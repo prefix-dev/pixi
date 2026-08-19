@@ -56,10 +56,7 @@ pub async fn add_conda_dep(
             .is_enabled(KnownPreviewFeature::PixiBuild)
         {
             return Err(miette::miette!(
-                help = format!(
-                    "Run `pixi workspace preview add pixi-build` to enable the preview feature ({})",
-                    workspace.workspace().workspace.provenance.path.display()
-                ),
+                help = "Run `pixi workspace preview add pixi-build` to enable the preview feature",
                 "conda source dependencies are not allowed without enabling the 'pixi-build' preview feature"
             ));
         }

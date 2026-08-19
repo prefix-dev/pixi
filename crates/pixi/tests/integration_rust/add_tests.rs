@@ -1248,14 +1248,7 @@ platforms = ["linux-64"]
     let error = result.unwrap_err();
 
     // Use insta to snapshot test the full error message format including help text
-    insta::with_settings!({
-        filters => vec![
-            // Filter out the dynamic manifest path to make the snapshot stable
-            (r"preview feature \([^)]+\)", "preview feature (<MANIFEST_PATH>)"),
-        ]
-    }, {
-        insta::assert_debug_snapshot!("git_dependency_without_preview_error", error);
-    });
+    insta::assert_debug_snapshot!("git_dependency_without_preview_error", error);
 }
 
 #[tokio::test]

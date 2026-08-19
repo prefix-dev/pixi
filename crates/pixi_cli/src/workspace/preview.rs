@@ -6,7 +6,7 @@ use clap::{
 };
 use miette::IntoDiagnostic;
 use pixi_api::WorkspaceContext;
-use pixi_core::{WorkspaceLocator, WorkspaceLocatorError};
+use pixi_core::{Workspace, WorkspaceLocator, WorkspaceLocatorError};
 use pixi_manifest::KnownPreviewFeature;
 use strum::VariantNames;
 
@@ -55,7 +55,9 @@ pub enum Command {
 
 /// Only known preview features are accepted, and they tab-complete.
 fn feature_parser() -> impl TypedValueParser<Value = KnownPreviewFeature> {
-    PossibleValuesParser::new(KnownPreviewFeature::VARIANTS).map(|name| {
+    // `VARIANTS` is the list of feature names, provided by strum's
+    // `VariantNames` derive
+    PossibleValuesParser::new(<KnownPreviewFeature as VariantNames>::VARIANTS).map(|name| {
         name.parse()
             .expect("the possible values are known features")
     })
@@ -67,30 +69,25 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate();
 
-    let workspace = match located {
-        Ok(workspace) => workspace,
-        // The workspace may fail to load exactly because the feature is
-        // missing, e.g. a `[package]` section without `pixi-build`, so `add`
-        // falls back to editing the manifest directly.
-        Err(WorkspaceLocatorError::Toml(err)) if matches!(args.command, Command::Add(_)) => {
-            let Command::Add(add) = args.command else {
-                unreachable!("the match guard checked the command")
-            };
-            return WorkspaceContext::add_preview_features_without_workspace(
+    match args.command {
+        Command::Add(add) => {
+            WorkspaceContext::add_preview_features(
                 CliInterface {},
-                PathBuf::from(err.source.name()),
+                manifest_path(located)?,
                 add.features,
             )
-            .await;
+            .await
         }
-        Err(err) => return Err(err.into()),
-    };
-
-    let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace);
-
-    match args.command {
-        Command::Add(args) => workspace_ctx.add_preview_features(args.features).await?,
+        Command::Remove(remove) => {
+            WorkspaceContext::remove_preview_features(
+                CliInterface {},
+                manifest_path(located)?,
+                remove.features,
+            )
+            .await
+        }
         Command::List => {
+            let workspace_ctx = WorkspaceContext::new(CliInterface {}, located?);
             let mut stdout = std::io::stdout();
             for feature in workspace_ctx.preview_features().await {
                 writeln!(stdout, "{feature}")
@@ -101,9 +98,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     })
                     .into_diagnostic()?;
             }
+            Ok(())
         }
-        Command::Remove(args) => workspace_ctx.remove_preview_features(args.features).await?,
     }
+}
 
-    Ok(())
+/// The manifest to edit. Editing doesn't need a valid manifest — only the
+/// result has to be valid — so a manifest that fails to parse still yields
+/// its path, e.g. for `add pixi-build` to fix a `[package]` section that
+/// isn't allowed without the feature.
+fn manifest_path(located: Result<Workspace, WorkspaceLocatorError>) -> miette::Result<PathBuf> {
+    match located {
+        Ok(workspace) => Ok(workspace.workspace.provenance.path.clone()),
+        Err(WorkspaceLocatorError::Toml(err)) => Ok(PathBuf::from(err.source.name())),
+        Err(err) => Err(err.into()),
+    }
 }

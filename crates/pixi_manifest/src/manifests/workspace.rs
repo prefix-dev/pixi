@@ -17,10 +17,10 @@ use rattler_conda_types::{
 use toml_edit::Value;
 
 use crate::{
-    Activation, AddDependencyOutcome, DependencyOverwriteBehavior, GetFeatureError,
-    KnownPreviewFeature, PixiPlatform, PixiPlatformName, PlatformEdit, PlatformMove, Preview,
-    PrioritizedChannel, PypiDependencyLocation, SpecType, TargetSelector, Task, TaskName,
-    TomlError, WorkspaceTarget, consts,
+    Activation, AddDependencyOutcome, DependencyOverwriteBehavior, GetFeatureError, PixiPlatform,
+    PixiPlatformName, PlatformEdit, PlatformMove, Preview, PrioritizedChannel,
+    PypiDependencyLocation, SpecType, TargetSelector, Task, TaskName, TomlError, WorkspaceTarget,
+    consts,
     environment::{Environment, EnvironmentName, NewEnvironment},
     environments::Environments,
     error::{DependencyError, UnknownFeature},
@@ -1868,53 +1868,6 @@ impl WorkspaceManifestMut<'_> {
             None => None,
         };
         self.document.set_requires_pixi(version).into_diagnostic()
-    }
-
-    /// Enable preview features, returns the features that were actually added.
-    ///
-    /// This function modifies both the workspace and the TOML document. Use
-    /// `ManifestProvenance::save` to persist the changes to disk.
-    pub fn add_preview_features(
-        &mut self,
-        features: impl IntoIterator<Item = KnownPreviewFeature>,
-    ) -> miette::Result<Vec<KnownPreviewFeature>> {
-        let mut added = Vec::new();
-        for feature in features {
-            if self.workspace.workspace.preview.insert(feature) {
-                self.document
-                    .add_preview_feature(feature.into())
-                    .into_diagnostic()?;
-                added.push(feature);
-            }
-        }
-        Ok(added)
-    }
-
-    /// Disable preview features, returns the features that were actually
-    /// removed.
-    ///
-    /// This function modifies both the workspace and the TOML document. Use
-    /// `ManifestProvenance::save` to persist the changes to disk.
-    pub fn remove_preview_features(
-        &mut self,
-        features: impl IntoIterator<Item = KnownPreviewFeature>,
-    ) -> miette::Result<Vec<KnownPreviewFeature>> {
-        if self.workspace.workspace.preview.all_enabled() {
-            miette::bail!(
-                help = "Set `preview` to the list of features you want to keep, e.g. `preview = [\"pixi-build\"]`",
-                "cannot remove individual preview features while `preview = true` enables them all"
-            );
-        }
-        let mut removed = Vec::new();
-        for feature in features {
-            if self.workspace.workspace.preview.remove(feature) {
-                self.document
-                    .remove_preview_feature(feature.into())
-                    .into_diagnostic()?;
-                removed.push(feature);
-            }
-        }
-        Ok(removed)
     }
 }
 
@@ -5936,108 +5889,6 @@ channels = ["nvidia", "pytorch"]
         "#;
         let manifest_no = parse_pixi_toml(contents_no).manifest;
         assert_eq!(manifest_no.workspace.requires_pixi, None);
-    }
-
-    #[test]
-    fn test_add_and_remove_preview_features() {
-        let mut workspace = parse_pixi_toml(
-            r#"
-[workspace]
-name = "test"
-channels = []
-platforms = []
-"#,
-        );
-        let mut manifest = workspace.editable();
-
-        let added = manifest
-            .add_preview_features([KnownPreviewFeature::PixiBuild])
-            .unwrap();
-        assert_eq!(added, vec![KnownPreviewFeature::PixiBuild]);
-        assert!(
-            manifest
-                .workspace
-                .workspace
-                .preview
-                .is_enabled(KnownPreviewFeature::PixiBuild)
-        );
-
-        // Adding it again is a no-op
-        let added = manifest
-            .add_preview_features([KnownPreviewFeature::PixiBuild])
-            .unwrap();
-        assert!(added.is_empty());
-
-        assert_snapshot!(manifest.document.to_string(), @r###"
-        [workspace]
-        name = "test"
-        channels = []
-        platforms = []
-        preview = ["pixi-build"]
-        "###);
-
-        // Removing it drops the field entirely
-        let removed = manifest
-            .remove_preview_features([KnownPreviewFeature::PixiBuild])
-            .unwrap();
-        assert_eq!(removed, vec![KnownPreviewFeature::PixiBuild]);
-        assert_snapshot!(manifest.document.to_string(), @r###"
-        [workspace]
-        name = "test"
-        channels = []
-        platforms = []
-        "###);
-    }
-
-    #[test]
-    fn test_remove_preview_feature_keeps_unknown_features() {
-        let mut workspace = parse_pixi_toml(
-            r#"
-[workspace]
-name = "test"
-channels = []
-platforms = []
-preview = ["something-else", "pixi-build"]
-"#,
-        );
-        let mut manifest = workspace.editable();
-
-        manifest
-            .remove_preview_features([KnownPreviewFeature::PixiBuild])
-            .unwrap();
-        assert_snapshot!(manifest.document.to_string(), @r###"
-        [workspace]
-        name = "test"
-        channels = []
-        platforms = []
-        preview = ["something-else"]
-        "###);
-    }
-
-    #[test]
-    fn test_preview_features_with_all_enabled() {
-        let mut workspace = parse_pixi_toml(
-            r#"
-[workspace]
-name = "test"
-channels = []
-platforms = []
-preview = true
-"#,
-        );
-        let mut manifest = workspace.editable();
-
-        // Everything is already enabled, so there is nothing to add
-        let added = manifest
-            .add_preview_features([KnownPreviewFeature::PixiBuild])
-            .unwrap();
-        assert!(added.is_empty());
-
-        // And removing a single feature makes no sense
-        let err = manifest
-            .remove_preview_features([KnownPreviewFeature::PixiBuild])
-            .unwrap_err();
-        assert!(err.to_string().contains("`preview = true`"), "{err}");
     }
 
     #[test]

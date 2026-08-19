@@ -11,6 +11,7 @@ use toml_edit::{Array, DocumentMut, Item, Table, TableLike, Value, value};
 use crate::{
     FeatureName, ManifestKind, ManifestProvenance, NewEnvironment, PixiPlatform, PixiPlatformName,
     PypiDependencyLocation, SpecType, TargetSelector, Task, TomlError,
+    error::GenericError,
     manifests::table_name::TableName,
     script::{ScriptManifest, ScriptManifestDocument, ScriptManifestError},
     toml::TomlDocument,
@@ -1200,20 +1201,22 @@ impl ManifestDocument {
     }
 
     /// Adds a preview feature to the `preview` array of the workspace,
-    /// returns false if it was already there
+    /// returns false if it was already enabled
     pub fn add_preview_feature(&mut self, feature: &str) -> Result<bool, TomlError> {
         let table_name = TableName::new()
             .with_prefix(self.table_prefix())
             .with_table(Some(self.detect_table_name()));
         let keys = table_name.as_keys();
 
-        // `preview = false` behaves like an empty list, replace it with one
         let table = self.manifest_mut().get_or_insert_nested_table(&keys)?;
-        if table
-            .get("preview")
-            .is_some_and(|item| item.as_bool().is_some())
-        {
-            table.remove("preview");
+        match table.get("preview").and_then(|item| item.as_bool()) {
+            // `preview = true` already enables every feature
+            Some(true) => return Ok(false),
+            // `preview = false` behaves like an empty list, replace it with one
+            Some(false) => {
+                table.remove("preview");
+            }
+            None => {}
         }
 
         let array = self
@@ -1228,27 +1231,42 @@ impl ManifestDocument {
     }
 
     /// Removes a preview feature from the `preview` array of the workspace,
-    /// dropping the field when it ends up empty
-    pub fn remove_preview_feature(&mut self, feature: &str) -> Result<(), TomlError> {
+    /// dropping the field when it ends up empty. Returns false when the
+    /// feature wasn't enabled.
+    pub fn remove_preview_feature(&mut self, feature: &str) -> Result<bool, TomlError> {
         let table_name = TableName::new()
             .with_prefix(self.table_prefix())
             .with_table(Some(self.detect_table_name()));
         let keys = table_name.as_keys();
 
         if self.manifest_mut().get_nested_table(&keys).is_err() {
-            return Ok(());
+            return Ok(false);
         }
         let table = self.manifest_mut().get_or_insert_nested_table(&keys)?;
-        if let Some(array) = table
+        if table.get("preview").and_then(|item| item.as_bool()) == Some(true) {
+            return Err(TomlError::Generic(
+                GenericError::new(
+                    "cannot remove individual preview features while `preview = true` enables them all",
+                )
+                .with_help(
+                    "Set `preview` to the list of features you want to keep, e.g. `preview = [\"pixi-build\"]`",
+                ),
+            ));
+        }
+
+        let Some(array) = table
             .get_mut("preview")
             .and_then(|item| item.as_array_mut())
-        {
-            array.retain(|item| item.as_str() != Some(feature));
-            if array.is_empty() {
-                table.remove("preview");
-            }
+        else {
+            return Ok(false);
+        };
+        let len_before = array.len();
+        array.retain(|item| item.as_str() != Some(feature));
+        let removed = array.len() != len_before;
+        if array.is_empty() {
+            table.remove("preview");
         }
-        Ok(())
+        Ok(removed)
     }
 }
 
@@ -2311,5 +2329,107 @@ dev = { features = [] }
             .unwrap();
 
         insta::assert_snapshot!(document.to_string());
+    }
+
+    fn pixi_toml_document(contents: &str) -> ManifestDocument {
+        ManifestDocument::PixiToml(TomlDocument::new(DocumentMut::from_str(contents).unwrap()))
+    }
+
+    #[test]
+    fn test_add_and_remove_preview_feature() {
+        let mut document = pixi_toml_document(
+            r#"
+[workspace]
+name = "test"
+channels = []
+platforms = []
+"#,
+        );
+
+        assert!(document.add_preview_feature("pixi-build").unwrap());
+        // Adding it again is a no-op
+        assert!(!document.add_preview_feature("pixi-build").unwrap());
+        insta::assert_snapshot!(document.render().unwrap(), @r###"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = []
+        preview = ["pixi-build"]
+        "###);
+
+        // Removing it drops the field entirely
+        assert!(document.remove_preview_feature("pixi-build").unwrap());
+        assert!(!document.remove_preview_feature("pixi-build").unwrap());
+        insta::assert_snapshot!(document.render().unwrap(), @r###"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = []
+        "###);
+    }
+
+    #[test]
+    fn test_remove_preview_feature_keeps_unknown_features() {
+        let mut document = pixi_toml_document(
+            r#"
+[workspace]
+name = "test"
+channels = []
+platforms = []
+preview = ["something-else", "pixi-build"]
+"#,
+        );
+
+        assert!(document.remove_preview_feature("pixi-build").unwrap());
+        insta::assert_snapshot!(document.render().unwrap(), @r###"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = []
+        preview = ["something-else"]
+        "###);
+    }
+
+    #[test]
+    fn test_preview_features_with_all_enabled() {
+        let mut document = pixi_toml_document(
+            r#"
+[workspace]
+name = "test"
+channels = []
+platforms = []
+preview = true
+"#,
+        );
+
+        // Everything is already enabled, so there is nothing to add and the
+        // field is left untouched
+        assert!(!document.add_preview_feature("pixi-build").unwrap());
+        insta::assert_snapshot!(document.render().unwrap(), @r###"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = []
+        preview = true
+        "###);
+
+        // And removing a single feature makes no sense
+        let err = document.remove_preview_feature("pixi-build").unwrap_err();
+        assert!(err.to_string().contains("`preview = true`"), "{err}");
+    }
+
+    #[test]
+    fn test_add_preview_feature_pyproject() {
+        let mut document = ManifestDocument::empty_pyproject();
+
+        assert!(document.add_preview_feature("pixi-build").unwrap());
+        insta::assert_snapshot!(document.render().unwrap(), @r###"
+        [project]
+        name = "test"
+        [tool.pixi.workspace]
+        channels = []
+        platforms = []
+        preview = ["pixi-build"]
+        "###);
     }
 }

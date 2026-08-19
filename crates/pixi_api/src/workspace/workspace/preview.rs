@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use pixi_core::{Workspace, workspace::WorkspaceMut};
+use pixi_core::Workspace;
 use pixi_manifest::{KnownPreviewFeature, ManifestDocument, ManifestProvenance};
 
 use crate::Interface;
@@ -16,25 +16,11 @@ pub async fn list(workspace: &Workspace) -> Vec<KnownPreviewFeature> {
         .enabled_features()
 }
 
+/// Enables the features by editing the manifest directly: the manifest
+/// doesn't have to be valid, only the result is checked, so a manifest
+/// that fails to load exactly because a preview feature is missing, e.g.
+/// a `[package]` section without `pixi-build`, can still be fixed.
 pub async fn add<I: Interface>(
-    interface: &I,
-    mut workspace: WorkspaceMut,
-    features: Vec<KnownPreviewFeature>,
-) -> miette::Result<()> {
-    // Add the features to the manifest
-    let added = workspace.manifest().add_preview_features(features)?;
-
-    // Save the manifest on disk
-    workspace.save().await.into_diagnostic()?;
-
-    report_added(interface, &added).await;
-    Ok(())
-}
-
-/// Adds the features by editing the manifest directly. Used when the workspace
-/// fails to load exactly because a preview feature is missing, e.g. a
-/// `[package]` section without `pixi-build`.
-pub async fn add_without_loading<I: Interface>(
     interface: &I,
     manifest_path: PathBuf,
     features: Vec<KnownPreviewFeature>,
@@ -52,25 +38,8 @@ pub async fn add_without_loading<I: Interface>(
         }
     }
 
-    // Save the manifest on disk
-    let contents = document.render().into_diagnostic()?;
-    pixi_utils::atomic_write::atomic_write(&provenance.path, &contents)
-        .await
-        .into_diagnostic()?;
+    let contents = save(&provenance, &document).await?;
 
-    report_added(interface, &added).await;
-
-    // The manifest may have other problems the feature doesn't fix
-    if let Err(err) = Workspace::from_str(&provenance.path, &contents) {
-        interface
-            .warning(&format!("The manifest still fails to load: {err}"))
-            .await;
-    }
-    Ok(())
-}
-
-// Report back to the user
-async fn report_added<I: Interface>(interface: &I, added: &[KnownPreviewFeature]) {
     if added.is_empty() {
         interface
             .success("The preview features were already enabled.")
@@ -83,21 +52,37 @@ async fn report_added<I: Interface>(interface: &I, added: &[KnownPreviewFeature]
             ))
             .await;
     }
+
+    // The manifest may have other problems the feature doesn't fix
+    if let Err(err) = Workspace::from_str(&provenance.path, &contents) {
+        interface
+            .warning(&format!("The manifest still fails to load: {err}"))
+            .await;
+    }
+    Ok(())
 }
 
+/// Disables the features by editing the manifest directly, like [`add`].
 pub async fn remove<I: Interface>(
     interface: &I,
-    mut workspace: WorkspaceMut,
+    manifest_path: PathBuf,
     features: Vec<KnownPreviewFeature>,
 ) -> miette::Result<()> {
-    // Remove the features from the manifest
-    let removed = workspace.manifest().remove_preview_features(features)?;
+    let provenance = ManifestProvenance::from_path(manifest_path).into_diagnostic()?;
+    let mut document = ManifestDocument::from_provenance(&provenance)?;
 
-    // Save the manifest on disk
-    let contents = workspace.document().render().into_diagnostic()?;
-    let workspace = workspace.save().await.into_diagnostic()?;
+    let mut removed = Vec::new();
+    for feature in features {
+        if document
+            .remove_preview_feature(feature.into())
+            .into_diagnostic()?
+        {
+            removed.push(feature);
+        }
+    }
 
-    // Report back to the user
+    let contents = save(&provenance, &document).await?;
+
     if removed.is_empty() {
         interface
             .success("The preview features were not enabled.")
@@ -113,11 +98,22 @@ pub async fn remove<I: Interface>(
 
     // Warn when the workspace still needs the removed feature(s), e.g. a
     // `[package]` section without `pixi-build`
-    if let Err(err) = Workspace::from_str(&workspace.workspace.provenance.path, &contents) {
+    if let Err(err) = Workspace::from_str(&provenance.path, &contents) {
         interface
             .warning(&format!("The manifest no longer loads: {err}"))
             .await;
     }
-
     Ok(())
+}
+
+/// Persists the edited manifest to disk.
+async fn save(
+    provenance: &ManifestProvenance,
+    document: &ManifestDocument,
+) -> miette::Result<String> {
+    let contents = document.render().into_diagnostic()?;
+    pixi_utils::atomic_write::atomic_write(&provenance.path, &contents)
+        .await
+        .into_diagnostic()?;
+    Ok(contents)
 }

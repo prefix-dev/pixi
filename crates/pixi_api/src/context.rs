@@ -96,39 +96,25 @@ impl<I: Interface> WorkspaceContext<I> {
         crate::workspace::workspace::preview::list(&self.workspace).await
     }
 
+    /// Enable preview features by editing the manifest directly, so a
+    /// manifest that fails to load exactly because a feature is missing,
+    /// e.g. a `[package]` section without `pixi-build`, can still be fixed.
     pub async fn add_preview_features(
-        &self,
-        features: Vec<KnownPreviewFeature>,
-    ) -> miette::Result<()> {
-        crate::workspace::workspace::preview::add(&self.interface, self.workspace_mut()?, features)
-            .await
-    }
-
-    /// Add preview features to a manifest that fails to load, e.g. a
-    /// `[package]` section without the `pixi-build` feature enabled.
-    pub async fn add_preview_features_without_workspace(
         interface: I,
         manifest_path: std::path::PathBuf,
         features: Vec<KnownPreviewFeature>,
     ) -> miette::Result<()> {
-        crate::workspace::workspace::preview::add_without_loading(
-            &interface,
-            manifest_path,
-            features,
-        )
-        .await
+        crate::workspace::workspace::preview::add(&interface, manifest_path, features).await
     }
 
+    /// Disable preview features by editing the manifest directly, like
+    /// [`Self::add_preview_features`].
     pub async fn remove_preview_features(
-        &self,
+        interface: I,
+        manifest_path: std::path::PathBuf,
         features: Vec<KnownPreviewFeature>,
     ) -> miette::Result<()> {
-        crate::workspace::workspace::preview::remove(
-            &self.interface,
-            self.workspace_mut()?,
-            features,
-        )
-        .await
+        crate::workspace::workspace::preview::remove(&interface, manifest_path, features).await
     }
 
     pub async fn list_activation(&self) -> Vec<crate::workspace::ActivationEntry> {

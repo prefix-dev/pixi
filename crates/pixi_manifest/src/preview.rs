@@ -63,37 +63,6 @@ impl Preview {
             Preview::Features(features) => features.clone(),
         }
     }
-
-    /// Enables a preview feature, returns false if it was already enabled
-    pub fn insert(&mut self, feature: KnownPreviewFeature) -> bool {
-        match self {
-            Preview::AllEnabled(true) => false,
-            Preview::AllEnabled(false) => {
-                *self = Preview::Features(vec![feature]);
-                true
-            }
-            Preview::Features(features) => {
-                if features.contains(&feature) {
-                    false
-                } else {
-                    features.push(feature);
-                    true
-                }
-            }
-        }
-    }
-
-    /// Disables a preview feature, returns false if it wasn't enabled
-    pub fn remove(&mut self, feature: KnownPreviewFeature) -> bool {
-        match self {
-            Preview::AllEnabled(_) => false,
-            Preview::Features(features) => {
-                let len = features.len();
-                features.retain(|f| *f != feature);
-                features.len() != len
-            }
-        }
-    }
 }
 
 #[derive(
