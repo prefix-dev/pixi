@@ -1,7 +1,8 @@
-use crate::global::{EnvironmentAction, report_failed_environments};
+use crate::global::{EnvironmentAction, report_failed_environment, report_failed_environments};
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use pixi_config::{Config, ConfigCli};
+use pixi_global::report::EnvStatus;
 
 /// Sync global manifest with installed environments
 #[derive(Parser, Debug)]
@@ -17,8 +18,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?
         .with_cli_config(config.clone());
 
-    let mut has_changed = false;
-
     // Prune environments that are not listed
     let state_change = project.prune_old_environments().await?;
 
@@ -30,8 +29,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     if state_change.has_changed() {
-        has_changed = true;
-        state_change.report();
+        state_change.report(&project).await;
     }
 
     // Remove broken files
@@ -55,12 +53,22 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // appearing frozen while executables are (re)exposed and trampolines rebuilt
     // (#6658). Reports use `pixi_progress::println!`, which suspends the spinner, so
     // change output stays readable above it.
-    let (expose_changed, errors) =
+    let total = env_names.len();
+    let (unchanged, errors) =
         pixi_progress::await_in_progress("Syncing global environments", |pb| async move {
-            let mut changed = false;
+            // `sync` sweeps every environment rather than the ones the user
+            // named, so the ones that didn't change are counted instead of
+            // getting a block of their own.
+            let mut unchanged = 0;
             let mut errors = Vec::new();
-            for (env_name, install_result) in env_names.iter().zip(install_results) {
-                pb.set_message(format!("Syncing environment {}", env_name.fancy_display()));
+            for (index, (env_name, install_result)) in
+                env_names.iter().zip(install_results).enumerate()
+            {
+                pb.set_message(format!(
+                    "syncing {} ({}/{total})",
+                    env_name.fancy_display(),
+                    index + 1
+                ));
                 let result = match install_result {
                     Ok(mut state_changes) => {
                         match project.sync_environment_expose(env_name).await {
@@ -75,25 +83,26 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 };
                 match result {
                     Ok(state_change) => {
-                        if state_change.has_changed() {
-                            changed = true;
-                            state_change.report();
+                        for env_report in state_change.reports_or_warn(&project).await {
+                            if env_report.status == Some(EnvStatus::Unchanged) {
+                                unchanged += 1;
+                            } else {
+                                pixi_global::report::print(&env_report);
+                            }
                         }
                     }
-                    Err(err) => errors.push((env_name.clone(), err)),
+                    Err(err) => {
+                        report_failed_environment(env_name);
+                        errors.push((env_name.clone(), err));
+                    }
                 }
             }
-            (changed, errors)
+            (unchanged, errors)
         })
         .await;
-    has_changed |= expose_changed;
 
-    if !has_changed {
-        eprintln!(
-            "{}Nothing to do. The pixi global installation is already up-to-date.",
-            console::style(console::Emoji("✔ ", "")).green()
-        );
-    }
+    pixi_global::report::print_unchanged_summary(unchanged);
+    pixi_global::report::print_nothing_to_do();
 
     report_failed_environments(EnvironmentAction::Sync, errors)
 }

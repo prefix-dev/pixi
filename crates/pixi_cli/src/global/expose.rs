@@ -4,7 +4,7 @@ use miette::Context;
 use pixi_config::{Config, ConfigCli};
 use pixi_global::{self, EnvironmentName, ExposedName, Mapping, StateChanges};
 
-use crate::global::revert_environment_after_error;
+use crate::global::{report_failed_environment, revert_environment_after_error};
 
 /// Add exposed binaries from an environment to your global environment
 ///
@@ -94,7 +94,7 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
     match apply_changes(&args, &mut project_modified).await {
         Ok(state_changes) => {
             project_modified.manifest.save().await?;
-            state_changes.report();
+            state_changes.report(&project_modified).await;
             Ok(())
         }
         Err(err) => {
@@ -141,6 +141,10 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
         })
         .collect_vec();
 
+    // Removing several names from one environment is one change to that
+    // environment, so the reports are collected and printed once at the end
+    // rather than repeating the header per name.
+    let mut all_changes = StateChanges::default();
     let mut last_updated_project = project_original;
     for mapping in exposed_mappings {
         let (exposed_name, env_name) = mapping?;
@@ -150,7 +154,7 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
             .wrap_err_with(|| format!("Couldn't remove exposed name {exposed_name}"))
         {
             Ok(state_changes) => {
-                state_changes.report();
+                all_changes |= state_changes;
             }
             Err(err) => {
                 if let Err(revert_err) =
@@ -159,10 +163,16 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
                     tracing::warn!("Reverting of the operation failed");
                     tracing::info!("Reversion error: {:?}", revert_err);
                 }
+                // The names before this one are already removed and saved, so
+                // the report is owed even though the command fails, and the
+                // environment that failed is marked like everywhere else.
+                all_changes.report(&last_updated_project).await;
+                report_failed_environment(&env_name);
                 return Err(err);
             }
         }
         last_updated_project = project;
     }
+    all_changes.report(&last_updated_project).await;
     Ok(())
 }
