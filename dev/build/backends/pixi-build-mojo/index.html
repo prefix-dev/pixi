@@ -8733,7 +8733,9 @@ This is why we require users to opt in to that feature by adding "pixi-build" to
 <li><strong>Type</strong>: <code>String</code></li>
 <li><strong>Default</strong>: Project name (with dashes converted to underscores)</li>
 </ul>
-<p>The name to give the Mojo package. The <code>.mojopkg</code> suffix will be added automatically. If not specified, defaults to the project name.</p>
+<p>The name to give the Mojo package. The backend adds the <code>.mojoc</code> suffix when using
+<code>mojo precompile</code>, or <code>.mojopkg</code> when falling back to the legacy <code>mojo package</code>
+command. If not specified, the name defaults to the project name.</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="k">[package.build.config.pkg]</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;greetings&quot;</span>
 </span></code></pre></div>
