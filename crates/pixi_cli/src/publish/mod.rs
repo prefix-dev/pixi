@@ -24,10 +24,9 @@ use pixi_command_dispatcher::{
 };
 use pixi_config::{ConfigCli, PackageFormatAndCompression};
 use pixi_core::{
-    Workspace, WorkspaceLocator,
-    environment::sanity_check_workspace,
-    workspace::{DiscoveryStart, apply_environment_variable_overrides},
+    Workspace, WorkspaceLocator, environment::sanity_check_workspace, workspace::DiscoveryStart,
 };
+use pixi_manifest::platform::host::apply_environment_variable_overrides;
 use pixi_manifest::{FeaturesExt, S3Options};
 use pixi_path::AbsPathBuf;
 use pixi_progress::global_multi_progress;

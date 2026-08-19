@@ -205,17 +205,7 @@ impl Workspace {
     /// plus the same architecture fallbacks used by
     /// [`Self::possible_pixi_platforms`].
     pub fn candidate_subdirs(&self, current: Platform) -> Vec<Platform> {
-        let mut candidate_subdirs: Vec<Platform> = vec![current];
-        if current.is_osx() && current != Platform::Osx64 {
-            candidate_subdirs.push(Platform::Osx64);
-        }
-        if current.is_windows() && current != Platform::Win64 {
-            candidate_subdirs.push(Platform::Win64);
-        }
-        if current == Platform::Win64 {
-            candidate_subdirs.push(Platform::Win32);
-        }
-        candidate_subdirs
+        crate::platform::candidate_subdirs(current)
     }
 
     /// Declared virtual packages from `env_platforms` whose host subdir
