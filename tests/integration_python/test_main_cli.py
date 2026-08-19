@@ -3,10 +3,10 @@ import os
 import platform
 import shlex
 import shutil
-import tomli
 from pathlib import Path
 
 import pytest
+import tomli
 import tomli_w
 from dirty_equals import AnyThing, IsDict, IsList, IsStr
 from inline_snapshot import snapshot
