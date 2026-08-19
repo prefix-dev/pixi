@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 
 import pytest
@@ -80,10 +79,12 @@ def test_no_change_should_be_fully_cached(pixi: Path, simple_workspace: Workspac
     assert simple_workspace.find_debug_file("conda_build_v1_params.json") is None
 
 
-def bump_mtime(path: Path) -> None:
-    """Moves the mtime forward by one second without touching the contents."""
-    stat = path.stat()
-    os.utime(path, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000_000))
+def conda_artifact_mtimes(workspace: Workspace) -> dict[Path, int]:
+    """The mtimes of every `.conda` pixi built for this workspace, keyed by path."""
+    return {
+        path: path.stat().st_mtime_ns
+        for path in sorted(workspace.workspace_dir.joinpath(".pixi").rglob("*.conda"))
+    }
 
 
 def install(pixi: Path, workspace: Workspace, expect_build: bool) -> None:
@@ -104,10 +105,15 @@ def install(pixi: Path, workspace: Workspace, expect_build: bool) -> None:
 def test_touching_recipe_does_not_trigger_rebuild(pixi: Path, simple_workspace: Workspace) -> None:
     simple_workspace.write_files()
     install(pixi, simple_workspace, expect_build=True)
+    artifacts = conda_artifact_mtimes(simple_workspace)
+    assert artifacts, "the first install must have built a package"
 
-    bump_mtime(simple_workspace.recipe_path)
+    simple_workspace.recipe_path.touch()
 
     install(pixi, simple_workspace, expect_build=False)
+
+    # The cached artifacts are served as they are, not written again.
+    assert conda_artifact_mtimes(simple_workspace) == artifacts
 
 
 @pytest.mark.slow
@@ -124,7 +130,6 @@ def test_same_size_recipe_edit_triggers_rebuild(pixi: Path, simple_workspace: Wo
     edited = original.replace("version: 1.0.0", "version: 1.0.1")
     assert len(edited) == len(original), "the edit must not change the file size"
     simple_workspace.recipe_path.write_text(edited)
-    bump_mtime(simple_workspace.recipe_path)
 
     install(pixi, simple_workspace, expect_build=True)
 
