@@ -93,17 +93,9 @@ pub async fn remove<I: Interface>(
     // Remove the features from the manifest
     let removed = workspace.manifest().remove_preview_features(features)?;
 
-    // Refuse to write a manifest that no longer loads, e.g. removing
-    // `pixi-build` while the manifest still contains source dependencies
-    let path = workspace.workspace().workspace.provenance.path.clone();
-    let contents = workspace.document().render().into_diagnostic()?;
-    Workspace::from_str(&path, &contents).map_err(|err| {
-        miette::Report::new(err)
-            .wrap_err("the workspace still uses the preview feature(s), not removing them")
-    })?;
-
     // Save the manifest on disk
-    workspace.save().await.into_diagnostic()?;
+    let contents = workspace.document().render().into_diagnostic()?;
+    let workspace = workspace.save().await.into_diagnostic()?;
 
     // Report back to the user
     if removed.is_empty() {
@@ -116,6 +108,14 @@ pub async fn remove<I: Interface>(
                 "Removed '{}' from the preview features.",
                 removed.iter().format("', '")
             ))
+            .await;
+    }
+
+    // Warn when the workspace still needs the removed feature(s), e.g. a
+    // `[package]` section without `pixi-build`
+    if let Err(err) = Workspace::from_str(&workspace.workspace.provenance.path, &contents) {
+        interface
+            .warning(&format!("The manifest no longer loads: {err}"))
             .await;
     }
 

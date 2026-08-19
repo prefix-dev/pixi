@@ -27,6 +27,7 @@ pub struct Args {
 }
 
 #[derive(Parser, Debug)]
+#[clap(arg_required_else_help = true)]
 pub struct AddRemoveArgs {
     /// The preview feature(s) to add or remove, e.g. `pixi-build`.
     #[clap(required = true, num_args = 1.., value_parser = feature_parser(), value_name = "PREVIEW_FEATURE")]
