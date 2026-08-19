@@ -6060,7 +6060,7 @@ dependencies = [
 
 [[package]]
 name = "pixi-build-mojo"
-version = "0.2.6"
+version = "0.2.7"
 dependencies = [
  "async-trait",
  "fs-err",
