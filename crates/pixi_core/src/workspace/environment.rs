@@ -619,6 +619,45 @@ mod tests {
         );
     }
 
+    /// Regression for prefix-dev/pixi#6770 (the issue's exact manifest): the
+    /// `osx-arm64` only the dev feature references must stay scoped to the
+    /// dev environment, so the default environment is not solved for a
+    /// platform `libgcc-ng` has no build for.
+    #[test]
+    fn test_feature_platforms_do_not_leak_across_environments() {
+        let manifest = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [workspace]
+        name = "platform-leak-repro"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+
+        [dependencies]
+        libgcc-ng = "*"
+
+        [feature.dev]
+        platforms = ["linux-64", "osx-arm64"]
+
+        [environments]
+        dev = { features = ["dev"], no-default-feature = true }
+        "#,
+        )
+        .unwrap();
+
+        assert_eq!(
+            manifest.default_environment().platforms(),
+            HashSet::from_iter([pixi_manifest::PixiPlatformName::from(Platform::Linux64)])
+        );
+        assert_eq!(
+            manifest.environment("dev").unwrap().platforms(),
+            HashSet::from_iter([
+                pixi_manifest::PixiPlatformName::from(Platform::Linux64),
+                pixi_manifest::PixiPlatformName::from(Platform::OsxArm64),
+            ])
+        );
+    }
+
     /// Regression for aqlaboratory/openfold-3#283: a `[system-requirements]`
     /// feature whose platforms migrate to synthetic names (`linux-64-cuda-13-0`)
     /// and a sibling feature pinning the bare `linux-64` must still resolve to

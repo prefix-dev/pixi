@@ -10,7 +10,7 @@ use pixi_manifest::{
 use pixi_spec::{GitSpec, SourceSpec, Subdirectory};
 use rattler_conda_types::{MatchSpec, PackageName};
 
-use crate::workspace::platforms::resolve_platforms;
+use crate::workspace::platforms::{platforms_to_declare, resolve_platforms};
 
 mod options;
 
@@ -34,9 +34,14 @@ pub async fn add_conda_dep(
         .platforms
         .clone();
     let pixi_platforms = resolve_platforms(&workspace_platforms, &dep_options.platforms)?;
+    let to_declare = platforms_to_declare(
+        workspace.workspace().workspace_manifest(),
+        &dep_options.feature,
+        &pixi_platforms,
+    );
     workspace
         .manifest()
-        .add_platforms(pixi_platforms.iter(), &FeatureName::Default)?;
+        .add_platforms(to_declare, &FeatureName::Default)?;
 
     let mut match_specs = IndexMap::default();
     let mut source_specs = IndexMap::default();
@@ -135,9 +140,14 @@ pub async fn add_pypi_dep(
         .platforms
         .clone();
     let pixi_platforms = resolve_platforms(&workspace_platforms, &options.platforms)?;
+    let to_declare = platforms_to_declare(
+        workspace.workspace().workspace_manifest(),
+        &options.feature,
+        &pixi_platforms,
+    );
     workspace
         .manifest()
-        .add_platforms(pixi_platforms.iter(), &FeatureName::Default)?;
+        .add_platforms(to_declare, &FeatureName::Default)?;
 
     // TODO: add dry_run logic to add
     let dry_run = false;

@@ -9,7 +9,11 @@
 //! packages. Shared by the parse-time registration pass and
 //! [`crate::FeaturesExt::platforms`].
 
-use std::collections::{BTreeMap, HashSet};
+use std::{
+    borrow::Cow,
+    collections::{BTreeMap, HashSet},
+    str::FromStr,
+};
 
 use indexmap::IndexSet;
 use rattler_conda_types::{GenericVirtualPackage, Platform};
@@ -19,8 +23,24 @@ use crate::{
     toml::platform::synthesize_name_string,
 };
 
+/// Resolve a feature-referenced platform name: a workspace platform wins,
+/// otherwise the name is treated as a bare conda subdir. `None` when it is
+/// neither (parsing already validated the reference, so only a name that
+/// vanished from the workspace ends up here).
+fn resolve_referenced_platform<'a>(
+    name: &PixiPlatformName,
+    workspace_platforms: &'a IndexSet<PixiPlatform>,
+) -> Option<Cow<'a, PixiPlatform>> {
+    if let Some(platform) = workspace_platforms.iter().find(|p| p.name() == name) {
+        return Some(Cow::Borrowed(platform));
+    }
+    Platform::from_str(name.as_str())
+        .ok()
+        .map(|subdir| Cow::Owned(PixiPlatform::from_subdir(subdir)))
+}
+
 /// The subdirs `feature` covers: `None` when it has no `platforms` key (every
-/// subdir), otherwise the subdirs of the workspace platforms it references.
+/// subdir), otherwise the subdirs of the platforms it references.
 fn referenced_subdirs(
     feature: &Feature,
     workspace_platforms: &IndexSet<PixiPlatform>,
@@ -29,18 +49,23 @@ fn referenced_subdirs(
     Some(
         names
             .iter()
-            .filter_map(|name| workspace_platforms.iter().find(|p| p.name() == name))
-            .map(PixiPlatform::subdir)
+            .filter_map(|name| resolve_referenced_platform(name, workspace_platforms))
+            .map(|platform| platform.subdir())
             .collect(),
     )
 }
 
-/// Whether `feature` applies on `subdir` (no `platforms` key means everywhere).
+/// Whether `feature` applies on `subdir` (no `platforms` key -- or a list the
+/// `[system-requirements]` migration synthesised for a keyless feature --
+/// means everywhere).
 pub(crate) fn feature_supports_subdir(
     feature: &Feature,
     subdir: Platform,
     workspace_platforms: &IndexSet<PixiPlatform>,
 ) -> bool {
+    if feature.platforms_span_workspace {
+        return true;
+    }
     match referenced_subdirs(feature, workspace_platforms) {
         None => true,
         Some(subdirs) => subdirs.contains(&subdir),
@@ -58,21 +83,21 @@ pub(crate) fn feature_supports_platform(
     feature_supports_subdir(feature, platform.subdir(), workspace_platforms)
 }
 
-/// The distinct workspace platforms the features pin for `subdir`, in first-seen
+/// The distinct platforms the features pin for `subdir`, in first-seen
 /// order. Features without a `platforms` key pin nothing.
 fn referenced_platforms<'a>(
     features: &[&Feature],
     subdir: Platform,
     workspace_platforms: &'a IndexSet<PixiPlatform>,
-) -> Vec<&'a PixiPlatform> {
-    let mut seen: HashSet<&PixiPlatformName> = HashSet::new();
+) -> Vec<Cow<'a, PixiPlatform>> {
+    let mut seen: HashSet<PixiPlatformName> = HashSet::new();
     features
         .iter()
         .filter_map(|feature| feature.platforms.as_ref())
         .flatten()
-        .filter_map(|name| workspace_platforms.iter().find(|p| p.name() == name))
+        .filter_map(|name| resolve_referenced_platform(name, workspace_platforms))
         .filter(|platform| platform.subdir() == subdir)
-        .filter(|platform| seen.insert(platform.name()))
+        .filter(|platform| seen.insert(platform.name().clone()))
         .collect()
 }
 
@@ -85,7 +110,7 @@ fn referenced_platforms<'a>(
 /// default `__glibc=2.28` would override an explicit `libc = "2.17"` from
 /// another feature. As in the legacy system-requirements union, a platform
 /// that does not customise a virtual package does not constrain it.
-fn union_virtual_packages(platforms: &[&PixiPlatform]) -> Vec<GenericVirtualPackage> {
+fn union_virtual_packages(platforms: &[Cow<'_, PixiPlatform>]) -> Vec<GenericVirtualPackage> {
     let mut union: BTreeMap<String, GenericVirtualPackage> = BTreeMap::new();
     for package in platforms.iter().flat_map(|platform| {
         let subdir = platform.subdir();
@@ -137,7 +162,7 @@ fn combined_platform(
     let referenced = referenced_platforms(features, subdir, workspace_platforms);
     match referenced.as_slice() {
         [] => Ok(PixiPlatform::from_subdir(subdir)),
-        [single] => Ok((*single).clone()),
+        [single] => Ok(single.clone().into_owned()),
         many => {
             let union = union_virtual_packages(many);
             let name = combined_platform_name(features, subdir, workspace_platforms);
@@ -155,15 +180,31 @@ fn combined_platform(
     }
 }
 
-/// Compose one [`PixiPlatform`] per subdir every feature supports.
-pub(crate) fn combined_platforms(
+/// The subdirs an environment made of `features` resolves to: the declared
+/// subdirs plus the subdirs the features themselves reference, narrowed to
+/// what every feature supports. Feature-referenced subdirs stay scoped to
+/// the environments using that feature (prefix-dev/pixi#6770).
+pub(crate) fn environment_subdirs(
     features: &[&Feature],
+    declared_subdirs: &IndexSet<Platform>,
     workspace_platforms: &IndexSet<PixiPlatform>,
-) -> Result<Vec<PixiPlatform>, TomlError> {
-    let subdirs: IndexSet<Platform> = workspace_platforms
-        .iter()
-        .map(PixiPlatform::subdir)
-        .collect();
+) -> IndexSet<Platform> {
+    let mut subdirs = declared_subdirs.clone();
+    for feature in features {
+        // A synthesised keyless feature spans the environment; its platform
+        // list pins rich platforms but does not pull in subdirs of its own.
+        if feature.platforms_span_workspace {
+            continue;
+        }
+        let Some(names) = feature.platforms.as_ref() else {
+            continue;
+        };
+        for name in names {
+            if let Some(platform) = resolve_referenced_platform(name, workspace_platforms) {
+                subdirs.insert(platform.subdir());
+            }
+        }
+    }
     subdirs
         .into_iter()
         .filter(|subdir| {
@@ -171,6 +212,17 @@ pub(crate) fn combined_platforms(
                 .iter()
                 .all(|feature| feature_supports_subdir(feature, *subdir, workspace_platforms))
         })
+        .collect()
+}
+
+/// Compose one [`PixiPlatform`] per subdir the environment resolves to.
+pub(crate) fn combined_platforms(
+    features: &[&Feature],
+    declared_subdirs: &IndexSet<Platform>,
+    workspace_platforms: &IndexSet<PixiPlatform>,
+) -> Result<Vec<PixiPlatform>, TomlError> {
+    environment_subdirs(features, declared_subdirs, workspace_platforms)
+        .into_iter()
         .map(|subdir| combined_platform(features, subdir, workspace_platforms))
         .collect()
 }

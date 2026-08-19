@@ -57,6 +57,13 @@ pub struct Workspace {
     /// The platforms this project supports
     pub platforms: IndexSet<PixiPlatform>,
 
+    /// The subdirs of the platforms declared in `[workspace] platforms`,
+    /// snapshotted before feature references and the `[system-requirements]`
+    /// migration extend `platforms`. On the composition path this is the base
+    /// every environment spans; platforms a feature pulls in stay scoped to
+    /// the environments that use that feature (prefix-dev/pixi#6770).
+    pub declared_subdirs: IndexSet<Platform>,
+
     /// The license as a valid SPDX string (e.g. MIT AND Apache-2.0)
     pub license: Option<String>,
 

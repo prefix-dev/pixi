@@ -15,7 +15,7 @@
 //! just use the returned `Vec` and leave the manifest alone.
 
 use indexmap::IndexSet;
-use pixi_manifest::{PixiPlatform, PixiPlatformName};
+use pixi_manifest::{FeatureName, PixiPlatform, PixiPlatformName, WorkspaceManifest};
 use rattler_conda_types::Platform;
 
 /// Resolve each requested platform name against the workspace's declared
@@ -42,5 +42,21 @@ pub fn resolve_platforms(
                 .map(PixiPlatform::from_subdir)
                 .map_err(|_| miette::miette!("workspace does not define a platform named '{name}'"))
         })
+        .collect()
+}
+
+/// The subset of `platforms` that still needs declaring on the workspace: a
+/// platform `feature` already references by name is covered in that feature's
+/// environments and declaring it would widen every other environment
+/// (prefix-dev/pixi#6770).
+pub fn platforms_to_declare<'a>(
+    manifest: &WorkspaceManifest,
+    feature: &FeatureName,
+    platforms: &'a [PixiPlatform],
+) -> Vec<&'a PixiPlatform> {
+    let referenced = manifest.feature(feature).and_then(|f| f.platforms.as_ref());
+    platforms
+        .iter()
+        .filter(|p| !referenced.is_some_and(|names| names.contains(p.name())))
         .collect()
 }

@@ -3,12 +3,12 @@ use std::str::FromStr;
 
 use clap::{Parser, ValueEnum, ValueHint};
 use indexmap::IndexSet;
-use pixi_api::workspace::platforms::resolve_platforms;
+use pixi_api::workspace::platforms::{platforms_to_declare, resolve_platforms};
 use pixi_config::ConfigCli;
 use pixi_core::{WorkspaceLocator, environment::sanity_check_workspace};
 use pixi_manifest::{
-    EnvironmentName, FeatureName, HasFeaturesIter, NewEnvironment, PixiPlatformName,
-    PrioritizedChannel,
+    EnvironmentName, FeatureName, HasFeaturesIter, HasWorkspaceManifest, NewEnvironment,
+    PixiPlatformName, PrioritizedChannel,
 };
 use pixi_utils::conda_environment_file::CondaEnvFile;
 use pixi_uv_conversions::convert_uv_requirements_to_pep508;
@@ -208,9 +208,14 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
     let platform_names: Vec<pixi_manifest::PixiPlatformName> =
         pixi_platforms.iter().map(|p| p.name().clone()).collect();
     if !pixi_platforms.is_empty() {
+        let to_declare = platforms_to_declare(
+            workspace.workspace().workspace_manifest(),
+            &feature_name,
+            &pixi_platforms,
+        );
         workspace
             .manifest()
-            .add_platforms(pixi_platforms.iter(), &feature_name)?;
+            .add_platforms(to_declare, &feature_name)?;
     }
 
     let (conda_deps, pypi_deps) = match processed_input {
