@@ -11,10 +11,10 @@ use std::str::FromStr;
 ///
 /// All environments:
 ///
-/// - Yellow: the binaries that are exposed.
+/// - Magenta: the name of the environment.
 /// - Green: the packages that are explicit dependencies of the environment.
-/// - Blue: the version of the installed package.
-/// - Cyan: the name of the environment.
+/// - Yellow: the binaries that are exposed.
+/// - Dim: the version of the installed package.
 ///
 /// Per environment:
 ///
@@ -89,7 +89,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 "The environments are not in sync with the manifest, to sync run\n\tpixi global sync"
             );
         }
-        list_all_global_environments(&project, None, None, args.regex, true).await?;
+        list_all_global_environments(&project, args.regex).await?;
     }
 
     Ok(())
