@@ -7,7 +7,7 @@ MietteDiagnostic {
     code: None,
     severity: None,
     help: Some(
-        "Run `pixi workspace preview add pixi-build` to enable the preview feature (<MANIFEST_PATH>)",
+        "Run `pixi workspace preview add pixi-build` to enable the preview feature",
     ),
     url: None,
     labels: None,
