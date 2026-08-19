@@ -6,13 +6,13 @@ use pixi_core::{
     UpdateLockFileOptions, WorkspaceLocator,
     environment::{InstallFilter, get_update_lock_file_and_prefixes},
     lock_file::{LockFileDerivedData, PackageFilterNames, ReinstallPackages, UpdateMode},
-    workspace::{HasWorkspaceRef, PlatformOverrides, PlatformSource},
 };
 use pixi_manifest::PixiPlatformName;
 use std::fmt::Write;
 
 use crate::cli_config::WorkspaceConfig;
 use crate::shared::install_platform::resolve_install_platform;
+use pixi_manifest::platform::host::{host_baseline, host_subdir};
 
 /// Install an environment, both updating the lock file and installing the
 /// environment.
@@ -181,10 +181,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             // `--platform` override), falling back to the host subdir. Unlike
             // `best_declared_platform()`, this never panics when the chosen platform is
             // not runnable on the current host (e.g. a cross-target install).
-            let host_platform = environment.workspace().host_platform(
-                PlatformSource::Defaults,
-                PlatformOverrides::EnvironmentVariableOverrides,
-            );
+            let host_platform = host_baseline(host_subdir());
             let platform = environment
                 .named_or_best_declared_platform(target_platform.as_ref())
                 .unwrap_or(&host_platform);

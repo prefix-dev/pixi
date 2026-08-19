@@ -464,25 +464,29 @@ mod tests {
     #[test]
     fn test_macos_deployment_target() {
         // A declared `__osx` (from `[system-requirements] macos`) wins.
-        let platform = PixiPlatform::from_required_virtual_packages(
+        let platform = PixiPlatform::from_detection(
+            None,
             Platform::OsxArm64,
             vec![GenericVirtualPackage {
                 name: "__osx".parse().unwrap(),
                 version: "12.0".parse().unwrap(),
-                build_string: "0".to_string(),
+                build_string: String::new(),
             }],
-        );
+        )
+        .unwrap();
         assert_eq!(macos_deployment_target(&platform), Some("12.0".to_string()));
 
         // A single-segment declaration gets a `.0` minor.
-        let platform = PixiPlatform::from_required_virtual_packages(
+        let platform = PixiPlatform::from_detection(
+            None,
             Platform::OsxArm64,
             vec![GenericVirtualPackage {
                 name: "__osx".parse().unwrap(),
                 version: "15".parse().unwrap(),
-                build_string: "0".to_string(),
+                build_string: String::new(),
             }],
-        );
+        )
+        .unwrap();
         assert_eq!(macos_deployment_target(&platform), Some("15.0".to_string()));
 
         // No declaration falls back to the subdir default.
