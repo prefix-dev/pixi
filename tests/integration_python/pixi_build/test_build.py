@@ -115,36 +115,59 @@ def test_no_change_should_be_fully_cached(pixi: Path, simple_workspace: Workspac
     assert simple_workspace.find_debug_file("conda_build_v1_params.json") is None
 
 
-@pytest.mark.slow
-def test_recipe_change_trigger_metadata_invalidation(
-    pixi: Path, simple_workspace: Workspace
-) -> None:
-    simple_workspace.write_files()
+def conda_artifact_mtimes(workspace: Workspace) -> dict[Path, int]:
+    """The mtimes of every `.conda` pixi built for this workspace, keyed by path."""
+    return {
+        path: path.stat().st_mtime_ns
+        for path in sorted(workspace.workspace_dir.joinpath(".pixi").rglob("*.conda"))
+    }
 
+
+def install(pixi: Path, workspace: Workspace, expect_build: bool) -> None:
     verify_cli_command(
         [
             pixi,
             "install",
             "-v",
             "--manifest-path",
-            simple_workspace.workspace_dir,
+            workspace.workspace_dir,
         ],
-        stderr_contains=BUILD_RUNNING_STRING,
+        stderr_contains=BUILD_RUNNING_STRING if expect_build else None,
+        stderr_excludes=None if expect_build else BUILD_RUNNING_STRING,
     )
 
-    # Touch the recipe
+
+@pytest.mark.slow
+def test_touching_recipe_does_not_trigger_rebuild(pixi: Path, simple_workspace: Workspace) -> None:
+    simple_workspace.write_files()
+    install(pixi, simple_workspace, expect_build=True)
+    artifacts = conda_artifact_mtimes(simple_workspace)
+    assert artifacts, "the first install must have built a package"
+
     simple_workspace.recipe_path.touch()
 
-    verify_cli_command(
-        [
-            pixi,
-            "install",
-            "-v",
-            "--manifest-path",
-            simple_workspace.workspace_dir,
-        ],
-        stderr_contains=BUILD_RUNNING_STRING,
-    )
+    install(pixi, simple_workspace, expect_build=False)
+
+    # The cached artifacts are served as they are, not written again.
+    assert conda_artifact_mtimes(simple_workspace) == artifacts
+
+
+@pytest.mark.slow
+def test_same_size_recipe_edit_triggers_rebuild(pixi: Path, simple_workspace: Workspace) -> None:
+    """The counterpart to touching the recipe. Both a touch and this edit
+    change only the mtime and leave the size alone, so the hash is the only
+    thing that separates them. A wrong hash wiring here would silently serve
+    the previous artifact."""
+    simple_workspace.write_files()
+    install(pixi, simple_workspace, expect_build=True)
+
+    original = simple_workspace.recipe_path.read_text()
+    assert "version: 1.0.0" in original
+    edited = original.replace("version: 1.0.0", "version: 1.0.1")
+    assert len(edited) == len(original), "the edit must not change the file size"
+    simple_workspace.recipe_path.write_text(edited)
+
+    install(pixi, simple_workspace, expect_build=True)
 
 
 @pytest.mark.slow
