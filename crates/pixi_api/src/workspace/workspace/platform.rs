@@ -130,6 +130,10 @@ pub async fn add_auto_detected<I: Interface>(
     feature_name: FeatureName,
     lock_file_usage: LockFileUsage,
 ) -> miette::Result<()> {
+    // A script's implicit platforms are pixi's own guess, not a declaration;
+    // dedup against them would make this a guaranteed no-op.
+    workspace.forget_implicit_script_platforms();
+
     // Content-based dedup: an existing platform with the same definition *is*
     // this machine, regardless of name.
     let existing = workspace
