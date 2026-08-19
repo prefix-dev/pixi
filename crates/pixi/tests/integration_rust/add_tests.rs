@@ -1251,7 +1251,7 @@ platforms = ["linux-64"]
     insta::with_settings!({
         filters => vec![
             // Filter out the dynamic manifest path to make the snapshot stable
-            (r"manifest \([^)]+\)", "manifest (<MANIFEST_PATH>)"),
+            (r"preview feature \([^)]+\)", "preview feature (<MANIFEST_PATH>)"),
         ]
     }, {
         insta::assert_debug_snapshot!("git_dependency_without_preview_error", error);
