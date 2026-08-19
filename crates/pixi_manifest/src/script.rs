@@ -423,21 +423,33 @@ impl ScriptManifest {
             .and_then(Item::as_table_like_mut)
             .and_then(|tool| tool.get_mut("pixi"))
             .and_then(Item::as_table_like_mut);
-        let (updated_conda, updated_pypi, updated_targets) = if let Some(pixi) = updated_pixi {
-            (
-                pixi.remove("dependencies")
-                    .and_then(|item| item.into_table().ok()),
-                pixi.remove("pypi-dependencies")
-                    .and_then(|item| item.into_table().ok()),
-                pixi.remove("target")
-                    .and_then(|item| item.into_table().ok()),
-            )
-        } else {
-            (None, None, None)
-        };
+        let (updated_conda, updated_pypi, updated_targets, updated_system_requirements) =
+            if let Some(pixi) = updated_pixi {
+                (
+                    pixi.remove("dependencies")
+                        .and_then(|item| item.into_table().ok()),
+                    pixi.remove("pypi-dependencies")
+                        .and_then(|item| item.into_table().ok()),
+                    pixi.remove("target")
+                        .and_then(|item| item.into_table().ok()),
+                    pixi.remove("system-requirements")
+                        .and_then(|item| item.into_table().ok()),
+                )
+            } else {
+                (None, None, None, None)
+            };
         sync_pixi_table(&mut metadata, updated_conda, "dependencies")?;
         sync_pixi_table(&mut metadata, updated_pypi, "pypi-dependencies")?;
         sync_pixi_table(&mut metadata, updated_targets, "target")?;
+        // The legacy `[system-requirements]` table has to be able to *leave*
+        // the script: adding a rich platform commits the migration away from
+        // it, and the two cannot coexist. Without this the removal is dropped
+        // on the floor here and the script no longer parses.
+        sync_pixi_table(
+            &mut metadata,
+            updated_system_requirements,
+            "system-requirements",
+        )?;
 
         Ok(format!(
             "{}{}{}",

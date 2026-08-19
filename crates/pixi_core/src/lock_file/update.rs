@@ -85,7 +85,8 @@ use crate::{
         get_activated_environment_variables,
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
         virtual_packages::{
-            minimum_compatible_declared_platform, verify_current_platform_can_run_environment,
+            environment_has_dependencies_for_platform, minimum_compatible_declared_platform,
+            verify_current_platform_can_run_environment,
         },
     },
 };
@@ -757,10 +758,41 @@ impl<'p> LockFileDerivedData<'p> {
         let lock_file_path = self.workspace.persistent_lock_file_path().ok_or_else(|| {
             miette::miette!("transient script workspaces cannot write lock files")
         })?;
+        self.warn_if_locking_an_implicit_host_platform(&lock_file_path);
         self.lock_file
             .to_path(&lock_file_path)
             .into_diagnostic()
             .context("failed to write lock file to disk")
+    }
+
+    /// Warn when a script that declares no `platforms` is about to persist a
+    /// lock file describing this machine.
+    ///
+    /// `pixi run --script` reaches here only when a sidecar already exists (it
+    /// resolves in memory otherwise), so this is about the `pixi lock --script`
+    /// that deliberately creates a portable-looking artifact that is not
+    /// portable, and about the runs that keep it up to date afterwards.
+    fn warn_if_locking_an_implicit_host_platform(&self, lock_file_path: &Path) {
+        if !self.workspace.script_platforms_are_implicit() {
+            return;
+        }
+        let manifest = self.workspace.workspace_manifest();
+        if manifest
+            .workspace
+            .platforms
+            .iter()
+            .all(|platform| platform.customised_virtual_packages().is_empty())
+        {
+            return;
+        }
+        let script = self.workspace.workspace.provenance.absolute_path();
+        tracing::warn!(
+            "the script declares no platforms, so {} records this machine's virtual packages.\n\
+             Run `pixi workspace platform add --script {} --auto-detect` to declare it explicitly, \
+             or add `platforms` to the script metadata.",
+            lock_file_path.display(),
+            script.display(),
+        );
     }
 
     /// Consumes this instance, dropping any resources that are not needed
@@ -1035,6 +1067,26 @@ impl<'p> LockFileDerivedData<'p> {
                     platform.name(),
                     environment.workspace_manifest(),
                 );
+                // No row for the platform being installed means nothing to
+                // install. That is the right answer whenever the environment
+                // declares nothing for this platform, which is ordinary for a
+                // workspace whose dependencies all sit under another
+                // `[target]`, and for a lock file old enough to carry rows only
+                // for the platforms that had packages. When it does declare
+                // something, an empty prefix would silently hand the run
+                // whatever is on `PATH`. Mostly reached through `--frozen`,
+                // which consumes the lock file without checking that it still
+                // covers this machine.
+                if lock_platform.is_none()
+                    && environment_has_dependencies_for_platform(environment, platform)
+                {
+                    return Err(miette::miette!(
+                        help = "Run `pixi lock` to resolve it for this platform. Without `--frozen` or `--locked`, pixi updates the lock file itself.",
+                        "the lock file has no entry for platform '{}' in environment '{}'",
+                        platform.name().as_str(),
+                        environment.name().fancy_display(),
+                    ));
+                }
                 let result = subset.filter(lock_platform.and_then(|p| locked_env.packages(p)))?;
                 let packages = result.install;
                 let ignored = result.ignore;

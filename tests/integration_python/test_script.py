@@ -1272,3 +1272,333 @@ print("hello")
     assert script_lock.read_text() != original_lock
     assert not (tmp_pixi_workspace / "pixi.lock").exists()
     assert_no_workspace_state_created(tmp_pixi_workspace)
+
+
+# The virtual_packages channel only ships the cuda package for these subdirs.
+_CUDA_CHANNEL_SUBDIRS = {"linux-64", "win-64"}
+
+requires_cuda_channel = pytest.mark.skipif(
+    CURRENT_PLATFORM not in _CUDA_CHANNEL_SUBDIRS,
+    reason="virtual_packages channel ships the cuda package only for linux-64 and win-64",
+)
+
+
+def _script_without_platforms(path: Path, extra_channel: str | None, dependency: str) -> Path:
+    """A script with no `platforms`, so pixi picks one for it.
+
+    Every script needs `python`, so conda-forge is always in the list; a test
+    channel goes in front of it when the test needs a package from one.
+    """
+    channels = [f'"{extra_channel}"'] if extra_channel else []
+    channels.append(f'"{CONDA_FORGE_CHANNEL}"')
+    path.write_text(
+        f"""# /// script
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# channels = [{", ".join(channels)}]
+#
+# [tool.pixi.dependencies]
+# {dependency}
+# ///
+print("SCRIPT-RAN")
+"""
+    )
+    return path
+
+
+@pytest.mark.slow
+@requires_cuda_channel
+def test_script_without_platforms_solves_against_the_machine(
+    pixi: Path, tmp_pixi_workspace: Path, virtual_packages_channel: str
+) -> None:
+    """A script that declares no platforms is resolved for the machine it runs
+    on, not for pixi's per-subdir defaults.
+
+    The in-repo ``cuda`` package needs ``__cuda >=12``, and ``__cuda`` is never
+    a subdir default, so it can only resolve if the host's virtual packages
+    reached the solver.
+    """
+    script = _script_without_platforms(
+        tmp_pixi_workspace / "gpu.py", virtual_packages_channel, 'cuda = "*"'
+    )
+    verify_cli_command(
+        [pixi, "run", "--script", script],
+        ExitCode.SUCCESS,
+        env={"CONDA_OVERRIDE_CUDA": "12"},
+        stdout_contains="SCRIPT-RAN",
+    )
+
+
+@pytest.mark.slow
+@requires_cuda_channel
+def test_script_without_platforms_respects_a_machine_below_the_floor(
+    pixi: Path, tmp_pixi_workspace: Path, virtual_packages_channel: str
+) -> None:
+    """The guard rail for the test above: below the package's ``__cuda >=12``
+    floor the same script must fail, so the success there cannot come from the
+    requirement being ignored."""
+    script = _script_without_platforms(
+        tmp_pixi_workspace / "gpu.py", virtual_packages_channel, 'cuda = "*"'
+    )
+    verify_cli_command(
+        [pixi, "run", "--script", script],
+        ExitCode.FAILURE,
+        env={"CONDA_OVERRIDE_CUDA": "10"},
+    )
+
+
+@pytest.mark.slow
+@requires_cuda_channel
+def test_script_with_explicit_platforms_is_left_alone(
+    pixi: Path, tmp_pixi_workspace: Path, virtual_packages_channel: str
+) -> None:
+    """Declaring `platforms` opts out of host detection, so the same script
+    resolves against the subdir defaults, which carry no ``__cuda`` at all."""
+    script = tmp_pixi_workspace / "gpu.py"
+    script.write_text(
+        f"""# /// script
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# channels = ["{virtual_packages_channel}", "{CONDA_FORGE_CHANNEL}"]
+# platforms = ["{CURRENT_PLATFORM}"]
+#
+# [tool.pixi.dependencies]
+# cuda = "*"
+# ///
+print("SCRIPT-RAN")
+"""
+    )
+    verify_cli_command(
+        [pixi, "run", "--script", script],
+        ExitCode.FAILURE,
+        env={"CONDA_OVERRIDE_CUDA": "12"},
+    )
+
+
+@pytest.mark.slow
+@requires_cuda_channel
+def test_script_sidecar_round_trips_without_resolving_again(
+    pixi: Path, tmp_pixi_workspace: Path, virtual_packages_channel: str
+) -> None:
+    """``pixi lock --script`` records the host platform, and the next run reuses
+    it.
+
+    The sidecar's platform used to be read back as a bare subdir, which dropped
+    the virtual packages it was locked with. The environment then looked absent,
+    every run re-resolved, and the sidecar was quietly rewritten with pixi's
+    defaults -- undoing the fix for anyone who created one.
+    """
+    script = _script_without_platforms(
+        tmp_pixi_workspace / "gpu.py", virtual_packages_channel, 'cuda = "*"'
+    )
+    lock = tmp_pixi_workspace / "gpu.py.pixi.lock"
+    env = {"CONDA_OVERRIDE_CUDA": "12"}
+
+    verify_cli_command([pixi, "lock", "--script", script], ExitCode.SUCCESS, env=env)
+    locked = json.loads(
+        verify_cli_command(
+            [pixi, "workspace", "platform", "list", "--script", script, "--json"],
+            ExitCode.SUCCESS,
+            env=env,
+        ).stdout
+    )
+    declared = [row for row in locked["platforms"] if not row.get("is_autodetected")]
+    assert declared, locked
+    assert any("cuda=12" in row["virtual_packages"] for row in declared), declared
+
+    before = lock.read_text()
+    verify_cli_command(
+        [pixi, "run", "--script", script, "--locked"],
+        ExitCode.SUCCESS,
+        env=env,
+        stdout_contains="SCRIPT-RAN",
+    )
+    assert lock.read_text() == before
+
+
+@pytest.mark.slow
+def test_script_sidecar_for_another_subdir_falls_back_to_the_machine(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """A sidecar locked for a subdir this machine cannot run is re-resolved.
+
+    The script declares no platforms, so erroring out on one would blame the
+    user for a platform they never wrote down. It used to do exactly that.
+    """
+    script = _script_without_platforms(tmp_pixi_workspace / "plain.py", None, "")
+    other = "win-64" if not CURRENT_PLATFORM.startswith("win") else "linux-64"
+
+    verify_cli_command(
+        [pixi, "lock", "--script", script],
+        ExitCode.SUCCESS,
+        env={"PIXI_OVERRIDE_PLATFORM": other},
+    )
+    # Re-resolving replaces the sidecar, so say so rather than discarding a
+    # deliberate lock in silence. The only row it holds is for another subdir,
+    # which is what gets reported.
+    verify_cli_command(
+        [pixi, "run", "--script", script],
+        ExitCode.SUCCESS,
+        stdout_contains="SCRIPT-RAN",
+        stderr_contains=[f"'{other}'", "does not ask for"],
+    )
+
+
+@pytest.mark.slow
+def test_script_frozen_refuses_a_sidecar_without_an_entry_for_this_machine(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """`--frozen` consumes the lock without checking it, so a sidecar with no
+    row for the platform we run on used to produce an empty environment and run
+    the script against whatever `python` was on `PATH`."""
+    script = _script_without_platforms(tmp_pixi_workspace / "plain.py", None, 'python = "3.12.*"')
+    other = "win-64" if not CURRENT_PLATFORM.startswith("win") else "linux-64"
+
+    verify_cli_command(
+        [pixi, "lock", "--script", script],
+        ExitCode.SUCCESS,
+        env={"PIXI_OVERRIDE_PLATFORM": other},
+    )
+    verify_cli_command(
+        [pixi, "run", "--script", script, "--frozen"],
+        ExitCode.FAILURE,
+        stderr_contains="has no entry for platform",
+    )
+
+
+@pytest.mark.slow
+def test_lock_script_without_platforms_warns_that_it_records_this_machine(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """``pixi lock --script`` is the only command that persists the picked
+    platform, so it says so once rather than leaving a machine-specific lock
+    looking portable."""
+    script = _script_without_platforms(tmp_pixi_workspace / "plain.py", None, "")
+    verify_cli_command(
+        [pixi, "lock", "--script", script],
+        ExitCode.SUCCESS,
+        stderr_contains=[
+            "declares no platforms",
+            "--auto-detect",
+        ],
+    )
+
+
+@pytest.mark.slow
+def test_script_with_an_unparsable_sidecar_does_not_blame_the_platform(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """A sidecar that does not parse says nothing about the platform it was
+    locked for, so the platform pick stays quiet and lets the loader report the
+    parse error it can point at a line of."""
+    script = _script_without_platforms(tmp_pixi_workspace / "plain.py", None, "")
+    (tmp_pixi_workspace / "plain.py.pixi.lock").write_text("this is not yaml: [ }\n")
+
+    verify_cli_command(
+        [pixi, "run", "--script", script],
+        ExitCode.FAILURE,
+        stderr_excludes="cannot run",
+    )
+
+
+@pytest.mark.slow
+def test_script_platform_add_migrates_away_from_system_requirements(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """Adding a detected platform to a script commits the migration off the
+    legacy ``[system-requirements]`` table.
+
+    The two cannot coexist, so a script keeping both no longer parses, and the
+    command that produced it is the one the lock warning recommends.
+    """
+    script = tmp_pixi_workspace / "sr.py"
+    script.write_text(
+        f"""# /// script
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# channels = ["{CONDA_FORGE_CHANNEL}"]
+#
+# [tool.pixi.system-requirements]
+# libc = "2.17"
+# ///
+print("SCRIPT-RAN")
+"""
+    )
+
+    verify_cli_command(
+        [pixi, "workspace", "platform", "add", "--script", script, "--auto-detect", "--no-install"],
+        ExitCode.SUCCESS,
+    )
+    assert "system-requirements" not in script.read_text()
+
+    # The script has to still load, which is what the stale table prevented.
+    verify_cli_command(
+        [pixi, "workspace", "platform", "list", "--script", script],
+        ExitCode.SUCCESS,
+    )
+
+
+@pytest.mark.slow
+def test_script_warns_before_dropping_foreign_subdirs_from_a_sidecar(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """A script that declares no platforms asks for one platform, the one it
+    runs on, so rows for other subdirs go. They take their packages with them,
+    which is too much of a checked-in lock file to lose in silence."""
+    script = tmp_pixi_workspace / "multi.py"
+    other = "win-64" if not CURRENT_PLATFORM.startswith("win") else "linux-64"
+    script.write_text(
+        f"""# /// script
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# channels = ["{CONDA_FORGE_CHANNEL}"]
+# platforms = ["{CURRENT_PLATFORM}", "{other}"]
+#
+# [tool.pixi.dependencies]
+# python = "3.12.*"
+# ///
+print("SCRIPT-RAN")
+"""
+    )
+    verify_cli_command([pixi, "lock", "--script", script], ExitCode.SUCCESS)
+
+    # Dropping the `platforms` line is what leaves the foreign rows behind.
+    script.write_text(
+        "\n".join(
+            line for line in script.read_text().splitlines() if not line.startswith("# platforms")
+        )
+        + "\n"
+    )
+    verify_cli_command(
+        [pixi, "run", "--script", script],
+        ExitCode.SUCCESS,
+        stdout_contains="SCRIPT-RAN",
+        stderr_contains=[f"'{other}'", "does not ask for"],
+    )
+
+
+@pytest.mark.slow
+def test_script_sidecar_this_machine_cannot_run_falls_back_to_the_host(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """A sidecar row for this subdir that demands more than the machine offers
+    gives way to the host, rather than failing on a platform the script never
+    declared."""
+    script = _script_without_platforms(tmp_pixi_workspace / "plain.py", None, "")
+
+    # Locked on a machine claiming a CUDA driver, run on one without it.
+    verify_cli_command(
+        [pixi, "lock", "--script", script],
+        ExitCode.SUCCESS,
+        env={"CONDA_OVERRIDE_CUDA": "99"},
+    )
+    verify_cli_command(
+        [pixi, "run", "--script", script],
+        ExitCode.SUCCESS,
+        stdout_contains="SCRIPT-RAN",
+        stderr_contains=["cannot run", "replaces what it records"],
+    )
