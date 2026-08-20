@@ -7170,6 +7170,7 @@ name = "pixi_reporters"
 version = "0.1.0"
 dependencies = [
  "console",
+ "fs-err",
  "futures",
  "human_bytes",
  "indexmap 2.14.0",

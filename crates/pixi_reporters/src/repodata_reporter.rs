@@ -103,7 +103,7 @@ fn read_viewed_channel_notice_ids() -> HashSet<String> {
 }
 
 fn read_viewed_channel_notice_ids_from(path: &std::path::Path) -> HashSet<String> {
-    std::fs::read_to_string(path)
+    fs_err::read_to_string(path)
         .map(|contents| {
             contents
                 .lines()
@@ -126,11 +126,11 @@ fn write_viewed_channel_notice_ids_to(
     viewed: &HashSet<String>,
 ) -> std::io::Result<()> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
+        fs_err::create_dir_all(parent)?;
     }
     let mut ids = viewed.iter().map(String::as_str).collect::<Vec<_>>();
     ids.sort_unstable();
-    std::fs::write(path, ids.join("\n"))
+    fs_err::write(path, ids.join("\n"))
 }
 
 fn format_channel_notice(notice: &ChannelNoticeResult, now: Timestamp, color: bool) -> String {
@@ -537,7 +537,7 @@ mod tests {
 
         write_viewed_channel_notice_ids_to(&path, &viewed).unwrap();
 
-        assert_eq!(std::fs::read_to_string(&path).unwrap(), "first\nsecond");
+        assert_eq!(fs_err::read_to_string(&path).unwrap(), "first\nsecond");
         assert_eq!(read_viewed_channel_notice_ids_from(&path), viewed);
     }
 }

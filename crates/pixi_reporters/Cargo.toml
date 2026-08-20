@@ -11,6 +11,7 @@ license.workspace = true
 
 [dependencies]
 # Standard library
+fs-err = { workspace = true }
 futures = { workspace = true }
 indexmap = { workspace = true }
 itertools = { workspace = true }
