@@ -57,20 +57,51 @@ pub fn host_subdir() -> Platform {
         .unwrap_or_else(Platform::current)
 }
 
-/// Read one `CONDA_OVERRIDE_*` variable: `None` when it is unset or holds a
-/// value rattler can't parse, `Some(None)` when it is set empty ("disable this
-/// package"), `Some(Some(version))` otherwise.
+/// What a `CONDA_OVERRIDE_*` variable says about the virtual package it
+/// governs.
+#[derive(Clone)]
+enum VersionOverride {
+    /// Unset, unusable, or a package no variable governs: leave the detected
+    /// package as it is.
+    Untouched,
+
+    /// Set empty: this machine does not have the package at all.
+    Disabled,
+
+    /// Set to a version: use it, and add the package if nothing detected it.
+    Pinned(Version),
+}
+
+impl VersionOverride {
+    /// The version this override introduces, if it introduces one.
+    fn pinned(&self) -> Option<Version> {
+        match self {
+            VersionOverride::Pinned(version) => Some(version.clone()),
+            VersionOverride::Untouched | VersionOverride::Disabled => None,
+        }
+    }
+}
+
+/// Read the `CONDA_OVERRIDE_*` variable that governs `T`.
+///
+/// The variable name and the parsing rules both hang off the type, so `T` is
+/// what selects the slot. `to_version` is a parameter only because the version
+/// field is not part of the trait: `Windows` carries an optional one where the
+/// rest carry a plain [`Version`].
 ///
 /// An unusable value is warned about rather than dropped on the floor -- pixi
 /// applies these itself now, so nothing else would ever tell the user their
 /// override was ignored.
-fn version_override<T: EnvOverride>(to_version: impl Fn(T) -> Version) -> Option<Option<Version>> {
-    std::env::var_os(T::DEFAULT_ENV_NAME)?;
+fn version_override<T: EnvOverride>(to_version: impl Fn(T) -> Version) -> VersionOverride {
+    if std::env::var_os(T::DEFAULT_ENV_NAME).is_none() {
+        return VersionOverride::Untouched;
+    }
     match T::detect_with_fallback(&Override::DefaultEnvVar, || Ok(None)) {
-        Ok(value) => Some(value.map(to_version)),
+        Ok(Some(value)) => VersionOverride::Pinned(to_version(value)),
+        Ok(None) => VersionOverride::Disabled,
         Err(error) => {
             tracing::warn!("Ignoring {}: {error}", T::DEFAULT_ENV_NAME);
-            None
+            VersionOverride::Untouched
         }
     }
 }
@@ -125,18 +156,15 @@ pub fn apply_environment_variable_overrides(
             "__win" => win.clone(),
             // The libc family is handled by `apply_glibc_override` below, since
             // the single glibc env var must not rewrite `__musl`/`__eglibc`.
-            _ => None,
+            _ => VersionOverride::Untouched,
         };
         match outcome {
-            // Override produced a version: use it.
-            Some(Some(version)) => {
+            VersionOverride::Pinned(version) => {
                 package.version = version;
                 true
             }
-            // Variable was set empty: disable the package.
-            Some(None) => false,
-            // Not env-overridable, unset, or unusable: leave untouched.
-            None => true,
+            VersionOverride::Disabled => false,
+            VersionOverride::Untouched => true,
         }
     });
 
@@ -159,11 +187,11 @@ pub fn apply_environment_variable_overrides(
         });
     };
 
-    add_missing("__cuda", cuda.flatten());
-    add_missing("__cuda_arch", cuda_arch.flatten());
-    add_missing("__osx", osx.flatten());
-    add_missing("__linux", linux.flatten());
-    add_missing("__win", win.flatten());
+    add_missing("__cuda", cuda.pinned());
+    add_missing("__cuda_arch", cuda_arch.pinned());
+    add_missing("__osx", osx.pinned());
+    add_missing("__linux", linux.pinned());
+    add_missing("__win", win.pinned());
 
     // CEP couples the two CUDA slots: `__cuda_arch` is meaningless without a
     // driver, and rattler drops it the same way in `VirtualPackages::detect`.
