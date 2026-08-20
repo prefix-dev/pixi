@@ -81,7 +81,7 @@ use crate::{
     workspace::{Environment, EnvironmentVars, grouped_environment::GroupedEnvironment},
 };
 use pixi_command_dispatcher::CommandDispatcher;
-use pixi_manifest::platform::host::{host_baseline, host_subdir};
+use pixi_manifest::platform::host::host_baseline;
 use pixi_uv_context::UvResolutionContext;
 use rattler_conda_types::GenericVirtualPackage;
 
@@ -548,7 +548,7 @@ pub async fn resolve_pypi(
             let prefix_platform: &PixiPlatform = match environment.best_declared_platform() {
                 Some(p) => p,
                 None => {
-                    host_platform = host_baseline(host_subdir());
+                    host_platform = host_baseline();
                     &host_platform
                 }
             };
