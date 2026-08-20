@@ -5882,6 +5882,8 @@
       
         
       
+        
+      
     
     
     
@@ -7640,14 +7642,14 @@
         
           
           <div class="md-nav__link md-nav__container">
-            <a href="../../reference/cli/pixi/workspace/register/" class="md-nav__link ">
+            <a href="../../reference/cli/pixi/workspace/preview/" class="md-nav__link ">
               
   
   
   <span class="md-ellipsis">
     
   
-  register
+  preview
 
     
   </span>
@@ -7665,6 +7667,161 @@
         
         <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_9_3_28_11_label" aria-expanded="false">
           <label class="md-nav__title" for="__nav_9_3_28_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+  preview
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/preview/add/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  add
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/preview/list/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  list
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/preview/remove/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  remove
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+      
+        
+          
+        
+      
+        
+      
+        
+      
+        
+      
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_3_28_12" >
+        
+          
+          <div class="md-nav__link md-nav__container">
+            <a href="../../reference/cli/pixi/workspace/register/" class="md-nav__link ">
+              
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  register
+
+    
+  </span>
+  
+  
+
+            </a>
+            
+              
+              <label class="md-nav__link " for="__nav_9_3_28_12" id="__nav_9_3_28_12_label" tabindex="0">
+                <span class="md-nav__icon md-icon"></span>
+              </label>
+            
+          </div>
+        
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_9_3_28_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_3_28_12">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -7793,7 +7950,7 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_3_28_12" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_9_3_28_13" >
         
           
           <div class="md-nav__link md-nav__container">
@@ -7814,14 +7971,14 @@
             </a>
             
               
-              <label class="md-nav__link " for="__nav_9_3_28_12" id="__nav_9_3_28_12_label" tabindex="0">
+              <label class="md-nav__link " for="__nav_9_3_28_13" id="__nav_9_3_28_13_label" tabindex="0">
                 <span class="md-nav__icon md-icon"></span>
               </label>
             
           </div>
         
-        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_9_3_28_12_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_9_3_28_12">
+        <nav class="md-nav" data-md-level="4" aria-labelledby="__nav_9_3_28_13_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_9_3_28_13">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -8289,7 +8446,7 @@ The vision is to enable building of packages from source, for any language, on a
 </ol>
 </div>
 <h2 id="setting-up-the-manifest">Setting up the Manifest<a class="headerlink" href="#setting-up-the-manifest" title="Permanent link">#</a></h2>
-<p>This is an overview of the Pixi manifest using the <code>pixi-build</code> feature.</p>
+<p>This is an overview of the Pixi manifest using the <code>pixi-build</code> preview flag.</p>
 <p>A more in-depth overview of what is available in the <code>[package]</code> part of the manifest can be found in the <a href="../../reference/pixi_manifest/#the-package-section">Manifest Reference</a>.</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1">### Specifies properties for the whole workspace ###</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="k">[workspace]</span>
@@ -8357,7 +8514,7 @@ You can read up on run-dependencies in the <a href=".././dependency_types/#depen
 </span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">rich</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;13.9.*&quot;</span>
 </span></code></pre></div>
 <h2 id="cli-commands">CLI Commands<a class="headerlink" href="#cli-commands" title="Permanent link">#</a></h2>
-<p>Using the preview feature you can now build packages from source.</p>
+<p>Using the preview flag you can now build packages from source.</p>
 <ul>
 <li><code>pixi publish</code> builds a <code>.conda</code> file from your package and either uploads it to a channel (<code>--target-channel</code>) or copies it into a local directory (<code>--target-dir &lt;PATH&gt;</code>).</li>
 <li>Other commands like <code>pixi install</code> and <code>pixi run</code> automatically make use of the build feature when a <code>path</code>, <code>git</code> or <code>url</code> dependency is present.</li>

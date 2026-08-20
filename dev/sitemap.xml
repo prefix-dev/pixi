@@ -565,6 +565,18 @@
         <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/name/set/</loc>
       </url>
       <url>
+        <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/preview/</loc>
+      </url>
+      <url>
+        <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/preview/add/</loc>
+      </url>
+      <url>
+        <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/preview/list/</loc>
+      </url>
+      <url>
+        <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/preview/remove/</loc>
+      </url>
+      <url>
         <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/register/</loc>
       </url>
       <url>

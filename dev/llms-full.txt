@@ -6878,7 +6878,7 @@ The package name is extracted from the archive filename, and the path is stored 
 ## Source Packages
 
 !!! warning
-    `pixi-build` is a preview feature, and will change until it is stabilized.
+    `pixi-build` is a preview flag, and will change until it is stabilized.
     Please keep that in mind when you use it for your workspaces.
 
 For these packages to be recognized they need to be understood by Pixi as source packages.
@@ -7274,7 +7274,7 @@ To illustrate this, we will use the same C++ package as in the previous tutorial
 This will unveil the hidden complexity of the build process, and give you a better grasp of how backends work.
 
 !!! warning
-    `pixi-build` is a preview feature, and will change until it is stabilized.
+    `pixi-build` is a preview flag, and will change until it is stabilized.
     Please keep that in mind when you use it for your workspaces.
 
 !!! hint
@@ -7481,7 +7481,7 @@ That we can also test using pixi.
 We'll later combine this example together with a Python package.
 
 !!! warning
-    `pixi-build` is a preview feature, and will change until it is stabilized.
+    `pixi-build` is a preview flag, and will change until it is stabilized.
     Please keep that in mind when you use it for your workspaces.
 
 ## Creating a New Workspace
@@ -7580,7 +7580,7 @@ In this tutorial we assume that you've read the [Building a C++ Package](cpp.md)
 If you haven't read it yet, we recommend you to do so before continuing, as the project structure and the source code will be the same as in the previous tutorial, so we may skip explicit explanations of some parts.
 
 !!! warning
-    `pixi-build` is a preview feature and will change until it is stabilized.
+    `pixi-build` is a preview flag and will change until it is stabilized.
 
 `pixi-build` has built-in cross-compilation capabilities: if the build process of a package supports it, building a package for a platform (`linux-aarch64`) different from the host platform (`linux-64`) can be done simply with `pixi publish --target-platform linux-aarch64 --target-dir output`.
 However, a typical [nanobind](https://github.com/wjakob/nanobind) project, as described in the [Building a C++ Package tutorial](cpp.md), doesn't cross-compile out of the box.
@@ -8222,7 +8222,7 @@ The vision is to enable building of packages from source, for any language, on a
 
 ## Setting up the Manifest
 
-This is an overview of the Pixi manifest using the `pixi-build` feature.
+This is an overview of the Pixi manifest using the `pixi-build` preview flag.
 
 A more in-depth overview of what is available in the `[package]` part of the manifest can be found in the [Manifest Reference](../reference/pixi_manifest.md#the-package-section).
 
@@ -8281,7 +8281,7 @@ You can read up on run-dependencies in the [dependency types chapter](./dependen
 ```
 
 ## CLI Commands
-Using the preview feature you can now build packages from source.
+Using the preview flag you can now build packages from source.
 
 - `pixi publish` builds a `.conda` file from your package and either uploads it to a channel (`--target-channel`) or copies it into a local directory (`--target-dir <PATH>`).
 - Other commands like `pixi install` and `pixi run` automatically make use of the build feature when a `path`, `git` or `url` dependency is present.
@@ -8435,7 +8435,7 @@ You might also want to check out the [documentation](backends/pixi-build-python.
 
 
 !!! warning
-    `pixi-build` is a preview feature, and will change until it is stabilized.
+    `pixi-build` is a preview flag, and will change until it is stabilized.
     Please keep that in mind when you use it for your projects.
 
 ## Why is This Useful?
@@ -8561,7 +8561,7 @@ For ROS without Pixi building (not packaging), see the [ROS 2 tutorial](../tutor
 You may also want to read the backend documentation for [pixi-build-ros](backends/pixi-build-ros.md).
 
 !!! warning
-    `pixi-build` is a preview feature and may change before stabilization.
+    `pixi-build` is a preview flag and may change before stabilization.
     Expect rough edges; please report issues so we can improve it.
 
 ## Create a Pixi workspace
@@ -8576,7 +8576,7 @@ pixi add ros-jazzy-ros2run
 
 This adds the `ros2` cli command to your Pixi environment.
 
-In all examples below, ensure the [build preview](../reference/pixi_manifest.md#preview-features) is enabled in your workspace manifest:
+In all examples below, ensure the [build preview](../reference/pixi_manifest.md#preview-flags) is enabled in your workspace manifest:
 ```toml title="ros_ws/pixi.toml"
 --8<-- "docs/source_files/pixi_workspaces/pixi_build/ros_ws/pixi.toml:preview"
 ```
@@ -8721,7 +8721,7 @@ In this tutorial, we will show you how to use variants in order to build a Pixi 
 Some might call this functionality, build matrix, build configurations or parameterized builds, in the conda ecosystem this is referred to as a variant.
 
 !!! warning
-    `pixi-build` is a preview feature, and will change until it is stabilized.
+    `pixi-build` is a preview flag, and will change until it is stabilized.
     Please keep that in mind when you use it for your projects.
 
 ## Why is This Useful?
@@ -8851,7 +8851,7 @@ Any questions? Feel free to reach out or share this tutorial on [X](https://twit
 In this tutorial, we will show you how to integrate multiple Pixi packages into a single workspace.
 
 !!! warning
-    `pixi-build` is a preview feature, and will change until it is stabilized.
+    `pixi-build` is a preview flag, and will change until it is stabilized.
     Please keep that in mind when you use it for your projects.
 
 ## Why is This Useful?
@@ -13643,8 +13643,8 @@ torch = "0d"
 
 ### `build-variants` (optional)
 
-!!! warning "Preview Feature"
-    Build variants require the `pixi-build` preview feature to be enabled:
+!!! warning "Preview Flag"
+    Build variants require the `pixi-build` preview flag to be enabled:
     ```toml
     [workspace]
     preview = ["pixi-build"]
@@ -13703,8 +13703,8 @@ For detailed examples and tutorials, see the [build variants documentation](../b
 
 ### `build-variants-files` (optional)
 
-!!! warning "Preview Feature"
-    Build variant files require the `pixi-build` preview feature to be enabled:
+!!! warning "Preview Flag"
+    Build variant files require the `pixi-build` preview flag to be enabled:
     ```toml
     [workspace]
     preview = ["pixi-build"]
@@ -13731,7 +13731,7 @@ Otherwise, it will use `rattler-build`'s syntax as outlined in the [rattler-buil
 
 A pool of conda dependency specs that dependency tables can inherit from per entry by writing `{ workspace = true }`.
 The environment tables (`[dependencies]`, `[feature.*.dependencies]`, `[target.*.dependencies]`, `[constraints]`) can inherit out of the box.
-The package tables (`[package.*-dependencies]`, `[package.run-constraints]`, `[package.build.backend]`) require the `pixi-build` preview feature, as do source (`path`/`git`) entries in the pool itself (see [Workspace Dependencies](../build/workspace_dependencies.md) for the semantics, override rules and error cases).
+The package tables (`[package.*-dependencies]`, `[package.run-constraints]`, `[package.build.backend]`) require the `pixi-build` preview flag, as do source (`path`/`git`) entries in the pool itself (see [Workspace Dependencies](../build/workspace_dependencies.md) for the semantics, override rules and error cases).
 Relative `path` specs are resolved against the workspace manifest's directory and re-anchored per consuming member.
 
 ```toml
@@ -14593,16 +14593,16 @@ The content is written inline on the environment, creating the environment if it
 The global configuration options are documented in the [global configuration](../reference/pixi_configuration.md) section.
 
 
-## Preview features
-Pixi sometimes introduces new features that are not yet stable, but that we would like for users to test out. These features are called preview features. Preview features are disabled by default and can be enabled by setting the `preview` field in the workspace manifest. The preview field is an array of strings that specify the preview features to enable, or the boolean value `true` to enable all preview features.
+## Preview flags
+Pixi sometimes introduces new features that are not yet stable, but that we would like for users to test out. These features are called preview flags. Preview flags are disabled by default and can be enabled by setting the `preview` field in the workspace manifest. The preview field is an array of strings that specify the preview flags to enable, or the boolean value `true` to enable all preview flags.
 
-An example of a preview feature in the manifest:
+An example of a preview flag in the manifest:
 
 ```toml
 --8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:preview"
 ```
 
-Preview features in the documentation will be marked as such on the relevant pages.
+Preview flags in the documentation will be marked as such on the relevant pages.
 
 ## The `dev` table
 The `dev` table allows you to depend on the development dependencies of a source package.
@@ -14617,7 +14617,7 @@ More information can be found in the [Dev packages](../build/dev.md) documentati
 ## The `package` section
 
 !!! warning "Important note"
-    `pixi-build` is a [preview feature](#preview-features), and will change until it is stabilized.
+    `pixi-build` is a [preview flag](#preview-flags), and will change until it is stabilized.
     Please keep that in mind when you use it for your workspaces.
     ```toml
     --8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:preview"
