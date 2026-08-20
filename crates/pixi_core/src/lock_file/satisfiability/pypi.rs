@@ -55,7 +55,7 @@ use crate::{
         Environment, EnvironmentVars, HasWorkspaceRef, grouped_environment::GroupedEnvironment,
     },
 };
-use pixi_manifest::platform::host::{host_baseline, host_subdir};
+use pixi_manifest::platform::host::host_baseline;
 
 /// Compare two PyPI index URLs ignoring trailing slashes.
 fn pypi_index_urls_match(a: &Url, b: &Url) -> bool {
@@ -607,7 +607,7 @@ async fn read_local_package_metadata(
     // Get or create cache entry for this environment and host platform. The
     // build prefix is shared across all target platforms, so we key the cache
     // on the *host* platform rather than the target being satisfied.
-    let host_platform = host_baseline(host_subdir());
+    let host_platform = host_baseline();
     let cache_key =
         BuildCacheKey::new(ctx.environment.name().clone(), host_platform.name().clone());
     let cache = ctx.build_caches.entry(cache_key).or_default().clone();
@@ -732,7 +732,7 @@ async fn read_local_package_metadata(
     let conda_prefix_updater = cache
         .conda_prefix_updater
         .get_or_try_init(|| {
-            let prefix_platform = host_baseline(host_subdir());
+            let prefix_platform = host_baseline();
             let group = GroupedEnvironment::Environment(ctx.environment.clone());
             let virtual_packages = ctx.environment.virtual_packages(&prefix_platform);
 

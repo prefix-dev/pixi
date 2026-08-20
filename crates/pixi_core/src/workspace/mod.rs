@@ -60,7 +60,7 @@ use rattler_lock::LockFile;
 use thiserror::Error;
 
 use crate::lock_file::LockedPackageKind;
-use pixi_manifest::platform::host::{detect_host_capabilities, host_subdir};
+use pixi_manifest::platform::host::{host_capabilities, host_subdir};
 use rattler_networking::{LazyClient, s3_middleware};
 use rattler_repodata_gateway::Gateway;
 pub use registry::{WorkspaceRegistry, WorkspaceRegistryError};
@@ -959,7 +959,7 @@ impl Workspace {
         {
             // If the tool platform is the same as the current platform, we just assume the
             // same virtual packages apply.
-            detect_host_capabilities(host_subdir)
+            host_capabilities()
         } else {
             vec![]
         };

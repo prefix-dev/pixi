@@ -9,7 +9,7 @@ use crate::workspace::{
 };
 use fancy_display::FancyDisplay;
 use miette::Diagnostic;
-use pixi_manifest::platform::host::{detect_host_capabilities, host_subdir};
+use pixi_manifest::platform::host::{host_capabilities, host_subdir};
 use pixi_manifest::{
     EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName,
     platform::{candidate_subdirs, solver_virtual_packages, unsatisfied_capabilities},
@@ -110,7 +110,7 @@ pub fn minimum_compatible_declared_platform<'p>(
     lock_file: &LockFile,
 ) -> Result<&'p PixiPlatform, Vec<MatchSpec>> {
     let current = host_subdir();
-    let system_virtual_packages = detect_host_capabilities(host_subdir());
+    let system_virtual_packages = host_capabilities();
     let candidate_subdirs = candidate_subdirs(current);
 
     let manifest = environment.workspace_manifest();
@@ -417,7 +417,7 @@ pub fn verify_run_platform(
             let subdirs = candidate_subdirs(current);
             (
                 subdirs,
-                detect_host_capabilities(host_subdir()),
+                host_capabilities(),
                 PixiPlatformName::from(current),
                 current,
             )

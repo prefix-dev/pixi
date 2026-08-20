@@ -37,7 +37,7 @@ use pixi_core::lock_file::virtual_packages::required_virtual_package_specs;
 use pixi_core::repodata::Repodata;
 use pixi_core::workspace::stdlib_variants::{StdlibVersionPin, derive_stdlib_variants};
 use pixi_manifest::platform::host::{
-    HostDetectionError, detect_host, host_platform_from, host_subdir,
+    HostDetectionError, detect_host, host_subdir, platform_from_detected,
 };
 use pixi_manifest::platform::solver_generic_virtual_packages;
 use pixi_manifest::{InlinePackageManifest, PixiPlatform, PrioritizedChannel, WorkspaceManifest};
@@ -608,7 +608,7 @@ impl Project {
         virtual_packages: &[GenericVirtualPackage],
         channels: &[ChannelUrl],
     ) -> VariantConfig {
-        let device_platform = host_platform_from(platform, virtual_packages.to_vec())
+        let device_platform = platform_from_detected(platform, virtual_packages.to_vec())
             .unwrap_or_else(|_| PixiPlatform::from_subdir(platform));
         let variant_configuration =
             derive_stdlib_variants(&device_platform, channels, StdlibVersionPin::AtMost)

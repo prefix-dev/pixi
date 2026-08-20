@@ -26,7 +26,7 @@ use pixi_config::{ConfigCli, PackageFormatAndCompression};
 use pixi_core::{
     Workspace, WorkspaceLocator, environment::sanity_check_workspace, workspace::DiscoveryStart,
 };
-use pixi_manifest::platform::host::apply_environment_variable_overrides;
+use pixi_manifest::platform::host::apply_conda_overrides;
 use pixi_manifest::{FeaturesExt, S3Options};
 use pixi_path::AbsPathBuf;
 use pixi_progress::global_multi_progress;
@@ -658,7 +658,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_iter()
         .map(GenericVirtualPackage::from)
         .collect();
-    apply_environment_variable_overrides(&mut build_virtual_packages, build_pixi_platform.subdir());
+    apply_conda_overrides(&mut build_virtual_packages, build_pixi_platform.subdir());
 
     let mut host_virtual_packages: Vec<GenericVirtualPackage> = workspace
         .default_environment()
@@ -666,7 +666,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_iter()
         .map(GenericVirtualPackage::from)
         .collect();
-    apply_environment_variable_overrides(&mut host_virtual_packages, target_pixi_platform.subdir());
+    apply_conda_overrides(&mut host_virtual_packages, target_pixi_platform.subdir());
 
     let build_environment = BuildEnvironment {
         host_platform: args.target_platform,

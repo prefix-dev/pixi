@@ -19,7 +19,7 @@ use super::{
     errors::{UnknownTask, UnsupportedPlatformError},
 };
 use crate::{Workspace, workspace::HasWorkspaceRef};
-use pixi_manifest::platform::host::{detect_host_capabilities, host_baseline, host_subdir};
+use pixi_manifest::platform::host::{host_baseline, host_capabilities, host_subdir};
 
 /// Describes a single environment from a project manifest. This is used to
 /// describe environments that can be installed and activated.
@@ -173,7 +173,7 @@ impl<'p> Environment<'p> {
     /// preferred one.
     pub fn best_declared_platform(&self) -> Option<&'p PixiPlatform> {
         let current = host_subdir();
-        let system_virtual_packages = detect_host_capabilities(host_subdir());
+        let system_virtual_packages = host_capabilities();
         let env_platforms = self.platforms();
 
         // The candidates are the workspace platforms whose subdir matches this
@@ -258,7 +258,7 @@ impl<'p> Environment<'p> {
     pub fn activation_platform(&self) -> PixiPlatform {
         self.installed_or_best_declared_platform()
             .cloned()
-            .unwrap_or_else(|| host_baseline(host_subdir()))
+            .unwrap_or_else(host_baseline)
     }
 
     /// Builds an [`UnsupportedPlatformError`] for the case where
@@ -267,7 +267,7 @@ impl<'p> Environment<'p> {
     /// this machine doesn't provide so the user can see what to mock.
     pub fn unsupported_platform_error(&self) -> UnsupportedPlatformError {
         let current = host_subdir();
-        let system_virtual_packages = detect_host_capabilities(host_subdir());
+        let system_virtual_packages = host_capabilities();
         let env_platforms = self.platforms();
         let workspace = &self.workspace_manifest().workspace;
         let unsatisfied_requirements = workspace.unsatisfied_platform_requirements(

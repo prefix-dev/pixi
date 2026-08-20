@@ -11,7 +11,7 @@ use pixi_manifest::{
     PixiPlatformName, PlatformEdit, PlatformMove,
     platform::{
         candidate_subdirs, capability_satisfied_by,
-        host::{detect_host, detect_host_capabilities, host_subdir, machine_virtual_packages},
+        host::{detect_host, host_capabilities, host_subdir, machine_virtual_packages},
         subdir_default_virtual_packages,
     },
 };
@@ -946,7 +946,7 @@ impl HostMachine {
     fn detect() -> Self {
         let subdir = host_subdir();
         let candidate_subdirs = candidate_subdirs(subdir);
-        let detected = detect_host_capabilities(subdir);
+        let detected = host_capabilities();
         HostMachine {
             subdir,
             candidate_subdirs,
