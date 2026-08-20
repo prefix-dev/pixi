@@ -8,7 +8,7 @@ use pixi_core::workspace::{
 };
 use pixi_core::{Workspace, environment::LockFileUsage};
 use pixi_manifest::{
-    EnvironmentName, Feature, FeatureName, KnownPreviewFeature, PixiPlatform, PixiPlatformName,
+    EnvironmentName, Feature, FeatureName, KnownPreviewFlag, PixiPlatform, PixiPlatformName,
     PlatformEdit, PlatformMove, PrioritizedChannel, SpecType, TargetSelector, Task, TaskName,
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
@@ -92,7 +92,7 @@ impl<I: Interface> WorkspaceContext<I> {
         .await
     }
 
-    pub async fn preview_flags(&self) -> Vec<KnownPreviewFeature> {
+    pub async fn preview_flags(&self) -> Vec<KnownPreviewFlag> {
         crate::workspace::workspace::preview::list(&self.workspace).await
     }
 
@@ -102,9 +102,9 @@ impl<I: Interface> WorkspaceContext<I> {
     pub async fn add_preview_flags(
         interface: I,
         manifest_path: std::path::PathBuf,
-        features: Vec<KnownPreviewFeature>,
+        flags: Vec<KnownPreviewFlag>,
     ) -> miette::Result<()> {
-        crate::workspace::workspace::preview::add(&interface, manifest_path, features).await
+        crate::workspace::workspace::preview::add(&interface, manifest_path, flags).await
     }
 
     /// Disable preview flags by editing the manifest directly, like
@@ -113,11 +113,10 @@ impl<I: Interface> WorkspaceContext<I> {
     pub async fn remove_preview_flags(
         interface: I,
         manifest_path: std::path::PathBuf,
-        features: Vec<KnownPreviewFeature>,
+        flags: Vec<KnownPreviewFlag>,
         force: bool,
     ) -> miette::Result<()> {
-        crate::workspace::workspace::preview::remove(&interface, manifest_path, features, force)
-            .await
+        crate::workspace::workspace::preview::remove(&interface, manifest_path, flags, force).await
     }
 
     pub async fn list_activation(&self) -> Vec<crate::workspace::ActivationEntry> {

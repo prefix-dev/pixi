@@ -3,17 +3,12 @@ use std::path::PathBuf;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_core::Workspace;
-use pixi_manifest::{KnownPreviewFeature, ManifestDocument, ManifestProvenance};
+use pixi_manifest::{KnownPreviewFlag, ManifestDocument, ManifestProvenance};
 
 use crate::Interface;
 
-pub async fn list(workspace: &Workspace) -> Vec<KnownPreviewFeature> {
-    workspace
-        .workspace
-        .value
-        .workspace
-        .preview
-        .enabled_features()
+pub async fn list(workspace: &Workspace) -> Vec<KnownPreviewFlag> {
+    workspace.workspace.value.workspace.preview.enabled_flags()
 }
 
 /// Enables the flags by editing the manifest directly: the manifest
@@ -23,18 +18,15 @@ pub async fn list(workspace: &Workspace) -> Vec<KnownPreviewFeature> {
 pub async fn add<I: Interface>(
     interface: &I,
     manifest_path: PathBuf,
-    features: Vec<KnownPreviewFeature>,
+    flags: Vec<KnownPreviewFlag>,
 ) -> miette::Result<()> {
     let provenance = ManifestProvenance::from_path(manifest_path).into_diagnostic()?;
     let mut document = ManifestDocument::from_provenance(&provenance)?;
 
     let mut added = Vec::new();
-    for feature in features {
-        if document
-            .add_preview_flag(feature.into())
-            .into_diagnostic()?
-        {
-            added.push(feature);
+    for flag in flags {
+        if document.add_preview_flag(flag.into()).into_diagnostic()? {
+            added.push(flag);
         }
     }
 
@@ -71,19 +63,19 @@ pub async fn add<I: Interface>(
 pub async fn remove<I: Interface>(
     interface: &I,
     manifest_path: PathBuf,
-    features: Vec<KnownPreviewFeature>,
+    flags: Vec<KnownPreviewFlag>,
     force: bool,
 ) -> miette::Result<()> {
     let provenance = ManifestProvenance::from_path(manifest_path).into_diagnostic()?;
     let mut document = ManifestDocument::from_provenance(&provenance)?;
 
     let mut removed = Vec::new();
-    for feature in features {
+    for flag in flags {
         if document
-            .remove_preview_flag(feature.into())
+            .remove_preview_flag(flag.into())
             .into_diagnostic()?
         {
-            removed.push(feature);
+            removed.push(flag);
         }
     }
 

@@ -1202,7 +1202,7 @@ impl ManifestDocument {
 
     /// Adds a preview flag to the `preview` array of the workspace,
     /// returns false if it was already enabled
-    pub fn add_preview_flag(&mut self, feature: &str) -> Result<bool, TomlError> {
+    pub fn add_preview_flag(&mut self, flag: &str) -> Result<bool, TomlError> {
         let table_name = TableName::new()
             .with_prefix(self.table_prefix())
             .with_table(Some(self.detect_table_name()));
@@ -1210,7 +1210,7 @@ impl ManifestDocument {
 
         let table = self.manifest_mut().get_or_insert_nested_table(&keys)?;
         match table.get("preview").and_then(|item| item.as_bool()) {
-            // `preview = true` already enables every feature
+            // `preview = true` already enables every flag
             Some(true) => return Ok(false),
             // `preview = false` behaves like an empty list, replace it with one
             Some(false) => {
@@ -1222,18 +1222,18 @@ impl ManifestDocument {
         let array = self
             .manifest_mut()
             .get_or_insert_toml_array_mut(&keys, "preview")?;
-        if array.iter().any(|item| item.as_str() == Some(feature)) {
+        if array.iter().any(|item| item.as_str() == Some(flag)) {
             Ok(false)
         } else {
-            array.push(feature);
+            array.push(flag);
             Ok(true)
         }
     }
 
     /// Removes a preview flag from the `preview` array of the workspace,
     /// dropping the field when it ends up empty. Returns false when the
-    /// feature wasn't enabled.
-    pub fn remove_preview_flag(&mut self, feature: &str) -> Result<bool, TomlError> {
+    /// flag wasn't enabled.
+    pub fn remove_preview_flag(&mut self, flag: &str) -> Result<bool, TomlError> {
         let table_name = TableName::new()
             .with_prefix(self.table_prefix())
             .with_table(Some(self.detect_table_name()));
@@ -1249,7 +1249,7 @@ impl ManifestDocument {
                     "cannot remove individual preview flags while `preview = true` enables them all",
                 )
                 .with_help(
-                    "Set `preview` to the list of features you want to keep, e.g. `preview = [\"pixi-build\"]`",
+                    "Set `preview` to the list of flags you want to keep, e.g. `preview = [\"pixi-build\"]`",
                 ),
             ));
         }
@@ -1261,7 +1261,7 @@ impl ManifestDocument {
             return Ok(false);
         };
         let len_before = array.len();
-        array.retain(|item| item.as_str() != Some(feature));
+        array.retain(|item| item.as_str() != Some(flag));
         let removed = array.len() != len_before;
         if array.is_empty() {
             table.remove("preview");

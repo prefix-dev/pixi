@@ -8,11 +8,11 @@
 //! preview = ["new-resolve"]
 //! ```
 //!
-//! Features are split into Known and Unknown features. Basically you can use
-//! any string as a feature but only the features defined in [`KnownPreviewFeature`]
-//! can be used. We do this for backwards compatibility with the old features
-//! that may have been used in the past. The [`KnownPreviewFeature`] enum contains all
-//! the known features. Extend this if you want to add support for new features.
+//! Flags are split into known and unknown flags. Basically you can use
+//! any string as a flag but only the flags defined in [`KnownPreviewFlag`]
+//! are used by pixi, unknown flags only produce a warning. We do this for
+//! backwards compatibility with flags that may have been used in the past.
+//! Extend the [`KnownPreviewFlag`] enum to add support for new flags.
 
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
@@ -23,18 +23,18 @@ pub enum Preview {
     /// All preview flags are enabled
     AllEnabled(bool), // For `preview = true`
     /// Specific preview flags are enabled
-    Features(Vec<KnownPreviewFeature>), // For `preview = ["feature"]`
+    Flags(Vec<KnownPreviewFlag>), // For `preview = ["pixi-build"]`
 }
 
 impl Default for Preview {
     fn default() -> Self {
-        Self::Features(Vec::new())
+        Self::Flags(Vec::new())
     }
 }
 
-impl FromIterator<KnownPreviewFeature> for Preview {
-    fn from_iter<T: IntoIterator<Item = KnownPreviewFeature>>(iter: T) -> Self {
-        Self::Features(iter.into_iter().collect())
+impl FromIterator<KnownPreviewFlag> for Preview {
+    fn from_iter<T: IntoIterator<Item = KnownPreviewFlag>>(iter: T) -> Self {
+        Self::Flags(iter.into_iter().collect())
     }
 }
 
@@ -43,24 +43,24 @@ impl Preview {
     pub fn all_enabled(&self) -> bool {
         match self {
             Preview::AllEnabled(enabled) => *enabled,
-            Preview::Features(_) => false,
+            Preview::Flags(_) => false,
         }
     }
 
     /// Returns true if the given preview flag is enabled
-    pub fn is_enabled(&self, feature: KnownPreviewFeature) -> bool {
+    pub fn is_enabled(&self, flag: KnownPreviewFlag) -> bool {
         match self {
             Preview::AllEnabled(_) => true,
-            Preview::Features(features) => features.contains(&feature),
+            Preview::Flags(flags) => flags.contains(&flag),
         }
     }
 
     /// Returns the enabled preview flags
-    pub fn enabled_features(&self) -> Vec<KnownPreviewFeature> {
+    pub fn enabled_flags(&self) -> Vec<KnownPreviewFlag> {
         match self {
-            Preview::AllEnabled(true) => KnownPreviewFeature::iter().collect(),
+            Preview::AllEnabled(true) => KnownPreviewFlag::iter().collect(),
             Preview::AllEnabled(false) => Vec::new(),
-            Preview::Features(features) => features.clone(),
+            Preview::Flags(flags) => flags.clone(),
         }
     }
 }
@@ -82,7 +82,7 @@ impl Preview {
 #[serde(rename_all = "kebab-case")]
 #[strum(serialize_all = "kebab-case")]
 /// Currently supported preview flags are listed here
-pub enum KnownPreviewFeature {
-    /// Build feature, to enable conda source builds
+pub enum KnownPreviewFlag {
+    /// Build flag, to enable conda source builds
     PixiBuild,
 }

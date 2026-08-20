@@ -4,7 +4,7 @@ use std::{
     ops::Range,
 };
 
-use crate::{KnownPreviewFeature, ManifestKind, WorkspaceManifest};
+use crate::{KnownPreviewFlag, ManifestKind, WorkspaceManifest};
 use itertools::Itertools;
 use miette::{Diagnostic, LabeledSpan, SourceOffset, SourceSpan};
 use pixi_pypi_spec::Pep508ToPyPiRequirementError;
@@ -193,7 +193,7 @@ pub struct FeatureNotEnabled {
 }
 
 impl FeatureNotEnabled {
-    pub fn new(message: impl Into<Cow<'static, str>>, feature: KnownPreviewFeature) -> Self {
+    pub fn new(message: impl Into<Cow<'static, str>>, feature: KnownPreviewFlag) -> Self {
         Self {
             feature: <&'static str>::from(feature).into(),
             message: message.into(),

@@ -7,7 +7,7 @@ use itertools::{Either, Itertools};
 use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Report};
 use pixi_consts::consts;
 use pixi_manifest::{
-    InlinePackageManifest, KnownPreviewFeature, Preview, PrioritizedChannel,
+    InlinePackageManifest, KnownPreviewFlag, Preview, PrioritizedChannel,
     toml::{TomlPlatform, WorkspacePackageProperties},
     utils::package_map::{DependencyTable, UniquePackageMap},
 };
@@ -271,7 +271,7 @@ impl TomlParsedManifest {
         // The global manifest has no preview mechanism; source dependencies
         // (and with them inline package definitions) are simply supported, so
         // conversion runs with the pixi-build preview flag enabled.
-        let preview = Preview::from_iter([KnownPreviewFeature::PixiBuild]);
+        let preview = Preview::from_iter([KnownPreviewFlag::PixiBuild]);
 
         let mut envs = IndexMap::with_capacity(self.envs.len());
         for (env_name, env) in self.envs {

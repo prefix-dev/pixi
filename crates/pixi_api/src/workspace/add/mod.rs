@@ -5,7 +5,7 @@ use pixi_core::{
     workspace::{PypiDeps, SkippedPackage, UpdateDeps, WorkspaceMut},
 };
 use pixi_manifest::{
-    DependencyOverwriteBehavior, FeatureName, HasWorkspaceManifest, KnownPreviewFeature, SpecType,
+    DependencyOverwriteBehavior, FeatureName, HasWorkspaceManifest, KnownPreviewFlag, SpecType,
 };
 use pixi_spec::{GitSpec, SourceSpec, Subdirectory};
 use rattler_conda_types::{MatchSpec, PackageName};
@@ -53,7 +53,7 @@ pub async fn add_conda_dep(
             .manifest()
             .workspace
             .preview()
-            .is_enabled(KnownPreviewFeature::PixiBuild)
+            .is_enabled(KnownPreviewFlag::PixiBuild)
         {
             return Err(miette::miette!(
                 help = "Run `pixi workspace preview add pixi-build` to enable the preview flag",

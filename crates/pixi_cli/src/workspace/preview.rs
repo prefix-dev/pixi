@@ -7,7 +7,7 @@ use clap::{
 use miette::IntoDiagnostic;
 use pixi_api::WorkspaceContext;
 use pixi_core::{Workspace, WorkspaceLocator, WorkspaceLocatorError};
-use pixi_manifest::KnownPreviewFeature;
+use pixi_manifest::KnownPreviewFlag;
 use strum::VariantNames;
 
 use crate::{cli_config::WorkspaceConfig, cli_interface::CliInterface};
@@ -30,8 +30,8 @@ pub struct Args {
 #[clap(arg_required_else_help = true)]
 pub struct AddRemoveArgs {
     /// The preview flag(s) to add or remove, e.g. `pixi-build`.
-    #[clap(required = true, num_args = 1.., value_parser = feature_parser(), value_name = "PREVIEW_FLAG")]
-    pub features: Vec<KnownPreviewFeature>,
+    #[clap(required = true, num_args = 1.., value_parser = flag_parser(), value_name = "PREVIEW_FLAG")]
+    pub flags: Vec<KnownPreviewFlag>,
 }
 
 #[derive(Parser, Debug)]
@@ -66,10 +66,16 @@ pub enum Command {
 }
 
 /// Only known preview flags are accepted, and they tab-complete.
-fn feature_parser() -> impl TypedValueParser<Value = KnownPreviewFeature> {
-    // `VARIANTS` is the list of flag names, provided by strum's
-    // `VariantNames` derive
-    PossibleValuesParser::new(<KnownPreviewFeature as VariantNames>::VARIANTS)
+///
+/// The natural way would be to derive `clap::ValueEnum` on
+/// [`KnownPreviewFlag`], but it lives in `pixi_manifest`, which doesn't
+/// depend on clap, and the orphan rule prevents implementing clap's trait
+/// for it here. Instead its strum derives provide the same two pieces:
+/// the flag names (`VariantNames::VARIANTS`) for clap to validate,
+/// complete, and list in help, and the conversion back (`FromStr`), which
+/// can't fail since the input is one of those names.
+fn flag_parser() -> impl TypedValueParser<Value = KnownPreviewFlag> {
+    PossibleValuesParser::new(<KnownPreviewFlag as VariantNames>::VARIANTS)
         .map(|name| name.parse().expect("the possible values are known flags"))
 }
 
@@ -81,18 +87,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     match args.command {
         Command::Add(add) => {
-            WorkspaceContext::add_preview_flags(
-                CliInterface {},
-                manifest_path(located)?,
-                add.features,
-            )
-            .await
+            WorkspaceContext::add_preview_flags(CliInterface {}, manifest_path(located)?, add.flags)
+                .await
         }
         Command::Remove(remove) => {
             WorkspaceContext::remove_preview_flags(
                 CliInterface {},
                 manifest_path(located)?,
-                remove.args.features,
+                remove.args.flags,
                 remove.force,
             )
             .await
@@ -100,8 +102,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Command::List => {
             let workspace_ctx = WorkspaceContext::new(CliInterface {}, located?);
             let mut stdout = std::io::stdout();
-            for feature in workspace_ctx.preview_flags().await {
-                writeln!(stdout, "{feature}")
+            for flag in workspace_ctx.preview_flags().await {
+                writeln!(stdout, "{flag}")
                     .inspect_err(|e| {
                         if e.kind() == std::io::ErrorKind::BrokenPipe {
                             std::process::exit(0);
