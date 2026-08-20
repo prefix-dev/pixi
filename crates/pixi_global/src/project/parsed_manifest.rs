@@ -270,7 +270,7 @@ impl TomlParsedManifest {
     ) -> Result<ParsedManifest, ManifestParsingError> {
         // The global manifest has no preview mechanism; source dependencies
         // (and with them inline package definitions) are simply supported, so
-        // conversion runs with the pixi-build feature enabled.
+        // conversion runs with the pixi-build preview flag enabled.
         let preview = Preview::from_iter([KnownPreviewFeature::PixiBuild]);
 
         let mut envs = IndexMap::with_capacity(self.envs.len());

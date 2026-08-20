@@ -216,10 +216,10 @@ impl TomlWorkspace {
                 && let Some((name, _)) = specs.iter().find(|(_, s)| toml_spec_is_source(s))
             {
                 return Err(GenericError::new(
-                    "conda source dependencies are not allowed without enabling the 'pixi-build' preview feature",
+                    "conda source dependencies are not allowed without enabling the 'pixi-build' preview flag",
                 )
                 .with_help(
-                    "Run `pixi workspace preview add pixi-build` to enable the preview feature",
+                    "Run `pixi workspace preview add pixi-build` to enable the preview flag",
                 )
                 .with_span_label(format!("source dependency `{}`", name.as_source()))
                 .with_opt_span(deps.span.clone())

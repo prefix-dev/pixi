@@ -3,11 +3,11 @@ source: crates/pixi/tests/integration_rust/add_tests.rs
 expression: error
 ---
 MietteDiagnostic {
-    message: "conda source dependencies are not allowed without enabling the 'pixi-build' preview feature",
+    message: "conda source dependencies are not allowed without enabling the 'pixi-build' preview flag",
     code: None,
     severity: None,
     help: Some(
-        "Run `pixi workspace preview add pixi-build` to enable the preview feature",
+        "Run `pixi workspace preview add pixi-build` to enable the preview flag",
     ),
     url: None,
     labels: None,

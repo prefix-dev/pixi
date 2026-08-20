@@ -4,7 +4,7 @@ You might also want to check out the [documentation](backends/pixi-build-python.
 
 
 !!! warning
-    `pixi-build` is a preview feature, and will change until it is stabilized.
+    `pixi-build` is a preview flag, and will change until it is stabilized.
     Please keep that in mind when you use it for your projects.
 
 ## Why is This Useful?

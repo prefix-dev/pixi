@@ -1,4 +1,4 @@
-//! This module contains the ability to parse the preview features of the
+//! This module contains the ability to parse the preview flags of the
 //! project
 //!
 //! e.g.
@@ -18,11 +18,11 @@ use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 
 #[derive(Debug, Clone, PartialEq)]
-/// The preview features of the project
+/// The preview flags of the project
 pub enum Preview {
-    /// All preview features are enabled
+    /// All preview flags are enabled
     AllEnabled(bool), // For `preview = true`
-    /// Specific preview features are enabled
+    /// Specific preview flags are enabled
     Features(Vec<KnownPreviewFeature>), // For `preview = ["feature"]`
 }
 
@@ -39,7 +39,7 @@ impl FromIterator<KnownPreviewFeature> for Preview {
 }
 
 impl Preview {
-    /// Returns true if all preview features are enabled
+    /// Returns true if all preview flags are enabled
     pub fn all_enabled(&self) -> bool {
         match self {
             Preview::AllEnabled(enabled) => *enabled,
@@ -47,7 +47,7 @@ impl Preview {
         }
     }
 
-    /// Returns true if the given preview feature is enabled
+    /// Returns true if the given preview flag is enabled
     pub fn is_enabled(&self, feature: KnownPreviewFeature) -> bool {
         match self {
             Preview::AllEnabled(_) => true,
@@ -55,7 +55,7 @@ impl Preview {
         }
     }
 
-    /// Returns the enabled preview features
+    /// Returns the enabled preview flags
     pub fn enabled_features(&self) -> Vec<KnownPreviewFeature> {
         match self {
             Preview::AllEnabled(true) => KnownPreviewFeature::iter().collect(),
@@ -81,7 +81,7 @@ impl Preview {
 )]
 #[serde(rename_all = "kebab-case")]
 #[strum(serialize_all = "kebab-case")]
-/// Currently supported preview features are listed here
+/// Currently supported preview flags are listed here
 pub enum KnownPreviewFeature {
     /// Build feature, to enable conda source builds
     PixiBuild,

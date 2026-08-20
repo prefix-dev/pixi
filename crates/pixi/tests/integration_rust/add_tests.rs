@@ -1225,7 +1225,7 @@ platforms = ["{platform}"]
 }
 
 #[tokio::test]
-async fn add_git_dependency_without_preview_feature_fails() {
+async fn add_git_dependency_without_preview_flag_fails() {
     setup_tracing();
 
     let pixi = PixiControl::from_manifest(
@@ -1252,7 +1252,7 @@ platforms = ["linux-64"]
 }
 
 #[tokio::test]
-async fn add_git_dependency_with_preview_feature_succeeds() {
+async fn add_git_dependency_with_preview_flag_succeeds() {
     setup_tracing();
 
     let pixi = PixiControl::from_manifest(

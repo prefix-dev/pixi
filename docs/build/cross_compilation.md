@@ -3,7 +3,7 @@ In this tutorial we assume that you've read the [Building a C++ Package](cpp.md)
 If you haven't read it yet, we recommend you to do so before continuing, as the project structure and the source code will be the same as in the previous tutorial, so we may skip explicit explanations of some parts.
 
 !!! warning
-    `pixi-build` is a preview feature and will change until it is stabilized.
+    `pixi-build` is a preview flag and will change until it is stabilized.
 
 `pixi-build` has built-in cross-compilation capabilities: if the build process of a package supports it, building a package for a platform (`linux-aarch64`) different from the host platform (`linux-64`) can be done simply with `pixi publish --target-platform linux-aarch64 --target-dir output`.
 However, a typical [nanobind](https://github.com/wjakob/nanobind) project, as described in the [Building a C++ Package tutorial](cpp.md), doesn't cross-compile out of the box.

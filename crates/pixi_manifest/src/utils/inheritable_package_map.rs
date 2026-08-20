@@ -145,12 +145,12 @@ impl InheritablePackageMap {
         {
             return Err(TomlError::Generic(
                 GenericError::new(
-                    "conda source dependencies are not allowed without enabling the 'pixi-build' preview feature",
+                    "conda source dependencies are not allowed without enabling the 'pixi-build' preview flag",
                 )
                 .with_opt_span(out.value_spans.get(package_name).cloned())
                 .with_span_label("source dependency specified here")
                 .with_help(
-                    "Run `pixi workspace preview add pixi-build` to enable the preview feature",
+                    "Run `pixi workspace preview add pixi-build` to enable the preview flag",
                 ),
             ));
         }

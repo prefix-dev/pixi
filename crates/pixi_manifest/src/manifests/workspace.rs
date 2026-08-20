@@ -5826,7 +5826,7 @@ channels = ["nvidia", "pytorch"]
         let manifest = WorkspaceManifest::from_toml_str_with_base_dir(toml, Path::new(""));
         let err = manifest.unwrap_err();
         insta::assert_snapshot!(format_parse_error(toml, err.error), @r###"
-         × conda source dependencies are not allowed without enabling the 'pixi-build' preview feature
+         × conda source dependencies are not allowed without enabling the 'pixi-build' preview flag
           ╭─[pixi.toml:8:15]
         7 │         [dependencies]
         8 │         foo = { path = "./foo" }
@@ -5834,7 +5834,7 @@ channels = ["nvidia", "pytorch"]
           ·                        ╰── source dependency specified here
         9 │
           ╰────
-         help: Run `pixi workspace preview add pixi-build` to enable the preview feature
+         help: Run `pixi workspace preview add pixi-build` to enable the preview flag
         "###);
     }
 

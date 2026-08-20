@@ -6,7 +6,7 @@ For ROS without Pixi building (not packaging), see the [ROS 2 tutorial](../tutor
 You may also want to read the backend documentation for [pixi-build-ros](backends/pixi-build-ros.md).
 
 !!! warning
-    `pixi-build` is a preview feature and may change before stabilization.
+    `pixi-build` is a preview flag and may change before stabilization.
     Expect rough edges; please report issues so we can improve it.
 
 ## Create a Pixi workspace

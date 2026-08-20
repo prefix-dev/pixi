@@ -84,7 +84,7 @@ pub struct Workspace {
     /// The S3 options supported in the project
     pub s3_options: Option<HashMap<String, S3Options>>,
 
-    /// Preview features
+    /// Preview flags
     pub preview: Preview,
 
     /// Build variants defined directly in the manifest.

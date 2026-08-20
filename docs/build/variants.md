@@ -2,7 +2,7 @@ In this tutorial, we will show you how to use variants in order to build a Pixi 
 Some might call this functionality, build matrix, build configurations or parameterized builds, in the conda ecosystem this is referred to as a variant.
 
 !!! warning
-    `pixi-build` is a preview feature, and will change until it is stabilized.
+    `pixi-build` is a preview flag, and will change until it is stabilized.
     Please keep that in mind when you use it for your projects.
 
 ## Why is This Useful?

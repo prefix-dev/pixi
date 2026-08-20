@@ -7,11 +7,11 @@ use toml_span::{DeserError, Spanned, Value, de_helpers::expected, value::ValueIn
 use crate::{KnownPreviewFeature, Preview, WithWarnings, error::GenericError};
 
 #[derive(Debug, Clone, PartialEq)]
-/// The preview features of the project
+/// The preview flags of the project
 pub enum TomlPreview {
-    /// All preview features are enabled
+    /// All preview flags are enabled
     AllEnabled(Spanned<bool>), // For `preview = true`
-    /// Specific preview features are enabled
+    /// Specific preview flags are enabled
     Features(Vec<Spanned<KnownOrUnknownPreviewFeature>>), // For `preview = ["feature"]`
 }
 
@@ -36,7 +36,7 @@ impl TomlPreview {
         }
     }
 
-    /// Returns true if the given preview feature is enabled
+    /// Returns true if the given preview flag is enabled
     pub fn is_enabled(&self, feature: KnownPreviewFeature) -> bool {
         match self {
             Self::AllEnabled(_) => true,
@@ -76,12 +76,16 @@ impl TomlPreview {
                         "is"
                     };
                     let s = if unknown_features.len() > 1 { "s" } else { "" };
-                    let warning = GenericError::new(
-                        format!("The preview feature{s}: {} {are} defined in the manifest but un-used in pixi",
-                                unknown_features.iter().map(|(name, _)| name).format(", ")))
-                        .with_labels(unknown_features.into_iter().map(|(name, span)| {
-                            LabeledSpan::new_with_span(Some(format!("'{name}' is unknown")), Range::<usize>::from(span))
-                        }));
+                    let warning = GenericError::new(format!(
+                        "The preview flag{s}: {} {are} defined in the manifest but un-used in pixi",
+                        unknown_features.iter().map(|(name, _)| name).format(", ")
+                    ))
+                    .with_labels(unknown_features.into_iter().map(|(name, span)| {
+                        LabeledSpan::new_with_span(
+                            Some(format!("'{name}' is unknown")),
+                            Range::<usize>::from(span),
+                        )
+                    }));
                     preview.with_warnings(vec![warning.into()])
                 }
             }
@@ -253,7 +257,7 @@ mod tests {
         let preview = top.preview.into_preview();
         assert_eq!(preview.warnings.len(), 1);
         assert_snapshot!(format_parse_error(input, preview.warnings.into_iter().next().unwrap()), @r###"
-         ⚠ The preview features: foobar, new_parsing are defined in the manifest but un-used in pixi
+         ⚠ The preview flags: foobar, new_parsing are defined in the manifest but un-used in pixi
           ╭─[pixi.toml:1:13]
         1 │ preview = ["foobar", "pixi-build", "new_parsing"]
           ·             ───┬──                  ─────┬─────

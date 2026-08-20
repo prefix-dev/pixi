@@ -124,7 +124,7 @@ impl TomlManifest {
         {
             return Err(FeatureNotEnabled::new(
                 format!(
-                    "[package] section is only allowed when the `{}` feature is enabled",
+                    "[package] section is only allowed when the `{}` preview flag is enabled",
                     KnownPreviewFeature::PixiBuild
                 ),
                 KnownPreviewFeature::PixiBuild,
@@ -595,7 +595,7 @@ impl TomlManifest {
             if !pixi_build_enabled {
                 return Err(FeatureNotEnabled::new(
                     format!(
-                        "[package] section is only allowed when the `{}` feature is enabled",
+                        "[package] section is only allowed when the `{}` preview flag is enabled",
                         KnownPreviewFeature::PixiBuild
                     ),
                     KnownPreviewFeature::PixiBuild,
@@ -2275,7 +2275,7 @@ mod test {
     #[test]
     fn test_dependencies_inherit_workspace_dependency() {
         // `{ workspace = true }` in `[dependencies]` resolves against the
-        // `[workspace.dependencies]` pool without any preview feature.
+        // `[workspace.dependencies]` pool without any preview flag.
         let ws = parse_workspace(
             r#"
             [workspace]
@@ -2592,7 +2592,7 @@ mod test {
         "#,
             ),
             @r#"
-         × conda source dependencies are not allowed without enabling the 'pixi-build' preview feature
+         × conda source dependencies are not allowed without enabling the 'pixi-build' preview flag
            ╭─[pixi.toml:10:17]
          9 │         [dependencies]
         10 │         mylib = { workspace = true }
@@ -2600,7 +2600,7 @@ mod test {
            ·                           ╰── source dependency specified here
         11 │
            ╰────
-         help: Run `pixi workspace preview add pixi-build` to enable the preview feature
+         help: Run `pixi workspace preview add pixi-build` to enable the preview flag
         "#
         );
     }

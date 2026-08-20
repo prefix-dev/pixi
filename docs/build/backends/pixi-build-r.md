@@ -3,7 +3,7 @@
 The `pixi-build-r` backend is designed for building R packages using `R CMD INSTALL`. It automatically parses the `DESCRIPTION` file to extract metadata and dependencies, and detects whether native code compilation is needed.
 
 !!! warning
-    `pixi-build` is a preview feature, and will change until it is stabilized.
+    `pixi-build` is a preview flag, and will change until it is stabilized.
     This is why we require users to opt in to that feature by adding "pixi-build" to `workspace.preview`.
 
     ```toml

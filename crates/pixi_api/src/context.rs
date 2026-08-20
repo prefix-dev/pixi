@@ -92,14 +92,14 @@ impl<I: Interface> WorkspaceContext<I> {
         .await
     }
 
-    pub async fn preview_features(&self) -> Vec<KnownPreviewFeature> {
+    pub async fn preview_flags(&self) -> Vec<KnownPreviewFeature> {
         crate::workspace::workspace::preview::list(&self.workspace).await
     }
 
-    /// Enable preview features by editing the manifest directly, so a
-    /// manifest that fails to load exactly because a feature is missing,
+    /// Enable preview flags by editing the manifest directly, so a
+    /// manifest that fails to load exactly because a flag is missing,
     /// e.g. a `[package]` section without `pixi-build`, can still be fixed.
-    pub async fn add_preview_features(
+    pub async fn add_preview_flags(
         interface: I,
         manifest_path: std::path::PathBuf,
         features: Vec<KnownPreviewFeature>,
@@ -107,10 +107,10 @@ impl<I: Interface> WorkspaceContext<I> {
         crate::workspace::workspace::preview::add(&interface, manifest_path, features).await
     }
 
-    /// Disable preview features by editing the manifest directly, like
-    /// [`Self::add_preview_features`]. Errors without saving when the
+    /// Disable preview flags by editing the manifest directly, like
+    /// [`Self::add_preview_flags`]. Errors without saving when the
     /// manifest would no longer load, unless `force` is set.
-    pub async fn remove_preview_features(
+    pub async fn remove_preview_flags(
         interface: I,
         manifest_path: std::path::PathBuf,
         features: Vec<KnownPreviewFeature>,

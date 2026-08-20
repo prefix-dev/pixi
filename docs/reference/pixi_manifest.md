@@ -444,8 +444,8 @@ torch = "0d"
 
 ### `build-variants` (optional)
 
-!!! warning "Preview Feature"
-    Build variants require the `pixi-build` preview feature to be enabled:
+!!! warning "Preview Flag"
+    Build variants require the `pixi-build` preview flag to be enabled:
     ```toml
     [workspace]
     preview = ["pixi-build"]
@@ -504,8 +504,8 @@ For detailed examples and tutorials, see the [build variants documentation](../b
 
 ### `build-variants-files` (optional)
 
-!!! warning "Preview Feature"
-    Build variant files require the `pixi-build` preview feature to be enabled:
+!!! warning "Preview Flag"
+    Build variant files require the `pixi-build` preview flag to be enabled:
     ```toml
     [workspace]
     preview = ["pixi-build"]
@@ -532,7 +532,7 @@ Otherwise, it will use `rattler-build`'s syntax as outlined in the [rattler-buil
 
 A pool of conda dependency specs that dependency tables can inherit from per entry by writing `{ workspace = true }`.
 The environment tables (`[dependencies]`, `[feature.*.dependencies]`, `[target.*.dependencies]`, `[constraints]`) can inherit out of the box.
-The package tables (`[package.*-dependencies]`, `[package.run-constraints]`, `[package.build.backend]`) require the `pixi-build` preview feature, as do source (`path`/`git`) entries in the pool itself (see [Workspace Dependencies](../build/workspace_dependencies.md) for the semantics, override rules and error cases).
+The package tables (`[package.*-dependencies]`, `[package.run-constraints]`, `[package.build.backend]`) require the `pixi-build` preview flag, as do source (`path`/`git`) entries in the pool itself (see [Workspace Dependencies](../build/workspace_dependencies.md) for the semantics, override rules and error cases).
 Relative `path` specs are resolved against the workspace manifest's directory and re-anchored per consuming member.
 
 ```toml
@@ -1394,16 +1394,16 @@ The content is written inline on the environment, creating the environment if it
 The global configuration options are documented in the [global configuration](../reference/pixi_configuration.md) section.
 
 
-## Preview features
-Pixi sometimes introduces new features that are not yet stable, but that we would like for users to test out. These features are called preview features. Preview features are disabled by default and can be enabled by setting the `preview` field in the workspace manifest. The preview field is an array of strings that specify the preview features to enable, or the boolean value `true` to enable all preview features.
+## Preview flags
+Pixi sometimes introduces new features that are not yet stable, but that we would like for users to test out. These features are called preview flags. Preview flags are disabled by default and can be enabled by setting the `preview` field in the workspace manifest. The preview field is an array of strings that specify the preview flags to enable, or the boolean value `true` to enable all preview flags.
 
-An example of a preview feature in the manifest:
+An example of a preview flag in the manifest:
 
 ```toml
 --8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:preview"
 ```
 
-Preview features in the documentation will be marked as such on the relevant pages.
+Preview flags in the documentation will be marked as such on the relevant pages.
 
 ## The `dev` table
 The `dev` table allows you to depend on the development dependencies of a source package.
@@ -1418,7 +1418,7 @@ More information can be found in the [Dev packages](../build/dev.md) documentati
 ## The `package` section
 
 !!! warning "Important note"
-    `pixi-build` is a [preview feature](#preview-features), and will change until it is stabilized.
+    `pixi-build` is a [preview flag](#preview-features), and will change until it is stabilized.
     Please keep that in mind when you use it for your workspaces.
     ```toml
     --8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:preview"

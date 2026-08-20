@@ -12,7 +12,7 @@ use strum::VariantNames;
 
 use crate::{cli_config::WorkspaceConfig, cli_interface::CliInterface};
 
-/// Commands to manage workspace preview features.
+/// Commands to manage workspace preview flags.
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]
@@ -29,8 +29,8 @@ pub struct Args {
 #[derive(Parser, Debug)]
 #[clap(arg_required_else_help = true)]
 pub struct AddRemoveArgs {
-    /// The preview feature(s) to add or remove, e.g. `pixi-build`.
-    #[clap(required = true, num_args = 1.., value_parser = feature_parser(), value_name = "PREVIEW_FEATURE")]
+    /// The preview flag(s) to add or remove, e.g. `pixi-build`.
+    #[clap(required = true, num_args = 1.., value_parser = feature_parser(), value_name = "PREVIEW_FLAG")]
     pub features: Vec<KnownPreviewFeature>,
 }
 
@@ -40,7 +40,7 @@ pub struct RemoveArgs {
     #[clap(flatten)]
     pub args: AddRemoveArgs,
 
-    /// Remove the feature(s) even when the manifest no longer loads without
+    /// Remove the flag(s) even when the manifest no longer loads without
     /// them.
     #[clap(long)]
     pub force: bool,
@@ -48,16 +48,16 @@ pub struct RemoveArgs {
 
 #[derive(Parser, Debug)]
 pub enum Command {
-    /// Add preview feature(s) to the workspace.
+    /// Add preview flag(s) to the workspace.
     ///
     /// Example:
     /// `pixi workspace preview add pixi-build`
     #[clap(visible_alias = "a")]
     Add(AddRemoveArgs),
-    /// List the enabled preview features.
+    /// List the enabled preview flags.
     #[clap(visible_alias = "ls")]
     List,
-    /// Remove preview feature(s) from the workspace.
+    /// Remove preview flag(s) from the workspace.
     ///
     /// Example:
     /// `pixi workspace preview remove pixi-build`
@@ -65,14 +65,12 @@ pub enum Command {
     Remove(RemoveArgs),
 }
 
-/// Only known preview features are accepted, and they tab-complete.
+/// Only known preview flags are accepted, and they tab-complete.
 fn feature_parser() -> impl TypedValueParser<Value = KnownPreviewFeature> {
-    // `VARIANTS` is the list of feature names, provided by strum's
+    // `VARIANTS` is the list of flag names, provided by strum's
     // `VariantNames` derive
-    PossibleValuesParser::new(<KnownPreviewFeature as VariantNames>::VARIANTS).map(|name| {
-        name.parse()
-            .expect("the possible values are known features")
-    })
+    PossibleValuesParser::new(<KnownPreviewFeature as VariantNames>::VARIANTS)
+        .map(|name| name.parse().expect("the possible values are known flags"))
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -83,7 +81,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     match args.command {
         Command::Add(add) => {
-            WorkspaceContext::add_preview_features(
+            WorkspaceContext::add_preview_flags(
                 CliInterface {},
                 manifest_path(located)?,
                 add.features,
@@ -91,7 +89,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .await
         }
         Command::Remove(remove) => {
-            WorkspaceContext::remove_preview_features(
+            WorkspaceContext::remove_preview_flags(
                 CliInterface {},
                 manifest_path(located)?,
                 remove.args.features,
@@ -102,7 +100,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Command::List => {
             let workspace_ctx = WorkspaceContext::new(CliInterface {}, located?);
             let mut stdout = std::io::stdout();
-            for feature in workspace_ctx.preview_features().await {
+            for feature in workspace_ctx.preview_flags().await {
                 writeln!(stdout, "{feature}")
                     .inspect_err(|e| {
                         if e.kind() == std::io::ErrorKind::BrokenPipe {
@@ -119,7 +117,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 /// The manifest to edit. Editing doesn't need a valid manifest — only the
 /// result has to be valid — so a manifest that fails to parse still yields
 /// its path, e.g. for `add pixi-build` to fix a `[package]` section that
-/// isn't allowed without the feature.
+/// isn't allowed without the flag.
 fn manifest_path(located: Result<Workspace, WorkspaceLocatorError>) -> miette::Result<PathBuf> {
     match located {
         Ok(workspace) => Ok(workspace.workspace.provenance.path.clone()),

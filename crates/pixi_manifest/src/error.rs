@@ -209,7 +209,7 @@ impl FeatureNotEnabled {
 impl Diagnostic for FeatureNotEnabled {
     fn help<'a>(&'a self) -> Option<Box<dyn Display + 'a>> {
         Some(Box::new(format!(
-            "Run `pixi workspace preview add {}` to enable the preview feature",
+            "Run `pixi workspace preview add {}` to enable the preview flag",
             self.feature
         )))
     }

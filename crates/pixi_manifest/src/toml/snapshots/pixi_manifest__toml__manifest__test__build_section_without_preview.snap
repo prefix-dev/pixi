@@ -2,11 +2,11 @@
 source: crates/pixi_manifest/src/toml/manifest.rs
 expression: "expect_parse_failure(r#\"\n        [workspace]\n        name = \"foo\"\n        channels = []\n        platforms = []\n\n        [build-system]\n        build-backend = { name = \"foobar\", version = \"*\" }\n        \"#,)"
 ---
-  × [build-system] section is only allowed when the `pixi-build` feature is enabled
+  × [build-system] section is only allowed when the `pixi-build` preview flag is enabled
    ╭─[pixi.toml:7:9]
  6 │
  7 │ ╭─▶         [build-system]
  8 │ ╰─▶         build-backend = { name = "foobar", version = "*" }
  9 │
    ╰────
-  help: Run `pixi workspace preview add pixi-build` to enable the preview feature
+  help: Run `pixi workspace preview add pixi-build` to enable the preview flag
