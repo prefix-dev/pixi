@@ -236,9 +236,24 @@ backend = { name = "pixi-build-python", version = "*" }
         ],
         stderr_contains="Added 'pixi-build'",
     )
-    # Removing it still works, with a warning that the manifest needs it
+    # Removing it fails because the manifest would no longer load
     verify_cli_command(
         [pixi, "workspace", "--manifest-path", manifest_path, "preview", "remove", "pixi-build"],
+        ExitCode.FAILURE,
+        stderr_contains=["no longer load", "--force"],
+    )
+    # With --force it works, with a warning that the manifest needs it
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "--manifest-path",
+            manifest_path,
+            "preview",
+            "remove",
+            "pixi-build",
+            "--force",
+        ],
         stderr_contains=["Removed 'pixi-build'", "no longer loads"],
     )
     manifest_path.write_text(manifest_content)

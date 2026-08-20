@@ -35,6 +35,18 @@ pub struct AddRemoveArgs {
 }
 
 #[derive(Parser, Debug)]
+#[clap(arg_required_else_help = true)]
+pub struct RemoveArgs {
+    #[clap(flatten)]
+    pub args: AddRemoveArgs,
+
+    /// Remove the feature(s) even when the manifest no longer loads without
+    /// them.
+    #[clap(long)]
+    pub force: bool,
+}
+
+#[derive(Parser, Debug)]
 pub enum Command {
     /// Add preview feature(s) to the workspace.
     ///
@@ -50,7 +62,7 @@ pub enum Command {
     /// Example:
     /// `pixi workspace preview remove pixi-build`
     #[clap(visible_alias = "rm")]
-    Remove(AddRemoveArgs),
+    Remove(RemoveArgs),
 }
 
 /// Only known preview features are accepted, and they tab-complete.
@@ -82,7 +94,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             WorkspaceContext::remove_preview_features(
                 CliInterface {},
                 manifest_path(located)?,
-                remove.features,
+                remove.args.features,
+                remove.force,
             )
             .await
         }

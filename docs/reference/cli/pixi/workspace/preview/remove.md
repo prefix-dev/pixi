@@ -10,7 +10,7 @@ Remove preview feature(s) from the workspace
 
 ## Usage
 ```
-pixi workspace preview remove <PREVIEW_FEATURE>...
+pixi workspace preview remove [OPTIONS] <PREVIEW_FEATURE>...
 ```
 
 ## Arguments
@@ -19,6 +19,10 @@ pixi workspace preview remove <PREVIEW_FEATURE>...
 <br>May be provided more than once.
 <br>**required**: `true`
 <br>**options**: `pixi-build`
+
+## Options
+- <a id="arg---force" href="#arg---force">`--force`</a>
+:  Remove the feature(s) even when the manifest no longer loads without them
 
 ## Description
 Remove preview feature(s) from the workspace.

@@ -38,7 +38,8 @@ pub async fn add<I: Interface>(
         }
     }
 
-    let contents = save(&provenance, &document).await?;
+    let contents = document.render().into_diagnostic()?;
+    save(&provenance, &contents).await?;
 
     if added.is_empty() {
         interface
@@ -63,10 +64,15 @@ pub async fn add<I: Interface>(
 }
 
 /// Disables the features by editing the manifest directly, like [`add`].
+///
+/// When the workspace still needs the removed feature(s), e.g. a
+/// `[package]` section without `pixi-build`, the manifest is left
+/// untouched and an error is returned, unless `force` is set.
 pub async fn remove<I: Interface>(
     interface: &I,
     manifest_path: PathBuf,
     features: Vec<KnownPreviewFeature>,
+    force: bool,
 ) -> miette::Result<()> {
     let provenance = ManifestProvenance::from_path(manifest_path).into_diagnostic()?;
     let mut document = ManifestDocument::from_provenance(&provenance)?;
@@ -81,39 +87,45 @@ pub async fn remove<I: Interface>(
         }
     }
 
-    let contents = save(&provenance, &document).await?;
-
     if removed.is_empty() {
         interface
             .success("The preview features were not enabled.")
             .await;
-    } else {
-        interface
-            .success(&format!(
-                "Removed '{}' from the preview features.",
-                removed.iter().format("', '")
-            ))
-            .await;
+        return Ok(());
     }
 
-    // Warn when the workspace still needs the removed feature(s), e.g. a
-    // `[package]` section without `pixi-build`
-    if let Err(err) = Workspace::from_str(&provenance.path, &contents) {
-        interface
-            .warning(&format!("The manifest no longer loads: {err}"))
-            .await;
+    let contents = document.render().into_diagnostic()?;
+    match Workspace::from_str(&provenance.path, &contents) {
+        Err(err) if !force => {
+            return Err(miette::Report::new(err).wrap_err(format!(
+                "The manifest would no longer load without '{}'. \
+                 Pass `--force` to remove anyway.",
+                removed.iter().format("', '")
+            )));
+        }
+        load_result => {
+            save(&provenance, &contents).await?;
+
+            interface
+                .success(&format!(
+                    "Removed '{}' from the preview features.",
+                    removed.iter().format("', '")
+                ))
+                .await;
+
+            if let Err(err) = load_result {
+                interface
+                    .warning(&format!("The manifest no longer loads: {err}"))
+                    .await;
+            }
+        }
     }
     Ok(())
 }
 
 /// Persists the edited manifest to disk.
-async fn save(
-    provenance: &ManifestProvenance,
-    document: &ManifestDocument,
-) -> miette::Result<String> {
-    let contents = document.render().into_diagnostic()?;
-    pixi_utils::atomic_write::atomic_write(&provenance.path, &contents)
+async fn save(provenance: &ManifestProvenance, contents: &str) -> miette::Result<()> {
+    pixi_utils::atomic_write::atomic_write(&provenance.path, contents)
         .await
-        .into_diagnostic()?;
-    Ok(contents)
+        .into_diagnostic()
 }

@@ -108,13 +108,16 @@ impl<I: Interface> WorkspaceContext<I> {
     }
 
     /// Disable preview features by editing the manifest directly, like
-    /// [`Self::add_preview_features`].
+    /// [`Self::add_preview_features`]. Errors without saving when the
+    /// manifest would no longer load, unless `force` is set.
     pub async fn remove_preview_features(
         interface: I,
         manifest_path: std::path::PathBuf,
         features: Vec<KnownPreviewFeature>,
+        force: bool,
     ) -> miette::Result<()> {
-        crate::workspace::workspace::preview::remove(&interface, manifest_path, features).await
+        crate::workspace::workspace::preview::remove(&interface, manifest_path, features, force)
+            .await
     }
 
     pub async fn list_activation(&self) -> Vec<crate::workspace::ActivationEntry> {
