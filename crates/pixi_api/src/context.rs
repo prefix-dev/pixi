@@ -341,6 +341,7 @@ impl<I: Interface> WorkspaceContext<I> {
         platform: Option<PixiPlatformName>,
         environment: Option<String>,
         explicit: bool,
+        local: bool,
         no_install: bool,
         lock_file_usage: LockFileUsage,
     ) -> miette::Result<Vec<Package>> {
@@ -350,6 +351,7 @@ impl<I: Interface> WorkspaceContext<I> {
             platform,
             environment,
             explicit,
+            local,
             no_install,
             lock_file_usage,
         )
