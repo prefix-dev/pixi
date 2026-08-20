@@ -8,7 +8,10 @@ use std::{
 
 use indexmap::IndexMap;
 use indicatif::{MultiProgress, ProgressBar, ProgressState, ProgressStyle, style::ProgressTracker};
-use jiff::Timestamp;
+use jiff::{
+    Span, Timestamp,
+    fmt::friendly::{Designator, Spacing, SpanPrinter},
+};
 use parking_lot::{Mutex, RwLock};
 use pixi_progress::ProgressBarPlacement;
 use rattler_conda_types::{ChannelNoticeLevel, ChannelUrl};
@@ -185,18 +188,23 @@ fn format_relative_time(timestamp: Timestamp, now: Timestamp) -> String {
         };
     }
 
-    let (amount, unit) = if absolute < 60 * 60 {
-        (absolute / 60, "minute")
+    let amount = if absolute < 60 * 60 {
+        Span::new().minutes((absolute / 60) as i64)
     } else if absolute < 24 * 60 * 60 {
-        (absolute / (60 * 60), "hour")
+        Span::new().hours((absolute / (60 * 60)) as i64)
     } else {
-        (absolute / (24 * 60 * 60), "day")
+        Span::new().days((absolute / (24 * 60 * 60)) as i64)
     };
-    let plural = if amount == 1 { "" } else { "s" };
+    let amount = if seconds < 0 { -amount } else { amount };
+    let formatted = SpanPrinter::new()
+        .designator(Designator::Verbose)
+        .spacing(Spacing::BetweenUnitsAndDesignators)
+        .span_to_string(&amount);
+
     if seconds > 0 {
-        format!("in {amount} {unit}{plural}")
+        format!("in {formatted}")
     } else {
-        format!("{amount} {unit}{plural} ago")
+        formatted
     }
 }
 
@@ -479,7 +487,7 @@ mod tests {
     use rattler_repodata_gateway::ChannelNoticeResult;
 
     use super::{
-        format_channel_notice, read_viewed_channel_notice_ids_from,
+        format_channel_notice, format_relative_time, read_viewed_channel_notice_ids_from,
         write_viewed_channel_notice_ids_to,
     };
 
@@ -529,6 +537,20 @@ mod tests {
         for (level, expected) in rendered {
             assert!(format_channel_notice(&notice(level), now, true).contains(expected));
         }
+    }
+
+    #[test]
+    fn relative_times_use_jiff_friendly_formatting() {
+        let now = "2026-08-20T10:30:00Z".parse::<Timestamp>().unwrap();
+
+        assert_eq!(
+            format_relative_time("2026-08-20T09:30:00Z".parse().unwrap(), now),
+            "1 hour ago"
+        );
+        assert_eq!(
+            format_relative_time("2026-08-20T10:32:00Z".parse().unwrap(), now),
+            "in 2 minutes"
+        );
     }
 
     #[test]
