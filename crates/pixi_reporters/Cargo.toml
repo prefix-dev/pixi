@@ -14,6 +14,7 @@ license.workspace = true
 futures = { workspace = true }
 indexmap = { workspace = true }
 itertools = { workspace = true }
+jiff = { workspace = true }
 parking_lot = { workspace = true }
 tokio = { workspace = true }
 url = { workspace = true }

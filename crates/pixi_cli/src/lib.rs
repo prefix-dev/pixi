@@ -392,6 +392,12 @@ pub async fn execute_command(
         Command::External(args) => command_info::execute_external_command(args),
     };
 
+    // Match conda's behavior by displaying notices only after a successful
+    // command, when they cannot get lost among progress bars and other output.
+    if result.is_ok() {
+        pixi_reporters::display_channel_notices();
+    }
+
     // Failures caused by offline mode get a hint attached that explains how to
     // get out of it.
     result.map_err(offline::attach_offline_hint)

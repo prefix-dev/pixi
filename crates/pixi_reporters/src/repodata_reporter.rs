@@ -1,12 +1,14 @@
 use std::{
     collections::HashSet,
     fmt::Write,
-    sync::Arc,
+    sync::{Arc, LazyLock},
     time::{Duration, Instant},
 };
 
+use indexmap::IndexMap;
 use indicatif::{MultiProgress, ProgressBar, ProgressState, ProgressStyle, style::ProgressTracker};
-use parking_lot::RwLock;
+use jiff::Timestamp;
+use parking_lot::{Mutex, RwLock};
 use pixi_progress::ProgressBarPlacement;
 use rattler_conda_types::{ChannelNoticeLevel, ChannelUrl};
 use rattler_repodata_gateway::{
@@ -42,7 +44,7 @@ impl rattler_repodata_gateway::Reporter for RepodataReporter {
     }
 
     fn on_channel_notice(&self, notice: &ChannelNoticeResult) {
-        self.inner.write().on_channel_notice(notice);
+        queue_channel_notice(notice);
     }
 }
 
@@ -52,12 +54,38 @@ impl RepodataReporter {
     }
 }
 
-/// Displays a CEP-6 channel notice without exposing URL credentials.
-pub fn display_channel_notice(notice: &ChannelNoticeResult) {
-    let level = match notice.notice.level {
-        ChannelNoticeLevel::Info => console::style("info").cyan(),
-        ChannelNoticeLevel::Warning => console::style("warning").yellow(),
-        ChannelNoticeLevel::Critical => console::style("critical").red().bold(),
+static CHANNEL_NOTICES: LazyLock<Mutex<IndexMap<(ChannelUrl, String), ChannelNoticeResult>>> =
+    LazyLock::new(|| Mutex::new(IndexMap::new()));
+
+/// Queue a CEP-6 channel notice for display at the end of the CLI command.
+pub fn queue_channel_notice(notice: &ChannelNoticeResult) {
+    CHANNEL_NOTICES
+        .lock()
+        .entry((notice.channel.clone(), notice.notice.id.clone()))
+        .or_insert_with(|| notice.clone());
+}
+
+/// Display all queued channel notices, preserving their arrival order.
+pub fn display_channel_notices() {
+    let notices = CHANNEL_NOTICES.lock().drain(..).collect::<Vec<_>>();
+    for (_, notice) in notices {
+        pixi_progress::println!(
+            "{}",
+            format_channel_notice(&notice, Timestamp::now(), console::colors_enabled_stderr())
+        );
+    }
+}
+
+fn format_channel_notice(notice: &ChannelNoticeResult, now: Timestamp, color: bool) -> String {
+    let (symbol, label, ansi) = match notice.notice.level {
+        ChannelNoticeLevel::Info => ("ℹ", "Info", "32"),
+        ChannelNoticeLevel::Warning => ("⚠", "Warning", "33"),
+        ChannelNoticeLevel::Critical => ("✖", "Critical", "31"),
+    };
+    let severity = if color {
+        format!("\x1b[1;{ansi}m{symbol} {label}\x1b[0m")
+    } else {
+        format!("{symbol} {label}")
     };
 
     let mut channel = notice.channel.as_ref().clone();
@@ -66,11 +94,74 @@ pub fn display_channel_notice(notice: &ChannelNoticeResult) {
     }
     let _ = channel.set_password(None);
 
-    pixi_progress::println!(
-        "{level}: Channel notice from {}:\n{}",
-        console::style(channel.as_str().trim_end_matches('/')).bold(),
-        notice.notice.message
-    );
+    let mut rendered = format!("\n  ╭─ {severity} channel notice\n");
+    for line in notice.notice.message.split('\n') {
+        push_wrapped_notice_line(&mut rendered, line);
+    }
+    rendered.push_str("  │\n  │ Channel  ");
+    rendered.push_str(channel.as_str().trim_end_matches('/'));
+    rendered.push('\n');
+    if let Some(created_at) = notice.notice.created_at {
+        rendered.push_str("  │ Added    ");
+        rendered.push_str(&format_relative_time(created_at, now));
+        rendered.push('\n');
+    }
+    if let Some(expires_at) = notice.notice.expires_at {
+        rendered.push_str("  │ Expires  ");
+        rendered.push_str(&format_relative_time(expires_at, now));
+        rendered.push('\n');
+    }
+    rendered.push_str("  ╰─\n");
+    rendered
+}
+
+fn format_relative_time(timestamp: Timestamp, now: Timestamp) -> String {
+    let seconds = timestamp.as_second().saturating_sub(now.as_second());
+    let absolute = seconds.unsigned_abs();
+    if absolute < 60 {
+        return if seconds > 0 {
+            "in less than a minute".to_owned()
+        } else {
+            "just now".to_owned()
+        };
+    }
+
+    let (amount, unit) = if absolute < 60 * 60 {
+        (absolute / 60, "minute")
+    } else if absolute < 24 * 60 * 60 {
+        (absolute / (60 * 60), "hour")
+    } else {
+        (absolute / (24 * 60 * 60), "day")
+    };
+    let plural = if amount == 1 { "" } else { "s" };
+    if seconds > 0 {
+        format!("in {amount} {unit}{plural}")
+    } else {
+        format!("{amount} {unit}{plural} ago")
+    }
+}
+
+fn push_wrapped_notice_line(rendered: &mut String, line: &str) {
+    const MESSAGE_WIDTH: usize = 88;
+
+    let mut remainder = line;
+    loop {
+        let boundary = remainder.char_indices().nth(MESSAGE_WIDTH).map(|(i, _)| i);
+        let Some(boundary) = boundary else {
+            rendered.push_str("  │ ");
+            rendered.push_str(remainder);
+            rendered.push('\n');
+            return;
+        };
+        let split = remainder[..boundary]
+            .rfind(char::is_whitespace)
+            .filter(|index| *index > 0)
+            .unwrap_or(boundary);
+        rendered.push_str("  │ ");
+        rendered.push_str(remainder[..split].trim_end());
+        rendered.push('\n');
+        remainder = remainder[split..].trim_start();
+    }
 }
 
 struct RepodataReporterInner {
@@ -78,7 +169,6 @@ struct RepodataReporterInner {
     title: Option<String>,
     downloads: Arc<RwLock<Vec<TrackedDownload>>>,
     unsupported_revision_warnings: HashSet<String>,
-    displayed_channel_notices: HashSet<(ChannelUrl, String)>,
 }
 
 struct TrackedDownload {
@@ -101,7 +191,6 @@ impl RepodataReporter {
                 title: Some(title),
                 downloads: Arc::new(RwLock::new(Vec::new())),
                 unsupported_revision_warnings: HashSet::new(),
-                displayed_channel_notices: HashSet::new(),
             })),
         }
     }
@@ -123,13 +212,6 @@ impl RepodataReporterInner {
                 ))
                 .yellow()
             );
-        }
-    }
-
-    fn on_channel_notice(&mut self, notice: &ChannelNoticeResult) {
-        let key = (notice.channel.clone(), notice.notice.id.clone());
-        if self.displayed_channel_notices.insert(key) {
-            display_channel_notice(notice);
         }
     }
 
@@ -328,5 +410,62 @@ impl DownloadReporter for RepodataReporter {
     fn on_download_start(&self, url: &Url) -> usize {
         let mut inner = self.inner.write();
         inner.on_download_start(url)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use jiff::Timestamp;
+    use rattler_conda_types::{ChannelNotice, ChannelNoticeLevel};
+    use rattler_repodata_gateway::ChannelNoticeResult;
+
+    use super::format_channel_notice;
+
+    fn notice(level: ChannelNoticeLevel) -> ChannelNoticeResult {
+        ChannelNoticeResult {
+            channel: url::Url::parse("https://token:secret@example.com/channel/")
+                .unwrap()
+                .into(),
+            notice: ChannelNotice {
+                id: "notice-id".to_owned(),
+                message: "A channel notice".to_owned(),
+                level,
+                created_at: Some("2026-08-17T10:30:00Z".parse().unwrap()),
+                expires_at: Some("2026-08-30T10:30:00Z".parse().unwrap()),
+                interval: None,
+            },
+        }
+    }
+
+    #[test]
+    fn channel_notice_matches_microrattler_rendering() {
+        let rendered = format_channel_notice(
+            &notice(ChannelNoticeLevel::Warning),
+            "2026-08-20T10:30:00Z".parse::<Timestamp>().unwrap(),
+            false,
+        );
+
+        assert!(rendered.starts_with("\n  ╭─ ⚠ Warning channel notice\n"));
+        assert!(rendered.contains("  │ A channel notice\n  │\n"));
+        assert!(rendered.contains("  │ Channel  https://***@example.com/channel\n"));
+        assert!(rendered.contains("  │ Added    3 days ago\n"));
+        assert!(rendered.contains("  │ Expires  in 10 days\n"));
+        assert!(rendered.ends_with("  ╰─\n"));
+        assert!(!rendered.contains("token"));
+        assert!(!rendered.contains("secret"));
+    }
+
+    #[test]
+    fn channel_notice_severity_colors_match_microrattler() {
+        let now = Timestamp::now();
+        let rendered = [
+            (ChannelNoticeLevel::Info, "\x1b[1;32mℹ Info\x1b[0m"),
+            (ChannelNoticeLevel::Warning, "\x1b[1;33m⚠ Warning\x1b[0m"),
+            (ChannelNoticeLevel::Critical, "\x1b[1;31m✖ Critical\x1b[0m"),
+        ];
+
+        for (level, expected) in rendered {
+            assert!(format_channel_notice(&notice(level), now, true).contains(expected));
+        }
     }
 }

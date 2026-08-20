@@ -128,6 +128,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Get environment variables from the activation
     let mut activation_env = run_activation(&prefix).await?;
 
+    // `pixi exec` replaces the process below, so flush notices after all pixi
+    // output rather than relying on the top-level command dispatcher.
+    pixi_reporters::display_channel_notices();
+
     // Collect unique package names for environment naming
     let package_names: BTreeSet<String> = display_names.into_iter().collect();
 
@@ -257,7 +261,7 @@ pub async fn create_exec_prefix(
     .await
     .context("failed to get repodata")?;
     for notice in &query_output.notices {
-        pixi_reporters::display_channel_notice(notice);
+        pixi_reporters::queue_channel_notice(notice);
     }
     let repodata = query_output.repodata;
 

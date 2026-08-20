@@ -20,7 +20,7 @@ use pixi_command_dispatcher::{
 use pixi_compute_reporters::{OperationId, OperationRegistry};
 pub use release_notes::format_release_notes;
 use repodata_reporter::RepodataReporter;
-pub use repodata_reporter::display_channel_notice;
+pub use repodata_reporter::{display_channel_notices, queue_channel_notice};
 use sync_reporter::SyncReporter;
 use uv_configuration::initialize_rayon_once;
 // Re-export the uv_reporter types for external use

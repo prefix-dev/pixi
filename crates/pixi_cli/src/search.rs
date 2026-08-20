@@ -184,7 +184,7 @@ pub async fn execute_impl<W: Write>(
         .await?
     };
     for notice in &result.notices {
-        pixi_reporters::display_channel_notice(notice);
+        pixi_reporters::queue_channel_notice(notice);
     }
     let packages = result.packages;
 
