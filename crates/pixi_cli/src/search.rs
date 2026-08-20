@@ -183,8 +183,11 @@ pub async fn execute_impl<W: Write>(
         })
         .await?
     };
-    for notice in &result.notices {
-        pixi_reporters::queue_channel_notice(notice);
+    // Keep machine-readable output quiet, matching conda's JSON behavior.
+    if !args.json {
+        for notice in &result.notices {
+            pixi_reporters::queue_channel_notice(notice);
+        }
     }
     let packages = result.packages;
 
