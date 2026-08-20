@@ -8853,15 +8853,17 @@ dependency of a published package must itself opt into publishing; the
 publish fails otherwise. When no package opts in, the package at the
 current directory is published instead, as if <code>--path .</code> had been
 passed. Use <code>--path</code> to build and publish a single package.</p>
-<p>Supported destinations for <code>--target-channel</code> (alias <code>--to</code>):
-  - prefix.dev: <code>https://prefix.dev/&lt;channel-name&gt;</code>
-  - anaconda.org: <code>https://anaconda.org/&lt;owner&gt;/&lt;label&gt;</code>
-  - Cloudsmith: <code>cloudsmith://&lt;owner&gt;/&lt;repository&gt;</code>
-  - S3: <code>s3://bucket-name</code>
-  - Quetz: <code>quetz://server/&lt;channel&gt;</code>
-  - Artifactory: <code>artifactory://server/&lt;channel&gt;</code>
-  - Local filesystem channel (with indexing):
-    <code>file:///path/to/channel</code> or a bare path</p>
+<p>Supported destinations for <code>--target-channel</code> (alias <code>--to</code>):</p>
+<ul>
+<li>prefix.dev: <code>https://prefix.dev/&lt;channel-name&gt;</code></li>
+<li>anaconda.org: <code>https://anaconda.org/&lt;owner&gt;/&lt;label&gt;</code></li>
+<li>Cloudsmith: <code>cloudsmith://&lt;owner&gt;/&lt;repository&gt;</code></li>
+<li>S3: <code>s3://bucket-name</code></li>
+<li>Quetz: <code>quetz://server/&lt;channel&gt;</code></li>
+<li>Artifactory: <code>artifactory://server/&lt;channel&gt;</code></li>
+<li>Local filesystem channel (with indexing):
+  <code>file:///path/to/channel</code> or a bare path</li>
+</ul>
 <p>Use <code>--target-dir &lt;PATH&gt;</code> instead to copy the built package(s) into a
 directory without creating a channel structure.</p>
 <h2 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">#</a></h2>
