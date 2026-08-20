@@ -43,6 +43,7 @@ An example of this would be the [`libglib_activate.sh`](https://github.com/conda
 Thus, just adding the `bin` directory to the `PATH` is not enough.
 
 Shell used for activation:
+
 - On Windows, Pixi executes activation under `cmd.exe`.
 - On Linux and macOS, Pixi executes activation under `bash`.
 

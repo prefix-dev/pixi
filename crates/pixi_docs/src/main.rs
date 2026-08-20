@@ -300,7 +300,7 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
     // Long about
     if let Some(long) = command.get_long_about() {
         writeln!(buffer, "\n## Description").unwrap();
-        writeln!(buffer, "{}\n", long.to_string().trim_end()).unwrap();
+        writeln!(buffer, "{}\n", normalize_lists(long.to_string().trim_end())).unwrap();
     }
 
     // Write snippet link
@@ -313,6 +313,63 @@ fn subcommand_to_md(parents: &[String], command: &Command) -> String {
     .unwrap();
 
     buffer
+}
+
+/// Returns the indentation of a line that starts a Markdown list item, or
+/// `None` for any other line.
+fn list_marker_indent(line: &str) -> Option<usize> {
+    let content = line.trim_start();
+    let indent = line.len() - content.len();
+
+    let bullet = ["- ", "* ", "+ "]
+        .iter()
+        .any(|marker| content.starts_with(marker));
+    let digits = content.chars().take_while(char::is_ascii_digit).count();
+    let ordered =
+        digits > 0 && (content[digits..].starts_with(". ") || content[digits..].starts_with(") "));
+
+    (bullet || ordered).then_some(indent)
+}
+
+/// Rewrites lists so that the docs renderer recognizes them.
+///
+/// Doc comments write lists the way they should look in `--help`: indented, and
+/// usually glued to the line that introduces them. The `mdx_truly_sane_lists`
+/// extension the docs use only accepts a list whose markers sit at column zero
+/// and that is preceded by a blank line - anything else becomes a paragraph of
+/// run-together bullets. So every line of an indented list is shifted left by
+/// the indentation of the marker that started it, which keeps nested items and
+/// continuation lines intact, and a missing blank line is inserted in front.
+fn normalize_lists(text: &str) -> String {
+    let mut lines: Vec<&str> = Vec::new();
+    // The indentation stripped from the lines of the list being walked over
+    let mut list_indent: Option<usize> = None;
+
+    for line in text.lines() {
+        if line.trim().is_empty() {
+            list_indent = None;
+        } else if list_indent.is_none() {
+            // Four spaces of indentation start a code block, not a list
+            if let Some(indent) = list_marker_indent(line).filter(|indent| *indent < 4) {
+                if lines
+                    .last()
+                    .is_some_and(|previous| !previous.trim().is_empty())
+                {
+                    lines.push("");
+                }
+                list_indent = Some(indent);
+            }
+        }
+
+        let stripped = line
+            .chars()
+            .take(list_indent.unwrap_or(0))
+            .take_while(|character| *character == ' ')
+            .count();
+        lines.push(&line[stripped..]);
+    }
+
+    lines.join("\n")
 }
 
 /// Processes a command and its subcommands, generating markdown documentation
@@ -528,4 +585,30 @@ fn arguments(options: &[&clap::Arg], parents: &[String]) -> String {
 /// Loads the CLI command structure from pixi
 fn get_command() -> Command {
     pixi_cli::Args::command()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_lists;
+
+    #[test]
+    fn dedents_a_list_and_separates_it_from_its_intro() {
+        let text = "Destinations:\n  - prefix.dev: `https://prefix.dev/<channel>`\n  - local channel:\n    `file:///path` or a bare path\n\nTrailing paragraph.";
+        assert_eq!(
+            normalize_lists(text),
+            "Destinations:\n\n- prefix.dev: `https://prefix.dev/<channel>`\n- local channel:\n  `file:///path` or a bare path\n\nTrailing paragraph."
+        );
+    }
+
+    #[test]
+    fn keeps_nested_items_nested() {
+        let text = "  - outer\n    - inner\n  - outer again";
+        assert_eq!(normalize_lists(text), "- outer\n  - inner\n- outer again");
+    }
+
+    #[test]
+    fn leaves_a_well_formed_list_and_indented_code_alone() {
+        let text = "Steps:\n\n1. first\n2. second\n\n    indented - code\n    - not a list";
+        assert_eq!(normalize_lists(text), text);
+    }
 }
