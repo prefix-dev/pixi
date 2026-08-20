@@ -314,21 +314,20 @@ pub fn host_baseline(subdir: Platform) -> PixiPlatform {
 /// detection returns, which would leave every declared platform unsatisfied and
 /// make `PIXI_OVERRIDE_PLATFORM` useless for anything but a bare subdir.
 pub fn detect_host(subdir: Platform) -> Result<PixiPlatform, HostDetectionError> {
-    if !is_machine_subdir(subdir) {
+    if !machine_runs(subdir) {
         return Ok(host_baseline(subdir));
     }
     Ok(host_platform_from(subdir, probe_machine(subdir)?)?)
 }
 
-/// Whether this machine can report anything about `subdir`.
+/// Whether this machine can run packages from `subdir`.
 ///
-/// The question is whether the machine can *run* that subdir, so it is the same
-/// [`candidate_subdirs`] test that decides which declared platforms this host
-/// may select. A reading taken here describes a machine that really executes
-/// those packages: `osx-64` on Apple Silicon reports the true macOS version,
-/// while `linux-aarch64` on an x86 box reports nothing, rather than lending it
-/// this machine's glibc and kernel.
-fn is_machine_subdir(subdir: Platform) -> bool {
+/// It is the same [`candidate_subdirs`] test that decides which declared
+/// platforms this host may select, so a reading taken here describes a machine
+/// that really executes those packages: `osx-64` on Apple Silicon reports the
+/// true macOS version, while `linux-aarch64` on an x86 box reports nothing,
+/// rather than lending it this machine's glibc and kernel.
+fn machine_runs(subdir: Platform) -> bool {
     candidate_subdirs(Platform::current()).contains(&subdir)
 }
 
@@ -484,14 +483,14 @@ pub fn detect_host_capabilities(subdir: Platform) -> Vec<GenericVirtualPackage> 
 /// What this machine reports about `subdir`, for display only.
 ///
 /// Unlike [`detect_host_capabilities`] this never substitutes pixi's
-/// assumptions: asked about a subdir the machine is not, it answers with what
-/// little detection produced, because a field that says "detected" must not
+/// assumptions: asked about a subdir this machine cannot run, it answers with
+/// what little detection produced, because a field that says "detected" must not
 /// show numbers nothing detected.
 pub fn machine_virtual_packages(subdir: Platform) -> Vec<GenericVirtualPackage> {
     // Detection for a foreign subdir does not fail, it *invents*: rattler
     // answers `__win` on a Linux box, and `detection_overrides` supplies the
     // architecture itself. Neither is something this machine reported.
-    if !is_machine_subdir(subdir) {
+    if !machine_runs(subdir) {
         return Vec::new();
     }
     probe_machine(subdir).unwrap_or_else(|error| {
