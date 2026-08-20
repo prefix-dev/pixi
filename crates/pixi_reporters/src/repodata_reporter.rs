@@ -57,7 +57,7 @@ impl RepodataReporter {
 
 static CHANNEL_NOTICES: LazyLock<Mutex<IndexMap<(ChannelUrl, String), ChannelNoticeResult>>> =
     LazyLock::new(|| Mutex::new(IndexMap::new()));
-const VIEWED_CHANNEL_NOTICES_FILE: &str = "notices/viewed-notices-v1";
+const VIEWED_CHANNEL_NOTICES_FILE: &str = "viewed-notices-v1";
 
 /// Queue a CEP-6 channel notice for display at the end of the CLI command.
 pub fn queue_channel_notice(notice: &ChannelNoticeResult) {
@@ -91,9 +91,11 @@ pub fn display_channel_notices() {
 }
 
 fn viewed_channel_notices_path() -> Option<PathBuf> {
-    pixi_config::get_cache_dir()
-        .ok()
-        .map(|cache_dir| cache_dir.join(VIEWED_CHANNEL_NOTICES_FILE))
+    pixi_config::get_cache_dir().ok().map(|cache_dir| {
+        cache_dir
+            .join(pixi_consts::consts::CHANNEL_NOTICES_CACHE_DIR)
+            .join(VIEWED_CHANNEL_NOTICES_FILE)
+    })
 }
 
 fn read_viewed_channel_notice_ids() -> HashSet<String> {

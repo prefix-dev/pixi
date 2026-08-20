@@ -90,6 +90,10 @@ pub struct CacheArgs {
     #[arg(long)]
     pub repodata: bool,
 
+    /// Clean only the viewed channel notices cache.
+    #[arg(long)]
+    pub notices: bool,
+
     /// Clean only the build backends environments cache.
     #[arg(long)]
     pub build_backends: bool,
@@ -222,6 +226,9 @@ async fn clean_cache(args: CacheArgs, config: &pixi_config::Config) -> miette::R
     }
     if args.repodata {
         dirs.push(config.cache_dir_for(pixi_config::CacheKind::Repodata)?);
+    }
+    if args.notices {
+        dirs.push(cache_dir.join(consts::CHANNEL_NOTICES_CACHE_DIR));
     }
     if args.mapping {
         dirs.push(config.cache_dir_for(pixi_config::CacheKind::PypiMapping)?);

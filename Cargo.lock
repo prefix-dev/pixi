@@ -7182,6 +7182,7 @@ dependencies = [
  "pixi_command_dispatcher",
  "pixi_compute_reporters",
  "pixi_config",
+ "pixi_consts",
  "pixi_git",
  "pixi_progress",
  "rattler",
