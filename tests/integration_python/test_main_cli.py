@@ -3,10 +3,10 @@ import os
 import platform
 import shlex
 import shutil
-import tomli
 from pathlib import Path
 
 import pytest
+import tomli
 import tomli_w
 from dirty_equals import AnyThing, IsDict, IsList, IsStr
 from inline_snapshot import snapshot
@@ -161,6 +161,102 @@ def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
         stdout_contains="osx-arm64",
         stdout_excludes="wasi-wasm32",
     )
+
+    # Preview commands
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "--manifest-path",
+            manifest_path,
+            "preview",
+            "add",
+            "pixi-build",
+        ],
+    )
+    verify_cli_command(
+        [pixi, "workspace", "--manifest-path", manifest_path, "preview", "list"],
+        stdout_contains="pixi-build",
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "--manifest-path",
+            manifest_path,
+            "preview",
+            "add",
+            "not-a-preview-feature",
+        ],
+        ExitCode.INCORRECT_USAGE,
+        stderr_contains=["invalid value 'not-a-preview-feature'", "pixi-build"],
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "--manifest-path",
+            manifest_path,
+            "preview",
+            "remove",
+            "pixi-build",
+        ],
+    )
+    verify_cli_command(
+        [pixi, "workspace", "--manifest-path", manifest_path, "preview", "list"],
+        stdout_excludes="pixi-build",
+    )
+
+    # Preview add works even when the manifest fails to load because the
+    # feature is missing, e.g. a `[package]` section without `pixi-build`
+    package_section = """
+[package]
+name = "test"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "pixi-build-python", version = "*" }
+"""
+    manifest_content = manifest_path.read_text()
+    manifest_path.write_text(manifest_content + package_section)
+    verify_cli_command(
+        [pixi, "workspace", "--manifest-path", manifest_path, "preview", "list"],
+        ExitCode.FAILURE,
+        stderr_contains="pixi workspace preview add pixi-build",
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "--manifest-path",
+            manifest_path,
+            "preview",
+            "add",
+            "pixi-build",
+        ],
+        stderr_contains="Added 'pixi-build'",
+    )
+    # Removing it fails because the manifest would no longer load
+    verify_cli_command(
+        [pixi, "workspace", "--manifest-path", manifest_path, "preview", "remove", "pixi-build"],
+        ExitCode.FAILURE,
+        stderr_contains=["no longer load", "--force"],
+    )
+    # With --force it works, with a warning that the manifest needs it
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "--manifest-path",
+            manifest_path,
+            "preview",
+            "remove",
+            "pixi-build",
+            "--force",
+        ],
+        stderr_contains=["Removed 'pixi-build'", "no longer loads"],
+    )
+    manifest_path.write_text(manifest_content)
 
     # Version commands
     verify_cli_command(

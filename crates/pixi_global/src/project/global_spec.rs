@@ -2,7 +2,7 @@
 use std::path::Path;
 
 use pixi_manifest::{
-    InlinePackageManifest, KnownPreviewFeature, Preview,
+    InlinePackageManifest, KnownPreviewFlag, Preview,
     toml::{TomlPackage, WorkspacePackageProperties},
 };
 use pixi_spec::PixiSpec;
@@ -156,7 +156,7 @@ impl InlinePackageValue {
             return Err(InlinePackageValueError::ExplicitBuildSource);
         }
 
-        let preview = Preview::from_iter([KnownPreviewFeature::PixiBuild]);
+        let preview = Preview::from_iter([KnownPreviewFlag::PixiBuild]);
         InlinePackageManifest::from_toml_package(
             name,
             package,

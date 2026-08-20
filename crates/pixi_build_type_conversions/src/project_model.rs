@@ -379,7 +379,7 @@ mod tests {
     use pixi_manifest::toml::{
         FromTomlStr, PackageDefaults, TomlPackage, WorkspacePackageProperties,
     };
-    use pixi_manifest::{KnownPreviewFeature, Preview};
+    use pixi_manifest::{KnownPreviewFlag, Preview};
     use rattler_conda_types::ChannelConfig;
     use rstest::rstest;
 
@@ -505,7 +505,7 @@ mod tests {
             .into_manifest(
                 WorkspacePackageProperties::default(),
                 PackageDefaults::default(),
-                &Preview::from_iter([KnownPreviewFeature::PixiBuild]),
+                &Preview::from_iter([KnownPreviewFlag::PixiBuild]),
                 std::path::Path::new(""),
             )
             .unwrap()
@@ -588,7 +588,7 @@ mod tests {
             .into_manifest(
                 WorkspacePackageProperties::default(),
                 PackageDefaults::default(),
-                &Preview::from_iter([KnownPreviewFeature::PixiBuild]),
+                &Preview::from_iter([KnownPreviewFlag::PixiBuild]),
                 std::path::Path::new(""),
             )
             .unwrap()
@@ -726,7 +726,7 @@ mod tests {
             .into_manifest(
                 WorkspacePackageProperties::default(),
                 PackageDefaults::default(),
-                &Preview::from_iter([KnownPreviewFeature::PixiBuild]),
+                &Preview::from_iter([KnownPreviewFlag::PixiBuild]),
                 std::path::Path::new(""),
             )
             .unwrap()

@@ -8,8 +8,8 @@ use pixi_core::workspace::{
 };
 use pixi_core::{Workspace, environment::LockFileUsage};
 use pixi_manifest::{
-    EnvironmentName, Feature, FeatureName, PixiPlatform, PixiPlatformName, PlatformEdit,
-    PlatformMove, PrioritizedChannel, SpecType, TargetSelector, Task, TaskName,
+    EnvironmentName, Feature, FeatureName, KnownPreviewFlag, PixiPlatform, PixiPlatformName,
+    PlatformEdit, PlatformMove, PrioritizedChannel, SpecType, TargetSelector, Task, TaskName,
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
@@ -90,6 +90,33 @@ impl<I: Interface> WorkspaceContext<I> {
             description,
         )
         .await
+    }
+
+    pub async fn preview_flags(&self) -> Vec<KnownPreviewFlag> {
+        crate::workspace::workspace::preview::list(&self.workspace).await
+    }
+
+    /// Enable preview flags by editing the manifest directly, so a
+    /// manifest that fails to load exactly because a flag is missing,
+    /// e.g. a `[package]` section without `pixi-build`, can still be fixed.
+    pub async fn add_preview_flags(
+        interface: I,
+        manifest_path: std::path::PathBuf,
+        flags: Vec<KnownPreviewFlag>,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::preview::add(&interface, manifest_path, flags).await
+    }
+
+    /// Disable preview flags by editing the manifest directly, like
+    /// [`Self::add_preview_flags`]. Errors without saving when the
+    /// manifest would no longer load, unless `force` is set.
+    pub async fn remove_preview_flags(
+        interface: I,
+        manifest_path: std::path::PathBuf,
+        flags: Vec<KnownPreviewFlag>,
+        force: bool,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::preview::remove(&interface, manifest_path, flags, force).await
     }
 
     pub async fn list_activation(&self) -> Vec<crate::workspace::ActivationEntry> {
