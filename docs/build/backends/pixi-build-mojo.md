@@ -30,6 +30,7 @@ The Mojo backend includes auto-discovery of your project structure and will deri
 This means in most cases, you don't need to explicitly configure the `bins` or `pkg` fields.
 
 **Caveats**:
+
 - If both a `bin` and a `pkg` are auto-derived, only the `bin` will be created, you must manually specify the pkg.
 - If the user specifies a `pkg` a `bin` will not be auto-derived.
 - If the user specifies a `bin` a `pkg` will not be auto-derived.
@@ -53,6 +54,7 @@ To use the Mojo backend in your `pixi.toml`, add it to your package's build conf
 ```
 
 With the project structure above, pixi-build-mojo will automatically discover:
+
 - The binary from `main.mojo`
 - The package from `greetings/__init__.mojo`
 
@@ -209,6 +211,7 @@ compilers = ["c", "cuda"]
 List of binary configurations to build. The created binary will be placed in the `$PREFIX/bin` dir and will be in the path after running `pixi install` assuming the package is listed as a dependency as in the example above. Running `pixi publish` will create a conda package that includes the binary.
 
 **Auto-derive behavior:**
+
 - If `bins` is not specified, pixi-build-mojo will search for a `main.mojo` file in the project root
 - If found, it creates a binary with the name set to the project name
 - If a pkg has been manually configured, a bin will not be auto-derived and must be manually configured.
@@ -219,6 +222,7 @@ List of binary configurations to build. The created binary will be placed in the
 - **Default**: Project name (with dashes converted to underscores) for the first binary
 
 The name of the binary executable to create. If not specified:
+
 - For the first binary in the list, defaults to the project name
 - For additional binaries, this field is required
 
@@ -233,6 +237,7 @@ The name of the binary executable to create. If not specified:
 - **Default**: Auto-derived for the first binary
 
 The path to the Mojo file that contains a `main` function. If not specified:
+
 - For the first binary, searches for `main.mojo` in the project root
 - For additional binaries, this field is required
 
@@ -261,6 +266,7 @@ extra-args = ["-I", "special-thing"]
 Package configuration for creating Mojo package. The created Mojo package will be placed in the `$PREFIX/lib/mojo` dir, which will make it discoverable to anything that depends on the package.
 
 **Auto-derive behavior:**
+
 - If `pkg` is not specified, pixi-build-mojo will search for a directory containing `__init__.mojo` in the following order:
   1. `<project_root>/<project_name>/`
   2. `<project_root>/src/`
