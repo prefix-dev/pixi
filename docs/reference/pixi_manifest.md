@@ -1418,7 +1418,7 @@ More information can be found in the [Dev packages](../build/dev.md) documentati
 ## The `package` section
 
 !!! warning "Important note"
-    `pixi-build` is a [preview flag](#preview-features), and will change until it is stabilized.
+    `pixi-build` is a [preview flag](#preview-flags), and will change until it is stabilized.
     Please keep that in mind when you use it for your workspaces.
     ```toml
     --8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:preview"
