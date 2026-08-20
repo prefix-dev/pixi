@@ -10,7 +10,7 @@ use pixi_manifest::{
     EnvironmentName, FeatureName, FeaturesExt, HasWorkspaceManifest, PixiPlatform,
     PixiPlatformName, PlatformEdit, PlatformMove,
     platform::{
-        capability_satisfied_by,
+        candidate_subdirs, capability_satisfied_by,
         host::{detect_host, detect_host_capabilities, host_subdir, machine_virtual_packages},
         subdir_default_virtual_packages,
     },
@@ -778,7 +778,7 @@ async fn execute_list(
     if args.json {
         // Same snapshot the human output renders, so the two views of one
         // command cannot disagree about the host.
-        let machine = HostMachine::detect(workspace);
+        let machine = HostMachine::detect();
         let mut platforms: Vec<serde_json::Value> =
             Vec::with_capacity(workspace_platforms.len() + 1);
         platforms.push(autodetected_to_json(&machine));
@@ -806,7 +806,7 @@ async fn execute_list(
     }
 
     let mut stdout = std::io::stdout();
-    let machine = HostMachine::detect(workspace);
+    let machine = HostMachine::detect();
     print_autodetected_host(&mut stdout, &machine);
 
     if !workspace_platforms.is_empty() {
@@ -943,12 +943,9 @@ struct HostMachine {
 }
 
 impl HostMachine {
-    fn detect(workspace: &pixi_core::Workspace) -> Self {
+    fn detect() -> Self {
         let subdir = host_subdir();
-        let candidate_subdirs = workspace
-            .workspace_manifest()
-            .workspace
-            .candidate_subdirs(subdir);
+        let candidate_subdirs = candidate_subdirs(subdir);
         let detected = detect_host_capabilities(subdir);
         HostMachine {
             subdir,

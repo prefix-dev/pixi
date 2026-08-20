@@ -12,7 +12,7 @@ use miette::Diagnostic;
 use pixi_manifest::platform::host::{detect_host_capabilities, host_subdir};
 use pixi_manifest::{
     EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName,
-    platform::{solver_virtual_packages, unsatisfied_capabilities},
+    platform::{candidate_subdirs, solver_virtual_packages, unsatisfied_capabilities},
 };
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Platform};
 use rattler_lock::LockFile;
@@ -111,10 +111,7 @@ pub fn minimum_compatible_declared_platform<'p>(
 ) -> Result<&'p PixiPlatform, Vec<MatchSpec>> {
     let current = host_subdir();
     let system_virtual_packages = detect_host_capabilities(host_subdir());
-    let candidate_subdirs = environment
-        .workspace_manifest()
-        .workspace
-        .candidate_subdirs(current);
+    let candidate_subdirs = candidate_subdirs(current);
 
     let manifest = environment.workspace_manifest();
     let env_platform_names = environment.platforms();
@@ -417,10 +414,7 @@ pub fn verify_run_platform(
         // can run (current subdir plus architecture fallbacks).
         None => {
             let current = host_subdir();
-            let subdirs = environment
-                .workspace_manifest()
-                .workspace
-                .candidate_subdirs(current);
+            let subdirs = candidate_subdirs(current);
             (
                 subdirs,
                 detect_host_capabilities(host_subdir()),
