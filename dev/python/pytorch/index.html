@@ -8768,13 +8768,19 @@ The ABI tag is based on the Python version is embedded in the wheel filename, e.
 This occurs when the platform tag doesn’t match the PyPI wheels available to be installed.</p>
 <p>Example Issue:
 <code>torch==2.5.1+cu124</code> (CUDA 12.4) was attempted on an <code>osx</code> machine, but this version is only available for <code>linux-64</code> and <code>win-64</code>.</p>
-<p>Solution:
-- Use the correct PyPI index for your platform:
-  - CPU-only: Use the cpu index for all platforms.
-  - CUDA versions: Use cu124 for linux-64 and win-64.</p>
-<p>Correct Indexes:
-- CPU: https://download.pytorch.org/whl/cpu
-- CUDA 12.4: https://download.pytorch.org/whl/cu124</p>
+<p>Solution:</p>
+<ul>
+<li>Use the correct PyPI index for your platform:<ul>
+<li>CPU-only: Use the cpu index for all platforms.</li>
+<li>CUDA versions: Use cu124 for linux-64 and win-64.</li>
+</ul>
+</li>
+</ul>
+<p>Correct Indexes:</p>
+<ul>
+<li>CPU: https://download.pytorch.org/whl/cpu</li>
+<li>CUDA 12.4: https://download.pytorch.org/whl/cu124</li>
+</ul>
 <p>This ensures PyTorch installations are compatible with your system’s platform and Python version.</p>
 
 

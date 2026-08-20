@@ -1709,11 +1709,13 @@ Example Issue:
 `torch==2.5.1+cu124` (CUDA 12.4) was attempted on an `osx` machine, but this version is only available for `linux-64` and `win-64`.
 
 Solution:
+
 - Use the correct PyPI index for your platform:
   - CPU-only: Use the cpu index for all platforms.
   - CUDA versions: Use cu124 for linux-64 and win-64.
 
 Correct Indexes:
+
 - CPU: https://download.pytorch.org/whl/cpu
 - CUDA 12.4: https://download.pytorch.org/whl/cu124
 
@@ -4739,6 +4741,7 @@ See [the environment variable priority documentation](../reference/environment_v
 and how those ways interact with each other.
 
 Notes on environment variables in tasks:
+
 - Values set via `tasks.<name>.env` are interpreted by `deno_task_shell` when the task runs. Shell-style expansions like `env = { VAR = "$FOO" }` therefore work the same on all operating systems.
 - Templating is allowed in env variables, when you have something like `{ cmd="pytest", env={ BACKEND="{{ backend }}" }, args=[{arg="backend", default="numpy"}] }`. The arg `{{ backend }}` value is interpreted by the `backend` values passed in.
 
@@ -5025,6 +5028,7 @@ An example of this would be the [`libglib_activate.sh`](https://github.com/conda
 Thus, just adding the `bin` directory to the `PATH` is not enough.
 
 Shell used for activation:
+
 - On Windows, Pixi executes activation under `cmd.exe`.
 - On Linux and macOS, Pixi executes activation under `bash`.
 
@@ -5266,13 +5270,14 @@ If you commit the lock file in your library project, you will want to also consi
 
 - **Upgrading the lock file:** How often do you want to upgrade the lock file used by your developers? Do you want to do these upgrades in the main repo history? Do you want to manage this lock file via (e.g.,) [the Renovate Bot](https://docs.renovatebot.com/modules/manager/pixi/) or via a custom CI job?
 - **Custom CI workflow to test against latest versions:** Do you want to have a workflow to test against the latest dependency versions? If so - you likely want to have the following CI workflow on a cron schedule:
-	- Remove the `pixi.lock` before running the `setup-pixi` action
-	- Run your tests
-	- If the tests fail:
-		- See how the generated `pixi.lock` differs from that in `main` by using `pixi-diff` and `pixi-diff-to-markdown`
-		- Automatically file an issue so that its tracked in the project repo
+  - Remove the `pixi.lock` before running the `setup-pixi` action
+  - Run your tests
+  - If the tests fail:
+    - See how the generated `pixi.lock` differs from that in `main` by using `pixi-diff` and `pixi-diff-to-markdown`
+    - Automatically file an issue so that its tracked in the project repo
 
 You can see how these considerations above have been explored by the following projects:
+
 - Scipy (being explored - will update with PR link once available. [Issue](https://github.com/scipy/scipy/issues/23637))
 
 ---
@@ -5979,15 +5984,16 @@ Each inline-table entry has:
 - `cuda` also accepts a `{ driver, arch }` table that declares the CUDA driver
   version (`__cuda`) together with the GPU compute capability (`__cuda_arch`):
 
-    ```toml title="pixi.toml"
-    platforms = [
-      { name = "gpu", platform = "linux-64", cuda = { driver = "12.0", arch = "8.6" } },
-    ]
-    ```
+  ```toml title="pixi.toml"
+  platforms = [
+    { name = "gpu", platform = "linux-64", cuda = { driver = "12.0", arch = "8.6" } },
+  ]
+  ```
 
-    `driver` is exactly equivalent to the bare `cuda = "12.0"` form. Per the
-    conda CEP, `__cuda_arch` is meaningless without `__cuda`, so `arch` requires
-    `driver`; declaring `arch` (or a raw `__cuda_arch`) alone is rejected.
+  `driver` is exactly equivalent to the bare `cuda = "12.0"` form. Per the
+  conda CEP, `__cuda_arch` is meaningless without `__cuda`, so `arch` requires
+  `driver`; declaring `arch` (or a raw `__cuda_arch`) alone is rejected.
+
 - For virtual packages without a friendly key, a raw `__name = "version"` entry is also accepted as an escape hatch. Only the virtual packages pixi knows how to override (`__win`, `__osx`, `__linux`, `__cuda`, `__archspec`, and the libc family `__glibc`/`__musl`/`__eglibc`) take effect at detection; any other raw `__name` is stored but ignored when checking host compatibility.
 
 A feature's `platforms` array is a list of names that must each resolve to a workspace platform (or be a bare conda subdir, which Pixi treats as an alias for that subdir).
@@ -11318,6 +11324,7 @@ pixi global install pixi-pack pixi-diff
 ```
 
 This approach has several advantages:
+
 - **Isolated environments**: Each extension gets its own environment, preventing dependency conflicts
 - **Automatic discovery**: Extensions are automatically found by Pixi without modifying PATH
 - **Easy management**: Use `pixi global list` and `pixi global remove` to manage extensions
@@ -12992,11 +12999,11 @@ priority first):
     (see [Environment-variable escape hatches](#environment-variable-escape-hatches)).
 2. The matching `[cache.<kind>]` path from this config, if set.
 3. The cache root, joined with the kind's subdirectory:
-    1. `PIXI_CACHE_DIR` environment variable
-    2. `RATTLER_CACHE_DIR` environment variable
-    3. `[cache.root]` from this config
-    4. `$XDG_CACHE_HOME/pixi` (when it exists)
-    5. The platform default (e.g. `~/Library/Caches/rattler/cache` on macOS)
+  1. `PIXI_CACHE_DIR` environment variable
+  2. `RATTLER_CACHE_DIR` environment variable
+  3. `[cache.root]` from this config
+  4. `$XDG_CACHE_HOME/pixi` (when it exists)
+  5. The platform default (e.g. `~/Library/Caches/rattler/cache` on macOS)
 4. If the resolved path is on a network filesystem and the kind is not
     "shared-friendly", auto-redirect to node-local scratch (see
     `netfs-redirect` below).
@@ -13851,6 +13858,7 @@ detectron2 = { git = "https://github.com/facebookresearch/detectron2.git", rev =
 
 Setting `no-build-isolation` also affects the order in which PyPI packages are installed.
 Packages are installed in that order:
+
 - conda packages in one go
 - packages with build isolation in one go
 - packages without build isolation installed in the order they are added to `no-build-isolation`

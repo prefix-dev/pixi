@@ -9308,12 +9308,14 @@ priority first):</p>
 <li>The matching <code>PIXI_CACHE_&lt;KIND&gt;_DIR</code> environment variable, if set
     (see <a href="#environment-variable-escape-hatches">Environment-variable escape hatches</a>).</li>
 <li>The matching <code>[cache.&lt;kind&gt;]</code> path from this config, if set.</li>
-<li>The cache root, joined with the kind's subdirectory:
-    1. <code>PIXI_CACHE_DIR</code> environment variable
-    2. <code>RATTLER_CACHE_DIR</code> environment variable
-    3. <code>[cache.root]</code> from this config
-    4. <code>$XDG_CACHE_HOME/pixi</code> (when it exists)
-    5. The platform default (e.g. <code>~/Library/Caches/rattler/cache</code> on macOS)</li>
+<li>The cache root, joined with the kind's subdirectory:<ol>
+<li><code>PIXI_CACHE_DIR</code> environment variable</li>
+<li><code>RATTLER_CACHE_DIR</code> environment variable</li>
+<li><code>[cache.root]</code> from this config</li>
+<li><code>$XDG_CACHE_HOME/pixi</code> (when it exists)</li>
+<li>The platform default (e.g. <code>~/Library/Caches/rattler/cache</code> on macOS)</li>
+</ol>
+</li>
 <li>If the resolved path is on a network filesystem and the kind is not
     "shared-friendly", auto-redirect to node-local scratch (see
     <code>netfs-redirect</code> below).</li>

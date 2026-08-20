@@ -8604,11 +8604,13 @@ Then it will execute it by passing any additional arguments to it.</p>
 </span><span id="__span-0-4"><a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="c1"># Install multiple extensions at once</span>
 </span><span id="__span-0-5"><a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>pixi-pack<span class="w"> </span>pixi-diff
 </span></code></pre></div>
-<p>This approach has several advantages:
-- <strong>Isolated environments</strong>: Each extension gets its own environment, preventing dependency conflicts
-- <strong>Automatic discovery</strong>: Extensions are automatically found by Pixi without modifying PATH
-- <strong>Easy management</strong>: Use <code>pixi global list</code> and <code>pixi global remove</code> to manage extensions
-- <strong>Consistent experience</strong>: Extensions appear in <code>pixi --list</code> with all the built-in commands, just like how <code>Cargo</code> handles it</p>
+<p>This approach has several advantages:</p>
+<ul>
+<li><strong>Isolated environments</strong>: Each extension gets its own environment, preventing dependency conflicts</li>
+<li><strong>Automatic discovery</strong>: Extensions are automatically found by Pixi without modifying PATH</li>
+<li><strong>Easy management</strong>: Use <code>pixi global list</code> and <code>pixi global remove</code> to manage extensions</li>
+<li><strong>Consistent experience</strong>: Extensions appear in <code>pixi --list</code> with all the built-in commands, just like how <code>Cargo</code> handles it</li>
+</ul>
 <h3 id="manual-installation">Manual Installation<a class="headerlink" href="#manual-installation" title="Permanent link">#</a></h3>
 <p>You can also install extensions manually by placing the executable in any directory in your PATH:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Download or build the extension</span>

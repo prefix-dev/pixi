@@ -8537,10 +8537,12 @@ This is why we require users to opt in to that feature by adding "pixi-build" to
 </li>
 </ul>
 <p>This means in most cases, you don't need to explicitly configure the <code>bins</code> or <code>pkg</code> fields.</p>
-<p><strong>Caveats</strong>:
-- If both a <code>bin</code> and a <code>pkg</code> are auto-derived, only the <code>bin</code> will be created, you must manually specify the pkg.
-- If the user specifies a <code>pkg</code> a <code>bin</code> will not be auto-derived.
-- If the user specifies a <code>bin</code> a <code>pkg</code> will not be auto-derived.</p>
+<p><strong>Caveats</strong>:</p>
+<ul>
+<li>If both a <code>bin</code> and a <code>pkg</code> are auto-derived, only the <code>bin</code> will be created, you must manually specify the pkg.</li>
+<li>If the user specifies a <code>pkg</code> a <code>bin</code> will not be auto-derived.</li>
+<li>If the user specifies a <code>bin</code> a <code>pkg</code> will not be auto-derived.</li>
+</ul>
 <h2 id="basic-usage">Basic Usage<a class="headerlink" href="#basic-usage" title="Permanent link">#</a></h2>
 <p>To use the Mojo backend in your <code>pixi.toml</code>, add it to your package's build configuration. The backend will automatically discover your project structure:</p>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a># Example project layout for combined binary/library.
@@ -8553,9 +8555,11 @@ This is why we require users to opt in to that feature by adding "pixi-build" to
 </span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>├── pixi.toml
 </span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>└── README.md
 </span></code></pre></div>
-<p>With the project structure above, pixi-build-mojo will automatically discover:
-- The binary from <code>main.mojo</code>
-- The package from <code>greetings/__init__.mojo</code></p>
+<p>With the project structure above, pixi-build-mojo will automatically discover:</p>
+<ul>
+<li>The binary from <code>main.mojo</code></li>
+<li>The package from <code>greetings/__init__.mojo</code></li>
+</ul>
 <p>Here's a minimal configuration that leverages auto-derive:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">[workspace]</span>
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">authors</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;J. Doe &lt;jdoe@mail.com&gt;&quot;</span><span class="p">]</span>
@@ -8679,18 +8683,22 @@ This is why we require users to opt in to that feature by adding "pixi-build" to
 <li><strong>Default</strong>: Auto-derived if not specified</li>
 </ul>
 <p>List of binary configurations to build. The created binary will be placed in the <code>$PREFIX/bin</code> dir and will be in the path after running <code>pixi install</code> assuming the package is listed as a dependency as in the example above. Running <code>pixi publish</code> will create a conda package that includes the binary.</p>
-<p><strong>Auto-derive behavior:</strong>
-- If <code>bins</code> is not specified, pixi-build-mojo will search for a <code>main.mojo</code> file in the project root
-- If found, it creates a binary with the name set to the project name
-- If a pkg has been manually configured, a bin will not be auto-derived and must be manually configured.</p>
+<p><strong>Auto-derive behavior:</strong></p>
+<ul>
+<li>If <code>bins</code> is not specified, pixi-build-mojo will search for a <code>main.mojo</code> file in the project root</li>
+<li>If found, it creates a binary with the name set to the project name</li>
+<li>If a pkg has been manually configured, a bin will not be auto-derived and must be manually configured.</li>
+</ul>
 <h4 id="binsname"><code>bins[].name</code><a class="headerlink" href="#binsname" title="Permanent link">#</a></h4>
 <ul>
 <li><strong>Type</strong>: <code>String</code></li>
 <li><strong>Default</strong>: Project name (with dashes converted to underscores) for the first binary</li>
 </ul>
-<p>The name of the binary executable to create. If not specified:
-- For the first binary in the list, defaults to the project name
-- For additional binaries, this field is required</p>
+<p>The name of the binary executable to create. If not specified:</p>
+<ul>
+<li>For the first binary in the list, defaults to the project name</li>
+<li>For additional binaries, this field is required</li>
+</ul>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="k">[[package.build.config.bins]]</span>
 </span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="c1"># name = &quot;greet&quot;  # Optional for first binary, defaults to project name</span>
 </span></code></pre></div>
@@ -8699,9 +8707,11 @@ This is why we require users to opt in to that feature by adding "pixi-build" to
 <li><strong>Type</strong>: <code>String</code> (path)</li>
 <li><strong>Default</strong>: Auto-derived for the first binary</li>
 </ul>
-<p>The path to the Mojo file that contains a <code>main</code> function. If not specified:
-- For the first binary, searches for <code>main.mojo</code> in the project root
-- For additional binaries, this field is required</p>
+<p>The path to the Mojo file that contains a <code>main</code> function. If not specified:</p>
+<ul>
+<li>For the first binary, searches for <code>main.mojo</code> in the project root</li>
+<li>For additional binaries, this field is required</li>
+</ul>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">[[package.build.config.bins]]</span>
 </span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="c1"># path = &quot;./main.mojo&quot;  # Optional if main.mojo exists in project root</span>
 </span></code></pre></div>
@@ -8720,14 +8730,18 @@ This is why we require users to opt in to that feature by adding "pixi-build" to
 <li><strong>Default</strong>: Auto-derived if not specified</li>
 </ul>
 <p>Package configuration for creating Mojo package. The created Mojo package will be placed in the <code>$PREFIX/lib/mojo</code> dir, which will make it discoverable to anything that depends on the package.</p>
-<p><strong>Auto-derive behavior:</strong>
-- If <code>pkg</code> is not specified, pixi-build-mojo will search for a directory containing <code>__init__.mojo</code> in the following order:
-  1. <code>&lt;project_root&gt;/&lt;project_name&gt;/</code>
-  2. <code>&lt;project_root&gt;/src/</code>
-- If found, it creates a package with the name set to the project name
-- If no valid package directory is found, no package is built
-- If a binary is manually configured, a pkg will not be auto-derived and must be manually specified.
-- If a binary is also auto-derive, a pkg will not be generated and must be manually specified</p>
+<p><strong>Auto-derive behavior:</strong></p>
+<ul>
+<li>If <code>pkg</code> is not specified, pixi-build-mojo will search for a directory containing <code>__init__.mojo</code> in the following order:<ol>
+<li><code>&lt;project_root&gt;/&lt;project_name&gt;/</code></li>
+<li><code>&lt;project_root&gt;/src/</code></li>
+</ol>
+</li>
+<li>If found, it creates a package with the name set to the project name</li>
+<li>If no valid package directory is found, no package is built</li>
+<li>If a binary is manually configured, a pkg will not be auto-derived and must be manually specified.</li>
+<li>If a binary is also auto-derive, a pkg will not be generated and must be manually specified</li>
+</ul>
 <h4 id="pkgname"><code>pkg.name</code><a class="headerlink" href="#pkgname" title="Permanent link">#</a></h4>
 <ul>
 <li><strong>Type</strong>: <code>String</code></li>
