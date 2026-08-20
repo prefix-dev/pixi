@@ -1,7 +1,7 @@
 """Regression tests for the richer-platform / system-requirement model.
 
-Each test asserts the intended behaviour for a bug that pixi used to get
-wrong; they guard against regressions now that those bugs are fixed.
+Each test pins one behaviour of that model at the CLI boundary, on the corners
+where declared platforms, detected virtual packages and subdir overrides meet.
 
 All tests stay network-free: they use the in-repo ``virtual_packages`` channel
 (its ``cuda`` package depends on ``__cuda >=12``) or ``dummy_channel_1``, and
@@ -203,10 +203,10 @@ def test_run_honours_platform_override_for_the_marker_check(
     """``PIXI_OVERRIDE_PLATFORM`` must skip the ``conda-meta/pixi`` marker check.
 
     The override moves the subdir pixi pretends to be on but leaves the detected
-    virtual packages alone, so the check used to compare a pretended ``win-64``
-    against a marker recorded for ``linux-64`` and report every requirement as
-    unmet -- naming ``__cuda``, which the machine does provide. Every sibling
-    platform check already bails on the override.
+    virtual packages alone. Comparing a pretended ``win-64`` against a marker
+    recorded for ``linux-64`` would report every requirement as unmet -- naming
+    ``__cuda``, which the machine does provide -- so this check bails on the
+    override, like every sibling platform check.
     """
     manifest = _write(
         tmp_pixi_workspace / "pixi.toml",
@@ -517,11 +517,10 @@ def test_platform_list_reports_the_real_machine_per_row(
 ) -> None:
     """``detected_virtual_packages`` describes the machine, not the row.
 
-    It used to be computed by detecting *with the row's declared packages
-    forced on as overrides*, so a row declaring ``cuda = "11.0"`` reported
-    11.0 back as "detected" and a declared/actual mismatch could never show
-    up. Each row now reports what this machine says about that row's subdir,
-    which is the comparison the field exists for.
+    Every row reports what this machine says about that row's subdir, so a row
+    declaring ``cuda = "11.0"`` on a host with CUDA 13 shows 13 as detected.
+    That mismatch between declared and detected is the comparison the field
+    exists for.
     """
     manifest = _write(
         tmp_pixi_workspace / "pixi.toml",
