@@ -1,6 +1,7 @@
 use std::{
     collections::HashSet,
     fmt::Write,
+    path::PathBuf,
     sync::{Arc, LazyLock},
     time::{Duration, Instant},
 };
@@ -56,6 +57,7 @@ impl RepodataReporter {
 
 static CHANNEL_NOTICES: LazyLock<Mutex<IndexMap<(ChannelUrl, String), ChannelNoticeResult>>> =
     LazyLock::new(|| Mutex::new(IndexMap::new()));
+const VIEWED_CHANNEL_NOTICES_FILE: &str = "notices/viewed-notices-v1";
 
 /// Queue a CEP-6 channel notice for display at the end of the CLI command.
 pub fn queue_channel_notice(notice: &ChannelNoticeResult) {
@@ -65,15 +67,70 @@ pub fn queue_channel_notice(notice: &ChannelNoticeResult) {
         .or_insert_with(|| notice.clone());
 }
 
-/// Display all queued channel notices, preserving their arrival order.
+/// Display all queued, previously unseen channel notices in arrival order.
 pub fn display_channel_notices() {
     let notices = CHANNEL_NOTICES.lock().drain(..).collect::<Vec<_>>();
+    let mut viewed = read_viewed_channel_notice_ids();
+    let mut newly_viewed = Vec::new();
+
     for (_, notice) in notices {
-        pixi_progress::println!(
-            "{}",
-            format_channel_notice(&notice, Timestamp::now(), console::colors_enabled_stderr())
-        );
+        if viewed.insert(notice.notice.id.clone()) {
+            pixi_progress::println!(
+                "{}",
+                format_channel_notice(&notice, Timestamp::now(), console::colors_enabled_stderr())
+            );
+            newly_viewed.push(notice.notice.id);
+        }
     }
+
+    if !newly_viewed.is_empty()
+        && let Err(err) = write_viewed_channel_notice_ids(&viewed)
+    {
+        tracing::debug!("failed to cache viewed channel notices: {err}");
+    }
+}
+
+fn viewed_channel_notices_path() -> Option<PathBuf> {
+    pixi_config::get_cache_dir()
+        .ok()
+        .map(|cache_dir| cache_dir.join(VIEWED_CHANNEL_NOTICES_FILE))
+}
+
+fn read_viewed_channel_notice_ids() -> HashSet<String> {
+    viewed_channel_notices_path()
+        .map(|path| read_viewed_channel_notice_ids_from(&path))
+        .unwrap_or_default()
+}
+
+fn read_viewed_channel_notice_ids_from(path: &std::path::Path) -> HashSet<String> {
+    std::fs::read_to_string(path)
+        .map(|contents| {
+            contents
+                .lines()
+                .filter(|line| !line.is_empty())
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn write_viewed_channel_notice_ids(viewed: &HashSet<String>) -> std::io::Result<()> {
+    let Some(path) = viewed_channel_notices_path() else {
+        return Ok(());
+    };
+    write_viewed_channel_notice_ids_to(&path, viewed)
+}
+
+fn write_viewed_channel_notice_ids_to(
+    path: &std::path::Path,
+    viewed: &HashSet<String>,
+) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut ids = viewed.iter().map(String::as_str).collect::<Vec<_>>();
+    ids.sort_unstable();
+    std::fs::write(path, ids.join("\n"))
 }
 
 fn format_channel_notice(notice: &ChannelNoticeResult, now: Timestamp, color: bool) -> String {
@@ -419,7 +476,10 @@ mod tests {
     use rattler_conda_types::{ChannelNotice, ChannelNoticeLevel};
     use rattler_repodata_gateway::ChannelNoticeResult;
 
-    use super::format_channel_notice;
+    use super::{
+        format_channel_notice, read_viewed_channel_notice_ids_from,
+        write_viewed_channel_notice_ids_to,
+    };
 
     fn notice(level: ChannelNoticeLevel) -> ChannelNoticeResult {
         ChannelNoticeResult {
@@ -467,5 +527,17 @@ mod tests {
         for (level, expected) in rendered {
             assert!(format_channel_notice(&notice(level), now, true).contains(expected));
         }
+    }
+
+    #[test]
+    fn viewed_channel_notice_ids_are_persisted() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let path = temp_dir.path().join("notices/viewed-notices-v1");
+        let viewed = ["second", "first"].into_iter().map(str::to_owned).collect();
+
+        write_viewed_channel_notice_ids_to(&path, &viewed).unwrap();
+
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "first\nsecond");
+        assert_eq!(read_viewed_channel_notice_ids_from(&path), viewed);
     }
 }
