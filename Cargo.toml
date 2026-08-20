@@ -257,7 +257,7 @@ rattler_upload = { version = "0.10", default-features = false, features = [
   "s3",
   "sigstore-sign",
 ] }
-rattler_virtual_packages = { version = "4.1", default-features = false }
+rattler_virtual_packages = { version = "5.0", default-features = false }
 simple_spawn_blocking = { version = "1.1.0", default-features = false }
 
 # Rattler build crates
