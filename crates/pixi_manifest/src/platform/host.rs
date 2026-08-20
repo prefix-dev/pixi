@@ -302,7 +302,8 @@ fn subdir_baseline(subdir: Platform) -> PixiPlatform {
 /// with the real machine's architecture.
 ///
 /// For any other subdir there is nothing to detect - a Linux box cannot report
-/// a macOS version - so the answer is [`subdir_baseline`]. The near-empty set
+/// a macOS version - so the answer is that subdir's baseline, the assumption
+/// [`host_baseline`] makes for the subdir we target. The near-empty set
 /// detection returns instead would leave every declared platform unsatisfied
 /// and make `PIXI_OVERRIDE_PLATFORM` useless for anything but a bare subdir.
 pub fn detect_host(subdir: Platform) -> Result<PixiPlatform, HostDetectionError> {
