@@ -58,7 +58,7 @@ pub use platform::{
     PlatformGlob, PlatformGlobError, PlatformMove,
 };
 pub use platform_composition::resolve_referenced_platform;
-pub use preview::{KnownPreviewFeature, Preview};
+pub use preview::{KnownPreviewFlag, Preview};
 pub use s3::S3Options;
 pub use spec_type::SpecType;
 pub use system_requirements::{

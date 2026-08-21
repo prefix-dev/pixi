@@ -13,7 +13,7 @@ use toml_span::{DeserError, Span, Spanned, Value, de_helpers::TableHelper, value
 use url::Url;
 
 use crate::{
-    KnownPreviewFeature, PixiPlatform, PrioritizedChannel, S3Options, TargetSelector, Targets,
+    KnownPreviewFlag, PixiPlatform, PrioritizedChannel, S3Options, TargetSelector, Targets,
     TomlError, WithWarnings, Workspace,
     error::GenericError,
     pypi::pypi_options::PypiOptions,
@@ -210,16 +210,16 @@ impl TomlWorkspace {
         // Source specs gated on pixi-build. Path specs are left
         // workspace-relative; members re-base them at inheritance time.
         let dependencies = if let Some(deps) = self.dependencies {
-            let pixi_build_enabled = preview.is_enabled(KnownPreviewFeature::PixiBuild);
+            let pixi_build_enabled = preview.is_enabled(KnownPreviewFlag::PixiBuild);
             let specs = deps.value.specs;
             if !pixi_build_enabled
                 && let Some((name, _)) = specs.iter().find(|(_, s)| toml_spec_is_source(s))
             {
                 return Err(GenericError::new(
-                    "conda source dependencies are not allowed without enabling the 'pixi-build' preview feature",
+                    "conda source dependencies are not allowed without enabling the 'pixi-build' preview flag",
                 )
                 .with_help(
-                    "Add `preview = [\"pixi-build\"]` to the `workspace` table of your manifest",
+                    "Run `pixi workspace preview add pixi-build` to enable the preview flag",
                 )
                 .with_span_label(format!("source dependency `{}`", name.as_source()))
                 .with_opt_span(deps.span.clone())

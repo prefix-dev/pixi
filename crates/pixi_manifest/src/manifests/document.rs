@@ -11,6 +11,7 @@ use toml_edit::{Array, DocumentMut, Item, Table, TableLike, Value, value};
 use crate::{
     FeatureName, ManifestKind, ManifestProvenance, NewEnvironment, PixiPlatform, PixiPlatformName,
     PypiDependencyLocation, SpecType, TargetSelector, Task, TomlError,
+    error::GenericError,
     manifests::table_name::TableName,
     script::{ScriptManifest, ScriptManifestDocument, ScriptManifestError},
     toml::TomlDocument,
@@ -1198,6 +1199,75 @@ impl ManifestDocument {
 
         Ok(())
     }
+
+    /// Adds a preview flag to the `preview` array of the workspace,
+    /// returns false if it was already enabled
+    pub fn add_preview_flag(&mut self, flag: &str) -> Result<bool, TomlError> {
+        let table_name = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_table(Some(self.detect_table_name()));
+        let keys = table_name.as_keys();
+
+        let table = self.manifest_mut().get_or_insert_nested_table(&keys)?;
+        match table.get("preview").and_then(|item| item.as_bool()) {
+            // `preview = true` already enables every flag
+            Some(true) => return Ok(false),
+            // `preview = false` behaves like an empty list, replace it with one
+            Some(false) => {
+                table.remove("preview");
+            }
+            None => {}
+        }
+
+        let array = self
+            .manifest_mut()
+            .get_or_insert_toml_array_mut(&keys, "preview")?;
+        if array.iter().any(|item| item.as_str() == Some(flag)) {
+            Ok(false)
+        } else {
+            array.push(flag);
+            Ok(true)
+        }
+    }
+
+    /// Removes a preview flag from the `preview` array of the workspace,
+    /// dropping the field when it ends up empty. Returns false when the
+    /// flag wasn't enabled.
+    pub fn remove_preview_flag(&mut self, flag: &str) -> Result<bool, TomlError> {
+        let table_name = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_table(Some(self.detect_table_name()));
+        let keys = table_name.as_keys();
+
+        if self.manifest_mut().get_nested_table(&keys).is_err() {
+            return Ok(false);
+        }
+        let table = self.manifest_mut().get_or_insert_nested_table(&keys)?;
+        if table.get("preview").and_then(|item| item.as_bool()) == Some(true) {
+            return Err(TomlError::Generic(
+                GenericError::new(
+                    "cannot remove individual preview flags while `preview = true` enables them all",
+                )
+                .with_help(
+                    "Set `preview` to the list of flags you want to keep, e.g. `preview = [\"pixi-build\"]`",
+                ),
+            ));
+        }
+
+        let Some(array) = table
+            .get_mut("preview")
+            .and_then(|item| item.as_array_mut())
+        else {
+            return Ok(false);
+        };
+        let len_before = array.len();
+        array.retain(|item| item.as_str() != Some(flag));
+        let removed = array.len() != len_before;
+        if array.is_empty() {
+            table.remove("preview");
+        }
+        Ok(removed)
+    }
 }
 
 /// The key under which a conda package is stored in the table-like item,
@@ -2259,5 +2329,107 @@ dev = { features = [] }
             .unwrap();
 
         insta::assert_snapshot!(document.to_string());
+    }
+
+    fn pixi_toml_document(contents: &str) -> ManifestDocument {
+        ManifestDocument::PixiToml(TomlDocument::new(DocumentMut::from_str(contents).unwrap()))
+    }
+
+    #[test]
+    fn test_add_and_remove_preview_flag() {
+        let mut document = pixi_toml_document(
+            r#"
+[workspace]
+name = "test"
+channels = []
+platforms = []
+"#,
+        );
+
+        assert!(document.add_preview_flag("pixi-build").unwrap());
+        // Adding it again is a no-op
+        assert!(!document.add_preview_flag("pixi-build").unwrap());
+        insta::assert_snapshot!(document.render().unwrap(), @r###"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = []
+        preview = ["pixi-build"]
+        "###);
+
+        // Removing it drops the field entirely
+        assert!(document.remove_preview_flag("pixi-build").unwrap());
+        assert!(!document.remove_preview_flag("pixi-build").unwrap());
+        insta::assert_snapshot!(document.render().unwrap(), @r###"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = []
+        "###);
+    }
+
+    #[test]
+    fn test_remove_preview_flag_keeps_unknown_features() {
+        let mut document = pixi_toml_document(
+            r#"
+[workspace]
+name = "test"
+channels = []
+platforms = []
+preview = ["something-else", "pixi-build"]
+"#,
+        );
+
+        assert!(document.remove_preview_flag("pixi-build").unwrap());
+        insta::assert_snapshot!(document.render().unwrap(), @r###"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = []
+        preview = ["something-else"]
+        "###);
+    }
+
+    #[test]
+    fn test_preview_flags_with_all_enabled() {
+        let mut document = pixi_toml_document(
+            r#"
+[workspace]
+name = "test"
+channels = []
+platforms = []
+preview = true
+"#,
+        );
+
+        // Everything is already enabled, so there is nothing to add and the
+        // field is left untouched
+        assert!(!document.add_preview_flag("pixi-build").unwrap());
+        insta::assert_snapshot!(document.render().unwrap(), @r###"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = []
+        preview = true
+        "###);
+
+        // And removing a single feature makes no sense
+        let err = document.remove_preview_flag("pixi-build").unwrap_err();
+        assert!(err.to_string().contains("`preview = true`"), "{err}");
+    }
+
+    #[test]
+    fn test_add_preview_flag_pyproject() {
+        let mut document = ManifestDocument::empty_pyproject();
+
+        assert!(document.add_preview_flag("pixi-build").unwrap());
+        insta::assert_snapshot!(document.render().unwrap(), @r###"
+        [project]
+        name = "test"
+        [tool.pixi.workspace]
+        channels = []
+        platforms = []
+        preview = ["pixi-build"]
+        "###);
     }
 }

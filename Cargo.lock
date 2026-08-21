@@ -6060,7 +6060,7 @@ dependencies = [
 
 [[package]]
 name = "pixi-build-mojo"
-version = "0.2.6"
+version = "0.2.7"
 dependencies = [
  "async-trait",
  "fs-err",
@@ -6496,6 +6496,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "strsim",
+ "strum",
  "tabwriter",
  "tar",
  "temp-env",
@@ -6571,6 +6572,7 @@ dependencies = [
  "rattler_solve 9.0.0",
  "rattler_virtual_packages",
  "regex",
+ "same-file",
  "serde",
  "serde_json",
  "serde_with",

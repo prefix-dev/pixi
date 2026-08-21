@@ -34,7 +34,7 @@ use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 pub struct WorkspaceTarget {
     /// Dependencies for this target.
     ///
-    /// TODO: While the pixi-build feature is not stabilized yet, a workspace
+    /// TODO: While the pixi-build preview flag is not stabilized yet, a workspace
     /// can have host- and build dependencies. When pixi-build is stabilized, we
     /// can simplify this part of the code.
     pub dependencies: HashMap<SpecType, CondaDependencies>,

@@ -331,7 +331,7 @@ The package name is extracted from the archive filename, and the path is stored 
 ## Source Packages
 
 !!! warning
-    `pixi-build` is a preview feature, and will change until it is stabilized.
+    `pixi-build` is a preview flag, and will change until it is stabilized.
     Please keep that in mind when you use it for your workspaces.
 
 For these packages to be recognized they need to be understood by Pixi as source packages.

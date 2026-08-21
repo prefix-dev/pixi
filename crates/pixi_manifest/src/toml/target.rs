@@ -7,8 +7,8 @@ use pixi_toml::{TomlHashMap, TomlIndexMap};
 use toml_span::{DeserError, Value, de_helpers::TableHelper};
 
 use crate::{
-    Activation, InlinePackageManifest, KnownPreviewFeature, SpecType, TargetSelector, Task,
-    TaskName, TomlError, Warning, WithWarnings, WorkspaceTarget,
+    Activation, InlinePackageManifest, KnownPreviewFlag, SpecType, TargetSelector, Task, TaskName,
+    TomlError, Warning, WithWarnings, WorkspaceTarget,
     error::GenericError,
     toml::{TomlPackage, WorkspacePackageProperties, preview::TomlPreview, task::TomlTask},
     utils::{
@@ -59,7 +59,7 @@ impl TomlTarget {
         workspace_dependencies: &IndexMap<PackageName, TomlSpec>,
         root_directory: &Path,
     ) -> Result<WithWarnings<WorkspaceTarget>, TomlError> {
-        let pixi_build_enabled = preview.is_enabled(KnownPreviewFeature::PixiBuild);
+        let pixi_build_enabled = preview.is_enabled(KnownPreviewFlag::PixiBuild);
 
         let TomlTarget {
             dependencies,
@@ -83,7 +83,7 @@ impl TomlTarget {
                             None => "Did you mean [package.host-dependencies]?".to_string(),
                             Some(selector) => format!("Did you mean [package.target.{selector}.host-dependencies]?"),
                         })
-                        .with_opt_label("pixi-build is enabled here", preview.get_span(KnownPreviewFeature::PixiBuild))));
+                        .with_opt_label("pixi-build is enabled here", preview.get_span(KnownPreviewFlag::PixiBuild))));
             }
 
             if let Some(build_dependencies) = &build_dependencies {
@@ -95,7 +95,7 @@ impl TomlTarget {
                             None => "Did you mean [package.build-dependencies]?".to_string(),
                             Some(selector) => format!("Did you mean [package.target.{selector}.build-dependencies]?"),
                         })
-                        .with_opt_label("pixi-build is enabled here", preview.get_span(KnownPreviewFeature::PixiBuild))
+                        .with_opt_label("pixi-build is enabled here", preview.get_span(KnownPreviewFlag::PixiBuild))
                 ));
             }
         }

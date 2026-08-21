@@ -8,7 +8,7 @@ use rattler_conda_types::PackageName;
 use toml_span::{DeserError, Value, de_helpers::TableHelper};
 
 use crate::{
-    KnownPreviewFeature, PackageDependencySpec, Preview, SpecType, TomlError,
+    KnownPreviewFlag, PackageDependencySpec, Preview, SpecType, TomlError,
     error::GenericError,
     target::{PackageRunExports, PackageTarget},
     utils::{
@@ -86,7 +86,7 @@ impl TomlPackageTarget {
         workspace_dependencies: &IndexMap<PackageName, TomlSpec>,
         package_name: Option<&PackageName>,
     ) -> Result<PackageTarget, TomlError> {
-        let pixi_build_enabled = preview.is_enabled(KnownPreviewFeature::PixiBuild);
+        let pixi_build_enabled = preview.is_enabled(KnownPreviewFlag::PixiBuild);
 
         let resolve = |entry: Option<PixiSpanned<InheritablePackageMap>>| -> Result<
             Option<ResolvedPackageMap>,

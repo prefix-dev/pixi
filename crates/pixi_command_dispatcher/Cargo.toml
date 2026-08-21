@@ -26,6 +26,7 @@ once_cell = { workspace = true }
 ordermap = { workspace = true }
 parking_lot = { workspace = true }
 pin-project-lite = { workspace = true }
+same-file = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_with = { workspace = true }

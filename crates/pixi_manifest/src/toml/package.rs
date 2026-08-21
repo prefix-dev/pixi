@@ -793,7 +793,7 @@ mod test {
     use tempfile::TempDir;
 
     use super::*;
-    use crate::{KnownPreviewFeature, SpecType, toml::FromTomlStr};
+    use crate::{KnownPreviewFlag, SpecType, toml::FromTomlStr};
     use pixi_build_types::ConditionalExpression;
 
     /// Parses a manifest using only `Preview::default()` and asserts it succeeds.
@@ -1885,7 +1885,7 @@ mod test {
         );
 
         // With pixi-build enabled the same input parses.
-        let preview = Preview::from_iter([KnownPreviewFeature::PixiBuild]);
+        let preview = Preview::from_iter([KnownPreviewFlag::PixiBuild]);
         TomlPackage::from_toml_str(input)
             .and_then(|w| {
                 w.into_manifest(
@@ -2099,7 +2099,7 @@ mod test {
 
         // With pixi-build enabled the same input parses and the source spec is
         // kept.
-        let preview = Preview::from_iter([KnownPreviewFeature::PixiBuild]);
+        let preview = Preview::from_iter([KnownPreviewFlag::PixiBuild]);
         let manifest = TomlPackage::from_toml_str(input)
             .and_then(|w| {
                 w.into_manifest(
@@ -2135,7 +2135,7 @@ mod test {
         local-pkg = { path = "./local" }
         "#;
 
-        let preview = Preview::from_iter([KnownPreviewFeature::PixiBuild]);
+        let preview = Preview::from_iter([KnownPreviewFlag::PixiBuild]);
         let err = TomlPackage::from_toml_str(input)
             .and_then(|w| {
                 w.into_manifest(
