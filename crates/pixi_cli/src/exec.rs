@@ -9,6 +9,8 @@ use pixi_command_dispatcher::offline::exclusions_for_solve;
 use pixi_config::{self, Config, ConfigCli};
 use pixi_core::environment::list::{PackageToOutput, print_package_table};
 use pixi_manifest::PixiPlatformName;
+use pixi_manifest::platform::host::{detect_host, host_subdir};
+use pixi_manifest::platform::solver_generic_virtual_packages;
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 use pixi_utils::prefix::Prefix;
 use pixi_utils::{EnvironmentHash, EnvironmentLock, reqwest::build_reqwest_clients};
@@ -18,7 +20,6 @@ use rattler::{
 };
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, PackageName, Platform};
 use rattler_solve::{SolverImpl, SolverTask, resolvo::Solver};
-use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use reqwest_middleware::ClientWithMiddleware;
 use uv_configuration::initialize_rayon_once;
 
@@ -86,7 +87,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .next()
             .expect("resolve_platforms preserves length")
             .subdir(),
-        None => Platform::current(),
+        None => host_subdir(),
     };
 
     let mut command_iter = args.command.iter();
@@ -265,13 +266,12 @@ pub async fn create_exec_prefix(
     }
     let repodata = query_output.repodata;
 
-    // Determine virtual packages of the current platform
-    let virtual_packages: Vec<GenericVirtualPackage> =
-        VirtualPackages::detect(&VirtualPackageOverrides::from_env(), None)
+    // Determine virtual packages of the platform we are targeting
+    let virtual_packages: Vec<GenericVirtualPackage> = solver_generic_virtual_packages(
+        &detect_host(platform)
             .into_diagnostic()
-            .context("failed to determine virtual packages")?
-            .into_generic_virtual_packages()
-            .collect();
+            .context("failed to determine virtual packages")?,
+    );
 
     // `pixi exec` solves outside the command dispatcher, so it has to build
     // the offline exclusions itself rather than inheriting them.

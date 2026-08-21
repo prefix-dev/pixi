@@ -4,77 +4,24 @@ use crate::lock_file::virtual_packages::{
     validate_system_meets_environment_requirements,
 };
 use crate::workspace::{
-    Environment, HasWorkspaceRef, PlatformOverrides, PlatformSource,
+    Environment, HasWorkspaceRef,
     errors::{UnsupportedPlatformError, format_specs},
 };
 use fancy_display::FancyDisplay;
 use miette::Diagnostic;
+use pixi_manifest::platform::host::{host_capabilities, host_subdir};
 use pixi_manifest::{
     EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName,
-    platform::{archspec_from_build_string, unsatisfied_capabilities},
+    platform::{candidate_subdirs, solver_virtual_packages, unsatisfied_capabilities},
 };
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Platform};
 use rattler_lock::LockFile;
-use rattler_virtual_packages::{Cuda, CudaArch, LibC, Linux, Osx, VirtualPackage};
+use rattler_virtual_packages::VirtualPackage;
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::path::PathBuf;
 use std::sync::{LazyLock, Mutex};
 use thiserror::Error;
-
-/// Convert a [`PixiPlatform`]'s declared virtual packages into the typed
-/// [`VirtualPackage`] form rattler's solver wants.
-///
-/// The subdir baseline is no longer recomputed here: every real subdir or
-/// rich platform already carries the materialised defaults via
-/// [`PixiPlatform::from_subdir`] / [`PixiPlatform::new_with_defaults`], and
-/// the only platform that intentionally has an empty declared list is the
-/// `auto_detected` host-display placeholder, which never reaches this path.
-/// The result mirrors what the conda-lock minimal-virtual-package set used
-/// to spell out by hand. <https://github.com/conda/conda-lock/blob/3d36688278ebf4f65281de0846701d61d6017ed2/conda_lock/virtual_package.py#L175>
-///
-/// Unknown conda virtual-package names (those rattler has no typed slot for)
-/// are dropped -- they round-trip through the manifest but never influence
-/// solving directly, the same behavior the previous implementation had.
-pub(crate) fn get_minimal_virtual_packages(platform: &PixiPlatform) -> Vec<VirtualPackage> {
-    platform
-        .declared_virtual_packages()
-        .iter()
-        .filter_map(generic_to_virtual_package)
-        .collect()
-}
-
-/// Translate a single [`GenericVirtualPackage`] into the typed
-/// [`VirtualPackage`] variant rattler expects. Returns `None` for entries
-/// that don't have a typed counterpart (rattler-unknown `__*` names).
-fn generic_to_virtual_package(gvp: &GenericVirtualPackage) -> Option<VirtualPackage> {
-    match gvp.name.as_normalized() {
-        "__unix" => Some(VirtualPackage::Unix),
-        "__linux" => Some(VirtualPackage::Linux(Linux {
-            version: gvp.version.clone(),
-        })),
-        family @ ("__glibc" | "__musl" | "__eglibc") => Some(VirtualPackage::LibC(LibC {
-            family: family.trim_start_matches('_').to_string(),
-            version: gvp.version.clone(),
-        })),
-        "__win" => Some(VirtualPackage::Win(rattler_virtual_packages::Windows {
-            version: Some(gvp.version.clone()),
-        })),
-        "__osx" => Some(VirtualPackage::Osx(Osx {
-            version: gvp.version.clone(),
-        })),
-        "__cuda" => Some(VirtualPackage::Cuda(Cuda {
-            version: gvp.version.clone(),
-        })),
-        "__cuda_arch" => Some(VirtualPackage::CudaArch(CudaArch {
-            version: gvp.version.clone(),
-        })),
-        "__archspec" => Some(VirtualPackage::Archspec(archspec_from_build_string(
-            &gvp.build_string,
-        ))),
-        _ => None,
-    }
-}
 
 /// An error that occurs when the current platform does not satisfy the minimal virtual package
 /// requirements.
@@ -162,25 +109,9 @@ pub fn minimum_compatible_declared_platform<'p>(
     environment: &Environment<'p>,
     lock_file: &LockFile,
 ) -> Result<&'p PixiPlatform, Vec<MatchSpec>> {
-    let current = environment
-        .workspace()
-        .host_platform(
-            PlatformSource::Defaults,
-            PlatformOverrides::EnvironmentVariableOverrides,
-        )
-        .subdir();
-    let system_virtual_packages = environment
-        .workspace()
-        .host_platform(
-            PlatformSource::AutoDetected,
-            PlatformOverrides::EnvironmentVariableOverrides,
-        )
-        .declared_virtual_packages()
-        .to_vec();
-    let candidate_subdirs = environment
-        .workspace_manifest()
-        .workspace
-        .candidate_subdirs(current);
+    let current = host_subdir();
+    let system_virtual_packages = host_capabilities();
+    let candidate_subdirs = candidate_subdirs(current);
 
     let manifest = environment.workspace_manifest();
     let env_platform_names = environment.platforms();
@@ -347,24 +278,14 @@ fn describe_resolution_gap(
 
     let requirements = unmet
         .iter()
-        .map(|required| {
-            format!(
-                "{} >={}",
-                required.name.as_normalized().trim_start_matches('_'),
-                required.version
-            )
-        })
+        .map(describe_requirement)
         .collect::<Vec<_>>()
         .join(", ");
     let provided = unmet
         .iter()
         .map(
             |required| match machine.iter().find(|sys| sys.name == required.name) {
-                Some(sys) => format!(
-                    "only provides '{} {}'",
-                    sys.name.as_normalized(),
-                    sys.version
-                ),
+                Some(sys) => format!("only provides '{}'", describe_provided(sys)),
                 None => format!("does not provide '{}'", required.name.as_normalized()),
             },
         )
@@ -377,6 +298,36 @@ fn describe_resolution_gap(
          {RERESOLVE} may install packages that do, which would no longer run on this \
          machine."
     )
+}
+
+/// A required virtual package, as the thing the user has to satisfy.
+///
+/// `__archspec` carries a constant version and names its microarchitecture in
+/// the build string, so rendering it like the others produces the useless
+/// "archspec >=0"; name the microarchitecture instead.
+fn describe_requirement(required: &GenericVirtualPackage) -> String {
+    let name = required.name.as_normalized().trim_start_matches('_');
+    match archspec_microarchitecture_of(required) {
+        Some(microarchitecture) => format!("{name} {microarchitecture}"),
+        None => format!("{name} >={}", required.version),
+    }
+}
+
+/// What the machine offers for a required virtual package, in the same terms.
+fn describe_provided(provided: &GenericVirtualPackage) -> String {
+    let name = provided.name.as_normalized();
+    match archspec_microarchitecture_of(provided) {
+        Some(microarchitecture) => format!("{name} {microarchitecture}"),
+        None => format!("{name} {}", provided.version),
+    }
+}
+
+/// The microarchitecture `package` names, if it is an `__archspec` that names
+/// one at all.
+fn archspec_microarchitecture_of(package: &GenericVirtualPackage) -> Option<&str> {
+    (package.name.as_normalized() == "__archspec")
+        .then(|| pixi_manifest::platform::archspec_microarchitecture(&package.build_string))
+        .flatten()
 }
 
 /// Marker-file paths we've already emitted the "runs by accident" warning for
@@ -462,27 +413,11 @@ pub fn verify_run_platform(
         // Auto-detected machine: its real virtual packages, and the subdirs it
         // can run (current subdir plus architecture fallbacks).
         None => {
-            let current = environment
-                .workspace()
-                .host_platform(
-                    PlatformSource::Defaults,
-                    PlatformOverrides::EnvironmentVariableOverrides,
-                )
-                .subdir();
-            let subdirs = environment
-                .workspace_manifest()
-                .workspace
-                .candidate_subdirs(current);
+            let current = host_subdir();
+            let subdirs = candidate_subdirs(current);
             (
                 subdirs,
-                environment
-                    .workspace()
-                    .host_platform(
-                        PlatformSource::AutoDetected,
-                        PlatformOverrides::EnvironmentVariableOverrides,
-                    )
-                    .declared_virtual_packages()
-                    .to_vec(),
+                host_capabilities(),
                 PixiPlatformName::from(current),
                 current,
             )
@@ -537,7 +472,7 @@ pub enum EnvironmentRunnability {
 /// Whether `environment` declares any conda or PyPI dependency on any of its
 /// platforms. An environment with no dependencies installs nothing, so no
 /// package can require a virtual package the machine lacks.
-fn environment_has_dependencies(environment: &Environment<'_>) -> bool {
+pub(crate) fn environment_has_dependencies(environment: &Environment<'_>) -> bool {
     let has_conda_dependencies = |platform: Option<&PixiPlatform>| {
         !environment.combined_dependencies(platform).is_empty()
             || !environment.combined_dev_dependencies(platform).is_empty()
@@ -610,7 +545,7 @@ impl Environment<'_> {
     /// subdir baseline is materialised by [`PixiPlatform::from_subdir`], so
     /// there is no separate "compute defaults" step.
     pub fn virtual_packages(&self, platform: &PixiPlatform) -> Vec<VirtualPackage> {
-        get_minimal_virtual_packages(platform)
+        solver_virtual_packages(platform)
     }
 }
 
@@ -639,7 +574,7 @@ mod tests {
 
         for platform in platforms {
             let pp = pixi_manifest::PixiPlatform::from_subdir(platform);
-            let packages = get_minimal_virtual_packages(&pp)
+            let packages = solver_virtual_packages(&pp)
                 .into_iter()
                 .map(GenericVirtualPackage::from)
                 .collect_vec();
@@ -893,7 +828,7 @@ packages: []
             }],
         )
         .unwrap();
-        let packages = get_minimal_virtual_packages(&pp);
+        let packages = solver_virtual_packages(&pp);
         let cuda = packages
             .iter()
             .find_map(|vp| match vp {
@@ -906,7 +841,7 @@ packages: []
         // A platform with no declared cuda should not emit a __cuda VP.
         let bare = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
         assert!(
-            !get_minimal_virtual_packages(&bare)
+            !solver_virtual_packages(&bare)
                 .iter()
                 .any(|vp| matches!(vp, VirtualPackage::Cuda(_))),
             "bare subdir platform should not declare __cuda"
@@ -925,7 +860,7 @@ packages: []
             }],
         )
         .unwrap();
-        let libc = get_minimal_virtual_packages(&pp)
+        let libc = solver_virtual_packages(&pp)
             .into_iter()
             .find_map(|vp| match vp {
                 VirtualPackage::LibC(l) => Some(l),

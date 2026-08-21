@@ -8,7 +8,7 @@ use miette::{Context, IntoDiagnostic};
 use pixi_consts::consts;
 use pixi_git::credentials::store_credentials_from_url;
 pub use pixi_install_pypi::{ContinuePyPIPrefixUpdate, on_python_interpreter_change};
-use pixi_manifest::{FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName};
+use pixi_manifest::{FeaturesExt, PixiPlatform, PixiPlatformName, platform::candidate_subdirs};
 use pixi_progress::await_in_progress;
 use pixi_pypi_spec::PixiPypiSource;
 pub use pixi_python_status::PythonStatus;
@@ -923,12 +923,7 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
     {
         let current = Platform::current();
         let subdir = platform.subdir();
-        if !workspace
-            .workspace_manifest()
-            .workspace
-            .candidate_subdirs(current)
-            .contains(&subdir)
-        {
+        if !candidate_subdirs(current).contains(&subdir) {
             tracing::warn!(
                 "installing for platform '{}' (subdir '{subdir}'), which this \
                  machine ('{current}') can not run -- packages will be downloaded \
