@@ -29,7 +29,7 @@ pub enum PixiPlatformNameError {
 /// Cap names so attacker-controlled manifests can't pass unbounded keys.
 /// Longest real conda subdir is 17 bytes; 64 is comfortable for descriptive
 /// custom names like `gpu-linux-cuda12-glibc228`.
-pub(crate) const MAX_PLATFORM_NAME_BYTES: usize = 64;
+const MAX_PLATFORM_NAME_BYTES: usize = 64;
 
 /// Bytes allowed in the body of a platform name and as the literal parts of a
 /// [`PlatformGlob`]: ASCII alphanumerics and `-`.

@@ -11,9 +11,7 @@ use toml_span::{
     de_helpers::{TableHelper, expected},
     value::ValueInner,
 };
-use xxhash_rust::xxh3::xxh3_64;
 
-use crate::platform::MAX_PLATFORM_NAME_BYTES;
 use crate::{
     PixiPlatform, PixiPlatformName,
     platform::subdir_default_virtual_packages,
@@ -738,34 +736,7 @@ pub(crate) fn synthesize_name_string(
         let val_seg = sanitize_name_segment(&value);
         parts.push(format!("{key_seg}-{val_seg}"));
     }
-    shorten_to_name_limit(parts.join("-"))
-}
-
-/// Keep a synthesized name inside [`MAX_PLATFORM_NAME_BYTES`].
-///
-/// A machine with enough virtual packages (`__cuda` and `__cuda_arch` on top of
-/// the usual four) spells out past the limit, and the name has to stay a legal
-/// [`PixiPlatformName`]: it is written to `pixi.toml` by
-/// `pixi workspace platform add --auto-detect`, and a manifest that cannot be
-/// read back is worse than a name that does not spell out every package.
-///
-/// The tail is replaced by a digest of the full name, so the result is still a
-/// pure function of the platform's definition -- two machines that agree on
-/// their virtual packages agree on the shortened name, and `has_derived_name`
-/// keeps working because it synthesizes through this same path.
-fn shorten_to_name_limit(name: String) -> String {
-    const DIGEST_BYTES: usize = 9; // "-" + 8 hex characters
-    if name.len() <= MAX_PLATFORM_NAME_BYTES {
-        return name;
-    }
-    let digest = format!("{:08x}", xxh3_64(name.as_bytes()) as u32);
-    let mut head = name;
-    head.truncate(MAX_PLATFORM_NAME_BYTES - DIGEST_BYTES);
-    // Never leave a trailing `-`, which a platform name may not end on.
-    while head.ends_with('-') {
-        head.pop();
-    }
-    format!("{head}-{digest}")
+    parts.join("-")
 }
 
 fn sanitize_name_segment(s: &str) -> String {
