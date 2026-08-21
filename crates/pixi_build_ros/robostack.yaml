@@ -72,6 +72,8 @@ crypto++:
   robostack: [cryptopp]
 curl:
   robostack: [libcurl]
+curlpp-dev:
+  robostack: [curlpp]
 cython:
   robostack: [cython]
 doxygen:
@@ -739,6 +741,8 @@ python3-bson:
   robostack: [pymongo]
 python3-cairo:
   robostack: [pycairo]
+python3-cantools-pip:
+  robostack: [cantools]
 python3-catkin-pkg:
   robostack: [catkin_pkg]
 python3-catkin-pkg-modules:
