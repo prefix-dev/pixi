@@ -504,6 +504,7 @@ mod tests {
     use rattler_conda_types::PackageName;
 
     use super::*;
+    use crate::platform::MAX_PLATFORM_NAME_BYTES;
     use crate::{PixiPlatformName, PixiPlatformNameError};
 
     /// A virtual package in the shape rattler hands back from detection: a
@@ -704,7 +705,9 @@ mod tests {
     /// the caller can drop the row over - never a panic.
     #[test]
     fn a_platform_that_cannot_be_named_is_an_error() {
-        let unnameable = format!("__{}", "a".repeat(120));
+        // Long enough that no plausible cap fits it, derived so the test
+        // keeps biting when the cap moves.
+        let unnameable = format!("__{}", "a".repeat(MAX_PLATFORM_NAME_BYTES + 40));
         let error = platform_from_detected(
             Platform::Linux64,
             vec![
@@ -715,7 +718,7 @@ mod tests {
                 detected(&unnameable, "1"),
             ],
         )
-        .expect_err("a 120-byte virtual package cannot fit in a platform name");
+        .expect_err("an oversized virtual package cannot fit in a platform name");
 
         assert!(
             matches!(
