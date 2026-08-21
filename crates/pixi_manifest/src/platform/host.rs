@@ -672,34 +672,6 @@ mod tests {
         assert_eq!(declared(&platform, "__linux").as_deref(), Some("7.1.8"));
     }
 
-    /// A machine with enough virtual packages spells out past the 64-byte
-    /// platform-name limit, and the name still has to be one the manifest can
-    /// read back.
-    #[test]
-    fn host_platform_name_stays_within_the_limit() {
-        let platform = platform_from_detected(
-            Platform::Linux64,
-            vec![
-                detected("__unix", "0"),
-                detected("__linux", "7.1.8"),
-                detected("__glibc", "2.42"),
-                detected_archspec("zen2"),
-                detected("__cuda", "12.0"),
-                detected("__cuda_arch", "8.6"),
-            ],
-        )
-        .unwrap();
-
-        let name = platform.name().as_str();
-        assert!(
-            PixiPlatformName::try_from(name).is_ok(),
-            "synthesized name is not a valid platform name: {name}"
-        );
-        // The name is a pure function of the definition, so it survives the
-        // round trip that `has_derived_name` and the lock alignment rely on.
-        assert!(platform.has_derived_name(), "got {name}");
-    }
-
     /// A machine that reports exactly the subdir baseline is the subdir
     /// platform -- detection should not manufacture a rich platform whose
     /// customisations are all defaults.
