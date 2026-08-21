@@ -195,7 +195,7 @@ fn prune_viewed_channel_notices(viewed: &mut ViewedNotices, now: Timestamp) {
 /// The directory holding pixi's channel notice state.
 ///
 /// `pixi clean cache --notices` removes this directory, so both it and
-/// [`viewed_channel_notices_path`] resolve it here to stay in agreement.
+/// `viewed_channel_notices_path` resolve it here to stay in agreement.
 pub fn channel_notices_cache_dir(cache_dir: &Path) -> PathBuf {
     cache_dir.join(pixi_consts::consts::CHANNEL_NOTICES_CACHE_DIR)
 }
