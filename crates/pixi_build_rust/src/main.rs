@@ -166,7 +166,12 @@ impl GenerateRecipe for RustGenerator {
         sccache_secrets.extend(model.secrets.iter().cloned());
         let secrets = sccache_secrets.into_iter().collect();
 
-        generated_recipe.recipe.build.script = Script::from_content(build_script)
+        *generated_recipe
+            .recipe
+            .build
+            .plan
+            .script_mut()
+            .expect("generated recipes use script mode") = Script::from_content(build_script)
             .with_env(
                 config_env
                     .iter()
@@ -264,7 +269,13 @@ mod tests {
             .await
             .expect("Failed to generate recipe");
 
-        let content = &generated_recipe.recipe.build.script.content;
+        let content = &generated_recipe
+            .recipe
+            .build
+            .plan
+            .script()
+            .expect("generated recipes use script mode")
+            .content;
         let content_str = content
             .as_ref()
             .expect("script content should be set")
@@ -342,7 +353,13 @@ mod tests {
             .await
             .expect("Failed to generate recipe");
 
-        let content = &generated_recipe.recipe.build.script.content;
+        let content = &generated_recipe
+            .recipe
+            .build
+            .plan
+            .script()
+            .expect("generated recipes use script mode")
+            .content;
         let content_str = content
             .as_ref()
             .expect("script content should be set")
@@ -562,7 +579,7 @@ mod tests {
             .await
             .expect("Failed to generate recipe");
 
-        insta::assert_yaml_snapshot!(generated_recipe.recipe.build.script,
+        insta::assert_yaml_snapshot!(generated_recipe.recipe.build.plan.script().unwrap(),
         {
             ".content" => "[ ... script ... ]",
         });

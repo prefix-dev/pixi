@@ -869,7 +869,7 @@ async fn execute_remove(
 }
 
 /// Pretty-print rattler's host detection as a "diagnostic" header rather
-/// than another `<name>:` row
+/// than another `<name>:` row.
 fn print_autodetected_host(stdout: &mut std::io::Stdout, machine: &HostMachine) {
     let _ = writeln!(stdout, "Your current machine was detected as:");
     let _ = writeln!(
@@ -959,7 +959,7 @@ impl HostMachine {
                 ),
             ));
         }
-        let mut detected = match VirtualPackages::detect_for_platform(subdir, &overrides) {
+        let mut detected = match VirtualPackages::detect_for_platform(subdir, &overrides, None) {
             Ok(detected) => detected.into_generic_virtual_packages().collect::<Vec<_>>(),
             Err(error) => {
                 tracing::warn!("Could not detect the virtual packages of this machine: {error}");

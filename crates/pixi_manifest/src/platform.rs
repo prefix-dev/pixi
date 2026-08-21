@@ -509,7 +509,7 @@ impl PixiPlatform {
 
     pub fn virtual_packages(&self) -> Result<VirtualPackages, DetectVirtualPackageError> {
         let overrides = overrides_from_declared(&self.declared_virtual_packages);
-        let mut detected = VirtualPackages::detect_for_platform(self.subdir, &overrides)?;
+        let mut detected = VirtualPackages::detect_for_platform(self.subdir, &overrides, None)?;
         // rattler's libc override slot is glibc-only, so a declared `__musl`/
         // `__eglibc` comes back labelled `glibc`. Relabel it to the declared
         // family so the configured libc survives into the detected output.

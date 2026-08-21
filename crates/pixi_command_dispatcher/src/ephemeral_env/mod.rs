@@ -485,7 +485,10 @@ async fn fetch_binary_repodata(
             [build_env.host_platform, Platform::NoArch],
             match_specs.into_iter().chain(constraint_specs),
         )
-        .recursive(true);
+        .recursive(true)
+        // Without a reporter the fetched notices are dropped on the floor, so
+        // do not pay for them.
+        .channel_notices(gateway_reporter.is_some());
     if let Some(reporter) = gateway_reporter {
         query = query.with_reporter(WrappingGatewayReporter(reporter));
     }

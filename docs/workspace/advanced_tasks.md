@@ -367,10 +367,23 @@ In addition to task arguments, Pixi automatically provides a `pixi` object in th
 | `pixi.manifest_path` | Absolute path to the manifest file | `/path/to/project/pixi.toml` |
 | `pixi.version` | The version of pixi being used | `0.59.0` |
 | `pixi.init_cwd` | The current working directory when pixi was invoked | `/path/to/cwd` |
-| `pixi.is_win` | Boolean flag indicating if the platform is Windows | `true` or `false` |
-| `pixi.is_unix` | Boolean flag indicating if the platform is Unix-like | `true` or `false` |
-| `pixi.is_linux` | Boolean flag indicating if the platform is Linux | `true` or `false` |
-| `pixi.is_osx` | Boolean flag indicating if the platform is macOS | `true` or `false` |
+| `pixi.is_win` | Boolean flag indicating if the platform is Windows | `True` or `False` |
+| `pixi.is_unix` | Boolean flag indicating if the platform is Unix-like | `True` or `False` |
+| `pixi.is_linux` | Boolean flag indicating if the platform is Linux | `True` or `False` |
+| `pixi.is_osx` | Boolean flag indicating if the platform is macOS | `True` or `False` |
+
+!!! warning "Booleans render as `True` and `False`"
+    Booleans follow Jinja2 spelling, so interpolating one with `{{ pixi.is_win }}`
+    writes `True` or `False`, and `{{ none }}` writes `None`. Branch with
+    `{% if %}` rather than comparing the rendered text, and add `| lower` when a
+    task needs the lowercase spelling a shell expects:
+
+    ```toml title="pixi.toml"
+    [tasks]
+    configure = "cmake -DWIN={{ pixi.is_win | lower }}"
+    ```
+
+    Earlier Pixi versions rendered `true` and `false` here.
 
 These variables are particularly useful for creating platform-specific or environment-aware tasks:
 

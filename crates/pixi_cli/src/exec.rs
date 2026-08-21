@@ -128,6 +128,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Get environment variables from the activation
     let mut activation_env = run_activation(&prefix).await?;
 
+    // `pixi exec` replaces the process below, so flush notices after all pixi
+    // output rather than relying on the top-level command dispatcher.
+    pixi_reporters::display_channel_notices();
+
     // Collect unique package names for environment naming
     let package_names: BTreeSet<String> = display_names.into_iter().collect();
 
@@ -245,21 +249,25 @@ pub async fn create_exec_prefix(
     let channels = args.channels.resolve_from_config(config)?;
 
     // Get the repodata for the specs
-    let repodata = await_in_progress("fetching repodata for environment", |_| async {
+    let query_output = await_in_progress("fetching repodata for environment", |_| async {
         gateway
             .query(channels, [platform, Platform::NoArch], specs.clone())
             .recursive(true)
+            .channel_notices(true)
             .execute()
             .await
             .into_diagnostic()
     })
     .await
-    .context("failed to get repodata")?
-    .repodata;
+    .context("failed to get repodata")?;
+    for notice in &query_output.notices {
+        pixi_reporters::queue_channel_notice(notice);
+    }
+    let repodata = query_output.repodata;
 
     // Determine virtual packages of the current platform
     let virtual_packages: Vec<GenericVirtualPackage> =
-        VirtualPackages::detect(&VirtualPackageOverrides::from_env())
+        VirtualPackages::detect(&VirtualPackageOverrides::from_env(), None)
             .into_diagnostic()
             .context("failed to determine virtual packages")?
             .into_generic_virtual_packages()

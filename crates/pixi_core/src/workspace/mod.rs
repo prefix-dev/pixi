@@ -1279,7 +1279,7 @@ impl Workspace {
                 .declared_virtual_packages()
                 .to_vec(),
             PlatformSource::AutoDetected => {
-                VirtualPackages::detect(&VirtualPackageOverrides::default())
+                VirtualPackages::detect(&VirtualPackageOverrides::default(), None)
                     .map(|detected| detected.into_generic_virtual_packages().collect())
                     .unwrap_or_default()
             }

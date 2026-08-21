@@ -1377,7 +1377,7 @@ async fn test_multiple_prefix_update() {
     setup_tracing();
 
     let current_platform = Platform::current();
-    let virtual_packages = VirtualPackages::detect(&VirtualPackageOverrides::default())
+    let virtual_packages = VirtualPackages::detect(&VirtualPackageOverrides::default(), None)
         .unwrap()
         .into_generic_virtual_packages()
         .collect();
