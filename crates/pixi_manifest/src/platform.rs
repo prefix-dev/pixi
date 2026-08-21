@@ -32,7 +32,13 @@ pub enum PixiPlatformNameError {
 /// auto-detected name, which spells out every virtual package the machine
 /// reports: a loaded `linux-aarch64` box with CUDA, a compute capability, a
 /// microarchitecture, glibc and a kernel version runs to about 95 bytes.
-const MAX_PLATFORM_NAME_BYTES: usize = 128;
+///
+/// The number is set well above that rather than snug against it. The set of
+/// virtual packages grows over time, a name spells out every one of them, and
+/// a machine that grows one package too many would otherwise lose its name
+/// with no way for the user to see why. Nothing gets faster or safer from a
+/// tighter number here, so the bound is only there to stay finite.
+const MAX_PLATFORM_NAME_BYTES: usize = 256;
 
 /// Bytes allowed in the body of a platform name and as the literal parts of a
 /// [`PlatformGlob`]: ASCII alphanumerics and `-`.
