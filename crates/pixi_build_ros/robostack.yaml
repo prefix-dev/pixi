@@ -1008,6 +1008,8 @@ sdl-image:
   robostack: [sdl_image]
 sdl2:
   robostack: [sdl2]
+smartmontools:
+  robostack: [smartmontools]
 socat:
   robostack: [socat]
 spacenavd:
