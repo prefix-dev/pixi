@@ -457,6 +457,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     };
 
+    // This function exits the process rather than returning, so the flush in
+    // the top-level command dispatcher never runs for `pixi shell`.
+    pixi_reporters::display_channel_notices();
+
     match res {
         Ok(Some(code)) => std::process::exit(code),
         Ok(None) => std::process::exit(0),

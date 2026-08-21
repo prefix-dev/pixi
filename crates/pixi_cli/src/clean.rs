@@ -228,7 +228,7 @@ async fn clean_cache(args: CacheArgs, config: &pixi_config::Config) -> miette::R
         dirs.push(config.cache_dir_for(pixi_config::CacheKind::Repodata)?);
     }
     if args.notices {
-        dirs.push(cache_dir.join(consts::CHANNEL_NOTICES_CACHE_DIR));
+        dirs.push(pixi_reporters::channel_notices_cache_dir(&cache_dir));
     }
     if args.mapping {
         dirs.push(config.cache_dir_for(pixi_config::CacheKind::PypiMapping)?);
