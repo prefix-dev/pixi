@@ -27,9 +27,12 @@ pub enum PixiPlatformNameError {
 }
 
 /// Cap names so attacker-controlled manifests can't pass unbounded keys.
-/// Longest real conda subdir is 17 bytes; 64 is comfortable for descriptive
-/// custom names like `gpu-linux-cuda12-glibc228`.
-const MAX_PLATFORM_NAME_BYTES: usize = 64;
+/// Longest real conda subdir is 17 bytes, and descriptive custom names like
+/// `gpu-linux-cuda12-glibc228` sit well under this. The binding case is an
+/// auto-detected name, which spells out every virtual package the machine
+/// reports: a loaded `linux-aarch64` box with CUDA, a compute capability, a
+/// microarchitecture, glibc and a kernel version runs to about 95 bytes.
+const MAX_PLATFORM_NAME_BYTES: usize = 128;
 
 /// Bytes allowed in the body of a platform name and as the literal parts of a
 /// [`PlatformGlob`]: ASCII alphanumerics and `-`.
@@ -264,6 +267,26 @@ pub enum PixiPlatformError {
     IsSubdirPlatform,
     #[error("`__cuda_arch` requires `__cuda` to be declared as well")]
     CudaArchRequiresCuda,
+    #[error(transparent)]
+    Name(#[from] PixiPlatformNameError),
+}
+
+/// The name a platform takes when it has none of its own: the subdir plus its
+/// customised virtual packages, spelled out by
+/// [`crate::toml::platform::synthesize_name_string`].
+///
+/// Synthesis is not total. It sanitises each segment, so the result is always
+/// shaped like a platform name, but its length grows with the number of
+/// virtual packages and the input is not always pixi's own: a lock file's
+/// platform row carries whatever names and versions were written into it. A
+/// set that spells out past [`MAX_PLATFORM_NAME_BYTES`] has no name, and that
+/// is an error rather than a platform pixi cannot read back.
+fn synthesized_name(
+    subdir: Platform,
+    declared: &[GenericVirtualPackage],
+) -> Result<PixiPlatformName, PixiPlatformError> {
+    let name = crate::toml::platform::synthesize_name_string(subdir, declared);
+    Ok(PixiPlatformName::try_from(name.as_str())?)
 }
 
 /// `true` when the declared set names `__cuda_arch` but not `__cuda`. Conda's
@@ -446,12 +469,10 @@ impl PixiPlatform {
         subdir: Platform,
         customised_virtual_packages: Vec<GenericVirtualPackage>,
     ) -> Result<Self, PixiPlatformError> {
-        let name = name.unwrap_or_else(|| {
-            PixiPlatformName(crate::toml::platform::synthesize_name_string(
-                subdir,
-                &customised_virtual_packages,
-            ))
-        });
+        let name = match name {
+            Some(name) => name,
+            None => synthesized_name(subdir, &customised_virtual_packages)?,
+        };
         Self::new_with_defaults(name, subdir, customised_virtual_packages)
     }
 
@@ -628,13 +649,8 @@ impl PixiPlatform {
         }
 
         if was_auto {
-            // Recompute the synthesised name from the new subdir + VPs. The
-            // synthesiser only emits valid names (subdir prefix, sanitised
-            // segments), so it needs no validation.
-            self.name = PixiPlatformName(crate::toml::platform::synthesize_name_string(
-                self.subdir,
-                &self.declared_virtual_packages,
-            ));
+            // Recompute the synthesised name from the new subdir + VPs.
+            self.name = synthesized_name(self.subdir, &self.declared_virtual_packages)?;
         } else if self.name.as_str() == self.subdir.as_str() {
             // A preserved custom name that now equals the subdir while VPs
             // remain would forge an illegal subdir-platform.
@@ -1549,7 +1565,7 @@ mod tests {
 
     #[test]
     fn name_rejects_too_long() {
-        let long = "a".repeat(128);
+        let long = "a".repeat(MAX_PLATFORM_NAME_BYTES + 1);
         let err = PixiPlatformName::try_from(long.as_str()).unwrap_err();
         assert!(
             matches!(err, PixiPlatformNameError::TooLong { .. }),

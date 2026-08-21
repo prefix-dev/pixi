@@ -20,7 +20,7 @@ use rattler_virtual_packages::{
 };
 
 use super::{
-    PixiPlatform, PixiPlatformError, PixiPlatformName, candidate_subdirs, is_subdir_default,
+    PixiPlatform, PixiPlatformError, candidate_subdirs, is_subdir_default,
     subdir_default_virtual_packages,
 };
 
@@ -391,10 +391,7 @@ pub fn platform_from_detected(
         .filter(|gvp| !is_subdir_default(gvp, subdir))
         .cloned()
         .collect();
-    let name = PixiPlatformName::try_from(
-        crate::toml::platform::synthesize_name_string(subdir, &customised).as_str(),
-    )
-    .expect("a synthesized platform name is always valid");
+    let name = crate::platform::synthesized_name(subdir, &customised)?;
 
     // The name is synthesized from the customised packages alone, so a machine
     // that only *drops* a default (an empty `CONDA_OVERRIDE_*`) and matches the
@@ -507,6 +504,7 @@ mod tests {
     use rattler_conda_types::PackageName;
 
     use super::*;
+    use crate::{PixiPlatformName, PixiPlatformNameError};
 
     /// A virtual package in the shape rattler hands back from detection: a
     /// `"0"` build string on everything that carries a version.
@@ -670,6 +668,62 @@ mod tests {
 
         assert_eq!(declared(&platform, "__glibc"), None);
         assert_eq!(declared(&platform, "__linux").as_deref(), Some("7.1.8"));
+    }
+
+    /// A loaded machine spells out a long name - CUDA and a compute
+    /// capability on top of the usual four packages - and the name still has
+    /// to be one the manifest can read back.
+    #[test]
+    fn host_platform_name_stays_within_the_limit() {
+        let platform = platform_from_detected(
+            Platform::Linux64,
+            vec![
+                detected("__unix", "0"),
+                detected("__linux", "7.1.8"),
+                detected("__glibc", "2.42"),
+                detected_archspec("zen2"),
+                detected("__cuda", "12.0"),
+                detected("__cuda_arch", "8.6"),
+            ],
+        )
+        .unwrap();
+
+        let name = platform.name().as_str();
+        assert!(
+            PixiPlatformName::try_from(name).is_ok(),
+            "synthesized name is not a valid platform name: {name}"
+        );
+        // The name is a pure function of the definition, so it survives the
+        // round trip that `has_derived_name` and the lock alignment rely on.
+        assert!(platform.has_derived_name(), "got {name}");
+    }
+
+    /// Detected packages are not always pixi's own: a lock file's platform row
+    /// carries whatever was written into it, and a long enough package name
+    /// spells out past the limit. That platform has no name, which is an error
+    /// the caller can drop the row over - never a panic.
+    #[test]
+    fn a_platform_that_cannot_be_named_is_an_error() {
+        let unnameable = format!("__{}", "a".repeat(120));
+        let error = platform_from_detected(
+            Platform::Linux64,
+            vec![
+                detected("__unix", "0"),
+                detected("__linux", "7.1.8"),
+                detected("__glibc", "2.42"),
+                detected_archspec("zen2"),
+                detected(&unnameable, "1"),
+            ],
+        )
+        .expect_err("a 120-byte virtual package cannot fit in a platform name");
+
+        assert!(
+            matches!(
+                error,
+                PixiPlatformError::Name(PixiPlatformNameError::TooLong { .. })
+            ),
+            "got {error:?}"
+        );
     }
 
     /// A machine that reports exactly the subdir baseline is the subdir

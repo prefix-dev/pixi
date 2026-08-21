@@ -1331,6 +1331,30 @@ def test_list_respects_conda_override_cuda(pixi: Path, tmp_pixi_workspace: Path)
     assert "cuda=12.0" in out.stdout
 
 
+def test_list_respects_conda_override_cuda_arch(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """`CONDA_OVERRIDE_CUDA_ARCH` overrides host auto-detection of the
+    `__cuda_arch` virtual package. rattler couples the two CUDA packages:
+    `__cuda_arch` is only reported when `__cuda` is also present (CEP), so
+    both override vars are set. The detected-host header echoes the raw
+    `__cuda_arch=<cc>` form because there is no friendly key for it."""
+    _seed_workspace(tmp_pixi_workspace)
+    out = verify_cli_command(
+        [
+            str(pixi),
+            "workspace",
+            "--manifest-path",
+            str(tmp_pixi_workspace / "pixi.toml"),
+            "platform",
+            "list",
+        ],
+        env={"CONDA_OVERRIDE_CUDA": "12.0", "CONDA_OVERRIDE_CUDA_ARCH": "8.6"},
+        strip_ansi=True,
+    )
+    # The host header mirrors the on-disk TOML shape, so the overridden CUDA
+    # packages render as the grouped table.
+    assert 'cuda = { driver = "12.0", arch = "8.6" }' in out.stdout
+
+
 def test_list_respects_pixi_override_platform(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """Setting `PIXI_OVERRIDE_PLATFORM` cross-targets the listing: a
     platform whose subdir matches the override gets the support marker
