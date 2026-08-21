@@ -20,23 +20,18 @@ use crate::{
     platform::{capability_satisfied_by, is_subdir_default},
     preview::Preview,
 };
-use minijinja::{AutoEscape, Environment, UndefinedBehavior, escape_formatter, value::ValueKind};
+use minijinja::{AutoEscape, Environment, UndefinedBehavior};
 use once_cell::sync::Lazy;
 
+/// The Jinja environment used to render task templates.
+///
+/// Booleans and `none` render the way Jinja2 does, as `True`, `False` and
+/// `None`. Use `{% if %}` to branch on a boolean, and `| lower` when a task
+/// needs the lowercase spelling.
 pub static JINJA_ENV: Lazy<Environment<'static>> = Lazy::new(|| {
     let mut env = Environment::new();
     env.set_undefined_behavior(UndefinedBehavior::Strict);
     env.set_auto_escape_callback(|_| AutoEscape::None);
-    // MiniJinja 2.24 switched boolean rendering to Jinja's `True` and `False`.
-    // Keep task interpolation backward compatible with pixi's lowercase output.
-    env.set_formatter(|out, state, value| {
-        if value.kind() == ValueKind::Bool {
-            out.write_str(if value.is_true() { "true" } else { "false" })
-                .map_err(minijinja::Error::from)
-        } else {
-            escape_formatter(out, state, value)
-        }
-    });
     env
 });
 
