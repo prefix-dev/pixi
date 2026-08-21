@@ -235,7 +235,7 @@ zstd = { version = "0.13.3", default-features = false }
 file_url = "0.3.0"
 rattler = { version = "0.48", default-features = false }
 rattler_cache = { version = "0.10", default-features = false }
-rattler_conda_types = { version = "0.50", default-features = false, features = [
+rattler_conda_types = { version = "0.51", default-features = false, features = [
   "rayon",
 ] }
 rattler_config = { version = "0.7", default-features = false }
@@ -251,7 +251,7 @@ rattler_networking = { version = "0.30", default-features = false, features = [
 ] }
 rattler_package_streaming = { version = "0.27", default-features = false }
 rattler_redaction = { version = "0.2.2", default-features = false }
-rattler_repodata_gateway = { version = "0.32", default-features = false }
+rattler_repodata_gateway = { version = "0.33", default-features = false }
 rattler_s3 = { version = "0.2", default-features = false }
 rattler_shell = { version = "0.27", default-features = false }
 rattler_solve = { version = "9.0", default-features = false }
@@ -259,17 +259,17 @@ rattler_upload = { version = "0.10", default-features = false, features = [
   "s3",
   "sigstore-sign",
 ] }
-rattler_virtual_packages = { version = "5.0", default-features = false }
+rattler_virtual_packages = { version = "5.1", default-features = false }
 simple_spawn_blocking = { version = "1.1.0", default-features = false }
 
 # Rattler build crates
-rattler_build_core = { version = "0.2.11", default-features = false, features = [
+rattler_build_core = { version = "0.2.12", default-features = false, features = [
   "s3",
 ] }
-rattler_build_jinja = { version = "0.1.12" }
-rattler_build_recipe = { version = "0.1.12" }
-rattler_build_types = { version = "0.1.11" }
-rattler_build_variant_config = { version = "0.1.12" }
+rattler_build_jinja = { version = "0.1.13" }
+rattler_build_recipe = { version = "0.1.13" }
+rattler_build_types = { version = "0.1.12" }
+rattler_build_variant_config = { version = "0.1.13" }
 
 [patch.crates-io]
 version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "d8efd77673c9a90792da9da31b6c0da7ea8a324b" }
