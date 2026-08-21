@@ -55,12 +55,17 @@ use pixi_utils::{
     variants::{VariantConfig, VariantValue},
 };
 use pypi_mapping::PurlDerivationMode;
-use rattler_conda_types::{ChannelConfig, ChannelUrl, MatchSpec, PackageName, Platform};
+use rattler_conda_types::{
+    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, Platform,
+};
 use rattler_lock::LockFile;
 use thiserror::Error;
 
 use crate::lock_file::LockedPackageKind;
-use pixi_manifest::platform::host::{host_capabilities, host_subdir};
+use pixi_manifest::platform::host::{
+    detect_host, host_capabilities, host_subdir, platform_from_detected,
+};
+use pixi_manifest::platform::unsatisfied_capabilities;
 use rattler_networking::{LazyClient, s3_middleware};
 use rattler_repodata_gateway::Gateway;
 pub use registry::{WorkspaceRegistry, WorkspaceRegistryError};
@@ -206,6 +211,16 @@ pub enum ScriptWorkspaceError {
 
     #[error("failed to resolve the script environment cache directory: {0}")]
     CacheDirectory(String),
+
+    #[error("failed to determine the virtual packages of this machine for '{subdir}'")]
+    #[diagnostic(help(
+        "a script without `platforms` is resolved for this machine. Declare the platforms in the script metadata to resolve it for a fixed target instead."
+    ))]
+    HostDetection {
+        subdir: Platform,
+        #[source]
+        source: pixi_manifest::platform::host::HostDetectionError,
+    },
 }
 
 fn script_cache_name(path: &Path) -> String {
@@ -231,6 +246,109 @@ fn script_cache_name(path: &Path) -> String {
     } else {
         format!("{name}-{digest}")
     }
+}
+
+/// Install the platforms picked for a script that declares none.
+///
+/// `use_platform_composition` is decided while the manifest is parsed, and a
+/// script's synthetic manifest is parsed with an empty `platforms`, which reads
+/// as "every platform is a bare subdir". Composition then resolves an
+/// environment's platform by *subdir name*, so it would look for `linux-64` and
+/// never find the rich platform injected afterwards. Recompute the flag for the
+/// platforms actually installed, which is what the parser would have done had
+/// they been written in the metadata.
+fn set_implicit_script_platforms(
+    workspace: &mut pixi_manifest::Workspace,
+    platforms: IndexSet<PixiPlatform>,
+) {
+    let all_simple_subdir = platforms.iter().all(PixiPlatform::is_subdir_platform);
+    workspace.use_platform_composition = all_simple_subdir;
+    // Derived from the same predicate at parse time, and just as stale.
+    // Leaving it set on a rich platform would let `commit_if_needed` delete the
+    // script's `[system-requirements]` table on the next edit.
+    workspace.must_migrate &= all_simple_subdir;
+    workspace.platforms = platforms;
+}
+
+/// The platforms a script that declares none is resolved for.
+///
+/// A script has no `[workspace] platforms`, so pixi picks one on its behalf.
+/// Unlike a workspace -- where "the current platform" means the subdir with
+/// pixi's assumed defaults, written down in the manifest for you to see and
+/// edit -- a script is resolved for the machine it is run on, the same as its
+/// no-manifest siblings `pixi exec` and `pixi global`. Otherwise a script on a
+/// machine with CUDA, or with a glibc newer than pixi's 2.28 floor, is solved
+/// against packages that machine does not need to be limited to.
+///
+/// An adjacent sidecar lock wins while it is usable, so a `pixi lock --script`
+/// keeps reproducing rather than being re-solved for a marginally different
+/// host on the next run. The platforms it recorded are rebuilt in full,
+/// virtual packages included: reading them back as bare subdirs would lose the
+/// machine they were locked for, and pixi would re-solve every run, quietly
+/// overwriting the sidecar with the defaults. Their names are synthesized from
+/// their contents rather than taken from the lock, which stores rich platforms
+/// under short `p1`/`p2` aliases; `align_platform_names` maps the rows back on
+/// by identity.
+///
+/// When no recorded platform can run here the host is used instead and the
+/// lock is re-solved, rather than failing on a platform the user never
+/// declared.
+fn implicit_script_platforms(
+    lock_file_path: Option<&Path>,
+) -> Result<IndexSet<PixiPlatform>, ScriptWorkspaceError> {
+    let subdir = host_subdir();
+    let host = detect_host(subdir).map_err(|error| ScriptWorkspaceError::HostDetection {
+        subdir,
+        source: error,
+    })?;
+
+    // Only the rows this machine can actually run. A lock can hold rows for
+    // other subdirs (a script that declared `platforms` once and had the line
+    // removed since); keeping those would make every later run solve and lock
+    // for a platform the script no longer asks for.
+    let locked = lock_file_path
+        .and_then(|path| LockFile::from_path(path).ok())
+        .map(|lock_file| {
+            lock_file
+                .platforms()
+                .filter(|platform| platform.subdir() == subdir)
+                .filter_map(|platform| {
+                    platform_from_detected(platform.subdir(), locked_virtual_packages(&platform))
+                        .ok()
+                })
+                .filter(|platform| {
+                    unsatisfied_capabilities(
+                        &platform.customised_virtual_packages(),
+                        host.declared_virtual_packages(),
+                    )
+                    .is_empty()
+                })
+                .collect::<IndexSet<_>>()
+        })
+        .filter(|platforms: &IndexSet<PixiPlatform>| !platforms.is_empty());
+
+    if locked.is_none() && lock_file_path.is_some_and(|path| path.is_file()) {
+        tracing::warn!(
+            "the lock file next to this script was resolved for a platform this machine \
+             cannot run, so the script is resolved for '{}' instead and the lock file is \
+             rewritten.\n\
+             Declare `platforms` in the script metadata to keep locking for a fixed target.",
+            host.name().as_str(),
+        );
+    }
+
+    Ok(locked.unwrap_or_else(|| IndexSet::from([host])))
+}
+
+/// The virtual packages a lock-file platform row records, as the typed form.
+/// Entries the current pixi cannot parse are dropped; they can only have come
+/// from a newer pixi, and a platform is defined by what we can compare.
+fn locked_virtual_packages(platform: &rattler_lock::Platform<'_>) -> Vec<GenericVirtualPackage> {
+    platform
+        .virtual_packages()
+        .iter()
+        .filter_map(|raw| pixi_manifest::platform::parse_locked_virtual_package(raw))
+        .collect()
 }
 
 fn script_lock_file_path(path: &Path) -> PathBuf {
@@ -355,19 +473,10 @@ impl Workspace {
                 .collect();
         }
         if !script_config.platforms_explicit {
-            let locked_platforms = LockFile::from_path(&lock_file_path)
-                .ok()
-                .map(|lock_file| {
-                    lock_file
-                        .platforms()
-                        .map(|platform| PixiPlatform::from_subdir(platform.subdir()))
-                        .collect::<IndexSet<_>>()
-                })
-                .filter(|platforms| !platforms.is_empty());
-
-            manifest.workspace.platforms = locked_platforms.unwrap_or_else(|| {
-                IndexSet::from([PixiPlatform::from_subdir(Platform::current())])
-            });
+            set_implicit_script_platforms(
+                &mut manifest.workspace,
+                implicit_script_platforms(Some(&lock_file_path))?,
+            );
         }
 
         let root = script_path
@@ -416,8 +525,12 @@ impl Workspace {
                 .collect();
         }
         if !script_config.platforms_explicit {
-            manifest.workspace.platforms =
-                IndexSet::from([PixiPlatform::from_subdir(Platform::current())]);
+            // A transient script has nowhere to keep a lock file, so the host
+            // is the only platform it can be resolved for.
+            set_implicit_script_platforms(
+                &mut manifest.workspace,
+                implicit_script_platforms(None)?,
+            );
         }
 
         let digest = format!("{:016x}", xxh3_64(cache_key));
@@ -566,6 +679,18 @@ impl Workspace {
         }
         self.detached_environments_path()
             .unwrap_or_else(|| self.default_pixi_dir())
+    }
+
+    /// `true` when this is a script that declares no `platforms`, so the
+    /// platform it resolves for was picked from the machine rather than from
+    /// the script metadata.
+    pub fn script_platforms_are_implicit(&self) -> bool {
+        let WorkspaceStorage::Script { manifest, .. } = &self.storage else {
+            return false;
+        };
+        manifest
+            .workspace_config()
+            .is_ok_and(|config| !config.platforms_explicit)
     }
 
     /// Create the detached-environments path for this project if it is set in
@@ -1293,6 +1418,54 @@ fn write_warning_file(
 
 #[cfg(test)]
 mod tests {
+    /// A lock file's platform row is not pixi's own input: it carries whatever
+    /// package names were written into it, and a long enough one spells out
+    /// past the platform-name limit. Such a row has no platform, so it is
+    /// skipped -- the rest of the lock still counts, and nothing panics.
+    #[test]
+    fn an_unnameable_locked_platform_is_skipped() {
+        let subdir = host_subdir();
+        // `MAX_PLATFORM_NAME_BYTES` is private to `pixi_manifest`, so this is
+        // simply longer than any cap that crate would plausibly carry.
+        let unnameable = format!("__{}", "a".repeat(1024));
+        let lock_source = format!(
+            r#"version: 7
+platforms:
+- name: {subdir}
+  subdir: {subdir}
+- name: unnameable
+  subdir: {subdir}
+  virtual-packages:
+  - {unnameable}=1
+environments:
+  default:
+    channels:
+    - url: https://conda.anaconda.org/conda-forge/
+    packages: {{}}
+packages: []
+"#
+        );
+
+        let dir = tempfile::tempdir().unwrap();
+        let lock_file_path = dir.path().join("script.py.pixi.lock");
+        fs_err::write(&lock_file_path, lock_source).unwrap();
+
+        let platforms = implicit_script_platforms(Some(&lock_file_path))
+            .expect("an unnameable row must not fail the whole lookup");
+
+        // The bare-subdir row came through, so the lock really was read.
+        assert!(
+            platforms.iter().any(|p| p.subdir() == subdir),
+            "got {:?}",
+            platforms.iter().map(|p| p.name().as_str()).collect_vec()
+        );
+        assert!(
+            !platforms.iter().any(|p| p.name().as_str().contains("aaaa")),
+            "the unnameable row should have been skipped, got {:?}",
+            platforms.iter().map(|p| p.name().as_str()).collect_vec()
+        );
+    }
+
     use std::str::FromStr;
 
     use insta::{assert_debug_snapshot, assert_snapshot};
@@ -2087,9 +2260,18 @@ print("hello")
     fn script_workspace_reuses_platforms_from_an_existing_sidecar_lock() {
         let root = tempfile::tempdir().unwrap();
         let cache = tempfile::tempdir().unwrap();
+        let host = host_subdir();
+        // A subdir this machine cannot run. A sidecar can hold one when the
+        // script declared `platforms` at some point and the line was removed
+        // since; adopting it would make every later run solve for it too.
+        let foreign = if host.is_windows() {
+            Platform::Linux64
+        } else {
+            Platform::Win64
+        };
         let lock_file = LockFile::builder()
             .with_platforms(
-                [Platform::Linux64, Platform::OsxArm64]
+                [host, foreign]
                     .into_iter()
                     .map(|subdir| rattler_lock::PlatformData {
                         name: rattler_lock::PlatformName::try_from(subdir.as_str()).unwrap(),
@@ -2119,7 +2301,7 @@ print("hello")
                 .iter()
                 .map(PixiPlatform::subdir)
                 .collect::<Vec<_>>(),
-            [Platform::Linux64, Platform::OsxArm64]
+            [host]
         );
     }
 
