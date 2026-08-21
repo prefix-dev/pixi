@@ -130,12 +130,18 @@ pub(crate) fn pypi_satisfies_editable(
 /// (already verified against the manifest); a requirement with no
 /// per-package `index` is satisfied by any of them. Empty slice falls back
 /// to the default PyPI URL (pre-v7 lock files).
+///
+/// `explicitly_pinned_indexes_by_package_name` holds the per-package `index`
+/// pins declared in the manifest. uv attaches such a pin to the package name
+/// rather than to the single spec carrying it, so an index-less spec for a
+/// name that another spec pins must accept the pinned index as well.
 pub(crate) fn pypi_satisfies_requirement(
     spec: &uv_distribution_types::Requirement,
     locked_record: &LockedPypiRecord,
     project_root: &Path,
     origin: RequirementOrigin,
     locked_indexes: &[&Url],
+    explicitly_pinned_indexes_by_package_name: &HashMap<uv_normalize::PackageName, Vec<Url>>,
 ) -> Result<(), Box<PlatformUnsat>> {
     let locked_data = &locked_record.data;
     if spec.name.to_string() != locked_data.name().to_string() {
@@ -206,13 +212,28 @@ pub(crate) fn pypi_satisfies_requirement(
                     } else {
                         locked_indexes
                     };
-                    let acceptable = effective_indexes
+                    // Issue #6834: an index-less spec never weakens a
+                    // per-package pin during resolution, so it must not reject
+                    // what the pin resolved to either. Both specs coexist under
+                    // one name when a pyproject `[project].dependencies` entry
+                    // is lifted, or when two features declare the same package.
+                    let acceptable_indexes = effective_indexes
+                        .iter()
+                        .copied()
+                        .chain(
+                            explicitly_pinned_indexes_by_package_name
+                                .get(&spec.name)
+                                .into_iter()
+                                .flatten(),
+                        )
+                        .collect_vec();
+                    let acceptable = acceptable_indexes
                         .iter()
                         .any(|configured| pypi_index_urls_match(configured, locked_url));
                     if !acceptable {
                         return Err(PlatformUnsat::LockedPyPIIndexMismatch {
                             name: spec.name.to_string(),
-                            expected_index: effective_indexes.iter().format(", ").to_string(),
+                            expected_index: acceptable_indexes.iter().format(", ").to_string(),
                             locked_index: locked_url.to_string(),
                         }
                         .into());
@@ -874,6 +895,7 @@ async fn read_local_package_metadata(
 #[cfg(test)]
 mod tests {
     use std::{
+        collections::HashMap,
         path::{Path, PathBuf},
         str::FromStr,
     };
@@ -891,7 +913,7 @@ mod tests {
 
     use super::super::PypiNoBuildCheck;
     use super::super::platform::RequirementOrigin;
-    use super::pypi_satisfies_requirement;
+    use super::{PlatformUnsat, pypi_satisfies_requirement};
     use crate::lock_file::tests::{make_source_package_with, make_wheel_package_with};
 
     /// Lock a `PypiPackageData` into a `LockedPypiRecord` for testing.
@@ -931,6 +953,7 @@ mod tests {
             &project_root,
             RequirementOrigin::Manifest,
             &[],
+            &HashMap::new(),
         )
         .unwrap_err();
 
@@ -960,6 +983,7 @@ mod tests {
             &project_root,
             RequirementOrigin::Manifest,
             &[],
+            &HashMap::new(),
         )
         .unwrap();
         let non_matching_spec = pep508_requirement_to_uv_requirement(
@@ -972,6 +996,7 @@ mod tests {
             &project_root,
             RequirementOrigin::Manifest,
             &[],
+            &HashMap::new(),
         )
         .unwrap_err();
 
@@ -988,6 +1013,7 @@ mod tests {
             &project_root,
             RequirementOrigin::Manifest,
             &[],
+            &HashMap::new(),
         )
         .unwrap_err();
 
@@ -1011,6 +1037,7 @@ mod tests {
             &project_root,
             RequirementOrigin::Manifest,
             &[],
+            &HashMap::new(),
         )
         .unwrap();
     }
@@ -1060,6 +1087,7 @@ mod tests {
             &project_root,
             RequirementOrigin::Manifest,
             &[],
+            &HashMap::new(),
         )
         .unwrap();
     }
@@ -1098,6 +1126,7 @@ mod tests {
             &project_root,
             RequirementOrigin::Manifest,
             &[],
+            &HashMap::new(),
         )
         .unwrap();
     }
@@ -1130,6 +1159,7 @@ mod tests {
             Path::new(""),
             RequirementOrigin::Manifest,
             &[],
+            &HashMap::new(),
         )
         .unwrap();
     }
@@ -1158,6 +1188,7 @@ mod tests {
             Path::new(""),
             RequirementOrigin::Manifest,
             &[],
+            &HashMap::new(),
         )
         .unwrap();
     }
@@ -1210,6 +1241,7 @@ mod tests {
             Path::new(""),
             RequirementOrigin::Manifest,
             &[],
+            &HashMap::new(),
         )
         .unwrap();
     }
@@ -1243,6 +1275,7 @@ mod tests {
             Path::new(""),
             RequirementOrigin::Manifest,
             &[],
+            &HashMap::new(),
         )
         .unwrap();
     }
@@ -1272,6 +1305,7 @@ mod tests {
             Path::new(""),
             RequirementOrigin::Manifest,
             &[],
+            &HashMap::new(),
         )
         .unwrap();
     }
@@ -1313,6 +1347,7 @@ mod tests {
             Path::new(""),
             RequirementOrigin::Manifest,
             &[],
+            &HashMap::new(),
         )
         .unwrap();
 
@@ -1332,6 +1367,7 @@ mod tests {
             Path::new(""),
             RequirementOrigin::Manifest,
             &[],
+            &HashMap::new(),
         )
         .unwrap_err();
     }
@@ -1371,6 +1407,7 @@ mod tests {
             &project_root,
             RequirementOrigin::Manifest,
             &[],
+            &HashMap::new(),
         );
         assert!(
             result.is_err(),
@@ -1421,6 +1458,7 @@ mod tests {
             &project_root,
             RequirementOrigin::Manifest,
             &[],
+            &HashMap::new(),
         )
         .expect_err("direct requirement without index must not satisfy custom-index lock");
 
@@ -1431,6 +1469,7 @@ mod tests {
             &project_root,
             RequirementOrigin::RequiresDist,
             &[],
+            &HashMap::new(),
         )
         .expect("transitive requirement with no pep508 index must satisfy a custom-index lock");
     }
@@ -1471,6 +1510,7 @@ mod tests {
             &project_root,
             RequirementOrigin::RequiresDist,
             &[],
+            &HashMap::new(),
         )
         .expect(
             "a path-locked package must satisfy a transitive registry constraint \
@@ -1534,6 +1574,7 @@ mod tests {
             &project_root,
             RequirementOrigin::Manifest,
             &[],
+            &HashMap::new(),
         );
         assert!(
             result.is_err(),
@@ -1566,6 +1607,7 @@ mod tests {
             &project_root,
             RequirementOrigin::Manifest,
             &[],
+            &HashMap::new(),
         );
         assert!(
             result.is_ok(),
@@ -1600,6 +1642,7 @@ mod tests {
             &project_root,
             RequirementOrigin::Manifest,
             &[],
+            &HashMap::new(),
         );
         assert!(
             result.is_err(),
@@ -1639,6 +1682,7 @@ mod tests {
             &project_root,
             RequirementOrigin::Manifest,
             &[&Url::parse(custom_index).unwrap()],
+            &HashMap::new(),
         );
         assert!(result.is_ok(), "{:?}", result.unwrap_err());
 
@@ -1649,6 +1693,7 @@ mod tests {
             &project_root,
             RequirementOrigin::Manifest,
             &[&Url::parse(&format!("{custom_index}/")).unwrap()],
+            &HashMap::new(),
         );
         assert!(result_with_trailing_slash.is_ok());
 
@@ -1659,8 +1704,73 @@ mod tests {
             &project_root,
             RequirementOrigin::Manifest,
             &[&Url::parse("https://unrelated.example.com/simple").unwrap()],
+            &HashMap::new(),
         );
         assert!(result_unrelated.is_err());
+    }
+
+    /// Regression for #6834: when one manifest spec pins a per-package
+    /// `index` and another spec of the same package carries none — a lifted
+    /// pyproject dependency, or a second feature — the index-less spec must
+    /// accept the pinned index, which is where uv resolved the package from.
+    #[test]
+    fn test_pypi_sibling_pinned_index_should_satisfy() {
+        let pinned_index = "https://download.pytorch.org/whl/cpu";
+
+        let locked_data = lock_for_test(make_wheel_package_with(
+            "my-dep",
+            "1.0.0",
+            "https://download.pytorch.org/whl/cpu/my_dep-1.0.0-py3-none-any.whl"
+                .parse()
+                .expect("failed to parse url"),
+            None,
+            Some(Url::parse(pinned_index).unwrap()),
+            vec![],
+            None,
+        ));
+
+        let index_less_spec = pep508_requirement_to_uv_requirement(
+            pep508_rs::Requirement::from_str("my-dep>=1.0").unwrap(),
+        )
+        .unwrap();
+        let explicitly_pinned_indexes_by_package_name = HashMap::from([(
+            index_less_spec.name.clone(),
+            vec![Url::parse(pinned_index).unwrap()],
+        )]);
+
+        let project_root = PathBuf::from_str("/").unwrap();
+        // The pinned index is deliberately absent from the env-level indexes:
+        // per-package pins are never recorded there.
+        let result = pypi_satisfies_requirement(
+            &index_less_spec,
+            &locked_data,
+            &project_root,
+            RequirementOrigin::Manifest,
+            &[&*pixi_consts::consts::DEFAULT_PYPI_INDEX_URL],
+            &explicitly_pinned_indexes_by_package_name,
+        );
+        assert!(result.is_ok(), "{:?}", result.unwrap_err());
+
+        // A pin on a different package must not make the locked index
+        // acceptable.
+        let unrelated_pin = HashMap::from([(
+            uv_normalize::PackageName::from_str("other-dep").unwrap(),
+            vec![Url::parse(pinned_index).unwrap()],
+        )]);
+        let result_unrelated = pypi_satisfies_requirement(
+            &index_less_spec,
+            &locked_data,
+            &project_root,
+            RequirementOrigin::Manifest,
+            &[&*pixi_consts::consts::DEFAULT_PYPI_INDEX_URL],
+            &unrelated_pin,
+        );
+        let unrelated_error = result_unrelated
+            .expect_err("a pin on another package must not satisfy this requirement");
+        assert!(matches!(
+            *unrelated_error,
+            PlatformUnsat::LockedPyPIIndexMismatch { .. }
+        ));
     }
 
     /// A package locked from an `extra-index-urls` entry must satisfy a
@@ -1696,6 +1806,7 @@ mod tests {
                 &*pixi_consts::consts::DEFAULT_PYPI_INDEX_URL,
                 &Url::parse(extra_index).unwrap(),
             ],
+            &HashMap::new(),
         );
         assert!(result.is_ok(), "{:?}", result.unwrap_err());
     }
@@ -1735,6 +1846,7 @@ mod tests {
             &project_root,
             RequirementOrigin::Manifest,
             &[],
+            &HashMap::new(),
         );
         assert!(
             result.is_ok(),
