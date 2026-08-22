@@ -16,7 +16,7 @@ use crate::{
     dependencies::CondaDevDependencies,
     has_features_iter::HasFeaturesIter,
     has_manifest_ref::HasWorkspaceManifest,
-    platform_composition::{combined_platform_name, feature_supports_subdir},
+    platform_composition::{combined_platform_name, environment_subdirs},
     pypi::{ResolvedPypiExcludeNewer, pypi_options::PypiOptions},
     workspace::{ChannelPriority, SolveStrategy},
 };
@@ -180,27 +180,21 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
         let workspace = &self.workspace_manifest().workspace;
         if workspace.use_platform_composition {
             let features: Vec<&Feature> = self.features().collect();
-            let subdirs: IndexSet<Platform> = workspace
-                .platforms
-                .iter()
-                .map(PixiPlatform::subdir)
-                .collect();
-            return subdirs
-                .into_iter()
-                .filter(|subdir| {
-                    features.iter().all(|feature| {
-                        feature_supports_subdir(feature, *subdir, &workspace.platforms)
-                    })
-                })
-                .filter_map(|subdir| {
-                    let name = combined_platform_name(&features, subdir, &workspace.platforms);
-                    workspace
-                        .platforms
-                        .iter()
-                        .find(|platform| platform.name().as_str() == name)
-                        .map(|platform| platform.name().clone())
-                })
-                .collect();
+            return environment_subdirs(
+                &features,
+                &workspace.feature_added_platforms,
+                &workspace.platforms,
+            )
+            .into_iter()
+            .filter_map(|subdir| {
+                let name = combined_platform_name(&features, subdir, &workspace.platforms);
+                workspace
+                    .platforms
+                    .iter()
+                    .find(|platform| platform.name().as_str() == name)
+                    .map(|platform| platform.name().clone())
+            })
+            .collect();
         }
         let exact_names: HashSet<&PixiPlatformName> = self
             .features()

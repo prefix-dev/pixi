@@ -84,18 +84,23 @@ impl WorkspaceManifest {
         if !self.workspace.use_platform_composition {
             return Ok(());
         }
-        let declared = self.workspace.platforms.clone();
+        let feature_added = self.workspace.feature_added_platforms.clone();
+        let all = self.workspace.platforms.clone();
         let mut composed: IndexSet<PixiPlatform> = IndexSet::new();
         for environment in self.environments.iter() {
             let features = self.environment_features(environment);
             composed.extend(crate::platform_composition::combined_platforms(
-                &features, &declared,
+                &features,
+                &feature_added,
+                &all,
             )?);
         }
         for solve_group in self.solve_groups.iter() {
             let features = self.solve_group_features(solve_group);
             composed.extend(crate::platform_composition::combined_platforms(
-                &features, &declared,
+                &features,
+                &feature_added,
+                &all,
             )?);
         }
         self.workspace.platforms.extend(composed);

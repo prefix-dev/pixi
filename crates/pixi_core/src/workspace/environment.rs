@@ -767,6 +767,50 @@ mod tests {
         );
     }
 
+    /// Regression for prefix-dev/pixi#6770: a `no-default-feature` environment
+    /// whose feature declares an extra subdir (`osx-arm64`) must not leak that
+    /// subdir into other environments. The default environment only spans the
+    /// workspace's declared `linux-64`; previously the feature-referenced
+    /// `osx-arm64` was folded into the global platform list and every
+    /// environment inherited it, so the default environment was solved for
+    /// `osx-arm64` too and failed on packages without an `osx-arm64` build.
+    #[test]
+    fn test_feature_platform_does_not_leak_across_environments() {
+        let manifest = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [workspace]
+        name = "repro"
+        channels = []
+        platforms = ["linux-64"]
+
+        [environments]
+        dev = { features = ["dev"], no-default-feature = true }
+
+        [feature.dev]
+        platforms = ["linux-64", "osx-arm64"]
+        "#,
+        )
+        .unwrap();
+
+        let default = manifest.default_environment();
+        assert_eq!(
+            default.platforms(),
+            HashSet::from_iter([pixi_manifest::PixiPlatformName::from(Platform::Linux64)]),
+            "default environment must stay on the declared linux-64 only"
+        );
+
+        let dev = manifest.environment("dev").unwrap();
+        assert_eq!(
+            dev.platforms(),
+            HashSet::from_iter([
+                pixi_manifest::PixiPlatformName::from(Platform::Linux64),
+                pixi_manifest::PixiPlatformName::from(Platform::OsxArm64),
+            ]),
+            "dev environment must solve for both platforms its feature declares"
+        );
+    }
+
     #[test]
     fn test_default_tasks() {
         let manifest = Workspace::from_str(
