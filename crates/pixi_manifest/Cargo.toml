@@ -25,6 +25,7 @@ pathdiff = { workspace = true }
 pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
 pixi_build_types = { workspace = true }
+pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_default_versions = { workspace = true }
 pixi_pypi_spec = { workspace = true }

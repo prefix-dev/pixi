@@ -20,6 +20,10 @@ use reqwest::{NoProxy, Proxy};
 use serde::{Deserialize, Serialize, de::IntoDeserializer};
 use url::Url;
 
+mod conda_pypi_map;
+
+pub use conda_pypi_map::{CondaPypiMap, CondaPypiMapEntry, CondaPypiMapSpec, CondaPypiMappingMode};
+
 const EXPERIMENTAL: &str = "experimental";
 
 /// Controls which root certificates to use for TLS connections.
@@ -1135,6 +1139,11 @@ pub struct Config {
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub default_channels: Vec<NamedChannelOrUrl>,
 
+    /// Default `conda-pypi-map` written into new workspaces by `pixi init`.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_conda_pypi_map: Option<CondaPypiMap>,
+
     /// Path to the file containing the authentication token.
     #[serde(default)]
     #[serde(alias = "authentication_override_file")] // BREAK: remove to stop supporting snake_case alias
@@ -1287,6 +1296,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             default_channels: Vec::new(),
+            default_conda_pypi_map: None,
             authentication_override_file: None,
             tls_no_verify: None,
             tls_root_certs: None,
@@ -1817,6 +1827,7 @@ impl Config {
             "concurrency.downloads",
             "concurrency.solves",
             "default-channels",
+            "default-conda-pypi-map",
             "detached-environments",
             "experimental",
             "experimental.use-environment-activation-cache",
@@ -1872,6 +1883,7 @@ impl Config {
             } else {
                 other.default_channels
             },
+            default_conda_pypi_map: other.default_conda_pypi_map.or(self.default_conda_pypi_map),
             tls_no_verify: other.tls_no_verify.or(self.tls_no_verify),
             tls_root_certs: other.tls_root_certs.or(self.tls_root_certs),
             offline: other.offline.or(self.offline),
@@ -2086,6 +2098,12 @@ impl Config {
                     .transpose()
                     .into_diagnostic()?
                     .unwrap_or_default();
+            }
+            "default-conda-pypi-map" => {
+                self.default_conda_pypi_map = value
+                    .map(|v| serde_json::de::from_str(&v))
+                    .transpose()
+                    .into_diagnostic()?;
             }
             "authentication-override-file" => {
                 self.authentication_override_file = value.map(PathBuf::from);
@@ -2551,6 +2569,7 @@ pub fn config_path_global() -> Vec<PathBuf> {
 
 #[cfg(test)]
 mod tests {
+    use assert_matches::assert_matches;
     use indexmap::IndexMap;
     use rstest::rstest;
 
@@ -2939,6 +2958,7 @@ UNUSED = "unused"
         let mut config = Config::default();
         let other = Config {
             default_channels: vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()],
+            default_conda_pypi_map: Some(CondaPypiMap::Disabled),
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
             tls_no_verify: Some(true),
             tls_root_certs: Some(TlsRootCerts::System),
@@ -4064,5 +4084,61 @@ UNUSED = "unused"
         };
         let err = config.validate().unwrap_err();
         assert!(format!("{err}").contains("cache.conda-packages"));
+    }
+
+    #[test]
+    fn test_default_conda_pypi_map_parse_merge_and_set() {
+        // Parses from config TOML, both value kinds and every spec field.
+        let toml = r#"
+            [default-conda-pypi-map]
+            internal = false
+
+            [default-conda-pypi-map.conda-forge]
+            location = "https://example.com/m.json"
+            mapping = { conda-name = "pypi-name", multi-name = ["first-name", "second-name"], not-on-pypi = false }
+            mapping-mode = "replace"
+            same-name-heuristic = true
+        "#;
+        let (config, unused) = Config::from_toml(toml, None).unwrap();
+        assert!(unused.is_empty());
+        let Some(CondaPypiMap::Map(entries)) = &config.default_conda_pypi_map else {
+            panic!("config.default_conda_pypi_map wasn't a Some(Map(..))")
+        };
+        assert_eq!(
+            entries[&NamedChannelOrUrl::from_str("internal").unwrap()],
+            CondaPypiMapEntry::Disabled
+        );
+        assert_eq!(
+            entries[&NamedChannelOrUrl::from_str("conda-forge").unwrap()],
+            CondaPypiMapEntry::Map(CondaPypiMapSpec {
+                location: Some("https://example.com/m.json".to_string()),
+                mapping: Some(HashMap::from([
+                    ("conda-name".to_string(), vec!["pypi-name".to_string()]),
+                    (
+                        "multi-name".to_string(),
+                        vec!["first-name".to_string(), "second-name".to_string()]
+                    ),
+                    ("not-on-pypi".to_string(), vec![]),
+                ])),
+                mapping_mode: CondaPypiMappingMode::Replace,
+                same_name_heuristic: Some(true),
+            })
+        );
+
+        // Check the merging works as expected.
+        let merged = config.clone().merge_config(Config::default());
+        assert_eq!(merged.default_conda_pypi_map, config.default_conda_pypi_map);
+        let (disabled, _) = Config::from_toml(r#"default-conda-pypi-map = false"#, None).unwrap();
+        let merged = config.clone().merge_config(disabled);
+        assert_eq!(merged.default_conda_pypi_map, Some(CondaPypiMap::Disabled));
+
+        let mut config = Config::default();
+        config
+            .set(
+                "default-conda-pypi-map",
+                Some(r#"{"conda-forge": "https://example.com/m.json"}"#.to_string()),
+            )
+            .unwrap();
+        assert_matches!(config.default_conda_pypi_map, Some(CondaPypiMap::Map(_)));
     }
 }

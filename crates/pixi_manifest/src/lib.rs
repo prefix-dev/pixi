@@ -29,6 +29,7 @@ pub mod toml;
 pub mod utils;
 mod warning;
 mod workspace;
+
 pub use activation::Activation;
 pub use build_system::BuildBackend;
 pub use build_system::PackageBuild;
@@ -53,6 +54,7 @@ pub use manifests::{
 use miette::Diagnostic;
 pub use package::Package;
 pub use package_dependency_spec::{PackageConstraintSpec, PackageDependencySpec};
+pub use pixi_config::{CondaPypiMap, CondaPypiMapEntry, CondaPypiMapSpec, CondaPypiMappingMode};
 pub use platform::{
     PixiPlatform, PixiPlatformError, PixiPlatformName, PixiPlatformNameError, PlatformEdit,
     PlatformGlob, PlatformGlobError, PlatformMove,
@@ -71,8 +73,7 @@ pub use task::{Task, TaskName};
 use thiserror::Error;
 pub use warning::{Warning, WarningWithSource, WithWarnings};
 pub use workspace::{
-    BuildVariantSource, ChannelPriority, CondaPypiMap, CondaPypiMapEntry, CondaPypiMapSpec,
-    CondaPypiMappingMode, PlatformMatchDiagnosis, SolveStrategy, Workspace,
+    BuildVariantSource, ChannelPriority, PlatformMatchDiagnosis, SolveStrategy, Workspace,
 };
 
 pub use crate::{

@@ -147,3 +147,9 @@ change-ps1 = false
 force-activate = true
 source-completion-scripts = false
 # --8<-- [end:shell]
+
+# --8<-- [start:default-conda-pypi-map]
+[default-conda-pypi-map]
+conda-forge = { location = "https://example.com/mapping.json", mapping-mode = "replace" }
+internal = false
+# --8<-- [end:default-conda-pypi-map]

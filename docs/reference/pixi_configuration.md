@@ -519,6 +519,20 @@ debugging:
 For persistent behavior, prefer `[cache.netfs-redirect]` or
 `PIXI_CACHE_NETFS_REDIRECT`.
 
+### `default-conda-pypi-map`
+
+The `default-conda-pypi-map` is the [`conda-pypi-map`](./pixi_manifest.md#conda-pypi-map-optional) that `pixi init`
+writes into the manifest of a new workspace, and takes the same values.
+You can override this from the CLI with `--conda-pypi-map`, which replaces the whole value rather than merging into it.
+
+```toml title="config.toml"
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:default-conda-pypi-map"
+```
+
+!!! note
+    This setting applies only when a workspace is created.
+    Existing workspaces use the `conda-pypi-map` in their own manifest.
+
 ## Experimental
 
 This allows the user to set specific experimental features that are not yet stable.
