@@ -11,7 +11,8 @@ use crate::compute_data::{
 };
 use crate::environment::WorkspaceEnvRegistry;
 use crate::injected_config::{
-    BackendOverrideKey, ChannelConfigKey, EnabledProtocolsKey, ToolBuildEnvironmentKey,
+    BackendOverrideKey, BackendVerbosityKey, ChannelConfigKey, EnabledProtocolsKey,
+    ToolBuildEnvironmentKey,
 };
 use crate::reporter::{
     BackendSourceBuildReporter, BuildBackendMetadataReporter, CondaSolveReporter, GatewayReporter,
@@ -24,7 +25,7 @@ use crate::{
     command_dispatcher::{CommandDispatcherData, DepGraphDumpGuard},
 };
 use pixi_build_discovery::EnabledProtocols;
-use pixi_build_frontend::BackendOverride;
+use pixi_build_frontend::{BackendOverride, tool::BackendVerbosity};
 use pixi_compute_cache_dirs::CacheDirsKey;
 use pixi_compute_engine::ComputeEngine;
 use pixi_compute_env_vars::EnvVarsKey;
@@ -54,6 +55,7 @@ pub struct CommandDispatcherBuilder {
     download_client: Option<LazyClient>,
     cache_dirs: Option<CacheDirs>,
     build_backend_overrides: BackendOverride,
+    backend_verbosity: Option<BackendVerbosity>,
     max_download_concurrency: MaxConcurrency,
     limits: Limits,
     executor: Executor,
@@ -87,6 +89,14 @@ pub struct CommandDispatcherBuilder {
 }
 
 impl CommandDispatcherBuilder {
+    /// Sets the verbosity passed to spawned build backend processes.
+    pub fn with_backend_verbosity(self, backend_verbosity: BackendVerbosity) -> Self {
+        Self {
+            backend_verbosity: Some(backend_verbosity),
+            ..self
+        }
+    }
+
     /// Sets the cache directories to use.
     pub fn with_cache_dirs(self, cache_dirs: CacheDirs) -> Self {
         Self {
@@ -356,6 +366,9 @@ impl CommandDispatcherBuilder {
 
     /// Completes the builder and returns a new [`CommandDispatcher`].
     pub fn finish(self) -> CommandDispatcher {
+        let backend_verbosity = self
+            .backend_verbosity
+            .unwrap_or_else(crate::current_backend_verbosity);
         let root_dir = self.root_dir.unwrap_or_else(|| {
             let current_dir =
                 std::env::current_dir().expect("failed to determine current directory");
@@ -565,6 +578,7 @@ impl CommandDispatcherBuilder {
             BackendOverrideKey,
             Arc::new(data.build_backend_overrides.clone()),
         );
+        engine.inject(BackendVerbosityKey, Arc::new(backend_verbosity));
 
         CommandDispatcher {
             _dump_guard: Arc::new(DepGraphDumpGuard {
@@ -573,5 +587,59 @@ impl CommandDispatcherBuilder {
             data,
             engine,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use pixi_build_frontend::tool::BackendVerbosity;
+
+    use super::CommandDispatcherBuilder;
+    use crate::{BackendVerbosityKey, scope_backend_verbosity};
+
+    #[tokio::test]
+    async fn dispatcher_snapshots_scoped_backend_verbosity_per_instance() {
+        let trace = BackendVerbosity::from_cli(0, 4);
+        let quiet = BackendVerbosity::from_cli(1, 4);
+
+        let (trace_dispatcher, quiet_dispatcher) = tokio::join!(
+            scope_backend_verbosity(trace, async {
+                CommandDispatcherBuilder::default().finish()
+            }),
+            scope_backend_verbosity(quiet, async {
+                CommandDispatcherBuilder::default().finish()
+            }),
+        );
+
+        assert_eq!(
+            *trace_dispatcher
+                .engine()
+                .read(&BackendVerbosityKey)
+                .expect("verbosity is injected"),
+            trace
+        );
+        assert_eq!(
+            *quiet_dispatcher
+                .engine()
+                .read(&BackendVerbosityKey)
+                .expect("verbosity is injected"),
+            quiet
+        );
+    }
+
+    #[test]
+    fn explicit_backend_verbosity_overrides_the_execution_context_default() {
+        let verbosity = BackendVerbosity::from_cli(0, 3);
+        let dispatcher = CommandDispatcherBuilder::default()
+            .with_backend_verbosity(verbosity)
+            .finish();
+
+        assert_eq!(
+            *dispatcher
+                .engine()
+                .read(&BackendVerbosityKey)
+                .expect("verbosity is injected"),
+            verbosity
+        );
     }
 }
