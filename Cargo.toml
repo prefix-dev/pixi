@@ -235,7 +235,7 @@ zstd = { version = "0.13.3", default-features = false }
 file_url = "0.3.0"
 rattler = { version = "0.48", default-features = false }
 rattler_cache = { version = "0.10", default-features = false }
-rattler_conda_types = { version = "0.50", default-features = false, features = [
+rattler_conda_types = { version = "0.51", default-features = false, features = [
   "rayon",
 ] }
 rattler_config = { version = "0.7", default-features = false }
@@ -251,7 +251,7 @@ rattler_networking = { version = "0.30", default-features = false, features = [
 ] }
 rattler_package_streaming = { version = "0.27", default-features = false }
 rattler_redaction = { version = "0.2.2", default-features = false }
-rattler_repodata_gateway = { version = "0.32", default-features = false }
+rattler_repodata_gateway = { version = "0.33", default-features = false }
 rattler_s3 = { version = "0.2", default-features = false }
 rattler_shell = { version = "0.27", default-features = false }
 rattler_solve = { version = "9.0", default-features = false }
