@@ -10,7 +10,7 @@ use pixi_manifest::{
 use pixi_spec::{GitSpec, SourceSpec, Subdirectory};
 use rattler_conda_types::{MatchSpec, PackageName};
 
-use crate::workspace::platforms::resolve_platforms;
+use crate::workspace::platforms::{declare_platforms, resolve_platforms};
 
 mod options;
 
@@ -26,17 +26,21 @@ pub async fn add_conda_dep(
     sanity_check_workspace(workspace.workspace()).await?;
 
     // Resolve the requested platforms, accepting bare subdirs as subdir
-    // platforms, and add any that the workspace does not yet declare.
-    let workspace_platforms = workspace
-        .workspace()
-        .workspace_manifest()
-        .workspace
-        .platforms
-        .clone();
-    let pixi_platforms = resolve_platforms(&workspace_platforms, &dep_options.platforms)?;
-    workspace
-        .manifest()
-        .add_platforms(pixi_platforms.iter(), &FeatureName::Default)?;
+    // platforms, and declare any the workspace does not yet cover.
+    let pixi_platforms = resolve_platforms(
+        &workspace
+            .workspace()
+            .workspace_manifest()
+            .workspace
+            .platforms,
+        &dep_options.platforms,
+    )?;
+    declare_platforms(
+        &mut workspace,
+        &dep_options.feature,
+        &pixi_platforms,
+        &FeatureName::Default,
+    )?;
 
     let mut match_specs = IndexMap::default();
     let mut source_specs = IndexMap::default();
@@ -124,17 +128,21 @@ pub async fn add_pypi_dep(
     sanity_check_workspace(workspace.workspace()).await?;
 
     // Resolve the requested platforms, accepting bare subdirs as subdir
-    // platforms, and add any that the workspace does not yet declare.
-    let workspace_platforms = workspace
-        .workspace()
-        .workspace_manifest()
-        .workspace
-        .platforms
-        .clone();
-    let pixi_platforms = resolve_platforms(&workspace_platforms, &options.platforms)?;
-    workspace
-        .manifest()
-        .add_platforms(pixi_platforms.iter(), &FeatureName::Default)?;
+    // platforms, and declare any the workspace does not yet cover.
+    let pixi_platforms = resolve_platforms(
+        &workspace
+            .workspace()
+            .workspace_manifest()
+            .workspace
+            .platforms,
+        &options.platforms,
+    )?;
+    declare_platforms(
+        &mut workspace,
+        &options.feature,
+        &pixi_platforms,
+        &FeatureName::Default,
+    )?;
 
     // TODO: add dry_run logic to add
     let dry_run = false;

@@ -209,6 +209,10 @@ pub enum ScriptWorkspaceError {
     #[diagnostic(transparent)]
     Manifest(#[from] pixi_manifest::script::ScriptManifestError),
 
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Toml(#[from] Box<pixi_manifest::TomlError>),
+
     #[error("failed to resolve the script environment cache directory: {0}")]
     CacheDirectory(String),
 }
@@ -606,9 +610,11 @@ impl Workspace {
                 })
                 .filter(|platforms| !platforms.is_empty());
 
-            manifest.workspace.platforms = locked_platforms.unwrap_or_else(|| {
-                IndexSet::from([PixiPlatform::from_subdir(Platform::current())])
-            });
+            manifest
+                .set_workspace_platforms(locked_platforms.unwrap_or_else(|| {
+                    IndexSet::from([PixiPlatform::from_subdir(Platform::current())])
+                }))
+                .map_err(Box::new)?;
         }
 
         let root = script_path
@@ -657,8 +663,11 @@ impl Workspace {
                 .collect();
         }
         if !script_config.platforms_explicit {
-            manifest.workspace.platforms =
-                IndexSet::from([PixiPlatform::from_subdir(Platform::current())]);
+            manifest
+                .set_workspace_platforms(IndexSet::from([PixiPlatform::from_subdir(
+                    Platform::current(),
+                )]))
+                .map_err(Box::new)?;
         }
 
         let digest = format!("{:016x}", xxh3_64(cache_key));

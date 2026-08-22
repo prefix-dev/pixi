@@ -3,7 +3,7 @@ use std::str::FromStr;
 
 use clap::{Parser, ValueEnum, ValueHint};
 use indexmap::IndexSet;
-use pixi_api::workspace::platforms::resolve_platforms;
+use pixi_api::workspace::platforms::{declare_platforms, resolve_platforms};
 use pixi_config::ConfigCli;
 use pixi_core::{WorkspaceLocator, environment::sanity_check_workspace};
 use pixi_manifest::{
@@ -208,9 +208,12 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
     let platform_names: Vec<pixi_manifest::PixiPlatformName> =
         pixi_platforms.iter().map(|p| p.name().clone()).collect();
     if !pixi_platforms.is_empty() {
-        workspace
-            .manifest()
-            .add_platforms(pixi_platforms.iter(), &feature_name)?;
+        declare_platforms(
+            &mut workspace,
+            &feature_name,
+            &pixi_platforms,
+            &feature_name,
+        )?;
     }
 
     let (conda_deps, pypi_deps) = match processed_input {

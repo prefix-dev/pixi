@@ -80,26 +80,44 @@ impl WorkspaceManifest {
     ///
     /// Only runs on the subdir-only `[system-requirements]` path; workspaces
     /// with custom rich platforms match by name and need no composition.
+    /// Re-run after mutating `platforms` or `declared_subdirs` so every name
+    /// an environment yields stays resolvable.
     pub(crate) fn register_composed_platforms(&mut self) -> Result<(), TomlError> {
         if !self.workspace.use_platform_composition {
             return Ok(());
         }
-        let declared = self.workspace.platforms.clone();
         let mut composed: IndexSet<PixiPlatform> = IndexSet::new();
         for environment in self.environments.iter() {
             let features = self.environment_features(environment);
             composed.extend(crate::platform_composition::combined_platforms(
-                &features, &declared,
+                &features,
+                &self.workspace.declared_subdirs,
+                &self.workspace.platforms,
             )?);
         }
         for solve_group in self.solve_groups.iter() {
             let features = self.solve_group_features(solve_group);
             composed.extend(crate::platform_composition::combined_platforms(
-                &features, &declared,
+                &features,
+                &self.workspace.declared_subdirs,
+                &self.workspace.platforms,
             )?);
         }
         self.workspace.platforms.extend(composed);
         Ok(())
+    }
+
+    /// Replace the declared workspace platforms wholesale, keeping the
+    /// composition invariants: `declared_subdirs` snapshots the new set and
+    /// the composed platforms are re-registered so every name an environment
+    /// yields stays resolvable.
+    pub fn set_workspace_platforms(
+        &mut self,
+        platforms: IndexSet<PixiPlatform>,
+    ) -> Result<(), TomlError> {
+        self.workspace.declared_subdirs = platforms.iter().map(PixiPlatform::subdir).collect();
+        self.workspace.platforms = platforms;
+        self.register_composed_platforms()
     }
 
     /// The features that make up `environment`, including the default feature
@@ -910,30 +928,28 @@ impl WorkspaceManifestMut<'_> {
 
         // Only platforms that aren't already declared cause a change. Re-adding
         // an existing platform (e.g. `pixi add <dep> --platform linux-64` when
-        // linux-64 is already declared) must leave the document untouched.
-        let mut new_platforms: IndexSet<PixiPlatform> = platforms
+        // linux-64 is already declared) must leave the document untouched. On
+        // the composition path the in-memory list also holds platforms that
+        // features pulled in or that a pending migration synthesised, so a bare
+        // subdir counts as declared only when `declared_subdirs` says so --
+        // adding a platform that so far only a feature referenced must still
+        // declare it on the workspace.
+        let composition = self.workspace.workspace.use_platform_composition;
+        let new_platforms: IndexSet<PixiPlatform> = platforms
             .iter()
-            .filter(|p| !self.workspace.workspace.platforms.contains(*p))
+            .filter(|p| {
+                if composition && p.is_subdir_platform() {
+                    !self
+                        .workspace
+                        .workspace
+                        .declared_subdirs
+                        .contains(&p.subdir())
+                } else {
+                    !self.workspace.workspace.platforms.contains(*p)
+                }
+            })
             .cloned()
             .collect();
-
-        // While the legacy migration is pending a re-added bare subdir (e.g.
-        // `--platform linux-64`) won't match by identity above: the in-memory
-        // entry for that subdir has been extended with the synthesised virtual
-        // packages. Its bare form being absent from the list is the signal that
-        // it got extended, so drop subdir-platforms whose subdir is already
-        // declared.
-        if self.workspace.workspace.must_migrate {
-            let declared_subdirs: HashSet<Platform> = self
-                .workspace
-                .workspace
-                .platforms
-                .iter()
-                .map(PixiPlatform::subdir)
-                .collect();
-            new_platforms
-                .retain(|p| !(p.is_subdir_platform() && declared_subdirs.contains(&p.subdir())));
-        }
 
         if new_platforms.is_empty() {
             return Ok(IndexSet::new());
@@ -951,6 +967,13 @@ impl WorkspaceManifestMut<'_> {
             .workspace
             .platforms
             .extend(new_platforms.iter().cloned());
+        self.workspace
+            .workspace
+            .declared_subdirs
+            .extend(new_platforms.iter().map(PixiPlatform::subdir));
+        self.workspace
+            .register_composed_platforms()
+            .map_err(|e| miette!(e))?;
 
         // Capture this before `commit_if_needed` clears the flag: a committing
         // migration rewrites every entry's shape, so the stale on-disk array
@@ -1029,6 +1052,14 @@ impl WorkspaceManifestMut<'_> {
             .workspace
             .platforms
             .iter()
+            // The in-memory set also holds platforms that features pulled in
+            // and composed entries; only the declared ones belong on disk.
+            .filter(|p| {
+                self.workspace
+                    .workspace
+                    .declared_subdirs
+                    .contains(&p.subdir())
+            })
             .map(crate::toml::platform::pixi_platform_to_toml_value)
             .collect();
 
@@ -1144,7 +1175,7 @@ impl WorkspaceManifestMut<'_> {
         } else {
             // Otherwise only this one entry changed: rewrite it in place so the
             // array keeps its order and on-disk formatting.
-            self.replace_workspace_platform_value(index, &updated)
+            self.replace_workspace_platform_value(name, index, &updated)
         }
     }
 
@@ -1212,11 +1243,17 @@ impl WorkspaceManifestMut<'_> {
         self.rewrite_workspace_platforms_toml()
     }
 
-    /// Rewrite the `index`th entry of the workspace `platforms` array from
-    /// `platform`, preserving that entry's surrounding whitespace so the
-    /// array's layout and the other entries stay untouched.
+    /// Rewrite the `platforms` array entry named `name` from `platform`,
+    /// preserving that entry's surrounding whitespace so the array's layout
+    /// and the other entries stay untouched. Matching by name rather than by
+    /// in-memory index: the in-memory set also holds undeclared entries, so
+    /// the two orders can diverge. In a bare-subdir document every entry
+    /// carries its name, so a miss means the platform is undeclared and the
+    /// edit stays in-memory; in a rich document the orders match and `index`
+    /// covers entries whose document form has no explicit `name`.
     fn replace_workspace_platform_value(
         &mut self,
+        name: &PixiPlatformName,
         index: usize,
         platform: &PixiPlatform,
     ) -> miette::Result<()> {
@@ -1224,9 +1261,22 @@ impl WorkspaceManifestMut<'_> {
         let array = self
             .document
             .get_array_mut("platforms", &Default::default())?;
-        if index < array.len() {
+        let position = array
+            .iter()
+            .position(|item| platform_array_element_name(item) == Some(name.as_str()))
+            .or_else(|| {
+                // Nameless entries can shift name-based positions, so fall
+                // back to the caller's index -- but only then: with every
+                // entry named, a miss means an undeclared platform that must
+                // stay out of the document.
+                let all_named = array
+                    .iter()
+                    .all(|item| platform_array_element_name(item).is_some());
+                (!all_named && index < array.len()).then_some(index)
+            });
+        if let Some(position) = position {
             // `Array::replace` keeps the decor of the replaced element.
-            array.replace(index, value);
+            array.replace(position, value);
         }
         Ok(())
     }
@@ -1346,6 +1396,19 @@ impl WorkspaceManifestMut<'_> {
             .workspace
             .platforms
             .retain(|existing| !platforms.contains(existing.name()));
+        for name in platforms {
+            if let Ok(subdir) = name.as_str().parse::<Platform>() {
+                self.workspace
+                    .workspace
+                    .declared_subdirs
+                    .shift_remove(&subdir);
+            }
+        }
+        // A feature may still reference a removed name; re-register the
+        // composed platforms so the names its environments yield resolve.
+        self.workspace
+            .register_composed_platforms()
+            .map_err(|e| miette!(e))?;
 
         // Update TOML document platforms. Retain-and-filter (rather than
         // clear-and-rebuild) so we preserve the user's quoting and spacing
@@ -1354,14 +1417,7 @@ impl WorkspaceManifestMut<'_> {
             .document
             .get_array_mut("platforms", &FeatureName::Default)?;
         pixi_toml_edit::retain_array_elements(array, |item| {
-            let entry_name = if let Some(s) = item.as_str() {
-                Some(s)
-            } else if let Some(table) = item.as_inline_table() {
-                table.get("name").and_then(|v| v.as_str())
-            } else {
-                None
-            };
-            match entry_name {
+            match platform_array_element_name(item) {
                 Some(name) => !platforms.iter().any(|pn| pn.as_str() == name),
                 None => true, // unexpected shape -- leave it alone
             }
@@ -1874,6 +1930,18 @@ impl WorkspaceManifestMut<'_> {
 /// The channel a `channels` array element refers to: either a bare string or
 /// the `channel` key of an inline table entry like
 /// `{ channel = "nvidia", priority = 1 }`.
+/// The platform name of a `platforms` array entry: the string itself for a
+/// bare entry, the `name` key for an inline table.
+fn platform_array_element_name(item: &Value) -> Option<&str> {
+    if let Some(name) = item.as_str() {
+        Some(name)
+    } else if let Some(table) = item.as_inline_table() {
+        table.get("name").and_then(|value| value.as_str())
+    } else {
+        None
+    }
+}
+
 fn channel_array_element_name(item: &Value) -> Option<&str> {
     if let Some(name) = item.as_str() {
         Some(name)
@@ -3708,11 +3776,25 @@ platforms = ["linux-64-cuda-12-9"]
             .remove_platforms([pp(Platform::Linux64)].iter(), &FeatureName::Default)
             .unwrap();
 
+        // `feature.test` still references linux-64, so the environments using
+        // it keep spanning it; the composed re-registration keeps the name
+        // resolvable. Only the declared set drops linux-64.
         assert_eq!(
             manifest.workspace.workspace.platforms,
-            [pp(Platform::Win64), pp(Platform::Osx64)]
-                .into_iter()
-                .collect::<IndexSet<_>>()
+            [
+                pp(Platform::Win64),
+                pp(Platform::Osx64),
+                pp(Platform::Linux64),
+            ]
+            .into_iter()
+            .collect::<IndexSet<_>>()
+        );
+        assert!(
+            !manifest
+                .workspace
+                .workspace
+                .declared_subdirs
+                .contains(&Platform::Linux64)
         );
 
         assert_eq!(
@@ -3798,9 +3880,21 @@ platforms = ["linux-64-cuda-12-9"]
             .remove_platforms([pp(Platform::OsxArm64)].iter(), &FeatureName::Default)
             .unwrap();
 
+        // The gpu feature still references OsxArm64, so its environment keeps
+        // spanning it and the composed re-registration keeps the name
+        // resolvable; the declared set drops it.
         assert_eq!(
             manifest.workspace.workspace.platforms,
-            [pp(Platform::Linux64)].into_iter().collect::<IndexSet<_>>(),
+            [pp(Platform::Linux64), pp(Platform::OsxArm64)]
+                .into_iter()
+                .collect::<IndexSet<_>>(),
+        );
+        assert!(
+            !manifest
+                .workspace
+                .workspace
+                .declared_subdirs
+                .contains(&Platform::OsxArm64)
         );
 
         // The feature still references OsxArm64 -- this is the dangling
@@ -6522,6 +6616,46 @@ platforms = [
             editable.document.to_string(),
             before,
             "re-adding an already-declared platform must leave the manifest untouched",
+        );
+    }
+
+    #[test]
+    fn test_add_platform_that_only_a_feature_references() {
+        // A platform a feature references is not declared on the workspace, so
+        // adding it must write it to `[workspace] platforms` instead of
+        // no-op'ing on the name already resolving.
+        let file_contents = r#"
+            [workspace]
+            name = "foo"
+            channels = []
+            platforms = ["linux-64"]
+
+            [feature.dev]
+            platforms = ["linux-64", "osx-arm64"]
+
+            [environments]
+            dev = { features = ["dev"], no-default-feature = true }
+        "#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut editable = workspace.editable();
+        editable
+            .add_platforms(
+                [PixiPlatform::from_subdir(Platform::OsxArm64)].iter(),
+                &FeatureName::Default,
+            )
+            .unwrap();
+
+        let reparsed = parse_pixi_toml(&editable.document.to_string());
+        assert_eq!(
+            reparsed
+                .manifest
+                .workspace
+                .declared_subdirs
+                .iter()
+                .copied()
+                .collect::<Vec<_>>(),
+            vec![Platform::Linux64, Platform::OsxArm64],
         );
     }
 

@@ -248,6 +248,8 @@ impl TomlWorkspace {
             channel_priority: self.channel_priority,
             solve_strategy: self.solve_strategy,
             platforms: self.platforms.value,
+            // Filled in by `migrate_system_requirements_to_platforms`.
+            declared_subdirs: IndexSet::new(),
             conda_pypi_map: self.conda_pypi_map,
             pypi_options: self.pypi_options,
             s3_options: self.s3_options,

@@ -26,6 +26,7 @@ use crate::{
     environment::EnvironmentIdx,
     error::{FeatureNotEnabled, GenericError},
     manifests::PackageManifest,
+    platform_composition::resolve_referenced_subdir,
     pypi::pypi_options::PypiOptions,
     system_requirements::virtual_packages_for_subdir,
     toml::{
@@ -296,6 +297,7 @@ impl TomlManifest {
             // The default feature does not overwrite the platforms or channels from the project
             // metadata.
             platforms: None,
+            platforms_span_workspace: false,
             channels: None,
 
             channel_priority: workspace.value.channel_priority,
@@ -653,9 +655,15 @@ fn migrate_system_requirements_to_platforms(
     // platforms by subdir; custom rich platforms are matched by name.
     workspace.use_platform_composition = all_simple_subdir;
 
-    if all_simple_subdir {
-        extend_originals_with_referenced_subdirs(&mut workspace.platforms, features)?;
-    }
+    // Snapshot the declared subdirs before anything extends `platforms`:
+    // they are the base every environment spans, while a subdir only a
+    // feature references stays scoped to the environments using that
+    // feature (prefix-dev/pixi#6770).
+    workspace.declared_subdirs = workspace
+        .platforms
+        .iter()
+        .map(PixiPlatform::subdir)
+        .collect();
 
     // Without `[system-requirements]` there is nothing to migrate: keep every
     // declared platform exactly as written -- including two distinct platforms
@@ -663,7 +671,7 @@ fn migrate_system_requirements_to_platforms(
     // only check that each feature reference resolves.
     if !has_any_sysreqs {
         for feature in features.values() {
-            validate_referenced_platforms(&workspace.platforms, feature)?;
+            validate_referenced_platforms(&workspace.platforms, feature, all_simple_subdir)?;
         }
         return Ok(());
     }
@@ -672,6 +680,22 @@ fn migrate_system_requirements_to_platforms(
     // replaced by the virtual-package-bearing variant its system requirements
     // imply, and rewrite each feature's platforms to name those entries.
     let originals: IndexSet<PixiPlatform> = std::mem::take(&mut workspace.platforms);
+
+    // A sysreqs feature without a `platforms` key spans everywhere, so
+    // synthesise it over the declared subdirs plus every subdir any feature
+    // references -- otherwise combining it with a platform-adding feature
+    // would strip that feature's extra subdirs from the environment.
+    let mut spanned_subdirs = workspace.declared_subdirs.clone();
+    for feature in features.values() {
+        spanned_subdirs.extend(
+            feature
+                .platforms
+                .iter()
+                .flatten()
+                .filter_map(|name| resolve_referenced_subdir(name, &originals)),
+        );
+    }
+
     for feature in features.values_mut() {
         let sysreqs = feature_sysreqs.get(&feature.name);
         if sysreqs.is_none_or(SystemRequirements::is_empty) {
@@ -685,38 +709,10 @@ fn migrate_system_requirements_to_platforms(
             ))));
         }
         let sysreqs = sysreqs.expect("checked just above");
-        synthesise_for_feature(&originals, feature, sysreqs, &mut workspace.platforms)?;
+        synthesise_for_feature(&spanned_subdirs, feature, sysreqs, &mut workspace.platforms)?;
     }
 
     append_uncovered_subdirs(&originals, &mut workspace.platforms);
-    Ok(())
-}
-
-/// Pre-scan pass for the simple-subdir-only workspace case: every name in
-/// any feature's platforms list that isn't already declared in the workspace
-/// is appended to `originals` as a bare subdir-platform, provided the name
-/// parses as a conda subdir. Names that don't parse are a hard error.
-fn extend_originals_with_referenced_subdirs(
-    originals: &mut IndexSet<PixiPlatform>,
-    features: &IndexMap<FeatureName, Feature>,
-) -> Result<(), TomlError> {
-    for feature in features.values() {
-        let Some(names) = feature.platforms.as_ref() else {
-            continue;
-        };
-        for name in names {
-            if originals.iter().any(|p| p.name() == name) {
-                continue;
-            }
-            let subdir = Platform::from_str(name.as_str()).map_err(|e| {
-                TomlError::from(GenericError::new(format!(
-                    "{} references platform '{}' which is neither declared in the workspace nor a valid conda subdir: {e}",
-                    feature.name.user_facing(), name,
-                )))
-            })?;
-            originals.insert(PixiPlatform::from_subdir(subdir));
-        }
-    }
     Ok(())
 }
 
@@ -750,24 +746,33 @@ fn undeclared_platform_error(
 }
 
 /// Error if any name in `feature.platforms` does not resolve to a platform
-/// declared in the workspace.
+/// declared in the workspace. On the subdir-only path (`allow_bare_subdirs`)
+/// an undeclared name is accepted when it parses as a conda subdir; it is
+/// resolved on the fly wherever the feature is used.
 fn validate_referenced_platforms(
     platforms: &IndexSet<PixiPlatform>,
     feature: &Feature,
+    allow_bare_subdirs: bool,
 ) -> Result<(), TomlError> {
     let Some(names) = feature.platforms.as_ref() else {
         return Ok(());
     };
     for name in names {
-        if !platforms.iter().any(|p| p.name() == name) {
-            return Err(undeclared_platform_error(platforms, feature, name));
+        if platforms.iter().any(|p| p.name() == name) {
+            continue;
         }
+        if allow_bare_subdirs && Platform::from_str(name.as_str()).is_ok() {
+            continue;
+        }
+        return Err(undeclared_platform_error(platforms, feature, name));
     }
     Ok(())
 }
 
 /// Resolve every name in `feature.platforms` to an original `PixiPlatform`
-/// and copy it into `workspace.platforms`. Error if a name is missing.
+/// and copy it into `workspace.platforms`. An undeclared name that parses as
+/// a conda subdir is left unregistered so it stays scoped to the environments
+/// using the feature; any other missing name is an error.
 fn register_referenced_originals(
     originals: &IndexSet<PixiPlatform>,
     feature: &Feature,
@@ -777,11 +782,13 @@ fn register_referenced_originals(
         return Ok(());
     };
     for name in names {
-        let original = originals
-            .iter()
-            .find(|p| p.name() == name)
-            .ok_or_else(|| undeclared_platform_error(originals, feature, name))?;
-        target.insert(original.clone());
+        match originals.iter().find(|p| p.name() == name) {
+            Some(original) => {
+                target.insert(original.clone());
+            }
+            None if Platform::from_str(name.as_str()).is_ok() => {}
+            None => return Err(undeclared_platform_error(originals, feature, name)),
+        }
     }
     Ok(())
 }
@@ -789,9 +796,11 @@ fn register_referenced_originals(
 /// For a feature that carries `[system-requirements]`, synthesise one
 /// `PixiPlatform` per subdir the feature targets, register it in
 /// `workspace.platforms`, and rewrite the feature's platforms list to those
-/// synthetic names (the default feature included).
+/// synthetic names (the default feature included). A feature without a
+/// `platforms` key is synthesised over `spanned_subdirs` and marked so it
+/// keeps spanning the environment instead of restricting it.
 fn synthesise_for_feature(
-    originals: &IndexSet<PixiPlatform>,
+    spanned_subdirs: &IndexSet<Platform>,
     feature: &mut Feature,
     sysreqs: &SystemRequirements,
     target: &mut IndexSet<PixiPlatform>,
@@ -809,7 +818,10 @@ fn synthesise_for_feature(
                 })
             })
             .collect::<Result<_, _>>()?,
-        None => originals.iter().map(PixiPlatform::subdir).collect(),
+        None => {
+            feature.platforms_span_workspace = true;
+            spanned_subdirs.iter().copied().collect()
+        }
     };
 
     let candidates = sysreqs.to_declared_virtual_packages();

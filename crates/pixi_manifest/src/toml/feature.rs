@@ -160,6 +160,7 @@ impl TomlFeature {
             platforms: feature_platform_names
                 .map(|spnv| spnv.value)
                 .map(|pnv| pnv.into_iter().collect()),
+            platforms_span_workspace: false,
             channels: self
                 .channels
                 .map(|channels| channels.into_iter().map(|channel| channel.into()).collect()),

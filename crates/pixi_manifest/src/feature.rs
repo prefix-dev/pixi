@@ -179,6 +179,12 @@ pub struct Feature {
     /// the default platforms from the project should be used.
     pub platforms: Option<IndexSet<PixiPlatformName>>,
 
+    /// Set when the feature declared no `platforms` and the
+    /// `[system-requirements]` migration synthesised the list for it: the
+    /// entries pin a rich platform per subdir, but the feature still spans
+    /// whatever the environment spans instead of restricting it.
+    pub platforms_span_workspace: bool,
+
     /// Channels specific to this feature.
     ///
     /// This value is `None` if this feature does not specify any channels and
@@ -209,6 +215,7 @@ impl Feature {
         Feature {
             name,
             platforms: None,
+            platforms_span_workspace: false,
             channels: None,
             channel_priority: None,
             solve_strategy: None,
@@ -226,6 +233,19 @@ impl Feature {
     /// if needed
     pub fn platforms_mut(&mut self) -> &mut IndexSet<PixiPlatformName> {
         self.platforms.get_or_insert_with(Default::default)
+    }
+
+    /// The platforms this feature genuinely references, restricting where it
+    /// applies: `None` when it has no `platforms` key or when the
+    /// `[system-requirements]` migration synthesised the list
+    /// (`platforms_span_workspace`) -- a synthesised list pins rich platforms
+    /// but does not restrict.
+    pub fn referenced_platforms(&self) -> Option<&IndexSet<PixiPlatformName>> {
+        if self.platforms_span_workspace {
+            None
+        } else {
+            self.platforms.as_ref()
+        }
     }
 
     /// Returns a mutable reference to the channels of the feature. Create them
