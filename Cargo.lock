@@ -6917,6 +6917,7 @@ dependencies = [
  "fancy_display",
  "fs-err",
  "futures",
+ "human_bytes",
  "indexmap 2.14.0",
  "insta",
  "is_executable",
