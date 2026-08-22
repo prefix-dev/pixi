@@ -1,0 +1,519 @@
+/* Prototype theme overrides, activated via ?theme=prefix|gradients|variant
+   (landing.js sets body[data-signal-theme]). Targets the default light scheme. */
+
+.signal-theme-defs {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+
+/* ============================================================
+   Theme A — "prefix": faithful to prefix.dev
+   Cream page, navy text, white cards, yellow highlights,
+   yellow pixi.lock as the focal piece.
+   ============================================================ */
+
+body[data-signal-theme="prefix"] .md-header,
+body[data-signal-theme="prefix"] .md-tabs {
+  color: #001d38;
+  border-bottom: 1px solid #e2e2df;
+  background: #f8f6f2;
+}
+
+body[data-signal-theme="prefix"] .md-tabs__link {
+  color: inherit;
+  opacity: 0.78;
+}
+
+body[data-signal-theme="prefix"] .md-tabs__link--active,
+body[data-signal-theme="prefix"] .md-tabs__link:hover {
+  color: #b3441a;
+  opacity: 1;
+}
+
+body[data-signal-theme="prefix"] .md-header__title,
+body[data-signal-theme="prefix"] .md-header__topic,
+body[data-signal-theme="prefix"] .md-header__button,
+body[data-signal-theme="prefix"] .md-source {
+  color: #001d38;
+}
+
+body[data-signal-theme="prefix"] .md-header__button.md-logo {
+  border: 1px solid #e2e2df;
+  background: #ffffff;
+}
+
+body[data-signal-theme="prefix"] .md-search__form {
+  border: 1px solid #e2e2df;
+  background: #f1ede4;
+}
+
+body[data-signal-theme="prefix"] .md-search__input,
+body[data-signal-theme="prefix"] .md-search__icon,
+body[data-signal-theme="prefix"] .md-search__input::placeholder {
+  color: #001d38;
+}
+
+body[data-signal-theme="prefix"] .signal-hero {
+  color: #001d38;
+  background:
+    radial-gradient(circle at 82% 12%, rgba(255, 212, 50, 0.16), transparent 24rem),
+    radial-gradient(circle at 8% 70%, rgba(255, 212, 50, 0.1), transparent 20rem),
+    #f8f6f2;
+}
+
+body[data-signal-theme="prefix"] .signal-hero::after {
+  opacity: 0.12;
+  background-image: radial-gradient(rgba(0, 29, 56, 0.4) 0.65px, transparent 0.65px);
+}
+
+body[data-signal-theme="prefix"] .signal-puzzle-field {
+  fill: rgba(255, 212, 50, 0.14);
+  stroke: rgba(0, 29, 56, 0.09);
+}
+
+body[data-signal-theme="prefix"] .signal-eyebrow {
+  color: #62656a;
+}
+
+body[data-signal-theme="prefix"] .signal-landing .signal-intro h1 {
+  color: #001d38;
+}
+
+body[data-signal-theme="prefix"] .signal-title__technology {
+  padding: 0 0.12em;
+  border-radius: 0.1em;
+  color: #001d38;
+  background: #ffd432;
+  box-decoration-break: clone;
+}
+
+body[data-signal-theme="prefix"] .signal-title__cursor {
+  background: #001d38;
+}
+
+body[data-signal-theme="prefix"] .signal-lede {
+  color: #62656a;
+}
+
+body[data-signal-theme="prefix"] .signal-button--primary {
+  box-shadow: 0 10px 24px rgba(255, 202, 22, 0.35);
+}
+
+body[data-signal-theme="prefix"] .signal-button--secondary {
+  color: #001d38 !important;
+  border-color: rgba(0, 29, 56, 0.35);
+  background: rgba(255, 255, 255, 0.45);
+}
+
+body[data-signal-theme="prefix"] .signal-button--secondary:hover {
+  border-color: rgba(0, 29, 56, 0.6);
+  background: #ffffff;
+}
+
+body[data-signal-theme="prefix"] .signal-gh-stars {
+  color: inherit;
+  border-left-color: rgba(0, 29, 56, 0.25);
+}
+
+body[data-signal-theme="prefix"] .signal-landing .signal-callouts:not([hidden]) {
+  color: #383d3f;
+}
+
+body[data-signal-theme="prefix"] .signal-callouts li {
+  border-color: rgba(0, 29, 56, 0.14);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+body[data-signal-theme="prefix"] .signal-source-line {
+  background: linear-gradient(to bottom, rgba(255, 202, 22, 0.9), rgba(0, 29, 56, 0.18));
+  box-shadow: none;
+}
+
+body[data-signal-theme="prefix"] .signal-map__paths {
+  stroke: rgba(57, 87, 255, 0.5);
+}
+
+body[data-signal-theme="prefix"] .signal-map__paths path {
+  filter: none;
+}
+
+body[data-signal-theme="prefix"] .signal-map__endpoints {
+  fill: #3957ff;
+  stroke: #f8f6f2;
+}
+
+body[data-signal-theme="prefix"] .signal-node {
+  color: #001d38;
+}
+
+body[data-signal-theme="prefix"] .signal-node__piece {
+  fill: #ffffff;
+  stroke: rgba(0, 29, 56, 0.14);
+  filter: drop-shadow(0 10px 22px rgba(59, 61, 63, 0.12));
+}
+
+body[data-signal-theme="prefix"] .signal-node:hover,
+body[data-signal-theme="prefix"] .signal-node:focus-visible,
+body[data-signal-theme="prefix"] .signal-node.is-active,
+body[data-signal-theme="prefix"] .signal-node[aria-pressed="true"] {
+  color: #001d38;
+}
+
+body[data-signal-theme="prefix"] .signal-node:hover .signal-node__piece,
+body[data-signal-theme="prefix"] .signal-node:focus-visible .signal-node__piece,
+body[data-signal-theme="prefix"] .signal-node.is-active .signal-node__piece,
+body[data-signal-theme="prefix"] .signal-node[aria-pressed="true"] .signal-node__piece {
+  fill: #fffbe8;
+  stroke: #ffca16;
+  filter: drop-shadow(0 0 6px rgba(255, 202, 22, 0.3)) drop-shadow(0 14px 26px rgba(59, 61, 63, 0.16));
+}
+
+body[data-signal-theme="prefix"] .signal-node__logo {
+  border-color: rgba(0, 29, 56, 0.08);
+  box-shadow: 0 2px 6px rgba(59, 61, 63, 0.14);
+}
+
+body[data-signal-theme="prefix"] .signal-lock {
+  color: #001d38;
+  border: 0;
+  background: #ffd432;
+  box-shadow: 0 0 0 0.45rem rgba(255, 212, 50, 0.16), 0 18px 40px rgba(255, 202, 22, 0.35);
+}
+
+body[data-signal-theme="prefix"] .signal-lock svg {
+  stroke: #001d38;
+}
+
+body[data-signal-theme="prefix"] .signal-lock small {
+  color: rgba(0, 29, 56, 0.62);
+}
+
+body[data-signal-theme="prefix"] .signal-interaction-hint {
+  color: #8b8e93;
+}
+
+body[data-signal-theme="prefix"] .signal-landing .signal-platforms:not([hidden]) {
+  border-color: rgba(0, 29, 56, 0.14);
+  background: rgba(255, 255, 255, 0.55);
+}
+
+body[data-signal-theme="prefix"] .signal-platforms li {
+  color: #62656a;
+}
+
+body[data-signal-theme="prefix"] .signal-platforms li + li {
+  border-left-color: rgba(0, 29, 56, 0.14);
+}
+
+body[data-signal-theme="prefix"] .signal-capability__piece {
+  stroke: #e2ddd0;
+}
+
+body[data-signal-theme="prefix"] .signal-landing .signal-final h2 {
+  color: #ffd432;
+}
+
+/* ============================================================
+   Theme B — "gradients": dark hero with violet/blue mesh,
+   gradient accents, gradient piece fills.
+   ============================================================ */
+
+body[data-signal-theme="gradients"] .md-header,
+body[data-signal-theme="gradients"] .md-tabs {
+  background: linear-gradient(120deg, #001f45, #180f42);
+}
+
+body[data-signal-theme="gradients"] .signal-hero {
+  background:
+    radial-gradient(circle at 76% 18%, rgba(164, 135, 255, 0.22), transparent 26rem),
+    radial-gradient(circle at 12% 62%, rgba(87, 115, 255, 0.24), transparent 30rem),
+    radial-gradient(circle at 55% 112%, rgba(255, 122, 0, 0.14), transparent 32rem),
+    linear-gradient(155deg, #021c42 0%, #0c1152 48%, #000c26 100%);
+}
+
+body[data-signal-theme="gradients"] .signal-eyebrow,
+body[data-signal-theme="gradients"] .signal-kicker {
+  background: linear-gradient(95deg, #ffd432, #ff8b2c);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+body[data-signal-theme="gradients"] .signal-eyebrow::before {
+  background: #ffb028;
+}
+
+body[data-signal-theme="gradients"] .signal-title__technology {
+  background: linear-gradient(95deg, #ffe062, #ff9d1c);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+body[data-signal-theme="gradients"] .signal-button--primary {
+  background: linear-gradient(105deg, #ffe062, #ffd432 45%, #ff9d1c);
+  box-shadow: 0 12px 32px rgba(255, 157, 28, 0.28);
+}
+
+body[data-signal-theme="gradients"] .signal-button--primary:hover {
+  background: linear-gradient(105deg, #ffe97e, #ffdd54 45%, #ffab3a);
+}
+
+body[data-signal-theme="gradients"] .signal-button--secondary {
+  border-color: rgba(140, 150, 255, 0.5);
+  background: rgba(87, 115, 255, 0.14);
+}
+
+body[data-signal-theme="gradients"] .signal-button--secondary:hover {
+  border-color: rgba(170, 178, 255, 0.75);
+  background: rgba(87, 115, 255, 0.24);
+}
+
+body[data-signal-theme="gradients"] .signal-install {
+  border-color: rgba(140, 150, 255, 0.32);
+  background: rgba(8, 12, 38, 0.72);
+}
+
+body[data-signal-theme="gradients"] .signal-callouts li {
+  border-color: rgba(140, 150, 255, 0.26);
+  background: rgba(87, 115, 255, 0.08);
+}
+
+body[data-signal-theme="gradients"] .signal-terminal {
+  border-color: rgba(140, 150, 255, 0.3);
+  background: rgba(4, 8, 30, 0.93);
+}
+
+body[data-signal-theme="gradients"] .signal-map__paths {
+  stroke: rgba(147, 160, 255, 0.8);
+}
+
+body[data-signal-theme="gradients"] .signal-map__paths path {
+  filter: drop-shadow(0 0 7px rgba(147, 160, 255, 0.45));
+}
+
+body[data-signal-theme="gradients"] .signal-map__endpoints {
+  fill: #93a0ff;
+}
+
+body[data-signal-theme="gradients"] .signal-node__piece {
+  fill: url(#sgNodePiece);
+  stroke: rgba(140, 150, 255, 0.42);
+}
+
+body[data-signal-theme="gradients"] .signal-node:hover .signal-node__piece,
+body[data-signal-theme="gradients"] .signal-node:focus-visible .signal-node__piece,
+body[data-signal-theme="gradients"] .signal-node.is-active .signal-node__piece,
+body[data-signal-theme="gradients"] .signal-node[aria-pressed="true"] .signal-node__piece {
+  fill: url(#sgNodePiece);
+  stroke: rgba(255, 212, 50, 0.8);
+}
+
+body[data-signal-theme="gradients"] .signal-lock {
+  border-color: rgba(164, 135, 255, 0.9);
+  background: radial-gradient(circle at 35% 18%, #2b2f7a, #0a102e 78%);
+  box-shadow: 0 0 0 0.45rem rgba(164, 135, 255, 0.08), 0 0 52px rgba(137, 104, 255, 0.3);
+}
+
+body[data-signal-theme="gradients"] .signal-below::before {
+  background: linear-gradient(115deg, rgba(87, 115, 255, 0.09), rgba(164, 135, 255, 0.08) 30%, rgba(255, 212, 50, 0.08) 65%, rgba(255, 106, 56, 0.07));
+}
+
+body[data-signal-theme="gradients"] .signal-capability__piece {
+  fill: url(#sgCardPiece);
+  stroke: rgba(126, 122, 200, 0.38);
+}
+
+body[data-signal-theme="gradients"] .signal-capability__icon {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--capability-accent) 26%, transparent), color-mix(in srgb, var(--capability-accent) 7%, transparent));
+}
+
+body[data-signal-theme="gradients"] .signal-manifest__code {
+  border-color: rgba(140, 150, 255, 0.35);
+  background: linear-gradient(160deg, #03173a, #150f3e);
+}
+
+body[data-signal-theme="gradients"] .signal-stack-tabs {
+  border-bottom-color: rgba(140, 150, 255, 0.3);
+  background: rgba(6, 16, 44, 0.85);
+}
+
+body[data-signal-theme="gradients"] .signal-final {
+  background:
+    radial-gradient(circle at 82% 12%, rgba(255, 212, 50, 0.16), transparent 20rem),
+    radial-gradient(circle at 10% 88%, rgba(87, 115, 255, 0.28), transparent 24rem),
+    linear-gradient(140deg, #001f45, #1c1257 55%, #000f24);
+}
+
+/* ============================================================
+   Theme C — "variant": bold yellow hero, navy inversions,
+   the loudest read of the brand.
+   ============================================================ */
+
+body[data-signal-theme="variant"] .signal-hero {
+  color: #001d38;
+  background:
+    radial-gradient(circle at 18% 12%, #ffe062, transparent 30rem),
+    radial-gradient(circle at 88% 90%, #ffca16, transparent 26rem),
+    #ffd432;
+}
+
+body[data-signal-theme="variant"] .signal-hero::after {
+  opacity: 0.14;
+  background-image: radial-gradient(rgba(0, 29, 56, 0.45) 0.65px, transparent 0.65px);
+}
+
+body[data-signal-theme="variant"] .signal-puzzle-field {
+  fill: rgba(255, 255, 255, 0.3);
+  stroke: rgba(0, 29, 56, 0.14);
+}
+
+body[data-signal-theme="variant"] .signal-eyebrow {
+  color: rgba(0, 29, 56, 0.72);
+}
+
+body[data-signal-theme="variant"] .signal-landing .signal-intro h1 {
+  color: #001d38;
+}
+
+body[data-signal-theme="variant"] .signal-title__technology {
+  padding: 0 0.12em;
+  border-radius: 0.1em;
+  color: #ffd432;
+  background: #001d38;
+  box-decoration-break: clone;
+}
+
+body[data-signal-theme="variant"] .signal-title__cursor {
+  background: #001d38;
+}
+
+body[data-signal-theme="variant"] .signal-lede {
+  color: rgba(0, 29, 56, 0.78);
+}
+
+body[data-signal-theme="variant"] .signal-hero .signal-button--primary {
+  color: #ffd432 !important;
+  background: #001d38;
+  box-shadow: 0 12px 28px rgba(0, 29, 56, 0.3);
+}
+
+body[data-signal-theme="variant"] .signal-hero .signal-button--primary:hover {
+  background: #0a2b52;
+}
+
+body[data-signal-theme="variant"] .signal-hero .signal-button--secondary {
+  color: #001d38 !important;
+  border-color: rgba(0, 29, 56, 0.42);
+  background: rgba(255, 255, 255, 0.28);
+}
+
+body[data-signal-theme="variant"] .signal-hero .signal-button--secondary:hover {
+  border-color: rgba(0, 29, 56, 0.7);
+  background: rgba(255, 255, 255, 0.45);
+}
+
+body[data-signal-theme="variant"] .signal-hero .signal-gh-stars {
+  color: inherit;
+  border-left-color: rgba(0, 29, 56, 0.3);
+}
+
+body[data-signal-theme="variant"] .signal-landing .signal-callouts:not([hidden]) {
+  color: #1c2f42;
+}
+
+body[data-signal-theme="variant"] .signal-callouts li {
+  border-color: rgba(0, 29, 56, 0.28);
+  background: rgba(255, 255, 255, 0.32);
+}
+
+body[data-signal-theme="variant"] .signal-install {
+  border-color: rgba(0, 29, 56, 0.4);
+  background: #001328;
+}
+
+body[data-signal-theme="variant"] .signal-source-line {
+  background: linear-gradient(to bottom, rgba(0, 29, 56, 0.8), rgba(0, 29, 56, 0.15));
+  box-shadow: none;
+}
+
+body[data-signal-theme="variant"] .signal-source-line::after {
+  background: #001d38;
+}
+
+body[data-signal-theme="variant"] .signal-map__paths {
+  stroke: rgba(0, 29, 56, 0.52);
+}
+
+body[data-signal-theme="variant"] .signal-map__paths path {
+  filter: none;
+}
+
+body[data-signal-theme="variant"] .signal-map__endpoints {
+  fill: #001d38;
+  stroke: #ffd432;
+}
+
+body[data-signal-theme="variant"] .signal-node {
+  color: #001d38;
+}
+
+body[data-signal-theme="variant"] .signal-node__piece {
+  fill: #fffdf6;
+  stroke: rgba(0, 29, 56, 0.28);
+  filter: drop-shadow(0 10px 22px rgba(122, 92, 0, 0.25));
+}
+
+body[data-signal-theme="variant"] .signal-node:hover,
+body[data-signal-theme="variant"] .signal-node:focus-visible,
+body[data-signal-theme="variant"] .signal-node.is-active,
+body[data-signal-theme="variant"] .signal-node[aria-pressed="true"] {
+  color: #001d38;
+}
+
+body[data-signal-theme="variant"] .signal-node:hover .signal-node__piece,
+body[data-signal-theme="variant"] .signal-node:focus-visible .signal-node__piece,
+body[data-signal-theme="variant"] .signal-node.is-active .signal-node__piece,
+body[data-signal-theme="variant"] .signal-node[aria-pressed="true"] .signal-node__piece {
+  fill: #ffffff;
+  stroke: #001d38;
+  filter: drop-shadow(0 0 6px rgba(0, 29, 56, 0.25)) drop-shadow(0 14px 26px rgba(122, 92, 0, 0.3));
+}
+
+body[data-signal-theme="variant"] .signal-node__logo {
+  border-color: rgba(0, 29, 56, 0.15);
+}
+
+body[data-signal-theme="variant"] .signal-lock {
+  color: #ffd432;
+  border-color: #001d38;
+  background: #001d38;
+  box-shadow: 0 0 0 0.45rem rgba(0, 29, 56, 0.12), 0 18px 40px rgba(0, 29, 56, 0.32);
+}
+
+body[data-signal-theme="variant"] .signal-lock svg {
+  stroke: #ffd432;
+}
+
+body[data-signal-theme="variant"] .signal-lock small {
+  color: rgba(248, 246, 242, 0.72);
+}
+
+body[data-signal-theme="variant"] .signal-interaction-hint {
+  color: rgba(0, 29, 56, 0.55);
+}
+
+body[data-signal-theme="variant"] .signal-landing .signal-platforms:not([hidden]) {
+  border-color: rgba(0, 29, 56, 0.3);
+  background: rgba(255, 255, 255, 0.26);
+}
+
+body[data-signal-theme="variant"] .signal-platforms li {
+  color: #1c2f42;
+}
+
+body[data-signal-theme="variant"] .signal-platforms li + li {
+  border-left-color: rgba(0, 29, 56, 0.3);
+}
