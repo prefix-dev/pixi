@@ -41,6 +41,16 @@ impl RunScriptInput {
 
 pub(crate) const STDIN_SCRIPT_COMMAND: &str = "__pixi_stdin_script__";
 
+pub(crate) fn transient_script_cache_key(kind: &[u8], identity: &[u8], root: &Path) -> Vec<u8> {
+    let mut key = Vec::with_capacity(kind.len() + identity.len() + root.as_os_str().len() + 2);
+    key.extend_from_slice(kind);
+    key.push(0);
+    key.extend_from_slice(root.as_os_str().as_encoded_bytes());
+    key.push(0);
+    key.extend_from_slice(identity);
+    key
+}
+
 #[derive(Clone)]
 pub(crate) struct StdinScriptCommand {
     contents: Arc<str>,
@@ -285,6 +295,7 @@ fn friendly_name(url: &Url) -> String {
 mod tests {
     use super::{
         Gist, RunScriptInput, friendly_name, gist_id, resolve_gist_at, safe_url, select_gist_file,
+        transient_script_cache_key,
     };
     use std::{
         io::{Read, Write},
@@ -352,6 +363,17 @@ mod tests {
             RunScriptInput::classify(Path::new("-")),
             RunScriptInput::Stdin
         ));
+    }
+
+    #[test]
+    fn transient_cache_keys_include_kind_and_working_directory() {
+        let identity = b"same metadata";
+        let first = transient_script_cache_key(b"stdin", identity, Path::new("/first"));
+        let second = transient_script_cache_key(b"stdin", identity, Path::new("/second"));
+        let remote = transient_script_cache_key(b"remote", identity, Path::new("/first"));
+
+        assert_ne!(first, second);
+        assert_ne!(first, remote);
     }
 
     #[test]

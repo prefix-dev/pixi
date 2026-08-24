@@ -78,37 +78,13 @@ impl ScriptWorkspaceConfig {
     }
 }
 
-/// Select the lock-file policy for commands that can consume a script
-/// without persisting an adjacent lock file.
-pub(crate) fn script_lock_file_usage(
+/// Reject lock-file modes that require authority a transient script cannot
+/// provide.
+pub(crate) fn validate_transient_script_lock_file_usage(
     requested: LockFileUsage,
-    is_script: bool,
-    lock_file_exists: bool,
-) -> miette::Result<LockFileUsage> {
-    if !is_script || lock_file_exists {
-        return Ok(requested);
-    }
-
+) -> miette::Result<()> {
     match requested {
-        LockFileUsage::Update | LockFileUsage::DryRun => Ok(LockFileUsage::DryRun),
-        LockFileUsage::Locked => Err(miette::miette!(
-            help = "Create one with `pixi lock --script <PATH>`.",
-            "no lock file exists for the script, but `--locked` was requested"
-        )),
-        LockFileUsage::Frozen => Err(miette::miette!(
-            help = "Create one with `pixi lock --script <PATH>`.",
-            "no lock file exists for the script, but `--frozen` was requested"
-        )),
-    }
-}
-
-/// Select the lock-file policy for a transient script, which can never have an
-/// adjacent lock file.
-pub(crate) fn transient_script_lock_file_usage(
-    requested: LockFileUsage,
-) -> miette::Result<LockFileUsage> {
-    match requested {
-        LockFileUsage::Update | LockFileUsage::DryRun => Ok(LockFileUsage::DryRun),
+        LockFileUsage::Update | LockFileUsage::DryRun => Ok(()),
         LockFileUsage::Locked => Err(miette::miette!(
             "transient scripts cannot be run with `--locked` because they do not have an adjacent lock file"
         )),
@@ -589,8 +565,7 @@ mod tests {
 
     use crate::cli_config::{
         DependencyConfig, GitRev, LockAndInstallConfig, LockFileUpdateConfig, NoInstallConfig,
-        ScriptWorkspaceConfig, build_vcs_requirement, script_lock_file_usage,
-        transient_script_lock_file_usage,
+        ScriptWorkspaceConfig, build_vcs_requirement, validate_transient_script_lock_file_usage,
     };
     use pixi_core::environment::LockFileUsage;
     use pixi_core::workspace::DiscoveryStart;
@@ -637,27 +612,10 @@ mod tests {
     }
 
     #[test]
-    fn an_absent_script_lock_is_solved_without_being_written() {
-        assert_eq!(
-            script_lock_file_usage(LockFileUsage::Update, true, false).unwrap(),
-            LockFileUsage::DryRun
-        );
-        assert_eq!(
-            script_lock_file_usage(LockFileUsage::Update, true, true).unwrap(),
-            LockFileUsage::Update
-        );
-        assert!(script_lock_file_usage(LockFileUsage::Locked, true, false).is_err());
-        assert!(script_lock_file_usage(LockFileUsage::Frozen, true, false).is_err());
-        assert_eq!(
-            script_lock_file_usage(LockFileUsage::Update, false, false).unwrap(),
-            LockFileUsage::Update
-        );
-        assert_eq!(
-            transient_script_lock_file_usage(LockFileUsage::Update).unwrap(),
-            LockFileUsage::DryRun
-        );
-        assert!(transient_script_lock_file_usage(LockFileUsage::Locked).is_err());
-        assert!(transient_script_lock_file_usage(LockFileUsage::Frozen).is_err());
+    fn transient_scripts_reject_authoritative_lock_modes() {
+        assert!(validate_transient_script_lock_file_usage(LockFileUsage::Update).is_ok());
+        assert!(validate_transient_script_lock_file_usage(LockFileUsage::Locked).is_err());
+        assert!(validate_transient_script_lock_file_usage(LockFileUsage::Frozen).is_err());
     }
 
     #[test]

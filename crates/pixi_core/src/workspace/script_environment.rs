@@ -1,9 +1,10 @@
-//! Resolution selection for PEP 723 script environments.
+//! Environment state for PEP 723 scripts.
 //!
-//! A script's adjacent lock file is optional exact resolution authority. When
-//! it is absent, Pixi keeps a disposable cached resolution under the script's
-//! environment cache directory. Missing, corrupt, or unsupported cache state
-//! is treated as a cache miss.
+//! Script metadata is requirements authority. An adjacent lock file is optional
+//! exact resolution authority; without one, Pixi keeps a disposable cached
+//! resolution under the script's environment cache directory. Missing, corrupt,
+//! or unsupported cache state is a cache miss. Metadata and lock changes use an
+//! optimistic compare-and-commit before prefix installation begins.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -139,6 +140,16 @@ impl ScriptChange {
         Ok(source)
     }
 
+    async fn commit_resolution<'w>(
+        self,
+        resolution: LockFileDerivedData<'w>,
+    ) -> miette::Result<LockFileDerivedData<'w>> {
+        let _mutation_guard = MutationGuard::acquire(self.mutation_lock_path.clone()).await?;
+        self.ensure_current()?;
+        write_lock_file(&self.lock_file_path, &resolution)?;
+        Ok(resolution)
+    }
+
     fn ensure_current(&self) -> miette::Result<()> {
         let source = fs_err::read(&self.script_path)
             .into_diagnostic()
@@ -172,14 +183,6 @@ impl<'w> CommitCandidate<'w> {
             MutationGuard::acquire(self.change.mutation_lock_path.clone()).await?;
         self.change.ensure_current()?;
 
-        let lock_file = shorten_platform_names(
-            self.resolution.lock_file.clone(),
-            self.resolution.workspace.workspace_manifest(),
-            self.resolution.workspace.root(),
-        )
-        .render_to_string()
-        .into_diagnostic()
-        .wrap_err("failed to serialize the script lock file")?;
         pixi_utils::atomic_write::atomic_write_sync_strict(&self.change.script_path, &self.source)
             .into_diagnostic()
             .wrap_err_with(|| {
@@ -188,14 +191,7 @@ impl<'w> CommitCandidate<'w> {
                     self.change.script_path.display()
                 )
             })?;
-        pixi_utils::atomic_write::atomic_write_sync_strict(&self.change.lock_file_path, lock_file)
-            .into_diagnostic()
-            .wrap_err_with(|| {
-                format!(
-                    "failed to commit script lock file `{}`",
-                    self.change.lock_file_path.display()
-                )
-            })?;
+        write_lock_file(&self.change.lock_file_path, &self.resolution)?;
 
         Ok(CommittedChange {
             source: self.source,
@@ -242,15 +238,11 @@ impl<'w> ReadyEnvironment<'w> {
     }
 }
 
-/// Options for resolving a script environment.
-pub struct ScriptEnvironmentOptions {
-    pub progress: Option<Arc<pixi_reporters::TopLevelProgress>>,
-    pub lock_file_usage: LockFileUsage,
-    pub no_install: bool,
-}
-
 impl Workspace {
-    pub(super) async fn begin_script_change(&self) -> miette::Result<(ScriptChange, LockFile)> {
+    pub(super) async fn begin_script_change(
+        &self,
+        lock_file_usage: LockFileUsage,
+    ) -> miette::Result<(ScriptChange, LockFile)> {
         let script_path = self.workspace.provenance.path.clone();
         let lock_file_path = self
             .persistent_lock_file_path()
@@ -271,10 +263,15 @@ impl Workspace {
                     lock_file_path.display()
                 )
             })?;
-        let lock_file = self
-            .load_lock_file()
-            .await?
-            .into_lock_file_or_empty_with_warning();
+        let loaded = self.load_lock_file().await?;
+        let lock_file = if matches!(
+            lock_file_usage,
+            LockFileUsage::Locked | LockFileUsage::Frozen
+        ) {
+            loaded.into_lock_file()?
+        } else {
+            loaded.into_lock_file_or_empty_with_warning()
+        };
 
         Ok((
             ScriptChange {
@@ -289,25 +286,29 @@ impl Workspace {
         ))
     }
 
-    /// Resolve a script from its adjacent lock file or disposable cache.
+    /// Resolve the lock data used by an operational command.
     ///
-    /// This method never writes the adjacent lock file. A resolved change is
-    /// caller-owned until the script environment Module commits it.
-    pub async fn resolve_script_environment(
+    /// Projects retain their normal persistent lock-file behavior. Scripts use
+    /// an adjacent lock file when one exists and otherwise reuse disposable
+    /// cached resolution state.
+    pub async fn resolve_lock_file(
         &self,
-        options: ScriptEnvironmentOptions,
-    ) -> miette::Result<LockFileDerivedData<'_>> {
+        progress: Option<Arc<pixi_reporters::TopLevelProgress>>,
+        options: UpdateLockFileOptions,
+    ) -> miette::Result<(LockFileDerivedData<'_>, bool)> {
         if !self.is_script() {
-            return Err(miette::miette!(
-                "script environment resolution requires a PEP 723 workspace"
-            ));
+            return self.update_lock_file(progress, options).await;
         }
 
-        let ScriptEnvironmentOptions {
-            progress,
-            lock_file_usage,
-            no_install,
-        } = options;
+        self.resolve_script_lock_file(progress, options).await
+    }
+
+    async fn resolve_script_lock_file(
+        &self,
+        progress: Option<Arc<pixi_reporters::TopLevelProgress>>,
+        options: UpdateLockFileOptions,
+    ) -> miette::Result<(LockFileDerivedData<'_>, bool)> {
+        let lock_file_usage = options.lock_file_usage;
         let cache_path = self.pixi_dir().join(CACHE_FILE);
         let adjacent_lock_exists = self
             .persistent_lock_file_path()
@@ -316,12 +317,22 @@ impl Workspace {
         if !adjacent_lock_exists {
             match lock_file_usage {
                 LockFileUsage::Locked => {
+                    if self.persistent_lock_file_path().is_none() {
+                        return Err(miette::miette!(
+                            "transient scripts cannot be run with `--locked` because they do not have an adjacent lock file"
+                        ));
+                    }
                     return Err(miette::miette!(
                         help = "Create one with `pixi lock --script <PATH>`.",
                         "no lock file exists for the script, but `--locked` was requested"
                     ));
                 }
                 LockFileUsage::Frozen => {
+                    if self.persistent_lock_file_path().is_none() {
+                        return Err(miette::miette!(
+                            "transient scripts cannot be run with `--frozen` because they do not have an adjacent lock file"
+                        ));
+                    }
                     return Err(miette::miette!(
                         help = "Create one with `pixi lock --script <PATH>`.",
                         "no lock file exists for the script, but `--frozen` was requested"
@@ -331,47 +342,61 @@ impl Workspace {
             }
         }
 
-        let baseline = if adjacent_lock_exists {
-            let loaded = self.load_lock_file().await?;
-            if matches!(
-                lock_file_usage,
-                LockFileUsage::Locked | LockFileUsage::Frozen
-            ) {
-                loaded.into_lock_file()?
-            } else {
-                loaded.into_lock_file_or_empty_with_warning()
-            }
+        let (change, baseline) = if adjacent_lock_exists {
+            let (change, lock_file) = self.begin_script_change(lock_file_usage).await?;
+            (Some(change), lock_file)
         } else {
-            load_cached_resolution(cache_path.clone(), self)
-                .await
-                .unwrap_or_default()
+            (
+                None,
+                load_cached_resolution(cache_path.clone(), self)
+                    .await
+                    .unwrap_or_default(),
+            )
         };
 
-        let (resolved, _) = self
-            .update_lock_file_from_lock_file(
-                progress,
-                UpdateLockFileOptions {
-                    lock_file_usage,
-                    no_install,
-                    max_concurrent_solves: self.config().max_concurrent_solves(),
-                    ..Default::default()
-                },
-                baseline,
-            )
+        let (resolved, updated) = self
+            .update_lock_file_from_lock_file(progress, options, baseline)
             .await?;
 
-        if !adjacent_lock_exists
-            && lock_file_usage != LockFileUsage::DryRun
-            && let Err(error) = store_cached_resolution(cache_path, resolved.as_lock_file()).await
-        {
-            tracing::warn!(
-                %error,
-                "failed to cache the script resolution; the environment remains usable"
-            );
-        }
+        let resolved =
+            if adjacent_lock_exists && updated && lock_file_usage != LockFileUsage::DryRun {
+                change
+                    .expect("an adjacent script lock captured its original state")
+                    .commit_resolution(resolved)
+                    .await?
+            } else {
+                if !adjacent_lock_exists
+                    && lock_file_usage != LockFileUsage::DryRun
+                    && let Err(error) =
+                        store_cached_resolution(cache_path, resolved.as_lock_file()).await
+                {
+                    tracing::warn!(
+                        %error,
+                        "failed to cache the script resolution; the environment remains usable"
+                    );
+                }
+                resolved
+            };
 
-        Ok(resolved)
+        Ok((resolved, updated))
     }
+}
+
+fn write_lock_file(
+    path: &std::path::Path,
+    resolution: &LockFileDerivedData<'_>,
+) -> miette::Result<()> {
+    let lock_file = shorten_platform_names(
+        resolution.lock_file.clone(),
+        resolution.workspace.workspace_manifest(),
+        resolution.workspace.root(),
+    )
+    .render_to_string()
+    .into_diagnostic()
+    .wrap_err("failed to serialize the script lock file")?;
+    pixi_utils::atomic_write::atomic_write_sync_strict(path, lock_file)
+        .into_diagnostic()
+        .wrap_err_with(|| format!("failed to commit script lock file `{}`", path.display()))
 }
 
 async fn read_optional(path: &std::path::Path) -> std::io::Result<Option<Vec<u8>>> {
@@ -475,7 +500,7 @@ mod tests {
         let path = root.join("example.py");
         fs_err::write(
             &path,
-            "# /// script\n# dependencies = []\n# ///\nprint(\"hello\")\n",
+            "# /// script\n# dependencies = []\n#\n# [tool.pixi.workspace]\n# platforms = []\n# ///\nprint(\"hello\")\n",
         )
         .unwrap();
         let script = ScriptManifest::from_path(path).unwrap().unwrap();
@@ -552,16 +577,47 @@ mod tests {
 
         for lock_file_usage in [LockFileUsage::Locked, LockFileUsage::Frozen] {
             let error = workspace
-                .resolve_script_environment(ScriptEnvironmentOptions {
-                    progress: None,
-                    lock_file_usage,
-                    no_install: true,
-                })
+                .resolve_lock_file(
+                    None,
+                    UpdateLockFileOptions {
+                        lock_file_usage,
+                        no_install: true,
+                        ..Default::default()
+                    },
+                )
                 .await
                 .err()
                 .expect("an adjacent lock file is required");
             assert!(error.to_string().contains("no lock file exists"));
         }
+    }
+
+    #[tokio::test]
+    async fn operational_resolution_uses_cache_without_creating_a_lock_file() {
+        let root = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+        let workspace = script_workspace(root.path(), cache.path());
+        let cache_path = workspace.pixi_dir().join(CACHE_FILE);
+
+        workspace
+            .resolve_lock_file(
+                None,
+                UpdateLockFileOptions {
+                    lock_file_usage: LockFileUsage::Update,
+                    no_install: true,
+                    ..Default::default()
+                },
+            )
+            .await
+            .unwrap();
+
+        assert!(cache_path.is_file());
+        assert!(!workspace.lock_file_path().exists());
+        assert!(
+            load_cached_resolution(cache_path, &workspace)
+                .await
+                .is_some()
+        );
     }
 
     #[tokio::test]
@@ -573,7 +629,10 @@ mod tests {
         store_cached_resolution(cache_path.clone(), &LockFile::default())
             .await
             .unwrap();
-        let (change, _) = workspace.begin_script_change().await.unwrap();
+        let (change, _) = workspace
+            .begin_script_change(LockFileUsage::Update)
+            .await
+            .unwrap();
         let source = "# /// script\n# dependencies = [\"rich\"]\n# ///\nprint(\"hello\")\n";
 
         change.commit_metadata(source.to_owned()).await.unwrap();
@@ -590,7 +649,10 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let cache = tempfile::tempdir().unwrap();
         let workspace = script_workspace(root.path(), cache.path());
-        let (change, _) = workspace.begin_script_change().await.unwrap();
+        let (change, _) = workspace
+            .begin_script_change(LockFileUsage::Update)
+            .await
+            .unwrap();
         let concurrent = "# /// script\n# dependencies = [\"click\"]\n# ///\nprint(\"changed\")\n";
         fs_err::write(&workspace.workspace.provenance.path, concurrent).unwrap();
 
@@ -613,7 +675,10 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let cache = tempfile::tempdir().unwrap();
         let workspace = script_workspace(root.path(), cache.path());
-        let (change, _) = workspace.begin_script_change().await.unwrap();
+        let (change, _) = workspace
+            .begin_script_change(LockFileUsage::Update)
+            .await
+            .unwrap();
         let command_dispatcher = workspace.command_dispatcher_builder().unwrap().finish();
         let resolution = LockFileDerivedData::from_input_lock_file(
             &workspace,

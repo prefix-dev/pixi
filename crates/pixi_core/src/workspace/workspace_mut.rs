@@ -222,6 +222,24 @@ impl WorkspaceMut {
     /// This is useful if an operation needs to save the changes but still needs
     /// to continue the modification.
     async fn save_inner(&mut self) -> Result<(), std::io::Error> {
+        if self.workspace().is_script() {
+            let (change, _) = self
+                .workspace()
+                .begin_script_change(LockFileUsage::Update)
+                .await
+                .map_err(std::io::Error::other)?;
+            let source = self
+                .workspace_manifest_document
+                .render()
+                .map_err(std::io::Error::other)?;
+            let source = change
+                .commit_metadata(source)
+                .await
+                .map_err(std::io::Error::other)?;
+            self.accept_script_commit(source)?;
+            return Ok(());
+        }
+
         let manifest_path = self.workspace().workspace.provenance.path.clone();
         let new_contents = self
             .workspace_manifest_document
@@ -230,20 +248,6 @@ impl WorkspaceMut {
         pixi_utils::atomic_write::atomic_write(&manifest_path, new_contents).await?;
         self.modified = true;
 
-        if let WorkspaceStorage::Script { manifest, .. } = &mut self
-            .workspace
-            .as_mut()
-            .expect("workspace is not available")
-            .storage
-        {
-            **manifest = ScriptManifest::from_path(&manifest_path)
-                .map_err(std::io::Error::other)?
-                .ok_or_else(|| {
-                    std::io::Error::other(
-                        "saved script no longer contains a PEP 723 metadata block",
-                    )
-                })?;
-        }
         Ok(())
     }
 
@@ -408,9 +412,22 @@ impl WorkspaceMut {
             self.save_inner().await.into_diagnostic()?;
         }
 
-        if *lock_file_update_config != LockFileUsage::Update {
-            if is_script && *lock_file_update_config == LockFileUsage::DryRun {
-                let (change, _) = self.workspace().begin_script_change().await?;
+        let script_has_lock_file = self
+            .workspace()
+            .persistent_lock_file_path()
+            .is_some_and(|path| path.is_file());
+        if *lock_file_update_config != LockFileUsage::Update || (is_script && !script_has_lock_file)
+        {
+            if is_script
+                && matches!(
+                    lock_file_update_config,
+                    LockFileUsage::Update | LockFileUsage::DryRun
+                )
+            {
+                let (change, _) = self
+                    .workspace()
+                    .begin_script_change(*lock_file_update_config)
+                    .await?;
                 let source = self.workspace_manifest_document.render()?;
                 let source = change.commit_metadata(source).await?;
                 self.accept_script_commit(source).into_diagnostic()?;
@@ -419,7 +436,10 @@ impl WorkspaceMut {
         }
 
         let (script_change, original_lock_file) = if is_script {
-            let (change, lock_file) = self.workspace().begin_script_change().await?;
+            let (change, lock_file) = self
+                .workspace()
+                .begin_script_change(*lock_file_update_config)
+                .await?;
             (Some(change), lock_file)
         } else {
             let lock_file = self

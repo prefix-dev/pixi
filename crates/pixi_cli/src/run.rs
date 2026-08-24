@@ -42,13 +42,12 @@ use tokio_util::sync::CancellationToken;
 use tracing::Level;
 
 use crate::cli_config::{
-    LockAndInstallConfig, ScriptWorkspaceConfig, script_lock_file_usage,
-    transient_script_lock_file_usage,
+    LockAndInstallConfig, ScriptWorkspaceConfig, validate_transient_script_lock_file_usage,
 };
 use crate::process_exit;
 use crate::run_script::{
     RunScriptInput, STDIN_SCRIPT_COMMAND, StdinScriptCommand, prepare_remote_script,
-    prepare_stdin_script,
+    prepare_stdin_script, transient_script_cache_key,
 };
 use crate::shared::install_platform::resolve_install_platform;
 
@@ -177,21 +176,22 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
         .script
         .as_deref()
         .map(RunScriptInput::classify);
+    let requested_lock_file_usage = args.lock_and_install_config.lock_file_usage()?;
     let global_config_source = args.config_source.source();
-    let mut transient_lock_file_usage = None;
     let mut _remote_script_file = None;
     let mut stdin_script_command = None;
     let workspace = match script_input {
         Some(RunScriptInput::Remote(url)) => {
-            transient_lock_file_usage = Some(transient_script_lock_file_usage(
-                args.lock_and_install_config.lock_file_usage()?,
-            )?);
+            validate_transient_script_lock_file_usage(requested_lock_file_usage)?;
             let root = std::env::current_dir().into_diagnostic()?;
             let config = pixi_config::Config::load_with(&root, &global_config_source)
                 .merge_config(cli_config);
             let prepared = prepare_remote_script(url, &config, &root).await?;
-            let mut cache_key = b"remote\0".to_vec();
-            cache_key.extend_from_slice(prepared.original_url.as_str().as_bytes());
+            let cache_key = transient_script_cache_key(
+                b"remote",
+                prepared.original_url.as_str().as_bytes(),
+                &root,
+            );
             let WithWarnings {
                 value: workspace,
                 warnings,
@@ -210,9 +210,7 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
             workspace
         }
         Some(RunScriptInput::Stdin) => {
-            transient_lock_file_usage = Some(transient_script_lock_file_usage(
-                args.lock_and_install_config.lock_file_usage()?,
-            )?);
+            validate_transient_script_lock_file_usage(requested_lock_file_usage)?;
             let root = std::env::current_dir().into_diagnostic()?;
             let config = pixi_config::Config::load_with(&root, &global_config_source)
                 .merge_config(cli_config);
@@ -221,8 +219,11 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
                 .read_to_end(&mut contents)
                 .into_diagnostic()?;
             let prepared = prepare_stdin_script(contents, &root)?;
-            let mut cache_key = b"stdin\0".to_vec();
-            cache_key.extend_from_slice(prepared.manifest.metadata().as_bytes());
+            let cache_key = transient_script_cache_key(
+                b"stdin",
+                prepared.manifest.metadata().as_bytes(),
+                &root,
+            );
             let WithWarnings {
                 value: workspace,
                 warnings,
@@ -332,21 +333,11 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
     let progress = pixi_reporters::TopLevelProgress::from_global();
 
     // Ensure that the lock file is up-to-date.
-    let lock_file_usage = match transient_lock_file_usage {
-        Some(lock_file_usage) => lock_file_usage,
-        None => script_lock_file_usage(
-            args.lock_and_install_config.lock_file_usage()?,
-            is_script,
-            workspace
-                .persistent_lock_file_path()
-                .is_some_and(|path| path.is_file()),
-        )?,
-    };
     let mut lock_file = workspace
-        .update_lock_file(
+        .resolve_lock_file(
             Some(progress.clone()),
             UpdateLockFileOptions {
-                lock_file_usage,
+                lock_file_usage: requested_lock_file_usage,
                 no_install: args.lock_and_install_config.no_install(),
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
                 ..Default::default()

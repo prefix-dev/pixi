@@ -15,9 +15,7 @@ use rattler_lock::{
     CondaPackageData, Environment, LockedPackage, Platform as LockedPlatform, PlatformName,
 };
 
-use crate::cli_config::{
-    LockFileUpdateConfig, NoInstallConfig, ScriptWorkspaceConfig, script_lock_file_usage,
-};
+use crate::cli_config::{LockFileUpdateConfig, NoInstallConfig, ScriptWorkspaceConfig};
 
 #[derive(Debug, Parser)]
 #[clap(arg_required_else_help = false)]
@@ -204,13 +202,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .locate()?
         .with_cli_config(args.config.clone());
 
-    let lock_file_usage = script_lock_file_usage(
-        args.lock_file_update_config.lock_file_usage()?,
-        args.workspace_config.script.is_some(),
-        workspace.lock_file_path().is_file(),
-    )?;
+    let lock_file_usage = args.lock_file_update_config.lock_file_usage()?;
     let lock_file = workspace
-        .update_lock_file(
+        .resolve_lock_file(
             Some(pixi_reporters::TopLevelProgress::from_global()),
             UpdateLockFileOptions {
                 lock_file_usage,

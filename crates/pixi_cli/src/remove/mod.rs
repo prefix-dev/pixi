@@ -7,7 +7,7 @@ use pixi_api::{
     workspace::{DependencyOptions, RemoveError},
 };
 use pixi_config::ConfigCli;
-use pixi_core::{DependencyType, WorkspaceLocator, environment::LockFileUsage};
+use pixi_core::{DependencyType, WorkspaceLocator};
 use pixi_manifest::HasWorkspaceManifest;
 
 use crate::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
@@ -95,11 +95,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         feature: args.dependency_config.feature_name(),
         platforms: args.dependency_config.platforms.clone(),
         no_install: args.no_install_config.no_install,
-        lock_file_usage: remove_lock_file_usage(
-            args.lock_file_update_config.lock_file_usage()?,
-            args.workspace_config.script.is_some(),
-            workspace.lock_file_path().is_file(),
-        ),
+        lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
     };
 
     let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
@@ -163,17 +159,5 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             )))
         }
         (Err(other), _) => Err(miette::Report::new(other)),
-    }
-}
-
-fn remove_lock_file_usage(
-    requested: LockFileUsage,
-    is_script: bool,
-    lock_file_exists: bool,
-) -> LockFileUsage {
-    if is_script && !lock_file_exists && requested == LockFileUsage::Update {
-        LockFileUsage::DryRun
-    } else {
-        requested
     }
 }

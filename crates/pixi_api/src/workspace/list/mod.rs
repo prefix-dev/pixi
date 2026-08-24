@@ -34,7 +34,7 @@ pub async fn list(
     let environment = workspace.environment_from_name_or_env_var(environment)?;
 
     let lock_file = workspace
-        .update_lock_file(
+        .resolve_lock_file(
             None,
             UpdateLockFileOptions {
                 lock_file_usage,

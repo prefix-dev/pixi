@@ -1,6 +1,4 @@
-use crate::cli_config::{
-    LockFileUpdateConfig, NoInstallConfig, ScriptWorkspaceConfig, script_lock_file_usage,
-};
+use crate::cli_config::{LockFileUpdateConfig, NoInstallConfig, ScriptWorkspaceConfig};
 use crate::shared::tree::{
     Dependency, Package, PackageSource, build_reverse_dependency_map, print_dependency_tree,
     print_inverted_dependency_tree,
@@ -87,13 +85,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .environment_from_name_or_env_var(args.environment)
         .wrap_err("Environment not found")?;
 
-    let lock_file_usage = script_lock_file_usage(
-        args.lock_file_update_config.lock_file_usage()?,
-        args.workspace_config.script.is_some(),
-        workspace.lock_file_path().is_file(),
-    )?;
+    let lock_file_usage = args.lock_file_update_config.lock_file_usage()?;
     let lock_file = workspace
-        .update_lock_file(
+        .resolve_lock_file(
             Some(pixi_reporters::TopLevelProgress::from_global()),
             UpdateLockFileOptions {
                 lock_file_usage,

@@ -16,9 +16,7 @@ use rattler_conda_types::Platform;
 use serde::Serialize;
 
 use crate::{
-    cli_config::{
-        LockFileUpdateConfig, NoInstallConfig, ScriptWorkspaceConfig, script_lock_file_usage,
-    },
+    cli_config::{LockFileUpdateConfig, NoInstallConfig, ScriptWorkspaceConfig},
     cli_interface::CliInterface,
 };
 
@@ -216,11 +214,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
 
-    let lock_file_usage = script_lock_file_usage(
-        args.lock_file_update_config.lock_file_usage()?,
-        args.workspace_config.script.is_some(),
-        workspace.lock_file_path().is_file(),
-    )?;
+    let lock_file_usage = args.lock_file_update_config.lock_file_usage()?;
     let environment = workspace.environment_from_name_or_env_var(args.environment.clone())?;
     let platform_display: String = match &args.platform {
         Some(p) => p.to_string(),

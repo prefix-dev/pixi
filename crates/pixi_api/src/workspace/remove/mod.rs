@@ -59,6 +59,12 @@ pub async fn remove_conda_deps(
     spec_type: SpecType,
     options: DependencyOptions,
 ) -> Result<(), RemoveError> {
+    let update_environment = options.lock_file_usage == LockFileUsage::Update
+        && (!workspace.workspace().is_script()
+            || workspace
+                .workspace()
+                .persistent_lock_file_path()
+                .is_some_and(|path| path.is_file()));
     // Prevent removing Python if PyPI dependencies exist
     for name in specs.keys() {
         if name.as_source() == "python" {
@@ -89,7 +95,7 @@ pub async fn remove_conda_deps(
 
     // TODO: update all environments touched by this feature defined.
     // updating prefix after removing from toml
-    if options.lock_file_usage == LockFileUsage::Update {
+    if update_environment {
         get_update_lock_file_and_prefix(
             &workspace.default_environment(),
             None,
@@ -115,6 +121,12 @@ pub async fn remove_pypi_deps(
     pypi_deps: PypiDeps,
     options: DependencyOptions,
 ) -> Result<(), RemoveError> {
+    let update_environment = options.lock_file_usage == LockFileUsage::Update
+        && (!workspace.workspace().is_script()
+            || workspace
+                .workspace()
+                .persistent_lock_file_path()
+                .is_some_and(|path| path.is_file()));
     for name in pypi_deps.keys() {
         workspace
             .manifest()
@@ -125,7 +137,7 @@ pub async fn remove_pypi_deps(
 
     // TODO: update all environments touched by this feature defined.
     // updating prefix after removing from toml
-    if options.lock_file_usage == LockFileUsage::Update {
+    if update_environment {
         get_update_lock_file_and_prefix(
             &workspace.default_environment(),
             None,

@@ -9,8 +9,7 @@ use pixi_api::{
 use pixi_config::ConfigCli;
 use pixi_consts::consts;
 use pixi_core::{
-    DependencyType, Workspace, WorkspaceLocator,
-    environment::LockFileUsage,
+    DependencyType, WorkspaceLocator,
     workspace::{PypiDeps, SkippedPackage},
 };
 use pixi_manifest::HasFeaturesIter;
@@ -145,16 +144,12 @@ impl Args {
         }
     }
 
-    fn dependency_options(&self, workspace: &Workspace) -> miette::Result<DependencyOptions> {
+    fn dependency_options(&self) -> miette::Result<DependencyOptions> {
         Ok(DependencyOptions {
             feature: self.dependency_config.feature_name(),
             platforms: self.dependency_config.platforms.clone(),
             no_install: self.no_install_config.no_install,
-            lock_file_usage: add_lock_file_usage(
-                self.lock_file_update_config.lock_file_usage()?,
-                self.workspace_config.script.is_some(),
-                workspace.lock_file_path().is_file(),
-            ),
+            lock_file_usage: self.lock_file_update_config.lock_file_usage()?,
         })
     }
 }
@@ -244,12 +239,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .map(|n| n.as_normalized().to_string())
                     .collect();
                 let result = workspace_ctx
-                    .add_conda_deps(
-                        specs,
-                        spec_type,
-                        args.dependency_options(&workspace)?,
-                        git_options,
-                    )
+                    .add_conda_deps(specs, spec_type, args.dependency_options()?, git_options)
                     .await?;
                 (result.0, result.1, names)
             }
@@ -271,11 +261,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     .map(|n| n.as_normalized().to_string())
                     .collect();
                 let result = workspace_ctx
-                    .add_pypi_deps(
-                        pypi_deps,
-                        args.editable,
-                        args.dependency_options(&workspace)?,
-                    )
+                    .add_pypi_deps(pypi_deps, args.editable, args.dependency_options()?)
                     .await?;
                 (result.0, result.1, names)
             }
@@ -373,16 +359,4 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     Ok(())
-}
-
-fn add_lock_file_usage(
-    requested: LockFileUsage,
-    is_script: bool,
-    lock_file_exists: bool,
-) -> LockFileUsage {
-    if is_script && !lock_file_exists && requested == LockFileUsage::Update {
-        LockFileUsage::DryRun
-    } else {
-        requested
-    }
 }

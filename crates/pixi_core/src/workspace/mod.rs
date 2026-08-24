@@ -65,7 +65,6 @@ use pixi_manifest::platform::host::{host_capabilities, host_subdir};
 use rattler_networking::{LazyClient, s3_middleware};
 use rattler_repodata_gateway::Gateway;
 pub use registry::{WorkspaceRegistry, WorkspaceRegistryError};
-pub use script_environment::ScriptEnvironmentOptions;
 pub use solve_group::SolveGroup;
 use tokio::sync::Semaphore;
 pub use workspace_mut::WorkspaceMut;
