@@ -500,11 +500,9 @@ pub(crate) fn environment_has_dependencies(environment: &Environment<'_>) -> boo
 /// particular.
 ///
 /// [`environment_has_dependencies`] answers the same question for the
-/// environment as a whole, which is the wrong question when the answer decides
-/// what a single platform's prefix should hold: a `[target.win-64.dependencies]`
-/// table says nothing about what belongs in a linux-64 prefix. Resolving the
-/// targets for one platform covers both the platform-independent tables and
-/// that platform's own.
+/// environment as a whole, which is too coarse to decide what a single
+/// platform's prefix should hold: a `[target.win-64.dependencies]` table says
+/// nothing about what belongs in a linux-64 prefix.
 pub(crate) fn environment_has_dependencies_for_platform(
     environment: &Environment<'_>,
     platform: &PixiPlatform,

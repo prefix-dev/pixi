@@ -1385,10 +1385,9 @@ def test_script_sidecar_round_trips_without_resolving_again(
     """``pixi lock --script`` records the host platform, and the next run reuses
     it.
 
-    The sidecar's platform used to be read back as a bare subdir, which dropped
-    the virtual packages it was locked with. The environment then looked absent,
-    every run re-resolved, and the sidecar was quietly rewritten with pixi's
-    defaults -- undoing the fix for anyone who created one.
+    The sidecar's platform has to be read back with the virtual packages it was
+    locked with. As a bare subdir the environment would look absent, every run
+    would re-resolve, and the sidecar would be rewritten with pixi's defaults.
     """
     script = _script_without_platforms(
         tmp_pixi_workspace / "gpu.py", virtual_packages_channel, 'cuda = "*"'
@@ -1425,7 +1424,7 @@ def test_script_sidecar_for_another_subdir_falls_back_to_the_machine(
     """A sidecar locked for a subdir this machine cannot run is re-resolved.
 
     The script declares no platforms, so erroring out on one would blame the
-    user for a platform they never wrote down. It used to do exactly that.
+    user for a platform they never wrote down.
     """
     script = _script_without_platforms(tmp_pixi_workspace / "plain.py", None, "")
     other = "win-64" if not CURRENT_PLATFORM.startswith("win") else "linux-64"
@@ -1436,8 +1435,8 @@ def test_script_sidecar_for_another_subdir_falls_back_to_the_machine(
         env={"PIXI_OVERRIDE_PLATFORM": other},
     )
     # Re-resolving replaces the sidecar, so say so rather than discarding a
-    # deliberate lock in silence. The only row it holds is for another subdir,
-    # which is what gets reported.
+    # deliberate lock in silence. Its only row is for another subdir, which is
+    # what gets reported.
     verify_cli_command(
         [pixi, "run", "--script", script],
         ExitCode.SUCCESS,
@@ -1451,8 +1450,8 @@ def test_script_frozen_refuses_a_sidecar_without_an_entry_for_this_machine(
     pixi: Path, tmp_pixi_workspace: Path
 ) -> None:
     """`--frozen` consumes the lock without checking it, so a sidecar with no
-    row for the platform we run on used to produce an empty environment and run
-    the script against whatever `python` was on `PATH`."""
+    row for the platform we run on has to be refused here rather than yielding
+    an empty environment that runs against whatever `python` is on `PATH`."""
     script = _script_without_platforms(tmp_pixi_workspace / "plain.py", None, 'python = "3.12.*"')
     other = "win-64" if not CURRENT_PLATFORM.startswith("win") else "linux-64"
 
@@ -1534,7 +1533,7 @@ print("SCRIPT-RAN")
     )
     assert "system-requirements" not in script.read_text()
 
-    # The script has to still load, which is what the stale table prevented.
+    # The script has to still load, which a leftover table would prevent.
     verify_cli_command(
         [pixi, "workspace", "platform", "list", "--script", script],
         ExitCode.SUCCESS,

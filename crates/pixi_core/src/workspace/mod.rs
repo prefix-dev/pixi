@@ -250,19 +250,17 @@ fn script_cache_name(path: &Path) -> String {
 
 /// Install the platforms picked for a script that declares none.
 ///
-/// `use_platform_composition` is decided while the manifest is parsed, and a
-/// script's synthetic manifest is parsed with an empty `platforms`, which reads
-/// as "every platform is a bare subdir". Composition then resolves an
-/// environment's platform by *subdir name*, so it would look for `linux-64` and
-/// never find the rich platform injected afterwards. Recompute the flag for the
-/// platforms actually installed, which is what the parser would have done had
-/// they been written in the metadata.
+/// `use_platform_composition` is decided while parsing, and a script's
+/// synthetic manifest parses with an empty `platforms`, which reads as "every
+/// platform is a bare subdir". Composition would then resolve an environment's
+/// platform by *subdir name* and never find the rich platform injected here, so
+/// the flag is recomputed for the platforms actually installed.
 ///
-/// `must_migrate` is deliberately left alone. It records that the script still
-/// carries a legacy `[system-requirements]` table, which is a fact about the
-/// document rather than about the platforms picked here, and clearing it stops
+/// `must_migrate` is deliberately left alone: it records that the script still
+/// carries a legacy `[system-requirements]` table, a fact about the document
+/// rather than about the platforms picked here. Clearing it would keep
 /// `commit_if_needed` from dropping that table when a rich platform is written
-/// next to it. The two cannot coexist, so the manifest would no longer parse.
+/// next to it, and the two cannot coexist.
 fn set_implicit_script_platforms(
     workspace: &mut pixi_manifest::Workspace,
     platforms: IndexSet<PixiPlatform>,
@@ -273,34 +271,27 @@ fn set_implicit_script_platforms(
 
 /// The platforms a script that declares none is resolved for.
 ///
-/// A script has no `[workspace] platforms`, so pixi picks one on its behalf.
-/// Unlike a workspace -- where "the current platform" means the subdir with
-/// pixi's assumed defaults, written down in the manifest for you to see and
-/// edit -- a script is resolved for the machine it is run on, the same as its
-/// no-manifest siblings `pixi exec` and `pixi global`. Otherwise a script on a
-/// machine with CUDA, or with a glibc newer than pixi's 2.28 floor, is solved
-/// against packages that machine does not need to be limited to.
+/// Such a script is resolved for the machine it runs on, like its no-manifest
+/// siblings `pixi exec` and `pixi global`, while a workspace takes "the current
+/// platform" to mean the bare subdir with pixi's assumed defaults. Otherwise a
+/// script on a machine with CUDA, or with a glibc newer than pixi's 2.28 floor,
+/// is solved against packages that machine does not need to be limited to.
 ///
 /// An adjacent sidecar lock wins while it is usable, so a `pixi lock --script`
 /// keeps reproducing rather than being re-solved for a marginally different
-/// host on the next run. The platforms it recorded are rebuilt in full,
-/// virtual packages included: reading them back as bare subdirs would lose the
-/// machine they were locked for, and pixi would re-solve every run, quietly
-/// overwriting the sidecar with the defaults. Their names are synthesized from
-/// their contents rather than taken from the lock, which stores rich platforms
-/// under short `p1`/`p2` aliases; `align_platform_names` maps the rows back on
-/// by identity.
+/// host. Its platforms are rebuilt in full, virtual packages included, since
+/// bare subdirs would lose the machine they were locked for. Their names are
+/// synthesized from their contents rather than taken from the lock, so a lock
+/// written by an older pixi under `p1`/`p2` aliases still maps on;
+/// `align_platform_names` matches the rows by identity either way.
 ///
-/// A recorded platform is only worth keeping when it says something this
-/// machine can honour. One this machine cannot run, and one that records
-/// nothing beyond pixi's defaults for the subdir, both give way to the host and
-/// a re-solve, rather than failing on a platform the user never declared or
-/// pinning the script below the machine it runs on. Rows for other subdirs are
-/// dropped outright. Each of those is worth a word, since the next write to the
-/// lock file makes it permanent, so all three warn.
+/// A recorded platform is kept only when it says something this machine can
+/// honour. One this machine cannot run, and one that records nothing beyond
+/// pixi's defaults for the subdir, both give way to the host and a re-solve.
+/// Rows for other subdirs are dropped. All three warn, since the next write to
+/// the lock file makes them permanent.
 ///
-/// A lock file that does not parse is left to the loader to report, so it is
-/// not mistaken here for one recording an unrunnable platform.
+/// A lock file that does not parse is left to the loader to report.
 fn implicit_script_platforms(
     lock_file_path: Option<&Path>,
 ) -> Result<IndexSet<PixiPlatform>, ScriptWorkspaceError> {
@@ -310,10 +301,9 @@ fn implicit_script_platforms(
         source: error,
     })?;
 
-    // A lock file that does not parse says nothing about which platform this
-    // machine can run, so it is passed over silently: the loader reads the same
-    // file moments later and reports why it is unusable, with the position in
-    // the file that this function does not have.
+    // A lock file that does not parse is passed over silently: the loader reads
+    // the same file moments later and reports why it is unusable, with a
+    // position in the file that is not available here.
     let Some(lock_file) = lock_file_path
         .filter(|path| path.is_file())
         .and_then(|path| LockFile::from_path(path).ok())
@@ -322,12 +312,9 @@ fn implicit_script_platforms(
     };
 
     // A row carrying nothing beyond the subdir baseline records no machine at
-    // all: it is what an older pixi wrote for a script without `platforms`, or
-    // what was locked while the script still declared a bare subdir. Adopting
-    // it would pin the script to pixi's defaults and quietly undo the point of
-    // resolving a script for the host it runs on. When the host is itself
-    // baseline the two are the same platform, so there is nothing to reject and
-    // no re-solve to trigger on every run.
+    // all, and adopting it would pin the script to pixi's defaults. When the
+    // host is itself baseline the two are the same platform, so there is
+    // nothing to reject and no re-solve to trigger on every run.
     let host_is_baseline = host.customised_virtual_packages().is_empty();
 
     let mut foreign_subdirs: IndexSet<Platform> = IndexSet::new();
@@ -335,10 +322,9 @@ fn implicit_script_platforms(
     let mut rejected_unrunnable = false;
     let mut locked: IndexSet<PixiPlatform> = IndexSet::new();
     for row in lock_file.platforms() {
-        // A lock can hold rows for other subdirs (a script that declared
-        // `platforms` once and had the line removed since); keeping those would
-        // make every later run solve and lock for a platform the script no
-        // longer asks for.
+        // A lock can hold rows for other subdirs, from a script that declared
+        // `platforms` and had the line removed since. Keeping those would make
+        // every later run solve and lock for a platform it no longer asks for.
         if row.subdir() != subdir {
             foreign_subdirs.insert(row.subdir());
             continue;
@@ -363,9 +349,8 @@ fn implicit_script_platforms(
         locked.insert(recorded);
     }
 
-    // Whether the file on disk actually changes is up to the lock file usage the
-    // command was given: `--frozen` and `--locked` consume it without writing,
-    // so none of these may claim the lock file *is* rewritten.
+    // `--frozen` and `--locked` consume the lock file without writing, so none
+    // of these warnings may claim that it *is* rewritten.
     if !foreign_subdirs.is_empty() {
         tracing::warn!(
             "the lock file next to this script also records {}, which a script without \
@@ -1498,10 +1483,9 @@ mod tests {
 
     use super::*;
 
-    /// A lock file's platform row is not pixi's own input: it carries whatever
-    /// package names were written into it, and a long enough one spells out
-    /// past the platform-name limit. Such a row has no platform, so it is
-    /// skipped -- the rest of the lock still counts, and nothing panics.
+    /// A platform row carries whatever package names were written into it, and
+    /// a long enough one spells out past the platform-name limit. Such a row is
+    /// skipped: the rest of the lock still counts, and nothing panics.
     #[test]
     fn an_unnameable_locked_platform_is_skipped() {
         let subdir = host_subdir();
@@ -2327,8 +2311,7 @@ print("hello")
         let cache = tempfile::tempdir().unwrap();
         let host = host_subdir();
         // A subdir this machine cannot run. A sidecar can hold one when the
-        // script declared `platforms` at some point and the line was removed
-        // since; adopting it would make every later run solve for it too.
+        // script declared `platforms` and had the line removed since.
         let foreign = if host.is_windows() {
             Platform::Linux64
         } else {
@@ -2370,10 +2353,9 @@ print("hello")
         );
     }
 
-    /// A row carrying nothing beyond the subdir baseline records no machine:
-    /// it is what an older pixi wrote for a script without `platforms`, or what
-    /// was locked while the script still declared a bare subdir. Adopting it
-    /// would pin the script to pixi's defaults on a machine that offers more.
+    /// A row carrying nothing beyond the subdir baseline records no machine,
+    /// so adopting it would pin the script to pixi's defaults on a machine that
+    /// offers more.
     #[test]
     fn a_baseline_locked_platform_gives_way_to_the_host() {
         let subdir = host_subdir();
@@ -2396,7 +2378,7 @@ print("hello")
 
     /// A row this machine satisfies is reused exactly as recorded, so a
     /// `pixi lock --script` keeps reproducing rather than being re-solved for a
-    /// marginally different host on the next run.
+    /// marginally different host.
     #[test]
     fn a_locked_platform_the_host_satisfies_is_reused() {
         let subdir = host_subdir();

@@ -768,10 +768,9 @@ impl<'p> LockFileDerivedData<'p> {
     /// Warn when a script that declares no `platforms` is about to persist a
     /// lock file describing this machine.
     ///
-    /// `pixi run --script` reaches here only when a sidecar already exists (it
-    /// resolves in memory otherwise), so this is about the `pixi lock --script`
-    /// that deliberately creates a portable-looking artifact that is not
-    /// portable, and about the runs that keep it up to date afterwards.
+    /// Reached from `pixi lock --script`, which creates a portable-looking
+    /// artifact that is not portable, and from the runs that keep it up to date
+    /// afterwards.
     fn warn_if_locking_an_implicit_host_platform(&self, lock_file_path: &Path) {
         if !self.workspace.script_platforms_are_implicit() {
             return;
@@ -1067,16 +1066,14 @@ impl<'p> LockFileDerivedData<'p> {
                     platform.name(),
                     environment.workspace_manifest(),
                 );
-                // No row for the platform being installed means nothing to
-                // install. That is the right answer whenever the environment
-                // declares nothing for this platform, which is ordinary for a
-                // workspace whose dependencies all sit under another
-                // `[target]`, and for a lock file old enough to carry rows only
-                // for the platforms that had packages. When it does declare
-                // something, an empty prefix would silently hand the run
-                // whatever is on `PATH`. Mostly reached through `--frozen`,
-                // which consumes the lock file without checking that it still
-                // covers this machine.
+                // No row for the platform means nothing to install, which is
+                // right whenever the environment declares nothing for it: all
+                // dependencies sit under another `[target]`, or the lock file
+                // only carries rows for platforms that had packages. When it
+                // does declare something, an empty prefix would silently hand
+                // the run whatever is on `PATH`. Mostly reached through
+                // `--frozen`, which consumes the lock file without checking
+                // that it still covers this machine.
                 if lock_platform.is_none()
                     && environment_has_dependencies_for_platform(environment, platform)
                 {

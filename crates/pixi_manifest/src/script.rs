@@ -443,8 +443,7 @@ impl ScriptManifest {
         sync_pixi_table(&mut metadata, updated_targets, "target")?;
         // The legacy `[system-requirements]` table has to be able to *leave*
         // the script: adding a rich platform commits the migration away from
-        // it, and the two cannot coexist. Without this the removal is dropped
-        // on the floor here and the script no longer parses.
+        // it, and the two cannot coexist, so its removal has to be synced too.
         sync_pixi_table(
             &mut metadata,
             updated_system_requirements,

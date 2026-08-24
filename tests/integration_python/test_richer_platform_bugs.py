@@ -637,8 +637,7 @@ def test_a_lock_without_a_row_for_this_platform_installs_nothing(
 
     A v6 lock records rows per platform that had packages, so a workspace whose
     dependencies all sit under another ``[target]`` legitimately has none for
-    this one. Treating that as fatal broke every such workspace, on a plain
-    ``pixi run`` as much as under ``--frozen``.
+    this one, on a plain ``pixi run`` as much as under ``--frozen``.
     """
     other = "win-64" if not CURRENT_PLATFORM.startswith("win") else "linux-64"
     manifest = _write(
