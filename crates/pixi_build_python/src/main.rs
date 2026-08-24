@@ -3,7 +3,7 @@ mod config;
 mod metadata;
 mod pypi_mapping;
 
-use build_script::{BuildPlatform, BuildScriptContext, Installer, uv_verbosity};
+use build_script::{BuildPlatform, BuildScriptContext, Installer, verbosity};
 use config::PythonBackendConfig;
 use fs_err as fs;
 use miette::IntoDiagnostic;
@@ -426,7 +426,7 @@ impl GenerateRecipe for PythonGenerator {
             editable,
             extra_args: config.extra_args.clone(),
             manifest_root: manifest_root.clone(),
-            uv_verbosity: uv_verbosity(
+            verbosity: verbosity(
                 tracing::enabled!(target: "rattler_build", tracing::Level::DEBUG),
                 tracing::enabled!(target: "rattler_build", tracing::Level::TRACE),
             ),
