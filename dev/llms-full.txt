@@ -9599,7 +9599,7 @@ It also makes use of `pixi shell-hook` to not rely on Pixi being installed in th
     For more examples, take a look at [pavelzw/pixi-docker-example](https://github.com/pavelzw/pixi-docker-example).
 
 ```Dockerfile
-FROM ghcr.io/prefix-dev/pixi:0.77.0 AS build
+FROM ghcr.io/prefix-dev/pixi:0.77.1 AS build
 
 # copy source code, pixi.toml and pixi.lock to the container
 WORKDIR /app
@@ -10277,7 +10277,7 @@ We created [prefix-dev/setup-pixi](https://github.com/prefix-dev/setup-pixi) to 
 ```yaml
 - uses: prefix-dev/setup-pixi@v0.10.0
   with:
-    pixi-version: v0.77.0
+    pixi-version: v0.77.1
     cache: true
     auth-host: prefix.dev
     auth-token: ${{ secrets.PREFIX_DEV_TOKEN }}
@@ -11219,7 +11219,7 @@ Then, create the following two files in the `.devcontainer` directory:
 ```dockerfile title=".devcontainer/Dockerfile"
 FROM mcr.microsoft.com/devcontainers/base:jammy
 
-ARG PIXI_VERSION=v0.77.0
+ARG PIXI_VERSION=v0.77.1
 
 RUN curl -L -o /usr/local/bin/pixi -fsSL --compressed "https://github.com/prefix-dev/pixi/releases/download/${PIXI_VERSION}/pixi-$(uname -m)-unknown-linux-musl" \
     && chmod +x /usr/local/bin/pixi \
@@ -14911,6 +14911,29 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+### [0.77.1] - 2026-08-24
+
+#### Added
+
+- Add `pixi workspace preview` subcommand by @ruben-arts in [#6859](https://github.com/prefix-dev/pixi/pull/6859)
+- Update rattler, rattler-build, minijinja, and display channel notices by @wolfv in [#6852](https://github.com/prefix-dev/pixi/pull/6852)
+- Add one consistent API for detecting host machine by @Hofer-Julian in [#6864](https://github.com/prefix-dev/pixi/pull/6864)
+
+#### Changed
+
+- Use .mojoc with precompile by @sstadick in [#6860](https://github.com/prefix-dev/pixi/pull/6860)
+- Render lists in the generated CLI docs by @Hofer-Julian in [#6868](https://github.com/prefix-dev/pixi/pull/6868)
+
+#### Documentation
+
+- Fix lists that render as plain text by @Hofer-Julian in [#6871](https://github.com/prefix-dev/pixi/pull/6871)
+- Add a social card for link previews by @Hofer-Julian in [#6876](https://github.com/prefix-dev/pixi/pull/6876)
+
+#### Fixed
+
+- Remove backends channel from pixi repo by @Hofer-Julian in [#6862](https://github.com/prefix-dev/pixi/pull/6862)
+- Avoid rebuilds for mtime-only source changes by @baszalmstra in [#6703](https://github.com/prefix-dev/pixi/pull/6703)
 
 ### [0.77.0] - 2026-08-18
 #### ✨ Highlights
