@@ -1,0 +1,33 @@
+# --8<-- [start:multi-env]
+[workspace]
+channels = ["https://prefix.dev/conda-forge"]
+name = "pytorch-pypi-envs"
+platforms = [
+  # The CUDA platforms are listed first, so they win platform selection on a machine with a CUDA driver.
+  { name = "linux-64-cuda", platform = "linux-64", cuda = "12.0" },
+  { name = "win-64-cuda", platform = "win-64", cuda = "12.0" },
+  { name = "linux-64-cpu", platform = "linux-64" },
+  { name = "win-64-cpu", platform = "win-64" },
+]
+
+[dependencies]
+# We need a python version that is compatible with pytorch
+python = ">=3.11,<3.13"
+
+[target."*-cuda".pypi-dependencies]
+torch = {
+  version = ">=2.5.1",
+  index = "https://download.pytorch.org/whl/cu124"
+}
+torchvision = {
+  version = ">=0.20.1",
+  index = "https://download.pytorch.org/whl/cu124"
+}
+
+[target."*-cpu".pypi-dependencies]
+torch = { version = ">=2.5.1", index = "https://download.pytorch.org/whl/cpu" }
+torchvision = {
+  version = ">=0.20.1",
+  index = "https://download.pytorch.org/whl/cpu"
+}
+# --8<-- [end:multi-env]

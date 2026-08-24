@@ -1,0 +1,3 @@
+# --8<-- [start:detached-environments-path]
+detached-environments = "/opt/pixi/envs"
+# --8<-- [end:detached-environments-path]
