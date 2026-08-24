@@ -465,7 +465,7 @@ packages:
         assert_eq!(
             specs.iter().map(ToString::to_string).collect_vec(),
             vec![
-                "__archspec 1.* ^(x86_64_v3|skylake)$",
+                "__archspec 1.*[build=\"^(x86_64_v3|skylake)$\"]",
                 "__glibc >=2.17",
                 "__glibc >=2.28",
             ]
