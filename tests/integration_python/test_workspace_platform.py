@@ -27,6 +27,7 @@ from typing import Any
 
 import pytest
 import yaml
+from rattler.lock import LockFile
 
 from .common import CURRENT_PLATFORM, ExitCode, verify_cli_command
 
@@ -1131,6 +1132,104 @@ def test_add_auto_detected_to_feature(pixi: Path, tmp_pixi_workspace: Path) -> N
     )
     data = tomli.loads(manifest.read_text())
     assert "machine" in data["feature"]["gpu"]["platforms"]
+
+
+# ----------------------------------------------------------------------------
+# PEP 723 scripts
+#
+# A script keeps its workspace in an inline metadata block and its lock file in
+# an adjacent `<script>.pixi.lock`, which need not exist yet. A PEP 723 script
+# always depends on python, so these point at a local channel holding a
+# stand-in for it rather than reaching out to conda-forge.
+# ----------------------------------------------------------------------------
+
+
+def _write_script(workspace: Path, channel: str) -> Path:
+    """Write `analysis.py` with an inline metadata block and return its path."""
+    script = workspace / "analysis.py"
+    script.write_text(
+        f'''# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# channels = ["{channel}"]
+# ///
+print("hello")
+'''
+    )
+    return script
+
+
+def _platforms_from_script(script: Path) -> list[str | dict[str, Any]]:
+    """Parse `[tool.pixi.workspace].platforms` from a script's PEP 723 block."""
+    lines = script.read_text().splitlines()
+    start = lines.index("# /// script")
+    end = lines.index("# ///", start + 1)
+    block = "\n".join(line.removeprefix("#").removeprefix(" ") for line in lines[start + 1 : end])
+    return tomli.loads(block)["tool"]["pixi"]["workspace"]["platforms"]
+
+
+def test_add_auto_detected_to_script_without_lock_file(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_python_channel: str
+) -> None:
+    """A script whose adjacent lock file doesn't exist yet still resolves.
+
+    Installing consults the lock file, so a policy that neither solves nor
+    checks staleness leaves the install step with nothing to read.
+    """
+    script = _write_script(tmp_pixi_workspace, dummy_python_channel)
+
+    verify_cli_command(
+        [
+            str(pixi),
+            "workspace",
+            "platform",
+            "add",
+            "--script",
+            str(script),
+            "--auto-detect",
+        ],
+        stderr_contains="detected from this machine",
+        strip_ansi=True,
+    )
+
+    assert _subdir(_platforms_from_script(script)[0]) == CURRENT_PLATFORM
+    # Resolving a lockless script happens in memory; it must not start
+    # persisting a lock file the user never asked for.
+    assert not script.with_name("analysis.py.pixi.lock").exists()
+    assert not (tmp_pixi_workspace / "pixi.lock").exists()
+
+
+def test_add_auto_detected_to_script_updates_existing_lock_file(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_python_channel: str
+) -> None:
+    """With a lock file already on disk the platform lands in it as usual."""
+    script = _write_script(tmp_pixi_workspace, dummy_python_channel)
+    lock = script.with_name("analysis.py.pixi.lock")
+
+    verify_cli_command([str(pixi), "lock", "--script", str(script)], strip_ansi=True)
+    assert lock.exists()
+
+    verify_cli_command(
+        [
+            str(pixi),
+            "workspace",
+            "platform",
+            "add",
+            "--script",
+            str(script),
+            "--auto-detect",
+        ],
+        stderr_contains="detected from this machine",
+        strip_ansi=True,
+    )
+
+    assert _subdir(_platforms_from_script(script)[0]) == CURRENT_PLATFORM
+    # Rich entries are written to the lock file under a short alias, so match
+    # on the subdir rather than on the manifest name.
+    assert any(str(p.subdir) == CURRENT_PLATFORM for p in LockFile.from_path(lock).platforms())
+    assert not (tmp_pixi_workspace / "pixi.lock").exists()
 
 
 # ----------------------------------------------------------------------------

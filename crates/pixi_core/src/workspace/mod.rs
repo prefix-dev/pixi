@@ -271,7 +271,7 @@ fn set_implicit_script_platforms(
 /// script on a machine with CUDA, or with a glibc newer than pixi's 2.28 floor,
 /// is solved against packages that machine does not need to be limited to.
 ///
-/// An adjacent sidecar lock wins while it is usable, so a `pixi lock --script`
+/// An adjacent lock file wins while it is usable, so a `pixi lock --script`
 /// keeps reproducing rather than being re-solved for a marginally different
 /// host. Its platforms are rebuilt in full, virtual packages included, since
 /// bare subdirs would lose the machine they were locked for. Their names are
@@ -2337,11 +2337,11 @@ print("hello")
     }
 
     #[test]
-    fn script_workspace_drops_foreign_subdirs_from_a_sidecar_lock() {
+    fn script_workspace_drops_foreign_subdirs_from_a_lock_file() {
         let root = tempfile::tempdir().unwrap();
         let cache = tempfile::tempdir().unwrap();
         let host = host_subdir();
-        // A subdir this machine cannot run. A sidecar can hold one when the
+        // A subdir this machine cannot run. A lock file can hold one when the
         // script declared `platforms` and had the line removed since.
         let foreign = if host.is_windows() {
             Platform::Linux64

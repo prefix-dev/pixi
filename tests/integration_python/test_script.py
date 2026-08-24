@@ -1350,15 +1350,16 @@ def test_script_without_platforms_respects_a_machine_below_the_floor(
 
 @pytest.mark.slow
 @requires_cuda_channel
-def test_script_sidecar_round_trips_without_resolving_again(
+def test_script_lock_file_round_trips_without_resolving_again(
     pixi: Path, tmp_pixi_workspace: Path, virtual_packages_channel: str
 ) -> None:
     """``pixi lock --script`` records the host platform, and the next run reuses
     it.
 
-    The sidecar's platform has to be read back with the virtual packages it was
-    locked with. As a bare subdir the environment would look absent, every run
-    would re-resolve, and the sidecar would be rewritten with pixi's defaults.
+    The lock file's platform has to be read back with the virtual packages it
+    was locked with. As a bare subdir the environment would look absent, every
+    run would re-resolve, and the lock file would be rewritten with pixi's
+    defaults.
     """
     script = _script_without_platforms(
         tmp_pixi_workspace / "gpu.py", virtual_packages_channel, 'cuda = "*"'
@@ -1389,10 +1390,10 @@ def test_script_sidecar_round_trips_without_resolving_again(
 
 
 @pytest.mark.slow
-def test_script_frozen_refuses_a_sidecar_without_an_entry_for_this_machine(
+def test_script_frozen_refuses_a_lock_file_without_an_entry_for_this_machine(
     pixi: Path, tmp_pixi_workspace: Path
 ) -> None:
-    """`--frozen` consumes the lock without checking it, so a sidecar with no
+    """`--frozen` consumes the lock without checking it, so a lock file with no
     row for the platform we run on has to be refused here rather than yielding
     an empty environment that runs against whatever `python` is on `PATH`."""
     script = _script_without_platforms(tmp_pixi_workspace / "plain.py", None, 'python = "3.12.*"')
@@ -1429,10 +1430,10 @@ def test_lock_script_without_platforms_warns_that_it_records_this_machine(
 
 
 @pytest.mark.slow
-def test_script_with_an_unparsable_sidecar_does_not_blame_the_platform(
+def test_script_with_an_unparsable_lock_file_does_not_blame_the_platform(
     pixi: Path, tmp_pixi_workspace: Path
 ) -> None:
-    """A sidecar that does not parse says nothing about the platform it was
+    """A lock file that does not parse says nothing about the platform it was
     locked for, so the platform pick stays quiet and lets the loader report the
     parse error it can point at a line of."""
     script = _script_without_platforms(tmp_pixi_workspace / "plain.py", None, "")
@@ -1446,7 +1447,7 @@ def test_script_with_an_unparsable_sidecar_does_not_blame_the_platform(
 
 
 @pytest.mark.slow
-def test_script_warns_before_dropping_foreign_subdirs_from_a_sidecar(
+def test_script_warns_before_dropping_foreign_subdirs_from_a_lock_file(
     pixi: Path, tmp_pixi_workspace: Path
 ) -> None:
     """A script that declares no platforms asks for one platform, the one it
