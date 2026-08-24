@@ -17,6 +17,7 @@ pub use package_identifier::PypiPackageIdentifier;
 use pixi_install_pypi::LockedPypiRecord;
 use pixi_record::PixiRecord;
 pub use pixi_uv_context::UvResolutionContext;
+pub(crate) use platform_rename::align_platform_names;
 pub use rattler_lock::Verbatim;
 pub use records_by_name::{
     HasNameVersion, PixiRecordsByName, PypiRecordsByName, UnresolvedPixiRecordsByName,

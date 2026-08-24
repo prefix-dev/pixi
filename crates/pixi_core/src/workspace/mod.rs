@@ -6,6 +6,7 @@ pub mod grouped_environment;
 mod has_project_ref;
 pub mod registry;
 mod repodata;
+mod script_environment;
 mod solve_group;
 pub mod stdlib_variants;
 pub mod virtual_packages;
@@ -64,6 +65,7 @@ use pixi_manifest::platform::host::{host_capabilities, host_subdir};
 use rattler_networking::{LazyClient, s3_middleware};
 use rattler_repodata_gateway::Gateway;
 pub use registry::{WorkspaceRegistry, WorkspaceRegistryError};
+pub use script_environment::ScriptEnvironmentOptions;
 pub use solve_group::SolveGroup;
 use tokio::sync::Semaphore;
 pub use workspace_mut::WorkspaceMut;
@@ -725,6 +727,11 @@ impl Workspace {
             WorkspaceStorage::Project => Some(self.root.join(consts::PROJECT_LOCK_FILE)),
             WorkspaceStorage::Script { lock_file_path, .. } => lock_file_path.clone(),
         }
+    }
+
+    /// Returns whether this workspace was constructed from a PEP 723 script.
+    pub fn is_script(&self) -> bool {
+        matches!(self.storage, WorkspaceStorage::Script { .. })
     }
 
     /// Returns the default environment of the project.
