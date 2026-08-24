@@ -1350,35 +1350,6 @@ def test_script_without_platforms_respects_a_machine_below_the_floor(
 
 @pytest.mark.slow
 @requires_cuda_channel
-def test_script_with_explicit_platforms_is_left_alone(
-    pixi: Path, tmp_pixi_workspace: Path, virtual_packages_channel: str
-) -> None:
-    """Declaring `platforms` opts out of host detection, so the same script
-    resolves against the subdir defaults, which carry no ``__cuda`` at all."""
-    script = tmp_pixi_workspace / "gpu.py"
-    script.write_text(
-        f"""# /// script
-# dependencies = []
-#
-# [tool.pixi.workspace]
-# channels = ["{virtual_packages_channel}", "{CONDA_FORGE_CHANNEL}"]
-# platforms = ["{CURRENT_PLATFORM}"]
-#
-# [tool.pixi.dependencies]
-# cuda = "*"
-# ///
-print("SCRIPT-RAN")
-"""
-    )
-    verify_cli_command(
-        [pixi, "run", "--script", script],
-        ExitCode.FAILURE,
-        env={"CONDA_OVERRIDE_CUDA": "12"},
-    )
-
-
-@pytest.mark.slow
-@requires_cuda_channel
 def test_script_sidecar_round_trips_without_resolving_again(
     pixi: Path, tmp_pixi_workspace: Path, virtual_packages_channel: str
 ) -> None:
@@ -1415,34 +1386,6 @@ def test_script_sidecar_round_trips_without_resolving_again(
         stdout_contains="SCRIPT-RAN",
     )
     assert lock.read_text() == before
-
-
-@pytest.mark.slow
-def test_script_sidecar_for_another_subdir_falls_back_to_the_machine(
-    pixi: Path, tmp_pixi_workspace: Path
-) -> None:
-    """A sidecar locked for a subdir this machine cannot run is re-resolved.
-
-    The script declares no platforms, so erroring out on one would blame the
-    user for a platform they never wrote down.
-    """
-    script = _script_without_platforms(tmp_pixi_workspace / "plain.py", None, "")
-    other = "win-64" if not CURRENT_PLATFORM.startswith("win") else "linux-64"
-
-    verify_cli_command(
-        [pixi, "lock", "--script", script],
-        ExitCode.SUCCESS,
-        env={"PIXI_OVERRIDE_PLATFORM": other},
-    )
-    # Re-resolving replaces the sidecar, so say so rather than discarding a
-    # deliberate lock in silence. Its only row is for another subdir, which is
-    # what gets reported.
-    verify_cli_command(
-        [pixi, "run", "--script", script],
-        ExitCode.SUCCESS,
-        stdout_contains="SCRIPT-RAN",
-        stderr_contains=[f"'{other}'", "does not ask for"],
-    )
 
 
 @pytest.mark.slow
@@ -1577,27 +1520,4 @@ print("SCRIPT-RAN")
         ExitCode.SUCCESS,
         stdout_contains="SCRIPT-RAN",
         stderr_contains=[f"'{other}'", "does not ask for"],
-    )
-
-
-@pytest.mark.slow
-def test_script_sidecar_this_machine_cannot_run_falls_back_to_the_host(
-    pixi: Path, tmp_pixi_workspace: Path
-) -> None:
-    """A sidecar row for this subdir that demands more than the machine offers
-    gives way to the host, rather than failing on a platform the script never
-    declared."""
-    script = _script_without_platforms(tmp_pixi_workspace / "plain.py", None, "")
-
-    # Locked on a machine claiming a CUDA driver, run on one without it.
-    verify_cli_command(
-        [pixi, "lock", "--script", script],
-        ExitCode.SUCCESS,
-        env={"CONDA_OVERRIDE_CUDA": "99"},
-    )
-    verify_cli_command(
-        [pixi, "run", "--script", script],
-        ExitCode.SUCCESS,
-        stdout_contains="SCRIPT-RAN",
-        stderr_contains=["cannot run", "replaces what it records"],
     )

@@ -2290,6 +2290,43 @@ print("hello")
         assert!(workspace.workspace.value.workspace.platforms.is_empty());
     }
 
+    /// Declaring `platforms` opts a script out of host detection, so it keeps
+    /// the bare subdir it asks for instead of this machine's virtual packages.
+    #[test]
+    fn script_workspace_keeps_explicitly_declared_platforms() {
+        let root = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+        let subdir = host_subdir();
+        let workspace = script_workspace(
+            &format!(
+                r#"# /// script
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# channels = []
+# platforms = ["{subdir}"]
+# ///
+"#
+            ),
+            root.path(),
+            cache.path(),
+        );
+
+        assert!(!workspace.script_platforms_are_implicit());
+        let platforms = &workspace.workspace.value.workspace.platforms;
+        assert_eq!(
+            platforms.iter().map(PixiPlatform::subdir).collect_vec(),
+            [subdir]
+        );
+        assert!(
+            platforms
+                .iter()
+                .all(|platform| platform.customised_virtual_packages().is_empty()),
+            "host detection leaked into an explicitly declared platform: {:?}",
+            platforms
+        );
+    }
+
     #[test]
     fn script_workspace_cache_identity_includes_the_absolute_path() {
         let first_root = tempfile::tempdir().unwrap();
@@ -2422,6 +2459,41 @@ packages: []
                 .map(PixiPlatform::customised_virtual_packages)
                 .collect::<Vec<_>>(),
             [vec![recorded]],
+        );
+    }
+
+    /// A row for this subdir that demands more than the machine offers gives
+    /// way to the host, rather than failing on a platform the script never
+    /// declared.
+    #[test]
+    fn a_locked_platform_the_host_cannot_run_gives_way_to_the_host() {
+        let subdir = host_subdir();
+        let host = detect_host(subdir).unwrap();
+        // No machine reports a CUDA driver this new, so the recorded platform
+        // is customised (not the baseline) and unsatisfiable.
+        let lock_source = format!(
+            r#"version: 7
+platforms:
+- name: recorded
+  subdir: {subdir}
+  virtual-packages:
+  - __cuda=99=0
+environments:
+  default:
+    channels:
+    - url: https://conda.anaconda.org/conda-forge/
+    packages: {{}}
+packages: []
+"#
+        );
+
+        let dir = tempfile::tempdir().unwrap();
+        let lock_file_path = dir.path().join("script.py.pixi.lock");
+        fs_err::write(&lock_file_path, lock_source).unwrap();
+
+        assert_eq!(
+            implicit_script_platforms(Some(&lock_file_path)).unwrap(),
+            IndexSet::from([host])
         );
     }
 
