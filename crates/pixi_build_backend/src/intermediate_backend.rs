@@ -893,6 +893,7 @@ where
                 ),
                 store_recipe: false,
                 force_colors: true,
+                experimental: false,
                 sandbox_config: None,
                 exclude_newer: None,
                 env_isolation: Default::default(),

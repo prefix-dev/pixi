@@ -55,19 +55,14 @@ use pixi_utils::{
     variants::{VariantConfig, VariantValue},
 };
 use pypi_mapping::PurlDerivationMode;
-use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, Platform, Version,
-};
+use rattler_conda_types::{ChannelConfig, ChannelUrl, MatchSpec, PackageName, Platform};
 use rattler_lock::LockFile;
 use thiserror::Error;
 
 use crate::lock_file::LockedPackageKind;
+use pixi_manifest::platform::host::{host_capabilities, host_subdir};
 use rattler_networking::{LazyClient, s3_middleware};
 use rattler_repodata_gateway::Gateway;
-use rattler_virtual_packages::{
-    Archspec, Cuda, CudaArch, EnvOverride, LibC, Linux, Osx, Override, VirtualPackageOverrides,
-    VirtualPackages, Windows,
-};
 pub use registry::{WorkspaceRegistry, WorkspaceRegistryError};
 pub use solve_group::SolveGroup;
 use tokio::sync::Semaphore;
@@ -272,242 +267,6 @@ pub type PypiDeps = indexmap::IndexMap<
 
 pub type MatchSpecs = indexmap::IndexMap<PackageName, (MatchSpec, SpecType)>;
 pub type SourceSpecs = indexmap::IndexMap<PackageName, (SourceSpec, SpecType)>;
-
-/// Where the virtual packages of a host [`PixiPlatform`] come from.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PlatformSource {
-    /// Pixi's fixed per-subdir defaults: deterministic and machine-independent.
-    Defaults,
-    /// The virtual packages actually detected on this machine.
-    AutoDetected,
-}
-
-/// Whether environment-variable overrides are honored when building a host
-/// [`PixiPlatform`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PlatformOverrides {
-    /// Ignore `PIXI_OVERRIDE_PLATFORM` and `CONDA_OVERRIDE_*`.
-    NoOverrides,
-    /// Honor `PIXI_OVERRIDE_PLATFORM` for the subdir and `CONDA_OVERRIDE_*` for
-    /// the detected virtual packages (via [`VirtualPackageOverrides::from_env`]).
-    EnvironmentVariableOverrides,
-}
-
-/// The subdir pixi treats as this machine's, honoring `PIXI_OVERRIDE_PLATFORM`
-/// when `overrides` allows it.
-///
-/// This function does not apply `CONDA_OVERRIDE_*`, so it does not trigger
-/// warnings when those are invalid.
-pub fn host_subdir(overrides: PlatformOverrides) -> Platform {
-    let PlatformOverrides::EnvironmentVariableOverrides = overrides else {
-        return Platform::current();
-    };
-    std::env::var(consts::PIXI_OVERRIDE_PLATFORM)
-        .ok()
-        .and_then(|value| match value.parse::<Platform>() {
-            Ok(platform) => Some(platform),
-            Err(_) => {
-                tracing::warn!("Invalid value for PIXI_OVERRIDE_PLATFORM='{value}', ignoring.");
-                None
-            }
-        })
-        .unwrap_or_else(Platform::current)
-}
-
-/// Read one `CONDA_OVERRIDE_*` variable: `None` when it is unset or holds a
-/// value rattler can't parse, `Some(None)` when it is set empty ("disable this
-/// package"), `Some(Some(version))` otherwise.
-///
-/// An unusable value is warned about rather than dropped on the floor -- pixi
-/// applies these itself now, so nothing else would ever tell the user their
-/// override was ignored.
-fn version_override<T: EnvOverride>(to_version: impl Fn(T) -> Version) -> Option<Option<Version>> {
-    std::env::var_os(T::DEFAULT_ENV_NAME)?;
-    match T::detect_with_fallback(&Override::DefaultEnvVar, || Ok(None)) {
-        Ok(value) => Some(value.map(to_version)),
-        Err(error) => {
-            tracing::warn!("Ignoring {}: {error}", T::DEFAULT_ENV_NAME);
-            None
-        }
-    }
-}
-
-/// Whether `subdir` can carry the OS-specific virtual package `name` at all.
-/// Mirrors the per-platform gating in rattler's `detect_for_platform`; every
-/// other slot (`__cuda`, `__archspec`, ...) is valid on any subdir.
-fn carried_by_subdir(name: &str, subdir: Platform) -> bool {
-    match name {
-        "__osx" => subdir.is_osx(),
-        "__win" => subdir.is_windows(),
-        "__linux" | "__glibc" | "__musl" | "__eglibc" => subdir.is_linux(),
-        _ => true,
-    }
-}
-
-/// Apply `CONDA_OVERRIDE_*` env vars to `packages`, matching upstream rattler
-/// semantics: unset keeps the current version, non-empty replaces it (adding
-/// the package if it wasn't detected at all), and empty removes the package
-/// entirely. Rattler drives this per slot via `detect_with_fallback`;
-/// `Ok(Some(v))` = use v, `Ok(None)` = disabled, error = leave untouched.
-///
-/// Detect with [`VirtualPackageOverrides::default`] and apply this instead of
-/// detecting with [`VirtualPackageOverrides::from_env`]: rattler errors out of
-/// the whole detection on an unparsable override value, where this validates
-/// per slot and warns.
-///
-/// `subdir` is the platform being described. An override only introduces a
-/// package the subdir can actually carry, so `CONDA_OVERRIDE_OSX` does not put
-/// `__osx` on a win-64 target -- rattler's `detect_for_platform` filters the
-/// same way.
-pub fn apply_environment_variable_overrides(
-    packages: &mut Vec<GenericVirtualPackage>,
-    subdir: Platform,
-) {
-    // Read each variable once, so a bad value is reported once rather than
-    // per pass below.
-    let cuda = version_override::<Cuda>(|cuda| cuda.version);
-    let linux = version_override::<Linux>(|linux| linux.version);
-    let osx = version_override::<Osx>(|osx| osx.version);
-    let cuda_arch = version_override::<CudaArch>(|arch| arch.version);
-    // `Windows::parse_version` always fills the version in, so the fallback
-    // only covers the unreachable `None` arm of rattler's optional field.
-    let win = version_override::<Windows>(|win| win.version.unwrap_or_else(|| Version::major(0)));
-
-    packages.retain_mut(|package| {
-        let outcome = match package.name.as_normalized() {
-            "__cuda" => cuda.clone(),
-            "__cuda_arch" => cuda_arch.clone(),
-            "__linux" => linux.clone(),
-            "__osx" => osx.clone(),
-            "__win" => win.clone(),
-            // The libc family is handled by `apply_glibc_override` below, since
-            // the single glibc env var must not rewrite `__musl`/`__eglibc`.
-            _ => None,
-        };
-        match outcome {
-            // Override produced a version: use it.
-            Some(Some(version)) => {
-                package.version = version;
-                true
-            }
-            // Variable was set empty: disable the package.
-            Some(None) => false,
-            // Not env-overridable, unset, or unusable: leave untouched.
-            None => true,
-        }
-    });
-
-    // Overrides can introduce packages the machine lacks (`CONDA_OVERRIDE_CUDA`
-    // without a GPU), matching rattler; the `Ok(None)` fallback adds only set vars.
-    // `carried_by_subdir` keeps an override from inventing an OS package the
-    // target can't have, the way rattler gates the same slots on the platform.
-    let mut add_missing = |name: &str, version: Option<Version>| {
-        let Some(version) = version else { return };
-        if !carried_by_subdir(name, subdir) {
-            return;
-        }
-        if packages.iter().any(|p| p.name.as_normalized() == name) {
-            return;
-        }
-        packages.push(GenericVirtualPackage {
-            name: name.parse().expect("static virtual package name is valid"),
-            version,
-            build_string: "0".to_string(),
-        });
-    };
-
-    add_missing("__cuda", cuda.flatten());
-    add_missing("__cuda_arch", cuda_arch.flatten());
-    add_missing("__osx", osx.flatten());
-    add_missing("__linux", linux.flatten());
-    add_missing("__win", win.flatten());
-
-    // CEP couples the two CUDA slots: `__cuda_arch` is meaningless without a
-    // driver, and rattler drops it the same way in `VirtualPackages::detect`.
-    if !packages.iter().any(|p| p.name.as_normalized() == "__cuda") {
-        packages.retain(|p| p.name.as_normalized() != "__cuda_arch");
-    }
-
-    apply_glibc_override(packages, subdir);
-    apply_archspec_override(packages);
-}
-
-/// Apply `CONDA_OVERRIDE_ARCHSPEC` to `packages`: unset leaves the detected
-/// `__archspec` untouched, an empty value removes it, and a microarchitecture
-/// name (or `0` for "unknown") replaces or inserts it.
-///
-/// Unknown names are rejected by [`Archspec::parse_version`] and ignored with a
-/// warning
-fn apply_archspec_override(packages: &mut Vec<GenericVirtualPackage>) {
-    if std::env::var_os(Archspec::DEFAULT_ENV_NAME).is_none() {
-        return;
-    }
-    let overridden = match Archspec::detect_with_fallback(&Override::DefaultEnvVar, || Ok(None)) {
-        Ok(overridden) => overridden,
-        Err(error) => {
-            tracing::warn!("Ignoring {}: {error}", Archspec::DEFAULT_ENV_NAME);
-            return;
-        }
-    };
-
-    // Set empty: no `__archspec` at all.
-    let Some(overridden) = overridden else {
-        packages.retain(|p| p.name.as_normalized() != "__archspec");
-        return;
-    };
-    // CEP 30 reserves version 0 for a build string that echoes the subdir
-    // architecture. So replace version as well as build string.
-    let overridden = GenericVirtualPackage::from(overridden);
-    match packages
-        .iter_mut()
-        .find(|p| p.name.as_normalized() == "__archspec")
-    {
-        Some(existing) => *existing = overridden,
-        None => packages.push(overridden),
-    }
-}
-
-/// Apply `CONDA_OVERRIDE_GLIBC` (rattler's only libc slot) to `packages`. The
-/// glibc env var governs glibc alone: unset leaves libc packages untouched, an
-/// empty value removes `__glibc`, and a concrete version pins
-/// `__glibc=<version>=0` and drops `__musl`/`__eglibc` (one libc family
-/// applies).
-fn apply_glibc_override(packages: &mut Vec<GenericVirtualPackage>, subdir: Platform) {
-    // Read the variable rattler would and reuse its empty-vs-version parsing.
-    let Ok(value) = std::env::var(LibC::DEFAULT_ENV_NAME) else {
-        return;
-    };
-    if !carried_by_subdir("__glibc", subdir) {
-        return;
-    }
-    match LibC::parse_version_opt(&value) {
-        // `CONDA_OVERRIDE_GLIBC=""`: drop `__glibc`, leave `__musl`/`__eglibc`.
-        Ok(None) => packages.retain(|p| p.name.as_normalized() != "__glibc"),
-        // `CONDA_OVERRIDE_GLIBC=<version>`: glibc becomes the active libc.
-        Ok(Some(libc)) => {
-            packages.retain(|p| !matches!(p.name.as_normalized(), "__musl" | "__eglibc"));
-            if let Some(glibc) = packages
-                .iter_mut()
-                .find(|p| p.name.as_normalized() == "__glibc")
-            {
-                glibc.version = libc.version;
-                glibc.build_string = "0".to_string();
-            } else {
-                packages.push(GenericVirtualPackage {
-                    name: "__glibc"
-                        .parse()
-                        .expect("static virtual package name is valid"),
-                    version: libc.version,
-                    build_string: "0".to_string(),
-                });
-            }
-        }
-        // Unusable value: leave the detected packages untouched, but say so.
-        Err(error) => {
-            tracing::warn!("Ignoring {}: {error}", LibC::DEFAULT_ENV_NAME);
-        }
-    }
-}
 
 impl Workspace {
     /// Core constructor: takes parsed manifests and loads the workspace config
@@ -1204,23 +963,15 @@ impl Workspace {
 
         // Determine the tool platform to use
         let tool_platform = self.config().tool_platform();
-        let host = self.host_platform(
-            PlatformSource::Defaults,
-            PlatformOverrides::EnvironmentVariableOverrides,
-        );
-        let tool_virtual_packages =
-            if tool_platform.only_platform() == host.subdir().only_platform() {
-                // If the tool platform is the same as the current platform, we just assume the
-                // same virtual packages apply.
-                self.host_platform(
-                    PlatformSource::AutoDetected,
-                    PlatformOverrides::EnvironmentVariableOverrides,
-                )
-                .declared_virtual_packages()
-                .to_vec()
-            } else {
-                vec![]
-            };
+        let host_subdir = host_subdir();
+        let tool_virtual_packages = if tool_platform.only_platform() == host_subdir.only_platform()
+        {
+            // If the tool platform is the same as the current platform, we just assume the
+            // same virtual packages apply.
+            host_capabilities()
+        } else {
+            vec![]
+        };
 
         let root_dir = AbsPathBuf::new(self.root().to_path_buf())
             .expect("root dir is not absolute")
@@ -1268,37 +1019,6 @@ impl Workspace {
 
     pub fn config(&self) -> &Config {
         &self.config
-    }
-
-    /// The platform pixi treats as this machine's host.
-    ///
-    /// `source` selects whether the virtual packages are pixi's per-subdir
-    /// defaults (deterministic) or the set actually detected on this machine;
-    /// `overrides` selects whether the `PIXI_OVERRIDE_PLATFORM` (subdir) and
-    /// `CONDA_OVERRIDE_*` (virtual package) environment variables are honored.
-    pub fn host_platform(
-        &self,
-        source: PlatformSource,
-        overrides: PlatformOverrides,
-    ) -> PixiPlatform {
-        let subdir = host_subdir(overrides);
-
-        let mut virtual_packages = match source {
-            PlatformSource::Defaults => PixiPlatform::from_subdir(subdir)
-                .declared_virtual_packages()
-                .to_vec(),
-            PlatformSource::AutoDetected => {
-                VirtualPackages::detect(&VirtualPackageOverrides::default())
-                    .map(|detected| detected.into_generic_virtual_packages().collect())
-                    .unwrap_or_default()
-            }
-        };
-
-        if let PlatformOverrides::EnvironmentVariableOverrides = overrides {
-            apply_environment_variable_overrides(&mut virtual_packages, subdir);
-        }
-
-        PixiPlatform::from_required_virtual_packages(subdir, virtual_packages)
     }
 
     /// Construct a [`ChannelConfig`] that is specific to this project. This
@@ -1589,7 +1309,9 @@ mod tests {
     use pixi_config::{CacheConfig, Config, DetachedEnvironments};
     use pixi_manifest::{FeatureName, FeaturesExt, HasWorkspaceManifest, script::ScriptManifest};
     use pypi_mapping::{MappingMode, ProjectDefinedChannelMapping, ProjectDefinedMappingLocation};
-    use rattler_conda_types::{Channel, NamedChannelOrUrl, Platform, Version};
+    use rattler_conda_types::{
+        Channel, GenericVirtualPackage, NamedChannelOrUrl, Platform, Version,
+    };
     use url::Url;
     use xxhash_rust::xxh3::xxh3_64;
 
@@ -1602,77 +1324,6 @@ mod tests {
         channels = []
         platforms = ["linux-64", "win-64"]
         "#;
-
-    /// `CONDA_OVERRIDE_*` must be able to *introduce* a virtual package the
-    /// machine doesn't provide (e.g. cuda on a GPU-less box), not just
-    /// override detected ones.
-    #[test]
-    fn override_adds_undetected_virtual_package() {
-        let packages = temp_env::with_var("CONDA_OVERRIDE_CUDA", Some("12.0"), || {
-            let mut packages = Vec::new();
-            apply_environment_variable_overrides(&mut packages, Platform::Linux64);
-            packages
-        });
-
-        let cuda = packages
-            .iter()
-            .find(|p| p.name.as_normalized() == "__cuda")
-            .expect("__cuda should be added from the override");
-        assert_eq!(cuda.version, Version::from_str("12.0").unwrap());
-    }
-
-    fn libc_package(name: &str, version: &str) -> GenericVirtualPackage {
-        GenericVirtualPackage {
-            name: name.parse().unwrap(),
-            version: Version::from_str(version).unwrap(),
-            build_string: "0".to_string(),
-        }
-    }
-
-    fn has_package(packages: &[GenericVirtualPackage], name: &str) -> bool {
-        packages.iter().any(|p| p.name.as_normalized() == name)
-    }
-
-    /// An empty `CONDA_OVERRIDE_GLIBC` drops `__glibc` but must leave a
-    /// non-glibc libc family (here `__musl`) untouched -- the glibc slot only
-    /// governs glibc.
-    #[test]
-    fn empty_glibc_override_drops_glibc_but_keeps_musl() {
-        let packages = temp_env::with_var("CONDA_OVERRIDE_GLIBC", Some(""), || {
-            let mut packages = vec![
-                libc_package("__glibc", "2.28"),
-                libc_package("__musl", "1.2"),
-            ];
-            apply_environment_variable_overrides(&mut packages, Platform::Linux64);
-            packages
-        });
-
-        assert!(!has_package(&packages, "__glibc"));
-        assert!(has_package(&packages, "__musl"));
-    }
-
-    /// A `CONDA_OVERRIDE_GLIBC` version makes glibc the active libc: it pins
-    /// `__glibc=<version>=0` and displaces any detected `__musl`/`__eglibc`.
-    #[test]
-    fn glibc_version_override_displaces_other_libc_families() {
-        let packages = temp_env::with_var("CONDA_OVERRIDE_GLIBC", Some("2.40"), || {
-            let mut packages = vec![
-                libc_package("__musl", "1.2"),
-                libc_package("__eglibc", "2.30"),
-            ];
-            apply_environment_variable_overrides(&mut packages, Platform::Linux64);
-            packages
-        });
-
-        assert!(!has_package(&packages, "__musl"));
-        assert!(!has_package(&packages, "__eglibc"));
-        let glibc = packages
-            .iter()
-            .find(|p| p.name.as_normalized() == "__glibc")
-            .expect("a glibc version override should add __glibc");
-        assert_eq!(glibc.version, Version::from_str("2.40").unwrap());
-        assert_eq!(glibc.build_string, "0");
-    }
 
     /// Every legacy `[system-requirements]` shape parses through the
     /// `[system-requirements]`-to-platforms migration and ends up as a

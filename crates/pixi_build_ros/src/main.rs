@@ -319,9 +319,15 @@ impl GenerateRecipe for RosGenerator {
             }
         }
 
-        generated_recipe.recipe.build.script = Script::from_content(build_script_content)
-            .with_env(script_env)
-            .with_secrets(model.secrets.iter().cloned().collect());
+        *generated_recipe
+            .recipe
+            .build
+            .plan
+            .script_mut()
+            .expect("generated recipes use script mode") =
+            Script::from_content(build_script_content)
+                .with_env(script_env)
+                .with_secrets(model.secrets.iter().cloned().collect());
 
         Ok(generated_recipe)
     }

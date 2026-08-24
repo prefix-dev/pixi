@@ -392,6 +392,11 @@ pub async fn execute_command(
         Command::External(args) => command_info::execute_external_command(args),
     };
 
+    // Notices are deferred to here so they cannot get lost among progress bars
+    // and other output. They are shown whether or not the command succeeded: a
+    // channel advisory is most relevant to someone whose command just failed.
+    pixi_reporters::display_channel_notices();
+
     // Failures caused by offline mode get a hint attached that explains how to
     // get out of it.
     result.map_err(offline::attach_offline_hint)

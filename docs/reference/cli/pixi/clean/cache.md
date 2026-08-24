@@ -24,6 +24,8 @@ pixi clean cache [OPTIONS]
 :  Clean only `exec` cache
 - <a id="arg---repodata" href="#arg---repodata">`--repodata`</a>
 :  Clean only the repodata cache
+- <a id="arg---notices" href="#arg---notices">`--notices`</a>
+:  Clean only the viewed channel notices cache
 - <a id="arg---build-backends" href="#arg---build-backends">`--build-backends`</a>
 :  Clean only the build backends environments cache
 - <a id="arg---build" href="#arg---build">`--build`</a>

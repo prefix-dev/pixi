@@ -504,6 +504,7 @@ impl Protocol for RattlerBuildBackend {
                 ),
                 store_recipe: false,
                 force_colors: true,
+                experimental: self.config.experimental.unwrap_or(false),
                 sandbox_config: None,
                 exclude_newer: None,
                 env_isolation: Default::default(),

@@ -78,12 +78,10 @@ use crate::{
             resolver_provider::CondaResolverProvider,
         },
     },
-    workspace::{
-        Environment, EnvironmentVars, HasWorkspaceRef, PlatformOverrides, PlatformSource,
-        grouped_environment::GroupedEnvironment,
-    },
+    workspace::{Environment, EnvironmentVars, grouped_environment::GroupedEnvironment},
 };
 use pixi_command_dispatcher::CommandDispatcher;
+use pixi_manifest::platform::host::host_baseline;
 use pixi_uv_context::UvResolutionContext;
 use rattler_conda_types::GenericVirtualPackage;
 
@@ -550,10 +548,7 @@ pub async fn resolve_pypi(
             let prefix_platform: &PixiPlatform = match environment.best_declared_platform() {
                 Some(p) => p,
                 None => {
-                    host_platform = environment.workspace().host_platform(
-                        PlatformSource::Defaults,
-                        PlatformOverrides::EnvironmentVariableOverrides,
-                    );
+                    host_platform = host_baseline();
                     &host_platform
                 }
             };

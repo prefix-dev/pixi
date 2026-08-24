@@ -276,7 +276,7 @@ pub(crate) fn validate_system_meets_environment_requirements(
         virtual_package_overrides.unwrap_or(VirtualPackageOverrides::from_env());
 
     // Get the virtual packages available on the system
-    let system_virtual_packages = VirtualPackage::detect(&virtual_package_overrides)?;
+    let system_virtual_packages = VirtualPackage::detect(&virtual_package_overrides, None)?;
     let system_capabilities: Vec<GenericVirtualPackage> = system_virtual_packages
         .iter()
         .cloned()
@@ -465,7 +465,7 @@ packages:
         assert_eq!(
             specs.iter().map(ToString::to_string).collect_vec(),
             vec![
-                "__archspec 1.* ^(x86_64_v3|skylake)$",
+                "__archspec 1.*[build=\"^(x86_64_v3|skylake)$\"]",
                 "__glibc >=2.17",
                 "__glibc >=2.28",
             ]

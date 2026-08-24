@@ -8,11 +8,11 @@ use pixi_default_versions::{
     default_glibc_version, default_linux_version, default_mac_os_version, default_windows_version,
 };
 use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform, Version};
-use rattler_virtual_packages::{
-    Archspec, DetectVirtualPackageError, Override, VirtualPackageOverrides, VirtualPackages,
-};
+use rattler_virtual_packages::{Archspec, Cuda, CudaArch, LibC, Linux, Osx, VirtualPackage};
 
 use crate::TargetSelector;
+
+pub mod host;
 
 #[derive(thiserror::Error, Clone, Debug)]
 pub enum PixiPlatformNameError {
@@ -27,9 +27,18 @@ pub enum PixiPlatformNameError {
 }
 
 /// Cap names so attacker-controlled manifests can't pass unbounded keys.
-/// Longest real conda subdir is 17 bytes; 64 is comfortable for descriptive
-/// custom names like `gpu-linux-cuda12-glibc228`.
-const MAX_PLATFORM_NAME_BYTES: usize = 64;
+/// Longest real conda subdir is 17 bytes, and descriptive custom names like
+/// `gpu-linux-cuda12-glibc228` sit well under this. The binding case is an
+/// auto-detected name, which spells out every virtual package the machine
+/// reports: a loaded `linux-aarch64` box with CUDA, a compute capability, a
+/// microarchitecture, glibc and a kernel version runs to about 95 bytes.
+///
+/// The number is set well above that rather than snug against it. The set of
+/// virtual packages grows over time, a name spells out every one of them, and
+/// a machine that grows one package too many would otherwise lose its name
+/// with no way for the user to see why. Nothing gets faster or safer from a
+/// tighter number here, so the bound is only there to stay finite.
+const MAX_PLATFORM_NAME_BYTES: usize = 256;
 
 /// Bytes allowed in the body of a platform name and as the literal parts of a
 /// [`PlatformGlob`]: ASCII alphanumerics and `-`.
@@ -264,6 +273,26 @@ pub enum PixiPlatformError {
     IsSubdirPlatform,
     #[error("`__cuda_arch` requires `__cuda` to be declared as well")]
     CudaArchRequiresCuda,
+    #[error(transparent)]
+    Name(#[from] PixiPlatformNameError),
+}
+
+/// The name a platform takes when it has none of its own: the subdir plus its
+/// customised virtual packages, spelled out by
+/// [`crate::toml::platform::synthesize_name_string`].
+///
+/// Synthesis is not total. It sanitises each segment, so the result is always
+/// shaped like a platform name, but its length grows with the number of
+/// virtual packages and the input is not always pixi's own: a lock file's
+/// platform row carries whatever names and versions were written into it. A
+/// set that spells out past [`MAX_PLATFORM_NAME_BYTES`] has no name, and that
+/// is an error rather than a platform pixi cannot read back.
+fn synthesized_name(
+    subdir: Platform,
+    declared: &[GenericVirtualPackage],
+) -> Result<PixiPlatformName, PixiPlatformError> {
+    let name = crate::toml::platform::synthesize_name_string(subdir, declared);
+    Ok(PixiPlatformName::try_from(name.as_str())?)
 }
 
 /// `true` when the declared set names `__cuda_arch` but not `__cuda`. Conda's
@@ -294,8 +323,8 @@ pub struct PixiPlatform {
     /// Virtual packages declared for this platform in `pixi.toml`. Stored
     /// verbatim as parsed from the manifest so that round-tripping through
     /// the TOML layer needs no knowledge of the concrete set of virtual
-    /// packages rattler supports. The runtime conversion to
-    /// [`VirtualPackageOverrides`] lives in `overrides_from_declared`.
+    /// packages rattler supports. This is the only set that means anything:
+    /// it is what the solver is given and what the lock file records.
     declared_virtual_packages: Vec<GenericVirtualPackage>,
 }
 
@@ -316,31 +345,6 @@ impl PixiPlatform {
             name: subdir.into(),
             subdir,
             declared_virtual_packages: subdir_default_virtual_packages(subdir),
-        }
-    }
-
-    /// Build a bare placeholder `PixiPlatform`.
-    ///
-    /// Same shape as [`Self::from_subdir`], except the declared
-    /// virtual-package list stays empty -- the platform is treated as
-    /// "auto-detect at use time" by [`Self::virtual_packages`] (rattler
-    /// gets a clean detection with no pixi overrides) and by
-    /// `pixi_core::workspace::virtual_packages::get_minimal_virtual_packages`
-    /// (which fills in pixi's defaults from the subdir).
-    ///
-    /// Reserved for two callers:
-    ///   * the `pixi workspace platform show` host-detection display, where
-    ///     forcing pixi's defaults onto the actual host detection would
-    ///     mask what the user's machine reports;
-    ///   * the workspace fallback placeholder used while a manifest is
-    ///     being read.
-    ///
-    /// All other paths build real subdir platforms via [`Self::from_subdir`].
-    pub fn auto_detected(subdir: Platform) -> Self {
-        Self {
-            name: subdir.into(),
-            subdir,
-            declared_virtual_packages: Vec::new(),
         }
     }
 
@@ -460,42 +464,21 @@ impl PixiPlatform {
         Self::new(name, subdir, declared)
     }
 
-    /// Build a runtime-only `PixiPlatform` for `subdir` declaring *exactly*
-    /// `virtual_packages` -- no subdir defaults are merged in. The name is
-    /// synthesized from the contents.
-    pub fn from_required_virtual_packages(
-        subdir: Platform,
-        virtual_packages: Vec<GenericVirtualPackage>,
-    ) -> Self {
-        let name = PixiPlatformName(crate::toml::platform::synthesize_name_string(
-            subdir,
-            &virtual_packages,
-        ));
-        Self {
-            name,
-            subdir,
-            declared_virtual_packages: virtual_packages,
-        }
-    }
-
     /// Build a workspace-registrable platform from auto-detection: the detected
     /// `subdir` plus its machine-specific (non-default) virtual packages. With
     /// `name` `None` a name is synthesised from the contents; an empty
-    /// customised set collapses to the bare subdir platform. Unlike
-    /// [`Self::from_required_virtual_packages`] the result is a normal workspace
-    /// platform (subdir defaults materialised, invariants enforced), safe to
-    /// register and write to disk.
+    /// customised set collapses to the bare subdir platform. The result is a
+    /// normal workspace platform (subdir defaults materialised, invariants
+    /// enforced), safe to register and write to disk.
     pub fn from_detection(
         name: Option<PixiPlatformName>,
         subdir: Platform,
         customised_virtual_packages: Vec<GenericVirtualPackage>,
     ) -> Result<Self, PixiPlatformError> {
-        let name = name.unwrap_or_else(|| {
-            PixiPlatformName(crate::toml::platform::synthesize_name_string(
-                subdir,
-                &customised_virtual_packages,
-            ))
-        });
+        let name = match name {
+            Some(name) => name,
+            None => synthesized_name(subdir, &customised_virtual_packages)?,
+        };
         Self::new_with_defaults(name, subdir, customised_virtual_packages)
     }
 
@@ -505,20 +488,6 @@ impl PixiPlatform {
         } else {
             TargetSelector::Platform(self.name.clone())
         }
-    }
-
-    pub fn virtual_packages(&self) -> Result<VirtualPackages, DetectVirtualPackageError> {
-        let overrides = overrides_from_declared(&self.declared_virtual_packages);
-        let mut detected = VirtualPackages::detect_for_platform(self.subdir, &overrides)?;
-        // rattler's libc override slot is glibc-only, so a declared `__musl`/
-        // `__eglibc` comes back labelled `glibc`. Relabel it to the declared
-        // family so the configured libc survives into the detected output.
-        if let Some(libc) = detected.libc.as_mut()
-            && let Some(family) = declared_libc_family(&self.declared_virtual_packages)
-        {
-            libc.family = family;
-        }
-        Ok(detected)
     }
 
     pub fn set_declared_virtual_packages(
@@ -686,13 +655,8 @@ impl PixiPlatform {
         }
 
         if was_auto {
-            // Recompute the synthesised name from the new subdir + VPs. The
-            // synthesiser only emits valid names (subdir prefix, sanitised
-            // segments), so it needs no validation.
-            self.name = PixiPlatformName(crate::toml::platform::synthesize_name_string(
-                self.subdir,
-                &self.declared_virtual_packages,
-            ));
+            // Recompute the synthesised name from the new subdir + VPs.
+            self.name = synthesized_name(self.subdir, &self.declared_virtual_packages)?;
         } else if self.name.as_str() == self.subdir.as_str() {
             // A preserved custom name that now equals the subdir while VPs
             // remain would forge an illegal subdir-platform.
@@ -806,15 +770,151 @@ pub fn is_subdir_default(gvp: &GenericVirtualPackage, subdir: Platform) -> bool 
     })
 }
 
-/// Returns `true` when `system` provides the capability `required` names: a
-/// virtual package of the same name at a version at least as high.
+/// Convert a platform's declared virtual packages into the form rattler's
+/// solver wants.
+///
+/// The manifest and rattler disagree on how a virtual package is spelled --
+/// the manifest writes empty build strings and pins `__archspec` to version 0,
+/// rattler stamps `"0"` and version 1 (see `host::canonicalize_detected`). The
+/// round trip through the typed [`VirtualPackage`] restores rattler's spelling,
+/// so this is the *only* supported way to hand a [`PixiPlatform`]'s packages to
+/// a solver. Passing `declared_virtual_packages()` straight through makes every
+/// package that depends on `__archspec 1=<micro>` unsolvable.
+///
+/// Unknown conda virtual-package names (those rattler has no typed slot for)
+/// are dropped -- they round-trip through the manifest but never influence
+/// solving directly.
+pub fn solver_virtual_packages(platform: &PixiPlatform) -> Vec<VirtualPackage> {
+    platform
+        .declared_virtual_packages()
+        .iter()
+        .filter_map(generic_to_virtual_package)
+        .collect()
+}
+
+/// [`solver_virtual_packages`] in the generic form most solver callers hold.
+pub fn solver_generic_virtual_packages(platform: &PixiPlatform) -> Vec<GenericVirtualPackage> {
+    solver_virtual_packages(platform)
+        .into_iter()
+        .map(GenericVirtualPackage::from)
+        .collect()
+}
+
+fn generic_to_virtual_package(gvp: &GenericVirtualPackage) -> Option<VirtualPackage> {
+    match gvp.name.as_normalized() {
+        "__unix" => Some(VirtualPackage::Unix),
+        "__linux" => Some(VirtualPackage::Linux(Linux {
+            version: gvp.version.clone(),
+        })),
+        family @ ("__glibc" | "__musl" | "__eglibc") => Some(VirtualPackage::LibC(LibC {
+            family: family.trim_start_matches('_').to_string(),
+            version: gvp.version.clone(),
+        })),
+        "__win" => Some(VirtualPackage::Win(rattler_virtual_packages::Windows {
+            version: Some(gvp.version.clone()),
+        })),
+        "__osx" => Some(VirtualPackage::Osx(Osx {
+            version: gvp.version.clone(),
+        })),
+        "__cuda" => Some(VirtualPackage::Cuda(Cuda {
+            version: gvp.version.clone(),
+        })),
+        "__cuda_arch" => Some(VirtualPackage::CudaArch(CudaArch {
+            version: gvp.version.clone(),
+        })),
+        "__archspec" => Some(VirtualPackage::Archspec(archspec_from_build_string(
+            &gvp.build_string,
+        ))),
+        _ => None,
+    }
+}
+
+/// The subdirs a machine running `current` can execute packages from.
+///
+/// A machine runs its own subdir, and the architecture fallbacks on top: any
+/// macOS runs `osx-64` through Rosetta, any Windows runs `win-64`, and
+/// `win-64` runs `win-32`. There is no such fallback across Linux
+/// architectures.
+///
+/// This is both "which declared platforms may this host select" and "which
+/// subdirs can this host meaningfully report virtual packages for", so
+/// selection and detection stay in agreement.
+pub fn candidate_subdirs(current: Platform) -> Vec<Platform> {
+    let mut candidate_subdirs: Vec<Platform> = vec![current];
+    if current.is_osx() && current != Platform::Osx64 {
+        candidate_subdirs.push(Platform::Osx64);
+    }
+    if current.is_windows() && current != Platform::Win64 {
+        candidate_subdirs.push(Platform::Win64);
+    }
+    if current == Platform::Win64 {
+        candidate_subdirs.push(Platform::Win32);
+    }
+    candidate_subdirs
+}
+
+/// Returns `true` when `system` provides the capability `required` names.
+///
+/// Every virtual package but one is a version: the system satisfies it by
+/// carrying the same name at a version at least as high. `__archspec` is the
+/// exception -- per CEP 30 its version is a constant and the microarchitecture
+/// lives in the build string -- so it is compared through the archspec
+/// database instead, where a host satisfies a requirement by being that
+/// microarchitecture or a strict superset of it (`zen2` covers `x86_64_v3`,
+/// `haswell` does not cover `zen2`).
 pub fn capability_satisfied_by(
     required: &GenericVirtualPackage,
     system: &[GenericVirtualPackage],
 ) -> bool {
+    if required.name.as_normalized() == "__archspec" {
+        return archspec_capability_satisfied_by(required, system);
+    }
     system
         .iter()
         .any(|provided| provided.name == required.name && provided.version >= required.version)
+}
+
+/// The `__archspec` half of [`capability_satisfied_by`].
+///
+/// A requirement that names no microarchitecture (the `0` sentinel) constrains
+/// nothing. Otherwise the system must carry an `__archspec` covering it. A
+/// system whose own microarchitecture is unknown is accepted: pixi cannot prove
+/// it covers the requirement, but it cannot prove it doesn't either, and
+/// rejecting would strand every host whose detection came back unknown. A
+/// system carrying no `__archspec` at all is not accepted, so a failed
+/// detection still fails closed.
+fn archspec_capability_satisfied_by(
+    required: &GenericVirtualPackage,
+    system: &[GenericVirtualPackage],
+) -> bool {
+    let Some(required_name) = archspec_microarchitecture(&required.build_string) else {
+        return true;
+    };
+    system
+        .iter()
+        .filter(|provided| provided.name == required.name)
+        .any(
+            |provided| match archspec_microarchitecture(&provided.build_string) {
+                None => true,
+                Some(provided_name) => archspec_covers(provided_name, required_name),
+            },
+        )
+}
+
+/// Whether the microarchitecture `provided` has at least the features of
+/// `required`, per the bundled archspec database. Names the database doesn't
+/// know only ever match themselves -- pixi rejects unknown names at parse time,
+/// so this is the belt-and-braces path for a lock file written by a pixi with a
+/// newer database.
+fn archspec_covers(provided: &str, required: &str) -> bool {
+    if provided == required {
+        return true;
+    }
+    let known = Microarchitecture::known_targets();
+    match (known.get(provided), known.get(required)) {
+        (Some(provided), Some(required)) => provided.is_strict_superset(required),
+        _ => false,
+    }
 }
 
 /// The entries of `required` that `system` does not provide, in order.
@@ -952,51 +1052,6 @@ pub(crate) fn merge_subdir_defaults(declared: &mut Vec<GenericVirtualPackage>, s
     }
 }
 
-/// Translate the manifest-declared virtual packages into the typed override
-/// shape rattler expects for detection.
-///
-/// This is the single place in pixi that needs to know which conda virtual
-/// package names map to which slot of [`VirtualPackageOverrides`]. Any raw
-/// `__name` rattler models no slot for (`__unix`, or a forward-compat
-/// escape-hatch name like `__future_pkg`) round-trips through TOML but has no
-/// effect at detection -- declaring it neither overrides nor introduces a
-/// detected virtual package.
-/// The libc family a platform declares (`glibc`/`musl`/`eglibc`), if any.
-fn declared_libc_family(declared: &[GenericVirtualPackage]) -> Option<String> {
-    declared
-        .iter()
-        .find_map(|gvp| match gvp.name.as_normalized() {
-            name @ ("__glibc" | "__musl" | "__eglibc") => {
-                Some(name.trim_start_matches('_').to_string())
-            }
-            _ => None,
-        })
-}
-
-fn overrides_from_declared(declared: &[GenericVirtualPackage]) -> VirtualPackageOverrides {
-    let mut overrides = VirtualPackageOverrides::default();
-    for gvp in declared {
-        match gvp.name.as_normalized() {
-            "__win" => overrides.win = Some(Override::String(gvp.version.to_string())),
-            "__osx" => overrides.osx = Some(Override::String(gvp.version.to_string())),
-            "__linux" => overrides.linux = Some(Override::String(gvp.version.to_string())),
-            "__cuda" => overrides.cuda = Some(Override::String(gvp.version.to_string())),
-            "__archspec" => {
-                let value = archspec_microarchitecture(&gvp.build_string).unwrap_or("0");
-                overrides.archspec = Some(Override::String(value.to_string()));
-            }
-            // The conda libc family collapses to rattler's single `libc`
-            // slot; the family in the name is not preserved (upstream's
-            // `LibC::parse_version` hardcodes `family = "glibc"`).
-            "__glibc" | "__musl" | "__eglibc" => {
-                overrides.libc = Some(Override::String(gvp.version.to_string()));
-            }
-            _ => {}
-        }
-    }
-    overrides
-}
-
 impl From<Platform> for PixiPlatform {
     fn from(subdir: Platform) -> Self {
         Self::from_subdir(subdir)
@@ -1076,6 +1131,64 @@ mod tests {
                 )
             })
             .collect()
+    }
+
+    fn archspec(microarchitecture: &str) -> GenericVirtualPackage {
+        GenericVirtualPackage {
+            name: PackageName::try_from("__archspec").unwrap(),
+            version: Version::major(0),
+            build_string: microarchitecture.to_string(),
+        }
+    }
+
+    /// A machine runs its own subdir plus the architecture fallbacks, and
+    /// nothing across Linux architectures. Detection leans on this to decide
+    /// whether a reading taken for a subdir describes a machine that could
+    /// actually execute it.
+    #[test]
+    fn candidate_subdirs_covers_the_architecture_fallbacks() {
+        assert_eq!(candidate_subdirs(Platform::Linux64), [Platform::Linux64]);
+        assert!(!candidate_subdirs(Platform::Linux64).contains(&Platform::LinuxAarch64));
+
+        assert!(candidate_subdirs(Platform::OsxArm64).contains(&Platform::Osx64));
+        assert!(candidate_subdirs(Platform::Win64).contains(&Platform::Win32));
+        assert!(candidate_subdirs(Platform::WinArm64).contains(&Platform::Win64));
+    }
+
+    /// `__archspec` carries its microarchitecture in the build string, so
+    /// comparing it by version (as every other virtual package is compared)
+    /// would wave through any host at all.
+    #[test]
+    fn archspec_capability_compares_microarchitectures() {
+        // A host is covered by its own microarchitecture and by anything it
+        // is a strict superset of.
+        assert!(capability_satisfied_by(
+            &archspec("x86_64_v3"),
+            &[archspec("zen2")]
+        ));
+        assert!(capability_satisfied_by(
+            &archspec("zen2"),
+            &[archspec("zen2")]
+        ));
+
+        // ... but not by a sibling that lacks the features.
+        assert!(!capability_satisfied_by(
+            &archspec("zen2"),
+            &[archspec("haswell")]
+        ));
+
+        // The `0` sentinel means "microarchitecture unknown". As a
+        // requirement it constrains nothing; as the host's answer it cannot
+        // be disproven, so it is accepted.
+        assert!(capability_satisfied_by(
+            &archspec("0"),
+            &[archspec("haswell")]
+        ));
+        assert!(capability_satisfied_by(&archspec("zen2"), &[archspec("0")]));
+
+        // A host that reports no `__archspec` at all fails closed, so a
+        // failed detection cannot silently satisfy a requirement.
+        assert!(!capability_satisfied_by(&archspec("zen2"), &[]));
     }
 
     /// Returns `true` if the platform declares any virtual package whose
@@ -1160,28 +1273,6 @@ mod tests {
         )
         .unwrap();
         assert_eq!(named.name().as_str(), "laptop");
-    }
-
-    #[test]
-    fn from_required_virtual_packages_keeps_exact_vps() {
-        // Exactly the given VPs are declared; subdir defaults are NOT merged in.
-        let platform = PixiPlatform::from_required_virtual_packages(
-            Platform::Linux64,
-            vec![gvp("__cuda", "12")],
-        );
-        assert_eq!(platform.subdir(), Platform::Linux64);
-        assert_eq!(
-            declared_by_name(&platform, &["__cuda"]),
-            vec![("__cuda".to_string(), "12".to_string())],
-        );
-        assert!(!declares(&platform, "__glibc"));
-        assert!(!declares(&platform, "__archspec"));
-        // The synthesised name encodes the VP, so it is a rich platform.
-        assert!(!platform.is_subdir_platform());
-
-        // With no required VPs the platform carries an empty declared set.
-        let empty = PixiPlatform::from_required_virtual_packages(Platform::Linux64, vec![]);
-        assert!(empty.declared_virtual_packages().is_empty());
     }
 
     #[test]
@@ -1480,7 +1571,7 @@ mod tests {
 
     #[test]
     fn name_rejects_too_long() {
-        let long = "a".repeat(128);
+        let long = "a".repeat(MAX_PLATFORM_NAME_BYTES + 1);
         let err = PixiPlatformName::try_from(long.as_str()).unwrap_err();
         assert!(
             matches!(err, PixiPlatformNameError::TooLong { .. }),
@@ -1686,22 +1777,6 @@ mod tests {
         let p = with_defaults("embedded", Platform::Linux64, vec![gvp("__eglibc", "2.30")]);
         assert!(declares(&p, "__eglibc"));
         assert!(!declares(&p, "__glibc"));
-    }
-
-    /// rattler's libc override slot is glibc-only, so detection re-labels a
-    /// declared `__musl` as `glibc`. `virtual_packages` must restore the
-    /// declared family so the detected output stays `__musl`, not `__glibc`.
-    #[test]
-    fn detected_virtual_packages_preserve_declared_musl() {
-        let p = with_defaults("alpine", Platform::Linux64, vec![gvp("__musl", "1.2.4")]);
-        let names: Vec<String> = p
-            .virtual_packages()
-            .expect("detection should succeed")
-            .into_generic_virtual_packages()
-            .map(|gvp| gvp.name.as_normalized().to_string())
-            .collect();
-        assert!(names.iter().any(|n| n == "__musl"), "got {names:?}");
-        assert!(!names.iter().any(|n| n == "__glibc"), "got {names:?}");
     }
 
     fn glob(pattern: &str) -> PlatformGlob {

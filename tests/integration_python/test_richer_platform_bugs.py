@@ -1,7 +1,7 @@
 """Regression tests for the richer-platform / system-requirement model.
 
-Each test asserts the intended behaviour for a bug that pixi used to get
-wrong; they guard against regressions now that those bugs are fixed.
+Each test pins one behaviour of that model at the CLI boundary, on the corners
+where declared platforms, detected virtual packages and subdir overrides meet.
 
 All tests stay network-free: they use the in-repo ``virtual_packages`` channel
 (its ``cuda`` package depends on ``__cuda >=12``) or ``dummy_channel_1``, and
@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -202,10 +203,10 @@ def test_run_honours_platform_override_for_the_marker_check(
     """``PIXI_OVERRIDE_PLATFORM`` must skip the ``conda-meta/pixi`` marker check.
 
     The override moves the subdir pixi pretends to be on but leaves the detected
-    virtual packages alone, so the check used to compare a pretended ``win-64``
-    against a marker recorded for ``linux-64`` and report every requirement as
-    unmet -- naming ``__cuda``, which the machine does provide. Every sibling
-    platform check already bails on the override.
+    virtual packages alone. Comparing a pretended ``win-64`` against a marker
+    recorded for ``linux-64`` would report every requirement as unmet -- naming
+    ``__cuda``, which the machine does provide -- so this check bails on the
+    override, like every sibling platform check.
     """
     manifest = _write(
         tmp_pixi_workspace / "pixi.toml",
@@ -509,3 +510,120 @@ def test_every_suggested_override_is_actionable(
     suggested = next(line.strip() for line in refusal.stderr.splitlines() if env_var in line)
     key, _, value = suggested.partition("=")
     _run(pixi, manifest, ExitCode.SUCCESS, env={key: value}, stdout_contains="TASK-RAN")
+
+
+def test_platform_list_reports_the_real_machine_per_row(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    """``detected_virtual_packages`` describes the machine, not the row.
+
+    Every row reports what this machine says about that row's subdir, so a row
+    declaring ``cuda = "11.0"`` on a host with CUDA 13 shows 13 as detected.
+    That mismatch between declared and detected is the comparison the field
+    exists for.
+    """
+    manifest = _write(
+        tmp_pixi_workspace / "pixi.toml",
+        f"""
+[workspace]
+name = "detected-vps"
+channels = ["{dummy_channel_1}"]
+platforms = ["{CURRENT_PLATFORM}", {{ name = "gpu", platform = "{CURRENT_PLATFORM}", cuda = "11.0" }}]
+""",
+    )
+    output = verify_cli_command(
+        [pixi, "workspace", "platform", "list", "--manifest-path", manifest, "--json"],
+        ExitCode.SUCCESS,
+        env={"CONDA_OVERRIDE_CUDA": "13"},
+    )
+    rows = {row["name"]: row for row in json.loads(output.stdout)["platforms"]}
+
+    gpu = rows["gpu"]
+    assert "cuda=11.0" in gpu["virtual_packages"], gpu
+    assert "cuda=13" in gpu["detected_virtual_packages"], gpu
+    assert "cuda=11.0" not in gpu["detected_virtual_packages"], gpu
+
+
+@requires_cuda_channel
+def test_exec_solves_against_the_machines_virtual_packages(
+    pixi: Path, tmp_pixi_workspace: Path, virtual_packages_channel: str
+) -> None:
+    """``pixi exec`` has no manifest, so the machine is the only platform it
+    can solve for. The in-repo ``cuda`` package needs ``__cuda >=12``, so the
+    same command must turn on the machine's ``__cuda`` and nothing else.
+
+    `pixi exec` keys its cached environments on specs, channels and platform
+    but not on virtual packages, so a cache holding this environment from a
+    higher `__cuda` would satisfy the run without solving. Use a private cache
+    so the assertions are about the solve.
+    """
+    command = [
+        pixi,
+        "exec",
+        "--channel",
+        virtual_packages_channel,
+        "--spec",
+        "cuda",
+        "python",
+        "-c",
+        "",
+    ]
+    cache = {"PIXI_CACHE_DIR": str(tmp_pixi_workspace / "exec-cache")}
+
+    verify_cli_command(command, ExitCode.FAILURE, env={"CONDA_OVERRIDE_CUDA": "10", **cache})
+    verify_cli_command(command, ExitCode.SUCCESS, env={"CONDA_OVERRIDE_CUDA": "12", **cache})
+
+
+def test_exec_gives_the_solver_rattlers_archspec_shape(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """Virtual packages must reach the solver in rattler's spelling.
+
+    The manifest pins `__archspec` to version 0 and names the microarchitecture
+    in the build string; rattler stamps version 1. Handing a platform's declared
+    packages straight to the solver makes every package depending on
+    `__archspec 1=<micro>` unsolvable, which is what conda-forge's
+    `_x86_64-microarch-level` does.
+    """
+    if not CURRENT_PLATFORM.startswith(("linux-64", "win-64", "osx-64")):
+        pytest.skip("the microarch-level packages are x86_64 only")
+    verify_cli_command(
+        [
+            pixi,
+            "exec",
+            "--channel",
+            "conda-forge",
+            "--spec",
+            "_x86_64-microarch-level=1",
+            "python",
+            "-c",
+            "",
+        ],
+        ExitCode.SUCCESS,
+        env={"PIXI_CACHE_DIR": str(tmp_pixi_workspace / "archspec-cache")},
+    )
+
+
+def test_exec_honours_the_platform_override(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    """``PIXI_OVERRIDE_PLATFORM`` overrides "the detected host platform used to
+    select and install environments", with no carve-out for ``exec``. It used
+    to be ignored here, so exec always solved for the real subdir.
+
+    ``dummy_channel_1`` ships no ``linux-aarch64``, so the solve can only fail
+    if the override actually redirected it; without the override the same
+    command resolves.
+
+    The command run afterwards is a system one rather than the package's own
+    entry point, which is a `.bat` that does not execute properly on windows.
+    """
+    runner = ["cmd", "/c", "echo ok"] if sys.platform.startswith("win") else ["echo", "ok"]
+    command = [pixi, "exec", "--channel", dummy_channel_1, "--spec", "dummy-f", *runner]
+    verify_cli_command(
+        command,
+        ExitCode.FAILURE,
+        env={"PIXI_OVERRIDE_PLATFORM": "linux-aarch64"},
+        stderr_contains="No candidates were found for dummy-f",
+    )
+    verify_cli_command(command, ExitCode.SUCCESS)
