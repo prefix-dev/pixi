@@ -18,10 +18,8 @@ use super::{
     SolveGroup,
     errors::{UnknownTask, UnsupportedPlatformError},
 };
-use crate::{
-    Workspace,
-    workspace::{HasWorkspaceRef, PlatformOverrides, PlatformSource},
-};
+use crate::{Workspace, workspace::HasWorkspaceRef};
+use pixi_manifest::platform::host::{host_baseline, host_capabilities, host_subdir};
 
 /// Describes a single environment from a project manifest. This is used to
 /// describe environments that can be installed and activated.
@@ -174,21 +172,8 @@ impl<'p> Environment<'p> {
     /// the environment itself declares support for, and return the most
     /// preferred one.
     pub fn best_declared_platform(&self) -> Option<&'p PixiPlatform> {
-        let current = self
-            .workspace
-            .host_platform(
-                PlatformSource::Defaults,
-                PlatformOverrides::EnvironmentVariableOverrides,
-            )
-            .subdir();
-        let system_virtual_packages = self
-            .workspace
-            .host_platform(
-                PlatformSource::AutoDetected,
-                PlatformOverrides::EnvironmentVariableOverrides,
-            )
-            .declared_virtual_packages()
-            .to_vec();
+        let current = host_subdir();
+        let system_virtual_packages = host_capabilities();
         let env_platforms = self.platforms();
 
         // The candidates are the workspace platforms whose subdir matches this
@@ -214,7 +199,9 @@ impl<'p> Environment<'p> {
                 current,
                 system_virtual_packages
                     .iter()
-                    .map(|vp| format!("{}={}", vp.name.as_normalized(), vp.version))
+                    // Render the build string too: `__archspec` matches by the
+                    // microarchitecture it carries there, not by its version.
+                    .map(ToString::to_string)
                     .format(", "),
                 declared.iter().format(", "),
                 candidates.iter().map(|p| p.name().as_str()).format(", "),
@@ -271,12 +258,7 @@ impl<'p> Environment<'p> {
     pub fn activation_platform(&self) -> PixiPlatform {
         self.installed_or_best_declared_platform()
             .cloned()
-            .unwrap_or_else(|| {
-                self.workspace.host_platform(
-                    PlatformSource::Defaults,
-                    PlatformOverrides::EnvironmentVariableOverrides,
-                )
-            })
+            .unwrap_or_else(host_baseline)
     }
 
     /// Builds an [`UnsupportedPlatformError`] for the case where
@@ -284,21 +266,8 @@ impl<'p> Environment<'p> {
     /// virtual packages declared by the workspace's host-subdir platforms
     /// this machine doesn't provide so the user can see what to mock.
     pub fn unsupported_platform_error(&self) -> UnsupportedPlatformError {
-        let current = self
-            .workspace
-            .host_platform(
-                PlatformSource::Defaults,
-                PlatformOverrides::EnvironmentVariableOverrides,
-            )
-            .subdir();
-        let system_virtual_packages = self
-            .workspace
-            .host_platform(
-                PlatformSource::AutoDetected,
-                PlatformOverrides::EnvironmentVariableOverrides,
-            )
-            .declared_virtual_packages()
-            .to_vec();
+        let current = host_subdir();
+        let system_virtual_packages = host_capabilities();
         let env_platforms = self.platforms();
         let workspace = &self.workspace_manifest().workspace;
         let unsatisfied_requirements = workspace.unsatisfied_platform_requirements(
@@ -1836,15 +1805,7 @@ mod tests {
                 // No declared platforms → None even with a valid override.
                 assert!(env.best_declared_platform().is_none());
                 // The host_platform helper honours the override.
-                assert_eq!(
-                    workspace
-                        .host_platform(
-                            PlatformSource::Defaults,
-                            PlatformOverrides::EnvironmentVariableOverrides
-                        )
-                        .subdir(),
-                    Platform::LinuxAarch64,
-                );
+                assert_eq!(host_subdir(), Platform::LinuxAarch64,);
             },
         );
     }
@@ -1869,15 +1830,7 @@ mod tests {
                 assert!(env.best_declared_platform().is_none());
                 // The host_platform helper still falls back to Platform::current()
                 // on invalid values.
-                assert_eq!(
-                    workspace
-                        .host_platform(
-                            PlatformSource::Defaults,
-                            PlatformOverrides::EnvironmentVariableOverrides
-                        )
-                        .subdir(),
-                    Platform::current(),
-                );
+                assert_eq!(host_subdir(), Platform::current(),);
             },
         );
     }

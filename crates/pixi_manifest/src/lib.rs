@@ -55,7 +55,7 @@ pub use package::Package;
 pub use package_dependency_spec::{PackageConstraintSpec, PackageDependencySpec};
 pub use platform::{
     PixiPlatform, PixiPlatformError, PixiPlatformName, PixiPlatformNameError, PlatformEdit,
-    PlatformGlob, PlatformGlobError, PlatformMove,
+    PlatformGlob, PlatformGlobError, PlatformMove, candidate_subdirs,
 };
 pub use preview::{KnownPreviewFlag, Preview};
 pub use s3::S3Options;

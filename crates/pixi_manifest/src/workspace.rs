@@ -17,7 +17,7 @@ use url::Url;
 use super::pypi::pypi_options::PypiOptions;
 use crate::{
     PixiPlatform, PixiPlatformName, PrioritizedChannel, S3Options, TargetSelector, Targets,
-    platform::{capability_satisfied_by, is_subdir_default},
+    platform::{candidate_subdirs, capability_satisfied_by, is_subdir_default},
     preview::Preview,
 };
 use minijinja::{AutoEscape, Environment, UndefinedBehavior};
@@ -162,7 +162,7 @@ impl Workspace {
         current: Platform,
         system_virtual_packages: &[GenericVirtualPackage],
     ) -> Vec<&PixiPlatform> {
-        let candidate_subdirs = self.candidate_subdirs(current);
+        let candidate_subdirs = candidate_subdirs(current);
 
         // Subdir-default virtual packages are pixi's assumed baseline for
         // the target subdir, not a host requirement -- a `win-64` entry's
@@ -199,23 +199,6 @@ impl Workspace {
         }
 
         result
-    }
-
-    /// Subdirs pixi will consider when matching the host platform: `current`
-    /// plus the same architecture fallbacks used by
-    /// [`Self::possible_pixi_platforms`].
-    pub fn candidate_subdirs(&self, current: Platform) -> Vec<Platform> {
-        let mut candidate_subdirs: Vec<Platform> = vec![current];
-        if current.is_osx() && current != Platform::Osx64 {
-            candidate_subdirs.push(Platform::Osx64);
-        }
-        if current.is_windows() && current != Platform::Win64 {
-            candidate_subdirs.push(Platform::Win64);
-        }
-        if current == Platform::Win64 {
-            candidate_subdirs.push(Platform::Win32);
-        }
-        candidate_subdirs
     }
 
     /// Declared virtual packages from `env_platforms` whose host subdir
@@ -260,7 +243,7 @@ impl Workspace {
         system_virtual_packages: &[GenericVirtualPackage],
         env_platforms: &HashSet<PixiPlatformName>,
     ) -> Vec<PlatformMatchDiagnosis> {
-        let candidate_subdirs = self.candidate_subdirs(current);
+        let candidate_subdirs = candidate_subdirs(current);
         self.platforms
             .iter()
             .filter(|p| env_platforms.contains(p.name()))
