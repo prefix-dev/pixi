@@ -1,6 +1,6 @@
 [package]
 name = "pixi"
-version = "0.77.0"
+version = "0.77.1"
 authors.workspace = true
 edition.workspace = true
 description = "A package management and workflow tool"
