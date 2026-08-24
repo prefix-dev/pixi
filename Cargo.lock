@@ -6723,6 +6723,7 @@ dependencies = [
 name = "pixi_core"
 version = "0.1.0"
 dependencies = [
+ "async-fd-lock",
  "async-once-cell",
  "barrier_cell",
  "console",

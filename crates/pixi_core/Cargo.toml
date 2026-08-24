@@ -9,6 +9,7 @@ repository.workspace = true
 license.workspace = true
 
 [dependencies]
+async-fd-lock = { workspace = true }
 async-once-cell = { workspace = true }
 barrier_cell = { workspace = true }
 console = { workspace = true }

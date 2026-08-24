@@ -26,10 +26,24 @@ fn temp_file_for(
     let mut builder = tempfile::Builder::new();
     builder.prefix(&prefix);
     #[cfg(unix)]
-    if let Some(p) = _perms {
-        builder.permissions(p);
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        builder.permissions(
+            _perms
+                .clone()
+                .unwrap_or_else(|| std::fs::Permissions::from_mode(0o666)),
+        );
     }
-    builder.tempfile_in(dir)
+    let temp_file = builder.tempfile_in(dir)?;
+    #[cfg(unix)]
+    if let Some(perms) = _perms {
+        // `open(2)` applies the current umask to the requested mode. Restore
+        // the destination's exact permissions before the temporary inode can
+        // be published by rename.
+        fs_err::set_permissions(temp_file.path(), perms)?;
+    }
+    Ok(temp_file)
 }
 
 /// Return the permissions of an existing file at `path`, or `None` if the file
@@ -105,6 +119,18 @@ pub fn atomic_write_sync(path: &Path, contents: impl AsRef<[u8]>) -> std::io::Re
 
     temp_file.persist(path).map_err(|e| e.error)?;
     Ok(())
+}
+
+/// Atomically replace `path`, returning an error instead of falling back to a
+/// truncating write when its parent cannot host a temporary file.
+pub fn atomic_write_sync_strict(path: &Path, contents: impl AsRef<[u8]>) -> std::io::Result<()> {
+    let perms = original_permissions(path)?;
+    let mut temp_file = temp_file_for(path, perms)?;
+    std::io::Write::write_all(&mut temp_file, contents.as_ref())?;
+    temp_file
+        .persist(path)
+        .map(|_| ())
+        .map_err(|error| error.error)
 }
 
 #[cfg(test)]
@@ -185,6 +211,17 @@ mod tests {
 
         // Reset permissions for clean up
         fs_err::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+
+    #[test]
+    fn test_atomic_write_sync_strict_replaces_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("pixi.lock");
+        fs_err::write(&target, b"old").unwrap();
+
+        atomic_write_sync_strict(&target, b"new").unwrap();
+
+        assert_eq!(fs_err::read(&target).unwrap(), b"new");
     }
 
     /// `atomic_write` must not change the mode of an existing file.

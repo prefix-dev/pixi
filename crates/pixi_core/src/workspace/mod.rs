@@ -570,6 +570,14 @@ impl Workspace {
             .unwrap_or_else(|| self.default_pixi_dir())
     }
 
+    pub(crate) fn with_script_pixi_dir(mut self, path: PathBuf) -> Self {
+        if let WorkspaceStorage::Script { pixi_dir, .. } = &mut self.storage {
+            *pixi_dir = path;
+            self.env_vars = Self::init_env_vars(&self.workspace.value.environments);
+        }
+        self
+    }
+
     /// Create the detached-environments path for this project if it is set in
     /// the config
     fn detached_environments_path(&self) -> Option<PathBuf> {

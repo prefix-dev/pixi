@@ -9,7 +9,7 @@ use crate::lock_file::SolveCondaEnvironmentError;
 use fancy_display::FancyDisplay;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use miette::{IntoDiagnostic, NamedSource};
+use miette::{Context, IntoDiagnostic, NamedSource};
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{Requirement, VersionOrUrl::VersionSpecifier};
 use pixi_command_dispatcher::{MissingChannelError, SolvePixiEnvironmentError::MissingChannel};
@@ -250,8 +250,43 @@ impl WorkspaceMut {
     /// Save the changes to the workspace manifest to disk and return the
     /// modified [`Workspace`].
     pub async fn save(mut self) -> Result<Workspace, std::io::Error> {
-        self.save_inner().await?;
+        let rendered = self
+            .workspace_manifest_document
+            .render()
+            .map_err(std::io::Error::other)?;
+        let already_committed = self
+            .original
+            .as_ref()
+            .is_some_and(|original| original.source == rendered);
+        if !already_committed {
+            self.save_inner().await?;
+        }
         Ok(self.workspace.take().expect("workspace is not available"))
+    }
+
+    fn accept_script_commit(&mut self, source: String) -> Result<(), std::io::Error> {
+        let script_path = self.workspace().workspace.provenance.path.clone();
+        let script = ScriptManifest::from_path(&script_path)
+            .map_err(std::io::Error::other)?
+            .ok_or_else(|| {
+                std::io::Error::other("committed script no longer contains PEP 723 metadata")
+            })?;
+        if let WorkspaceStorage::Script { manifest, .. } = &mut self
+            .workspace
+            .as_mut()
+            .expect("workspace is not available")
+            .storage
+        {
+            **manifest = script;
+        }
+
+        let manifest = self.workspace().workspace.value.clone();
+        if let Some(original) = &mut self.original {
+            original.manifest = manifest;
+            original.source = source;
+        }
+        self.modified = false;
+        Ok(())
     }
 
     /// Revert the changes made to the workspace manifest and returns the
@@ -364,21 +399,36 @@ impl WorkspaceMut {
             }
         }
 
-        // Save Python-backed manifests before resolving so tools like `pixi
-        // build` and `uv` observe the changes.
-        if matches!(self.kind(), ManifestKind::Pyproject | ManifestKind::Pep723) {
+        let is_script = self.workspace().is_script();
+
+        // A pyproject is build-tool input and must be visible while resolving.
+        // Script metadata is solved from the in-memory workspace and committed
+        // together with its lock file only after the solve succeeds.
+        if matches!(self.kind(), ManifestKind::Pyproject) {
             self.save_inner().await.into_diagnostic()?;
         }
 
         if *lock_file_update_config != LockFileUsage::Update {
+            if is_script && *lock_file_update_config == LockFileUsage::DryRun {
+                let (change, _) = self.workspace().begin_script_change().await?;
+                let source = self.workspace_manifest_document.render()?;
+                let source = change.commit_metadata(source).await?;
+                self.accept_script_commit(source).into_diagnostic()?;
+            }
             return Ok((None, skipped_packages));
         }
 
-        let original_lock_file = self
-            .workspace()
-            .load_lock_file()
-            .await?
-            .into_lock_file_or_empty_with_warning();
+        let (script_change, original_lock_file) = if is_script {
+            let (change, lock_file) = self.workspace().begin_script_change().await?;
+            (Some(change), lock_file)
+        } else {
+            let lock_file = self
+                .workspace()
+                .load_lock_file()
+                .await?
+                .into_lock_file_or_empty_with_warning();
+            (None, lock_file)
+        };
         let affected_environments = self
             .workspace()
             .environments()
@@ -440,6 +490,21 @@ impl WorkspaceMut {
                 .map(|(e, p)| (e.as_str(), p.clone()))
                 .collect(),
         );
+        let solve_dir = if is_script {
+            Some(
+                tempfile::tempdir()
+                    .into_diagnostic()
+                    .wrap_err("failed to create a temporary script solve environment")?,
+            )
+        } else {
+            None
+        };
+        let solve_workspace = solve_dir.as_ref().map(|solve_dir| {
+            self.workspace()
+                .clone()
+                .with_script_pixi_dir(solve_dir.path().join("environment"))
+        });
+        let workspace_for_solve = solve_workspace.as_ref().unwrap_or_else(|| self.workspace());
         let LockFileDerivedData {
             workspace: _, // We don't need the project here
             lock_file,
@@ -453,8 +518,8 @@ impl WorkspaceMut {
             build_caches,
             ..
         } = UpdateContext::builder(
-            self.workspace(),
-            self.workspace().command_dispatcher_builder()?.finish(),
+            workspace_for_solve,
+            workspace_for_solve.command_dispatcher_builder()?.finish(),
         )?
         .with_lock_file(unlocked_lock_file)
         .with_no_install(no_install || dry_run)
@@ -503,13 +568,66 @@ impl WorkspaceMut {
             implicit_constraints.extend(pypi_constraints);
         }
 
-        // Save Python-backed manifests again after applying resolved constraints.
-        if matches!(self.kind(), ManifestKind::Pyproject | ManifestKind::Pep723) {
+        // Save pyproject manifests again after applying resolved constraints.
+        // Script metadata is committed with its resolution below.
+        if matches!(self.kind(), ManifestKind::Pyproject) {
             self.save_inner().await.into_diagnostic()?;
         }
 
-        // Re-wrap the derived data under the longer-lived workspace
-        // reference.
+        if is_script {
+            // Script solves use an isolated environment directory, so discard
+            // all prefix-derived state before touching the real environment.
+            let install_workspace = self.workspace().clone();
+            let command_dispatcher = install_workspace.command_dispatcher_builder()?.finish();
+            let updated_lock_file = LockFileDerivedData::from_input_lock_file(
+                &install_workspace,
+                lock_file,
+                command_dispatcher.package_cache().clone(),
+                command_dispatcher,
+                pixi_glob::GlobHashCache::default(),
+            );
+
+            if dry_run {
+                let lock_file_diff = LockFileDiff::from_lock_files(
+                    &original_lock_file,
+                    &updated_lock_file.into_lock_file(),
+                );
+                return Ok((
+                    Some(UpdateDeps {
+                        implicit_constraints,
+                        lock_file_diff,
+                    }),
+                    skipped_packages,
+                ));
+            }
+
+            let source = self.workspace_manifest_document.render()?;
+            let candidate = script_change
+                .expect("an updating script captured its original state")
+                .candidate(source, updated_lock_file);
+            let committed = candidate.commit().await?;
+            self.accept_script_commit(committed.source().to_owned())
+                .into_diagnostic()?;
+            let install = !no_install
+                && self.workspace().environments().len() == 1
+                && default_environment_is_affected;
+            let ready = committed.ensure_prefix(install).await?;
+            let (_, updated_lock_file) = ready.into_parts();
+            let lock_file_diff = LockFileDiff::from_lock_files(
+                &original_lock_file,
+                &updated_lock_file.into_lock_file(),
+            );
+            return Ok((
+                Some(UpdateDeps {
+                    implicit_constraints,
+                    lock_file_diff,
+                }),
+                skipped_packages,
+            ));
+        }
+
+        // Project workspaces keep the derived solve state and their existing
+        // write-then-install behavior.
         let mut updated_lock_file = LockFileDerivedData::from_input_lock_file(
             self.workspace(),
             lock_file,
