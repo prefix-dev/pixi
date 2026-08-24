@@ -8672,7 +8672,14 @@ You can for example add a CUDA toolkit version or a glibc minimum version as a v
   cannot contain <code>-</code>, so the spelling uses underscores and dots (<code>x86_64_v3</code>,
   not <code>x86-64-v3</code>). A CPU newer than the bundled database can't be named until
   Pixi ships an updated archspec; set <code>archspec = "0"</code> to declare the
-  microarchitecture explicitly unknown.</li>
+  microarchitecture explicitly unknown.
+  Unlike every other virtual package, a machine does not satisfy <code>archspec</code> by
+  carrying a high enough version.
+  It satisfies it by being that microarchitecture or one the archspec database
+  says is a strict superset of it, so a <code>zen2</code> host covers a platform declaring
+  <code>x86_64_v3</code> but a <code>haswell</code> host does not cover one declaring <code>zen2</code>.
+  A machine whose own microarchitecture is unknown is accepted, since Pixi can
+  neither prove nor disprove that it covers the requirement.</li>
 <li>
 <p><code>cuda</code> also accepts a <code>{ driver, arch }</code> table that declares the CUDA driver
   version (<code>__cuda</code>) together with the GPU compute capability (<code>__cuda_arch</code>):</p>

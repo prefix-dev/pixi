@@ -5994,6 +5994,13 @@ Each inline-table entry has:
   not `x86-64-v3`). A CPU newer than the bundled database can't be named until
   Pixi ships an updated archspec; set `archspec = "0"` to declare the
   microarchitecture explicitly unknown.
+  Unlike every other virtual package, a machine does not satisfy `archspec` by
+  carrying a high enough version.
+  It satisfies it by being that microarchitecture or one the archspec database
+  says is a strict superset of it, so a `zen2` host covers a platform declaring
+  `x86_64_v3` but a `haswell` host does not cover one declaring `zen2`.
+  A machine whose own microarchitecture is unknown is accepted, since Pixi can
+  neither prove nor disprove that it covers the requirement.
 - `cuda` also accepts a `{ driver, arch }` table that declares the CUDA driver
   version (`__cuda`) together with the GPU compute capability (`__cuda_arch`):
 
