@@ -1837,7 +1837,7 @@ pixi add --script analysis.py --pypi --editable \
 Relative paths in metadata are resolved from the script's directory.
 
 When no adjacent lock file exists, dependency mutations solve for validation
-but write only the inline metadata. If a sidecar lock already exists, it is
+but write only the inline metadata. If a lock file already exists, it is
 updated as part of the mutation.
 
 ## Run the script
@@ -1938,25 +1938,28 @@ and reuse Pixi's caches:
 pixi run --script earthquakes.py
 ```
 
-Create a sidecar when exact versions need to travel with the script:
+Create a lock file when exact versions need to travel with the script:
 
 ```console
 pixi lock --script earthquakes.py
 ```
 
 This writes `earthquakes.py.pixi.lock` next to the file. Subsequent commands
-reuse the sidecar, and metadata mutations keep it up to date.
+reuse the lock file, and metadata mutations keep it up to date.
 
-To lock more than the current platform, declare the platforms first:
+When the script declares no platforms, Pixi locks the versions for your
+machine. On a machine that does not meet it, Pixi resolves the script again
+instead of using the lock file. Declare the platforms first to lock versions
+that everyone reuses:
 
 ```console
 pixi workspace platform add --script earthquakes.py linux-64 osx-arm64
 pixi lock --script earthquakes.py
 ```
 
-Use `--locked` to require an existing, up-to-date sidecar. Use `--frozen` to
-consume an existing sidecar without updating it. Both options report an error
-when the script has no adjacent lock file.
+Use `--locked` to require an existing, up-to-date lock file. Use `--frozen`
+to consume an existing lock file without updating it. Both options report an
+error when the script has no adjacent lock file.
 
 ## Manage channels and platforms
 
@@ -1983,6 +1986,18 @@ The platform command also supports rich platform definitions and the `edit`
 and `move` operations. Platform order determines selection priority. Declared
 platforms are also the platforms consumed by `pixi lock --script`; the lock
 command does not take a separate platform override.
+
+### Scripts without declared platforms
+
+A script does not have to declare `platforms`.
+When it doesn't, Pixi resolves it for the machine you run it on, using the [virtual packages](../workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform) it detects there: your CUDA driver, your glibc version, your macOS version.
+A script that needs a glibc newer than Pixi's `2.28` default resolves without you writing anything down.
+
+To resolve for a fixed target instead:
+
+```console
+pixi workspace platform add --script analysis.py --auto-detect
+```
 
 ## Supported command surface
 

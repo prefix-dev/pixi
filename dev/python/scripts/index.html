@@ -810,6 +810,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Manage channels and platforms">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scripts-without-declared-platforms" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Scripts without declared platforms
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -8553,6 +8570,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Manage channels and platforms">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scripts-without-declared-platforms" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Scripts without declared platforms
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -8679,7 +8713,7 @@ Richer requirements are written under <code>tool.pixi</code>:</p>
 </span></code></pre></div>
 <p>Relative paths in metadata are resolved from the script's directory.</p>
 <p>When no adjacent lock file exists, dependency mutations solve for validation
-but write only the inline metadata. If a sidecar lock already exists, it is
+but write only the inline metadata. If a lock file already exists, it is
 updated as part of the mutation.</p>
 <h2 id="run-the-script">Run the script<a class="headerlink" href="#run-the-script" title="Permanent link">#</a></h2>
 <p><code>pixi run --script</code> creates or reuses the cached environment, then invokes the
@@ -8746,18 +8780,21 @@ lock policy flags.</p>
 and reuse Pixi's caches:</p>
 <div class="language-console highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="go">pixi run --script earthquakes.py</span>
 </span></code></pre></div>
-<p>Create a sidecar when exact versions need to travel with the script:</p>
+<p>Create a lock file when exact versions need to travel with the script:</p>
 <div class="language-console highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="go">pixi lock --script earthquakes.py</span>
 </span></code></pre></div>
 <p>This writes <code>earthquakes.py.pixi.lock</code> next to the file. Subsequent commands
-reuse the sidecar, and metadata mutations keep it up to date.</p>
-<p>To lock more than the current platform, declare the platforms first:</p>
+reuse the lock file, and metadata mutations keep it up to date.</p>
+<p>When the script declares no platforms, Pixi locks the versions for your
+machine. On a machine that does not meet it, Pixi resolves the script again
+instead of using the lock file. Declare the platforms first to lock versions
+that everyone reuses:</p>
 <div class="language-console highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="go">pixi workspace platform add --script earthquakes.py linux-64 osx-arm64</span>
 </span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="go">pixi lock --script earthquakes.py</span>
 </span></code></pre></div>
-<p>Use <code>--locked</code> to require an existing, up-to-date sidecar. Use <code>--frozen</code> to
-consume an existing sidecar without updating it. Both options report an error
-when the script has no adjacent lock file.</p>
+<p>Use <code>--locked</code> to require an existing, up-to-date lock file. Use <code>--frozen</code>
+to consume an existing lock file without updating it. Both options report an
+error when the script has no adjacent lock file.</p>
 <h2 id="manage-channels-and-platforms">Manage channels and platforms<a class="headerlink" href="#manage-channels-and-platforms" title="Permanent link">#</a></h2>
 <p>Scripts have one implicit environment, but they can declare multiple channels
 and target platforms.</p>
@@ -8775,6 +8812,13 @@ and target platforms.</p>
 and <code>move</code> operations. Platform order determines selection priority. Declared
 platforms are also the platforms consumed by <code>pixi lock --script</code>; the lock
 command does not take a separate platform override.</p>
+<h3 id="scripts-without-declared-platforms">Scripts without declared platforms<a class="headerlink" href="#scripts-without-declared-platforms" title="Permanent link">#</a></h3>
+<p>A script does not have to declare <code>platforms</code>.
+When it doesn't, Pixi resolves it for the machine you run it on, using the <a href="../../workspace/multi_platform_configuration/#declaring-virtual-packages-per-platform">virtual packages</a> it detects there: your CUDA driver, your glibc version, your macOS version.
+A script that needs a glibc newer than Pixi's <code>2.28</code> default resolves without you writing anything down.</p>
+<p>To resolve for a fixed target instead:</p>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="go">pixi workspace platform add --script analysis.py --auto-detect</span>
+</span></code></pre></div>
 <h2 id="supported-command-surface">Supported command surface<a class="headerlink" href="#supported-command-surface" title="Permanent link">#</a></h2>
 <p>The script-capable commands are:</p>
 <table>
