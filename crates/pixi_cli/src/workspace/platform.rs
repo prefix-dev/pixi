@@ -17,7 +17,10 @@ use pixi_manifest::{
 };
 use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform, Version};
 
-use crate::{cli_config::ScriptWorkspaceConfig, cli_interface::CliInterface};
+use crate::{
+    cli_config::{ScriptWorkspaceConfig, script_lock_file_usage},
+    cli_interface::CliInterface,
+};
 
 /// Commands to manage workspace platforms.
 #[derive(Parser, Debug)]
@@ -500,10 +503,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
 
-    let lock_file_usage = platform_lock_file_usage(
+    let lock_file_usage = script_lock_file_usage(
+        LockFileUsage::Update,
         args.workspace_config.script.is_some(),
         workspace.lock_file_path().is_file(),
-    );
+    )?;
     let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
 
     match args.command {
@@ -514,14 +518,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Command::Remove(args) => {
             execute_remove(&workspace, &workspace_ctx, args, lock_file_usage).await
         }
-    }
-}
-
-fn platform_lock_file_usage(is_script: bool, lock_file_exists: bool) -> LockFileUsage {
-    if is_script && !lock_file_exists {
-        LockFileUsage::Frozen
-    } else {
-        LockFileUsage::Update
     }
 }
 
