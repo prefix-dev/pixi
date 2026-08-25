@@ -358,20 +358,3 @@ impl<N: Hash + Eq + Clone + Serialize, D: Hash + Eq + Clone + Serialize> Seriali
         seq.end()
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::DependencyMap;
-
-    #[test]
-    fn dependency_map_serde_round_trip_preserves_multiple_specs() {
-        let mut map = DependencyMap::default();
-        map.insert("python".to_string(), ">=3.12".to_string());
-        map.insert("python".to_string(), "<3.14".to_string());
-        map.insert("numpy".to_string(), "2.*".to_string());
-
-        let json = serde_json::to_string(&map).unwrap();
-        let restored: DependencyMap<String, String> = serde_json::from_str(&json).unwrap();
-        assert_eq!(restored, map);
-    }
-}

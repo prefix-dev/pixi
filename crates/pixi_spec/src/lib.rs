@@ -827,7 +827,15 @@ impl From<PixiSpec> for toml_edit::Value {
 ///
 /// This type only represents binary packages. Use [`PixiSpec`] to represent
 /// both binary and source packages.
-#[derive(Debug, Clone, Hash, PartialEq, Eq, ::serde::Serialize)]
+#[derive(
+    Debug,
+    Clone,
+    Hash,
+    PartialEq,
+    Eq,
+    ::serde::Deserialize,
+    ::serde::Serialize,
+)]
 #[serde(untagged)]
 pub enum BinarySpec {
     /// The spec is represented solely by a version string. The package should

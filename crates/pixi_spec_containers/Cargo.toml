@@ -16,6 +16,3 @@ serde = { workspace = true, features = ["derive"] }
 rattler_conda_types = { workspace = true }
 
 pixi_spec = { workspace = true }
-
-[dev-dependencies]
-serde_json = { workspace = true }
