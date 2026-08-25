@@ -806,6 +806,8 @@ impl ArtifactCache {
             tokio::fs::read(self.sidecar_path(package, key)).await,
             Ok(current) if current == expected_bytes
         ))
+    }
+
     /// Read the backend description associated with an immutable alias.
     pub(crate) async fn immutable_alias(
         &self,
