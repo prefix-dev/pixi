@@ -39,6 +39,15 @@ impl RunScriptInput {
     }
 }
 
+/// Separates transient environments by input kind.
+pub(crate) fn transient_script_cache_key(kind: &[u8], identity: &[u8]) -> Vec<u8> {
+    let mut key = Vec::with_capacity(kind.len() + identity.len() + 1);
+    key.extend_from_slice(kind);
+    key.push(0);
+    key.extend_from_slice(identity);
+    key
+}
+
 pub(crate) const STDIN_SCRIPT_COMMAND: &str = "__pixi_stdin_script__";
 
 #[derive(Clone)]
@@ -285,6 +294,7 @@ fn friendly_name(url: &Url) -> String {
 mod tests {
     use super::{
         Gist, RunScriptInput, friendly_name, gist_id, resolve_gist_at, safe_url, select_gist_file,
+        transient_script_cache_key,
     };
     use std::{
         io::{Read, Write},
@@ -352,6 +362,18 @@ mod tests {
             RunScriptInput::classify(Path::new("-")),
             RunScriptInput::Stdin
         ));
+    }
+
+    #[test]
+    fn transient_cache_keys_include_the_input_context() {
+        let first = transient_script_cache_key(b"stdin", b"metadata");
+        let same = transient_script_cache_key(b"stdin", b"metadata");
+        let other_kind = transient_script_cache_key(b"remote", b"metadata");
+        let other_identity = transient_script_cache_key(b"stdin", b"other metadata");
+
+        assert_eq!(first, same);
+        assert_ne!(first, other_kind);
+        assert_ne!(first, other_identity);
     }
 
     #[test]

@@ -541,8 +541,13 @@ impl Workspace {
         let cache_root = config
             .cache_dir_for(CacheKind::ExecEnvironments)
             .map_err(|error| ScriptWorkspaceError::CacheDirectory(error.to_string()))?;
-        let workspace_script =
-            WorkspaceScript::for_transient(script_manifest, &cache_root, cache_name, cache_key);
+        let workspace_script = WorkspaceScript::for_transient(
+            script_manifest,
+            &cache_root,
+            cache_name,
+            cache_key,
+            &root,
+        );
         let workspace = manifest.with_provenance(ManifestProvenance::new(
             provenance_path,
             ManifestKind::Pep723,

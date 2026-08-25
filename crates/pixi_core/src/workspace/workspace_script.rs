@@ -56,10 +56,11 @@ impl WorkspaceScript {
         cache_root: &Path,
         cache_name: &str,
         cache_key: &[u8],
+        root: &Path,
     ) -> Self {
         Self {
             manifest: Box::new(manifest),
-            pixi_dir: cache_root.join(transient_cache_name(cache_name, cache_key)),
+            pixi_dir: cache_root.join(transient_cache_name(cache_name, cache_key, root)),
             lock_file_path: None,
         }
     }
@@ -253,8 +254,12 @@ fn local_cache_name(path: &Path) -> String {
     }
 }
 
-fn transient_cache_name(name: &str, key: &[u8]) -> String {
-    let digest = format!("{:016x}", xxh3_64(key));
+fn transient_cache_name(name: &str, key: &[u8], root: &Path) -> String {
+    let mut scoped_key = Vec::with_capacity(root.as_os_str().len() + key.len() + 1);
+    scoped_key.extend_from_slice(root.as_os_str().as_encoded_bytes());
+    scoped_key.push(0);
+    scoped_key.extend_from_slice(key);
+    let digest = format!("{:016x}", xxh3_64(&scoped_key));
     let name = name
         .bytes()
         .take(100)
@@ -339,25 +344,39 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let cache_root = directory.path().join("cache");
         let script_path = directory.path().join("example.py");
+        let root = directory.path().join("first");
         let key = b"first key";
-        let digest = xxh3_64(key);
+        let mut scoped_key = root.as_os_str().as_encoded_bytes().to_vec();
+        scoped_key.push(0);
+        scoped_key.extend_from_slice(key);
+        let digest = xxh3_64(&scoped_key);
         let first = WorkspaceScript::for_transient(
             manifest(&script_path),
             &cache_root,
             "HTTPS://example.com/example.py",
             key,
+            &root,
         );
         let first_again = WorkspaceScript::for_transient(
             manifest(&script_path),
             &cache_root,
             "HTTPS://example.com/example.py",
             key,
+            &root,
         );
         let second = WorkspaceScript::for_transient(
             manifest(&script_path),
             &cache_root,
             "HTTPS://example.com/example.py",
             b"second key",
+            &root,
+        );
+        let other_root = WorkspaceScript::for_transient(
+            manifest(&script_path),
+            &cache_root,
+            "HTTPS://example.com/example.py",
+            key,
+            &directory.path().join("second"),
         );
 
         assert!(first.lock_file_path().is_none());
@@ -367,6 +386,7 @@ mod tests {
         );
         assert_eq!(first.pixi_dir(), first_again.pixi_dir());
         assert_ne!(first.pixi_dir(), second.pixi_dir());
+        assert_ne!(first.pixi_dir(), other_root.pixi_dir());
     }
 
     #[test]
@@ -375,9 +395,13 @@ mod tests {
         let cache_root = directory.path().join("cache");
         let script_path = directory.path().join("example.py");
         let key = b"cache key";
+        let root = directory.path().join("root");
+        let mut scoped_key = root.as_os_str().as_encoded_bytes().to_vec();
+        scoped_key.push(0);
+        scoped_key.extend_from_slice(key);
         let script =
-            WorkspaceScript::for_transient(manifest(&script_path), &cache_root, "://", key);
-        let expected = cache_root.join(format!("{:016x}", xxh3_64(key)));
+            WorkspaceScript::for_transient(manifest(&script_path), &cache_root, "://", key, &root);
+        let expected = cache_root.join(format!("{:016x}", xxh3_64(&scoped_key)));
 
         assert_eq!(expected, script.pixi_dir());
     }
