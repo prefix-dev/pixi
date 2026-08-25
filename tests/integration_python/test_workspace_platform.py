@@ -12,7 +12,9 @@ commits. Heavy install/publish flows that don't fit pytest live in
   block at the top of `pixi.lock` is rewritten regardless of `--no-install`)
 
 To keep the suite fast everything uses `--no-install` and a manifest with no
-channels/dependencies so no network is involved.
+channels/dependencies so no network is involved. The one exception is the
+`--locked` legacy-alias test, which installs an empty environment (still
+offline) because `--locked` satisfiability is exactly what it verifies.
 """
 
 from __future__ import annotations
@@ -70,6 +72,22 @@ def _lockfile_platforms(workspace_dir: Path) -> list[str | dict[str, Any]]:
     assert lock.exists(), f"expected lockfile at {lock}"
     data = yaml.safe_load(lock.read_text())
     return data.get("platforms", [])
+
+
+def _alias_platform_in_lockfile(workspace_dir: Path, real_name: str, alias: str) -> None:
+    """Rewrite `pixi.lock` so the platform row named `real_name` is keyed by
+    `alias` instead, mimicking the short `pN` aliases older pixi versions
+    wrote to disk for rich platforms."""
+    lock_path = workspace_dir / "pixi.lock"
+    data = yaml.safe_load(lock_path.read_text())
+    for platform in data.get("platforms", []):
+        if isinstance(platform, dict) and platform.get("name") == real_name:
+            platform["name"] = alias
+    for env in (data.get("environments") or {}).values():
+        packages = env.get("packages") or {}
+        if real_name in packages:
+            packages[alias] = packages.pop(real_name)
+    lock_path.write_text(yaml.safe_dump(data))
 
 
 def _run_platform(
@@ -609,17 +627,96 @@ def test_lockfile_records_custom_platform_and_vps(pixi: Path, tmp_pixi_workspace
         "--no-install",
     )
     lock_platforms = _lockfile_platforms(tmp_pixi_workspace)
-    # Rich platforms are written under a short alias (e.g. `p1`) rather than
-    # their manifest name; they are matched back to `gpu-linux` by identity
-    # (subdir + virtual packages) when the lock file is read.
+    # Rich platforms are written under their manifest name so that lockfile
+    # consumers (e.g. pixi-pack) can look a platform up by the same name the
+    # manifest uses.
     entry = next(
         p
         for p in lock_platforms
         if isinstance(p, dict) and "__cuda=12.0" in p.get("virtual-packages", [])
     )
     assert entry["subdir"] == "linux-64"
-    assert entry["name"] != "gpu-linux"
-    assert entry["name"].startswith("p")
+    assert entry["name"] == "gpu-linux"
+
+
+def test_install_locked_succeeds_with_legacy_platform_aliases(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """A lockfile written by an older pixi keys rich platforms by short
+    aliases (`p1`). Such a lockfile is still satisfiable -- the alias is
+    matched back to the manifest platform by identity (subdir + virtual
+    packages) -- so `pixi install --locked` succeeds and, because `--locked`
+    never writes, leaves the file byte-for-byte untouched."""
+    manifest = _seed_workspace(tmp_pixi_workspace)
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "add",
+        "gpu-linux=linux-64",
+        "--cuda",
+        "12.0",
+        "--no-install",
+    )
+    _alias_platform_in_lockfile(tmp_pixi_workspace, "gpu-linux", "p1")
+    lock_path = tmp_pixi_workspace / "pixi.lock"
+    before = lock_path.read_text()
+
+    verify_cli_command(
+        [str(pixi), "install", "--locked", "--manifest-path", str(manifest)],
+    )
+
+    assert lock_path.read_text() == before, "--locked must not rewrite the lock file"
+
+
+def test_lock_rewrites_legacy_platform_aliases(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """`pixi lock` on an otherwise up-to-date lockfile that still uses the
+    legacy short aliases rewrites the platform names to the manifest names
+    without re-solving anything."""
+    manifest = _seed_workspace(tmp_pixi_workspace)
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "add",
+        "gpu-linux=linux-64",
+        "--cuda",
+        "12.0",
+        "--no-install",
+    )
+    _alias_platform_in_lockfile(tmp_pixi_workspace, "gpu-linux", "p1")
+
+    verify_cli_command([str(pixi), "lock", "--manifest-path", str(manifest)])
+
+    names = [
+        p if isinstance(p, str) else p["name"] for p in _lockfile_platforms(tmp_pixi_workspace)
+    ]
+    assert "gpu-linux" in names
+    assert "p1" not in names
+
+
+def test_lock_rewrites_renamed_platform_without_resolve(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """Renaming a platform in `pixi.toml` must not require a re-solve: the
+    locked row is matched by identity, and `pixi lock` persists the new name."""
+    manifest = _seed_workspace(tmp_pixi_workspace)
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "add",
+        "gpu-linux=linux-64",
+        "--cuda",
+        "12.0",
+        "--no-install",
+    )
+    manifest.write_text(manifest.read_text().replace('"gpu-linux"', '"cuda-linux"'))
+
+    verify_cli_command([str(pixi), "lock", "--manifest-path", str(manifest)])
+
+    names = [
+        p if isinstance(p, str) else p["name"] for p in _lockfile_platforms(tmp_pixi_workspace)
+    ]
+    assert "cuda-linux" in names
+    assert "gpu-linux" not in names
 
 
 def test_lockfile_records_removed_platform_lazy_pruning(

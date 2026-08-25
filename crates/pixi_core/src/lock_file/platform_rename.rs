@@ -14,11 +14,12 @@
 //! use by another platform in the lockfile. Mismatched or ambiguous entries
 //! pass through unchanged so the satisfiability layer can still flag them.
 //!
-//! The inverse runs at save time: [`shorten_platform_names`] rewrites rich
-//! platforms to short aliases (`p1`, `p2`, ...) so `pixi.lock` keys don't carry
-//! their full descriptive identity names. Because the load-time pass matches by
-//! identity rather than name, those aliases round-trip transparently -- the real
-//! names only ever live in `pixi.toml`.
+//! On disk, `pixi.lock` carries the manifest names verbatim (explicit or
+//! synthesized), so external tools can look up a platform under the same name
+//! the manifest uses. Older pixi versions wrote rich platforms under short
+//! `p1`, `p2`, ... aliases instead; because this pass matches by identity
+//! rather than name, those legacy aliases map back to the manifest names on
+//! load and disappear the next time the lock file is written.
 use std::{collections::HashMap, path::Path};
 
 use pixi_manifest::{PixiPlatform, WorkspaceManifest, platform};
@@ -28,19 +29,22 @@ use rattler_lock::{LockFile, LockedPackage, PlatformData, PlatformName};
 use thiserror::Error;
 
 /// Rewrite locked platform names so they match the manifest's current names
-/// where the identity matches. Returns the original lockfile unchanged when
-/// no renames apply.
+/// where the identity matches. The returned flag is `true` when at least one
+/// entry was renamed: the in-memory lockfile then diverges from the on-disk
+/// one in name only, and the caller may persist the new names without a
+/// re-solve. Returns the original lockfile unchanged (and `false`) when no
+/// renames apply.
 pub(crate) fn align_platform_names(
     lock_file: LockFile,
     manifest: &WorkspaceManifest,
     workspace_root: &Path,
-) -> LockFile {
+) -> (LockFile, bool) {
     let renames = compute_renames(&lock_file, manifest);
     if renames.is_empty() {
-        return lock_file;
+        return (lock_file, false);
     }
     match rebuild_with_renames(&lock_file, &renames, workspace_root) {
-        Ok(rebuilt) => rebuilt,
+        Ok(rebuilt) => (rebuilt, true),
         // The rebuild only fails if the rattler builder or the lock file
         // resolver rejects an input we just read out of a valid lockfile.
         // Log and fall back to the unmodified lockfile so the user still
@@ -50,43 +54,7 @@ pub(crate) fn align_platform_names(
                 "failed to rewrite lockfile platform names against the manifest: {err}; \
                  continuing with the lockfile's original names",
             );
-            lock_file
-        }
-    }
-}
-
-/// Rewrite the lockfile's rich platform names to short, stable aliases (`p1`,
-/// `p2`, ...) before serializing to disk, keeping descriptive identity names
-/// out of `pixi.lock`. Subdir platforms keep their conda subdir name. Numbering
-/// follows the declaration order of the non-subdir platforms in the workspace
-/// manifest, so the aliases are stable as long as that order is. The real names
-/// stay in `pixi.toml`; [`align_platform_names`] restores them by identity on
-/// load. Returns the lockfile unchanged when there are no rich platforms.
-pub(crate) fn shorten_platform_names(
-    lock_file: LockFile,
-    manifest: &WorkspaceManifest,
-    workspace_root: &Path,
-) -> LockFile {
-    let mut renames: HashMap<String, String> = HashMap::new();
-    let mut ordinal = 0usize;
-    for platform in &manifest.workspace.platforms {
-        if platform.is_subdir_platform() {
-            continue;
-        }
-        ordinal += 1;
-        renames.insert(platform.name().as_str().to_string(), format!("p{ordinal}"));
-    }
-    if renames.is_empty() {
-        return lock_file;
-    }
-    match rebuild_with_renames(&lock_file, &renames, workspace_root) {
-        Ok(rebuilt) => rebuilt,
-        Err(err) => {
-            tracing::warn!(
-                "failed to shorten lockfile platform names: {err}; \
-                 writing the lockfile with its full platform names",
-            );
-            lock_file
+            (lock_file, false)
         }
     }
 }
@@ -271,7 +239,7 @@ mod tests {
     use rattler_conda_types::Platform;
     use rattler_lock::{LockFile, PlatformData, PlatformName};
 
-    use super::{align_platform_names, shorten_platform_names};
+    use super::align_platform_names;
 
     fn manifest(source: &str) -> WorkspaceManifest {
         WorkspaceManifest::from_toml_str_with_base_dir(source, Path::new("")).unwrap()
@@ -294,11 +262,13 @@ mod tests {
         builder.finish()
     }
 
-    /// On save, rich platforms are aliased to `p1`, `p2`, ... in workspace
-    /// declaration order; subdir platforms keep their name. The aliases
-    /// round-trip back to the manifest names via the identity-based load pass.
+    /// Older pixi versions wrote rich platforms to disk under short `p1`,
+    /// `p2`, ... aliases in workspace declaration order. The identity-based
+    /// load pass maps those legacy aliases back to the manifest names, so
+    /// such lock files keep working without a re-solve and pick up the real
+    /// names on their next write.
     #[test]
-    fn shorten_aliases_rich_platforms_in_declaration_order() {
+    fn legacy_pn_aliases_align_to_manifest_names() {
         let manifest = manifest(
             r#"
             [workspace]
@@ -314,7 +284,7 @@ mod tests {
         let mut builder = LockFile::builder()
             .with_platforms(vec![
                 PlatformData {
-                    name: PlatformName::try_from("mac").unwrap(),
+                    name: PlatformName::try_from("p1").unwrap(),
                     subdir: Platform::OsxArm64,
                     virtual_packages: vec!["__osx=13.5".to_string()],
                 },
@@ -324,7 +294,7 @@ mod tests {
                     virtual_packages: vec![],
                 },
                 PlatformData {
-                    name: PlatformName::try_from("gpu").unwrap(),
+                    name: PlatformName::try_from("p2").unwrap(),
                     subdir: Platform::Linux64,
                     virtual_packages: vec!["__cuda=12.0".to_string()],
                 },
@@ -334,19 +304,9 @@ mod tests {
         builder.set_options("default", rattler_lock::SolveOptions::default());
         let lock = builder.finish();
 
-        let shortened = shorten_platform_names(lock, &manifest, Path::new("/"));
+        let (restored, renamed) = align_platform_names(lock, &manifest, Path::new("/"));
 
-        // `mac` is the first non-subdir entry, `gpu` the second; `linux-64`
-        // is a subdir platform and keeps its name.
-        assert!(shortened.platform("p1").is_some());
-        assert!(shortened.platform("p2").is_some());
-        assert!(shortened.platform("linux-64").is_some());
-        assert!(shortened.platform("mac").is_none());
-        assert!(shortened.platform("gpu").is_none());
-
-        // The load pass restores the manifest names by identity, so the
-        // aliases never escape `pixi.lock`.
-        let restored = align_platform_names(shortened, &manifest, Path::new("/"));
+        assert!(renamed, "legacy aliases must be reported as a divergence");
         assert!(restored.platform("mac").is_some());
         assert!(restored.platform("gpu").is_some());
         assert!(restored.platform("linux-64").is_some());
@@ -373,8 +333,9 @@ mod tests {
             vec!["__cuda=12.0".to_string()],
         );
 
-        let aligned = align_platform_names(lock, &manifest, Path::new("/"));
+        let (aligned, renamed) = align_platform_names(lock, &manifest, Path::new("/"));
 
+        assert!(renamed, "the rename must be reported as a divergence");
         assert!(
             aligned.platform("gpu-linux").is_some(),
             "renamed entry should be queryable under the workspace name",
@@ -404,9 +365,13 @@ mod tests {
             vec!["__cuda=12.0".to_string()],
         );
 
-        let aligned = align_platform_names(lock, &manifest, Path::new("/"));
+        let (aligned, renamed) = align_platform_names(lock, &manifest, Path::new("/"));
 
         // The manifest has no `__cuda` entry, so no rename can apply.
+        assert!(
+            !renamed,
+            "no divergence may be reported when nothing renames"
+        );
         assert!(aligned.platform("leftover").is_some());
     }
 
@@ -447,10 +412,11 @@ mod tests {
         builder.set_options("default", rattler_lock::SolveOptions::default());
         let lock = builder.finish();
 
-        let aligned = align_platform_names(lock, &manifest, Path::new("/"));
+        let (aligned, renamed) = align_platform_names(lock, &manifest, Path::new("/"));
 
         // Both rows survive under their original names: the colliding
         // rename was skipped rather than overwriting.
+        assert!(!renamed);
         assert!(aligned.platform("gpu-linux").is_some());
         assert!(aligned.platform("linux-64-cuda").is_some());
     }
@@ -484,8 +450,9 @@ mod tests {
             ],
         );
 
-        let aligned = align_platform_names(lock, &manifest, Path::new("/"));
+        let (aligned, renamed) = align_platform_names(lock, &manifest, Path::new("/"));
 
+        assert!(renamed);
         assert!(aligned.platform("gpu-linux").is_some());
         assert!(aligned.platform("linux-64-cuda").is_none());
     }
@@ -505,10 +472,11 @@ mod tests {
             "#,
         );
         // `build-tool` is referenced only from the source record's
-        // `build_packages`, not from any environment.
+        // `build_packages`, not from any environment. The lock row is keyed
+        // by the legacy `p1` alias so the load pass has to rename it.
         let lock_source = r#"version: 7
 platforms:
-- name: gpu
+- name: p1
   subdir: linux-64
   virtual-packages:
   - __cuda=12.0
@@ -517,7 +485,7 @@ environments:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
     packages:
-      gpu:
+      p1:
       - conda_source: my-package[12345678] @ git+https://github.com/example/my-package.git?tag=v0.1.0#abc123def456abc123def456abc123def456abc1
 packages:
 - conda: https://conda.anaconda.org/conda-forge/linux-64/build-tool-1.0.0-h0.conda
@@ -531,10 +499,11 @@ packages:
         let lock = LockFile::from_str_with_base_directory(lock_source, Some(Path::new("/")))
             .expect("fixture lockfile should parse");
 
-        let shortened = shorten_platform_names(lock, &manifest, Path::new("/"));
+        let (aligned, renamed) = align_platform_names(lock, &manifest, Path::new("/"));
 
-        assert!(shortened.platform("p1").is_some(), "rename should apply");
-        let rendered = shortened
+        assert!(renamed);
+        assert!(aligned.platform("gpu").is_some(), "rename should apply");
+        let rendered = aligned
             .render_to_string()
             .expect("rebuilt lockfile should serialize");
         assert!(
@@ -559,10 +528,11 @@ packages:
             "#,
         );
         // `host-tool` is referenced only from the source record's
-        // `host_packages`, not from any environment.
+        // `host_packages`, not from any environment. The lock row is keyed
+        // by the legacy `p1` alias so the load pass has to rename it.
         let lock_source = r#"version: 7
 platforms:
-- name: gpu
+- name: p1
   subdir: linux-64
   virtual-packages:
   - __cuda=12.0
@@ -571,7 +541,7 @@ environments:
     channels:
     - url: https://conda.anaconda.org/conda-forge/
     packages:
-      gpu:
+      p1:
       - conda_source: my-package[12345678] @ git+https://github.com/example/my-package.git?tag=v0.1.0#abc123def456abc123def456abc123def456abc1
 packages:
 - conda: https://conda.anaconda.org/conda-forge/linux-64/host-tool-1.0.0-h0.conda
@@ -585,10 +555,11 @@ packages:
         let lock = LockFile::from_str_with_base_directory(lock_source, Some(Path::new("/")))
             .expect("fixture lockfile should parse");
 
-        let shortened = shorten_platform_names(lock, &manifest, Path::new("/"));
+        let (aligned, renamed) = align_platform_names(lock, &manifest, Path::new("/"));
 
-        assert!(shortened.platform("p1").is_some(), "rename should apply");
-        let rendered = shortened
+        assert!(renamed);
+        assert!(aligned.platform("gpu").is_some(), "rename should apply");
+        let rendered = aligned
             .render_to_string()
             .expect("rebuilt lockfile should serialize");
         assert!(

@@ -15,5 +15,9 @@ ignore-hidden = false
 _placehold = "_placehold"
 intoto = "intoto"
 plt-setp = "plt.setp"
-pn = "pn"
 solvePnPRansac = "solvePnPRansac"
+
+[default.extend-words]
+# The short platform aliases (`p1`, `p2`, ...) older pixi versions wrote to
+# `pixi.lock` are referred to as `pN` in identifiers and docs.
+pn = "pn"
