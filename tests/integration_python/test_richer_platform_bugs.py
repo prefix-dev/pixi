@@ -627,3 +627,50 @@ def test_exec_honours_the_platform_override(
         stderr_contains="No candidates were found for dummy-f",
     )
     verify_cli_command(command, ExitCode.SUCCESS)
+
+
+def test_a_lock_without_a_row_for_this_platform_installs_nothing(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    """A lock file that carries no row for the platform being installed is only
+    a problem when the environment declares something to install there.
+
+    A v6 lock records rows per platform that had packages, so a workspace whose
+    dependencies all sit under another ``[target]`` legitimately has none for
+    this one, on a plain ``pixi run`` as much as under ``--frozen``.
+    """
+    other = "win-64" if not CURRENT_PLATFORM.startswith("win") else "linux-64"
+    manifest = _write(
+        tmp_pixi_workspace / "pixi.toml",
+        f"""
+[workspace]
+name = "no-row"
+channels = ["{dummy_channel_1}"]
+platforms = ["{CURRENT_PLATFORM}", "{other}"]
+
+[target.{other}.dependencies]
+dummy-a = "*"
+
+[tasks]
+hello = "echo TASK-RAN"
+""",
+    )
+    _write(
+        tmp_pixi_workspace / "pixi.lock",
+        f"""version: 6
+environments:
+  default:
+    channels:
+    - url: {dummy_channel_1}/
+    packages:
+      {other}: []
+packages: []
+""",
+    )
+
+    for extra in ([], ["--frozen"]):
+        verify_cli_command(
+            [pixi, "run", *extra, "--manifest-path", manifest, "hello"],
+            ExitCode.SUCCESS,
+            stdout_contains="TASK-RAN",
+        )

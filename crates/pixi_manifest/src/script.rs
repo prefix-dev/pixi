@@ -675,6 +675,13 @@ fn validate_subset(metadata: &DocumentMut) -> Result<(), ScriptManifestError> {
         return Ok(());
     };
 
+    // Reported on its own, ahead of the generic sweep: the machine's virtual
+    // packages already reach a script that declares no `platforms`, and a
+    // script that declares them carries its requirements on the platform.
+    if pixi.contains_key("system-requirements") {
+        return Err(ScriptManifestError::SystemRequirementsUnsupported);
+    }
+
     let mut unsupported = unsupported_keys(
         pixi,
         "tool.pixi",
@@ -683,7 +690,6 @@ fn validate_subset(metadata: &DocumentMut) -> Result<(), ScriptManifestError> {
             "constraints",
             "dependencies",
             "pypi-dependencies",
-            "system-requirements",
             "target",
             "workspace",
         ],
@@ -780,6 +786,12 @@ pub enum ScriptManifestError {
     #[error("PEP 723 scripts do not support: {}", .0.join(", "))]
     #[diagnostic(help("A script represents one implicit default environment."))]
     UnsupportedFields(Vec<String>),
+
+    #[error("PEP 723 scripts do not support `[tool.pixi.system-requirements]`")]
+    #[diagnostic(help(
+        "a script without `platforms` is resolved for the virtual packages of the machine it runs on. To pin a target instead, run `pixi workspace platform add --script <PATH> --auto-detect`"
+    ))]
+    SystemRequirementsUnsupported,
 
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -1251,6 +1263,29 @@ print("hello")
                 "tool.pixi.target.linux-64.tasks",
                 "tool.pixi.workspace.description"
             ]
+        );
+    }
+
+    #[test]
+    fn rejects_system_requirements() {
+        let (_directory, path) = script(
+            r#"# /// script
+# dependencies = []
+#
+# [tool.pixi.system-requirements]
+# cuda = "12"
+# ///
+"#,
+        );
+
+        let error = ScriptManifest::from_path(path)
+            .unwrap()
+            .unwrap()
+            .into_workspace_manifest()
+            .unwrap_err();
+        assert!(
+            matches!(error, ScriptManifestError::SystemRequirementsUnsupported),
+            "unexpected error: {error}"
         );
     }
 

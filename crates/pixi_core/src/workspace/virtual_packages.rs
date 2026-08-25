@@ -496,6 +496,24 @@ pub(crate) fn environment_has_dependencies(environment: &Environment<'_>) -> boo
         .any(|platform| has_conda_dependencies(Some(platform)))
 }
 
+/// Whether `environment` declares anything to install for `platform` in
+/// particular.
+///
+/// [`environment_has_dependencies`] answers the same question for the
+/// environment as a whole, which is too coarse to decide what a single
+/// platform's prefix should hold: a `[target.win-64.dependencies]` table says
+/// nothing about what belongs in a linux-64 prefix.
+pub(crate) fn environment_has_dependencies_for_platform(
+    environment: &Environment<'_>,
+    platform: &PixiPlatform,
+) -> bool {
+    !environment.combined_dependencies(Some(platform)).is_empty()
+        || !environment
+            .combined_dev_dependencies(Some(platform))
+            .is_empty()
+        || !environment.pypi_dependencies(Some(platform)).is_empty()
+}
+
 /// Classify how the current machine (including virtual-package overrides)
 /// runs `environment`:
 ///

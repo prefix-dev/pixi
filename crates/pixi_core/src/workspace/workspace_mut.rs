@@ -175,6 +175,42 @@ impl WorkspaceMut {
         self.workspace_manifest_document.kind()
     }
 
+    /// Forget the platforms pixi picked for a script that declares none, so an
+    /// edit sees the empty list the script actually has.
+    ///
+    /// A script's `platforms` are injected into the parsed manifest at load
+    /// time, which makes them look declared to every mutation: an add would
+    /// find the platform "already there" and write nothing. Nothing is lost by
+    /// dropping them, since they are recomputed on the next load.
+    pub fn forget_implicit_script_platforms(&mut self) {
+        if !self
+            .workspace
+            .as_ref()
+            .expect("workspace is not available")
+            .script_platforms_are_implicit()
+        {
+            return;
+        }
+        self.workspace
+            .as_mut()
+            .expect("workspace is not available")
+            .workspace
+            .value
+            .workspace
+            .platforms
+            .clear();
+        // `use_platform_composition` was set from the injected platforms. With
+        // none left, an environment resolves its platform by subdir name, which
+        // is what an empty `platforms` parses to.
+        self.workspace
+            .as_mut()
+            .expect("workspace is not available")
+            .workspace
+            .value
+            .workspace
+            .use_platform_composition = true;
+    }
+
     /// Returns a [`WorkspaceManifestMut`] which implements methods to modify a
     /// workspace manifest both in memory and on-disk.
     #[must_use]
