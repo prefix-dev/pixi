@@ -61,8 +61,9 @@ use uv_normalize::ExtraName;
 
 use super::{
     CondaPrefixUpdater, InstallSubset, PixiRecordsByName, PypiRecordsByName,
-    UnresolvedPixiRecordsByName, outdated::OutdatedEnvironments, resolve_lock_platform,
-    resolve_lock_platform_for, utils::IoConcurrencyLimit,
+    UnresolvedPixiRecordsByName, outdated::OutdatedEnvironments,
+    platform_rename::align_platform_names, resolve_lock_platform, resolve_lock_platform_for,
+    utils::IoConcurrencyLimit,
 };
 use crate::{
     Workspace,
@@ -243,6 +244,63 @@ impl LockFileLoadResult {
     }
 }
 
+fn lock_file_for_usage(
+    lock_file_result: LockFileLoadResult,
+    lock_file_usage: LockFileUsage,
+) -> miette::Result<(LockFile, bool)> {
+    let platform_names_realigned = lock_file_result.platform_names_realigned();
+
+    if lock_file_result.is_version_mismatch()
+        && matches!(
+            lock_file_usage,
+            LockFileUsage::Locked | LockFileUsage::Frozen
+        )
+        && let LockFileLoadResult::VersionMismatch {
+            lock_file_version,
+            max_supported_version,
+        } = lock_file_result
+    {
+        #[cfg(feature = "self_update")]
+        let update_instruction = "Try running `pixi self-update` to update to the latest version.";
+        #[cfg(not(feature = "self_update"))]
+        let update_instruction = "Please update pixi to the latest version and try again.";
+
+        let help_message = format!(
+            "Maximum supported version: {} (pixi v{})\n\
+             Cannot continue with --locked or --frozen mode as the lock file cannot be read.\n\
+             {}",
+            max_supported_version,
+            consts::PIXI_VERSION,
+            update_instruction
+        );
+        return Err(LockFileVersionMismatchError {
+            lock_file_version,
+            help_message,
+        }
+        .into());
+    }
+
+    Ok((
+        lock_file_result.into_lock_file_or_empty_with_warning(),
+        platform_names_realigned,
+    ))
+}
+
+/// Chooses the lock file to update and whether Pixi may write it.
+enum LockFileInput {
+    /// Read and write the workspace lock file.
+    Workspace,
+
+    /// Use a lock file supplied by the caller.
+    Provided(LockFile),
+}
+
+impl LockFileInput {
+    fn should_persist(&self) -> bool {
+        matches!(self, Self::Workspace)
+    }
+}
+
 impl Workspace {
     /// Ensures that the lock file is up-to-date with the project.
     ///
@@ -261,45 +319,38 @@ impl Workspace {
         progress: Option<Arc<pixi_reporters::TopLevelProgress>>,
         options: UpdateLockFileOptions,
     ) -> miette::Result<(LockFileDerivedData<'_>, bool)> {
-        let lock_file_result = self.load_lock_file().await?;
+        self.update_lock_file_with_input(progress, options, LockFileInput::Workspace)
+            .await
+    }
 
-        // Handle version mismatch - error if --locked or --frozen is set
-        if lock_file_result.is_version_mismatch()
-            && (options.lock_file_usage == LockFileUsage::Locked
-                || options.lock_file_usage == LockFileUsage::Frozen)
-        {
-            // Extract the version info for the error message
-            if let LockFileLoadResult::VersionMismatch {
-                lock_file_version,
-                max_supported_version,
-            } = lock_file_result
-            {
-                #[cfg(feature = "self_update")]
-                let update_instruction =
-                    "Try running `pixi self-update` to update to the latest version.";
-                #[cfg(not(feature = "self_update"))]
-                let update_instruction = "Please update pixi to the latest version and try again.";
+    /// Updates a caller-provided lock file without writing it.
+    ///
+    /// The caller is responsible for persisting the returned lock file.
+    pub(crate) async fn update_lock_file_from_lock_file(
+        &self,
+        progress: Option<Arc<pixi_reporters::TopLevelProgress>>,
+        options: UpdateLockFileOptions,
+        lock_file: LockFile,
+    ) -> miette::Result<(LockFileDerivedData<'_>, bool)> {
+        self.update_lock_file_with_input(progress, options, LockFileInput::Provided(lock_file))
+            .await
+    }
 
-                let help_message = format!(
-                    "Maximum supported version: {} (pixi v{})\n\
-                         Cannot continue with --locked or --frozen mode as the lock file cannot be read.\n\
-                         {}",
-                    max_supported_version,
-                    consts::PIXI_VERSION,
-                    update_instruction
-                );
-
-                return Err(LockFileVersionMismatchError {
-                    lock_file_version,
-                    help_message,
-                }
-                .into());
+    async fn update_lock_file_with_input(
+        &self,
+        progress: Option<Arc<pixi_reporters::TopLevelProgress>>,
+        options: UpdateLockFileOptions,
+        input: LockFileInput,
+    ) -> miette::Result<(LockFileDerivedData<'_>, bool)> {
+        let persist_lock_file = input.should_persist();
+        let (lock_file, platform_names_realigned) = match input {
+            LockFileInput::Workspace => {
+                lock_file_for_usage(self.load_lock_file().await?, options.lock_file_usage)?
             }
-        }
-
-        // Load the lock file, displaying warning if there's a version mismatch
-        let platform_names_realigned = lock_file_result.platform_names_realigned();
-        let lock_file = lock_file_result.into_lock_file_or_empty_with_warning();
+            LockFileInput::Provided(lock_file) => {
+                align_platform_names(lock_file, self.workspace_manifest(), self.root())
+            }
+        };
 
         let needs_format_upgrade = lock_file.version() < rattler_lock::FileFormatVersion::LATEST;
 
@@ -371,7 +422,7 @@ impl Workspace {
                 && !needs_format_upgrade
                 && options.lock_file_usage.allow_updates()
             {
-                if options.lock_file_usage != LockFileUsage::DryRun {
+                if persist_lock_file && options.lock_file_usage != LockFileUsage::DryRun {
                     derived.write_to_disk()?;
                 }
                 return Ok((derived, true));
@@ -449,7 +500,7 @@ impl Workspace {
 
         // Write the lock file to disk
 
-        if options.lock_file_usage != LockFileUsage::DryRun {
+        if persist_lock_file && options.lock_file_usage != LockFileUsage::DryRun {
             lock_file_derived_data.write_to_disk()?;
         }
 
