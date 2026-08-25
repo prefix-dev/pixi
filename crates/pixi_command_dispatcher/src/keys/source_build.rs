@@ -65,17 +65,6 @@ fn unwrap_dispatcher_err<E>(err: CommandDispatcherError<E>) -> E {
     }
 }
 
-/// Whether the source tree used for this build is fully identified by locked
-/// Git commits. Only these builds may reuse an artifact without materialising
-/// the source tree to perform file-based freshness checks.
-fn immutable_git_sources(record: &UnresolvedSourceRecord) -> bool {
-    record.manifest_source.as_git().is_some()
-        && record
-            .build_source
-            .as_ref()
-            .is_none_or(|source| source.pinned().as_git().is_some())
-}
-
 /// Hash user-provided variant files before checkout. If a file cannot be read,
 /// the checkout-free path is disabled rather than keying an artifact without
 /// one of its static build inputs.
@@ -204,7 +193,7 @@ async fn compute_inner(
     let backend_override = ctx.compute(&BackendOverrideKey).await;
     let enabled_protocols = ctx.compute(&EnabledProtocolsKey).await;
     let channel_config = ctx.compute(&ChannelConfigKey).await;
-    let immutable_cache_key = (immutable_git_sources(&spec.record) && backend_override.is_empty())
+    let immutable_cache_key = (!spec.record.has_mutable_source() && backend_override.is_empty())
         .then(|| immutable_variant_file_hashes(&spec))
         .flatten()
         .map(|variant_file_hashes| {
