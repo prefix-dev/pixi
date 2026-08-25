@@ -92,8 +92,8 @@ impl WorkspaceMut {
         let contents = workspace.workspace.provenance.read()?.into_inner();
 
         let workspace_manifest_document = match &workspace.storage {
-            WorkspaceStorage::Script { manifest, .. } => {
-                ManifestDocument::from_script(manifest.as_ref().clone())
+            WorkspaceStorage::Script(script) => {
+                ManifestDocument::from_script(script.manifest().clone())
                     .expect("a loaded script must remain valid")
             }
             WorkspaceStorage::Project => {
@@ -266,19 +266,20 @@ impl WorkspaceMut {
         pixi_utils::atomic_write::atomic_write(&manifest_path, new_contents).await?;
         self.modified = true;
 
-        if let WorkspaceStorage::Script { manifest, .. } = &mut self
+        if let WorkspaceStorage::Script(script) = &mut self
             .workspace
             .as_mut()
             .expect("workspace is not available")
             .storage
         {
-            **manifest = ScriptManifest::from_path(&manifest_path)
+            let manifest = ScriptManifest::from_path(&manifest_path)
                 .map_err(std::io::Error::other)?
                 .ok_or_else(|| {
                     std::io::Error::other(
                         "saved script no longer contains a PEP 723 metadata block",
                     )
                 })?;
+            script.replace_manifest(manifest);
         }
         Ok(())
     }

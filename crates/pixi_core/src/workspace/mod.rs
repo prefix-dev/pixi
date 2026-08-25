@@ -10,8 +10,10 @@ mod solve_group;
 pub mod stdlib_variants;
 pub mod virtual_packages;
 mod workspace_mut;
+mod workspace_script;
 
 use self::errors::VariantsError;
+use self::workspace_script::WorkspaceScript;
 #[cfg(not(windows))]
 use std::os::unix::fs::symlink;
 use std::{
@@ -196,11 +198,7 @@ pub struct Workspace {
 #[derive(Debug, Clone)]
 enum WorkspaceStorage {
     Project,
-    Script {
-        manifest: Box<ScriptManifest>,
-        pixi_dir: PathBuf,
-        lock_file_path: Option<PathBuf>,
-    },
+    Script(WorkspaceScript),
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -221,31 +219,6 @@ pub enum ScriptWorkspaceError {
         #[source]
         source: pixi_manifest::platform::host::HostDetectionError,
     },
-}
-
-fn script_cache_name(path: &Path) -> String {
-    let digest = format!("{:016x}", xxh3_64(path.to_string_lossy().as_bytes()));
-    let Some(stem) = path.file_stem().and_then(|stem| stem.to_str()) else {
-        return digest;
-    };
-
-    let mut name = String::with_capacity(stem.len().min(100));
-    let mut last_was_dash = false;
-    for byte in stem.bytes().take(100) {
-        if byte.is_ascii_alphanumeric() {
-            name.push(byte.to_ascii_lowercase() as char);
-            last_was_dash = false;
-        } else if !last_was_dash {
-            name.push('-');
-            last_was_dash = true;
-        }
-    }
-    let name = name.trim_matches('-');
-    if name.is_empty() {
-        digest
-    } else {
-        format!("{name}-{digest}")
-    }
 }
 
 /// Install the platforms picked for a script that declares none.
@@ -395,15 +368,6 @@ fn locked_virtual_packages(platform: &rattler_lock::Platform<'_>) -> Vec<Generic
         .collect()
 }
 
-fn script_lock_file_path(path: &Path) -> PathBuf {
-    let mut file_name = path
-        .file_name()
-        .expect("an absolute script path always has a file name")
-        .to_os_string();
-    file_name.push(".pixi.lock");
-    path.with_file_name(file_name)
-}
-
 impl Debug for Workspace {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Project")
@@ -504,7 +468,6 @@ impl Workspace {
         config: Config,
     ) -> Result<WithWarnings<Self>, ScriptWorkspaceError> {
         let script_path = script.path().to_owned();
-        let lock_file_path = script_lock_file_path(&script_path);
         let script_manifest = script.clone();
         let script_config = script.workspace_config()?;
         let (mut manifest, warnings) = script.into_workspace_manifest()?;
@@ -516,21 +479,23 @@ impl Workspace {
                 .map(PrioritizedChannel::from)
                 .collect();
         }
+        let root = script_path
+            .parent()
+            .expect("an absolute script path always has a parent")
+            .to_owned();
+        let cache_root = config
+            .cache_dir_for(CacheKind::ExecEnvironments)
+            .map_err(|error| ScriptWorkspaceError::CacheDirectory(error.to_string()))?;
+        let workspace_script = WorkspaceScript::for_local(script_manifest, &cache_root);
         if !script_config.platforms_explicit {
+            let lock_file_path = workspace_script
+                .lock_file_path()
+                .expect("a local script has an adjacent lock-file path");
             set_implicit_script_platforms(
                 &mut manifest.workspace,
                 implicit_script_platforms(Some(&lock_file_path))?,
             );
         }
-
-        let root = script_path
-            .parent()
-            .expect("an absolute script path always has a parent")
-            .to_owned();
-        let pixi_dir = config
-            .cache_dir_for(CacheKind::ExecEnvironments)
-            .map_err(|error| ScriptWorkspaceError::CacheDirectory(error.to_string()))?
-            .join(script_cache_name(&script_path));
         let workspace =
             manifest.with_provenance(ManifestProvenance::new(script_path, ManifestKind::Pep723));
 
@@ -539,11 +504,7 @@ impl Workspace {
             None,
             root,
             config,
-            WorkspaceStorage::Script {
-                manifest: Box::new(script_manifest),
-                pixi_dir,
-                lock_file_path: Some(lock_file_path),
-            },
+            WorkspaceStorage::Script(workspace_script),
         ))
         .with_warnings(warnings))
     }
@@ -577,28 +538,11 @@ impl Workspace {
             );
         }
 
-        let digest = format!("{:016x}", xxh3_64(cache_key));
-        let cache_name = cache_name
-            .bytes()
-            .take(100)
-            .map(|byte| {
-                if byte.is_ascii_alphanumeric() {
-                    byte.to_ascii_lowercase() as char
-                } else {
-                    '-'
-                }
-            })
-            .collect::<String>();
-        let cache_name = cache_name.trim_matches('-');
-        let cache_name = if cache_name.is_empty() {
-            digest
-        } else {
-            format!("{cache_name}-{digest}")
-        };
-        let pixi_dir = config
+        let cache_root = config
             .cache_dir_for(CacheKind::ExecEnvironments)
-            .map_err(|error| ScriptWorkspaceError::CacheDirectory(error.to_string()))?
-            .join(cache_name);
+            .map_err(|error| ScriptWorkspaceError::CacheDirectory(error.to_string()))?;
+        let workspace_script =
+            WorkspaceScript::for_transient(script_manifest, &cache_root, cache_name, cache_key);
         let workspace = manifest.with_provenance(ManifestProvenance::new(
             provenance_path,
             ManifestKind::Pep723,
@@ -609,11 +553,7 @@ impl Workspace {
             None,
             root,
             config,
-            WorkspaceStorage::Script {
-                manifest: Box::new(script_manifest),
-                pixi_dir,
-                lock_file_path: None,
-            },
+            WorkspaceStorage::Script(workspace_script),
         ))
         .with_warnings(warnings))
     }
@@ -710,7 +650,7 @@ impl Workspace {
     pub fn default_pixi_dir(&self) -> PathBuf {
         match &self.storage {
             WorkspaceStorage::Project => self.root.join(consts::PIXI_DIR),
-            WorkspaceStorage::Script { pixi_dir, .. } => pixi_dir.clone(),
+            WorkspaceStorage::Script(script) => script.pixi_dir().to_owned(),
         }
     }
 
@@ -718,8 +658,8 @@ impl Workspace {
     /// detached-environments is configured, this returns the project-specific
     /// detached path instead of the default `.pixi` directory.
     pub fn pixi_dir(&self) -> PathBuf {
-        if let WorkspaceStorage::Script { pixi_dir, .. } = &self.storage {
-            return pixi_dir.clone();
+        if let WorkspaceStorage::Script(script) = &self.storage {
+            return script.pixi_dir().to_owned();
         }
         self.detached_environments_path()
             .unwrap_or_else(|| self.default_pixi_dir())
@@ -729,10 +669,11 @@ impl Workspace {
     /// platform it resolves for was picked from the machine rather than from
     /// the script metadata.
     pub fn script_platforms_are_implicit(&self) -> bool {
-        let WorkspaceStorage::Script { manifest, .. } = &self.storage else {
+        let WorkspaceStorage::Script(script) = &self.storage else {
             return false;
         };
-        manifest
+        script
+            .manifest()
             .workspace_config()
             .is_ok_and(|config| !config.platforms_explicit)
     }
@@ -740,7 +681,7 @@ impl Workspace {
     /// Create the detached-environments path for this project if it is set in
     /// the config
     fn detached_environments_path(&self) -> Option<PathBuf> {
-        if matches!(self.storage, WorkspaceStorage::Script { .. }) {
+        if matches!(self.storage, WorkspaceStorage::Script(_)) {
             return None;
         }
         if let Ok(Some(detached_environments_path)) = self.config().detached_environments_dir() {
@@ -877,14 +818,9 @@ impl Workspace {
     pub fn lock_file_path(&self) -> PathBuf {
         match &self.storage {
             WorkspaceStorage::Project => self.root.join(consts::PROJECT_LOCK_FILE),
-            WorkspaceStorage::Script {
-                lock_file_path: Some(lock_file_path),
-                ..
-            } => lock_file_path.clone(),
-            WorkspaceStorage::Script {
-                lock_file_path: None,
-                ..
-            } => panic!("transient script workspaces do not have a lock file path"),
+            WorkspaceStorage::Script(script) => script
+                .lock_file_path()
+                .expect("transient script workspaces do not have a lock file path"),
         }
     }
 
@@ -892,7 +828,7 @@ impl Workspace {
     pub fn persistent_lock_file_path(&self) -> Option<PathBuf> {
         match &self.storage {
             WorkspaceStorage::Project => Some(self.root.join(consts::PROJECT_LOCK_FILE)),
-            WorkspaceStorage::Script { lock_file_path, .. } => lock_file_path.clone(),
+            WorkspaceStorage::Script(script) => script.lock_file_path(),
         }
     }
 
