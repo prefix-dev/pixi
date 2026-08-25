@@ -369,10 +369,10 @@ print(json.dumps({
 
 
 @pytest.mark.slow
-def test_pixi_run_script_reuses_a_satisfying_resolution_without_solving(
+def test_pixi_update_script_refreshes_the_cached_resolution(
     pixi: Path, tmp_pixi_workspace: Path, channels: Path
 ) -> None:
-    """A satisfying cached resolution does not require channel access."""
+    """An explicit update refreshes the resolution used by later runs."""
     exec_cache = tmp_pixi_workspace / "script-exec-cache"
     repodata_cache = tmp_pixi_workspace / "repodata-cache"
     env = {
@@ -422,12 +422,29 @@ print("SCRIPT-RAN")
     package_records = list(exec_cache.glob("*/envs/default/conda-meta/package-*.json"))
     assert len(package_records) == 1
     assert json.loads(package_records[0].read_text())["version"] == "0.1.0"
+
+    shutil.copytree(channels / "multiple_versions_channel_1", channel)
+    verify_cli_command(
+        [pixi, "update", "--script", script],
+        cwd=tmp_pixi_workspace,
+        env=env,
+    )
+    verify_cli_command(
+        [pixi, "run", "--script", script],
+        cwd=tmp_pixi_workspace,
+        env=env,
+        stdout_contains="SCRIPT-RAN",
+    )
+
+    package_records = list(exec_cache.glob("*/envs/default/conda-meta/package-*.json"))
+    assert len(package_records) == 1
+    assert json.loads(package_records[0].read_text())["version"] == "0.2.0"
     assert not script.with_name("example.py.pixi.lock").exists()
     assert_no_workspace_state_created(tmp_pixi_workspace)
 
 
 @pytest.mark.slow
-def test_pixi_lock_script_writes_only_the_adjacent_lock(
+def test_pixi_lock_and_update_script_write_only_the_adjacent_lock(
     pixi: Path, tmp_pixi_workspace: Path
 ) -> None:
     (tmp_pixi_workspace / "pixi.toml").write_text(
@@ -460,6 +477,12 @@ print("hello")
     assert not script_lock.exists()
 
     verify_cli_command([pixi, "lock", "--script", script], cwd=tmp_pixi_workspace)
+    assert script.read_text() == original_script
+    assert script_lock.exists()
+    assert not (tmp_pixi_workspace / "pixi.lock").exists()
+    assert_no_workspace_state_created(tmp_pixi_workspace)
+
+    verify_cli_command([pixi, "update", "--script", script], cwd=tmp_pixi_workspace)
     assert script.read_text() == original_script
     assert script_lock.exists()
     assert not (tmp_pixi_workspace / "pixi.lock").exists()

@@ -159,6 +159,26 @@ impl WorkspaceScript {
 }
 
 impl Workspace {
+    /// Loads the lock-file input for an explicit update.
+    ///
+    /// Projects and scripts with an adjacent lock file use that lock file. A
+    /// script without one uses its cached resolution.
+    pub async fn load_lock_file_for_update(&self) -> miette::Result<LockFile> {
+        if let WorkspaceStorage::Script(script) = &self.storage
+            && !script.lock_file_path().is_some_and(|path| path.is_file())
+        {
+            return Ok(script
+                .load_cached_resolution(self.root())
+                .await
+                .unwrap_or_default());
+        }
+
+        Ok(self
+            .load_lock_file()
+            .await?
+            .into_lock_file_or_empty_with_warning())
+    }
+
     /// Resolves the lock file used by an operational command.
     ///
     /// Projects use their persistent lock file. Scripts use an adjacent lock
@@ -217,6 +237,22 @@ impl Workspace {
         }
 
         Ok((resolved, updated))
+    }
+}
+
+impl LockFileDerivedData<'_> {
+    /// Writes a resolution produced by an explicit update.
+    ///
+    /// Projects and scripts with an adjacent lock file write that lock file. A
+    /// script without one writes its cached resolution.
+    pub async fn write_updated_resolution(&self) -> miette::Result<()> {
+        if let WorkspaceStorage::Script(script) = &self.workspace.storage
+            && !script.lock_file_path().is_some_and(|path| path.is_file())
+        {
+            return script.write_cached_resolution(&self.lock_file).await;
+        }
+
+        self.write_to_disk()
     }
 }
 

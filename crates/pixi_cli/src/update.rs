@@ -15,11 +15,12 @@ use pixi_diff::{LockFileDiff, LockFileJsonDiff};
 use pixi_manifest::{EnvironmentName, PixiPlatformName};
 use rattler_lock::LockFile;
 
-use crate::cli_config::WorkspaceConfig;
+use crate::cli_config::ScriptWorkspaceConfig;
 
-/// The `update` command checks if there are newer versions of the dependencies and updates the `pixi.lock` file and environments accordingly.
+/// Updates dependencies to newer compatible versions.
 ///
-/// It will only update the lock file if the dependencies in the manifest file are still compatible with the new versions.
+/// Projects and scripts with an adjacent lock file write that lock file. A
+/// script without one writes its cached resolution.
 #[derive(Parser, Debug, Default)]
 pub struct Args {
     #[clap(flatten)]
@@ -29,14 +30,14 @@ pub struct Args {
     pub config: ConfigCli,
 
     #[clap(flatten)]
-    pub project_config: WorkspaceConfig,
+    pub project_config: ScriptWorkspaceConfig,
 
     /// Don't install the (solve) environments needed for pypi-dependencies
     /// solving.
     #[arg(long, env = "PIXI_NO_INSTALL")]
     pub no_install: bool,
 
-    /// Don't actually write the lock file or update any environment.
+    /// Don't write the updated resolution or update any environment.
     #[clap(short = 'n', long)]
     pub dry_run: bool,
 
@@ -148,12 +149,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     }
 
-    // Load the current lock file, if any. If none is found, a dummy lock file is
-    // returned.
-    let loaded_lock_file = &workspace
-        .load_lock_file()
-        .await?
-        .into_lock_file_or_empty_with_warning();
+    // Load the current resolution, if any. If none is found, an empty lock file
+    // is returned.
+    let loaded_lock_file = &workspace.load_lock_file_for_update().await?;
 
     // If the user specified a package name, check to see if it is even locked.
     if let Some(packages) = &specs.packages {
@@ -180,9 +178,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .update()
         .await?;
 
-    // If we're doing a dry-run, we don't want to write the lock file.
+    // If we're doing a dry-run, we don't want to write the updated resolution.
     if !args.dry_run {
-        updated_lock_file.write_to_disk()?;
+        updated_lock_file.write_updated_resolution().await?;
     }
 
     let lock_file = updated_lock_file.into_lock_file();
