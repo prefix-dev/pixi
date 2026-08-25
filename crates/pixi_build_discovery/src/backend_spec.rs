@@ -3,7 +3,7 @@ use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::ChannelUrl;
 /// Describes how a backend should be instantiated.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type", rename_all = "kebab-case"))]
 pub enum BackendSpec {
     /// Describes a backend that uses JSON-RPC to communicate with a backend.
@@ -23,7 +23,7 @@ impl BackendSpec {
 
 /// Describes a backend that uses JSON-RPC to communicate with an executable.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub struct JsonRpcBackendSpec {
     /// The name of the backend
@@ -54,7 +54,7 @@ impl JsonRpcBackendSpec {
 /// Describes a command that should be run by calling an executable in a certain
 /// environment.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(tag = "type", rename_all = "kebab-case"))]
 pub enum CommandSpec {
     EnvironmentSpec(Box<EnvironmentSpec>),
@@ -77,7 +77,7 @@ impl CommandSpec {
 /// Describes a command that should be run by calling an executable on the
 /// system.
 #[derive(Debug, Default, Clone, Hash, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub struct SystemCommandSpec {
     /// The command to run. If this is `None` the command should be inferred
@@ -88,7 +88,7 @@ pub struct SystemCommandSpec {
 /// Describes a conda environment that should be set up in which the backend is
 /// run.
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "kebab-case"))]
 pub struct EnvironmentSpec {
     /// The main requirement

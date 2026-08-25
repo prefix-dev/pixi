@@ -119,7 +119,8 @@ pub use install_pixi::{
 pub use installed_source_hints::{InstalledSourceHint, InstalledSourceHints};
 pub use instantiate_backend_key::{
     BackendHandle, InstantiateBackendError, InstantiateBackendKey, ProjectModelOverrides,
-    resolve_backend_identifier,
+    resolve_backend_identifier, resolve_backend_identifier_from_spec,
+    resolve_backend_identifier_with_spec,
 };
 pub use instantiate_tool_env::{InstantiateToolEnvironmentError, InstantiateToolEnvironmentSpec};
 pub use keys::SourceMetadata;

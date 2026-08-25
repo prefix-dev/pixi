@@ -37,11 +37,13 @@ use async_fd_lock::{LockRead, LockWrite};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Utc};
 use pixi_build_types::InputGlobSet;
+use pixi_build_discovery::JsonRpcBackendSpec;
 use pixi_compute_engine::ComputeCtx;
 use pixi_manifest::InlineContentHash;
 use pixi_path::{AbsPath, AbsPathBuf};
 use pixi_record::{UnresolvedPixiRecord, UnresolvedSourceRecord};
-use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
+use pixi_spec::ResolvedExcludeNewer;
+use rattler_conda_types::{ChannelUrl, PackageName, Platform, RepoDataRecord};
 use rattler_digest::Sha256Hash;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -76,8 +78,34 @@ pub enum SourceMutability {
 /// Format: url-safe-base64 of the `xxh3_64` over all hashed inputs
 /// (see [`compute_artifact_cache_key`]). Package name is not included
 /// because the entry lives under a `<package_name>/` parent directory.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ArtifactCacheKey(String);
+
+/// Cache key for locating an artifact produced from immutable Git sources
+/// before its build backend has been resolved.
+///
+/// This is deliberately distinct from [`ArtifactCacheKey`]: it omits the
+/// backend identifier, which is only available after source checkout.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ImmutableArtifactCacheKey(String);
+
+impl std::fmt::Display for ImmutableArtifactCacheKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+/// An immutable-source lookup entry pointing at the normal artifact-cache
+/// entry. The regular artifact entry remains authoritative.
+#[serde_as]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct ImmutableArtifactAlias {
+    artifact_key: ArtifactCacheKey,
+    #[serde_as(as = "rattler_digest::serde::SerializableHash<rattler_digest::Sha256>")]
+    artifact_sha256: Sha256Hash,
+    pub backend_identifier: String,
+    pub backend_spec: JsonRpcBackendSpec,
+}
 
 impl std::fmt::Display for ArtifactCacheKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -85,25 +113,68 @@ impl std::fmt::Display for ArtifactCacheKey {
     }
 }
 
+/// Compute the checkout-free lookup key for an immutable source build.
+///
+/// This has the same structural inputs as [`compute_artifact_cache_key`],
+/// except for the backend identifier. An alias written after a normal build
+/// connects this key to the backend-specific artifact entry.
+#[allow(clippy::too_many_arguments)]
+pub fn compute_immutable_artifact_cache_key(
+    record: &UnresolvedSourceRecord,
+    build_platform: Platform,
+    host_platform: Platform,
+    channels: &[ChannelUrl],
+    exclude_newer: &Option<ResolvedExcludeNewer>,
+    build_source_dep_sha256s: &[Sha256Hash],
+    host_source_dep_sha256s: &[Sha256Hash],
+    project_model_overrides: &crate::ProjectModelOverrides,
+    package_format: Option<pixi_build_types::procedures::conda_build_v1::CondaPackageFormat>,
+    inline_content_hash: Option<InlineContentHash>,
+) -> ImmutableArtifactCacheKey {
+    let mut hasher = Xxh3::new();
+    "immutable-artifact-alias-v1".hash(&mut hasher);
+    record.name().as_normalized().hash(&mut hasher);
+    record.manifest_source.hash(&mut hasher);
+    record.build_source.hash(&mut hasher);
+    record.variants.hash(&mut hasher);
+    inline_content_hash.hash(&mut hasher);
+    build_platform.hash(&mut hasher);
+    host_platform.hash(&mut hasher);
+    channels.hash(&mut hasher);
+    exclude_newer.hash(&mut hasher);
+    project_model_overrides.hash(&mut hasher);
+    package_format.hash(&mut hasher);
+
+    "build_packages".hash(&mut hasher);
+    for dep in &record.build_packages {
+        if let UnresolvedPixiRecord::Binary(repo) = dep {
+            repo.url.as_str().hash(&mut hasher);
+            repo.package_record.sha256.hash(&mut hasher);
+        }
+    }
+    for sha in build_source_dep_sha256s {
+        sha.hash(&mut hasher);
+    }
+
+    "host_packages".hash(&mut hasher);
+    for dep in &record.host_packages {
+        if let UnresolvedPixiRecord::Binary(repo) = dep {
+            repo.url.as_str().hash(&mut hasher);
+            repo.package_record.sha256.hash(&mut hasher);
+        }
+    }
+    for sha in host_source_dep_sha256s {
+        sha.hash(&mut hasher);
+    }
+
+    ImmutableArtifactCacheKey(URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes()))
+}
+
 /// Compute the artifact cache key for a source build.
 ///
-/// Inputs that go into the hash:
-/// - package name, pinned manifest source, pinned build source, variants
-/// - build + host platform
-/// - backend identifier (version + name of the build backend)
-/// - url + sha256 of every binary dep in `build_packages` / `host_packages`,
-///   tagged by bucket so a dep moving build ↔ host invalidates
-/// - sha256 of every source dep artifact, also tagged by bucket
-/// - any user-supplied project-model overrides (build_string_prefix,
-///   build_number) -- these flow into the resulting `.conda`'s build
-///   string and number, so different overrides must not share a cache
-///   entry
-///
-/// Source *files* are not hashed here: the sidecar captures their mtimes
-/// separately so a content change still invalidates the entry on lookup.
-///
-/// The caller provides source-dep sha256s split into build / host buckets
-/// to preserve the same bucket separation applied to binary deps.
+/// Source *files* are deliberately omitted: mutable sources are validated by
+/// the sidecar's mtimes and globs, while immutable sources use their locked
+/// commit identity through [`compute_immutable_artifact_cache_key`].
 #[allow(clippy::too_many_arguments)]
 pub fn compute_artifact_cache_key(
     record: &UnresolvedSourceRecord,
@@ -425,17 +496,33 @@ impl ArtifactCache {
         self.entry_dir(package, key).join("sidecar.json")
     }
 
+    fn immutable_alias_path(
+        &self,
+        package: &PackageName,
+        key: &ImmutableArtifactCacheKey,
+    ) -> PathBuf {
+        self.root
+            .join("immutable-v1")
+            .join(package.as_normalized())
+            .join(format!("{}.json", key.0))
+    }
+
     /// Remove every cached entry for `package`. Silently succeeds if
     /// there's nothing cached yet. Intended for CLI invalidation
     /// commands like `pixi build --clean` or `pixi install
     /// --force-reinstall`.
     pub fn clear_package(&self, package: &PackageName) -> std::io::Result<()> {
-        let dir = self.package_dir(package);
-        match fs_err::remove_dir_all(&dir) {
-            Ok(()) => Ok(()),
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
-            Err(err) => Err(err),
+        for dir in [
+            self.package_dir(package),
+            self.root.join("immutable-v1").join(package.as_normalized()),
+        ] {
+            match fs_err::remove_dir_all(&dir) {
+                Ok(()) => {}
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+                Err(err) => return Err(err),
+            }
         }
+        Ok(())
     }
 
     /// Remove every cached entry across every package.
@@ -719,6 +806,120 @@ impl ArtifactCache {
             tokio::fs::read(self.sidecar_path(package, key)).await,
             Ok(current) if current == expected_bytes
         ))
+    /// Read the backend description associated with an immutable alias.
+    pub(crate) async fn immutable_alias(
+        &self,
+        package: &PackageName,
+        key: &ImmutableArtifactCacheKey,
+    ) -> Result<Option<ImmutableArtifactAlias>, ArtifactCacheError> {
+        let alias_path = self.immutable_alias_path(package, key);
+        let bytes = match tokio::fs::read(&alias_path).await {
+            Ok(bytes) => bytes,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(err) => {
+                return Err(ArtifactCacheError::io(
+                    "reading immutable alias",
+                    alias_path,
+                    err,
+                ));
+            }
+        };
+        Ok(serde_json::from_slice(&bytes).ok())
+    }
+
+    /// Look up an immutable-source artifact without a source checkout.
+    ///
+    /// The alias is written only after the normal artifact entry has been
+    /// stored. Since a locked Git commit identifies immutable source content,
+    /// this intentionally skips the mtime and input-glob validation that
+    /// [`Self::lookup`] performs for mutable sources.
+    pub async fn lookup_immutable(
+        &self,
+        package: &PackageName,
+        key: &ImmutableArtifactCacheKey,
+        backend_identifier: &str,
+    ) -> Result<Option<CachedArtifact>, ArtifactCacheError> {
+        let Some(alias) = self.immutable_alias(package, key).await? else {
+            return Ok(None);
+        };
+        if alias.backend_identifier != backend_identifier {
+            return Ok(None);
+        }
+
+        let sidecar_path = self.sidecar_path(package, &alias.artifact_key);
+        if fs_err::metadata(&sidecar_path).is_err() {
+            return Ok(None);
+        }
+        let Some(lock_file) = self
+            .open_lock_file_if_exists(package, &alias.artifact_key)
+            .await?
+        else {
+            return Ok(None);
+        };
+        let _guard = lock_file.lock_read().await.map_err(|err| {
+            ArtifactCacheError::io(
+                "acquiring shared lock",
+                self.lock_path(package, &alias.artifact_key),
+                err.error,
+            )
+        })?;
+        let bytes = match tokio::fs::read(&sidecar_path).await {
+            Ok(bytes) => bytes,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(err) => return Err(ArtifactCacheError::io("reading sidecar", sidecar_path, err)),
+        };
+        let Ok(sidecar) = serde_json::from_slice::<ArtifactSidecar>(&bytes) else {
+            return Ok(None);
+        };
+        if sidecar.artifact_sha256 != alias.artifact_sha256 {
+            return Ok(None);
+        }
+        let artifact_path = self
+            .entry_dir(package, &alias.artifact_key)
+            .join(&sidecar.artifact_filename);
+        if fs_err::metadata(&artifact_path).is_err() {
+            return Ok(None);
+        }
+
+        let mut record = sidecar.record;
+        record.url = Url::from_file_path(&artifact_path).expect("cache entry paths are absolute");
+        Ok(Some(CachedArtifact {
+            artifact: artifact_path,
+            sha256: sidecar.artifact_sha256,
+            record,
+        }))
+    }
+
+    /// Publish an immutable-source alias for an existing artifact entry.
+    ///
+    /// The target entry must already have been stored successfully. Readers
+    /// treat a malformed or temporarily absent alias as a cache miss.
+    pub async fn publish_immutable_alias(
+        &self,
+        package: &PackageName,
+        immutable_key: &ImmutableArtifactCacheKey,
+        artifact_key: &ArtifactCacheKey,
+        artifact: &CachedArtifact,
+        backend_identifier: String,
+        backend_spec: JsonRpcBackendSpec,
+    ) -> Result<(), ArtifactCacheError> {
+        let alias_path = self.immutable_alias_path(package, immutable_key);
+        let parent = alias_path
+            .parent()
+            .expect("immutable alias path has a parent");
+        tokio::fs::create_dir_all(parent)
+            .await
+            .map_err(|err| ArtifactCacheError::io("creating immutable alias directory", parent.into(), err))?;
+        let alias = ImmutableArtifactAlias {
+            artifact_key: artifact_key.clone(),
+            artifact_sha256: artifact.sha256,
+            backend_identifier,
+            backend_spec,
+        };
+        let bytes = serde_json::to_vec(&alias).expect("immutable alias serializes");
+        tokio::fs::write(&alias_path, bytes)
+            .await
+            .map_err(|err| ArtifactCacheError::io("writing immutable alias", alias_path, err))
     }
 
     /// Place `artifact_source` into the cache and write its sidecar.
@@ -1045,6 +1246,66 @@ mod tests {
             ),
             "a mutable source with deleted input files must stay a miss",
         );
+    }
+
+    #[tokio::test]
+    async fn immutable_alias_reuses_artifact_without_source_tree() {
+        let tmp = TempDir::new().unwrap();
+        let cache = ArtifactCache::new(tmp.path().join("artifacts"));
+        let source = tmp.path().join("src");
+        fs_err::create_dir_all(&source).unwrap();
+        let input = source.join("main.py");
+        fs_err::write(&input, b"print(1)").unwrap();
+
+        let artifact_source = tmp.path().join("foo-1.0.0-h0.conda");
+        fs_err::write(&artifact_source, b"pretend this is a conda").unwrap();
+        let artifact_key = key("linux-64-abc");
+        let stored = cache
+            .store(
+                &pkg("foo"),
+                &artifact_key,
+                &artifact_source,
+                vec![glob_group(&["**/*.py"])],
+                vec![abs(&input)],
+                SystemTime::now(),
+                dummy_record("foo"),
+            )
+            .await
+            .unwrap();
+        let immutable_key = ImmutableArtifactCacheKey("immutable-key".to_string());
+        cache
+            .publish_immutable_alias(
+                &pkg("foo"),
+                &immutable_key,
+                &artifact_key,
+                &stored,
+                "test-backend".to_string(),
+                JsonRpcBackendSpec::default_rattler_build(Vec::new()),
+            )
+            .await
+            .unwrap();
+
+        assert!(cache
+            .lookup_immutable(&pkg("foo"), &immutable_key, "other-backend")
+            .await
+            .unwrap()
+            .is_none());
+        fs_err::remove_dir_all(&source).unwrap();
+
+        let hit = cache
+            .lookup_immutable(&pkg("foo"), &immutable_key, "test-backend")
+            .await
+            .unwrap()
+            .expect("immutable alias hit");
+        assert_eq!(hit.sha256, stored.sha256);
+        assert_eq!(hit.artifact, stored.artifact);
+
+        cache.clear_package(&pkg("foo")).unwrap();
+        assert!(cache
+            .lookup_immutable(&pkg("foo"), &immutable_key, "test-backend")
+            .await
+            .unwrap()
+            .is_none());
     }
 
     #[tokio::test]

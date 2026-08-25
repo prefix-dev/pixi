@@ -27,7 +27,7 @@ use url::Url;
 pub use crate::cache::{ArtifactCache, WorkspaceCache};
 use crate::cache::{
     ArtifactCacheError, CacheLookup, SourceMutability, compute_artifact_cache_key,
-    compute_workspace_key,
+    compute_immutable_artifact_cache_key, compute_workspace_key,
     markers::{SourceBuildArtifactsDir, SourceBuildWorkspacesDir},
 };
 use crate::{
@@ -35,7 +35,8 @@ use crate::{
     BackendSourceBuildPrefix, BackendSourceBuildSpec, BackendSourceBuildV1Method, BuildEnvironment,
     BuildProfile, CommandDispatcherError, CommandDispatcherErrorResultExt,
     InstallPixiEnvironmentExt, InstallPixiEnvironmentSpec, InstantiateBackendKey,
-    ProjectModelOverrides, SourceBuildError,
+    ProjectModelOverrides, SourceBuildError, resolve_backend_identifier_from_spec,
+    resolve_backend_identifier_with_spec,
     build::{Dependencies, PixiRunExports, convert_extra_dependencies},
     compute_data::{HasGateway, HasIoConcurrencySemaphore},
 };
@@ -52,6 +53,17 @@ fn unwrap_dispatcher_err<E>(err: CommandDispatcherError<E>) -> E {
             unreachable!("compute-engine cancellation does not surface inside a Key compute body")
         }
     }
+}
+
+/// Whether the source tree used for this build is fully identified by locked
+/// Git commits. Only these builds may reuse an artifact without materialising
+/// the source tree to perform file-based freshness checks.
+fn immutable_git_sources(record: &UnresolvedSourceRecord) -> bool {
+    record.manifest_source.as_git().is_some()
+        && record
+            .build_source
+            .as_ref()
+            .map_or(true, |source| source.pinned().as_git().is_some())
 }
 
 /// Hashable inputs to a source build. Runtime concerns (reporters, log
@@ -156,6 +168,60 @@ async fn compute_inner(
         .map(|result| result.artifact_sha256)
         .collect();
 
+    let project_model_overrides = ProjectModelOverrides {
+        build_string_prefix: spec.build_string_prefix.clone(),
+        build_number: spec.build_number,
+    };
+    let immutable_cache_key = immutable_git_sources(&spec.record).then(|| {
+        compute_immutable_artifact_cache_key(
+            &spec.record,
+            spec.build_environment.build_platform,
+            spec.build_environment.host_platform,
+            &spec.channels,
+            &spec.exclude_newer,
+            &build_source_dep_sha256s,
+            &host_source_dep_sha256s,
+            &project_model_overrides,
+            spec.package_format,
+            spec.inline.as_ref().map(|inline| inline.content_hash),
+        )
+    });
+    let artifacts_dir = ctx.cache_dir::<SourceBuildArtifactsDir>().await;
+    let artifact_cache = ArtifactCache::new(artifacts_dir.as_std_path())
+        .with_io_concurrency_semaphore(ctx.global_data().io_concurrency_semaphore().cloned());
+    if let Some(immutable_cache_key) = immutable_cache_key.as_ref()
+        && let Some(alias) = artifact_cache
+            .immutable_alias(spec.record.name(), immutable_cache_key)
+            .await
+            .map_err(map_cache_err)?
+    {
+        let backend_identifier = resolve_backend_identifier_from_spec(
+            ctx,
+            alias.backend_spec,
+            spec.exclude_newer.clone(),
+        )
+        .await
+        .map_err(|err: Arc<crate::InstantiateBackendError>| {
+            SourceBuildError::Initialize((*err).clone())
+        })?;
+        if let Some(hit) = artifact_cache
+            .lookup_immutable(spec.record.name(), immutable_cache_key, &backend_identifier)
+            .await
+            .map_err(map_cache_err)?
+        {
+            tracing::debug!(
+                package = %spec.record.name().as_source(),
+                artifact = %hit.artifact.display(),
+                "immutable artifact cache hit"
+            );
+            return Ok(SourceBuildResult {
+                artifact: hit.artifact,
+                artifact_sha256: hit.sha256,
+                record: hit.record,
+            });
+        }
+    }
+
     let manifest_source = spec.record.manifest_source.clone();
     let manifest_checkout = ctx
         .checkout_pinned_source(manifest_source.clone())
@@ -185,7 +251,7 @@ async fn compute_inner(
         .path
         .as_dir_or_file_parent()
         .to_path_buf();
-    let backend_identifier = crate::resolve_backend_identifier(
+    let (backend_identifier, backend_spec) = resolve_backend_identifier_with_spec(
         ctx,
         manifest_checkout.path.as_std_path(),
         manifest_anchor.clone(),
@@ -199,10 +265,6 @@ async fn compute_inner(
 
     // Cache key covers structural identity + dep content addresses;
     // source-file freshness lives in the sidecar, not the key.
-    let project_model_overrides = ProjectModelOverrides {
-        build_string_prefix: spec.build_string_prefix.clone(),
-        build_number: spec.build_number,
-    };
     let cache_key = compute_artifact_cache_key(
         &spec.record,
         spec.build_environment.build_platform,
@@ -218,9 +280,6 @@ async fn compute_inner(
     // On artifact cache hit, return without invoking the backend.
     // Force-rebuild is handled by wiping the cache entry before calling;
     // this body honors whatever state it finds on disk.
-    let artifacts_dir = ctx.cache_dir::<SourceBuildArtifactsDir>().await;
-    let artifact_cache = ArtifactCache::new(artifacts_dir.as_std_path())
-        .with_io_concurrency_semaphore(ctx.global_data().io_concurrency_semaphore().cloned());
     let source_dir = build_source_checkout
         .path
         .as_dir_or_file_parent()
@@ -238,6 +297,19 @@ async fn compute_inner(
         .map_err(map_cache_err)?
     {
         CacheLookup::Hit(hit) => {
+            if let Some(immutable_cache_key) = immutable_cache_key.as_ref() {
+                artifact_cache
+                    .publish_immutable_alias(
+                        spec.record.name(),
+                        immutable_cache_key,
+                        &cache_key,
+                        &hit,
+                        backend_identifier.clone(),
+                        backend_spec.clone(),
+                    )
+                    .await
+                    .map_err(map_cache_err)?;
+            }
             tracing::debug!(
                 package = %spec.record.name().as_source(),
                 artifact = %hit.artifact.display(),
@@ -517,6 +589,20 @@ async fn compute_inner(
         )
         .await
         .map_err(map_cache_err)?;
+
+    if let Some(immutable_cache_key) = immutable_cache_key.as_ref() {
+        artifact_cache
+            .publish_immutable_alias(
+                spec.record.name(),
+                immutable_cache_key,
+                &cache_key,
+                &stored,
+                backend_identifier,
+                backend_spec,
+            )
+            .await
+            .map_err(map_cache_err)?;
+    }
 
     Ok(SourceBuildResult {
         artifact: stored.artifact,
