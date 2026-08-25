@@ -37,12 +37,14 @@ use async_fd_lock::{LockRead, LockWrite};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Utc};
 use pixi_build_types::InputGlobSet;
-use pixi_build_discovery::JsonRpcBackendSpec;
+use pixi_build_discovery::{
+    CommandSpec, EnvironmentSpec, JsonRpcBackendSpec, SystemCommandSpec,
+};
 use pixi_compute_engine::ComputeCtx;
 use pixi_manifest::InlineContentHash;
 use pixi_path::{AbsPath, AbsPathBuf};
 use pixi_record::{UnresolvedPixiRecord, UnresolvedSourceRecord};
-use pixi_spec::ResolvedExcludeNewer;
+use pixi_spec::{PixiSpec, ResolvedExcludeNewer};
 use rattler_conda_types::{ChannelUrl, PackageName, Platform, RepoDataRecord};
 use rattler_digest::Sha256Hash;
 use serde::{Deserialize, Serialize};
@@ -95,6 +97,73 @@ impl std::fmt::Display for ImmutableArtifactCacheKey {
     }
 }
 
+/// The checkout-independent subset of a backend specification that can be
+/// restored from an immutable artifact alias. Constraint-bearing environment
+/// specs are intentionally excluded: [`pixi_spec::BinarySpec`] is not a
+/// deserializable cache format, and skipping those aliases is safer than
+/// weakening their backend resolution.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub(crate) enum ImmutableBackendSpec {
+    Environment {
+        name: String,
+        requirement: (PackageName, PixiSpec),
+        additional_requirements: Vec<(PackageName, PixiSpec)>,
+        channels: Vec<ChannelUrl>,
+        command: Option<String>,
+    },
+    System {
+        name: String,
+        command: Option<String>,
+    },
+}
+
+impl ImmutableBackendSpec {
+    fn from_backend_spec(spec: JsonRpcBackendSpec) -> Option<Self> {
+        match spec.command {
+            CommandSpec::EnvironmentSpec(env_spec) if env_spec.constraints.is_empty() => {
+                Some(Self::Environment {
+                    name: spec.name,
+                    requirement: env_spec.requirement,
+                    additional_requirements: env_spec.additional_requirements.into_specs().collect(),
+                    channels: env_spec.channels,
+                    command: env_spec.command,
+                })
+            }
+            CommandSpec::System(system_spec) => Some(Self::System {
+                name: spec.name,
+                command: system_spec.command,
+            }),
+            CommandSpec::EnvironmentSpec(_) => None,
+        }
+    }
+
+    pub(crate) fn into_backend_spec(self) -> JsonRpcBackendSpec {
+        match self {
+            Self::Environment {
+                name,
+                requirement,
+                additional_requirements,
+                channels,
+                command,
+            } => JsonRpcBackendSpec {
+                name,
+                command: CommandSpec::EnvironmentSpec(Box::new(EnvironmentSpec {
+                    requirement,
+                    additional_requirements: additional_requirements.into_iter().collect(),
+                    constraints: Default::default(),
+                    channels,
+                    command,
+                })),
+            },
+            Self::System { name, command } => JsonRpcBackendSpec {
+                name,
+                command: CommandSpec::System(SystemCommandSpec { command }),
+            },
+        }
+    }
+}
+
 /// An immutable-source lookup entry pointing at the normal artifact-cache
 /// entry. The regular artifact entry remains authoritative.
 #[serde_as]
@@ -104,7 +173,7 @@ pub(crate) struct ImmutableArtifactAlias {
     #[serde_as(as = "rattler_digest::serde::SerializableHash<rattler_digest::Sha256>")]
     artifact_sha256: Sha256Hash,
     pub backend_identifier: String,
-    pub backend_spec: JsonRpcBackendSpec,
+    pub backend_spec: ImmutableBackendSpec,
 }
 
 impl std::fmt::Display for ArtifactCacheKey {
@@ -905,6 +974,9 @@ impl ArtifactCache {
         backend_identifier: String,
         backend_spec: JsonRpcBackendSpec,
     ) -> Result<(), ArtifactCacheError> {
+        let Some(backend_spec) = ImmutableBackendSpec::from_backend_spec(backend_spec) else {
+            return Ok(());
+        };
         let alias_path = self.immutable_alias_path(package, immutable_key);
         let parent = alias_path
             .parent()

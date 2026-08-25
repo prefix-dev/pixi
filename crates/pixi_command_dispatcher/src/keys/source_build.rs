@@ -197,7 +197,7 @@ async fn compute_inner(
     {
         let backend_identifier = resolve_backend_identifier_from_spec(
             ctx,
-            alias.backend_spec,
+            alias.backend_spec.into_backend_spec(),
             spec.exclude_newer.clone(),
         )
         .await

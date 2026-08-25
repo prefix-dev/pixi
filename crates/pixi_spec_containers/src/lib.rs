@@ -2,12 +2,9 @@ use itertools::{Either, Itertools};
 use ordermap::{Equivalent, OrderMap, OrderSet};
 use pixi_spec::{BinarySpec, SpecConversionError};
 use rattler_conda_types::{ChannelConfig, MatchSpec};
-use serde::{
-    Deserialize, Deserializer, Serialize, Serializer,
-    de::{Error as _, IgnoredAny, MapAccess, Visitor},
-    ser::{SerializeMap, SerializeSeq},
-};
-use std::{borrow::Cow, hash::Hash, iter::FromIterator, marker::PhantomData};
+use serde::ser::{SerializeMap, SerializeSeq};
+use serde::{Serialize, Serializer};
+use std::{borrow::Cow, hash::Hash, iter::FromIterator};
 
 /// Holds a list of dependencies where for each package name there can be
 /// multiple requirements.
@@ -268,62 +265,6 @@ impl DependencyMap<rattler_conda_types::PackageName, BinarySpec> {
                 Ok(MatchSpec::from_nameless(spec, name.into()))
             })
             .collect()
-    }
-}
-
-impl<'de, N, D> Deserialize<'de> for DependencyMap<N, D>
-where
-    N: Deserialize<'de> + Hash + Eq + Clone,
-    D: Deserialize<'de> + Hash + Eq + Clone,
-{
-    fn deserialize<S>(deserializer: S) -> Result<Self, S::Error>
-    where
-        S: Deserializer<'de>,
-    {
-        struct Entry<N, D>((N, D));
-
-        impl<'de, N, D> Deserialize<'de> for Entry<N, D>
-        where
-            N: Deserialize<'de>,
-            D: Deserialize<'de>,
-        {
-            fn deserialize<S>(deserializer: S) -> Result<Self, S::Error>
-            where
-                S: Deserializer<'de>,
-            {
-                struct EntryVisitor<N, D>(PhantomData<(N, D)>);
-
-                impl<'de, N, D> Visitor<'de> for EntryVisitor<N, D>
-                where
-                    N: Deserialize<'de>,
-                    D: Deserialize<'de>,
-                {
-                    type Value = Entry<N, D>;
-
-                    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                        formatter.write_str("a map containing exactly one dependency")
-                    }
-
-                    fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
-                    where
-                        A: MapAccess<'de>,
-                    {
-                        let Some((name, spec)) = map.next_entry()? else {
-                            return Err(A::Error::custom("expected one dependency"));
-                        };
-                        if map.next_entry::<IgnoredAny, IgnoredAny>()?.is_some() {
-                            return Err(A::Error::custom("expected exactly one dependency"));
-                        }
-                        Ok(Entry((name, spec)))
-                    }
-                }
-
-                deserializer.deserialize_map(EntryVisitor(PhantomData))
-            }
-        }
-
-        let entries = Vec::<Entry<N, D>>::deserialize(deserializer)?;
-        Ok(entries.into_iter().map(|Entry(entry)| entry).collect())
     }
 }
 
