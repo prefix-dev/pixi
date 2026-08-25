@@ -241,6 +241,9 @@ pub async fn resolve_pypi(
     pb.set_message("resolving pypi dependencies");
 
     // Determine which pypi packages are already installed as conda package.
+    PypiPackageIdentifier::trace_legacy_purl_fallbacks(
+        locked_pixi_records.iter().filter_map(PixiRecord::as_binary),
+    );
     let conda_python_packages = locked_pixi_records
         .iter()
         .flat_map(|record| {

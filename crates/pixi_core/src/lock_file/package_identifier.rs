@@ -47,6 +47,35 @@ impl PypiPackageIdentifier {
         Ok(result)
     }
 
+    /// Logs the conda packages for which old lock-file compatibility requires
+    /// assuming that the conda and PyPI package names are identical.
+    ///
+    /// This is intentionally called on a collection of records, rather than
+    /// while converting each record, so each conversion pass emits one summary
+    /// instead of one line per package.
+    pub(crate) fn trace_legacy_purl_fallbacks<'a>(
+        records: impl IntoIterator<Item = &'a RepoDataRecord>,
+    ) {
+        let mut package_names = records
+            .into_iter()
+            .filter(|record| Self::uses_legacy_purl_fallback(record))
+            .map(|record| record.package_record.name.as_source().to_string())
+            .collect::<Vec<_>>();
+        package_names.sort_unstable();
+        package_names.dedup();
+
+        if !package_names.is_empty() {
+            tracing::trace!(
+                "Using legacy same-name PyPI fallback for conda packages whose lock records have no purls: {}",
+                package_names.join(", ")
+            );
+        }
+    }
+
+    fn uses_legacy_purl_fallback(record: &RepoDataRecord) -> bool {
+        record.package_record.purls.is_none() && pypi_mapping::is_conda_forge_record(record)
+    }
+
     /// Helper function to write the result of extract the python packages that
     /// will be installed into a pre-allocated vector.
     fn from_record_into(
@@ -66,14 +95,7 @@ impl PypiPackageIdentifier {
         // the name of the package is equivalent to the name of the python package.
         // In newer versions of the lock file, we should always have a purl
         // where empty purls means that the package is not a pypi-one.
-        if record.package_record.purls.is_none()
-            && !has_pypi_purl
-            && pypi_mapping::is_conda_forge_record(record)
-        {
-            tracing::trace!(
-                "Using backwards compatibility purl logic for conda package: {}",
-                record.package_record.name.as_source()
-            );
+        if Self::uses_legacy_purl_fallback(record) && !has_pypi_purl {
             // Convert the conda package names to pypi package names. If the conversion fails we
             // just assume that its not a valid python package.
             let name =
