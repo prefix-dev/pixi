@@ -2,9 +2,12 @@ use itertools::{Either, Itertools};
 use ordermap::{Equivalent, OrderMap, OrderSet};
 use pixi_spec::{BinarySpec, SpecConversionError};
 use rattler_conda_types::{ChannelConfig, MatchSpec};
-use serde::ser::{SerializeMap, SerializeSeq};
-use serde::{Serialize, Serializer};
-use std::{borrow::Cow, hash::Hash, iter::FromIterator};
+use serde::{
+    Deserialize, Deserializer, Serialize, Serializer,
+    de::{Error as _, IgnoredAny, MapAccess, Visitor},
+    ser::{SerializeMap, SerializeSeq},
+};
+use std::{borrow::Cow, hash::Hash, iter::FromIterator, marker::PhantomData};
 
 /// Holds a list of dependencies where for each package name there can be
 /// multiple requirements.
@@ -268,6 +271,62 @@ impl DependencyMap<rattler_conda_types::PackageName, BinarySpec> {
     }
 }
 
+impl<'de, N, D> Deserialize<'de> for DependencyMap<N, D>
+where
+    N: Deserialize<'de> + Hash + Eq + Clone,
+    D: Deserialize<'de> + Hash + Eq + Clone,
+{
+    fn deserialize<S>(deserializer: S) -> Result<Self, S::Error>
+    where
+        S: Deserializer<'de>,
+    {
+        struct Entry<N, D>((N, D));
+
+        impl<'de, N, D> Deserialize<'de> for Entry<N, D>
+        where
+            N: Deserialize<'de>,
+            D: Deserialize<'de>,
+        {
+            fn deserialize<S>(deserializer: S) -> Result<Self, S::Error>
+            where
+                S: Deserializer<'de>,
+            {
+                struct EntryVisitor<N, D>(PhantomData<(N, D)>);
+
+                impl<'de, N, D> Visitor<'de> for EntryVisitor<N, D>
+                where
+                    N: Deserialize<'de>,
+                    D: Deserialize<'de>,
+                {
+                    type Value = Entry<N, D>;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                        formatter.write_str("a map containing exactly one dependency")
+                    }
+
+                    fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+                    where
+                        A: MapAccess<'de>,
+                    {
+                        let Some((name, spec)) = map.next_entry()? else {
+                            return Err(A::Error::custom("expected one dependency"));
+                        };
+                        if map.next_entry::<IgnoredAny, IgnoredAny>()?.is_some() {
+                            return Err(A::Error::custom("expected exactly one dependency"));
+                        }
+                        Ok(Entry((name, spec)))
+                    }
+                }
+
+                deserializer.deserialize_map(EntryVisitor(PhantomData))
+            }
+        }
+
+        let entries = Vec::<Entry<N, D>>::deserialize(deserializer)?;
+        Ok(entries.into_iter().map(|Entry(entry)| entry).collect())
+    }
+}
+
 impl<N: Hash + Eq + Clone + Serialize, D: Hash + Eq + Clone + Serialize> Serialize
     for DependencyMap<N, D>
 {
@@ -297,5 +356,22 @@ impl<N: Hash + Eq + Clone + Serialize, D: Hash + Eq + Clone + Serialize> Seriali
             seq.serialize_element(&Entry { name, dep })?;
         }
         seq.end()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DependencyMap;
+
+    #[test]
+    fn dependency_map_serde_round_trip_preserves_multiple_specs() {
+        let mut map = DependencyMap::default();
+        map.insert("python".to_string(), ">=3.12".to_string());
+        map.insert("python".to_string(), "<3.14".to_string());
+        map.insert("numpy".to_string(), "2.*".to_string());
+
+        let json = serde_json::to_string(&map).unwrap();
+        let restored: DependencyMap<String, String> = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored, map);
     }
 }
