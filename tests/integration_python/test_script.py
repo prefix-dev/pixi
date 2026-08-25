@@ -1446,44 +1446,6 @@ def test_script_with_an_unparsable_sidecar_does_not_blame_the_platform(
 
 
 @pytest.mark.slow
-def test_script_platform_add_migrates_away_from_system_requirements(
-    pixi: Path, tmp_pixi_workspace: Path
-) -> None:
-    """Adding a detected platform to a script commits the migration off the
-    legacy ``[system-requirements]`` table.
-
-    The two cannot coexist, so a script keeping both no longer parses, and the
-    command that produced it is the one the lock warning recommends.
-    """
-    script = tmp_pixi_workspace / "sr.py"
-    script.write_text(
-        f"""# /// script
-# dependencies = []
-#
-# [tool.pixi.workspace]
-# channels = ["{CONDA_FORGE_CHANNEL}"]
-#
-# [tool.pixi.system-requirements]
-# libc = "2.17"
-# ///
-print("SCRIPT-RAN")
-"""
-    )
-
-    verify_cli_command(
-        [pixi, "workspace", "platform", "add", "--script", script, "--auto-detect", "--no-install"],
-        ExitCode.SUCCESS,
-    )
-    assert "system-requirements" not in script.read_text()
-
-    # The script has to still load, which a leftover table would prevent.
-    verify_cli_command(
-        [pixi, "workspace", "platform", "list", "--script", script],
-        ExitCode.SUCCESS,
-    )
-
-
-@pytest.mark.slow
 def test_script_warns_before_dropping_foreign_subdirs_from_a_sidecar(
     pixi: Path, tmp_pixi_workspace: Path
 ) -> None:

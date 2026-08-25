@@ -113,7 +113,7 @@ pixi add --script analysis.py --pypi --editable \
 Relative paths in metadata are resolved from the script's directory.
 
 When no adjacent lock file exists, dependency mutations solve for validation
-but write only the inline metadata. If a sidecar lock already exists, it is
+but write only the inline metadata. If a lock file already exists, it is
 updated as part of the mutation.
 
 ## Run the script
@@ -214,25 +214,28 @@ and reuse Pixi's caches:
 pixi run --script earthquakes.py
 ```
 
-Create a sidecar when exact versions need to travel with the script:
+Create a lock file when exact versions need to travel with the script:
 
 ```console
 pixi lock --script earthquakes.py
 ```
 
 This writes `earthquakes.py.pixi.lock` next to the file. Subsequent commands
-reuse the sidecar, and metadata mutations keep it up to date.
+reuse the lock file, and metadata mutations keep it up to date.
 
-To lock more than the current platform, declare the platforms first:
+When the script declares no platforms, Pixi locks the versions for your
+machine. On a machine that does not meet it, Pixi resolves the script again
+instead of using the lock file. Declare the platforms first to lock versions
+that everyone reuses:
 
 ```console
 pixi workspace platform add --script earthquakes.py linux-64 osx-arm64
 pixi lock --script earthquakes.py
 ```
 
-Use `--locked` to require an existing, up-to-date sidecar. Use `--frozen` to
-consume an existing sidecar without updating it. Both options report an error
-when the script has no adjacent lock file.
+Use `--locked` to require an existing, up-to-date lock file. Use `--frozen`
+to consume an existing lock file without updating it. Both options report an
+error when the script has no adjacent lock file.
 
 ## Manage channels and platforms
 
@@ -263,25 +266,14 @@ command does not take a separate platform override.
 ### Scripts without declared platforms
 
 A script does not have to declare `platforms`.
-When it doesn't, Pixi resolves it for the machine you run it on, using the [virtual packages](../workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform) it detects there.
-This is what `pixi exec` and `pixi global` do as well, and it means a script that needs your CUDA driver or a glibc newer than Pixi's `2.28` floor resolves without you having to write the platform down.
+When it doesn't, Pixi resolves it for the machine you run it on, using the [virtual packages](../workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform) it detects there: your CUDA driver, your glibc version, your macOS version.
+A script that needs a glibc newer than Pixi's `2.28` default resolves without you writing anything down.
 
-A workspace behaves differently.
-There, the current platform means the conda subdir with Pixi's assumed defaults, written into `pixi.toml` where you can see and edit it.
-
-Declare `platforms` to opt out and resolve for a fixed target instead:
+To resolve for a fixed target instead:
 
 ```console
 pixi workspace platform add --script analysis.py --auto-detect
 ```
-
-The environment itself lives in Pixi's cache and is never shared between machines, so this only matters once you create a sidecar lock file.
-`pixi run --script` does not create one, but `pixi lock --script` does, and on a script without declared platforms it records the machine that ran it.
-Pixi warns when that happens.
-A sidecar keeps being reused as long as the machine still satisfies the platform it was locked for; otherwise the script is resolved for the current machine again.
-A sidecar that records only the plain conda subdir does not count as a machine, so it is re-solved too.
-That is what an older Pixi wrote, and what you get when a script declared `platforms` and the line was later removed; keeping it would pin the script to Pixi's defaults on a machine that offers more.
-Pixi warns before it happens, and again before it drops any rows for other subdirs the script no longer asks for.
 
 ## Supported command surface
 

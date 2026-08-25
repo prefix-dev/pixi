@@ -255,12 +255,6 @@ fn script_cache_name(path: &Path) -> String {
 /// platform is a bare subdir". Composition would then resolve an environment's
 /// platform by *subdir name* and never find the rich platform injected here, so
 /// the flag is recomputed for the platforms actually installed.
-///
-/// `must_migrate` is deliberately left alone: it records that the script still
-/// carries a legacy `[system-requirements]` table, a fact about the document
-/// rather than about the platforms picked here. Clearing it would keep
-/// `commit_if_needed` from dropping that table when a rich platform is written
-/// next to it, and the two cannot coexist.
 fn set_implicit_script_platforms(
     workspace: &mut pixi_manifest::Workspace,
     platforms: IndexSet<PixiPlatform>,

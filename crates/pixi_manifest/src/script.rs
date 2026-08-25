@@ -423,32 +423,21 @@ impl ScriptManifest {
             .and_then(Item::as_table_like_mut)
             .and_then(|tool| tool.get_mut("pixi"))
             .and_then(Item::as_table_like_mut);
-        let (updated_conda, updated_pypi, updated_targets, updated_system_requirements) =
-            if let Some(pixi) = updated_pixi {
-                (
-                    pixi.remove("dependencies")
-                        .and_then(|item| item.into_table().ok()),
-                    pixi.remove("pypi-dependencies")
-                        .and_then(|item| item.into_table().ok()),
-                    pixi.remove("target")
-                        .and_then(|item| item.into_table().ok()),
-                    pixi.remove("system-requirements")
-                        .and_then(|item| item.into_table().ok()),
-                )
-            } else {
-                (None, None, None, None)
-            };
+        let (updated_conda, updated_pypi, updated_targets) = if let Some(pixi) = updated_pixi {
+            (
+                pixi.remove("dependencies")
+                    .and_then(|item| item.into_table().ok()),
+                pixi.remove("pypi-dependencies")
+                    .and_then(|item| item.into_table().ok()),
+                pixi.remove("target")
+                    .and_then(|item| item.into_table().ok()),
+            )
+        } else {
+            (None, None, None)
+        };
         sync_pixi_table(&mut metadata, updated_conda, "dependencies")?;
         sync_pixi_table(&mut metadata, updated_pypi, "pypi-dependencies")?;
         sync_pixi_table(&mut metadata, updated_targets, "target")?;
-        // The legacy `[system-requirements]` table has to be able to *leave*
-        // the script: adding a rich platform commits the migration away from
-        // it, and the two cannot coexist, so its removal has to be synced too.
-        sync_pixi_table(
-            &mut metadata,
-            updated_system_requirements,
-            "system-requirements",
-        )?;
 
         Ok(format!(
             "{}{}{}",
@@ -686,6 +675,13 @@ fn validate_subset(metadata: &DocumentMut) -> Result<(), ScriptManifestError> {
         return Ok(());
     };
 
+    // Reported on its own, ahead of the generic sweep: the machine's virtual
+    // packages already reach a script that declares no `platforms`, and a
+    // script that declares them carries its requirements on the platform.
+    if pixi.contains_key("system-requirements") {
+        return Err(ScriptManifestError::SystemRequirementsUnsupported);
+    }
+
     let mut unsupported = unsupported_keys(
         pixi,
         "tool.pixi",
@@ -694,7 +690,6 @@ fn validate_subset(metadata: &DocumentMut) -> Result<(), ScriptManifestError> {
             "constraints",
             "dependencies",
             "pypi-dependencies",
-            "system-requirements",
             "target",
             "workspace",
         ],
@@ -791,6 +786,12 @@ pub enum ScriptManifestError {
     #[error("PEP 723 scripts do not support: {}", .0.join(", "))]
     #[diagnostic(help("A script represents one implicit default environment."))]
     UnsupportedFields(Vec<String>),
+
+    #[error("PEP 723 scripts do not support `[tool.pixi.system-requirements]`")]
+    #[diagnostic(help(
+        "a script without `platforms` is resolved for the virtual packages of the machine it runs on. To pin a target instead, run `pixi workspace platform add --script <PATH> --auto-detect`"
+    ))]
+    SystemRequirementsUnsupported,
 
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -1262,6 +1263,29 @@ print("hello")
                 "tool.pixi.target.linux-64.tasks",
                 "tool.pixi.workspace.description"
             ]
+        );
+    }
+
+    #[test]
+    fn rejects_system_requirements() {
+        let (_directory, path) = script(
+            r#"# /// script
+# dependencies = []
+#
+# [tool.pixi.system-requirements]
+# cuda = "12"
+# ///
+"#,
+        );
+
+        let error = ScriptManifest::from_path(path)
+            .unwrap()
+            .unwrap()
+            .into_workspace_manifest()
+            .unwrap_err();
+        assert!(
+            matches!(error, ScriptManifestError::SystemRequirementsUnsupported),
+            "unexpected error: {error}"
         );
     }
 
