@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use indexmap::{IndexMap, IndexSet};
 use miette::IntoDiagnostic;
@@ -49,6 +50,7 @@ impl<I: Interface> DefaultContext<I> {
 pub struct WorkspaceContext<I: Interface> {
     interface: I,
     workspace: Workspace,
+    progress: Option<Arc<pixi_reporters::TopLevelProgress>>,
 }
 
 impl<I: Interface> WorkspaceContext<I> {
@@ -56,7 +58,16 @@ impl<I: Interface> WorkspaceContext<I> {
         Self {
             interface,
             workspace,
+            progress: None,
         }
+    }
+
+    /// Reports solve, download and install progress of every operation this
+    /// context performs. Consumers that are not driving a terminal leave this
+    /// unset and the work stays silent.
+    pub fn with_progress(mut self, progress: Arc<pixi_reporters::TopLevelProgress>) -> Self {
+        self.progress = Some(progress);
+        self
     }
 
     pub fn workspace(&self) -> &Workspace {
@@ -64,7 +75,17 @@ impl<I: Interface> WorkspaceContext<I> {
     }
 
     pub fn workspace_mut(&self) -> miette::Result<WorkspaceMut> {
-        self.workspace.clone().modify().into_diagnostic()
+        Ok(self.attach_progress(self.workspace.clone().modify().into_diagnostic()?))
+    }
+
+    /// Hands this context's reporter to `workspace` so the solves, downloads
+    /// and installs it triggers are visible. Every `WorkspaceMut` this context
+    /// hands out must go through here, or that work runs silently.
+    fn attach_progress(&self, workspace: WorkspaceMut) -> WorkspaceMut {
+        match &self.progress {
+            Some(progress) => workspace.with_progress(progress.clone()),
+            None => workspace,
+        }
     }
 
     pub async fn init(interface: I, options: InitOptions) -> miette::Result<Workspace> {
@@ -379,6 +400,7 @@ impl<I: Interface> WorkspaceContext<I> {
             explicit,
             no_install,
             lock_file_usage,
+            self.progress.as_ref(),
         )
         .await
     }
@@ -488,7 +510,7 @@ impl<I: Interface> WorkspaceContext<I> {
         spec_type: SpecType,
         dep_options: DependencyOptions,
     ) -> Result<(), RemoveError> {
-        let workspace_mut = self.workspace.clone().modify()?;
+        let workspace_mut = self.attach_progress(self.workspace.clone().modify()?);
         Box::pin(crate::workspace::remove::remove_conda_deps(
             workspace_mut,
             specs,
@@ -503,7 +525,7 @@ impl<I: Interface> WorkspaceContext<I> {
         pypi_deps: PypiDeps,
         options: DependencyOptions,
     ) -> Result<(), RemoveError> {
-        let workspace_mut = self.workspace.clone().modify()?;
+        let workspace_mut = self.attach_progress(self.workspace.clone().modify()?);
         Box::pin(crate::workspace::remove::remove_pypi_deps(
             workspace_mut,
             pypi_deps,
@@ -522,6 +544,7 @@ impl<I: Interface> WorkspaceContext<I> {
             &self.workspace,
             options,
             lock_file_usage,
+            self.progress.as_ref(),
         )
         .await
     }

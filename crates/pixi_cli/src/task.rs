@@ -24,7 +24,10 @@ use pixi_core::{
     workspace::{Environment, virtual_packages::EnvironmentRunnability},
 };
 
-use crate::{cli_config::WorkspaceConfig, cli_interface::CliInterface};
+use crate::{
+    cli_config::WorkspaceConfig,
+    cli_interface::{CliInterface, cli_context},
+};
 
 #[derive(Parser, Debug)]
 pub enum Operation {
@@ -401,7 +404,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
 
-    let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
+    let workspace_ctx = cli_context(workspace.clone());
 
     match args.operation {
         Operation::Add(args) => add_task(workspace_ctx, args).await,

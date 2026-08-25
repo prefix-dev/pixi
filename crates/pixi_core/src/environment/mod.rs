@@ -933,6 +933,10 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
         }
     }
 
+    // Held across the solve and install so the caller's summary output is not
+    // written over bars that have finished but are still rendered.
+    let _clear_progress = pixi_reporters::TopLevelProgress::clear_when_done(progress.as_ref());
+
     // Make sure the project is in a sane state
     sanity_check_workspace(workspace).await?;
 

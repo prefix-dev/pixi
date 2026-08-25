@@ -5,11 +5,10 @@ use fancy_display::FancyDisplay;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use pixi_api::WorkspaceContext;
 use pixi_core::WorkspaceLocator;
 use pixi_manifest::{Feature, FeatureName};
 
-use crate::{cli_config::WorkspaceConfig, cli_interface::CliInterface};
+use crate::{cli_config::WorkspaceConfig, cli_interface::cli_context};
 
 /// Commands to manage workspace features.
 #[derive(Parser, Debug)]
@@ -55,7 +54,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
 
-    let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace);
+    let workspace_ctx = cli_context(workspace);
 
     match args.command {
         Command::List(list_args) => {
@@ -130,7 +129,7 @@ mod tests {
             "#,
         )
         .unwrap();
-        let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace);
+        let workspace_ctx = cli_context(workspace);
 
         let features = workspace_ctx.list_features().await;
 

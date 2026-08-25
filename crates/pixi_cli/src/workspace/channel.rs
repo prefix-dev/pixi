@@ -3,7 +3,7 @@ use std::io::Write;
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use miette::IntoDiagnostic;
-use pixi_api::{WorkspaceContext, workspace::ChannelOptions};
+use pixi_api::workspace::ChannelOptions;
 use pixi_config::ConfigCli;
 use pixi_core::{WorkspaceLocator, environment::LockFileUsage};
 use pixi_manifest::{EnvironmentName, FeatureName};
@@ -11,7 +11,7 @@ use rattler_conda_types::NamedChannelOrUrl;
 
 use crate::{
     cli_config::{LockFileUpdateConfig, NoInstallConfig, ScriptWorkspaceConfig},
-    cli_interface::CliInterface,
+    cli_interface::cli_context,
 };
 
 /// Commands to manage workspace channels.
@@ -138,7 +138,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let is_script = args.workspace_config.script.is_some();
     let lock_file_exists = workspace.lock_file_path().is_file();
     let channel_config = workspace.channel_config();
-    let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace);
+    let workspace_ctx = cli_context(workspace);
 
     match args.command {
         Command::Add(add_args) => {

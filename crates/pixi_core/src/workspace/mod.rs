@@ -1111,8 +1111,16 @@ impl Workspace {
 
     /// Returns a pre-filled command dispatcher builder. Seeds a
     /// [`RayonPrimer`](crate::rayon_primer::RayonPrimer) in the install /
-    /// solve / instantiate-backend reporter slots; UI reporters override.
-    pub fn command_dispatcher_builder(&self) -> miette::Result<CommandDispatcherBuilder> {
+    /// solve / instantiate-backend reporter slots, then lets `progress`
+    /// override them with the terminal reporters.
+    ///
+    /// `progress` is mandatory so that no dispatcher can be constructed
+    /// without deciding whether its work is visible to the user. Pass `None`
+    /// only for genuinely silent paths; `grep` for it to find them all.
+    pub fn command_dispatcher_builder(
+        &self,
+        progress: Option<&Arc<pixi_reporters::TopLevelProgress>>,
+    ) -> miette::Result<CommandDispatcherBuilder> {
         let cache_dir = AbsPathBuf::new(pixi_config::get_cache_dir()?)
             .expect("cache dir is not absolute")
             .into_assume_dir();
@@ -1138,7 +1146,7 @@ impl Workspace {
             .into_assume_dir();
 
         let rayon_primer = std::sync::Arc::new(crate::rayon_primer::RayonPrimer::default());
-        Ok(CommandDispatcher::builder()
+        let builder = CommandDispatcher::builder()
             .with_gateway(self.repodata_gateway()?.clone())
             .with_cache_dirs(cache_dirs)
             .with_root_dir(root_dir)
@@ -1166,7 +1174,13 @@ impl Workspace {
             .with_pixi_install_reporter(rayon_primer.clone())
             .with_pixi_solve_reporter(rayon_primer.clone())
             .with_instantiate_backend_reporter(rayon_primer)
-            .with_tool_platform(tool_platform, tool_virtual_packages))
+            .with_tool_platform(tool_platform, tool_virtual_packages);
+
+        // Registered last so the terminal reporters win over the primers above.
+        Ok(match progress {
+            Some(progress) => progress.clone().register_with(builder),
+            None => builder,
+        })
     }
 
     fn lazy_client_and_authenticated_client(

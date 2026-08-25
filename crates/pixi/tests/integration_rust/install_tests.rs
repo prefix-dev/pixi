@@ -1458,7 +1458,7 @@ async fn test_multiple_prefix_update() {
     let name = group.name();
     let prefix = group.prefix();
 
-    let command_dispatcher = project.command_dispatcher_builder().unwrap().finish();
+    let command_dispatcher = project.command_dispatcher_builder(None).unwrap().finish();
 
     let current_pixi_platform = pixi_manifest::PixiPlatform::from_subdir(current_platform);
     let variant_config = group

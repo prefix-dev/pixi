@@ -167,18 +167,21 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Update the packages in the lock file.
     let progress = pixi_reporters::TopLevelProgress::from_global();
-    let dispatcher = progress
-        .clone()
-        .register_with(workspace.command_dispatcher_builder()?)
+    let dispatcher = workspace
+        .command_dispatcher_builder(Some(&progress))?
         .finish();
-    let updated_lock_file = UpdateContext::builder(&workspace, dispatcher)?
-        .with_lock_file(relaxed_lock_file.clone())
-        .with_no_install(args.no_install)
-        .with_update_targets(specs.packages.clone())
-        .finish()
-        .await?
-        .update()
-        .await?;
+    // Scoped so the bars are cleared before the diff or the JSON is printed.
+    let updated_lock_file = {
+        let _clear_progress = pixi_reporters::TopLevelProgress::clear_when_done(Some(&progress));
+        UpdateContext::builder(&workspace, dispatcher)?
+            .with_lock_file(relaxed_lock_file.clone())
+            .with_no_install(args.no_install)
+            .with_update_targets(specs.packages.clone())
+            .finish()
+            .await?
+            .update()
+            .await?
+    };
 
     // If we're doing a dry-run, we don't want to write the lock file.
     if !args.dry_run {

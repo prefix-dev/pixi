@@ -19,7 +19,7 @@ use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform, Version}
 
 use crate::{
     cli_config::{ScriptWorkspaceConfig, script_lock_file_usage},
-    cli_interface::CliInterface,
+    cli_interface::{CliInterface, cli_context},
 };
 
 /// Commands to manage workspace platforms.
@@ -508,7 +508,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         args.workspace_config.script.is_some(),
         workspace.lock_file_path().is_file(),
     )?;
-    let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
+    let workspace_ctx = cli_context(workspace.clone());
 
     match args.command {
         Command::Add(args) => execute_add(&workspace_ctx, args, lock_file_usage).await,

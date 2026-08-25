@@ -7,8 +7,8 @@ use clap::Parser;
 use indexmap::IndexMap;
 use indexmap::IndexSet;
 use miette::{IntoDiagnostic, Report};
+use pixi_api::DefaultContext;
 use pixi_api::workspace::platforms::resolve_platforms;
-use pixi_api::{DefaultContext, WorkspaceContext};
 use pixi_config::default_channel_config;
 use pixi_core::{WorkspaceLocator, workspace::WorkspaceLocatorError};
 use pixi_manifest::{FeaturesExt, HasWorkspaceManifest, PixiPlatformName};
@@ -22,7 +22,7 @@ use url::Url;
 
 use crate::{
     cli_config::{ChannelsConfig, WorkspaceConfig},
-    cli_interface::CliInterface,
+    cli_interface::{CliInterface, cli_context},
 };
 
 /// Search a conda package
@@ -168,7 +168,7 @@ pub async fn execute_impl<W: Write>(
 
     let result = if let Some(workspace) = workspace {
         await_in_progress("searching packages...", |_| async {
-            WorkspaceContext::new(CliInterface {}, workspace)
+            cli_context(workspace)
                 .search(matchspec, channels, platforms, fuzzy_limit)
                 .await
         })

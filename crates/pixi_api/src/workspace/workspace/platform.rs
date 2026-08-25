@@ -53,7 +53,7 @@ pub async fn edit<I: Interface>(
 
     get_update_lock_file_and_prefix(
         &workspace.workspace().default_environment(),
-        None,
+        workspace.progress().cloned(),
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage,
@@ -87,7 +87,7 @@ pub async fn move_platform<I: Interface>(
 
     get_update_lock_file_and_prefix(
         &workspace.workspace().default_environment(),
-        None,
+        workspace.progress().cloned(),
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage,
@@ -179,7 +179,7 @@ pub async fn add_auto_detected<I: Interface>(
 
     get_update_lock_file_and_prefix(
         &workspace.workspace().default_environment(),
-        None,
+        workspace.progress().cloned(),
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage,
@@ -253,7 +253,7 @@ pub async fn add<I: Interface>(
     // Try to update the lock file with the new channels
     get_update_lock_file_and_prefix(
         &workspace.workspace().default_environment(),
-        None,
+        workspace.progress().cloned(),
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage,
@@ -309,7 +309,7 @@ pub async fn remove<I: Interface>(
 
     get_update_lock_file_and_prefix(
         &workspace.workspace().default_environment(),
-        None,
+        workspace.progress().cloned(),
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage,

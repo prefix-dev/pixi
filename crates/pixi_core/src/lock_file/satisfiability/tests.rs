@@ -95,7 +95,7 @@ async fn verify_lock_file_satisfiability(
     let temp_pixi_dir = tempfile::tempdir().unwrap();
     let command_dispatcher = {
         let command_dispatcher = project
-            .command_dispatcher_builder()
+            .command_dispatcher_builder(None)
             .unwrap()
             .with_cache_dirs(CacheDirs::new(
                 pixi_path::AbsPathBuf::new(temp_pixi_dir.path())
