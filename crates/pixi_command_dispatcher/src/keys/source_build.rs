@@ -63,7 +63,7 @@ fn immutable_git_sources(record: &UnresolvedSourceRecord) -> bool {
         && record
             .build_source
             .as_ref()
-            .map_or(true, |source| source.pinned().as_git().is_some())
+            .is_none_or(|source| source.pinned().as_git().is_some())
 }
 
 /// Hashable inputs to a source build. Runtime concerns (reporters, log

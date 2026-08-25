@@ -105,30 +105,33 @@ impl std::fmt::Display for ImmutableArtifactCacheKey {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub(crate) enum ImmutableBackendSpec {
-    Environment {
-        name: String,
-        requirement: (PackageName, PixiSpec),
-        additional_requirements: Vec<(PackageName, PixiSpec)>,
-        channels: Vec<ChannelUrl>,
-        command: Option<String>,
-    },
+    Environment(Box<ImmutableEnvironmentBackendSpec>),
     System {
         name: String,
         command: Option<String>,
     },
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct ImmutableEnvironmentBackendSpec {
+    name: String,
+    requirement: (PackageName, PixiSpec),
+    additional_requirements: Vec<(PackageName, PixiSpec)>,
+    channels: Vec<ChannelUrl>,
+    command: Option<String>,
+}
+
 impl ImmutableBackendSpec {
     fn from_backend_spec(spec: JsonRpcBackendSpec) -> Option<Self> {
         match spec.command {
             CommandSpec::EnvironmentSpec(env_spec) if env_spec.constraints.is_empty() => {
-                Some(Self::Environment {
+                Some(Self::Environment(Box::new(ImmutableEnvironmentBackendSpec {
                     name: spec.name,
                     requirement: env_spec.requirement,
                     additional_requirements: env_spec.additional_requirements.into_specs().collect(),
                     channels: env_spec.channels,
                     command: env_spec.command,
-                })
+                })))
             }
             CommandSpec::System(system_spec) => Some(Self::System {
                 name: spec.name,
@@ -140,20 +143,14 @@ impl ImmutableBackendSpec {
 
     pub(crate) fn into_backend_spec(self) -> JsonRpcBackendSpec {
         match self {
-            Self::Environment {
-                name,
-                requirement,
-                additional_requirements,
-                channels,
-                command,
-            } => JsonRpcBackendSpec {
-                name,
+            Self::Environment(spec) => JsonRpcBackendSpec {
+                name: spec.name,
                 command: CommandSpec::EnvironmentSpec(Box::new(EnvironmentSpec {
-                    requirement,
-                    additional_requirements: additional_requirements.into_iter().collect(),
+                    requirement: spec.requirement,
+                    additional_requirements: spec.additional_requirements.into_iter().collect(),
                     constraints: Default::default(),
-                    channels,
-                    command,
+                    channels: spec.channels,
+                    command: spec.command,
                 })),
             },
             Self::System { name, command } => JsonRpcBackendSpec {
