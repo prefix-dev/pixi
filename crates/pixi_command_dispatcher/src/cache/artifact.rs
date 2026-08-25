@@ -1010,7 +1010,10 @@ mod tests {
     use std::{fs::OpenOptions, str::FromStr, time::SystemTime};
 
     use pixi_compute_engine::ComputeEngine;
+    use pixi_record::{PinnedPathSpec, PinnedSourceSpec, PinnedUrlSpec};
+    use pixi_spec::Subdirectory;
     use rattler_conda_types::{PackageName, PackageRecord};
+    use rattler_digest::{Sha256, compute_file_digest, parse_digest_from_hex};
     use tempfile::TempDir;
 
     use super::*;
@@ -1171,28 +1174,53 @@ mod tests {
         );
     }
 
-    /// An immutable source (git commit, url archive) is fully identified by
-    /// the cache key; the recorded input files may be long gone (e.g. the
-    /// global cache dir holding the git checkout was wiped) without making
-    /// the entry stale. This also covers sidecars written by older versions,
-    /// which still carry file lists for immutable sources.
+    /// A checksum-pinned local URL archive is eligible for immutable artifact
+    /// lookup after its extracted checkout is removed. A path source is not.
     #[tokio::test]
-    async fn lookup_immutable_hits_despite_deleted_input_files() {
-        let (f, input) = Fixture::with_input("main.py", b"body").await;
-
-        // Simulate a wiped cache dir: every recorded input file is gone.
-        fs_err::remove_file(&input).unwrap();
-
-        assert!(
-            f.lookup_with(SourceMutability::Immutable).await.is_some(),
-            "an immutable source must hit even when the recorded input files are gone",
+    async fn pinned_url_hits_after_deleted_checkout_but_path_source_misses() {
+        let archive = Path::new(env!("CARGO_WORKSPACE_DIR")).join("tests/data/url/hello_world.zip");
+        let expected_sha256 = parse_digest_from_hex::<Sha256>(
+            "cceb48dc9667384be394e8c19199252e9e0bdaff98272b19f66a854b4631c163",
+        )
+        .unwrap();
+        assert_eq!(
+            compute_file_digest::<Sha256>(&archive).unwrap(),
+            expected_sha256
         );
+
+        let pinned_url = PinnedSourceSpec::Url(PinnedUrlSpec {
+            url: url::Url::from_file_path(&archive).unwrap(),
+            sha256: expected_sha256,
+            md5: None,
+            subdirectory: Subdirectory::default(),
+        });
+        let pinned_path = PinnedSourceSpec::Path(PinnedPathSpec {
+            path: typed_path::Utf8TypedPathBuf::from("checkout"),
+        });
+        assert!(!pinned_url.is_mutable());
+        assert!(pinned_path.is_mutable());
+
+        let (f, _checkout_file) = Fixture::with_input("main.py", b"body").await;
+        fs_err::remove_dir_all(&f.source).unwrap();
+
+        let mutability = |source: &PinnedSourceSpec| {
+            if source.is_mutable() {
+                SourceMutability::Mutable
+            } else {
+                SourceMutability::Immutable
+            }
+        };
+        assert!(
+            f.lookup_with(mutability(&pinned_url)).await.is_some(),
+            "a pinned URL archive must hit after its prior checkout is removed",
+        );
+        assert_eq!(mutability(&pinned_path), SourceMutability::Mutable);
         assert!(
             matches!(
                 f.lookup_miss().await,
                 CacheMissReason::InputFileRemoved { .. }
             ),
-            "a mutable source with deleted input files must stay a miss",
+            "a path source with a removed checkout must remain a miss",
         );
     }
 
