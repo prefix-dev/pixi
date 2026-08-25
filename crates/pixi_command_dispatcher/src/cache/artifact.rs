@@ -36,14 +36,14 @@ use std::{
 use async_fd_lock::{LockRead, LockWrite};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Utc};
-use pixi_build_discovery::{CommandSpec, EnabledProtocols, EnvironmentSpec, JsonRpcBackendSpec};
+use pixi_build_discovery::{CommandSpec, EnvironmentSpec, JsonRpcBackendSpec};
 use pixi_build_types::InputGlobSet;
 use pixi_compute_engine::ComputeCtx;
 use pixi_manifest::InlineContentHash;
 use pixi_path::{AbsPath, AbsPathBuf};
-use pixi_record::{UnresolvedPixiRecord, UnresolvedSourceRecord, VariantValue};
-use pixi_spec::{BinarySpec, PixiSpec, ResolvedExcludeNewer};
-use rattler_conda_types::{ChannelConfig, ChannelUrl, PackageName, Platform, RepoDataRecord};
+use pixi_record::{UnresolvedPixiRecord, UnresolvedSourceRecord};
+use pixi_spec::PixiSpec;
+use rattler_conda_types::{ChannelUrl, PackageName, Platform, RepoDataRecord};
 use rattler_digest::Sha256Hash;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -78,135 +78,51 @@ pub enum SourceMutability {
 /// Format: url-safe-base64 of the `xxh3_64` over all hashed inputs
 /// (see [`compute_artifact_cache_key`]). Package name is not included
 /// because the entry lives under a `<package_name>/` parent directory.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ArtifactCacheKey(String);
 
-#[cfg(test)]
-impl ArtifactCacheKey {
-    pub(crate) fn for_test(value: impl Into<String>) -> Self {
-        Self(value.into())
-    }
-}
-
-/// Backend validation data stored in an immutable artifact's normal sidecar.
-/// Only environment backends whose requirements can be reconstructed without
-/// a checkout are eligible; system and in-memory backends deliberately fall
-/// back to normal discovery.
+/// Minimal backend descriptor needed to re-solve a checkout-free hit.
+/// Complex environment specs deliberately use the normal checkout path.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub(crate) struct ImmutableBackendValidation {
-    pub backend_identifier: String,
-    pub backend_spec: ImmutableEnvironmentBackendSpec,
-    enabled_protocols: ImmutableEnabledProtocols,
-    channel_alias: Url,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-struct ImmutableEnabledProtocols {
-    rattler_build: bool,
-    ros: bool,
-    pixi: bool,
-}
-
-impl From<&EnabledProtocols> for ImmutableEnabledProtocols {
-    fn from(value: &EnabledProtocols) -> Self {
-        Self {
-            rattler_build: value.enable_rattler_build,
-            ros: value.enable_ros,
-            pixi: value.enable_pixi,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub(crate) struct ImmutableEnvironmentBackendSpec {
+pub(crate) struct ImmutableBackend {
+    pub identifier: String,
     name: String,
     requirement: (PackageName, PixiSpec),
-    additional_requirements: Vec<(PackageName, PixiSpec)>,
-    constraints: Vec<(PackageName, PixiSpec)>,
     channels: Vec<ChannelUrl>,
-    command: Option<String>,
 }
 
-impl ImmutableBackendValidation {
-    pub(crate) fn new(
-        backend_identifier: String,
-        spec: JsonRpcBackendSpec,
-        enabled_protocols: &EnabledProtocols,
-        channel_config: &ChannelConfig,
-    ) -> Option<Self> {
-        let CommandSpec::EnvironmentSpec(env_spec) = spec.command else {
+impl ImmutableBackend {
+    pub(crate) fn new(identifier: String, spec: JsonRpcBackendSpec) -> Option<Self> {
+        let CommandSpec::EnvironmentSpec(environment) = spec.command else {
             return None;
         };
-        let requirements = std::iter::once(&env_spec.requirement.1).chain(
-            env_spec
-                .additional_requirements
-                .iter_specs()
-                .map(|(_, spec)| spec),
-        );
-        if requirements.into_iter().any(|spec| {
-            !matches!(
-                spec,
-                PixiSpec::Version(_) | PixiSpec::DetailedVersion(_) | PixiSpec::UrlBinary(_)
+        if !environment.additional_requirements.is_empty()
+            || !environment.constraints.is_empty()
+            || environment.command.is_some()
+            || !matches!(
+                environment.requirement.1,
+                PixiSpec::Version(_) | PixiSpec::DetailedVersion(_)
             )
-        }) {
+        {
             return None;
         }
-        let constraints = env_spec
-            .constraints
-            .into_specs()
-            .map(|(name, spec)| match spec {
-                BinarySpec::Version(spec) => Some((name, PixiSpec::Version(spec))),
-                BinarySpec::DetailedVersion(spec) => Some((name, PixiSpec::DetailedVersion(spec))),
-                BinarySpec::Url(spec) => Some((name, PixiSpec::UrlBinary(spec))),
-                BinarySpec::Path(_) => None,
-            })
-            .collect::<Option<Vec<_>>>()?;
         Some(Self {
-            backend_identifier,
-            backend_spec: ImmutableEnvironmentBackendSpec {
-                name: spec.name,
-                requirement: env_spec.requirement,
-                additional_requirements: env_spec.additional_requirements.into_specs().collect(),
-                constraints,
-                channels: env_spec.channels,
-                command: env_spec.command,
-            },
-            enabled_protocols: enabled_protocols.into(),
-            channel_alias: channel_config.channel_alias.clone(),
+            identifier,
+            name: spec.name,
+            requirement: environment.requirement,
+            channels: environment.channels,
         })
     }
 
-    pub(crate) fn is_current_config(
-        &self,
-        enabled_protocols: &EnabledProtocols,
-        channel_config: &ChannelConfig,
-    ) -> bool {
-        self.enabled_protocols == enabled_protocols.into()
-            && self.channel_alias == channel_config.channel_alias
-    }
-
-    pub(crate) fn backend_spec(&self) -> JsonRpcBackendSpec {
-        let spec = &self.backend_spec;
+    pub(crate) fn spec(&self) -> JsonRpcBackendSpec {
         JsonRpcBackendSpec {
-            name: spec.name.clone(),
+            name: self.name.clone(),
             command: CommandSpec::EnvironmentSpec(Box::new(EnvironmentSpec {
-                requirement: spec.requirement.clone(),
-                additional_requirements: spec.additional_requirements.iter().cloned().collect(),
-                constraints: spec
-                    .constraints
-                    .iter()
-                    .cloned()
-                    .filter_map(|(name, spec)| match spec {
-                        PixiSpec::Version(spec) => Some((name, BinarySpec::Version(spec))),
-                        PixiSpec::DetailedVersion(spec) => {
-                            Some((name, BinarySpec::DetailedVersion(spec)))
-                        }
-                        PixiSpec::UrlBinary(spec) => Some((name, BinarySpec::Url(spec))),
-                        _ => None,
-                    })
-                    .collect(),
-                channels: spec.channels.clone(),
-                command: spec.command.clone(),
+                requirement: self.requirement.clone(),
+                additional_requirements: Default::default(),
+                constraints: Default::default(),
+                channels: self.channels.clone(),
+                command: None,
             })),
         }
     }
@@ -218,73 +134,7 @@ impl std::fmt::Display for ArtifactCacheKey {
     }
 }
 
-/// Compute the authoritative normal artifact key for an immutable source
-/// build. It covers checkout-independent build inputs and intentionally omits
-/// the backend identifier; backend validation is stored in the same entry's
-/// sidecar and rechecked before reuse.
-#[allow(clippy::too_many_arguments)]
-pub fn compute_immutable_artifact_cache_key(
-    record: &UnresolvedSourceRecord,
-    build_platform: Platform,
-    host_platform: Platform,
-    channels: &[ChannelUrl],
-    exclude_newer: &Option<ResolvedExcludeNewer>,
-    build_source_dep_sha256s: &[Sha256Hash],
-    host_source_dep_sha256s: &[Sha256Hash],
-    project_model_overrides: &crate::ProjectModelOverrides,
-    package_format: Option<pixi_build_types::procedures::conda_build_v1::CondaPackageFormat>,
-    inline_content_hash: Option<InlineContentHash>,
-    variant_configuration: Option<&BTreeMap<String, Vec<VariantValue>>>,
-    variant_file_hashes: &[(PathBuf, u64)],
-) -> ArtifactCacheKey {
-    let mut hasher = Xxh3::new();
-    // A namespace marker keeps checkout-independent immutable entries
-    // distinct from mutable/backend-keyed entries.
-    "immutable-artifact-v2".hash(&mut hasher);
-    record.name().as_normalized().hash(&mut hasher);
-    record.manifest_source.hash(&mut hasher);
-    record.build_source.hash(&mut hasher);
-    record.variants.hash(&mut hasher);
-    variant_configuration.hash(&mut hasher);
-    variant_file_hashes.hash(&mut hasher);
-    inline_content_hash.hash(&mut hasher);
-    build_platform.hash(&mut hasher);
-    host_platform.hash(&mut hasher);
-    channels.hash(&mut hasher);
-    exclude_newer.hash(&mut hasher);
-    project_model_overrides.hash(&mut hasher);
-    package_format.hash(&mut hasher);
-
-    "build_packages".hash(&mut hasher);
-    for dep in &record.build_packages {
-        if let UnresolvedPixiRecord::Binary(repo) = dep {
-            repo.url.as_str().hash(&mut hasher);
-            repo.package_record.sha256.hash(&mut hasher);
-        }
-    }
-    for sha in build_source_dep_sha256s {
-        sha.hash(&mut hasher);
-    }
-
-    "host_packages".hash(&mut hasher);
-    for dep in &record.host_packages {
-        if let UnresolvedPixiRecord::Binary(repo) = dep {
-            repo.url.as_str().hash(&mut hasher);
-            repo.package_record.sha256.hash(&mut hasher);
-        }
-    }
-    for sha in host_source_dep_sha256s {
-        sha.hash(&mut hasher);
-    }
-
-    ArtifactCacheKey(URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes()))
-}
-
 /// Compute the artifact cache key for a source build.
-///
-/// Source *files* are deliberately omitted: mutable sources are validated by
-/// the sidecar's mtimes and globs. Immutable sources use a separate key from
-/// [`compute_immutable_artifact_cache_key`].
 #[allow(clippy::too_many_arguments)]
 pub fn compute_artifact_cache_key(
     record: &UnresolvedSourceRecord,
@@ -302,48 +152,37 @@ pub fn compute_artifact_cache_key(
     record.manifest_source.hash(&mut hasher);
     record.build_source.hash(&mut hasher);
     record.variants.hash(&mut hasher);
-    // An inline package definition's content hash is not otherwise
-    // represented on disk, so it must enter the key explicitly: editing the
-    // inline `[package]` table then invalidates the built artifact even when the
-    // source files are untouched. `None` for ordinary source packages keeps
-    // their key unchanged.
     inline_content_hash.hash(&mut hasher);
     build_platform.hash(&mut hasher);
     host_platform.hash(&mut hasher);
     backend_identifier.hash(&mut hasher);
     project_model_overrides.hash(&mut hasher);
-    // Distinguish artifacts by output format.
     package_format.hash(&mut hasher);
 
-    // Bucket-tagged streams: the same (url, sha256) behaves differently
-    // when installed into the build prefix vs. the host prefix because
-    // run-dep resolution uses different pin-compatibility maps. Hash a
-    // distinct marker per bucket so the two cases can never collide.
-    "build_packages".hash(&mut hasher);
-    for dep in &record.build_packages {
-        if let UnresolvedPixiRecord::Binary(repo) = dep {
-            repo.url.as_str().hash(&mut hasher);
-            repo.package_record.sha256.hash(&mut hasher);
+    for (bucket, dependencies, source_sha256s) in [
+        (
+            "build_packages",
+            &record.build_packages,
+            build_source_dep_sha256s,
+        ),
+        (
+            "host_packages",
+            &record.host_packages,
+            host_source_dep_sha256s,
+        ),
+    ] {
+        bucket.hash(&mut hasher);
+        for dependency in dependencies {
+            if let UnresolvedPixiRecord::Binary(repo) = dependency {
+                repo.url.as_str().hash(&mut hasher);
+                repo.package_record.sha256.hash(&mut hasher);
+            }
+        }
+        for sha256 in source_sha256s {
+            sha256.hash(&mut hasher);
         }
     }
-    for sha in build_source_dep_sha256s {
-        sha.hash(&mut hasher);
-    }
 
-    "host_packages".hash(&mut hasher);
-    for dep in &record.host_packages {
-        if let UnresolvedPixiRecord::Binary(repo) = dep {
-            repo.url.as_str().hash(&mut hasher);
-            repo.package_record.sha256.hash(&mut hasher);
-        }
-    }
-    for sha in host_source_dep_sha256s {
-        sha.hash(&mut hasher);
-    }
-
-    // `host_platform` is already folded into `hasher`, so the hash
-    // alone uniquely identifies the artifact. Dropping the display-only
-    // prefix keeps the on-disk path short on Windows.
     ArtifactCacheKey(URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes()))
 }
 
@@ -387,7 +226,7 @@ pub struct ArtifactSidecar {
 
     /// Checkout-free validation data for an exact immutable Git source.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub(crate) immutable_backend: Option<ImmutableBackendValidation>,
+    pub(crate) immutable_backend: Option<ImmutableBackend>,
 }
 
 impl ArtifactSidecar {
@@ -400,7 +239,7 @@ impl ArtifactSidecar {
         artifact_sha256: Sha256Hash,
         artifact_filename: String,
         record: RepoDataRecord,
-        immutable_backend: Option<ImmutableBackendValidation>,
+        immutable_backend: Option<ImmutableBackend>,
     ) -> Self {
         let input_files = snapshot
             .iter()
@@ -915,7 +754,7 @@ impl ArtifactCache {
         &self,
         package: &PackageName,
         key: &ArtifactCacheKey,
-    ) -> Result<Option<ImmutableBackendValidation>, ArtifactCacheError> {
+    ) -> Result<Option<ImmutableBackend>, ArtifactCacheError> {
         let sidecar_path = self.sidecar_path(package, key);
         let bytes = match tokio::fs::read(&sidecar_path).await {
             Ok(bytes) => bytes,
@@ -932,7 +771,7 @@ impl ArtifactCache {
         &self,
         package: &PackageName,
         key: &ArtifactCacheKey,
-        expected_validation: &ImmutableBackendValidation,
+        expected_backend: &ImmutableBackend,
         backend_identifier: &str,
     ) -> Result<Option<CachedArtifact>, ArtifactCacheError> {
         let sidecar_path = self.sidecar_path(package, key);
@@ -954,8 +793,8 @@ impl ArtifactCache {
         let Ok(sidecar) = serde_json::from_slice::<ArtifactSidecar>(&bytes) else {
             return Ok(None);
         };
-        if expected_validation.backend_identifier != backend_identifier
-            || sidecar.immutable_backend.as_ref() != Some(expected_validation)
+        if expected_backend.identifier != backend_identifier
+            || sidecar.immutable_backend.as_ref() != Some(expected_backend)
         {
             return Ok(None);
         }
@@ -1024,17 +863,8 @@ impl ArtifactCache {
         artifact_source: &Path,
         build_started: SystemTime,
         record: RepoDataRecord,
-        backend_identifier: String,
-        backend_spec: JsonRpcBackendSpec,
-        enabled_protocols: &EnabledProtocols,
-        channel_config: &ChannelConfig,
+        backend: ImmutableBackend,
     ) -> Result<CachedArtifact, ArtifactCacheError> {
-        let validation = ImmutableBackendValidation::new(
-            backend_identifier,
-            backend_spec,
-            enabled_protocols,
-            channel_config,
-        );
         self.store_inner(
             package,
             key,
@@ -1043,7 +873,7 @@ impl ArtifactCache {
             Vec::<AbsPathBuf>::new(),
             build_started,
             record,
-            validation,
+            Some(backend),
         )
         .await
     }
@@ -1058,7 +888,7 @@ impl ArtifactCache {
         input_files: impl IntoIterator<Item = AbsPathBuf>,
         build_started: SystemTime,
         mut record: RepoDataRecord,
-        immutable_backend: Option<ImmutableBackendValidation>,
+        immutable_backend: Option<ImmutableBackend>,
     ) -> Result<CachedArtifact, ArtifactCacheError> {
         let entry_dir = self.entry_dir(package, key);
         let lock_file = self.open_lock_file(package, key).await?;
@@ -1367,169 +1197,56 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn immutable_entry_reuses_artifact_without_source_tree() {
-        let tmp = TempDir::new().unwrap();
-        let cache = ArtifactCache::new(tmp.path().join("artifacts"));
-        let source = tmp.path().join("src");
-        fs_err::create_dir_all(&source).unwrap();
-        fs_err::write(source.join("main.py"), b"print(1)").unwrap();
-
-        let artifact_source = tmp.path().join("foo-1.0.0-h0.conda");
-        fs_err::write(&artifact_source, b"pretend this is a conda").unwrap();
-        let artifact_key = key("immutable-key");
-        let stored = cache
-            .store_immutable(
-                &pkg("foo"),
-                &artifact_key,
-                &artifact_source,
-                SystemTime::now(),
-                dummy_record("foo"),
-                "test-backend".to_string(),
-                JsonRpcBackendSpec::default_rattler_build(Vec::new()),
-                &EnabledProtocols::default(),
-                &ChannelConfig::default_with_root_dir(tmp.path().to_path_buf()),
-            )
-            .await
-            .unwrap();
-
-        let validation = cache
-            .immutable_backend(&pkg("foo"), &artifact_key)
-            .await
-            .unwrap()
-            .unwrap();
-        assert!(
-            cache
-                .lookup_immutable(&pkg("foo"), &artifact_key, &validation, "other-backend",)
-                .await
-                .unwrap()
-                .is_none()
-        );
-        fs_err::remove_dir_all(&source).unwrap();
-
-        let hit = cache
-            .lookup_immutable(&pkg("foo"), &artifact_key, &validation, "test-backend")
-            .await
-            .unwrap()
-            .expect("immutable entry hit");
-        assert_eq!(hit.sha256, stored.sha256);
-        assert_eq!(hit.artifact, stored.artifact);
-        assert_eq!(
-            stored.artifact.parent().unwrap(),
-            cache.entry_dir(&pkg("foo"), &artifact_key)
-        );
-
-        cache.clear_package(&pkg("foo")).unwrap();
-        assert!(
-            cache
-                .lookup_immutable(&pkg("foo"), &artifact_key, &validation, "test-backend",)
-                .await
-                .unwrap()
-                .is_none()
-        );
-    }
-
-    #[tokio::test]
-    async fn immutable_sidecar_round_trips_backend_environment_inputs() {
+    async fn immutable_entry_validates_backend_without_source_tree() {
         let f = Fixture::new();
-        let mut backend_spec = JsonRpcBackendSpec::default_rattler_build(Vec::new());
-        let CommandSpec::EnvironmentSpec(environment) = &mut backend_spec.command else {
+        let mut complex = JsonRpcBackendSpec::default_rattler_build(Vec::new());
+        let CommandSpec::EnvironmentSpec(environment) = &mut complex.command else {
             unreachable!()
         };
-        environment.additional_requirements.insert(
-            PackageName::from_str("extra-tool").unwrap(),
-            PixiSpec::any(),
-        );
         environment
-            .constraints
-            .insert(PackageName::from_str("python").unwrap(), BinarySpec::any());
-        let channel_config = ChannelConfig::default_with_root_dir(f.source.clone());
-        f.cache
+            .additional_requirements
+            .insert(pkg("extra-tool"), PixiSpec::any());
+        assert!(ImmutableBackend::new("ignored".to_string(), complex).is_none());
+
+        let backend = ImmutableBackend::new(
+            "backend@1".to_string(),
+            JsonRpcBackendSpec::default_rattler_build(Vec::new()),
+        )
+        .unwrap();
+        let stored = f
+            .cache
             .store_immutable(
                 &pkg("foo"),
                 &key("immutable-key"),
                 &f.artifact,
                 SystemTime::now(),
                 dummy_record("foo"),
-                "backend@1".to_string(),
-                backend_spec.clone(),
-                &EnabledProtocols::default(),
-                &channel_config,
+                backend.clone(),
             )
             .await
             .unwrap();
 
-        let validation = f
+        let persisted = f
             .cache
             .immutable_backend(&pkg("foo"), &key("immutable-key"))
             .await
             .unwrap()
-            .expect("immutable backend validation should be in the sidecar");
-        assert_eq!(validation.backend_identifier, "backend@1");
-        assert_eq!(validation.backend_spec(), backend_spec);
-        assert!(validation.is_current_config(&EnabledProtocols::default(), &channel_config));
-
-        let mut changed_protocols = EnabledProtocols::default();
-        changed_protocols.enable_pixi = !changed_protocols.enable_pixi;
-        assert!(
-            !validation.is_current_config(&changed_protocols, &channel_config),
-            "protocol changes must reject checkout-free reuse"
-        );
-
-        let changed_channel_config = ChannelConfig {
-            channel_alias: Url::parse("https://different.example.test/").unwrap(),
-            ..channel_config.clone()
-        };
-        assert!(
-            !validation.is_current_config(&EnabledProtocols::default(), &changed_channel_config),
-            "channel alias changes must reject checkout-free reuse"
-        );
-
-        let mut changed_backend = validation.clone();
-        changed_backend.backend_spec.name = "different-backend".to_string();
-        assert!(
-            f.cache
-                .lookup_immutable(
-                    &pkg("foo"),
-                    &key("immutable-key"),
-                    &changed_backend,
-                    "backend@1",
-                )
-                .await
-                .unwrap()
-                .is_none(),
-            "a changed persisted backend environment must be a cache miss"
-        );
-    }
-
-    #[tokio::test]
-    async fn system_backend_is_not_persisted_for_checkout_free_reuse() {
-        let f = Fixture::new();
-        let backend_spec = JsonRpcBackendSpec {
-            name: "system-backend".to_string(),
-            command: CommandSpec::System(pixi_build_discovery::SystemCommandSpec { command: None }),
-        };
-        f.cache
-            .store_immutable(
-                &pkg("foo"),
-                &key("immutable-key"),
-                &f.artifact,
-                SystemTime::now(),
-                dummy_record("foo"),
-                "system-backend".to_string(),
-                backend_spec,
-                &EnabledProtocols::default(),
-                &ChannelConfig::default_with_root_dir(f.source.clone()),
-            )
-            .await
             .unwrap();
-
+        assert_eq!(persisted.spec(), backend.spec());
         assert!(
             f.cache
-                .immutable_backend(&pkg("foo"), &key("immutable-key"))
+                .lookup_immutable(&pkg("foo"), &key("immutable-key"), &persisted, "backend@2")
                 .await
                 .unwrap()
                 .is_none()
         );
+        let hit = f
+            .cache
+            .lookup_immutable(&pkg("foo"), &key("immutable-key"), &persisted, "backend@1")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(hit.artifact, stored.artifact);
     }
 
     #[tokio::test]
@@ -2701,17 +2418,17 @@ mod cache_key_tests {
     //! key: equivalent inputs produce equal keys, any single-field change
     //! produces a different key. These tests are the guardrail against
     //! silent cache collisions when the hash input set evolves.
-    use std::{collections::BTreeMap, path::PathBuf, str::FromStr, sync::Arc};
+    use std::{collections::BTreeMap, str::FromStr, sync::Arc};
 
     use pixi_record::{
         FullSourceRecordData, PinnedPathSpec, PinnedSourceSpec, SourceRecordData,
-        UnresolvedPixiRecord, UnresolvedSourceRecord, VariantValue,
+        UnresolvedPixiRecord, UnresolvedSourceRecord,
     };
     use rattler_conda_types::{PackageName, PackageRecord, Platform, RepoDataRecord};
     use rattler_digest::{Sha256Hash, parse_digest_from_hex};
     use typed_path::Utf8TypedPathBuf;
 
-    use super::{compute_artifact_cache_key, compute_immutable_artifact_cache_key};
+    use super::compute_artifact_cache_key;
 
     fn record(name: &str) -> UnresolvedSourceRecord {
         let mut pr = PackageRecord::new(
@@ -2783,47 +2500,6 @@ mod cache_key_tests {
             None,
         )
         .to_string()
-    }
-
-    fn immutable_key_for(
-        r: &UnresolvedSourceRecord,
-        variant_configuration: Option<&BTreeMap<String, Vec<VariantValue>>>,
-        variant_file_hashes: &[(PathBuf, u64)],
-    ) -> String {
-        compute_immutable_artifact_cache_key(
-            r,
-            Platform::Linux64,
-            Platform::Linux64,
-            &[],
-            &None,
-            &[],
-            &[],
-            &Default::default(),
-            None,
-            None,
-            variant_configuration,
-            variant_file_hashes,
-        )
-        .to_string()
-    }
-
-    #[test]
-    fn immutable_static_variant_inputs_invalidate_key() {
-        let record = record("foo");
-        let baseline = immutable_key_for(&record, None, &[]);
-
-        let mut variant_configuration = BTreeMap::new();
-        variant_configuration.insert("python".to_string(), vec![VariantValue::from("3.12")]);
-        assert_ne!(
-            baseline,
-            immutable_key_for(&record, Some(&variant_configuration), &[]),
-            "variant configuration must be part of the immutable key"
-        );
-        assert_ne!(
-            baseline,
-            immutable_key_for(&record, None, &[(PathBuf::from("variants.yaml"), 1)]),
-            "variant file content hashes must be part of the immutable key"
-        );
     }
 
     #[test]

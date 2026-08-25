@@ -534,26 +534,6 @@ pub async fn resolve_backend_identifier(
     exclude_newer: Option<ResolvedExcludeNewer>,
     inline: Option<&InlinePackage>,
 ) -> Result<String, Arc<InstantiateBackendError>> {
-    Ok(resolve_backend_identifier_with_spec(
-        ctx,
-        source_path,
-        manifest_source_anchor,
-        exclude_newer,
-        inline,
-    )
-    .await?
-    .0)
-}
-
-/// Resolve a backend identifier and return the anchor-resolved specification
-/// used to derive it.
-pub async fn resolve_backend_identifier_with_spec(
-    ctx: &mut ComputeCtx,
-    source_path: &std::path::Path,
-    manifest_source_anchor: SourceAnchor,
-    exclude_newer: Option<ResolvedExcludeNewer>,
-    inline: Option<&InlinePackage>,
-) -> Result<(String, JsonRpcBackendSpec), Arc<InstantiateBackendError>> {
     let discovered = discover_backend(ctx, source_path, inline)
         .await
         .map_err(InstantiateBackendError::Discovery)
@@ -563,20 +543,6 @@ pub async fn resolve_backend_identifier_with_spec(
         .backend_spec
         .clone()
         .resolve(manifest_source_anchor);
-    let identifier =
-        resolve_backend_identifier_from_spec(ctx, resolved_spec.clone(), exclude_newer).await?;
-    Ok((identifier, resolved_spec))
-}
-
-/// Resolve the backend identifier from an already discovered, anchor-resolved
-/// backend specification. This is usable by immutable source-cache hits,
-/// where the cached specification lets us validate the current backend without
-/// materialising the source tree again.
-pub async fn resolve_backend_identifier_from_spec(
-    ctx: &mut ComputeCtx,
-    resolved_spec: JsonRpcBackendSpec,
-    exclude_newer: Option<ResolvedExcludeNewer>,
-) -> Result<String, Arc<InstantiateBackendError>> {
     let resolved_command = ctx
         .compute(&ResolvedBackendCommandKey::new(resolved_spec.clone()))
         .await;
@@ -611,7 +577,7 @@ pub async fn resolve_backend_identifier_from_spec(
 /// additional backend dependency changing can change build behavior even when
 /// the primary backend package version stays fixed. Unsupported system and
 /// in-memory commands return `None` so callers fall back to checkout/discovery.
-pub async fn resolve_immutable_backend_identifier_from_spec(
+pub(crate) async fn resolve_immutable_backend_identifier_from_spec(
     ctx: &mut ComputeCtx,
     resolved_spec: JsonRpcBackendSpec,
     exclude_newer: Option<ResolvedExcludeNewer>,

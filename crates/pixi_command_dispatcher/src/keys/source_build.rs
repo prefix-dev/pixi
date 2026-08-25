@@ -7,7 +7,6 @@
 
 use std::{
     collections::BTreeMap,
-    future::Future,
     hash::{Hash, Hasher},
     path::PathBuf,
     sync::Arc,
@@ -15,8 +14,7 @@ use std::{
 
 use derive_more::Display;
 use futures::{SinkExt, channel::mpsc::unbounded};
-use pixi_build_discovery::{EnabledProtocols, JsonRpcBackendSpec};
-use pixi_build_frontend::BackendOverride;
+use pixi_build_discovery::BackendSpec;
 use pixi_build_types::procedures::{
     conda_build_v1::CondaPackageFormat,
     conda_outputs::{CondaOutput, CondaOutputsParams},
@@ -26,8 +24,7 @@ use pixi_record::{PixiRecord, UnresolvedPixiRecord, UnresolvedSourceRecord, Vari
 use pixi_spec::{ResolvedExcludeNewer, SourceAnchor, SourceSpec};
 use pixi_variant::VariantSelector;
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, PackageName, PackageRecord, RepoDataRecord,
-    package::DistArchiveIdentifier, prefix::Prefix,
+    ChannelUrl, PackageRecord, RepoDataRecord, package::DistArchiveIdentifier, prefix::Prefix,
 };
 use rattler_digest::Sha256Hash;
 use tracing::instrument;
@@ -36,9 +33,9 @@ use xxhash_rust::xxh3::Xxh3;
 
 pub use crate::cache::{ArtifactCache, WorkspaceCache};
 use crate::cache::{
-    ArtifactCacheError, CacheLookup, CachedArtifact, SourceMutability,
-    artifact::ImmutableBackendValidation,
-    compute_artifact_cache_key, compute_immutable_artifact_cache_key, compute_workspace_key,
+    ArtifactCacheError, CacheLookup, SourceMutability,
+    artifact::ImmutableBackend,
+    compute_artifact_cache_key, compute_workspace_key,
     markers::{SourceBuildArtifactsDir, SourceBuildWorkspacesDir},
 };
 use crate::{
@@ -50,7 +47,8 @@ use crate::{
     build::{Dependencies, PixiRunExports, convert_extra_dependencies},
     compute_data::{HasGateway, HasIoConcurrencySemaphore},
     injected_config::{BackendOverrideKey, ChannelConfigKey, EnabledProtocolsKey},
-    resolve_backend_identifier_with_spec, resolve_immutable_backend_identifier_from_spec,
+    inline_package::discover_backend,
+    instantiate_backend_key::resolve_immutable_backend_identifier_from_spec,
 };
 use pixi_compute_cache_dirs::CacheDirsExt;
 use pixi_compute_sources::SourceCheckoutExt;
@@ -87,46 +85,11 @@ fn immutable_variant_file_hashes(spec: &SourceBuildSpec) -> Option<Vec<(PathBuf,
         .unwrap_or_default()
         .iter()
         .map(|path| {
-            let bytes = fs_err::read(path).ok()?;
-            let mut hasher = Xxh3::new();
-            bytes.hash(&mut hasher);
-            Some((path.clone(), hasher.finish()))
+            let file = fs_err::File::open(path).ok()?;
+            let hash = crate::file_fingerprint::hash_file_contents(file).ok()?;
+            Some((path.clone(), hash))
         })
         .collect()
-}
-
-/// Try the checkout-free immutable hit used at the start of a source build.
-/// Keeping this seam separate makes it possible to prove that a normal (empty)
-/// backend override reaches the authoritative artifact entry without creating
-/// a source checkout.
-async fn lookup_immutable_before_checkout<Resolve, ResolveFuture>(
-    artifact_cache: &ArtifactCache,
-    package: &PackageName,
-    key: &crate::cache::ArtifactCacheKey,
-    backend_override: &BackendOverride,
-    enabled_protocols: &EnabledProtocols,
-    channel_config: &ChannelConfig,
-    resolve_backend: Resolve,
-) -> Result<Option<CachedArtifact>, ArtifactCacheError>
-where
-    Resolve: FnOnce(JsonRpcBackendSpec) -> ResolveFuture,
-    ResolveFuture: Future<Output = Option<String>>,
-{
-    if !backend_override.is_empty() {
-        return Ok(None);
-    }
-    let Some(validation) = artifact_cache.immutable_backend(package, key).await? else {
-        return Ok(None);
-    };
-    if !validation.is_current_config(enabled_protocols, channel_config) {
-        return Ok(None);
-    }
-    let Some(backend_identifier) = resolve_backend(validation.backend_spec()).await else {
-        return Ok(None);
-    };
-    artifact_cache
-        .lookup_immutable(package, key, &validation, &backend_identifier)
-        .await
 }
 
 /// Hashable inputs to a source build. Runtime concerns (reporters, log
@@ -235,74 +198,60 @@ async fn compute_inner(
         build_string_prefix: spec.build_string_prefix.clone(),
         build_number: spec.build_number,
     };
-    let immutable_variant_file_hashes = immutable_variant_file_hashes(&spec);
-    let immutable_cache_key = immutable_git_sources(&spec.record)
-        .then_some(immutable_variant_file_hashes)
+    let artifacts_dir = ctx.cache_dir::<SourceBuildArtifactsDir>().await;
+    let artifact_cache = ArtifactCache::new(artifacts_dir.as_std_path())
+        .with_io_concurrency_semaphore(ctx.global_data().io_concurrency_semaphore().cloned());
+    let backend_override = ctx.compute(&BackendOverrideKey).await;
+    let enabled_protocols = ctx.compute(&EnabledProtocolsKey).await;
+    let channel_config = ctx.compute(&ChannelConfigKey).await;
+    let immutable_cache_key = (immutable_git_sources(&spec.record) && backend_override.is_empty())
+        .then(|| immutable_variant_file_hashes(&spec))
         .flatten()
         .map(|variant_file_hashes| {
-            compute_immutable_artifact_cache_key(
+            let mut hasher = Xxh3::new();
+            (
+                "immutable-artifact-v3",
+                &spec,
+                variant_file_hashes,
+                &enabled_protocols,
+                &channel_config.channel_alias,
+            )
+                .hash(&mut hasher);
+            let immutable_identifier = format!("immutable@{:016x}", hasher.finish());
+            compute_artifact_cache_key(
                 &spec.record,
                 spec.build_environment.build_platform,
                 spec.build_environment.host_platform,
-                &spec.channels,
-                &spec.exclude_newer,
+                &immutable_identifier,
                 &build_source_dep_sha256s,
                 &host_source_dep_sha256s,
                 &project_model_overrides,
                 spec.package_format,
                 spec.inline.as_ref().map(|inline| inline.content_hash),
-                spec.variant_configuration.as_ref(),
-                &variant_file_hashes,
             )
         });
-    let artifacts_dir = ctx.cache_dir::<SourceBuildArtifactsDir>().await;
-    let artifact_cache = ArtifactCache::new(artifacts_dir.as_std_path())
-        .with_io_concurrency_semaphore(ctx.global_data().io_concurrency_semaphore().cloned());
 
-    // Backend overrides and unsupported descriptors deliberately bypass this
-    // checkout-free probe. The optimistic descriptor read is validated by a
-    // final locked sidecar read after resolving the backend against current
-    // configuration.
-    let backend_override = ctx.compute(&BackendOverrideKey).await;
-    let immutable_cache_key = backend_override
-        .is_empty()
-        .then_some(immutable_cache_key)
-        .flatten();
-    if let Some(immutable_cache_key) = immutable_cache_key.as_ref() {
-        let enabled_protocols = ctx.compute(&EnabledProtocolsKey).await;
-        let channel_config = ctx.compute(&ChannelConfigKey).await;
-        let hit = lookup_immutable_before_checkout(
-            &artifact_cache,
-            spec.record.name(),
-            immutable_cache_key,
-            &backend_override,
-            &enabled_protocols,
-            &channel_config,
-            |backend_spec| async {
-                resolve_immutable_backend_identifier_from_spec(
-                    ctx,
-                    backend_spec,
-                    spec.exclude_newer.clone(),
-                )
-                .await
-                .ok()
-                .flatten()
-            },
+    if let Some(key) = immutable_cache_key.as_ref()
+        && let Some(backend) = artifact_cache
+            .immutable_backend(spec.record.name(), key)
+            .await
+            .map_err(map_cache_err)?
+        && let Ok(Some(identifier)) = resolve_immutable_backend_identifier_from_spec(
+            ctx,
+            backend.spec(),
+            spec.exclude_newer.clone(),
         )
         .await
-        .map_err(map_cache_err)?;
-        if let Some(hit) = hit {
-            tracing::debug!(
-                package = %spec.record.name().as_source(),
-                artifact = %hit.artifact.display(),
-                "immutable artifact cache hit"
-            );
-            return Ok(SourceBuildResult {
-                artifact: hit.artifact,
-                artifact_sha256: hit.sha256,
-                record: hit.record,
-            });
-        }
+        && let Some(hit) = artifact_cache
+            .lookup_immutable(spec.record.name(), key, &backend, &identifier)
+            .await
+            .map_err(map_cache_err)?
+    {
+        return Ok(SourceBuildResult {
+            artifact: hit.artifact,
+            artifact_sha256: hit.sha256,
+            record: hit.record,
+        });
     }
 
     let manifest_source = spec.record.manifest_source.clone();
@@ -334,7 +283,7 @@ async fn compute_inner(
         .path
         .as_dir_or_file_parent()
         .to_path_buf();
-    let (discovered_backend_identifier, backend_spec) = resolve_backend_identifier_with_spec(
+    let discovered_backend_identifier = crate::resolve_backend_identifier(
         ctx,
         manifest_checkout.path.as_std_path(),
         manifest_anchor.clone(),
@@ -345,7 +294,20 @@ async fn compute_inner(
     .map_err(|err: Arc<crate::InstantiateBackendError>| {
         SourceBuildError::Initialize((*err).clone())
     })?;
-    let immutable_backend_identifier = if immutable_cache_key.is_some() {
+    // Discovery is content-addressed, so this only retrieves the descriptor
+    // used by the identifier resolution above.
+    let discovered = discover_backend(
+        ctx,
+        manifest_checkout.path.as_std_path(),
+        spec.inline.as_ref(),
+    )
+    .await
+    .map_err(|err| SourceBuildError::Initialize(crate::InstantiateBackendError::Discovery(err)))?;
+    let BackendSpec::JsonRpc(backend_spec) = discovered
+        .backend_spec
+        .clone()
+        .resolve(manifest_anchor.clone());
+    let immutable_backend = if immutable_cache_key.is_some() {
         resolve_immutable_backend_identifier_from_spec(
             ctx,
             backend_spec.clone(),
@@ -353,14 +315,17 @@ async fn compute_inner(
         )
         .await
         .map_err(|err| SourceBuildError::Initialize((*err).clone()))?
+        .and_then(|identifier| ImmutableBackend::new(identifier, backend_spec.clone()))
     } else {
         None
     };
-    // Unsupported backend commands retain the existing backend-keyed path.
-    let immutable_cache_key = immutable_backend_identifier
+    // Complex environment specs and non-environment backends retain the
+    // existing backend-keyed path.
+    let immutable_cache_key = immutable_backend.as_ref().and(immutable_cache_key);
+    let backend_identifier = immutable_backend
         .as_ref()
-        .and(immutable_cache_key);
-    let backend_identifier = immutable_backend_identifier.unwrap_or(discovered_backend_identifier);
+        .map(|backend| backend.identifier.clone())
+        .unwrap_or(discovered_backend_identifier);
 
     // Cache key covers structural identity + dep content addresses;
     // source-file freshness lives in the sidecar, not the key.
@@ -392,30 +357,11 @@ async fn compute_inner(
     } else {
         SourceMutability::Immutable
     };
-    let immutable_validation = if immutable_cache_key.is_some() {
-        let enabled_protocols = ctx.compute(&EnabledProtocolsKey).await;
-        let channel_config = ctx.compute(&ChannelConfigKey).await;
-        ImmutableBackendValidation::new(
-            backend_identifier.clone(),
-            backend_spec.clone(),
-            &enabled_protocols,
-            &channel_config,
-        )
-    } else {
-        None
-    };
-    let cached = if let Some(validation) = immutable_validation.as_ref() {
+    let cached = if let Some(backend) = immutable_backend.as_ref() {
         artifact_cache
-            .lookup_immutable(
-                spec.record.name(),
-                &cache_key,
-                validation,
-                &backend_identifier,
-            )
+            .lookup_immutable(spec.record.name(), &cache_key, backend, &backend_identifier)
             .await
             .map_err(map_cache_err)?
-    } else if immutable_cache_key.is_some() {
-        None
     } else {
         match artifact_cache
             .lookup(ctx, spec.record.name(), &cache_key, &source_dir, mutability)
@@ -690,9 +636,7 @@ async fn compute_inner(
         SourceMutability::Immutable => (Vec::new(), Vec::new()),
     };
 
-    let stored = if immutable_cache_key.is_some() {
-        let enabled_protocols = ctx.compute(&EnabledProtocolsKey).await;
-        let channel_config = ctx.compute(&ChannelConfigKey).await;
+    let stored = if let Some(backend) = immutable_backend {
         artifact_cache
             .store_immutable(
                 spec.record.name(),
@@ -700,10 +644,7 @@ async fn compute_inner(
                 &built.output_file,
                 build_started,
                 record,
-                backend_identifier,
-                backend_spec,
-                &enabled_protocols,
-                &channel_config,
+                backend,
             )
             .await
             .map_err(map_cache_err)?
@@ -1078,105 +1019,5 @@ impl Directories {
             build_prefix,
             host_prefix,
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::{cell::Cell, str::FromStr, time::SystemTime};
-
-    use rattler_conda_types::{PackageRecord, Platform};
-    use tempfile::TempDir;
-
-    use super::*;
-    use crate::cache::ArtifactCacheKey;
-
-    fn dummy_record(name: &str) -> RepoDataRecord {
-        let mut package_record = PackageRecord::new(
-            PackageName::from_str(name).unwrap(),
-            "1.0.0"
-                .parse::<rattler_conda_types::VersionWithSource>()
-                .unwrap(),
-            "h0".into(),
-        );
-        package_record.subdir = Platform::Linux64.to_string();
-        RepoDataRecord {
-            package_record,
-            identifier: DistArchiveIdentifier::try_from_filename(&format!("{name}-1.0.0-h0.conda"))
-                .unwrap(),
-            url: Url::parse(&format!("file:///{name}-1.0.0-h0.conda")).unwrap(),
-            channel: None,
-        }
-    }
-
-    #[tokio::test]
-    async fn normal_backend_uses_checkout_free_source_build_probe() {
-        let temp = TempDir::new().unwrap();
-        let cache = ArtifactCache::new(temp.path().join("artifacts"));
-        let key = ArtifactCacheKey::for_test("immutable-source-build");
-        let package = PackageName::from_str("foo").unwrap();
-        let artifact = temp.path().join("foo-1.0.0-h0.conda");
-        fs_err::write(&artifact, b"cached artifact").unwrap();
-        let channel_config = ChannelConfig::default_with_root_dir(temp.path().to_path_buf());
-        cache
-            .store_immutable(
-                &package,
-                &key,
-                &artifact,
-                SystemTime::now(),
-                dummy_record("foo"),
-                "env@resolved".to_string(),
-                JsonRpcBackendSpec::default_rattler_build(Vec::new()),
-                &EnabledProtocols::default(),
-                &channel_config,
-            )
-            .await
-            .unwrap();
-
-        // This directory represents the immutable source checkout. The probe
-        // has no source path parameter and must still return the artifact.
-        let checkout = temp.path().join("checkout");
-        fs_err::create_dir(&checkout).unwrap();
-        fs_err::remove_dir(&checkout).unwrap();
-        let resolver_called = Cell::new(false);
-        let hit = lookup_immutable_before_checkout(
-            &cache,
-            &package,
-            &key,
-            &BackendOverride::default(),
-            &EnabledProtocols::default(),
-            &channel_config,
-            |_| async {
-                resolver_called.set(true);
-                Some("env@resolved".to_string())
-            },
-        )
-        .await
-        .unwrap()
-        .expect("normal no-override probe should hit without a checkout");
-        assert!(resolver_called.get());
-        assert_eq!(
-            hit.artifact,
-            cache.entry_dir(&package, &key).join("foo-1.0.0-h0.conda")
-        );
-        assert!(!checkout.exists());
-
-        let mut changed_protocols = EnabledProtocols::default();
-        changed_protocols.enable_pixi = !changed_protocols.enable_pixi;
-        let mismatch = lookup_immutable_before_checkout(
-            &cache,
-            &package,
-            &key,
-            &BackendOverride::default(),
-            &changed_protocols,
-            &channel_config,
-            |_| async { panic!("configuration mismatch must fall back before backend resolution") },
-        )
-        .await
-        .unwrap();
-        assert!(
-            mismatch.is_none(),
-            "configuration mismatch must fall back to checkout and discovery"
-        );
     }
 }

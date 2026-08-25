@@ -20,7 +20,6 @@ pub mod workspace;
 pub use artifact::{
     ArtifactCache, ArtifactCacheError, ArtifactCacheKey, ArtifactSidecar, CacheLookup,
     CacheMissReason, CachedArtifact, SourceMutability, compute_artifact_cache_key,
-    compute_immutable_artifact_cache_key,
 };
 pub use backend_metadata::{
     BuildBackendMetadataCache, BuildBackendMetadataCacheEntry, BuildBackendMetadataCacheError,
