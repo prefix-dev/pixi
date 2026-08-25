@@ -8732,11 +8732,15 @@ This is how you bind a feature to the rich variant:</p>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Platform names in <code>pixi.lock</code></p>
-<p>Rich platforms are written to <code>pixi.lock</code> under short aliases (<code>p1</code>, <code>p2</code>,
-...) instead of their full names, to keep the lock file compact. Pixi maps
-these back to the manifest entries by their contents (subdir plus declared
-virtual packages) when the lock file is read, so the aliases never need to
-be understood by hand. The real names stay in <code>pixi.toml</code>.</p>
+<p>Platforms are written to <code>pixi.lock</code> under the same name the manifest
+uses (explicit or synthesized), so tools that consume the lock file can
+look up a platform by its manifest name. Renaming a platform in
+<code>pixi.toml</code> never requires a re-solve: Pixi matches the locked entries to
+the manifest by their contents (subdir plus declared virtual packages)
+when the lock file is read, and the next <code>pixi lock</code> rewrites just the
+names. Lock files from older Pixi versions that used short aliases
+(<code>p1</code>, <code>p2</code>, ...) are matched the same way and updated on their next
+write.</p>
 </div>
 <h3 id="adding-the-current-machine">Adding the current machine<a class="headerlink" href="#adding-the-current-machine" title="Permanent link">#</a></h3>
 <p>To get binaries optimized for the machine you are on, let Pixi detect it for you instead of writing the inline table by hand:</p>
