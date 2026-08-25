@@ -23,6 +23,11 @@ impl Default for BackendOverride {
 }
 
 impl BackendOverride {
+    /// Returns whether no backend commands are overridden.
+    pub fn is_empty(&self) -> bool {
+        matches!(self, Self::System(OverriddenBackends::Specified(overrides)) if overrides.is_empty())
+    }
+
     /// Constructs a backend override that uses the specified
     /// [`InMemoryBackendInstantiator`] to create an in-memory backend.
     ///
