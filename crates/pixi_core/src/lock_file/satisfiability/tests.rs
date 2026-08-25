@@ -79,10 +79,11 @@ async fn verify_lock_file_satisfiability(
     uv_configuration::initialize_rayon_once();
 
     // Mirror production's load path (`Workspace::load_lock_file`): align the
-    // lockfile's platform names to the manifest by identity, so short on-disk
-    // aliases like `p1` resolve to the workspace platform names the rest of
-    // this check matches against.
-    let aligned_lock_file = crate::lock_file::platform_rename::align_platform_names(
+    // lockfile's platform names to the manifest by identity, so stale names
+    // (a manifest rename, or the legacy `pN` aliases of older pixi versions)
+    // resolve to the workspace platform names the rest of this check matches
+    // against.
+    let (aligned_lock_file, _renamed) = crate::lock_file::platform_rename::align_platform_names(
         lock_file.clone(),
         project.workspace_manifest(),
         project.root(),

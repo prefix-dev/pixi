@@ -94,7 +94,16 @@ use crate::{
 #[derive(Debug)]
 pub enum LockFileLoadResult {
     /// The lock file was successfully loaded
-    Loaded(LockFile),
+    Loaded {
+        lock_file: LockFile,
+        /// `true` when the load-time pass renamed at least one platform to
+        /// match the manifest (a manifest rename, or legacy `pN` aliases
+        /// written by older pixi versions). The loaded lock file then
+        /// diverges from the on-disk one in platform names only, and a
+        /// writing command should persist the new names even when nothing
+        /// needs re-solving.
+        platform_names_realigned: bool,
+    },
     /// The lock file version is newer than what is supported
     VersionMismatch {
         lock_file_version: u64,
@@ -128,7 +137,7 @@ impl LockFileLoadResult {
     /// This ensures that version mismatches are caught and reported as errors.
     pub fn into_lock_file(self) -> miette::Result<LockFile> {
         match self {
-            Self::Loaded(lock_file) => Ok(lock_file),
+            Self::Loaded { lock_file, .. } => Ok(lock_file),
             Self::VersionMismatch {
                 lock_file_version,
                 max_supported_version,
@@ -164,7 +173,7 @@ impl LockFileLoadResult {
     /// as if it doesn't exist.
     pub fn into_lock_file_or_empty(self) -> LockFile {
         match self {
-            Self::Loaded(lock_file) => lock_file,
+            Self::Loaded { lock_file, .. } => lock_file,
             Self::VersionMismatch { .. } => LockFile::default(),
         }
     }
@@ -172,6 +181,19 @@ impl LockFileLoadResult {
     /// Check if this result represents a version mismatch.
     pub fn is_version_mismatch(&self) -> bool {
         matches!(self, Self::VersionMismatch { .. })
+    }
+
+    /// `true` when the loaded lock file's platform names were rewritten to
+    /// match the manifest and therefore diverge from the on-disk file. See
+    /// [`LockFileLoadResult::Loaded`].
+    pub fn platform_names_realigned(&self) -> bool {
+        matches!(
+            self,
+            Self::Loaded {
+                platform_names_realigned: true,
+                ..
+            }
+        )
     }
 
     /// Extract the lock file, displaying a warning for version mismatches and treating them as missing.
@@ -185,7 +207,7 @@ impl LockFileLoadResult {
     /// stop execution (unless --locked or --frozen is set, which is handled elsewhere).
     pub fn into_lock_file_or_empty_with_warning(self) -> LockFile {
         match self {
-            Self::Loaded(lock_file) => lock_file,
+            Self::Loaded { lock_file, .. } => lock_file,
             Self::VersionMismatch {
                 lock_file_version,
                 max_supported_version,
@@ -275,6 +297,7 @@ impl Workspace {
         }
 
         // Load the lock file, displaying warning if there's a version mismatch
+        let platform_names_realigned = lock_file_result.platform_names_realigned();
         let lock_file = lock_file_result.into_lock_file_or_empty_with_warning();
 
         let needs_format_upgrade = lock_file.version() < rattler_lock::FileFormatVersion::LATEST;
@@ -332,6 +355,26 @@ impl Workspace {
             // build_caches even if empty, in case conda_prefix needs them.
             derived.uv_context = outdated.uv_context;
             derived.build_caches = outdated.build_caches;
+
+            // The load pass renamed platforms to match the manifest (a
+            // manifest rename, or the legacy `pN` aliases older pixi
+            // versions wrote). The packages are untouched, so nothing needs
+            // re-solving, but the on-disk file still carries the old names:
+            // persist the aligned names so consumers of `pixi.lock` see the
+            // same names the manifest uses. `--locked` never writes; the
+            // divergence is name-only, so its satisfiability is unaffected.
+            // An old-format lock file is skipped as well: writing it back
+            // would silently upgrade the format without the re-solve that
+            // fills the fields the old format didn't store.
+            if platform_names_realigned
+                && !needs_format_upgrade
+                && options.lock_file_usage.allow_updates()
+            {
+                if options.lock_file_usage != LockFileUsage::DryRun {
+                    derived.write_to_disk()?;
+                }
+                return Ok((derived, true));
+            }
             return Ok((derived, false));
         }
 
@@ -425,7 +468,10 @@ impl Workspace {
     /// - `.into_lock_file_or_empty_with_warning()` - displays warning and continues
     pub async fn load_lock_file(&self) -> miette::Result<LockFileLoadResult> {
         let Some(lock_file_path) = self.persistent_lock_file_path() else {
-            return Ok(LockFileLoadResult::Loaded(LockFile::default()));
+            return Ok(LockFileLoadResult::Loaded {
+                lock_file: LockFile::default(),
+                platform_names_realigned: false,
+            });
         };
         let manifest = self.workspace_manifest().clone();
         let workspace_root = self.root().to_path_buf();
@@ -440,14 +486,20 @@ impl Workspace {
                         // pixi.toml shouldn't have to re-solve to use the
                         // existing locked packages, and downstream code
                         // (satisfiability, environment lookup, install) sees
-                        // the workspace-current names directly.
-                        crate::lock_file::platform_rename::align_platform_names(
-                            lock,
-                            &manifest,
-                            &workspace_root,
-                        )
+                        // the workspace-current names directly. The same pass
+                        // maps the legacy `pN` aliases older pixi versions
+                        // wrote to disk back to the manifest names.
+                        let (lock_file, platform_names_realigned) =
+                            crate::lock_file::platform_rename::align_platform_names(
+                                lock,
+                                &manifest,
+                                &workspace_root,
+                            );
+                        LockFileLoadResult::Loaded {
+                            lock_file,
+                            platform_names_realigned,
+                        }
                     })
-                    .map(LockFileLoadResult::Loaded)
                     .or_else(|err| match err {
                         ParseCondaLockError::IncompatibleVersion {
                             lock_file_version,
@@ -468,7 +520,10 @@ impl Workspace {
             .await
             .unwrap_or_else(|e| Err(e).into_diagnostic())
         } else {
-            Ok(LockFileLoadResult::Loaded(LockFile::default()))
+            Ok(LockFileLoadResult::Loaded {
+                lock_file: LockFile::default(),
+                platform_names_realigned: false,
+            })
         }
     }
 }
@@ -702,14 +757,7 @@ impl<'p> LockFileDerivedData<'p> {
         let lock_file_path = self.workspace.persistent_lock_file_path().ok_or_else(|| {
             miette::miette!("transient script workspaces cannot write lock files")
         })?;
-        // Shorten rich platform names to `p1`, `p2`, ... on disk; the load-time
-        // pass restores the manifest names by identity.
-        let lock_file = crate::lock_file::platform_rename::shorten_platform_names(
-            self.lock_file.clone(),
-            self.workspace.workspace_manifest(),
-            self.workspace.root(),
-        );
-        lock_file
+        self.lock_file
             .to_path(&lock_file_path)
             .into_diagnostic()
             .context("failed to write lock file to disk")

@@ -133,11 +133,15 @@ platforms = ["linux-64-cuda-12-0"]  # the synthesized name for the entry above
 ```
 
 !!! note "Platform names in `pixi.lock`"
-    Rich platforms are written to `pixi.lock` under short aliases (`p1`, `p2`,
-    ...) instead of their full names, to keep the lock file compact. Pixi maps
-    these back to the manifest entries by their contents (subdir plus declared
-    virtual packages) when the lock file is read, so the aliases never need to
-    be understood by hand. The real names stay in `pixi.toml`.
+    Platforms are written to `pixi.lock` under the same name the manifest
+    uses (explicit or synthesized), so tools that consume the lock file can
+    look up a platform by its manifest name. Renaming a platform in
+    `pixi.toml` never requires a re-solve: Pixi matches the locked entries to
+    the manifest by their contents (subdir plus declared virtual packages)
+    when the lock file is read, and the next `pixi lock` rewrites just the
+    names. Lock files from older Pixi versions that used short aliases
+    (`p1`, `p2`, ...) are matched the same way and updated on their next
+    write.
 
 ### Adding the current machine
 
