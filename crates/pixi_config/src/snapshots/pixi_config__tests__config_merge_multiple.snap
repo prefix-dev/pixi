@@ -1,6 +1,5 @@
 ---
 source: crates/pixi_config/src/lib.rs
-assertion_line: 3037
 expression: debug
 ---
 Config {
@@ -84,6 +83,18 @@ Config {
                 true,
             ),
             disable_sharded: None,
+        },
+        per_channel: {},
+    },
+    index_config: IndexConfig {
+        default: IndexChannelConfig {
+            write_zst: None,
+            write_shards: None,
+            repodata_revisions: None,
+            package_revision_assignment: None,
+            base_url: None,
+            notices: None,
+            channel_relations: None,
         },
         per_channel: {},
     },

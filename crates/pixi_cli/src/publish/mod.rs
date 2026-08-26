@@ -22,7 +22,7 @@ use pixi_command_dispatcher::{
     ComputeResultExt, CondaPackageFormat, EnvironmentRef, EnvironmentSpec, EphemeralEnv,
     keys::{ResolveSourcePackageKey, ResolveSourcePackageSpec, SourceBuildKey, SourceBuildSpec},
 };
-use pixi_config::{ConfigCli, PackageFormatAndCompression};
+use pixi_config::{ConfigCli, IndexChannelConfig, IndexConfig, PackageFormatAndCompression};
 use pixi_core::{
     Workspace, WorkspaceLocator, environment::sanity_check_workspace, workspace::DiscoveryStart,
 };
@@ -374,6 +374,9 @@ pub struct PublishContext {
     /// Whether pixi runs in offline mode. Uploading to a remote channel is
     /// refused in offline mode; local filesystem targets still work.
     pub offline: bool,
+
+    /// Indexing options, resolved per channel once the target is known.
+    pub index_config: IndexConfig,
 }
 
 impl PublishContext {
@@ -397,6 +400,7 @@ impl PublishContext {
             skip_existing,
             generate_attestation,
             offline: config.offline(),
+            index_config: config.index_config.clone(),
         })
     }
 }
@@ -1492,13 +1496,28 @@ async fn upload_to_artifactory(
         .await
 }
 
+/// The indexing options for `target`, a channel URL or an absolute path.
+///
+/// `IndexConfig` leaves every option unset by default, so pixi's own defaults
+/// fill the gaps: a channel published without any `index-config` is indexed
+/// exactly as it was before the key was honored.
+fn index_options(config: &IndexConfig, target: &str) -> IndexChannelConfig {
+    let mut resolved = config.resolve(target);
+    resolved.write_zst.get_or_insert(true);
+    resolved.write_shards.get_or_insert(true);
+    resolved
+}
+
 /// Upload packages to S3 and run indexing.
 async fn upload_to_s3(
     url: &Url,
     package_paths: &[PathBuf],
     ctx: &PublishContext,
 ) -> miette::Result<()> {
-    use rattler_index::{IndexS3Config, ensure_channel_initialized_s3, index_s3};
+    use rattler_index::{
+        ChannelMetadata, IndexS3Config, ensure_channel_initialized_s3,
+        index_s3_with_channel_metadata,
+    };
     use rattler_upload::upload::upload_package_to_s3;
     use std::collections::HashSet;
 
@@ -1563,6 +1582,8 @@ async fn upload_to_s3(
 
     tracing::info!("Successfully uploaded packages to S3, running indexing...");
 
+    let options = index_options(&ctx.index_config, url.as_str());
+
     for subdir in subdirs {
         let target_platform = subdir
             .parse::<Platform>()
@@ -1573,10 +1594,10 @@ async fn upload_to_s3(
             credentials: resolved_credentials.clone(),
             target_platform: Some(target_platform),
             repodata_patch: None,
-            write_zst: true,
-            write_shards: true,
-            repodata_revisions: vec![],
-            package_revision_assignment: Default::default(),
+            write_zst: options.write_zst.unwrap_or(true),
+            write_shards: options.write_shards.unwrap_or(true),
+            repodata_revisions: options.repodata_revisions.clone().unwrap_or_default(),
+            package_revision_assignment: options.package_revision_assignment.unwrap_or_default(),
             // `--force` may have replaced an existing artifact under its old
             // filename; only a forced index re-extracts its metadata.
             force: ctx.force,
@@ -1587,7 +1608,7 @@ async fn upload_to_s3(
             precondition_checks: rattler_index::PreconditionChecks::Enabled,
         };
 
-        index_s3(index_config)
+        index_s3_with_channel_metadata(index_config, ChannelMetadata::from_index_config(&options))
             .await
             .map_err(|e| miette::miette!("Failed to index S3 channel: {}", e))?;
     }
@@ -1601,7 +1622,10 @@ async fn upload_to_local_filesystem_channel(
     package_paths: &[PathBuf],
     ctx: &PublishContext,
 ) -> miette::Result<()> {
-    use rattler_index::{IndexFsConfig, ensure_channel_initialized_fs, index_fs};
+    use rattler_index::{
+        ChannelMetadata, IndexFsConfig, ensure_channel_initialized_fs,
+        index_fs_with_channel_metadata,
+    };
     use std::collections::HashSet;
 
     tracing::info!(
@@ -1643,6 +1667,8 @@ async fn upload_to_local_filesystem_channel(
 
     tracing::info!("Indexing local channel at {}", target_dir.display());
 
+    let options = index_options(&ctx.index_config, &target_dir.to_string_lossy());
+
     for subdir in subdirs {
         let target_platform = subdir
             .parse::<Platform>()
@@ -1652,10 +1678,10 @@ async fn upload_to_local_filesystem_channel(
             channel: target_dir.to_path_buf(),
             target_platform: Some(target_platform),
             repodata_patch: None,
-            write_zst: true,
-            write_shards: true,
-            repodata_revisions: vec![],
-            package_revision_assignment: Default::default(),
+            write_zst: options.write_zst.unwrap_or(true),
+            write_shards: options.write_shards.unwrap_or(true),
+            repodata_revisions: options.repodata_revisions.clone().unwrap_or_default(),
+            package_revision_assignment: options.package_revision_assignment.unwrap_or_default(),
             // `--force` may have replaced an existing artifact under its old
             // filename; only a forced index re-extracts its metadata.
             force: ctx.force,
@@ -1665,7 +1691,7 @@ async fn upload_to_local_filesystem_channel(
             multi_progress: None,
         };
 
-        index_fs(index_config)
+        index_fs_with_channel_metadata(index_config, ChannelMetadata::from_index_config(&options))
             .await
             .map_err(|e| miette::miette!("Failed to index channel: {}", e))?;
     }
@@ -1679,6 +1705,36 @@ mod tests {
 
     use super::*;
     use rattler_conda_types::{compression_level::CompressionLevel, package::CondaArchiveType};
+
+    #[test]
+    fn index_options_fall_back_to_pixis_own_defaults() {
+        let options = index_options(&IndexConfig::default(), "s3://bucket");
+
+        // An unconfigured publish indexes exactly as it did before
+        // `index-config` was honored.
+        assert_eq!(options.write_zst, Some(true));
+        assert_eq!(options.write_shards, Some(true));
+        assert_eq!(options.repodata_revisions, None);
+    }
+
+    #[test]
+    fn index_options_let_the_config_turn_a_default_off() {
+        let config: IndexConfig = serde_json::from_str(
+            r#"{"write-zst": false, "s3://bucket/staging": {"base-url": "https://cdn.example"}}"#,
+        )
+        .unwrap();
+
+        let staging = index_options(&config, "s3://bucket/staging");
+        assert_eq!(staging.write_zst, Some(false));
+        assert_eq!(staging.base_url.as_deref(), Some("https://cdn.example"));
+        // Untouched by the config, so pixi's default still applies.
+        assert_eq!(staging.write_shards, Some(true));
+
+        // A channel the per-channel entry does not name keeps only the
+        // defaults.
+        let stable = index_options(&config, "s3://bucket/stable");
+        assert_eq!(stable.base_url, None);
+    }
 
     #[test]
     fn parse_variant_accepts_single_and_comma_list() {

@@ -588,6 +588,51 @@ def test_config_shared_layer(pixi: Path, tmp_path: Path) -> None:
     )
 
 
+def test_config_list_honors_the_config_source_flags(pixi: Path, tmp_path: Path) -> None:
+    """`config list` can be pointed at one file or told to skip discovery."""
+    env = isolated_config_env(tmp_path)
+    (Path(env["RATTLER_HOME"]) / "config.toml").write_text(
+        'default-channels = ["shared-channel"]\n'
+    )
+    only = tmp_path / "only.toml"
+    only.write_text('default-channels = ["only-channel"]\n')
+
+    # Without a flag the discovered shared file shows up.
+    verify_cli_command([pixi, "config", "list"], env=env, stdout_contains="shared-channel")
+    # `--config-file` replaces the discovered layers with just that file.
+    verify_cli_command(
+        [pixi, "config", "list", "--config-file", only],
+        env=env,
+        stdout_contains="only-channel",
+        stdout_excludes="shared-channel",
+    )
+    # `PIXI_CONFIG_FILE` is the same switch by environment variable.
+    verify_cli_command(
+        [pixi, "config", "list"],
+        env=env | {"PIXI_CONFIG_FILE": str(only)},
+        stdout_contains="only-channel",
+        stdout_excludes="shared-channel",
+    )
+    # `--no-config` drops them all.
+    verify_cli_command(
+        [pixi, "config", "list", "--no-config"], env=env, stdout_excludes="shared-channel"
+    )
+
+
+def test_config_index_config_from_the_shared_layer(pixi: Path, tmp_path: Path) -> None:
+    """`index-config` is a shared key, so a `rattler` file may set it."""
+    env = isolated_config_env(tmp_path)
+    (Path(env["RATTLER_HOME"]) / "config.toml").write_text(
+        "[index-config]\nwrite-zst = false\n\n"
+        '[index-config."s3://bucket/staging"]\nwrite-shards = false\n'
+    )
+
+    listed = verify_cli_command([pixi, "config", "list"], env=env).stdout
+    config = tomli.loads(listed)
+    assert config["index-config"]["write-zst"] is False
+    assert config["index-config"]["s3://bucket/staging"]["write-shards"] is False
+
+
 def test_config_append_extends_the_visible_list(pixi: Path, tmp_path: Path) -> None:
     """`config append` extends the list the user sees, exactly once, for both
     the keys that replace lower layers and the ones that concatenate."""
