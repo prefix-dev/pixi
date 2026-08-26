@@ -1356,6 +1356,18 @@ impl Project {
                 env_name.fancy_display()
             );
         } else {
+            // Creating an environment reads as an install rather than an
+            // update, whether it was `install` or a `sync` acting on a manifest
+            // entry whose prefix is missing.
+            if !self
+                .env_root
+                .path()
+                .join(env_name.as_str())
+                .join(consts::CONDA_META_DIR)
+                .exists()
+            {
+                state_changes.insert_change(env_name, StateChange::AddedEnvironment);
+            }
             tracing::debug!(
                 "Environment {} specs not up to date with global manifest",
                 env_name.fancy_display()

@@ -134,7 +134,7 @@ pub(crate) async fn create_executable_trampolines(
 
         let mut env_for_trampoline = activation_variables.clone();
         if pixi_config_dir
-            .join(executable_name)
+            .join(&executable_name)
             .join(IGNORE_CONDA_PREFIX_MARKER)
             .is_file()
         {
@@ -188,10 +188,16 @@ pub(crate) async fn create_executable_trampolines(
         match changed {
             AddedOrChanged::Unchanged => {}
             AddedOrChanged::Added => {
-                state_changes.insert_change(env_name, StateChange::AddedExposed(exposed_name));
+                state_changes.insert_change(
+                    env_name,
+                    StateChange::AddedExposed(exposed_name, Some(executable_name.clone())),
+                );
             }
             AddedOrChanged::Changed | AddedOrChanged::Migrated => {
-                state_changes.insert_change(env_name, StateChange::UpdatedExposed(exposed_name));
+                state_changes.insert_change(
+                    env_name,
+                    StateChange::UpdatedExposed(exposed_name, Some(executable_name)),
+                );
             }
         }
     }

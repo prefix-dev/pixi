@@ -9,13 +9,12 @@ use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, Platform};
 
 use crate::global::{
     EnvironmentAction, eventual_environment_channels, global_specs::GlobalSpecs,
-    report_failed_environments, revert_environment_after_error,
+    report_failed_environment, report_failed_environments, revert_environment_after_error,
 };
 use pixi_config::{self, Config, ConfigCli};
 use pixi_global::{
-    self, EnvChanges, EnvState, EnvironmentName, Mapping, Project, StateChange, StateChanges,
-    common::{NotChangedReason, contains_menuinst_document},
-    list::list_all_global_environments,
+    self, EnvironmentName, Mapping, Project, StateChange, StateChanges,
+    common::contains_menuinst_document,
     project::{ExposedType, GlobalSpec},
 };
 
@@ -134,7 +133,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         miette::bail!("Can't add packages with `--with` for more than one environment");
     }
 
-    let mut env_changes = EnvChanges::default();
     let mut last_updated_project = project_original;
     let mut errors: Vec<(EnvironmentName, Report)> = Vec::new();
     // Convert the packages into named global specs
@@ -143,16 +141,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let mut project = last_updated_project.clone();
         match setup_environment(env_name, &args, specs, &mut project).await {
             Ok(state_changes) => {
-                if state_changes.has_changed() {
-                    env_changes
-                        .changes
-                        .insert(env_name.clone(), EnvState::Installed)
-                } else {
-                    env_changes.changes.insert(
-                        env_name.clone(),
-                        EnvState::NotChanged(NotChangedReason::AlreadyInstalled),
-                    )
-                };
+                // The user named these environments, so they get a block even
+                // when nothing changed.
+                state_changes.report(&project).await;
                 // Only advance project on success
                 last_updated_project = project;
             }
@@ -163,20 +154,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     tracing::warn!("Reverting of the operation failed");
                     tracing::info!("Reversion error: {:?}", revert_err);
                 }
+                report_failed_environment(env_name);
                 errors.push((env_name.clone(), err));
             }
         }
     }
-
-    // After installing, we always want to list the changed environments
-    list_all_global_environments(
-        &last_updated_project,
-        Some(env_to_specs.into_keys().collect()),
-        Some(&env_changes),
-        None,
-        false,
-    )
-    .await?;
 
     report_failed_environments(EnvironmentAction::Install, errors)
 }
@@ -188,6 +170,10 @@ async fn setup_environment(
     project: &mut Project,
 ) -> miette::Result<StateChanges> {
     let mut state_changes = StateChanges::new_with_env(env_name.clone());
+
+    // The manifest as it was before this environment was touched, so the
+    // shortcut below can tell whether it still owes the file a write.
+    let manifest_before = project.manifest.document.to_string();
 
     if args.force_reinstall && project.environment(env_name).is_some() {
         state_changes |= project.remove_environment(env_name).await?;
@@ -239,8 +225,15 @@ async fn setup_environment(
         }
     }
 
+    // The prefix already satisfies the manifest, so there is nothing to solve,
+    // install or expose. The manifest itself can still have changed: it may
+    // have just gained the environment that the prefix was left over from, and
+    // that change still has to be written out.
     if project.environment_in_sync_internal(env_name, true).await? {
-        return Ok(StateChanges::new_with_env(env_name.clone()));
+        if project.manifest.document.to_string() != manifest_before {
+            project.manifest.save().await?;
+        }
+        return Ok(state_changes);
     }
 
     // Installing the environment to be able to find the bin paths later
@@ -264,18 +257,10 @@ async fn setup_environment(
         state_changes |= project.sync_shortcuts(env_name).await?;
     }
 
-    // Figure out added packages and their corresponding versions
-    let requested_package_names: Vec<_> = packages_to_add
-        .iter()
-        .map(|spec| spec.name().clone())
-        .collect();
-    let user_requested_changes =
-        environment_update.user_requested_changes(&requested_package_names);
-
-    // Convert to StateChange::AddedPackage for packages that were installed or upgraded
-    state_changes
-        .add_packages_from_install_changes(env_name, user_requested_changes, project)
-        .await?;
+    state_changes.insert_change(
+        env_name,
+        StateChange::UpdatedEnvironment(environment_update),
+    );
 
     // Expose executables of the new environment
     state_changes |= project

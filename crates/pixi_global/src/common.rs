@@ -1,8 +1,7 @@
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     ffi::OsStr,
     io::Read,
-    iter::Peekable,
     ops::Not,
     path::{Path, PathBuf},
     str::FromStr,
@@ -10,7 +9,6 @@ use std::{
 
 use ahash::HashSet;
 use console::StyledObject;
-use fancy_display::FancyDisplay;
 use fs_err as fs;
 use fs_err::tokio as tokio_fs;
 use indexmap::{IndexMap, IndexSet};
@@ -18,17 +16,19 @@ use is_executable::IsExecutable;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::pixi_home;
+use pixi_consts::consts;
 use pixi_manifest::PrioritizedChannel;
 use pixi_utils::{executable_from_path, prefix::Executable};
 use rattler::install::{Transaction, TransactionOperation};
 use rattler_conda_types::{
     Channel, ChannelConfig, HasArtifactIdentificationRefs, NamedChannelOrUrl, PackageName,
-    PackageRecord, PrefixRecord, Version,
+    PrefixRecord, Version,
 };
 use url::Url;
 
 use super::{
     EnvironmentName, ExposedName, Mapping,
+    report::{self, EnvReport, EnvStatus, Item, Label, Marker, Row},
     trampoline::{GlobalExecutable, Trampoline},
 };
 
@@ -216,65 +216,6 @@ pub async fn find_package_records(conda_meta: &Path) -> miette::Result<Vec<Prefi
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum NotChangedReason {
-    AlreadyInstalled,
-}
-
-impl std::fmt::Display for NotChangedReason {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            NotChangedReason::AlreadyInstalled => {
-                write!(f, "{}", NotChangedReason::AlreadyInstalled.as_str())
-            }
-        }
-    }
-}
-
-impl NotChangedReason {
-    /// Returns the name of the environment.
-    pub fn as_str(&self) -> &str {
-        match self {
-            NotChangedReason::AlreadyInstalled => "already installed",
-        }
-    }
-}
-
-impl FancyDisplay for NotChangedReason {
-    fn fancy_display(&self) -> StyledObject<&str> {
-        console::style(self.as_str()).cyan()
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum EnvState {
-    Installed,
-    NotChanged(NotChangedReason),
-}
-
-impl EnvState {
-    pub fn as_str(&self) -> &str {
-        match self {
-            EnvState::Installed => "installed",
-            EnvState::NotChanged(reason) => reason.as_str(),
-        }
-    }
-}
-
-impl FancyDisplay for EnvState {
-    fn fancy_display(&self) -> StyledObject<&str> {
-        match self {
-            EnvState::Installed => console::style(self.as_str()).green(),
-            EnvState::NotChanged(reason) => reason.fancy_display(),
-        }
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct EnvChanges {
-    pub changes: HashMap<EnvironmentName, EnvState>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum InstallChange {
     Installed(Version),
     Upgraded(Version, Version),
@@ -353,29 +294,16 @@ impl EnvironmentUpdate {
     pub fn add_removed_packages(&mut self, packages: Vec<PackageName>) {
         self.current_packages.extend(packages);
     }
-
-    /// Get only the package changes that were explicitly requested by the user.
-    /// This filters out transitive dependency changes to focus on
-    /// user-installed packages.
-    pub fn user_requested_changes(
-        &self,
-        requested_packages: &[PackageName],
-    ) -> HashMap<PackageName, InstallChange> {
-        self.package_changes
-            .iter()
-            .filter(|(name, _)| requested_packages.contains(name))
-            .map(|(name, change)| (name.clone(), change.clone()))
-            .collect()
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[must_use]
 pub enum StateChange {
-    AddedExposed(ExposedName),
+    /// An executable was exposed, together with the executable it points at
+    /// when that is known.
+    AddedExposed(ExposedName, Option<String>),
     RemovedExposed(ExposedName),
-    UpdatedExposed(ExposedName),
-    AddedPackage(Box<PackageRecord>),
+    UpdatedExposed(ExposedName, Option<String>),
     AddedEnvironment,
     RemovedEnvironment,
     UpdatedEnvironment(EnvironmentUpdate),
@@ -418,60 +346,6 @@ impl StateChanges {
         self.changes
     }
 
-    /// Get changes for a specific environment
-    pub fn changes_for_env(&self, env_name: &EnvironmentName) -> Option<&Vec<StateChange>> {
-        self.changes.get(env_name)
-    }
-
-    /// Convert user-requested install changes to AddedPackage state changes
-    pub async fn add_packages_from_install_changes(
-        &mut self,
-        env_name: &EnvironmentName,
-        user_requested_changes: HashMap<PackageName, InstallChange>,
-        project: &super::Project,
-    ) -> miette::Result<()> {
-        // Convert to StateChange::AddedPackage for packages that were installed or
-        // upgraded
-        for (package_name, install_change) in user_requested_changes {
-            if matches!(
-                install_change,
-                InstallChange::Installed(_)
-                    | InstallChange::Upgraded(_, _)
-                    | InstallChange::Reinstalled(_, _)
-            ) {
-                // Get the package record from the environment prefix
-                let prefix = project.environment_prefix(env_name).await?;
-                if let Ok(prefix_record) = prefix.find_designated_package(&package_name).await {
-                    self.insert_change(
-                        env_name,
-                        StateChange::AddedPackage(Box::new(
-                            prefix_record.repodata_record.package_record,
-                        )),
-                    );
-                }
-            }
-        }
-        Ok(())
-    }
-
-    fn accumulate_changes<F, T>(
-        iter: &mut Peekable<std::slice::Iter<StateChange>>,
-        filter_fn: F,
-        init_value: Option<T>,
-    ) -> Vec<T>
-    where
-        F: Fn(Option<&StateChange>) -> Option<T>,
-    {
-        let mut changes = init_value.into_iter().collect::<Vec<T>>();
-
-        while let Some(next) = filter_fn(iter.peek().cloned()) {
-            changes.push(next);
-            iter.next();
-        }
-
-        changes
-    }
-
     /// Remove changes that cancel each other out
     fn prune(&mut self) {
         self.changes = self
@@ -488,360 +362,279 @@ impl StateChanges {
                 }
                 (env.clone(), pruned_changes)
             })
-            .collect()
+            .collect();
     }
 
-    pub fn report(mut self) {
+    /// Turn the recorded changes into one report per environment, sorted by
+    /// environment name so that the output doesn't depend on hash order.
+    pub async fn into_reports(
+        mut self,
+        project: &super::Project,
+    ) -> miette::Result<Vec<EnvReport>> {
         self.prune();
 
-        for (env_name, changes_for_env) in self.changes {
-            // If there are no changes for the environment, skip it
-            if changes_for_env.is_empty() {
-                continue;
+        let env_names = self
+            .changes
+            .keys()
+            .cloned()
+            .sorted_by(|left, right| left.as_str().cmp(right.as_str()))
+            .collect_vec();
+
+        let mut reports = Vec::with_capacity(env_names.len());
+        for env_name in env_names {
+            let changes = &self.changes[&env_name];
+            reports.push(build_report(project, &env_name, changes).await?);
+        }
+        Ok(reports)
+    }
+
+    /// The reports for these changes, or nothing if they can't be built.
+    /// Describing an operation is not part of performing it, so a failure here
+    /// is a warning rather than something that affects the exit code.
+    pub async fn reports_or_warn(self, project: &super::Project) -> Vec<EnvReport> {
+        match self.into_reports(project).await {
+            Ok(reports) => reports,
+            Err(err) => {
+                tracing::warn!("Couldn't describe what changed\n{err:?}");
+                Vec::new()
             }
+        }
+    }
 
-            let mut iter = changes_for_env.iter().peekable();
+    /// Print a block for every environment these changes touched.
+    pub async fn report(self, project: &super::Project) {
+        for env_report in self.reports_or_warn(project).await {
+            report::print(&env_report);
+        }
+    }
+}
 
-            while let Some(change) = iter.next() {
-                match change {
-                    StateChange::AddedExposed(first_name) => {
-                        let mut exposed_names = StateChanges::accumulate_changes(
-                            &mut iter,
-                            |next| match next {
-                                Some(StateChange::AddedExposed(name)) => Some(name.clone()),
-                                _ => None,
-                            },
-                            Some(first_name.clone()),
-                        );
+/// The executable an exposed name points at, spelled out only when it differs
+/// from the name itself.
+fn exposed_target(name: &ExposedName, executable: Option<&str>) -> Option<String> {
+    executable
+        .filter(|executable| *executable != name.to_string())
+        .map(|executable| format!("-> {executable}"))
+}
 
-                        exposed_names.sort();
+/// The item describing a single package change.
+fn install_change_item(name: &str, change: &InstallChange) -> Item {
+    let (marker, detail) = match change {
+        InstallChange::Installed(version) => (Marker::Added, Some(version.to_string())),
+        // A package can be rebuilt without its version moving, and `1.0 -> 1.0`
+        // says less than the version on its own.
+        InstallChange::Upgraded(old, new)
+        | InstallChange::TransitiveUpgraded(old, new)
+        | InstallChange::Reinstalled(old, new)
+            if old == new =>
+        {
+            (Marker::Changed, Some(new.to_string()))
+        }
+        InstallChange::Upgraded(old, new)
+        | InstallChange::TransitiveUpgraded(old, new)
+        | InstallChange::Reinstalled(old, new) => {
+            (Marker::Changed, Some(format!("{old} -> {new}")))
+        }
+        InstallChange::Removed => (Marker::Removed, None),
+    };
+    Item::package(marker, name, detail)
+}
 
-                        if exposed_names.len() == 1 {
-                            pixi_progress::println!(
-                                "{}Exposed executable {} from environment {}.",
-                                console::style(console::Emoji("✔ ", "")).green(),
-                                exposed_names[0].fancy_display(),
-                                env_name.fancy_display()
-                            );
-                        } else {
-                            pixi_progress::println!(
-                                "{}Exposed executables from environment {}:",
-                                console::style(console::Emoji("✔ ", "")).green(),
-                                env_name.fancy_display()
-                            );
-                            for exposed_name in exposed_names {
-                                pixi_progress::println!("   - {}", exposed_name.fancy_display());
-                            }
-                        }
-                    }
-                    StateChange::RemovedExposed(removed) => {
-                        let mut exposed_names = StateChanges::accumulate_changes(
-                            &mut iter,
-                            |next| match next {
-                                Some(StateChange::RemovedExposed(name)) => Some(name.clone()),
-                                _ => None,
-                            },
-                            Some(removed.clone()),
-                        );
-                        exposed_names.sort();
-                        if exposed_names.len() == 1 {
-                            pixi_progress::println!(
-                                "{}Removed exposed executable {} from environment {}.",
-                                console::style(console::Emoji("✔ ", "")).green(),
-                                exposed_names[0].fancy_display(),
-                                env_name.fancy_display()
-                            );
-                        } else {
-                            pixi_progress::println!(
-                                "{}Removed exposed executables from environment {}:",
-                                console::style(console::Emoji("✔ ", "")).green(),
-                                env_name.fancy_display()
-                            );
-                            for exposed_name in exposed_names {
-                                pixi_progress::println!("   - {}", exposed_name.fancy_display());
-                            }
-                        }
-                    }
-                    StateChange::UpdatedExposed(exposed) => {
-                        let mut exposed_names = StateChanges::accumulate_changes(
-                            &mut iter,
-                            |next| match next {
-                                Some(StateChange::UpdatedExposed(name)) => Some(name.clone()),
-                                _ => None,
-                            },
-                            Some(exposed.clone()),
-                        );
-                        exposed_names.sort();
-                        if exposed_names.len() == 1 {
-                            pixi_progress::println!(
-                                "{}Updated executable {} of environment {}.",
-                                console::style(console::Emoji("✔ ", "")).green(),
-                                exposed_names[0].fancy_display(),
-                                env_name.fancy_display()
-                            );
-                        } else {
-                            pixi_progress::println!(
-                                "{}Updated executables of environment {}:",
-                                console::style(console::Emoji("✔ ", "")).green(),
-                                env_name.fancy_display()
-                            );
-                            for exposed_name in exposed_names {
-                                pixi_progress::println!("   - {}", exposed_name.fancy_display());
-                            }
-                        }
-                    }
-                    StateChange::AddedPackage(pkg) => {
-                        let mut added_pkgs = StateChanges::accumulate_changes(
-                            &mut iter,
-                            |next| match next {
-                                Some(StateChange::AddedPackage(name)) => Some(name.clone()),
-                                _ => None,
-                            },
-                            Some(pkg.clone()),
-                        );
+/// Whether the environment holds a single dependency named after the
+/// environment itself, the case where its version goes into the header instead
+/// of a `dependencies` row.
+pub(crate) fn is_single_package_environment(
+    project: &super::Project,
+    env_name: &EnvironmentName,
+) -> bool {
+    project.environment(env_name).is_some_and(|environment| {
+        environment.dependencies.specs.len() == 1
+            && environment
+                .dependencies
+                .specs
+                .keys()
+                .next()
+                .is_some_and(|name| name.as_normalized() == env_name.as_str())
+    })
+}
 
-                        added_pkgs.sort_by(|pkg1, pkg2| pkg1.name.cmp(&pkg2.name));
+/// The installed version of the package an environment is named after.
+///
+/// Records are named `<package>-<version>-<build>.json`, so only the files that
+/// could belong to this package are parsed rather than the whole prefix.
+pub(crate) async fn installed_version(
+    project: &super::Project,
+    env_name: &EnvironmentName,
+) -> miette::Result<Option<String>> {
+    let conda_meta = project
+        .env_root_path()
+        .join(env_name.as_str())
+        .join(consts::CONDA_META_DIR);
 
-                        if added_pkgs.len() == 1 {
-                            pixi_progress::println!(
-                                "{}Added package {}={} to environment {}.",
-                                console::style(console::Emoji("✔ ", "")).green(),
-                                console::style(pkg.name.as_normalized()).green(),
-                                console::style(&pkg.version).blue(),
-                                env_name.fancy_display()
-                            );
-                        } else {
-                            pixi_progress::println!(
-                                "{}Added packages of environment {}:",
-                                console::style(console::Emoji("✔ ", "")).green(),
-                                env_name.fancy_display()
-                            );
-                            for pkg in added_pkgs {
-                                pixi_progress::println!(
-                                    "   - {}={}",
-                                    console::style(pkg.name.as_normalized()).green(),
-                                    console::style(&pkg.version).blue(),
-                                );
-                            }
-                        }
-                    }
-                    StateChange::AddedEnvironment => {
-                        pixi_progress::println!(
-                            "{}Added environment {}.",
-                            console::style(console::Emoji("✔ ", "")).green(),
-                            env_name.fancy_display()
-                        );
-                    }
-                    StateChange::RemovedEnvironment => {
-                        pixi_progress::println!(
-                            "{}Removed environment {}.",
-                            console::style(console::Emoji("✔ ", "")).green(),
-                            env_name.fancy_display()
-                        );
-                    }
-                    StateChange::UpdatedEnvironment(update_change) => {
-                        StateChanges::report_update_changes(&env_name, update_change);
-                    }
-                    StateChange::InstalledShortcut(name) => {
-                        let mut installed_items = StateChanges::accumulate_changes(
-                            &mut iter,
-                            |next| match next {
-                                Some(StateChange::InstalledShortcut(name)) => Some(name.clone()),
-                                _ => None,
-                            },
-                            Some(name.clone()),
-                        );
+    let mut read_dir = match tokio_fs::read_dir(&conda_meta).await {
+        Ok(read_dir) => read_dir,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(err) => miette::bail!(
+            "Failed to read conda-meta directory {}: {}",
+            conda_meta.display(),
+            err
+        ),
+    };
 
-                        installed_items.sort();
+    // Records written by conda or mamba keep the original case of the package
+    // name in the file name, so the candidate test is case insensitive; the
+    // parsed record still has to match by normalized name.
+    let prefix = format!("{}-", env_name.as_str().to_lowercase());
+    while let Some(entry) = read_dir.next_entry().await.into_diagnostic()? {
+        let path = entry.path();
+        if path.extension().and_then(OsStr::to_str) != Some("json") {
+            continue;
+        }
+        let is_candidate = path
+            .file_name()
+            .and_then(OsStr::to_str)
+            .is_some_and(|name| name.to_lowercase().starts_with(&prefix));
+        if !is_candidate {
+            continue;
+        }
 
-                        if installed_items.len() == 1 {
-                            pixi_progress::println!(
-                                "{}Installed shortcut {} of environment {}.",
-                                console::style(console::Emoji("✔ ", "")).green(),
-                                installed_items[0],
-                                env_name.fancy_display()
-                            );
-                        } else {
-                            pixi_progress::println!(
-                                "{}Installed shortcuts of environment {}:",
-                                console::style(console::Emoji("✔ ", "")).green(),
-                                env_name.fancy_display()
-                            );
-                            for installed_item in installed_items {
-                                pixi_progress::println!("   - {}", installed_item);
-                            }
-                        }
-                    }
-                    StateChange::UninstalledShortcut(name) => {
-                        let mut uninstalled_items = StateChanges::accumulate_changes(
-                            &mut iter,
-                            |next| match next {
-                                Some(StateChange::UninstalledShortcut(name)) => Some(name.clone()),
-                                _ => None,
-                            },
-                            Some(name.clone()),
-                        );
+        let record = PrefixRecord::from_path(&path)
+            .into_diagnostic()
+            .wrap_err_with(|| format!("Couldn't parse json from {}", path.display()))?;
+        if record.repodata_record.package_record.name.as_normalized() == env_name.as_str() {
+            return Ok(Some(
+                record
+                    .repodata_record
+                    .package_record
+                    .version
+                    .version()
+                    .to_string(),
+            ));
+        }
+    }
 
-                        uninstalled_items.sort();
+    Ok(None)
+}
 
-                        if uninstalled_items.len() == 1 {
-                            pixi_progress::println!(
-                                "{}Uninstalled shortcut {} of environment {}.",
-                                console::style(console::Emoji("✔ ", "")).green(),
-                                uninstalled_items[0],
-                                env_name.fancy_display()
-                            );
-                        } else {
-                            pixi_progress::println!(
-                                "{}Uninstalled shortcuts of environment {}:",
-                                console::style(console::Emoji("✔ ", "")).green(),
-                                env_name.fancy_display()
-                            );
-                            for uninstalled_item in uninstalled_items {
-                                pixi_progress::println!("   - {}", uninstalled_item);
-                            }
-                        }
-                    }
-                    StateChange::AddedCompletion(name) => {
-                        let mut installed_items = StateChanges::accumulate_changes(
-                            &mut iter,
-                            |next| match next {
-                                Some(StateChange::AddedCompletion(name)) => Some(name.clone()),
-                                _ => None,
-                            },
-                            Some(name.clone()),
-                        );
+fn push_row(rows: &mut Vec<Row>, label: Label, items: BTreeMap<String, Item>) {
+    if !items.is_empty() {
+        rows.push(Row::new(label, items.into_values().collect()));
+    }
+}
 
-                        installed_items.sort();
+/// Build the report of a single environment out of the changes recorded for it.
+async fn build_report(
+    project: &super::Project,
+    env_name: &EnvironmentName,
+    changes: &[StateChange],
+) -> miette::Result<EnvReport> {
+    // Keyed by name so that an item is reported once with its net effect: a
+    // `--force-reinstall` unexposes and re-exposes the same executable, and all
+    // that matters is that it ended up exposed. Changes are walked in the order
+    // they were recorded, so the last one wins.
+    let mut dependencies: BTreeMap<String, Item> = BTreeMap::new();
+    let mut exposed: BTreeMap<String, Item> = BTreeMap::new();
+    let mut shortcuts: BTreeMap<String, Item> = BTreeMap::new();
+    let mut completions: BTreeMap<String, Item> = BTreeMap::new();
+    // The last environment-level change wins: `--force-reinstall` removes the
+    // environment and creates it again, and that reads as an install.
+    let mut environment_change = None;
+    // Packages that aren't named in the manifest leave no row behind, but the
+    // environment did change and has to say so.
+    let mut transitive_change = false;
 
-                        if installed_items.len() == 1 {
-                            pixi_progress::println!(
-                                "{}Exposed completion {} of environment {}.",
-                                console::style(console::Emoji("✔ ", "")).green(),
-                                installed_items[0],
-                                env_name.fancy_display()
-                            );
-                        } else {
-                            pixi_progress::println!(
-                                "{}Exposed completions of environment {}:",
-                                console::style(console::Emoji("✔ ", "")).green(),
-                                env_name.fancy_display()
-                            );
-                            for installed_item in installed_items {
-                                pixi_progress::println!("   - {}", installed_item);
-                            }
-                        }
-                    }
-                    StateChange::RemovedCompletion(name) => {
-                        let mut uninstalled_items = StateChanges::accumulate_changes(
-                            &mut iter,
-                            |next| match next {
-                                Some(StateChange::RemovedCompletion(name)) => Some(name.clone()),
-                                _ => None,
-                            },
-                            Some(name.clone()),
-                        );
-
-                        uninstalled_items.sort();
-
-                        if uninstalled_items.len() == 1 {
-                            pixi_progress::println!(
-                                "{}Removed completion {} of environment {}.",
-                                console::style(console::Emoji("✔ ", "")).green(),
-                                uninstalled_items[0],
-                                env_name.fancy_display()
-                            );
-                        } else {
-                            pixi_progress::println!(
-                                "{}Removed completions of environment {}:",
-                                console::style(console::Emoji("✔ ", "")).green(),
-                                env_name.fancy_display()
-                            );
-                            for uninstalled_item in uninstalled_items {
-                                pixi_progress::println!("   - {}", uninstalled_item);
-                            }
-                        }
+    for change in changes {
+        match change {
+            StateChange::AddedExposed(name, executable) => {
+                exposed.insert(
+                    name.to_string(),
+                    Item::exposed(
+                        Marker::Added,
+                        name.to_string(),
+                        exposed_target(name, executable.as_deref()),
+                    ),
+                );
+            }
+            StateChange::RemovedExposed(name) => {
+                exposed.insert(
+                    name.to_string(),
+                    Item::exposed(Marker::Removed, name.to_string(), None),
+                );
+            }
+            // Not reported: a rewritten trampoline doesn't change what the
+            // `exposed` row says, and it happens as a side effect of almost any
+            // change to the environment.
+            StateChange::UpdatedExposed(_, _) => {}
+            StateChange::AddedEnvironment => environment_change = Some(EnvStatus::Installed),
+            StateChange::RemovedEnvironment => environment_change = Some(EnvStatus::Removed),
+            StateChange::UpdatedEnvironment(update) => {
+                for (package_name, install_change) in
+                    update.changes().iter().sorted_by(|(left, _), (right, _)| {
+                        left.as_normalized().cmp(right.as_normalized())
+                    })
+                {
+                    // A package the manifest names is a dependency; everything
+                    // else came along with it and is only counted.
+                    if update.current_packages().contains(package_name) {
+                        let name = package_name.as_normalized().to_string();
+                        dependencies
+                            .insert(name.clone(), install_change_item(&name, install_change));
+                    } else {
+                        transitive_change = true;
                     }
                 }
             }
-        }
-    }
-
-    pub(crate) fn report_update_changes(
-        env_name: &EnvironmentName,
-        environment_update: &EnvironmentUpdate,
-    ) {
-        // Check if there are any changes
-        if environment_update.is_empty() {
-            pixi_progress::println!(
-                "{}Environment {} was already up-to-date.",
-                console::style(console::Emoji("✔ ", "")).green(),
-                env_name.fancy_display(),
-            );
-            return;
-        }
-
-        // Separate top-level and transitive changes
-        let mut top_level_changes: Vec<(&PackageName, &InstallChange)> = Vec::new();
-        let mut transitive_changes = Vec::new();
-
-        let env_dependencies = environment_update.current_packages();
-
-        for (package_name, change) in environment_update.changes() {
-            if env_dependencies.contains(package_name) && !change.is_transitive() {
-                top_level_changes.push((package_name, change));
-            } else if change.is_transitive() {
-                transitive_changes.push((package_name, change));
+            StateChange::InstalledShortcut(name) => {
+                shortcuts.insert(name.clone(), Item::plain(Marker::Added, name.clone()));
             }
-        }
-
-        #[allow(clippy::unnecessary_sort_by)]
-        {
-            top_level_changes.sort_by(|(name1, _), (name2, _)| name1.cmp(name2));
-        }
-
-        let was_removed = top_level_changes
-            .iter()
-            .find_map(|(_, change)| change.is_removed().then_some(|| true))
-            .is_some();
-
-        let message = if was_removed { "Removed" } else { "Updated" };
-        let check_mark = console::style(console::Emoji("✔ ", "")).green();
-        let env_fancy = env_name.fancy_display();
-
-        // Output messages based on the type of changes
-        if top_level_changes.is_empty() && !transitive_changes.is_empty() {
-            pixi_progress::println!("{check_mark}Updated environment {env_fancy}.",);
-        } else if top_level_changes.is_empty() && transitive_changes.is_empty() {
-            pixi_progress::println!("{check_mark}Environment {env_fancy} was already up-to-date.");
-        } else if top_level_changes.len() == 1 {
-            let changes = console::style(top_level_changes[0].0.as_normalized()).green();
-            let version_string = top_level_changes[0]
-                .1
-                .version_fancy_display()
-                .map(|version| format!("={version}"))
-                .unwrap_or_default();
-
-            pixi_progress::println!(
-                "{check_mark}{message} package {changes}{version_string} in environment {env_fancy}."
-            );
-        } else if top_level_changes.len() > 1 {
-            pixi_progress::println!(
-                "{}{} packages in environment {}.",
-                console::style(console::Emoji("✔ ", "")).green(),
-                message,
-                env_name.fancy_display()
-            );
-            for (package, install_change) in top_level_changes {
-                let package_fancy = console::style(package.as_normalized()).green();
-                let change_fancy = install_change
-                    .version_fancy_display()
-                    .map(|version| format!(" {version}"))
-                    .unwrap_or_default();
-                pixi_progress::println!("    - {package_fancy}{change_fancy}");
+            StateChange::UninstalledShortcut(name) => {
+                shortcuts.insert(name.clone(), Item::plain(Marker::Removed, name.clone()));
+            }
+            StateChange::AddedCompletion(name) => {
+                completions.insert(name.clone(), Item::plain(Marker::Added, name.clone()));
+            }
+            StateChange::RemovedCompletion(name) => {
+                completions.insert(name.clone(), Item::plain(Marker::Removed, name.clone()));
             }
         }
     }
+
+    // An environment that holds a single dependency named after itself says
+    // everything about it in the header, so a row would repeat the name
+    // standing right above it.
+    let single_package = is_single_package_environment(project, env_name);
+    let own_dependency = single_package
+        .then(|| dependencies.remove(env_name.as_str()))
+        .flatten();
+
+    let mut rows = Vec::new();
+    push_row(&mut rows, Label::Dependencies, dependencies);
+    push_row(&mut rows, Label::Exposed, exposed);
+    push_row(&mut rows, Label::Shortcuts, shortcuts);
+    push_row(&mut rows, Label::Completions, completions);
+
+    let status = match environment_change {
+        Some(status) => status,
+        // The dependency that was lifted into the header and the packages that
+        // came along with it still count as changes, even though they left no
+        // row behind.
+        None if rows.is_empty() && own_dependency.is_none() && !transitive_change => {
+            EnvStatus::Unchanged
+        }
+        None => EnvStatus::Updated,
+    };
+
+    let version = if status == EnvStatus::Removed || !single_package {
+        None
+    } else if let Some(dependency) = &own_dependency {
+        // The change rather than the resulting version alone, so an upgrade
+        // reads `0.26.1 -> 0.27.0` in the header.
+        dependency.detail.clone()
+    } else {
+        installed_version(project, env_name).await?
+    };
+
+    Ok(EnvReport::new(env_name.as_str(), version, Some(status)).with_rows(rows))
 }
 
 impl std::ops::BitOrAssign for StateChanges {

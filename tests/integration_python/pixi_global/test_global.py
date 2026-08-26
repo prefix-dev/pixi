@@ -167,7 +167,10 @@ def test_sync_prune(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     del parsed_toml["envs"]["test"]
     manifest.write_text(tomli_w.dumps(parsed_toml))
     verify_cli_command(
-        [pixi, "global", "sync"], env=env, stderr_contains="Removed environment test"
+        [pixi, "global", "sync"],
+        env=env,
+        stderr_contains="(removed)   test",
+        strip_ansi=True,
     )
     assert not dummy_a.is_file()
 
@@ -741,7 +744,8 @@ def test_install_twice(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None
             "dummy-b",
         ],
         env=env,
-        stdout_contains="dummy-b: 0.1.0 (installed)",
+        stderr_contains="(installed) dummy-b 0.1.0",
+        strip_ansi=True,
     )
     assert dummy_b.is_file()
 
@@ -756,7 +760,8 @@ def test_install_twice(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None
             "dummy-b",
         ],
         env=env,
-        stdout_contains="dummy-b: 0.1.0 (already installed)",
+        stderr_contains="(unchanged) dummy-b 0.1.0",
+        strip_ansi=True,
     )
     assert dummy_b.is_file()
 
@@ -786,7 +791,8 @@ def test_install_twice_with_same_env_name_as_expose(
             "customdummyb=dummy-b",
         ],
         env=env,
-        stdout_contains=["customdummyb (installed)", "exposes: customdummyb -> dummy-b"],
+        stderr_contains=["(installed) customdummyb", "+ customdummyb -> dummy-b"],
+        strip_ansi=True,
     )
     assert dummy_b.is_file()
 
@@ -805,7 +811,8 @@ def test_install_twice_with_same_env_name_as_expose(
             "customdummyb=dummy-b",
         ],
         env=env,
-        stdout_contains=["customdummyb (already installed)", "exposes: customdummyb -> dummy-b"],
+        stderr_contains="(unchanged) customdummyb",
+        strip_ansi=True,
     )
     assert dummy_b.is_file()
 
@@ -892,7 +899,8 @@ def test_install_with_different_channel_and_force_reinstall(
             "dummy-b",
         ],
         env=env,
-        stdout_contains="dummy-b: 0.1.0 (installed)",
+        stderr_contains="(installed) dummy-b 0.1.0",
+        strip_ansi=True,
     )
     assert dummy_b.is_file()
 
@@ -916,7 +924,8 @@ def test_install_with_different_channel_and_force_reinstall(
             "dummy-b",
         ],
         env=env,
-        stdout_contains="dummy-b: 0.1.0 (already installed)",
+        stderr_contains="(unchanged) dummy-b 0.1.0",
+        strip_ansi=True,
     )
 
     # Install dummy-b again, but with force-reinstall
@@ -932,7 +941,8 @@ def test_install_with_different_channel_and_force_reinstall(
             "dummy-b",
         ],
         env=env,
-        stdout_contains="dummy-b: 0.1.0 (installed)",
+        stderr_contains="(installed) dummy-b 0.1.0",
+        strip_ansi=True,
     )
 
 
@@ -1161,6 +1171,117 @@ def test_install_continues_past_failing_env(
     assert dummy_b.is_file()
 
 
+def test_quiet_keeps_the_reason_of_a_failure(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
+    """`--quiet` drops the report, but a failure has to stay readable.
+
+    The reason used to be a `tracing::warn!` that `--quiet` swallowed, so a
+    quiet run has to end up with more than a name and an exit code.
+    """
+    env = {"PIXI_HOME": str(tmp_path)}
+
+    verify_cli_command(
+        [pixi, "global", "install", "--quiet", "--channel", dummy_channel_1, "dummy-x"],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains=["dummy-x", "No candidates were found for dummy-x"],
+    )
+
+    # The report of a run that worked is still silenced.
+    verify_cli_command(
+        [pixi, "global", "install", "--quiet", "--channel", dummy_channel_1, "dummy-a"],
+        env=env,
+        stderr_excludes=["installed", "exposed"],
+    )
+    assert tmp_path.joinpath("bin", exec_extension("dummy-a")).is_file()
+
+
+def test_expose_remove_reports_what_it_already_removed(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
+    """A name removed before a later one fails is still gone from disk.
+
+    The removals are collected and reported once at the end, so the error path
+    has to report them too rather than returning straight past them.
+    """
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    manifest.write_text(f"""
+version = {MANIFEST_VERSION}
+
+[envs.one]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-a = "*" }}
+exposed = {{ dummy-a = "dummy-a" }}
+
+[envs.broken]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-x = "*" }}
+exposed = {{ dummy-x = "dummy-x" }}
+""")
+    dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
+
+    verify_cli_command([pixi, "global", "sync"], ExitCode.FAILURE, env=env)
+    assert dummy_a.is_file()
+
+    # `dummy-a` is removed and saved before `dummy-x` fails to solve.
+    verify_cli_command(
+        [pixi, "global", "expose", "remove", "dummy-a", "dummy-x"],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains=["one", "dummy-a", "broken"],
+    )
+    assert not dummy_a.is_file()
+
+
+def test_install_of_an_environment_missing_from_the_manifest(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
+    """An environment the manifest has lost reads as installed, and is saved.
+
+    The prefix satisfying the manifest is a shortcut past the solve, not a
+    reason to drop the environment the manifest just gained.
+    """
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    manifest.write_text(f"""
+version = {MANIFEST_VERSION}
+
+[envs.dummy-a]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-a = "*" }}
+exposed = {{ dummy-a = "dummy-a" }}
+""")
+    verify_cli_command([pixi, "global", "sync"], env=env)
+    assert tmp_path.joinpath("bin", exec_extension("dummy-a")).is_file()
+
+    # The prefix and its trampolines stay, the manifest forgets the environment.
+    manifest.write_text(f"version = {MANIFEST_VERSION}\n")
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "--expose",
+            "dummy-a=dummy-a",
+            "dummy-a",
+        ],
+        env=env,
+        stderr_contains="installed",
+        stderr_excludes="unchanged",
+    )
+
+    assert "[envs.dummy-a]" in manifest.read_text()
+    verify_cli_command([pixi, "global", "list"], env=env, stdout_contains="dummy-a")
+
+
 @pytest.mark.slow
 def test_install_platform(pixi: Path, tmp_path: Path) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
@@ -1336,6 +1457,112 @@ def test_pixi_install_cleanup(pixi: Path, tmp_path: Path, multiple_versions_chan
     assert package0_2_0.is_file()
 
 
+def test_sync_and_update_speak_up_when_there_is_nothing_to_do(pixi: Path, tmp_path: Path) -> None:
+    """A command that takes a moment and then says nothing reads as a hang."""
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+
+    verify_cli_command(
+        [pixi, "global", "sync"],
+        env=env,
+        stderr_contains="Nothing to do",
+        strip_ansi=True,
+    )
+    verify_cli_command(
+        [pixi, "global", "update"],
+        env=env,
+        stderr_contains="Nothing to do",
+        strip_ansi=True,
+    )
+
+
+def test_sync_creating_an_environment_says_installed(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
+    """The same event gets the same word whichever command triggers it."""
+    env = {"PIXI_HOME": str(tmp_path)}
+    verify_cli_command(
+        [pixi, "global", "install", "--channel", dummy_channel_1, "dummy-a"], env=env
+    )
+    shutil.rmtree(tmp_path / "envs")
+
+    verify_cli_command(
+        [pixi, "global", "sync"],
+        env=env,
+        stderr_contains="(installed) dummy-a 0.1.0",
+        stderr_excludes="updated",
+        strip_ansi=True,
+    )
+
+
+def test_a_single_package_environment_is_described_by_its_header(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
+    """The header already names the package, so no `dependencies` row repeats it."""
+    env = {"PIXI_HOME": str(tmp_path)}
+    verify_cli_command(
+        [pixi, "global", "install", "--channel", dummy_channel_1, "dummy-a"],
+        env=env,
+        stderr_contains=["(installed) dummy-a 0.1.0", "exposed       + dummy-a"],
+        stderr_excludes="dependencies",
+        strip_ansi=True,
+    )
+
+    # An environment holding more than the package it is named after keeps the
+    # row, since it has something to say that the header doesn't.
+    verify_cli_command(
+        [pixi, "global", "add", "--environment", "dummy-a", "dummy-b"],
+        env=env,
+        stderr_contains=["(updated)   dummy-a", "dependencies  + dummy-b 0.1.0"],
+        strip_ansi=True,
+    )
+
+
+def test_update_reports_a_failure_and_carries_on(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
+    """A failed environment must not swallow the ones after it."""
+    env = {"PIXI_HOME": str(tmp_path)}
+    verify_cli_command(
+        [pixi, "global", "install", "--channel", dummy_channel_1, "dummy-a"], env=env
+    )
+
+    verify_cli_command(
+        [pixi, "global", "update", "does-not-exist", "dummy-a"],
+        env=env,
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains=[
+            "(failed)    does-not-exist",
+            "not found in manifest",
+            "(unchanged) dummy-a 0.1.0",
+        ],
+        strip_ansi=True,
+    )
+
+
+def test_expose_remove_reports_one_block_per_environment(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
+    """Several names leaving one environment is one change to that environment."""
+    env = {"PIXI_HOME": str(tmp_path)}
+    verify_cli_command(
+        [pixi, "global", "install", "--channel", dummy_channel_1, "dummy-a"], env=env
+    )
+    verify_cli_command(
+        [pixi, "global", "expose", "add", "--environment", "dummy-a", "one=dummy-a", "two=dummy-a"],
+        env=env,
+    )
+
+    result = verify_cli_command(
+        [pixi, "global", "expose", "remove", "one", "two"],
+        env=env,
+        stderr_contains="- one, - two",
+        strip_ansi=True,
+    )
+    assert result.stderr.count("(updated)   dummy-a 0.1.0") == 1
+
+
 def test_list(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")
@@ -1366,7 +1593,7 @@ def test_list(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     verify_cli_command(
         [pixi, "global", "list"],
         env=env,
-        stdout_contains=["dummy-b: 0.1.0", "dummy-a: 0.1.0", "dummy-a", "dummy-aa"],
+        stdout_contains=["dummy-b 0.1.0", "dummy-a 0.1.0", "dummy-a", "dummy-aa"],
     )
 
 
@@ -1413,7 +1640,7 @@ def test_list_with_filter(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> N
     verify_cli_command(
         [pixi, "global", "list", "dummy-a"],
         env=env,
-        stdout_contains=["dummy-a: 0.1.0", "dummy-a", "dummy-aa"],
+        stdout_contains=["dummy-a 0.1.0", "dummy-a", "dummy-aa"],
         stdout_excludes=["dummy-b"],
     )
 
@@ -1422,7 +1649,7 @@ def test_list_with_filter(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> N
     verify_cli_command(
         [pixi, "global", "list", "--environment", "dummy-a", "dummy"],
         env=env,
-        stdout_contains=["The dummy-a environment", "dummy-a", "0.1.0"],
+        stdout_contains=["dummy-a", "0.1.0"],
         stdout_excludes=["dummy-b"],
     )
 
@@ -1559,7 +1786,8 @@ exposed = {{ dummy-c = "dummy-c" }}
     verify_cli_command(
         [pixi, "global", "uninstall", "dummy-a"],
         env=env,
-        stderr_contains="Removed environment dummy-a",
+        stderr_contains="(removed)   dummy-a",
+        strip_ansi=True,
     )
     assert not dummy_a.is_file()
     assert not dummy_aa.is_file()
@@ -1604,7 +1832,8 @@ exposed = {{ dummy-c = "dummy-c" }}
         [pixi, "global", "uninstall", "dummy-a"],
         ExitCode.FAILURE,
         env=env,
-        stderr_contains="Couldn't remove environment dummy-a",
+        stderr_contains=["(failed)    dummy-a", "Environment dummy-a doesn't exist"],
+        strip_ansi=True,
     )
 
     # Uninstall multiple packages
@@ -1712,7 +1941,8 @@ def test_global_update_single_package(
     verify_cli_command(
         [pixi, "global", "update", "package"],
         env=env,
-        stderr_contains=["Updated", "package", "0.1.0", "0.2.0"],
+        stderr_contains=["updated", "package", "0.1.0 -> 0.2.0"],
+        strip_ansi=True,
     )
     package = tmp_path / "bin" / exec_extension("package")
     package0_1_0 = tmp_path / "bin" / exec_extension("package0.1.0")
@@ -1748,7 +1978,10 @@ def test_global_update_single_package_with_transient_dependency(
     verify_cli_command(
         [pixi, "global", "update", "jupyter"],
         env=env,
-        stderr_contains="Updated environment jupyter.",
+        stderr_contains=["(updated)   jupyter 0.1.0"],
+        # The environment's own package is named by the header, never by a row.
+        stderr_excludes="~ jupyter",
+        strip_ansi=True,
     )
 
 
@@ -1785,7 +2018,8 @@ def test_global_update_doesnt_remove_exposed_key_of_transient_dependencies(
     verify_cli_command(
         [pixi, "global", "update", "package4"],
         env=env,
-        stderr_contains=["Updated", "package4", "0.1.0", "0.2.0"],
+        stderr_contains=["updated", "package4", "0.1.0 -> 0.2.0"],
+        strip_ansi=True,
     )
 
     # package3 should still be exposed
@@ -1882,7 +2116,8 @@ def test_global_update_multiple_packages_in_one_env(
     verify_cli_command(
         [pixi, "global", "update", "my-packages"],
         env=env,
-        stderr_contains=["- package 0.1.0 -> 0.2.0", "- package2 0.1.0 -> 0.2.0"],
+        stderr_contains=["~ package 0.1.0 -> 0.2.0", "~ package2 0.1.0 -> 0.2.0"],
+        strip_ansi=True,
     )
 
     assert package2.is_file()
@@ -2015,7 +2250,8 @@ def test_add(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     verify_cli_command(
         [pixi, "global", "add", "--environment", "dummy-a", "dummy-b"],
         env=env,
-        stderr_contains="Added package dummy-b",
+        stderr_contains="+ dummy-b 0.1.0",
+        strip_ansi=True,
     )
     # Make sure it doesn't expose a binary from this package
     dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
@@ -2033,7 +2269,8 @@ def test_add(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
             "dummy-b",
         ],
         env=env,
-        stderr_contains=["Exposed executable dummy-b from environment dummy-a"],
+        stderr_contains=["(updated)   dummy-a", "+ dummy-b"],
+        strip_ansi=True,
     )
     # Make sure it now exposes the binary
     dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
@@ -2056,10 +2293,14 @@ def test_remove_dependency(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> 
             "dummy-b",
         ],
         env=env,
-        stdout_contains=[
-            "dependencies: dummy-a 0.1.0, dummy-b 0.1.0",
-            "exposes: dummy-a, dummy-aa, dummy-b",
+        stderr_contains=[
+            "+ dummy-a 0.1.0",
+            "+ dummy-b 0.1.0",
+            "+ dummy-a",
+            "+ dummy-aa",
+            "+ dummy-b",
         ],
+        strip_ansi=True,
     )
     dummy_a = tmp_path / "bin" / exec_extension("dummy-a")
     dummy_b = tmp_path / "bin" / exec_extension("dummy-b")
@@ -2071,9 +2312,11 @@ def test_remove_dependency(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> 
         [pixi, "global", "remove", "--environment", "my-env", "dummy-a"],
         env=env,
         stderr_contains=[
-            "Removed package dummy-a in environment my-env.",
-            "Removed exposed executables from environment my-env:\n   - dummy-a\n   - dummy-aa\n",
+            "(updated)   my-env",
+            "- dummy-a",
+            "exposed       - dummy-a, - dummy-aa",
         ],
+        strip_ansi=True,
     )
     assert not dummy_a.is_file()
 
@@ -2096,9 +2339,11 @@ def test_remove_dependency(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> 
         [pixi, "global", "remove", "--environment", "my-env", "dummy-a", "dummy-b"],
         env=env,
         stderr_contains=[
-            "Removed packages in environment my-env.\n    - dummy-a\n    - dummy-b",
-            "Removed exposed executables from environment my-env:\n   - dummy-a\n   - dummy-aa\n   - dummy-b",
+            "(updated)   my-env",
+            "dependencies  - dummy-a, - dummy-b",
+            "exposed       - dummy-a, - dummy-aa, - dummy-b",
         ],
+        strip_ansi=True,
     )
 
     # Remove non-existing package
@@ -2431,7 +2676,8 @@ class TestCondaFile:
             ],
             env=env,
             cwd=cwd,
-            stderr_contains="Environment pixi-editor was already up-to-date.",
+            stderr_contains="(unchanged) pixi-editor 1.0.0",
+            strip_ansi=True,
         )
 
         # sync with file still there
@@ -2443,7 +2689,8 @@ class TestCondaFile:
             ],
             env=env,
             cwd=cwd,
-            stderr_contains="Nothing to do",
+            stderr_contains="1 environment unchanged",
+            strip_ansi=True,
         )
 
         os.remove(conda_file)
@@ -2458,7 +2705,8 @@ class TestCondaFile:
             ],
             env=env,
             cwd=cwd,
-            stderr_contains="Environment pixi-editor was already up-to-date.",
+            stderr_contains="(unchanged) pixi-editor 1.0.0",
+            strip_ansi=True,
         )
 
         # sync with file gone
@@ -2470,7 +2718,8 @@ class TestCondaFile:
             ],
             env=env,
             cwd=cwd,
-            stderr_contains="Nothing to do",
+            stderr_contains="1 environment unchanged",
+            strip_ansi=True,
         )
 
         # remove the environment

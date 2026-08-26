@@ -16,6 +16,7 @@ dunce = { workspace = true }
 fancy_display = { workspace = true }
 fs-err = { workspace = true }
 futures = { workspace = true }
+human_bytes = { workspace = true }
 indexmap = { workspace = true }
 is_executable = { workspace = true }
 itertools = { workspace = true }

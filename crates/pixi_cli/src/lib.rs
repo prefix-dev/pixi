@@ -152,6 +152,18 @@ impl Args {
     }
 }
 
+impl GlobalOptions {
+    /// How much of the reports of `pixi global` is shown. This rides along with
+    /// the logging flags rather than having a knob of its own.
+    fn report_verbosity(&self) -> pixi_global::report::Verbosity {
+        if self.quiet > 0 {
+            pixi_global::report::Verbosity::Quiet
+        } else {
+            pixi_global::report::Verbosity::Normal
+        }
+    }
+}
+
 #[derive(Parser, Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum Command {
@@ -271,6 +283,10 @@ pub async fn execute() -> miette::Result<()> {
 
     // Setup logging for the application.
     setup_logging(&args, use_colors)?;
+
+    // The quiet flag silences the reports of `pixi global` as well as the
+    // logging.
+    pixi_global::report::set_verbosity(args.global_options.report_verbosity());
 
     let (Some(command), global_options) = (args.command, args.global_options) else {
         // match CI expectations
