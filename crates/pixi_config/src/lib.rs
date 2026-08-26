@@ -1511,6 +1511,15 @@ pub enum ConfigError {
     ValidationError(miette::Report, PathBuf),
 }
 
+/// Error returned when a configuration key is not one of the keys pixi
+/// recognizes (see [`Config::get_keys`]).
+#[derive(thiserror::Error, Debug, miette::Diagnostic)]
+#[error("Unknown key: {key}\n{supported}")]
+struct UnknownConfigKey {
+    key: String,
+    supported: String,
+}
+
 impl Config {
     /// Constructs a new config that is optimized to be used in tests.
     ///
@@ -2071,13 +2080,22 @@ impl Config {
     ///
     /// It is required to call `save()` to persist the changes.
     pub fn set(&mut self, key: &str, value: Option<String>) -> miette::Result<()> {
-        let show_supported_keys =
-            || format!("Supported keys:\n\t{}", self.get_keys().join(",\n\t"));
-        let err = miette::miette!(
-            "Unknown key: {}\n{}",
-            console::style(key).red(),
-            show_supported_keys()
-        );
+        // Unsetting a key that pixi does not recognize should still succeed, so
+        // that stale entries (for example a key that was removed from the schema)
+        // can be cleared from the config file. Setting an unknown key stays an
+        // error.
+        let unset = value.is_none();
+        match self.set_key(key, value) {
+            Err(e) if unset && e.downcast_ref::<UnknownConfigKey>().is_some() => Ok(()),
+            result => result,
+        }
+    }
+
+    fn set_key(&mut self, key: &str, value: Option<String>) -> miette::Result<()> {
+        let err = miette::Report::new(UnknownConfigKey {
+            key: console::style(key).red().to_string(),
+            supported: format!("Supported keys:\n\t{}", self.get_keys().join(",\n\t")),
+        });
 
         match key {
             "default-channels" => {
@@ -3481,7 +3499,13 @@ UNUSED = "unused"
             .unwrap();
         assert_eq!(config.pinning_strategy, Some(PinningStrategy::Semver));
 
-        config.set("unknown-key", None).unwrap_err();
+        // Setting an unknown key is an error, but unsetting one is not so that
+        // stale entries can be cleared from the config file.
+        config
+            .set("unknown-key", Some("value".to_string()))
+            .unwrap_err();
+        config.set("unknown-key", None).unwrap();
+        config.set("repodata-config.disable-jlap", None).unwrap();
     }
 
     #[rstest]
