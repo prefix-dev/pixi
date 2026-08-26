@@ -6707,6 +6707,7 @@ dependencies = [
  "serde_ignored",
  "serde_json",
  "temp-env",
+ "tempfile",
  "thiserror 2.0.20",
  "toml_edit",
  "tracing",

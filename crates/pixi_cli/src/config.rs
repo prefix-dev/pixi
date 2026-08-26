@@ -2,7 +2,7 @@ use crate::cli_config::WorkspaceConfig;
 use clap::Parser;
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_config;
-use pixi_config::Config;
+use pixi_config::{Config, ConfigError};
 use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
 use pixi_core::workspace::WorkspaceLocatorError;
@@ -274,20 +274,31 @@ fn alter_config(
     value: Option<String>,
     mode: AlterMode,
 ) -> miette::Result<()> {
-    let mut config = load_config(common_args)?;
     let to = determine_config_write_path(common_args)?;
+
+    // Edit only the file that is about to be written. Starting from the
+    // merged config would bake every inherited setting into it, so the user
+    // would silently stop following the layers they inherit from.
+    let mut config = match Config::from_path(&to) {
+        Ok(config) => config,
+        Err(ConfigError::FileNotFound(_)) => Config::default(),
+        Err(e) => return Err(e).into_diagnostic(),
+    };
 
     match mode {
         AlterMode::Prepend | AlterMode::Append => {
             let is_prepend = matches!(mode, AlterMode::Prepend);
 
             match key {
+                // `default-channels` replaces the lower layers rather than
+                // extending them, so the list written here has to be the
+                // whole one the user sees.
                 "default-channels" => {
                     let input = value.expect("value must be provided");
                     let channel = NamedChannelOrUrl::from_str(&input)
                         .into_diagnostic()
                         .context("invalid channel name")?;
-                    let mut new_channels = config.default_channels.clone();
+                    let mut new_channels = load_config(common_args)?.default_channels;
                     if is_prepend {
                         new_channels.insert(0, channel);
                     } else {
@@ -295,10 +306,14 @@ fn alter_config(
                     }
                     config.default_channels = new_channels;
                 }
+                // `extra-index-urls` is concatenated across layers, so only
+                // this file's own share of the list is edited; copying the
+                // lower layers in would list them twice. A prepend therefore
+                // lands ahead of this file's URLs, but after the lower ones.
                 "pypi-config.extra-index-urls" => {
                     let input = url::Url::parse(&value.expect("value must be provided"))
                         .map_err(|e| miette::miette!("Invalid URL: {}", e))?;
-                    let mut new_urls = config.pypi_config().extra_index_urls.clone();
+                    let mut new_urls = config.pypi_config.extra_index_urls.clone();
                     if is_prepend {
                         new_urls.insert(0, input);
                     } else {
