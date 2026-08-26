@@ -153,13 +153,13 @@ impl Args {
 }
 
 impl GlobalOptions {
-    /// How much detail the reports of `pixi global` show. This rides along with
+    /// How much of the reports of `pixi global` is shown. This rides along with
     /// the logging flags rather than having a knob of its own.
     fn report_verbosity(&self) -> pixi_global::report::Verbosity {
-        match (self.quiet, self.verbose) {
-            (quiet, _) if quiet > 0 => pixi_global::report::Verbosity::Quiet,
-            (_, 0) => pixi_global::report::Verbosity::Normal,
-            _ => pixi_global::report::Verbosity::Detailed,
+        if self.quiet > 0 {
+            pixi_global::report::Verbosity::Quiet
+        } else {
+            pixi_global::report::Verbosity::Normal
         }
     }
 }
@@ -284,8 +284,8 @@ pub async fn execute() -> miette::Result<()> {
     // Setup logging for the application.
     setup_logging(&args, use_colors)?;
 
-    // The verbosity flags decide how much of a `pixi global` report is shown as
-    // well as how much is logged.
+    // The quiet flag silences the reports of `pixi global` as well as the
+    // logging.
     pixi_global::report::set_verbosity(args.global_options.report_verbosity());
 
     let (Some(command), global_options) = (args.command, args.global_options) else {

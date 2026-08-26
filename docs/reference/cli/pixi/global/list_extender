@@ -33,8 +33,8 @@ python 3.14.6
                   python3.14-config
 ```
 
-Here is an example of list of a single environment, which adds the packages that
-came along with the dependencies, the channels, and the full package table:
+Here is an example of list of a single environment, which adds the channels, the
+size the environment takes up on disk, and the full package table:
 ```
 pixi global list --environment demo
 ```
@@ -42,9 +42,9 @@ Results in:
 ```
 demo
 ├── dependencies  bat 0.26.1, ripgrep 15.2.0
-├── transitive    3 packages, 1.6 MiB total
 ├── exposed       demo-cli -> bat
-└── channels      conda-forge
+├── channels      conda-forge
+└── size          6.2 MiB
 
 Package        Version  Build       Size
 _openmp_mutex  4.5      20_gnu      28.3 KiB

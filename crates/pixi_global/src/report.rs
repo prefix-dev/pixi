@@ -9,15 +9,14 @@
 //!
 //! ```text
 //! (installed) ripgrep 15.2.0
-//! ├── transitive    3 added
 //! ├── exposed       + rg
 //! └── completions   + rg
 //! ```
 //!
 //! Rows are children of their own header, so a block is self-contained and can
 //! be printed as soon as its environment is done. The labels are the keys of
-//! `pixi-global.toml`, except for `transitive`, `completions` and `size`, which
-//! describe the result rather than the manifest.
+//! `pixi-global.toml`, except for `completions` and `size`, which describe the
+//! result rather than the manifest.
 
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 
@@ -48,10 +47,8 @@ const ITEMS_PER_LINE: usize = 4;
 pub enum Verbosity {
     /// Print nothing but failures.
     Quiet,
-    /// Print the report, with transitive changes aggregated into a count.
+    /// Print the whole report.
     Normal,
-    /// Print the report, with every transitive change listed individually.
-    Detailed,
 }
 
 static VERBOSITY: AtomicU8 = AtomicU8::new(Verbosity::Normal as u8);
@@ -69,7 +66,6 @@ pub fn set_verbosity(verbosity: Verbosity) {
 pub fn verbosity() -> Verbosity {
     match VERBOSITY.load(Ordering::Relaxed) {
         value if value == Verbosity::Quiet as u8 => Verbosity::Quiet,
-        value if value == Verbosity::Detailed as u8 => Verbosity::Detailed,
         _ => Verbosity::Normal,
     }
 }
@@ -151,7 +147,6 @@ impl Marker {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Label {
     Dependencies,
-    Transitive,
     Exposed,
     Shortcuts,
     Completions,
@@ -164,7 +159,6 @@ impl Label {
     pub fn as_str(self) -> &'static str {
         match self {
             Label::Dependencies => "dependencies",
-            Label::Transitive => "transitive",
             Label::Exposed => "exposed",
             Label::Shortcuts => "shortcuts",
             Label::Completions => "completions",
@@ -689,20 +683,16 @@ mod tests {
             Some("15.2.0".to_string()),
             Some(EnvStatus::Installed),
         )
-        .with_rows(vec![
-            Row::new(Label::Transitive, vec![Item::summary("3 added")]),
-            Row::new(
-                Label::Exposed,
-                vec![Item::exposed(Marker::Added, "rg", None)],
-            ),
-        ])
+        .with_rows(vec![Row::new(
+            Label::Exposed,
+            vec![Item::exposed(Marker::Added, "rg", None)],
+        )])
     }
 
     #[test]
     fn renders_install() {
         insta::assert_snapshot!(render(&installed(), &options()), @r"
         (installed) ripgrep 15.2.0
-        ├── transitive    3 added
         └── exposed       + rg
         ");
     }
@@ -715,20 +705,22 @@ mod tests {
             "ripgrep",
             Some("15.2.0 -> 15.3.0".to_string()),
             Some(EnvStatus::Updated),
-        )
-        .with_rows(vec![Row::new(
-            Label::Transitive,
-            vec![Item::summary("2 changed")],
-        )]);
+        );
 
-        insta::assert_snapshot!(render(&report, &options()), @r"
-        (updated)   ripgrep 15.2.0 -> 15.3.0
-        └── transitive    2 changed
-        ");
+        insta::assert_snapshot!(render(&report, &options()), @"(updated)   ripgrep 15.2.0 -> 15.3.0");
+    }
+
+    /// An environment where only packages the manifest doesn't name moved still
+    /// says that it changed, even though nothing is listed below it.
+    #[test]
+    fn renders_an_update_without_rows() {
+        let report = EnvReport::new("dev", None, Some(EnvStatus::Updated));
+
+        insta::assert_snapshot!(render(&report, &options()), @"(updated)   dev");
     }
 
     #[test]
-    fn renders_update_with_transitive_summary() {
+    fn renders_update_with_dependency_changes() {
         let report = EnvReport::new("dev", None, Some(EnvStatus::Updated)).with_rows(vec![
             Row::new(
                 Label::Dependencies,
@@ -742,10 +734,6 @@ mod tests {
                 ],
             ),
             Row::new(
-                Label::Transitive,
-                vec![Item::summary("12 added, 3 changed, 1 removed")],
-            ),
-            Row::new(
                 Label::Exposed,
                 vec![Item::exposed(Marker::Removed, "bat", None)],
             ),
@@ -754,7 +742,6 @@ mod tests {
         insta::assert_snapshot!(render(&report, &options()), @r"
         (updated)   dev
         ├── dependencies  ~ ripgrep 15.2.0 -> 15.3.0, - bat 0.26.1
-        ├── transitive    12 added, 3 changed, 1 removed
         └── exposed       - bat
         ");
     }
@@ -1025,7 +1012,6 @@ mod tests {
 
         insta::assert_snapshot!(render_all(&[installed(), second], &options()), @r"
         (installed) ripgrep 15.2.0
-        ├── transitive    3 added
         └── exposed       + rg
 
         (installed) bat 0.27.0

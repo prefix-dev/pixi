@@ -409,42 +409,6 @@ impl StateChanges {
     }
 }
 
-/// How many packages an environment gained, changed and lost besides the ones
-/// named in its manifest.
-#[derive(Debug, Default)]
-struct TransitiveCounts {
-    added: usize,
-    changed: usize,
-    removed: usize,
-}
-
-impl TransitiveCounts {
-    fn add(&mut self, change: &InstallChange) {
-        match change {
-            InstallChange::Installed(_) => self.added += 1,
-            InstallChange::Removed => self.removed += 1,
-            InstallChange::Upgraded(_, _)
-            | InstallChange::TransitiveUpgraded(_, _)
-            | InstallChange::Reinstalled(_, _) => self.changed += 1,
-        }
-    }
-}
-
-impl std::fmt::Display for TransitiveCounts {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let parts = [
-            (self.added, "added"),
-            (self.changed, "changed"),
-            (self.removed, "removed"),
-        ]
-        .into_iter()
-        .filter(|(count, _)| *count > 0)
-        .map(|(count, what)| format!("{count} {what}"))
-        .join(", ");
-        write!(f, "{parts}")
-    }
-}
-
 /// The executable an exposed name points at, spelled out only when it differs
 /// from the name itself.
 fn exposed_target(name: &ExposedName, executable: Option<&str>) -> Option<String> {
@@ -569,14 +533,15 @@ async fn build_report(
     // that matters is that it ended up exposed. Changes are walked in the order
     // they were recorded, so the last one wins.
     let mut dependencies: BTreeMap<String, Item> = BTreeMap::new();
-    let mut transitive: BTreeMap<String, Item> = BTreeMap::new();
-    let mut transitive_counts = TransitiveCounts::default();
     let mut exposed: BTreeMap<String, Item> = BTreeMap::new();
     let mut shortcuts: BTreeMap<String, Item> = BTreeMap::new();
     let mut completions: BTreeMap<String, Item> = BTreeMap::new();
     // The last environment-level change wins: `--force-reinstall` removes the
     // environment and creates it again, and that reads as an install.
     let mut environment_change = None;
+    // Packages that aren't named in the manifest leave no row behind, but the
+    // environment did change and has to say so.
+    let mut transitive_change = false;
 
     for change in changes {
         match change {
@@ -608,15 +573,14 @@ async fn build_report(
                         left.as_normalized().cmp(right.as_normalized())
                     })
                 {
-                    let name = package_name.as_normalized().to_string();
-                    let item = install_change_item(&name, install_change);
                     // A package the manifest names is a dependency; everything
-                    // else came along with it.
+                    // else came along with it and is only counted.
                     if update.current_packages().contains(package_name) {
-                        dependencies.insert(name, item);
+                        let name = package_name.as_normalized().to_string();
+                        dependencies
+                            .insert(name.clone(), install_change_item(&name, install_change));
                     } else {
-                        transitive_counts.add(install_change);
-                        transitive.insert(name, item);
+                        transitive_change = true;
                     }
                 }
             }
@@ -645,23 +609,18 @@ async fn build_report(
 
     let mut rows = Vec::new();
     push_row(&mut rows, Label::Dependencies, dependencies);
-    if !transitive.is_empty() {
-        let items = if report::verbosity() == report::Verbosity::Detailed {
-            transitive.into_values().collect()
-        } else {
-            vec![Item::summary(transitive_counts.to_string())]
-        };
-        rows.push(Row::new(Label::Transitive, items));
-    }
     push_row(&mut rows, Label::Exposed, exposed);
     push_row(&mut rows, Label::Shortcuts, shortcuts);
     push_row(&mut rows, Label::Completions, completions);
 
     let status = match environment_change {
         Some(status) => status,
-        // The dependency that was lifted into the header still counts as a
-        // change, even though it left no row behind.
-        None if rows.is_empty() && own_dependency.is_none() => EnvStatus::Unchanged,
+        // The dependency that was lifted into the header and the packages that
+        // came along with it still count as changes, even though they left no
+        // row behind.
+        None if rows.is_empty() && own_dependency.is_none() && !transitive_change => {
+            EnvStatus::Unchanged
+        }
         None => EnvStatus::Updated,
     };
 

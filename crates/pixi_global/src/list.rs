@@ -264,37 +264,6 @@ pub async fn list_specific_global_environment(
 
     let mut report = state_report(project, environment_name, env).await?;
 
-    // Everything the environment pulled in besides the packages its manifest
-    // names, counted rather than listed: the table below has the detail, and
-    // the `size` row the total.
-    let transitive = records
-        .iter()
-        .filter(|record| {
-            !env.dependencies
-                .specs
-                .contains_key(&record.repodata_record.package_record.name)
-        })
-        .count();
-    if transitive > 0 {
-        // Right after the dependencies, so the rows stay in the same order as
-        // in a change report.
-        let position = report
-            .rows
-            .iter()
-            .position(|row| row.label == Label::Dependencies)
-            .map_or(0, |index| index + 1);
-        report.rows.insert(
-            position,
-            Row::new(
-                Label::Transitive,
-                vec![Item::summary(format!(
-                    "{transitive} package{}",
-                    if transitive == 1 { "" } else { "s" }
-                ))],
-            ),
-        );
-    }
-
     if !env.channels().is_empty() {
         report.rows.push(Row::new(
             Label::Channels,
