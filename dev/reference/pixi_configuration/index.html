@@ -3657,6 +3657,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#configuration-shared-with-other-rattler-based-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Configuration shared with other rattler-based tools
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#skipping-or-overriding-config-discovery" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -8671,6 +8682,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#configuration-shared-with-other-rattler-based-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Configuration shared with other rattler-based tools
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#skipping-or-overriding-config-discovery" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -8992,39 +9014,59 @@ The configuration is loaded in the following order:</p>
 </thead>
 <tbody>
 <tr>
-<td>7</td>
+<td>11</td>
 <td>Command line arguments (<code>--tls-no-verify</code>, <code>--change-ps1=false</code>, etc.)</td>
 <td>Configuration via command line arguments</td>
 </tr>
 <tr>
-<td>6</td>
+<td>10</td>
 <td><code>your_project/.pixi/config.toml</code></td>
 <td>Project-specific configuration</td>
 </tr>
 <tr>
-<td>5</td>
+<td>9</td>
 <td><code>$PIXI_HOME/config.toml</code></td>
 <td>Global configuration in <code>PIXI_HOME</code>.</td>
 </tr>
 <tr>
-<td>4</td>
+<td>8</td>
 <td><code>$HOME/.pixi/config.toml</code></td>
 <td>Global configuration in the user home directory.</td>
 </tr>
 <tr>
-<td>3</td>
+<td>7</td>
 <td><code>$XDG_CONFIG_HOME/pixi/config.toml</code></td>
 <td>XDG compliant user-specific configuration</td>
 </tr>
 <tr>
-<td>2</td>
+<td>6</td>
 <td><code>$HOME/.config/pixi/config.toml</code></td>
 <td>User-specific configuration</td>
 </tr>
 <tr>
-<td>1</td>
+<td>5</td>
+<td><code>$RATTLER_HOME/config.toml</code></td>
+<td>Shared configuration, only when <code>RATTLER_HOME</code> is set</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>$XDG_CONFIG_HOME/rattler/config.toml</code></td>
+<td>Shared XDG compliant user-specific configuration</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>$HOME/.config/rattler/config.toml</code></td>
+<td>Shared user-specific configuration</td>
+</tr>
+<tr>
+<td>2</td>
 <td><code>/etc/pixi/config.toml</code></td>
 <td>System-wide configuration</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>/etc/rattler/config.toml</code></td>
+<td>Shared system-wide configuration</td>
 </tr>
 </tbody>
 </table>
@@ -9040,39 +9082,59 @@ The configuration is loaded in the following order:</p>
 </thead>
 <tbody>
 <tr>
-<td>7</td>
+<td>11</td>
 <td>Command line arguments (<code>--tls-no-verify</code>, <code>--change-ps1=false</code>, etc.)</td>
 <td>Configuration via command line arguments</td>
 </tr>
 <tr>
-<td>6</td>
+<td>10</td>
 <td><code>your_project/.pixi/config.toml</code></td>
 <td>Project-specific configuration</td>
 </tr>
 <tr>
-<td>5</td>
+<td>9</td>
 <td><code>$PIXI_HOME/config.toml</code></td>
 <td>Global configuration in <code>PIXI_HOME</code>.</td>
 </tr>
 <tr>
-<td>4</td>
+<td>8</td>
 <td><code>$HOME/.pixi/config.toml</code></td>
 <td>Global configuration in the user home directory.</td>
 </tr>
 <tr>
-<td>3</td>
+<td>7</td>
 <td><code>$HOME/Library/Application Support/pixi/config.toml</code></td>
 <td>User-specific configuration</td>
 </tr>
 <tr>
-<td>2</td>
+<td>6</td>
 <td><code>$XDG_CONFIG_HOME/pixi/config.toml</code></td>
 <td>XDG compliant user-specific configuration</td>
 </tr>
 <tr>
-<td>1</td>
+<td>5</td>
+<td><code>$RATTLER_HOME/config.toml</code></td>
+<td>Shared configuration, only when <code>RATTLER_HOME</code> is set</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>$HOME/Library/Application Support/rattler/config.toml</code></td>
+<td>Shared user-specific configuration</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>$XDG_CONFIG_HOME/rattler/config.toml</code></td>
+<td>Shared XDG compliant user-specific configuration</td>
+</tr>
+<tr>
+<td>2</td>
 <td><code>/etc/pixi/config.toml</code></td>
 <td>System-wide configuration</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>/etc/rattler/config.toml</code></td>
+<td>Shared system-wide configuration</td>
 </tr>
 </tbody>
 </table>
@@ -9088,34 +9150,49 @@ The configuration is loaded in the following order:</p>
 </thead>
 <tbody>
 <tr>
-<td>6</td>
+<td>9</td>
 <td>Command line arguments (<code>--tls-no-verify</code>, <code>--change-ps1=false</code>, etc.)</td>
 <td>Configuration via command line arguments</td>
 </tr>
 <tr>
-<td>5</td>
+<td>8</td>
 <td><code>your_project\.pixi\config.toml</code></td>
 <td>Project-specific configuration</td>
 </tr>
 <tr>
-<td>4</td>
+<td>7</td>
 <td><code>%PIXI_HOME%\config.toml</code></td>
 <td>Global configuration in <code>PIXI_HOME</code>.</td>
 </tr>
 <tr>
-<td>3</td>
+<td>6</td>
 <td><code>%USERPROFILE%\.pixi\config.toml</code></td>
 <td>Global configuration in the user home directory.</td>
 </tr>
 <tr>
-<td>2</td>
+<td>5</td>
 <td><code>%APPDATA%\pixi\config.toml</code></td>
 <td>User-specific configuration</td>
 </tr>
 <tr>
-<td>1</td>
+<td>4</td>
+<td><code>%RATTLER_HOME%\config.toml</code></td>
+<td>Shared configuration, only when <code>RATTLER_HOME</code> is set</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>%APPDATA%\rattler\config.toml</code></td>
+<td>Shared user-specific configuration</td>
+</tr>
+<tr>
+<td>2</td>
 <td><code>C:\ProgramData\pixi\config.toml</code></td>
 <td>System-wide configuration</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>C:\ProgramData\rattler\config.toml</code></td>
+<td>Shared system-wide configuration</td>
 </tr>
 </tbody>
 </table>
@@ -9132,6 +9209,10 @@ configuration read from lower priority locations are overwritten.</p>
 </div>
 <p>To find the locations where <code>pixi</code> looks for configuration files, run
 <code>pixi info -vvv</code>.</p>
+<h3 id="configuration-shared-with-other-rattler-based-tools">Configuration shared with other rattler-based tools<a class="headerlink" href="#configuration-shared-with-other-rattler-based-tools" title="Permanent link">#</a></h3>
+<p>The <code>rattler</code> locations are read by every rattler-based tool, so a setting placed there applies to Pixi and <code>rattler-build</code> alike.
+They accept only the options that all of these tools understand, such as <code>default-channels</code>, <code>mirrors</code>, <code>s3-options</code> and <code>concurrency</code>.
+Options that only Pixi knows, like <code>shell</code> or <code>detached-environments</code>, belong in a <code>pixi</code> location; in a <code>rattler</code> file Pixi ignores them and warns about it.</p>
 <h3 id="skipping-or-overriding-config-discovery">Skipping or overriding config discovery<a class="headerlink" href="#skipping-or-overriding-config-discovery" title="Permanent link">#</a></h3>
 <p>Two global flags (and their environment-variable equivalents) let you opt out
 of the system and user-level config layers — the project-local
