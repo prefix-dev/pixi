@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     ffi::OsStr,
     io::Read,
     iter::Peekable,
@@ -381,8 +381,8 @@ pub enum StateChange {
     UpdatedEnvironment(EnvironmentUpdate),
     InstalledShortcut(String),
     UninstalledShortcut(String),
-    AddedCompletion(String),
-    RemovedCompletion(String),
+    AddedCompletion { name: String, shell: String },
+    RemovedCompletion { name: String, shell: String },
 }
 
 #[must_use]
@@ -702,64 +702,36 @@ impl StateChanges {
                             }
                         }
                     }
-                    StateChange::AddedCompletion(name) => {
-                        let mut installed_items = StateChanges::accumulate_changes(
+                    StateChange::AddedCompletion { name, shell } => {
+                        let installed_items = StateChanges::accumulate_changes(
                             &mut iter,
                             |next| match next {
-                                Some(StateChange::AddedCompletion(name)) => Some(name.clone()),
+                                Some(StateChange::AddedCompletion { name, shell }) => {
+                                    Some((name.clone(), shell.clone()))
+                                }
                                 _ => None,
                             },
-                            Some(name.clone()),
+                            Some((name.clone(), shell.clone())),
                         );
 
-                        installed_items.sort();
-
-                        if installed_items.len() == 1 {
-                            pixi_progress::println!(
-                                "{}Exposed completion {} of environment {}.",
-                                console::style(console::Emoji("✔ ", "")).green(),
-                                installed_items[0],
-                                env_name.fancy_display()
-                            );
-                        } else {
-                            pixi_progress::println!(
-                                "{}Exposed completions of environment {}:",
-                                console::style(console::Emoji("✔ ", "")).green(),
-                                env_name.fancy_display()
-                            );
-                            for installed_item in installed_items {
-                                pixi_progress::println!("   - {}", installed_item);
-                            }
+                        if tracing::enabled!(tracing::Level::INFO) {
+                            report_completion_changes(&env_name, "Exposed", installed_items);
                         }
                     }
-                    StateChange::RemovedCompletion(name) => {
-                        let mut uninstalled_items = StateChanges::accumulate_changes(
+                    StateChange::RemovedCompletion { name, shell } => {
+                        let uninstalled_items = StateChanges::accumulate_changes(
                             &mut iter,
                             |next| match next {
-                                Some(StateChange::RemovedCompletion(name)) => Some(name.clone()),
+                                Some(StateChange::RemovedCompletion { name, shell }) => {
+                                    Some((name.clone(), shell.clone()))
+                                }
                                 _ => None,
                             },
-                            Some(name.clone()),
+                            Some((name.clone(), shell.clone())),
                         );
 
-                        uninstalled_items.sort();
-
-                        if uninstalled_items.len() == 1 {
-                            pixi_progress::println!(
-                                "{}Removed completion {} of environment {}.",
-                                console::style(console::Emoji("✔ ", "")).green(),
-                                uninstalled_items[0],
-                                env_name.fancy_display()
-                            );
-                        } else {
-                            pixi_progress::println!(
-                                "{}Removed completions of environment {}:",
-                                console::style(console::Emoji("✔ ", "")).green(),
-                                env_name.fancy_display()
-                            );
-                            for uninstalled_item in uninstalled_items {
-                                pixi_progress::println!("   - {}", uninstalled_item);
-                            }
+                        if tracing::enabled!(tracing::Level::INFO) {
+                            report_completion_changes(&env_name, "Removed", uninstalled_items);
                         }
                     }
                 }
@@ -842,6 +814,33 @@ impl StateChanges {
             }
         }
     }
+}
+
+fn report_completion_changes(
+    env_name: &EnvironmentName,
+    action: &str,
+    completions: Vec<(String, String)>,
+) {
+    pixi_progress::println!(
+        "{}{} completions of environment {}:",
+        console::style(console::Emoji("✔ ", "")).green(),
+        action,
+        env_name.fancy_display()
+    );
+    for (name, shells) in group_completion_changes(completions) {
+        pixi_progress::println!("   - {} ({})", name, shells);
+    }
+}
+
+fn group_completion_changes(completions: Vec<(String, String)>) -> Vec<(String, String)> {
+    let mut grouped = BTreeMap::<String, Vec<String>>::new();
+    for (name, shell) in completions {
+        grouped.entry(name).or_default().push(shell);
+    }
+    grouped
+        .into_iter()
+        .map(|(name, shells)| (name, shells.into_iter().join(", ")))
+        .collect()
 }
 
 impl std::ops::BitOrAssign for StateChanges {
@@ -1114,6 +1113,24 @@ mod tests {
 
     use super::*;
     use crate::trampoline::Configuration;
+
+    #[test]
+    fn group_completion_shells_by_executable() {
+        let completions = vec![
+            ("rattler".to_string(), "bash".to_string()),
+            ("pixi".to_string(), "bash".to_string()),
+            ("rattler".to_string(), "zsh".to_string()),
+            ("rattler".to_string(), "fish".to_string()),
+        ];
+
+        assert_eq!(
+            group_completion_changes(completions),
+            vec![
+                ("pixi".to_string(), "bash".to_string()),
+                ("rattler".to_string(), "bash, zsh, fish".to_string()),
+            ]
+        );
+    }
 
     #[tokio::test]
     async fn test_create() {

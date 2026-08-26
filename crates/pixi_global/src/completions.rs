@@ -71,14 +71,16 @@ impl CompletionsDir {
 #[derive(Debug, Clone)]
 pub struct Completion {
     name: String,
+    shell: &'static str,
     source: PathBuf,
     destination: PathBuf,
 }
 
 impl Completion {
-    pub fn new(name: String, source: PathBuf, destination: PathBuf) -> Self {
+    pub fn new(name: String, shell: &'static str, source: PathBuf, destination: PathBuf) -> Self {
         Self {
             name,
+            shell,
             source,
             destination,
         }
@@ -98,7 +100,10 @@ impl Completion {
             .await
             .into_diagnostic()?;
 
-        Ok(Some(StateChange::AddedCompletion(self.name.clone())))
+        Ok(Some(StateChange::AddedCompletion {
+            name: self.name.clone(),
+            shell: self.shell.to_string(),
+        }))
     }
 
     /// Remove the shell completion
@@ -107,7 +112,10 @@ impl Completion {
             .await
             .into_diagnostic()?;
 
-        Ok(StateChange::RemovedCompletion(self.name.clone()))
+        Ok(StateChange::RemovedCompletion {
+            name: self.name.clone(),
+            shell: self.shell.to_string(),
+        })
     }
 }
 
@@ -155,7 +163,12 @@ pub fn contained_completions(
                 .join(bash_path.file_name().wrap_err_with(|| {
                     miette::miette!("Bash completion path needs to have a file name")
                 })?);
-        completion_scripts.push(Completion::new(name.to_string(), bash_path, destination));
+        completion_scripts.push(Completion::new(
+            name.to_string(),
+            "bash",
+            bash_path,
+            destination,
+        ));
     }
 
     if zsh_path.exists() {
@@ -165,7 +178,12 @@ pub fn contained_completions(
                 .join(zsh_path.file_name().wrap_err_with(|| {
                     miette::miette!("Zsh completion path needs to have a file name")
                 })?);
-        completion_scripts.push(Completion::new(name.to_string(), zsh_path, destination));
+        completion_scripts.push(Completion::new(
+            name.to_string(),
+            "zsh",
+            zsh_path,
+            destination,
+        ));
     }
 
     if fish_path.exists() {
@@ -175,7 +193,12 @@ pub fn contained_completions(
                 .join(fish_path.file_name().wrap_err_with(|| {
                     miette::miette!("Fish completion path needs to have a file name")
                 })?);
-        completion_scripts.push(Completion::new(name.to_string(), fish_path, destination));
+        completion_scripts.push(Completion::new(
+            name.to_string(),
+            "fish",
+            fish_path,
+            destination,
+        ));
     }
     Ok(completion_scripts)
 }
