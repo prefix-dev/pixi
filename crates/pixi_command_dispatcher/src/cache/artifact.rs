@@ -84,6 +84,19 @@ pub struct ArtifactCacheKey(String);
 
 /// Minimal backend descriptor needed to re-solve a checkout-free hit.
 /// Complex environment specs deliberately use the normal checkout path.
+///
+/// Note what trusting this on the checkout-free path implies: `channels` is
+/// read back off disk and fed into an environment solve before anything has
+/// validated it, and nothing can, because the identifier it is checked
+/// against is re-derived from this same descriptor. The contents of a cache
+/// file therefore choose which channel is contacted and which package is
+/// downloaded and installed. That is acceptable only because the artifact
+/// cache lives inside the workspace: whoever can write this file can also
+/// write `pixi.toml`, which grants arbitrary channels *and* code execution at
+/// build time. Do not move this cache anywhere less trusted without
+/// revisiting it -- and note that constraining the channels to the
+/// workspace's own is not the fix, since `[package.build] channels` routinely
+/// and legitimately names a backend channel the workspace does not list.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct ImmutableBackend {
     pub identifier: String,
@@ -1374,9 +1387,7 @@ mod tests {
 
         // FILE_SHARE_NONE: what a second pixi, a virus scanner or a backup
         // agent does to the sidecar while it is being read.
-        let sidecar = f
-            .cache
-            .sidecar_path(&pkg("foo"), &key("immutable-key"));
+        let sidecar = f.cache.sidecar_path(&pkg("foo"), &key("immutable-key"));
         let exclusive = OpenOptions::new()
             .read(true)
             .share_mode(0)
@@ -1487,9 +1498,7 @@ mod tests {
             .immutable_backend(&pkg("foo"), &key("immutable-key"))
             .await
             .unwrap();
-        let sidecar = f
-            .cache
-            .sidecar_path(&pkg("foo"), &key("immutable-key"));
+        let sidecar = f.cache.sidecar_path(&pkg("foo"), &key("immutable-key"));
 
         for (name, bytes) in [
             ("truncated", &b"{\"artifact_sha"[..]),

@@ -275,7 +275,9 @@ async fn compute_inner(
         });
 
     if let Some(key) = immutable_cache_key.as_ref()
-        && let Some(backend) = artifact_cache.immutable_backend(spec.record.name(), key).await
+        && let Some(backend) = artifact_cache
+            .immutable_backend(spec.record.name(), key)
+            .await
         && let Ok(Some(identifier)) = resolve_immutable_backend_identifier_from_spec(
             ctx,
             backend.spec(),
@@ -996,6 +998,68 @@ async fn synthesize_repodata(
         channel: None,
     })
 }
+/// Compute the sha256 of a file on a blocking thread.
+async fn compute_package_sha256(path: &std::path::Path) -> Result<Sha256Hash, SourceBuildError> {
+    let p = path.to_path_buf();
+    tokio::task::spawn_blocking({
+        let p = p.clone();
+        move || rattler_digest::compute_file_digest::<rattler_digest::Sha256>(&p)
+    })
+    .await
+    .expect("sha256 task panicked")
+    .map_err(|e| SourceBuildError::CalculateSha256(p, Arc::new(e)))
+}
+
+fn map_cache_err(err: ArtifactCacheError) -> SourceBuildError {
+    match err {
+        ArtifactCacheError::Io {
+            operation,
+            path,
+            source,
+        } => {
+            let msg = format!("{operation} at {}", path.display());
+            SourceBuildError::CreateWorkDirectory(Arc::new(std::io::Error::new(source.kind(), msg)))
+        }
+        ArtifactCacheError::Glob(err) => SourceBuildError::GlobSet(err),
+        ArtifactCacheError::ArtifactFilename(path) => SourceBuildError::MissingOutputFile(path),
+    }
+}
+
+/// Build/host prefixes for a source build: both sit under the workspace
+/// dir, with platform-specific padding for non-Windows hosts.
+struct Directories {
+    build_prefix: PathBuf,
+    host_prefix: PathBuf,
+}
+
+impl Directories {
+    fn new(work_directory: &std::path::Path, host_platform: rattler_conda_types::Platform) -> Self {
+        const BUILD_DIR: &str = "bld";
+        const HOST_ENV_DIR: &str = "host";
+        const PLACEHOLDER_TEMPLATE_STR: &str = "_placehold";
+
+        let build_prefix = work_directory.join(BUILD_DIR);
+        let host_prefix = if host_platform.is_windows() {
+            work_directory.join(HOST_ENV_DIR)
+        } else {
+            // Non-Windows backends expect a 255-char host prefix for
+            // reliable prefix replacement. Pad with a template string.
+            const PLACEHOLDER_LENGTH: usize = 255;
+            let mut placeholder = String::new();
+            while placeholder.len() < PLACEHOLDER_LENGTH {
+                placeholder.push_str(PLACEHOLDER_TEMPLATE_STR);
+            }
+            let placeholder = placeholder
+                [0..PLACEHOLDER_LENGTH - work_directory.join(HOST_ENV_DIR).as_os_str().len()]
+                .to_string();
+            work_directory.join(format!("{HOST_ENV_DIR}{placeholder}"))
+        };
+        Self {
+            build_prefix,
+            host_prefix,
+        }
+    }
+}
 
 #[cfg(test)]
 mod immutable_identifier_tests {
@@ -1030,9 +1094,7 @@ mod immutable_identifier_tests {
             manifest_source: PinnedSourceSpec::Git(PinnedGitSpec {
                 git: Url::parse("https://example.invalid/foo.git").unwrap(),
                 source: PinnedGitCheckout {
-                    commit: "0123456789abcdef0123456789abcdef01234567"
-                        .parse()
-                        .unwrap(),
+                    commit: "0123456789abcdef0123456789abcdef01234567".parse().unwrap(),
                     subdirectory: Default::default(),
                     reference: pixi_spec::GitReference::DefaultBranch,
                     lfs: None,
@@ -1196,68 +1258,5 @@ mod immutable_identifier_tests {
             ),
             "channel config root dir",
         );
-    }
-}
-
-/// Compute the sha256 of a file on a blocking thread.
-async fn compute_package_sha256(path: &std::path::Path) -> Result<Sha256Hash, SourceBuildError> {
-    let p = path.to_path_buf();
-    tokio::task::spawn_blocking({
-        let p = p.clone();
-        move || rattler_digest::compute_file_digest::<rattler_digest::Sha256>(&p)
-    })
-    .await
-    .expect("sha256 task panicked")
-    .map_err(|e| SourceBuildError::CalculateSha256(p, Arc::new(e)))
-}
-
-fn map_cache_err(err: ArtifactCacheError) -> SourceBuildError {
-    match err {
-        ArtifactCacheError::Io {
-            operation,
-            path,
-            source,
-        } => {
-            let msg = format!("{operation} at {}", path.display());
-            SourceBuildError::CreateWorkDirectory(Arc::new(std::io::Error::new(source.kind(), msg)))
-        }
-        ArtifactCacheError::Glob(err) => SourceBuildError::GlobSet(err),
-        ArtifactCacheError::ArtifactFilename(path) => SourceBuildError::MissingOutputFile(path),
-    }
-}
-
-/// Build/host prefixes for a source build: both sit under the workspace
-/// dir, with platform-specific padding for non-Windows hosts.
-struct Directories {
-    build_prefix: PathBuf,
-    host_prefix: PathBuf,
-}
-
-impl Directories {
-    fn new(work_directory: &std::path::Path, host_platform: rattler_conda_types::Platform) -> Self {
-        const BUILD_DIR: &str = "bld";
-        const HOST_ENV_DIR: &str = "host";
-        const PLACEHOLDER_TEMPLATE_STR: &str = "_placehold";
-
-        let build_prefix = work_directory.join(BUILD_DIR);
-        let host_prefix = if host_platform.is_windows() {
-            work_directory.join(HOST_ENV_DIR)
-        } else {
-            // Non-Windows backends expect a 255-char host prefix for
-            // reliable prefix replacement. Pad with a template string.
-            const PLACEHOLDER_LENGTH: usize = 255;
-            let mut placeholder = String::new();
-            while placeholder.len() < PLACEHOLDER_LENGTH {
-                placeholder.push_str(PLACEHOLDER_TEMPLATE_STR);
-            }
-            let placeholder = placeholder
-                [0..PLACEHOLDER_LENGTH - work_directory.join(HOST_ENV_DIR).as_os_str().len()]
-                .to_string();
-            work_directory.join(format!("{HOST_ENV_DIR}{placeholder}"))
-        };
-        Self {
-            build_prefix,
-            host_prefix,
-        }
     }
 }
