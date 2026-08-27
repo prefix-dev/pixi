@@ -1,6 +1,8 @@
 #define _USE_MATH_DEFINES
 
 #include <cmath>
+#include <codecvt>
+#include <locale>
 
 #include "rclcpp/rclcpp.hpp"
 #include "geometry_msgs/msg/point.hpp"

@@ -66,18 +66,13 @@ use crate::{
 ///
 /// Local path dependencies can be added with `--path`. Paths are resolved from
 /// the current directory and stored relative to the workspace manifest, so an
-/// absolute input path does not become machine-specific manifest data. A direct
-/// `pixi.toml` or `pyproject.toml` input is stored as its containing directory.
+/// absolute input path does not become machine-specific manifest data.
 ///
 /// - `pixi add mylib --path ../mylib`
-/// - `pixi add mylib --path /absolute/path/to/mylib/pixi.toml`
+/// - `pixi add mylib --path /absolute/path/to/mylib`
 /// - `pixi add recipe-package --path ../recipe/recipe.yaml`
 /// - `pixi add --pypi mylib --path ../mylib`
-/// - `pixi add --pypi mylib --path ../mylib/pyproject.toml --editable`
-///
-/// Conda path dependencies require the `pixi-build` preview feature. If it is
-/// not enabled, pixi offers to enable it when running interactively, or hints at
-/// `pixi workspace preview add pixi-build` otherwise.
+/// - `pixi add --pypi mylib --path ../mylib --editable`
 ///
 /// If the workspace manifest is a `pyproject.toml`, adding a pypi dependency will
 /// add it to the native pyproject `project.dependencies` array or to the native

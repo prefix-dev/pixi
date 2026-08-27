@@ -869,8 +869,9 @@ async fn add_pypi_path_dependency_rewrites_absolute_manifest_path() {
         .unwrap();
 
     let manifest = pixi.manifest_contents().unwrap();
+    let normalized_manifest = manifest.replace('\\', "/").replace('\'', "\"");
     assert!(
-        manifest.contains(r#"python-package = { path = "packages/python package" }"#),
+        normalized_manifest.contains(r#"python-package = { path = "packages/python package" }"#),
         "unexpected manifest:\n{manifest}"
     );
 }
@@ -1066,12 +1067,13 @@ backend = { name = "in-memory", version = "*" }
         .unwrap();
 
     let manifest = pixi.manifest_contents().unwrap();
+    let normalized_manifest = manifest.replace('\\', "/").replace('\'', "\"");
     let expected_path = pathdiff::diff_paths(&package_dir, pixi.workspace_path())
         .unwrap()
         .to_string_lossy()
         .replace('\\', "/");
     assert!(
-        manifest.contains(&format!(
+        normalized_manifest.contains(&format!(
             r#"local-package = {{ path = "{expected_path}" }}"#
         )),
         "unexpected manifest:\n{manifest}"
