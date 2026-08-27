@@ -11,7 +11,6 @@ license.workspace = true
 
 [dependencies]
 miette = { workspace = true }
-pixi_default_versions = { workspace = true }
 pixi_manifest = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_virtual_packages = { workspace = true }
