@@ -8658,6 +8658,12 @@
 </li>
 <li>
 <dl>
+<dt><a id="arg---path" href="#arg---path"><code>--path &lt;PATH&gt;</code></a></dt>
+<dd>The local path to use when adding a path dependency</dd>
+</dl>
+</li>
+<li>
+<dl>
 <dt><a id="arg---editable" href="#arg---editable"><code>--editable</code></a></dt>
 <dd>Whether the pypi requirement should be editable</dd>
 </dl>
@@ -8886,6 +8892,16 @@ be mixed with the conda dependencies</p>
 <li><code>pixi add --pypi boto3</code></li>
 <li><code>pixi add --pypi "boto3==version"</code></li>
 </ul>
+<p>Local path dependencies can be added with <code>--path</code>. Paths are resolved from
+the current directory and stored relative to the workspace manifest, so an
+absolute input path does not become machine-specific manifest data.</p>
+<ul>
+<li><code>pixi add mylib --path ../mylib</code></li>
+<li><code>pixi add mylib --path /absolute/path/to/mylib</code></li>
+<li><code>pixi add recipe-package --path ../recipe/recipe.yaml</code></li>
+<li><code>pixi add --pypi mylib --path ../mylib</code></li>
+<li><code>pixi add --pypi mylib --path ../mylib --editable</code></li>
+</ul>
 <p>If the workspace manifest is a <code>pyproject.toml</code>, adding a pypi dependency will
 add it to the native pyproject <code>project.dependencies</code> array or to the native
 <code>dependency-groups</code> table if a feature is specified:</p>
@@ -8938,6 +8954,13 @@ Python, Rust, Julia, GCC, GXX, GFortran, NodeJS, Deno, R, R-Base, Perl</p>
 </span><span id="__span-1-28"><a id="__codelineno-1-28" name="__codelineno-1-28" href="#__codelineno-1-28"></a>pixi<span class="w"> </span>add<span class="w"> </span>--git<span class="w"> </span>https://github.com/mahmoud/boltons.git<span class="w"> </span>boltons<span class="w"> </span>--rev<span class="w"> </span>e50d4a1<span class="w"> </span>--pypi<span class="w"> </span><span class="c1"># (25)!</span>
 </span><span id="__span-1-29"><a id="__codelineno-1-29" name="__codelineno-1-29" href="#__codelineno-1-29"></a>pixi<span class="w"> </span>add<span class="w"> </span>--git<span class="w"> </span>https://github.com/mahmoud/boltons.git<span class="w"> </span>boltons<span class="w"> </span>--tag<span class="w"> </span>v0.1.0<span class="w"> </span>--pypi<span class="w"> </span><span class="c1"># (26)!</span>
 </span><span id="__span-1-30"><a id="__codelineno-1-30" name="__codelineno-1-30" href="#__codelineno-1-30"></a>pixi<span class="w"> </span>add<span class="w"> </span>--git<span class="w"> </span>https://github.com/mahmoud/boltons.git<span class="w"> </span>boltons<span class="w"> </span>--tag<span class="w"> </span>v0.1.0<span class="w"> </span>--pypi<span class="w"> </span>--subdirectory<span class="w"> </span>boltons<span class="w"> </span><span class="c1"># (27)!</span>
+</span><span id="__span-1-31"><a id="__codelineno-1-31" name="__codelineno-1-31" href="#__codelineno-1-31"></a>
+</span><span id="__span-1-32"><a id="__codelineno-1-32" name="__codelineno-1-32" href="#__codelineno-1-32"></a><span class="c1"># Add local path dependencies</span>
+</span><span id="__span-1-33"><a id="__codelineno-1-33" name="__codelineno-1-33" href="#__codelineno-1-33"></a>pixi<span class="w"> </span>add<span class="w"> </span>my-package<span class="w"> </span>--path<span class="w"> </span>../my-package<span class="w"> </span><span class="c1"># (29)!</span>
+</span><span id="__span-1-34"><a id="__codelineno-1-34" name="__codelineno-1-34" href="#__codelineno-1-34"></a>pixi<span class="w"> </span>add<span class="w"> </span>my-package<span class="w"> </span>--path<span class="w"> </span>/absolute/path/to/my-package<span class="w"> </span><span class="c1"># (30)!</span>
+</span><span id="__span-1-35"><a id="__codelineno-1-35" name="__codelineno-1-35" href="#__codelineno-1-35"></a>pixi<span class="w"> </span>add<span class="w"> </span>recipe-package<span class="w"> </span>--path<span class="w"> </span>../recipe/recipe.yaml<span class="w"> </span><span class="c1"># (31)!</span>
+</span><span id="__span-1-36"><a id="__codelineno-1-36" name="__codelineno-1-36" href="#__codelineno-1-36"></a>pixi<span class="w"> </span>add<span class="w"> </span>--pypi<span class="w"> </span>python-package<span class="w"> </span>--path<span class="w"> </span>../python-package<span class="w"> </span><span class="c1"># (32)!</span>
+</span><span id="__span-1-37"><a id="__codelineno-1-37" name="__codelineno-1-37" href="#__codelineno-1-37"></a>pixi<span class="w"> </span>add<span class="w"> </span>--pypi<span class="w"> </span>python-package<span class="w"> </span>--path<span class="w"> </span>../python-package<span class="w"> </span>--editable<span class="w"> </span><span class="c1"># (33)!</span>
 </span></code></pre></div>
 <ol>
 <li>This will add the <code>numpy</code> package to the project with the latest available for the solved environment.</li>
@@ -8968,6 +8991,11 @@ Python, Rust, Julia, GCC, GXX, GFortran, NodeJS, Deno, R, R-Base, Perl</p>
 <li>This will add the <code>boltons</code> package with the given <code>git</code> url and <code>v0.1.0</code> tag as <code>pypi</code> dependency.</li>
 <li>This will add the <code>boltons</code> package with the given <code>git</code> url, <code>v0.1.0</code> tag and the <code>boltons</code> folder in the repository as <code>pypi</code> dependency.</li>
 <li>This will add the <code>numpy</code> package to the dependencies defined inline on the environment <code>dev</code>, creating the environment if it does not exist.</li>
+<li>This will add a local pixi-build package from a directory. Conda path dependencies require the <code>pixi-build</code> preview feature.</li>
+<li>This will add a local pixi-build package by pointing directly at its directory. Absolute input paths are stored relative to the workspace manifest.</li>
+<li>This will add a local conda source package by pointing directly at its <code>recipe.yaml</code>. Direct <code>recipe.yml</code> and <code>package.xml</code> paths are also supported.</li>
+<li>This will add a Python project directory as a PyPI path dependency. The directory must contain a <code>pyproject.toml</code>.</li>
+<li>This will add a Python project directory and install it in editable mode.</li>
 </ol>
 <div class="admonition tip">
 <p class="admonition-title">Need to specify build strings or hardware-specific packages?</p>
