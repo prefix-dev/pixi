@@ -93,7 +93,16 @@ pub(crate) fn prepare_stdin_script(
         root.to_owned(),
         "stdin",
     )?
-    .ok_or_else(|| miette::miette!("stdin does not contain a PEP 723 metadata block"))?;
+    .ok_or_else(|| {
+        if crate::conda_script::looks_like_conda_script(&contents) {
+            miette::miette!(
+                help = "conda-script blocks run from local files: save the script and run `pixi run --experimental --script <PATH>`",
+                "conda-script blocks are not supported on stdin"
+            )
+        } else {
+            miette::miette!("stdin does not contain a PEP 723 metadata block")
+        }
+    })?;
     let contents =
         String::from_utf8(contents).expect("ScriptManifest validates the complete script as UTF-8");
     Ok(PreparedStdinScript {
@@ -159,11 +168,18 @@ pub(crate) async fn prepare_remote_script(
         cache_name.clone(),
     )?
     .ok_or_else(|| {
-        miette::miette!(
-            help =
-                "Download the script and initialize it locally with `pixi init --script <PATH>`.",
-            "the remote script at {safe_original_url} does not contain a PEP 723 metadata block"
-        )
+        if crate::conda_script::looks_like_conda_script(&contents) {
+            miette::miette!(
+                help = "conda-script blocks run from local files: download the script and run `pixi run --experimental --script <PATH>`",
+                "the remote script at {safe_original_url} contains a conda-script block, which only runs from a local file"
+            )
+        } else {
+            miette::miette!(
+                help =
+                    "Download the script and initialize it locally with `pixi init --script <PATH>`.",
+                "the remote script at {safe_original_url} does not contain a PEP 723 metadata block"
+            )
+        }
     })?;
 
     Ok(PreparedRemoteScript {
