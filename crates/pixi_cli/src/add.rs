@@ -339,8 +339,12 @@ fn resolve_dependency_path(
     })
 }
 
+fn manifest_path_string(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
+
 fn pypi_path_deps(package: &str, path: &Path, workspace: &Workspace) -> miette::Result<PypiDeps> {
-    let requirement_text = format!("{package} @ {}", path.to_string_lossy());
+    let requirement_text = format!("{package} @ {}", manifest_path_string(path));
     let requirement = Requirement::parse(&requirement_text, workspace.root()).into_diagnostic()?;
     let name =
         PypiPackageName::from_normalized(requirement.name.clone()).with_source(package.to_string());

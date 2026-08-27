@@ -84,7 +84,7 @@ pub async fn add_conda_dep(
             source_specs = passed_specs
                 .iter()
                 .map(|(name, (_spec, spec_type))| {
-                    let path_spec = PathSourceSpec::new(path.to_string_lossy().to_string());
+                    let path_spec = PathSourceSpec::new(manifest_path_string(path));
                     (name.clone(), (SourceSpec::from(path_spec), *spec_type))
                 })
                 .collect();
@@ -123,6 +123,10 @@ pub async fn add_conda_dep(
     };
 
     Ok((update_deps, skipped))
+}
+
+fn manifest_path_string(path: &std::path::Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
 }
 
 pub async fn add_pypi_dep(
