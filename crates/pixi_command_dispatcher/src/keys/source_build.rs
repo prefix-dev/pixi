@@ -275,10 +275,7 @@ async fn compute_inner(
         });
 
     if let Some(key) = immutable_cache_key.as_ref()
-        && let Some(backend) = artifact_cache
-            .immutable_backend(spec.record.name(), key)
-            .await
-            .map_err(map_cache_err)?
+        && let Some(backend) = artifact_cache.immutable_backend(spec.record.name(), key).await
         && let Ok(Some(identifier)) = resolve_immutable_backend_identifier_from_spec(
             ctx,
             backend.spec(),
@@ -288,7 +285,6 @@ async fn compute_inner(
         && let Some(hit) = artifact_cache
             .lookup_immutable(spec.record.name(), key, &backend, &identifier)
             .await
-            .map_err(map_cache_err)?
     {
         return Ok(SourceBuildResult {
             artifact: hit.artifact,
@@ -404,7 +400,6 @@ async fn compute_inner(
         artifact_cache
             .lookup_immutable(spec.record.name(), &cache_key, backend, &backend_identifier)
             .await
-            .map_err(map_cache_err)?
     } else {
         match artifact_cache
             .lookup(ctx, spec.record.name(), &cache_key, &source_dir, mutability)

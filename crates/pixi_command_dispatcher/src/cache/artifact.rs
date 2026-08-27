@@ -274,6 +274,24 @@ impl ArtifactSidecar {
     }
 }
 
+/// Read a sidecar for the checkout-free path, mapping every failure -- absent,
+/// unreadable, locked by another process -- onto a cache miss. A cache that
+/// cannot be read is a reason to rebuild, never a reason to fail a build.
+async fn read_sidecar_or_miss(sidecar_path: &Path) -> Option<Vec<u8>> {
+    match tokio::fs::read(sidecar_path).await {
+        Ok(bytes) => Some(bytes),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => None,
+        Err(err) => {
+            tracing::debug!(
+                path = %sidecar_path.display(),
+                %err,
+                "cannot read artifact cache sidecar, treating as a miss",
+            );
+            None
+        }
+    }
+}
+
 /// Result of a successful cache lookup.
 #[derive(Debug, Clone)]
 pub struct CachedArtifact {
@@ -750,68 +768,82 @@ impl ArtifactCache {
     /// Read checkout-free backend validation data from the authoritative
     /// artifact sidecar. This optimistic read is revalidated under the entry
     /// lock by [`Self::lookup_immutable`] after the backend is resolved.
+    ///
+    /// Never fails: an unusable sidecar is a cache miss, not a build error.
+    /// This runs before the checkout on every immutable build, so a cache
+    /// directory that is merely unreadable -- a concurrent writer, a virus
+    /// scanner or backup agent holding the handle, a bad mount -- must fall
+    /// back to rebuilding rather than take the build down with it.
     pub(crate) async fn immutable_backend(
         &self,
         package: &PackageName,
         key: &ArtifactCacheKey,
-    ) -> Result<Option<ImmutableBackend>, ArtifactCacheError> {
+    ) -> Option<ImmutableBackend> {
         let sidecar_path = self.sidecar_path(package, key);
-        let bytes = match tokio::fs::read(&sidecar_path).await {
-            Ok(bytes) => bytes,
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(err) => return Err(ArtifactCacheError::io("reading sidecar", sidecar_path, err)),
-        };
-        Ok(serde_json::from_slice::<ArtifactSidecar>(&bytes)
+        let bytes = read_sidecar_or_miss(&sidecar_path).await?;
+        serde_json::from_slice::<ArtifactSidecar>(&bytes)
             .ok()
-            .and_then(|sidecar| sidecar.immutable_backend))
+            .and_then(|sidecar| sidecar.immutable_backend)
     }
 
     /// Validate and return an immutable artifact under its normal entry lock.
+    ///
+    /// Like [`Self::immutable_backend`], every failure to read the entry is a
+    /// miss: rebuilding is always a safe fallback.
     pub(crate) async fn lookup_immutable(
         &self,
         package: &PackageName,
         key: &ArtifactCacheKey,
         expected_backend: &ImmutableBackend,
         backend_identifier: &str,
-    ) -> Result<Option<CachedArtifact>, ArtifactCacheError> {
+    ) -> Option<CachedArtifact> {
         let sidecar_path = self.sidecar_path(package, key);
-        let Some(lock_file) = self.open_lock_file_if_exists(package, key).await? else {
-            return Ok(None);
+        let lock_file = match self.open_lock_file_if_exists(package, key).await {
+            Ok(Some(lock_file)) => lock_file,
+            Ok(None) => return None,
+            Err(err) => {
+                tracing::debug!(
+                    path = %self.lock_path(package, key).display(),
+                    %err,
+                    "cannot open artifact cache lock, treating as a miss",
+                );
+                return None;
+            }
         };
-        let _guard = lock_file.lock_read().await.map_err(|err| {
-            ArtifactCacheError::io(
-                "acquiring shared lock",
-                self.lock_path(package, key),
-                err.error,
-            )
-        })?;
-        let bytes = match tokio::fs::read(&sidecar_path).await {
-            Ok(bytes) => bytes,
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(err) => return Err(ArtifactCacheError::io("reading sidecar", sidecar_path, err)),
+        let _guard = match lock_file.lock_read().await {
+            Ok(guard) => guard,
+            Err(err) => {
+                tracing::debug!(
+                    path = %self.lock_path(package, key).display(),
+                    err = %err.error,
+                    "cannot lock artifact cache entry, treating as a miss",
+                );
+                return None;
+            }
         };
+        let bytes = read_sidecar_or_miss(&sidecar_path).await?;
         let Ok(sidecar) = serde_json::from_slice::<ArtifactSidecar>(&bytes) else {
-            return Ok(None);
+            return None;
         };
         if expected_backend.identifier != backend_identifier
             || sidecar.immutable_backend.as_ref() != Some(expected_backend)
         {
-            return Ok(None);
+            return None;
         }
         let artifact_path = self
             .entry_dir(package, key)
             .join(&sidecar.artifact_filename);
         if fs_err::metadata(&artifact_path).is_err() {
-            return Ok(None);
+            return None;
         }
 
         let mut record = sidecar.record;
         record.url = Url::from_file_path(&artifact_path).expect("cache entry paths are absolute");
-        Ok(Some(CachedArtifact {
+        Some(CachedArtifact {
             artifact: artifact_path,
             sha256: sidecar.artifact_sha256,
             record,
-        }))
+        })
     }
 
     /// Place `artifact_source` into the cache and write its sidecar.
@@ -1258,23 +1290,148 @@ mod tests {
             .cache
             .immutable_backend(&pkg("foo"), &key("immutable-key"))
             .await
-            .unwrap()
             .unwrap();
         assert_eq!(persisted.spec(), backend.spec());
         assert!(
             f.cache
                 .lookup_immutable(&pkg("foo"), &key("immutable-key"), &persisted, "backend@2")
                 .await
-                .unwrap()
                 .is_none()
         );
         let hit = f
             .cache
             .lookup_immutable(&pkg("foo"), &key("immutable-key"), &persisted, "backend@1")
             .await
-            .unwrap()
             .unwrap();
         assert_eq!(hit.artifact, stored.artifact);
+    }
+
+    /// The checkout-free probe runs before the checkout on every immutable
+    /// build. A cache directory that cannot be read must degrade to a miss --
+    /// rebuilding is always safe -- rather than take the build down. This
+    /// previously surfaced to the user as `CreateWorkDirectory`.
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn unreadable_sidecar_is_a_miss_not_an_error() {
+        use std::os::windows::fs::OpenOptionsExt;
+
+        let f = Fixture::new();
+        let backend = ImmutableBackend::new(
+            "backend@1".to_string(),
+            JsonRpcBackendSpec::default_rattler_build(Vec::new()),
+        )
+        .unwrap();
+        let stored = f
+            .cache
+            .store_immutable(
+                &pkg("foo"),
+                &key("immutable-key"),
+                &f.artifact,
+                SystemTime::now(),
+                dummy_record("foo"),
+                backend.clone(),
+            )
+            .await
+            .unwrap();
+        let persisted = f
+            .cache
+            .immutable_backend(&pkg("foo"), &key("immutable-key"))
+            .await
+            .unwrap();
+
+        // FILE_SHARE_NONE: what a second pixi, a virus scanner or a backup
+        // agent does to the sidecar while it is being read.
+        let sidecar = f
+            .cache
+            .sidecar_path(&pkg("foo"), &key("immutable-key"));
+        let exclusive = OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&sidecar)
+            .unwrap();
+
+        assert!(
+            f.cache
+                .immutable_backend(&pkg("foo"), &key("immutable-key"))
+                .await
+                .is_none(),
+            "an unreadable sidecar must be a miss",
+        );
+        assert!(
+            f.cache
+                .lookup_immutable(&pkg("foo"), &key("immutable-key"), &persisted, "backend@1")
+                .await
+                .is_none(),
+            "an unreadable sidecar must be a miss",
+        );
+
+        drop(exclusive);
+        let hit = f
+            .cache
+            .lookup_immutable(&pkg("foo"), &key("immutable-key"), &persisted, "backend@1")
+            .await
+            .expect("the entry is readable again");
+        assert_eq!(hit.artifact, stored.artifact);
+    }
+
+    #[tokio::test]
+    async fn unusable_immutable_entries_are_misses_not_errors() {
+        let f = Fixture::new();
+        let backend = ImmutableBackend::new(
+            "backend@1".to_string(),
+            JsonRpcBackendSpec::default_rattler_build(Vec::new()),
+        )
+        .unwrap();
+        f.cache
+            .store_immutable(
+                &pkg("foo"),
+                &key("immutable-key"),
+                &f.artifact,
+                SystemTime::now(),
+                dummy_record("foo"),
+                backend.clone(),
+            )
+            .await
+            .unwrap();
+        let persisted = f
+            .cache
+            .immutable_backend(&pkg("foo"), &key("immutable-key"))
+            .await
+            .unwrap();
+        let sidecar = f
+            .cache
+            .sidecar_path(&pkg("foo"), &key("immutable-key"));
+
+        for (name, bytes) in [
+            ("truncated", &b"{\"artifact_sha"[..]),
+            ("empty", &b""[..]),
+            ("not json", &b"this is not json"[..]),
+        ] {
+            fs_err::write(&sidecar, bytes).unwrap();
+            assert!(
+                f.cache
+                    .immutable_backend(&pkg("foo"), &key("immutable-key"))
+                    .await
+                    .is_none(),
+                "{name} sidecar must be a miss",
+            );
+            assert!(
+                f.cache
+                    .lookup_immutable(&pkg("foo"), &key("immutable-key"), &persisted, "backend@1")
+                    .await
+                    .is_none(),
+                "{name} sidecar must be a miss",
+            );
+        }
+
+        fs_err::remove_file(&sidecar).unwrap();
+        assert!(
+            f.cache
+                .lookup_immutable(&pkg("foo"), &key("immutable-key"), &persisted, "backend@1")
+                .await
+                .is_none(),
+            "a removed sidecar must be a miss",
+        );
     }
 
     #[tokio::test]
