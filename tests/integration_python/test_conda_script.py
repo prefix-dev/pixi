@@ -228,6 +228,40 @@ sys.exit(1)
     assert not (tmp_pixi_workspace / "marker").exists()
 
 
+SOURCE_DEPENDENCY_BLOCK = f"""# /// conda-script
+# channels = ["{CONDA_FORGE_CHANNEL}"]
+# entrypoint = "simple-app"
+#
+# [dependencies]
+# simple-app = "{{version}}"
+#
+# [tool.pixi.dependencies]
+# simple-app = {{{{ git = "https://github.com/prefix-dev/pixi-build-testsuite.git", subdirectory = "tests/data/pixi_build/minimal-backend-workspaces/pixi-build-python" }}}}
+# /// end-conda-script
+"""
+
+
+@pytest.mark.slow
+def test_a_binary_spec_constrains_a_source_dependency(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Both features' specs reach the solver as a union: the source spec in
+    `[tool.pixi.dependencies]` provides the candidate and the binary spec in
+    `[dependencies]` constrains its version."""
+    script = tmp_pixi_workspace / "source.code"
+    script.write_text(SOURCE_DEPENDENCY_BLOCK.format(version="0.1.*"))
+
+    verify_cli_command(
+        [pixi, "run", "--experimental", "--script", script],
+        stdout_contains="Build backend works",
+    )
+
+    script.write_text(SOURCE_DEPENDENCY_BLOCK.format(version="0.2.*"))
+    verify_cli_command(
+        [pixi, "run", "--experimental", "--script", script],
+        ExitCode.FAILURE,
+        stderr_contains="0.2",
+    )
+
+
 @pytest.mark.slow
 def test_lock_writes_an_adjacent_lock_file_with_conditional_dependencies(
     pixi: Path, tmp_pixi_workspace: Path
