@@ -7215,6 +7215,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi_script_shell"
+version = "0.1.0"
+dependencies = [
+ "deno_task_shell",
+ "fs-err",
+ "insta",
+ "miette 7.6.0",
+ "nix 0.29.0",
+ "pixi_test_utils",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
+]
+
+[[package]]
 name = "pixi_spec"
 version = "0.1.0"
 dependencies = [
