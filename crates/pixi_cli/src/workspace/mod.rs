@@ -6,6 +6,7 @@ use crate::cli_config::WorkspaceConfig;
 
 pub mod activation;
 pub mod channel;
+pub mod dependencies;
 pub mod description;
 pub mod environment;
 pub mod export;
@@ -21,6 +22,8 @@ pub mod version;
 pub enum Command {
     Activation(activation::Args),
     Channel(channel::Args),
+    #[clap(visible_aliases = ["dependency", "dep"])]
+    Dependencies(dependencies::Args),
     Description(description::Args),
     Platform(platform::Args),
     Version(version::Args),
@@ -47,6 +50,7 @@ pub async fn execute(cmd: Args) -> miette::Result<()> {
     match cmd.command {
         Command::Activation(args) => activation::execute(args).await?,
         Command::Channel(args) => channel::execute(args).await?,
+        Command::Dependencies(args) => dependencies::execute(args).await?,
         Command::Description(args) => description::execute(args).await?,
         Command::Platform(args) => platform::execute(args).await?,
         Command::Version(args) => version::execute(args).await?,
