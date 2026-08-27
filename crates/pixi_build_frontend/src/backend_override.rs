@@ -23,18 +23,6 @@ impl Default for BackendOverride {
 }
 
 impl BackendOverride {
-    /// Returns whether no backend commands are overridden.
-    ///
-    /// The source build's checkout-free artifact cache path is gated on this:
-    /// an overridden backend is whatever the user pointed at, so it has no
-    /// content-addressed identity to validate a cached artifact against.
-    /// Anything other than "nothing is overridden" must therefore answer
-    /// `false`, and [`Self::default`] must answer `true` or the optimisation
-    /// silently never runs.
-    pub fn is_empty(&self) -> bool {
-        matches!(self, Self::System(OverriddenBackends::Specified(overrides)) if overrides.is_empty())
-    }
-
     /// Constructs a backend override that uses the specified
     /// [`InMemoryBackendInstantiator`] to create an in-memory backend.
     ///
@@ -202,39 +190,6 @@ mod tests {
         } else {
             panic!("Expected OverriddenBackends::Specified");
         }
-    }
-
-    /// `is_empty` is the gate on the source build's checkout-free artifact
-    /// cache path. It has no other caller, so nothing else would notice if it
-    /// started answering `false` for the default -- the optimisation would
-    /// just silently stop running everywhere. Note the dispatcher's own
-    /// integration tests all install an in-memory backend, so they exercise
-    /// the `false` arm exclusively; only a real backend reaches the other.
-    #[test]
-    fn is_empty_gates_the_checkout_free_artifact_path() {
-        assert!(
-            BackendOverride::default().is_empty(),
-            "no override must leave the checkout-free path enabled",
-        );
-        assert!(
-            BackendOverride::System(OverriddenBackends::Specified(Vec::new())).is_empty(),
-            "an empty override list is not an override",
-        );
-
-        assert!(
-            !BackendOverride::System(OverriddenBackends::All).is_empty(),
-            "overriding all backends must disable the checkout-free path",
-        );
-        assert!(
-            !BackendOverride::System(OverriddenBackends::from_str("pixi-build-python").unwrap())
-                .is_empty(),
-            "a named override must disable the checkout-free path",
-        );
-        assert!(
-            !BackendOverride::InMemory(InMemoryOverriddenBackends::Specified(HashMap::new()))
-                .is_empty(),
-            "an in-memory backend has no content-addressed identity",
-        );
     }
 
     #[test]

@@ -11,6 +11,7 @@ from .common import (
     CURRENT_PLATFORM,
     copy_manifest,
     copytree_with_local_backend,
+    exec_extension,
     git_test_repo,
     verify_cli_command,
 )
@@ -349,10 +350,9 @@ def test_immutable_git_source_is_reused_without_a_checkout(
     reused the cached artifact.
 
     This is the only coverage the checkout-free path has. Every dispatcher
-    integration test installs an in-memory backend, and the session-wide
-    `setup_build_backend_override` fixture points this suite's backends at
-    workspace-built binaries; both are `BackendOverride`s, and the path is
-    gated on there being none, so it is unreachable everywhere else.
+    integration test installs an in-memory backend, which is a
+    `BackendOverride` and therefore has no content-addressed identity to
+    validate a cached artifact against, so the path is unreachable there.
 
     The consuming workspace uses a *relative* `exclude-newer`, which is what
     the majority of workspaces (including pixi's own) do. That resolves to
@@ -360,10 +360,20 @@ def test_immutable_git_source_is_reused_without_a_checkout(
     covers the cache key staying stable across processes -- when it did not,
     the second install rebuilt instead of hitting the cache and this test
     failed on the deleted repository.
+
+    An *unrelated* backend is left overridden on purpose. Overriding one
+    backend must not disable the checkout-free path for packages built by a
+    different, channel-solved one; when it did, this test failed the same way.
     """
-    # A real, channel-solved backend is required: an overridden one is
-    # whatever the user pointed at and has no content-addressed identity.
-    monkeypatch.delenv("PIXI_BUILD_BACKEND_OVERRIDE", raising=False)
+    # The session-wide `setup_build_backend_override` fixture points every
+    # backend at a workspace-built binary. Keep an unrelated one overridden
+    # and release this package's own, so the backend is solved from its
+    # channel the way a user's would be -- an overridden backend is a
+    # `CommandSpec::System` and correctly declines the checkout-free path.
+    monkeypatch.setenv(
+        "PIXI_BUILD_BACKEND_OVERRIDE",
+        f"pixi-build-rust={pixi.parent / exec_extension('pixi-build-rust')}",
+    )
     monkeypatch.delenv("PIXI_BUILD_BACKEND_OVERRIDE_ALL", raising=False)
 
     # Own the cache so the git checkouts can be deleted without touching the

@@ -47,7 +47,7 @@ use crate::{
     ProjectModelOverrides, SourceBuildError,
     build::{Dependencies, PixiRunExports, convert_extra_dependencies},
     compute_data::{HasGateway, HasIoConcurrencySemaphore},
-    injected_config::{BackendOverrideKey, ChannelConfigKey, EnabledProtocolsKey},
+    injected_config::{ChannelConfigKey, EnabledProtocolsKey},
     inline_package::discover_backend,
     instantiate_backend_key::resolve_immutable_backend_identifier_from_spec,
 };
@@ -248,10 +248,17 @@ async fn compute_inner(
     let artifacts_dir = ctx.cache_dir::<SourceBuildArtifactsDir>().await;
     let artifact_cache = ArtifactCache::new(artifacts_dir.as_std_path())
         .with_io_concurrency_semaphore(ctx.global_data().io_concurrency_semaphore().cloned());
-    let backend_override = ctx.compute(&BackendOverrideKey).await;
     let enabled_protocols = ctx.compute(&EnabledProtocolsKey).await;
     let channel_config = ctx.compute(&ChannelConfigKey).await;
-    let immutable_cache_key = (!spec.record.has_mutable_source() && backend_override.is_empty())
+    // Backend overrides are *not* checked here. An overridden backend is a
+    // `CommandSpec::System` after `ResolvedBackendCommandKey` re-applies the
+    // override, and `resolve_immutable_backend_identifier_from_spec` returns
+    // `None` for anything that is not an `EnvironmentSpec`, so an overridden
+    // backend already declines the checkout-free path on its own. Gating on
+    // "any backend is overridden" instead would disable the optimisation for
+    // every package in the workspace as soon as one unrelated backend is
+    // pointed at a local binary.
+    let immutable_cache_key = (!spec.record.has_mutable_source())
         .then(|| immutable_variant_file_hashes(&spec))
         .flatten()
         .map(|variant_file_hashes| {
