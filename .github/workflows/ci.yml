@@ -357,6 +357,41 @@ jobs:
           path: ./target/riscv64gc-unknown-linux-gnu/${{ env.CARGO_BUILD_PROFILE }}/pixi
           retention-days: 14
 
+  # There is no `gcc-riscv64-linux-musl` in apt, so this target is
+  # cross-compiled with cargo-zigbuild, the same way the release builds it.
+  build-binary-linux-riscv64gc-musl:
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    name: "build binary | linux riscv64gc musl"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: prefix-dev/setup-pixi@f00437f565399d418b0acc85936d12c1fb668347 # v0.10.1
+        with:
+          environments: release
+          activate-environment: true
+      - name: "Setup cross-compilation toolchain"
+        run: rustup target add riscv64gc-unknown-linux-musl
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: "Build"
+        run: >
+          cargo zigbuild
+          --locked
+          --target riscv64gc-unknown-linux-musl
+          --profile $CARGO_BUILD_PROFILE
+          --features self_update
+          --workspace
+      - name: "Upload binary"
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: pixi-linux-riscv64gc-musl-${{ github.sha }}
+          path: ./target/riscv64gc-unknown-linux-musl/${{ env.CARGO_BUILD_PROFILE }}/pixi
+          retention-days: 14
+
   build-binary-macos-aarch64:
     needs: determine_changes
     if: ${{ needs.determine_changes.outputs.code == 'true' || github.ref == 'refs/heads/main' }}

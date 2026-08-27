@@ -71,6 +71,9 @@ jobs:
           - target: riscv64gc-unknown-linux-gnu
             runner: 8core_ubuntu_latest_runner
             builder: zigbuild
+          - target: riscv64gc-unknown-linux-musl
+            runner: 8core_ubuntu_latest_runner
+            builder: zigbuild
           - target: x86_64-apple-darwin
             runner: namespace-profile-macos-15-arm64-6
             builder: build
