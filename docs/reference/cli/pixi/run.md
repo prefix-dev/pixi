@@ -21,6 +21,8 @@ pixi run [OPTIONS] [TASK]...
 ## Options
 - <a id="arg---executable" href="#arg---executable">`--executable (-x)`</a>
 :  Execute the command as an executable without resolving Pixi tasks
+- <a id="arg---experimental" href="#arg---experimental">`--experimental`</a>
+:  Enable experimental `--script` features; currently the `conda-script` block
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
 :  The environment to run the task in
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>

@@ -831,6 +831,17 @@ impl<'p> LockFileDerivedData<'p> {
         {
             return;
         }
+        // A conda-script block has no `platforms` key and no editing support,
+        // so the PEP 723 remedies would send its users after commands that
+        // reject the file.
+        if self.workspace.is_conda_script() {
+            tracing::warn!(
+                "a conda-script cannot declare platforms, so {} records this machine's \
+                 virtual packages and reproduces only on machines that provide them.",
+                lock_file_path.display(),
+            );
+            return;
+        }
         let script = self.workspace.workspace.provenance.absolute_path();
         tracing::warn!(
             "the script declares no platforms, so {} records this machine's virtual packages.\n\
