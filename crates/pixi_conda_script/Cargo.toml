@@ -1,0 +1,27 @@
+[package]
+name = "pixi_conda_script"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+description = "Parser for the `conda-script` metadata block embedded in code files"
+readme.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+fs-err = { workspace = true }
+indexmap = { workspace = true }
+itertools = { workspace = true }
+miette = { workspace = true }
+pixi_pypi_spec = { workspace = true }
+pixi_spec = { workspace = true }
+pixi_toml = { workspace = true }
+rattler_conda_types = { workspace = true }
+thiserror = { workspace = true }
+toml-span = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
+pixi_test_utils = { workspace = true }
+tempfile = { workspace = true }

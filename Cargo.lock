@@ -6683,6 +6683,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi_conda_script"
+version = "0.1.0"
+dependencies = [
+ "fs-err",
+ "indexmap 2.14.0",
+ "insta",
+ "itertools 0.15.0",
+ "miette 7.6.0",
+ "pixi_pypi_spec",
+ "pixi_spec",
+ "pixi_test_utils",
+ "pixi_toml",
+ "rattler_conda_types",
+ "tempfile",
+ "thiserror 2.0.20",
+ "toml-span",
+]
+
+[[package]]
 name = "pixi_config"
 version = "0.1.0"
 dependencies = [
