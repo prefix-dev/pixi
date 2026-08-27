@@ -8,7 +8,6 @@ use std::{
 };
 
 use ahash::HashSet;
-use console::StyledObject;
 use fs_err as fs;
 use fs_err::tokio as tokio_fs;
 use indexmap::{IndexMap, IndexSet};
@@ -222,40 +221,6 @@ pub enum InstallChange {
     TransitiveUpgraded(Version, Version),
     Reinstalled(Version, Version),
     Removed,
-}
-
-impl InstallChange {
-    pub fn is_transitive(&self) -> bool {
-        matches!(self, InstallChange::TransitiveUpgraded(_, _))
-    }
-    pub fn is_removed(&self) -> bool {
-        matches!(self, InstallChange::Removed)
-    }
-
-    pub fn version_fancy_display(&self) -> Option<StyledObject<String>> {
-        let version_style = console::Style::new().blue();
-        let default_style = console::Style::new();
-
-        match self {
-            InstallChange::Installed(version) => Some(version_style.apply_to(version.to_string())),
-            InstallChange::Upgraded(old, new) => Some(default_style.apply_to(format!(
-                "{} -> {}",
-                version_style.apply_to(old.to_string()),
-                version_style.apply_to(new.to_string())
-            ))),
-            InstallChange::TransitiveUpgraded(old, new) => Some(default_style.apply_to(format!(
-                "{} -> {}",
-                version_style.apply_to(old.to_string()),
-                version_style.apply_to(new.to_string())
-            ))),
-            InstallChange::Reinstalled(old, new) => Some(default_style.apply_to(format!(
-                "{} -> {}",
-                version_style.apply_to(old.to_string()),
-                version_style.apply_to(new.to_string())
-            ))),
-            InstallChange::Removed => None,
-        }
-    }
 }
 
 /// Tracks changes made to the environment
