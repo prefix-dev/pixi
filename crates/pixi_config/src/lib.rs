@@ -786,6 +786,7 @@ impl ConfigCliPrompt {
 // tolerant `Deserialize` impl that pixi used to maintain locally —
 // unknown/deprecated keys (e.g. `disable-jlap`) are silently consumed
 // and surface as `serde_ignored` warnings.
+pub use rattler_config::config::index::{IndexChannelConfig, IndexConfig};
 pub use rattler_config::config::repodata_config::{RepodataChannelConfig, RepodataConfig};
 
 #[derive(Parser, Debug, Default, Clone)]
@@ -1188,6 +1189,11 @@ pub struct Config {
     #[serde(default, skip_serializing_if = "RepodataConfig::is_empty")]
     pub repodata_config: RepodataConfig,
 
+    /// Options for the channels `pixi publish` indexes, with per-channel
+    /// overrides keyed by channel URL or path.
+    #[serde(default, skip_serializing_if = "IndexConfig::is_empty")]
+    pub index_config: IndexConfig,
+
     /// Configuration for PyPI packages.
     #[serde(default)]
     #[serde(skip_serializing_if = "PyPIConfig::is_default")]
@@ -1299,6 +1305,7 @@ impl Default for Config {
             loaded_from: Vec::new(),
             channel_config: default_channel_config(),
             repodata_config: RepodataConfig::default(),
+            index_config: IndexConfig::default(),
             pypi_config: PyPIConfig::default(),
             s3_options: S3OptionsMap::default(),
             detached_environments: None,
@@ -1341,9 +1348,9 @@ impl rattler_config::config::Config for Config {
 
 /// Folds the keys shared by all rattler-based tools into pixi's own layering.
 ///
-/// Keys pixi does not model (like `index-config`) are dropped silently: a
-/// shared file serves every rattler-based tool, so a key meant for another
-/// one of them is not a mistake.
+/// Keys pixi does not model are dropped silently: a shared file serves every
+/// rattler-based tool, so a key meant for another one of them is not a
+/// mistake.
 impl From<CommonConfig> for Config {
     fn from(common: CommonConfig) -> Self {
         Self {
@@ -1356,6 +1363,7 @@ impl From<CommonConfig> for Config {
             }),
             mirrors: common.mirrors.into_iter().collect(),
             repodata_config: common.repodata_config,
+            index_config: common.index_config,
             s3_options: common.s3_options,
             concurrency: common.concurrency,
             proxy_config: common.proxy_config,
@@ -1958,6 +1966,10 @@ impl Config {
             "detached-environments",
             "experimental",
             "experimental.use-environment-activation-cache",
+            "index-config",
+            "index-config.base-url",
+            "index-config.write-shards",
+            "index-config.write-zst",
             "mirrors",
             "offline",
             "pinning-strategy",
@@ -2028,6 +2040,10 @@ impl Config {
                 .repodata_config
                 .merge_config(&other.repodata_config)
                 .expect("RepodataConfig::merge_config is infallible"),
+            index_config: self
+                .index_config
+                .merge_config(&other.index_config)
+                .expect("IndexConfig::merge_config is infallible"),
             pypi_config: self.pypi_config.merge(other.pypi_config),
             s3_options: S3OptionsMap(
                 self.s3_options
@@ -2280,6 +2296,36 @@ impl Config {
                     .map(Platform::from_str)
                     .transpose()
                     .into_diagnostic()?;
+            }
+            key if key.starts_with("index-config") => {
+                if key == "index-config" {
+                    self.index_config = value
+                        .map(|v| serde_json::de::from_str(&v))
+                        .transpose()
+                        .into_diagnostic()?
+                        .unwrap_or_default();
+                    return Ok(());
+                } else if !key.starts_with("index-config.") {
+                    return Err(err);
+                }
+
+                let subkey = key.strip_prefix("index-config.").unwrap();
+                match subkey {
+                    "write-zst" => {
+                        self.index_config.default.write_zst =
+                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                    }
+                    "write-shards" => {
+                        self.index_config.default.write_shards =
+                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                    }
+                    "base-url" => {
+                        self.index_config.default.base_url = value;
+                    }
+                    // The remaining keys are lists or per-channel tables; set
+                    // them through the whole `index-config` table instead.
+                    _ => return Err(err),
+                }
             }
             key if key.starts_with("repodata-config") => {
                 if key == "repodata-config" {
@@ -3176,6 +3222,17 @@ UNUSED = "unused"
                     RepodataChannelConfig::default(),
                 )]),
             },
+            index_config: IndexConfig {
+                default: IndexChannelConfig {
+                    write_zst: Some(false),
+                    write_shards: Some(false),
+                    ..IndexChannelConfig::default()
+                },
+                per_channel: HashMap::from([(
+                    "s3://bucket/staging".to_string(),
+                    IndexChannelConfig::default(),
+                )]),
+            },
             run_post_link_scripts: Some(RunPostLinkScripts::Insecure),
             allow_symbolic_links: Some(true),
             allow_hard_links: Some(true),
@@ -3228,6 +3285,66 @@ UNUSED = "unused"
         assert_eq!(config.pinning_strategy, None);
         assert_eq!(config.shell, ShellConfig::default());
         assert_eq!(config.loaded_from, vec![path]);
+    }
+
+    #[test]
+    fn test_from_shared_path_keeps_index_config() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        fs_err::write(
+            &path,
+            r#"
+            [index-config]
+            write-zst = false
+
+            [index-config."s3://bucket/staging"]
+            write-shards = false
+            "#,
+        )
+        .unwrap();
+
+        let config = Config::from_shared_path(&path).unwrap();
+
+        // The default applies everywhere, the per-channel entry only to the
+        // channel it names.
+        let staging = config.index_config.resolve("s3://bucket/staging");
+        assert_eq!(staging.write_zst, Some(false));
+        assert_eq!(staging.write_shards, Some(false));
+
+        let other = config.index_config.resolve("s3://bucket/stable");
+        assert_eq!(other.write_zst, Some(false));
+        assert_eq!(other.write_shards, None);
+    }
+
+    #[test]
+    fn test_index_config_merges_across_layers() {
+        let shared = Config {
+            index_config: IndexConfig {
+                default: IndexChannelConfig {
+                    write_zst: Some(false),
+                    write_shards: Some(false),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let pixi = Config {
+            index_config: IndexConfig {
+                default: IndexChannelConfig {
+                    write_shards: Some(true),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let merged = shared.merge_config(pixi).index_config.resolve("s3://any");
+        // The pixi layer wins where it sets a key, the shared one survives
+        // where it does not.
+        assert_eq!(merged.write_shards, Some(true));
+        assert_eq!(merged.write_zst, Some(false));
     }
 
     #[test]

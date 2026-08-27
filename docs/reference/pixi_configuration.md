@@ -61,7 +61,7 @@ To find the locations where `pixi` looks for configuration files, run
 ### Configuration shared with other rattler-based tools
 
 The `rattler` locations are read by every rattler-based tool, so a setting placed there applies to Pixi and `rattler-build` alike.
-They accept only the options that all of these tools understand, such as `default-channels`, `mirrors`, `s3-options` and `concurrency`.
+They accept only the options that all of these tools understand, such as `default-channels`, `mirrors`, `s3-options`, `index-config` and `concurrency`.
 Options that only Pixi knows, like `shell` or `detached-environments`, belong in a `pixi` location; in a `rattler` file Pixi ignores them and warns about it.
 
 ### Skipping or overriding config discovery
@@ -345,6 +345,22 @@ The above settings can be overridden on a per-channel basis by specifying a chan
 
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:prefix-repodata-config"
+```
+
+### `index-config`
+
+Options for the channels `pixi publish` indexes.
+They are ignored when publishing to a server that indexes on its own, such as prefix.dev, and only apply to the targets Pixi indexes itself: S3 URLs and local filesystem channels.
+
+```toml title="config.toml"
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:index-config"
+```
+
+The above settings can be overridden per channel by using the channel URL or absolute path as the key.
+The longest matching prefix wins, so a general entry can be narrowed for one channel below it.
+
+```toml title="config.toml"
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:per-channel-index-config"
 ```
 
 ### `pypi-config`

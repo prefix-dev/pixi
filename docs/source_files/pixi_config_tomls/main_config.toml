@@ -81,6 +81,21 @@ disable-zstd = true  # don't try to download repodata.json.zst
 disable-sharded = false
 # --8<-- [end:prefix-repodata-config]
 
+# --8<-- [start:index-config]
+[index-config]
+# write repodata.json.zst next to repodata.json
+write-zst = true
+# write sharded repodata
+write-shards = true
+# the info.base_url written to the generated repodata
+base-url = "https://cdn.example.com/my-channel"
+
+# --8<-- [end:index-config]
+# --8<-- [start:per-channel-index-config]
+[index-config."s3://my-bucket/staging"]
+write-shards = false
+# --8<-- [end:per-channel-index-config]
+
 # --8<-- [start:pypi-config]
 [pypi-config]
 # Main index url
