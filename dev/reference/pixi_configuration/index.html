@@ -3812,6 +3812,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#index-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code>index-config</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#pypi-config" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -8837,6 +8848,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#index-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        <code>index-config</code>
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#pypi-config" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -9211,7 +9233,7 @@ configuration read from lower priority locations are overwritten.</p>
 <code>pixi info -vvv</code>.</p>
 <h3 id="configuration-shared-with-other-rattler-based-tools">Configuration shared with other rattler-based tools<a class="headerlink" href="#configuration-shared-with-other-rattler-based-tools" title="Permanent link">#</a></h3>
 <p>The <code>rattler</code> locations are read by every rattler-based tool, so a setting placed there applies to Pixi and <code>rattler-build</code> alike.
-They accept only the options that all of these tools understand, such as <code>default-channels</code>, <code>mirrors</code>, <code>s3-options</code> and <code>concurrency</code>.
+They accept only the options that all of these tools understand, such as <code>default-channels</code>, <code>mirrors</code>, <code>s3-options</code>, <code>index-config</code> and <code>concurrency</code>.
 Options that only Pixi knows, like <code>shell</code> or <code>detached-environments</code>, belong in a <code>pixi</code> location; in a <code>rattler</code> file Pixi ignores them and warns about it.</p>
 <h3 id="skipping-or-overriding-config-discovery">Skipping or overriding config discovery<a class="headerlink" href="#skipping-or-overriding-config-discovery" title="Permanent link">#</a></h3>
 <p>Two global flags (and their environment-variable equivalents) let you opt out
@@ -9468,6 +9490,22 @@ Now <code>proxy-config</code> table supports the following options:</p>
 <div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">[repodata-config.</span><span class="s2">&quot;https://prefix.dev&quot;</span><span class="k">]</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">disable-sharded</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
 </span></code></pre></div>
+<h3 id="index-config"><code>index-config</code><a class="headerlink" href="#index-config" title="Permanent link">#</a></h3>
+<p>Options for the channels <code>pixi publish</code> indexes.
+They are ignored when publishing to a server that indexes on its own, such as prefix.dev, and only apply to the targets Pixi indexes itself: S3 URLs and local filesystem channels.</p>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="k">[index-config]</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="c1"># write repodata.json.zst next to repodata.json</span>
+</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="n">write-zst</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="c1"># write sharded repodata</span>
+</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="n">write-shards</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="c1"># the info.base_url written to the generated repodata</span>
+</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="n">base-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://cdn.example.com/my-channel&quot;</span>
+</span></code></pre></div>
+<p>The above settings can be overridden per channel by using the channel URL or absolute path as the key.
+The longest matching prefix wins, so a general entry can be narrowed for one channel below it.</p>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="k">[index-config.</span><span class="s2">&quot;s3://my-bucket/staging&quot;</span><span class="k">]</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">write-shards</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
+</span></code></pre></div>
 <h3 id="pypi-config"><code>pypi-config</code><a class="headerlink" href="#pypi-config" title="Permanent link">#</a></h3>
 <p>To setup a certain number of defaults for the usage of PyPI registries. You can use the following configuration options:</p>
 <ul>
@@ -9478,15 +9516,15 @@ Now <code>proxy-config</code> table supports the following options:</p>
   retrieve credentials.</li>
 <li><code>allow-insecure-host</code>: A list of host names (without protocol or port) for which TLS certificate verification should be disabled when accessing PyPI registries. This is useful when working with internal PyPI mirrors that use self-signed certificates. For disabling TLS verification globally for all connections, use <a href="#tls-no-verify"><code>tls-no-verify</code></a> instead.</li>
 </ul>
-<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="k">[pypi-config]</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="c1"># Main index url</span>
-</span><span id="__span-14-3"><a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="n">index-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://pypi.org/simple&quot;</span>
-</span><span id="__span-14-4"><a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a><span class="c1"># list of additional urls</span>
-</span><span id="__span-14-5"><a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="n">extra-index-urls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://pypi.org/simple2&quot;</span><span class="p">]</span>
-</span><span id="__span-14-6"><a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="c1"># can be &quot;subprocess&quot; or &quot;disabled&quot;</span>
-</span><span id="__span-14-7"><a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="n">keyring-provider</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;subprocess&quot;</span>
-</span><span id="__span-14-8"><a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a><span class="c1"># allow insecure connections to host</span>
-</span><span id="__span-14-9"><a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="n">allow-insecure-host</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;localhost:8080&quot;</span><span class="p">]</span>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="k">[pypi-config]</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="c1"># Main index url</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="n">index-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://pypi.org/simple&quot;</span>
+</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="c1"># list of additional urls</span>
+</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a><span class="n">extra-index-urls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://pypi.org/simple2&quot;</span><span class="p">]</span>
+</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="c1"># can be &quot;subprocess&quot; or &quot;disabled&quot;</span>
+</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="n">keyring-provider</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;subprocess&quot;</span>
+</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="c1"># allow insecure connections to host</span>
+</span><span id="__span-16-9"><a id="__codelineno-16-9" name="__codelineno-16-9" href="#__codelineno-16-9"></a><span class="n">allow-insecure-host</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;localhost:8080&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title"><code>index-url</code> and <code>extra-index-urls</code> are <em>not</em> globals</p>
@@ -9497,25 +9535,25 @@ This is because we want to keep the manifest file as complete and reproducible a
 <h3 id="s3-options"><code>s3-options</code><a class="headerlink" href="#s3-options" title="Permanent link">#</a></h3>
 <p>Configuration for S3 authentication. This will lead to Pixi not using AWS's default credentials but instead use the
 credentials from the Pixi authentication storage, see the <a href="../../deployment/s3/">S3 section</a> for more information.</p>
-<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="k">[s3-options.my-bucket]</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">endpoint-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://my-s3-compatible-host.com&quot;</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="n">force-path-style</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
-</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="n">region</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;us-east-1&quot;</span>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="k">[s3-options.my-bucket]</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="n">endpoint-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://my-s3-compatible-host.com&quot;</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="n">force-path-style</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+</span><span id="__span-17-4"><a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="n">region</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;us-east-1&quot;</span>
 </span></code></pre></div>
 <h3 id="concurrency"><code>concurrency</code><a class="headerlink" href="#concurrency" title="Permanent link">#</a></h3>
 <p>Configure multiple settings to limit or extend the concurrency of pixi.</p>
-<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="k">[concurrency]</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="c1"># The maximum number of concurrent downloads</span>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="c1"># Defaults to 50 as that was found to be a good balance between speed and stability</span>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a><span class="n">downloads</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">5</span>
-</span><span id="__span-16-5"><a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>
-</span><span id="__span-16-6"><a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a><span class="c1"># The maximum number of concurrent dependency resolves</span>
-</span><span id="__span-16-7"><a id="__codelineno-16-7" name="__codelineno-16-7" href="#__codelineno-16-7"></a><span class="c1"># Defaults to a heuristic based on the number of cores on the system</span>
-</span><span id="__span-16-8"><a id="__codelineno-16-8" name="__codelineno-16-8" href="#__codelineno-16-8"></a><span class="n">solves</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="k">[concurrency]</span>
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a><span class="c1"># The maximum number of concurrent downloads</span>
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="c1"># Defaults to 50 as that was found to be a good balance between speed and stability</span>
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a><span class="n">downloads</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">5</span>
+</span><span id="__span-18-5"><a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>
+</span><span id="__span-18-6"><a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a><span class="c1"># The maximum number of concurrent dependency resolves</span>
+</span><span id="__span-18-7"><a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a><span class="c1"># Defaults to a heuristic based on the number of cores on the system</span>
+</span><span id="__span-18-8"><a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a><span class="n">solves</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">2</span>
 </span></code></pre></div>
 <p>Set them through the CLI with:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>concurrency.solves<span class="w"> </span><span class="m">1</span>
-</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>concurrency.downloads<span class="w"> </span><span class="m">12</span>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>concurrency.solves<span class="w"> </span><span class="m">1</span>
+</span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>concurrency.downloads<span class="w"> </span><span class="m">12</span>
 </span></code></pre></div>
 <h3 id="run-post-link-scripts"><code>run-post-link-scripts</code><a class="headerlink" href="#run-post-link-scripts" title="Permanent link">#</a></h3>
 <p>Configure whether pixi should execute <code>post-link</code> and <code>pre-unlink</code> scripts or not.</p>
@@ -9526,13 +9564,13 @@ scripts.</p>
 <p>However, you can opt-in on a global (or workspace) basis by setting the value to <code>insecure</code> (e.g. by running
 <code>pixi config set --local run-post-link-scripts insecure</code>).</p>
 <p>In the future we are planning to add a <code>sandbox</code> mode to execute these scripts in a controlled environment.</p>
-<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="n">run-post-link-scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;false&quot;</span><span class="w">  </span><span class="c1"># set to &quot;insecure&quot; to allow running post-link scripts</span>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="n">run-post-link-scripts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;false&quot;</span><span class="w">  </span><span class="c1"># set to &quot;insecure&quot; to allow running post-link scripts</span>
 </span></code></pre></div>
 <h3 id="tool-platform"><code>tool-platform</code><a class="headerlink" href="#tool-platform" title="Permanent link">#</a></h3>
 <p>Defines the platform used when installing "tools" like build backends. By default pixi uses the platform of the current
 system, but you can override it to use a different platform. This can be useful if you are running pixi on an
 architecture for which there is fewer support for certain build backends.</p>
-<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="n">tool-platform</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="w">  </span><span class="c1"># force tools like build backends to be installed for a specific platform</span>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="n">tool-platform</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;win-64&quot;</span><span class="w">  </span><span class="c1"># force tools like build backends to be installed for a specific platform</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Virtual packages</p>
@@ -9541,27 +9579,27 @@ architecture for which there is fewer support for certain build backends.</p>
 operating system than the current system, no virtual packages will be used.</p>
 <h3 id="cache"><code>cache</code><a class="headerlink" href="#cache" title="Permanent link">#</a></h3>
 <p>The <code>[cache]</code> table lets you redirect specific pixi caches independently.</p>
-<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-20-1"><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="k">[cache]</span>
-</span><span id="__span-20-2"><a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="c1"># Override for the cache root. Equivalent to setting PIXI_CACHE_DIR.</span>
-</span><span id="__span-20-3"><a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a><span class="c1"># Per-kind fields below override this on a cache-by-cache basis.</span>
-</span><span id="__span-20-4"><a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="n">root</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/shared/hpc/pixi-cache&quot;</span>
-</span><span id="__span-20-5"><a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>
-</span><span id="__span-20-6"><a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a><span class="c1"># Per-cache absolute path overrides.</span>
-</span><span id="__span-20-7"><a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="n">build-tool-environments</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/local/scratch/cached-build-tool-envs&quot;</span>
-</span><span id="__span-20-8"><a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a><span class="n">conda-packages</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/shared/hpc/pkgs&quot;</span><span class="w">  </span><span class="c1"># conda package cache</span>
-</span><span id="__span-20-9"><a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a><span class="n">detached-environments</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/local/scratch/envs&quot;</span>
-</span><span id="__span-20-10"><a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a><span class="n">exec-environments</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/local/scratch/cached-envs&quot;</span>
-</span><span id="__span-20-11"><a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a><span class="n">pypi-mapping</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/local/scratch/conda-pypi-mapping&quot;</span><span class="w">  </span><span class="c1"># conda&lt;-&gt;pypi name mapping</span>
-</span><span id="__span-20-12"><a id="__codelineno-20-12" name="__codelineno-20-12" href="#__codelineno-20-12"></a><span class="n">pypi-wheels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/shared/hpc/uv-cache&quot;</span><span class="w">  </span><span class="c1"># uv wheel cache</span>
-</span><span id="__span-20-13"><a id="__codelineno-20-13" name="__codelineno-20-13" href="#__codelineno-20-13"></a><span class="n">repodata</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/shared/hpc/repodata&quot;</span><span class="w">  </span><span class="c1"># repodata cache</span>
-</span><span id="__span-20-14"><a id="__codelineno-20-14" name="__codelineno-20-14" href="#__codelineno-20-14"></a>
-</span><span id="__span-20-15"><a id="__codelineno-20-15" name="__codelineno-20-15" href="#__codelineno-20-15"></a><span class="c1"># How to handle a cache that lives on a network filesystem.</span>
-</span><span id="__span-20-16"><a id="__codelineno-20-16" name="__codelineno-20-16" href="#__codelineno-20-16"></a><span class="c1"># - &quot;auto&quot; (default): redirect kinds that prefer local storage to node-local</span>
-</span><span id="__span-20-17"><a id="__codelineno-20-17" name="__codelineno-20-17" href="#__codelineno-20-17"></a><span class="c1">#   scratch (chosen from $SLURM_TMPDIR / $PBS_JOBFS / $SCRATCH / $TMPDIR);</span>
-</span><span id="__span-20-18"><a id="__codelineno-20-18" name="__codelineno-20-18" href="#__codelineno-20-18"></a><span class="c1">#   leave shared-friendly kinds (conda-packages, repodata, pypi-wheels) put.</span>
-</span><span id="__span-20-19"><a id="__codelineno-20-19" name="__codelineno-20-19" href="#__codelineno-20-19"></a><span class="c1"># - &quot;always&quot;: redirect every kind when the root looks like netfs.</span>
-</span><span id="__span-20-20"><a id="__codelineno-20-20" name="__codelineno-20-20" href="#__codelineno-20-20"></a><span class="c1"># - &quot;never&quot;: never redirect.</span>
-</span><span id="__span-20-21"><a id="__codelineno-20-21" name="__codelineno-20-21" href="#__codelineno-20-21"></a><span class="n">netfs-redirect</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;auto&quot;</span>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="k">[cache]</span>
+</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="c1"># Override for the cache root. Equivalent to setting PIXI_CACHE_DIR.</span>
+</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="c1"># Per-kind fields below override this on a cache-by-cache basis.</span>
+</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a><span class="n">root</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/shared/hpc/pixi-cache&quot;</span>
+</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>
+</span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a><span class="c1"># Per-cache absolute path overrides.</span>
+</span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a><span class="n">build-tool-environments</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/local/scratch/cached-build-tool-envs&quot;</span>
+</span><span id="__span-22-8"><a id="__codelineno-22-8" name="__codelineno-22-8" href="#__codelineno-22-8"></a><span class="n">conda-packages</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/shared/hpc/pkgs&quot;</span><span class="w">  </span><span class="c1"># conda package cache</span>
+</span><span id="__span-22-9"><a id="__codelineno-22-9" name="__codelineno-22-9" href="#__codelineno-22-9"></a><span class="n">detached-environments</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/local/scratch/envs&quot;</span>
+</span><span id="__span-22-10"><a id="__codelineno-22-10" name="__codelineno-22-10" href="#__codelineno-22-10"></a><span class="n">exec-environments</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/local/scratch/cached-envs&quot;</span>
+</span><span id="__span-22-11"><a id="__codelineno-22-11" name="__codelineno-22-11" href="#__codelineno-22-11"></a><span class="n">pypi-mapping</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/local/scratch/conda-pypi-mapping&quot;</span><span class="w">  </span><span class="c1"># conda&lt;-&gt;pypi name mapping</span>
+</span><span id="__span-22-12"><a id="__codelineno-22-12" name="__codelineno-22-12" href="#__codelineno-22-12"></a><span class="n">pypi-wheels</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/shared/hpc/uv-cache&quot;</span><span class="w">  </span><span class="c1"># uv wheel cache</span>
+</span><span id="__span-22-13"><a id="__codelineno-22-13" name="__codelineno-22-13" href="#__codelineno-22-13"></a><span class="n">repodata</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;/shared/hpc/repodata&quot;</span><span class="w">  </span><span class="c1"># repodata cache</span>
+</span><span id="__span-22-14"><a id="__codelineno-22-14" name="__codelineno-22-14" href="#__codelineno-22-14"></a>
+</span><span id="__span-22-15"><a id="__codelineno-22-15" name="__codelineno-22-15" href="#__codelineno-22-15"></a><span class="c1"># How to handle a cache that lives on a network filesystem.</span>
+</span><span id="__span-22-16"><a id="__codelineno-22-16" name="__codelineno-22-16" href="#__codelineno-22-16"></a><span class="c1"># - &quot;auto&quot; (default): redirect kinds that prefer local storage to node-local</span>
+</span><span id="__span-22-17"><a id="__codelineno-22-17" name="__codelineno-22-17" href="#__codelineno-22-17"></a><span class="c1">#   scratch (chosen from $SLURM_TMPDIR / $PBS_JOBFS / $SCRATCH / $TMPDIR);</span>
+</span><span id="__span-22-18"><a id="__codelineno-22-18" name="__codelineno-22-18" href="#__codelineno-22-18"></a><span class="c1">#   leave shared-friendly kinds (conda-packages, repodata, pypi-wheels) put.</span>
+</span><span id="__span-22-19"><a id="__codelineno-22-19" name="__codelineno-22-19" href="#__codelineno-22-19"></a><span class="c1"># - &quot;always&quot;: redirect every kind when the root looks like netfs.</span>
+</span><span id="__span-22-20"><a id="__codelineno-22-20" name="__codelineno-22-20" href="#__codelineno-22-20"></a><span class="c1"># - &quot;never&quot;: never redirect.</span>
+</span><span id="__span-22-21"><a id="__codelineno-22-21" name="__codelineno-22-21" href="#__codelineno-22-21"></a><span class="n">netfs-redirect</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;auto&quot;</span>
 </span></code></pre></div>
 <h4 id="resolution-order">Resolution order<a class="headerlink" href="#resolution-order" title="Permanent link">#</a></h4>
 <p>For each cache kind, pixi resolves the directory in this order (highest
@@ -9728,22 +9766,22 @@ debugging:</p>
 activated.</p>
 <h3 id="caching-environment-activations">Caching environment activations<a class="headerlink" href="#caching-environment-activations" title="Permanent link">#</a></h3>
 <p>Turn this feature on from configuration with the following command:</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-21-1"><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="c1"># For all of your workspaces</span>
-</span><span id="__span-21-2"><a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>experimental.use-environment-activation-cache<span class="w"> </span><span class="nb">true</span><span class="w"> </span>--global
-</span><span id="__span-21-3"><a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a>
-</span><span id="__span-21-4"><a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="c1"># For a specific workspace</span>
-</span><span id="__span-21-5"><a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>experimental.use-environment-activation-cache<span class="w"> </span><span class="nb">true</span><span class="w"> </span>--local
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="c1"># For all of your workspaces</span>
+</span><span id="__span-23-2"><a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>experimental.use-environment-activation-cache<span class="w"> </span><span class="nb">true</span><span class="w"> </span>--global
+</span><span id="__span-23-3"><a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a>
+</span><span id="__span-23-4"><a id="__codelineno-23-4" name="__codelineno-23-4" href="#__codelineno-23-4"></a><span class="c1"># For a specific workspace</span>
+</span><span id="__span-23-5"><a id="__codelineno-23-5" name="__codelineno-23-5" href="#__codelineno-23-5"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>experimental.use-environment-activation-cache<span class="w"> </span><span class="nb">true</span><span class="w"> </span>--local
 </span></code></pre></div>
 <p>This will cache the environment activation in the <code>.pixi/activation-env-v0</code> folder in the workspace root.
 It will create a json file for each environment that is activated, and it will be used to activate the environment in
 the future.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a>&gt;<span class="w"> </span>tree<span class="w"> </span>.pixi/activation-env-v0/
-</span><span id="__span-22-2"><a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a>.pixi/activation-env-v0/
-</span><span id="__span-22-3"><a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a>├──<span class="w"> </span>activation_default.json
-</span><span id="__span-22-4"><a id="__codelineno-22-4" name="__codelineno-22-4" href="#__codelineno-22-4"></a>└──<span class="w"> </span>activation_lint.json
-</span><span id="__span-22-5"><a id="__codelineno-22-5" name="__codelineno-22-5" href="#__codelineno-22-5"></a>
-</span><span id="__span-22-6"><a id="__codelineno-22-6" name="__codelineno-22-6" href="#__codelineno-22-6"></a>&gt;<span class="w"> </span>cat<span class="w">  </span>.pixi/activation-env-v0/activation_lint.json
-</span><span id="__span-22-7"><a id="__codelineno-22-7" name="__codelineno-22-7" href="#__codelineno-22-7"></a><span class="o">{</span><span class="s2">&quot;hash&quot;</span>:<span class="s2">&quot;8d8344e0751d377a&quot;</span>,<span class="s2">&quot;environment_variables&quot;</span>:<span class="o">{</span>&lt;ENVIRONMENT_VARIABLES_USED_IN_ACTIVATION&gt;<span class="o">}}</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a>&gt;<span class="w"> </span>tree<span class="w"> </span>.pixi/activation-env-v0/
+</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>.pixi/activation-env-v0/
+</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>├──<span class="w"> </span>activation_default.json
+</span><span id="__span-24-4"><a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a>└──<span class="w"> </span>activation_lint.json
+</span><span id="__span-24-5"><a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a>
+</span><span id="__span-24-6"><a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a>&gt;<span class="w"> </span>cat<span class="w">  </span>.pixi/activation-env-v0/activation_lint.json
+</span><span id="__span-24-7"><a id="__codelineno-24-7" name="__codelineno-24-7" href="#__codelineno-24-7"></a><span class="o">{</span><span class="s2">&quot;hash&quot;</span>:<span class="s2">&quot;8d8344e0751d377a&quot;</span>,<span class="s2">&quot;environment_variables&quot;</span>:<span class="o">{</span>&lt;ENVIRONMENT_VARIABLES_USED_IN_ACTIVATION&gt;<span class="o">}}</span>
 </span></code></pre></div>
 <ul>
 <li>The <code>hash</code> is a hash of the data on that environment in the <code>pixi.lock</code>, plus some important information on the
@@ -9752,12 +9790,12 @@ the future.</p>
 <li>The <code>environment_variables</code> are the environment variables that are set when activating the environment.</li>
 </ul>
 <p>You can ignore the cache by running:</p>
-<div class="language-text highlight"><pre><span></span><code><span id="__span-23-1"><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a>pixi run/shell/shell-hook --force-activate
+<div class="language-text highlight"><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a>pixi run/shell/shell-hook --force-activate
 </span></code></pre></div>
 <p>Set the configuration with:</p>
-<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-24-1"><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="k">[experimental]</span>
-</span><span id="__span-24-2"><a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a><span class="c1"># Enable the use of the environment activation cache</span>
-</span><span id="__span-24-3"><a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a><span class="n">use-environment-activation-cache</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="k">[experimental]</span>
+</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="c1"># Enable the use of the environment activation cache</span>
+</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="n">use-environment-activation-cache</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Why is this experimental?</p>
@@ -9775,13 +9813,13 @@ the repodata (the most important file) from the first mirror in the list. The
 repodata contains all the SHA256 hashes of the individual packages, so it is
 important to get this file from a trusted source.</p>
 <p>You can also specify mirrors for an entire "host", e.g.</p>
-<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-25-1"><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="k">[mirrors]</span>
-</span><span id="__span-25-2"><a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="s2">&quot;https://conda.anaconda.org&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://prefix.dev/&quot;</span><span class="p">]</span>
-</span><span id="__span-25-3"><a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="c1"># prefix.dev doesn&#39;t mirror conda-forge&#39;s label channels</span>
-</span><span id="__span-25-4"><a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="c1"># pixi uses the longest matching prefix for the mirror</span>
-</span><span id="__span-25-5"><a id="__codelineno-25-5" name="__codelineno-25-5" href="#__codelineno-25-5"></a><span class="s2">&quot;https://conda.anaconda.org/conda-forge/label&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-25-6"><a id="__codelineno-25-6" name="__codelineno-25-6" href="#__codelineno-25-6"></a><span class="w">  </span><span class="s2">&quot;https://conda.anaconda.org/conda-forge/label&quot;</span><span class="p">,</span>
-</span><span id="__span-25-7"><a id="__codelineno-25-7" name="__codelineno-25-7" href="#__codelineno-25-7"></a><span class="p">]</span>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="k">[mirrors]</span>
+</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="s2">&quot;https://conda.anaconda.org&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://prefix.dev/&quot;</span><span class="p">]</span>
+</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="c1"># prefix.dev doesn&#39;t mirror conda-forge&#39;s label channels</span>
+</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="c1"># pixi uses the longest matching prefix for the mirror</span>
+</span><span id="__span-27-5"><a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a><span class="s2">&quot;https://conda.anaconda.org/conda-forge/label&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-27-6"><a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a><span class="w">  </span><span class="s2">&quot;https://conda.anaconda.org/conda-forge/label&quot;</span><span class="p">,</span>
+</span><span id="__span-27-7"><a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a><span class="p">]</span>
 </span></code></pre></div>
 <p>This will forward all request to channels on anaconda.org to prefix.dev.
 Channels that are not currently mirrored on prefix.dev will fail in the above example.
@@ -9791,10 +9829,10 @@ by providing a longer prefix that points to itself.</p>
 <p>You can also specify mirrors on the OCI registry. There is a public mirror on
 the Github container registry (ghcr.io) that is maintained by the conda-forge
 team. You can use it like this:</p>
-<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="k">[mirrors]</span>
-</span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="s2">&quot;https://conda.anaconda.org/conda-forge&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="w">  </span><span class="s2">&quot;oci://ghcr.io/channel-mirrors/conda-forge&quot;</span><span class="p">,</span>
-</span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="p">]</span>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="k">[mirrors]</span>
+</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="s2">&quot;https://conda.anaconda.org/conda-forge&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a><span class="w">  </span><span class="s2">&quot;oci://ghcr.io/channel-mirrors/conda-forge&quot;</span><span class="p">,</span>
+</span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a><span class="p">]</span>
 </span></code></pre></div>
 <p>The GHCR mirror also contains <code>bioconda</code> packages. You can search the <a href="https://github.com/orgs/channel-mirrors/packages">available
 packages on Github</a>.</p>
