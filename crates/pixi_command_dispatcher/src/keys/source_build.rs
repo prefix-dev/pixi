@@ -66,18 +66,22 @@ fn unwrap_dispatcher_err<E>(err: CommandDispatcherError<E>) -> E {
     }
 }
 
-/// Hash user-provided variant files before checkout. If a file cannot be read,
-/// the checkout-free path is disabled rather than keying an artifact without
-/// one of its static build inputs.
-fn immutable_variant_file_hashes(spec: &SourceBuildSpec) -> Option<Vec<(PathBuf, u64)>> {
+/// Hash the *contents* of the user-provided variant files before checkout. If
+/// a file cannot be read, the checkout-free path is disabled rather than
+/// keying an artifact without one of its static build inputs.
+///
+/// Only the contents go into the key, in declaration order (later files
+/// override earlier ones). The paths themselves are deliberately excluded:
+/// they are absolute, so including them would tie every cached artifact to
+/// one workspace location for no gain -- what the build reads is the content.
+fn immutable_variant_file_hashes(spec: &SourceBuildSpec) -> Option<Vec<u64>> {
     spec.variant_files
         .as_deref()
         .unwrap_or_default()
         .iter()
         .map(|path| {
             let file = fs_err::File::open(path).ok()?;
-            let hash = crate::file_fingerprint::hash_file_contents(file).ok()?;
-            Some((path.clone(), hash))
+            crate::file_fingerprint::hash_file_contents(file).ok()
         })
         .collect()
 }
@@ -104,7 +108,7 @@ fn immutable_variant_file_hashes(spec: &SourceBuildSpec) -> Option<Vec<(PathBuf,
 ///   its `content_hash`, so `spec.inline` would be redundant.)
 fn immutable_backend_identifier(
     spec: &SourceBuildSpec,
-    variant_file_hashes: &[(PathBuf, u64)],
+    variant_file_hashes: &[u64],
     enabled_protocols: &EnabledProtocols,
     channel_config: &ChannelConfig,
 ) -> String {
@@ -1063,7 +1067,7 @@ mod immutable_identifier_tests {
         }
     }
 
-    fn identifier_with(spec: &SourceBuildSpec, variant_file_hashes: &[(PathBuf, u64)]) -> String {
+    fn identifier_with(spec: &SourceBuildSpec, variant_file_hashes: &[u64]) -> String {
         immutable_backend_identifier(
             spec,
             variant_file_hashes,
@@ -1148,8 +1152,18 @@ mod immutable_identifier_tests {
 
         assert_ne!(
             baseline,
-            identifier_with(&spec(), &[(PathBuf::from("variants.toml"), 7)]),
+            identifier_with(&spec(), &[7]),
             "variant file hashes",
+        );
+        assert_ne!(
+            identifier_with(&spec(), &[7]),
+            identifier_with(&spec(), &[7, 9]),
+            "variant file count",
+        );
+        assert_ne!(
+            identifier_with(&spec(), &[7, 9]),
+            identifier_with(&spec(), &[9, 7]),
+            "variant file order",
         );
     }
 }
