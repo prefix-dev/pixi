@@ -9218,12 +9218,13 @@ channels, platforms, and an optional adjacent lock file:</p>
 </span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="gp">$ </span>pixi<span class="w"> </span>add<span class="w"> </span>--script<span class="w"> </span>script.py<span class="w"> </span>--pypi<span class="w"> </span>requests
 </span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="gp">$ </span>pixi<span class="w"> </span>add<span class="w"> </span>--script<span class="w"> </span>script.py<span class="w"> </span>openssl
 </span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="gp">$ </span>pixi<span class="w"> </span>run<span class="w"> </span>--script<span class="w"> </span>script.py
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="gp">$ </span>pixi<span class="w"> </span>update<span class="w"> </span>--script<span class="w"> </span>script.py
 </span></code></pre></div>
 <p>PyPI dependencies that fit standard PEP 723 remain portable between uv and
 Pixi. Pixi-specific metadata lives under <code>tool.pixi</code>, so uv ignores the Conda
 dependency while preserving it. See <a href="../../python/scripts/">Standalone Python
-scripts</a> for locking, channel and platform management,
-dependency trees, and export.</p>
+scripts</a> for resolution updates, locking, channel and
+platform management, dependency trees, and export.</p>
 <h3 id="tasks">Tasks<a class="headerlink" href="#tasks" title="Permanent link">#</a></h3>
 <p>uv has no built-in task runner. Pixi does:</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="k">[tasks]</span>

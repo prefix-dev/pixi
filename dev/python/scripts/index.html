@@ -780,6 +780,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#reuse-and-update-resolutions" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Reuse and update resolutions
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#inspect-and-export" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -8540,6 +8551,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#reuse-and-update-resolutions" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Reuse and update resolutions
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#inspect-and-export" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -8630,8 +8652,8 @@ block</a>,
 while the resolved environment stays in Pixi's cache instead of a workspace
 next to the script.</p>
 <p>Script commands use <code>--script &lt;PATH&gt;</code>. The same <code>init</code>, <code>run</code>, <code>add</code>, <code>remove</code>,
-and <code>lock</code> commands used for workspaces can therefore operate on either a
-manifest or a standalone file.</p>
+<code>lock</code>, and <code>update</code> commands used for workspaces can therefore operate on
+either a manifest or a standalone file.</p>
 <h2 id="make-a-script-self-contained">Make a script self-contained<a class="headerlink" href="#make-a-script-self-contained" title="Permanent link">#</a></h2>
 <p>This script downloads the USGS earthquake feed with <code>httpx</code>, then uses GDAL's
 Python bindings to count the features:</p>
@@ -8762,25 +8784,36 @@ environment.</p>
 <p>The environment is isolated from an enclosing Pixi workspace and from any
 currently activated environment. The script itself runs with the directory
 from which Pixi was invoked as its working directory.</p>
+<h2 id="reuse-and-update-resolutions">Reuse and update resolutions<a class="headerlink" href="#reuse-and-update-resolutions" title="Permanent link">#</a></h2>
+<p>The first <code>pixi run --script</code> resolves the script and remembers the selected
+versions with its cached environment. Later runs reuse that resolution while
+it still satisfies the inline metadata. New versions in a channel or package
+index therefore do not change the environment during an ordinary run.</p>
+<p>Refresh the resolution explicitly when you want newer compatible versions:</p>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="go">pixi update --script earthquakes.py</span>
+</span></code></pre></div>
+<p>Without an adjacent lock file, this replaces the cached resolution. The next
+run updates the cached environment to match it. This cache state is disposable.
+Removing it causes Pixi to resolve the script again.</p>
+<p>When an adjacent lock file exists, <code>update</code> writes the new resolution there
+instead.</p>
 <h2 id="inspect-and-export">Inspect and export<a class="headerlink" href="#inspect-and-export" title="Permanent link">#</a></h2>
 <p>Inspect the resolved dependency graph with <code>tree</code>:</p>
-<div class="language-console highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="go">pixi tree --script earthquakes.py</span>
-</span><span id="__span-10-2"><a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a><span class="go">pixi tree --script earthquakes.py httpx</span>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="go">pixi tree --script earthquakes.py</span>
+</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="go">pixi tree --script earthquakes.py httpx</span>
 </span></code></pre></div>
 <p>Export the default script environment in either supported Conda format:</p>
-<div class="language-console highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="go">pixi workspace export conda-environment --script earthquakes.py</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="go">pixi workspace export conda-explicit-spec --script earthquakes.py ./export</span>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="go">pixi workspace export conda-environment --script earthquakes.py</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="go">pixi workspace export conda-explicit-spec --script earthquakes.py ./export</span>
 </span></code></pre></div>
 <p><code>conda-environment</code> renders from the manifest by default. Pass
 <code>--from-lock-file</code> to export exact versions from an adjacent lock.
 <code>conda-explicit-spec</code> resolves packages when necessary and accepts the normal
 lock policy flags.</p>
 <h2 id="lock-exact-versions">Lock exact versions<a class="headerlink" href="#lock-exact-versions" title="Permanent link">#</a></h2>
-<p>A lock file is optional. Without one, commands resolve the script in memory
-and reuse Pixi's caches:</p>
-<div class="language-console highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="go">pixi run --script earthquakes.py</span>
-</span></code></pre></div>
-<p>Create a lock file when exact versions need to travel with the script:</p>
+<p>A cached resolution keeps ordinary runs stable on one machine, but it does not
+travel with the script. Create a lock file when exact versions need to travel
+with it:</p>
 <div class="language-console highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="go">pixi lock --script earthquakes.py</span>
 </span></code></pre></div>
 <p>This writes <code>earthquakes.py.pixi.lock</code> next to the file. Subsequent commands
@@ -8846,6 +8879,10 @@ A script that needs a glibc newer than Pixi's <code>2.28</code> default resolves
 <td><code>pixi lock --script &lt;PATH&gt;</code></td>
 </tr>
 <tr>
+<td>Update dependencies</td>
+<td><code>pixi update --script &lt;PATH&gt;</code></td>
+</tr>
+<tr>
 <td>Inspect dependencies</td>
 <td><code>pixi tree --script &lt;PATH&gt;</code></td>
 </tr>
@@ -8865,8 +8902,8 @@ A script that needs a glibc newer than Pixi's <code>2.28</code> default resolves
 </table>
 <p>A script has no workspace name, version, registration, named environments,
 features, or tasks. Commands and options that manage those concepts reject
-<code>--script</code>. Persistent workspace operations such as install, shell, update,
-and configuration also remain workspace-only.</p>
+<code>--script</code>. Persistent workspace operations such as install, shell, and
+configuration also remain workspace-only.</p>
 
 
 
