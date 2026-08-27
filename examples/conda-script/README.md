@@ -17,9 +17,9 @@ pass another binary as the first argument to verify that one instead.
 
 Languages are ordered by TIOBE rank, filtered to those where a single-file
 script is meaningful and the toolchain is installable from conda channels.
-Folder numbers are rank positions; gaps are languages that were attempted,
-verified, and then removed because the result was too awkward to recommend
-(see the second exclusion table).
+Folder numbers follow that order; the numbering is not contiguous because
+some languages were attempted, verified, and then removed as too awkward to
+recommend (see the second exclusion table).
 
 The corpus adopts three adjustments to the draft in issue 3751:
 
@@ -54,20 +54,15 @@ The corpus adopts three adjustments to the draft in issue 3751:
 | 19 | Lua | `lua` | `lua-luafilesystem` | conda environment |
 | 21 | Bash | `brush` | `jq` | conda environment (dependency program) |
 | 22 | PowerShell | `powershell` | `powershell-yaml` | PSGallery via `Install-Module` |
-| 23 | Groovy | `groovy` | `commons-lang3` | Maven via `@Grab` |
-| 24 | Octave | `octave` | `octave-statistics` | conda environment, `pkg rebuild` + `pkg load` |
-| 25 | Prolog | `swi-prolog` | `list_util` | SWI pack server via `pack_install` |
-| 27 | Common Lisp | `sbcl` | `zlib` | conda environment, FFI via `sb-alien` |
-| 28 | Elixir | `elixir` | `jason` | hex.pm via `Mix.install` |
-| 29 | Zig | `zig` + `pkg-config` | `zlib` | conda environment, flags via `$(pkg-config ...)` |
-| 30 | Mojo | `mojo` (Modular channel) | `numpy` | conda environment, Python interop |
+| 23 | Zig | `zig` + `pkg-config` | `zlib` | conda environment, flags via `$(pkg-config ...)` |
+| 24 | Mojo | `mojo` (Modular channel) | `numpy` | conda environment, Python interop |
 
-All 24 examples run as written on linux-64 with byte-identical output across
+All 19 examples run as written on linux-64 with byte-identical output across
 repeated runs, and none writes a file into the invocation directory.
 
 ## Variable usage tally
 
-- `${SCRIPT}`: all 24.
+- `${SCRIPT}`: all 19.
 - `${CACHE}`: 5 (C, C++, Fortran, Rust for build artifacts; Scala for its
   build workspace).
 - `${PREFIX}`: 0, and the corpus proposes dropping the variable. Five
@@ -83,7 +78,7 @@ repeated runs, and none writes a file into the invocation directory.
 
 ### Entrypoints come in two shapes
 
-1. One command that runs the file: 19 of 24, from `python ${SCRIPT}` to
+1. One command that runs the file: 15 of 19, from `python ${SCRIPT}` to
    `zig run ${SCRIPT} $(pkg-config --libs zlib)`. Languages whose dependencies
    come from a native fetcher keep this shape, because the fetching is
    declared in-file, not in the entrypoint.
@@ -91,18 +86,14 @@ repeated runs, and none writes a file into the invocation directory.
    `g++ -o ${CACHE}/main ${SCRIPT} -lfmt && ${CACHE}/main` (C, C++, Fortran,
    Rust).
 
-The one outlier is Octave, whose first segment repairs the environment
-(`pkg rebuild -global`) because pixi does not run post-link scripts.
-
 ### In-file dependency directives are widespread prior art
 
-Groovy's `@Grab` (2007), Kotlin's `@file:DependsOn`, .NET 10's `#:package`,
-Scala's `//> using dep`, deno's `npm:` import specifiers, Elixir's
-`Mix.install`, and Julia's in-script `Pkg` calls all embed dependency metadata
-in a single runnable file. The conda-script block composes cleanly with every
-one of them, and adds the thing none of them can express: pinning the runtime
-itself. A file can carry both its conda block and its native directives
-without conflict.
+Kotlin's `@file:DependsOn`, .NET 10's `#:package`, Scala's `//> using dep`,
+deno's `npm:` import specifiers, and Julia's in-script `Pkg` calls all embed
+dependency metadata in a single runnable file. The conda-script block
+composes cleanly with every one of them, and adds the thing none of them can
+express: pinning the runtime itself. A file can carry both its conda block
+and its native directives without conflict.
 
 ### The mini-shell holds
 
@@ -129,10 +120,9 @@ with no path flags at all; only subdirectory-header libraries like glib need
 resolves the prefix itself (cgo's in-file `#cgo pkg-config: zlib` works the
 same way without the substitution).
 Activation matters the same way: cgo picks up `CC` and `CGO_ENABLED` from
-the go package's activation, Julia's `JULIA_DEPOT_PATH` points into the
-prefix, and the Lisp script reads `CONDA_PREFIX` at run time. The CEP
-should guarantee activation as a contract, including exported activation
-variables.
+the go package's activation, and Julia's `JULIA_DEPOT_PATH` points into the
+prefix. The CEP should guarantee activation as a contract, including
+exported activation variables.
 
 ### Feedstock and packaging issues found along the way
 
@@ -141,18 +131,15 @@ variables.
   needed `GLIBC_TUNABLES=glibc.rtld.execstack=2` as a host-side workaround).
 - conda-forge `scala3` identifies itself as `3.7.4-bin-SNAPSHOT`, a version
   coursier cannot fetch; the script must pin `//> using scala 3.7.4`.
-- conda-forge octave packages register themselves via post-link scripts,
-  which pixi and rattler do not run; hence the `pkg rebuild -global` segment.
 - Solver skew: `rb-*` gems pin old ruby minors, `lua-luafilesystem` pins lua
   5.4, `perl-uri` pins perl 5.32.
 
 ### Caches outside the tool's control
 
-NuGet, Grape, hex, deno, PSGallery modules, SWI packs, coursier, Kotlin's
-Maven resolver, zig, and go all cache under `$HOME`, shared across
-environments and never cleaned up with them. Redirection knobs exist
-(`MIX_HOME`, `DENO_DIR`, ...) but setting them would need env-var support in
-the spec. A hermetic runner is not achievable today; the CEP should decide
+NuGet, deno, PSGallery modules, coursier, Kotlin's Maven resolver, zig, and
+go all cache under `$HOME`, shared across environments and never cleaned up
+with them. Redirection knobs exist (`DENO_DIR`, `COURSIER_CACHE`, ...) but
+setting them would need env-var support in the spec. A hermetic runner is not achievable today; the CEP should decide
 whether that is acceptable.
 
 ### Smaller spec notes
@@ -178,7 +165,7 @@ Never attempted:
 | --- | --- |
 | Visual Basic | the compiler ships in the conda-forge `dotnet` SDK, but .NET file-based apps support only C#; classic VB is proprietary |
 | SQL | not a standalone script; needs a database to be meaningful |
-| MATLAB | proprietary; `24-octave` covers the language family |
+| MATLAB | proprietary; Octave, the open implementation of the language family, was attempted and removed (see the second table) |
 | Assembly | no meaningful single-library story for a portability-focused spec |
 | Scratch | not a text-based language |
 | Delphi / Object Pascal | no Free Pascal or Delphi toolchain on conda-forge |
@@ -195,3 +182,8 @@ Attempted, verified, and removed as too awkward:
 | Haskell | FFI to `zlib` compiled with `ghc` | conda-forge `ghc` is frozen at 8.10.7 from 2021, `cabal-install` is not packaged, and ghc prints compile chatter to stdout |
 | Dart | `dart create` scaffolding a throwaway project inside `${CACHE}` | dart has no single-file dependency mechanism at all; the scaffold drags in 48 dev dependencies and prints to stdout on every run |
 | COBOL | `cobc` linking conda-forge `zlib` via static `CALL` | the `gnucobol` feedstock hardcodes `COB_CC` to its build path, so compiling requires env vars the entrypoint cannot set |
+| Groovy | `groovy ${SCRIPT}` with `commons-lang3` via `@Grab` | Grape resolves into `~/.groovy/grapes` with no way to redirect it from the spec; Kotlin (13) already covers the JVM-with-Maven-directives story |
+| Octave | `octave-statistics` via `pkg load` | the entrypoint must lead with a `pkg rebuild -global` repair segment on every run because pixi does not run the feedstock's post-link scripts, and that segment mutates the environment globally |
+| Prolog | `list_util` via an in-script conditional `pack_install` | "install only if absent" needs a three-directive preamble in the script because the mini-shell has no conditionals, and SWI packs land in a per-user directory outside the environment |
+| Common Lisp | FFI to conda-forge `zlib` via `sb-alien` | no Lisp package manager is on conda-forge, so hand-written FFI against `CONDA_PREFIX` is the only library story |
+| Elixir | `jason` via `Mix.install` | hex and the `Mix.install` build cache live under `$HOME` with no way to redirect them from the spec |
