@@ -835,6 +835,258 @@ async fn add_dependency_pinning_strategy() {
     assert_eq!(bar_spec, r#"">=1,<2""#);
 }
 
+#[tokio::test]
+async fn add_pypi_path_dependency_rewrites_absolute_manifest_path() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+    let channel = package_database.into_channel().await.unwrap();
+
+    let pixi = PixiControl::new().unwrap();
+    pixi.init()
+        .with_local_channel(channel.url().to_file_path().unwrap())
+        .with_platforms(vec![Platform::current()])
+        .await
+        .unwrap();
+    pixi.add("python").await.unwrap();
+
+    let package_dir = pixi.workspace_path().join("packages/python package");
+    fs_err::create_dir_all(&package_dir).unwrap();
+    fs_err::write(
+        package_dir.join("pyproject.toml"),
+        "[project]\nname = \"python-package\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+
+    pixi.add_pypi("python-package")
+        .with_path(package_dir.join("pyproject.toml"))
+        .await
+        .unwrap();
+
+    let manifest = pixi.manifest_contents().unwrap();
+    assert!(
+        manifest.contains(r#"python-package = { path = "packages/python package" }"#),
+        "unexpected manifest:\n{manifest}"
+    );
+}
+
+#[tokio::test]
+async fn add_conda_path_dependency_accepts_manifest_files_and_relative_input() {
+    setup_tracing();
+
+    let pixi = PixiControl::from_manifest(
+        r#"
+[workspace]
+name = "path-test"
+channels = []
+platforms = ["linux-64"]
+preview = ["pixi-build"]
+"#,
+    )
+    .unwrap();
+    let sources = pixi.workspace_path().join("sources");
+    fs_err::create_dir_all(&sources).unwrap();
+    fs_err::write(
+        sources.join("pixi.toml"),
+        "[workspace]\nchannels = []\nplatforms = [\"linux-64\"]\n\n[package]\nname = \"pixi-source\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+    fs_err::write(
+        sources.join("recipe.yaml"),
+        "package:\n  name: recipe-source\n  version: 0.1.0\n",
+    )
+    .unwrap();
+    fs_err::write(
+        sources.join("package.xml"),
+        "<package><name>ros-source</name><version>0.1.0</version></package>",
+    )
+    .unwrap();
+
+    // A relative CLI path is interpreted from the current directory, but is
+    // written relative to the workspace manifest.
+    let relative_pixi_manifest =
+        pathdiff::diff_paths(sources.join("pixi.toml"), std::env::current_dir().unwrap()).unwrap();
+    pixi.add("pixi-source")
+        .with_path(relative_pixi_manifest)
+        .with_feature("local")
+        .await
+        .unwrap();
+    pixi.add("recipe-source")
+        .with_path(sources.join("recipe.yaml"))
+        .with_feature("local")
+        .await
+        .unwrap();
+    pixi.add("ros-source")
+        .with_path(sources.join("package.xml"))
+        .with_feature("local")
+        .await
+        .unwrap();
+
+    let manifest = pixi.manifest_contents().unwrap();
+    for expected in [
+        r#"pixi-source = { path = "sources" }"#,
+        r#"recipe-source = { path = "sources/recipe.yaml" }"#,
+        r#"ros-source = { path = "sources/package.xml" }"#,
+    ] {
+        assert!(
+            manifest.contains(expected),
+            "missing {expected:?} in:\n{manifest}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn add_conda_path_rejects_python_only_pyproject() {
+    setup_tracing();
+
+    let pixi = PixiControl::from_manifest(
+        r#"
+[workspace]
+name = "path-test"
+channels = []
+platforms = ["linux-64"]
+"#,
+    )
+    .unwrap();
+    let package_dir = pixi.workspace_path().join("python-package");
+    fs_err::create_dir_all(&package_dir).unwrap();
+    fs_err::write(
+        package_dir.join("pyproject.toml"),
+        "[project]\nname = \"python-package\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+
+    let error = pixi
+        .add("python-package")
+        .with_path(package_dir)
+        .await
+        .unwrap_err();
+    let report = format!("{error:?}");
+    assert!(report.contains("--pypi"), "{report}");
+    assert!(!report.contains("preview add pixi-build"), "{report}");
+}
+
+#[tokio::test]
+async fn add_conda_path_dependency_without_preview_has_hint() {
+    setup_tracing();
+
+    let pixi = PixiControl::from_manifest(
+        r#"
+[workspace]
+name = "path-test"
+channels = []
+platforms = ["linux-64"]
+"#,
+    )
+    .unwrap();
+    let package_dir = pixi.workspace_path().join("package");
+    fs_err::create_dir_all(&package_dir).unwrap();
+    fs_err::write(
+        package_dir.join("pixi.toml"),
+        "[workspace]\nchannels = []\nplatforms = [\"linux-64\"]\n\n[package]\nname = \"local-package\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+
+    let multiple_error = pixi
+        .add_multiple(vec!["local-package", "other-package"])
+        .with_path(&package_dir)
+        .await
+        .unwrap_err();
+    assert!(
+        format!("{multiple_error:?}").contains("exactly one package name"),
+        "{multiple_error:?}"
+    );
+
+    let error = pixi
+        .add("local-package")
+        .with_path(&package_dir)
+        .await
+        .unwrap_err();
+    let report = format!("{error:?}");
+    assert!(
+        report.contains("pixi workspace preview add pixi-build"),
+        "{report}"
+    );
+    assert!(
+        !pixi
+            .manifest_contents()
+            .unwrap()
+            .contains("local-package =")
+    );
+}
+
+#[tokio::test]
+async fn direct_pixi_manifest_input_is_stored_as_directory() {
+    setup_tracing();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let platform = Platform::current();
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+[workspace]
+name = "path-test"
+channels = []
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+"#,
+    ))
+    .unwrap()
+    .with_backend_override(backend_override);
+    let source_dir = TempDir::new().unwrap();
+    let package_dir = source_dir.path().join("local-package");
+    fs_err::create_dir_all(&package_dir).unwrap();
+    fs_err::write(
+        package_dir.join("pixi.toml"),
+        r#"
+[workspace]
+channels = []
+platforms = []
+preview = ["pixi-build"]
+
+[package]
+name = "local-package"
+version = "0.1.0"
+
+[package.build]
+source = { path = "src" }
+backend = { name = "in-memory", version = "*" }
+"#,
+    )
+    .unwrap();
+    fs_err::create_dir_all(package_dir.join("src")).unwrap();
+
+    pixi.add("local-package")
+        .with_path(package_dir.join("pixi.toml"))
+        .await
+        .unwrap();
+
+    let manifest = pixi.manifest_contents().unwrap();
+    let expected_path = pathdiff::diff_paths(&package_dir, pixi.workspace_path())
+        .unwrap()
+        .to_string_lossy()
+        .replace('\\', "/");
+    assert!(
+        manifest.contains(&format!(
+            r#"local-package = {{ path = "{expected_path}" }}"#
+        )),
+        "unexpected manifest:\n{manifest}"
+    );
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(
+        lock.get_conda_source_package("default", platform, "local-package")
+            .is_some()
+    );
+
+    // Force a second installation from the serialized lock file.
+    fs_err::remove_dir_all(pixi.workspace_path().join(".pixi")).unwrap();
+    pixi.install().await.unwrap();
+}
+
 /// The deprecated `--subdir` alias still resolves to the `subdirectory` field.
 #[tokio::test]
 async fn add_git_deps_deprecated_subdir_alias() {
