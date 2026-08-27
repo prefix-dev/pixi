@@ -130,6 +130,8 @@ solves = 2
 [experimental]
 # Enable the use of the environment activation cache
 use-environment-activation-cache = true
+# Run conda scripts without passing `--experimental` every time
+conda-script = true
 # --8<-- [end:experimental]
 
 # --8<-- [start:mirrors]

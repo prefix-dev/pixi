@@ -10,6 +10,10 @@ Script commands use `--script <PATH>`. The same `init`, `run`, `add`, `remove`,
 `install`, `lock`, and `update` commands used for workspaces can therefore
 operate on either a manifest or a standalone file.
 
+For files in other languages there is an experimental
+[`conda-script` block](../tutorials/conda_script.md) that embeds the same
+kind of metadata in any code file.
+
 ## Make a script self-contained
 
 This script downloads the USGS earthquake feed with `httpx`, then uses GDAL's

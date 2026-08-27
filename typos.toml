@@ -13,6 +13,7 @@ ignore-hidden = false
 
 [default.extend-identifiers]
 _placehold = "_placehold"
+arange = "arange"
 intoto = "intoto"
 plt-setp = "plt.setp"
 solvePnPRansac = "solvePnPRansac"
