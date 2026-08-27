@@ -67,13 +67,6 @@ const TRAMPOLINE_BIN: &[u8] = include_bytes!(
 
 #[cfg(target_arch = "riscv64")]
 #[cfg(target_os = "linux")]
-#[cfg(target_env = "gnu")]
-const TRAMPOLINE_BIN: &[u8] =
-    include_bytes!("../../../trampoline/binaries/pixi-trampoline-riscv64gc-unknown-linux-gnu.zst");
-
-#[cfg(target_arch = "riscv64")]
-#[cfg(target_os = "linux")]
-#[cfg(target_env = "musl")]
 const TRAMPOLINE_BIN: &[u8] =
     include_bytes!("../../../trampoline/binaries/pixi-trampoline-riscv64gc-unknown-linux-musl.zst");
 
