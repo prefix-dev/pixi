@@ -274,6 +274,29 @@ impl ArtifactSidecar {
     }
 }
 
+/// Resolve the sidecar's recorded artifact filename inside `entry_dir`.
+///
+/// `Path::join` neither normalises `..` nor rejects an absolute right-hand
+/// side -- joining an absolute path discards the base entirely -- so a
+/// sidecar that has been tampered with or corrupted could otherwise name any
+/// file on the system, and the cache would hand it back together with the
+/// sidecar's own `RepoDataRecord` vouching for it. The filename is written by
+/// `store_inner` from the built artifact's own file name, so requiring a
+/// single ordinary path component costs nothing legitimate.
+fn artifact_path_within(entry_dir: &Path, artifact_filename: &str) -> Option<PathBuf> {
+    let mut components = Path::new(artifact_filename).components();
+    match (components.next(), components.next()) {
+        (Some(std::path::Component::Normal(name)), None) => Some(entry_dir.join(name)),
+        _ => {
+            tracing::debug!(
+                artifact_filename,
+                "artifact cache sidecar names a file outside its entry, treating as a miss",
+            );
+            None
+        }
+    }
+}
+
 /// Read a sidecar for the checkout-free path, mapping every failure -- absent,
 /// unreadable, locked by another process -- onto a cache miss. A cache that
 /// cannot be read is a reason to rebuild, never a reason to fail a build.
@@ -622,9 +645,13 @@ impl ArtifactCache {
             }
         }
 
-        let artifact_path = self
-            .entry_dir(package, key)
-            .join(&sidecar.artifact_filename);
+        let entry_dir = self.entry_dir(package, key);
+        let Some(artifact_path) = artifact_path_within(&entry_dir, &sidecar.artifact_filename)
+        else {
+            return Ok(CacheLookup::Miss(CacheMissReason::ArtifactRemoved {
+                path: entry_dir.join(&sidecar.artifact_filename),
+            }));
+        };
         if fs_err::metadata(&artifact_path).is_err() {
             return Ok(CacheLookup::Miss(CacheMissReason::ArtifactRemoved {
                 path: artifact_path,
@@ -830,9 +857,8 @@ impl ArtifactCache {
         {
             return None;
         }
-        let artifact_path = self
-            .entry_dir(package, key)
-            .join(&sidecar.artifact_filename);
+        let artifact_path =
+            artifact_path_within(&self.entry_dir(package, key), &sidecar.artifact_filename)?;
         if fs_err::metadata(&artifact_path).is_err() {
             return None;
         }
@@ -1372,6 +1398,62 @@ mod tests {
             .await
             .expect("the entry is readable again");
         assert_eq!(hit.artifact, stored.artifact);
+    }
+
+    /// A sidecar that names a file outside its own entry directory must never
+    /// resolve. `Path::join` normalises nothing and an absolute right-hand
+    /// side discards the base entirely, so without a guard the cache would
+    /// return an arbitrary file plus the sidecar's own `RepoDataRecord`
+    /// vouching for it.
+    #[tokio::test]
+    async fn a_sidecar_cannot_name_a_file_outside_its_entry() {
+        let f = Fixture::new();
+        let backend = ImmutableBackend::new(
+            "backend@1".to_string(),
+            JsonRpcBackendSpec::default_rattler_build(Vec::new()),
+        )
+        .unwrap();
+        f.cache
+            .store_immutable(
+                &pkg("foo"),
+                &key("immutable-key"),
+                &f.artifact,
+                SystemTime::now(),
+                dummy_record("foo"),
+                backend.clone(),
+            )
+            .await
+            .unwrap();
+        let persisted = f
+            .cache
+            .immutable_backend(&pkg("foo"), &key("immutable-key"))
+            .await
+            .unwrap();
+
+        let outside = f._tmp.path().join("outside.conda");
+        fs_err::write(&outside, b"not the cached artifact").unwrap();
+        let sidecar_path = f.cache.sidecar_path(&pkg("foo"), &key("immutable-key"));
+        let original: ArtifactSidecar =
+            serde_json::from_slice(&fs_err::read(&sidecar_path).unwrap()).unwrap();
+
+        for escape in [
+            outside.to_string_lossy().to_string(),
+            "../../../outside.conda".to_string(),
+            "..\\..\\..\\outside.conda".to_string(),
+            "sub/dir.conda".to_string(),
+        ] {
+            let mut tampered = original.clone();
+            tampered.artifact_filename = escape.clone();
+            fs_err::write(&sidecar_path, serde_json::to_vec(&tampered).unwrap()).unwrap();
+
+            assert!(
+                f.cache
+                    .lookup_immutable(&pkg("foo"), &key("immutable-key"), &persisted, "backend@1")
+                    .await
+                    .is_none(),
+                "lookup_immutable must not resolve {escape}",
+            );
+        }
     }
 
     #[tokio::test]
