@@ -593,6 +593,7 @@ mod tests {
             "pixi remove",
             "pixi run",
             "pixi tree",
+            "pixi update",
             "pixi workspace channel",
             "pixi workspace export conda-environment",
             "pixi workspace export conda-explicit-spec",

@@ -37,7 +37,7 @@ pixi [OPTIONS] [COMMAND]
 | [`shell-hook`](shell-hook.md) | Print the pixi environment activation script |
 | [`task`](task/index.md) | Interact with tasks in the workspace |
 | [`tree`](tree.md) | Show a tree of workspace dependencies |
-| [`update`](update.md) | The `update` command checks if there are newer versions of the dependencies and updates the `pixi.lock` file and environments accordingly |
+| [`update`](update.md) | Updates dependencies to newer compatible versions |
 | [`upgrade`](upgrade.md) | Checks if there are newer versions of the dependencies and upgrades them in the lock file and manifest file |
 | [`upload`](upload/index.md) | Upload conda packages to various channels |
 | [`workspace`](workspace/index.md) | Modify the workspace configuration file through the command line |

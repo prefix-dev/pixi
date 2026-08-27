@@ -7,8 +7,8 @@ while the resolved environment stays in Pixi's cache instead of a workspace
 next to the script.
 
 Script commands use `--script <PATH>`. The same `init`, `run`, `add`, `remove`,
-and `lock` commands used for workspaces can therefore operate on either a
-manifest or a standalone file.
+`lock`, and `update` commands used for workspaces can therefore operate on
+either a manifest or a standalone file.
 
 ## Make a script self-contained
 
@@ -184,6 +184,26 @@ The environment is isolated from an enclosing Pixi workspace and from any
 currently activated environment. The script itself runs with the directory
 from which Pixi was invoked as its working directory.
 
+## Reuse and update resolutions
+
+The first `pixi run --script` resolves the script and remembers the selected
+versions with its cached environment. Later runs reuse that resolution while
+it still satisfies the inline metadata. New versions in a channel or package
+index therefore do not change the environment during an ordinary run.
+
+Refresh the resolution explicitly when you want newer compatible versions:
+
+```console
+pixi update --script earthquakes.py
+```
+
+Without an adjacent lock file, this replaces the cached resolution. The next
+run updates the cached environment to match it. This cache state is disposable.
+Removing it causes Pixi to resolve the script again.
+
+When an adjacent lock file exists, `update` writes the new resolution there
+instead.
+
 ## Inspect and export
 
 Inspect the resolved dependency graph with `tree`:
@@ -207,14 +227,9 @@ lock policy flags.
 
 ## Lock exact versions
 
-A lock file is optional. Without one, commands resolve the script in memory
-and reuse Pixi's caches:
-
-```console
-pixi run --script earthquakes.py
-```
-
-Create a lock file when exact versions need to travel with the script:
+A cached resolution keeps ordinary runs stable on one machine, but it does not
+travel with the script. Create a lock file when exact versions need to travel
+with it:
 
 ```console
 pixi lock --script earthquakes.py
@@ -285,6 +300,7 @@ The script-capable commands are:
 | Run | `pixi run --script <PATH>` |
 | Add or remove dependencies | `pixi add --script <PATH>`, `pixi remove --script <PATH>` |
 | Create or update a lock | `pixi lock --script <PATH>` |
+| Update dependencies | `pixi update --script <PATH>` |
 | Inspect dependencies | `pixi tree --script <PATH>` |
 | Manage channels | `pixi workspace channel ... --script <PATH>` |
 | Manage platforms | `pixi workspace platform ... --script <PATH>` |
@@ -292,5 +308,5 @@ The script-capable commands are:
 
 A script has no workspace name, version, registration, named environments,
 features, or tasks. Commands and options that manage those concepts reject
-`--script`. Persistent workspace operations such as install, shell, update,
-and configuration also remain workspace-only.
+`--script`. Persistent workspace operations such as install, shell, and
+configuration also remain workspace-only.

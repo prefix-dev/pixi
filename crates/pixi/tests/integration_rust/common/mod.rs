@@ -814,9 +814,12 @@ impl PixiControl {
             args: update::Args {
                 config: self.config_cli(),
                 config_source: isolated_config_source(),
-                project_config: WorkspaceConfig {
-                    manifest_path: Some(self.manifest_path()),
-                    ..Default::default()
+                project_config: ScriptWorkspaceConfig {
+                    workspace_config: WorkspaceConfig {
+                        manifest_path: Some(self.manifest_path()),
+                        ..Default::default()
+                    },
+                    script: None,
                 },
                 no_install: true,
                 dry_run: false,

@@ -196,13 +196,14 @@ $ pixi init --script script.py
 $ pixi add --script script.py --pypi requests
 $ pixi add --script script.py openssl
 $ pixi run --script script.py
+$ pixi update --script script.py
 ```
 
 PyPI dependencies that fit standard PEP 723 remain portable between uv and
 Pixi. Pixi-specific metadata lives under `tool.pixi`, so uv ignores the Conda
 dependency while preserving it. See [Standalone Python
-scripts](../python/scripts.md) for locking, channel and platform management,
-dependency trees, and export.
+scripts](../python/scripts.md) for resolution updates, locking, channel and
+platform management, dependency trees, and export.
 
 ### Tasks
 
