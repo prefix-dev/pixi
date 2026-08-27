@@ -6479,6 +6479,7 @@ dependencies = [
  "pixi_pypi_spec",
  "pixi_record",
  "pixi_reporters",
+ "pixi_script_shell",
  "pixi_spec",
  "pixi_task",
  "pixi_test_utils",

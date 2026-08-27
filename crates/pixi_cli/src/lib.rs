@@ -26,6 +26,7 @@ pub mod cli_config;
 pub mod cli_interface;
 pub mod command_info;
 pub mod completion;
+mod conda_script;
 pub mod config;
 pub mod exec;
 pub mod global;
