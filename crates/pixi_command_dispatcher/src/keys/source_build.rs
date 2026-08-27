@@ -14,7 +14,7 @@ use std::{
 
 use derive_more::Display;
 use futures::{SinkExt, channel::mpsc::unbounded};
-use pixi_build_discovery::BackendSpec;
+use pixi_build_discovery::{BackendSpec, EnabledProtocols};
 use pixi_build_types::procedures::{
     conda_build_v1::CondaPackageFormat,
     conda_outputs::{CondaOutput, CondaOutputsParams},
@@ -24,7 +24,8 @@ use pixi_record::{PixiRecord, UnresolvedPixiRecord, UnresolvedSourceRecord, Vari
 use pixi_spec::{ResolvedExcludeNewer, SourceAnchor, SourceSpec};
 use pixi_variant::VariantSelector;
 use rattler_conda_types::{
-    ChannelUrl, PackageRecord, RepoDataRecord, package::DistArchiveIdentifier, prefix::Prefix,
+    ChannelConfig, ChannelUrl, PackageRecord, RepoDataRecord, package::DistArchiveIdentifier,
+    prefix::Prefix,
 };
 use rattler_digest::Sha256Hash;
 use tracing::instrument;
@@ -79,6 +80,52 @@ fn immutable_variant_file_hashes(spec: &SourceBuildSpec) -> Option<Vec<(PathBuf,
             Some((path.clone(), hash))
         })
         .collect()
+}
+
+/// Synthetic backend identifier standing in for the real one in the
+/// checkout-free artifact cache key.
+///
+/// The real identifier is only known after a checkout, so this covers the
+/// build inputs that a checkout would otherwise have pinned. Fields are
+/// listed explicitly rather than hashing [`SourceBuildSpec`] wholesale: the
+/// spec carries values that are *not* stable across processes, and folding
+/// one of those in silently turns every lookup into a miss.
+///
+/// Deliberately **not** hashed:
+///
+/// - `exclude_newer`, whose `ResolvedExcludeNewer::cutoff` is derived from
+///   `Utc::now()` for a relative `exclude-newer` and therefore differs on
+///   every invocation. It only influences which backend gets solved, and
+///   that is already validated on lookup by re-solving the recorded backend
+///   and comparing its `env@…` identifier.
+/// - Anything [`compute_artifact_cache_key`] already folds in itself: the
+///   record, both platforms, the project-model overrides, the package
+///   format, and the inline content hash. (`InlinePackage` hashes as just
+///   its `content_hash`, so `spec.inline` would be redundant.)
+fn immutable_backend_identifier(
+    spec: &SourceBuildSpec,
+    variant_file_hashes: &[(PathBuf, u64)],
+    enabled_protocols: &EnabledProtocols,
+    channel_config: &ChannelConfig,
+) -> String {
+    let mut hasher = Xxh3::new();
+    "immutable-artifact-v4".hash(&mut hasher);
+    spec.channels.hash(&mut hasher);
+    spec.build_profile.hash(&mut hasher);
+    spec.variant_configuration.hash(&mut hasher);
+    // Virtual packages are absent from `compute_artifact_cache_key`, but a
+    // backend may select variants on them (`__cuda`, `__glibc`), so an
+    // artifact built against one set must not be reused for another.
+    spec.build_environment
+        .build_virtual_packages
+        .hash(&mut hasher);
+    spec.build_environment
+        .host_virtual_packages
+        .hash(&mut hasher);
+    variant_file_hashes.hash(&mut hasher);
+    enabled_protocols.hash(&mut hasher);
+    channel_config.channel_alias.hash(&mut hasher);
+    format!("immutable@{:016x}", hasher.finish())
 }
 
 /// Hashable inputs to a source build. Runtime concerns (reporters, log
@@ -197,16 +244,12 @@ async fn compute_inner(
         .then(|| immutable_variant_file_hashes(&spec))
         .flatten()
         .map(|variant_file_hashes| {
-            let mut hasher = Xxh3::new();
-            (
-                "immutable-artifact-v3",
+            let immutable_identifier = immutable_backend_identifier(
                 &spec,
-                variant_file_hashes,
+                &variant_file_hashes,
                 &enabled_protocols,
-                &channel_config.channel_alias,
-            )
-                .hash(&mut hasher);
-            let immutable_identifier = format!("immutable@{:016x}", hasher.finish());
+                &channel_config,
+            );
             compute_artifact_cache_key(
                 &spec.record,
                 spec.build_environment.build_platform,
@@ -946,6 +989,169 @@ async fn synthesize_repodata(
         url: Url::from_file_path(output_file).expect("the output file should be a valid URL"),
         channel: None,
     })
+}
+
+#[cfg(test)]
+mod immutable_identifier_tests {
+    //! The checkout-free artifact key stands in for a backend identifier that
+    //! is only knowable after a checkout, so it must be stable across
+    //! processes: anything derived from the wall clock silently turns every
+    //! lookup into a miss and stores a fresh copy of the artifact.
+    use std::str::FromStr;
+
+    use chrono::{TimeZone, Utc};
+    use pixi_record::{
+        FullSourceRecordData, PinnedGitCheckout, PinnedGitSpec, PinnedSourceSpec, SourceRecordData,
+    };
+    use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform};
+
+    use super::*;
+
+    fn record() -> Arc<UnresolvedSourceRecord> {
+        let mut package_record = PackageRecord::new(
+            PackageName::from_str("foo").unwrap(),
+            "1.0.0"
+                .parse::<rattler_conda_types::VersionWithSource>()
+                .unwrap(),
+            "h0".into(),
+        );
+        package_record.subdir = "linux-64".into();
+        Arc::new(UnresolvedSourceRecord {
+            data: SourceRecordData::Full(FullSourceRecordData {
+                package_record,
+                sources: BTreeMap::new(),
+            }),
+            manifest_source: PinnedSourceSpec::Git(PinnedGitSpec {
+                git: Url::parse("https://example.invalid/foo.git").unwrap(),
+                source: PinnedGitCheckout {
+                    commit: "0123456789abcdef0123456789abcdef01234567"
+                        .parse()
+                        .unwrap(),
+                    subdirectory: Default::default(),
+                    reference: pixi_spec::GitReference::DefaultBranch,
+                    lfs: None,
+                },
+            }),
+            build_source: None,
+            variants: BTreeMap::new(),
+            identifier_hash: String::new(),
+            build_packages: Vec::new(),
+            host_packages: Vec::new(),
+        })
+    }
+
+    fn spec() -> SourceBuildSpec {
+        SourceBuildSpec {
+            record: record(),
+            channels: vec![ChannelUrl::from(
+                Url::parse("https://prefix.dev/conda-forge/").unwrap(),
+            )],
+            exclude_newer: None,
+            build_environment: BuildEnvironment {
+                host_platform: Platform::Linux64,
+                host_virtual_packages: Vec::new(),
+                build_platform: Platform::Linux64,
+                build_virtual_packages: Vec::new(),
+            },
+            build_profile: BuildProfile::Development,
+            variant_configuration: None,
+            variant_files: None,
+            build_string_prefix: None,
+            build_number: None,
+            package_format: None,
+            inline: None,
+        }
+    }
+
+    fn identifier_with(spec: &SourceBuildSpec, variant_file_hashes: &[(PathBuf, u64)]) -> String {
+        immutable_backend_identifier(
+            spec,
+            variant_file_hashes,
+            &EnabledProtocols::default(),
+            &ChannelConfig::default_with_root_dir(PathBuf::from("/workspace")),
+        )
+    }
+
+    fn identifier(spec: &SourceBuildSpec) -> String {
+        identifier_with(spec, &[])
+    }
+
+    fn cutoff(secs: i64) -> Option<ResolvedExcludeNewer> {
+        Some(ResolvedExcludeNewer::from_datetime(
+            Utc.timestamp_opt(secs, 0).unwrap(),
+        ))
+    }
+
+    /// Regression test. `exclude_newer` resolves to `Utc::now() - duration`
+    /// for a relative `exclude-newer` such as `"7d"`, so hashing it into the
+    /// key made the key unique per process: the checkout-free path could
+    /// never hit, and every run wrote a new artifact-cache entry.
+    #[test]
+    fn identifier_ignores_the_exclude_newer_cutoff() {
+        let mut early = spec();
+        early.exclude_newer = cutoff(1_700_000_000);
+        let mut late = spec();
+        late.exclude_newer = cutoff(1_700_000_042);
+
+        assert_eq!(
+            identifier(&early),
+            identifier(&late),
+            "the checkout-free key must not move with the wall clock",
+        );
+        assert_eq!(
+            identifier(&spec()),
+            identifier(&early),
+            "setting exclude-newer at all must not move the key",
+        );
+    }
+
+    #[test]
+    fn identifier_is_deterministic() {
+        assert_eq!(identifier(&spec()), identifier(&spec()));
+    }
+
+    /// Every input the key *is* responsible for must still move it: these are
+    /// the build inputs a checkout would otherwise have pinned, and which
+    /// `compute_artifact_cache_key` does not fold in itself.
+    #[test]
+    fn identifier_covers_every_input_it_owns() {
+        let baseline = identifier(&spec());
+
+        let mut channels = spec();
+        channels.channels = vec![ChannelUrl::from(
+            Url::parse("https://example.invalid/other/").unwrap(),
+        )];
+        assert_ne!(baseline, identifier(&channels), "channels");
+
+        let mut profile = spec();
+        profile.build_profile = BuildProfile::Release;
+        assert_ne!(baseline, identifier(&profile), "build profile");
+
+        let mut variants = spec();
+        variants.variant_configuration = Some(BTreeMap::from([(
+            "python".to_string(),
+            vec![VariantValue::String("3.13".to_string())],
+        )]));
+        assert_ne!(baseline, identifier(&variants), "variant configuration");
+
+        let mut virtual_packages = spec();
+        virtual_packages.build_environment.host_virtual_packages = vec![GenericVirtualPackage {
+            name: PackageName::from_str("__cuda").unwrap(),
+            version: "12.4".parse().unwrap(),
+            build_string: "0".to_string(),
+        }];
+        assert_ne!(
+            baseline,
+            identifier(&virtual_packages),
+            "host virtual packages",
+        );
+
+        assert_ne!(
+            baseline,
+            identifier_with(&spec(), &[(PathBuf::from("variants.toml"), 7)]),
+            "variant file hashes",
+        );
+    }
 }
 
 /// Compute the sha256 of a file on a blocking thread.
