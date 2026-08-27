@@ -13,7 +13,7 @@ mod workspace_mut;
 mod workspace_script;
 
 use self::errors::VariantsError;
-use self::workspace_script::WorkspaceScript;
+use self::workspace_script::{ScriptSource, WorkspaceScript};
 #[cfg(not(windows))]
 use std::os::unix::fs::symlink;
 use std::{
@@ -39,6 +39,7 @@ use once_cell::sync::OnceCell;
 use pep508_rs::Requirement;
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{CacheDirs, CommandDispatcher, CommandDispatcherBuilder, Limits};
+use pixi_conda_script::CondaScriptManifest;
 use pixi_config::{CacheKind, Config, RunPostLinkScripts};
 use pixi_consts::consts;
 use pixi_diff::LockFileDiff;
@@ -46,7 +47,10 @@ use pixi_manifest::{
     AssociateProvenance, BuildVariantSource, EnvironmentName, Environments, FeaturesExt,
     HasWorkspaceManifest, LoadManifestsError, ManifestKind, ManifestProvenance, Manifests,
     PackageManifest, PixiPlatform, PixiPlatformName, PrioritizedChannel, SpecType, WithProvenance,
-    WithWarnings, WorkspaceManifest, script::ScriptManifest,
+    WithWarnings, WorkspaceManifest,
+    script::ScriptManifest,
+    toml::{ExternalWorkspaceProperties, FromTomlStr, PackageDefaults, TomlManifest},
+    utils::WithSourceCode,
 };
 use pixi_path::AbsPathBuf;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
@@ -206,6 +210,10 @@ pub enum ScriptWorkspaceError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Manifest(#[from] pixi_manifest::script::ScriptManifestError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    CondaScriptManifest(Box<WithSourceCode<pixi_manifest::TomlError, miette::NamedSource<String>>>),
 
     #[error("failed to resolve the script environment cache directory: {0}")]
     CacheDirectory(String),
@@ -509,6 +517,76 @@ impl Workspace {
         .with_warnings(warnings))
     }
 
+    /// Construct an isolated workspace for a local `conda-script` file.
+    ///
+    /// `config` must include both the selected global configuration and CLI
+    /// overrides, like [`Workspace::from_script`].
+    pub fn from_conda_script(
+        script: CondaScriptManifest,
+        config: Config,
+    ) -> Result<WithWarnings<Self>, ScriptWorkspaceError> {
+        let script_path = script.path().to_owned();
+        let root = script_path
+            .parent()
+            .expect("an absolute script path always has a parent")
+            .to_owned();
+        // The diagnostics of this step point into the synthesized document,
+        // not the script; the source name says so.
+        let source_name = format!("{} (synthesized manifest)", script_path.display());
+        let source = script.synthetic_manifest().map_err(|error| {
+            ScriptWorkspaceError::CondaScriptManifest(Box::new(WithSourceCode {
+                error: pixi_manifest::TomlError::from(error),
+                source: miette::NamedSource::new(&source_name, script.toml().to_owned()),
+            }))
+        })?;
+
+        let (mut manifest, package, warnings) = TomlManifest::from_toml_str(&source)
+            .and_then(|manifest| {
+                manifest.into_workspace_manifest(
+                    ExternalWorkspaceProperties::default(),
+                    PackageDefaults::default(),
+                    &root,
+                )
+            })
+            .map_err(|error| {
+                ScriptWorkspaceError::CondaScriptManifest(Box::new(WithSourceCode {
+                    error,
+                    source: miette::NamedSource::new(&source_name, source),
+                }))
+            })?;
+        debug_assert!(
+            package.is_none(),
+            "a synthetic conda-script manifest never defines a package"
+        );
+
+        let cache_root = config
+            .cache_dir_for(CacheKind::ExecEnvironments)
+            .map_err(|error| ScriptWorkspaceError::CacheDirectory(error.to_string()))?;
+        let workspace_script = WorkspaceScript::for_local_conda_script(script, &cache_root);
+        let lock_file_path = workspace_script
+            .lock_file_path()
+            .expect("a local script has an adjacent lock-file path");
+        set_implicit_script_platforms(
+            &mut manifest.workspace,
+            implicit_script_platforms(Some(&lock_file_path))?,
+        );
+
+        // The provenance kind only matters for flows that re-read or edit the
+        // manifest, which conda-script workspaces reject; PEP 723 is the
+        // closest embedded-metadata kind.
+        let workspace =
+            manifest.with_provenance(ManifestProvenance::new(script_path, ManifestKind::Pep723));
+
+        Ok(WithWarnings::from(Self::from_parsed(
+            workspace,
+            None,
+            root,
+            config,
+            WorkspaceStorage::Script(workspace_script),
+        ))
+        .with_warnings(warnings))
+    }
+
     /// Construct an isolated workspace for a transient PEP 723 script.
     pub fn from_transient_script(
         script: ScriptManifest,
@@ -677,10 +755,22 @@ impl Workspace {
         let WorkspaceStorage::Script(script) = &self.storage else {
             return false;
         };
-        script
-            .manifest()
-            .workspace_config()
-            .is_ok_and(|config| !config.platforms_explicit)
+        match script.source() {
+            ScriptSource::Pep723(manifest) => manifest
+                .workspace_config()
+                .is_ok_and(|config| !config.platforms_explicit),
+            // A conda-script block has no `platforms` key at all.
+            ScriptSource::CondaScript(_) => true,
+        }
+    }
+
+    /// `true` when this workspace was constructed from a conda-script file.
+    pub fn is_conda_script(&self) -> bool {
+        matches!(
+            &self.storage,
+            WorkspaceStorage::Script(script)
+                if matches!(script.source(), ScriptSource::CondaScript(_))
+        )
     }
 
     /// Create the detached-environments path for this project if it is set in
@@ -2132,6 +2222,71 @@ platforms = []
         )
         .unwrap()
         .value
+    }
+
+    #[test]
+    fn conda_script_workspace_merges_tool_pixi_into_the_default_environment() {
+        let root = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+        let path = root.path().join("example.c");
+        fs_err::write(
+            &path,
+            r#"// /// conda-script
+// channels = ["testing"]
+// entrypoint = "run ${SCRIPT}"
+//
+// [dependencies]
+// zlib = "1.3.*"
+//
+// [tool.pixi.pypi-dependencies]
+// requests = ">=2"
+// /// end-conda-script
+"#,
+        )
+        .unwrap();
+        let script = CondaScriptManifest::from_path(&path).unwrap().unwrap();
+
+        let workspace = Workspace::from_conda_script(
+            script,
+            Config {
+                cache: CacheConfig {
+                    exec_environments: Some(cache.path().to_owned()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .value;
+
+        let manifest = &workspace.workspace.value;
+        assert_eq!(
+            manifest
+                .workspace
+                .channels
+                .iter()
+                .map(|channel| channel.channel.to_string())
+                .collect::<Vec<_>>(),
+            ["testing"]
+        );
+        assert_eq!(manifest.environments.iter().count(), 1);
+        assert_eq!(manifest.all_features().count(), 2);
+        let default_environment = workspace.default_environment();
+        assert!(
+            default_environment
+                .pypi_dependencies(None)
+                .contains_key(&PypiPackageName::from_str("requests").unwrap()),
+            "the tool.pixi feature must reach the default environment"
+        );
+        assert!(
+            !manifest.workspace.platforms.is_empty(),
+            "a conda-script workspace resolves for the machine it runs on"
+        );
+        assert!(workspace.script_platforms_are_implicit());
+        assert_eq!(
+            workspace.lock_file_path(),
+            root.path().join("example.c.pixi.lock")
+        );
     }
 
     #[test]

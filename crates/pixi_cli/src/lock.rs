@@ -43,11 +43,33 @@ pub struct Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let mut workspace = WorkspaceLocator::for_cli()
-        .with_global_config_source(args.config_source.source())
-        .with_search_start(args.workspace_config.workspace_locator_start())
-        .with_cli_config(args.config.clone())
-        .locate()?;
+    let conda_script = match args.workspace_config.script.as_deref() {
+        Some(path) => crate::conda_script::detect_with_fallback(path, false)?,
+        None => None,
+    };
+    let mut workspace = if let Some(manifest) = conda_script {
+        let root = manifest
+            .path()
+            .parent()
+            .expect("an absolute script path always has a parent")
+            .to_owned();
+        let config = pixi_config::Config::load_with(&root, &args.config_source.source())
+            .merge_config(args.config.clone().into());
+        let pixi_manifest::WithWarnings {
+            value: workspace,
+            warnings,
+        } = pixi_core::Workspace::from_conda_script(manifest, config)?;
+        for warning in warnings {
+            tracing::warn!("{warning}");
+        }
+        workspace
+    } else {
+        WorkspaceLocator::for_cli()
+            .with_global_config_source(args.config_source.source())
+            .with_search_start(args.workspace_config.workspace_locator_start())
+            .with_cli_config(args.config.clone())
+            .locate()?
+    };
 
     // Apply backend override if provided (primarily for testing)
     if let Some(backend_override) = args

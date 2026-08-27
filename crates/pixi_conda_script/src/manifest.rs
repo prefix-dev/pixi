@@ -94,6 +94,78 @@ impl CondaScriptManifest {
     pub fn toml(&self) -> &str {
         &self.toml
     }
+
+    /// Renders the metadata as a `pixi.toml` document.
+    ///
+    /// The dependency tables are spliced in verbatim from the block, so the
+    /// specs reach the manifest parser exactly as written. `[dependencies]`
+    /// fills the default feature while `[tool.pixi.dependencies]` and
+    /// `[tool.pixi.pypi-dependencies]` become a separate feature of the
+    /// default environment, which merges the two spec sets the way pixi
+    /// merges features: both specs of a package reach the solver.
+    pub fn synthetic_manifest(&self) -> Result<String, toml_edit::TomlError> {
+        let mut block: toml_edit::DocumentMut = self.toml.parse()?;
+        let channels = block
+            .remove("channels")
+            .expect("`channels` is required by the metadata model");
+        let dependencies = block.remove("dependencies");
+        let mut pixi = block
+            .get_mut("tool")
+            .and_then(toml_edit::Item::as_table_like_mut)
+            .and_then(|tool| tool.get_mut("pixi"))
+            .and_then(toml_edit::Item::as_table_like_mut);
+        let pixi_dependencies = pixi.as_mut().and_then(|pixi| pixi.remove("dependencies"));
+        let pixi_pypi_dependencies = pixi
+            .as_mut()
+            .and_then(|pixi| pixi.remove("pypi-dependencies"));
+
+        let name = self
+            .path
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .filter(|stem| !stem.is_empty())
+            .unwrap_or("script");
+
+        let mut document = toml_edit::DocumentMut::new();
+        let mut workspace = toml_edit::Table::new();
+        workspace.insert("name", toml_edit::value(name));
+        workspace.insert("channels", channels);
+        workspace.insert(
+            "platforms",
+            toml_edit::Item::Value(toml_edit::Value::Array(toml_edit::Array::new())),
+        );
+        document.insert("workspace", toml_edit::Item::Table(workspace));
+
+        if let Some(dependencies) = dependencies {
+            document.insert("dependencies", dependencies);
+        }
+
+        if pixi_dependencies.is_some() || pixi_pypi_dependencies.is_some() {
+            let mut tool_pixi = toml_edit::Table::new();
+            tool_pixi.set_implicit(true);
+            if let Some(pixi_dependencies) = pixi_dependencies {
+                tool_pixi.insert("dependencies", pixi_dependencies);
+            }
+            if let Some(pixi_pypi_dependencies) = pixi_pypi_dependencies {
+                tool_pixi.insert("pypi-dependencies", pixi_pypi_dependencies);
+            }
+            let mut feature = toml_edit::Table::new();
+            feature.set_implicit(true);
+            feature.insert("tool-pixi", toml_edit::Item::Table(tool_pixi));
+            document.insert("feature", toml_edit::Item::Table(feature));
+
+            let mut default = toml_edit::Array::new();
+            default.push("tool-pixi");
+            let mut environments = toml_edit::Table::new();
+            environments.insert(
+                "default",
+                toml_edit::Item::Value(toml_edit::Value::Array(default)),
+            );
+            document.insert("environments", toml_edit::Item::Table(environments));
+        }
+
+        Ok(document.to_string())
+    }
 }
 
 #[cfg(test)]
@@ -332,6 +404,75 @@ mod tests {
         let empty = directory.path().join("empty.c");
         fs_err::write(&empty, "int main(void) { return 0; }\n").unwrap();
         assert!(CondaScriptManifest::from_path(&empty).unwrap().is_none());
+    }
+
+    #[test]
+    fn renders_a_synthetic_pixi_manifest() {
+        let manifest = parse(
+            r#"// /// conda-script
+// channels = ["conda-forge"]
+// entrypoint = "python ${SCRIPT}"
+//
+// [dependencies]
+// python = "3.13.*"
+// simple-app = "0.1.*"
+// gcc = { version = "*", when = "__unix" }
+// pytorch = {
+//   version = ">=2.4",
+//   build = "*cuda*",
+// }
+//
+// [tool.pixi.dependencies]
+// simple-app = { git = "https://github.com/prefix-dev/pixi-build-testsuite.git" }
+//
+// [tool.pixi.pypi-dependencies]
+// requests = ">=2"
+// /// end-conda-script
+"#,
+        )
+        .unwrap()
+        .unwrap();
+
+        insta::assert_snapshot!(manifest.synthetic_manifest().unwrap(), @r#"
+        [workspace]
+        name = "example"
+        channels = ["conda-forge"]
+        platforms = []
+
+        [dependencies]
+        python = "3.13.*"
+        simple-app = "0.1.*"
+        gcc = { version = "*", when = "__unix" }
+        pytorch = {
+          version = ">=2.4",
+          build = "*cuda*",
+        }
+
+        [feature.tool-pixi.dependencies]
+        simple-app = { git = "https://github.com/prefix-dev/pixi-build-testsuite.git" }
+
+        [feature.tool-pixi.pypi-dependencies]
+        requests = ">=2"
+
+        [environments]
+        default = ["tool-pixi"]
+        "#);
+    }
+
+    #[test]
+    fn a_synthetic_manifest_without_tool_pixi_has_no_feature() {
+        let manifest = parse(
+            "# /// conda-script\n# channels = [\"conda-forge\"]\n# entrypoint = \"python ${SCRIPT}\"\n# /// end-conda-script\n",
+        )
+        .unwrap()
+        .unwrap();
+
+        insta::assert_snapshot!(manifest.synthetic_manifest().unwrap(), @r#"
+        [workspace]
+        name = "example"
+        channels = ["conda-forge"]
+        platforms = []
+        "#);
     }
 
     #[test]

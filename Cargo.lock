@@ -6465,6 +6465,7 @@ dependencies = [
  "pixi_build_types",
  "pixi_command_dispatcher",
  "pixi_compute_reporters",
+ "pixi_conda_script",
  "pixi_config",
  "pixi_consts",
  "pixi_core",
@@ -6700,6 +6701,7 @@ dependencies = [
  "thiserror 2.0.20",
  "tokio",
  "toml-span",
+ "toml_edit",
 ]
 
 [[package]]
@@ -6778,6 +6780,7 @@ dependencies = [
  "pixi_build_types",
  "pixi_command_dispatcher",
  "pixi_compute_reporters",
+ "pixi_conda_script",
  "pixi_config",
  "pixi_consts",
  "pixi_diff",

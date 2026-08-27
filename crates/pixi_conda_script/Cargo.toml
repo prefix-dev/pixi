@@ -20,6 +20,7 @@ pixi_toml = { workspace = true }
 rattler_conda_types = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "process"] }
+toml_edit = { workspace = true }
 toml-span = { workspace = true }
 
 [dev-dependencies]

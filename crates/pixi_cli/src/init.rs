@@ -182,6 +182,15 @@ async fn initialize_script(
     channels: Option<Vec<NamedChannelOrUrl>>,
 ) -> miette::Result<()> {
     let path = std::path::absolute(path).into_diagnostic()?;
+    // A file with a conda-script block must not get a PEP 723 block on top;
+    // the two kinds cannot coexist in one file.
+    if path.is_file() && crate::conda_script::detect_with_fallback(&path, false)?.is_some() {
+        return Err(miette::miette!(
+            help = "a file can carry either a PEP 723 block or a conda-script block, not both",
+            "{} is already a conda-script",
+            path.display()
+        ));
+    }
     let channels = channels
         .unwrap_or_default()
         .into_iter()

@@ -4,6 +4,7 @@ use std::{
 };
 
 use miette::{Context, IntoDiagnostic};
+use pixi_conda_script::CondaScriptManifest;
 use pixi_manifest::script::ScriptManifest;
 use rattler_lock::LockFile;
 use serde::{Deserialize, Serialize};
@@ -25,6 +26,14 @@ struct CachedResolution {
     lock_file: String,
 }
 
+/// The parsed manifest of a script workspace: a PEP 723 Python script or a
+/// `conda-script` code file.
+#[derive(Debug, Clone)]
+pub(super) enum ScriptSource {
+    Pep723(Box<ScriptManifest>),
+    CondaScript(Box<CondaScriptManifest>),
+}
+
 /// Describes where a script reads and writes workspace state.
 ///
 /// Every script has a parsed manifest and a cache directory. A local script
@@ -33,7 +42,7 @@ struct CachedResolution {
 /// lock file may keep its last resolution in the cache directory.
 #[derive(Debug, Clone)]
 pub(super) struct WorkspaceScript {
-    manifest: Box<ScriptManifest>,
+    source: ScriptSource,
     pixi_dir: PathBuf,
 
     /// The adjacent lock-file path for a local script.
@@ -45,7 +54,17 @@ impl WorkspaceScript {
         let pixi_dir = cache_root.join(local_cache_name(manifest.path()));
         let lock_file_path = Some(local_lock_file_path(manifest.path()));
         Self {
-            manifest: Box::new(manifest),
+            source: ScriptSource::Pep723(Box::new(manifest)),
+            pixi_dir,
+            lock_file_path,
+        }
+    }
+
+    pub(super) fn for_local_conda_script(manifest: CondaScriptManifest, cache_root: &Path) -> Self {
+        let pixi_dir = cache_root.join(local_cache_name(manifest.path()));
+        let lock_file_path = Some(local_lock_file_path(manifest.path()));
+        Self {
+            source: ScriptSource::CondaScript(Box::new(manifest)),
             pixi_dir,
             lock_file_path,
         }
@@ -59,21 +78,26 @@ impl WorkspaceScript {
         root: &Path,
     ) -> Self {
         Self {
-            manifest: Box::new(manifest),
+            source: ScriptSource::Pep723(Box::new(manifest)),
             pixi_dir: cache_root.join(transient_cache_name(cache_name, cache_key, root)),
             lock_file_path: None,
         }
     }
 
-    pub(super) fn manifest(&self) -> &ScriptManifest {
-        &self.manifest
+    pub(super) fn source(&self) -> &ScriptSource {
+        &self.source
     }
 
     pub(super) fn replace_manifest(&mut self, new_manifest: ScriptManifest) {
         if self.lock_file_path.is_some() {
             self.lock_file_path = Some(local_lock_file_path(new_manifest.path()));
         }
-        *self.manifest = new_manifest;
+        match &mut self.source {
+            ScriptSource::Pep723(manifest) => **manifest = new_manifest,
+            ScriptSource::CondaScript(_) => {
+                unreachable!("conda-script workspaces reject manifest edits when they are opened")
+            }
+        }
     }
 
     pub(super) fn pixi_dir(&self) -> &Path {
