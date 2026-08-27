@@ -128,7 +128,14 @@ fn immutable_backend_identifier(
         .hash(&mut hasher);
     variant_file_hashes.hash(&mut hasher);
     enabled_protocols.hash(&mut hasher);
+    // Both halves of the channel config matter: `channel_alias` expands bare
+    // channel names, and `root_dir` resolves relative ones. The artifact
+    // cache is normally workspace-local, which would make `root_dir`
+    // constant, but `CacheBase::Workspace` falls back to the global root when
+    // no workspace is configured, so entries keyed here can be shared between
+    // different roots.
     channel_config.channel_alias.hash(&mut hasher);
+    channel_config.root_dir.hash(&mut hasher);
     format!("immutable@{:016x}", hasher.finish())
 }
 
@@ -1068,11 +1075,23 @@ mod immutable_identifier_tests {
     }
 
     fn identifier_with(spec: &SourceBuildSpec, variant_file_hashes: &[u64]) -> String {
+        identifier_in(
+            spec,
+            variant_file_hashes,
+            &ChannelConfig::default_with_root_dir(PathBuf::from("/workspace")),
+        )
+    }
+
+    fn identifier_in(
+        spec: &SourceBuildSpec,
+        variant_file_hashes: &[u64],
+        channel_config: &ChannelConfig,
+    ) -> String {
         immutable_backend_identifier(
             spec,
             variant_file_hashes,
             &EnabledProtocols::default(),
-            &ChannelConfig::default_with_root_dir(PathBuf::from("/workspace")),
+            channel_config,
         )
     }
 
@@ -1164,6 +1183,23 @@ mod immutable_identifier_tests {
             identifier_with(&spec(), &[7, 9]),
             identifier_with(&spec(), &[9, 7]),
             "variant file order",
+        );
+
+        let mut alias = ChannelConfig::default_with_root_dir(PathBuf::from("/workspace"));
+        alias.channel_alias = Url::parse("https://mirror.invalid/").unwrap();
+        assert_ne!(
+            baseline,
+            identifier_in(&spec(), &[], &alias),
+            "channel alias",
+        );
+        assert_ne!(
+            baseline,
+            identifier_in(
+                &spec(),
+                &[],
+                &ChannelConfig::default_with_root_dir(PathBuf::from("/elsewhere")),
+            ),
+            "channel config root dir",
         );
     }
 }
