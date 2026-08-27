@@ -6000,6 +6000,7 @@ dependencies = [
  "indicatif",
  "insta",
  "miette 7.6.0",
+ "pathdiff",
  "pep508_rs",
  "percent-encoding",
  "pixi_allocator",

@@ -1,6 +1,11 @@
-use std::collections::HashSet;
+use std::{
+    collections::HashSet,
+    io::IsTerminal,
+    path::{Path, PathBuf},
+};
 
 use clap::Parser;
+use miette::{Context, IntoDiagnostic};
 use pep508_rs::Requirement;
 use pixi_api::workspace::{DependencyOptions, GitOptions};
 use pixi_config::ConfigCli;
@@ -10,13 +15,15 @@ use pixi_core::{
     environment::LockFileUsage,
     workspace::{PypiDeps, SkippedPackage},
 };
-use pixi_manifest::HasFeaturesIter;
+use pixi_manifest::{
+    HasFeaturesIter, HasWorkspaceManifest, KnownPreviewFlag, PypiDependencyLocation,
+};
 use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, PypiPackageName};
 use url::Url;
 
 use crate::{
     cli_config::{DependencyConfig, LockFileUpdateConfig, NoInstallConfig, ScriptWorkspaceConfig},
-    cli_interface::cli_context,
+    cli_interface::{CliInterface, cli_context},
     has_specs::HasSpecs,
 };
 
@@ -56,6 +63,16 @@ use crate::{
 ///
 /// - `pixi add --pypi boto3`
 /// - `pixi add --pypi "boto3==version"`
+///
+/// Local path dependencies can be added with `--path`. Paths are resolved from
+/// the current directory and stored relative to the workspace manifest, so an
+/// absolute input path does not become machine-specific manifest data.
+///
+/// - `pixi add mylib --path ../mylib`
+/// - `pixi add mylib --path /absolute/path/to/mylib`
+/// - `pixi add recipe-package --path ../recipe/recipe.yaml`
+/// - `pixi add --pypi mylib --path ../mylib`
+/// - `pixi add --pypi mylib --path ../mylib --editable`
 ///
 /// If the workspace manifest is a `pyproject.toml`, adding a pypi dependency will
 /// add it to the native pyproject `project.dependencies` array or to the native
@@ -101,13 +118,17 @@ pub struct Args {
     #[clap(flatten)]
     pub config_source: pixi_config::ConfigSourceCli,
 
+    /// The local path to use when adding a path dependency.
+    #[arg(long, conflicts_with = "git")]
+    pub path: Option<PathBuf>,
+
     /// Whether the pypi requirement should be editable
     #[arg(long, requires = "pypi")]
     pub editable: bool,
 
     /// The PyPI index URL to use for this dependency.
     /// Only applicable when adding pypi dependencies.
-    #[clap(long, requires = "pypi", conflicts_with = "git")]
+    #[clap(long, requires = "pypi", conflicts_with_all = ["git", "path"])]
     pub index: Option<Url>,
 }
 
@@ -160,6 +181,7 @@ impl From<&Args> for GitOptions {
     fn from(args: &Args) -> Self {
         GitOptions {
             git: args.dependency_config.git.clone(),
+            path: args.path.clone(),
             reference: args
                 .dependency_config
                 .rev
@@ -199,6 +221,147 @@ fn map_pypi_requirements_with_index(
         .collect()
 }
 
+fn path_error(path: &Path, message: impl std::fmt::Display) -> miette::Report {
+    miette::miette!("invalid dependency path '{}': {message}", path.display())
+}
+
+/// Resolve a CLI path from the current directory and rewrite it relative to the
+/// workspace manifest. Also verifies that the target is a supported package
+/// manifest (or a directory containing one).
+fn resolve_dependency_path(
+    path: &Path,
+    workspace: &Workspace,
+    pypi: bool,
+) -> miette::Result<PathBuf> {
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir().into_diagnostic()?.join(path)
+    };
+    let absolute = dunce::canonicalize(&absolute)
+        .into_diagnostic()
+        .wrap_err_with(|| format!("dependency path '{}' does not exist", path.display()))?;
+
+    let manifest = if absolute.is_dir() {
+        if pypi {
+            let pyproject = absolute.join("pyproject.toml");
+            if !pyproject.is_file() {
+                return Err(path_error(
+                    path,
+                    "directory does not contain pyproject.toml",
+                ));
+            }
+            pyproject
+        } else {
+            let pixi = absolute.join("pixi.toml");
+            let pyproject = absolute.join("pyproject.toml");
+            if pixi.is_file() {
+                pixi
+            } else if pyproject.is_file() {
+                pyproject
+            } else {
+                return Err(path_error(
+                    path,
+                    "directory does not contain pixi.toml or pyproject.toml",
+                ));
+            }
+        }
+    } else {
+        let file_name = absolute.file_name().and_then(|name| name.to_str());
+        let supported = if pypi {
+            file_name == Some("pyproject.toml")
+        } else {
+            matches!(
+                file_name,
+                Some("pixi.toml" | "pyproject.toml" | "recipe.yaml" | "recipe.yml" | "package.xml")
+            )
+        };
+        if !supported {
+            return Err(path_error(path, "not a supported package manifest"));
+        }
+        absolute.clone()
+    };
+
+    if !pypi
+        && matches!(
+            manifest.file_name().and_then(|name| name.to_str()),
+            Some("pixi.toml" | "pyproject.toml")
+        )
+    {
+        let contents = fs_err::read_to_string(&manifest).into_diagnostic()?;
+        let document = contents
+            .parse::<toml_edit::DocumentMut>()
+            .into_diagnostic()?;
+        let has_package =
+            if manifest.file_name().and_then(|name| name.to_str()) == Some("pixi.toml") {
+                document.get("package").is_some()
+            } else {
+                document
+                    .get("tool")
+                    .and_then(|tool| tool.get("pixi"))
+                    .and_then(|pixi| pixi.get("package"))
+                    .is_some()
+            };
+        if !has_package {
+            if manifest.file_name().and_then(|name| name.to_str()) == Some("pyproject.toml") {
+                return Err(miette::miette!(
+                    help = "Use `pixi add --pypi NAME --path PATH` for a Python path dependency",
+                    "'{}' is a Python project, not a pixi-build package source",
+                    manifest.display()
+                ));
+            }
+            return Err(miette::miette!(
+                help = "Add a `[package]` section to the package manifest",
+                "'{}' is a pixi workspace, not a pixi-build package source",
+                manifest.display()
+            ));
+        }
+    }
+
+    let dependency_path = match manifest.file_name().and_then(|name| name.to_str()) {
+        Some("pixi.toml" | "pyproject.toml") => manifest
+            .parent()
+            .expect("a canonical manifest path has a parent directory"),
+        _ => &manifest,
+    };
+    let manifest_dir = workspace
+        .workspace
+        .provenance
+        .path
+        .parent()
+        .ok_or_else(|| miette::miette!("workspace manifest has no parent directory"))?;
+    pathdiff::diff_paths(dependency_path, manifest_dir).ok_or_else(|| {
+        miette::miette!(
+            "could not make dependency path '{}' relative to workspace manifest '{}'",
+            dependency_path.display(),
+            workspace.workspace.provenance.path.display()
+        )
+    })
+}
+
+fn manifest_path_string(path: &Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
+}
+
+fn pypi_path_deps(package: &str, path: &Path, workspace: &Workspace) -> miette::Result<PypiDeps> {
+    let requirement_text = format!("{package} @ {}", manifest_path_string(path));
+    let requirement = Requirement::parse(&requirement_text, workspace.root()).into_diagnostic()?;
+    let name =
+        PypiPackageName::from_normalized(requirement.name.clone()).with_source(package.to_string());
+    let spec = PixiPypiSpec::try_from(requirement.clone())
+        .map_err(|error| miette::miette!("failed to create path requirement: {error}"))?;
+    Ok([(
+        name,
+        (
+            requirement,
+            Some(spec),
+            Some(PypiDependencyLocation::PixiPypiDependencies),
+        ),
+    )]
+    .into_iter()
+    .collect())
+}
+
 pub async fn execute(args: Args) -> miette::Result<()> {
     args.validate_script_options()?;
     args.dependency_config.warn_deprecated_subdir();
@@ -219,6 +382,61 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         workspace = workspace.with_backend_override(backend_override);
     }
 
+    let resolved_path = if let Some(path) = &args.path {
+        if args.dependency_config.specs.len() != 1 {
+            return Err(miette::miette!("--path requires exactly one package name"));
+        }
+        Some(resolve_dependency_path(
+            path,
+            &workspace,
+            args.dependency_config.pypi,
+        )?)
+    } else {
+        None
+    };
+
+    if resolved_path.is_some()
+        && !args.dependency_config.pypi
+        && !(&workspace)
+            .workspace_manifest()
+            .workspace
+            .preview
+            .is_enabled(KnownPreviewFlag::PixiBuild)
+    {
+        let hint = "Run `pixi workspace preview add pixi-build` to enable the preview flag";
+        let enable = std::io::stdin().is_terminal()
+            && dialoguer::Confirm::new()
+                .with_prompt("Conda path dependencies require the pixi-build preview feature. Enable pixi-build for this workspace?")
+                .default(false)
+                .interact()
+                .into_diagnostic()?;
+        if !enable {
+            return Err(miette::miette!(
+                help = hint,
+                "conda path dependencies are not allowed without enabling the 'pixi-build' preview flag"
+            ));
+        }
+        pixi_api::WorkspaceContext::add_preview_flags(
+            CliInterface {},
+            workspace.workspace.provenance.path.clone(),
+            vec![KnownPreviewFlag::PixiBuild],
+        )
+        .await?;
+        workspace = WorkspaceLocator::for_cli()
+            .with_global_config_source(args.config_source.source())
+            .with_search_start(args.workspace_config.workspace_locator_start())
+            .with_cli_config(args.config.clone())
+            .locate()?;
+        if let Some(backend_override) = args
+            .workspace_config
+            .workspace_config
+            .backend_override
+            .clone()
+        {
+            workspace = workspace.with_backend_override(backend_override);
+        }
+    }
+
     let workspace_ctx = cli_context(workspace.clone());
 
     let (update_deps, skipped, parsed_names): (_, Vec<SkippedPackage>, Vec<String>) =
@@ -226,6 +444,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             DependencyType::CondaDependency(spec_type) => {
                 let git_options = GitOptions {
                     git: args.dependency_config.git.clone(),
+                    path: resolved_path.clone(),
                     reference: args
                         .dependency_config
                         .rev
@@ -251,17 +470,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 (result.0, result.1, names)
             }
             DependencyType::PypiDependency => {
-                let requirements_iter = match args
-                    .dependency_config
-                    .vcs_pep508_requirements(&workspace)
-                    .transpose()?
-                {
-                    Some(vcs_reqs) => vcs_reqs.into_iter(),
-                    None => args.dependency_config.pypi_deps(&workspace)?.into_iter(),
+                let pypi_deps = if let Some(path) = &resolved_path {
+                    pypi_path_deps(&args.dependency_config.specs[0], path, &workspace)?
+                } else {
+                    let requirements_iter = match args
+                        .dependency_config
+                        .vcs_pep508_requirements(&workspace)
+                        .transpose()?
+                    {
+                        Some(vcs_reqs) => vcs_reqs.into_iter(),
+                        None => args.dependency_config.pypi_deps(&workspace)?.into_iter(),
+                    };
+                    map_pypi_requirements_with_index(requirements_iter, args.index.as_ref())?
                 };
-
-                let pypi_deps =
-                    map_pypi_requirements_with_index(requirements_iter, args.index.as_ref())?;
 
                 let names: Vec<String> = pypi_deps
                     .keys()

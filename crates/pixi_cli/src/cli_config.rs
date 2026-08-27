@@ -17,8 +17,7 @@ use pixi_manifest::{EnvironmentName, FeatureName, PixiPlatformName, SpecType};
 use pixi_spec::GitReference;
 use rattler_conda_types::ChannelConfig;
 use rattler_conda_types::{Channel, NamedChannelOrUrl};
-use std::collections::HashMap;
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 use url::Url;
 
 use pixi_git::GIT_URL_QUERY_REV_TYPE;

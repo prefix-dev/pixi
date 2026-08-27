@@ -33,6 +33,7 @@ insta = { workspace = true, features = [
   "redactions",
   "yaml",
 ] }
+pathdiff = { workspace = true }
 pep508_rs = { workspace = true }
 percent-encoding = { workspace = true }
 pixi_build_backend_passthrough = { workspace = true }
