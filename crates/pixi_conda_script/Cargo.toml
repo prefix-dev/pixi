@@ -19,9 +19,11 @@ pixi_spec = { workspace = true }
 pixi_toml = { workspace = true }
 rattler_conda_types = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true, features = ["io-util", "process"] }
 toml-span = { workspace = true }
 
 [dev-dependencies]
 insta = { workspace = true }
 pixi_test_utils = { workspace = true }
 tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "process", "rt"] }

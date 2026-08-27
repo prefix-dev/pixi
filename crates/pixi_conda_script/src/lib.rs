@@ -12,6 +12,7 @@ mod envelope;
 mod error;
 mod manifest;
 mod metadata;
+pub mod shell;
 
 pub use entrypoint::{Entrypoint, EntrypointSelector};
 pub use error::{CondaScriptError, EnvelopeError, MetadataError};
