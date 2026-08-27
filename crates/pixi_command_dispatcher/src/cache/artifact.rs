@@ -34,7 +34,6 @@ use std::{
 };
 
 use async_fd_lock::{LockRead, LockWrite};
-use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Utc};
 use pixi_build_discovery::{CommandSpec, EnvironmentSpec, JsonRpcBackendSpec};
 use pixi_build_types::InputGlobSet;
@@ -75,9 +74,11 @@ pub enum SourceMutability {
 
 /// Opaque content-addressed handle for an artifact cache entry.
 ///
-/// Format: url-safe-base64 of the `xxh3_64` over all hashed inputs
+/// Format: lowercase hex of the `xxh3_64` over all hashed inputs
 /// (see [`compute_artifact_cache_key`]). Package name is not included
 /// because the entry lives under a `<package_name>/` parent directory.
+/// The encoding is case-insensitive on purpose -- the key doubles as a
+/// directory name on filesystems that fold case.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ArtifactCacheKey(String);
 
@@ -183,7 +184,13 @@ pub fn compute_artifact_cache_key(
         }
     }
 
-    ArtifactCacheKey(URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes()))
+    // Lowercase hex, not url-safe base64: the key is used verbatim as the
+    // entry's directory name, and base64's alphabet is case-significant while
+    // NTFS and APFS are not, so two distinct keys could share one entry. The
+    // checkout-free path skips the mtime and glob validation that otherwise
+    // notices a wrong entry, so it has nothing to fall back on. Five extra
+    // characters per entry is a cheap way to retire the whole class.
+    ArtifactCacheKey(format!("{:016x}", hasher.finish()))
 }
 
 /// On-disk record that lives next to a cached `.conda`.
