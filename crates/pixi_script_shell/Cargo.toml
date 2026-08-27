@@ -1,0 +1,27 @@
+[package]
+name = "pixi_script_shell"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+description = "The mini-shell that runs script entrypoints"
+readme.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+deno_task_shell = { workspace = true }
+miette = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["io-util", "macros", "process"] }
+which = { workspace = true }
+
+[dev-dependencies]
+fs-err = { workspace = true }
+insta = { workspace = true }
+pixi_test_utils = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["macros", "process", "rt", "time"] }
+
+[target."cfg(unix)".dependencies]
+nix = { workspace = true, features = ["signal"] }
