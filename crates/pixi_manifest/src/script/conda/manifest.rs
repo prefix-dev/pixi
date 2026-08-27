@@ -169,6 +169,15 @@ impl CondaScriptManifest {
             "platforms",
             toml_edit::Item::Value(toml_edit::Value::Array(toml_edit::Array::new())),
         );
+        // Running a conda-script is already gated behind `--experimental`,
+        // which implies the pixi-build preview so source dependencies under
+        // `[tool.pixi.dependencies]` build without further opt-in.
+        let mut preview = toml_edit::Array::new();
+        preview.push("pixi-build");
+        workspace.insert(
+            "preview",
+            toml_edit::Item::Value(toml_edit::Value::Array(preview)),
+        );
         document.insert("workspace", toml_edit::Item::Table(workspace));
 
         if let Some(dependencies) = dependencies {
@@ -473,6 +482,7 @@ mod tests {
         name = "example"
         channels = ["conda-forge"]
         platforms = []
+        preview = ["pixi-build"]
 
         [dependencies]
         python = "3.13.*"
@@ -507,6 +517,7 @@ mod tests {
         name = "example"
         channels = ["conda-forge"]
         platforms = []
+        preview = ["pixi-build"]
         "#);
     }
 
