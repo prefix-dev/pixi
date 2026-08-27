@@ -80,6 +80,10 @@ pub struct WorkspaceMut {
 
     // The parsed toml document.
     workspace_manifest_document: ManifestDocument,
+
+    // Reports solve, download and install progress to the user. `None` keeps
+    // the work silent, which is what non-terminal consumers want.
+    progress: Option<Arc<pixi_reporters::TopLevelProgress>>,
 }
 
 impl WorkspaceMut {
@@ -130,6 +134,7 @@ impl WorkspaceMut {
 
             workspace: Some(workspace),
             workspace_manifest_document,
+            progress: None,
         })
     }
 
@@ -167,7 +172,20 @@ impl WorkspaceMut {
 
             workspace: Some(workspace),
             workspace_manifest_document,
+            progress: None,
         })
+    }
+
+    /// Reports the progress of any solve, download or install this instance
+    /// triggers. Without it the work runs silently.
+    pub fn with_progress(mut self, progress: Arc<pixi_reporters::TopLevelProgress>) -> Self {
+        self.progress = Some(progress);
+        self
+    }
+
+    /// The progress reporter attached with [`Self::with_progress`], if any.
+    pub fn progress(&self) -> Option<&Arc<pixi_reporters::TopLevelProgress>> {
+        self.progress.as_ref()
     }
 
     /// Returns the kind of manifest this workspace is derived from.
@@ -477,6 +495,10 @@ impl WorkspaceMut {
                 .map(|(e, p)| (e.as_str(), p.clone()))
                 .collect(),
         );
+        // Held across the solve and install so the caller's summary output is
+        // not written over bars that have finished but are still rendered.
+        let _clear_progress = pixi_reporters::TopLevelProgress::clear_when_done(self.progress());
+
         let LockFileDerivedData {
             workspace: _, // We don't need the project here
             lock_file,
@@ -491,7 +513,9 @@ impl WorkspaceMut {
             ..
         } = UpdateContext::builder(
             self.workspace(),
-            self.workspace().command_dispatcher_builder()?.finish(),
+            self.workspace()
+                .command_dispatcher_builder(self.progress.as_ref())?
+                .finish(),
         )?
         .with_lock_file(unlocked_lock_file)
         .with_no_install(no_install || dry_run)

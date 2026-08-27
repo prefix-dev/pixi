@@ -64,9 +64,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Use the silent version here since update_lock_file() will display the warning.
     let original_lock_file = workspace.load_lock_file().await?.into_lock_file_or_empty();
     let progress = pixi_reporters::TopLevelProgress::from_global();
+    // Scoped so the bars are cleared before the diff or the JSON is printed.
+    let clear_progress = pixi_reporters::TopLevelProgress::clear_when_done(Some(&progress));
     let (LockFileDerivedData { lock_file, .. }, lock_updated) = workspace
         .update_lock_file(
-            Some(progress),
+            Some(progress.clone()),
             UpdateLockFileOptions {
                 lock_file_usage: if args.dry_run {
                     LockFileUsage::DryRun
@@ -79,6 +81,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             },
         )
         .await?;
+    drop(clear_progress);
 
     // Determine the diff between the old and new lock file.
     let diff = LockFileDiff::from_lock_files(&original_lock_file, &lock_file);

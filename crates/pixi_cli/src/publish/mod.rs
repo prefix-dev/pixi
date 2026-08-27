@@ -620,13 +620,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         multi_progress,
         anchor_pb,
     ));
-    let command_dispatcher = progress
-        .clone()
-        .register_with(
-            workspace
-                .command_dispatcher_builder()?
-                .with_cache_dirs(cache_dirs),
-        )
+    let command_dispatcher = workspace
+        .command_dispatcher_builder(Some(&progress))?
+        .with_cache_dirs(cache_dirs)
         .finish();
 
     // Resolve the CLI subdirs to the platforms the workspace declares for them,

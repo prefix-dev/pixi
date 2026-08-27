@@ -510,6 +510,9 @@ fn width_boundary(line: &str, width: usize) -> usize {
 }
 
 struct RepodataReporterInner {
+    /// Used to swap in a fresh bar in [`RepodataReporterInner::clear`], since
+    /// a bar that has been finished can never be shown again.
+    multi_progress: MultiProgress,
     pb: ProgressBar,
     title: Option<String>,
     downloads: Arc<RwLock<Vec<TrackedDownload>>>,
@@ -529,9 +532,10 @@ impl RepodataReporter {
         progress_bar_placement: ProgressBarPlacement,
         title: String,
     ) -> Self {
-        let pb = progress_bar_placement.insert(multi_progress, ProgressBar::hidden());
+        let pb = progress_bar_placement.insert(multi_progress.clone(), ProgressBar::hidden());
         Self {
             inner: Arc::new(RwLock::new(RepodataReporterInner {
+                multi_progress,
                 pb,
                 title: Some(title),
                 downloads: Arc::new(RwLock::new(Vec::new())),
@@ -543,8 +547,30 @@ impl RepodataReporter {
 
 impl RepodataReporterInner {
     pub fn clear(&mut self) {
-        self.pb.finish_and_clear();
+        let downloads = self.downloads.read();
+        if downloads.is_empty() {
+            return;
+        }
+
+        // Downloads in flight hold an index into `downloads`, so dropping the
+        // entries under them would panic the next progress callback. Leave the
+        // bar up and let a later clear take care of it.
+        if downloads.iter().any(|download| download.finished.is_none()) {
+            drop(downloads);
+            self.update();
+            return;
+        }
+        drop(downloads);
         self.downloads.write().clear();
+
+        // A finished bar can never be shown again, so swap in a fresh hidden
+        // one and restore the title for whatever phase comes next.
+        self.title = Some(self.pb.prefix());
+        let new_pb = self
+            .multi_progress
+            .insert_after(&self.pb, ProgressBar::hidden());
+        self.pb.finish_and_clear();
+        self.pb = new_pb;
     }
 
     fn on_unsupported_repodata_revision(&mut self, message: &UnsupportedRepodataRevision) {

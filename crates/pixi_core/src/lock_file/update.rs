@@ -357,11 +357,7 @@ impl Workspace {
         let glob_hash_cache = GlobHashCache::default();
 
         // Construct a command dispatcher to run the tasks.
-        let mut builder = self.command_dispatcher_builder()?;
-        if let Some(progress) = progress {
-            builder = progress.register_with(builder);
-        }
-        let command_dispatcher = builder.finish();
+        let command_dispatcher = self.command_dispatcher_builder(progress.as_ref())?.finish();
 
         // Get the package cache from the dispatcher.
         let package_cache = command_dispatcher.package_cache().clone();

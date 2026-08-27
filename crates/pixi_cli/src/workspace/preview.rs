@@ -10,7 +10,10 @@ use pixi_core::{Workspace, WorkspaceLocator, WorkspaceLocatorError};
 use pixi_manifest::KnownPreviewFlag;
 use strum::VariantNames;
 
-use crate::{cli_config::WorkspaceConfig, cli_interface::CliInterface};
+use crate::{
+    cli_config::WorkspaceConfig,
+    cli_interface::{CliInterface, cli_context},
+};
 
 /// Commands to manage workspace preview flags.
 #[derive(Parser, Debug)]
@@ -100,7 +103,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .await
         }
         Command::List => {
-            let workspace_ctx = WorkspaceContext::new(CliInterface {}, located?);
+            let workspace_ctx = cli_context(located?);
             let mut stdout = std::io::stdout();
             for flag in workspace_ctx.preview_flags().await {
                 writeln!(stdout, "{flag}")

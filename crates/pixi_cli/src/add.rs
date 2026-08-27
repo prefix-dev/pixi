@@ -2,10 +2,7 @@ use std::collections::HashSet;
 
 use clap::Parser;
 use pep508_rs::Requirement;
-use pixi_api::{
-    WorkspaceContext,
-    workspace::{DependencyOptions, GitOptions},
-};
+use pixi_api::workspace::{DependencyOptions, GitOptions};
 use pixi_config::ConfigCli;
 use pixi_consts::consts;
 use pixi_core::{
@@ -19,7 +16,7 @@ use url::Url;
 
 use crate::{
     cli_config::{DependencyConfig, LockFileUpdateConfig, NoInstallConfig, ScriptWorkspaceConfig},
-    cli_interface::CliInterface,
+    cli_interface::cli_context,
     has_specs::HasSpecs,
 };
 
@@ -222,7 +219,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         workspace = workspace.with_backend_override(backend_override);
     }
 
-    let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
+    let workspace_ctx = cli_context(workspace.clone());
 
     let (update_deps, skipped, parsed_names): (_, Vec<SkippedPackage>, Vec<String>) =
         match args.dependency_config.dependency_type() {

@@ -5,6 +5,7 @@ use pixi_core::{
     environment::{LockFileUsage, get_update_lock_file_and_prefixes},
     lock_file::{ReinstallEnvironment, UpdateMode},
 };
+use std::sync::Arc;
 
 use crate::interface::Interface;
 
@@ -17,6 +18,7 @@ pub async fn reinstall<I: Interface>(
     workspace: &Workspace,
     options: ReinstallOptions,
     lock_file_usage: LockFileUsage,
+    progress: Option<&Arc<pixi_reporters::TopLevelProgress>>,
 ) -> miette::Result<()> {
     // Install either:
     //
@@ -44,7 +46,7 @@ pub async fn reinstall<I: Interface>(
     get_update_lock_file_and_prefixes(
         &environments,
         options.target_platform.as_ref(),
-        Some(pixi_reporters::TopLevelProgress::from_global()),
+        progress.cloned(),
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage,
