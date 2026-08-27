@@ -39,7 +39,7 @@ pub use discovery::{
     PixiVersionMismatchError, WorkspaceDiscoverer, WorkspaceDiscoveryError,
 };
 pub use environment::{Environment, EnvironmentName, NewEnvironment};
-pub use error::{DependencyError, TomlError};
+pub use error::{DependencyError, GenericError, TomlError};
 pub use feature::{Feature, FeatureName};
 pub use features_ext::FeaturesExt;
 pub use has_features_iter::HasFeaturesIter;

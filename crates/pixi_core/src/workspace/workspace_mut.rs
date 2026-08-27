@@ -33,7 +33,7 @@ use crate::{
     lock_file::{LockFileDerivedData, ReinstallPackages, UpdateContext, UpdateMode},
     workspace::{
         MatchSpecs, NON_SEMVER_PACKAGES, PypiDeps, SkippedPackage, SourceSpecs, UpdateDeps,
-        WorkspaceStorage, grouped_environment::GroupedEnvironment,
+        WorkspaceStorage, grouped_environment::GroupedEnvironment, workspace_script::ScriptSource,
     },
 };
 
@@ -96,10 +96,27 @@ impl WorkspaceMut {
         let contents = workspace.workspace.provenance.read()?.into_inner();
 
         let workspace_manifest_document = match &workspace.storage {
-            WorkspaceStorage::Script(script) => {
-                ManifestDocument::from_script(script.manifest().clone())
-                    .expect("a loaded script must remain valid")
-            }
+            WorkspaceStorage::Script(script) => match script.source() {
+                ScriptSource::Pep723(manifest) => {
+                    ManifestDocument::from_script((**manifest).clone())
+                        .expect("a loaded script must remain valid")
+                }
+                ScriptSource::CondaScript(manifest) => {
+                    return Err(Box::new(WithSourceCode {
+                        error: TomlError::Generic(
+                            pixi_manifest::GenericError::new(
+                                "conda-script files cannot be edited by pixi",
+                            )
+                            .with_help("edit the `/// conda-script` block in the file directly"),
+                        ),
+                        source: NamedSource::new(
+                            manifest.path().to_string_lossy(),
+                            Arc::from(contents.as_str()),
+                        ),
+                    })
+                    .into());
+                }
+            },
             WorkspaceStorage::Project => {
                 let toml = match DocumentMut::from_str(&contents) {
                     Ok(document) => TomlDocument::new(document),

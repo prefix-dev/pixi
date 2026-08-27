@@ -75,6 +75,14 @@ pub struct Args {
     #[arg(long = "executable", short = 'x')]
     pub executable: bool,
 
+    /// Enable experimental `--script` features; currently the `conda-script`
+    /// block proposed in issue #3751.
+    ///
+    /// The flag has no effect for PEP 723 scripts, so a shebang line can
+    /// pass it unconditionally.
+    #[arg(long, requires = "script")]
+    pub experimental: bool,
+
     #[clap(flatten)]
     pub workspace_config: ScriptWorkspaceConfig,
 
@@ -168,6 +176,7 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
 
     let cli_config = args
         .activation_config
+        .clone()
         .merge_config(args.config.clone().into());
 
     let is_script = args.workspace_config.script.is_some();
@@ -235,11 +244,38 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
             stdin_script_command = Some(prepared.command);
             workspace
         }
-        Some(RunScriptInput::Local(path)) => WorkspaceLocator::for_cli()
-            .with_global_config_source(global_config_source)
-            .with_search_start(pixi_core::workspace::DiscoveryStart::Script(path))
-            .with_cli_config(cli_config)
-            .locate()?,
+        Some(RunScriptInput::Local(path)) => {
+            // A conda-script block takes this file off the PEP 723 path; a
+            // file with both kinds of block is rejected by the detection.
+            if let Some(manifest) =
+                crate::conda_script::detect_with_fallback(&path, args.experimental)?
+            {
+                if !args.experimental {
+                    return Err(miette::miette!(
+                        help =
+                            "conda-script support is experimental; add `--experimental` to run it",
+                        "{} contains a conda-script block",
+                        path.display()
+                    ));
+                }
+                let root = manifest
+                    .path()
+                    .parent()
+                    .expect("an absolute script path always has a parent")
+                    .to_owned();
+                let config = pixi_config::Config::load_with(&root, &global_config_source)
+                    .merge_config(cli_config);
+                if not_hidden {
+                    global_multi_progress().set_draw_target(ProgressDrawTarget::stderr_with_hz(20));
+                }
+                return crate::conda_script::execute_run(manifest, args, config).await;
+            }
+            WorkspaceLocator::for_cli()
+                .with_global_config_source(global_config_source)
+                .with_search_start(pixi_core::workspace::DiscoveryStart::Script(path))
+                .with_cli_config(cli_config)
+                .locate()?
+        }
         None => WorkspaceLocator::for_cli()
             .with_global_config_source(global_config_source)
             .with_search_start(args.workspace_config.workspace_locator_start())
@@ -875,4 +911,17 @@ async fn listen_and_forward_all_signals(kill_signal: KillSignal) {
         )
     }
     futures::future::join_all(futures).await;
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+
+    use super::Args;
+
+    #[test]
+    fn experimental_requires_a_script() {
+        assert!(Args::try_parse_from(["run", "--experimental", "--script", "main.c"]).is_ok());
+        assert!(Args::try_parse_from(["run", "--experimental", "task"]).is_err());
+    }
 }
