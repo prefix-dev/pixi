@@ -5,6 +5,9 @@ extend-exclude = [
   ".claude/",
   "**/*.snap",
   "tests/data/mapping_files/*",
+  # The conda-script corpus embeds code in many languages whose identifiers
+  # (such as numpy's `arange`) read as typos.
+  "examples/conda-script/",
   "examples/**/**.ipynb",
   "robostack.yaml",
   "checkouts/",
