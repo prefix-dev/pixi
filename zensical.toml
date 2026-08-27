@@ -32,6 +32,7 @@ nav = [
           { "Pytorch Installation" = "python/pytorch.md" },
         ]
       },
+      { "Conda Scripts" = "tutorials/conda_script.md" },
       { "ROS 2" = "tutorials/ros2.md" },
       { "Rust" = "tutorials/rust.md" },
       {
