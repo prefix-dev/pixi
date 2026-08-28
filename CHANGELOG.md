@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.78.0] - 2026-08-28
+#### ✨ Highlights
+
+- You can now use the CLI to add path dependencies with the following command:
+  ```shell
+  pixi add --path ~/dev/pixi pixi
+  pixi add --path ~/dev/vinca vinca --pypi
+  pixi add --path ~/dev/ros_ws/src/common/package.xml ros-jazzy-common
+  ```
+- Pixi now can also share the configuration with rattler-based tools like `rattler-build` and `rattler-index`.
+- The PEP 723 script support has been improved with better caching and resolution of scripts.
+
+#### Added
+
+- Write manifest platform names instead of pN aliases by @ruben-arts in [#6885](https://github.com/prefix-dev/pixi/pull/6885)
+- Rework the terminal output by @Hofer-Julian in [#6869](https://github.com/prefix-dev/pixi/pull/6869)
+- Read the shared config layer of rattler-based tools by @Hofer-Julian in [#6776](https://github.com/prefix-dev/pixi/pull/6776)
+- Cache and update script resolutions by @manzt in [#6893](https://github.com/prefix-dev/pixi/pull/6893)
+- Honor the shared `index-config` when indexing a channel by @Hofer-Julian in [#6896](https://github.com/prefix-dev/pixi/pull/6896)
+- Add `--path` to the `pixi add` command by @ruben-arts in [#6904](https://github.com/prefix-dev/pixi/pull/6904)
+
+#### Changed
+
+- Solve scripts against the host's virtual packages by @Hofer-Julian in [#6865](https://github.com/prefix-dev/pixi/pull/6865)
+- Replace the distro index fetch with a static mapping by @Hofer-Julian in [#6881](https://github.com/prefix-dev/pixi/pull/6881)
+- Drop unused `InstallChange` helpers by @Hofer-Julian in [#6897](https://github.com/prefix-dev/pixi/pull/6897)
+- Pin the ROS fixture's macOS compiler to unbreak CI by @baszalmstra in [#6906](https://github.com/prefix-dev/pixi/pull/6906)
+
+#### Fixed
+
+- Group legacy purl fallback traces by @baszalmstra in [#6886](https://github.com/prefix-dev/pixi/pull/6886)
+- Solve lockless scripts in `pixi workspace platform` by @Hofer-Julian in [#6882](https://github.com/prefix-dev/pixi/pull/6882)
+- Show progress for `pixi add` and other commands that solve by @Hofer-Julian in [#6892](https://github.com/prefix-dev/pixi/pull/6892)
+
+
 ### [0.77.1] - 2026-08-24
 
 #### Added
