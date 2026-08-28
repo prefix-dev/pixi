@@ -15,7 +15,6 @@ The vision is to enable building of packages from source, for any language, on a
 
     1. Limited set of [build-backends](https://github.com/prefix-dev/pixi-build-backends).
     2. Build-backends are probably missing a lot of parameters/features.
-    3. Workspace dependencies cannot be inherited.
 
 ## Setting up the Manifest
 
