@@ -1,0 +1,121 @@
+# Pixi
+
+> Pixi Documentation — Next-gen package manager for reproducible development setups
+
+Pixi is a fast, modern, and reproducible package management tool
+for developers of all backgrounds. Pixi is a cross-platform package manager
+and project management tool that creates reproducible environments using conda and PyPI packages.
+
+To use Pixi, start by running `pixi init my_project` to create a new project with a `pixi.toml` manifest file,
+then add dependencies using `pixi add package1 package2 ...` for conda packages
+or `pixi add --pypi python_package ...` for PyPI packages. Pixi automatically generates a lock file (`pixi.lock`)
+to ensure reproducible environments across different systems.
+You can define and run tasks using `pixi task add task_name "command arg1 arg2"` and `pixi run task_name`,
+and work within the project's virtual environment using `pixi run` for single commands
+or `pixi shell` for an interactive session.
+
+The tool combines dependency management, task running, and environment isolation in a single workflow,
+making it easy to share consistent development environments with others. See other documentation sections
+for further details on how to use the software.
+
+## Getting Started documentation
+
+- [Home](https://pixi.prefix.dev/latest/)
+- [Installation](https://pixi.prefix.dev/latest/installation/)
+- [Basic usage of Pixi](https://pixi.prefix.dev/latest/getting_started/)
+- [Making a Pixi workspace](https://pixi.prefix.dev/latest/first_workspace/)
+- [Pixi for Robotics](https://pixi.prefix.dev/latest/robotics/)
+
+## Tutorials documentation
+
+- [other fields](https://pixi.prefix.dev/latest/python/pyproject_toml/)
+- [Pytorch](https://pixi.prefix.dev/latest/python/pytorch/)
+- [Standalone Python scripts](https://pixi.prefix.dev/latest/python/scripts/)
+- [Main pixi entry](https://pixi.prefix.dev/latest/python/tutorial/)
+- [Import](https://pixi.prefix.dev/latest/tutorials/import/)
+- [Or using the task directly, which will spawn a dialog to select the environment of choice](https://pixi.prefix.dev/latest/tutorials/multi_environment/)
+- [Your project can support multiple platforms, the current platform will be automatically added.](https://pixi.prefix.dev/latest/tutorials/ros2/)
+- [Rust](https://pixi.prefix.dev/latest/tutorials/rust/)
+- [or a specific location](https://pixi.prefix.dev/latest/switching_from/conda/)
+- [Poetry](https://pixi.prefix.dev/latest/switching_from/poetry/)
+- [/// script](https://pixi.prefix.dev/latest/switching_from/uv/)
+- [Global Tools](https://pixi.prefix.dev/latest/global_tools/introduction/)
+
+## Concepts documentation
+
+- [Commands as lists so you can also add documentation in between.](https://pixi.prefix.dev/latest/workspace/advanced_tasks/)
+- [or manually:](https://pixi.prefix.dev/latest/workspace/environment/)
+- [Lock file](https://pixi.prefix.dev/latest/workspace/lock_file/)
+- [A rich entry declares __glibc 2.33 as available on linux-64.](https://pixi.prefix.dev/latest/workspace/multi_environment/)
+- [Give the detected platform a custom name instead of the synthesized one.](https://pixi.prefix.dev/latest/workspace/multi_platform_configuration/)
+- [Migrating from `[system-requirements]`](https://pixi.prefix.dev/latest/workspace/system_requirements/)
+- [Conda pypi](https://pixi.prefix.dev/latest/concepts/conda_pypi/)
+- [Package Specifications](https://pixi.prefix.dev/latest/concepts/package_specifications/)
+- [The Global Manifest](https://pixi.prefix.dev/latest/global_tools/manifest/)
+- [Trampolines](https://pixi.prefix.dev/latest/global_tools/trampolines/)
+
+## Building documentation
+
+- [Advanced cpp](https://pixi.prefix.dev/latest/build/advanced_cpp/)
+- [Backends](https://pixi.prefix.dev/latest/build/backends/)
+- [Cpp](https://pixi.prefix.dev/latest/build/cpp/)
+- [── Cross-compilation ─────────────────────────────────────────────────────────](https://pixi.prefix.dev/latest/build/cross_compilation/)
+- [Pulls in the `cuda` group of `mypackage` in addition to its regular run dependencies.](https://pixi.prefix.dev/latest/build/dependency_types/)
+- [Dev](https://pixi.prefix.dev/latest/build/dev/)
+- [Getting started](https://pixi.prefix.dev/latest/build/getting_started/)
+- [Inline packages](https://pixi.prefix.dev/latest/build/inline_packages/)
+- [Package source](https://pixi.prefix.dev/latest/build/package_source/)
+- [Python](https://pixi.prefix.dev/latest/build/python/)
+- [then](https://pixi.prefix.dev/latest/build/ros/)
+- [Variants](https://pixi.prefix.dev/latest/build/variants/)
+- [Workspace](https://pixi.prefix.dev/latest/build/workspace/)
+- [Use the workspace's numpy version, but pin a specific build string here.](https://pixi.prefix.dev/latest/build/workspace_dependencies/)
+
+## Distributing documentation
+
+- [JFrog Artifactory](https://pixi.prefix.dev/latest/deployment/artifactory/)
+- [if your key uses a session token, you can also use:](https://pixi.prefix.dev/latest/deployment/authentication/)
+- [copy source code, pixi.toml and pixi.lock to the container](https://pixi.prefix.dev/latest/deployment/container/)
+- [environment.tar](https://pixi.prefix.dev/latest/deployment/pixi_pack/)
+- [Prefix.dev](https://pixi.prefix.dev/latest/deployment/prefix/)
+- [...](https://pixi.prefix.dev/latest/deployment/s3/)
+
+## Integration documentation
+
+- [Github actions](https://pixi.prefix.dev/latest/integration/ci/github_actions/)
+- [Updates github actions](https://pixi.prefix.dev/latest/integration/ci/updates_github_actions/)
+- [The production environment is the default feature set.](https://pixi.prefix.dev/latest/integration/editor/jetbrains/)
+- [Jupyterlab](https://pixi.prefix.dev/latest/integration/editor/jupyterlab/)
+- [for example](https://pixi.prefix.dev/latest/integration/editor/r_studio/)
+- [set some user and workdir settings to work nicely with vscode](https://pixi.prefix.dev/latest/integration/editor/vscode/)
+- [Zed](https://pixi.prefix.dev/latest/integration/editor/zed/)
+- [Pixi Extensions](https://pixi.prefix.dev/latest/integration/extensions/introduction/)
+- [Browse conda-forge (default)](https://pixi.prefix.dev/latest/integration/extensions/pixi_browse/)
+- [bash / zsh](https://pixi.prefix.dev/latest/integration/extensions/pixi_diff/)
+- [Pixi install to prefix](https://pixi.prefix.dev/latest/integration/extensions/pixi_install_to_prefix/)
+- [Interactive mode - prompts for backend and scope](https://pixi.prefix.dev/latest/integration/extensions/pixi_skills/)
+- [General setup options:](https://pixi.prefix.dev/latest/integration/third_party/conda_deny/)
+- [Direnv](https://pixi.prefix.dev/latest/integration/third_party/direnv/)
+- [customize python binary path for pixi](https://pixi.prefix.dev/latest/integration/third_party/starship/)
+
+## Advanced documentation
+
+- [Channel logic](https://pixi.prefix.dev/latest/advanced/channel_logic/)
+- [Explain info command](https://pixi.prefix.dev/latest/advanced/explain_info_command/)
+- [pyproject.toml](https://pixi.prefix.dev/latest/advanced/override/)
+- [on WSL - the `wsl.exe` somehow takes over `stdin` and prevents `pixi shell` from succeeding](https://pixi.prefix.dev/latest/advanced/pixi_shell/)
+- [Shebang](https://pixi.prefix.dev/latest/advanced/shebang/)
+
+## Reference documentation
+
+- [Outside environment](https://pixi.prefix.dev/latest/reference/environment_variables/)
+- [The Configuration of Pixi Itself](https://pixi.prefix.dev/latest/reference/pixi_configuration/)
+- [Additive overlay from a file: your entries take priority, and anything not](https://pixi.prefix.dev/latest/reference/pixi_manifest/)
+
+## Miscellaneous documentation
+
+- [Changelog](https://pixi.prefix.dev/latest/CHANGELOG/)
+- [Community](https://pixi.prefix.dev/latest/misc/Community/)
+- [Faq](https://pixi.prefix.dev/latest/misc/FAQ/)
+- [Packaging](https://pixi.prefix.dev/latest/misc/packaging/)
+- [Vision](https://pixi.prefix.dev/latest/misc/vision/)
