@@ -481,6 +481,18 @@
         <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/channel/remove/</loc>
       </url>
       <url>
+        <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/dependencies/</loc>
+      </url>
+      <url>
+        <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/dependencies/add/</loc>
+      </url>
+      <url>
+        <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/dependencies/list/</loc>
+      </url>
+      <url>
+        <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/dependencies/remove/</loc>
+      </url>
+      <url>
         <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/description/</loc>
       </url>
       <url>
