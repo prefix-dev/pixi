@@ -81,7 +81,7 @@ pub struct ListArgs {
 pub enum Command {
     /// Add dependencies to the `[workspace.dependencies]` table.
     #[clap(visible_alias = "a")]
-    Add(AddArgs),
+    Add(Box<AddArgs>),
     /// List dependencies in the `[workspace.dependencies]` table.
     #[clap(visible_alias = "ls")]
     List(ListArgs),
@@ -364,14 +364,14 @@ mod tests {
 
         execute(args(
             manifest_path.clone(),
-            Command::Add(AddArgs {
+            Command::Add(Box::new(AddArgs {
                 specs: vec!["numpy=1.*".to_string(), "boltons>=24".to_string()],
                 path: None,
                 git: None,
                 rev: None,
                 subdirectory: None,
                 subdir: None,
-            }),
+            })),
         ))
         .await
         .unwrap();
@@ -419,14 +419,14 @@ mod tests {
 
         execute(args(
             manifest_path.clone(),
-            Command::Add(AddArgs {
+            Command::Add(Box::new(AddArgs {
                 specs: vec!["local-package".to_string()],
                 path: Some(package_dir),
                 git: None,
                 rev: None,
                 subdirectory: None,
                 subdir: None,
-            }),
+            })),
         ))
         .await
         .unwrap();
@@ -444,14 +444,14 @@ mod tests {
 
         execute(args(
             manifest_path.clone(),
-            Command::Add(AddArgs {
+            Command::Add(Box::new(AddArgs {
                 specs: vec!["local-package".to_string()],
                 path: None,
                 git: Some(Url::parse("https://github.com/example/local-package").unwrap()),
                 rev: Some(GitRev::new().with_tag("v1.2.3".to_string())),
                 subdirectory: Some("recipe".to_string()),
                 subdir: None,
-            }),
+            })),
         ))
         .await
         .unwrap();
