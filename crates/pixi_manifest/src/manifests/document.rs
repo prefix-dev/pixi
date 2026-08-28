@@ -439,6 +439,49 @@ impl ManifestDocument {
             .unwrap_or(false)
     }
 
+    fn workspace_dependency_table_keys(&self) -> Vec<&'static str> {
+        let mut keys = Vec::new();
+        if let Some(prefix) = self.table_prefix() {
+            keys.extend(prefix.split('.'));
+        }
+        keys.extend(["workspace", "dependencies"]);
+        keys
+    }
+
+    /// Adds a dependency to the `[workspace.dependencies]` pool.
+    ///
+    /// If a dependency with the same name already exists, it will be replaced.
+    pub fn add_workspace_dependency(
+        &mut self,
+        name: &PackageName,
+        spec: &PixiSpec,
+    ) -> Result<(), TomlError> {
+        let keys = self.workspace_dependency_table_keys();
+        let item = self.manifest_mut().get_or_insert_nested_item(&keys)?;
+
+        let existing_key = existing_conda_key(item, name);
+        let key = existing_key.as_deref().unwrap_or(name.as_normalized());
+
+        pixi_toml_edit::upsert_entry(item, key, spec.to_toml_value())
+            .map_err(|_| TomlError::table_error("dependencies", "workspace.dependencies"))?;
+
+        Ok(())
+    }
+
+    /// Removes a dependency from the `[workspace.dependencies]` pool.
+    ///
+    /// This is a no-op if the dependency is not found.
+    pub fn remove_workspace_dependency(&mut self, name: &PackageName) -> Result<(), TomlError> {
+        let keys = self.workspace_dependency_table_keys();
+        let item = self.manifest_mut().get_or_insert_nested_item(&keys)?;
+        let Some(key) = existing_conda_key(item, name) else {
+            return Ok(());
+        };
+        pixi_toml_edit::remove_entry(item, &key)
+            .map_err(|_| TomlError::table_error("dependencies", "workspace.dependencies"))?;
+        Ok(())
+    }
+
     /// Adds a conda dependency to the TOML manifest
     ///
     /// If a dependency with the same name already exists, it will be replaced.
