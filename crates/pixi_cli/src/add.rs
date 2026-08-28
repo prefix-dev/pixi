@@ -13,7 +13,7 @@ use pixi_consts::consts;
 use pixi_core::{
     DependencyType, Workspace, WorkspaceLocator,
     environment::LockFileUsage,
-    workspace::{PypiDeps, SkippedPackage},
+    workspace::{DiscoveryStart, PypiDeps, SkippedPackage},
 };
 use pixi_manifest::{
     HasFeaturesIter, HasWorkspaceManifest, KnownPreviewFlag, PypiDependencyLocation,
@@ -228,7 +228,7 @@ fn path_error(path: &Path, message: impl std::fmt::Display) -> miette::Report {
 /// Resolve a CLI path from the current directory and rewrite it relative to the
 /// workspace manifest. Also verifies that the target is a supported package
 /// manifest (or a directory containing one).
-fn resolve_dependency_path(
+pub(crate) fn resolve_dependency_path(
     path: &Path,
     workspace: &Workspace,
     pypi: bool,
@@ -339,8 +339,51 @@ fn resolve_dependency_path(
     })
 }
 
-fn manifest_path_string(path: &Path) -> String {
+pub(crate) fn manifest_path_string(path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
+}
+
+pub(crate) async fn ensure_pixi_build_preview_enabled(
+    workspace: Workspace,
+    config_source: &pixi_config::ConfigSourceCli,
+    search_start: DiscoveryStart,
+    config: ConfigCli,
+) -> miette::Result<Workspace> {
+    if (&workspace)
+        .workspace_manifest()
+        .workspace
+        .preview
+        .is_enabled(KnownPreviewFlag::PixiBuild)
+    {
+        return Ok(workspace);
+    }
+
+    let hint = "Run `pixi workspace preview add pixi-build` to enable the preview flag";
+    let enable = std::io::stdin().is_terminal()
+        && dialoguer::Confirm::new()
+            .with_prompt("Conda source dependencies require the pixi-build preview feature. Enable pixi-build for this workspace?")
+            .default(false)
+            .interact()
+            .into_diagnostic()?;
+    if !enable {
+        return Err(miette::miette!(
+            help = hint,
+            "conda source dependencies are not allowed without enabling the 'pixi-build' preview flag"
+        ));
+    }
+
+    pixi_api::WorkspaceContext::add_preview_flags(
+        CliInterface {},
+        workspace.workspace.provenance.path.clone(),
+        vec![KnownPreviewFlag::PixiBuild],
+    )
+    .await?;
+
+    Ok(WorkspaceLocator::for_cli()
+        .with_global_config_source(config_source.source())
+        .with_search_start(search_start)
+        .with_cli_config(config)
+        .locate()?)
 }
 
 fn pypi_path_deps(package: &str, path: &Path, workspace: &Workspace) -> miette::Result<PypiDeps> {
@@ -395,38 +438,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         None
     };
 
-    if resolved_path.is_some()
-        && !args.dependency_config.pypi
-        && !(&workspace)
-            .workspace_manifest()
-            .workspace
-            .preview
-            .is_enabled(KnownPreviewFlag::PixiBuild)
-    {
-        let hint = "Run `pixi workspace preview add pixi-build` to enable the preview flag";
-        let enable = std::io::stdin().is_terminal()
-            && dialoguer::Confirm::new()
-                .with_prompt("Conda path dependencies require the pixi-build preview feature. Enable pixi-build for this workspace?")
-                .default(false)
-                .interact()
-                .into_diagnostic()?;
-        if !enable {
-            return Err(miette::miette!(
-                help = hint,
-                "conda path dependencies are not allowed without enabling the 'pixi-build' preview flag"
-            ));
-        }
-        pixi_api::WorkspaceContext::add_preview_flags(
-            CliInterface {},
-            workspace.workspace.provenance.path.clone(),
-            vec![KnownPreviewFlag::PixiBuild],
+    if resolved_path.is_some() && !args.dependency_config.pypi {
+        workspace = ensure_pixi_build_preview_enabled(
+            workspace,
+            &args.config_source,
+            args.workspace_config.workspace_locator_start(),
+            args.config.clone(),
         )
         .await?;
-        workspace = WorkspaceLocator::for_cli()
-            .with_global_config_source(args.config_source.source())
-            .with_search_start(args.workspace_config.workspace_locator_start())
-            .with_cli_config(args.config.clone())
-            .locate()?;
         if let Some(backend_override) = args
             .workspace_config
             .workspace_config

@@ -1,0 +1,30 @@
+
+--8<-- [start:description]
+
+--8<-- [end:description]
+
+--8<-- [start:example]
+
+## Examples
+
+```shell
+pixi workspace dependencies add numpy # (1)!
+pixi workspace dependencies add "numpy=1.*" boltons # (2)!
+pixi workspace dependencies add shared-lib --path packages/shared-lib # (3)!
+pixi workspace dependencies add shared-lib --path /absolute/path/to/shared-lib # (4)!
+pixi workspace dependencies add shared-lib --git https://github.com/org/shared-lib # (5)!
+pixi workspace dependencies add shared-lib --git https://github.com/org/shared-lib --branch main --subdirectory recipe # (6)!
+pixi workspace dependencies add shared-lib --git https://github.com/org/shared-lib --tag v1.2.3 # (7)!
+pixi workspace dependencies add shared-lib --git https://github.com/org/shared-lib --rev e50d4a1 # (8)!
+```
+
+1. Add `numpy` with the default spec.
+2. Add multiple MatchSpecs to the workspace dependencies.
+3. Add a local pixi-build package from a path stored relative to the workspace manifest.
+4. Absolute input paths are also stored relative to the workspace manifest.
+5. Add a pixi-build source package from a git repository.
+6. Select a branch and package subdirectory within the repository.
+7. Select a git tag.
+8. Select a git revision.
+
+--8<-- [end:example]
