@@ -241,6 +241,11 @@ impl AddBuilder {
         self
     }
 
+    pub fn with_path(mut self, path: impl Into<PathBuf>) -> Self {
+        self.args.path = Some(path.into());
+        self
+    }
+
     pub fn with_git_rev(mut self, rev: GitRev) -> Self {
         self.args.dependency_config.rev = Some(rev);
         self

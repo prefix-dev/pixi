@@ -30,6 +30,8 @@ pixi add [OPTIONS] <SPEC>...
 <br>**default**: `default`
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
 :  The environment for which the dependency should be modified. The dependency is written to the content defined inline on the environment, creating the environment if it does not exist
+- <a id="arg---path" href="#arg---path">`--path <PATH>`</a>
+:  The local path to use when adding a path dependency
 - <a id="arg---editable" href="#arg---editable">`--editable`</a>
 :  Whether the pypi requirement should be editable
 - <a id="arg---index" href="#arg---index">`--index <INDEX>`</a>
@@ -146,6 +148,16 @@ be mixed with the conda dependencies
 
 - `pixi add --pypi boto3`
 - `pixi add --pypi "boto3==version"`
+
+Local path dependencies can be added with `--path`. Paths are resolved from
+the current directory and stored relative to the workspace manifest, so an
+absolute input path does not become machine-specific manifest data.
+
+- `pixi add mylib --path ../mylib`
+- `pixi add mylib --path /absolute/path/to/mylib`
+- `pixi add recipe-package --path ../recipe/recipe.yaml`
+- `pixi add --pypi mylib --path ../mylib`
+- `pixi add --pypi mylib --path ../mylib --editable`
 
 If the workspace manifest is a `pyproject.toml`, adding a pypi dependency will
 add it to the native pyproject `project.dependencies` array or to the native
