@@ -7,12 +7,12 @@ use pixi_core::{
     UpdateLockFileOptions, Workspace, environment::LockFileUsage, lock_file::UvResolutionContext,
     lock_file::resolve_lock_platform_for,
 };
-use pixi_manifest::{FeaturesExt, HasWorkspaceManifest, PixiPlatformName};
+use pixi_manifest::{FeaturesExt, PixiPlatformName};
 use pixi_uv_conversions::{ConversionError, pypi_options_to_index_locations, to_uv_normalize};
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_package_name};
 use rattler_lock::LockedPackage;
 
-use crate::workspace::platforms::resolve_platforms;
+use crate::workspace::platforms::resolve_declared_platform;
 use uv_distribution::RegistryWheelIndex;
 use uv_distribution_types::{
     ConfigSettings, ExtraBuildRequires, ExtraBuildVariables, PackageConfigSettings,
@@ -58,14 +58,8 @@ pub async fn list(
     // priority; a bare conda subdir is accepted as a fallback so the user
     // never has to spell out which workspace platform they mean. Falls
     // back to the environment's best platform when unset.
-    let workspace_platforms = workspace.workspace_manifest().workspace.platforms.clone();
     let resolved_platform = match platform {
-        Some(name) => Some(
-            resolve_platforms(&workspace_platforms, std::slice::from_ref(&name))?
-                .into_iter()
-                .next()
-                .expect("resolve_platforms preserves length"),
-        ),
+        Some(name) => Some(resolve_declared_platform(workspace, &name)?),
         None => None,
     };
     let platform = match resolved_platform.as_ref() {
@@ -77,6 +71,24 @@ pub async fn list(
             )
         })?,
     };
+
+    // A platform the environment does not declare has no packages by
+    // definition. Say that outright instead of letting the caller report an
+    // empty package list, which reads like the solve produced nothing.
+    let environment_platforms = environment.platforms();
+    if !environment_platforms.is_empty() && !environment_platforms.contains(platform.name()) {
+        miette::bail!(
+            help = format!(
+                "environment '{}' declares: {}",
+                environment.name(),
+                environment_platforms.iter().map(|p| p.as_str()).join(", ")
+            ),
+            "environment '{}' does not include platform '{}'",
+            environment.name(),
+            platform.name(),
+        );
+    }
+
     let locked_platform = resolve_lock_platform_for(&lock_file, platform);
     let locked_environment = lock_file.environment(environment.name().as_str());
 
