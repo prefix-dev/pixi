@@ -778,10 +778,13 @@ impl PixiControl {
         InstallBuilder {
             args: Args {
                 environment: None,
-                workspace_config: WorkspaceConfig {
-                    manifest_path: Some(self.manifest_path()),
-                    backend_override: self.backend_override.clone(),
-                    workspace: None,
+                workspace_config: ScriptWorkspaceConfig {
+                    workspace_config: WorkspaceConfig {
+                        manifest_path: Some(self.manifest_path()),
+                        backend_override: self.backend_override.clone(),
+                        workspace: None,
+                    },
+                    script: None,
                 },
                 lock_file_usage: LockFileUsageConfig {
                     frozen: false,

@@ -887,12 +887,73 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
     reinstall_packages: ReinstallPackages,
     filter: &InstallFilter,
 ) -> miette::Result<(LockFileDerivedData<'env>, Vec<Prefix>)> {
+    get_lock_file_and_prefixes(
+        environments,
+        target_platform,
+        progress,
+        update_mode,
+        reinstall_packages,
+        filter,
+        LockFileSource::Workspace(update_lock_file_options),
+    )
+    .await
+}
+
+/// Resolves lock data and installs the specified environments.
+///
+/// For scripts, Pixi updates an adjacent lock file when one exists. Otherwise,
+/// it uses and updates the cached resolution.
+///
+/// The environment list must not be empty. When `target_platform` is set,
+/// every environment must declare that platform.
+pub async fn get_resolved_lock_file_and_prefixes<'env>(
+    environments: &[Environment<'env>],
+    target_platform: Option<&PixiPlatformName>,
+    progress: Option<std::sync::Arc<pixi_reporters::TopLevelProgress>>,
+    update_mode: UpdateMode,
+    update_lock_file_options: UpdateLockFileOptions,
+    reinstall_packages: ReinstallPackages,
+    filter: &InstallFilter,
+) -> miette::Result<(LockFileDerivedData<'env>, Vec<Prefix>)> {
+    get_lock_file_and_prefixes(
+        environments,
+        target_platform,
+        progress,
+        update_mode,
+        reinstall_packages,
+        filter,
+        LockFileSource::Script(update_lock_file_options),
+    )
+    .await
+}
+
+/// Chooses how installation obtains lock data.
+enum LockFileSource {
+    /// Updates the workspace's persistent lock file.
+    Workspace(UpdateLockFileOptions),
+    /// Uses a script's adjacent lock file or cached resolution.
+    Script(UpdateLockFileOptions),
+}
+
+/// Installs environments using workspace or script lock-file behavior.
+async fn get_lock_file_and_prefixes<'env>(
+    environments: &[Environment<'env>],
+    target_platform: Option<&PixiPlatformName>,
+    progress: Option<std::sync::Arc<pixi_reporters::TopLevelProgress>>,
+    update_mode: UpdateMode,
+    reinstall_packages: ReinstallPackages,
+    filter: &InstallFilter,
+    lock_file_source: LockFileSource,
+) -> miette::Result<(LockFileDerivedData<'env>, Vec<Prefix>)> {
     if environments.is_empty() {
         return Err(miette::miette!("No environments provided to install."));
     }
 
     let workspace = environments[0].workspace();
 
+    let update_lock_file_options = match &lock_file_source {
+        LockFileSource::Workspace(options) | LockFileSource::Script(options) => options,
+    };
     let no_install = update_lock_file_options.no_install;
     for env in environments {
         // A `--platform` the environment doesn't list is a membership error.
@@ -945,18 +1006,25 @@ pub async fn get_update_lock_file_and_prefixes<'env>(
     store_credentials_from_requirements(requirements);
 
     // Ensure that the lock file is up-to-date
-    let mut lock_file = workspace
-        .update_lock_file(
-            progress.clone(),
-            UpdateLockFileOptions {
-                lock_file_usage: update_lock_file_options.lock_file_usage,
-                no_install,
-                max_concurrent_solves: update_lock_file_options.max_concurrent_solves,
-                ..Default::default()
-            },
-        )
-        .await?
-        .0;
+    let options = UpdateLockFileOptions {
+        lock_file_usage: update_lock_file_options.lock_file_usage,
+        no_install,
+        max_concurrent_solves: update_lock_file_options.max_concurrent_solves,
+        ..Default::default()
+    };
+    let mut lock_file = match lock_file_source {
+        LockFileSource::Workspace(_) => {
+            workspace
+                .update_lock_file(progress.clone(), options)
+                .await?
+        }
+        LockFileSource::Script(_) => {
+            workspace
+                .resolve_lock_file(progress.clone(), options)
+                .await?
+        }
+    }
+    .0;
     // Pin the override so the downstream prefix helpers see it without a
     // fresh parameter on every call.
     lock_file.target_platform = target_platform.cloned();
