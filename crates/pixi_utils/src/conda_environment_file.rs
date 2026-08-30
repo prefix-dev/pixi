@@ -292,8 +292,8 @@ mod tests {
 
     use super::*;
 
-    #[tokio::test]
-    async fn test_parse_conda_env_file() {
+    #[test]
+    fn test_parse_conda_env_file() {
         let example_conda_env_file = r#"
         name: pixi_example_project
         channels:
