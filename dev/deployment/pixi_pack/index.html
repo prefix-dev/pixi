@@ -2448,6 +2448,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#named-platforms" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Named platforms
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#self-extracting-binaries" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -8661,6 +8672,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#named-platforms" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Named platforms
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#self-extracting-binaries" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -8820,31 +8842,38 @@ without needing to have <code>conda</code> or <code>micromamba</code> installed.
 <p class="admonition-title">Note</p>
 <p>You can only unpack a pack on a system that has the same platform as the pack was created for.</p>
 </div>
+<h3 id="named-platforms">Named platforms<a class="headerlink" href="#named-platforms" title="Permanent link">#</a></h3>
+<p>If your <code>pixi.toml</code> defines named platforms (requires a lockfile in version 7 or later), you can pack them by name.</p>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">platforms</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[{</span><span class="w"> </span><span class="n">name</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;jetson&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">platform</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;linux-aarch64&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">cuda</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;13&quot;</span><span class="w"> </span><span class="p">}]</span>
+</span></code></pre></div>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>pixi-pack<span class="w"> </span>--platform<span class="w"> </span>jetson
+</span></code></pre></div>
+<p>You can still pass the underlying conda platform (e.g. <code>linux-aarch64</code>) as long as only one named platform uses it; otherwise <code>pixi-pack</code> asks you to use one of the platform names instead.</p>
 <h3 id="self-extracting-binaries">Self-Extracting Binaries<a class="headerlink" href="#self-extracting-binaries" title="Permanent link">#</a></h3>
 <p>You can create a self-extracting binary that contains the packed environment and a script that unpacks the environment.
 This can be useful if you want to distribute the environment to users that don't have <code>pixi-unpack</code> installed.</p>
 <div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Linux &amp; macOS</label><label for="__tabbed_1_2">Windows</label></div>
 <div class="tabbed-content">
 <div class="tabbed-block">
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>$<span class="w"> </span>pixi-pack<span class="w"> </span>--create-executable
-</span><span id="__span-6-2"><a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a>$<span class="w"> </span>ls
-</span><span id="__span-6-3"><a id="__codelineno-6-3" name="__codelineno-6-3" href="#__codelineno-6-3"></a>environment.sh
-</span><span id="__span-6-4"><a id="__codelineno-6-4" name="__codelineno-6-4" href="#__codelineno-6-4"></a>$<span class="w"> </span>./environment.sh
-</span><span id="__span-6-5"><a id="__codelineno-6-5" name="__codelineno-6-5" href="#__codelineno-6-5"></a>$<span class="w"> </span>ls
-</span><span id="__span-6-6"><a id="__codelineno-6-6" name="__codelineno-6-6" href="#__codelineno-6-6"></a>env/
-</span><span id="__span-6-7"><a id="__codelineno-6-7" name="__codelineno-6-7" href="#__codelineno-6-7"></a>activate.sh
-</span><span id="__span-6-8"><a id="__codelineno-6-8" name="__codelineno-6-8" href="#__codelineno-6-8"></a>environment.sh
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>$<span class="w"> </span>pixi-pack<span class="w"> </span>--create-executable
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>$<span class="w"> </span>ls
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>environment.sh
+</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a>$<span class="w"> </span>./environment.sh
+</span><span id="__span-8-5"><a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>$<span class="w"> </span>ls
+</span><span id="__span-8-6"><a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>env/
+</span><span id="__span-8-7"><a id="__codelineno-8-7" name="__codelineno-8-7" href="#__codelineno-8-7"></a>activate.sh
+</span><span id="__span-8-8"><a id="__codelineno-8-8" name="__codelineno-8-8" href="#__codelineno-8-8"></a>environment.sh
 </span></code></pre></div>
 </div>
 <div class="tabbed-block">
-<div class="language-powershell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="nb">PS </span><span class="p">&gt;</span> <span class="n">pixi-pack</span> <span class="p">-</span><span class="n">-create-executable</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="nb">PS </span><span class="p">&gt;</span> <span class="nb">ls</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="n">environment</span><span class="p">.</span><span class="n">ps1</span>
-</span><span id="__span-7-4"><a id="__codelineno-7-4" name="__codelineno-7-4" href="#__codelineno-7-4"></a><span class="nb">PS </span><span class="p">&gt;</span> <span class="p">.\</span><span class="n">environment</span><span class="p">.</span><span class="n">ps1</span>
-</span><span id="__span-7-5"><a id="__codelineno-7-5" name="__codelineno-7-5" href="#__codelineno-7-5"></a><span class="nb">PS </span><span class="p">&gt;</span> <span class="nb">ls</span>
-</span><span id="__span-7-6"><a id="__codelineno-7-6" name="__codelineno-7-6" href="#__codelineno-7-6"></a><span class="n">env</span><span class="p">/</span>
-</span><span id="__span-7-7"><a id="__codelineno-7-7" name="__codelineno-7-7" href="#__codelineno-7-7"></a><span class="n">activate</span><span class="p">.</span><span class="n">sh</span>
-</span><span id="__span-7-8"><a id="__codelineno-7-8" name="__codelineno-7-8" href="#__codelineno-7-8"></a><span class="n">environment</span><span class="p">.</span><span class="n">ps1</span>
+<div class="language-powershell highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="nb">PS </span><span class="p">&gt;</span> <span class="n">pixi-pack</span> <span class="p">-</span><span class="n">-create-executable</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="nb">PS </span><span class="p">&gt;</span> <span class="nb">ls</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="n">environment</span><span class="p">.</span><span class="n">ps1</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="nb">PS </span><span class="p">&gt;</span> <span class="p">.\</span><span class="n">environment</span><span class="p">.</span><span class="n">ps1</span>
+</span><span id="__span-9-5"><a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a><span class="nb">PS </span><span class="p">&gt;</span> <span class="nb">ls</span>
+</span><span id="__span-9-6"><a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a><span class="n">env</span><span class="p">/</span>
+</span><span id="__span-9-7"><a id="__codelineno-9-7" name="__codelineno-9-7" href="#__codelineno-9-7"></a><span class="n">activate</span><span class="p">.</span><span class="n">sh</span>
+</span><span id="__span-9-8"><a id="__codelineno-9-8" name="__codelineno-9-8" href="#__codelineno-9-8"></a><span class="n">environment</span><span class="p">.</span><span class="n">ps1</span>
 </span></code></pre></div>
 </div>
 </div>
@@ -8858,10 +8887,10 @@ This can be useful if you want to distribute the environment to users that don't
 </ul>
 <h5 id="example-usage">Example Usage<a class="headerlink" href="#example-usage" title="Permanent link">#</a></h5>
 <p>Using a URL:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>pixi-pack<span class="w"> </span>--create-executable<span class="w"> </span>--pixi-unpack-source<span class="w"> </span>https://my.mirror/pixi-pack/pixi-unpack-x86_64-unknown-linux-musl
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>pixi-pack<span class="w"> </span>--create-executable<span class="w"> </span>--pixi-unpack-source<span class="w"> </span>https://my.mirror/pixi-pack/pixi-unpack-x86_64-unknown-linux-musl
 </span></code></pre></div>
 <p>Using a path:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>pixi-pack<span class="w"> </span>--create-executable<span class="w"> </span>--pixi-unpack-source<span class="w"> </span>./pixi-unpack-x86_64-unknown-linux-musl
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>pixi-pack<span class="w"> </span>--create-executable<span class="w"> </span>--pixi-unpack-source<span class="w"> </span>./pixi-unpack-x86_64-unknown-linux-musl
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
@@ -8869,7 +8898,7 @@ This can be useful if you want to distribute the environment to users that don't
 </div>
 <h3 id="inject-additional-packages">Inject Additional Packages<a class="headerlink" href="#inject-additional-packages" title="Permanent link">#</a></h3>
 <p>You can inject additional packages into the environment that are not specified in <code>pixi.lock</code> by using the <code>--inject</code> flag:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>pixi-pack<span class="w"> </span>--inject<span class="w"> </span>local-package-1.0.0-hbefa133_0.conda<span class="w"> </span>pixi.toml
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>pixi-pack<span class="w"> </span>--inject<span class="w"> </span>local-package-1.0.0-hbefa133_0.conda<span class="w"> </span>pixi.toml
 </span></code></pre></div>
 <p>This can be particularly useful if you build the package itself and want to include the built package
 in the environment but still want to use <code>pixi.lock</code> from the workspace.</p>
@@ -8879,7 +8908,7 @@ in the environment but still want to use <code>pixi.lock</code> from the workspa
 If you happen to use source distributions, you can ignore them by using the <code>--ignore-pypi-non-wheel</code> flag.
 This will skip the bundling of PyPi packages that are source distributions.</p>
 <p>The <code>--inject</code> option also supports wheels.</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>pixi-pack<span class="w"> </span>--ignore-pypi-non-wheel<span class="w"> </span>--inject<span class="w"> </span>my_webserver-0.1.0-py3-none-any.whl
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>pixi-pack<span class="w"> </span>--ignore-pypi-non-wheel<span class="w"> </span>--inject<span class="w"> </span>my_webserver-0.1.0-py3-none-any.whl
 </span></code></pre></div>
 <div class="admonition warning">
 <p class="admonition-title">Warning</p>
@@ -8888,24 +8917,24 @@ we cannot verify that injected wheels are compatible with the target environment
 </div>
 <h3 id="mirror-and-s3-middleware">Mirror and S3 middleware<a class="headerlink" href="#mirror-and-s3-middleware" title="Permanent link">#</a></h3>
 <p>You can use mirror middleware by creating a configuration file as described in the <a href="../../reference/pixi_configuration/#mirror-configuration">pixi documentation</a> and referencing it using <code>--config</code>.</p>
-<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="k">[mirrors]</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="s2">&quot;https://conda.anaconda.org/conda-forge&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://my.artifactory/conda-forge&quot;</span><span class="p">]</span>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="k">[mirrors]</span>
+</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="s2">&quot;https://conda.anaconda.org/conda-forge&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://my.artifactory/conda-forge&quot;</span><span class="p">]</span>
 </span></code></pre></div>
 <p>If you are using <a href=".././s3/">S3 in pixi</a>, you can also add the appropriate S3 config in your config file and reference it.</p>
-<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="k">[s3-options.my-s3-bucket]</span>
-</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">endpoint-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://s3.eu-central-1.amazonaws.com&quot;</span>
-</span><span id="__span-13-3"><a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="n">region</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;eu-central-1&quot;</span>
-</span><span id="__span-13-4"><a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a><span class="n">force-path-style</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="k">[s3-options.my-s3-bucket]</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">endpoint-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://s3.eu-central-1.amazonaws.com&quot;</span>
+</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="n">region</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;eu-central-1&quot;</span>
+</span><span id="__span-15-4"><a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a><span class="n">force-path-style</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">false</span>
 </span></code></pre></div>
 <h3 id="setting-maximum-number-of-parallel-downloads">Setting maximum number of parallel downloads<a class="headerlink" href="#setting-maximum-number-of-parallel-downloads" title="Permanent link">#</a></h3>
-<div class="language-toml highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="k">[concurrency]</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">downloads</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">5</span>
+<div class="language-toml highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="k">[concurrency]</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="n">downloads</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">5</span>
 </span></code></pre></div>
 <p>Use <code>pixi-pack --config config.toml</code> to use the custom configuration file.
 See <a href="../../reference/pixi_configuration/#concurrency">pixi docs</a> for more information.</p>
 <h3 id="cache-downloaded-packages">Cache Downloaded Packages<a class="headerlink" href="#cache-downloaded-packages" title="Permanent link">#</a></h3>
 <p>You can cache downloaded packages to speed up subsequent pack operations by using the <code>--use-cache</code> flag:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>pixi-pack<span class="w"> </span>--use-cache<span class="w"> </span>~/.pixi-pack/cache
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a>pixi-pack<span class="w"> </span>--use-cache<span class="w"> </span>~/.pixi-pack/cache
 </span></code></pre></div>
 <p>This will store all downloaded packages in the specified directory and reuse them in future pack operations. The cache follows the same structure as conda channels, organizing packages by platform subdirectories (e.g., linux-64, win-64, etc.).</p>
 <p>Using a cache is particularly useful when:</p>
@@ -8920,10 +8949,10 @@ See <a href="../../reference/pixi_configuration/#concurrency">pixi docs</a> for 
 Just unarchive the <code>environment.tar</code>, then you have a local channel on your system where all necessary packages are available.
 Next to this local channel, you will find an <code>environment.yml</code> file that contains the environment specification.
 You can then install the environment using <code>conda</code> or <code>micromamba</code>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a>tar<span class="w"> </span>-xvf<span class="w"> </span>environment.tar
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>micromamba<span class="w"> </span>create<span class="w"> </span>-p<span class="w"> </span>./env<span class="w"> </span>--file<span class="w"> </span>environment.yml
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="c1"># or</span>
-</span><span id="__span-16-4"><a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>conda<span class="w"> </span>env<span class="w"> </span>create<span class="w"> </span>-p<span class="w"> </span>./env<span class="w"> </span>--file<span class="w"> </span>environment.yml
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>tar<span class="w"> </span>-xvf<span class="w"> </span>environment.tar
+</span><span id="__span-18-2"><a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>micromamba<span class="w"> </span>create<span class="w"> </span>-p<span class="w"> </span>./env<span class="w"> </span>--file<span class="w"> </span>environment.yml
+</span><span id="__span-18-3"><a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a><span class="c1"># or</span>
+</span><span id="__span-18-4"><a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>conda<span class="w"> </span>env<span class="w"> </span>create<span class="w"> </span>-p<span class="w"> </span>./env<span class="w"> </span>--file<span class="w"> </span>environment.yml
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
