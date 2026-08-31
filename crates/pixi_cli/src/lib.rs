@@ -571,7 +571,7 @@ mod tests {
             };
             if command
                 .get_arguments()
-                .any(|argument| argument.get_long() == Some("script"))
+                .any(|argument| argument.get_long() == Some("script") && !argument.is_hide_set())
             {
                 commands.insert(path.clone());
             }
