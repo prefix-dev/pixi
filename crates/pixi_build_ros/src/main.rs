@@ -340,6 +340,8 @@ impl GenerateRecipe for RosGenerator {
             "**/*.hpp",
             "**/*.rs",
             "**/*.sh",
+            "**/*.py",
+            "**/*.pyx",
             "package.xml",
             "setup.py",
             "setup.cfg",
@@ -356,10 +358,6 @@ impl GenerateRecipe for RosGenerator {
             "srv/**/*.srv",
             "action/**/*.action",
         ];
-
-        if !editable {
-            globs.extend(["**/*.py", "**/*.pyx"]);
-        }
 
         let mut result: Vec<String> = globs.iter().map(|s| s.to_string()).collect();
         if let Some(extra) = &config.extra_input_globs {
