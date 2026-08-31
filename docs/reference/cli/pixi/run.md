@@ -104,7 +104,7 @@ pixi run [OPTIONS] [TASK]...
 - <a id="arg---workspace" href="#arg---workspace">`--workspace (-w) <WORKSPACE>`</a>
 :  Name of the workspace
 - <a id="arg---script" href="#arg---script">`--script (-s) <SCRIPT>`</a>
-:  The path to a Python script containing PEP 723 metadata
+:  The path to a script with an embedded manifest: a Python script containing PEP 723 metadata, or a file of any language containing a `/// conda-script` block
 
 ## Description
 Runs task in the pixi environment.
