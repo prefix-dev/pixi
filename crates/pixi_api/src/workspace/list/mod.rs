@@ -30,6 +30,7 @@ pub async fn list(
     platform: Option<PixiPlatformName>,
     environment: Option<String>,
     explicit: bool,
+    local: bool,
     no_install: bool,
     lock_file_usage: LockFileUsage,
     progress: Option<&Arc<pixi_reporters::TopLevelProgress>>,
@@ -189,6 +190,14 @@ pub async fn list(
         packages_to_output = packages_to_output
             .into_iter()
             .filter(|p| p.is_explicit)
+            .collect::<Vec<_>>();
+    }
+
+    // Only return local packages if needed
+    if local {
+        packages_to_output = packages_to_output
+            .into_iter()
+            .filter(|p| p.size_bytes.is_none())
             .collect::<Vec<_>>();
     }
 
