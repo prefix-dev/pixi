@@ -1,4 +1,4 @@
-use std::{fmt, ops::Range, sync::Arc};
+use std::{fmt, ops::Range, path::PathBuf, sync::Arc};
 
 use miette::{Diagnostic, LabeledSpan, NamedSource, SourceCode};
 use pixi_toml::TomlDiagnostic;
@@ -26,6 +26,10 @@ pub enum CondaScriptError {
 
     #[error(transparent)]
     TomlEdit(#[from] toml_edit::TomlError),
+
+    #[error("{} is already a conda-script", path.display())]
+    #[diagnostic(help("the file already carries a `/// conda-script` block"))]
+    AlreadyInitialized { path: PathBuf },
 
     #[error("conda-script blocks do not support `{key}`")]
     #[diagnostic(help("a conda-script resolves for the machine it runs on"))]
