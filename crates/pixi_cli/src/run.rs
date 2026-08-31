@@ -26,7 +26,7 @@ use pixi_core::{
         errors::UnsupportedPlatformError,
         virtual_packages::{
             EnvironmentRunnability, classify_environment_runnability,
-            verify_current_platform_can_run_environment,
+            minimum_compatible_declared_platform, verify_current_platform_can_run_environment,
         },
     },
 };
@@ -37,6 +37,7 @@ use pixi_task::{
     PreferExecutable, SearchEnvironments, TaskAndEnvironment, TaskGraph, get_task_env,
 };
 use rattler_conda_types::Platform;
+use rattler_lock::LockFile;
 use thiserror::Error;
 use tokio_util::sync::CancellationToken;
 use tracing::Level;
@@ -283,7 +284,12 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
 
     // Print all available tasks if no task is provided
     if args.task.is_empty() {
-        command_not_found(&workspace, explicit_environment);
+        let lock_file = workspace
+            .load_lock_file()
+            .await
+            .ok()
+            .map(|r| r.into_lock_file_or_empty_with_warning());
+        command_not_found(&workspace, explicit_environment, lock_file.as_ref());
         return Ok(());
     }
 
@@ -365,9 +371,13 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
     } else {
         None
     };
-    let search_environment =
-        SearchEnvironments::from_opt_env(&workspace, explicit_environment.clone(), search_platform)
-            .with_disambiguate_fn(disambiguate_task_interactive);
+    let search_environment = SearchEnvironments::from_opt_env_with_lock_file(
+        &workspace,
+        explicit_environment.clone(),
+        search_platform,
+        Some(lock_file.as_lock_file()),
+    )
+    .with_disambiguate_fn(disambiguate_task_interactive);
 
     let task_graph = TaskGraph::from_cmd_args(
         &workspace,
@@ -605,7 +615,11 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
             }
             Err(TaskExecutionError::NonZeroExitCode(code)) => {
                 if code == 127 {
-                    command_not_found(&workspace, explicit_environment.clone());
+                    command_not_found(
+                        &workspace,
+                        explicit_environment.clone(),
+                        Some(lock_file.as_lock_file()),
+                    );
                 }
                 process_exit::exit_with_code(code);
             }
@@ -630,15 +644,42 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
 }
 
 /// Called when a command was not found.
-fn command_not_found<'p>(workspace: &'p Workspace, explicit_environment: Option<Environment<'p>>) {
+fn command_not_found<'p>(
+    workspace: &'p Workspace,
+    explicit_environment: Option<Environment<'p>>,
+    lock_file: Option<&LockFile>,
+) {
+    let filtered_tasks = |env: Environment<'p>| {
+        let platform = env.best_declared_platform().or_else(|| {
+            lock_file
+                .and_then(|lock_file| minimum_compatible_declared_platform(&env, lock_file).ok())
+        });
+        env.tasks(platform)
+            .into_iter()
+            .flat_map(|tasks| {
+                tasks.into_iter().filter_map(|(key, _)| {
+                    if !key.as_str().starts_with('_') {
+                        Some(key)
+                    } else {
+                        None
+                    }
+                })
+            })
+            .map(ToOwned::to_owned)
+            .collect::<HashSet<_>>()
+    };
     let available_tasks: HashSet<TaskName> =
         if let Some(explicit_environment) = explicit_environment {
-            explicit_environment.get_filtered_tasks()
+            filtered_tasks(explicit_environment)
         } else {
             workspace
                 .environments()
                 .into_iter()
-                .flat_map(|env| env.get_filtered_tasks())
+                .filter(|env| {
+                    classify_environment_runnability(env, lock_file)
+                        != EnvironmentRunnability::Unsupported
+                })
+                .flat_map(filtered_tasks)
                 .collect()
         };
 
