@@ -571,11 +571,10 @@ impl Workspace {
             implicit_script_platforms(Some(&lock_file_path))?,
         );
 
-        // The provenance kind only matters for flows that re-read or edit the
-        // manifest, which conda-script workspaces reject; PEP 723 is the
-        // closest embedded-metadata kind.
-        let workspace =
-            manifest.with_provenance(ManifestProvenance::new(script_path, ManifestKind::Pep723));
+        let workspace = manifest.with_provenance(ManifestProvenance::new(
+            script_path,
+            ManifestKind::CondaScript,
+        ));
 
         Ok(WithWarnings::from(Self::from_parsed(
             workspace,
@@ -2270,13 +2269,13 @@ platforms = []
             ["testing"]
         );
         assert_eq!(manifest.environments.iter().count(), 1);
-        assert_eq!(manifest.all_features().count(), 2);
+        assert_eq!(manifest.all_features().count(), 1);
         let default_environment = workspace.default_environment();
         assert!(
             default_environment
                 .pypi_dependencies(None)
                 .contains_key(&PypiPackageName::from_str("requests").unwrap()),
-            "the tool.pixi feature must reach the default environment"
+            "`tool.pixi.pypi-dependencies` must reach the default environment"
         );
         assert!(
             !manifest.workspace.platforms.is_empty(),

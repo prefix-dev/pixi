@@ -203,7 +203,7 @@ pub struct Args {
 pub async fn execute(args: Args) -> miette::Result<()> {
     if args.workspace_config.script.is_some() && args.environment.is_some() {
         return Err(miette::miette!(
-            help = "A PEP 723 script has one implicit default run environment.",
+            help = "A script has one implicit default run environment.",
             "`pixi list --script` does not support --environment"
         ));
     }

@@ -7,6 +7,7 @@ pub enum ManifestSource<S> {
     PixiToml(S),
     MojoProjectToml(S),
     Pep723(S),
+    CondaScript(S),
 }
 
 impl<S> AsRef<S> for ManifestSource<S> {
@@ -16,6 +17,7 @@ impl<S> AsRef<S> for ManifestSource<S> {
             ManifestSource::PixiToml(source) => source,
             ManifestSource::MojoProjectToml(source) => source,
             ManifestSource::Pep723(source) => source,
+            ManifestSource::CondaScript(source) => source,
         }
     }
 }
@@ -28,6 +30,7 @@ impl<S> ManifestSource<S> {
             ManifestSource::PixiToml(source) => source,
             ManifestSource::MojoProjectToml(source) => source,
             ManifestSource::Pep723(source) => source,
+            ManifestSource::CondaScript(source) => source,
         }
     }
 
@@ -38,6 +41,7 @@ impl<S> ManifestSource<S> {
             ManifestSource::PixiToml(_) => ManifestKind::Pixi,
             ManifestSource::MojoProjectToml(_) => ManifestKind::MojoProject,
             ManifestSource::Pep723(_) => ManifestKind::Pep723,
+            ManifestSource::CondaScript(_) => ManifestKind::CondaScript,
         }
     }
 
@@ -48,6 +52,7 @@ impl<S> ManifestSource<S> {
             ManifestSource::PixiToml(source) => ManifestSource::PixiToml(f(source)),
             ManifestSource::MojoProjectToml(source) => ManifestSource::MojoProjectToml(f(source)),
             ManifestSource::Pep723(source) => ManifestSource::Pep723(f(source)),
+            ManifestSource::CondaScript(source) => ManifestSource::CondaScript(f(source)),
         }
     }
 
