@@ -22,7 +22,7 @@ pixi [OPTIONS] [COMMAND]
 | [`exec`](exec.md) | Run a command and install it in a temporary environment |
 | [`global`](global/index.md) | Subcommand for global package management actions |
 | [`info`](info.md) | Information about the system, workspace and environments for the current machine |
-| [`init`](init.md) | Creates a new workspace |
+| [`init`](init.md) | Creates a new workspace or script |
 | [`import`](import.md) | Imports a file into an environment in an existing workspace. |
 | [`install`](install.md) | Install an environment, both updating the lock file and installing the environment |
 | [`list`](list.md) | List the packages of the current workspace |

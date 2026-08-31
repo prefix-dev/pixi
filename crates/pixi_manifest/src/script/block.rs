@@ -106,3 +106,33 @@ pub(crate) fn without_line_ending(line: &str) -> &str {
     let line = line.strip_suffix('\n').unwrap_or(line);
     line.strip_suffix('\r').unwrap_or(line)
 }
+
+/// Splits file contents into a BOM, an optional shebang line and the rest.
+pub(crate) fn extract_script_header(
+    contents: &[u8],
+) -> Result<(&str, Option<&str>, &str), std::str::Utf8Error> {
+    let contents = std::str::from_utf8(contents)?;
+    let (bom, contents) = contents
+        .strip_prefix('\u{feff}')
+        .map_or(("", contents), |contents| ("\u{feff}", contents));
+    if !contents.starts_with("#!") {
+        return Ok((bom, None, contents));
+    }
+
+    let bytes = contents.as_bytes();
+    let end = bytes
+        .iter()
+        .position(|byte| matches!(byte, b'\r' | b'\n'))
+        .unwrap_or(bytes.len());
+    let newline_width = match bytes.get(end..) {
+        Some([b'\r', b'\n', ..]) => 2,
+        Some([b'\r' | b'\n', ..]) => 1,
+        _ => 0,
+    };
+
+    Ok((
+        bom,
+        Some(&contents[..end]),
+        &contents[end + newline_width..],
+    ))
+}

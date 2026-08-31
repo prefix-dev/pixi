@@ -1,17 +1,31 @@
-use std::{cmp::PartialEq, collections::HashMap, path::PathBuf, str::FromStr};
+use std::{
+    cmp::PartialEq,
+    collections::HashMap,
+    ffi::OsStr,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use clap::{Parser, ValueEnum, ValueHint};
 use miette::IntoDiagnostic;
 use pixi_api::{Interface, WorkspaceContext, workspace::InitOptions};
-use pixi_manifest::{CondaPypiMap, CondaPypiMapEntry, script::ScriptManifest};
+use pixi_manifest::{
+    CondaPypiMap, CondaPypiMapEntry,
+    script::{
+        ScriptManifest,
+        conda::{CondaScriptManifest, supported_extensions, template_for_extension},
+    },
+};
 use rattler_conda_types::NamedChannelOrUrl;
 
 use crate::cli_interface::CliInterface;
 
-/// Creates a new workspace
+/// Creates a new workspace or script
 ///
-/// This command is used to create a new workspace.
-/// It prepares a manifest and some helpers for the user to start working.
+/// The positional path starts a workspace, while `--script` writes a metadata
+/// block into a single file: a PEP 723 block for a Python file, a
+/// `conda-script` block for every other known extension. `--format` overrides
+/// that default.
 ///
 /// As pixi can both work with `pixi.toml` and `pyproject.toml` files, the user
 /// can choose which one to use with `--format`.
@@ -19,23 +33,15 @@ use crate::cli_interface::CliInterface;
 /// You can import an existing conda environment file with the `--import` flag.
 #[derive(Parser, Debug)]
 pub struct Args {
-    /// Where to place the workspace (defaults to current path)
-    #[arg(default_value = ".", conflicts_with = "script")]
-    pub path: PathBuf,
+    /// Where to place the workspace (defaults to the current path)
+    pub path: Option<PathBuf>,
 
-    /// Create a PEP 723 metadata block in a Python script.
+    /// Create a metadata block in a script instead of a workspace
     #[arg(
         short = 's',
         long,
         value_name = "PATH",
-        conflicts_with_all = [
-            "ENVIRONMENT_FILE",
-            "PLATFORM",
-            "format",
-            "pyproject_toml",
-            "scm",
-            "conda_pypi_map"
-        ]
+        conflicts_with_all = ["ENVIRONMENT_FILE", "PLATFORM", "pyproject_toml", "scm", "conda_pypi_map"]
     )]
     pub script: Option<PathBuf>,
 
@@ -113,11 +119,31 @@ fn parse_conda_pypi_mapping(s: &str) -> Result<CondaPypiMap, String> {
     Ok(CondaPypiMap::Map(mappings))
 }
 
-#[derive(Parser, Debug, Clone, PartialEq, ValueEnum)]
+#[derive(Parser, Debug, Clone, Copy, PartialEq, ValueEnum)]
 pub enum ManifestFormat {
     Pixi,
     Pyproject,
     Mojoproject,
+    Pep723,
+    CondaScript,
+}
+
+impl ManifestFormat {
+    /// Whether the format lives in a metadata block inside a script.
+    fn is_script(self) -> bool {
+        matches!(self, Self::Pep723 | Self::CondaScript)
+    }
+
+    /// The spelling the user passes to `--format`.
+    fn flag_value(self) -> &'static str {
+        match self {
+            Self::Pixi => "pixi",
+            Self::Pyproject => "pyproject",
+            Self::Mojoproject => "mojoproject",
+            Self::Pep723 => "pep723",
+            Self::CondaScript => "conda-script",
+        }
+    }
 }
 
 #[derive(Parser, Debug, Clone, PartialEq, ValueEnum)]
@@ -133,6 +159,9 @@ impl From<Args> for InitOptions {
             ManifestFormat::Pixi => pixi_api::workspace::ManifestFormat::Pixi,
             ManifestFormat::Pyproject => pixi_api::workspace::ManifestFormat::Pyproject,
             ManifestFormat::Mojoproject => pixi_api::workspace::ManifestFormat::Mojoproject,
+            ManifestFormat::Pep723 | ManifestFormat::CondaScript => {
+                unreachable!("script formats route to script initialization")
+            }
         });
 
         let scm = args.scm.map(|s| match s {
@@ -142,7 +171,9 @@ impl From<Args> for InitOptions {
         });
 
         InitOptions {
-            path: args.path,
+            path: args
+                .path
+                .expect("a workspace always initializes with a directory"),
             channels: args.channels,
             platforms: args.platforms,
             env_file: args.env_file,
@@ -153,34 +184,109 @@ impl From<Args> for InitOptions {
     }
 }
 
+/// The extension of a path, or an empty string.
+fn extension_of(path: &Path) -> String {
+    path.extension()
+        .and_then(OsStr::to_str)
+        .unwrap_or_default()
+        .to_owned()
+}
+
+fn is_python_extension(extension: &str) -> bool {
+    extension.eq_ignore_ascii_case("py") || extension.eq_ignore_ascii_case("pyw")
+}
+
 pub async fn execute(args: Args) -> miette::Result<()> {
-    if let Some(path) = args.script.clone() {
-        return initialize_script(path, args.channels).await;
-    }
-
-    let uses_deprecated_pyproject_flag = args.pyproject_toml;
-    let mut options: InitOptions = args.into();
-
     // Deprecation warning for the `pyproject` option
-    if uses_deprecated_pyproject_flag {
+    let format = if args.pyproject_toml {
         eprintln!(
             "{}The '{}' option is deprecated and will be removed in the future.\nUse '{}' instead.",
             console::style(console::Emoji("⚠️ ", "")).yellow(),
             console::style("--pyproject").bold().red(),
             console::style("--format pyproject").bold().green(),
         );
-        options.format = Some(pixi_api::workspace::ManifestFormat::Pyproject);
+        Some(ManifestFormat::Pyproject)
+    } else {
+        args.format
+    };
+
+    if let Some(script) = args.script.clone() {
+        // A script lives at one path, so a directory next to it has nothing
+        // left to name.
+        if let Some(directory) = &args.path {
+            return Err(miette::miette!(
+                help = format!(
+                    "put the directory in the script path, like `pixi init --script {}`",
+                    directory.join(&script).display()
+                ),
+                "`--script` and the workspace directory {} cannot be combined",
+                directory.display()
+            ));
+        }
+        return initialize_script(script, format, args).await;
     }
 
-    WorkspaceContext::init(CliInterface {}, options).await?;
+    if let Some(format) = format.filter(|format| format.is_script()) {
+        return Err(miette::miette!(
+            help = format!(
+                "pass the file to create, like `pixi init --script main.R --format {}`",
+                format.flag_value()
+            ),
+            "`--format {}` needs `--script`",
+            format.flag_value()
+        ));
+    }
 
+    let options = InitOptions::from(Args {
+        path: Some(args.path.unwrap_or_else(|| PathBuf::from("."))),
+        format,
+        pyproject_toml: false,
+        ..args
+    });
+    WorkspaceContext::init(CliInterface {}, options).await?;
     Ok(())
 }
 
+/// Gives a script its metadata block: PEP 723 for Python, `conda-script`
+/// for every other known extension, with `--format` overriding the default.
 async fn initialize_script(
     path: PathBuf,
-    channels: Option<Vec<NamedChannelOrUrl>>,
+    format: Option<ManifestFormat>,
+    args: Args,
 ) -> miette::Result<()> {
+    let extension = extension_of(&path);
+    let is_python = is_python_extension(&extension);
+    let channels = args
+        .channels
+        .unwrap_or_default()
+        .into_iter()
+        .map(|channel| channel.to_string())
+        .collect::<Vec<_>>();
+
+    match format {
+        Some(ManifestFormat::Pep723) if !is_python => Err(miette::miette!(
+            help = "PEP 723 blocks only exist in Python files, ending in `.py` or `.pyw`",
+            "`--format pep723` does not apply to {}",
+            path.display()
+        )),
+        Some(ManifestFormat::Pep723) | None if is_python => {
+            initialize_pep723_script(path, &channels).await
+        }
+        Some(ManifestFormat::CondaScript) | None => {
+            initialize_conda_script(path, &extension, &channels).await
+        }
+        Some(format) => Err(miette::miette!(
+            help = format!(
+                "workspace formats go with a directory, like `pixi init --format {} my_workspace`",
+                format.flag_value()
+            ),
+            "`--format {}` does not apply to a script",
+            format.flag_value()
+        )),
+    }
+}
+
+async fn initialize_pep723_script(path: PathBuf, channels: &[String]) -> miette::Result<()> {
     let path = std::path::absolute(path).into_diagnostic()?;
     // A file with a conda-script block must not get a PEP 723 block on top;
     // the two kinds cannot coexist in one file.
@@ -191,12 +297,34 @@ async fn initialize_script(
             path.display()
         ));
     }
-    let channels = channels
-        .unwrap_or_default()
-        .into_iter()
-        .map(|channel| channel.to_string())
-        .collect::<Vec<_>>();
-    let script = ScriptManifest::initialize(&path, &channels)?;
+    let script = ScriptManifest::initialize(&path, channels)?;
+
+    CliInterface::default()
+        .success(&format!(
+            "Initialized script at {}",
+            script.path().display()
+        ))
+        .await;
+    Ok(())
+}
+
+async fn initialize_conda_script(
+    path: PathBuf,
+    extension: &str,
+    channels: &[String],
+) -> miette::Result<()> {
+    let Some(template) = template_for_extension(extension) else {
+        return Err(miette::miette!(
+            help = format!(
+                "pixi knows the comment syntax of these extensions: {}",
+                supported_extensions().join(", ")
+            ),
+            "no conda-script template exists for {}",
+            path.display()
+        ));
+    };
+
+    let script = CondaScriptManifest::initialize(&path, template, channels)?;
 
     CliInterface::default()
         .success(&format!(
@@ -263,35 +391,187 @@ mod tests {
     }
 
     #[test]
+    fn script_formats_parse() {
+        let args = Args::try_parse_from(["init", "--format", "conda-script"]).unwrap();
+        assert_eq!(args.format, Some(ManifestFormat::CondaScript));
+        let args = Args::try_parse_from(["init", "--format", "pep723"]).unwrap();
+        assert_eq!(args.format, Some(ManifestFormat::Pep723));
+    }
+
+    #[test]
+    fn manifest_path_is_not_an_option() {
+        assert!(Args::try_parse_from(["init", "--manifest-path", "example.py"]).is_err());
+    }
+
+    #[test]
     fn script_uses_the_reserved_short_form() {
         let long = Args::try_parse_from(["init", "--script", "example.py"]).unwrap();
-        assert_eq!(
-            long.script.as_deref(),
-            Some(std::path::Path::new("example.py"))
-        );
+        assert_eq!(long.script.as_deref(), Some(Path::new("example.py")));
+        assert_eq!(long.path, None);
 
         let short = Args::try_parse_from(["init", "-s", "example.py"]).unwrap();
-        assert_eq!(
-            short.script.as_deref(),
-            Some(std::path::Path::new("example.py"))
+        assert_eq!(short.script.as_deref(), Some(Path::new("example.py")));
+    }
+
+    /// The script path carries its own directory, so a second path has
+    /// nothing left to name.
+    #[tokio::test]
+    async fn script_and_a_workspace_directory_point_at_the_combined_path() {
+        let args =
+            Args::try_parse_from(["init", "--script", "main.mojo", "some_directory"]).unwrap();
+        let error = execute(args).await.unwrap_err();
+
+        assert!(error.to_string().contains("cannot be combined"));
+        let combined = Path::new("some_directory").join("main.mojo");
+        assert!(format!("{error:?}").contains(combined.to_str().unwrap()));
+        assert!(
+            !Path::new("some_directory").exists(),
+            "the failed run must not create anything"
         );
     }
 
     #[test]
     fn script_rejects_workspace_only_initialization_options() {
         for incompatible in [
-            vec!["--format", "pixi"],
             vec!["--import", "environment.yml"],
             vec!["--platform", "linux-64"],
             vec!["--scm", "github"],
             vec!["--conda-pypi-map", "false"],
         ] {
             let mut arguments = vec!["init", "--script", "example.py"];
-            arguments.extend(incompatible);
-            assert!(Args::try_parse_from(arguments).is_err());
+            arguments.extend(incompatible.clone());
+            assert!(
+                Args::try_parse_from(arguments).is_err(),
+                "{incompatible:?} must not combine with a script"
+            );
         }
+    }
 
-        assert!(Args::try_parse_from(["init", "workspace", "--script", "example.py"]).is_err());
+    #[tokio::test]
+    async fn script_rejects_workspace_formats() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("example.py");
+
+        let args =
+            Args::try_parse_from(["init", "--script", path.to_str().unwrap(), "--format", "pixi"])
+                .unwrap();
+        let error = execute(args).await.unwrap_err();
+
+        assert!(error.to_string().contains("does not apply to a script"));
+        assert!(!path.exists());
+    }
+
+    #[tokio::test]
+    async fn script_formats_need_the_script_flag() {
+        for format in ["pep723", "conda-script"] {
+            let args = Args::try_parse_from(["init", "--format", format]).unwrap();
+            let error = execute(args).await.unwrap_err();
+            assert!(error.to_string().contains("needs `--script`"));
+        }
+    }
+
+    #[tokio::test]
+    async fn refuses_an_existing_file_without_a_template() {
+        let directory = tempfile::tempdir().unwrap();
+        let readme = directory.path().join("README.md");
+        fs_err::write(&readme, "# Project\n").unwrap();
+
+        let args = Args::try_parse_from(["init", "--script", readme.to_str().unwrap()]).unwrap();
+        let error = execute(args).await.unwrap_err();
+        assert!(error.to_string().contains("no conda-script template"));
+        assert_eq!(fs_err::read_to_string(&readme).unwrap(), "# Project\n");
+    }
+
+    #[tokio::test]
+    async fn initializes_a_conda_script_from_the_extension_template() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("main.R");
+
+        let args = Args::try_parse_from(["init", "--script", path.to_str().unwrap()]).unwrap();
+        execute(args).await.unwrap();
+
+        insta::assert_snapshot!(fs_err::read_to_string(path).unwrap(), @r###"
+        # /// conda-script
+        # channels = ["conda-forge"]
+        # entrypoint = "Rscript ${SCRIPT}"
+        #
+        # [dependencies]
+        # r-base = "*"
+        # /// end-conda-script
+
+        cat("Hello from pixi!\n")
+        "###);
+    }
+
+    #[tokio::test]
+    async fn format_overrides_the_python_default() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("main.py");
+
+        let args = Args::try_parse_from([
+            "init",
+            "--script",
+            path.to_str().unwrap(),
+            "--format",
+            "conda-script",
+        ])
+        .unwrap();
+        execute(args).await.unwrap();
+
+        let contents = fs_err::read_to_string(path).unwrap();
+        assert!(contents.starts_with("# /// conda-script\n"));
+    }
+
+    #[tokio::test]
+    async fn pep723_format_needs_a_python_file() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("main.R");
+
+        let args =
+            Args::try_parse_from(["init", "--script", path.to_str().unwrap(), "--format", "pep723"])
+                .unwrap();
+        let error = execute(args).await.unwrap_err();
+        assert!(error.to_string().contains("does not apply"));
+        assert!(!path.exists());
+    }
+
+    #[tokio::test]
+    async fn conda_script_keeps_an_existing_body_and_shebang() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("tool.sh");
+        fs_err::write(&path, "#!/usr/bin/env bash\necho hi\n").unwrap();
+
+        let args = Args::try_parse_from(["init", "--script", path.to_str().unwrap()]).unwrap();
+        execute(args).await.unwrap();
+
+        insta::assert_snapshot!(fs_err::read_to_string(path).unwrap(), @r###"
+        #!/usr/bin/env bash
+        #
+        # /// conda-script
+        # channels = ["conda-forge"]
+        # entrypoint = "brush ${SCRIPT}"
+        #
+        # [dependencies]
+        # brush = "*"
+        # /// end-conda-script
+
+        echo hi
+        "###);
+    }
+
+    #[tokio::test]
+    async fn refuses_to_reinitialize_a_conda_script() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("main.R");
+
+        let args = Args::try_parse_from(["init", "--script", path.to_str().unwrap()]).unwrap();
+        execute(args).await.unwrap();
+        let contents = fs_err::read_to_string(&path).unwrap();
+
+        let args = Args::try_parse_from(["init", "--script", path.to_str().unwrap()]).unwrap();
+        let error = execute(args).await.unwrap_err();
+        assert!(error.to_string().contains("already a conda-script"));
+        assert_eq!(fs_err::read_to_string(&path).unwrap(), contents);
     }
 
     #[tokio::test]
@@ -334,21 +614,6 @@ mod tests {
         # channels = ["conda-forge"]
         # ///
         "###);
-    }
-
-    /// `-s` took its short form over from other options, so `pixi init -s github`
-    /// now parses as `--script github`. It must fail instead of writing a file.
-    #[tokio::test]
-    async fn script_refuses_a_path_that_is_not_a_python_file() {
-        let directory = tempfile::tempdir().unwrap();
-
-        for name in ["github", "README.md"] {
-            let path = directory.path().join(name);
-            let args = Args::try_parse_from(["init", "-s", path.to_str().unwrap()]).unwrap();
-
-            assert!(execute(args).await.is_err(), "`-s {name}` must be an error");
-            assert!(!path.exists(), "`-s {name}` must not create a file");
-        }
     }
 
     #[test]
