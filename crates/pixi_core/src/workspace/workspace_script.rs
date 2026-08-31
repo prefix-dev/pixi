@@ -88,16 +88,15 @@ impl WorkspaceScript {
         &self.source
     }
 
-    pub(super) fn replace_manifest(&mut self, new_manifest: ScriptManifest) {
+    pub(super) fn replace_manifest(&mut self, new_source: ScriptSource) {
         if self.lock_file_path.is_some() {
-            self.lock_file_path = Some(local_lock_file_path(new_manifest.path()));
+            let path = match &new_source {
+                ScriptSource::Pep723(manifest) => manifest.path(),
+                ScriptSource::CondaScript(manifest) => manifest.path(),
+            };
+            self.lock_file_path = Some(local_lock_file_path(path));
         }
-        match &mut self.source {
-            ScriptSource::Pep723(manifest) => **manifest = new_manifest,
-            ScriptSource::CondaScript(_) => {
-                unreachable!("conda-script workspaces reject manifest edits when they are opened")
-            }
-        }
+        self.source = new_source;
     }
 
     pub(super) fn pixi_dir(&self) -> &Path {

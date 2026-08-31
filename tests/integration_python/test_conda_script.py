@@ -325,3 +325,134 @@ def test_lock_writes_an_adjacent_lock_file_with_conditional_dependencies(
         [pixi, "run", "--experimental", "--script", script, "--frozen"],
         stdout_contains="1234",
     )
+
+
+def test_add_edits_the_block_and_locks(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    script = tmp_pixi_workspace / "tool.code"
+    script.write_text(f"""# /// conda-script
+# channels = ["{CONDA_FORGE_CHANNEL}"]
+# entrypoint = "main"
+#
+# [dependencies]
+# zlib = "*"
+# /// end-conda-script
+body
+""")
+
+    # An adjacent lock file makes the edit commands update it in place.
+    verify_cli_command([pixi, "lock", "--script", script])
+    lock_file = tmp_pixi_workspace / "tool.code.pixi.lock"
+    assert "/xz-" not in lock_file.read_text()
+
+    verify_cli_command([pixi, "add", "--script", script, "--no-install", "xz"])
+
+    contents = script.read_text()
+    assert re.search(r"^# xz = \">=", contents, re.MULTILINE)
+    # The code around the block stays untouched.
+    assert contents.endswith("body\n")
+    assert "/xz-" in lock_file.read_text()
+
+    verify_cli_command(
+        [pixi, "list", "--script", script, "--no-install"],
+        stdout_contains=["xz", "zlib"],
+    )
+    verify_cli_command(
+        [pixi, "tree", "--script", script, "--no-install"],
+        stdout_contains="zlib",
+    )
+    verify_cli_command([pixi, "update", "--script", script, "--no-install"])
+
+
+def test_add_pypi_writes_the_tool_pixi_table(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    script = tmp_pixi_workspace / "pypi.code"
+    script.write_text(f"""# /// conda-script
+# channels = ["{CONDA_FORGE_CHANNEL}"]
+# entrypoint = "python ${{SCRIPT}}"
+#
+# [dependencies]
+# python = "3.13.*"
+# /// end-conda-script
+print("hi")
+""")
+
+    verify_cli_command([pixi, "add", "--script", script, "--no-install", "--pypi", "six"])
+
+    contents = script.read_text()
+    assert "# [tool.pixi.pypi-dependencies]" in contents
+    assert re.search(r"^# six = ", contents, re.MULTILINE)
+
+
+def test_add_rejects_options_outside_the_block_schema(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    script = tmp_pixi_workspace / "guards.code"
+    script.write_text(f"""# /// conda-script
+# channels = ["{CONDA_FORGE_CHANNEL}"]
+# entrypoint = "main"
+# /// end-conda-script
+""")
+
+    verify_cli_command(
+        [pixi, "add", "--script", script, "--platform", "linux-64", "zlib"],
+        ExitCode.FAILURE,
+        stderr_contains="`when` condition",
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "add",
+            "--script",
+            script,
+            "--git",
+            "https://github.com/prefix-dev/pixi-build-testsuite.git",
+            "simple-app",
+        ],
+        ExitCode.FAILURE,
+        stderr_contains="tool.pixi.dependencies",
+    )
+
+
+def test_add_rejects_a_file_with_both_block_kinds(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    script = tmp_pixi_workspace / "both.py"
+    script.write_text(
+        "# /// script\n"
+        "# dependencies = []\n"
+        "# ///\n"
+        "# /// conda-script\n"
+        '# channels = ["conda-forge"]\n'
+        '# entrypoint = "python ${SCRIPT}"\n'
+        "# /// end-conda-script\n"
+    )
+
+    verify_cli_command(
+        [pixi, "add", "--script", script, "numpy"],
+        ExitCode.FAILURE,
+        stderr_contains="both a PEP 723",
+    )
+
+
+def test_a_blockless_file_reports_the_missing_block(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    script = tmp_pixi_workspace / "plain.sh"
+    script.write_text("echo plain\n")
+
+    verify_cli_command(
+        [pixi, "list", "--script", script],
+        ExitCode.FAILURE,
+        stderr_contains="does not contain a conda-script block",
+    )
+
+
+def test_add_then_remove_pypi_round_trips(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    script = tmp_pixi_workspace / "roundtrip.code"
+    script.write_text(f"""# /// conda-script
+# channels = ["{CONDA_FORGE_CHANNEL}"]
+# entrypoint = "python ${{SCRIPT}}"
+#
+# [dependencies]
+# python = "3.13.*"
+# /// end-conda-script
+""")
+
+    verify_cli_command([pixi, "add", "--script", script, "--no-install", "--pypi", "six"])
+    assert "six" in script.read_text()
+
+    verify_cli_command([pixi, "remove", "--script", script, "--no-install", "--pypi", "six"])
+    assert "six" not in script.read_text()

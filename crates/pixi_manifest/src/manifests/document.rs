@@ -13,7 +13,10 @@ use crate::{
     PypiDependencyLocation, SpecType, TargetSelector, Task, TomlError,
     error::GenericError,
     manifests::table_name::TableName,
-    script::{ScriptManifest, ScriptManifestDocument, ScriptManifestError},
+    script::{
+        ScriptManifest, ScriptManifestDocument, ScriptManifestError,
+        conda::{CondaScriptError, CondaScriptManifest, CondaScriptManifestDocument},
+    },
     toml::TomlDocument,
     utils::WithSourceCode,
 };
@@ -25,6 +28,7 @@ pub enum ManifestDocument {
     PixiToml(TomlDocument),
     MojoProjectToml(TomlDocument),
     Pep723(ScriptManifestDocument),
+    CondaScript(Box<CondaScriptManifestDocument>),
 }
 
 impl fmt::Display for ManifestDocument {
@@ -34,6 +38,7 @@ impl fmt::Display for ManifestDocument {
             ManifestDocument::PixiToml(document) => write!(f, "{document}"),
             ManifestDocument::MojoProjectToml(document) => write!(f, "{document}"),
             ManifestDocument::Pep723(document) => write!(f, "{document}"),
+            ManifestDocument::CondaScript(document) => write!(f, "{document}"),
         }
     }
 }
@@ -54,6 +59,25 @@ pub enum ManifestDocumentError {
 
     #[error("{} does not contain a PEP 723 metadata block", .0.display())]
     MissingPep723(PathBuf),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    CondaScript(#[from] CondaScriptError),
+
+    #[error("{} does not contain a conda-script block", .0.display())]
+    MissingCondaScript(PathBuf),
+}
+
+/// An error that is returned when rendering an editable manifest document.
+#[derive(Debug, Error, Diagnostic)]
+pub enum ManifestRenderError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Script(#[from] ScriptManifestError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    CondaScript(#[from] CondaScriptError),
 }
 
 impl ManifestDocument {
@@ -62,13 +86,21 @@ impl ManifestDocument {
         Ok(Self::Pep723(ScriptManifestDocument::new(script)?))
     }
 
+    /// Construct an editable document from a parsed conda-script manifest.
+    pub fn from_conda_script(script: CondaScriptManifest) -> Result<Self, CondaScriptError> {
+        Ok(Self::CondaScript(Box::new(
+            CondaScriptManifestDocument::new(script)?,
+        )))
+    }
+
     /// Render the editable document back into its source format.
-    pub fn render(&self) -> Result<String, ScriptManifestError> {
+    pub fn render(&self) -> Result<String, ManifestRenderError> {
         match self {
             ManifestDocument::PyProjectToml(document)
             | ManifestDocument::PixiToml(document)
             | ManifestDocument::MojoProjectToml(document) => Ok(document.to_string()),
-            ManifestDocument::Pep723(document) => document.render(),
+            ManifestDocument::Pep723(document) => Ok(document.render()?),
+            ManifestDocument::CondaScript(document) => Ok(document.render()?),
         }
     }
 
@@ -126,6 +158,12 @@ impl ManifestDocument {
                 .ok_or_else(|| ManifestDocumentError::MissingPep723(provenance.path.clone()))?;
             return Ok(ManifestDocument::from_script(script)?);
         }
+        if provenance.kind == ManifestKind::CondaScript {
+            let script = CondaScriptManifest::from_path(&provenance.path)?.ok_or_else(|| {
+                ManifestDocumentError::MissingCondaScript(provenance.path.clone())
+            })?;
+            return Ok(ManifestDocument::from_conda_script(script)?);
+        }
 
         // Read the contents of the file
         let contents = provenance.read()?.into_inner();
@@ -149,7 +187,9 @@ impl ManifestDocument {
             ManifestKind::Pyproject => Ok(ManifestDocument::PyProjectToml(toml)),
             ManifestKind::Pixi => Ok(ManifestDocument::PixiToml(toml)),
             ManifestKind::MojoProject => Ok(ManifestDocument::MojoProjectToml(toml)),
-            ManifestKind::Pep723 => unreachable!("PEP 723 manifests are parsed above"),
+            ManifestKind::Pep723 | ManifestKind::CondaScript => {
+                unreachable!("script manifests are parsed above")
+            }
         }
     }
 
@@ -160,6 +200,7 @@ impl ManifestDocument {
             ManifestDocument::PixiToml(_) => ManifestKind::Pixi,
             ManifestDocument::MojoProjectToml(_) => ManifestKind::MojoProject,
             ManifestDocument::Pep723(_) => ManifestKind::Pep723,
+            ManifestDocument::CondaScript(_) => ManifestKind::CondaScript,
         }
     }
 
@@ -176,6 +217,7 @@ impl ManifestDocument {
             }
             ManifestDocument::PixiToml(_) => None,
             ManifestDocument::MojoProjectToml(_) => None,
+            ManifestDocument::CondaScript(_) => None,
         }
     }
 
@@ -185,6 +227,7 @@ impl ManifestDocument {
             ManifestDocument::PixiToml(document) => document,
             ManifestDocument::MojoProjectToml(document) => document,
             ManifestDocument::Pep723(document) => document.document_mut(),
+            ManifestDocument::CondaScript(document) => document.document_mut(),
         }
     }
 
@@ -195,6 +238,7 @@ impl ManifestDocument {
             ManifestDocument::PixiToml(document) => document,
             ManifestDocument::MojoProjectToml(document) => document,
             ManifestDocument::Pep723(document) => document.document(),
+            ManifestDocument::CondaScript(document) => document.document(),
         }
     }
 
@@ -251,6 +295,7 @@ impl ManifestDocument {
             ManifestDocument::PixiToml(document) => document.as_table_mut(),
             ManifestDocument::MojoProjectToml(document) => document.as_table_mut(),
             ManifestDocument::Pep723(document) => document.document_mut().as_table_mut(),
+            ManifestDocument::CondaScript(document) => document.document_mut().as_table_mut(),
         }
     }
 
@@ -535,8 +580,10 @@ impl ManifestDocument {
         //  - When a specific platform is requested, as markers are not supported (https://github.com/prefix-dev/pixi/issues/2149)
         //  - When an editable install is requested
         //  - When a dependency-specific index must be preserved
-        if matches!(self, ManifestDocument::PixiToml(_))
-            || matches!(location, Some(PypiDependencyLocation::PixiPypiDependencies))
+        if matches!(
+            self,
+            ManifestDocument::PixiToml(_) | ManifestDocument::CondaScript(_)
+        ) || matches!(location, Some(PypiDependencyLocation::PixiPypiDependencies))
             || target.is_some()
             || editable.is_some_and(|e| e)
             || pixi_requirement.is_some_and(|requirement| requirement.index().is_some())

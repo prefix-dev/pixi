@@ -23,6 +23,13 @@ pub enum CondaScriptError {
     #[error("a file containing a conda-script block must be valid UTF-8")]
     #[diagnostic(help("the block holds TOML, which is defined to be UTF-8"))]
     Utf8(#[from] std::str::Utf8Error),
+
+    #[error(transparent)]
+    TomlEdit(#[from] toml_edit::TomlError),
+
+    #[error("conda-script blocks do not support `{key}`")]
+    #[diagnostic(help("a conda-script resolves for the machine it runs on"))]
+    UnsupportedEdit { key: String },
 }
 
 #[derive(Debug, Clone)]
