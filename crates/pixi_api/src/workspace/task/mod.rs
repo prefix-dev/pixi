@@ -6,7 +6,10 @@ use pixi_core::{
     Workspace,
     workspace::{
         Environment, WorkspaceMut,
-        virtual_packages::{EnvironmentRunnability, classify_environment_runnability},
+        virtual_packages::{
+            EnvironmentRunnability, classify_environment_runnability,
+            minimum_compatible_declared_platform,
+        },
     },
 };
 use pixi_manifest::{
@@ -102,11 +105,15 @@ pub async fn list_tasks(
         .into_iter()
         .map(|(env, (runnability, task_names))| {
             let env_name = env.name().clone();
-            let best_declared_platform = env.best_declared_platform();
+            let task_platform = env.best_declared_platform().or_else(|| {
+                lock_file.as_ref().and_then(|lock_file| {
+                    minimum_compatible_declared_platform(&env, lock_file).ok()
+                })
+            });
             let task_map = task_names
                 .into_iter()
                 .flat_map(|task_name| {
-                    env.task(&task_name, best_declared_platform)
+                    env.task(&task_name, task_platform)
                         .ok()
                         .map(|task| (task_name, task.clone()))
                 })

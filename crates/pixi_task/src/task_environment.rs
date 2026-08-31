@@ -5,11 +5,12 @@ use pixi_core::{
         Environment,
         virtual_packages::{
             EnvironmentRunnability, classify_environment_runnability,
-            verify_current_platform_can_run_environment,
+            minimum_compatible_declared_platform, verify_current_platform_can_run_environment,
         },
     },
 };
 use pixi_manifest::{FeaturesExt, HasWorkspaceManifest, PixiPlatform, Task, TaskName};
+use rattler_lock::LockFile;
 use thiserror::Error;
 
 use crate::error::{AmbiguousTaskError, MissingTaskError};
@@ -46,10 +47,11 @@ impl<'p, F: Fn(&AmbiguousTask<'p>) -> Option<TaskAndEnvironment<'p>>> TaskDisamb
 }
 
 /// An object to help with searching for tasks.
-pub struct SearchEnvironments<'p, D: TaskDisambiguation<'p> = NoDisambiguation> {
+pub struct SearchEnvironments<'p, 'lock, D: TaskDisambiguation<'p> = NoDisambiguation> {
     pub project: &'p Workspace,
     pub explicit_environment: Option<Environment<'p>>,
     pub platform: Option<&'p PixiPlatform>,
+    pub lock_file: Option<&'lock LockFile>,
     pub disambiguate: D,
 }
 
@@ -82,7 +84,7 @@ pub enum FindTaskError {
     AmbiguousTask(AmbiguousTaskError),
 }
 
-impl<'p> SearchEnvironments<'p, NoDisambiguation> {
+impl<'p, 'lock> SearchEnvironments<'p, 'lock, NoDisambiguation> {
     // Determine which environments we are allowed to check for tasks.
     //
     // If the user specified an environment, look for tasks in the main environment
@@ -95,10 +97,20 @@ impl<'p> SearchEnvironments<'p, NoDisambiguation> {
         explicit_environment: Option<Environment<'p>>,
         platform: Option<&'p PixiPlatform>,
     ) -> Self {
+        Self::from_opt_env_with_lock_file(project, explicit_environment, platform, None)
+    }
+
+    pub fn from_opt_env_with_lock_file(
+        project: &'p Workspace,
+        explicit_environment: Option<Environment<'p>>,
+        platform: Option<&'p PixiPlatform>,
+        lock_file: Option<&'lock LockFile>,
+    ) -> Self {
         Self {
             project,
             explicit_environment,
             platform,
+            lock_file,
             disambiguate: NoDisambiguation,
         }
     }
@@ -146,17 +158,18 @@ pub(crate) fn default_search_platform<'p>(env: &Environment<'p>) -> Option<&'p P
     })
 }
 
-impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
+impl<'p, 'lock, D: TaskDisambiguation<'p>> SearchEnvironments<'p, 'lock, D> {
     /// Returns a new `SearchEnvironments` with the given disambiguation
     /// function.
     pub fn with_disambiguate_fn<F: Fn(&AmbiguousTask<'p>) -> Option<TaskAndEnvironment<'p>>>(
         self,
         func: F,
-    ) -> SearchEnvironments<'p, DisambiguateFn<F>> {
+    ) -> SearchEnvironments<'p, 'lock, DisambiguateFn<F>> {
         SearchEnvironments {
             project: self.project,
             explicit_environment: self.explicit_environment,
             platform: self.platform,
+            lock_file: self.lock_file,
             disambiguate: DisambiguateFn(func),
         }
     }
@@ -165,10 +178,13 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
     /// pinned platform when one was given, otherwise the environment's own
     /// default (installed / best declared / first declared).
     pub(crate) fn search_platform_for(&self, env: &Environment<'p>) -> Option<&'p PixiPlatform> {
-        match self.platform {
-            Some(platform) => Some(platform),
-            None => default_search_platform(env),
+        if let Some(platform) = self.platform {
+            return Some(platform);
         }
+        default_search_platform(env).or_else(|| {
+            self.lock_file
+                .and_then(|lock_file| minimum_compatible_declared_platform(env, lock_file).ok())
+        })
     }
 
     /// Narrows a set of candidate environments to the ones this machine can
@@ -181,7 +197,8 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
             return;
         }
         let runnable = |(env, _): &TaskAndEnvironment<'p>| {
-            classify_environment_runnability(env, None) != EnvironmentRunnability::Unsupported
+            classify_environment_runnability(env, self.lock_file)
+                != EnvironmentRunnability::Unsupported
         };
         if tasks.iter().any(runnable) {
             tasks.retain(runnable);
@@ -366,6 +383,62 @@ mod tests {
             .find_task("build".into(), FindTaskSource::CmdArgs, None)
             .expect("the only environment this machine can run should be picked");
         assert_eq!(env.name().as_str(), "portable");
+    }
+
+    #[test]
+    fn test_lock_file_runnable_environment_is_a_candidate() {
+        let current = rattler_conda_types::Platform::current();
+        let manifest_str = format!(
+            r#"
+            [workspace]
+            name = "foo"
+            channels = ["foo"]
+            platforms = [{{ name = "gpu", platform = "{current}", cuda = "99" }}, "{current}"]
+
+            [feature.gpu]
+            platforms = ["gpu"]
+
+            [feature.gpu.tasks]
+            build = "echo gpu"
+
+            [feature.portable.tasks]
+            build = "echo portable"
+
+            [environments]
+            gpu = ["gpu"]
+            portable = ["portable"]
+        "#
+        );
+        let project = Workspace::from_str(Path::new("pixi.toml"), &manifest_str).unwrap();
+        let lock_file = rattler_lock::LockFile::from_str_with_base_directory(
+            &format!(
+                r#"version: 7
+platforms:
+- name: gpu
+  subdir: {current}
+  virtual-packages:
+  - __cuda=99
+environments:
+  gpu:
+    channels:
+    - url: https://conda.anaconda.org/conda-forge/
+    packages:
+      gpu: []
+packages: []
+"#
+            ),
+            None,
+        )
+        .unwrap();
+        let search =
+            SearchEnvironments::from_opt_env_with_lock_file(&project, None, None, Some(&lock_file));
+        let err = search
+            .find_task("build".into(), FindTaskSource::CmdArgs, None)
+            .expect_err("the lock-file-runnable environment should remain ambiguous");
+        let FindTaskError::AmbiguousTask(err) = err else {
+            panic!("expected ambiguous task")
+        };
+        assert_eq!(err.environments.len(), 2);
     }
 
     #[test]
