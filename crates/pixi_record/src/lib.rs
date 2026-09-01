@@ -341,8 +341,8 @@ impl UnresolvedPixiRecord {
                 // against the workspace root so the record carries an absolute
                 // `file://` URL, mirroring how source records are resolved.
                 let mut value = *value;
-                let location = resolve_local_location(value.location.inner(), workspace_root);
-                value.location = Verbatim::new(location.clone());
+                let location = resolve_local_location(&value.location, workspace_root);
+                value.location = location.clone();
                 let record: RepoDataRecord = value.try_into().map_err(|err| match err {
                     ConversionError::Missing(field) => ParseLockFileError::Missing(location, field),
                     ConversionError::LocationToUrlConversionError(err) => {
@@ -454,7 +454,7 @@ pub fn relativize_local_channel_location(
     // so compare in URL space: turn the location back into a `file://` URL.
     // Remote (https) locations also produce a URL here but won't match a local
     // channel's `file://` base, so they pass through untouched.
-    let Ok(url) = binary.location.inner().try_into_url() else {
+    let Ok(url) = binary.location.try_into_url() else {
         return CondaPackageData::Binary(binary);
     };
     let url = url.as_str();
@@ -468,8 +468,9 @@ pub fn relativize_local_channel_location(
         };
         let suffix = suffix.trim_start_matches('/');
         let given = format!("{}/{suffix}", declared_spelling.trim_end_matches('/'));
-        let inner = binary.location.inner().clone();
-        binary.location = Verbatim::new_with_given(inner, given);
+        binary.location = given
+            .parse()
+            .expect("relative channel location should be valid");
         break;
     }
     CondaPackageData::Binary(binary)
@@ -703,8 +704,8 @@ mod tests {
         let data = relativize_local_channel_location(data, &relative_channels);
         let binary = data.as_binary().expect("binary package");
         assert_eq!(
-            binary.location.given(),
-            Some("../local-channel/linux-64/my-dep-0.1.0-h0.conda"),
+            binary.location,
+            UrlOrPath::Path("../local-channel/linux-64/my-dep-0.1.0-h0.conda".into()),
             "the lock should store the path relative to the declared channel"
         );
     }
@@ -725,7 +726,10 @@ mod tests {
         };
         let data = CondaPackageData::from(Arc::unwrap_or_clone(record));
         let data = relativize_local_channel_location(data, &relative_channels);
-        assert_eq!(data.as_binary().unwrap().location.given(), None);
+        assert_eq!(
+            data.as_binary().unwrap().location,
+            UrlOrPath::Url(url::Url::parse("https://example.com/pkg.conda").unwrap())
+        );
     }
 
     fn source_record(name: &str, identifier_hash: &str, path: &str) -> PixiRecord {
