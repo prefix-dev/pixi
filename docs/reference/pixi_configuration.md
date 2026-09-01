@@ -85,7 +85,6 @@ For backwards compatibility, the following configuration options can still be wr
 in `snake_case`:
 
     - `default_channels`
-    - `default_platforms`
     - `change_ps1`
     - `tls_no_verify`
     - `authentication_override_file`
@@ -117,11 +116,11 @@ The default platforms to select when running `pixi init`.
 This defaults to the current platform if not specified.
 
 ```toml title="config.toml"
-default-platforms = ["win-64", "linux-64", "osx-64"]
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:default-platforms"
 ```
 
 !!! note
-The `default-platforms` are only used when initializing a new project. You can override this by explicitly providing platforms with the `--platform` flag.
+    The `default-platforms` are only used when initializing a new project. You can override this by explicitly providing platforms with the `--platform` flag.
 
 ### `shell`
 

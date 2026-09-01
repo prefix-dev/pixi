@@ -185,7 +185,7 @@ fn is_init_dir_equal_to_pixi_home_parent(init_dir: &Path) -> bool {
 }
 
 fn resolve_platforms(options: &InitOptions, config: &Config) -> Vec<String> {
-    if options.platforms.is_empty() {
+    let platforms = if options.platforms.is_empty() {
         let platforms = config.default_platforms();
         if platforms.is_empty() {
             vec![Platform::current().to_string()]
@@ -193,10 +193,11 @@ fn resolve_platforms(options: &InitOptions, config: &Config) -> Vec<String> {
             platforms
         }
     } else {
-        // Dedup so a repeated `--platform` (or one matching the current
-        // platform) doesn't write a manifest the parser then rejects.
-        options.platforms.iter().cloned().unique().collect()
-    }
+        options.platforms.clone()
+    };
+
+    // A repeated platform would produce a manifest that fails validation.
+    platforms.into_iter().unique().collect()
 }
 
 fn resolve_channels_from_options(options: &InitOptions, config: &Config) -> Vec<NamedChannelOrUrl> {
@@ -1250,9 +1251,12 @@ mod tests {
             ..Config::default()
         };
 
-        assert_eq!(resolve_platforms(&options, &config), config.default_platforms);
+        assert_eq!(
+            resolve_platforms(&options, &config),
+            config.default_platforms
+        );
 
-        options.platforms = vec!["osx-64".to_string()];
-        assert_eq!(resolve_platforms(&options, &config), options.platforms);
+        options.platforms = vec!["osx-64".to_string(), "osx-64".to_string()];
+        assert_eq!(resolve_platforms(&options, &config), vec!["osx-64"]);
     }
 }

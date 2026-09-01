@@ -1968,6 +1968,7 @@ impl Config {
             "concurrency.downloads",
             "concurrency.solves",
             "default-channels",
+            "default-platforms",
             "detached-environments",
             "experimental",
             "experimental.use-environment-activation-cache",
@@ -2251,6 +2252,13 @@ impl Config {
         match key {
             "default-channels" => {
                 self.default_channels = value
+                    .map(|v| serde_json::de::from_str(&v))
+                    .transpose()
+                    .into_diagnostic()?
+                    .unwrap_or_default();
+            }
+            "default-platforms" => {
+                self.default_platforms = value
                     .map(|v| serde_json::de::from_str(&v))
                     .transpose()
                     .into_diagnostic()?
@@ -3186,6 +3194,7 @@ UNUSED = "unused"
         let mut config = Config::default();
         let other = Config {
             default_channels: vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()],
+            default_platforms: vec!["linux-64".to_string()],
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
             tls_no_verify: Some(true),
             tls_root_certs: Some(TlsRootCerts::System),
@@ -3597,6 +3606,7 @@ UNUSED = "unused"
         // See if the toml parses in kebab-case
         let toml = r#"
             default-channels = ["conda-forge"]
+            default-platforms = ["linux-64", "osx-64"]
             change-ps1 = true
             tls-no-verify = false
             authentication-override-file = "/path/to/your/override.json"
@@ -3626,6 +3636,13 @@ UNUSED = "unused"
             config.default_channels,
             vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]
         );
+        config
+            .set(
+                "default-platforms",
+                Some(r#"["linux-64", "osx-64"]"#.to_string()),
+            )
+            .unwrap();
+        assert_eq!(config.default_platforms, vec!["linux-64", "osx-64"]);
 
         config
             .set("tls-no-verify", Some("true".to_string()))
