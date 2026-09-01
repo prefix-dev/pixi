@@ -358,26 +358,37 @@ mod tests {
     /// is dropped instead of being offered for disambiguation.
     #[test]
     fn test_unrunnable_environment_is_not_a_candidate() {
-        let manifest_str = r#"
+        let current = rattler_conda_types::Platform::current();
+        let foreign = if current == rattler_conda_types::Platform::LinuxRiscv64 {
+            rattler_conda_types::Platform::Linux64
+        } else {
+            rattler_conda_types::Platform::LinuxRiscv64
+        };
+        let manifest_str = format!(
+            r#"
             [project]
             name = "foo"
             channels = ["foo"]
-            platforms = ["linux-64", "osx-arm64", "win-64", "osx-64", "linux-riscv64"]
+            platforms = ["{current}", "{foreign}"]
 
-            [feature.riscv]
-            platforms = ["linux-riscv64"]
+            [feature.foreign]
+            platforms = ["{foreign}"]
 
-            [feature.riscv.tasks]
-            build = "echo riscv"
+            [feature.foreign.dependencies]
+            foo = "*"
+
+            [feature.foreign.tasks]
+            build = "echo foreign"
 
             [feature.portable.tasks]
             build = "echo portable"
 
             [environments]
-            riscv = ["riscv"]
+            foreign = ["foreign"]
             portable = ["portable"]
-        "#;
-        let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
+        "#
+        );
+        let project = Workspace::from_str(Path::new("pixi.toml"), &manifest_str).unwrap();
         let search = SearchEnvironments::from_opt_env(&project, None, None);
         let (env, _task) = search
             .find_task("build".into(), FindTaskSource::CmdArgs, None)
