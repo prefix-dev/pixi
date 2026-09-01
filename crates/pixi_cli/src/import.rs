@@ -142,6 +142,7 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
         (args.file, args.platforms, args.workspace_config);
 
     let workspace = WorkspaceLocator::for_cli()
+        .with_deprecation_warnings(true)
         .with_global_config_source(source)
         .with_search_start(workspace_config.workspace_locator_start())
         .locate()?

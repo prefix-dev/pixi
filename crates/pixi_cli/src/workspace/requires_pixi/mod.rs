@@ -40,6 +40,7 @@ pub enum Command {
 pub async fn execute(args: Args) -> miette::Result<()> {
     let is_verify = matches!(args.command, Command::Verify);
     let workspace_locator = WorkspaceLocator::for_cli()
+        .with_deprecation_warnings(true)
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .with_ignore_pixi_version_check(!is_verify);
