@@ -4,9 +4,7 @@ use itertools::Itertools;
 use pixi_config::ConfigCli;
 use pixi_core::{
     UpdateLockFileOptions, WorkspaceLocator,
-    environment::{
-        InstallFilter, get_resolved_lock_file_and_prefixes, get_update_lock_file_and_prefixes,
-    },
+    environment::{InstallFilter, LockFileSource, get_lock_file_and_prefixes},
     lock_file::{LockFileDerivedData, PackageFilterNames, ReinstallPackages, UpdateMode},
 };
 use pixi_manifest::PixiPlatformName;
@@ -188,36 +186,26 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Resolve the lock data and install the selected prefixes. Scripts use an
     // adjacent lock file when one exists. Otherwise, they use the cached
     // resolution. Other workspaces update their persistent lock file.
-    let options = UpdateLockFileOptions {
+    let update_lock_file_options = UpdateLockFileOptions {
         lock_file_usage: args.lock_file_usage.to_usage(),
         no_install: false,
         max_concurrent_solves: workspace.config().max_concurrent_solves(),
         ..Default::default()
     };
-    let (LockFileDerivedData { lock_file, .. }, prefixes) =
+    let (LockFileDerivedData { lock_file, .. }, prefixes) = get_lock_file_and_prefixes(
+        &environments,
+        target_platform.as_ref(),
+        Some(pixi_reporters::TopLevelProgress::from_global()),
+        UpdateMode::Revalidate,
         if args.workspace_config.script.is_some() {
-            get_resolved_lock_file_and_prefixes(
-                &environments,
-                target_platform.as_ref(),
-                Some(pixi_reporters::TopLevelProgress::from_global()),
-                UpdateMode::Revalidate,
-                options,
-                ReinstallPackages::default(),
-                &filter,
-            )
-            .await?
+            LockFileSource::Resolve(update_lock_file_options)
         } else {
-            get_update_lock_file_and_prefixes(
-                &environments,
-                target_platform.as_ref(),
-                Some(pixi_reporters::TopLevelProgress::from_global()),
-                UpdateMode::Revalidate,
-                options,
-                ReinstallPackages::default(),
-                &filter,
-            )
-            .await?
-        };
+            LockFileSource::Update(update_lock_file_options)
+        },
+        ReinstallPackages::default(),
+        &filter,
+    )
+    .await?;
 
     // Message what's installed
     let mut message = console::style(console::Emoji("✔ ", "")).green().to_string();

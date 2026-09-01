@@ -842,7 +842,7 @@ impl InstallFilter {
 
 /// Update the prefix if it doesn't exist or if it is not up-to-date.
 ///
-/// To updated multiple prefixes at once, use [`get_update_lock_file_and_prefixes`].
+/// To update multiple prefixes at once, use [`get_lock_file_and_prefixes`].
 pub async fn get_update_lock_file_and_prefix<'env>(
     environment: &Environment<'env>,
     progress: Option<std::sync::Arc<pixi_reporters::TopLevelProgress>>,
@@ -851,12 +851,12 @@ pub async fn get_update_lock_file_and_prefix<'env>(
     reinstall_packages: ReinstallPackages,
     filter: &InstallFilter,
 ) -> miette::Result<(LockFileDerivedData<'env>, Prefix)> {
-    let (lock_file, prefixes) = get_update_lock_file_and_prefixes(
+    let (lock_file, prefixes) = get_lock_file_and_prefixes(
         std::slice::from_ref(environment),
         None,
         progress.clone(),
         update_mode,
-        update_lock_file_options,
+        LockFileSource::Update(update_lock_file_options),
         reinstall_packages,
         filter,
     )
@@ -870,6 +870,14 @@ pub async fn get_update_lock_file_and_prefix<'env>(
     ))
 }
 
+/// Chooses how installation obtains lock data.
+pub enum LockFileSource {
+    /// Updates the workspace's persistent lock file.
+    Update(UpdateLockFileOptions),
+    /// Uses storage-aware operational resolution, including the script cache.
+    Resolve(UpdateLockFileOptions),
+}
+
 /// Update all the specified prefixes if it doesn't exist or if it is not
 /// up-to-date.
 ///
@@ -878,72 +886,14 @@ pub async fn get_update_lock_file_and_prefix<'env>(
 /// the host-virtual-package satisfaction check. That's how
 /// `pixi install --platform <name>` materialises an environment for a
 /// subdir the local machine can't actually run.
-pub async fn get_update_lock_file_and_prefixes<'env>(
+pub async fn get_lock_file_and_prefixes<'env>(
     environments: &[Environment<'env>],
     target_platform: Option<&PixiPlatformName>,
     progress: Option<std::sync::Arc<pixi_reporters::TopLevelProgress>>,
     update_mode: UpdateMode,
-    update_lock_file_options: UpdateLockFileOptions,
-    reinstall_packages: ReinstallPackages,
-    filter: &InstallFilter,
-) -> miette::Result<(LockFileDerivedData<'env>, Vec<Prefix>)> {
-    get_lock_file_and_prefixes(
-        environments,
-        target_platform,
-        progress,
-        update_mode,
-        reinstall_packages,
-        filter,
-        LockFileSource::Workspace(update_lock_file_options),
-    )
-    .await
-}
-
-/// Resolves lock data and installs the specified environments.
-///
-/// For scripts, Pixi updates an adjacent lock file when one exists. Otherwise,
-/// it uses and updates the cached resolution.
-///
-/// The environment list must not be empty. When `target_platform` is set,
-/// every environment must declare that platform.
-pub async fn get_resolved_lock_file_and_prefixes<'env>(
-    environments: &[Environment<'env>],
-    target_platform: Option<&PixiPlatformName>,
-    progress: Option<std::sync::Arc<pixi_reporters::TopLevelProgress>>,
-    update_mode: UpdateMode,
-    update_lock_file_options: UpdateLockFileOptions,
-    reinstall_packages: ReinstallPackages,
-    filter: &InstallFilter,
-) -> miette::Result<(LockFileDerivedData<'env>, Vec<Prefix>)> {
-    get_lock_file_and_prefixes(
-        environments,
-        target_platform,
-        progress,
-        update_mode,
-        reinstall_packages,
-        filter,
-        LockFileSource::Script(update_lock_file_options),
-    )
-    .await
-}
-
-/// Chooses how installation obtains lock data.
-enum LockFileSource {
-    /// Updates the workspace's persistent lock file.
-    Workspace(UpdateLockFileOptions),
-    /// Uses a script's adjacent lock file or cached resolution.
-    Script(UpdateLockFileOptions),
-}
-
-/// Installs environments using workspace or script lock-file behavior.
-async fn get_lock_file_and_prefixes<'env>(
-    environments: &[Environment<'env>],
-    target_platform: Option<&PixiPlatformName>,
-    progress: Option<std::sync::Arc<pixi_reporters::TopLevelProgress>>,
-    update_mode: UpdateMode,
-    reinstall_packages: ReinstallPackages,
-    filter: &InstallFilter,
     lock_file_source: LockFileSource,
+    reinstall_packages: ReinstallPackages,
+    filter: &InstallFilter,
 ) -> miette::Result<(LockFileDerivedData<'env>, Vec<Prefix>)> {
     if environments.is_empty() {
         return Err(miette::miette!("No environments provided to install."));
@@ -951,10 +901,9 @@ async fn get_lock_file_and_prefixes<'env>(
 
     let workspace = environments[0].workspace();
 
-    let update_lock_file_options = match &lock_file_source {
-        LockFileSource::Workspace(options) | LockFileSource::Script(options) => options,
+    let no_install = match &lock_file_source {
+        LockFileSource::Update(options) | LockFileSource::Resolve(options) => options.no_install,
     };
-    let no_install = update_lock_file_options.no_install;
     for env in environments {
         // A `--platform` the environment doesn't list is a membership error.
         // With no platform requested, defer to the install path's minimum fallback.
@@ -1006,19 +955,13 @@ async fn get_lock_file_and_prefixes<'env>(
     store_credentials_from_requirements(requirements);
 
     // Ensure that the lock file is up-to-date
-    let options = UpdateLockFileOptions {
-        lock_file_usage: update_lock_file_options.lock_file_usage,
-        no_install,
-        max_concurrent_solves: update_lock_file_options.max_concurrent_solves,
-        ..Default::default()
-    };
     let mut lock_file = match lock_file_source {
-        LockFileSource::Workspace(_) => {
+        LockFileSource::Update(options) => {
             workspace
                 .update_lock_file(progress.clone(), options)
                 .await?
         }
-        LockFileSource::Script(_) => {
+        LockFileSource::Resolve(options) => {
             workspace
                 .resolve_lock_file(progress.clone(), options)
                 .await?
