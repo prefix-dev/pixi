@@ -87,6 +87,8 @@ pixi install [OPTIONS]
 :  The path to `pixi.toml`, `pyproject.toml`, or the workspace directory
 - <a id="arg---workspace" href="#arg---workspace">`--workspace (-w) <WORKSPACE>`</a>
 :  Name of the workspace
+- <a id="arg---script" href="#arg---script">`--script (-s) <SCRIPT>`</a>
+:  The path to a Python script containing PEP 723 metadata
 
 ## Description
 Install an environment, both updating the lock file and installing the environment.
@@ -100,6 +102,8 @@ If you want to install all environments, you can use the `--all` flag.
 Running `pixi install` is not required before running other commands like `pixi run` or `pixi shell`. These commands will automatically install the environment if it is not already installed.
 
 You can use `pixi reinstall` to reinstall all environments, one environment or just some packages of an environment.
+
+`pixi install --script` installs a PEP 723 script's environment without running the script. It uses the same environment as `pixi run --script`. Pixi updates an adjacent lock file when one exists. Otherwise, it updates the cached resolution.
 
 
 --8<-- "docs/reference/cli/pixi/install_extender:example"
