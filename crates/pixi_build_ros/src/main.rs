@@ -331,9 +331,9 @@ impl GenerateRecipe for RosGenerator {
         &self,
         config: &Self::Config,
         _workdir: impl AsRef<Path>,
-        editable: bool,
+        _editable: bool,
     ) -> miette::Result<Vec<String>> {
-        let mut globs: Vec<&str> = vec![
+        let globs: Vec<&str> = vec![
             "**/*.c",
             "**/*.cpp",
             "**/*.h",
