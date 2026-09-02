@@ -791,6 +791,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#install-without-running" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Install without running
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#inspect-and-export" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -8719,6 +8730,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#install-without-running" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Install without running
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#inspect-and-export" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -8809,8 +8831,8 @@ block</a>,
 while the resolved environment stays in Pixi's cache instead of a workspace
 next to the script.</p>
 <p>Script commands use <code>--script &lt;PATH&gt;</code>. The same <code>init</code>, <code>run</code>, <code>add</code>, <code>remove</code>,
-<code>lock</code>, and <code>update</code> commands used for workspaces can therefore operate on
-either a manifest or a standalone file.</p>
+<code>install</code>, <code>lock</code>, and <code>update</code> commands used for workspaces can therefore
+operate on either a manifest or a standalone file.</p>
 <h2 id="make-a-script-self-contained">Make a script self-contained<a class="headerlink" href="#make-a-script-self-contained" title="Permanent link">#</a></h2>
 <p>This script downloads the USGS earthquake feed with <code>httpx</code>, then uses GDAL's
 Python bindings to count the features:</p>
@@ -8950,18 +8972,26 @@ index therefore do not change the environment during an ordinary run.</p>
 <div class="language-console highlight"><pre><span></span><code><span id="__span-10-1"><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="go">pixi update --script earthquakes.py</span>
 </span></code></pre></div>
 <p>Without an adjacent lock file, this replaces the cached resolution. The next
-run updates the cached environment to match it. This cache state is disposable.
-Removing it causes Pixi to resolve the script again.</p>
+<code>run</code> or <code>install</code> updates the cached environment to match it. This cache state
+is disposable. Removing it causes Pixi to resolve the script again.</p>
 <p>When an adjacent lock file exists, <code>update</code> writes the new resolution there
 instead.</p>
+<h2 id="install-without-running">Install without running<a class="headerlink" href="#install-without-running" title="Permanent link">#</a></h2>
+<p>Use <code>pixi install</code> to install the script's environment without running the
+script.</p>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="go">pixi install --script earthquakes.py</span>
+</span></code></pre></div>
+<p>This installs the same cached environment that <code>pixi run --script</code> would use
+and prints its location. Run this during a container build or before going
+offline to install the environment ahead of time.</p>
 <h2 id="inspect-and-export">Inspect and export<a class="headerlink" href="#inspect-and-export" title="Permanent link">#</a></h2>
 <p>Inspect the resolved dependency graph with <code>tree</code>:</p>
-<div class="language-console highlight"><pre><span></span><code><span id="__span-11-1"><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="go">pixi tree --script earthquakes.py</span>
-</span><span id="__span-11-2"><a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="go">pixi tree --script earthquakes.py httpx</span>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="go">pixi tree --script earthquakes.py</span>
+</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="go">pixi tree --script earthquakes.py httpx</span>
 </span></code></pre></div>
 <p>Export the default script environment in either supported Conda format:</p>
-<div class="language-console highlight"><pre><span></span><code><span id="__span-12-1"><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="go">pixi workspace export conda-environment --script earthquakes.py</span>
-</span><span id="__span-12-2"><a id="__codelineno-12-2" name="__codelineno-12-2" href="#__codelineno-12-2"></a><span class="go">pixi workspace export conda-explicit-spec --script earthquakes.py ./export</span>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="go">pixi workspace export conda-environment --script earthquakes.py</span>
+</span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="go">pixi workspace export conda-explicit-spec --script earthquakes.py ./export</span>
 </span></code></pre></div>
 <p><code>conda-environment</code> renders from the manifest by default. Pass
 <code>--from-lock-file</code> to export exact versions from an adjacent lock.
@@ -8971,7 +9001,7 @@ lock policy flags.</p>
 <p>A cached resolution keeps ordinary runs stable on one machine, but it does not
 travel with the script. Create a lock file when exact versions need to travel
 with it:</p>
-<div class="language-console highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="go">pixi lock --script earthquakes.py</span>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="go">pixi lock --script earthquakes.py</span>
 </span></code></pre></div>
 <p>This writes <code>earthquakes.py.pixi.lock</code> next to the file. Subsequent commands
 reuse the lock file, and metadata mutations keep it up to date.</p>
@@ -8979,8 +9009,8 @@ reuse the lock file, and metadata mutations keep it up to date.</p>
 machine. On a machine that does not meet it, Pixi resolves the script again
 instead of using the lock file. Declare the platforms first to lock versions
 that everyone reuses:</p>
-<div class="language-console highlight"><pre><span></span><code><span id="__span-14-1"><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="go">pixi workspace platform add --script earthquakes.py linux-64 osx-arm64</span>
-</span><span id="__span-14-2"><a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="go">pixi lock --script earthquakes.py</span>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="go">pixi workspace platform add --script earthquakes.py linux-64 osx-arm64</span>
+</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="go">pixi lock --script earthquakes.py</span>
 </span></code></pre></div>
 <p>Use <code>--locked</code> to require an existing, up-to-date lock file. Use <code>--frozen</code>
 to consume an existing lock file without updating it. Both options report an
@@ -8989,14 +9019,14 @@ error when the script has no adjacent lock file.</p>
 <p>Scripts have one implicit environment, but they can declare multiple channels
 and target platforms.</p>
 <p>Manage channels through <code>pixi workspace channel</code>:</p>
-<div class="language-console highlight"><pre><span></span><code><span id="__span-15-1"><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="go">pixi workspace channel add --script analysis.py conda-forge</span>
-</span><span id="__span-15-2"><a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="go">pixi workspace channel list --script analysis.py</span>
-</span><span id="__span-15-3"><a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a><span class="go">pixi workspace channel remove --script analysis.py conda-forge</span>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="go">pixi workspace channel add --script analysis.py conda-forge</span>
+</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="go">pixi workspace channel list --script analysis.py</span>
+</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="go">pixi workspace channel remove --script analysis.py conda-forge</span>
 </span></code></pre></div>
 <p>Manage platforms through <code>pixi workspace platform</code>:</p>
-<div class="language-console highlight"><pre><span></span><code><span id="__span-16-1"><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="go">pixi workspace platform add --script analysis.py linux-64 osx-arm64</span>
-</span><span id="__span-16-2"><a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a><span class="go">pixi workspace platform list --script analysis.py</span>
-</span><span id="__span-16-3"><a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a><span class="go">pixi workspace platform remove --script analysis.py osx-arm64</span>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="go">pixi workspace platform add --script analysis.py linux-64 osx-arm64</span>
+</span><span id="__span-17-2"><a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="go">pixi workspace platform list --script analysis.py</span>
+</span><span id="__span-17-3"><a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="go">pixi workspace platform remove --script analysis.py osx-arm64</span>
 </span></code></pre></div>
 <p>The platform command also supports rich platform definitions and the <code>edit</code>
 and <code>move</code> operations. Platform order determines selection priority. Declared
@@ -9007,7 +9037,7 @@ command does not take a separate platform override.</p>
 When it doesn't, Pixi resolves it for the machine you run it on, using the <a href="../../workspace/multi_platform_configuration/#declaring-virtual-packages-per-platform">virtual packages</a> it detects there: your CUDA driver, your glibc version, your macOS version.
 A script that needs a glibc newer than Pixi's <code>2.28</code> default resolves without you writing anything down.</p>
 <p>To resolve for a fixed target instead:</p>
-<div class="language-console highlight"><pre><span></span><code><span id="__span-17-1"><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="go">pixi workspace platform add --script analysis.py --auto-detect</span>
+<div class="language-console highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="go">pixi workspace platform add --script analysis.py --auto-detect</span>
 </span></code></pre></div>
 <h2 id="supported-command-surface">Supported command surface<a class="headerlink" href="#supported-command-surface" title="Permanent link">#</a></h2>
 <p>The script-capable commands are:</p>
