@@ -864,18 +864,19 @@ impl<'p> LockFileDerivedData<'p> {
             .ok_or_else(|| UpdateError::LockFileMissingEnv(environment.name().clone()))?;
         Ok(LockedEnvironmentHash::from_environment(
             locked_environment,
-            environment.named_or_best_declared_platform(self.target_platform.as_ref()),
+            environment.named_or_pinned_platform(self.target_platform.as_ref()),
         ))
     }
 
     /// The declared platform install targets for `environment`: the explicit
-    /// `--platform` override or the best declared platform; when neither
-    /// matches this machine, a declared platform whose lock-resolved minimum
-    /// requirements the machine meets (running "by accident").
+    /// `--platform` override, else the platform it is already installed for,
+    /// else the best declared platform; when none of those matches this
+    /// machine, a declared platform whose lock-resolved minimum requirements
+    /// the machine meets (running "by accident").
     fn install_platform(&self, environment: &Environment<'p>) -> Option<&'p PixiPlatform> {
         let target_override = self.target_platform.as_ref();
         environment
-            .named_or_best_declared_platform(target_override)
+            .named_or_pinned_platform(target_override)
             .or_else(|| {
                 if target_override.is_some() {
                     return None;
@@ -885,7 +886,7 @@ impl<'p> LockFileDerivedData<'p> {
                 if let Some(platform) = fallback {
                     tracing::debug!(
                         "no declared platform of environment '{}' matches this machine; \
-                         installing minimum-compatible platform '{}'",
+                     installing minimum-compatible platform '{}'",
                         environment.name(),
                         platform.name(),
                     );

@@ -8,6 +8,7 @@ use miette::IntoDiagnostic;
 use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
 use pixi_core::environment::{PlatformData, RequiredPlatform};
+use pixi_core::workspace::platform_options::alternative_platforms;
 use pixi_global::{BinDir, EnvRoot};
 use pixi_manifest::platform::subdir_default_virtual_packages;
 use pixi_manifest::toml::inline_virtual_package_specs;
@@ -111,6 +112,21 @@ impl From<&RequiredPlatform> for PlatformInfo {
     }
 }
 
+/// The resolved platform, named after the declared platform `declared`
+/// recovered. The marker file records no name, so without this an environment
+/// installed for `gpu` reports as `linux-64 (cuda=13)` -- indistinguishable from
+/// the bare `linux-64` platform listed beside it.
+fn resolved_platform_info(
+    data: &PlatformData,
+    declared: Option<&pixi_manifest::PixiPlatform>,
+) -> PlatformInfo {
+    let mut info = PlatformInfo::from(data);
+    if let Some(declared) = declared {
+        info.name = declared.name().clone();
+    }
+    info
+}
+
 /// Human-readable representation of a platform entry in the `pixi info`
 /// output: bare name when it carries no customised VPs, otherwise
 /// `<name> (vp1, vp2, ...)` in friendly form.
@@ -133,6 +149,9 @@ pub struct EnvironmentInfo {
     platforms: Vec<PlatformInfo>,
     resolved_platform: Option<PlatformInfo>,
     minimum_supported_platform: Option<PlatformInfo>,
+    /// Declared platforms this machine can also run, besides the one the
+    /// environment is installed for. Empty unless it is installed.
+    alternative_platforms: Vec<PlatformInfo>,
     tasks: Vec<TaskName>,
     channels: Vec<String>,
     prefix: PathBuf,
@@ -240,6 +259,20 @@ impl Display for EnvironmentInfo {
             bold.apply_to("Minimum platform"),
             minimum
         )?;
+
+        if !self.alternative_platforms.is_empty() {
+            let alternatives = self
+                .alternative_platforms
+                .iter()
+                .map(format_platform)
+                .format(", ");
+            writeln!(
+                f,
+                "{:>WIDTH$}: {}",
+                bold.apply_to("Also runnable here"),
+                alternatives
+            )?;
+        }
 
         writeln!(
             f,
@@ -500,7 +533,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             ws.environments()
                 .iter()
                 .map(|env| {
-                    let best = env.best_declared_platform();
+                    // The platform in use, so the dependencies and tasks shown
+                    // are the ones this machine actually resolves against.
+                    let best = env.pinned_or_best_declared_platform();
                     let tasks = env
                         .tasks(best)
                         .ok()
@@ -543,10 +578,21 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                                     .map(PlatformInfo::from)
                             })
                             .collect(),
-                        resolved_platform: resolved_platform.as_ref().map(PlatformInfo::from),
+                        resolved_platform: resolved_platform.as_ref().map(|data| {
+                            resolved_platform_info(data, env.installed_resolved_platform())
+                        }),
                         minimum_supported_platform: minimum_supported_platform
                             .as_ref()
                             .map(PlatformInfo::from),
+                        alternative_platforms: alternative_platforms(env)
+                            .map(|options| {
+                                options
+                                    .alternatives
+                                    .into_iter()
+                                    .map(PlatformInfo::from)
+                                    .collect()
+                            })
+                            .unwrap_or_default(),
                         channels: env.channels().into_iter().map(|c| c.to_string()).collect(),
                         prefix: env.dir(),
                         tasks,
