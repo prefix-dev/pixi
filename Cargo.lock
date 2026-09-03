@@ -6156,7 +6156,7 @@ dependencies = [
 
 [[package]]
 name = "pixi-build-ros"
-version = "0.7.4"
+version = "0.7.5"
 dependencies = [
  "async-trait",
  "fs-err",
