@@ -175,6 +175,44 @@ def test_entrypoint_syntax_errors_are_reported(pixi: Path, tmp_pixi_workspace: P
     )
 
 
+def test_requires_pixi_is_enforced(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    script = tmp_pixi_workspace / "requires-pixi.code"
+    script.write_text(f"""# /// conda-script
+# channels = ["{CONDA_FORGE_CHANNEL}"]
+# entrypoint = "echo ok"
+#
+# [tool.pixi.workspace]
+# requires-pixi = ">=999"
+# /// end-conda-script
+""")
+
+    verify_cli_command(
+        [pixi, "workspace", "platform", "list", "--script", script, "--json"],
+        ExitCode.FAILURE,
+        stderr_contains=[
+            "this project requires pixi '>=999'",
+            "this version requirement is not satisfied",
+        ],
+    )
+
+
+def test_implicit_platform_accepts_matching_target(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    script = tmp_pixi_workspace / "target.code"
+    script.write_text(f"""# /// conda-script
+# channels = ["{CONDA_FORGE_CHANNEL}"]
+# entrypoint = "echo ok"
+#
+# [tool.pixi.target.{CURRENT_PLATFORM}.dependencies]
+# zlib = "*"
+# /// end-conda-script
+""")
+
+    verify_cli_command(
+        [pixi, "workspace", "platform", "list", "--script", script, "--json"],
+        stderr_excludes="does not match any of the platforms supported by the workspace",
+    )
+
+
 @pytest.mark.slow
 @pytest.mark.skipif(sys.platform == "win32", reason="signals are a Unix concept")
 def test_a_signal_sent_to_pixi_reaches_the_entrypoint(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -290,6 +328,91 @@ sys.exit(1)
         cwd=tmp_pixi_workspace,
     )
     assert not (tmp_pixi_workspace / "marker").exists()
+
+
+SOURCE_DEPENDENCY_BLOCK = f"""# /// conda-script
+# channels = ["{CONDA_FORGE_CHANNEL}"]
+# entrypoint = "simple-app"
+#
+# [dependencies]
+# simple-app = "{{version}}"
+#
+# [tool.pixi.workspace]
+# preview = ["pixi-build"]
+#
+# [tool.pixi.dependencies]
+# simple-app = {{{{ git = "https://github.com/prefix-dev/pixi-build-testsuite.git", subdirectory = "tests/data/pixi_build/minimal-backend-workspaces/pixi-build-python" }}}}
+# /// end-conda-script
+"""
+
+
+@pytest.mark.slow
+def test_a_binary_spec_constrains_a_source_dependency(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Both specs of the package reach the solver: the source spec in
+    `[tool.pixi.dependencies]` provides the candidate and the binary spec in
+    `[dependencies]` constrains its version. The preview declared under
+    `[tool.pixi.workspace]` lets the source dependency build."""
+    script = tmp_pixi_workspace / "source.code"
+    script.write_text(SOURCE_DEPENDENCY_BLOCK.format(version="0.1.*"))
+
+    verify_cli_command(
+        [pixi, "run", "--experimental", "--script", script],
+        stdout_contains="Build backend works",
+    )
+
+    script.write_text(SOURCE_DEPENDENCY_BLOCK.format(version="0.2.*"))
+    verify_cli_command(
+        [pixi, "run", "--experimental", "--script", script],
+        ExitCode.FAILURE,
+        stderr_contains="0.2",
+    )
+
+
+@pytest.mark.slow
+def test_tool_pixi_tables_shape_the_environment(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """`tool.pixi` is read like a manifest: activation applies to the
+    entrypoint and the workspace options reach the solver."""
+    script = tmp_pixi_workspace / "tool.code"
+    script.write_text(f"""# /// conda-script
+# channels = ["{CONDA_FORGE_CHANNEL}"]
+# entrypoint = "python -c \\"import os; print(os.environ['GREETING'])\\""
+#
+# [dependencies]
+# python = "3.13.*"
+#
+# [tool.pixi.workspace]
+# exclude-newer = "2030-01-01"
+#
+# [tool.pixi.activation.env]
+# GREETING = "hello from tool.pixi"
+# /// end-conda-script
+""")
+
+    verify_cli_command(
+        [pixi, "run", "--experimental", "--script", script],
+        stdout_contains="hello from tool.pixi",
+    )
+
+
+def test_run_rejects_workspace_only_tables(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    script = tmp_pixi_workspace / "feature.code"
+    script.write_text(f"""# /// conda-script
+# channels = ["{CONDA_FORGE_CHANNEL}"]
+# entrypoint = "python ${{SCRIPT}}"
+#
+# [tool.pixi.feature.test.dependencies]
+# pytest = "*"
+# /// end-conda-script
+""")
+
+    verify_cli_command(
+        [pixi, "run", "--experimental", "--script", script],
+        ExitCode.FAILURE,
+        stderr_contains=[
+            "scripts do not support `tool.pixi.feature`",
+            "one implicit default environment",
+        ],
+    )
 
 
 @pytest.mark.slow
@@ -456,3 +579,28 @@ def test_add_then_remove_pypi_round_trips(pixi: Path, tmp_pixi_workspace: Path) 
 
     verify_cli_command([pixi, "remove", "--script", script, "--no-install", "--pypi", "six"])
     assert "six" not in script.read_text()
+
+
+def test_remove_edits_the_block_dependencies(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """The block's `[dependencies]` are the default feature, which is where
+    `pixi remove` looks for a conda dependency."""
+    script = tmp_pixi_workspace / "remove.code"
+    script.write_text(f"""# /// conda-script
+# channels = ["{CONDA_FORGE_CHANNEL}"]
+# entrypoint = "python ${{SCRIPT}}"
+#
+# [dependencies]
+# python = "3.13.*"
+# zlib = "*"
+#
+# [tool.pixi.activation.env]
+# GREETING = "kept"
+# /// end-conda-script
+""")
+
+    verify_cli_command([pixi, "remove", "--script", script, "--no-install", "zlib"])
+
+    contents = script.read_text()
+    assert "zlib" not in contents
+    assert '# python = "3.13.*"' in contents
+    assert '# GREETING = "kept"' in contents

@@ -92,7 +92,7 @@ pub struct TomlWorkspaceTarget {
 }
 
 /// The TOML representation of the `[[workspace]]` section in a pixi manifest.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct TomlWorkspace {
     // In TOML the workspace name can be empty. It is a required field though, but this is enforced
     // when converting the TOML model to the actual manifest. When using a PyProject we want to use

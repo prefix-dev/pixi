@@ -279,7 +279,7 @@ impl LockFileDerivedData<'_> {
     }
 }
 
-fn local_lock_file_path(script_path: &Path) -> PathBuf {
+pub(super) fn local_lock_file_path(script_path: &Path) -> PathBuf {
     let mut file_name = script_path
         .file_name()
         .expect("an absolute script path always has a file name")

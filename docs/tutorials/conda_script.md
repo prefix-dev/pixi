@@ -180,11 +180,22 @@ The entrypoint runs in the directory `pixi run` was invoked from, so relative pa
 
 ## Pixi-specific configuration
 
-Tables under `[tool.*]` belong to the named tool. Pixi reads `[tool.pixi]`
-the same way as in a `pyproject.toml`, restricted to one implicit
-environment: `[tool.pixi.dependencies]` for specs in pixi's native syntax,
-including [source dependencies](../build/dependency_types.md), and
-`[tool.pixi.pypi-dependencies]` for PyPI packages.
+Tables under `[tool.*]` belong to the named tool.
+Pixi reads `[tool.pixi]` the same way as in a `pyproject.toml`, restricted to what one implicit environment needs.
+[PEP 723 scripts](../python/scripts.md) accept the same subset:
+
+- `[tool.pixi.dependencies]` holds conda specs in pixi's native syntax, including [source dependencies](../build/dependency_types.md), which need the `pixi-build` preview declared under `[tool.pixi.workspace]`.
+- `[tool.pixi.pypi-dependencies]` holds PyPI packages.
+- `[tool.pixi.constraints]`, `[tool.pixi.activation]` and `[tool.pixi.target.<platform>]` hold constraints, activation settings and platform-specific dependencies.
+- `[tool.pixi.exclude-newer]` and `[tool.pixi.pypi-exclude-newer]` override the cutoff date per package.
+- `[tool.pixi.workspace]` holds resolver options: `platforms`, `channel-priority`, `solve-strategy`, `exclude-newer`, `conda-pypi-map`, `pypi-options`, `preview` and `requires-pixi`.
+  Channels stay in the block's `channels`, so `tool.pixi.workspace.channels` is rejected.
+
+A script without `platforms` resolves for the machine it runs on.
+Declaring them pins the script to those platforms, which lets `pixi lock --script` produce a lock file for other machines.
+
+Every other key is rejected with an error pointing at it: features, environments, tasks and package sections have no meaning in a single implicit environment.
+The deprecated `system-requirements` table is rejected too, since a script either takes the virtual packages of the machine or declares them on its `platforms`.
 
 `[tool.pixi.dependencies]` merges with `[dependencies]` the way pixi merges features: every spec applies.
 A source dependency there composes with a version constraint in `[dependencies]`, so tools that only implement the conda-script specification still see a solvable script:
@@ -192,6 +203,9 @@ A source dependency there composes with a version constraint in `[dependencies]`
 ```toml
 [dependencies]
 simple-app = "0.1.*"
+
+[tool.pixi.workspace]
+preview = ["pixi-build"]
 
 [tool.pixi.dependencies]
 simple-app = { git = "https://github.com/prefix-dev/pixi-build-testsuite.git", subdirectory = "tests/data/pixi_build/minimal-backend-workspaces/pixi-build-python" }

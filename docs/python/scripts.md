@@ -71,12 +71,21 @@ PEP 723 defines two portable fields:
 Pixi reads those fields and extends them with a focused subset of
 `tool.pixi`:
 
-- `tool.pixi.workspace` configures channels, platforms, and resolver options.
+- `tool.pixi.workspace` configures channels, platforms, and resolver options
+  such as `exclude-newer`, `channel-priority` or `solve-strategy`.
 - `tool.pixi.dependencies` lists Conda packages.
 - `tool.pixi.pypi-dependencies` represents PyPI requirements that need
   Pixi-specific fields, such as an index or editable installation.
+- `tool.pixi.constraints` and `tool.pixi.activation` hold constraints and
+  activation settings.
 - `tool.pixi.target.<platform>` holds platform-specific dependencies,
   constraints, and activation settings.
+- `tool.pixi.exclude-newer` and `tool.pixi.pypi-exclude-newer` override the
+  cutoff date per package.
+
+Every other key under `tool.pixi` is rejected with an error pointing at it,
+since a script has one implicit environment and no features, tasks or
+packages.
 
 Other PEP 723 tools can use the portable fields and ignore `tool.pixi`. In the
 example above, another tool can install `httpx`, but only Pixi also provides
