@@ -1,10 +1,11 @@
 use std::{fmt, ops::Range, path::PathBuf, sync::Arc};
 
 use miette::{Diagnostic, LabeledSpan, NamedSource, SourceCode};
-use pixi_toml::TomlDiagnostic;
 use thiserror::Error;
 
-use crate::script::block::BlockSourceMap;
+use crate::{
+    InvalidRequiresPixiError, PixiVersionMismatchError, TomlError, script::block::BlockSourceMap,
+};
 
 /// Errors produced while reading a `conda-script` file.
 #[derive(Debug, Error, Diagnostic)]
@@ -16,6 +17,14 @@ pub enum CondaScriptError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Metadata(#[from] Box<MetadataError>),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    PixiVersionMismatch(#[from] Box<PixiVersionMismatchError>),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    InvalidRequiresPixi(#[from] Box<InvalidRequiresPixiError>),
 
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -31,8 +40,10 @@ pub enum CondaScriptError {
     #[diagnostic(help("the file already carries a `/// conda-script` block"))]
     AlreadyInitialized { path: PathBuf },
 
-    #[error("conda-script blocks do not support `{key}`")]
-    #[diagnostic(help("a conda-script resolves for the machine it runs on"))]
+    #[error("conda-script blocks do not support editing `{key}`")]
+    #[diagnostic(help(
+        "the block's `channels` take plain names; `platforms` are declared by hand under `[tool.pixi.workspace]`"
+    ))]
     UnsupportedEdit { key: String },
 }
 
@@ -151,11 +162,11 @@ impl Diagnostic for EnvelopeError {
     }
 }
 
-/// Invalid TOML inside a `conda-script` block, with spans mapped back into
-/// the original file.
+/// Invalid metadata inside a `conda-script` block, with spans mapped back
+/// into the original file.
 #[derive(Debug)]
 pub struct MetadataError {
-    pub(crate) error: TomlDiagnostic,
+    pub(crate) error: TomlError,
     pub(crate) source: NamedSource<Arc<str>>,
     pub(crate) source_map: BlockSourceMap,
 }
