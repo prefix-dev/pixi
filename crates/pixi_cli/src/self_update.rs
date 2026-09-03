@@ -98,6 +98,8 @@ fn default_archive_name() -> Option<String> {
             Some("pixi-x86_64-unknown-linux-musl.tar.gz".to_string())
         } else if cfg!(target_arch = "aarch64") {
             Some("pixi-aarch64-unknown-linux-musl.tar.gz".to_string())
+        } else if cfg!(target_arch = "riscv64") {
+            Some("pixi-riscv64gc-unknown-linux-musl.tar.gz".to_string())
         } else {
             None
         }
