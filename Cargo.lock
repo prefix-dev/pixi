@@ -1724,23 +1724,12 @@ dependencies = [
 
 [[package]]
 name = "comfy-table"
-version = "7.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "958c5d6ecf1f214b4c2bbbbf6ab9523a864bd136dcf71a7e8904799acfe1ad47"
-dependencies = [
- "ansi-str",
- "console",
- "crossterm",
- "unicode-segmentation",
- "unicode-width 0.2.2",
-]
-
-[[package]]
-name = "comfy-table"
 version = "8.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "136c8c4c3823846e8ba6d4bda011b4e5d5827b8bb0ac26c31f9ab31abe9f54f2"
 dependencies = [
+ "ansi-str",
+ "console",
  "crossterm",
  "unicode-segmentation",
  "unicode-width 0.2.2",
@@ -6419,7 +6408,7 @@ dependencies = [
  "clap",
  "clap_complete",
  "clap_complete_nushell",
- "comfy-table 7.2.2",
+ "comfy-table",
  "console",
  "console-subscriber",
  "ctrlc",
@@ -8103,7 +8092,7 @@ dependencies = [
  "async-recursion",
  "clap",
  "clap-verbosity-flag",
- "comfy-table 8.0.0",
+ "comfy-table",
  "console",
  "content_inspector",
  "dunce",
