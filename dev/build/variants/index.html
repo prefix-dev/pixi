@@ -8820,7 +8820,7 @@ Rather than making you repeat this in <code>[workspace.build-variants]</code>, P
 </tr>
 </tbody>
 </table>
-<p>Platforms declared as a bare subdir string carry Pixi's portable defaults (<code>__glibc = "2.28"</code>, <code>__osx = "13.0"</code>), so the derivation works even when you don't declare system requirements explicitly.</p>
+<p>Platforms declared as a bare subdir string carry Pixi's <a href="../../workspace/system_requirements/#default-declared-virtual-packages">portable defaults</a> (<code>__glibc = "2.28"</code>, except <code>2.39</code> on <code>linux-riscv64</code>, and <code>__osx = "13.0"</code>), so the derivation works even when you don't declare system requirements explicitly.</p>
 <p>The providers <code>macosx_deployment_target</code> and <code>sysroot</code> are conda-forge packages, so this derivation only applies when one of your channels is conda-forge.
 It is skipped on Windows (which has no meaningful stdlib version), and musl (<code>__musl</code>) and CUDA (<code>__cuda</code>) are not derived yet.</p>
 <h2 id="conclusion">Conclusion<a class="headerlink" href="#conclusion" title="Permanent link">#</a></h2>

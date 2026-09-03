@@ -9035,7 +9035,7 @@ command does not take a separate platform override.</p>
 <h3 id="scripts-without-declared-platforms">Scripts without declared platforms<a class="headerlink" href="#scripts-without-declared-platforms" title="Permanent link">#</a></h3>
 <p>A script does not have to declare <code>platforms</code>.
 When it doesn't, Pixi resolves it for the machine you run it on, using the <a href="../../workspace/multi_platform_configuration/#declaring-virtual-packages-per-platform">virtual packages</a> it detects there: your CUDA driver, your glibc version, your macOS version.
-A script that needs a glibc newer than Pixi's <code>2.28</code> default resolves without you writing anything down.</p>
+A script that needs a glibc newer than Pixi's <a href="../../workspace/system_requirements/#default-declared-virtual-packages">default</a> resolves without you writing anything down.</p>
 <p>To resolve for a fixed target instead:</p>
 <div class="language-console highlight"><pre><span></span><code><span id="__span-18-1"><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="go">pixi workspace platform add --script analysis.py --auto-detect</span>
 </span></code></pre></div>
