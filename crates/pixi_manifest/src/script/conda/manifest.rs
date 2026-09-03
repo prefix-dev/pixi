@@ -3,15 +3,31 @@ use std::{
     sync::Arc,
 };
 
+use indexmap::{IndexMap, IndexSet};
 use miette::NamedSource;
-use toml_edit::DocumentMut;
+use toml_edit::{DocumentMut, Item};
+use toml_span::{Span, Spanned};
 
 use super::{
     CondaScriptError, CondaScriptMetadata, CondaScriptTemplate,
     envelope::{self, CLOSING_MARKER, OPENING_MARKER},
     error::{EnvelopeError, EnvelopeErrorKind, MetadataError},
+    metadata::ParsedBlock,
 };
-use crate::script::block::{LineEnding, extract_script_header, serialize_block};
+use crate::{
+    EnvironmentName, FeatureName, InvalidRequiresPixiError, PixiPlatform, PixiVersionMismatchError,
+    TomlError, Warning, WorkspaceManifest,
+    discovery::RequiresPixiCheck,
+    script::{
+        ScriptWorkspaceConfig,
+        block::{BlockSourceMap, LineEnding, extract_script_header, serialize_block},
+    },
+    toml::{ExternalWorkspaceProperties, PackageDefaults, TomlEnvironmentList, TomlFeature},
+    utils::PixiSpanned,
+};
+
+/// The feature that carries `tool.pixi.dependencies` in the workspace.
+const TOOL_PIXI_FEATURE: &str = "tool-pixi";
 
 /// A code file containing a `conda-script` metadata block.
 #[derive(Debug, Clone)]
@@ -23,6 +39,8 @@ pub struct CondaScriptManifest {
     prelude: String,
     postlude: String,
     line_ending: LineEnding,
+    source: Arc<str>,
+    source_map: BlockSourceMap,
 }
 
 impl CondaScriptManifest {
@@ -147,17 +165,40 @@ impl CondaScriptManifest {
             }
         };
 
-        let metadata = match CondaScriptMetadata::from_toml_str(&block.metadata) {
-            Ok(metadata) => metadata,
-            Err(mut errors) => {
+        let parsed = match ParsedBlock::from_toml_str(&block.metadata) {
+            Ok(parsed) => parsed,
+            Err(error) => {
                 return Err(Box::new(MetadataError {
-                    error: errors.errors.remove(0).into(),
+                    error,
                     source: NamedSource::new(source_name, source),
                     source_map: block.source_map,
                 })
                 .into());
             }
         };
+        match parsed.requires_pixi {
+            RequiresPixiCheck::Satisfied => {}
+            RequiresPixiCheck::Mismatch {
+                requires_pixi,
+                span,
+            } => {
+                return Err(Box::new(PixiVersionMismatchError {
+                    requires_pixi,
+                    source_code: NamedSource::new(source_name, source),
+                    span: block.source_map.span(span.offset(), span.len(), 0),
+                })
+                .into());
+            }
+            RequiresPixiCheck::Invalid { span, parse_error } => {
+                return Err(Box::new(InvalidRequiresPixiError {
+                    source_code: NamedSource::new(source_name, source),
+                    span: block.source_map.span(span.offset(), span.len(), 0),
+                    parse_error,
+                })
+                .into());
+            }
+        }
+        let metadata = parsed.metadata;
 
         Ok(Some(Self {
             path,
@@ -167,6 +208,8 @@ impl CondaScriptManifest {
             prelude: block.prelude,
             postlude: block.postlude,
             line_ending: LineEnding::detect(contents),
+            source,
+            source_map: block.source_map,
         }))
     }
 
@@ -256,77 +299,120 @@ impl CondaScriptManifest {
         Ok(())
     }
 
-    /// Renders the metadata as a `pixi.toml` document.
+    /// Whether the block pins channels and platforms itself.
     ///
-    /// The dependency tables are spliced in verbatim from the block, so the
-    /// specs reach the manifest parser exactly as written. `[dependencies]`
-    /// and `[tool.pixi.pypi-dependencies]` fill the default feature while
-    /// `[tool.pixi.dependencies]` becomes a separate feature of the default
-    /// environment, which merges the two spec sets the way pixi merges
-    /// features: both specs of a package reach the solver.
-    pub fn synthetic_manifest(&self) -> Result<String, toml_edit::TomlError> {
-        let mut block: toml_edit::DocumentMut = self.toml.parse()?;
-        let channels = block
-            .remove("channels")
-            .expect("`channels` is required by the metadata model");
-        let dependencies = block.remove("dependencies");
-        let mut pixi = block
-            .get_mut("tool")
-            .and_then(toml_edit::Item::as_table_like_mut)
-            .and_then(|tool| tool.get_mut("pixi"))
-            .and_then(toml_edit::Item::as_table_like_mut);
-        let pixi_dependencies = pixi.as_mut().and_then(|pixi| pixi.remove("dependencies"));
-        let pixi_pypi_dependencies = pixi
-            .as_mut()
-            .and_then(|pixi| pixi.remove("pypi-dependencies"));
+    /// Channels are always explicit, the block requires them. Platforms are
+    /// explicit when `tool.pixi.workspace.platforms` is declared; otherwise
+    /// the script resolves for the machine it runs on.
+    pub fn workspace_config(&self) -> Result<ScriptWorkspaceConfig, CondaScriptError> {
+        let metadata = self.metadata_document()?;
+        let platforms_explicit = metadata
+            .get("tool")
+            .and_then(Item::as_table_like)
+            .and_then(|tool| tool.get("pixi"))
+            .and_then(Item::as_table_like)
+            .and_then(|pixi| pixi.get("workspace"))
+            .and_then(Item::as_table_like)
+            .is_some_and(|workspace| workspace.contains_key("platforms"));
+        Ok(ScriptWorkspaceConfig {
+            channels_explicit: true,
+            platforms_explicit,
+        })
+    }
 
-        let name = self
+    /// The workspace the script resolves in.
+    ///
+    /// `tool.pixi` is the manifest, with the block's `[dependencies]` as its
+    /// dependency table, where the `--script` editors expect them.
+    /// `tool.pixi.dependencies` move into a feature of the default
+    /// environment, so a package named in both merges the way pixi merges
+    /// features: both specs reach the solver. The workspace is named after
+    /// the file.
+    pub fn into_workspace_manifest(
+        &self,
+        implicit_platforms: Option<IndexSet<PixiPlatform>>,
+    ) -> Result<(WorkspaceManifest, Vec<Warning>), CondaScriptError> {
+        let ParsedBlock {
+            dependencies,
+            mut manifest,
+            ..
+        } = ParsedBlock::from_toml_str(&self.toml).map_err(|error| self.metadata_error(error))?;
+
+        let workspace = &mut manifest
+            .workspace
+            .as_mut()
+            .expect("the block parser always sets a workspace")
+            .value;
+        workspace.name = Some(self.name().to_owned());
+        if let Some(platforms) = implicit_platforms {
+            workspace.platforms = Spanned {
+                value: platforms,
+                span: Span::default(),
+            };
+        }
+
+        let pixi_dependencies = std::mem::replace(&mut manifest.dependencies, dependencies);
+        if let Some(pixi_dependencies) = pixi_dependencies {
+            let feature = TomlFeature {
+                dependencies: Some(pixi_dependencies),
+                ..TomlFeature::default()
+            };
+            manifest.feature = Some(PixiSpanned {
+                span: None,
+                value: IndexMap::from([(
+                    PixiSpanned {
+                        span: None,
+                        value: FeatureName::from(TOOL_PIXI_FEATURE.to_owned()),
+                    },
+                    feature,
+                )]),
+            });
+            manifest.environments = Some(PixiSpanned {
+                span: None,
+                value: IndexMap::from([(
+                    EnvironmentName::Default,
+                    TomlEnvironmentList::Seq(Spanned {
+                        value: vec![Spanned {
+                            value: TOOL_PIXI_FEATURE.to_owned(),
+                            span: Span::default(),
+                        }],
+                        span: Span::default(),
+                    }),
+                )]),
+            });
+        }
+
+        let root = self
             .path
+            .parent()
+            .expect("an absolute script path always has a parent");
+        let (workspace, package, warnings) = manifest
+            .into_workspace_manifest(
+                ExternalWorkspaceProperties::default(),
+                PackageDefaults::default(),
+                root,
+            )
+            .map_err(|error| self.metadata_error(error))?;
+        debug_assert!(package.is_none(), "a script never defines a package");
+        Ok((workspace, warnings))
+    }
+
+    /// The workspace name: the file stem, or `script` for a file without one.
+    fn name(&self) -> &str {
+        self.path
             .file_stem()
             .and_then(|stem| stem.to_str())
             .filter(|stem| !stem.is_empty())
-            .unwrap_or("script");
+            .unwrap_or("script")
+    }
 
-        let mut document = toml_edit::DocumentMut::new();
-        let mut workspace = toml_edit::Table::new();
-        workspace.insert("name", toml_edit::value(name));
-        workspace.insert("channels", channels);
-        workspace.insert(
-            "platforms",
-            toml_edit::Item::Value(toml_edit::Value::Array(toml_edit::Array::new())),
-        );
-        document.insert("workspace", toml_edit::Item::Table(workspace));
-
-        if let Some(dependencies) = dependencies {
-            document.insert("dependencies", dependencies);
-        }
-
-        if let Some(pixi_pypi_dependencies) = pixi_pypi_dependencies {
-            document.insert("pypi-dependencies", pixi_pypi_dependencies);
-        }
-
-        if pixi_dependencies.is_some() {
-            let mut tool_pixi = toml_edit::Table::new();
-            tool_pixi.set_implicit(true);
-            if let Some(pixi_dependencies) = pixi_dependencies {
-                tool_pixi.insert("dependencies", pixi_dependencies);
-            }
-            let mut feature = toml_edit::Table::new();
-            feature.set_implicit(true);
-            feature.insert("tool-pixi", toml_edit::Item::Table(tool_pixi));
-            document.insert("feature", toml_edit::Item::Table(feature));
-
-            let mut default = toml_edit::Array::new();
-            default.push("tool-pixi");
-            let mut environments = toml_edit::Table::new();
-            environments.insert(
-                "default",
-                toml_edit::Item::Value(toml_edit::Value::Array(default)),
-            );
-            document.insert("environments", toml_edit::Item::Table(environments));
-        }
-
-        Ok(document.to_string())
+    fn metadata_error(&self, error: TomlError) -> CondaScriptError {
+        Box::new(MetadataError {
+            error,
+            source: NamedSource::new(self.path.to_string_lossy(), Arc::clone(&self.source)),
+            source_map: self.source_map.clone(),
+        })
+        .into()
     }
 }
 
@@ -335,11 +421,13 @@ mod tests {
     use std::str::FromStr;
 
     use pixi_pypi_spec::PypiPackageName;
+    use pixi_spec::PixiSpec;
     use pixi_test_utils::format_diagnostic;
-    use rattler_conda_types::PackageName;
+    use rattler_conda_types::{PackageName, Platform};
 
     use super::super::Entrypoint;
     use super::*;
+    use crate::{KnownPreviewFlag, PixiPlatform, SpecType};
 
     /// A name for the source in diagnostics; `from_source` is given the
     /// contents directly and never reads this path.
@@ -500,6 +588,9 @@ mod tests {
 # [dependencies]
 # python = "3.13.*"
 #
+# [tool.pixi.workspace]
+# preview = ["pixi-build"]
+#
 # [tool.pixi.dependencies]
 # simple-app = { git = "https://github.com/prefix-dev/pixi-build-testsuite.git" }
 #
@@ -514,16 +605,114 @@ mod tests {
         .unwrap()
         .unwrap();
 
-        let pixi = &manifest.metadata().pixi;
-        let simple_app = pixi
-            .dependencies
+        let (workspace, warnings) = manifest.into_workspace_manifest(None).unwrap();
+        assert!(warnings.is_empty());
+        let target = workspace.default_feature().targets.default();
+        let simple_app = workspace
+            .feature(&FeatureName::from(TOOL_PIXI_FEATURE.to_owned()))
+            .unwrap()
+            .targets
+            .default()
+            .run_dependencies()
+            .unwrap()
             .get(&PackageName::new_unchecked("simple-app"))
             .unwrap();
-        assert!(simple_app.is_source());
+        assert!(simple_app.iter().any(PixiSpec::is_source));
         assert!(
-            pixi.pypi_dependencies
+            target
+                .pypi_dependencies
+                .as_ref()
+                .unwrap()
                 .contains_key(&PypiPackageName::from_str("requests").unwrap())
         );
+    }
+
+    #[test]
+    fn tool_pixi_tables_reach_the_workspace() {
+        let manifest = parse(
+            r#"# /// conda-script
+# channels = ["conda-forge"]
+# entrypoint = "python ${SCRIPT}"
+#
+# [tool.pixi.workspace]
+# platforms = ["linux-64", "win-64"]
+# exclude-newer = "2025-01-01"
+#
+# [tool.pixi.activation.env]
+# GREETING = "hello"
+#
+# [tool.pixi.constraints]
+# openssl = ">=3"
+#
+# [tool.pixi.exclude-newer]
+# zlib = "0d"
+#
+# [tool.pixi.target.win-64.dependencies]
+# vc = "*"
+# /// end-conda-script
+"#,
+        )
+        .unwrap()
+        .unwrap();
+
+        let (workspace, warnings) = manifest.into_workspace_manifest(None).unwrap();
+        assert!(warnings.is_empty());
+        assert_eq!(
+            workspace
+                .workspace
+                .platforms
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>(),
+            ["linux-64", "win-64"]
+        );
+        assert!(workspace.workspace.exclude_newer.is_some());
+        assert!(
+            workspace
+                .workspace
+                .exclude_newer_package_overrides
+                .contains_key(&PackageName::new_unchecked("zlib"))
+        );
+        let feature = workspace.default_feature();
+        assert_eq!(
+            feature
+                .targets
+                .default()
+                .activation
+                .as_ref()
+                .and_then(|activation| activation.env.as_ref())
+                .and_then(|env| env.get("GREETING"))
+                .map(String::as_str),
+            Some("hello")
+        );
+        assert!(feature.targets.default().constraints.is_some());
+        let vc = PackageName::new_unchecked("vc");
+        let has_vc = |platform: Platform| {
+            feature
+                .run_dependencies(Some(&PixiPlatform::from(platform)))
+                .is_some_and(|dependencies| dependencies.contains_key(&vc))
+        };
+        assert!(has_vc(Platform::Win64));
+        assert!(!has_vc(Platform::Linux64));
+    }
+
+    #[test]
+    fn workspace_config_reports_declared_platforms() {
+        let implicit = parse(
+            "# /// conda-script\n# channels = [\"conda-forge\"]\n# entrypoint = \"python ${SCRIPT}\"\n# /// end-conda-script\n",
+        )
+        .unwrap()
+        .unwrap();
+        let config = implicit.workspace_config().unwrap();
+        assert!(config.channels_explicit);
+        assert!(!config.platforms_explicit);
+
+        let explicit = parse(
+            "# /// conda-script\n# channels = [\"conda-forge\"]\n# entrypoint = \"python ${SCRIPT}\"\n# [tool.pixi.workspace]\n# platforms = [\"linux-64\"]\n# /// end-conda-script\n",
+        )
+        .unwrap()
+        .unwrap();
+        assert!(explicit.workspace_config().unwrap().platforms_explicit);
     }
 
     #[test]
@@ -569,7 +758,7 @@ mod tests {
     }
 
     #[test]
-    fn renders_a_synthetic_pixi_manifest() {
+    fn tool_pixi_dependencies_form_a_feature_of_the_default_environment() {
         let manifest = parse(
             r#"// /// conda-script
 // channels = ["conda-forge"]
@@ -579,62 +768,102 @@ mod tests {
 // python = "3.13.*"
 // simple-app = "0.1.*"
 // gcc = { version = "*", when = "__unix" }
-// pytorch = {
-//   version = ">=2.4",
-//   build = "*cuda*",
-// }
+//
+// [tool.pixi.workspace]
+// preview = ["pixi-build"]
 //
 // [tool.pixi.dependencies]
 // simple-app = { git = "https://github.com/prefix-dev/pixi-build-testsuite.git" }
-//
-// [tool.pixi.pypi-dependencies]
-// requests = ">=2"
 // /// end-conda-script
 "#,
         )
         .unwrap()
         .unwrap();
 
-        insta::assert_snapshot!(manifest.synthetic_manifest().unwrap(), @r##"
-        [workspace]
-        name = "example"
-        channels = ["conda-forge"]
-        platforms = []
+        let (workspace, warnings) = manifest.into_workspace_manifest(None).unwrap();
+        assert!(warnings.is_empty());
+        assert_eq!(workspace.workspace.name.as_deref(), Some("example"));
+        assert_eq!(
+            workspace
+                .workspace
+                .channels
+                .iter()
+                .map(|channel| channel.channel.to_string())
+                .collect::<Vec<_>>(),
+            ["conda-forge"]
+        );
+        assert!(workspace.workspace.platforms.is_empty());
+        assert!(
+            workspace
+                .workspace
+                .preview
+                .is_enabled(KnownPreviewFlag::PixiBuild)
+        );
 
-        [dependencies]
-        python = "3.13.*"
-        simple-app = "0.1.*"
-        gcc = { version = "*", when = "__unix" }
-        pytorch = {
-          version = ">=2.4",
-          build = "*cuda*",
-        }
+        let tool_pixi_feature = FeatureName::from(TOOL_PIXI_FEATURE.to_owned());
+        assert_eq!(workspace.environments.iter().count(), 1);
+        assert!(
+            workspace
+                .default_environment()
+                .features
+                .contains(&tool_pixi_feature)
+        );
 
-        [feature.tool-pixi.dependencies]
-        simple-app = { git = "https://github.com/prefix-dev/pixi-build-testsuite.git" }
-
-        [environments]
-        default = ["tool-pixi"]
-
-        [pypi-dependencies]
-        requests = ">=2"
-        "##);
+        let simple_app = PackageName::new_unchecked("simple-app");
+        let block = workspace.default_feature().targets.default();
+        assert!(block.has_dependency(&simple_app, SpecType::Run, None));
+        assert!(block.has_dependency(&PackageName::new_unchecked("gcc"), SpecType::Run, None));
+        let pixi = workspace
+            .feature(&tool_pixi_feature)
+            .unwrap()
+            .targets
+            .default();
+        assert!(
+            pixi.run_dependencies()
+                .unwrap()
+                .get(&simple_app)
+                .unwrap()
+                .iter()
+                .any(PixiSpec::is_source)
+        );
     }
 
     #[test]
-    fn a_synthetic_manifest_without_tool_pixi_has_no_feature() {
+    fn a_source_dependency_needs_the_declared_preview() {
+        let manifest = parse(
+            "# /// conda-script\n# channels = [\"conda-forge\"]\n# entrypoint = \"python ${SCRIPT}\"\n# [tool.pixi.dependencies]\n# simple-app = { git = \"https://github.com/prefix-dev/pixi-build-testsuite.git\" }\n# /// end-conda-script\n",
+        )
+        .unwrap()
+        .unwrap();
+
+        insta::assert_snapshot!(
+            format_diagnostic(&manifest.into_workspace_manifest(None).unwrap_err()),
+            @r#"
+         × conda source dependencies are not allowed without enabling the 'pixi-build' preview flag
+         ╰─▶ conda source dependencies are not allowed without enabling the 'pixi-build' preview flag
+          ╭─[<CARGO_ROOT>/crates/pixi_manifest/example.c:5:16]
+        4 │ # [tool.pixi.dependencies]
+        5 │ # simple-app = { git = "https://github.com/prefix-dev/pixi-build-testsuite.git" }
+          ·                ─────────────────────────────────┬────────────────────────────────
+          ·                                                 ╰── source dependency specified here
+        6 │ # /// end-conda-script
+          ╰────
+         help: Run `pixi workspace preview add pixi-build` to enable the preview flag
+        "#
+        );
+    }
+
+    #[test]
+    fn a_block_without_tool_pixi_dependencies_has_only_the_default_feature() {
         let manifest = parse(
             "# /// conda-script\n# channels = [\"conda-forge\"]\n# entrypoint = \"python ${SCRIPT}\"\n# /// end-conda-script\n",
         )
         .unwrap()
         .unwrap();
 
-        insta::assert_snapshot!(manifest.synthetic_manifest().unwrap(), @r#"
-        [workspace]
-        name = "example"
-        channels = ["conda-forge"]
-        platforms = []
-        "#);
+        let (workspace, _) = manifest.into_workspace_manifest(None).unwrap();
+        assert_eq!(workspace.all_features().count(), 1);
+        assert_eq!(workspace.environments.iter().count(), 1);
     }
 
     #[test]
@@ -1019,15 +1248,87 @@ mod tests {
         insta::assert_snapshot!(parse_error(
             "# /// conda-script\n# channels = [\"conda-forge\"]\n# entrypoint = \"python ${SCRIPT}\"\n# [tool.pixi.tasks]\n# test = \"pytest\"\n# /// end-conda-script\n"
         ), @r#"
-         × conda-script blocks do not support `tool.pixi.tasks`
-         ╰─▶ conda-script blocks do not support `tool.pixi.tasks`
+         × scripts do not support `tool.pixi.tasks`
+         ╰─▶ scripts do not support `tool.pixi.tasks`
           ╭─[<CARGO_ROOT>/crates/pixi_manifest/example.c:4:14]
         3 │ # entrypoint = "python ${SCRIPT}"
         4 │ # [tool.pixi.tasks]
           ·              ─────
         5 │ # test = "pytest"
           ╰────
-         help: a script represents one implicit default environment
+         help: a script represents one implicit default environment; `tool.pixi` accepts `activation`, `constraints`, `dependencies`, `exclude-newer`, `pypi-dependencies`, `pypi-exclude-newer`, `target`,
+               `workspace`
+        "#);
+    }
+
+    #[test]
+    fn errors_on_a_feature_table() {
+        insta::assert_snapshot!(parse_error(
+            "# /// conda-script\n# channels = [\"conda-forge\"]\n# entrypoint = \"python ${SCRIPT}\"\n# [tool.pixi.feature.test.dependencies]\n# pytest = \"*\"\n# [tool.pixi.environments]\n# test = [\"test\"]\n# /// end-conda-script\n"
+        ), @r#"
+         × scripts do not support `tool.pixi.feature` and `tool.pixi.environments`
+         ╰─▶ scripts do not support `tool.pixi.feature` and `tool.pixi.environments`
+          ╭─[<CARGO_ROOT>/crates/pixi_manifest/example.c:4:14]
+        3 │ # entrypoint = "python ${SCRIPT}"
+        4 │ # [tool.pixi.feature.test.dependencies]
+          ·              ───────
+        5 │ # pytest = "*"
+        6 │ # [tool.pixi.environments]
+          ·              ────────────
+        7 │ # test = ["test"]
+          ╰────
+         help: a script represents one implicit default environment; `tool.pixi` accepts `activation`, `constraints`, `dependencies`, `exclude-newer`, `pypi-dependencies`, `pypi-exclude-newer`, `target`,
+               `workspace`
+        "#);
+    }
+
+    #[test]
+    fn errors_on_workspace_channels_in_tool_pixi() {
+        insta::assert_snapshot!(parse_error(
+            "# /// conda-script\n# channels = [\"conda-forge\"]\n# entrypoint = \"python ${SCRIPT}\"\n# [tool.pixi.workspace]\n# channels = [\"bioconda\"]\n# /// end-conda-script\n"
+        ), @r#"
+         × scripts do not support `tool.pixi.workspace.channels`
+         ╰─▶ scripts do not support `tool.pixi.workspace.channels`
+          ╭─[<CARGO_ROOT>/crates/pixi_manifest/example.c:5:3]
+        4 │ # [tool.pixi.workspace]
+        5 │ # channels = ["bioconda"]
+          ·   ────────
+        6 │ # /// end-conda-script
+          ╰────
+         help: a conda-script block declares its channels at the top level
+        "#);
+    }
+
+    #[test]
+    fn errors_on_system_requirements() {
+        insta::assert_snapshot!(parse_error(
+            "# /// conda-script\n# channels = [\"conda-forge\"]\n# entrypoint = \"python ${SCRIPT}\"\n# [tool.pixi.system-requirements]\n# cuda = \"12\"\n# /// end-conda-script\n"
+        ), @r#"
+         × scripts do not support `tool.pixi.system-requirements`
+         ╰─▶ scripts do not support `tool.pixi.system-requirements`
+          ╭─[<CARGO_ROOT>/crates/pixi_manifest/example.c:4:14]
+        3 │ # entrypoint = "python ${SCRIPT}"
+        4 │ # [tool.pixi.system-requirements]
+          ·              ───────────────────
+        5 │ # cuda = "12"
+          ╰────
+         help: a script without `platforms` resolves for the virtual packages of the machine it runs on; declare `platforms` with their virtual packages to pin a target instead
+        "#);
+    }
+
+    #[test]
+    fn typed_errors_in_tool_pixi_point_into_the_file() {
+        insta::assert_snapshot!(parse_error(
+            "# /// conda-script\n# channels = [\"conda-forge\"]\n# entrypoint = \"python ${SCRIPT}\"\n# [tool.pixi.dependencies]\n# bad-package = \"!invalid!\"\n# /// end-conda-script\n"
+        ), @r#"
+         × invalid operator '!'
+         ╰─▶ invalid operator '!'
+          ╭─[<CARGO_ROOT>/crates/pixi_manifest/example.c:5:18]
+        4 │ # [tool.pixi.dependencies]
+        5 │ # bad-package = "!invalid!"
+          ·                  ─────────
+        6 │ # /// end-conda-script
+          ╰────
         "#);
     }
 

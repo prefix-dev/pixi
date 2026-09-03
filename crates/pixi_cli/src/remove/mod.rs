@@ -90,8 +90,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     if workspace.is_conda_script() && !args.dependency_config.platforms.is_empty() {
         return Err(miette::miette!(
-            help = "restrict a dependency with a `when` condition in the block instead",
-            "conda-script blocks do not support platform-specific dependency tables"
+            help = "restrict the dependency with a `when` condition in `[dependencies]`, or write `[tool.pixi.target.<platform>.dependencies]` by hand",
+            "`--platform` cannot edit a conda-script block"
         ));
     }
 

@@ -9,9 +9,12 @@ use miette::{Diagnostic, LabeledSpan, NamedSource, SourceCode};
 use thiserror::Error;
 use toml_edit::{Array, DocumentMut, Item, Table, Value};
 
-use super::block::{
-    BlockSourceMap, LineEnding, MetadataLine, extract_script_header, serialize_block,
-    without_line_ending,
+use super::{
+    block::{
+        BlockSourceMap, LineEnding, MetadataLine, extract_script_header, serialize_block,
+        without_line_ending,
+    },
+    tool_pixi::{ScriptKind, UnsupportedKey, finish, unsupported_tool_pixi_keys},
 };
 use crate::{
     TomlError, Warning, WorkspaceManifest,
@@ -526,7 +529,7 @@ fn inline_pyproject(
 ) -> Result<InlinePyProject, ScriptManifestError> {
     let metadata = script.metadata();
     let metadata_document = script.metadata_document()?;
-    validate_subset(&metadata_document)?;
+    validate_subset(script)?;
 
     let mut prefix = format!("[project]\nname = {}\n", Value::from(project_name));
     if !metadata_document.contains_key("dependencies") {
@@ -568,103 +571,38 @@ fn ensure_pixi_workspace(pyproject: &mut DocumentMut) -> Result<(), ScriptManife
     Ok(())
 }
 
-fn validate_subset(metadata: &DocumentMut) -> Result<(), ScriptManifestError> {
-    let unsupported_root = metadata
-        .as_table()
-        .iter()
-        .map(|(key, _)| key)
-        .filter(|key| !matches!(*key, "dependencies" | "requires-python" | "tool"))
-        .map(str::to_owned)
-        .collect::<Vec<_>>();
-    if !unsupported_root.is_empty() {
-        return Err(ScriptManifestError::UnsupportedFields(unsupported_root));
-    }
-
-    let Some(pixi) = metadata
-        .get("tool")
-        .and_then(Item::as_table_like)
-        .and_then(|tool| tool.get("pixi"))
-        .and_then(Item::as_table_like)
-    else {
+/// Rejects metadata outside the subset pixi interprets: the two portable
+/// fields and the script subset of `tool.pixi`.
+fn validate_subset(script: &ScriptManifest) -> Result<(), ScriptManifestError> {
+    let metadata = toml_span::parse(script.metadata())
+        .map_err(|error| script.metadata_error(error.into(), 0))?;
+    let Some(table) = metadata.as_table() else {
         return Ok(());
     };
 
-    // Reported on its own, ahead of the generic sweep: the machine's virtual
-    // packages already reach a script that declares no `platforms`, and a
-    // script that declares them carries its requirements on the platform.
-    if pixi.contains_key("system-requirements") {
-        return Err(ScriptManifestError::SystemRequirementsUnsupported);
+    let mut keys = table
+        .keys()
+        .filter(|key| !matches!(key.name.as_ref(), "dependencies" | "requires-python" | "tool"))
+        .map(|key| {
+            UnsupportedKey::new(
+                key.name.as_ref(),
+                "a PEP 723 block holds `dependencies`, `requires-python` and `tool`; pixi-specific settings go under `tool.pixi`",
+                key.span,
+            )
+        })
+        .collect::<Vec<_>>();
+    if let Some(pixi) = table
+        .get("tool")
+        .and_then(toml_span::Value::as_table)
+        .and_then(|tool| tool.get("pixi"))
+    {
+        keys.extend(
+            unsupported_tool_pixi_keys(pixi, ScriptKind::Pep723)
+                .map_err(|error| script.metadata_error(error, 0))?,
+        );
     }
 
-    let mut unsupported = unsupported_keys(
-        pixi,
-        "tool.pixi",
-        &[
-            "activation",
-            "constraints",
-            "dependencies",
-            "pypi-dependencies",
-            "target",
-            "workspace",
-        ],
-    );
-
-    if let Some(workspace) = pixi.get("workspace").and_then(Item::as_table_like) {
-        unsupported.extend(unsupported_keys(
-            workspace,
-            "tool.pixi.workspace",
-            &[
-                "channel-priority",
-                "channels",
-                "platforms",
-                "preview",
-                "pypi-options",
-                "requires-pixi",
-                "solve-strategy",
-            ],
-        ));
-    }
-
-    if let Some(targets) = pixi.get("target").and_then(Item::as_table_like) {
-        for (selector, target) in targets.iter() {
-            let path = format!("tool.pixi.target.{selector}");
-            let Some(target) = target.as_table_like() else {
-                unsupported.push(path);
-                continue;
-            };
-            unsupported.extend(unsupported_keys(
-                target,
-                &path,
-                &[
-                    "activation",
-                    "constraints",
-                    "dependencies",
-                    "pypi-dependencies",
-                ],
-            ));
-        }
-    }
-
-    if unsupported.is_empty() {
-        Ok(())
-    } else {
-        unsupported.sort();
-        unsupported.dedup();
-        Err(ScriptManifestError::UnsupportedFields(unsupported))
-    }
-}
-
-fn unsupported_keys(
-    table: &dyn toml_edit::TableLike,
-    prefix: &str,
-    allowed: &[&str],
-) -> Vec<String> {
-    table
-        .iter()
-        .map(|(key, _)| key)
-        .filter(|key| !allowed.contains(key))
-        .map(|key| format!("{prefix}.{key}"))
-        .collect()
+    finish(keys).map_err(|error| script.metadata_error(error, 0))
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -696,16 +634,6 @@ pub enum ScriptManifestError {
 
     #[error("the editable script document is missing its project table")]
     InvalidEditableDocument,
-
-    #[error("PEP 723 scripts do not support: {}", .0.join(", "))]
-    #[diagnostic(help("A script represents one implicit default environment."))]
-    UnsupportedFields(Vec<String>),
-
-    #[error("PEP 723 scripts do not support `[tool.pixi.system-requirements]`")]
-    #[diagnostic(help(
-        "a script without `platforms` is resolved for the virtual packages of the machine it runs on. To pin a target instead, run `pixi workspace platform add --script <PATH> --auto-detect`"
-    ))]
-    SystemRequirementsUnsupported,
 
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -1093,9 +1021,18 @@ print("hello")
         assert_eq!(manifest.environments.iter().count(), 1);
     }
 
+    /// The diagnostic for a block whose `tool.pixi` leaves the script
+    /// subset, rendered against the script.
+    fn subset_error(contents: &str) -> String {
+        let script = ScriptManifest::from_source(example_script_path(), contents.as_bytes())
+            .unwrap()
+            .unwrap();
+        format_diagnostic(&script.into_workspace_manifest().unwrap_err())
+    }
+
     #[test]
     fn rejects_workspace_only_concepts() {
-        let (_directory, path) = script(
+        insta::assert_snapshot!(subset_error(
             r#"# /// script
 # dependencies = []
 #
@@ -1104,34 +1041,30 @@ print("hello")
 #
 # [tool.pixi.feature.test.dependencies]
 # pytest = "*"
-#
-# [tool.pixi.target.linux-64.host-dependencies]
-# python = "*"
 # ///
-"#,
-        );
-
-        let error = ScriptManifest::from_path(path)
-            .unwrap()
-            .unwrap()
-            .into_workspace_manifest()
-            .unwrap_err();
-        let ScriptManifestError::UnsupportedFields(fields) = error else {
-            panic!("unexpected error: {error}");
-        };
-        assert_eq!(
-            fields,
-            [
-                "tool.pixi.feature",
-                "tool.pixi.target.linux-64.host-dependencies",
-                "tool.pixi.target.linux-64.tasks"
-            ]
-        );
+"#
+        ), @r#"
+         × scripts do not support `tool.pixi.target.linux-64.tasks` and `tool.pixi.feature`
+         ╰─▶ scripts do not support `tool.pixi.target.linux-64.tasks` and `tool.pixi.feature`
+          ╭─[<CARGO_ROOT>/crates/pixi_manifest/example.py:4:30]
+        3 │ #
+        4 │ # [tool.pixi.target.linux-64.tasks]
+          ·                              ─────
+        5 │ # test = "pytest"
+        6 │ #
+        7 │ # [tool.pixi.feature.test.dependencies]
+          ·              ───────
+        8 │ # pytest = "*"
+          ╰────
+         help: a script represents one implicit default environment; `tool.pixi.target.linux-64` accepts `activation`, `constraints`, `dependencies`, `pypi-dependencies`
+               a script represents one implicit default environment; `tool.pixi` accepts `activation`, `constraints`, `dependencies`, `exclude-newer`, `pypi-dependencies`, `pypi-exclude-newer`, `target`,
+               `workspace`
+        "#);
     }
 
     #[test]
     fn rejects_unknown_pixi_fields_with_an_explicit_allowlist() {
-        let (_directory, path) = script(
+        insta::assert_snapshot!(subset_error(
             r#"# /// script
 # dependencies = []
 #
@@ -1139,50 +1072,103 @@ print("hello")
 # channels = []
 # platforms = []
 # description = "not execution metadata"
-#
-# [tool.pixi.target.linux-64.tasks]
-# test = "pytest"
 # ///
-"#,
-        );
+"#
+        ), @r#"
+         × scripts do not support `tool.pixi.workspace.description`
+         ╰─▶ scripts do not support `tool.pixi.workspace.description`
+          ╭─[<CARGO_ROOT>/crates/pixi_manifest/example.py:7:3]
+        6 │ # platforms = []
+        7 │ # description = "not execution metadata"
+          ·   ───────────
+        8 │ # ///
+          ╰────
+         help: a script represents one implicit default environment; `tool.pixi.workspace` accepts `channel-priority`, `conda-pypi-map`, `exclude-newer`, `platforms`, `preview`, `pypi-options`, `requires-
+               pixi`, `solve-strategy`
+        "#);
+    }
 
-        let error = ScriptManifest::from_path(path)
-            .unwrap()
-            .unwrap()
-            .into_workspace_manifest()
-            .unwrap_err();
-        let ScriptManifestError::UnsupportedFields(fields) = error else {
-            panic!("unexpected error: {error}");
-        };
-        assert_eq!(
-            fields,
-            [
-                "tool.pixi.target.linux-64.tasks",
-                "tool.pixi.workspace.description"
-            ]
-        );
+    #[test]
+    fn rejects_unknown_top_level_fields() {
+        insta::assert_snapshot!(subset_error(
+            r#"# /// script
+# dependencies = []
+# platforms = ["linux-64"]
+# ///
+"#
+        ), @r#"
+         × scripts do not support `platforms`
+         ╰─▶ scripts do not support `platforms`
+          ╭─[<CARGO_ROOT>/crates/pixi_manifest/example.py:3:3]
+        2 │ # dependencies = []
+        3 │ # platforms = ["linux-64"]
+          ·   ─────────
+        4 │ # ///
+          ╰────
+         help: a PEP 723 block holds `dependencies`, `requires-python` and `tool`; pixi-specific settings go under `tool.pixi`
+        "#);
     }
 
     #[test]
     fn rejects_system_requirements() {
-        let (_directory, path) = script(
+        insta::assert_snapshot!(subset_error(
             r#"# /// script
 # dependencies = []
 #
 # [tool.pixi.system-requirements]
 # cuda = "12"
 # ///
+"#
+        ), @r#"
+         × scripts do not support `tool.pixi.system-requirements`
+         ╰─▶ scripts do not support `tool.pixi.system-requirements`
+          ╭─[<CARGO_ROOT>/crates/pixi_manifest/example.py:4:14]
+        3 │ #
+        4 │ # [tool.pixi.system-requirements]
+          ·              ───────────────────
+        5 │ # cuda = "12"
+          ╰────
+         help: a script without `platforms` resolves for the virtual packages of the machine it runs on; declare `platforms` with their virtual packages to pin a target instead
+        "#);
+    }
+
+    #[test]
+    fn accepts_resolver_options_and_exclude_newer_tables() {
+        let (_directory, path) = script(
+            r#"# /// script
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# channels = ["conda-forge"]
+# exclude-newer = "2025-01-01"
+# conda-pypi-map = { conda-forge = "mapping.json" }
+#
+# [tool.pixi.dependencies]
+# zlib = "*"
+#
+# [tool.pixi.exclude-newer]
+# zlib = "0d"
+#
+# [tool.pixi.pypi-exclude-newer]
+# requests = "0d"
+# ///
 "#,
         );
 
-        let error = ScriptManifest::from_path(path)
-            .unwrap()
-            .unwrap()
-            .into_workspace_manifest()
-            .unwrap_err();
+        let script = ScriptManifest::from_path(path).unwrap().unwrap();
+        let (manifest, _) = script.into_workspace_manifest().unwrap();
+        assert!(manifest.workspace.exclude_newer.is_some());
         assert!(
-            matches!(error, ScriptManifestError::SystemRequirementsUnsupported),
-            "unexpected error: {error}"
+            manifest
+                .workspace
+                .exclude_newer_package_overrides
+                .contains_key(&PackageName::from_str("zlib").unwrap())
+        );
+        assert!(
+            manifest
+                .workspace
+                .pypi_exclude_newer_package_overrides
+                .contains_key(&PypiPackageName::from_str("requests").unwrap())
         );
     }
 

@@ -13,7 +13,7 @@ mod workspace_mut;
 mod workspace_script;
 
 use self::errors::VariantsError;
-use self::workspace_script::{ScriptSource, WorkspaceScript};
+use self::workspace_script::{ScriptSource, WorkspaceScript, local_lock_file_path};
 #[cfg(not(windows))]
 use std::os::unix::fs::symlink;
 use std::{
@@ -47,10 +47,7 @@ use pixi_manifest::{
     AssociateProvenance, BuildVariantSource, EnvironmentName, Environments, FeaturesExt,
     HasWorkspaceManifest, LoadManifestsError, ManifestKind, ManifestProvenance, Manifests,
     PackageManifest, PixiPlatform, PixiPlatformName, PrioritizedChannel, SpecType, WithProvenance,
-    WithWarnings, WorkspaceManifest,
-    script::ScriptManifest,
-    toml::{ExternalWorkspaceProperties, FromTomlStr, PackageDefaults, TomlManifest},
-    utils::WithSourceCode,
+    WithWarnings, WorkspaceManifest, script::ScriptManifest,
 };
 use pixi_path::AbsPathBuf;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
@@ -213,7 +210,7 @@ pub enum ScriptWorkspaceError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    CondaScriptManifest(Box<WithSourceCode<pixi_manifest::TomlError, miette::NamedSource<String>>>),
+    CondaScript(#[from] Box<pixi_manifest::script::conda::CondaScriptError>),
 
     #[error("failed to resolve the script environment cache directory: {0}")]
     CacheDirectory(String),
@@ -231,9 +228,9 @@ pub enum ScriptWorkspaceError {
 
 /// Install the platforms picked for a script that declares none.
 ///
-/// `use_platform_composition` is decided while parsing, and a script's
-/// synthetic manifest parses with an empty `platforms`, which reads as "every
-/// platform is a bare subdir". Composition would then resolve an environment's
+/// `use_platform_composition` is decided while parsing, and a script without
+/// `platforms` parses with an empty set, which reads as "every platform is a
+/// bare subdir". Composition would then resolve an environment's
 /// platform by *subdir name* and never find the rich platform injected here, so
 /// the flag is recomputed for the platforms actually installed.
 fn set_implicit_script_platforms(
@@ -530,46 +527,21 @@ impl Workspace {
             .parent()
             .expect("an absolute script path always has a parent")
             .to_owned();
-        // The diagnostics of this step point into the synthesized document,
-        // not the script; the source name says so.
-        let source_name = format!("{} (synthesized manifest)", script_path.display());
-        let source = script.synthetic_manifest().map_err(|error| {
-            ScriptWorkspaceError::CondaScriptManifest(Box::new(WithSourceCode {
-                error: pixi_manifest::TomlError::from(error),
-                source: miette::NamedSource::new(&source_name, script.toml().to_owned()),
-            }))
-        })?;
-
-        let (mut manifest, package, warnings) = TomlManifest::from_toml_str(&source)
-            .and_then(|manifest| {
-                manifest.into_workspace_manifest(
-                    ExternalWorkspaceProperties::default(),
-                    PackageDefaults::default(),
-                    &root,
-                )
-            })
-            .map_err(|error| {
-                ScriptWorkspaceError::CondaScriptManifest(Box::new(WithSourceCode {
-                    error,
-                    source: miette::NamedSource::new(&source_name, source),
-                }))
-            })?;
-        debug_assert!(
-            package.is_none(),
-            "a synthetic conda-script manifest never defines a package"
-        );
+        let script_config = script.workspace_config().map_err(Box::new)?;
+        let implicit_platforms = if script_config.platforms_explicit {
+            None
+        } else {
+            let lock_file_path = local_lock_file_path(&script_path);
+            Some(implicit_script_platforms(Some(&lock_file_path))?)
+        };
+        let (manifest, warnings) = script
+            .into_workspace_manifest(implicit_platforms)
+            .map_err(Box::new)?;
 
         let cache_root = config
             .cache_dir_for(CacheKind::ExecEnvironments)
             .map_err(|error| ScriptWorkspaceError::CacheDirectory(error.to_string()))?;
         let workspace_script = WorkspaceScript::for_local_conda_script(script, &cache_root);
-        let lock_file_path = workspace_script
-            .lock_file_path()
-            .expect("a local script has an adjacent lock-file path");
-        set_implicit_script_platforms(
-            &mut manifest.workspace,
-            implicit_script_platforms(Some(&lock_file_path))?,
-        );
 
         let workspace = manifest.with_provenance(ManifestProvenance::new(
             script_path,
@@ -758,8 +730,9 @@ impl Workspace {
             ScriptSource::Pep723(manifest) => manifest
                 .workspace_config()
                 .is_ok_and(|config| !config.platforms_explicit),
-            // A conda-script block has no `platforms` key at all.
-            ScriptSource::CondaScript(_) => true,
+            ScriptSource::CondaScript(manifest) => manifest
+                .workspace_config()
+                .is_ok_and(|config| !config.platforms_explicit),
         }
     }
 
@@ -2269,13 +2242,18 @@ platforms = []
             ["testing"]
         );
         assert_eq!(manifest.environments.iter().count(), 1);
-        assert_eq!(manifest.all_features().count(), 1);
         let default_environment = workspace.default_environment();
         assert!(
             default_environment
                 .pypi_dependencies(None)
                 .contains_key(&PypiPackageName::from_str("requests").unwrap()),
             "`tool.pixi.pypi-dependencies` must reach the default environment"
+        );
+        assert!(
+            default_environment
+                .combined_dependencies(None)
+                .contains_key(&PackageName::from_str("zlib").unwrap()),
+            "the block's `[dependencies]` must reach the default environment"
         );
         assert!(
             !manifest.workspace.platforms.is_empty(),
@@ -2286,6 +2264,52 @@ platforms = []
             workspace.lock_file_path(),
             root.path().join("example.c.pixi.lock")
         );
+    }
+
+    #[test]
+    fn conda_script_workspace_honours_declared_platforms() {
+        let root = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+        let path = root.path().join("example.c");
+        fs_err::write(
+            &path,
+            r#"// /// conda-script
+// channels = ["testing"]
+// entrypoint = "run ${SCRIPT}"
+//
+// [tool.pixi.workspace]
+// platforms = ["linux-64", "win-64"]
+// /// end-conda-script
+"#,
+        )
+        .unwrap();
+        let script = CondaScriptManifest::from_path(&path).unwrap().unwrap();
+
+        let workspace = Workspace::from_conda_script(
+            script,
+            Config {
+                cache: CacheConfig {
+                    exec_environments: Some(cache.path().to_owned()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .value;
+
+        assert_eq!(
+            workspace
+                .workspace
+                .value
+                .workspace
+                .platforms
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>(),
+            ["linux-64", "win-64"]
+        );
+        assert!(!workspace.script_platforms_are_implicit());
     }
 
     #[test]
