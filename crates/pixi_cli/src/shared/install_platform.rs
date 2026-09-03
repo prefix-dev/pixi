@@ -97,13 +97,13 @@ mod tests {
     fn bare_subdir_resolves_to_the_declared_platform() {
         let workspace = workspace_with_platforms(&[
             "osx-arm64",
-            r#"{ platform = "linux-riscv64", glibc = "2.39" }"#,
+            r#"{ platform = "linux-riscv64", glibc = "2.41" }"#,
         ]);
         let name = "linux-riscv64".parse().unwrap();
         let resolved = resolve_install_platform(&workspace, Some(&name))
             .unwrap()
             .unwrap();
-        assert_eq!(resolved.as_str(), "linux-riscv64-glibc-2-39");
+        assert_eq!(resolved.as_str(), "linux-riscv64-glibc-2-41");
     }
 
     #[test]

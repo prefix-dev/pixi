@@ -107,12 +107,17 @@ mod tests {
     /// after the override, so `--platform linux-riscv64` has to map onto that
     /// name -- resolving to the subdir baseline instead misses both the
     /// environment and the lock-file row.
+    ///
+    /// The override has to differ from the subdir's own `__glibc` default
+    /// (2.39 on `linux-riscv64`), because a declaration that merely restates a
+    /// default is not a customisation: the name collapses to the bare subdir
+    /// and the entry is then rejected outright for carrying virtual packages.
     #[test]
     fn bare_subdir_resolves_to_the_declared_platform() {
-        let workspace = workspace(r#""osx-arm64", { platform = "linux-riscv64", glibc = "2.39" }"#);
+        let workspace = workspace(r#""osx-arm64", { platform = "linux-riscv64", glibc = "2.41" }"#);
         assert_eq!(
             resolve(&workspace, "linux-riscv64").unwrap(),
-            "linux-riscv64-glibc-2-39"
+            "linux-riscv64-glibc-2-41"
         );
     }
 
@@ -121,7 +126,7 @@ mod tests {
     #[test]
     fn explicit_name_and_its_subdir_both_resolve() {
         let workspace =
-            workspace(r#"{ name = "riscv", platform = "linux-riscv64", glibc = "2.39" }"#);
+            workspace(r#"{ name = "riscv", platform = "linux-riscv64", glibc = "2.41" }"#);
         assert_eq!(resolve(&workspace, "riscv").unwrap(), "riscv");
         assert_eq!(resolve(&workspace, "linux-riscv64").unwrap(), "riscv");
     }
@@ -158,7 +163,7 @@ mod tests {
     /// platform name.
     #[test]
     fn resolve_platforms_still_keeps_the_bare_subdir() {
-        let workspace = workspace(r#"{ platform = "linux-riscv64", glibc = "2.39" }"#);
+        let workspace = workspace(r#"{ platform = "linux-riscv64", glibc = "2.41" }"#);
         let declared = (&workspace)
             .workspace_manifest()
             .workspace
