@@ -45,7 +45,7 @@ pub const CACHED_BUILD_BACKENDS: &str = "backends-v0";
 pub const CACHED_PACKAGES: &str = "pkgs";
 /// Base name of the per-workspace backend-metadata cache, versioned
 /// so that entry-schema changes don't collide. Also houses the backend
-/// work directories for `conda/outputs` under `<source>/work/` — the
+/// work directories for `conda/outputs` under `<source>/work/` -- the
 /// cache entries and the backend's scratch space for the same source
 /// live side by side.
 pub const CACHED_BUILD_BACKEND_METADATA: &str = "meta";
