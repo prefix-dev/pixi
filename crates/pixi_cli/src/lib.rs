@@ -247,6 +247,8 @@ impl LockFileUsageConfig {
 }
 
 pub async fn execute() -> miette::Result<()> {
+    completion::complete();
+
     let args = Args::parse();
 
     // Extract values we need before moving args
