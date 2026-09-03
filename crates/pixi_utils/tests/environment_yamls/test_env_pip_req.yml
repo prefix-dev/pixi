@@ -1,0 +1,10 @@
+name: test_env
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.5.5
+  - setuptools>=39.1.0
+  - wheel<=0.31.1
+  - pip:
+      - -r test_env_req.txt
