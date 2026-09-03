@@ -5,10 +5,16 @@
 //! gives the backend a stable incremental-build location across runs
 //! sharing the same deps.
 
-use std::{collections::BTreeMap, hash::Hash, path::PathBuf, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    hash::{Hash, Hasher},
+    path::PathBuf,
+    sync::Arc,
+};
 
 use derive_more::Display;
 use futures::{SinkExt, channel::mpsc::unbounded};
+use pixi_build_discovery::{BackendSpec, EnabledProtocols};
 use pixi_build_types::procedures::{
     conda_build_v1::CondaPackageFormat,
     conda_outputs::{CondaOutput, CondaOutputsParams},
@@ -18,16 +24,19 @@ use pixi_record::{PixiRecord, UnresolvedPixiRecord, UnresolvedSourceRecord, Vari
 use pixi_spec::{ResolvedExcludeNewer, SourceAnchor, SourceSpec};
 use pixi_variant::VariantSelector;
 use rattler_conda_types::{
-    ChannelUrl, PackageRecord, RepoDataRecord, package::DistArchiveIdentifier, prefix::Prefix,
+    ChannelConfig, ChannelUrl, PackageRecord, RepoDataRecord, package::DistArchiveIdentifier,
+    prefix::Prefix,
 };
 use rattler_digest::Sha256Hash;
 use tracing::instrument;
 use url::Url;
+use xxhash_rust::xxh3::Xxh3;
 
 pub use crate::cache::{ArtifactCache, WorkspaceCache};
 use crate::cache::{
-    ArtifactCacheError, CacheLookup, SourceMutability, compute_artifact_cache_key,
-    compute_workspace_key,
+    ArtifactCacheError, CacheLookup, SourceMutability,
+    artifact::ImmutableBackend,
+    compute_artifact_cache_key, compute_workspace_key,
     markers::{SourceBuildArtifactsDir, SourceBuildWorkspacesDir},
 };
 use crate::{
@@ -38,6 +47,9 @@ use crate::{
     ProjectModelOverrides, SourceBuildError,
     build::{Dependencies, PixiRunExports, convert_extra_dependencies},
     compute_data::{HasGateway, HasIoConcurrencySemaphore},
+    injected_config::{ChannelConfigKey, EnabledProtocolsKey},
+    inline_package::discover_backend,
+    instantiate_backend_key::resolve_immutable_backend_identifier_from_spec,
 };
 use pixi_compute_cache_dirs::CacheDirsExt;
 use pixi_compute_sources::SourceCheckoutExt;
@@ -52,6 +64,79 @@ fn unwrap_dispatcher_err<E>(err: CommandDispatcherError<E>) -> E {
             unreachable!("compute-engine cancellation does not surface inside a Key compute body")
         }
     }
+}
+
+/// Hash the *contents* of the user-provided variant files before checkout. If
+/// a file cannot be read, the checkout-free path is disabled rather than
+/// keying an artifact without one of its static build inputs.
+///
+/// Only the contents go into the key, in declaration order (later files
+/// override earlier ones). The paths themselves are deliberately excluded:
+/// they are absolute, so including them would tie every cached artifact to
+/// one workspace location for no gain -- what the build reads is the content.
+fn immutable_variant_file_hashes(spec: &SourceBuildSpec) -> Option<Vec<u64>> {
+    spec.variant_files
+        .as_deref()
+        .unwrap_or_default()
+        .iter()
+        .map(|path| {
+            let file = fs_err::File::open(path).ok()?;
+            crate::file_fingerprint::hash_file_contents(file).ok()
+        })
+        .collect()
+}
+
+/// Synthetic backend identifier standing in for the real one in the
+/// checkout-free artifact cache key.
+///
+/// The real identifier is only known after a checkout, so this covers the
+/// build inputs that a checkout would otherwise have pinned. Fields are
+/// listed explicitly rather than hashing [`SourceBuildSpec`] wholesale: the
+/// spec carries values that are *not* stable across processes, and folding
+/// one of those in silently turns every lookup into a miss.
+///
+/// Deliberately **not** hashed:
+///
+/// - `exclude_newer`, whose `ResolvedExcludeNewer::cutoff` is derived from
+///   `Utc::now()` for a relative `exclude-newer` and therefore differs on
+///   every invocation. It only influences which backend gets solved, and
+///   that is already validated on lookup by re-solving the recorded backend
+///   and comparing its `env@…` identifier.
+/// - Anything [`compute_artifact_cache_key`] already folds in itself: the
+///   record, both platforms, the project-model overrides, the package
+///   format, and the inline content hash. (`InlinePackage` hashes as just
+///   its `content_hash`, so `spec.inline` would be redundant.)
+fn immutable_backend_identifier(
+    spec: &SourceBuildSpec,
+    variant_file_hashes: &[u64],
+    enabled_protocols: &EnabledProtocols,
+    channel_config: &ChannelConfig,
+) -> String {
+    let mut hasher = Xxh3::new();
+    "immutable-artifact-v4".hash(&mut hasher);
+    spec.channels.hash(&mut hasher);
+    spec.build_profile.hash(&mut hasher);
+    spec.variant_configuration.hash(&mut hasher);
+    // Virtual packages are absent from `compute_artifact_cache_key`, but a
+    // backend may select variants on them (`__cuda`, `__glibc`), so an
+    // artifact built against one set must not be reused for another.
+    spec.build_environment
+        .build_virtual_packages
+        .hash(&mut hasher);
+    spec.build_environment
+        .host_virtual_packages
+        .hash(&mut hasher);
+    variant_file_hashes.hash(&mut hasher);
+    enabled_protocols.hash(&mut hasher);
+    // Both halves of the channel config matter: `channel_alias` expands bare
+    // channel names, and `root_dir` resolves relative ones. The artifact
+    // cache is normally workspace-local, which would make `root_dir`
+    // constant, but `CacheBase::Workspace` falls back to the global root when
+    // no workspace is configured, so entries keyed here can be shared between
+    // different roots.
+    channel_config.channel_alias.hash(&mut hasher);
+    channel_config.root_dir.hash(&mut hasher);
+    format!("immutable@{:016x}", hasher.finish())
 }
 
 /// Hashable inputs to a source build. Runtime concerns (reporters, log
@@ -156,6 +241,67 @@ async fn compute_inner(
         .map(|result| result.artifact_sha256)
         .collect();
 
+    let project_model_overrides = ProjectModelOverrides {
+        build_string_prefix: spec.build_string_prefix.clone(),
+        build_number: spec.build_number,
+    };
+    let artifacts_dir = ctx.cache_dir::<SourceBuildArtifactsDir>().await;
+    let artifact_cache = ArtifactCache::new(artifacts_dir.as_std_path())
+        .with_io_concurrency_semaphore(ctx.global_data().io_concurrency_semaphore().cloned());
+    let enabled_protocols = ctx.compute(&EnabledProtocolsKey).await;
+    let channel_config = ctx.compute(&ChannelConfigKey).await;
+    // Backend overrides are *not* checked here. An overridden backend is a
+    // `CommandSpec::System` after `ResolvedBackendCommandKey` re-applies the
+    // override, and `resolve_immutable_backend_identifier_from_spec` returns
+    // `None` for anything that is not an `EnvironmentSpec`, so an overridden
+    // backend already declines the checkout-free path on its own. Gating on
+    // "any backend is overridden" instead would disable the optimisation for
+    // every package in the workspace as soon as one unrelated backend is
+    // pointed at a local binary.
+    let immutable_cache_key = (!spec.record.has_mutable_source())
+        .then(|| immutable_variant_file_hashes(&spec))
+        .flatten()
+        .map(|variant_file_hashes| {
+            let immutable_identifier = immutable_backend_identifier(
+                &spec,
+                &variant_file_hashes,
+                &enabled_protocols,
+                &channel_config,
+            );
+            compute_artifact_cache_key(
+                &spec.record,
+                spec.build_environment.build_platform,
+                spec.build_environment.host_platform,
+                &immutable_identifier,
+                &build_source_dep_sha256s,
+                &host_source_dep_sha256s,
+                &project_model_overrides,
+                spec.package_format,
+                spec.inline.as_ref().map(|inline| inline.content_hash),
+            )
+        });
+
+    if let Some(key) = immutable_cache_key.as_ref()
+        && let Some(backend) = artifact_cache
+            .immutable_backend(spec.record.name(), key)
+            .await
+        && let Ok(Some(identifier)) = resolve_immutable_backend_identifier_from_spec(
+            ctx,
+            backend.spec(),
+            spec.exclude_newer.clone(),
+        )
+        .await
+        && let Some(hit) = artifact_cache
+            .lookup_immutable(spec.record.name(), key, &backend, &identifier)
+            .await
+    {
+        return Ok(SourceBuildResult {
+            artifact: hit.artifact,
+            artifact_sha256: hit.sha256,
+            record: hit.record,
+        });
+    }
+
     let manifest_source = spec.record.manifest_source.clone();
     let manifest_checkout = ctx
         .checkout_pinned_source(manifest_source.clone())
@@ -185,7 +331,7 @@ async fn compute_inner(
         .path
         .as_dir_or_file_parent()
         .to_path_buf();
-    let backend_identifier = crate::resolve_backend_identifier(
+    let discovered_backend_identifier = crate::resolve_backend_identifier(
         ctx,
         manifest_checkout.path.as_std_path(),
         manifest_anchor.clone(),
@@ -196,31 +342,58 @@ async fn compute_inner(
     .map_err(|err: Arc<crate::InstantiateBackendError>| {
         SourceBuildError::Initialize((*err).clone())
     })?;
+    // Discovery is content-addressed, so this only retrieves the descriptor
+    // used by the identifier resolution above.
+    let discovered = discover_backend(
+        ctx,
+        manifest_checkout.path.as_std_path(),
+        spec.inline.as_ref(),
+    )
+    .await
+    .map_err(|err| SourceBuildError::Initialize(crate::InstantiateBackendError::Discovery(err)))?;
+    let BackendSpec::JsonRpc(backend_spec) = discovered
+        .backend_spec
+        .clone()
+        .resolve(manifest_anchor.clone());
+    let immutable_backend = if immutable_cache_key.is_some() {
+        resolve_immutable_backend_identifier_from_spec(
+            ctx,
+            backend_spec.clone(),
+            spec.exclude_newer.clone(),
+        )
+        .await
+        .map_err(|err| SourceBuildError::Initialize((*err).clone()))?
+        .and_then(|identifier| ImmutableBackend::new(identifier, backend_spec.clone()))
+    } else {
+        None
+    };
+    // Complex environment specs and non-environment backends retain the
+    // existing backend-keyed path.
+    let immutable_cache_key = immutable_backend.as_ref().and(immutable_cache_key);
+    let backend_identifier = immutable_backend
+        .as_ref()
+        .map(|backend| backend.identifier.clone())
+        .unwrap_or(discovered_backend_identifier);
 
     // Cache key covers structural identity + dep content addresses;
     // source-file freshness lives in the sidecar, not the key.
-    let project_model_overrides = ProjectModelOverrides {
-        build_string_prefix: spec.build_string_prefix.clone(),
-        build_number: spec.build_number,
-    };
-    let cache_key = compute_artifact_cache_key(
-        &spec.record,
-        spec.build_environment.build_platform,
-        spec.build_environment.host_platform,
-        &backend_identifier,
-        &build_source_dep_sha256s,
-        &host_source_dep_sha256s,
-        &project_model_overrides,
-        spec.package_format,
-        spec.inline.as_ref().map(|inline| inline.content_hash),
-    );
+    let cache_key = immutable_cache_key.clone().unwrap_or_else(|| {
+        compute_artifact_cache_key(
+            &spec.record,
+            spec.build_environment.build_platform,
+            spec.build_environment.host_platform,
+            &backend_identifier,
+            &build_source_dep_sha256s,
+            &host_source_dep_sha256s,
+            &project_model_overrides,
+            spec.package_format,
+            spec.inline.as_ref().map(|inline| inline.content_hash),
+        )
+    });
 
     // On artifact cache hit, return without invoking the backend.
     // Force-rebuild is handled by wiping the cache entry before calling;
     // this body honors whatever state it finds on disk.
-    let artifacts_dir = ctx.cache_dir::<SourceBuildArtifactsDir>().await;
-    let artifact_cache = ArtifactCache::new(artifacts_dir.as_std_path())
-        .with_io_concurrency_semaphore(ctx.global_data().io_concurrency_semaphore().cloned());
     let source_dir = build_source_checkout
         .path
         .as_dir_or_file_parent()
@@ -232,34 +405,39 @@ async fn compute_inner(
     } else {
         SourceMutability::Immutable
     };
-    match artifact_cache
-        .lookup(ctx, spec.record.name(), &cache_key, &source_dir, mutability)
-        .await
-        .map_err(map_cache_err)?
-    {
-        CacheLookup::Hit(hit) => {
-            tracing::debug!(
-                package = %spec.record.name().as_source(),
-                artifact = %hit.artifact.display(),
-                "artifact cache hit",
-            );
-            return Ok(SourceBuildResult {
-                artifact: hit.artifact,
-                artifact_sha256: hit.sha256,
-                record: hit.record,
-            });
+    let cached = if let Some(backend) = immutable_backend.as_ref() {
+        artifact_cache
+            .lookup_immutable(spec.record.name(), &cache_key, backend, &backend_identifier)
+            .await
+    } else {
+        match artifact_cache
+            .lookup(ctx, spec.record.name(), &cache_key, &source_dir, mutability)
+            .await
+            .map_err(map_cache_err)?
+        {
+            CacheLookup::Hit(hit) => Some(hit),
+            CacheLookup::Miss(reason) => {
+                tracing::debug!(
+                    package = %spec.record.name().as_source(),
+                    key = %cache_key,
+                    reason = %reason,
+                    "artifact cache miss, rebuilding",
+                );
+                None
+            }
         }
-        CacheLookup::Miss(reason) => {
-            // Logged at the same level as the hit so a rebuild is never
-            // silent: without the reason, a changed cache key and an
-            // invalidated entry look identical from the outside.
-            tracing::debug!(
-                package = %spec.record.name().as_source(),
-                key = %cache_key,
-                reason = %reason,
-                "artifact cache miss, rebuilding",
-            );
-        }
+    };
+    if let Some(hit) = cached {
+        tracing::debug!(
+            package = %spec.record.name().as_source(),
+            artifact = %hit.artifact.display(),
+            "artifact cache hit",
+        );
+        return Ok(SourceBuildResult {
+            artifact: hit.artifact,
+            artifact_sha256: hit.sha256,
+            record: hit.record,
+        });
     }
 
     // Cache miss: now spawn the backend. `InstantiateBackendKey`
@@ -505,18 +683,32 @@ async fn compute_inner(
         SourceMutability::Immutable => (Vec::new(), Vec::new()),
     };
 
-    let stored = artifact_cache
-        .store(
-            spec.record.name(),
-            &cache_key,
-            &built.output_file,
-            input_glob_sets,
-            input_files,
-            build_started,
-            record,
-        )
-        .await
-        .map_err(map_cache_err)?;
+    let stored = if let Some(backend) = immutable_backend {
+        artifact_cache
+            .store_immutable(
+                spec.record.name(),
+                &cache_key,
+                &built.output_file,
+                build_started,
+                record,
+                backend,
+            )
+            .await
+            .map_err(map_cache_err)?
+    } else {
+        artifact_cache
+            .store(
+                spec.record.name(),
+                &cache_key,
+                &built.output_file,
+                input_glob_sets,
+                input_files,
+                build_started,
+                record,
+            )
+            .await
+            .map_err(map_cache_err)?
+    };
 
     Ok(SourceBuildResult {
         artifact: stored.artifact,
@@ -813,7 +1005,6 @@ async fn synthesize_repodata(
         channel: None,
     })
 }
-
 /// Compute the sha256 of a file on a blocking thread.
 async fn compute_package_sha256(path: &std::path::Path) -> Result<Sha256Hash, SourceBuildError> {
     let p = path.to_path_buf();
@@ -874,5 +1065,205 @@ impl Directories {
             build_prefix,
             host_prefix,
         }
+    }
+}
+
+#[cfg(test)]
+mod immutable_identifier_tests {
+    //! The checkout-free artifact key stands in for a backend identifier that
+    //! is only knowable after a checkout, so it must be stable across
+    //! processes: anything derived from the wall clock silently turns every
+    //! lookup into a miss and stores a fresh copy of the artifact.
+    use std::str::FromStr;
+
+    use chrono::{TimeZone, Utc};
+    use pixi_record::{
+        FullSourceRecordData, PinnedGitCheckout, PinnedGitSpec, PinnedSourceSpec, SourceRecordData,
+    };
+    use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform};
+
+    use super::*;
+
+    fn record() -> Arc<UnresolvedSourceRecord> {
+        let mut package_record = PackageRecord::new(
+            PackageName::from_str("foo").unwrap(),
+            "1.0.0"
+                .parse::<rattler_conda_types::VersionWithSource>()
+                .unwrap(),
+            "h0".into(),
+        );
+        package_record.subdir = "linux-64".into();
+        Arc::new(UnresolvedSourceRecord {
+            data: SourceRecordData::Full(FullSourceRecordData {
+                package_record,
+                sources: BTreeMap::new(),
+            }),
+            manifest_source: PinnedSourceSpec::Git(PinnedGitSpec {
+                git: Url::parse("https://example.invalid/foo.git").unwrap(),
+                source: PinnedGitCheckout {
+                    commit: "0123456789abcdef0123456789abcdef01234567".parse().unwrap(),
+                    subdirectory: Default::default(),
+                    reference: pixi_spec::GitReference::DefaultBranch,
+                    lfs: None,
+                },
+            }),
+            build_source: None,
+            variants: BTreeMap::new(),
+            identifier_hash: String::new(),
+            build_packages: Vec::new(),
+            host_packages: Vec::new(),
+        })
+    }
+
+    fn spec() -> SourceBuildSpec {
+        SourceBuildSpec {
+            record: record(),
+            channels: vec![ChannelUrl::from(
+                Url::parse("https://prefix.dev/conda-forge/").unwrap(),
+            )],
+            exclude_newer: None,
+            build_environment: BuildEnvironment {
+                host_platform: Platform::Linux64,
+                host_virtual_packages: Vec::new(),
+                build_platform: Platform::Linux64,
+                build_virtual_packages: Vec::new(),
+            },
+            build_profile: BuildProfile::Development,
+            variant_configuration: None,
+            variant_files: None,
+            build_string_prefix: None,
+            build_number: None,
+            package_format: None,
+            inline: None,
+        }
+    }
+
+    fn identifier_with(spec: &SourceBuildSpec, variant_file_hashes: &[u64]) -> String {
+        identifier_in(
+            spec,
+            variant_file_hashes,
+            &ChannelConfig::default_with_root_dir(PathBuf::from("/workspace")),
+        )
+    }
+
+    fn identifier_in(
+        spec: &SourceBuildSpec,
+        variant_file_hashes: &[u64],
+        channel_config: &ChannelConfig,
+    ) -> String {
+        immutable_backend_identifier(
+            spec,
+            variant_file_hashes,
+            &EnabledProtocols::default(),
+            channel_config,
+        )
+    }
+
+    fn identifier(spec: &SourceBuildSpec) -> String {
+        identifier_with(spec, &[])
+    }
+
+    fn cutoff(secs: i64) -> Option<ResolvedExcludeNewer> {
+        Some(ResolvedExcludeNewer::from_datetime(
+            Utc.timestamp_opt(secs, 0).unwrap(),
+        ))
+    }
+
+    /// Regression test. `exclude_newer` resolves to `Utc::now() - duration`
+    /// for a relative `exclude-newer` such as `"7d"`, so hashing it into the
+    /// key made the key unique per process: the checkout-free path could
+    /// never hit, and every run wrote a new artifact-cache entry.
+    #[test]
+    fn identifier_ignores_the_exclude_newer_cutoff() {
+        let mut early = spec();
+        early.exclude_newer = cutoff(1_700_000_000);
+        let mut late = spec();
+        late.exclude_newer = cutoff(1_700_000_042);
+
+        assert_eq!(
+            identifier(&early),
+            identifier(&late),
+            "the checkout-free key must not move with the wall clock",
+        );
+        assert_eq!(
+            identifier(&spec()),
+            identifier(&early),
+            "setting exclude-newer at all must not move the key",
+        );
+    }
+
+    #[test]
+    fn identifier_is_deterministic() {
+        assert_eq!(identifier(&spec()), identifier(&spec()));
+    }
+
+    /// Every input the key *is* responsible for must still move it: these are
+    /// the build inputs a checkout would otherwise have pinned, and which
+    /// `compute_artifact_cache_key` does not fold in itself.
+    #[test]
+    fn identifier_covers_every_input_it_owns() {
+        let baseline = identifier(&spec());
+
+        let mut channels = spec();
+        channels.channels = vec![ChannelUrl::from(
+            Url::parse("https://example.invalid/other/").unwrap(),
+        )];
+        assert_ne!(baseline, identifier(&channels), "channels");
+
+        let mut profile = spec();
+        profile.build_profile = BuildProfile::Release;
+        assert_ne!(baseline, identifier(&profile), "build profile");
+
+        let mut variants = spec();
+        variants.variant_configuration = Some(BTreeMap::from([(
+            "python".to_string(),
+            vec![VariantValue::String("3.13".to_string())],
+        )]));
+        assert_ne!(baseline, identifier(&variants), "variant configuration");
+
+        let mut virtual_packages = spec();
+        virtual_packages.build_environment.host_virtual_packages = vec![GenericVirtualPackage {
+            name: PackageName::from_str("__cuda").unwrap(),
+            version: "12.4".parse().unwrap(),
+            build_string: "0".to_string(),
+        }];
+        assert_ne!(
+            baseline,
+            identifier(&virtual_packages),
+            "host virtual packages",
+        );
+
+        assert_ne!(
+            baseline,
+            identifier_with(&spec(), &[7]),
+            "variant file hashes",
+        );
+        assert_ne!(
+            identifier_with(&spec(), &[7]),
+            identifier_with(&spec(), &[7, 9]),
+            "variant file count",
+        );
+        assert_ne!(
+            identifier_with(&spec(), &[7, 9]),
+            identifier_with(&spec(), &[9, 7]),
+            "variant file order",
+        );
+
+        let mut alias = ChannelConfig::default_with_root_dir(PathBuf::from("/workspace"));
+        alias.channel_alias = Url::parse("https://mirror.invalid/").unwrap();
+        assert_ne!(
+            baseline,
+            identifier_in(&spec(), &[], &alias),
+            "channel alias",
+        );
+        assert_ne!(
+            baseline,
+            identifier_in(
+                &spec(),
+                &[],
+                &ChannelConfig::default_with_root_dir(PathBuf::from("/elsewhere")),
+            ),
+            "channel config root dir",
+        );
     }
 }
