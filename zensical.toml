@@ -5,8 +5,8 @@ site_description = "Pixi Documentation — Next-gen package manager for reproduc
 site_name = "Pixi"
 site_url = "https://pixi.prefix.dev/"
 
-extra_css = ["stylesheets/extra.css"]
-extra_javascript = ["javascripts/extra.js"]
+extra_css = ["stylesheets/extra.css", "stylesheets/landing.css", "stylesheets/themes.css"]
+extra_javascript = ["javascripts/extra.js", "javascripts/landing.js"]
 
 # Rendered as a template so llms.txt links get mike's version prefix
 extra_templates = ["llms.txt"]
@@ -471,6 +471,7 @@ features = [
   "navigation.instant.progress",
   "navigation.tracking",
   "navigation.indexes",
+  "navigation.tabs",
   "navigation.top",
   "navigation.footer",
 ]
