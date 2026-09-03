@@ -235,7 +235,7 @@ zstd = { version = "0.13.3", default-features = false }
 file_url = "0.3.0"
 rattler = { version = "0.48", default-features = false }
 rattler_cache = { version = "0.10", default-features = false }
-rattler_conda_types = { version = "0.51", default-features = false, features = [
+rattler_conda_types = { version = "0.52", default-features = false, features = [
   "rayon",
 ] }
 rattler_config = { version = "0.7", default-features = false }
