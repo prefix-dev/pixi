@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.79.0] - 2026-09-03
+#### ✨ Highlights
+
+Pixi now has better support for RISC-V by setting the default virtual packages.
+
+And we've extended the CLI to include `pixi install --script` and `pixi workspace dependencies add`.
+
+#### Added
+
+- Add `pixi workspace dependencies` CLI by @ruben-arts in [#6917](https://github.com/prefix-dev/pixi/pull/6917)
+- Install script environments without running by @manzt in [#6923](https://github.com/prefix-dev/pixi/pull/6923)
+- Set `__glibc` default to 2.39 on linux-riscv64 by @pavelzw in [#6914](https://github.com/prefix-dev/pixi/pull/6914)
+
+
+#### Changed
+
+- Restore static MSVC CRT in Windows builds by @baszalmstra in [#6919](https://github.com/prefix-dev/pixi/pull/6919)
+
+
+#### Documentation
+
+- Mention named platforms in pixi-pack by @pavelzw in [#6927](https://github.com/prefix-dev/pixi/pull/6927)
+
+
+#### Fixed
+
+- Bump astral_async_http_range_reader to 0.11.1 by @baszalmstra in [#6941](https://github.com/prefix-dev/pixi/pull/6941)
+
+
+
 ### [0.78.0] - 2026-08-28
 #### ✨ Highlights
 
