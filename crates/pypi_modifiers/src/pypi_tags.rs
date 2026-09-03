@@ -1,11 +1,11 @@
 use miette::Diagnostic;
-use pixi_default_versions::{default_glibc_version, default_mac_os_version};
 use pixi_manifest::PixiPlatform;
 use rattler_conda_types::MatchSpec;
 use rattler_conda_types::{
     Arch, GenericVirtualPackage, PackageName, PackageRecord, Platform, Version,
 };
 use rattler_virtual_packages::VirtualPackage;
+use rattler_virtual_packages::defaults::{default_glibc_version, default_mac_os_version};
 use regex::Regex;
 use std::str::FromStr;
 use std::sync::OnceLock;
@@ -115,7 +115,7 @@ fn get_linux_platform_tags(
     let arch = get_arch_tags(platform)?;
 
     let (family, version) = declared_libc(platform.declared_virtual_packages())
-        .unwrap_or_else(|| ("glibc", default_glibc_version()));
+        .unwrap_or_else(|| ("glibc", default_glibc_version(platform.subdir())));
 
     match family {
         "glibc" | "eglibc" => {
@@ -166,8 +166,10 @@ fn get_windows_platform_tags(
 /// macOS version pixi targets: declared `__osx`, else the subdir default.
 /// Call only for macOS platforms.
 fn macos_target_version(platform: &PixiPlatform) -> Version {
-    declared_version(platform.declared_virtual_packages(), "__osx")
-        .unwrap_or_else(|| default_mac_os_version(platform.subdir()))
+    declared_version(platform.declared_virtual_packages(), "__osx").unwrap_or_else(|| {
+        default_mac_os_version(platform.subdir())
+            .expect("macos_target_version() called with non-osx platform")
+    })
 }
 
 /// Get macos specific platform tags
@@ -750,7 +752,7 @@ mod tests {
     fn linux_tag_falls_back_to_default_glibc() {
         let platform = PixiPlatform::from_subdir(Platform::Linux64);
         let res = get_linux_platform_tags(&platform).unwrap();
-        let (default_major, default_minor) = default_glibc_version()
+        let (default_major, default_minor) = default_glibc_version(Platform::Linux64)
             .as_major_minor()
             .expect("default glibc has major/minor");
         assert_eq!(
