@@ -320,6 +320,18 @@ nav = [
                 ]
               },
               {
+                "dependencies" = [
+                  "reference/cli/pixi/workspace/dependencies/index.md",
+                  { "add" = "reference/cli/pixi/workspace/dependencies/add.md" },
+                  {
+                    "list" = "reference/cli/pixi/workspace/dependencies/list.md"
+                  },
+                  {
+                    "remove" = "reference/cli/pixi/workspace/dependencies/remove.md"
+                  },
+                ]
+              },
+              {
                 "description" = [
                   "reference/cli/pixi/workspace/description/index.md",
                   { "get" = "reference/cli/pixi/workspace/description/get.md" },
