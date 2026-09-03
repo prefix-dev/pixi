@@ -2,6 +2,10 @@
 default-channels = ["conda-forge"]
 # --8<-- [end:default-channels]
 
+# --8<-- [start:default-platforms]
+default-platforms = ["linux-64", "osx-64", "win-64"]
+# --8<-- [end:default-platforms]
+
 # --8<-- [start:tls-no-verify]
 tls-no-verify = false
 # --8<-- [end:tls-no-verify]
