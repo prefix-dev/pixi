@@ -1,18 +1,28 @@
-use std::{fmt::Display, hash::Hash, str::FromStr};
+use std::str::FromStr;
 
 use indexmap::IndexMap;
 use itertools::Itertools;
-use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use pixi_toml::{TomlFromStr, TomlWith, custom_error, custom_error_message_with_help};
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, VersionSpec};
 use toml_span::{
-    DeserError, ErrorKind, Spanned, Value,
+    DeserError, ErrorKind, Span, Spanned, Value,
     de_helpers::{TableHelper, expected},
-    value::ValueInner,
+    value::{Key, Table, ValueInner},
 };
 
 use super::entrypoint::Entrypoint;
+use crate::{
+    ManifestKind, PackageDependencySpec, PrioritizedChannel, TomlError,
+    discovery::{RequiresPixiCheck, check_requires_pixi_early},
+    script::tool_pixi::{ScriptKind, validate_tool_pixi},
+    toml::{TomlManifest, TomlWorkspace},
+    utils::{
+        PixiSpanned,
+        inheritable_package_map::{InheritablePackageMap, InheritableSpec},
+        package_map::DependencyTable,
+    },
+};
 
 /// The dependency keys the `conda-script` specification allows.
 const ALLOWED_DEPENDENCY_KEYS: &[&str] = &[
@@ -34,7 +44,7 @@ const ALLOWED_DEPENDENCY_KEYS: &[&str] = &[
 /// also allows `when`, which pixi cannot attach to a URL spec yet.
 const URL_COMPATIBLE_KEYS: &[&str] = &["url", "md5", "sha256"];
 
-/// The parsed content of a `conda-script` block.
+/// The fields of a `conda-script` block that the specification defines.
 #[derive(Debug, Clone)]
 pub struct CondaScriptMetadata {
     /// The conda channels the dependencies are solved from.
@@ -43,31 +53,26 @@ pub struct CondaScriptMetadata {
     pub entrypoint: Entrypoint,
     /// The conda dependencies declared in `[dependencies]`.
     pub dependencies: IndexMap<PackageName, PixiSpec>,
-    /// The pixi-specific configuration under `[tool.pixi]`.
-    pub pixi: PixiTool,
 }
 
-/// The `[tool.pixi]` table of a `conda-script` block.
-#[derive(Debug, Clone, Default)]
-pub struct PixiTool {
-    /// Conda dependencies in pixi's native spec syntax. They merge with the
-    /// `[dependencies]` table the way pixi merges features: both specs reach
-    /// the solver.
-    pub dependencies: IndexMap<PackageName, PixiSpec>,
-    /// PyPI packages added to the environment.
-    pub pypi_dependencies: IndexMap<PypiPackageName, PixiPypiSpec>,
+/// A block parsed into the specification's fields and the manifest pixi
+/// builds the environment from.
+pub(crate) struct ParsedBlock {
+    pub(crate) metadata: CondaScriptMetadata,
+    pub(crate) requires_pixi: RequiresPixiCheck,
+    /// `[dependencies]` in the shape of a manifest dependency table, with
+    /// spans pointing into the block.
+    pub(crate) dependencies: Option<PixiSpanned<DependencyTable>>,
+    /// `tool.pixi` parsed as a manifest whose workspace carries the block's
+    /// channels.
+    pub(crate) manifest: TomlManifest,
 }
 
-impl CondaScriptMetadata {
-    pub(crate) fn from_toml_str(text: &str) -> Result<Self, DeserError> {
+impl ParsedBlock {
+    pub(crate) fn from_toml_str(text: &str) -> Result<Self, TomlError> {
         let mut value = toml_span::parse(text)?;
-        <Self as toml_span::Deserialize>::deserialize(&mut value)
-    }
-}
-
-impl<'de> toml_span::Deserialize<'de> for CondaScriptMetadata {
-    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
-        let mut th = TableHelper::new(value)?;
+        let requires_pixi = check_requires_pixi_early(&value, ManifestKind::CondaScript);
+        let mut th = TableHelper::new(&mut value)?;
         let mut errors = DeserError { errors: Vec::new() };
 
         let channels = th
@@ -82,26 +87,30 @@ impl<'de> toml_span::Deserialize<'de> for CondaScriptMetadata {
         let entrypoint = th.required::<Entrypoint>("entrypoint").ok();
 
         let dependencies = match th.take("dependencies") {
-            Some((_, mut value)) => match dependency_table(&mut value, conda_script_spec) {
-                Ok(dependencies) => dependencies,
-                Err(table_errors) => {
-                    errors.merge(table_errors);
-                    IndexMap::new()
+            Some((_, mut value)) => {
+                let span = value.span;
+                match dependency_table(&mut value) {
+                    Ok(dependencies) => Some((span, dependencies)),
+                    Err(table_errors) => {
+                        errors.merge(table_errors);
+                        None
+                    }
                 }
-            },
-            None => IndexMap::new(),
+            }
+            None => None,
         };
 
         let pixi = match th.take("tool") {
-            Some((_, mut value)) => match tool_table(&mut value) {
+            Some((_, mut tool)) => match pixi_tool_value(&mut tool) {
                 Ok(pixi) => pixi,
                 Err(tool_errors) => {
                     errors.merge(tool_errors);
-                    PixiTool::default()
+                    None
                 }
             },
-            None => PixiTool::default(),
+            None => None,
         };
+        let pixi = pixi.unwrap_or_else(|| Value::new(ValueInner::Table(Table::new())));
 
         if let Err(finalize_errors) = th.finalize(None) {
             errors.merge(finalize_errors);
@@ -124,41 +133,59 @@ impl<'de> toml_span::Deserialize<'de> for CondaScriptMetadata {
         }
 
         if !errors.errors.is_empty() {
-            return Err(errors);
+            return Err(errors.into());
         }
+        validate_tool_pixi(&pixi, ScriptKind::CondaScript)?;
+
+        let channels: Vec<NamedChannelOrUrl> = channels
+            .expect("missing channels were reported above")
+            .value
+            .into_iter()
+            .map(|channel| channel.value)
+            .collect();
+        let manifest = tool_pixi_manifest(pixi, &channels).map_err(TomlError::from)?;
+        let (dependencies, specs) = match dependencies {
+            Some((span, dependencies)) => (
+                Some(PixiSpanned {
+                    span: Some(span.start..span.end),
+                    value: dependencies.table,
+                }),
+                dependencies.specs,
+            ),
+            None => (None, IndexMap::new()),
+        };
 
         Ok(Self {
-            channels: channels
-                .expect("missing channels were reported above")
-                .value
-                .into_iter()
-                .map(|channel| channel.value)
-                .collect(),
-            entrypoint: entrypoint.expect("a missing entrypoint was reported above"),
+            requires_pixi,
+            metadata: CondaScriptMetadata {
+                channels,
+                entrypoint: entrypoint.expect("a missing entrypoint was reported above"),
+                dependencies: specs,
+            },
             dependencies,
-            pixi,
+            manifest,
         })
     }
 }
 
-/// Parses a `name = <spec>` table, rejecting names that collide after
+/// The block's `[dependencies]`, both as plain specs and as a manifest
+/// dependency table.
+struct BlockDependencies {
+    specs: IndexMap<PackageName, PixiSpec>,
+    table: DependencyTable,
+}
+
+/// Parses `[dependencies]`, rejecting names that collide after
 /// normalization.
-fn dependency_table<'de, Name, Spec>(
-    value: &mut Value<'de>,
-    parse_spec: impl Fn(&mut Value<'de>) -> Result<Spec, DeserError>,
-) -> Result<IndexMap<Name, Spec>, DeserError>
-where
-    Name: FromStr + Hash + Eq + Clone,
-    Name::Err: Display,
-{
+fn dependency_table(value: &mut Value<'_>) -> Result<BlockDependencies, DeserError> {
     let table = match value.take() {
         ValueInner::Table(table) => table,
         inner => return Err(expected("a table", inner, value.span).into()),
     };
 
     let mut errors = DeserError { errors: Vec::new() };
-    let mut result: IndexMap<Name, Spec> = IndexMap::new();
-    let mut name_spans: IndexMap<Name, toml_span::Span> = IndexMap::new();
+    let mut specs = IndexMap::new();
+    let mut manifest_table = InheritablePackageMap::default();
     for (key, mut value) in table.into_iter().sorted_by_key(|(key, _)| key.span.start) {
         if key.name.is_empty() {
             errors.errors.push(custom_error(
@@ -167,7 +194,7 @@ where
             ));
             continue;
         }
-        let name = match Name::from_str(&key.name) {
+        let name = match PackageName::from_str(&key.name) {
             Ok(name) => name,
             Err(_) => {
                 errors.errors.push(custom_error(
@@ -180,28 +207,44 @@ where
                 continue;
             }
         };
-        if let Some(first) = name_spans.get(&name) {
+        if let Some(first) = manifest_table.name_spans.get(&name) {
             errors.errors.push(toml_span::Error {
                 kind: ErrorKind::DuplicateKey {
                     key: key.name.into_owned(),
-                    first: *first,
+                    first: Span::new(first.start, first.end),
                 },
                 span: key.span,
                 line_info: None,
             });
             continue;
         }
-        name_spans.insert(name.clone(), key.span);
-        match parse_spec(&mut value) {
+        let value_span = value.span;
+        match conda_script_spec(&mut value) {
             Ok(spec) => {
-                result.insert(name, spec);
+                manifest_table.specs.insert(
+                    name.clone(),
+                    InheritableSpec::Direct(Box::new(PackageDependencySpec::from(spec.clone()))),
+                );
+                manifest_table
+                    .name_spans
+                    .insert(name.clone(), key.span.start..key.span.end);
+                manifest_table
+                    .value_spans
+                    .insert(name.clone(), value_span.start..value_span.end);
+                specs.insert(name, spec);
             }
             Err(spec_errors) => errors.merge(spec_errors),
         }
     }
 
     if errors.errors.is_empty() {
-        Ok(result)
+        Ok(BlockDependencies {
+            specs,
+            table: DependencyTable {
+                specs: manifest_table,
+                ..DependencyTable::default()
+            },
+        })
     } else {
         Err(errors)
     }
@@ -278,83 +321,57 @@ fn conda_script_spec(value: &mut Value<'_>) -> Result<PixiSpec, DeserError> {
     Ok(spec)
 }
 
-/// Parses the `[tool]` table: `pixi` is interpreted, every other tool's
-/// table is ignored without looking inside it.
-fn tool_table(value: &mut Value<'_>) -> Result<PixiTool, DeserError> {
-    let table = match value.take() {
+/// Takes `pixi` out of the `[tool]` table; every other tool's table is
+/// ignored without looking inside it.
+fn pixi_tool_value<'de>(tool: &mut Value<'de>) -> Result<Option<Value<'de>>, DeserError> {
+    let table = match tool.take() {
         ValueInner::Table(table) => table,
-        inner => return Err(expected("a table", inner, value.span).into()),
+        inner => return Err(expected("a table", inner, tool.span).into()),
     };
-
-    for (key, mut value) in table {
-        if key.name == "pixi" {
-            return pixi_tool_table(&mut value);
-        }
-    }
-    Ok(PixiTool::default())
+    Ok(table
+        .into_iter()
+        .find(|(key, _)| key.name == "pixi")
+        .map(|(_, pixi)| pixi))
 }
 
-fn pixi_tool_table(value: &mut Value<'_>) -> Result<PixiTool, DeserError> {
-    let mut th = TableHelper::new(value)?;
-    let mut errors = DeserError { errors: Vec::new() };
-
-    let dependencies = match th.take("dependencies") {
-        Some((_, mut value)) => {
-            match dependency_table(
-                &mut value,
-                <PixiSpec as toml_span::Deserialize>::deserialize,
-            ) {
-                Ok(dependencies) => dependencies,
-                Err(table_errors) => {
-                    errors.merge(table_errors);
-                    IndexMap::new()
+/// Parses `tool.pixi` with the manifest parser and gives its workspace the
+/// block's channels.
+///
+/// The workspace parser requires `channels`, which a block declares at its
+/// top level instead; a placeholder satisfies the parser until the block's
+/// channels replace it.
+fn tool_pixi_manifest(
+    mut pixi: Value<'_>,
+    channels: &[NamedChannelOrUrl],
+) -> Result<TomlManifest, DeserError> {
+    if let ValueInner::Table(mut table) = pixi.take() {
+        if let Some(workspace) = table.get_mut("workspace") {
+            match workspace.take() {
+                ValueInner::Table(mut workspace_table) => {
+                    workspace_table.insert(
+                        Key {
+                            name: "channels".into(),
+                            span: Span::default(),
+                        },
+                        Value::new(ValueInner::Array(Vec::new())),
+                    );
+                    workspace.set(ValueInner::Table(workspace_table));
                 }
+                other => workspace.set(other),
             }
         }
-        None => IndexMap::new(),
-    };
-
-    let pypi_dependencies = match th.take("pypi-dependencies") {
-        Some((_, mut value)) => {
-            match dependency_table(
-                &mut value,
-                <PixiPypiSpec as toml_span::Deserialize>::deserialize,
-            ) {
-                Ok(dependencies) => dependencies,
-                Err(table_errors) => {
-                    errors.merge(table_errors);
-                    IndexMap::new()
-                }
-            }
-        }
-        None => IndexMap::new(),
-    };
-
-    // Put the unclaimed keys back so each can be reported as unsupported.
-    if let Err(finalize_errors) = th.finalize(Some(value)) {
-        errors.merge(finalize_errors);
-    }
-    if let Some(table) = value.as_table() {
-        for key in table.keys().sorted_by_key(|key| key.span.start) {
-            errors.errors.push(custom_error(
-                custom_error_message_with_help(
-                    &format!(
-                        "conda-script blocks do not support `tool.pixi.{}`",
-                        key.name
-                    ),
-                    "a script represents one implicit default environment",
-                ),
-                key.span,
-            ));
-        }
+        pixi.set(ValueInner::Table(table));
     }
 
-    if errors.errors.is_empty() {
-        Ok(PixiTool {
-            dependencies,
-            pypi_dependencies,
-        })
-    } else {
-        Err(errors)
-    }
+    let mut manifest = <TomlManifest as toml_span::Deserialize>::deserialize(&mut pixi)?;
+    let workspace = manifest.workspace.get_or_insert_with(|| PixiSpanned {
+        span: None,
+        value: TomlWorkspace::default(),
+    });
+    workspace.value.channels = channels
+        .iter()
+        .cloned()
+        .map(PrioritizedChannel::from)
+        .collect();
+    Ok(manifest)
 }

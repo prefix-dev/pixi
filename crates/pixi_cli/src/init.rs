@@ -452,9 +452,14 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("example.py");
 
-        let args =
-            Args::try_parse_from(["init", "--script", path.to_str().unwrap(), "--format", "pixi"])
-                .unwrap();
+        let args = Args::try_parse_from([
+            "init",
+            "--script",
+            path.to_str().unwrap(),
+            "--format",
+            "pixi",
+        ])
+        .unwrap();
         let error = execute(args).await.unwrap_err();
 
         assert!(error.to_string().contains("does not apply to a script"));
@@ -527,9 +532,14 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("main.R");
 
-        let args =
-            Args::try_parse_from(["init", "--script", path.to_str().unwrap(), "--format", "pep723"])
-                .unwrap();
+        let args = Args::try_parse_from([
+            "init",
+            "--script",
+            path.to_str().unwrap(),
+            "--format",
+            "pep723",
+        ])
+        .unwrap();
         let error = execute(args).await.unwrap_err();
         assert!(error.to_string().contains("does not apply"));
         assert!(!path.exists());
