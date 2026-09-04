@@ -1,0 +1,37 @@
+[workspace]
+name = "pixi-pgo-training"
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["linux-64", "osx-arm64", "win-64"]
+
+[dependencies]
+python = "3.13.*"
+numpy = "*"
+pandas = "*"
+scipy = "*"
+scikit-learn = "*"
+matplotlib = "*"
+jupyterlab = "*"
+fastapi = "*"
+uvicorn = "*"
+pytest = "*"
+ruff = "*"
+
+[feature.analysis.dependencies]
+dask = "*"
+xarray = "*"
+polars = "*"
+
+[feature.docs.dependencies]
+sphinx = "*"
+myst-parser = "*"
+furo = "*"
+
+[environments]
+default = []
+analysis = ["analysis"]
+docs = ["docs"]
+full = ["analysis", "docs"]
+
+[tasks]
+check = "ruff check ."
+test = "pytest"
