@@ -75,6 +75,15 @@ pub struct Args {
     #[arg(long = "executable", short = 'x')]
     pub executable: bool,
 
+    /// Enable experimental `--script` features; currently the `conda-script`
+    /// block.
+    ///
+    /// The flag has no effect for PEP 723 scripts, so a shebang line can
+    /// pass it unconditionally. Setting `experimental.conda-script` in the
+    /// configuration opts in without the flag, with a warning on every run.
+    #[arg(long, requires = "script")]
+    pub experimental: bool,
+
     #[clap(flatten)]
     pub workspace_config: ScriptWorkspaceConfig,
 
@@ -168,6 +177,7 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
 
     let cli_config = args
         .activation_config
+        .clone()
         .merge_config(args.config.clone().into());
 
     let is_script = args.workspace_config.script.is_some();
@@ -235,11 +245,45 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
             stdin_script_command = Some(prepared.command);
             workspace
         }
-        Some(RunScriptInput::Local(path)) => WorkspaceLocator::for_cli()
-            .with_global_config_source(global_config_source)
-            .with_search_start(pixi_core::workspace::DiscoveryStart::Script(path))
-            .with_cli_config(cli_config)
-            .locate()?,
+        Some(RunScriptInput::Local(path)) => {
+            let root = std::path::absolute(&path)
+                .into_diagnostic()?
+                .parent()
+                .expect("an absolute script path always has a parent")
+                .to_owned();
+            let config = pixi_config::Config::load_with(&root, &global_config_source)
+                .merge_config(cli_config.clone());
+            // The configuration option opts in for every run, so the flag is
+            // only needed when it is unset.
+            let opted_in = args.experimental || config.experimental_conda_script();
+            // A conda-script block takes this file off the PEP 723 path; a
+            // file with both kinds of block is rejected by the detection.
+            if let Some(manifest) = crate::conda_script::detect_with_fallback(&path, opted_in)? {
+                if !opted_in {
+                    return Err(miette::miette!(
+                        help = "conda-script support is experimental; opt in with `pixi config set experimental.conda-script true --global`, or add `--experimental` to this run",
+                        "{} contains a conda-script block",
+                        path.display()
+                    ));
+                }
+                if !args.experimental {
+                    eprintln!(
+                        "{}Running {} through `experimental.conda-script`, a draft format that may still change",
+                        console::style(console::Emoji("⚠️ ", "warning: ")).yellow(),
+                        path.display(),
+                    );
+                }
+                if not_hidden {
+                    global_multi_progress().set_draw_target(ProgressDrawTarget::stderr_with_hz(20));
+                }
+                return crate::conda_script::execute_run(manifest, args, config).await;
+            }
+            WorkspaceLocator::for_cli()
+                .with_global_config_source(global_config_source)
+                .with_search_start(pixi_core::workspace::DiscoveryStart::Script(path))
+                .with_cli_config(cli_config)
+                .locate()?
+        }
         None => WorkspaceLocator::for_cli()
             .with_global_config_source(global_config_source)
             .with_search_start(args.workspace_config.workspace_locator_start())
@@ -875,4 +919,17 @@ async fn listen_and_forward_all_signals(kill_signal: KillSignal) {
         )
     }
     futures::future::join_all(futures).await;
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+
+    use super::Args;
+
+    #[test]
+    fn experimental_requires_a_script() {
+        assert!(Args::try_parse_from(["run", "--experimental", "--script", "main.c"]).is_ok());
+        assert!(Args::try_parse_from(["run", "--experimental", "task"]).is_err());
+    }
 }
