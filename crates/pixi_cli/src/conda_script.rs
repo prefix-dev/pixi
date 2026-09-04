@@ -12,7 +12,7 @@ use pixi_core::{
     },
 };
 use pixi_manifest::WithWarnings;
-use pixi_manifest::script::conda::{CondaScriptError, CondaScriptManifest};
+use pixi_manifest::script::conda::CondaScriptManifest;
 use pixi_script_shell::{ShellContext, execute_sequence, parse_sequence};
 use pixi_task::get_task_env;
 use tracing::Level;
@@ -25,38 +25,14 @@ use crate::{
 
 /// Reads the `conda-script` block of a local `--script` file.
 ///
-/// Returns `Ok(None)` when the file has no block or when a malformed block
-/// appears in a Python file, so the caller falls back to the PEP 723 path: a
-/// Python script may contain an accidental line ending in the opening
-/// marker, say inside an indented docstring, and must keep working as it did
-/// before the conda-script format existed. When `surface_errors` is set (the
-/// caller passed `--experimental`) or the file cannot be a PEP 723 script
-/// anyway, a block error is reported instead.
+/// See [`CondaScriptManifest::detect_with_fallback`] for the fallback
+/// behavior; `surface_errors` is set when the caller passed
+/// `--experimental`.
 pub(crate) fn detect_with_fallback(
     path: &Path,
     surface_errors: bool,
 ) -> miette::Result<Option<CondaScriptManifest>> {
-    match CondaScriptManifest::from_path(path) {
-        Ok(manifest) => Ok(manifest),
-        Err(error @ CondaScriptError::Io(_)) => Err(Report::new(error)),
-        Err(error) => {
-            let is_python = path
-                .extension()
-                .and_then(|extension| extension.to_str())
-                .is_some_and(|extension| {
-                    extension.eq_ignore_ascii_case("py") || extension.eq_ignore_ascii_case("pyw")
-                });
-            if surface_errors || !is_python {
-                Err(Report::new(error))
-            } else {
-                tracing::debug!(
-                    "ignoring a malformed conda-script block in {}: {error}",
-                    path.display()
-                );
-                Ok(None)
-            }
-        }
-    }
+    CondaScriptManifest::detect_with_fallback(path, surface_errors).map_err(Report::new)
 }
 
 /// Whether the contents carry a conda-script block, well-formed or not.

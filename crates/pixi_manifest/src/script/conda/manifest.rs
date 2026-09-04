@@ -9,7 +9,7 @@ use toml_edit::DocumentMut;
 use super::{
     CondaScriptError, CondaScriptMetadata,
     envelope::{self, CLOSING_MARKER, OPENING_MARKER},
-    error::{EnvelopeError, MetadataError},
+    error::{EnvelopeError, EnvelopeErrorKind, MetadataError},
 };
 use crate::script::block::{LineEnding, serialize_block};
 
@@ -90,6 +90,52 @@ impl CondaScriptManifest {
         }))
     }
 
+    /// Reads the `conda-script` block of a script file, tolerating a
+    /// malformed block in a Python file.
+    ///
+    /// Returns `Ok(None)` when the file has no block or when a malformed
+    /// block appears in a Python file, so the caller falls back to the PEP
+    /// 723 path: a Python script may contain an accidental line ending in
+    /// the opening marker, say inside an indented docstring, and must keep
+    /// working as it did before the conda-script format existed. When
+    /// `surface_errors` is set or the file cannot be a PEP 723 script
+    /// anyway, a block error is reported instead.
+    pub fn detect_with_fallback(
+        path: &Path,
+        surface_errors: bool,
+    ) -> Result<Option<Self>, CondaScriptError> {
+        match Self::from_path(path) {
+            Ok(manifest) => Ok(manifest),
+            Err(error @ CondaScriptError::Io(_)) => Err(error),
+            Err(error) => {
+                let is_python = path
+                    .extension()
+                    .and_then(|extension| extension.to_str())
+                    .is_some_and(|extension| {
+                        extension.eq_ignore_ascii_case("py")
+                            || extension.eq_ignore_ascii_case("pyw")
+                    });
+                // A file with both block kinds is not a stray marker but a
+                // real conflict; editing or running it as PEP 723 would
+                // maintain a file `pixi run` refuses.
+                let both_kinds = matches!(
+                    &error,
+                    CondaScriptError::Envelope(envelope)
+                        if matches!(envelope.kind, EnvelopeErrorKind::BothBlockKinds { .. })
+                );
+                if surface_errors || !is_python || both_kinds {
+                    Err(error)
+                } else {
+                    tracing::debug!(
+                        "ignoring a malformed conda-script block in {}: {error}",
+                        path.display()
+                    );
+                    Ok(None)
+                }
+            }
+        }
+    }
+
     /// The absolute path of the script file.
     pub fn path(&self) -> &Path {
         &self.path
@@ -134,10 +180,10 @@ impl CondaScriptManifest {
     ///
     /// The dependency tables are spliced in verbatim from the block, so the
     /// specs reach the manifest parser exactly as written. `[dependencies]`
-    /// fills the default feature while `[tool.pixi.dependencies]` and
-    /// `[tool.pixi.pypi-dependencies]` become a separate feature of the
-    /// default environment, which merges the two spec sets the way pixi
-    /// merges features: both specs of a package reach the solver.
+    /// and `[tool.pixi.pypi-dependencies]` fill the default feature while
+    /// `[tool.pixi.dependencies]` becomes a separate feature of the default
+    /// environment, which merges the two spec sets the way pixi merges
+    /// features: both specs of a package reach the solver.
     pub fn synthetic_manifest(&self) -> Result<String, toml_edit::TomlError> {
         let mut block: toml_edit::DocumentMut = self.toml.parse()?;
         let channels = block
@@ -175,14 +221,15 @@ impl CondaScriptManifest {
             document.insert("dependencies", dependencies);
         }
 
-        if pixi_dependencies.is_some() || pixi_pypi_dependencies.is_some() {
+        if let Some(pixi_pypi_dependencies) = pixi_pypi_dependencies {
+            document.insert("pypi-dependencies", pixi_pypi_dependencies);
+        }
+
+        if pixi_dependencies.is_some() {
             let mut tool_pixi = toml_edit::Table::new();
             tool_pixi.set_implicit(true);
             if let Some(pixi_dependencies) = pixi_dependencies {
                 tool_pixi.insert("dependencies", pixi_dependencies);
-            }
-            if let Some(pixi_pypi_dependencies) = pixi_pypi_dependencies {
-                tool_pixi.insert("pypi-dependencies", pixi_pypi_dependencies);
             }
             let mut feature = toml_edit::Table::new();
             feature.set_implicit(true);
@@ -486,11 +533,11 @@ mod tests {
         [feature.tool-pixi.dependencies]
         simple-app = { git = "https://github.com/prefix-dev/pixi-build-testsuite.git" }
 
-        [feature.tool-pixi.pypi-dependencies]
-        requests = ">=2"
-
         [environments]
         default = ["tool-pixi"]
+
+        [pypi-dependencies]
+        requests = ">=2"
         "##);
     }
 
