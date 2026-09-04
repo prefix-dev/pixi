@@ -7,11 +7,11 @@ use miette::NamedSource;
 use toml_edit::DocumentMut;
 
 use super::{
-    CondaScriptError, CondaScriptMetadata,
+    CondaScriptError, CondaScriptMetadata, CondaScriptTemplate,
     envelope::{self, CLOSING_MARKER, OPENING_MARKER},
     error::{EnvelopeError, EnvelopeErrorKind, MetadataError},
 };
-use crate::script::block::{LineEnding, serialize_block};
+use crate::script::block::{LineEnding, extract_script_header, serialize_block};
 
 /// A code file containing a `conda-script` metadata block.
 #[derive(Debug, Clone)]
@@ -26,6 +26,86 @@ pub struct CondaScriptManifest {
 }
 
 impl CondaScriptManifest {
+    /// Add a `conda-script` block to a new or existing file.
+    ///
+    /// The block is generated from the language template; `channels`
+    /// overrides the template's channels when non-empty. A freshly created
+    /// file also gets the template's starter program.
+    pub fn initialize(
+        path: impl AsRef<Path>,
+        template: &CondaScriptTemplate,
+        channels: &[String],
+    ) -> Result<Self, CondaScriptError> {
+        let path = std::path::absolute(path)?;
+        let contents = match fs_err::read(&path) {
+            Ok(contents) => contents,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+            Err(error) => return Err(error.into()),
+        };
+        if Self::from_source(&path, &contents)?.is_some() {
+            return Err(CondaScriptError::AlreadyInitialized { path });
+        }
+
+        let mut metadata = toml_edit::DocumentMut::new();
+        let mut channel_array = toml_edit::Array::new();
+        if channels.is_empty() {
+            channel_array.extend(template.channels.iter().copied());
+        } else {
+            channel_array.extend(channels.iter().map(String::as_str));
+        }
+        metadata.insert(
+            "channels",
+            toml_edit::Item::Value(toml_edit::Value::Array(channel_array)),
+        );
+        metadata.insert("entrypoint", toml_edit::value(template.entrypoint));
+        let mut dependencies = toml_edit::Table::new();
+        for dependency in template.dependencies {
+            dependencies.insert(dependency, toml_edit::value("*"));
+        }
+        metadata.insert("dependencies", toml_edit::Item::Table(dependencies));
+
+        let line_ending = LineEnding::detect(&contents);
+        let (bom, shebang, body) = extract_script_header(&contents)?;
+        let body = if contents.is_empty() {
+            template.body
+        } else {
+            body
+        };
+
+        let mut output = String::new();
+        output.push_str(bom);
+        if let Some(shebang) = shebang {
+            output.push_str(shebang);
+            output.push_str(line_ending.as_str());
+            output.push_str(template.prefix.trim_end());
+            output.push_str(line_ending.as_str());
+        }
+        output.push_str(&serialize_block(
+            &metadata.to_string(),
+            template.prefix,
+            &format!("{}{OPENING_MARKER}", template.prefix),
+            &format!("{}{CLOSING_MARKER}", template.prefix),
+            line_ending.as_str(),
+        ));
+        if !body.is_empty() {
+            output.push_str(line_ending.as_str());
+            output.push_str(body);
+        }
+
+        // Parsing before writing keeps a file that would not read back, say
+        // one that already carries a PEP 723 block, untouched on disk.
+        let manifest = Self::from_source(&path, output.as_bytes())?
+            .expect("a block serialized by the script initializer must be parseable");
+
+        fs_err::create_dir_all(
+            path.parent()
+                .expect("an absolute script path always has a parent"),
+        )?;
+        fs_err::write(&path, output)?;
+
+        Ok(manifest)
+    }
+
     /// Read the `conda-script` block from a file.
     ///
     /// Returns `Ok(None)` when the file contains no block.

@@ -12,9 +12,11 @@ mod envelope;
 mod error;
 mod manifest;
 mod metadata;
+mod templates;
 
 pub use document::CondaScriptManifestDocument;
 pub use entrypoint::{Entrypoint, EntrypointSelector};
 pub use error::{CondaScriptError, EnvelopeError, MetadataError};
 pub use manifest::CondaScriptManifest;
 pub use metadata::{CondaScriptMetadata, PixiTool};
+pub use templates::{CondaScriptTemplate, supported_extensions, template_for_extension};
