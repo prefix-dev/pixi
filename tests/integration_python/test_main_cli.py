@@ -1223,6 +1223,10 @@ def test_bash_run_task_completion(pixi: Path, tmp_pixi_workspace: Path) -> None:
     # `import -p` does take a declared platform name.
     assert complete(["pixi", "import", "-p", ""]) == all_platforms
 
+    # `--shell` is a fixed set, so clap itself supplies the candidates.
+    assert complete(["pixi", "shell-hook", "-s", "z"]) == ["zsh"]
+    assert complete(["pixi", "shell-hook", "--shell", "nu"]) == ["nu", "nushell"]
+
 
 def test_pixi_info_tasks(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
