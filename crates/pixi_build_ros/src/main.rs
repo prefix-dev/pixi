@@ -331,15 +331,17 @@ impl GenerateRecipe for RosGenerator {
         &self,
         config: &Self::Config,
         _workdir: impl AsRef<Path>,
-        editable: bool,
+        _editable: bool,
     ) -> miette::Result<Vec<String>> {
-        let mut globs: Vec<&str> = vec![
+        let globs: Vec<&str> = vec![
             "**/*.c",
             "**/*.cpp",
             "**/*.h",
             "**/*.hpp",
             "**/*.rs",
             "**/*.sh",
+            "**/*.py",
+            "**/*.pyx",
             "package.xml",
             "setup.py",
             "setup.cfg",
@@ -356,10 +358,6 @@ impl GenerateRecipe for RosGenerator {
             "srv/**/*.srv",
             "action/**/*.action",
         ];
-
-        if !editable {
-            globs.extend(["**/*.py", "**/*.pyx"]);
-        }
 
         let mut result: Vec<String> = globs.iter().map(|s| s.to_string()).collect();
         if let Some(extra) = &config.extra_input_globs {

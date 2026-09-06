@@ -7,8 +7,8 @@ while the resolved environment stays in Pixi's cache instead of a workspace
 next to the script.
 
 Script commands use `--script <PATH>`. The same `init`, `run`, `add`, `remove`,
-`lock`, and `update` commands used for workspaces can therefore operate on
-either a manifest or a standalone file.
+`install`, `lock`, and `update` commands used for workspaces can therefore
+operate on either a manifest or a standalone file.
 
 ## Make a script self-contained
 
@@ -198,11 +198,24 @@ pixi update --script earthquakes.py
 ```
 
 Without an adjacent lock file, this replaces the cached resolution. The next
-run updates the cached environment to match it. This cache state is disposable.
-Removing it causes Pixi to resolve the script again.
+`run` or `install` updates the cached environment to match it. This cache state
+is disposable. Removing it causes Pixi to resolve the script again.
 
 When an adjacent lock file exists, `update` writes the new resolution there
 instead.
+
+## Install without running
+
+Use `pixi install` to install the script's environment without running the
+script.
+
+```console
+pixi install --script earthquakes.py
+```
+
+This installs the same cached environment that `pixi run --script` would use
+and prints its location. Run this during a container build or before going
+offline to install the environment ahead of time.
 
 ## Inspect and export
 
@@ -282,7 +295,7 @@ command does not take a separate platform override.
 
 A script does not have to declare `platforms`.
 When it doesn't, Pixi resolves it for the machine you run it on, using the [virtual packages](../workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform) it detects there: your CUDA driver, your glibc version, your macOS version.
-A script that needs a glibc newer than Pixi's `2.28` default resolves without you writing anything down.
+A script that needs a glibc newer than Pixi's [default](../workspace/system_requirements.md#default-declared-virtual-packages) resolves without you writing anything down.
 
 To resolve for a fixed target instead:
 

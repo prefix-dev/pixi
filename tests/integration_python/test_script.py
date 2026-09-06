@@ -429,6 +429,12 @@ print("SCRIPT-RAN")
         cwd=tmp_pixi_workspace,
         env=env,
     )
+
+    # Updating changes the resolution but leaves the installed environment unchanged.
+    package_records = list(exec_cache.glob("*/envs/default/conda-meta/package-*.json"))
+    assert len(package_records) == 1
+    assert json.loads(package_records[0].read_text())["version"] == "0.1.0"
+
     verify_cli_command(
         [pixi, "run", "--script", script],
         cwd=tmp_pixi_workspace,
@@ -439,6 +445,60 @@ print("SCRIPT-RAN")
     package_records = list(exec_cache.glob("*/envs/default/conda-meta/package-*.json"))
     assert len(package_records) == 1
     assert json.loads(package_records[0].read_text())["version"] == "0.2.0"
+    assert not script.with_name("example.py.pixi.lock").exists()
+    assert_no_workspace_state_created(tmp_pixi_workspace)
+
+
+@pytest.mark.slow
+def test_pixi_install_script_installs_without_running(
+    pixi: Path, tmp_pixi_workspace: Path, channels: Path
+) -> None:
+    exec_cache = tmp_pixi_workspace / "script-exec-cache"
+    env = {"PIXI_CACHE_EXEC_ENVIRONMENTS_DIR": str(exec_cache)}
+    channel = tmp_pixi_workspace / "channel"
+    shutil.copytree(channels / "multiple_versions_channel_1", channel)
+    script = tmp_pixi_workspace / "example.py"
+    script.write_text(
+        f'''# /// script
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# channels = ["{channel.as_uri()}", "{CONDA_FORGE_CHANNEL}"]
+# platforms = ["{CURRENT_PLATFORM}"]
+#
+# [tool.pixi.dependencies]
+# package = "0.1.*"
+# ///
+from pathlib import Path
+
+Path("script-ran").touch()
+print("SCRIPT-RAN")
+'''
+    )
+
+    verify_cli_command(
+        [pixi, "install", "--script", script],
+        cwd=tmp_pixi_workspace,
+        env=env,
+        stdout_excludes="SCRIPT-RAN",
+        stderr_contains="script environment has been installed at",
+    )
+    assert not (tmp_pixi_workspace / "script-ran").exists()
+
+    package_records = list(exec_cache.glob("*/envs/default/conda-meta/package-*.json"))
+    assert len(package_records) == 1
+    assert json.loads(package_records[0].read_text())["version"] == "0.1.0"
+
+    # Running reuses the environment created by install.
+    verify_cli_command(
+        [pixi, "run", "--script", script],
+        cwd=tmp_pixi_workspace,
+        env=env,
+        stdout_contains="SCRIPT-RAN",
+    )
+    assert (tmp_pixi_workspace / "script-ran").exists()
+    assert len(list(exec_cache.glob("*/envs/default"))) == 1
+
     assert not script.with_name("example.py.pixi.lock").exists()
     assert_no_workspace_state_created(tmp_pixi_workspace)
 
