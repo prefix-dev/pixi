@@ -32,6 +32,7 @@ for further details on how to use the software.
 - [Pytorch](https://pixi.prefix.dev/latest/python/pytorch/)
 - [Standalone Python scripts](https://pixi.prefix.dev/latest/python/scripts/)
 - [Main pixi entry](https://pixi.prefix.dev/latest/python/tutorial/)
+- [Standalone scripts in any language](https://pixi.prefix.dev/latest/tutorials/conda_script/)
 - [Import](https://pixi.prefix.dev/latest/tutorials/import/)
 - [Or using the task directly, which will spawn a dialog to select the environment of choice](https://pixi.prefix.dev/latest/tutorials/multi_environment/)
 - [Your project can support multiple platforms, the current platform will be automatically added.](https://pixi.prefix.dev/latest/tutorials/ros2/)

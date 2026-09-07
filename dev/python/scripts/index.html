@@ -519,6 +519,8 @@
       
         
       
+        
+      
     
     
     
@@ -913,6 +915,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../../tutorials/conda_script/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Conda Scripts
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../tutorials/ros2/" class="md-nav__link">
         
   
@@ -983,10 +1012,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_5" >
         
           
-          <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_3_5" id="__nav_3_5_label" tabindex="0">
             
   
   
@@ -1003,8 +1032,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_4">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -8833,6 +8862,9 @@ next to the script.</p>
 <p>Script commands use <code>--script &lt;PATH&gt;</code>. The same <code>init</code>, <code>run</code>, <code>add</code>, <code>remove</code>,
 <code>install</code>, <code>lock</code>, and <code>update</code> commands used for workspaces can therefore
 operate on either a manifest or a standalone file.</p>
+<p>For files in other languages there is an experimental
+<a href="../../tutorials/conda_script/"><code>conda-script</code> block</a> that embeds the same
+kind of metadata in any code file.</p>
 <h2 id="make-a-script-self-contained">Make a script self-contained<a class="headerlink" href="#make-a-script-self-contained" title="Permanent link">#</a></h2>
 <p>This script downloads the USGS earthquake feed with <code>httpx</code>, then uses GDAL's
 Python bindings to count the features:</p>
@@ -8878,13 +8910,21 @@ without a separate <code>pixi.toml</code>, <code>pyproject.toml</code>, or lock 
 <p>Pixi reads those fields and extends them with a focused subset of
 <code>tool.pixi</code>:</p>
 <ul>
-<li><code>tool.pixi.workspace</code> configures channels, platforms, and resolver options.</li>
+<li><code>tool.pixi.workspace</code> configures channels, platforms, and resolver options
+  such as <code>exclude-newer</code>, <code>channel-priority</code> or <code>solve-strategy</code>.</li>
 <li><code>tool.pixi.dependencies</code> lists Conda packages.</li>
 <li><code>tool.pixi.pypi-dependencies</code> represents PyPI requirements that need
   Pixi-specific fields, such as an index or editable installation.</li>
+<li><code>tool.pixi.constraints</code> and <code>tool.pixi.activation</code> hold constraints and
+  activation settings.</li>
 <li><code>tool.pixi.target.&lt;platform&gt;</code> holds platform-specific dependencies,
   constraints, and activation settings.</li>
+<li><code>tool.pixi.exclude-newer</code> and <code>tool.pixi.pypi-exclude-newer</code> override the
+  cutoff date per package.</li>
 </ul>
+<p>Every other key under <code>tool.pixi</code> is rejected with an error pointing at it,
+since a script has one implicit environment and no features, tasks or
+packages.</p>
 <p>Other PEP 723 tools can use the portable fields and ignore <code>tool.pixi</code>. In the
 example above, another tool can install <code>httpx</code>, but only Pixi also provides
 GDAL. Pixi preserves metadata under other <code>tool.*</code> tables when editing a

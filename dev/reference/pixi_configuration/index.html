@@ -517,6 +517,8 @@
       
         
       
+        
+      
     
     
     
@@ -733,6 +735,33 @@
   
   
     <li class="md-nav__item">
+      <a href="../../tutorials/conda_script/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Conda Scripts
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../../tutorials/ros2/" class="md-nav__link">
         
   
@@ -803,10 +832,10 @@
       
         
         
-        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" >
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_5" >
         
           
-          <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="0">
+          <label class="md-nav__link" for="__nav_3_5" id="__nav_3_5_label" tabindex="0">
             
   
   
@@ -823,8 +852,8 @@
             <span class="md-nav__icon md-icon"></span>
           </label>
         
-        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
-          <label class="md-nav__title" for="__nav_3_4">
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_5">
             <span class="md-nav__icon md-icon"></span>
             
   
@@ -3910,6 +3939,17 @@
     <span class="md-ellipsis">
       <span class="md-typeset">
         Caching environment activations
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#running-conda-scripts" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Running conda scripts
       </span>
     </span>
   </a>
@@ -9109,6 +9149,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#running-conda-scripts" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Running conda scripts
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -9953,12 +10004,24 @@ the future.</p>
 <div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-26-1"><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="k">[experimental]</span>
 </span><span id="__span-26-2"><a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="c1"># Enable the use of the environment activation cache</span>
 </span><span id="__span-26-3"><a id="__codelineno-26-3" name="__codelineno-26-3" href="#__codelineno-26-3"></a><span class="n">use-environment-activation-cache</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
+</span><span id="__span-26-4"><a id="__codelineno-26-4" name="__codelineno-26-4" href="#__codelineno-26-4"></a><span class="c1"># Run conda scripts without passing `--experimental` every time</span>
+</span><span id="__span-26-5"><a id="__codelineno-26-5" name="__codelineno-26-5" href="#__codelineno-26-5"></a><span class="n">conda-script</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kc">true</span>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Why is this experimental?</p>
 </div>
 <p>This feature is experimental because the cache invalidation is very tricky,
 and we don't want to disturb users that are not affected by activation times.</p>
+<h3 id="running-conda-scripts">Running conda scripts<a class="headerlink" href="#running-conda-scripts" title="Permanent link">#</a></h3>
+<p><a href="../../tutorials/conda_script/">Conda scripts</a> normally need <code>--experimental</code> on every <code>pixi run</code>.
+Turn the flag into a setting with:</p>
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="c1"># For all of your workspaces</span>
+</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>experimental.conda-script<span class="w"> </span><span class="nb">true</span><span class="w"> </span>--global
+</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a>
+</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="c1"># For a specific workspace</span>
+</span><span id="__span-27-5"><a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>experimental.conda-script<span class="w"> </span><span class="nb">true</span><span class="w"> </span>--local
+</span></code></pre></div>
+<p>Running a conda script then prints a warning instead of asking for the flag, as a reminder that the format may still change.</p>
 <h2 id="mirror-configuration">Mirror configuration<a class="headerlink" href="#mirror-configuration" title="Permanent link">#</a></h2>
 <p>You can configure mirrors for conda channels. We expect that mirrors are exact
 copies of the original channel. The implementation will look for the mirror key
@@ -9970,13 +10033,13 @@ the repodata (the most important file) from the first mirror in the list. The
 repodata contains all the SHA256 hashes of the individual packages, so it is
 important to get this file from a trusted source.</p>
 <p>You can also specify mirrors for an entire "host", e.g.</p>
-<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-27-1"><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="k">[mirrors]</span>
-</span><span id="__span-27-2"><a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="s2">&quot;https://conda.anaconda.org&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://prefix.dev/&quot;</span><span class="p">]</span>
-</span><span id="__span-27-3"><a id="__codelineno-27-3" name="__codelineno-27-3" href="#__codelineno-27-3"></a><span class="c1"># prefix.dev doesn&#39;t mirror conda-forge&#39;s label channels</span>
-</span><span id="__span-27-4"><a id="__codelineno-27-4" name="__codelineno-27-4" href="#__codelineno-27-4"></a><span class="c1"># pixi uses the longest matching prefix for the mirror</span>
-</span><span id="__span-27-5"><a id="__codelineno-27-5" name="__codelineno-27-5" href="#__codelineno-27-5"></a><span class="s2">&quot;https://conda.anaconda.org/conda-forge/label&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-27-6"><a id="__codelineno-27-6" name="__codelineno-27-6" href="#__codelineno-27-6"></a><span class="w">  </span><span class="s2">&quot;https://conda.anaconda.org/conda-forge/label&quot;</span><span class="p">,</span>
-</span><span id="__span-27-7"><a id="__codelineno-27-7" name="__codelineno-27-7" href="#__codelineno-27-7"></a><span class="p">]</span>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="k">[mirrors]</span>
+</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="s2">&quot;https://conda.anaconda.org&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://prefix.dev/&quot;</span><span class="p">]</span>
+</span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a><span class="c1"># prefix.dev doesn&#39;t mirror conda-forge&#39;s label channels</span>
+</span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a><span class="c1"># pixi uses the longest matching prefix for the mirror</span>
+</span><span id="__span-28-5"><a id="__codelineno-28-5" name="__codelineno-28-5" href="#__codelineno-28-5"></a><span class="s2">&quot;https://conda.anaconda.org/conda-forge/label&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-28-6"><a id="__codelineno-28-6" name="__codelineno-28-6" href="#__codelineno-28-6"></a><span class="w">  </span><span class="s2">&quot;https://conda.anaconda.org/conda-forge/label&quot;</span><span class="p">,</span>
+</span><span id="__span-28-7"><a id="__codelineno-28-7" name="__codelineno-28-7" href="#__codelineno-28-7"></a><span class="p">]</span>
 </span></code></pre></div>
 <p>This will forward all request to channels on anaconda.org to prefix.dev.
 Channels that are not currently mirrored on prefix.dev will fail in the above example.
@@ -9986,10 +10049,10 @@ by providing a longer prefix that points to itself.</p>
 <p>You can also specify mirrors on the OCI registry. There is a public mirror on
 the Github container registry (ghcr.io) that is maintained by the conda-forge
 team. You can use it like this:</p>
-<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-28-1"><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="k">[mirrors]</span>
-</span><span id="__span-28-2"><a id="__codelineno-28-2" name="__codelineno-28-2" href="#__codelineno-28-2"></a><span class="s2">&quot;https://conda.anaconda.org/conda-forge&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
-</span><span id="__span-28-3"><a id="__codelineno-28-3" name="__codelineno-28-3" href="#__codelineno-28-3"></a><span class="w">  </span><span class="s2">&quot;oci://ghcr.io/channel-mirrors/conda-forge&quot;</span><span class="p">,</span>
-</span><span id="__span-28-4"><a id="__codelineno-28-4" name="__codelineno-28-4" href="#__codelineno-28-4"></a><span class="p">]</span>
+<div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="k">[mirrors]</span>
+</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="s2">&quot;https://conda.anaconda.org/conda-forge&quot;</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a><span class="w">  </span><span class="s2">&quot;oci://ghcr.io/channel-mirrors/conda-forge&quot;</span><span class="p">,</span>
+</span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="p">]</span>
 </span></code></pre></div>
 <p>The GHCR mirror also contains <code>bioconda</code> packages. You can search the <a href="https://github.com/orgs/channel-mirrors/packages">available
 packages on Github</a>.</p>

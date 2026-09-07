@@ -31,6 +31,9 @@
         <loc>https://pixi.prefix.dev/latest/python/pytorch/</loc>
       </url>
       <url>
+        <loc>https://pixi.prefix.dev/latest/tutorials/conda_script/</loc>
+      </url>
+      <url>
         <loc>https://pixi.prefix.dev/latest/tutorials/ros2/</loc>
       </url>
       <url>
