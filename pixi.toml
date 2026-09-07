@@ -185,7 +185,7 @@ RUSTC_WRAPPER = "sccache"
 
 [environments.backends-release.dependencies]
 gh = ">=2.96.0,<3"
-rattler-build = ">=0.70.0,<0.71"
+rattler-build = ">=0.75,<0.76"
 sccache = ">=0.16.0,<0.17"
 
 [environments.backends-release.tasks]
