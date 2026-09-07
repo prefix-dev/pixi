@@ -1,6 +1,6 @@
 # Standalone scripts in any language
 
-With conda scripts you can run a self contained script written in any language that includes dependencies and entry-point.
+Conda scripts let you write scripts in any language, with dependencies and instructions for running them included in the same file.
 
 !!! warning "Experimental"
     This implements the draft `conda-script` proposal from [issue #3751](https://github.com/prefix-dev/pixi/issues/3751), which is on its way to becoming a CEP for the whole conda ecosystem.

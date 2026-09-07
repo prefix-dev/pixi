@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### [0.80.0] - 2026-09-07
 #### ✨ Highlights
 
-Pixi now has experimental support for `conda-script`: standalone scripts in any language can carry their Conda channels, dependencies and entrypoint in a comment block.
+Pixi now has experimental support for `conda-script`. Conda scripts let you write scripts in any language, with dependencies and instructions for running them included in the same file.
 Pixi solves the environment, caches it, and runs the script without requiring a separate workspace.
 
 For example, an R script can now be self-contained:
@@ -44,11 +44,17 @@ int main() {
 }
 ```
 
-Run them with:
+First enable the experimental configuration with:
 
 ```shell
-pixi run --experimental --script hello.R
-pixi run --experimental --script hello.cpp
+pixi config set experimental.conda-script true --global
+```
+
+Then, run them with:
+
+```shell
+pixi run --script hello.R
+pixi run --script hello.cpp
 ```
 
 You can also create and manage these scripts with `pixi init --script`, `pixi add --script`, `pixi remove --script`, `pixi lock --script`, and the other script-aware commands.
