@@ -1,0 +1,9 @@
+--8<-- [start:example]
+
+## Examples
+
+```shell
+pixi auth status
+```
+
+--8<-- [end:example]
