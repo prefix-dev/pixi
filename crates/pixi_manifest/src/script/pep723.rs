@@ -1,15 +1,17 @@
 use std::{
     error::Error,
     fmt,
-    ops::Range,
     path::{Path, PathBuf},
     sync::Arc,
 };
 
-use miette::{Diagnostic, LabeledSpan, NamedSource, SourceCode, SourceSpan};
+use miette::{Diagnostic, LabeledSpan, NamedSource, SourceCode};
 use thiserror::Error;
 use toml_edit::{Array, DocumentMut, Item, Table, Value};
 
+use super::block::{
+    BlockSourceMap, LineEnding, MetadataLine, serialize_block, without_line_ending,
+};
 use crate::{
     TomlError, Warning, WorkspaceManifest,
     pyproject::PyProjectManifest,
@@ -25,7 +27,8 @@ pub struct ScriptManifest {
     prelude: String,
     postlude: String,
     line_ending: LineEnding,
-    source_map: ScriptSourceMap,
+    source: Arc<str>,
+    source_map: BlockSourceMap,
 }
 
 #[derive(Debug, Clone)]
@@ -35,49 +38,11 @@ struct ScriptManifestContext {
     project_name: String,
 }
 
-#[derive(Debug, Clone)]
-struct MetadataLine {
-    metadata_start: usize,
-    source_start: usize,
-    len: usize,
-}
-
-#[derive(Debug, Clone)]
-struct ScriptSourceMap {
-    source: Arc<str>,
-    opening: Range<usize>,
-    metadata_lines: Vec<MetadataLine>,
-}
-
-impl ScriptSourceMap {
-    fn metadata_offset(&self, offset: usize) -> usize {
-        let Some(line) = self
-            .metadata_lines
-            .iter()
-            .rev()
-            .find(|line| line.metadata_start <= offset)
-        else {
-            return self.opening.start;
-        };
-        line.source_start + offset.saturating_sub(line.metadata_start).min(line.len)
-    }
-
-    fn span(&self, offset: usize, len: usize, synthetic_prefix: usize) -> SourceSpan {
-        let Some(metadata_start) = offset.checked_sub(synthetic_prefix) else {
-            return SourceSpan::from(self.opening.clone());
-        };
-        let metadata_end = offset.saturating_add(len).saturating_sub(synthetic_prefix);
-        let start = self.metadata_offset(metadata_start);
-        let end = self.metadata_offset(metadata_end).max(start);
-        SourceSpan::new(start.into(), end - start)
-    }
-}
-
 #[derive(Debug)]
 pub struct ScriptMetadataError {
     error: TomlError,
     source: NamedSource<Arc<str>>,
-    source_map: ScriptSourceMap,
+    source_map: BlockSourceMap,
     synthetic_prefix: usize,
 }
 
@@ -158,29 +123,6 @@ impl fmt::Display for ScriptManifestDocument {
 pub struct ScriptWorkspaceConfig {
     pub channels_explicit: bool,
     pub platforms_explicit: bool,
-}
-
-#[derive(Debug, Clone, Copy)]
-enum LineEnding {
-    Lf,
-    CrLf,
-}
-
-impl LineEnding {
-    fn detect(contents: &[u8]) -> Self {
-        if contents.windows(2).any(|window| window == b"\r\n") {
-            Self::CrLf
-        } else {
-            Self::Lf
-        }
-    }
-
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::Lf => "\n",
-            Self::CrLf => "\r\n",
-        }
-    }
 }
 
 impl ScriptManifest {
@@ -288,7 +230,7 @@ impl ScriptManifest {
         block.metadata.parse::<DocumentMut>().map_err(|error| {
             ScriptManifestError::Metadata(Box::new(ScriptMetadataError {
                 error: error.into(),
-                source: NamedSource::new(source_name.clone(), Arc::clone(&block.source_map.source)),
+                source: NamedSource::new(source_name.clone(), Arc::clone(&block.source)),
                 source_map: block.source_map.clone(),
                 synthetic_prefix: 0,
             }))
@@ -305,6 +247,7 @@ impl ScriptManifest {
             prelude: block.prelude,
             postlude: block.postlude,
             line_ending: block.line_ending,
+            source: block.source,
             source_map: block.source_map,
         }))
     }
@@ -360,10 +303,7 @@ impl ScriptManifest {
     fn metadata_error(&self, error: TomlError, synthetic_prefix: usize) -> ScriptManifestError {
         ScriptManifestError::Metadata(Box::new(ScriptMetadataError {
             error,
-            source: NamedSource::new(
-                &self.context.source_name,
-                Arc::clone(&self.source_map.source),
-            ),
+            source: NamedSource::new(&self.context.source_name, Arc::clone(&self.source)),
             source_map: self.source_map.clone(),
             synthetic_prefix,
         }))
@@ -813,7 +753,8 @@ struct ScriptBlock {
     metadata: String,
     postlude: String,
     line_ending: LineEnding,
-    source_map: ScriptSourceMap,
+    source: Arc<str>,
+    source_map: BlockSourceMap,
 }
 
 impl ScriptBlock {
@@ -887,18 +828,13 @@ impl ScriptBlock {
             metadata: toml.join("\n") + "\n",
             postlude: postlude.to_owned(),
             line_ending,
-            source_map: ScriptSourceMap {
-                source,
+            source,
+            source_map: BlockSourceMap {
                 opening,
                 metadata_lines,
             },
         }))
     }
-}
-
-fn without_line_ending(line: &str) -> &str {
-    let line = line.strip_suffix('\n').unwrap_or(line);
-    line.strip_suffix('\r').unwrap_or(line)
 }
 
 fn reject_duplicate_block(lines: &[&str]) -> Result<(), ScriptManifestError> {
@@ -921,20 +857,7 @@ fn reject_duplicate_block(lines: &[&str]) -> Result<(), ScriptManifestError> {
 }
 
 fn serialize_metadata(metadata: &str, line_ending: &str) -> String {
-    let mut output = String::with_capacity(metadata.len() + 32);
-    output.push_str("# /// script");
-    output.push_str(line_ending);
-    for line in metadata.lines() {
-        output.push('#');
-        if !line.is_empty() {
-            output.push(' ');
-            output.push_str(line);
-        }
-        output.push_str(line_ending);
-    }
-    output.push_str("# ///");
-    output.push_str(line_ending);
-    output
+    serialize_block(metadata, "# ", "# /// script", "# ///", line_ending)
 }
 
 #[cfg(test)]
