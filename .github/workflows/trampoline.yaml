@@ -32,7 +32,7 @@ jobs:
             os: ubuntu-latest
 
           - name: "Linux-riscv64"
-            target: riscv64gc-unknown-linux-gnu
+            target: riscv64gc-unknown-linux-musl
             os: ubuntu-latest
 
           - name: "Linux-loong64"
