@@ -69,6 +69,28 @@ mod solve_binary;
 mod solve_conda;
 mod util;
 
+use std::future::Future;
+
+use pixi_build_frontend::tool::BackendVerbosity;
+
+tokio::task_local! {
+    static SCOPED_BACKEND_VERBOSITY: BackendVerbosity;
+}
+
+/// Run a CLI command with backend verbosity inherited by dispatchers it creates.
+pub async fn scope_backend_verbosity<T>(
+    verbosity: BackendVerbosity,
+    future: impl Future<Output = T>,
+) -> T {
+    SCOPED_BACKEND_VERBOSITY.scope(verbosity, future).await
+}
+
+fn current_backend_verbosity() -> BackendVerbosity {
+    SCOPED_BACKEND_VERBOSITY
+        .try_with(|verbosity| *verbosity)
+        .unwrap_or_default()
+}
+
 pub use backend_source_build::{
     BackendBuiltSource, BackendSourceBuildError, BackendSourceBuildExt, BackendSourceBuildMethod,
     BackendSourceBuildPrefix, BackendSourceBuildSpec, BackendSourceBuildV1Method,
@@ -109,7 +131,8 @@ pub use errors::{
     SourceRecordError,
 };
 pub use injected_config::{
-    BackendOverrideKey, ChannelConfigKey, EnabledProtocolsKey, ToolBuildEnvironmentKey,
+    BackendOverrideKey, BackendVerbosityKey, ChannelConfigKey, EnabledProtocolsKey,
+    ToolBuildEnvironmentKey,
 };
 pub use inline_package::InlinePackage;
 pub use install_pixi::{
