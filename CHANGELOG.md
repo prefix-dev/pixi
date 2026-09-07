@@ -5,6 +5,69 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.80.0] - 2026-09-07
+#### ✨ Highlights
+
+Pixi now has experimental support for `conda-script`. Conda scripts let you write scripts in any language, with dependencies and instructions for running them included in the same file.
+Pixi solves the environment, caches it, and runs the script without requiring a separate workspace.
+
+For example, an R script can now be self-contained:
+
+```r
+# /// conda-script
+# channels = ["https://prefix.dev/conda-forge"]
+# entrypoint = "Rscript ${SCRIPT}"
+#
+# [dependencies]
+# r-base = "*"
+# r-jsonlite = "*"
+# /// end-conda-script
+library(jsonlite)
+writeLines(toJSON(list(hello = "pixi"), auto_unbox = TRUE))
+```
+
+Or compile and run a C++ file with Conda-provided dependencies:
+
+```cpp
+// /// conda-script
+// channels = ["https://prefix.dev/conda-forge"]
+// entrypoint = "g++ -o ${CACHE}/hello ${SCRIPT} -lfmt && ${CACHE}/hello"
+//
+// [dependencies]
+// gxx = "*"
+// fmt = "*"
+// /// end-conda-script
+#include <fmt/core.h>
+
+int main() {
+    fmt::print("Hello from pixi!\n");
+}
+```
+
+First enable the experimental configuration with:
+
+```shell
+pixi config set experimental.conda-script true --global
+```
+
+Then, run them with:
+
+```shell
+pixi run --script hello.R
+pixi run --script hello.cpp
+```
+
+You can also create and manage these scripts with `pixi init --script`, `pixi add --script`, `pixi remove --script`, `pixi lock --script`, and the other script-aware commands.
+
+#### Added
+
+- Add experimental `conda-script` support by @Hofer-Julian in [#6907](https://github.com/prefix-dev/pixi/pull/6907), [#6908](https://github.com/prefix-dev/pixi/pull/6908), [#6909](https://github.com/prefix-dev/pixi/pull/6909), [#6928](https://github.com/prefix-dev/pixi/pull/6928), [#6929](https://github.com/prefix-dev/pixi/pull/6929), and [#6943](https://github.com/prefix-dev/pixi/pull/6943). This includes the metadata model, cross-platform entrypoint shell, `pixi run --script`, `pixi init --script`, dependency editing, and shared `tool.pixi` support across script formats.
+
+#### Documentation
+
+- Document `conda-script` files by @Hofer-Julian in [#6911](https://github.com/prefix-dev/pixi/pull/6911)
+
+
 ### [0.79.0] - 2026-09-03
 #### ✨ Highlights
 
