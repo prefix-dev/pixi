@@ -352,7 +352,7 @@ fn get_field_cell(package: &Package, field: Field) -> Cell {
 fn print_packages_as_table(packages: &[Package], fields: &[Field]) {
     let mut table = Table::new();
     table
-        .load_preset(NOTHING)
+        .load_style(NOTHING)
         .set_content_arrangement(ContentArrangement::Disabled);
 
     // Set up header row
