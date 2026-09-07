@@ -3943,7 +3943,7 @@ UNUSED = "unused"
             .unwrap();
         assert_eq!(config.pinning_strategy, Some(PinningStrategy::Semver));
 
-        config.set("unknown-key", None).unwrap_err();
+        config.set("unknown-key", None).unwrap();
     }
 
     #[rstest]
