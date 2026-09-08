@@ -43,7 +43,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: prefix-dev/setup-pixi@a09b6247153796b190642a2b53fac4241043cf6f # v0.10.0
+      - uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2
         with:
           environments: release
       - name: Extract version
@@ -101,7 +101,7 @@ jobs:
           submodules: recursive
           persist-credentials: false
 
-      - uses: prefix-dev/setup-pixi@a09b6247153796b190642a2b53fac4241043cf6f # v0.10.0
+      - uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2
         with:
           environments: release
           activate-environment: true
@@ -112,6 +112,12 @@ jobs:
           toolchain: "1.96.0"
           target: ${{ matrix.target }}
           cache: false
+          # This action defaults to writing RUSTFLAGS=-D warnings into the job
+          # environment. RUSTFLAGS overrides every `[target.*].rustflags` entry
+          # in .cargo/config.toml, which silently dropped `+crt-static` from the
+          # Windows release builds (pixi#6915). Leave the variable alone here;
+          # the "Set build options" step below composes the full value.
+          rustflags: ""
 
       - name: Set build options
         run: pixi run -e release build-options --target ${{ matrix.target }}
@@ -136,7 +142,7 @@ jobs:
 
       - name: Azure login (OIDC)
         if: runner.os == 'Windows' && env.PUBLISHING == 'true'
-        uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca # v3.0.1
+        uses: azure/login@7ddb5af1ef8758cf1353cf3b42f940aee27ba21c # v3.0.2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -215,7 +221,7 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: prefix-dev/setup-pixi@a09b6247153796b190642a2b53fac4241043cf6f # v0.10.0
+      - uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2
         with:
           environments: release
       - name: Create and push tag
@@ -242,7 +248,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.tag }}
           fetch-depth: 0
           persist-credentials: false
-      - uses: prefix-dev/setup-pixi@a09b6247153796b190642a2b53fac4241043cf6f # v0.10.0
+      - uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2
         with:
           environments: release
       - name: Download artifacts

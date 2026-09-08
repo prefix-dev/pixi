@@ -205,8 +205,9 @@ def test_trampoline_migrate_with_newer_trampoline(
             "update",
         ],
         env=env,
-        stderr_contains="Environment dummy-trampoline was already up-to-date",
-        stderr_excludes="Updated executable dummy-trampoline of environment dummy-trampoline",
+        stderr_contains="1 environment unchanged",
+        stderr_excludes="~ dummy-trampoline",
+        strip_ansi=True,
     )
 
     # now change the trampoline binary , and verify that it will install the new one
@@ -220,8 +221,11 @@ def test_trampoline_migrate_with_newer_trampoline(
             "update",
         ],
         env=env,
-        stderr_contains="Updated executable dummy-trampoline of environment dummy-trampoline",
+        stderr_contains="1 environment unchanged",
+        strip_ansi=True,
     )
+    # Rewriting a trampoline is not reported, so the file itself is the proof.
+    assert is_binary(dummy_trampoline)
 
     # run an update again
     verify_cli_command(
@@ -231,8 +235,9 @@ def test_trampoline_migrate_with_newer_trampoline(
             "update",
         ],
         env=env,
-        stderr_contains="Environment dummy-trampoline was already up-to-date",
-        stderr_excludes="Updated executable dummy-trampoline of environment dummy-trampoline",
+        stderr_contains="1 environment unchanged",
+        stderr_excludes="~ dummy-trampoline",
+        strip_ansi=True,
     )
 
 
@@ -357,8 +362,9 @@ def test_trampoline_migrate_with_newer_configuration(
             "update",
         ],
         env=env,
-        stderr_contains="Environment dummy-trampoline was already up-to-date",
-        stderr_excludes="Updated executable dummy-trampoline of environment dummy-trampoline",
+        stderr_contains="1 environment unchanged",
+        stderr_excludes="~ dummy-trampoline",
+        strip_ansi=True,
     )
 
     original_configuration = break_configuration(dummy_trampoline_json)
@@ -384,8 +390,12 @@ def test_trampoline_migrate_with_newer_configuration(
             "update",
         ],
         env=env,
-        stderr_contains="Updated executable dummy-trampoline of environment dummy-trampoline",
+        stderr_contains="1 environment unchanged",
+        strip_ansi=True,
     )
+    # Rewriting a trampoline is not reported, so the files themselves are the proof.
+    assert is_binary(dummy_trampoline)
+    assert json.loads(dummy_trampoline_json.read_text()) == original_configuration
 
 
 @pytest.mark.parametrize(

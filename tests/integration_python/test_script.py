@@ -1,4 +1,5 @@
 import json
+import shutil
 import threading
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -368,7 +369,142 @@ print(json.dumps({
 
 
 @pytest.mark.slow
-def test_pixi_lock_script_writes_only_the_adjacent_lock(
+def test_pixi_update_script_refreshes_the_cached_resolution(
+    pixi: Path, tmp_pixi_workspace: Path, channels: Path
+) -> None:
+    """An explicit update refreshes the resolution used by later runs."""
+    exec_cache = tmp_pixi_workspace / "script-exec-cache"
+    repodata_cache = tmp_pixi_workspace / "repodata-cache"
+    env = {
+        "PIXI_CACHE_EXEC_ENVIRONMENTS_DIR": str(exec_cache),
+        "PIXI_CACHE_REPODATA_DIR": str(repodata_cache),
+    }
+    channel = tmp_pixi_workspace / "channel"
+    shutil.copytree(channels / "multiple_versions_channel_1", channel)
+    script = tmp_pixi_workspace / "example.py"
+    script.write_text(
+        f'''# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# channels = ["{channel.as_uri()}", "{CONDA_FORGE_CHANNEL}"]
+# platforms = ["{CURRENT_PLATFORM}"]
+#
+# [tool.pixi.dependencies]
+# package = "0.1.*"
+# ///
+print("SCRIPT-RAN")
+'''
+    )
+
+    verify_cli_command(
+        [pixi, "run", "--script", script],
+        cwd=tmp_pixi_workspace,
+        env=env,
+        stdout_contains="SCRIPT-RAN",
+    )
+
+    package_records = list(exec_cache.glob("*/envs/default/conda-meta/package-*.json"))
+    assert len(package_records) == 1
+    assert json.loads(package_records[0].read_text())["version"] == "0.1.0"
+
+    script.write_text(script.read_text().replace('package = "0.1.*"', 'package = "*"'))
+    shutil.rmtree(channel)
+    shutil.rmtree(repodata_cache)
+    verify_cli_command(
+        [pixi, "run", "--script", script],
+        cwd=tmp_pixi_workspace,
+        env=env,
+        stdout_contains="SCRIPT-RAN",
+    )
+
+    package_records = list(exec_cache.glob("*/envs/default/conda-meta/package-*.json"))
+    assert len(package_records) == 1
+    assert json.loads(package_records[0].read_text())["version"] == "0.1.0"
+
+    shutil.copytree(channels / "multiple_versions_channel_1", channel)
+    verify_cli_command(
+        [pixi, "update", "--script", script],
+        cwd=tmp_pixi_workspace,
+        env=env,
+    )
+
+    # Updating changes the resolution but leaves the installed environment unchanged.
+    package_records = list(exec_cache.glob("*/envs/default/conda-meta/package-*.json"))
+    assert len(package_records) == 1
+    assert json.loads(package_records[0].read_text())["version"] == "0.1.0"
+
+    verify_cli_command(
+        [pixi, "run", "--script", script],
+        cwd=tmp_pixi_workspace,
+        env=env,
+        stdout_contains="SCRIPT-RAN",
+    )
+
+    package_records = list(exec_cache.glob("*/envs/default/conda-meta/package-*.json"))
+    assert len(package_records) == 1
+    assert json.loads(package_records[0].read_text())["version"] == "0.2.0"
+    assert not script.with_name("example.py.pixi.lock").exists()
+    assert_no_workspace_state_created(tmp_pixi_workspace)
+
+
+@pytest.mark.slow
+def test_pixi_install_script_installs_without_running(
+    pixi: Path, tmp_pixi_workspace: Path, channels: Path
+) -> None:
+    exec_cache = tmp_pixi_workspace / "script-exec-cache"
+    env = {"PIXI_CACHE_EXEC_ENVIRONMENTS_DIR": str(exec_cache)}
+    channel = tmp_pixi_workspace / "channel"
+    shutil.copytree(channels / "multiple_versions_channel_1", channel)
+    script = tmp_pixi_workspace / "example.py"
+    script.write_text(
+        f'''# /// script
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# channels = ["{channel.as_uri()}", "{CONDA_FORGE_CHANNEL}"]
+# platforms = ["{CURRENT_PLATFORM}"]
+#
+# [tool.pixi.dependencies]
+# package = "0.1.*"
+# ///
+from pathlib import Path
+
+Path("script-ran").touch()
+print("SCRIPT-RAN")
+'''
+    )
+
+    verify_cli_command(
+        [pixi, "install", "--script", script],
+        cwd=tmp_pixi_workspace,
+        env=env,
+        stdout_excludes="SCRIPT-RAN",
+        stderr_contains="script environment has been installed at",
+    )
+    assert not (tmp_pixi_workspace / "script-ran").exists()
+
+    package_records = list(exec_cache.glob("*/envs/default/conda-meta/package-*.json"))
+    assert len(package_records) == 1
+    assert json.loads(package_records[0].read_text())["version"] == "0.1.0"
+
+    # Running reuses the environment created by install.
+    verify_cli_command(
+        [pixi, "run", "--script", script],
+        cwd=tmp_pixi_workspace,
+        env=env,
+        stdout_contains="SCRIPT-RAN",
+    )
+    assert (tmp_pixi_workspace / "script-ran").exists()
+    assert len(list(exec_cache.glob("*/envs/default"))) == 1
+
+    assert not script.with_name("example.py.pixi.lock").exists()
+    assert_no_workspace_state_created(tmp_pixi_workspace)
+
+
+@pytest.mark.slow
+def test_pixi_lock_and_update_script_write_only_the_adjacent_lock(
     pixi: Path, tmp_pixi_workspace: Path
 ) -> None:
     (tmp_pixi_workspace / "pixi.toml").write_text(
@@ -401,6 +537,12 @@ print("hello")
     assert not script_lock.exists()
 
     verify_cli_command([pixi, "lock", "--script", script], cwd=tmp_pixi_workspace)
+    assert script.read_text() == original_script
+    assert script_lock.exists()
+    assert not (tmp_pixi_workspace / "pixi.lock").exists()
+    assert_no_workspace_state_created(tmp_pixi_workspace)
+
+    verify_cli_command([pixi, "update", "--script", script], cwd=tmp_pixi_workspace)
     assert script.read_text() == original_script
     assert script_lock.exists()
     assert not (tmp_pixi_workspace / "pixi.lock").exists()
@@ -1272,3 +1414,215 @@ print("hello")
     assert script_lock.read_text() != original_lock
     assert not (tmp_pixi_workspace / "pixi.lock").exists()
     assert_no_workspace_state_created(tmp_pixi_workspace)
+
+
+# The virtual_packages channel only ships the cuda package for these subdirs.
+_CUDA_CHANNEL_SUBDIRS = {"linux-64", "win-64"}
+
+requires_cuda_channel = pytest.mark.skipif(
+    CURRENT_PLATFORM not in _CUDA_CHANNEL_SUBDIRS,
+    reason="virtual_packages channel ships the cuda package only for linux-64 and win-64",
+)
+
+
+def _script_without_platforms(path: Path, extra_channel: str | None, dependency: str) -> Path:
+    """A script with no `platforms`, so pixi picks one for it.
+
+    Every script needs `python`, so conda-forge is always in the list; a test
+    channel goes in front of it when the test needs a package from one.
+    """
+    channels = [f'"{extra_channel}"'] if extra_channel else []
+    channels.append(f'"{CONDA_FORGE_CHANNEL}"')
+    path.write_text(
+        f"""# /// script
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# channels = [{", ".join(channels)}]
+#
+# [tool.pixi.dependencies]
+# {dependency}
+# ///
+print("SCRIPT-RAN")
+"""
+    )
+    return path
+
+
+@pytest.mark.slow
+@requires_cuda_channel
+def test_script_without_platforms_solves_against_the_machine(
+    pixi: Path, tmp_pixi_workspace: Path, virtual_packages_channel: str
+) -> None:
+    """A script that declares no platforms is resolved for the machine it runs
+    on, not for pixi's per-subdir defaults.
+
+    The in-repo ``cuda`` package needs ``__cuda >=12``, and ``__cuda`` is never
+    a subdir default, so it can only resolve if the host's virtual packages
+    reached the solver.
+    """
+    script = _script_without_platforms(
+        tmp_pixi_workspace / "gpu.py", virtual_packages_channel, 'cuda = "*"'
+    )
+    verify_cli_command(
+        [pixi, "run", "--script", script],
+        ExitCode.SUCCESS,
+        env={"CONDA_OVERRIDE_CUDA": "12"},
+        stdout_contains="SCRIPT-RAN",
+    )
+
+
+@pytest.mark.slow
+@requires_cuda_channel
+def test_script_without_platforms_respects_a_machine_below_the_floor(
+    pixi: Path, tmp_pixi_workspace: Path, virtual_packages_channel: str
+) -> None:
+    """The guard rail for the test above: below the package's ``__cuda >=12``
+    floor the same script must fail, so the success there cannot come from the
+    requirement being ignored."""
+    script = _script_without_platforms(
+        tmp_pixi_workspace / "gpu.py", virtual_packages_channel, 'cuda = "*"'
+    )
+    verify_cli_command(
+        [pixi, "run", "--script", script],
+        ExitCode.FAILURE,
+        env={"CONDA_OVERRIDE_CUDA": "10"},
+    )
+
+
+@pytest.mark.slow
+@requires_cuda_channel
+def test_script_lock_file_round_trips_without_resolving_again(
+    pixi: Path, tmp_pixi_workspace: Path, virtual_packages_channel: str
+) -> None:
+    """``pixi lock --script`` records the host platform, and the next run reuses
+    it.
+
+    The lock file's platform has to be read back with the virtual packages it
+    was locked with. As a bare subdir the environment would look absent, every
+    run would re-resolve, and the lock file would be rewritten with pixi's
+    defaults.
+    """
+    script = _script_without_platforms(
+        tmp_pixi_workspace / "gpu.py", virtual_packages_channel, 'cuda = "*"'
+    )
+    lock = tmp_pixi_workspace / "gpu.py.pixi.lock"
+    env = {"CONDA_OVERRIDE_CUDA": "12"}
+
+    verify_cli_command([pixi, "lock", "--script", script], ExitCode.SUCCESS, env=env)
+    locked = json.loads(
+        verify_cli_command(
+            [pixi, "workspace", "platform", "list", "--script", script, "--json"],
+            ExitCode.SUCCESS,
+            env=env,
+        ).stdout
+    )
+    declared = [row for row in locked["platforms"] if not row.get("is_autodetected")]
+    assert declared, locked
+    assert any("cuda=12" in row["virtual_packages"] for row in declared), declared
+
+    before = lock.read_text()
+    verify_cli_command(
+        [pixi, "run", "--script", script, "--locked"],
+        ExitCode.SUCCESS,
+        env=env,
+        stdout_contains="SCRIPT-RAN",
+    )
+    assert lock.read_text() == before
+
+
+@pytest.mark.slow
+def test_script_frozen_refuses_a_lock_file_without_an_entry_for_this_machine(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """`--frozen` consumes the lock without checking it, so a lock file with no
+    row for the platform we run on has to be refused here rather than yielding
+    an empty environment that runs against whatever `python` is on `PATH`."""
+    script = _script_without_platforms(tmp_pixi_workspace / "plain.py", None, 'python = "3.12.*"')
+    other = "win-64" if not CURRENT_PLATFORM.startswith("win") else "linux-64"
+
+    verify_cli_command(
+        [pixi, "lock", "--script", script],
+        ExitCode.SUCCESS,
+        env={"PIXI_OVERRIDE_PLATFORM": other},
+    )
+    verify_cli_command(
+        [pixi, "run", "--script", script, "--frozen"],
+        ExitCode.FAILURE,
+        stderr_contains="has no entry for platform",
+    )
+
+
+@pytest.mark.slow
+def test_lock_script_without_platforms_warns_that_it_records_this_machine(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """``pixi lock --script`` is the only command that persists the picked
+    platform, so it says so once rather than leaving a machine-specific lock
+    looking portable."""
+    script = _script_without_platforms(tmp_pixi_workspace / "plain.py", None, "")
+    verify_cli_command(
+        [pixi, "lock", "--script", script],
+        ExitCode.SUCCESS,
+        stderr_contains=[
+            "declares no platforms",
+            "--auto-detect",
+        ],
+    )
+
+
+@pytest.mark.slow
+def test_script_with_an_unparsable_lock_file_does_not_blame_the_platform(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """A lock file that does not parse says nothing about the platform it was
+    locked for, so the platform pick stays quiet and lets the loader report the
+    parse error it can point at a line of."""
+    script = _script_without_platforms(tmp_pixi_workspace / "plain.py", None, "")
+    (tmp_pixi_workspace / "plain.py.pixi.lock").write_text("this is not yaml: [ }\n")
+
+    verify_cli_command(
+        [pixi, "run", "--script", script],
+        ExitCode.FAILURE,
+        stderr_excludes="cannot run",
+    )
+
+
+@pytest.mark.slow
+def test_script_warns_before_dropping_foreign_subdirs_from_a_lock_file(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """A script that declares no platforms asks for one platform, the one it
+    runs on, so rows for other subdirs go. They take their packages with them,
+    which is too much of a checked-in lock file to lose in silence."""
+    script = tmp_pixi_workspace / "multi.py"
+    other = "win-64" if not CURRENT_PLATFORM.startswith("win") else "linux-64"
+    script.write_text(
+        f"""# /// script
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# channels = ["{CONDA_FORGE_CHANNEL}"]
+# platforms = ["{CURRENT_PLATFORM}", "{other}"]
+#
+# [tool.pixi.dependencies]
+# python = "3.12.*"
+# ///
+print("SCRIPT-RAN")
+"""
+    )
+    verify_cli_command([pixi, "lock", "--script", script], ExitCode.SUCCESS)
+
+    # Dropping the `platforms` line is what leaves the foreign rows behind.
+    script.write_text(
+        "\n".join(
+            line for line in script.read_text().splitlines() if not line.startswith("# platforms")
+        )
+        + "\n"
+    )
+    verify_cli_command(
+        [pixi, "run", "--script", script],
+        ExitCode.SUCCESS,
+        stdout_contains="SCRIPT-RAN",
+        stderr_contains=[f"'{other}'", "does not ask for"],
+    )

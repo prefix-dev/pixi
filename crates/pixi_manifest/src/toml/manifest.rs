@@ -20,9 +20,9 @@ use toml_span::{
 use url::Url;
 
 use crate::{
-    Activation, Environment, EnvironmentName, Environments, Feature, FeatureName,
-    KnownPreviewFeature, PixiPlatform, PixiPlatformName, SolveGroups, SystemRequirements,
-    TargetSelector, Targets, Task, TaskName, TomlError, Warning, WithWarnings, WorkspaceManifest,
+    Activation, Environment, EnvironmentName, Environments, Feature, FeatureName, KnownPreviewFlag,
+    PixiPlatform, PixiPlatformName, SolveGroups, SystemRequirements, TargetSelector, Targets, Task,
+    TaskName, TomlError, Warning, WithWarnings, WorkspaceManifest,
     environment::EnvironmentIdx,
     error::{FeatureNotEnabled, GenericError},
     manifests::PackageManifest,
@@ -120,14 +120,14 @@ impl TomlManifest {
         if !workspace
             .workspace
             .preview
-            .is_enabled(KnownPreviewFeature::PixiBuild)
+            .is_enabled(KnownPreviewFlag::PixiBuild)
         {
             return Err(FeatureNotEnabled::new(
                 format!(
-                    "[package] section is only allowed when the `{}` feature is enabled",
-                    KnownPreviewFeature::PixiBuild
+                    "[package] section is only allowed when the `{}` preview flag is enabled",
+                    KnownPreviewFlag::PixiBuild
                 ),
-                KnownPreviewFeature::PixiBuild,
+                KnownPreviewFlag::PixiBuild,
             )
             .with_opt_span(package_span)
             .into());
@@ -163,7 +163,7 @@ impl TomlManifest {
             .ok_or_else(|| TomlError::MissingField("project/workspace".into(), None))?;
 
         let preview = &workspace.value.preview;
-        let pixi_build_enabled = preview.is_enabled(KnownPreviewFeature::PixiBuild);
+        let pixi_build_enabled = preview.is_enabled(KnownPreviewFlag::PixiBuild);
 
         // Inline package definitions declared on dependencies are converted into
         // full package manifests while building the targets below, so they must
@@ -595,10 +595,10 @@ impl TomlManifest {
             if !pixi_build_enabled {
                 return Err(FeatureNotEnabled::new(
                     format!(
-                        "[package] section is only allowed when the `{}` feature is enabled",
-                        KnownPreviewFeature::PixiBuild
+                        "[package] section is only allowed when the `{}` preview flag is enabled",
+                        KnownPreviewFlag::PixiBuild
                     ),
-                    KnownPreviewFeature::PixiBuild,
+                    KnownPreviewFlag::PixiBuild,
                 )
                 .with_opt_span(package_span)
                 .into());
@@ -1083,6 +1083,33 @@ mod test {
     }
 
     #[test]
+    fn test_pin_in_workspace_dependencies_is_rejected() {
+        // Pins only make sense while building a package; the workspace
+        // dependency tables reject them at parse time.
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = []
+
+        [dependencies]
+        boltons = { pin-compatible = true }
+        "#,
+        ), @"
+         × `pin-compatible` is not allowed in `[dependencies]`
+          ╭─[pixi.toml:8:19]
+        7 │         [dependencies]
+        8 │         boltons = { pin-compatible = true }
+          ·                   ────────────┬────────────
+          ·                               ╰── pin-compatible used here
+        9 │
+          ╰────
+         help: Pins are only supported in package dependency tables
+        ");
+    }
+
+    #[test]
     fn test_package_without_build_section() {
         assert_snapshot!(expect_parse_failure(
             r#"
@@ -1168,7 +1195,7 @@ mod test {
     /// lock-file rename passes cannot distinguish from the bare platform.
     #[test]
     fn test_system_requirements_migration_default_matching_sysreq_uses_bare_subdir() {
-        let glibc = pixi_default_versions::default_glibc_version();
+        let glibc = rattler_virtual_packages::defaults::default_glibc_version(Platform::Linux64);
         let workspace_manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             format!(
                 r#"
@@ -1212,8 +1239,9 @@ mod test {
     /// the same way.
     #[test]
     fn test_system_requirements_migration_linux_and_macos_defaults_use_bare_subdir() {
-        let linux = pixi_default_versions::default_linux_version();
-        let macos = pixi_default_versions::default_mac_os_version(Platform::OsxArm64);
+        let linux = rattler_virtual_packages::defaults::default_linux_version();
+        let macos = rattler_virtual_packages::defaults::default_mac_os_version(Platform::OsxArm64)
+            .expect("osx-arm64 has a default macos version");
         for (subdir, requirement) in [
             ("linux-64", format!("linux = \"{linux}\"")),
             ("osx-arm64", format!("macos = \"{macos}\"")),
@@ -1850,7 +1878,7 @@ mod test {
         let numpy = host_deps
             .get(&rattler_conda_types::PackageName::new_unchecked("numpy"))
             .expect("numpy in host deps");
-        let spec = numpy.iter().next().unwrap();
+        let spec = numpy.iter().next().unwrap().as_spec().unwrap();
         assert_eq!(spec.as_version_spec().unwrap().to_string(), "1.*");
     }
 
@@ -1929,7 +1957,41 @@ mod test {
             .iter()
             .next()
             .unwrap()
+            .as_spec()
+            .expect("expected a regular spec")
             .clone()
+    }
+
+    #[test]
+    fn test_inline_package_pin_subpackage_wrong_name_is_rejected() {
+        // The pin name rules apply to inline package definitions too: the
+        // package name is the dependency key, so a `pin-subpackage` on any
+        // other name must be rejected.
+        let source = r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [dependencies.numpy]
+            git = "https://github.com/numpy/numpy.git"
+            package.build.backend = { name = "pixi-build-python", version = "*" }
+            package.run-exports.weak = { otherpkg = { pin-subpackage = true } }
+            "#;
+        let manifest = <TomlManifest as FromTomlStr>::from_toml_str(source).expect("parse toml");
+        let error = manifest
+            .into_workspace_manifest(
+                ExternalWorkspaceProperties::default(),
+                PackageDefaults::default(),
+                Path::new(""),
+            )
+            .expect_err("the wrong-name self-pin must be rejected");
+        let message = error.to_string();
+        assert!(
+            message
+                .contains("`pin-subpackage` can only reference the package's own name (`numpy`)"),
+            "unexpected error: {message}"
+        );
     }
 
     #[test]
@@ -2214,7 +2276,7 @@ mod test {
     #[test]
     fn test_dependencies_inherit_workspace_dependency() {
         // `{ workspace = true }` in `[dependencies]` resolves against the
-        // `[workspace.dependencies]` pool without any preview feature.
+        // `[workspace.dependencies]` pool without any preview flag.
         let ws = parse_workspace(
             r#"
             [workspace]
@@ -2531,7 +2593,7 @@ mod test {
         "#,
             ),
             @r#"
-         × conda source dependencies are not allowed without enabling the 'pixi-build' preview feature
+         × conda source dependencies are not allowed without enabling the 'pixi-build' preview flag
            ╭─[pixi.toml:10:17]
          9 │         [dependencies]
         10 │         mylib = { workspace = true }
@@ -2539,7 +2601,7 @@ mod test {
            ·                           ╰── source dependency specified here
         11 │
            ╰────
-         help: Add `preview = ["pixi-build"]` to the `workspace` or `project` table of your manifest
+         help: Run `pixi workspace preview add pixi-build` to enable the preview flag
         "#
         );
     }

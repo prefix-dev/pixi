@@ -1,15 +1,21 @@
 use std::{
     error::Error,
     fmt,
-    ops::Range,
     path::{Path, PathBuf},
     sync::Arc,
 };
 
-use miette::{Diagnostic, LabeledSpan, NamedSource, SourceCode, SourceSpan};
+use miette::{Diagnostic, LabeledSpan, NamedSource, SourceCode};
 use thiserror::Error;
 use toml_edit::{Array, DocumentMut, Item, Table, Value};
 
+use super::{
+    block::{
+        BlockSourceMap, LineEnding, MetadataLine, extract_script_header, serialize_block,
+        without_line_ending,
+    },
+    tool_pixi::{ScriptKind, UnsupportedKey, finish, unsupported_tool_pixi_keys},
+};
 use crate::{
     TomlError, Warning, WorkspaceManifest,
     pyproject::PyProjectManifest,
@@ -25,7 +31,8 @@ pub struct ScriptManifest {
     prelude: String,
     postlude: String,
     line_ending: LineEnding,
-    source_map: ScriptSourceMap,
+    source: Arc<str>,
+    source_map: BlockSourceMap,
 }
 
 #[derive(Debug, Clone)]
@@ -35,49 +42,11 @@ struct ScriptManifestContext {
     project_name: String,
 }
 
-#[derive(Debug, Clone)]
-struct MetadataLine {
-    metadata_start: usize,
-    source_start: usize,
-    len: usize,
-}
-
-#[derive(Debug, Clone)]
-struct ScriptSourceMap {
-    source: Arc<str>,
-    opening: Range<usize>,
-    metadata_lines: Vec<MetadataLine>,
-}
-
-impl ScriptSourceMap {
-    fn metadata_offset(&self, offset: usize) -> usize {
-        let Some(line) = self
-            .metadata_lines
-            .iter()
-            .rev()
-            .find(|line| line.metadata_start <= offset)
-        else {
-            return self.opening.start;
-        };
-        line.source_start + offset.saturating_sub(line.metadata_start).min(line.len)
-    }
-
-    fn span(&self, offset: usize, len: usize, synthetic_prefix: usize) -> SourceSpan {
-        let Some(metadata_start) = offset.checked_sub(synthetic_prefix) else {
-            return SourceSpan::from(self.opening.clone());
-        };
-        let metadata_end = offset.saturating_add(len).saturating_sub(synthetic_prefix);
-        let start = self.metadata_offset(metadata_start);
-        let end = self.metadata_offset(metadata_end).max(start);
-        SourceSpan::new(start.into(), end - start)
-    }
-}
-
 #[derive(Debug)]
 pub struct ScriptMetadataError {
     error: TomlError,
     source: NamedSource<Arc<str>>,
-    source_map: ScriptSourceMap,
+    source_map: BlockSourceMap,
     synthetic_prefix: usize,
 }
 
@@ -160,29 +129,6 @@ pub struct ScriptWorkspaceConfig {
     pub platforms_explicit: bool,
 }
 
-#[derive(Debug, Clone, Copy)]
-enum LineEnding {
-    Lf,
-    CrLf,
-}
-
-impl LineEnding {
-    fn detect(contents: &[u8]) -> Self {
-        if contents.windows(2).any(|window| window == b"\r\n") {
-            Self::CrLf
-        } else {
-            Self::Lf
-        }
-    }
-
-    fn as_str(self) -> &'static str {
-        match self {
-            Self::Lf => "\n",
-            Self::CrLf => "\r\n",
-        }
-    }
-}
-
 impl ScriptManifest {
     /// Add a PEP 723 metadata block to a new or existing Python script.
     pub fn initialize(
@@ -203,7 +149,8 @@ impl ScriptManifest {
         }
 
         let line_ending = LineEnding::detect(&contents).as_str();
-        let (bom, shebang, body) = extract_script_header(&contents)?;
+        let (bom, shebang, body) =
+            extract_script_header(&contents).map_err(ScriptManifestError::Utf8)?;
         let mut metadata = "requires-python = \">=3.11\"\ndependencies = []\n"
             .parse::<DocumentMut>()
             .expect("the default script metadata is valid TOML");
@@ -288,7 +235,7 @@ impl ScriptManifest {
         block.metadata.parse::<DocumentMut>().map_err(|error| {
             ScriptManifestError::Metadata(Box::new(ScriptMetadataError {
                 error: error.into(),
-                source: NamedSource::new(source_name.clone(), Arc::clone(&block.source_map.source)),
+                source: NamedSource::new(source_name.clone(), Arc::clone(&block.source)),
                 source_map: block.source_map.clone(),
                 synthetic_prefix: 0,
             }))
@@ -305,6 +252,7 @@ impl ScriptManifest {
             prelude: block.prelude,
             postlude: block.postlude,
             line_ending: block.line_ending,
+            source: block.source,
             source_map: block.source_map,
         }))
     }
@@ -360,10 +308,7 @@ impl ScriptManifest {
     fn metadata_error(&self, error: TomlError, synthetic_prefix: usize) -> ScriptManifestError {
         ScriptManifestError::Metadata(Box::new(ScriptMetadataError {
             error,
-            source: NamedSource::new(
-                &self.context.source_name,
-                Arc::clone(&self.source_map.source),
-            ),
+            source: NamedSource::new(&self.context.source_name, Arc::clone(&self.source)),
             source_map: self.source_map.clone(),
             synthetic_prefix,
         }))
@@ -542,35 +487,6 @@ fn string_array(values: &[String]) -> Array {
     array
 }
 
-fn extract_script_header(
-    contents: &[u8],
-) -> Result<(&str, Option<&str>, &str), ScriptManifestError> {
-    let contents = std::str::from_utf8(contents)?;
-    let (bom, contents) = contents
-        .strip_prefix('\u{feff}')
-        .map_or(("", contents), |contents| ("\u{feff}", contents));
-    if !contents.starts_with("#!") {
-        return Ok((bom, None, contents));
-    }
-
-    let bytes = contents.as_bytes();
-    let end = bytes
-        .iter()
-        .position(|byte| matches!(byte, b'\r' | b'\n'))
-        .unwrap_or(bytes.len());
-    let newline_width = match bytes.get(end..) {
-        Some([b'\r', b'\n', ..]) => 2,
-        Some([b'\r' | b'\n', ..]) => 1,
-        _ => 0,
-    };
-
-    Ok((
-        bom,
-        Some(&contents[..end]),
-        &contents[end + newline_width..],
-    ))
-}
-
 fn script_name(path: &Path) -> Result<&str, ScriptManifestError> {
     path.file_stem()
         .and_then(|name| name.to_str())
@@ -582,8 +498,9 @@ fn script_name(path: &Path) -> Result<&str, ScriptManifestError> {
 
 /// Only accept paths that name a Python file.
 ///
-/// Without this check `pixi init -s github` would silently write a file called
-/// `github` and `--script README.md` would prepend a metadata block to the README.
+/// Without this check `pixi init --script github` would silently write a file
+/// called `github` and `pixi init --script README.md` would prepend a metadata
+/// block to the README.
 fn validate_script_extension(path: &Path) -> Result<(), ScriptManifestError> {
     let is_python = path
         .extension()
@@ -612,7 +529,7 @@ fn inline_pyproject(
 ) -> Result<InlinePyProject, ScriptManifestError> {
     let metadata = script.metadata();
     let metadata_document = script.metadata_document()?;
-    validate_subset(&metadata_document)?;
+    validate_subset(script)?;
 
     let mut prefix = format!("[project]\nname = {}\n", Value::from(project_name));
     if !metadata_document.contains_key("dependencies") {
@@ -654,97 +571,38 @@ fn ensure_pixi_workspace(pyproject: &mut DocumentMut) -> Result<(), ScriptManife
     Ok(())
 }
 
-fn validate_subset(metadata: &DocumentMut) -> Result<(), ScriptManifestError> {
-    let unsupported_root = metadata
-        .as_table()
-        .iter()
-        .map(|(key, _)| key)
-        .filter(|key| !matches!(*key, "dependencies" | "requires-python" | "tool"))
-        .map(str::to_owned)
-        .collect::<Vec<_>>();
-    if !unsupported_root.is_empty() {
-        return Err(ScriptManifestError::UnsupportedFields(unsupported_root));
-    }
-
-    let Some(pixi) = metadata
-        .get("tool")
-        .and_then(Item::as_table_like)
-        .and_then(|tool| tool.get("pixi"))
-        .and_then(Item::as_table_like)
-    else {
+/// Rejects metadata outside the subset pixi interprets: the two portable
+/// fields and the script subset of `tool.pixi`.
+fn validate_subset(script: &ScriptManifest) -> Result<(), ScriptManifestError> {
+    let metadata = toml_span::parse(script.metadata())
+        .map_err(|error| script.metadata_error(error.into(), 0))?;
+    let Some(table) = metadata.as_table() else {
         return Ok(());
     };
 
-    let mut unsupported = unsupported_keys(
-        pixi,
-        "tool.pixi",
-        &[
-            "activation",
-            "constraints",
-            "dependencies",
-            "pypi-dependencies",
-            "system-requirements",
-            "target",
-            "workspace",
-        ],
-    );
-
-    if let Some(workspace) = pixi.get("workspace").and_then(Item::as_table_like) {
-        unsupported.extend(unsupported_keys(
-            workspace,
-            "tool.pixi.workspace",
-            &[
-                "channel-priority",
-                "channels",
-                "platforms",
-                "preview",
-                "pypi-options",
-                "requires-pixi",
-                "solve-strategy",
-            ],
-        ));
+    let mut keys = table
+        .keys()
+        .filter(|key| !matches!(key.name.as_ref(), "dependencies" | "requires-python" | "tool"))
+        .map(|key| {
+            UnsupportedKey::new(
+                key.name.as_ref(),
+                "a PEP 723 block holds `dependencies`, `requires-python` and `tool`; pixi-specific settings go under `tool.pixi`",
+                key.span,
+            )
+        })
+        .collect::<Vec<_>>();
+    if let Some(pixi) = table
+        .get("tool")
+        .and_then(toml_span::Value::as_table)
+        .and_then(|tool| tool.get("pixi"))
+    {
+        keys.extend(
+            unsupported_tool_pixi_keys(pixi, ScriptKind::Pep723)
+                .map_err(|error| script.metadata_error(error, 0))?,
+        );
     }
 
-    if let Some(targets) = pixi.get("target").and_then(Item::as_table_like) {
-        for (selector, target) in targets.iter() {
-            let path = format!("tool.pixi.target.{selector}");
-            let Some(target) = target.as_table_like() else {
-                unsupported.push(path);
-                continue;
-            };
-            unsupported.extend(unsupported_keys(
-                target,
-                &path,
-                &[
-                    "activation",
-                    "constraints",
-                    "dependencies",
-                    "pypi-dependencies",
-                ],
-            ));
-        }
-    }
-
-    if unsupported.is_empty() {
-        Ok(())
-    } else {
-        unsupported.sort();
-        unsupported.dedup();
-        Err(ScriptManifestError::UnsupportedFields(unsupported))
-    }
-}
-
-fn unsupported_keys(
-    table: &dyn toml_edit::TableLike,
-    prefix: &str,
-    allowed: &[&str],
-) -> Vec<String> {
-    table
-        .iter()
-        .map(|(key, _)| key)
-        .filter(|key| !allowed.contains(key))
-        .map(|key| format!("{prefix}.{key}"))
-        .collect()
+    finish(keys).map_err(|error| script.metadata_error(error, 0))
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -777,10 +635,6 @@ pub enum ScriptManifestError {
     #[error("the editable script document is missing its project table")]
     InvalidEditableDocument,
 
-    #[error("PEP 723 scripts do not support: {}", .0.join(", "))]
-    #[diagnostic(help("A script represents one implicit default environment."))]
-    UnsupportedFields(Vec<String>),
-
     #[error(transparent)]
     Io(#[from] std::io::Error),
 
@@ -801,7 +655,8 @@ struct ScriptBlock {
     metadata: String,
     postlude: String,
     line_ending: LineEnding,
-    source_map: ScriptSourceMap,
+    source: Arc<str>,
+    source_map: BlockSourceMap,
 }
 
 impl ScriptBlock {
@@ -875,18 +730,13 @@ impl ScriptBlock {
             metadata: toml.join("\n") + "\n",
             postlude: postlude.to_owned(),
             line_ending,
-            source_map: ScriptSourceMap {
-                source,
+            source,
+            source_map: BlockSourceMap {
                 opening,
                 metadata_lines,
             },
         }))
     }
-}
-
-fn without_line_ending(line: &str) -> &str {
-    let line = line.strip_suffix('\n').unwrap_or(line);
-    line.strip_suffix('\r').unwrap_or(line)
 }
 
 fn reject_duplicate_block(lines: &[&str]) -> Result<(), ScriptManifestError> {
@@ -909,20 +759,7 @@ fn reject_duplicate_block(lines: &[&str]) -> Result<(), ScriptManifestError> {
 }
 
 fn serialize_metadata(metadata: &str, line_ending: &str) -> String {
-    let mut output = String::with_capacity(metadata.len() + 32);
-    output.push_str("# /// script");
-    output.push_str(line_ending);
-    for line in metadata.lines() {
-        output.push('#');
-        if !line.is_empty() {
-            output.push(' ');
-            output.push_str(line);
-        }
-        output.push_str(line_ending);
-    }
-    output.push_str("# ///");
-    output.push_str(line_ending);
-    output
+    serialize_block(metadata, "# ", "# /// script", "# ///", line_ending)
 }
 
 #[cfg(test)]
@@ -1006,13 +843,13 @@ print('hello')
         );
     }
 
-    /// `-s` is the short form of `--script`, so a value meant for another
-    /// option must not be mistaken for a script to create or rewrite.
+    /// A path that is not a Python file must never be created or rewritten as
+    /// a PEP 723 script, whatever `--format` claims.
     #[test]
     fn refuses_to_treat_a_non_python_path_as_a_script() {
         let directory = tempfile::tempdir().unwrap();
 
-        // `pixi init -s github`: must not create a file called `github`.
+        // `pixi init --script github`: must not create a file called `github`.
         let extensionless = directory.path().join("github");
         assert!(matches!(
             ScriptManifest::initialize(&extensionless, &[]),
@@ -1184,9 +1021,18 @@ print("hello")
         assert_eq!(manifest.environments.iter().count(), 1);
     }
 
+    /// The diagnostic for a block whose `tool.pixi` leaves the script
+    /// subset, rendered against the script.
+    fn subset_error(contents: &str) -> String {
+        let script = ScriptManifest::from_source(example_script_path(), contents.as_bytes())
+            .unwrap()
+            .unwrap();
+        format_diagnostic(&script.into_workspace_manifest().unwrap_err())
+    }
+
     #[test]
     fn rejects_workspace_only_concepts() {
-        let (_directory, path) = script(
+        insta::assert_snapshot!(subset_error(
             r#"# /// script
 # dependencies = []
 #
@@ -1195,34 +1041,30 @@ print("hello")
 #
 # [tool.pixi.feature.test.dependencies]
 # pytest = "*"
-#
-# [tool.pixi.target.linux-64.host-dependencies]
-# python = "*"
 # ///
-"#,
-        );
-
-        let error = ScriptManifest::from_path(path)
-            .unwrap()
-            .unwrap()
-            .into_workspace_manifest()
-            .unwrap_err();
-        let ScriptManifestError::UnsupportedFields(fields) = error else {
-            panic!("unexpected error: {error}");
-        };
-        assert_eq!(
-            fields,
-            [
-                "tool.pixi.feature",
-                "tool.pixi.target.linux-64.host-dependencies",
-                "tool.pixi.target.linux-64.tasks"
-            ]
-        );
+"#
+        ), @r#"
+         × scripts do not support `tool.pixi.target.linux-64.tasks` and `tool.pixi.feature`
+         ╰─▶ scripts do not support `tool.pixi.target.linux-64.tasks` and `tool.pixi.feature`
+          ╭─[<CARGO_ROOT>/crates/pixi_manifest/example.py:4:30]
+        3 │ #
+        4 │ # [tool.pixi.target.linux-64.tasks]
+          ·                              ─────
+        5 │ # test = "pytest"
+        6 │ #
+        7 │ # [tool.pixi.feature.test.dependencies]
+          ·              ───────
+        8 │ # pytest = "*"
+          ╰────
+         help: a script represents one implicit default environment; `tool.pixi.target.linux-64` accepts `activation`, `constraints`, `dependencies`, `pypi-dependencies`
+               a script represents one implicit default environment; `tool.pixi` accepts `activation`, `constraints`, `dependencies`, `exclude-newer`, `pypi-dependencies`, `pypi-exclude-newer`, `target`,
+               `workspace`
+        "#);
     }
 
     #[test]
     fn rejects_unknown_pixi_fields_with_an_explicit_allowlist() {
-        let (_directory, path) = script(
+        insta::assert_snapshot!(subset_error(
             r#"# /// script
 # dependencies = []
 #
@@ -1230,27 +1072,103 @@ print("hello")
 # channels = []
 # platforms = []
 # description = "not execution metadata"
+# ///
+"#
+        ), @r#"
+         × scripts do not support `tool.pixi.workspace.description`
+         ╰─▶ scripts do not support `tool.pixi.workspace.description`
+          ╭─[<CARGO_ROOT>/crates/pixi_manifest/example.py:7:3]
+        6 │ # platforms = []
+        7 │ # description = "not execution metadata"
+          ·   ───────────
+        8 │ # ///
+          ╰────
+         help: a script represents one implicit default environment; `tool.pixi.workspace` accepts `channel-priority`, `conda-pypi-map`, `exclude-newer`, `platforms`, `preview`, `pypi-options`, `requires-
+               pixi`, `solve-strategy`
+        "#);
+    }
+
+    #[test]
+    fn rejects_unknown_top_level_fields() {
+        insta::assert_snapshot!(subset_error(
+            r#"# /// script
+# dependencies = []
+# platforms = ["linux-64"]
+# ///
+"#
+        ), @r#"
+         × scripts do not support `platforms`
+         ╰─▶ scripts do not support `platforms`
+          ╭─[<CARGO_ROOT>/crates/pixi_manifest/example.py:3:3]
+        2 │ # dependencies = []
+        3 │ # platforms = ["linux-64"]
+          ·   ─────────
+        4 │ # ///
+          ╰────
+         help: a PEP 723 block holds `dependencies`, `requires-python` and `tool`; pixi-specific settings go under `tool.pixi`
+        "#);
+    }
+
+    #[test]
+    fn rejects_system_requirements() {
+        insta::assert_snapshot!(subset_error(
+            r#"# /// script
+# dependencies = []
 #
-# [tool.pixi.target.linux-64.tasks]
-# test = "pytest"
+# [tool.pixi.system-requirements]
+# cuda = "12"
+# ///
+"#
+        ), @r#"
+         × scripts do not support `tool.pixi.system-requirements`
+         ╰─▶ scripts do not support `tool.pixi.system-requirements`
+          ╭─[<CARGO_ROOT>/crates/pixi_manifest/example.py:4:14]
+        3 │ #
+        4 │ # [tool.pixi.system-requirements]
+          ·              ───────────────────
+        5 │ # cuda = "12"
+          ╰────
+         help: a script without `platforms` resolves for the virtual packages of the machine it runs on; declare `platforms` with their virtual packages to pin a target instead
+        "#);
+    }
+
+    #[test]
+    fn accepts_resolver_options_and_exclude_newer_tables() {
+        let (_directory, path) = script(
+            r#"# /// script
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# channels = ["conda-forge"]
+# exclude-newer = "2025-01-01"
+# conda-pypi-map = { conda-forge = "mapping.json" }
+#
+# [tool.pixi.dependencies]
+# zlib = "*"
+#
+# [tool.pixi.exclude-newer]
+# zlib = "0d"
+#
+# [tool.pixi.pypi-exclude-newer]
+# requests = "0d"
 # ///
 "#,
         );
 
-        let error = ScriptManifest::from_path(path)
-            .unwrap()
-            .unwrap()
-            .into_workspace_manifest()
-            .unwrap_err();
-        let ScriptManifestError::UnsupportedFields(fields) = error else {
-            panic!("unexpected error: {error}");
-        };
-        assert_eq!(
-            fields,
-            [
-                "tool.pixi.target.linux-64.tasks",
-                "tool.pixi.workspace.description"
-            ]
+        let script = ScriptManifest::from_path(path).unwrap().unwrap();
+        let (manifest, _) = script.into_workspace_manifest().unwrap();
+        assert!(manifest.workspace.exclude_newer.is_some());
+        assert!(
+            manifest
+                .workspace
+                .exclude_newer_package_overrides
+                .contains_key(&PackageName::from_str("zlib").unwrap())
+        );
+        assert!(
+            manifest
+                .workspace
+                .pypi_exclude_newer_package_overrides
+                .contains_key(&PypiPackageName::from_str("requests").unwrap())
         );
     }
 

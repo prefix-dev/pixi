@@ -8,7 +8,7 @@ use pixi_manifest::{EnvironmentName, FeatureName, HasWorkspaceManifest, TargetSe
 
 use crate::{
     cli_config::{WorkspaceConfig, feature_from_flags},
-    cli_interface::CliInterface,
+    cli_interface::{CliInterface, cli_context},
 };
 
 /// Commands to manage the activation of environments: the scripts that run
@@ -209,7 +209,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
 
-    let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace);
+    let workspace_ctx = cli_context(workspace);
 
     match args.command {
         Command::Script(script_args) => match script_args.command {

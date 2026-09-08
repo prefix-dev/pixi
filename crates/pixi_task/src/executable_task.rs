@@ -20,7 +20,7 @@ use pixi_core::{
     workspace::{Environment, HasWorkspaceRef},
 };
 use pixi_manifest::{
-    Task, TaskName,
+    PixiPlatform, Task, TaskName,
     task::{ArgValues, TaskRenderContext, TemplateStringError},
 };
 use pixi_progress::await_in_progress;
@@ -98,6 +98,9 @@ pub struct ExecutableTask<'p> {
     pub run_environment: Environment<'p>,
     pub args: ArgValues,
     pub init_cwd: Option<PathBuf>,
+    /// The platform this task is rendered, hashed and activated for: the
+    /// `pixi run --platform` pin, or the environment's own default.
+    pub platform: PixiPlatform,
 }
 
 impl<'p> ExecutableTask<'p> {
@@ -108,6 +111,11 @@ impl<'p> ExecutableTask<'p> {
         init_cwd: Option<PathBuf>,
     ) -> Self {
         let node = &task_graph[task_id];
+        let platform = task_graph
+            .platform()
+            .or_else(|| crate::task_environment::default_search_platform(&node.run_environment))
+            .cloned()
+            .unwrap_or_else(|| node.run_environment.activation_platform());
 
         Self {
             workspace: task_graph.project(),
@@ -116,6 +124,7 @@ impl<'p> ExecutableTask<'p> {
             run_environment: node.run_environment.clone(),
             args: node.args.clone().unwrap_or_default(),
             init_cwd,
+            platform,
         }
     }
 
@@ -143,7 +152,7 @@ impl<'p> ExecutableTask<'p> {
     /// This includes the platform, environment name, manifest path, and arguments.
     pub fn render_context(&self) -> pixi_manifest::task::TaskRenderContext<'_> {
         pixi_manifest::task::TaskRenderContext {
-            platform: self.run_environment.best_declared_platform(),
+            platform: Some(&self.platform),
             environment_name: self.run_environment.name(),
             manifest_path: Some(&self.workspace.workspace.provenance.path),
             args: Some(&self.args),
@@ -325,6 +334,7 @@ impl<'p> ExecutableTask<'p> {
                     &self.run_environment,
                     &std::collections::HashMap::new(),
                     lock_file,
+                    &self.platform,
                 ),
             }
         };
@@ -549,8 +559,11 @@ fn get_export_specific_task_env(
 /// Determine the environment variables to use when executing a command. The
 /// method combines the activation environment with the system environment
 /// variables.
+///
+/// `platform` selects which `[target.*]` activation applies.
 pub async fn get_task_env(
     environment: &Environment<'_>,
+    platform: &PixiPlatform,
     clean_env: bool,
     lock_file: Option<&LockFile>,
     force_activate: bool,
@@ -566,6 +579,7 @@ pub async fn get_task_env(
         get_activated_environment_variables(
             environment.workspace().env_vars(),
             environment,
+            platform,
             env_var_behavior,
             lock_file,
             force_activate,
@@ -829,6 +843,7 @@ mod tests {
             run_environment: workspace.default_environment(),
             args: ArgValues::default(),
             init_cwd: None,
+            platform: workspace.default_environment().activation_platform(),
         };
 
         let script = executable_task.as_script().unwrap().unwrap();
@@ -848,6 +863,7 @@ mod tests {
             run_environment: workspace.default_environment(),
             args: ArgValues::default(),
             init_cwd: None,
+            platform: workspace.default_environment().activation_platform(),
         }
     }
 
@@ -1014,9 +1030,16 @@ exit 0
         .unwrap();
 
         let environment = workspace.default_environment();
-        let env = get_task_env(&environment, false, None, false, false)
-            .await
-            .unwrap();
+        let env = get_task_env(
+            &environment,
+            &environment.activation_platform(),
+            false,
+            None,
+            false,
+            false,
+        )
+        .await
+        .unwrap();
         assert_eq!(
             env.get("INIT_CWD").unwrap(),
             &std::env::current_dir()

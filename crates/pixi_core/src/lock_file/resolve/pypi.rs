@@ -78,12 +78,10 @@ use crate::{
             resolver_provider::CondaResolverProvider,
         },
     },
-    workspace::{
-        Environment, EnvironmentVars, HasWorkspaceRef, PlatformOverrides, PlatformSource,
-        grouped_environment::GroupedEnvironment,
-    },
+    workspace::{Environment, EnvironmentVars, grouped_environment::GroupedEnvironment},
 };
 use pixi_command_dispatcher::CommandDispatcher;
+use pixi_manifest::platform::host::host_baseline;
 use pixi_uv_context::UvResolutionContext;
 use rattler_conda_types::GenericVirtualPackage;
 
@@ -243,6 +241,9 @@ pub async fn resolve_pypi(
     pb.set_message("resolving pypi dependencies");
 
     // Determine which pypi packages are already installed as conda package.
+    PypiPackageIdentifier::trace_legacy_purl_fallbacks(
+        locked_pixi_records.iter().filter_map(PixiRecord::as_binary),
+    );
     let conda_python_packages = locked_pixi_records
         .iter()
         .flat_map(|record| {
@@ -555,10 +556,7 @@ pub async fn resolve_pypi(
             let prefix_platform: &PixiPlatform = match environment.best_declared_platform() {
                 Some(p) => p,
                 None => {
-                    host_platform = environment.workspace().host_platform(
-                        PlatformSource::Defaults,
-                        PlatformOverrides::EnvironmentVariableOverrides,
-                    );
+                    host_platform = host_baseline();
                     &host_platform
                 }
             };

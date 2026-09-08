@@ -26,7 +26,6 @@ pep440_rs = { workspace = true }
 pep508_rs = { workspace = true }
 pixi_build_types = { workspace = true }
 pixi_consts = { workspace = true }
-pixi_default_versions = { workspace = true }
 pixi_pypi_spec = { workspace = true }
 pixi_spec = { workspace = true }
 pixi_spec_containers = { workspace = true }
@@ -63,4 +62,5 @@ miette = { workspace = true, features = ["fancy-no-backtrace"] }
 pixi_test_utils = { workspace = true }
 rstest = { workspace = true }
 serde_json = { workspace = true, features = ["preserve_order"] }
+temp-env = { workspace = true }
 tempfile = { workspace = true }

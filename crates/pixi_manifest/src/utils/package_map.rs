@@ -48,12 +48,12 @@ impl UniquePackageMap {
         {
             return Err(TomlError::Generic(
                     GenericError::new(
-                        "conda source dependencies are not allowed without enabling the 'pixi-build' preview feature",
+                        "conda source dependencies are not allowed without enabling the 'pixi-build' preview flag",
                     )
                     .with_opt_span(self.value_spans.get(package_name).cloned())
                     .with_span_label("source dependency specified here")
                     .with_help(
-                        "Add `preview = [\"pixi-build\"]` to the `workspace` or `project` table of your manifest",
+                        "Run `pixi workspace preview add pixi-build` to enable the preview flag",
                     ),
                 ));
         }

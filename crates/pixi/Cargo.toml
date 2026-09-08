@@ -1,6 +1,6 @@
 [package]
 name = "pixi"
-version = "0.76.2"
+version = "0.80.0"
 authors.workspace = true
 edition.workspace = true
 description = "A package management and workflow tool"
@@ -33,6 +33,7 @@ insta = { workspace = true, features = [
   "redactions",
   "yaml",
 ] }
+pathdiff = { workspace = true }
 pep508_rs = { workspace = true }
 percent-encoding = { workspace = true }
 pixi_build_backend_passthrough = { workspace = true }
@@ -53,6 +54,7 @@ rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true }
 rattler_lock = { workspace = true }
 rattler_package_streaming = { workspace = true }
+rattler_shell = { workspace = true }
 rattler_virtual_packages = { workspace = true }
 reqwest = { workspace = true }
 reqwest-middleware = { workspace = true }

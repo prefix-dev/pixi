@@ -5,10 +5,7 @@ use comfy_table::{Cell, CellAlignment, ContentArrangement, Table, presets::NOTHI
 use console::Style;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
-use pixi_api::{
-    WorkspaceContext,
-    workspace::{Package, PackageKind},
-};
+use pixi_api::workspace::{Package, PackageKind};
 use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
 use pixi_manifest::PixiPlatformName;
@@ -19,7 +16,7 @@ use crate::{
     cli_config::{
         LockFileUpdateConfig, NoInstallConfig, ScriptWorkspaceConfig, script_lock_file_usage,
     },
-    cli_interface::CliInterface,
+    cli_interface::cli_context,
 };
 
 // an enum to sort by size or name
@@ -206,7 +203,7 @@ pub struct Args {
 pub async fn execute(args: Args) -> miette::Result<()> {
     if args.workspace_config.script.is_some() && args.environment.is_some() {
         return Err(miette::miette!(
-            help = "A PEP 723 script has one implicit default run environment.",
+            help = "A script has one implicit default run environment.",
             "`pixi list --script` does not support --environment"
         ));
     }
@@ -230,7 +227,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .unwrap_or_else(|| Platform::current().to_string()),
     };
 
-    let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
+    let workspace_ctx = cli_context(workspace.clone());
     let mut packages_to_output = workspace_ctx
         .list_packages(
             args.regex,
@@ -355,7 +352,7 @@ fn get_field_cell(package: &Package, field: Field) -> Cell {
 fn print_packages_as_table(packages: &[Package], fields: &[Field]) {
     let mut table = Table::new();
     table
-        .load_preset(NOTHING)
+        .load_style(NOTHING)
         .set_content_arrangement(ContentArrangement::Disabled);
 
     // Set up header row

@@ -3,10 +3,10 @@ import os
 import platform
 import shlex
 import shutil
-import tomli
 from pathlib import Path
 
 import pytest
+import tomli
 import tomli_w
 from dirty_equals import AnyThing, IsDict, IsList, IsStr
 from inline_snapshot import snapshot
@@ -161,6 +161,102 @@ def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
         stdout_contains="osx-arm64",
         stdout_excludes="wasi-wasm32",
     )
+
+    # Preview commands
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "--manifest-path",
+            manifest_path,
+            "preview",
+            "add",
+            "pixi-build",
+        ],
+    )
+    verify_cli_command(
+        [pixi, "workspace", "--manifest-path", manifest_path, "preview", "list"],
+        stdout_contains="pixi-build",
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "--manifest-path",
+            manifest_path,
+            "preview",
+            "add",
+            "not-a-preview-feature",
+        ],
+        ExitCode.INCORRECT_USAGE,
+        stderr_contains=["invalid value 'not-a-preview-feature'", "pixi-build"],
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "--manifest-path",
+            manifest_path,
+            "preview",
+            "remove",
+            "pixi-build",
+        ],
+    )
+    verify_cli_command(
+        [pixi, "workspace", "--manifest-path", manifest_path, "preview", "list"],
+        stdout_excludes="pixi-build",
+    )
+
+    # Preview add works even when the manifest fails to load because the
+    # feature is missing, e.g. a `[package]` section without `pixi-build`
+    package_section = """
+[package]
+name = "test"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "pixi-build-python", version = "*" }
+"""
+    manifest_content = manifest_path.read_text()
+    manifest_path.write_text(manifest_content + package_section)
+    verify_cli_command(
+        [pixi, "workspace", "--manifest-path", manifest_path, "preview", "list"],
+        ExitCode.FAILURE,
+        stderr_contains="pixi workspace preview add pixi-build",
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "--manifest-path",
+            manifest_path,
+            "preview",
+            "add",
+            "pixi-build",
+        ],
+        stderr_contains="Added 'pixi-build'",
+    )
+    # Removing it fails because the manifest would no longer load
+    verify_cli_command(
+        [pixi, "workspace", "--manifest-path", manifest_path, "preview", "remove", "pixi-build"],
+        ExitCode.FAILURE,
+        stderr_contains=["no longer load", "--force"],
+    )
+    # With --force it works, with a warning that the manifest needs it
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "--manifest-path",
+            manifest_path,
+            "preview",
+            "remove",
+            "pixi-build",
+            "--force",
+        ],
+        stderr_contains=["Removed 'pixi-build'", "no longer loads"],
+    )
+    manifest_path.write_text(manifest_content)
 
     # Version commands
     verify_cli_command(
@@ -425,6 +521,153 @@ def test_cli_config_options(
     verify_cli_command(
         [pixi, "install", f"--auth-file={auth_file}", "--manifest-path", manifest_path]
     )
+
+
+def isolated_config_env(tmp_path: Path) -> dict[str, str]:
+    """Point every configuration search path at a private directory.
+
+    The shared and pixi files are addressed through `RATTLER_HOME` and
+    `PIXI_HOME`, the only locations that are env-driven on every platform;
+    `dirs::config_dir` does not follow `XDG_CONFIG_HOME` on Windows. The
+    remaining variables keep the developer's own files out of the run.
+    """
+    home = tmp_path / "home"
+    rattler_home = home / ".rattler"
+    pixi_home = home / ".pixi"
+    xdg = home / "xdg"
+    for directory in (rattler_home, pixi_home, xdg):
+        directory.mkdir(parents=True, exist_ok=True)
+
+    return {
+        "HOME": str(home),
+        "USERPROFILE": str(home),
+        "XDG_CONFIG_HOME": str(xdg),
+        "RATTLER_HOME": str(rattler_home),
+        "PIXI_HOME": str(pixi_home),
+    }
+
+
+def test_config_shared_layer(pixi: Path, tmp_path: Path) -> None:
+    """A shared config file is read, loses against a pixi file, and is never
+    forked into one by `pixi config set`."""
+    env = isolated_config_env(tmp_path)
+    shared_config = Path(env["RATTLER_HOME"]) / "config.toml"
+    pixi_config = Path(env["PIXI_HOME"]) / "config.toml"
+
+    shared_config.write_text(
+        'default-channels = ["shared-channel"]\ntls-no-verify = true\npinning-strategy = "no-pin"\n'
+    )
+    pixi_config.write_text('default-channels = ["pixi-channel"]\n')
+
+    # The pixi file wins, keys only the shared file sets are still used, and a
+    # pixi-only key in a shared file is ignored with a warning.
+    verify_cli_command(
+        [pixi, "config", "list"],
+        env=env,
+        stdout_contains=['default-channels = ["pixi-channel"]', "tls-no-verify = true"],
+        stdout_excludes="shared-channel",
+        stderr_contains="pinning-strategy",
+    )
+
+    # Setting an unrelated key must not copy the shared settings into the pixi
+    # file, otherwise the user silently stops following the shared layer.
+    verify_cli_command([pixi, "config", "set", "--global", "shell.change-ps1", "false"], env=env)
+    written = tomli.loads(pixi_config.read_text())
+    assert written == {"default-channels": ["pixi-channel"], "shell": {"change-ps1": False}}
+
+    # Both layers are reported, and opting out skips the shared one as well.
+    verify_cli_command(
+        [pixi, "info"],
+        env=env,
+        stdout_contains=[str(shared_config), str(pixi_config)],
+    )
+    verify_cli_command(
+        [pixi, "info", "--no-config"],
+        env=env,
+        stdout_excludes=[str(shared_config), str(pixi_config)],
+    )
+
+
+def test_config_list_honors_the_config_source_flags(pixi: Path, tmp_path: Path) -> None:
+    """`config list` can be pointed at one file or told to skip discovery."""
+    env = isolated_config_env(tmp_path)
+    (Path(env["RATTLER_HOME"]) / "config.toml").write_text(
+        'default-channels = ["shared-channel"]\n'
+    )
+    only = tmp_path / "only.toml"
+    only.write_text('default-channels = ["only-channel"]\n')
+
+    # Without a flag the discovered shared file shows up.
+    verify_cli_command([pixi, "config", "list"], env=env, stdout_contains="shared-channel")
+    # `--config-file` replaces the discovered layers with just that file.
+    verify_cli_command(
+        [pixi, "config", "list", "--config-file", only],
+        env=env,
+        stdout_contains="only-channel",
+        stdout_excludes="shared-channel",
+    )
+    # `PIXI_CONFIG_FILE` is the same switch by environment variable.
+    verify_cli_command(
+        [pixi, "config", "list"],
+        env=env | {"PIXI_CONFIG_FILE": str(only)},
+        stdout_contains="only-channel",
+        stdout_excludes="shared-channel",
+    )
+    # `--no-config` drops them all.
+    verify_cli_command(
+        [pixi, "config", "list", "--no-config"], env=env, stdout_excludes="shared-channel"
+    )
+
+
+def test_config_index_config_from_the_shared_layer(pixi: Path, tmp_path: Path) -> None:
+    """`index-config` is a shared key, so a `rattler` file may set it."""
+    env = isolated_config_env(tmp_path)
+    (Path(env["RATTLER_HOME"]) / "config.toml").write_text(
+        "[index-config]\nwrite-zst = false\n\n"
+        '[index-config."s3://bucket/staging"]\nwrite-shards = false\n'
+    )
+
+    listed = verify_cli_command([pixi, "config", "list"], env=env).stdout
+    config = tomli.loads(listed)
+    assert config["index-config"]["write-zst"] is False
+    assert config["index-config"]["s3://bucket/staging"]["write-shards"] is False
+
+
+def test_config_append_extends_the_visible_list(pixi: Path, tmp_path: Path) -> None:
+    """`config append` extends the list the user sees, exactly once, for both
+    the keys that replace lower layers and the ones that concatenate."""
+    env = isolated_config_env(tmp_path)
+    workspace = tmp_path / "home" / "workspace"
+    workspace.mkdir(parents=True)
+
+    # `default-channels` replaces lower layers, `extra-index-urls` concatenates.
+    (Path(env["RATTLER_HOME"]) / "config.toml").write_text(
+        'default-channels = ["shared-channel"]\n'
+    )
+    (Path(env["PIXI_HOME"]) / "config.toml").write_text(
+        '[pypi-config]\nextra-index-urls = ["https://global.example/simple"]\n'
+    )
+    manifest = workspace / "pixi.toml"
+    manifest.write_text('[workspace]\nname = "p"\nchannels = []\nplatforms = ["linux-64"]\n')
+
+    for key, added in [
+        ("default-channels", "extra-channel"),
+        ("pypi-config.extra-index-urls", "https://mine.example/simple"),
+    ]:
+        verify_cli_command(
+            [pixi, "config", "append", "--local", "--manifest-path", manifest, key, added],
+            env=env,
+        )
+
+    listed = verify_cli_command(
+        [pixi, "config", "list", "--manifest-path", manifest], env=env
+    ).stdout
+    config = tomli.loads(listed)
+    assert config["default-channels"] == ["shared-channel", "extra-channel"]
+    assert config["pypi-config"]["extra-index-urls"] == [
+        "https://global.example/simple",
+        "https://mine.example/simple",
+    ]
 
 
 def test_config_allow_links(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:

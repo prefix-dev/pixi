@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::config::PackageMappingSource;
-use crate::distro::Distro;
+use crate::distro::{Distro, RosVersion};
 use crate::package_xml::{Dependency, PackageXml};
 
 /// Errors that can occur during package mapping resolution.
@@ -386,7 +386,7 @@ pub fn package_xml_to_conda_requirements(
 
     // Add ros_workspace for ROS2
     let ros_workspace_dep;
-    if !distro.is_ros1 {
+    if distro.version == RosVersion::Ros2 {
         ros_workspace_dep = Dependency::from("ros_workspace");
         build_deps.push(&ros_workspace_dep);
     }
@@ -628,7 +628,7 @@ mod tests {
     }
 
     fn jazzy_distro() -> Distro {
-        Distro::builder("jazzy").build()
+        Distro::new("jazzy")
     }
 
     #[test]

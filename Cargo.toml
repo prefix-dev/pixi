@@ -42,7 +42,7 @@ clap_complete = "4.6.3"
 clap_complete_nushell = "4.6.0"
 clap-verbosity-flag = "3.0.2"
 cmp_any = "0.8.1"
-comfy-table = "7.2.1"
+comfy-table = "8.0.0"
 console = "0.16.1"
 console-subscriber = "0.5.0"
 crossbeam-channel = "0.5.14"
@@ -64,7 +64,9 @@ futures = "0.3.31"
 glob = "0.3.3"
 hex = "0.4.3"
 http = "1.3.1"
-http-cache-reqwest = { version = "1.0.0-alpha.6", features = ["manager-cacache"] }
+http-cache-reqwest = { version = "1.0.0-alpha.6", features = [
+  "manager-cacache",
+] }
 human_bytes = "0.4.3"
 humantime = "2.1.0"
 ignore = "0.4"
@@ -81,7 +83,7 @@ jsonrpsee = "=0.26.0"
 libc = { version = "0.2.170", default-features = false }
 memchr = "2.8"
 miette = { version = "7.6.0" }
-minijinja = "2.15.1"
+minijinja = "2.24.0"
 nanoid = "0.5.0"
 nix = { version = "0.29.0", default-features = false }
 once_cell = "1.20.3"
@@ -112,7 +114,6 @@ pixi_compute_sources = { path = "crates/pixi_compute_sources" }
 pixi_config = { path = "crates/pixi_config" }
 pixi_consts = { path = "crates/pixi_consts" }
 pixi_core = { path = "crates/pixi_core" }
-pixi_default_versions = { path = "crates/pixi_default_versions" }
 pixi_diff = { path = "crates/pixi_diff" }
 pixi_git = { path = "crates/pixi_git" }
 pixi_glob = { path = "crates/pixi_glob" }
@@ -125,6 +126,7 @@ pixi_pypi_spec = { path = "crates/pixi_pypi_spec" }
 pixi_python_status = { path = "crates/pixi_python_status" }
 pixi_record = { path = "crates/pixi_record" }
 pixi_reporters = { path = "crates/pixi_reporters" }
+pixi_script_shell = { path = "crates/pixi_script_shell" }
 pixi_spec = { path = "crates/pixi_spec" }
 pixi_spec_containers = { path = "crates/pixi_spec_containers" }
 pixi_stable_hash = { path = "crates/pixi_stable_hash" }
@@ -142,7 +144,7 @@ pypi_modifiers = { path = "crates/pypi_modifiers" }
 pyproject-toml = "0.13.7"
 
 bzip2 = "0.6.1"
-lzma-rust2 = { version = "0.18", default-features = false, features = [
+lzma-rust2 = { version = "0.20", default-features = false, features = [
   "std",
   "xz",
 ] }
@@ -171,7 +173,7 @@ serde-untagged = "0.1.6"
 serde-value = "0.7.0"
 serde_with = "3.18.0"
 serde_yaml = "0.9.34"
-sevenz-rust2 = "0.21.0"
+sevenz-rust2 = "0.22.0"
 shlex = "2.0.0"
 signal-hook = "0.3.17"
 slotmap = "1.0.7"
@@ -195,6 +197,7 @@ tracing = "0.1.41"
 tracing-subscriber = "=0.3.19"
 tracing-test = "0.2"
 typed-path = "0.12.0"
+unicode-width = "0.2.2"
 url = "2.5"
 # uv 0.12.10 publishes these internal crates as 0.0.77.
 uv-build-frontend = "0.0.77"
@@ -236,12 +239,12 @@ zstd = { version = "0.13.3", default-features = false }
 file_url = "0.3.0"
 rattler = { version = "0.48", default-features = false }
 rattler_cache = { version = "0.10", default-features = false }
-rattler_conda_types = { version = "0.49", default-features = false, features = [
+rattler_conda_types = { version = "0.52", default-features = false, features = [
   "rayon",
 ] }
-rattler_config = { version = "0.6", default-features = false }
+rattler_config = { version = "0.7", default-features = false }
 rattler_digest = { version = "1.3", default-features = false }
-rattler_index = { version = "0.30", default-features = false, features = [
+rattler_index = { version = "0.31", default-features = false, features = [
   "s3",
 ] }
 rattler_lock = { version = "0.32", default-features = false }
@@ -250,8 +253,9 @@ rattler_networking = { version = "0.30", default-features = false, features = [
   "dirs",
   "google-cloud-auth",
 ] }
-rattler_package_streaming = { version = "0.26", default-features = false }
-rattler_repodata_gateway = { version = "0.31", default-features = false }
+rattler_package_streaming = { version = "0.27", default-features = false }
+rattler_redaction = { version = "0.2.2", default-features = false }
+rattler_repodata_gateway = { version = "0.33", default-features = false }
 rattler_s3 = { version = "0.2", default-features = false }
 rattler_shell = { version = "0.27", default-features = false }
 rattler_solve = { version = "9.0", default-features = false }
@@ -259,17 +263,17 @@ rattler_upload = { version = "0.10", default-features = false, features = [
   "s3",
   "sigstore-sign",
 ] }
-rattler_virtual_packages = { version = "4.1", default-features = false }
+rattler_virtual_packages = { version = "6.0", default-features = false }
 simple_spawn_blocking = { version = "1.1.0", default-features = false }
 
 # Rattler build crates
-rattler_build_core = { version = "0.2.7", default-features = false, features = [
+rattler_build_core = { version = "0.2.13", default-features = false, features = [
   "s3",
 ] }
-rattler_build_jinja = { version = "0.1.9" }
-rattler_build_recipe = { version = "0.1.9" }
-rattler_build_types = { version = "0.1.8" }
-rattler_build_variant_config = { version = "0.1.9" }
+rattler_build_jinja = { version = "0.1.14" }
+rattler_build_recipe = { version = "0.1.14" }
+rattler_build_types = { version = "0.1.13" }
+rattler_build_variant_config = { version = "0.1.14" }
 
 [patch.crates-io]
 version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "d8efd77673c9a90792da9da31b6c0da7ea8a324b" }

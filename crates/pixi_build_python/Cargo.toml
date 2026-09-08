@@ -1,6 +1,6 @@
 [package]
 name = "pixi-build-python"
-version = "0.8.5"
+version = "0.8.6"
 edition.workspace = true
 license.workspace = true
 

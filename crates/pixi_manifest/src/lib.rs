@@ -12,6 +12,7 @@ mod has_features_iter;
 mod has_manifest_ref;
 mod manifests;
 mod package;
+mod package_dependency_spec;
 pub mod platform;
 mod platform_composition;
 mod preview;
@@ -38,7 +39,7 @@ pub use discovery::{
     PixiVersionMismatchError, WorkspaceDiscoverer, WorkspaceDiscoveryError,
 };
 pub use environment::{Environment, EnvironmentName, NewEnvironment};
-pub use error::{DependencyError, TomlError};
+pub use error::{DependencyError, GenericError, TomlError};
 pub use feature::{Feature, FeatureName};
 pub use features_ext::FeaturesExt;
 pub use has_features_iter::HasFeaturesIter;
@@ -51,11 +52,12 @@ pub use manifests::{
 };
 use miette::Diagnostic;
 pub use package::Package;
+pub use package_dependency_spec::{PackageConstraintSpec, PackageDependencySpec};
 pub use platform::{
     PixiPlatform, PixiPlatformError, PixiPlatformName, PixiPlatformNameError, PlatformEdit,
-    PlatformGlob, PlatformGlobError, PlatformMove,
+    PlatformGlob, PlatformGlobError, PlatformMove, candidate_subdirs,
 };
-pub use preview::{KnownPreviewFeature, Preview};
+pub use preview::{KnownPreviewFlag, Preview};
 pub use s3::S3Options;
 pub use spec_type::SpecType;
 pub use system_requirements::{

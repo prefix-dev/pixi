@@ -26,6 +26,7 @@ pub mod cli_config;
 pub mod cli_interface;
 pub mod command_info;
 pub mod completion;
+mod conda_script;
 pub mod config;
 pub mod exec;
 pub mod global;
@@ -152,6 +153,18 @@ impl Args {
     }
 }
 
+impl GlobalOptions {
+    /// How much of the reports of `pixi global` is shown. This rides along with
+    /// the logging flags rather than having a knob of its own.
+    fn report_verbosity(&self) -> pixi_global::report::Verbosity {
+        if self.quiet > 0 {
+            pixi_global::report::Verbosity::Quiet
+        } else {
+            pixi_global::report::Verbosity::Normal
+        }
+    }
+}
+
 #[derive(Parser, Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum Command {
@@ -272,6 +285,10 @@ pub async fn execute() -> miette::Result<()> {
     // Setup logging for the application.
     setup_logging(&args, use_colors)?;
 
+    // The quiet flag silences the reports of `pixi global` as well as the
+    // logging.
+    pixi_global::report::set_verbosity(args.global_options.report_verbosity());
+
     let (Some(command), global_options) = (args.command, args.global_options) else {
         // match CI expectations
         std::process::exit(2);
@@ -391,6 +408,11 @@ pub async fn execute_command(
         Command::Build(args) => build::execute(args).await,
         Command::External(args) => command_info::execute_external_command(args),
     };
+
+    // Notices are deferred to here so they cannot get lost among progress bars
+    // and other output. They are shown whether or not the command succeeded: a
+    // channel advisory is most relevant to someone whose command just failed.
+    pixi_reporters::display_channel_notices();
 
     // Failures caused by offline mode get a hint attached that explains how to
     // get out of it.
@@ -549,7 +571,7 @@ mod tests {
             };
             if command
                 .get_arguments()
-                .any(|argument| argument.get_long() == Some("script"))
+                .any(|argument| argument.get_long() == Some("script") && !argument.is_hide_set())
             {
                 commands.insert(path.clone());
             }
@@ -567,11 +589,13 @@ mod tests {
         let expected = [
             "pixi add",
             "pixi init",
+            "pixi install",
             "pixi list",
             "pixi lock",
             "pixi remove",
             "pixi run",
             "pixi tree",
+            "pixi update",
             "pixi workspace channel",
             "pixi workspace export conda-environment",
             "pixi workspace export conda-explicit-spec",

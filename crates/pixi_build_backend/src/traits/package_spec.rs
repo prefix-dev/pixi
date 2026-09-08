@@ -106,8 +106,8 @@ impl PackageSpec for pbt::PackageSpec {
                 },
                 Some(source_spec.clone()),
             )),
-            pbt::PackageSpec::PinCompatible(_) => {
-                miette::bail!("PinCompatible package specs are not yet supported in this context")
+            pbt::PackageSpec::PinCompatible(_) | pbt::PackageSpec::PinSubpackage(_) => {
+                miette::bail!("pin specs cannot be converted to a concrete match spec")
             }
         }
     }

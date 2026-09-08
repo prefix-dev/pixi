@@ -7,7 +7,10 @@ use pixi_consts::consts;
 use pixi_manifest::{
     ExplicitManifestError, LoadManifestsError, Manifests, TomlError, WarningWithSource,
     WithWarnings, WorkspaceDiscoveryError,
-    script::{ScriptManifest, ScriptManifestError},
+    script::{
+        ScriptManifest, ScriptManifestError,
+        conda::{CondaScriptError, CondaScriptManifest},
+    },
     utils::WithSourceCode,
 };
 use thiserror::Error;
@@ -155,11 +158,21 @@ pub enum WorkspaceLocatorError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
+    CondaScript(#[from] Box<CondaScriptError>),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
     ScriptWorkspace(#[from] ScriptWorkspaceError),
 
     #[error("{} does not contain a PEP 723 metadata block", path.display())]
     #[diagnostic(help("Initialize it with `pixi init --script {}`.", path.display()))]
     MissingScriptMetadata { path: PathBuf },
+
+    #[error("{} does not contain a conda-script block", path.display())]
+    #[diagnostic(help(
+        "a script of this language carries its manifest in a `/// conda-script` comment block"
+    ))]
+    MissingCondaScriptBlock { path: PathBuf },
 }
 
 impl WorkspaceLocator {
@@ -373,6 +386,40 @@ impl WorkspaceLocator {
         let DiscoveryStart::Script(path) = self.start else {
             unreachable!("the script selection was checked before loading")
         };
+
+        if let Some(script) =
+            CondaScriptManifest::detect_with_fallback(&path, false).map_err(Box::new)?
+        {
+            let root = script
+                .path()
+                .parent()
+                .expect("an absolute script path always has a parent");
+            let config =
+                Config::load_with(root, &self.global_config_source).merge_config(self.cli_config);
+            let WithWarnings {
+                value: workspace,
+                warnings,
+            } = Workspace::from_conda_script(script, config)?;
+
+            if self.emit_warnings {
+                for warning in warnings {
+                    tracing::warn!("{warning}");
+                }
+            }
+
+            return Ok(workspace);
+        }
+
+        let is_python = path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| {
+                extension.eq_ignore_ascii_case("py") || extension.eq_ignore_ascii_case("pyw")
+            });
+        if !is_python {
+            return Err(WorkspaceLocatorError::MissingCondaScriptBlock { path });
+        }
+
         let script = ScriptManifest::from_path(&path)?
             .ok_or_else(|| WorkspaceLocatorError::MissingScriptMetadata { path })?;
         let root = script
@@ -544,10 +591,11 @@ mod test {
     fn script_selection_never_initializes_or_rewrites_a_file() {
         let directory = tempdir().unwrap();
 
-        // A path that is not a Python file is rejected on its extension, so a
-        // value meant for another option cannot select an unrelated file.
+        // A non-Python file without a block is reported as missing its
+        // conda-script block, so a value meant for another option cannot
+        // select an unrelated file.
         let unrelated = directory.path().join("notes.txt");
-        fs_err::write(&unrelated, "not a Python script\n").unwrap();
+        fs_err::write(&unrelated, "not a script\n").unwrap();
 
         let error = WorkspaceLocator::for_cli()
             .with_script(&unrelated)
@@ -555,11 +603,11 @@ mod test {
             .unwrap_err();
         assert!(matches!(
             error,
-            WorkspaceLocatorError::Script(ScriptManifestError::NotAPythonScript { .. })
+            WorkspaceLocatorError::MissingCondaScriptBlock { .. }
         ));
         assert_eq!(
             fs_err::read_to_string(&unrelated).unwrap(),
-            "not a Python script\n"
+            "not a script\n"
         );
 
         // A Python file without a metadata block is reported as such, and is

@@ -357,6 +357,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let env = get_activated_environment_variables(
         workspace.env_vars(),
         &environment,
+        &environment.activation_platform(),
         CurrentEnvVarBehavior::Exclude,
         Some(&lock_file),
         workspace.config().force_activate(),
@@ -455,6 +456,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
         }
     };
+
+    // This function exits the process rather than returning, so the flush in
+    // the top-level command dispatcher never runs for `pixi shell`.
+    pixi_reporters::display_channel_notices();
 
     match res {
         Ok(Some(code)) => std::process::exit(code),

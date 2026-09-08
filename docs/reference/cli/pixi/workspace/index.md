@@ -18,6 +18,7 @@ pixi workspace [OPTIONS] <COMMAND>
 |---------|-------------|
 | [`activation`](activation/index.md) | Commands to manage the activation of environments: the scripts that run and the environment variables that are set when an environment is activated |
 | [`channel`](channel/index.md) | Commands to manage workspace channels |
+| [`dependencies`](dependencies/index.md) | Commands to manage the `[workspace.dependencies]` table |
 | [`description`](description/index.md) | Commands to manage workspace description |
 | [`platform`](platform/index.md) | Commands to manage workspace platforms |
 | [`version`](version/index.md) | Commands to manage workspace version |
@@ -25,6 +26,7 @@ pixi workspace [OPTIONS] <COMMAND>
 | [`feature`](feature/index.md) | Commands to manage workspace features |
 | [`export`](export/index.md) | Commands to export workspaces to other formats |
 | [`name`](name/index.md) | Commands to manage workspace name |
+| [`preview`](preview/index.md) | Commands to manage workspace preview flags |
 | [`register`](register/index.md) | Commands to manage the registry of workspaces. Default command will add a new workspace |
 | [`requires-pixi`](requires-pixi/index.md) | Commands to manage the pixi minimum version requirement |
 

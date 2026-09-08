@@ -1,0 +1,14 @@
+[package]
+name = "package_a"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "in-memory", version = "*" }
+
+[package.build.config]
+noarch = false
+
+# `some-lib` is neither a build nor a host dependency, so the pin has
+# nothing to resolve against and must fail with a clear error.
+[package.run-dependencies]
+some-lib = { pin-compatible = true }

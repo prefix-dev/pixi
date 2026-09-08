@@ -48,7 +48,8 @@ pub enum SourceBuildError {
     InstallHostEnvironment(#[source] Arc<InstallPixiEnvironmentError>),
 
     #[error(
-        "The build backend does not provide an output matching '{name}' with variants {variants:?}."
+        "The build backend does not provide an output matching '{name}' with variants: {}.",
+        format_variants(variants)
     )]
     MissingOutput {
         name: String,
@@ -64,7 +65,14 @@ pub enum SourceBuildError {
     InvalidPackageName(#[source] Arc<InvalidPackageNameError>),
 
     #[error(transparent)]
+    #[diagnostic(transparent)]
     PinCompatibleError(#[from] PinCompatibleError),
+
+    #[error(
+        "the build backend returned an unresolved `pin-subpackage` spec for '{}'",
+        .0.as_normalized()
+    )]
+    UnresolvedPinSubpackage(PackageName),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -112,6 +120,9 @@ impl From<DependenciesError> for SourceBuildError {
             }
             DependenciesError::PinCompatibleError(error) => {
                 SourceBuildError::PinCompatibleError(error)
+            }
+            DependenciesError::UnresolvedPinSubpackage(name) => {
+                SourceBuildError::UnresolvedPinSubpackage(name)
             }
         }
     }
@@ -168,7 +179,14 @@ pub enum SourceRecordError {
     InvalidPackageName(Arc<InvalidPackageNameError>),
 
     #[error(transparent)]
+    #[diagnostic(transparent)]
     PinCompatibleError(#[from] PinCompatibleError),
+
+    #[error(
+        "the build backend returned an unresolved `pin-subpackage` spec for '{}'",
+        .0.as_normalized()
+    )]
+    UnresolvedPinSubpackage(PackageName),
 
     #[error("found two source dependencies for {} but for different sources ({source1} and {source2})", package.as_source()
     )]
@@ -220,6 +238,9 @@ impl From<DependenciesError> for SourceRecordError {
             }
             DependenciesError::PinCompatibleError(error) => {
                 SourceRecordError::PinCompatibleError(error)
+            }
+            DependenciesError::UnresolvedPinSubpackage(name) => {
+                SourceRecordError::UnresolvedPinSubpackage(name)
             }
         }
     }
@@ -402,6 +423,18 @@ impl From<crate::DevSourceMetadataError> for SolvePixiEnvironmentError {
     }
 }
 
+/// Formats a variant map as `key=value` pairs for error messages.
+fn format_variants(variants: &BTreeMap<String, VariantValue>) -> String {
+    if variants.is_empty() {
+        return "none".to_string();
+    }
+    variants
+        .iter()
+        .map(|(key, value)| format!("{key}={value}"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -451,6 +484,21 @@ mod tests {
             },
         ));
         assert!(err.discovery_error().is_some());
+    }
+
+    #[test]
+    fn missing_output_error_prints_the_variants() {
+        let mut variants = BTreeMap::new();
+        variants.insert("python".to_string(), VariantValue::from("3.12".to_string()));
+        let err = SourceBuildError::MissingOutput {
+            name: "wusel".to_string(),
+            variants,
+        };
+
+        insta::assert_snapshot!(
+            err,
+            @"The build backend does not provide an output matching 'wusel' with variants: python=3.12."
+        );
     }
 
     #[test]

@@ -225,6 +225,13 @@ def dummy_channel_2(channels: Path) -> str:
 
 
 @pytest.fixture
+def dummy_python_channel(channels: Path) -> str:
+    """A channel holding an empty `python` package, for tests that need a
+    solvable interpreter but never run one."""
+    return channels.joinpath("dummy_python_channel").as_uri()
+
+
+@pytest.fixture
 def multiple_versions_channel_1(channels: Path) -> str:
     return channels.joinpath("multiple_versions_channel_1").as_uri()
 

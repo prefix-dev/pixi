@@ -203,7 +203,9 @@ pub(super) fn output_source_run_dependencies(
 fn source_dependency(named: &NamedSpec<PackageSpec>) -> Option<(&str, &SourcePackageSpec)> {
     match &named.spec {
         PackageSpec::Source(source) => Some((named.name.as_str(), source)),
-        PackageSpec::Binary(_) | PackageSpec::PinCompatible(_) => None,
+        PackageSpec::Binary(_) | PackageSpec::PinCompatible(_) | PackageSpec::PinSubpackage(_) => {
+            None
+        }
     }
 }
 

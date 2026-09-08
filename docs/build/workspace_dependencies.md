@@ -14,8 +14,8 @@ The same applies within a single workspace manifest, where several features and 
 
 ## Defining common dependencies
 
-Add a `[workspace.dependencies]` table to the workspace manifest. Entries use
-the same syntax as any other conda dependency table.
+Add a `[workspace.dependencies]` table to the workspace manifest.
+Entries use the same syntax as any other conda dependency table.
 
 ```toml title="pixi.toml (workspace root)"
 [workspace]
@@ -29,6 +29,17 @@ numpy = "1.*"
 pixi-build-cmake = "0.3.*"
 boltons = { version = ">=24", channel = "conda-forge" }
 shared-lib = { path = "packages/shared-lib" }
+```
+
+You can also manage this table with the CLI:
+
+```shell
+pixi workspace dependencies add numpy
+pixi workspace dependencies add "numpy=1.*" boltons
+pixi workspace dependencies add shared-lib --path packages/shared-lib
+pixi workspace dependencies add shared-lib --git https://github.com/org/shared-lib --tag v1.2.3
+pixi workspace dependencies list
+pixi workspace dependencies remove numpy
 ```
 
 ## Using a workspace dependency in an environment

@@ -2,6 +2,7 @@ use pixi_core::environment::LockFileUsage;
 use pixi_manifest::{FeatureName, PixiPlatformName};
 use pixi_spec::GitReference;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use url::Url;
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -18,6 +19,7 @@ pub struct DependencyOptions {
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct GitOptions {
     pub git: Option<Url>,
+    pub path: Option<PathBuf>,
     pub reference: GitReference,
     pub subdir: Option<String>,
 }

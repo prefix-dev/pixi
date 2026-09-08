@@ -6,12 +6,15 @@ use pixi_utils::reqwest::build_lazy_reqwest_clients;
 use rattler_conda_types::{
     Channel, MatchSpec, PackageName, PackageNameMatcher, Platform, RepoDataRecord,
 };
+use rattler_repodata_gateway::ChannelNoticeResult;
 
 /// The outcome of a [`search`]: the fetched records plus, when the fuzzy
 /// fallback ran, how many package names matched in total so callers can
 /// report the matches hidden by `fuzzy_limit`.
 pub struct SearchResult {
     pub packages: Vec<RepoDataRecord>,
+    /// CEP-6 notices published by the queried channels.
+    pub notices: Vec<ChannelNoticeResult>,
     /// Total names matched by the fuzzy fallback; `None` when the spec was
     /// answered directly.
     pub fuzzy_matches: Option<usize>,
@@ -45,21 +48,22 @@ pub async fn search(
         let channels = channels.clone();
         let platforms = platforms.clone();
         async move {
-            let repo_data = gateway
+            let output = gateway
                 .query(channels, platforms, specs)
                 .recursive(false)
+                .channel_notices(true)
                 .await
                 .into_diagnostic()?;
 
             let mut packages: Vec<RepoDataRecord> = Vec::new();
-            for repo in repo_data {
+            for repo in output.repodata {
                 packages.extend(repo.iter().cloned());
             }
-            Ok::<Vec<RepoDataRecord>, miette::Report>(packages)
+            Ok::<_, miette::Report>((packages, output.notices))
         }
     };
 
-    let mut packages = run_query(vec![matchspec.clone()]).await?;
+    let (mut packages, notices) = run_query(vec![matchspec.clone()]).await?;
 
     if packages.is_empty()
         && let Some(name) = bare_exact_name(&matchspec)
@@ -97,7 +101,7 @@ pub async fn search(
             })
             .collect();
 
-        let mut packages = run_query(specs).await?;
+        let (mut packages, _) = run_query(specs).await?;
         // Prefix matches first, then natural (name, version) ordering.
         let needle = needle.to_string();
         packages.sort_by(|a, b| {
@@ -107,6 +111,7 @@ pub async fn search(
         });
         return Ok(SearchResult {
             packages,
+            notices,
             fuzzy_matches: Some(fuzzy_matches),
         });
     }
@@ -119,6 +124,7 @@ pub async fn search(
 
     Ok(SearchResult {
         packages,
+        notices,
         fuzzy_matches: None,
     })
 }

@@ -52,7 +52,7 @@ pub async fn add<I: Interface>(
     // TODO: Update all environments touched by the features defined.
     get_update_lock_file_and_prefix(
         &workspace.workspace().default_environment(),
-        None,
+        workspace.progress().cloned(),
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage: options.lock_file_usage,
@@ -95,7 +95,7 @@ pub async fn remove<I: Interface>(
     // Try to update the lock file without the removed channels
     get_update_lock_file_and_prefix(
         &workspace.workspace().default_environment(),
-        None,
+        workspace.progress().cloned(),
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage: options.lock_file_usage,
@@ -136,7 +136,7 @@ pub async fn set<I: Interface>(
     // Update the lock file with the new channel configuration
     get_update_lock_file_and_prefix(
         &workspace.workspace().default_environment(),
-        None,
+        workspace.progress().cloned(),
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage: options.lock_file_usage,

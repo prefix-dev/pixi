@@ -31,11 +31,15 @@ use pixi_command_dispatcher::{
 use pixi_config::{Config, RunPostLinkScripts, default_channel_config, pixi_home};
 use pixi_consts::consts::{self};
 use pixi_core::environment::{
-    EnvironmentFile, LockedEnvironmentHash, PlatformData, write_environment_file,
+    EnvironmentFile, LockedEnvironmentHash, PlatformData, RequiredPlatform, write_environment_file,
 };
-use pixi_core::lock_file::virtual_packages::minimal_required_virtual_packages;
+use pixi_core::lock_file::virtual_packages::required_virtual_package_specs;
 use pixi_core::repodata::Repodata;
 use pixi_core::workspace::stdlib_variants::{StdlibVersionPin, derive_stdlib_variants};
+use pixi_manifest::platform::host::{
+    HostDetectionError, detect_host, host_subdir, platform_from_detected,
+};
+use pixi_manifest::platform::solver_generic_virtual_packages;
 use pixi_manifest::{InlinePackageManifest, PixiPlatform, PrioritizedChannel, WorkspaceManifest};
 use pixi_path::AbsPathBuf;
 use pixi_reporters::TopLevelProgress;
@@ -53,9 +57,6 @@ use rattler_conda_types::{
 };
 use rattler_networking::LazyClient;
 use rattler_repodata_gateway::Gateway;
-use rattler_virtual_packages::{
-    DetectVirtualPackageError, VirtualPackage, VirtualPackageOverrides,
-};
 use tokio::sync::Semaphore;
 use toml_edit::DocumentMut;
 use xxhash_rust::xxh3::Xxh3;
@@ -264,7 +265,7 @@ fn convert_record_to_metadata(
 ) -> miette::Result<(Option<Platform>, PrioritizedChannel, PackageName)> {
     let platform = match Platform::from_str(&prefix_record.repodata_record.package_record.subdir) {
         Ok(Platform::NoArch) => None,
-        Ok(platform) if platform == Platform::current() => None,
+        Ok(platform) if platform == host_subdir() => None,
         Err(_) => None,
         Ok(p) => Some(p),
     };
@@ -568,26 +569,22 @@ impl Project {
         self.config.global_channel_config()
     }
 
-    /// The virtual packages to solve an environment against. For the current
-    /// platform these are detected from the machine, honoring any
-    /// `CONDA_OVERRIDE_*` variables (e.g. `CONDA_OVERRIDE_CUDA=12.0`) so the
-    /// solve respects run constraints on virtual packages. For any other
+    /// The virtual packages to solve an environment against.
+    ///
+    /// For the platform this machine targets these are detected from the
+    /// machine, honoring `CONDA_OVERRIDE_*` (e.g. `CONDA_OVERRIDE_CUDA=12.0`)
+    /// so the solve respects run constraints on virtual packages. For any other
     /// platform the machine can't be inspected, so the list is empty.
     fn virtual_packages_for(
         platform: &Platform,
-    ) -> Result<Vec<GenericVirtualPackage>, DetectVirtualPackageError> {
+    ) -> Result<Vec<GenericVirtualPackage>, HostDetectionError> {
+        let host = host_subdir();
         if platform
             .only_platform()
-            .map(|p| p == Platform::current().only_platform().unwrap_or(""))
+            .map(|p| p == host.only_platform().unwrap_or(""))
             .unwrap_or(false)
         {
-            Ok(
-                VirtualPackage::detect(&VirtualPackageOverrides::from_env())?
-                    .iter()
-                    .cloned()
-                    .map(GenericVirtualPackage::from)
-                    .collect(),
-            )
+            Ok(solver_generic_virtual_packages(&detect_host(host)?))
         } else {
             Ok(vec![])
         }
@@ -611,8 +608,8 @@ impl Project {
         virtual_packages: &[GenericVirtualPackage],
         channels: &[ChannelUrl],
     ) -> VariantConfig {
-        let device_platform =
-            PixiPlatform::from_required_virtual_packages(platform, virtual_packages.to_vec());
+        let device_platform = platform_from_detected(platform, virtual_packages.to_vec())
+            .unwrap_or_else(|_| PixiPlatform::from_subdir(platform));
         let variant_configuration =
             derive_stdlib_variants(&device_platform, channels, StdlibVersionPin::AtMost)
                 .into_iter()
@@ -669,7 +666,7 @@ impl Project {
             .collect::<Result<Vec<_>, _>>()
             .into_diagnostic()?;
 
-        let platform = environment.platform.unwrap_or_else(Platform::current);
+        let platform = environment.platform.unwrap_or_else(host_subdir);
 
         // Source dependencies are built on this machine, so they can only
         // target the platform we are running on.
@@ -848,13 +845,9 @@ impl Project {
         Ok(EnvironmentUpdate::new(install_changes, dependencies_names))
     }
 
-    /// Record the resolved and minimum-supported platforms in the environment's
-    /// `conda-meta/pixi` marker file, mirroring what non-global environments
-    /// write. The resolved platform is the subdir plus the virtual packages the
-    /// solve ran against (machine detection honoring `CONDA_OVERRIDE_*`); the
-    /// minimum-supported platform keeps only the virtual packages some installed
-    /// record actually depends on. `source_fingerprints` records the source
-    /// dependency specifications so `pixi global sync` can detect edits.
+    /// Record the resolved platform and the installed packages' requirements in
+    /// the environment's `conda-meta/pixi` marker file, mirroring what non-global
+    /// environments write.
     fn write_environment_file(
         &self,
         env_name: &EnvironmentName,
@@ -867,7 +860,7 @@ impl Project {
         let resolved_platform = PlatformData::new(platform, resolved_virtual_packages);
         let depends: Vec<&str> = resolved_depends.iter().map(String::as_str).collect();
         let minimum_supported_platform =
-            PlatformData::new(platform, minimal_required_virtual_packages(&depends));
+            RequiredPlatform::new(platform, required_virtual_package_specs(&depends));
 
         write_environment_file(
             prefix.root(),
@@ -1363,6 +1356,18 @@ impl Project {
                 env_name.fancy_display()
             );
         } else {
+            // Creating an environment reads as an install rather than an
+            // update, whether it was `install` or a `sync` acting on a manifest
+            // entry whose prefix is missing.
+            if !self
+                .env_root
+                .path()
+                .join(env_name.as_str())
+                .join(consts::CONDA_META_DIR)
+                .exists()
+            {
+                state_changes.insert_change(env_name, StateChange::AddedEnvironment);
+            }
             tracing::debug!(
                 "Environment {} specs not up to date with global manifest",
                 env_name.fancy_display()
@@ -1504,7 +1509,7 @@ impl Project {
             rattler_menuinst::install_menuitems_for_record(
                 prefix.root(),
                 &record,
-                environment.platform.unwrap_or(Platform::current()),
+                environment.platform.unwrap_or_else(Platform::current),
                 MenuMode::User,
             )
             .into_diagnostic()?;

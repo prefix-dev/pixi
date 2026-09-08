@@ -1,11 +1,15 @@
-use crate::global::revert_environment_after_error;
+use crate::global::{
+    EnvironmentAction, report_failed_environment, report_failed_environments,
+    revert_environment_after_error,
+};
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use indexmap::IndexMap;
-use miette::WrapErr;
+use miette::{Report, WrapErr};
 use pixi_config::{Config, ConfigCli};
 use pixi_global::common::check_all_exposed;
 use pixi_global::project::ExposedType;
+use pixi_global::report::EnvStatus;
 use pixi_global::{EnvironmentName, Project};
 use pixi_global::{StateChange, StateChanges};
 use pixi_utils::prefix::Executable;
@@ -99,6 +103,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?
         .with_cli_config(config.clone());
 
+    // Environments the user named get a block even when nothing changed;
+    // a sweep over all of them counts the unchanged ones instead.
+    let named_environments = args.environments.is_some();
     let env_names: Vec<EnvironmentName> = match args.environments {
         Some(env_names) => {
             let mut seen = indexmap::IndexSet::new();
@@ -109,7 +116,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         None => {
             let state_changes = project_original.prune_old_environments().await?;
-            state_changes.report();
+            state_changes.report(&project_original).await;
             #[cfg(unix)]
             {
                 let completions_dir = pixi_global::completions::CompletionsDir::from_env().await?;
@@ -133,28 +140,37 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let mut project = project_original;
     project.clear_progress();
-    for result in install_results {
-        match result {
-            Ok(env_result) => {
-                let env_name = env_result.env_name.clone();
-                match apply_manifest_changes(&mut project, env_result).await {
-                    Ok(state_changes) => state_changes.report(),
-                    Err(err) => {
-                        revert_environment_after_error(&env_name, &project).await?;
-                        return Err(err.wrap_err(format!(
-                            "Couldn't update environment {}",
-                            env_name.fancy_display()
-                        )));
+    let mut unchanged = 0;
+    let mut errors: Vec<(EnvironmentName, Report)> = Vec::new();
+    for (env_name, result) in env_names.iter().zip(install_results) {
+        let outcome = match result {
+            Ok(env_result) => apply_manifest_changes(&mut project, env_result).await,
+            Err(err) => Err(err),
+        };
+        match outcome {
+            Ok(state_changes) => {
+                for env_report in state_changes.reports_or_warn(&project).await {
+                    if !named_environments && env_report.status == Some(EnvStatus::Unchanged) {
+                        unchanged += 1;
+                    } else {
+                        pixi_global::report::print(&env_report);
                     }
                 }
             }
             Err(err) => {
-                let _ = project.manifest.save().await;
-                return Err(err);
+                if let Err(revert_err) = revert_environment_after_error(env_name, &project).await {
+                    tracing::warn!("Reverting of the operation failed");
+                    tracing::info!("Reversion error: {:?}", revert_err);
+                }
+                report_failed_environment(env_name);
+                errors.push((env_name.clone(), err));
             }
         }
     }
 
+    pixi_global::report::print_unchanged_summary(unchanged);
+    pixi_global::report::print_nothing_to_do();
+
     project.manifest.save().await?;
-    Ok(())
+    report_failed_environments(EnvironmentAction::Update, errors)
 }

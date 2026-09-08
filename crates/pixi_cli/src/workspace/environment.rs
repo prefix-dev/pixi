@@ -4,13 +4,12 @@ use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use pixi_api::WorkspaceContext;
 use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
 use pixi_manifest::EnvironmentName;
 use pixi_manifest::HasFeaturesIter;
 
-use crate::{cli_config::WorkspaceConfig, cli_interface::CliInterface};
+use crate::{cli_config::WorkspaceConfig, cli_interface::cli_context};
 
 /// Commands to manage workspace environments.
 #[derive(Parser, Debug)]
@@ -84,7 +83,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_ignore_unused_feature_warnings(matches!(args.command, Command::Add(_)))
         .locate()?;
 
-    let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace);
+    let workspace_ctx = cli_context(workspace);
 
     match args.command {
         Command::List(list_args) => {

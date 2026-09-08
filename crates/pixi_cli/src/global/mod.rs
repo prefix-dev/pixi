@@ -1,10 +1,9 @@
 use clap::Parser;
-use fancy_display::FancyDisplay;
 use miette::{IntoDiagnostic, Report, WrapErr};
 use rattler_conda_types::NamedChannelOrUrl;
 use tokio::fs as tokio_fs;
 
-use pixi_global::EnvironmentName;
+use pixi_global::{EnvironmentName, report::EnvReport};
 
 mod add;
 mod edit;
@@ -86,7 +85,8 @@ pub async fn execute(cmd: Args) -> miette::Result<()> {
 enum EnvironmentAction {
     Sync,
     Install,
-    Remove,
+    Uninstall,
+    Update,
 }
 
 impl std::fmt::Display for EnvironmentAction {
@@ -94,15 +94,23 @@ impl std::fmt::Display for EnvironmentAction {
         let verb = match self {
             EnvironmentAction::Sync => "sync",
             EnvironmentAction::Install => "install",
-            EnvironmentAction::Remove => "remove",
+            EnvironmentAction::Uninstall => "uninstall",
+            EnvironmentAction::Update => "update",
         };
         write!(f, "{verb}")
     }
 }
 
-/// Warns about each failed environment with its full error, then returns a
-/// single error naming every environment the operation failed for. Returns
-/// `Ok(())` if there are no errors.
+/// Mark an environment as failed in place, so it keeps its position among the
+/// environments around it. Only the header line: the reason lands at the end of
+/// the run, with the other failures.
+fn report_failed_environment(env_name: &EnvironmentName) {
+    pixi_global::report::print(&EnvReport::failed(env_name.as_str()));
+}
+
+/// Print why each environment failed, then return a single error counting them.
+/// Collecting the reasons at the end of the run keeps them readable together,
+/// each attributed to its environment. Returns `Ok(())` if there are no errors.
 fn report_failed_environments(
     action: EnvironmentAction,
     errors: Vec<(EnvironmentName, Report)>,
@@ -110,19 +118,16 @@ fn report_failed_environments(
     if errors.is_empty() {
         return Ok(());
     }
+
+    let count = errors.len();
+    pixi_global::report::print_failure_heading(&action.to_string(), count);
     for (env_name, err) in &errors {
-        tracing::warn!(
-            "Couldn't {action} environment {}\n{err:?}",
-            env_name.fancy_display()
-        );
+        pixi_global::report::print(&EnvReport::reason(env_name.as_str(), format!("{err:?}")));
     }
-    let failed_envs = errors
-        .iter()
-        .map(|(env_name, _)| env_name.fancy_display().to_string())
-        .collect::<Vec<_>>()
-        .join(", ");
+
+    let plural = if count == 1 { "" } else { "s" };
     Err(miette::miette!(
-        "Couldn't {action} the following environments: {failed_envs}"
+        "couldn't {action} {count} environment{plural}"
     ))
 }
 

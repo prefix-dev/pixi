@@ -32,6 +32,7 @@ nav = [
           { "Pytorch Installation" = "python/pytorch.md" },
         ]
       },
+      { "Conda Scripts" = "tutorials/conda_script.md" },
       { "ROS 2" = "tutorials/ros2.md" },
       { "Rust" = "tutorials/rust.md" },
       {
@@ -320,6 +321,18 @@ nav = [
                 ]
               },
               {
+                "dependencies" = [
+                  "reference/cli/pixi/workspace/dependencies/index.md",
+                  { "add" = "reference/cli/pixi/workspace/dependencies/add.md" },
+                  {
+                    "list" = "reference/cli/pixi/workspace/dependencies/list.md"
+                  },
+                  {
+                    "remove" = "reference/cli/pixi/workspace/dependencies/remove.md"
+                  },
+                ]
+              },
+              {
                 "description" = [
                   "reference/cli/pixi/workspace/description/index.md",
                   { "get" = "reference/cli/pixi/workspace/description/get.md" },
@@ -385,6 +398,16 @@ nav = [
                   "reference/cli/pixi/workspace/name/index.md",
                   { "get" = "reference/cli/pixi/workspace/name/get.md" },
                   { "set" = "reference/cli/pixi/workspace/name/set.md" },
+                ]
+              },
+              {
+                "preview" = [
+                  "reference/cli/pixi/workspace/preview/index.md",
+                  { "add" = "reference/cli/pixi/workspace/preview/add.md" },
+                  { "list" = "reference/cli/pixi/workspace/preview/list.md" },
+                  {
+                    "remove" = "reference/cli/pixi/workspace/preview/remove.md"
+                  },
                 ]
               },
               {

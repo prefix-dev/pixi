@@ -27,7 +27,7 @@ pub use backend_metadata::{
 };
 pub use common::{
     CacheEntry, CacheError, CacheKey, CacheKeyString, CacheRevision, MetadataCache,
-    MetadataCacheEntry, MetadataCacheKey, VersionedCacheEntry, WriteResult,
+    MetadataCacheEntry, MetadataCacheKey, RefreshResult, VersionedCacheEntry, WriteResult,
 };
 pub use pixi_compute_cache_dirs::CacheDirs;
 pub use workspace::{WorkspaceCache, WorkspaceGuard, WorkspaceKey, compute_workspace_key};

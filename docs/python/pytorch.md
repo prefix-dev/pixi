@@ -256,11 +256,13 @@ Example Issue:
 `torch==2.5.1+cu124` (CUDA 12.4) was attempted on an `osx` machine, but this version is only available for `linux-64` and `win-64`.
 
 Solution:
+
 - Use the correct PyPI index for your platform:
   - CPU-only: Use the cpu index for all platforms.
   - CUDA versions: Use cu124 for linux-64 and win-64.
 
 Correct Indexes:
+
 - CPU: https://download.pytorch.org/whl/cpu
 - CUDA 12.4: https://download.pytorch.org/whl/cu124
 

@@ -107,7 +107,29 @@ A library package typically weak-exports itself, so consumers that put it in `ho
 mylib = { path = "." }
 ```
 
+To export the package pinned to the version it was built as, use a [`pin-subpackage` spec](../reference/pixi_manifest.md#pin-subpackage-and-pin-compatible) instead:
+
+```toml
+[package.run-exports.weak]
+mylib = { pin-subpackage = { upper-bound = "x.x" } }
+```
+
 Note that consumers building `noarch` packages only receive the `noarch` bucket; declare the export there as well when it should reach them.
+
+#### Pinning run dependencies to the host environment
+
+A run dependency can be pinned to a range derived from the version that the host environment resolved, using a [`pin-compatible` spec](../reference/pixi_manifest.md#pin-subpackage-and-pin-compatible).
+This mirrors `pin_compatible` in a rattler-build recipe:
+
+```toml
+[package.host-dependencies]
+boltons = ">=24,<26"
+
+[package.run-dependencies]
+boltons = { pin-compatible = { lower-bound = "x.x" } }
+```
+
+If the host environment resolves `boltons=25.0.0`, the run dependency becomes `boltons >=25.0,<26.0a0`.
 
 
 ### [Dependencies (Run Dependencies)](../reference/pixi_manifest.md#dependencies)

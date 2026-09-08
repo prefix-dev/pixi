@@ -39,6 +39,15 @@ impl RunScriptInput {
     }
 }
 
+/// Separates transient environments by input kind.
+pub(crate) fn transient_script_cache_key(kind: &[u8], identity: &[u8]) -> Vec<u8> {
+    let mut key = Vec::with_capacity(kind.len() + identity.len() + 1);
+    key.extend_from_slice(kind);
+    key.push(0);
+    key.extend_from_slice(identity);
+    key
+}
+
 pub(crate) const STDIN_SCRIPT_COMMAND: &str = "__pixi_stdin_script__";
 
 #[derive(Clone)]
@@ -84,7 +93,16 @@ pub(crate) fn prepare_stdin_script(
         root.to_owned(),
         "stdin",
     )?
-    .ok_or_else(|| miette::miette!("stdin does not contain a PEP 723 metadata block"))?;
+    .ok_or_else(|| {
+        if crate::conda_script::looks_like_conda_script(&contents) {
+            miette::miette!(
+                help = "conda-script blocks run from local files: save the script and run `pixi run --experimental --script <PATH>`",
+                "conda-script blocks are not supported on stdin"
+            )
+        } else {
+            miette::miette!("stdin does not contain a PEP 723 metadata block")
+        }
+    })?;
     let contents =
         String::from_utf8(contents).expect("ScriptManifest validates the complete script as UTF-8");
     Ok(PreparedStdinScript {
@@ -150,11 +168,18 @@ pub(crate) async fn prepare_remote_script(
         cache_name.clone(),
     )?
     .ok_or_else(|| {
-        miette::miette!(
-            help =
-                "Download the script and initialize it locally with `pixi init --script <PATH>`.",
-            "the remote script at {safe_original_url} does not contain a PEP 723 metadata block"
-        )
+        if crate::conda_script::looks_like_conda_script(&contents) {
+            miette::miette!(
+                help = "conda-script blocks run from local files: download the script and run `pixi run --experimental --script <PATH>`",
+                "the remote script at {safe_original_url} contains a conda-script block, which only runs from a local file"
+            )
+        } else {
+            miette::miette!(
+                help =
+                    "Download the script and initialize it locally with `pixi init --script <PATH>`.",
+                "the remote script at {safe_original_url} does not contain a PEP 723 metadata block"
+            )
+        }
     })?;
 
     Ok(PreparedRemoteScript {
@@ -285,6 +310,7 @@ fn friendly_name(url: &Url) -> String {
 mod tests {
     use super::{
         Gist, RunScriptInput, friendly_name, gist_id, resolve_gist_at, safe_url, select_gist_file,
+        transient_script_cache_key,
     };
     use std::{
         io::{Read, Write},
@@ -352,6 +378,18 @@ mod tests {
             RunScriptInput::classify(Path::new("-")),
             RunScriptInput::Stdin
         ));
+    }
+
+    #[test]
+    fn transient_cache_keys_include_the_input_context() {
+        let first = transient_script_cache_key(b"stdin", b"metadata");
+        let same = transient_script_cache_key(b"stdin", b"metadata");
+        let other_kind = transient_script_cache_key(b"remote", b"metadata");
+        let other_identity = transient_script_cache_key(b"stdin", b"other metadata");
+
+        assert_eq!(first, same);
+        assert_ne!(first, other_kind);
+        assert_ne!(first, other_identity);
     }
 
     #[test]

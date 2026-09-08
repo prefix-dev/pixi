@@ -7,17 +7,11 @@
 //! [`crate::cache::backend_metadata::BuildBackendMetadataCacheEntry`] and
 //! compared on cache probe.
 
-use std::{
-    fs::File,
-    io::{BufReader, Read},
-    path::PathBuf,
-    sync::Arc,
-};
+use std::{fs::File, path::PathBuf, sync::Arc};
 
 use derive_more::Display;
 use pixi_compute_engine::{ComputeCtx, Key};
 use thiserror::Error;
-use xxhash_rust::xxh3::Xxh3;
 
 use crate::input_hash::BackendBinaryFingerprint;
 
@@ -42,21 +36,10 @@ impl Key for BackendBinaryFingerprintKey {
     async fn compute(&self, _ctx: &mut ComputeCtx) -> Self::Value {
         let path = self.0.path.clone();
         tokio::task::spawn_blocking(move || {
-            let file = File::open(&path)
-                .map_err(|err| BackendBinaryFingerprintError::new(path.clone(), err))?;
-            let mut reader = BufReader::new(file);
-            let mut hasher = Xxh3::new();
-            let mut buf = [0u8; 64 * 1024];
-            loop {
-                let n = reader
-                    .read(&mut buf)
-                    .map_err(|err| BackendBinaryFingerprintError::new(path.clone(), err))?;
-                if n == 0 {
-                    break;
-                }
-                hasher.update(&buf[..n]);
-            }
-            Ok(BackendBinaryFingerprint::new(hasher.digest()))
+            File::open(&path)
+                .and_then(crate::file_fingerprint::hash_file_contents)
+                .map(BackendBinaryFingerprint::new)
+                .map_err(|err| BackendBinaryFingerprintError::new(path, err))
         })
         .await
         .expect("spawn_blocking panicked while fingerprinting backend binary")

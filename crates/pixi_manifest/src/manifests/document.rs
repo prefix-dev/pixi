@@ -11,8 +11,12 @@ use toml_edit::{Array, DocumentMut, Item, Table, TableLike, Value, value};
 use crate::{
     FeatureName, ManifestKind, ManifestProvenance, NewEnvironment, PixiPlatform, PixiPlatformName,
     PypiDependencyLocation, SpecType, TargetSelector, Task, TomlError,
+    error::GenericError,
     manifests::table_name::TableName,
-    script::{ScriptManifest, ScriptManifestDocument, ScriptManifestError},
+    script::{
+        ScriptManifest, ScriptManifestDocument, ScriptManifestError,
+        conda::{CondaScriptError, CondaScriptManifest, CondaScriptManifestDocument},
+    },
     toml::TomlDocument,
     utils::WithSourceCode,
 };
@@ -24,6 +28,7 @@ pub enum ManifestDocument {
     PixiToml(TomlDocument),
     MojoProjectToml(TomlDocument),
     Pep723(ScriptManifestDocument),
+    CondaScript(Box<CondaScriptManifestDocument>),
 }
 
 impl fmt::Display for ManifestDocument {
@@ -33,6 +38,7 @@ impl fmt::Display for ManifestDocument {
             ManifestDocument::PixiToml(document) => write!(f, "{document}"),
             ManifestDocument::MojoProjectToml(document) => write!(f, "{document}"),
             ManifestDocument::Pep723(document) => write!(f, "{document}"),
+            ManifestDocument::CondaScript(document) => write!(f, "{document}"),
         }
     }
 }
@@ -53,6 +59,25 @@ pub enum ManifestDocumentError {
 
     #[error("{} does not contain a PEP 723 metadata block", .0.display())]
     MissingPep723(PathBuf),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    CondaScript(#[from] CondaScriptError),
+
+    #[error("{} does not contain a conda-script block", .0.display())]
+    MissingCondaScript(PathBuf),
+}
+
+/// An error that is returned when rendering an editable manifest document.
+#[derive(Debug, Error, Diagnostic)]
+pub enum ManifestRenderError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Script(#[from] ScriptManifestError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    CondaScript(#[from] CondaScriptError),
 }
 
 impl ManifestDocument {
@@ -61,13 +86,21 @@ impl ManifestDocument {
         Ok(Self::Pep723(ScriptManifestDocument::new(script)?))
     }
 
+    /// Construct an editable document from a parsed conda-script manifest.
+    pub fn from_conda_script(script: CondaScriptManifest) -> Result<Self, CondaScriptError> {
+        Ok(Self::CondaScript(Box::new(
+            CondaScriptManifestDocument::new(script)?,
+        )))
+    }
+
     /// Render the editable document back into its source format.
-    pub fn render(&self) -> Result<String, ScriptManifestError> {
+    pub fn render(&self) -> Result<String, ManifestRenderError> {
         match self {
             ManifestDocument::PyProjectToml(document)
             | ManifestDocument::PixiToml(document)
             | ManifestDocument::MojoProjectToml(document) => Ok(document.to_string()),
-            ManifestDocument::Pep723(document) => document.render(),
+            ManifestDocument::Pep723(document) => Ok(document.render()?),
+            ManifestDocument::CondaScript(document) => Ok(document.render()?),
         }
     }
 
@@ -125,6 +158,12 @@ impl ManifestDocument {
                 .ok_or_else(|| ManifestDocumentError::MissingPep723(provenance.path.clone()))?;
             return Ok(ManifestDocument::from_script(script)?);
         }
+        if provenance.kind == ManifestKind::CondaScript {
+            let script = CondaScriptManifest::from_path(&provenance.path)?.ok_or_else(|| {
+                ManifestDocumentError::MissingCondaScript(provenance.path.clone())
+            })?;
+            return Ok(ManifestDocument::from_conda_script(script)?);
+        }
 
         // Read the contents of the file
         let contents = provenance.read()?.into_inner();
@@ -148,7 +187,9 @@ impl ManifestDocument {
             ManifestKind::Pyproject => Ok(ManifestDocument::PyProjectToml(toml)),
             ManifestKind::Pixi => Ok(ManifestDocument::PixiToml(toml)),
             ManifestKind::MojoProject => Ok(ManifestDocument::MojoProjectToml(toml)),
-            ManifestKind::Pep723 => unreachable!("PEP 723 manifests are parsed above"),
+            ManifestKind::Pep723 | ManifestKind::CondaScript => {
+                unreachable!("script manifests are parsed above")
+            }
         }
     }
 
@@ -159,6 +200,7 @@ impl ManifestDocument {
             ManifestDocument::PixiToml(_) => ManifestKind::Pixi,
             ManifestDocument::MojoProjectToml(_) => ManifestKind::MojoProject,
             ManifestDocument::Pep723(_) => ManifestKind::Pep723,
+            ManifestDocument::CondaScript(_) => ManifestKind::CondaScript,
         }
     }
 
@@ -175,6 +217,7 @@ impl ManifestDocument {
             }
             ManifestDocument::PixiToml(_) => None,
             ManifestDocument::MojoProjectToml(_) => None,
+            ManifestDocument::CondaScript(_) => None,
         }
     }
 
@@ -184,6 +227,7 @@ impl ManifestDocument {
             ManifestDocument::PixiToml(document) => document,
             ManifestDocument::MojoProjectToml(document) => document,
             ManifestDocument::Pep723(document) => document.document_mut(),
+            ManifestDocument::CondaScript(document) => document.document_mut(),
         }
     }
 
@@ -194,6 +238,7 @@ impl ManifestDocument {
             ManifestDocument::PixiToml(document) => document,
             ManifestDocument::MojoProjectToml(document) => document,
             ManifestDocument::Pep723(document) => document.document(),
+            ManifestDocument::CondaScript(document) => document.document(),
         }
     }
 
@@ -250,6 +295,7 @@ impl ManifestDocument {
             ManifestDocument::PixiToml(document) => document.as_table_mut(),
             ManifestDocument::MojoProjectToml(document) => document.as_table_mut(),
             ManifestDocument::Pep723(document) => document.document_mut().as_table_mut(),
+            ManifestDocument::CondaScript(document) => document.document_mut().as_table_mut(),
         }
     }
 
@@ -438,6 +484,49 @@ impl ManifestDocument {
             .unwrap_or(false)
     }
 
+    fn workspace_dependency_table_keys(&self) -> Vec<&'static str> {
+        let mut keys = Vec::new();
+        if let Some(prefix) = self.table_prefix() {
+            keys.extend(prefix.split('.'));
+        }
+        keys.extend(["workspace", "dependencies"]);
+        keys
+    }
+
+    /// Adds a dependency to the `[workspace.dependencies]` pool.
+    ///
+    /// If a dependency with the same name already exists, it will be replaced.
+    pub fn add_workspace_dependency(
+        &mut self,
+        name: &PackageName,
+        spec: &PixiSpec,
+    ) -> Result<(), TomlError> {
+        let keys = self.workspace_dependency_table_keys();
+        let item = self.manifest_mut().get_or_insert_nested_item(&keys)?;
+
+        let existing_key = existing_conda_key(item, name);
+        let key = existing_key.as_deref().unwrap_or(name.as_normalized());
+
+        pixi_toml_edit::upsert_entry(item, key, spec.to_toml_value())
+            .map_err(|_| TomlError::table_error("dependencies", "workspace.dependencies"))?;
+
+        Ok(())
+    }
+
+    /// Removes a dependency from the `[workspace.dependencies]` pool.
+    ///
+    /// This is a no-op if the dependency is not found.
+    pub fn remove_workspace_dependency(&mut self, name: &PackageName) -> Result<(), TomlError> {
+        let keys = self.workspace_dependency_table_keys();
+        let item = self.manifest_mut().get_or_insert_nested_item(&keys)?;
+        let Some(key) = existing_conda_key(item, name) else {
+            return Ok(());
+        };
+        pixi_toml_edit::remove_entry(item, &key)
+            .map_err(|_| TomlError::table_error("dependencies", "workspace.dependencies"))?;
+        Ok(())
+    }
+
     /// Adds a conda dependency to the TOML manifest
     ///
     /// If a dependency with the same name already exists, it will be replaced.
@@ -491,8 +580,10 @@ impl ManifestDocument {
         //  - When a specific platform is requested, as markers are not supported (https://github.com/prefix-dev/pixi/issues/2149)
         //  - When an editable install is requested
         //  - When a dependency-specific index must be preserved
-        if matches!(self, ManifestDocument::PixiToml(_))
-            || matches!(location, Some(PypiDependencyLocation::PixiPypiDependencies))
+        if matches!(
+            self,
+            ManifestDocument::PixiToml(_) | ManifestDocument::CondaScript(_)
+        ) || matches!(location, Some(PypiDependencyLocation::PixiPypiDependencies))
             || target.is_some()
             || editable.is_some_and(|e| e)
             || pixi_requirement.is_some_and(|requirement| requirement.index().is_some())
@@ -1197,6 +1288,75 @@ impl ManifestDocument {
         }
 
         Ok(())
+    }
+
+    /// Adds a preview flag to the `preview` array of the workspace,
+    /// returns false if it was already enabled
+    pub fn add_preview_flag(&mut self, flag: &str) -> Result<bool, TomlError> {
+        let table_name = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_table(Some(self.detect_table_name()));
+        let keys = table_name.as_keys();
+
+        let table = self.manifest_mut().get_or_insert_nested_table(&keys)?;
+        match table.get("preview").and_then(|item| item.as_bool()) {
+            // `preview = true` already enables every flag
+            Some(true) => return Ok(false),
+            // `preview = false` behaves like an empty list, replace it with one
+            Some(false) => {
+                table.remove("preview");
+            }
+            None => {}
+        }
+
+        let array = self
+            .manifest_mut()
+            .get_or_insert_toml_array_mut(&keys, "preview")?;
+        if array.iter().any(|item| item.as_str() == Some(flag)) {
+            Ok(false)
+        } else {
+            array.push(flag);
+            Ok(true)
+        }
+    }
+
+    /// Removes a preview flag from the `preview` array of the workspace,
+    /// dropping the field when it ends up empty. Returns false when the
+    /// flag wasn't enabled.
+    pub fn remove_preview_flag(&mut self, flag: &str) -> Result<bool, TomlError> {
+        let table_name = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_table(Some(self.detect_table_name()));
+        let keys = table_name.as_keys();
+
+        if self.manifest_mut().get_nested_table(&keys).is_err() {
+            return Ok(false);
+        }
+        let table = self.manifest_mut().get_or_insert_nested_table(&keys)?;
+        if table.get("preview").and_then(|item| item.as_bool()) == Some(true) {
+            return Err(TomlError::Generic(
+                GenericError::new(
+                    "cannot remove individual preview flags while `preview = true` enables them all",
+                )
+                .with_help(
+                    "Set `preview` to the list of flags you want to keep, e.g. `preview = [\"pixi-build\"]`",
+                ),
+            ));
+        }
+
+        let Some(array) = table
+            .get_mut("preview")
+            .and_then(|item| item.as_array_mut())
+        else {
+            return Ok(false);
+        };
+        let len_before = array.len();
+        array.retain(|item| item.as_str() != Some(flag));
+        let removed = array.len() != len_before;
+        if array.is_empty() {
+            table.remove("preview");
+        }
+        Ok(removed)
     }
 }
 
@@ -2259,5 +2419,107 @@ dev = { features = [] }
             .unwrap();
 
         insta::assert_snapshot!(document.to_string());
+    }
+
+    fn pixi_toml_document(contents: &str) -> ManifestDocument {
+        ManifestDocument::PixiToml(TomlDocument::new(DocumentMut::from_str(contents).unwrap()))
+    }
+
+    #[test]
+    fn test_add_and_remove_preview_flag() {
+        let mut document = pixi_toml_document(
+            r#"
+[workspace]
+name = "test"
+channels = []
+platforms = []
+"#,
+        );
+
+        assert!(document.add_preview_flag("pixi-build").unwrap());
+        // Adding it again is a no-op
+        assert!(!document.add_preview_flag("pixi-build").unwrap());
+        insta::assert_snapshot!(document.render().unwrap(), @r###"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = []
+        preview = ["pixi-build"]
+        "###);
+
+        // Removing it drops the field entirely
+        assert!(document.remove_preview_flag("pixi-build").unwrap());
+        assert!(!document.remove_preview_flag("pixi-build").unwrap());
+        insta::assert_snapshot!(document.render().unwrap(), @r###"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = []
+        "###);
+    }
+
+    #[test]
+    fn test_remove_preview_flag_keeps_unknown_features() {
+        let mut document = pixi_toml_document(
+            r#"
+[workspace]
+name = "test"
+channels = []
+platforms = []
+preview = ["something-else", "pixi-build"]
+"#,
+        );
+
+        assert!(document.remove_preview_flag("pixi-build").unwrap());
+        insta::assert_snapshot!(document.render().unwrap(), @r###"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = []
+        preview = ["something-else"]
+        "###);
+    }
+
+    #[test]
+    fn test_preview_flags_with_all_enabled() {
+        let mut document = pixi_toml_document(
+            r#"
+[workspace]
+name = "test"
+channels = []
+platforms = []
+preview = true
+"#,
+        );
+
+        // Everything is already enabled, so there is nothing to add and the
+        // field is left untouched
+        assert!(!document.add_preview_flag("pixi-build").unwrap());
+        insta::assert_snapshot!(document.render().unwrap(), @r###"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = []
+        preview = true
+        "###);
+
+        // And removing a single feature makes no sense
+        let err = document.remove_preview_flag("pixi-build").unwrap_err();
+        assert!(err.to_string().contains("`preview = true`"), "{err}");
+    }
+
+    #[test]
+    fn test_add_preview_flag_pyproject() {
+        let mut document = ManifestDocument::empty_pyproject();
+
+        assert!(document.add_preview_flag("pixi-build").unwrap());
+        insta::assert_snapshot!(document.render().unwrap(), @r###"
+        [project]
+        name = "test"
+        [tool.pixi.workspace]
+        channels = []
+        platforms = []
+        preview = ["pixi-build"]
+        "###);
     }
 }

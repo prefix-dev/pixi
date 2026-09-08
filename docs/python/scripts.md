@@ -7,8 +7,12 @@ while the resolved environment stays in Pixi's cache instead of a workspace
 next to the script.
 
 Script commands use `--script <PATH>`. The same `init`, `run`, `add`, `remove`,
-and `lock` commands used for workspaces can therefore operate on either a
-manifest or a standalone file.
+`install`, `lock`, and `update` commands used for workspaces can therefore
+operate on either a manifest or a standalone file.
+
+For files in other languages there is an experimental
+[`conda-script` block](../tutorials/conda_script.md) that embeds the same
+kind of metadata in any code file.
 
 ## Make a script self-contained
 
@@ -67,12 +71,21 @@ PEP 723 defines two portable fields:
 Pixi reads those fields and extends them with a focused subset of
 `tool.pixi`:
 
-- `tool.pixi.workspace` configures channels, platforms, and resolver options.
+- `tool.pixi.workspace` configures channels, platforms, and resolver options
+  such as `exclude-newer`, `channel-priority` or `solve-strategy`.
 - `tool.pixi.dependencies` lists Conda packages.
 - `tool.pixi.pypi-dependencies` represents PyPI requirements that need
   Pixi-specific fields, such as an index or editable installation.
+- `tool.pixi.constraints` and `tool.pixi.activation` hold constraints and
+  activation settings.
 - `tool.pixi.target.<platform>` holds platform-specific dependencies,
   constraints, and activation settings.
+- `tool.pixi.exclude-newer` and `tool.pixi.pypi-exclude-newer` override the
+  cutoff date per package.
+
+Every other key under `tool.pixi` is rejected with an error pointing at it,
+since a script has one implicit environment and no features, tasks or
+packages.
 
 Other PEP 723 tools can use the portable fields and ignore `tool.pixi`. In the
 example above, another tool can install `httpx`, but only Pixi also provides
@@ -113,7 +126,7 @@ pixi add --script analysis.py --pypi --editable \
 Relative paths in metadata are resolved from the script's directory.
 
 When no adjacent lock file exists, dependency mutations solve for validation
-but write only the inline metadata. If a sidecar lock already exists, it is
+but write only the inline metadata. If a lock file already exists, it is
 updated as part of the mutation.
 
 ## Run the script
@@ -184,6 +197,39 @@ The environment is isolated from an enclosing Pixi workspace and from any
 currently activated environment. The script itself runs with the directory
 from which Pixi was invoked as its working directory.
 
+## Reuse and update resolutions
+
+The first `pixi run --script` resolves the script and remembers the selected
+versions with its cached environment. Later runs reuse that resolution while
+it still satisfies the inline metadata. New versions in a channel or package
+index therefore do not change the environment during an ordinary run.
+
+Refresh the resolution explicitly when you want newer compatible versions:
+
+```console
+pixi update --script earthquakes.py
+```
+
+Without an adjacent lock file, this replaces the cached resolution. The next
+`run` or `install` updates the cached environment to match it. This cache state
+is disposable. Removing it causes Pixi to resolve the script again.
+
+When an adjacent lock file exists, `update` writes the new resolution there
+instead.
+
+## Install without running
+
+Use `pixi install` to install the script's environment without running the
+script.
+
+```console
+pixi install --script earthquakes.py
+```
+
+This installs the same cached environment that `pixi run --script` would use
+and prints its location. Run this during a container build or before going
+offline to install the environment ahead of time.
+
 ## Inspect and export
 
 Inspect the resolved dependency graph with `tree`:
@@ -207,32 +253,30 @@ lock policy flags.
 
 ## Lock exact versions
 
-A lock file is optional. Without one, commands resolve the script in memory
-and reuse Pixi's caches:
-
-```console
-pixi run --script earthquakes.py
-```
-
-Create a sidecar when exact versions need to travel with the script:
+A cached resolution keeps ordinary runs stable on one machine, but it does not
+travel with the script. Create a lock file when exact versions need to travel
+with it:
 
 ```console
 pixi lock --script earthquakes.py
 ```
 
 This writes `earthquakes.py.pixi.lock` next to the file. Subsequent commands
-reuse the sidecar, and metadata mutations keep it up to date.
+reuse the lock file, and metadata mutations keep it up to date.
 
-To lock more than the current platform, declare the platforms first:
+When the script declares no platforms, Pixi locks the versions for your
+machine. On a machine that does not meet it, Pixi resolves the script again
+instead of using the lock file. Declare the platforms first to lock versions
+that everyone reuses:
 
 ```console
 pixi workspace platform add --script earthquakes.py linux-64 osx-arm64
 pixi lock --script earthquakes.py
 ```
 
-Use `--locked` to require an existing, up-to-date sidecar. Use `--frozen` to
-consume an existing sidecar without updating it. Both options report an error
-when the script has no adjacent lock file.
+Use `--locked` to require an existing, up-to-date lock file. Use `--frozen`
+to consume an existing lock file without updating it. Both options report an
+error when the script has no adjacent lock file.
 
 ## Manage channels and platforms
 
@@ -260,6 +304,18 @@ and `move` operations. Platform order determines selection priority. Declared
 platforms are also the platforms consumed by `pixi lock --script`; the lock
 command does not take a separate platform override.
 
+### Scripts without declared platforms
+
+A script does not have to declare `platforms`.
+When it doesn't, Pixi resolves it for the machine you run it on, using the [virtual packages](../workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform) it detects there: your CUDA driver, your glibc version, your macOS version.
+A script that needs a glibc newer than Pixi's [default](../workspace/system_requirements.md#default-declared-virtual-packages) resolves without you writing anything down.
+
+To resolve for a fixed target instead:
+
+```console
+pixi workspace platform add --script analysis.py --auto-detect
+```
+
 ## Supported command surface
 
 The script-capable commands are:
@@ -270,6 +326,7 @@ The script-capable commands are:
 | Run | `pixi run --script <PATH>` |
 | Add or remove dependencies | `pixi add --script <PATH>`, `pixi remove --script <PATH>` |
 | Create or update a lock | `pixi lock --script <PATH>` |
+| Update dependencies | `pixi update --script <PATH>` |
 | Inspect dependencies | `pixi tree --script <PATH>` |
 | Manage channels | `pixi workspace channel ... --script <PATH>` |
 | Manage platforms | `pixi workspace platform ... --script <PATH>` |
@@ -277,5 +334,5 @@ The script-capable commands are:
 
 A script has no workspace name, version, registration, named environments,
 features, or tasks. Commands and options that manage those concepts reject
-`--script`. Persistent workspace operations such as install, shell, update,
-and configuration also remain workspace-only.
+`--script`. Persistent workspace operations such as install, shell, and
+configuration also remain workspace-only.

@@ -390,6 +390,7 @@ impl RattlerBuild {
                     ),
                     store_recipe: false,
                     force_colors: true,
+                    experimental: self.experimental,
                     sandbox_config: None,
                     exclude_newer: None,
                     env_isolation: Default::default(),
