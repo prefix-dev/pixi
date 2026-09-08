@@ -105,7 +105,8 @@ pub use ephemeral_env::{
     EphemeralEnvError, EphemeralEnvKey, EphemeralEnvSpec, InstalledEphemeralEnv,
 };
 pub use errors::{
-    MissingChannelError, SolvePixiEnvironmentError, SourceBuildError, SourceMetadataError,
+    MissingChannelError, PrefixPlatformMismatchError, PrefixRecordOrigin,
+    SolvePixiEnvironmentError, SourceBuildError, SourceBuildPrefixKind, SourceMetadataError,
     SourceRecordError,
 };
 pub use injected_config::{
