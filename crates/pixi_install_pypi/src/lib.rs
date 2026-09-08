@@ -1016,7 +1016,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
                     tracing::debug!("Stored credentials for {}: {}", url, success);
                 }
                 Err(err) => {
-                    tracing::debug!("Failed to store credentials for {}: {}", url, err);
+                    tracing::warn!("Failed to store credentials for {}: {}", url, err);
                 }
             }
         }
