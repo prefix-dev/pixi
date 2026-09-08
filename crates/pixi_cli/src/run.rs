@@ -3,7 +3,7 @@ use std::{
     convert::identity,
     ffi::OsString,
     io::Read,
-    string::String,
+    process::ExitCode,
 };
 
 #[cfg(unix)]
@@ -157,7 +157,7 @@ impl Args {
 /// CLI entry point for `pixi run`
 /// When running the sigints are ignored and child can react to them. As it
 /// pleases.
-pub async fn execute(mut args: Args) -> miette::Result<()> {
+pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
     args.validate_script_options()?;
 
     // Following statements don't spawn any progress bar, so set
@@ -284,7 +284,7 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
     // Print all available tasks if no task is provided
     if args.task.is_empty() {
         command_not_found(&workspace, explicit_environment);
-        return Ok(());
+        return Ok(ExitCode::SUCCESS);
     }
 
     // We expect progress bar to be used afterwards, so set draw
@@ -607,7 +607,7 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
                 if code == 127 {
                     command_not_found(&workspace, explicit_environment.clone());
                 }
-                process_exit::exit_with_code(code);
+                return Ok(process_exit::exit_code_from_code(code));
             }
             Err(err) => return Err(err.into()),
         }
@@ -626,7 +626,7 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
             .into_diagnostic()?;
     }
 
-    Ok(())
+    Ok(ExitCode::SUCCESS)
 }
 
 /// Called when a command was not found.
@@ -774,17 +774,6 @@ fn reset_cursor() {
     let term = console::Term::stdout();
     let _ = term.show_cursor();
 }
-
-// /// Exit the process with the appropriate exit code for a SIGINT.
-// fn exit_process_on_sigint() {
-//     // https://learn.microsoft.com/en-us/cpp/c-runtime-library/signal-constants
-//     #[cfg(target_os = "windows")]
-//     std::process::exit(3);
-//
-//     // POSIX compliant OSs: 128 + SIGINT (2)
-//     #[cfg(not(target_os = "windows"))]
-//     std::process::exit(130);
-// }
 
 /// Runs a task future forwarding any signals received to the process.
 ///

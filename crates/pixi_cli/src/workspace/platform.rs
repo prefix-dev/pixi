@@ -761,12 +761,7 @@ async fn execute_list(
             .map(|p| p.name().as_str())
             .collect::<Vec<_>>()
             .join(" ");
-        writeln!(std::io::stdout(), "{names}")
-            .inspect_err(|e| {
-                if e.kind() == std::io::ErrorKind::BrokenPipe {
-                    std::process::exit(0);
-                }
-            })
+        pixi_utils::io::ignore_broken_pipe(writeln!(std::io::stdout(), "{names}"))
             .into_diagnostic()?;
         return Ok(());
     }

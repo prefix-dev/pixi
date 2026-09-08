@@ -73,13 +73,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             } else {
                 toml_edit::ser::to_string_pretty(&workspaces).into_diagnostic()?
             };
-            writeln!(std::io::stdout(), "{out}")
-                .map_err(|e| {
-                    if e.kind() == std::io::ErrorKind::BrokenPipe {
-                        std::process::exit(0);
-                    }
-                    e
-                })
+            pixi_utils::io::ignore_broken_pipe(writeln!(std::io::stdout(), "{out}"))
                 .into_diagnostic()?;
         }
         Some(Command::Remove(remove_args)) => {
