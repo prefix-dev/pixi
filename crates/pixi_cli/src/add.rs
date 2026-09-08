@@ -2,7 +2,6 @@ use std::{
     collections::HashSet,
     io::IsTerminal,
     path::{Path, PathBuf},
-    str::FromStr,
 };
 
 use clap::Parser;
