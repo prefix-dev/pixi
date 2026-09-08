@@ -2,6 +2,7 @@ use std::{
     collections::HashSet,
     io::IsTerminal,
     path::{Path, PathBuf},
+    str::FromStr,
 };
 
 use clap::Parser;
@@ -126,6 +127,11 @@ pub struct Args {
     #[arg(long, requires = "pypi")]
     pub editable: bool,
 
+    /// One or more channels to use for this dependency.
+    /// These channels will also be added to the workspace.
+    #[arg(long, short, conflicts_with = "pypi")]
+    pub channel: Option<Vec<rattler_conda_types::NamedChannelOrUrl>>,
+
     /// The PyPI index URL to use for this dependency.
     /// Only applicable when adding pypi dependencies.
     #[clap(long, requires = "pypi", conflicts_with_all = ["git", "path"])]
@@ -167,6 +173,7 @@ impl Args {
         Ok(DependencyOptions {
             feature: self.dependency_config.feature_name(),
             platforms: self.dependency_config.platforms.clone(),
+            channels: self.channel.clone(),
             no_install: self.no_install_config.no_install,
             lock_file_usage: add_lock_file_usage(
                 self.lock_file_update_config.lock_file_usage()?,
@@ -487,7 +494,21 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     subdir: args.dependency_config.subdirectory(),
                 };
 
-                let specs = args.dependency_config.specs()?;
+                let mut specs = args.dependency_config.specs()?;
+                if let Some(channels) = &args.channel {
+                    if let Some(channel) = channels.first() {
+                        let channel_str = channel.to_string();
+                        for spec in specs.values_mut() {
+                            let new_spec = rattler_conda_types::MatchSpec::from_str(
+                                &format!("{}::{}", channel_str, spec.to_string()),
+                                rattler_conda_types::ParseMatchSpecOptions::lenient()
+                                    .with_repodata_revision(rattler_conda_types::RepodataRevision::V3),
+                            ).into_diagnostic()?;
+                            *spec = new_spec;
+                        }
+                    }
+                }
+
                 let names: Vec<String> = specs
                     .keys()
                     .map(|n| n.as_normalized().to_string())

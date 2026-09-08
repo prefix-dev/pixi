@@ -98,6 +98,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let dependency_options = DependencyOptions {
         feature: args.dependency_config.feature_name(),
         platforms: args.dependency_config.platforms.clone(),
+        channels: None,
         no_install: args.no_install_config.no_install,
         lock_file_usage: remove_lock_file_usage(
             args.lock_file_update_config.lock_file_usage()?,
