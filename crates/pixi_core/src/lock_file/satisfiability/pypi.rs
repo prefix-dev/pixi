@@ -402,9 +402,7 @@ pub(crate) fn pypi_satisfies_requirement(
             }
         }
         RequirementSource::GitPath { .. } => {
-            // uv's 0.11.16 GitDirectory/GitPath split; pixi never produces
-            // git-archive requirements.
-            unreachable!("pixi does not produce git-archive pypi requirements")
+            Err(PlatformUnsat::UnsupportedGitArchiveDependency(spec.name.clone()).into())
         }
         RequirementSource::Path { install_path, .. }
         | RequirementSource::Directory { install_path, .. } => {
@@ -705,7 +703,7 @@ async fn read_local_package_metadata(
         FlatIndex::from_entries(
             flat_index_entries,
             Some(&tags),
-            &HashStrategy::None,
+            &HashStrategy::default(),
             &build_options,
         )
     };
@@ -719,6 +717,7 @@ async fn read_local_package_metadata(
         &config_settings,
         deployment_target.as_deref(),
     );
+    let hash_strategy = HashStrategy::default();
     let build_params = UvBuildDispatchParams::new(
         &registry_client,
         &ctx.uv_context.cache,
@@ -727,7 +726,7 @@ async fn read_local_package_metadata(
         &dependency_metadata,
         &config_settings,
         &build_options,
-        &HashStrategy::None,
+        &hash_strategy,
     )
     .with_index_strategy(index_strategy)
     .with_capabilities(ctx.uv_context.capabilities.clone())
@@ -897,8 +896,8 @@ mod tests {
     use uv_distribution_types::RequirementSource;
     use uv_redacted::DisplaySafeUrl;
 
-    use super::super::PypiNoBuildCheck;
     use super::super::platform::RequirementOrigin;
+    use super::super::{PlatformUnsat, PypiNoBuildCheck};
     use super::pypi_satisfies_requirement;
     use crate::lock_file::tests::{make_source_package_with, make_wheel_package_with};
 
@@ -1021,6 +1020,41 @@ mod tests {
             &[],
         )
         .unwrap();
+    }
+
+    #[test]
+    fn git_archive_requirement_returns_error_instead_of_panicking() {
+        let spec = pep508_requirement_to_uv_requirement(
+            pep508_rs::Requirement::from_str(
+                "mypkg @ git+https://example.com/repo.git#path=dist/mypkg-0.1.0-py3-none-any.whl",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert!(matches!(spec.source, RequirementSource::GitPath { .. }));
+        let locked = lock_for_test(make_wheel_package_with(
+            "mypkg",
+            "0.1.0",
+            "https://example.com/mypkg-0.1.0-py3-none-any.whl"
+                .parse()
+                .unwrap(),
+            None,
+            None,
+            vec![],
+            None,
+        ));
+        let err = pypi_satisfies_requirement(
+            &spec,
+            &locked,
+            Path::new("/"),
+            RequirementOrigin::RequiresDist,
+            &[],
+        )
+        .unwrap_err();
+        assert!(matches!(
+            *err,
+            PlatformUnsat::UnsupportedGitArchiveDependency(_)
+        ));
     }
 
     /// Reproduces issue #5661: PyPI dependency with full commit hash from a

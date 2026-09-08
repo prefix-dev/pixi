@@ -469,7 +469,7 @@ pub async fn resolve_pypi(
         FlatIndex::from_entries(
             flat_index_entries,
             Some(&tags),
-            &HashStrategy::None,
+            &HashStrategy::default(),
             &build_options,
         )
     };
@@ -509,6 +509,7 @@ pub async fn resolve_pypi(
         &config_settings,
         deployment_target.as_deref(),
     );
+    let hash_strategy = HashStrategy::default();
     let build_params = UvBuildDispatchParams::new(
         &registry_client,
         &context.cache,
@@ -517,7 +518,7 @@ pub async fn resolve_pypi(
         &dependency_metadata,
         &config_settings,
         &build_options,
-        &HashStrategy::None,
+        &hash_strategy,
     )
     .with_index_strategy(index_strategy)
     .with_exclude_newer(options.exclude_newer.clone())
@@ -704,7 +705,8 @@ pub async fn resolve_pypi(
                 &constraints,
                 &overrides,
                 &excludes,
-                &HashStrategy::None,
+                &dependency_metadata,
+                &hash_strategy,
                 &lookahead_index,
                 DistributionDatabase::new(
                     &registry_client,
@@ -1084,9 +1086,10 @@ async fn lock_pypi_packages(
                             )?);
                         }
                         BuiltDist::GitPath(_) => {
-                            // uv's 0.11.16 GitDirectory/GitPath split; pixi never
-                            // produces git-archive built distributions.
-                            unreachable!("pixi does not produce git-archive built distributions")
+                            miette::bail!(
+                                "Git archive dependency '{}' is not supported",
+                                dist.name()
+                            )
                         }
                     }
                 }
@@ -1260,9 +1263,10 @@ async fn lock_pypi_packages(
                             );
                         }
                         SourceDist::GitPath(_) => {
-                            // uv's 0.11.16 GitDirectory/GitPath split; pixi never
-                            // produces git-archive source distributions.
-                            unreachable!("pixi does not produce git-archive source distributions")
+                            miette::bail!(
+                                "Git archive dependency '{}' is not supported",
+                                source.name()
+                            )
                         }
                     };
                 }

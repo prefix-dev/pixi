@@ -965,7 +965,10 @@ async fn verify_package_platform_satisfiability(
                         });
                     }
 
-                    if matches!(requirement.source, RequirementSource::GitDirectory { .. }) {
+                    if matches!(
+                        requirement.source,
+                        RequirementSource::GitDirectory { .. } | RequirementSource::GitPath { .. }
+                    ) {
                         delayed_pypi_error.get_or_insert_with(|| {
                             Box::new(PlatformUnsat::GitDependencyOnCondaInstalledPackage(
                                 requirement.name.clone(),

@@ -384,6 +384,7 @@ struct UvInstallerConfig {
     exclude_newer: ExcludeNewer,
     /// Verifies downloaded artifacts against the digests in the lock file.
     hash_strategy: HashStrategy,
+    build_hash_strategy: HashStrategy,
 }
 
 /// High-level interface for PyPI environment updates that handles all
@@ -623,7 +624,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         let flat_index = FlatIndex::from_entries(
             flat_index_entries,
             Some(&planner_config.tags),
-            &HashStrategy::None,
+            &HashStrategy::default(),
             &planner_config.build_options,
         );
 
@@ -651,6 +652,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             dependency_metadata: DependencyMetadata::default(),
             exclude_newer: to_exclude_newer(exclude_newer),
             hash_strategy,
+            build_hash_strategy: HashStrategy::default(),
         })
     }
 
@@ -1079,7 +1081,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &setup.build_options,
             // Build dependencies are resolved on the fly and have no locked digest.
             // They are not subject to the lock file hash strategy.
-            &HashStrategy::None,
+            &setup.build_hash_strategy,
             setup.exclude_newer.clone(),
             self.context_config.uv_context.no_sources.clone(),
             uv_types::SourceTreeEditablePolicy::default(),
