@@ -38,6 +38,14 @@ pub async fn add_conda_dep(
         .manifest()
         .add_platforms(pixi_platforms.iter(), &FeatureName::Default)?;
 
+    if let Some(channels) = &dep_options.channels {
+        workspace.manifest().add_channels(
+            channels.iter().cloned().map(pixi_manifest::PrioritizedChannel::from),
+            &dep_options.feature,
+            false,
+        )?;
+    }
+
     let mut match_specs = IndexMap::default();
     let mut source_specs = IndexMap::default();
 

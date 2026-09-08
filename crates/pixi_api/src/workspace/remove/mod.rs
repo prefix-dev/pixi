@@ -171,6 +171,7 @@ mod tests {
         DependencyOptions {
             feature: FeatureName::Default,
             platforms: vec![],
+            channels: None,
             no_install: true,
             lock_file_usage: LockFileUsage::Frozen,
         }
