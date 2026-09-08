@@ -53,12 +53,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Command::Get => {
             // Print the description if it exists
             if let Some(description) = workspace_ctx.description().await {
-                writeln!(std::io::stdout(), "{description}")
-                    .inspect_err(|e| {
-                        if e.kind() == std::io::ErrorKind::BrokenPipe {
-                            std::process::exit(0);
-                        }
-                    })
+                pixi_utils::io::ignore_broken_pipe(writeln!(std::io::stdout(), "{description}"))
                     .into_diagnostic()?;
             }
         }

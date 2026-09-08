@@ -3,6 +3,7 @@ import os
 import platform
 import shlex
 import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -29,6 +30,34 @@ def test_pixi(pixi: Path) -> None:
         [pixi], ExitCode.INCORRECT_USAGE, stdout_excludes=f"[version {PIXI_VERSION}]"
     )
     verify_cli_command([pixi, "--version"], stdout_contains=PIXI_VERSION)
+
+
+def test_pixi_broken_output_pipe(pixi: Path) -> None:
+    read_fd, write_fd = os.pipe()
+    os.close(read_fd)
+    try:
+        help_result = subprocess.run(
+            [pixi, "--help"],
+            stdout=write_fd,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    finally:
+        os.close(write_fd)
+    assert help_result.returncode == ExitCode.SUCCESS
+
+    read_fd, write_fd = os.pipe()
+    os.close(read_fd)
+    try:
+        error_result = subprocess.run(
+            [pixi, "--definitely-invalid"],
+            stdout=subprocess.DEVNULL,
+            stderr=write_fd,
+            check=False,
+        )
+    finally:
+        os.close(write_fd)
+    assert error_result.returncode == ExitCode.INCORRECT_USAGE
 
 
 @pytest.mark.slow
