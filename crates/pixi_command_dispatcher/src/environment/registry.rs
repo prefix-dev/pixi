@@ -78,7 +78,11 @@ impl WorkspaceEnvRegistry {
             u32::try_from(inner.entries.len()).expect("too many workspace envs allocated"),
         );
         inner.entries.push(Arc::new(key.spec.clone()));
-        let env_ref = WorkspaceEnvRef::new(id, key.name.clone(), key.platform.clone());
+        let build_environment = &key.spec.build_environment;
+        let build_platform = (build_environment.build_platform != build_environment.host_platform)
+            .then(|| build_environment.build_platform.to_string());
+        let env_ref =
+            WorkspaceEnvRef::new(id, key.name.clone(), key.platform.clone(), build_platform);
         inner.refs_by_key.insert(key, env_ref.clone());
         env_ref
     }
