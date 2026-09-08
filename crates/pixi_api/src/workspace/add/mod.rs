@@ -40,7 +40,10 @@ pub async fn add_conda_dep(
 
     if let Some(channels) = &dep_options.channels {
         workspace.manifest().add_channels(
-            channels.iter().cloned().map(pixi_manifest::PrioritizedChannel::from),
+            channels
+                .iter()
+                .cloned()
+                .map(pixi_manifest::PrioritizedChannel::from),
             &dep_options.feature,
             false,
         )?;

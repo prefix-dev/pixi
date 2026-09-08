@@ -478,79 +478,82 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let workspace_ctx = cli_context(workspace.clone());
 
-    let (update_deps, skipped, parsed_names): (_, Vec<SkippedPackage>, Vec<String>) =
-        match args.dependency_config.dependency_type() {
-            DependencyType::CondaDependency(spec_type) => {
-                let git_options = GitOptions {
-                    git: args.dependency_config.git.clone(),
-                    path: resolved_path.clone(),
-                    reference: args
-                        .dependency_config
-                        .rev
-                        .clone()
-                        .unwrap_or_default()
-                        .into(),
-                    subdir: args.dependency_config.subdirectory(),
-                };
+    let (update_deps, skipped, parsed_names): (_, Vec<SkippedPackage>, Vec<String>) = match args
+        .dependency_config
+        .dependency_type()
+    {
+        DependencyType::CondaDependency(spec_type) => {
+            let git_options = GitOptions {
+                git: args.dependency_config.git.clone(),
+                path: resolved_path.clone(),
+                reference: args
+                    .dependency_config
+                    .rev
+                    .clone()
+                    .unwrap_or_default()
+                    .into(),
+                subdir: args.dependency_config.subdirectory(),
+            };
 
-                let mut specs = args.dependency_config.specs()?;
-                if let Some(channels) = &args.channel {
-                    if let Some(channel) = channels.first() {
-                        let channel_str = channel.to_string();
-                        for spec in specs.values_mut() {
-                            let new_spec = rattler_conda_types::MatchSpec::from_str(
-                                &format!("{}::{}", channel_str, spec.to_string()),
-                                rattler_conda_types::ParseMatchSpecOptions::lenient()
-                                    .with_repodata_revision(rattler_conda_types::RepodataRevision::V3),
-                            ).into_diagnostic()?;
-                            *spec = new_spec;
-                        }
+            let mut specs = args.dependency_config.specs()?;
+            if let Some(channels) = &args.channel {
+                if let Some(channel) = channels.first() {
+                    let channel_str = channel.to_string();
+                    for spec in specs.values_mut() {
+                        let new_spec = rattler_conda_types::MatchSpec::from_str(
+                            &format!("{}::{}", channel_str, spec.to_string()),
+                            rattler_conda_types::ParseMatchSpecOptions::lenient()
+                                .with_repodata_revision(rattler_conda_types::RepodataRevision::V3),
+                        )
+                        .into_diagnostic()?;
+                        *spec = new_spec;
                     }
                 }
-
-                let names: Vec<String> = specs
-                    .keys()
-                    .map(|n| n.as_normalized().to_string())
-                    .collect();
-                let result = workspace_ctx
-                    .add_conda_deps(
-                        specs,
-                        spec_type,
-                        args.dependency_options(&workspace)?,
-                        git_options,
-                    )
-                    .await?;
-                (result.0, result.1, names)
             }
-            DependencyType::PypiDependency => {
-                let pypi_deps = if let Some(path) = &resolved_path {
-                    pypi_path_deps(&args.dependency_config.specs[0], path, &workspace)?
-                } else {
-                    let requirements_iter = match args
-                        .dependency_config
-                        .vcs_pep508_requirements(&workspace)
-                        .transpose()?
-                    {
-                        Some(vcs_reqs) => vcs_reqs.into_iter(),
-                        None => args.dependency_config.pypi_deps(&workspace)?.into_iter(),
-                    };
-                    map_pypi_requirements_with_index(requirements_iter, args.index.as_ref())?
+
+            let names: Vec<String> = specs
+                .keys()
+                .map(|n| n.as_normalized().to_string())
+                .collect();
+            let result = workspace_ctx
+                .add_conda_deps(
+                    specs,
+                    spec_type,
+                    args.dependency_options(&workspace)?,
+                    git_options,
+                )
+                .await?;
+            (result.0, result.1, names)
+        }
+        DependencyType::PypiDependency => {
+            let pypi_deps = if let Some(path) = &resolved_path {
+                pypi_path_deps(&args.dependency_config.specs[0], path, &workspace)?
+            } else {
+                let requirements_iter = match args
+                    .dependency_config
+                    .vcs_pep508_requirements(&workspace)
+                    .transpose()?
+                {
+                    Some(vcs_reqs) => vcs_reqs.into_iter(),
+                    None => args.dependency_config.pypi_deps(&workspace)?.into_iter(),
                 };
+                map_pypi_requirements_with_index(requirements_iter, args.index.as_ref())?
+            };
 
-                let names: Vec<String> = pypi_deps
-                    .keys()
-                    .map(|n| n.as_normalized().to_string())
-                    .collect();
-                let result = workspace_ctx
-                    .add_pypi_deps(
-                        pypi_deps,
-                        args.editable,
-                        args.dependency_options(&workspace)?,
-                    )
-                    .await?;
-                (result.0, result.1, names)
-            }
-        };
+            let names: Vec<String> = pypi_deps
+                .keys()
+                .map(|n| n.as_normalized().to_string())
+                .collect();
+            let result = workspace_ctx
+                .add_pypi_deps(
+                    pypi_deps,
+                    args.editable,
+                    args.dependency_options(&workspace)?,
+                )
+                .await?;
+            (result.0, result.1, names)
+        }
+    };
 
     let skipped_set: HashSet<&str> = skipped.iter().map(|s| s.name.as_str()).collect();
 
