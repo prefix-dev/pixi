@@ -71,7 +71,7 @@ jobs:
 
       - name: Build PGO binary
         if: matrix.mode == 'pgo'
-        run: python scripts/build_pgo.py
+        run: python scripts/build_pgo.py --target x86_64-unknown-linux-musl
 
       - name: Upload binary
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

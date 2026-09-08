@@ -65,24 +65,31 @@ jobs:
           - target: x86_64-unknown-linux-musl
             runner: nscloud-ubuntu-24.04-amd64-16x32
             builder: zigbuild
+            pgo: true
           - target: aarch64-unknown-linux-musl
             runner: 8core_ubuntu_latest_runner
             builder: zigbuild
+            pgo: false
           - target: riscv64gc-unknown-linux-gnu
             runner: 8core_ubuntu_latest_runner
             builder: zigbuild
+            pgo: false
           - target: x86_64-apple-darwin
             runner: namespace-profile-macos-15-arm64-6
             builder: build
+            pgo: false
           - target: aarch64-apple-darwin
-            runner: namespace-profile-macos-15-arm64-6
+            runner: nscloud-macos-sequoia-arm64-12x28
             builder: build
+            pgo: true
           - target: x86_64-pc-windows-msvc
             runner: namespace-profile-windows-2022-x86-64-8
             builder: build
+            pgo: false
           - target: aarch64-pc-windows-msvc
             runner: namespace-profile-windows-2022-x86-64-8
             builder: build
+            pgo: false
     env:
       PUBLISHING: ${{ needs.prepare.outputs.publishing }}
       # macOS codesigning / notarization.
@@ -123,15 +130,15 @@ jobs:
         run: pixi run -e release build-options --target ${{ matrix.target }}
 
       - name: Install LLVM tools
-        if: matrix.target == 'x86_64-unknown-linux-musl'
+        if: matrix.pgo
         run: rustup component add llvm-tools-preview
 
       - name: Build with PGO
-        if: matrix.target == 'x86_64-unknown-linux-musl'
-        run: python scripts/build_pgo.py
+        if: matrix.pgo
+        run: python scripts/build_pgo.py --target ${{ matrix.target }}
 
       - name: Build
-        if: matrix.target != 'x86_64-unknown-linux-musl'
+        if: ${{ !matrix.pgo }}
         shell: bash
         env:
           CARGO_PROFILE_RELEASE_LTO: fat

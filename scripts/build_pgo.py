@@ -1,5 +1,6 @@
-"""Build the Linux x86-64 release binary with profile-guided optimization."""
+"""Build a host-native Pixi release binary with profile-guided optimization."""
 
+import argparse
 import os
 import shlex
 import shutil
@@ -9,22 +10,29 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-TARGET = "x86_64-unknown-linux-musl"
+LINUX_MUSL_TARGET = "x86_64-unknown-linux-musl"
 ZIG_TARGET = "x86_64-linux-musl"
 TRAINING_MANIFEST = ROOT / "scripts" / "pgo" / "pixi.toml"
 
-CARGO_ARGS = [
-    "--locked",
-    "--release",
-    "--manifest-path",
-    str(ROOT / "crates" / "pixi" / "Cargo.toml"),
-    "--features",
-    "self_update,performance",
-    "--bin",
-    "pixi",
-    "--target",
-    TARGET,
-]
+
+def cargo_args(target: str) -> list[str]:
+    return [
+        "--locked",
+        "--release",
+        "--manifest-path",
+        str(ROOT / "crates" / "pixi" / "Cargo.toml"),
+        "--features",
+        "self_update,performance",
+        "--bin",
+        "pixi",
+        "--target",
+        target,
+    ]
+
+
+def binary_path(target_dir: Path, target: str) -> Path:
+    executable = "pixi.exe" if target.endswith("-pc-windows-msvc") else "pixi"
+    return target_dir / target / "release" / executable
 
 
 def run(command: list[str], *, env: dict[str, str], quiet: bool = False) -> None:
@@ -63,6 +71,30 @@ def encoded_rustflags(profile_flag: str) -> str:
     return "\x1f".join([*shlex.split(os.environ.get("RUSTFLAGS", "")), profile_flag])
 
 
+def pgo_environment(target_dir: Path, profile_flag: str, target: str) -> dict[str, str]:
+    env = os.environ.copy()
+    env.pop("RUSTFLAGS", None)
+    env.update(
+        {
+            "CARGO_INCREMENTAL": "0",
+            "CARGO_TARGET_DIR": str(target_dir),
+            "CARGO_ENCODED_RUSTFLAGS": encoded_rustflags(profile_flag),
+        }
+    )
+    if target.endswith("-apple-darwin"):
+        for variable in ("CFLAGS", "CXXFLAGS"):
+            env[variable] = " ".join(
+                filter(
+                    None,
+                    (
+                        env.get(variable),
+                        "-fno-profile-generate -fno-profile-use",
+                    ),
+                )
+            )
+    return env
+
+
 def write_zig_wrapper(path: Path, compiler: str) -> None:
     # Zig 0.16 treats rustc's `-u __llvm_profile_runtime` as an input file.
     # Passing the same option directly to the linker keeps the PGO runtime alive.
@@ -85,35 +117,34 @@ exec cargo-zigbuild zig {compiler} -- -g -fno-sanitize=all -target {ZIG_TARGET} 
     path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 
-def instrumented_build(target_dir: Path, profile_dir: Path, working_dir: Path) -> Path:
-    wrappers = working_dir / "wrappers"
-    wrappers.mkdir(parents=True)
-    cc_wrapper = wrappers / "zigcc"
-    cxx_wrapper = wrappers / "zigcxx"
-    ar_wrapper = wrappers / "zigar"
-    write_zig_wrapper(cc_wrapper, "cc")
-    write_zig_wrapper(cxx_wrapper, "c++")
-    ar_wrapper.write_text(
-        '#!/usr/bin/env bash\nset -euo pipefail\nexec cargo-zigbuild zig ar -- "$@"\n'
-    )
-    ar_wrapper.chmod(ar_wrapper.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+def instrumented_build(target_dir: Path, profile_dir: Path, working_dir: Path, target: str) -> Path:
+    env = pgo_environment(target_dir, f"-Cprofile-generate={profile_dir}", target)
 
-    target_env_name = TARGET.replace("-", "_")
-    env = os.environ.copy()
-    env.pop("RUSTFLAGS", None)
-    env.update(
-        {
-            "CARGO_INCREMENTAL": "0",
-            "CARGO_TARGET_DIR": str(target_dir),
-            "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER": str(cc_wrapper),
-            f"CC_{target_env_name}": str(cc_wrapper),
-            f"CXX_{target_env_name}": str(cxx_wrapper),
-            f"AR_{target_env_name}": str(ar_wrapper),
-            "CARGO_ENCODED_RUSTFLAGS": encoded_rustflags(f"-Cprofile-generate={profile_dir}"),
-        }
-    )
-    run(["cargo", "build", *CARGO_ARGS], env=env)
-    return target_dir / TARGET / "release" / "pixi"
+    if target == LINUX_MUSL_TARGET:
+        wrappers = working_dir / "wrappers"
+        wrappers.mkdir(parents=True)
+        cc_wrapper = wrappers / "zigcc"
+        cxx_wrapper = wrappers / "zigcxx"
+        ar_wrapper = wrappers / "zigar"
+        write_zig_wrapper(cc_wrapper, "cc")
+        write_zig_wrapper(cxx_wrapper, "c++")
+        ar_wrapper.write_text(
+            '#!/usr/bin/env bash\nset -euo pipefail\nexec cargo-zigbuild zig ar -- "$@"\n'
+        )
+        ar_wrapper.chmod(ar_wrapper.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+
+        target_env_name = target.replace("-", "_")
+        env.update(
+            {
+                "CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER": str(cc_wrapper),
+                f"CC_{target_env_name}": str(cc_wrapper),
+                f"CXX_{target_env_name}": str(cxx_wrapper),
+                f"AR_{target_env_name}": str(ar_wrapper),
+            }
+        )
+
+    run(["cargo", "build", *cargo_args(target)], env=env)
+    return binary_path(target_dir, target)
 
 
 def train(binary: Path, profile_dir: Path, working_dir: Path) -> None:
@@ -142,28 +173,28 @@ def train(binary: Path, profile_dir: Path, working_dir: Path) -> None:
         run([str(binary), *arguments], env=env, quiet=True)
 
 
-def optimized_build(target_dir: Path, profile_data: Path) -> Path:
-    env = os.environ.copy()
-    env.pop("RUSTFLAGS", None)
-    env.update(
-        {
-            "CARGO_INCREMENTAL": "0",
-            "CARGO_TARGET_DIR": str(target_dir),
-            "CARGO_ENCODED_RUSTFLAGS": encoded_rustflags(f"-Cprofile-use={profile_data}"),
-        }
-    )
-    run(["cargo", "zigbuild", *CARGO_ARGS], env=env)
-    return target_dir / TARGET / "release" / "pixi"
+def optimized_build(target_dir: Path, profile_data: Path, target: str) -> Path:
+    env = pgo_environment(target_dir, f"-Cprofile-use={profile_data}", target)
+    builder = "zigbuild" if target == LINUX_MUSL_TARGET else "build"
+    run(["cargo", builder, *cargo_args(target)], env=env)
+    return binary_path(target_dir, target)
 
 
 def main() -> None:
-    if shutil.which("cargo-zigbuild") is None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--target", required=True, help="Host-native Rust target triple")
+    args = parser.parse_args()
+
+    host = rust_host()
+    if args.target not in (host, LINUX_MUSL_TARGET):
+        parser.error(f"PGO training requires the host-native target {host}, got {args.target}")
+    if args.target == LINUX_MUSL_TARGET and shutil.which("cargo-zigbuild") is None:
         raise FileNotFoundError("cargo-zigbuild is required")
     if not TRAINING_MANIFEST.is_file():
         raise FileNotFoundError(TRAINING_MANIFEST)
 
     target_dir = Path(os.environ.get("CARGO_TARGET_DIR", ROOT / "target")).resolve()
-    working_dir = target_dir / "pgo"
+    working_dir = target_dir / "pgo" / args.target
     instrumented_target_dir = working_dir / "instrumented"
     optimized_target_dir = working_dir / "optimized"
     profile_dir = working_dir / "profiles"
@@ -173,7 +204,9 @@ def main() -> None:
     profile_dir.mkdir(parents=True)
 
     print("Building instrumented Pixi binary")
-    instrumented_binary = instrumented_build(instrumented_target_dir, profile_dir, working_dir)
+    instrumented_binary = instrumented_build(
+        instrumented_target_dir, profile_dir, working_dir, args.target
+    )
 
     print("Training instrumented Pixi binary")
     train(instrumented_binary, profile_dir, working_dir)
@@ -188,8 +221,8 @@ def main() -> None:
     )
 
     print("Building PGO-optimized Pixi binary")
-    optimized_binary = optimized_build(optimized_target_dir, profile_data)
-    binary = target_dir / TARGET / "release" / "pixi"
+    optimized_binary = optimized_build(optimized_target_dir, profile_data, args.target)
+    binary = binary_path(target_dir, args.target)
     binary.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(optimized_binary, binary)
     print(binary)

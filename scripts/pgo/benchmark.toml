@@ -1,0 +1,25 @@
+[workspace]
+name = "pixi-pgo-benchmark"
+channels = ["https://prefix.dev/conda-forge"]
+platforms = ["linux-64", "osx-arm64", "win-64"]
+
+[dependencies]
+python = "3.12.*"
+httpx = "*"
+rich = "*"
+sqlalchemy = "*"
+typer = "*"
+
+[feature.server.dependencies]
+flask = "*"
+starlette = "*"
+
+[feature.data.dependencies]
+duckdb = "*"
+pyarrow = "*"
+
+[environments]
+default = []
+server = ["server"]
+data = ["data"]
+full = ["server", "data"]
