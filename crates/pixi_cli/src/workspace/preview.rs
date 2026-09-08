@@ -106,13 +106,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let workspace_ctx = cli_context(located?);
             let mut stdout = std::io::stdout();
             for flag in workspace_ctx.preview_flags().await {
-                writeln!(stdout, "{flag}")
-                    .inspect_err(|e| {
-                        if e.kind() == std::io::ErrorKind::BrokenPipe {
-                            std::process::exit(0);
-                        }
-                    })
-                    .into_diagnostic()?;
+                pixi_utils::io::ignore_broken_pipe(writeln!(stdout, "{flag}")).into_diagnostic()?;
             }
             Ok(())
         }
