@@ -1,4 +1,4 @@
-use std::{fmt::Display, io::Write, path::PathBuf};
+use std::{fmt::Display, io::Write, path::PathBuf, sync::OnceLock};
 
 use chrono::{DateTime, Local};
 use clap::Parser;
@@ -26,6 +26,18 @@ use tokio::task::spawn_blocking;
 use crate::cli_config::WorkspaceConfig;
 
 static WIDTH: usize = 19;
+
+/// The commit the running binary was built from, handed over by the binary
+/// crate through [`crate::execute`].
+static GIT_SHA: OnceLock<&'static str> = OnceLock::new();
+
+/// Records the commit the running binary was built from. Does nothing when the
+/// build carried no commit, or once a commit has been recorded.
+pub(crate) fn set_git_sha(git_sha: Option<&'static str>) {
+    if let Some(git_sha) = git_sha.filter(|sha| !sha.is_empty()) {
+        GIT_SHA.get_or_init(|| git_sha);
+    }
+}
 
 /// Information about the system, workspace and environments for the current machine.
 #[derive(Parser, Debug)]
@@ -305,6 +317,10 @@ pub struct Info {
     #[serde_as(as = "Vec<DisplayFromStr>")]
     virtual_packages: Vec<GenericVirtualPackage>,
     version: String,
+    /// The commit the binary was built from, or `None` when the build carried
+    /// no git metadata. Omitted from the human-readable output when absent, but
+    /// always present as a (possibly `null`) field in the JSON output.
+    git_sha: Option<&'static str>,
     tls_backend: String,
     cache_dir: Option<PathBuf>,
     cache_size: Option<String>,
@@ -329,6 +345,9 @@ impl Display for Info {
             bold.apply_to("Pixi version"),
             console::style(&self.version).green()
         )?;
+        if let Some(git_sha) = self.git_sha {
+            writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Git SHA"), git_sha)?;
+        }
         writeln!(
             f,
             "{:>WIDTH$}: {}",
@@ -587,6 +606,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         platform: Platform::current().to_string(),
         virtual_packages,
         version: consts::PIXI_VERSION.to_string(),
+        git_sha: GIT_SHA.get().copied(),
         tls_backend: tls_backend().to_string(),
         cache_dir: Some(pixi_config::get_cache_dir()?),
         cache_size,
