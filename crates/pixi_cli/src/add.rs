@@ -496,17 +496,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             };
 
             let mut specs = args.dependency_config.specs()?;
-            if let Some(channels) = &args.channel {
-                if let Some(channel) = channels.first() {
-                    for spec in specs.values_mut() {
-                        let new_spec = rattler_conda_types::MatchSpec::from_str(
-                            &format!("{}::{}", channel, spec),
-                            rattler_conda_types::ParseMatchSpecOptions::lenient()
-                                .with_repodata_revision(rattler_conda_types::RepodataRevision::V3),
-                        )
-                        .into_diagnostic()?;
-                        *spec = new_spec;
-                    }
+            if let Some(channels) = &args.channel
+                && let Some(channel) = channels.first()
+            {
+                for spec in specs.values_mut() {
+                    let new_spec = rattler_conda_types::MatchSpec::from_str(
+                        &format!("{}::{}", channel, spec),
+                        rattler_conda_types::ParseMatchSpecOptions::lenient()
+                            .with_repodata_revision(rattler_conda_types::RepodataRevision::V3),
+                    )
+                    .into_diagnostic()?;
+                    *spec = new_spec;
                 }
             }
 
