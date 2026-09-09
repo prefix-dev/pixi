@@ -30,11 +30,11 @@ pub enum PrereleaseMode {
     Disallow,
     /// Allow all pre-releases
     Allow,
-    /// Allow pre-releases if no stable version available
+    /// Prefer stable versions, falling back to pre-releases when necessary
     IfNecessary,
-    /// Only allow explicit pre-releases
+    /// Prefer stable versions; allow pre-releases only for explicitly opted-in packages
     Explicit,
-    /// Either necessary or explicitly requested (default)
+    /// Alias for IfNecessary (default), following uv's pre-release policy
     #[default]
     IfNecessaryOrExplicit,
 }

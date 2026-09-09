@@ -451,6 +451,9 @@ pub enum PlatformUnsat {
     #[error("direct pypi url dependency to a conda installed package '{0}' is not supported")]
     DirectUrlDependencyOnCondaInstalledPackage(uv_normalize::PackageName),
 
+    #[error("git archive dependency '{0}' is not supported")]
+    UnsupportedGitArchiveDependency(uv_normalize::PackageName),
+
     #[error("git dependency on a conda installed package '{0}' is not supported")]
     GitDependencyOnCondaInstalledPackage(uv_normalize::PackageName),
 

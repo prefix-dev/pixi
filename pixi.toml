@@ -15,7 +15,7 @@ preview = ["pixi-build"]
 requires-pixi = ">=0.74"
 
 [workspace.build-variants]
-rust_compiler_version = [">=1.95,<1.96"]
+rust_compiler_version = [">=1.96,<1.97"]
 
 [workspace.target.linux-64.build-variants]
 c_stdlib_version = ["2.17"]
@@ -54,7 +54,7 @@ python = ">=3.14.6,<3.15"
 # Shared feature for Rust toolchain
 #
 [feature.rust.dependencies]
-rust-src = ">=1.95,<1.96"
+rust-src = ">=1.96,<1.97"
 
 # The target dir is anchored to the workspace root so that cargo invocations
 # from subdirectories don't create stray target folders at the invocation site.
