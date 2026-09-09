@@ -2430,19 +2430,11 @@
         "index-strategy": {
           "title": "Index-Strategy",
           "description": "The strategy to use when resolving packages from multiple indexes",
-          "anyOf": [
-            {
-              "type": "string",
-              "const": "first-index"
-            },
-            {
-              "type": "string",
-              "const": "unsafe-first-match"
-            },
-            {
-              "type": "string",
-              "const": "unsafe-best-match"
-            }
+          "type": "string",
+          "enum": [
+            "first-index",
+            "unsafe-first-match",
+            "unsafe-best-match"
           ],
           "examples": [
             "first-index",
@@ -2524,27 +2516,13 @@
         "prerelease-mode": {
           "title": "Prerelease-Mode",
           "description": "The strategy to use when considering pre-release versions",
-          "anyOf": [
-            {
-              "type": "string",
-              "const": "disallow"
-            },
-            {
-              "type": "string",
-              "const": "allow"
-            },
-            {
-              "type": "string",
-              "const": "if-necessary"
-            },
-            {
-              "type": "string",
-              "const": "explicit"
-            },
-            {
-              "type": "string",
-              "const": "if-necessary-or-explicit"
-            }
+          "type": "string",
+          "enum": [
+            "disallow",
+            "allow",
+            "if-necessary",
+            "explicit",
+            "if-necessary-or-explicit"
           ],
           "examples": [
             "disallow",

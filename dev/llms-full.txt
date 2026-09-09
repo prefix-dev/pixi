@@ -152,7 +152,7 @@ To install `pixi`, run:
         ```
     3. **Create your script:**
         ```py title="hello.py"
-        --8<-- "docs/source_files/pixi_workspaces/introduction/deps_add/hello.py"
+        --8 < --"docs/source_files/pixi_workspaces/introduction/deps_add/hello.py"
         ```
     5. **Add a task:**
         ```
@@ -1749,9 +1749,7 @@ from osgeo import ogr
 
 ogr.UseExceptions()
 
-response = httpx.get(
-    "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson"
-)
+response = httpx.get("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson")
 dataset = ogr.Open(response.text)
 print(f"{dataset.GetLayer().GetFeatureCount()} earthquakes in the past hour")
 ```
@@ -2359,8 +2357,10 @@ We will add a new function to the `src/pixi_py/__init__.py` file:
 ```python
 from rich import print
 
+
 def hello():
     return "Hello, [bold magenta]World[/bold magenta]!", ":vampire:"
+
 
 def say_hello():
     print(*hello())
@@ -2409,6 +2409,7 @@ Giving us the following project structure:
 
 ```python
 from pixi_py import hello
+
 
 def test_pixi_py():
     assert hello() == ("Hello, [bold magenta]World[/bold magenta]!", ":vampire:")
@@ -2581,7 +2582,7 @@ Here are examples for languages that have a great selection of libraries on cond
 === "Python"
 
     ```py title="main.py"
-    --8<-- "docs/source_files/conda_scripts/main.py"
+    --8 < --"docs/source_files/conda_scripts/main.py"
     ```
 
 === "R"
@@ -3968,6 +3969,7 @@ uv supports [PEP 723 inline script metadata](https://peps.python.org/pep-0723/) 
 # dependencies = ["requests"]
 # ///
 import requests
+
 print(requests.get("https://example.com").status_code)
 ```
 
@@ -8800,7 +8802,7 @@ The Python package has a single function `main`.
 Calling that, will print a table containing the name, age and city of three people.
 
 ```py title="src/python_rich/__init__.py"
---8<-- "docs/source_files/pixi_workspaces/pixi_build/python/src/python_rich/__init__.py"
+--8 < --"docs/source_files/pixi_workspaces/pixi_build/python/src/python_rich/__init__.py"
 ```
 
 
@@ -9221,7 +9223,7 @@ Within a Pixi manifest, you can manage a workspace and/or describe a package.
 In the case of `python_rich` we choose to do both, so the only thing we have to add `cpp_math` as a [run dependency](../reference/pixi_manifest.md#run-dependencies) of `python_rich`.
 
 ```py title="pixi.toml"
---8<-- "docs/source_files/pixi_workspaces/pixi_build/workspace/pixi.toml:run-dependencies"
+--8 < --"docs/source_files/pixi_workspaces/pixi_build/workspace/pixi.toml:run-dependencies"
 ```
 
 We only want to use the `workspace` table of the top-level manifest.
@@ -9259,7 +9261,7 @@ Luckily `cpp_math` exposes a function `add` which allows us to do exactly that.
 
 
 ```py title="src/python_rich/__init__.py"
---8<-- "docs/source_files/pixi_workspaces/pixi_build/workspace/src/python_rich/__init__.py"
+--8 < --"docs/source_files/pixi_workspaces/pixi_build/workspace/src/python_rich/__init__.py"
 ```
 
 If you run `pixi run start`, the age of each person should now be accurate:
@@ -11713,9 +11715,11 @@ mv pixi-myext ~/.local/bin/
 #!/usr/bin/env python3
 import sys
 
+
 def main():
     name = sys.argv[1] if len(sys.argv) > 1 else "World"
     print(f"Hello, {name}!")
+
 
 if __name__ == "__main__":
     main()
@@ -12692,7 +12696,13 @@ async def _install(
         target_prefix=target_prefix,
         client=Client(
             middlewares=[
-                MirrorMiddleware({"https://conda.anaconda.org/conda-forge": ["https://repo.prefix.dev/conda-forge"]}),
+                MirrorMiddleware(
+                    {
+                        "https://conda.anaconda.org/conda-forge": [
+                            "https://repo.prefix.dev/conda-forge"
+                        ]
+                    }
+                ),
                 AuthenticationMiddleware(),
             ]
         ),
