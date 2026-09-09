@@ -19,6 +19,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import NoReturn
 
 import questionary
 import tomli
@@ -37,15 +38,21 @@ def run(cmd: list[str], *, cwd: Path = ROOT) -> None:
     subprocess.run(cmd, check=True, cwd=cwd, text=True)
 
 
-def git_out(*args: str) -> str:
-    return subprocess.run(
-        ["git", *args], cwd=ROOT, text=True, capture_output=True, check=False
-    ).stdout.strip()
-
-
-def fail(msg: str) -> None:
+def fail(msg: str) -> NoReturn:
     print(f"\nerror: {msg}", file=sys.stderr)
     sys.exit(1)
+
+
+def capture(cmd: list[str]) -> str:
+    """Run `cmd` for its stdout, aborting with its stderr if it fails."""
+    result = subprocess.run(cmd, cwd=ROOT, text=True, capture_output=True, check=False)
+    if result.returncode != 0:
+        fail(f"command failed: {' '.join(cmd)}\n{result.stderr.strip()}")
+    return result.stdout.strip()
+
+
+def git_out(*args: str) -> str:
+    return capture(["git", *args])
 
 
 def is_jj() -> bool:
@@ -81,9 +88,7 @@ def fetched_version() -> Version:
 
 def gh_token() -> str:
     """A GitHub token from gh CLI auth, used to enrich git-cliff output."""
-    return subprocess.run(
-        ["gh", "auth", "token"], cwd=ROOT, text=True, capture_output=True, check=False
-    ).stdout.strip()
+    return capture(["gh", "auth", "token"])
 
 
 def cliff_preview(tag: str) -> str:

@@ -151,17 +151,16 @@ def run(cmd: list[str], *, cwd: Path = ROOT) -> None:
         fail(f"command failed: {' '.join(cmd)}")
 
 
-def git_out(*args: str, cwd: Path = ROOT) -> str:
-    return subprocess.run(
-        ["git", *args], cwd=cwd, text=True, capture_output=True, check=False
-    ).stdout.strip()
-
-
-def capture(cmd: list[str]) -> str:
-    result = subprocess.run(cmd, cwd=ROOT, text=True, capture_output=True, check=False)
+def capture(cmd: list[str], *, cwd: Path = ROOT) -> str:
+    """Run `cmd` for its stdout, aborting with its stderr if it fails."""
+    result = subprocess.run(cmd, cwd=cwd, text=True, capture_output=True, check=False)
     if result.returncode != 0:
         fail(f"command failed: {' '.join(cmd)}\n{result.stderr.strip()}")
     return result.stdout.strip()
+
+
+def git_out(*args: str, cwd: Path = ROOT) -> str:
+    return capture(["git", *args], cwd=cwd)
 
 
 def resolve_remote(slug: str) -> str | None:
