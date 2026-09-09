@@ -1,8 +1,9 @@
-import subprocess
-import os
 import argparse
-from pathlib import Path
+import os
+import subprocess
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Self
 
 
 @dataclass
@@ -12,7 +13,7 @@ class Results:
     installed: list[str]
     failed: list[str]
 
-    def __iadd__(self, other: "Results") -> "Results":
+    def __iadd__(self, other: "Results") -> Self:
         self.succeeded += other.succeeded
         self.skipped += other.skipped
         self.installed += other.installed
@@ -22,7 +23,7 @@ class Results:
 
 def has_test_task(folder: Path, pixi_exec: Path) -> bool:
     command = [str(pixi_exec), "task", "--manifest-path", str(folder), "list"]
-    result = subprocess.run(command, capture_output=True, text=True)
+    result = subprocess.run(command, capture_output=True, text=True, check=False)
     return "test" in result.stderr
 
 
@@ -48,7 +49,9 @@ def run_test_in_subfolders(
         if run_clean:
             clean_command = [str(pixi_exec), "clean", "--manifest-path", str(manifest_path)]
             print(f"Running clean command in {folder}: {' '.join(clean_command)}")
-            clean_result = subprocess.run(clean_command, capture_output=True, text=True)
+            clean_result = subprocess.run(
+                clean_command, capture_output=True, text=True, check=False
+            )
             if clean_result.returncode != 0:
                 print(f"\033[91m ❌ {folder} (clean failed)\033[0m")
                 print(f"\tOutput:\n{clean_result.stdout.replace('\n', '\n\t')}")
@@ -68,7 +71,7 @@ def run_test_in_subfolders(
             do_install = True
 
         print(f"Running command in {folder}: {' '.join(command)}")
-        result = subprocess.run(command, capture_output=True, text=True)
+        result = subprocess.run(command, capture_output=True, text=True, check=False)
 
         if result.returncode != 0:
             print(f"\033[91m ❌ {folder}\033[0m")
@@ -85,7 +88,7 @@ def run_test_in_subfolders(
             results.succeeded.append(str(folder))
 
         print(f"Done: {i + 1}/{tests}")
-        print("")
+        print()
     return results
 
 

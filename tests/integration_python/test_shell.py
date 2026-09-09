@@ -1,6 +1,6 @@
-from pathlib import Path
 import json
 import platform
+from pathlib import Path
 
 from .common import ALL_PLATFORMS, verify_cli_command
 

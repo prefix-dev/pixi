@@ -3,13 +3,13 @@ import platform
 import re
 import subprocess
 import sys
-import tomli
 from collections.abc import Sequence
 from enum import IntEnum
 from pathlib import Path
 from typing import Any, override
 
 import pytest
+import tomli
 from rattler import Platform
 
 # Regex pattern to match ANSI escape sequences
@@ -89,6 +89,7 @@ def verify_cli_command(
         env=complete_env,
         cwd=cwd,
         input=stdin.encode() if isinstance(stdin, str) else stdin,
+        check=False,
     )
     # Decode stdout and stderr explicitly using UTF-8
     stdout = process.stdout.decode("utf-8", errors="replace")
@@ -216,11 +217,7 @@ def run_and_get_env(pixi: Path, *args: str, env_var: str) -> tuple[str | None, O
 
     try:
         result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
+            cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False
         )
 
         value = result.stdout.strip()
@@ -313,7 +310,7 @@ def check_command_supports_flags(command_parts: list[str], *flag_names: str) -> 
 
         return tuple(results)
 
-    except (OSError, IOError):
+    except OSError:
         return tuple(False for _ in flag_names)
 
 

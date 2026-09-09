@@ -1,4 +1,4 @@
-from math import sin, cos
+from math import cos, sin
 
 import rospy
 from turtlesim.msg import Pose

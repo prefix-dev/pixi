@@ -100,6 +100,7 @@ def _run_unchecked(pixi: Path, manifest: Path) -> Output:
         [str(part) for part in command],
         capture_output=True,
         env=dict(os.environ) | {"PIXI_NO_WRAP": "1"},
+        check=False,
     )
     return Output(
         command,

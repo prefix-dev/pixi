@@ -12,8 +12,8 @@ Run a single one with `pixi run test-specific-test <substring>`.
 from pathlib import Path
 
 import pytest
-import tomli_w
 import tomli
+import tomli_w
 
 from .common import (
     ExitCode,

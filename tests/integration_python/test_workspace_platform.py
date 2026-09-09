@@ -21,16 +21,15 @@ from __future__ import annotations
 
 import json
 import sys
-import tomli
 from pathlib import Path
 from typing import Any
 
 import pytest
+import tomli
 import yaml
 from rattler.lock import LockFile
 
 from .common import CURRENT_PLATFORM, ExitCode, verify_cli_command
-
 
 # ----------------------------------------------------------------------------
 # helpers

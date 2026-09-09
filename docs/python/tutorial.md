@@ -295,8 +295,10 @@ We will add a new function to the `src/pixi_py/__init__.py` file:
 ```python
 from rich import print
 
+
 def hello():
     return "Hello, [bold magenta]World[/bold magenta]!", ":vampire:"
+
 
 def say_hello():
     print(*hello())
@@ -345,6 +347,7 @@ Giving us the following project structure:
 
 ```python
 from pixi_py import hello
+
 
 def test_pixi_py():
     assert hello() == ("Hello, [bold magenta]World[/bold magenta]!", ":vampire:")

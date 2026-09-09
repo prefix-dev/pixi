@@ -27,8 +27,8 @@ import tempfile
 from pathlib import Path
 
 from rich.console import Console
-from rich.panel import Panel
 from rich.markup import escape
+from rich.panel import Panel
 from testcontainers.core.container import DockerContainer
 
 console = Console()
@@ -213,11 +213,7 @@ def run_pixi_test(pixi_bin: str, project_dir: Path, tls_root_certs: str) -> tupl
     env["PIXI_TLS_ROOT_CERTS"] = tls_root_certs
 
     result = subprocess.run(
-        [pixi_bin, "install"],
-        cwd=project_dir,
-        env=env,
-        capture_output=True,
-        text=True,
+        [pixi_bin, "install"], cwd=project_dir, env=env, capture_output=True, text=True, check=False
     )
     output = result.stdout + result.stderr
     return result.returncode == 0, output
@@ -328,7 +324,7 @@ def main() -> int:
             console.print(f"Test B (should pass with tls-root-certs=native): {test_b_passed}")
             return 1
 
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         console.print(f"[red]Error: {escape(str(e))}[/red]")
         return 1
 

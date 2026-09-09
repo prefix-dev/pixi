@@ -46,7 +46,7 @@ def untar_file(tar_file_path: pathlib.Path, dst_path: pathlib.Path, keep_tar: bo
     try:
         with tarfile.open(tar_file_path, "r") as tf:
             tf.extractall(dst_path)
-    except Exception as error:
+    except (tarfile.TarError, OSError) as error:
         print(f"Error unzipping {tar_file_path}, error: {error}")
         return False
     if not keep_tar:

@@ -21,7 +21,6 @@ from .common import (
     verify_cli_command,
 )
 
-
 BACKEND_CHANNELS = [
     "https://prefix.dev/pixi-build-backends",
     "https://prefix.dev/conda-forge",
@@ -266,6 +265,7 @@ def test_rattler_build_backend_does_not_silently_drop_run_exports(
         cwd=pkg_dir,
         capture_output=True,
         text=True,
+        check=False,
     )
     if result.returncode == 0:
         packages = list(dist.glob("*.conda"))
