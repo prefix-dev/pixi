@@ -1,12 +1,12 @@
-import tomli
 from pathlib import Path
-from typing import TypeAlias, cast
+from typing import cast
 
 import pytest
+import tomli
 
 from .common import current_platform, repo_root, verify_cli_command
 
-Workspace: TypeAlias = dict[str, object]
+type Workspace = dict[str, object]
 
 
 def workspace_from_manifest(manifest_path: Path) -> Workspace | None:

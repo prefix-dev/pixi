@@ -25,9 +25,7 @@ from osgeo import ogr
 
 ogr.UseExceptions()
 
-response = httpx.get(
-    "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson"
-)
+response = httpx.get("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson")
 dataset = ogr.Open(response.text)
 print(f"{dataset.GetLayer().GetFeatureCount()} earthquakes in the past hour")
 ```

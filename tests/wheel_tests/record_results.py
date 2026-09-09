@@ -1,11 +1,10 @@
-import tomli
-import tomli_w
-
 from dataclasses import dataclass, field
-from filelock import FileLock
 from pathlib import Path
 from typing import Any
 
+import tomli
+import tomli_w
+from filelock import FileLock
 
 # Path to the results file, containing test outcomes
 RESULTS_FILE = Path(__file__).parent / ".wheel_test_results.toml"

@@ -18,8 +18,9 @@ template syntax in examples, so it is copied verbatim instead.
 """
 
 import re
-import tomli
 from pathlib import Path
+
+import tomli
 
 REPO_ROOT = Path(__file__).parent.parent
 DOCS_DIR = REPO_ROOT / "docs"

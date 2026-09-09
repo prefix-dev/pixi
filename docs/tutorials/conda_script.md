@@ -38,7 +38,7 @@ Here are examples for languages that have a great selection of libraries on cond
 === "Python"
 
     ```py title="main.py"
-    --8<-- "docs/source_files/conda_scripts/main.py"
+    --8 < --"docs/source_files/conda_scripts/main.py"
     ```
 
 === "R"

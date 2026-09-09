@@ -1,10 +1,10 @@
-import tomli
-
 from pathlib import Path
+
+import tomli
 from rich.console import Console
+from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
-from rich.panel import Panel
 
 from .read_wheels import read_wheel_file
 from .record_results import RESULTS_FILE

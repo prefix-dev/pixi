@@ -1,10 +1,11 @@
 import json
 import shutil
+import textwrap
 import threading
+from collections.abc import Iterator
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Iterator
 
 import pytest
 from inline_snapshot import snapshot
@@ -62,21 +63,22 @@ def test_pixi_init_script(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
     verify_cli_command([pixi, "init", "--script", script, "--channel", "testing"])
 
-    assert (
-        script.read_text()
-        == """#!/usr/bin/env python
-#
-# /// script
-# requires-python = ">=3.11"
-# dependencies = []
-#
-# [tool.pixi.workspace]
-# channels = ["testing"]
-# ///
+    # Indented and dedented so that the `# /// script` block doesn't start at the
+    # beginning of a line: tools that scan source files for PEP 723 metadata, like
+    # `ty`, would otherwise take this test module itself for a script.
+    assert script.read_text() == textwrap.dedent("""\
+        #!/usr/bin/env python
+        #
+        # /// script
+        # requires-python = ">=3.11"
+        # dependencies = []
+        #
+        # [tool.pixi.workspace]
+        # channels = ["testing"]
+        # ///
 
-print('hello')
-"""
-    )
+        print('hello')
+        """)
     assert not (tmp_pixi_workspace / "pixi.toml").exists()
     assert_no_workspace_state_created(tmp_pixi_workspace)
 

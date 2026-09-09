@@ -1,11 +1,11 @@
 import hashlib
-import tomli
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 from typing import override
 
 import pytest
+import tomli
 import tomli_w
 
 from ..common import CURRENT_PLATFORM, ExitCode, verify_cli_command
@@ -42,12 +42,10 @@ class PlatformConfig(ABC):
     @abstractmethod
     def shortcut_exists(self, data_home: Path, name: str) -> bool:
         """Given the name of a shortcut, return whether it exists or not."""
-        pass
 
     @abstractmethod
     def get_shortcut_content_hash(self, data_home: Path, name: str) -> str:
         """Get a hash of the shortcut content for comparison. Raises FileNotFoundError if shortcut doesn't exist."""
-        pass
 
 
 class LinuxConfig(PlatformConfig):

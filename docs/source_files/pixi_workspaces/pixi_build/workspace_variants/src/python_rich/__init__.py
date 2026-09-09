@@ -1,7 +1,8 @@
 from dataclasses import dataclass, fields
+
+import cpp_math
 from rich.console import Console
 from rich.table import Table
-import cpp_math
 
 
 @dataclass
