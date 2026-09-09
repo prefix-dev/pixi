@@ -225,7 +225,7 @@ impl<'p> TaskGraph<'p> {
     /// collide with task names.
     pub fn from_cmd_args<D: TaskDisambiguation<'p>>(
         project: &'p Workspace,
-        search_envs: &SearchEnvironments<'p, D>,
+        search_envs: &SearchEnvironments<'p, '_, D>,
         args: Vec<String>,
         skip_deps: bool,
         prefer_executable: PreferExecutable,
@@ -414,7 +414,7 @@ impl<'p> TaskGraph<'p> {
     /// Constructs a new instance of a [`TaskGraph`] from a root task.
     fn from_root<D: TaskDisambiguation<'p>>(
         project: &'p Workspace,
-        search_environments: &SearchEnvironments<'p, D>,
+        search_environments: &SearchEnvironments<'p, '_, D>,
         root: TaskNode<'p>,
         root_args: Option<Vec<TypedDependencyArg>>,
     ) -> Result<Self, TaskGraphError> {
