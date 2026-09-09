@@ -24,7 +24,12 @@ pub enum EnvironmentRef {
     Derived {
         parent: DerivedParent,
         package: PackageName,
+        /// The relation of this environment to `package`: its build or
+        /// its host environment. Used for labels (traces, cycle frames).
         kind: DerivedEnvKind,
+        /// Which of the parent's platforms this environment is solved
+        /// for. This is what [`EnvironmentRef::resolve`] applies.
+        platform: DerivedPlatform,
     },
 
     /// One-off spec that does not live in the registry. Content-hashed;
@@ -48,16 +53,19 @@ impl EnvironmentRef {
                 parent: DerivedParent::Workspace(w.clone()),
                 package,
                 kind: derived_env_kind,
+                platform: DerivedPlatform::of_kind(derived_env_kind),
             },
             EnvironmentRef::Derived { parent, .. } => Self::Derived {
                 parent: parent.clone(),
                 package,
                 kind: derived_env_kind,
+                platform: DerivedPlatform::of_kind(derived_env_kind),
             },
             EnvironmentRef::Ephemeral(eph) => Self::Derived {
                 parent: DerivedParent::Ephemeral(eph.clone()),
                 package,
                 kind: derived_env_kind,
+                platform: DerivedPlatform::of_kind(derived_env_kind),
             },
         }
     }
@@ -124,11 +132,13 @@ impl EnvironmentRef {
     pub fn resolve(&self, registry: &WorkspaceEnvRegistry) -> Arc<EnvironmentSpec> {
         match self {
             EnvironmentRef::Workspace(ws) => registry.get(ws.id()),
-            EnvironmentRef::Derived { parent, kind, .. } => {
+            EnvironmentRef::Derived {
+                parent, platform, ..
+            } => {
                 let parent_spec = parent.resolve(registry);
-                let build_environment = match kind {
-                    DerivedEnvKind::Build => parent_spec.build_environment.to_build_from_build(),
-                    DerivedEnvKind::Host => parent_spec.build_environment.clone(),
+                let build_environment = match platform {
+                    DerivedPlatform::Build => parent_spec.build_environment.to_build_from_build(),
+                    DerivedPlatform::Host => parent_spec.build_environment.clone(),
                 };
                 Arc::new(EnvironmentSpec {
                     build_environment,
@@ -171,18 +181,45 @@ impl DerivedParent {
     }
 }
 
-/// Which derived environment a [`EnvironmentRef::Derived`] represents.
-/// The build/host derivation is a pure function of the parent
-/// [`BuildEnvironment`](crate::BuildEnvironment).
+/// The relation of a [`EnvironmentRef::Derived`] environment to its
+/// package: the environment its build backend runs in, or the
+/// environment the built package targets. Labels traces and cycle
+/// frames; the platform the environment is solved for is
+/// [`DerivedPlatform`].
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, Display)]
 pub enum DerivedEnvKind {
-    /// Environment used to run the build backend itself. Derived via
+    /// Environment used to run the build backend itself.
+    Build,
+
+    /// Environment the built package targets.
+    Host,
+}
+
+/// Which of the parent's two platforms a [`EnvironmentRef::Derived`]
+/// environment is solved for.
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+pub enum DerivedPlatform {
+    /// The parent's build platform: the parent's `BuildEnvironment` is
+    /// folded with
     /// [`BuildEnvironment::to_build_from_build`](crate::BuildEnvironment::to_build_from_build).
     Build,
 
-    /// Environment the built package targets. Today this is a clone of
-    /// the parent `BuildEnvironment`.
+    /// The parent's host platform: the parent's `BuildEnvironment` is
+    /// used unchanged.
     Host,
+}
+
+impl DerivedPlatform {
+    /// The platform a `kind` environment is solved for when its parent is
+    /// solved for the parent's own host platform: the build environment
+    /// runs on the build platform, the host environment targets the host
+    /// platform.
+    pub fn of_kind(kind: DerivedEnvKind) -> Self {
+        match kind {
+            DerivedEnvKind::Build => DerivedPlatform::Build,
+            DerivedEnvKind::Host => DerivedPlatform::Host,
+        }
+    }
 }
 
 impl fmt::Display for EnvironmentRef {
@@ -193,6 +230,7 @@ impl fmt::Display for EnvironmentRef {
                 parent,
                 package,
                 kind,
+                ..
             } => write!(f, "{kind} of {} in {}", package.as_normalized(), parent),
             EnvironmentRef::Ephemeral(eph) => write!(
                 f,
