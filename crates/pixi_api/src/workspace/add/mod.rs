@@ -43,7 +43,7 @@ pub async fn add_conda_dep(
             channels
                 .iter()
                 .cloned()
-                .map(pixi_manifest::PrioritizedChannel::from),
+                .map(|c| c.into()),
             &dep_options.feature,
             false,
         )?;
