@@ -1873,6 +1873,8 @@ on every invocation and executed from a secure temporary `.py` file, while
 their environment is reused from Pixi's cache. Relative paths in remote
 metadata resolve from the directory where Pixi was invoked.
 
+URLs also support [`conda-script` blocks](../tutorials/conda_script.md).
+
 Remote inputs are execution-only: commands that edit, inspect, export, or lock
 a script continue to require a local path. A remote script has no adjacent lock
 file, so it cannot be run with `--locked` or `--frozen`.
@@ -2573,6 +2575,15 @@ $ pixi run --script main.R
 ```
 
 Pixi solves the dependencies, installs the environment into its cache and runs the entrypoint inside it.
+
+You can also run a script directly from an HTTP or HTTPS URL, including a GitHub Gist:
+
+```shell
+pixi run --experimental --script https://gist.github.com/ruben-arts/1dba132edbf91adcd604f12fbd181683
+```
+
+Pixi downloads the script into a temporary directory, preserving its filename, and reuses the cached environment.
+The [remote script rules](../python/scripts.md#run-the-script) also apply here.
 
 ## More languages
 
