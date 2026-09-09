@@ -12,13 +12,12 @@ use pixi_core::{
     },
 };
 use pixi_manifest::WithWarnings;
-use pixi_manifest::script::conda::CondaScriptManifest;
+use pixi_manifest::script::conda::{CondaScriptManifest, Entrypoint};
 use pixi_script_shell::{ShellContext, execute_sequence, parse_sequence};
 use pixi_task::get_task_env;
 use tracing::Level;
 
 use crate::{
-    process_exit,
     run::{Args, run_future_forwarding_signals},
     shared::install_platform::resolve_install_platform,
 };
@@ -37,8 +36,8 @@ pub(crate) fn detect_with_fallback(
 
 /// Whether the contents carry a conda-script block, well-formed or not.
 ///
-/// Transient script sources use this to explain that conda-script files only
-/// run from local paths, instead of reporting a missing PEP 723 block.
+/// Stdin uses this to report unsupported conda-script blocks instead of a
+/// missing PEP 723 block.
 pub(crate) fn looks_like_conda_script(contents: &[u8]) -> bool {
     !matches!(
         CondaScriptManifest::from_source("conda-script-probe", contents),
@@ -46,23 +45,41 @@ pub(crate) fn looks_like_conda_script(contents: &[u8]) -> bool {
     )
 }
 
-/// Solves and installs the environment of a `conda-script` file, then runs
-/// its entrypoint through the mini-shell with the CLI arguments appended.
-pub(crate) async fn execute_run(
-    manifest: CondaScriptManifest,
-    args: Args,
-    config: pixi_config::Config,
+pub(crate) fn ensure_enabled(
+    experimental: bool,
+    config: &pixi_config::Config,
+    source: &str,
 ) -> miette::Result<()> {
-    let script_path = manifest.path().to_owned();
-    let entrypoint = manifest.metadata().entrypoint.clone();
+    if !experimental && !config.experimental_conda_script() {
+        return Err(miette::miette!(
+            help = "conda-script support is experimental; opt in with `pixi config set experimental.conda-script true --global`, or add `--experimental` to this run",
+            "{source} contains a conda-script block"
+        ));
+    }
+    if !experimental {
+        eprintln!(
+            "warning: Running {source} through `experimental.conda-script`, a draft format that may still change",
+        );
+    }
+    Ok(())
+}
 
+/// Solves and installs the environment of a `conda-script` file, then runs
+/// its entrypoint through the mini-shell, returning its exit code so callers
+/// can clean up downloaded files before exiting.
+pub(crate) async fn execute_run(
+    workspace: WithWarnings<Workspace>,
+    entrypoint: Entrypoint,
+    args: Args,
+) -> miette::Result<i32> {
     let WithWarnings {
         value: workspace,
         warnings,
-    } = Workspace::from_conda_script(manifest, config)?;
+    } = workspace;
     for warning in warnings {
         tracing::warn!("{warning}");
     }
+    let script_path = workspace.workspace.provenance.path.clone();
     sanity_check_workspace(&workspace).await?;
 
     let environment = workspace.default_environment();
@@ -162,7 +179,7 @@ pub(crate) async fn execute_run(
                 .bold()
         );
         print_command(command);
-        return Ok(());
+        return Ok(0);
     }
 
     if allow_installs {
@@ -215,14 +232,20 @@ pub(crate) async fn execute_run(
         cwd: std::env::current_dir().into_diagnostic()?,
         kill_signal: kill_signal.clone(),
     };
+    // Interactive SIGINT reaches the child directly. Keep Pixi alive long
+    // enough to remove a downloaded script before propagating its exit.
+    #[cfg(unix)]
+    let _interrupt = workspace
+        .persistent_lock_file_path()
+        .is_none()
+        .then(|| tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt()))
+        .transpose()
+        .into_diagnostic()?;
     let code = run_future_forwarding_signals(
         kill_signal,
         execute_sequence(&sequence, &args.task, &context),
     )
     .await
     .map_err(Report::new)?;
-    if code != 0 {
-        process_exit::exit_with_code(code);
-    }
-    Ok(())
+    Ok(code)
 }

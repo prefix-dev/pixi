@@ -276,11 +276,11 @@ check-openssl = {
 }
 dprint-check = {
   cmd = "dprint check --log-level=silent",
-  description = "Check formatting with dprint",
+  description = "Check YAML formatting with dprint",
 }
 dprint-fmt = {
   cmd = "dprint fmt --incremental=false",
-  description = "Format with dprint",
+  description = "Format YAML with dprint",
 }
 ruff-fmt = {
   cmd = "ruff format --exit-non-zero-on-format --force-exclude",
