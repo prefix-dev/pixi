@@ -151,6 +151,8 @@ on every invocation and executed from a secure temporary `.py` file, while
 their environment is reused from Pixi's cache. Relative paths in remote
 metadata resolve from the directory where Pixi was invoked.
 
+URLs also support [`conda-script` blocks](../tutorials/conda_script.md).
+
 Remote inputs are execution-only: commands that edit, inspect, export, or lock
 a script continue to require a local path. A remote script has no adjacent lock
 file, so it cannot be run with `--locked` or `--frozen`.
