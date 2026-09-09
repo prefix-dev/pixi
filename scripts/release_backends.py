@@ -33,8 +33,8 @@ import sys
 import tempfile
 import urllib.request
 from collections import Counter
-from functools import lru_cache
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, NoReturn
 
@@ -147,16 +147,18 @@ def fail(msg: str) -> NoReturn:
 def run(cmd: list[str], *, cwd: Path = ROOT) -> None:
     location = "" if cwd == ROOT else f"  (in {cwd})"
     console.print(f"[dim]$ {' '.join(cmd)}{location}[/dim]")
-    if subprocess.run(cmd, cwd=cwd).returncode != 0:
+    if subprocess.run(cmd, cwd=cwd, check=False).returncode != 0:
         fail(f"command failed: {' '.join(cmd)}")
 
 
 def git_out(*args: str, cwd: Path = ROOT) -> str:
-    return subprocess.run(["git", *args], cwd=cwd, text=True, capture_output=True).stdout.strip()
+    return subprocess.run(
+        ["git", *args], cwd=cwd, text=True, capture_output=True, check=False
+    ).stdout.strip()
 
 
 def capture(cmd: list[str]) -> str:
-    result = subprocess.run(cmd, cwd=ROOT, text=True, capture_output=True)
+    result = subprocess.run(cmd, cwd=ROOT, text=True, capture_output=True, check=False)
     if result.returncode != 0:
         fail(f"command failed: {' '.join(cmd)}\n{result.stderr.strip()}")
     return result.stdout.strip()
@@ -218,7 +220,7 @@ def version_from_toml(text: str, table: str = "package") -> str:
     doc = tomlkit.parse(text)
     version = doc[table]["version"]
     if not isinstance(version, str):
-        raise ValueError("version is not a string")
+        raise TypeError("version is not a string")
     return version
 
 
@@ -504,7 +506,7 @@ def compute_tarball_sha256(tag: str) -> str:
     url = f"https://github.com/{REPO}/archive/refs/tags/{tag}.tar.gz"
     console.print(f"  Downloading [dim]{url}[/dim]")
     sha256 = hashlib.sha256()
-    with urllib.request.urlopen(url) as response:  # noqa: S310
+    with urllib.request.urlopen(url) as response:
         while chunk := response.read(65536):
             sha256.update(chunk)
     digest = sha256.hexdigest()

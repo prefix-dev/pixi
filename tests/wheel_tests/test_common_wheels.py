@@ -1,13 +1,14 @@
 import os
 import pathlib
-import pytest
 import subprocess
 import sys
 import time
 
+import pytest
+
+from .helpers import add_system_requirements, log_called_process_error, run
 from .read_wheels import Package, read_wheel_file
 from .record_results import record_result
-from .helpers import add_system_requirements, log_called_process_error, run
 
 
 @pytest.mark.flaky(reruns=5, reruns_delay=1, condition=sys.platform.startswith("win32"))
@@ -61,7 +62,7 @@ def test_wheel(
         # Log the error
         log_called_process_error(package.to_add_cmd(), e, std_err_only=True)
         # Re-raise the exception to fail the test
-        raise e
+        raise
 
 
 def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:

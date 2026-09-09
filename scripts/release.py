@@ -18,10 +18,10 @@ import re
 import shutil
 import subprocess
 import sys
-import tomli
 from pathlib import Path
 
 import questionary
+import tomli
 
 ROOT = Path(__file__).resolve().parent.parent
 REPO = "prefix-dev/pixi"
@@ -38,7 +38,9 @@ def run(cmd: list[str], *, cwd: Path = ROOT) -> None:
 
 
 def git_out(*args: str) -> str:
-    return subprocess.run(["git", *args], cwd=ROOT, text=True, capture_output=True).stdout.strip()
+    return subprocess.run(
+        ["git", *args], cwd=ROOT, text=True, capture_output=True, check=False
+    ).stdout.strip()
 
 
 def fail(msg: str) -> None:
@@ -80,7 +82,7 @@ def fetched_version() -> Version:
 def gh_token() -> str:
     """A GitHub token from gh CLI auth, used to enrich git-cliff output."""
     return subprocess.run(
-        ["gh", "auth", "token"], cwd=ROOT, text=True, capture_output=True
+        ["gh", "auth", "token"], cwd=ROOT, text=True, capture_output=True, check=False
     ).stdout.strip()
 
 
@@ -107,6 +109,7 @@ def cliff_preview(tag: str) -> str:
         cwd=ROOT,
         text=True,
         stdout=subprocess.PIPE,
+        check=False,
     )
     if result.returncode != 0:
         fail(f"git-cliff failed with exit code {result.returncode}")

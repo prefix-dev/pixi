@@ -20,9 +20,7 @@ def run(cmd: list[str]) -> None:
 def rev_parse(ref: str) -> str | None:
     """Resolve a git ref to a commit hash, or None if it doesn't exist."""
     result = subprocess.run(
-        ["git", "rev-parse", f"{ref}^{{commit}}"],
-        capture_output=True,
-        text=True,
+        ["git", "rev-parse", f"{ref}^{{commit}}"], capture_output=True, text=True, check=False
     )
     if result.returncode == 0:
         return result.stdout.strip()

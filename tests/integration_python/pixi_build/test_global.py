@@ -1,8 +1,8 @@
 from pathlib import Path
 
 import pytest
-import tomli_w
 import tomli
+import tomli_w
 
 from .common import (
     CURRENT_PLATFORM,

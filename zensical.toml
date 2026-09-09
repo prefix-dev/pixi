@@ -76,9 +76,7 @@ nav = [
           { "Multiple Packages in Workspace" = "build/workspace.md" },
           { "Variants" = "build/variants.md" },
           { "Advanced Building Using rattler-build" = "build/advanced_cpp.md" },
-          {
-            "Cross Compilation using rattler-build" = "build/cross_compilation.md"
-          },
+          { "Cross Compilation using rattler-build" = "build/cross_compilation.md" },
         ]
       },
       { "Dependency Types" = "build/dependency_types.md" },
@@ -129,9 +127,7 @@ nav = [
       {
         "Continuous Integration" = [
           { "GitHub Actions" = "integration/ci/github_actions.md" },
-          {
-            "Pixi Diff-to-markdown" = "integration/ci/updates_github_actions.md"
-          },
+          { "Pixi Diff-to-markdown" = "integration/ci/updates_github_actions.md" },
         ]
       },
       {
@@ -139,12 +135,8 @@ nav = [
           { "Introduction" = "integration/extensions/introduction.md" },
           { "Pixi Browse" = "integration/extensions/pixi_browse.md" },
           { "Pixi Diff" = "integration/extensions/pixi_diff.md" },
-          {
-            "Pixi Diff-to-markdown" = "integration/ci/updates_github_actions.md"
-          },
-          {
-            "Pixi Install-to-prefix" = "integration/extensions/pixi_install_to_prefix.md"
-          },
+          { "Pixi Diff-to-markdown" = "integration/ci/updates_github_actions.md" },
+          { "Pixi Install-to-prefix" = "integration/extensions/pixi_install_to_prefix.md" },
           { "Pixi Pack" = "deployment/pixi_pack.md" },
           { "Pixi Skills" = "integration/extensions/pixi_skills.md" },
         ]
@@ -279,32 +271,18 @@ nav = [
                   {
                     "script" = [
                       "reference/cli/pixi/workspace/activation/script/index.md",
-                      {
-                        "add" = "reference/cli/pixi/workspace/activation/script/add.md"
-                      },
-                      {
-                        "prepend" = "reference/cli/pixi/workspace/activation/script/prepend.md"
-                      },
-                      {
-                        "remove" = "reference/cli/pixi/workspace/activation/script/remove.md"
-                      },
-                      {
-                        "list" = "reference/cli/pixi/workspace/activation/script/list.md"
-                      },
+                      { "add" = "reference/cli/pixi/workspace/activation/script/add.md" },
+                      { "prepend" = "reference/cli/pixi/workspace/activation/script/prepend.md" },
+                      { "remove" = "reference/cli/pixi/workspace/activation/script/remove.md" },
+                      { "list" = "reference/cli/pixi/workspace/activation/script/list.md" },
                     ]
                   },
                   {
                     "env" = [
                       "reference/cli/pixi/workspace/activation/env/index.md",
-                      {
-                        "set" = "reference/cli/pixi/workspace/activation/env/set.md"
-                      },
-                      {
-                        "remove" = "reference/cli/pixi/workspace/activation/env/remove.md"
-                      },
-                      {
-                        "list" = "reference/cli/pixi/workspace/activation/env/list.md"
-                      },
+                      { "set" = "reference/cli/pixi/workspace/activation/env/set.md" },
+                      { "remove" = "reference/cli/pixi/workspace/activation/env/remove.md" },
+                      { "list" = "reference/cli/pixi/workspace/activation/env/list.md" },
                     ]
                   },
                   { "list" = "reference/cli/pixi/workspace/activation/list.md" },
@@ -315,21 +293,15 @@ nav = [
                   "reference/cli/pixi/workspace/channel/index.md",
                   { "add" = "reference/cli/pixi/workspace/channel/add.md" },
                   { "list" = "reference/cli/pixi/workspace/channel/list.md" },
-                  {
-                    "remove" = "reference/cli/pixi/workspace/channel/remove.md"
-                  },
+                  { "remove" = "reference/cli/pixi/workspace/channel/remove.md" },
                 ]
               },
               {
                 "dependencies" = [
                   "reference/cli/pixi/workspace/dependencies/index.md",
                   { "add" = "reference/cli/pixi/workspace/dependencies/add.md" },
-                  {
-                    "list" = "reference/cli/pixi/workspace/dependencies/list.md"
-                  },
-                  {
-                    "remove" = "reference/cli/pixi/workspace/dependencies/remove.md"
-                  },
+                  { "list" = "reference/cli/pixi/workspace/dependencies/list.md" },
+                  { "remove" = "reference/cli/pixi/workspace/dependencies/remove.md" },
                 ]
               },
               {
@@ -346,9 +318,7 @@ nav = [
                   { "edit" = "reference/cli/pixi/workspace/platform/edit.md" },
                   { "move" = "reference/cli/pixi/workspace/platform/move.md" },
                   { "list" = "reference/cli/pixi/workspace/platform/list.md" },
-                  {
-                    "remove" = "reference/cli/pixi/workspace/platform/remove.md"
-                  },
+                  { "remove" = "reference/cli/pixi/workspace/platform/remove.md" },
                 ]
               },
               {
@@ -365,32 +335,22 @@ nav = [
                 "environment" = [
                   "reference/cli/pixi/workspace/environment/index.md",
                   { "add" = "reference/cli/pixi/workspace/environment/add.md" },
-                  {
-                    "list" = "reference/cli/pixi/workspace/environment/list.md"
-                  },
-                  {
-                    "remove" = "reference/cli/pixi/workspace/environment/remove.md"
-                  },
+                  { "list" = "reference/cli/pixi/workspace/environment/list.md" },
+                  { "remove" = "reference/cli/pixi/workspace/environment/remove.md" },
                 ]
               },
               {
                 "feature" = [
                   "reference/cli/pixi/workspace/feature/index.md",
                   { "list" = "reference/cli/pixi/workspace/feature/list.md" },
-                  {
-                    "remove" = "reference/cli/pixi/workspace/feature/remove.md"
-                  },
+                  { "remove" = "reference/cli/pixi/workspace/feature/remove.md" },
                 ]
               },
               {
                 "export" = [
                   "reference/cli/pixi/workspace/export/index.md",
-                  {
-                    "conda-explicit-spec" = "reference/cli/pixi/workspace/export/conda-explicit-spec.md"
-                  },
-                  {
-                    "conda-environment" = "reference/cli/pixi/workspace/export/conda-environment.md"
-                  },
+                  { "conda-explicit-spec" = "reference/cli/pixi/workspace/export/conda-explicit-spec.md" },
+                  { "conda-environment" = "reference/cli/pixi/workspace/export/conda-environment.md" },
                 ]
               },
               {
@@ -405,36 +365,24 @@ nav = [
                   "reference/cli/pixi/workspace/preview/index.md",
                   { "add" = "reference/cli/pixi/workspace/preview/add.md" },
                   { "list" = "reference/cli/pixi/workspace/preview/list.md" },
-                  {
-                    "remove" = "reference/cli/pixi/workspace/preview/remove.md"
-                  },
+                  { "remove" = "reference/cli/pixi/workspace/preview/remove.md" },
                 ]
               },
               {
                 "register" = [
                   "reference/cli/pixi/workspace/register/index.md",
                   { "list" = "reference/cli/pixi/workspace/register/list.md" },
-                  {
-                    "remove" = "reference/cli/pixi/workspace/register/remove.md"
-                  },
+                  { "remove" = "reference/cli/pixi/workspace/register/remove.md" },
                   { "prune" = "reference/cli/pixi/workspace/register/prune.md" },
                 ]
               },
               {
                 "requires-pixi" = [
                   "reference/cli/pixi/workspace/requires-pixi/index.md",
-                  {
-                    "get" = "reference/cli/pixi/workspace/requires-pixi/get.md"
-                  },
-                  {
-                    "set" = "reference/cli/pixi/workspace/requires-pixi/set.md"
-                  },
-                  {
-                    "unset" = "reference/cli/pixi/workspace/requires-pixi/unset.md"
-                  },
-                  {
-                    "verify" = "reference/cli/pixi/workspace/requires-pixi/verify.md"
-                  },
+                  { "get" = "reference/cli/pixi/workspace/requires-pixi/get.md" },
+                  { "set" = "reference/cli/pixi/workspace/requires-pixi/set.md" },
+                  { "unset" = "reference/cli/pixi/workspace/requires-pixi/unset.md" },
+                  { "verify" = "reference/cli/pixi/workspace/requires-pixi/verify.md" },
                 ]
               },
             ]
