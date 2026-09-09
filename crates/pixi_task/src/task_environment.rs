@@ -130,7 +130,7 @@ pub(crate) fn environments_defining_task(
 /// machine-incompatible environments are still found -- the first declared
 /// platform.
 pub(crate) fn default_search_platform<'p>(env: &Environment<'p>) -> Option<&'p PixiPlatform> {
-    env.installed_or_best_declared_platform().or_else(|| {
+    env.pinned_or_best_declared_platform().or_else(|| {
         let env_platform_names = env.platforms();
         env.workspace_manifest()
             .workspace

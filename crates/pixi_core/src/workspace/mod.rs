@@ -4,6 +4,7 @@ mod environment;
 pub mod errors;
 pub mod grouped_environment;
 mod has_project_ref;
+pub mod platform_options;
 pub mod registry;
 mod repodata;
 mod solve_group;
