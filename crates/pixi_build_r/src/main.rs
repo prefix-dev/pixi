@@ -652,6 +652,75 @@ Imports:
     }
 
     #[tokio::test]
+    async fn test_recommended_packages_are_dependencies() {
+        let temp_dir = TempDir::new().unwrap();
+
+        fs::write(
+            temp_dir.path().join("DESCRIPTION"),
+            r#"Package: nlraa
+Version: 1.9.11
+Imports:
+    boot,
+    MASS,
+    Matrix,
+    mgcv,
+    nlme,
+    stats
+"#,
+        )
+        .await
+        .unwrap();
+
+        let project_model = project_fixture!({
+            "name": "r-nlraa",
+            "version": "1.9.11",
+            "targets": {
+                "defaultTarget": {}
+            }
+        });
+
+        let generated_recipe = RGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &RBackendConfig::default(),
+                temp_dir.path().to_path_buf(),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let host_reqs = &generated_recipe.recipe.requirements.host;
+        let run_reqs = &generated_recipe.recipe.requirements.run;
+
+        for package in ["r-boot", "r-mass", "r-matrix", "r-mgcv", "r-nlme"] {
+            assert!(
+                host_reqs.iter().any(|req| req.to_string() == package),
+                "{package} should be in host requirements"
+            );
+            assert!(
+                run_reqs.iter().any(|req| req.to_string() == package),
+                "{package} should be in run requirements"
+            );
+        }
+
+        assert!(
+            host_reqs.iter().all(|req| req.to_string() != "r-stats"),
+            "base packages should not be separate host requirements"
+        );
+        assert!(
+            run_reqs.iter().all(|req| req.to_string() != "r-stats"),
+            "base packages should not be separate run requirements"
+        );
+    }
+
+    #[tokio::test]
     async fn test_package_name_derived_from_description_is_r_prefixed() {
         // When the model carries no name (the inline source-dependency flow),
         // the recipe name comes from the DESCRIPTION via the metadata provider.
