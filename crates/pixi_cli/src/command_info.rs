@@ -5,8 +5,9 @@ use pixi_config::pixi_home;
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::path::PathBuf;
+use std::process::ExitCode;
 
-use super::{Args, Command, get_styles};
+use super::{Args, Command, get_styles, process_exit};
 
 /// Get all built-in command names including aliases (discovered dynamically from clap)
 fn get_builtin_commands_with_aliases() -> Vec<String> {
@@ -103,51 +104,39 @@ pub fn find_external_subcommand(cmd: &str) -> Option<PathBuf> {
 }
 
 /// Execute an external subcommand
-pub fn execute_external_command(args: Vec<String>) -> miette::Result<()> {
-    // There should be always at least one argument, the command itself.
-    // but we dont want to panic on runtime, so we handle it as a error.
-    let cmd = args
+pub fn execute_external_command(args: Vec<String>) -> miette::Result<ExitCode> {
+    let command_name = args
         .first()
         .ok_or_else(|| miette::miette!("No external subcommand was passed"))?;
+    let command_args = &args[1..];
 
-    // The rest of the arguments are passed to the external command
-    // and we don't mind if there are no additional arguments.
-    let cmd_args = &args[1..];
-
-    if let Some(path) = find_external_subcommand(cmd) {
-        // ignore any ctrl-c signals
+    if let Some(path) = find_external_subcommand(command_name) {
         ctrlc::set_handler(move || {})
             .into_diagnostic()
             .wrap_err("Couldn't set the ctrl-c handler")?;
 
         let mut command = std::process::Command::new(&path);
-        command.args(cmd_args);
-
-        imp::execute_command(command)?;
-
-        Ok(())
+        command.args(command_args);
+        imp::execute_command(command)
     } else {
-        // Generate suggestions for similar commands
-        let mut suggestions = find_similar_commands(cmd);
-
+        let mut suggestions = find_similar_commands(command_name);
         let styles = get_styles();
-
-        // get the styles for invalid and valid commands
         let invalid = styles.get_invalid();
         let tip = styles.get_valid();
-
-        let mut error_msg = format!("unrecognized subcommand '{invalid}{cmd}{invalid:#}'");
+        let mut message = format!("unrecognized subcommand '{invalid}{command_name}{invalid:#}'");
 
         if let Some(most_similar) = suggestions.pop() {
-            error_msg.push_str(&format!(
+            message.push_str(&format!(
                 "\n\n  {tip}tip{tip:#}: a similar subcommand exists: '{tip}{most_similar}{tip:#}'",
             ));
         }
 
-        Command::command()
+        let error = Command::command()
             .styles(styles)
-            .error(clap::error::ErrorKind::InvalidSubcommand, error_msg)
-            .exit();
+            .error(clap::error::ErrorKind::InvalidSubcommand, message);
+        let exit_code = process_exit::exit_code_from_code(error.exit_code());
+        pixi_utils::io::ignore_broken_pipe(error.print()).into_diagnostic()?;
+        Ok(exit_code)
     }
 }
 
@@ -177,15 +166,14 @@ fn search_directories() -> Option<Vec<PathBuf>> {
 mod imp {
     use std::os::unix::process::CommandExt;
 
-    pub(crate) fn execute_command(mut cmd: std::process::Command) -> miette::Result<()> {
-        let err = cmd.exec();
-        // if calling exec fails, we error out
-        // otherwise, the child process replaces the current process
-        // and we don't reach this point
+    pub(crate) fn execute_command(
+        mut command: std::process::Command,
+    ) -> miette::Result<std::process::ExitCode> {
+        let error = command.exec();
         Err(miette::miette!(
             "Failed to execute command '{}': {}",
-            cmd.get_program().to_string_lossy(),
-            err
+            command.get_program().to_string_lossy(),
+            error
         ))
     }
 }
@@ -197,20 +185,20 @@ mod imp {
     /// On windows, we will rely on spawning the child process
     /// using `CreateProcess``
     /// and waiting for it to complete, since we cannot use `exec`.
-    pub(crate) fn execute_command(mut cmd: std::process::Command) -> miette::Result<()> {
-        let mut child = cmd.spawn().into_diagnostic().wrap_err(format!(
+    pub(crate) fn execute_command(
+        mut command: std::process::Command,
+    ) -> miette::Result<std::process::ExitCode> {
+        let mut child = command.spawn().into_diagnostic().wrap_err(format!(
             "Couldn't spawn the child process {}",
-            cmd.get_program().to_string_lossy()
+            command.get_program().to_string_lossy()
         ))?;
 
-        // Wait for the child process to complete
         let status = child.wait().into_diagnostic().wrap_err(format!(
             "Couldn't wait for the child process {}",
-            cmd.get_program().to_string_lossy()
+            command.get_program().to_string_lossy()
         ))?;
 
-        // Exit with the same status code as the child process
-        std::process::exit(status.code().unwrap_or(1));
+        Ok(super::process_exit::exit_code_from_status(status))
     }
 }
 

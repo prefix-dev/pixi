@@ -267,7 +267,7 @@ pub fn print_package(
     } else {
         format!("(extra: {})", via_extras.join(", "))
     };
-    writeln!(
+    pixi_utils::io::ignore_broken_pipe(writeln!(
         handle,
         "{}{} {} {}{}",
         prefix,
@@ -282,15 +282,7 @@ pub fn print_package(
         },
         console::style(extras_label).fg(Color::Cyan),
         if visited { " (*)" } else { "" }
-    )
-    .map_err(|e| {
-        if e.kind() == std::io::ErrorKind::BrokenPipe {
-            // Exit gracefully
-            std::process::exit(0);
-        } else {
-            e
-        }
-    })
+    ))
     .into_diagnostic()
     .wrap_err("Failed to write package information")
 }
