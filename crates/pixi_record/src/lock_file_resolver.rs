@@ -215,6 +215,52 @@ mod tests {
 
     use super::{LockFileResolver, LockFileResolverError};
 
+    /// A binary conda package served from a local channel is recorded with a
+    /// path relative to the lock file. The resolver must resolve it against the
+    /// workspace root into an absolute `file://` URL instead of rejecting it
+    /// with "the path is not an absolute path". Regression test for
+    /// <https://github.com/prefix-dev/pixi/issues/6322>.
+    #[test]
+    fn relative_local_channel_binary_path_resolves() {
+        let lock_source = r#"version: 7
+platforms:
+- name: linux-64
+environments:
+  default:
+    channels:
+    - url: ../local-channel
+    packages:
+      linux-64:
+      - conda: ../local-channel/linux-64/my-dep-0.1.0-h0.conda
+packages:
+- conda: ../local-channel/linux-64/my-dep-0.1.0-h0.conda
+  name: my-dep
+  version: 0.1.0
+  build: h0
+  subdir: linux-64
+"#;
+
+        let lock_file =
+            LockFile::from_str_with_base_directory(lock_source, Some(Path::new("/workspace")))
+                .expect("lock file with a relative local-channel path should parse");
+
+        let resolver = LockFileResolver::build(&lock_file, Path::new("/workspace"))
+            .expect("relative local-channel binary path should resolve against the workspace root");
+
+        let record = lock_file
+            .packages()
+            .iter()
+            .find_map(|pkg| resolver.get_for_package(pkg))
+            .expect("resolver should produce a record for the binary package");
+        let name = record
+            .package_record()
+            .expect("binary record has a package record")
+            .name
+            .as_normalized()
+            .to_string();
+        assert_eq!(name, "my-dep");
+    }
+
     /// Two source packages that list each other as a build dependency.
     /// `LockFileResolver::build` should detect the back-edge during DFS
     /// and surface a `Cycle` error whose payload names both packages.

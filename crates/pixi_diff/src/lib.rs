@@ -590,7 +590,7 @@ mod tests {
                 Version::from_str("1.0").unwrap(),
                 "0".to_string(),
             ),
-            location: UrlOrPath::Url(Url::parse(url).unwrap()),
+            location: UrlOrPath::Url(Url::parse(url).unwrap()).into(),
             file_name: DistArchiveIdentifier::try_from_filename("foo-1.0-0.conda").unwrap(),
             channel: None,
         }))
