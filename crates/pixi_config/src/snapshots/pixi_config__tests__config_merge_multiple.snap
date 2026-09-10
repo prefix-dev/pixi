@@ -14,6 +14,7 @@ Config {
             "defaults",
         ),
     ],
+    default_platforms: [],
     authentication_override_file: None,
     tls_no_verify: Some(
         false,
