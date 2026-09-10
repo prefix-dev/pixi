@@ -32,7 +32,7 @@ def remote_script_server(source: str) -> Iterator[tuple[str, list[str]]]:
                 )
                 self.end_headers()
                 return
-            if self.path == "/extensionless":
+            if self.path in {"/extensionless", "/script.txt", "/example.main.kts"}:
                 body = source.encode()
                 self.send_response(200)
                 self.send_header("Content-Length", str(len(body)))
@@ -105,7 +105,8 @@ def test_pixi_run_script_requires_inline_metadata(pixi: Path, tmp_pixi_workspace
 
 
 @pytest.mark.slow
-def test_pixi_run_remote_script(pixi: Path, tmp_pixi_workspace: Path) -> None:
+@pytest.mark.parametrize("script_path", ["redirect", "script.txt"])
+def test_pixi_run_remote_script(pixi: Path, tmp_pixi_workspace: Path, script_path: str) -> None:
     source = f'''# /// script
 # requires-python = ">=3.11"
 # dependencies = []
@@ -129,7 +130,7 @@ print(json.dumps({{
                 pixi,
                 "run",
                 "--script",
-                f"{base_url}/redirect",
+                f"{base_url}/{script_path}",
                 "first",
                 "--second",
             ],
@@ -141,8 +142,73 @@ print(json.dumps({{
     assert payload["cwd"] == str(tmp_pixi_workspace)
     assert payload["file"].endswith(".py")
     assert not Path(payload["file"]).exists()
-    assert requests == ["/redirect", "/extensionless"]
+    assert requests == (
+        ["/redirect", "/extensionless"] if script_path == "redirect" else ["/script.txt"]
+    )
     assert_no_workspace_state_created(tmp_pixi_workspace)
+
+
+@pytest.mark.slow
+def test_pixi_run_remote_conda_script(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    source = f'''# /// conda-script
+# channels = ["{CONDA_FORGE_CHANNEL}"]
+# entrypoint = "python ${{SCRIPT}} ${{CACHE}}"
+# [dependencies]
+# python = "3.13.*"
+# /// end-conda-script
+import json
+import os
+import sys
+from pathlib import Path
+
+counter = Path(sys.argv[1]) / "counter"
+runs = int(counter.read_text()) + 1 if counter.exists() else 1
+counter.write_text(str(runs))
+print(json.dumps({{
+    "runs": runs,
+    "argv": sys.argv[2:],
+    "cwd": os.getcwd(),
+    "file": __file__,
+    "prefix": sys.prefix,
+}}))
+sys.exit(1 if "--fail" in sys.argv else 0)
+'''
+    with remote_script_server(source) as (base_url, requests):
+        command = [pixi, "run", "--experimental", "--script", f"{base_url}/example.main.kts"]
+        first = verify_cli_command(command + ["first", "--second"], cwd=tmp_pixi_workspace)
+        second = verify_cli_command(
+            command + ["--", "--fail"], ExitCode.FAILURE, cwd=tmp_pixi_workspace
+        )
+
+    payloads = [
+        json.loads(next(line for line in output.stdout.splitlines() if line.startswith("{")))
+        for output in (first, second)
+    ]
+    assert payloads[0]["argv"] == ["first", "--second"]
+    assert payloads[1]["runs"] == payloads[0]["runs"] + 1
+    assert payloads[0]["prefix"] == payloads[1]["prefix"]
+    for payload in payloads:
+        assert payload["cwd"] == str(tmp_pixi_workspace)
+        assert Path(payload["file"]).name == "example.main.kts"
+        assert not Path(payload["file"]).exists()
+        assert not Path(payload["file"] + ".pixi.lock").exists()
+    assert requests == ["/example.main.kts"] * 2
+    assert_no_workspace_state_created(tmp_pixi_workspace)
+
+
+def test_remote_conda_script_requires_opt_in(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    source = """# /// conda-script
+# channels = ["conda-forge"]
+# entrypoint = "python ${SCRIPT}"
+# /// end-conda-script
+"""
+    with remote_script_server(source) as (base_url, _):
+        verify_cli_command(
+            [pixi, "run", "--no-config", "--script", f"{base_url}/extensionless"],
+            ExitCode.FAILURE,
+            stderr_contains=["conda-script block", "--experimental"],
+            cwd=tmp_pixi_workspace,
+        )
 
 
 def test_pixi_run_remote_script_reports_http_errors_and_rejects_locks(

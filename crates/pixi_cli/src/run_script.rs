@@ -10,11 +10,12 @@ use deno_task_shell::{ExecutableCommand, FutureExecuteResult, ShellCommand, Shel
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_config::Config;
 use pixi_manifest::script::ScriptManifest;
+use pixi_manifest::script::conda::CondaScriptManifest;
 use pixi_utils::reqwest::build_reqwest_clients;
 use reqwest::header::ACCEPT;
 use reqwest_middleware::{ClientWithMiddleware, RequestBuilder};
 use serde::Deserialize;
-use tempfile::NamedTempFile;
+use tempfile::TempDir;
 use url::Url;
 
 #[derive(Debug)]
@@ -111,9 +112,14 @@ pub(crate) fn prepare_stdin_script(
     })
 }
 
+pub(crate) enum RemoteScriptManifest {
+    Pep723(ScriptManifest),
+    CondaScript(CondaScriptManifest),
+}
+
 pub(crate) struct PreparedRemoteScript {
-    pub(crate) file: NamedTempFile,
-    pub(crate) manifest: ScriptManifest,
+    pub(crate) directory: TempDir,
+    pub(crate) manifest: RemoteScriptManifest,
     pub(crate) original_url: Url,
     pub(crate) cache_name: String,
 }
@@ -122,6 +128,7 @@ pub(crate) async fn prepare_remote_script(
     original_url: Url,
     config: &Config,
     root: &Path,
+    experimental: bool,
 ) -> miette::Result<PreparedRemoteScript> {
     let safe_original_url = safe_url(&original_url);
     let (_, client) = build_reqwest_clients(Some(config), None)?;
@@ -138,10 +145,23 @@ pub(crate) async fn prepare_remote_script(
 
     let final_url = response.url().clone();
     let cache_name = friendly_name(&final_url);
-    let mut file = tempfile::Builder::new()
-        .prefix(&format!("{cache_name}-"))
-        .suffix(".py")
-        .tempfile()
+    let mut builder = tempfile::Builder::new();
+    builder.prefix("pixi-script-");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        builder.permissions(std::fs::Permissions::from_mode(0o700));
+    }
+    let directory = builder
+        .tempdir()
+        .into_diagnostic()
+        .wrap_err("failed to create a temporary directory for the remote script")?;
+    let filename = Path::new(final_url.path())
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("script");
+    let path = directory.path().join(filename);
+    let mut file = fs_err::File::create(&path)
         .into_diagnostic()
         .wrap_err("failed to create a temporary file for the remote script")?;
     while let Some(chunk) = response
@@ -156,34 +176,38 @@ pub(crate) async fn prepare_remote_script(
     file.flush()
         .into_diagnostic()
         .wrap_err("failed to flush the downloaded script")?;
+    drop(file);
 
-    let contents = fs_err::read(file.path())
+    let contents = fs_err::read(&path)
         .into_diagnostic()
         .wrap_err("failed to read the downloaded script")?;
-    let manifest = ScriptManifest::from_source_with_context(
-        file.path().to_owned(),
+    let python_path = directory.path().join("script.py");
+    let manifest = if let Some(manifest) = ScriptManifest::from_source_with_context(
+        python_path.clone(),
         &contents,
         safe_original_url.clone(),
         root.to_owned(),
         cache_name.clone(),
-    )?
-    .ok_or_else(|| {
-        if crate::conda_script::looks_like_conda_script(&contents) {
-            miette::miette!(
-                help = "conda-script blocks run from local files: download the script and run `pixi run --experimental --script <PATH>`",
-                "the remote script at {safe_original_url} contains a conda-script block, which only runs from a local file"
-            )
-        } else {
+    )? {
+        // Keep PEP 723 execution independent of the URL's filename.
+        if path != python_path {
+            fs_err::rename(&path, &python_path).into_diagnostic()?;
+        }
+        RemoteScriptManifest::Pep723(manifest)
+    } else {
+        let manifest = CondaScriptManifest::from_source(&path, &contents)?.ok_or_else(|| {
             miette::miette!(
                 help =
                     "Download the script and initialize it locally with `pixi init --script <PATH>`.",
                 "the remote script at {safe_original_url} does not contain a PEP 723 metadata block"
             )
-        }
-    })?;
+        })?;
+        crate::conda_script::ensure_enabled(experimental, config, &safe_original_url)?;
+        RemoteScriptManifest::CondaScript(manifest)
+    };
 
     Ok(PreparedRemoteScript {
-        file,
+        directory,
         manifest,
         original_url,
         cache_name,

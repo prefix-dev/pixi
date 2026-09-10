@@ -331,6 +331,7 @@ impl CondaScriptManifest {
     pub fn into_workspace_manifest(
         &self,
         implicit_platforms: Option<IndexSet<PixiPlatform>>,
+        root: &Path,
     ) -> Result<(WorkspaceManifest, Vec<Warning>), CondaScriptError> {
         let ParsedBlock {
             dependencies,
@@ -382,10 +383,6 @@ impl CondaScriptManifest {
             });
         }
 
-        let root = self
-            .path
-            .parent()
-            .expect("an absolute script path always has a parent");
         let (workspace, package, warnings) = manifest
             .into_workspace_manifest(
                 ExternalWorkspaceProperties::default(),
@@ -605,7 +602,9 @@ mod tests {
         .unwrap()
         .unwrap();
 
-        let (workspace, warnings) = manifest.into_workspace_manifest(None).unwrap();
+        let (workspace, warnings) = manifest
+            .into_workspace_manifest(None, manifest.path().parent().unwrap())
+            .unwrap();
         assert!(warnings.is_empty());
         let target = workspace.default_feature().targets.default();
         let simple_app = workspace
@@ -655,7 +654,9 @@ mod tests {
         .unwrap()
         .unwrap();
 
-        let (workspace, warnings) = manifest.into_workspace_manifest(None).unwrap();
+        let (workspace, warnings) = manifest
+            .into_workspace_manifest(None, manifest.path().parent().unwrap())
+            .unwrap();
         assert!(warnings.is_empty());
         assert_eq!(
             workspace
@@ -780,7 +781,9 @@ mod tests {
         .unwrap()
         .unwrap();
 
-        let (workspace, warnings) = manifest.into_workspace_manifest(None).unwrap();
+        let (workspace, warnings) = manifest
+            .into_workspace_manifest(None, manifest.path().parent().unwrap())
+            .unwrap();
         assert!(warnings.is_empty());
         assert_eq!(workspace.workspace.name.as_deref(), Some("example"));
         assert_eq!(
@@ -837,7 +840,7 @@ mod tests {
         .unwrap();
 
         insta::assert_snapshot!(
-            format_diagnostic(&manifest.into_workspace_manifest(None).unwrap_err()),
+            format_diagnostic(&manifest.into_workspace_manifest(None, manifest.path().parent().unwrap()).unwrap_err()),
             @r#"
          × conda source dependencies are not allowed without enabling the 'pixi-build' preview flag
          ╰─▶ conda source dependencies are not allowed without enabling the 'pixi-build' preview flag
@@ -861,7 +864,9 @@ mod tests {
         .unwrap()
         .unwrap();
 
-        let (workspace, _) = manifest.into_workspace_manifest(None).unwrap();
+        let (workspace, _) = manifest
+            .into_workspace_manifest(None, manifest.path().parent().unwrap())
+            .unwrap();
         assert_eq!(workspace.all_features().count(), 1);
         assert_eq!(workspace.environments.iter().count(), 1);
     }

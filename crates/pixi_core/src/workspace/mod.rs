@@ -535,7 +535,7 @@ impl Workspace {
             Some(implicit_script_platforms(Some(&lock_file_path))?)
         };
         let (manifest, warnings) = script
-            .into_workspace_manifest(implicit_platforms)
+            .into_workspace_manifest(implicit_platforms, &root)
             .map_err(Box::new)?;
 
         let cache_root = config
@@ -543,6 +543,49 @@ impl Workspace {
             .map_err(|error| ScriptWorkspaceError::CacheDirectory(error.to_string()))?;
         let workspace_script = WorkspaceScript::for_local_conda_script(script, &cache_root);
 
+        let workspace = manifest.with_provenance(ManifestProvenance::new(
+            script_path,
+            ManifestKind::CondaScript,
+        ));
+
+        Ok(WithWarnings::from(Self::from_parsed(
+            workspace,
+            None,
+            root,
+            config,
+            WorkspaceStorage::Script(workspace_script),
+        ))
+        .with_warnings(warnings))
+    }
+
+    /// Construct an isolated workspace for a downloaded `conda-script` file.
+    pub fn from_transient_conda_script(
+        script: CondaScriptManifest,
+        config: Config,
+        root: PathBuf,
+        cache_name: &str,
+        cache_key: &[u8],
+    ) -> Result<WithWarnings<Self>, ScriptWorkspaceError> {
+        let script_path = script.path().to_owned();
+        let script_config = script.workspace_config().map_err(Box::new)?;
+        let implicit_platforms = if script_config.platforms_explicit {
+            None
+        } else {
+            Some(implicit_script_platforms(None)?)
+        };
+        let (manifest, warnings) = script
+            .into_workspace_manifest(implicit_platforms, &root)
+            .map_err(Box::new)?;
+        let cache_root = config
+            .cache_dir_for(CacheKind::ExecEnvironments)
+            .map_err(|error| ScriptWorkspaceError::CacheDirectory(error.to_string()))?;
+        let workspace_script = WorkspaceScript::for_transient(
+            ScriptSource::CondaScript(Box::new(script)),
+            &cache_root,
+            cache_name,
+            cache_key,
+            &root,
+        );
         let workspace = manifest.with_provenance(ManifestProvenance::new(
             script_path,
             ManifestKind::CondaScript,
@@ -591,7 +634,7 @@ impl Workspace {
             .cache_dir_for(CacheKind::ExecEnvironments)
             .map_err(|error| ScriptWorkspaceError::CacheDirectory(error.to_string()))?;
         let workspace_script = WorkspaceScript::for_transient(
-            script_manifest,
+            ScriptSource::Pep723(Box::new(script_manifest)),
             &cache_root,
             cache_name,
             cache_key,
