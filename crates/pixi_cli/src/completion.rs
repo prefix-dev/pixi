@@ -1,10 +1,16 @@
 use crate::Args as CommandArgs;
 use clap::{Arg, Command, CommandFactory, Parser, ValueEnum};
-use clap_complete::{Generator, shells};
+use clap_complete::{
+    Generator,
+    engine::{ArgValueCompleter, CompletionCandidate, ValueCompleter},
+    shells,
+};
 use clap_complete_nushell::Nushell;
 use miette::IntoDiagnostic;
+use pixi_core::WorkspaceLocator;
 use regex::{Captures, Regex};
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
+use std::ffi::OsStr;
 use std::io::Write;
 use std::iter;
 use std::sync::LazyLock;
@@ -90,6 +96,76 @@ impl Generator for Shell {
             Shell::Powershell => shells::PowerShell.generate(cmd, buf),
             Shell::Zsh => shells::Zsh.generate(cmd, buf),
         }
+    }
+}
+
+/// Handle native, runtime completion requests made through `PIXI_COMPLETE`.
+pub fn complete() {
+    clap_complete::CompleteEnv::with_factory(dynamic_completion_command)
+        .var("PIXI_COMPLETE")
+        .bin("pixi")
+        .complete();
+}
+
+fn dynamic_completion_command() -> Command {
+    dynamic_completion_command_with_tasks(current_workspace_task_names())
+}
+
+fn dynamic_completion_command_with_tasks(task_names: Vec<String>) -> Command {
+    CommandArgs::command().mut_subcommand("run", move |command| {
+        command.trailing_var_arg(false).mut_arg("task", move |arg| {
+            // The runtime parser stores the task and its arguments in one
+            // trailing Vec. Narrow only the completion model to its first
+            // value, otherwise clap offers task names for task arguments too.
+            arg.action(clap::ArgAction::Set)
+                .num_args(1)
+                .trailing_var_arg(false)
+                .add(ArgValueCompleter::new(TaskNameCompleter { task_names }))
+        })
+    })
+}
+
+fn current_workspace_task_names() -> Vec<String> {
+    // Workspace-aware candidates are best-effort. A missing or invalid
+    // workspace must not disable clap's normal command and option completion.
+    let Ok(workspace) = WorkspaceLocator::for_cli()
+        .with_emit_warnings(false)
+        .locate()
+    else {
+        return Vec::new();
+    };
+
+    workspace
+        .environments()
+        .into_iter()
+        .flat_map(|environment| environment.get_filtered_tasks())
+        .map(|task| task.as_str().to_owned())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
+
+struct TaskNameCompleter {
+    task_names: Vec<String>,
+}
+
+impl TaskNameCompleter {
+    fn candidates(&self, current: &OsStr) -> Vec<CompletionCandidate> {
+        let Some(prefix) = current.to_str() else {
+            return Vec::new();
+        };
+
+        self.task_names
+            .iter()
+            .filter(|task| task.starts_with(prefix))
+            .map(CompletionCandidate::new)
+            .collect()
+    }
+}
+
+impl ValueCompleter for TaskNameCompleter {
+    fn complete(&self, current: &OsStr) -> Vec<CompletionCandidate> {
+        self.candidates(current)
     }
 }
 
@@ -708,7 +784,7 @@ fn nushell_completion(cli: &Cli, cmd: &str, long: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
+    use std::{collections::HashSet, ffi::OsString};
 
     use clap::ValueHint;
 
@@ -722,6 +798,44 @@ mod tests {
     /// The bash fixture spells the binary `pixi`, so the rewrite has to too.
     fn bash_fixture_cli() -> Cli {
         Cli::with_bin_name("pixi")
+    }
+
+    fn dynamic_candidates(args: &[&str], index: usize) -> HashSet<String> {
+        let mut command = dynamic_completion_command_with_tasks(vec![
+            "build-docs".to_owned(),
+            "lint".to_owned(),
+            "test".to_owned(),
+        ]);
+        clap_complete::engine::complete(
+            &mut command,
+            args.iter().map(OsString::from).collect(),
+            index,
+            None,
+        )
+        .expect("dynamic completion should succeed")
+        .into_iter()
+        .map(|candidate| candidate.get_value().to_string_lossy().into_owned())
+        .collect()
+    }
+
+    #[test]
+    fn test_dynamic_completion_uses_the_full_clap_command_tree() {
+        let root = dynamic_candidates(&["pixi", "work"], 1);
+        assert!(root.contains("workspace"));
+
+        let nested = dynamic_candidates(&["pixi", "workspace", "plat"], 2);
+        assert!(nested.contains("platform"));
+    }
+
+    #[test]
+    fn test_dynamic_completion_adds_current_workspace_tasks_to_run() {
+        let tasks = dynamic_candidates(&["pixi", "run", "bu"], 2);
+        assert_eq!(tasks, HashSet::from(["build-docs".to_owned()]));
+
+        let task_arguments = dynamic_candidates(&["pixi", "run", "build-docs", ""], 3);
+        assert!(!task_arguments.contains("build-docs"));
+        assert!(!task_arguments.contains("lint"));
+        assert!(!task_arguments.contains("test"));
     }
 
     #[test]
