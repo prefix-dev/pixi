@@ -11,6 +11,8 @@ pub struct DependencyOptions {
     pub feature: FeatureName,
     /// The platform for which the dependency should be modified.
     pub platforms: Vec<PixiPlatformName>,
+    /// The channels to add the dependency from.
+    pub channels: Option<Vec<rattler_conda_types::NamedChannelOrUrl>>,
     /// Don't modify the environment, only modify the lock file.
     pub no_install: bool,
     pub lock_file_usage: LockFileUsage,
