@@ -47,16 +47,21 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 url = { workspace = true }
 uv-configuration = { workspace = true }
+webpki = { workspace = true, optional = true }
 webpki-root-certs = { workspace = true }
+x509-parser = { workspace = true, optional = true }
 xxhash-rust = { workspace = true, features = ["xxh3"] }
 
 [dev-dependencies]
 async-trait = { workspace = true }
 axum = { workspace = true, features = ["http1", "tokio"] }
 insta = { workspace = true }
+rcgen = { workspace = true }
 rstest = { workspace = true }
+rustls = { workspace = true }
 temp-env = { workspace = true }
 tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread"] }
+tokio-rustls = { workspace = true }
 
 [features]
 default = ["rustls"]
@@ -65,4 +70,10 @@ native-tls = [
   "rattler_networking/native-tls",
   "reqwest/native-tls",
 ]
-rustls = ["pixi_auth/rustls", "rattler_networking/rustls", "reqwest/rustls"]
+rustls = [
+  "pixi_auth/rustls",
+  "rattler_networking/rustls",
+  "reqwest/rustls",
+  "dep:webpki",
+  "dep:x509-parser",
+]
