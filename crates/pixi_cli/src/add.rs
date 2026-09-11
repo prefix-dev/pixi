@@ -496,9 +496,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             };
 
             let mut specs = args.dependency_config.specs()?;
-            if let Some(channels) = &args.channel
-                && let Some(channel) = channels.first()
-            {
+            if let Some(channel) = args.channel.as_ref().and_then(|c| c.first()) {
                 for spec in specs.values_mut() {
                     let new_spec = rattler_conda_types::MatchSpec::from_str(
                         &format!("{}::{}", channel, spec),
