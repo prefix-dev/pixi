@@ -3894,6 +3894,20 @@ UNUSED = "unused"
         assert_eq!(config.max_concurrent_solves(), 5);
         assert_eq!(config.max_concurrent_downloads(), 25);
 
+        // Test concurrency full update (issue #6666)
+        config.pypi_config.index_url = Some(Url::parse("https://my-index.test").unwrap());
+        config
+            .set("concurrency", Some(r#"{"solves": 10, "downloads": 50}"#.to_string()))
+            .unwrap();
+        assert_eq!(config.concurrency.solves, 10);
+        assert_eq!(config.concurrency.downloads, 50);
+        assert_eq!(config.pypi_config.index_url, Some(Url::parse("https://my-index.test").unwrap()));
+
+        config.set("concurrency", None).unwrap();
+        assert_eq!(config.concurrency.solves, ConcurrencyConfig::default().solves);
+        assert_eq!(config.concurrency.downloads, ConcurrencyConfig::default().downloads);
+        assert_eq!(config.pypi_config.index_url, Some(Url::parse("https://my-index.test").unwrap()));
+
         // Test tls-no-verify
         config
             .set("tls-no-verify", Some("true".to_string()))
