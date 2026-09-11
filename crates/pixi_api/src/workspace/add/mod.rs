@@ -40,10 +40,7 @@ pub async fn add_conda_dep(
 
     if let Some(channels) = &dep_options.channels {
         workspace.manifest().add_channels(
-            channels
-                .iter()
-                .cloned()
-                .map(|c| c.into()),
+            channels.iter().cloned().map(|c| c.into()),
             &dep_options.feature,
             false,
         )?;
