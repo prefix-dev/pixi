@@ -2508,9 +2508,9 @@ impl Config {
             key if key.starts_with("concurrency") => {
                 if key == "concurrency" {
                     if let Some(value) = value {
-                        self.pypi_config = serde_json::de::from_str(&value).into_diagnostic()?;
+                        self.concurrency = serde_json::de::from_str(&value).into_diagnostic()?;
                     } else {
-                        self.pypi_config = PyPIConfig::default();
+                        self.concurrency = ConcurrencyConfig::default();
                     }
                     return Ok(());
                 } else if !key.starts_with("concurrency.") {
