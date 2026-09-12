@@ -30,6 +30,16 @@ if exist "%PREFIX%\Library\include\openssl" {{ export("OPENSSL_DIR", env("PREFIX
 {{ export("RUSTC_WRAPPER", "sccache") }}
 {%- endif %}
 
+{# cc-rs concatenates generic flags into both host and target compilations.
+   During cross-compilation conda's generic flags belong only to the target. -#}
+{% if is_bash -%}
+if [ "$BUILD" != "$HOST" ]; then
+    export TARGET_CFLAGS="$CFLAGS${TARGET_CFLAGS:+ $TARGET_CFLAGS}"
+    export TARGET_CXXFLAGS="$CXXFLAGS${TARGET_CXXFLAGS:+ $TARGET_CXXFLAGS}"
+    unset CFLAGS CXXFLAGS
+fi
+{% endif -%}
+
 {{ export("CARGO", bin_path ~ "cargo") }}
 {{ export("RUSTC", bin_path ~ "rustc") }}
 {{ export("RUSTDOC", bin_path ~ "rustdoc") }}

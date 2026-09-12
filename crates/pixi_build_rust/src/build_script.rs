@@ -39,6 +39,18 @@ mod test {
     }
 
     #[test]
+    fn test_cross_compile_flags_are_target_scoped() {
+        let script = render(true, false);
+        assert!(script.contains(
+            r#"if [ "$BUILD" != "$HOST" ]; then
+    export TARGET_CFLAGS="$CFLAGS${TARGET_CFLAGS:+ $TARGET_CFLAGS}"
+    export TARGET_CXXFLAGS="$CXXFLAGS${TARGET_CXXFLAGS:+ $TARGET_CXXFLAGS}"
+    unset CFLAGS CXXFLAGS
+fi"#
+        ));
+    }
+
+    #[test]
     fn test_build_script_bash() {
         insta::assert_snapshot!(render(true, false), @r###"
         if [ -d "$PREFIX/include/openssl" ]; then
@@ -47,6 +59,11 @@ mod test {
 
 
 
+        if [ "$BUILD" != "$HOST" ]; then
+            export TARGET_CFLAGS="$CFLAGS${TARGET_CFLAGS:+ $TARGET_CFLAGS}"
+            export TARGET_CXXFLAGS="$CXXFLAGS${TARGET_CXXFLAGS:+ $TARGET_CXXFLAGS}"
+            unset CFLAGS CXXFLAGS
+        fi
         export CARGO="$BUILD_PREFIX/bin/cargo"
         export RUSTC="$BUILD_PREFIX/bin/rustc"
         export RUSTDOC="$BUILD_PREFIX/bin/rustdoc"
@@ -80,6 +97,11 @@ mod test {
 
         export RUSTC_WRAPPER="sccache"
 
+        if [ "$BUILD" != "$HOST" ]; then
+            export TARGET_CFLAGS="$CFLAGS${TARGET_CFLAGS:+ $TARGET_CFLAGS}"
+            export TARGET_CXXFLAGS="$CXXFLAGS${TARGET_CXXFLAGS:+ $TARGET_CXXFLAGS}"
+            unset CFLAGS CXXFLAGS
+        fi
         export CARGO="$BUILD_PREFIX/bin/cargo"
         export RUSTC="$BUILD_PREFIX/bin/rustc"
         export RUSTDOC="$BUILD_PREFIX/bin/rustdoc"
