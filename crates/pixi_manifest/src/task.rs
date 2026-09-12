@@ -876,9 +876,11 @@ pub fn quote(in_str: &str) -> Cow<'_, str> {
         let mut out: String = String::with_capacity(in_str.len() + 2);
         out.push('"');
         for c in in_str.chars() {
-            match c {
-                '"' | '\\' => out.push('\\'),
-                _ => (),
+            // Only `"` is escaped. `deno_task_shell` does not unescape `\\` to
+            // `\` inside double quotes the way POSIX shells do, so escaping a
+            // backslash here would deliver two of them to the process (#5054).
+            if c == '"' {
+                out.push('\\');
             }
             out.push(c);
         }
@@ -1118,6 +1120,14 @@ mod tests {
             "PATH=\"$PATH;build/Debug\""
         );
         assert_eq!(quote("name=[64,64]"), "\"name=[64,64]\"");
+        // `deno_task_shell` keeps a backslash literal inside double quotes, so
+        // it must be emitted as-is rather than doubled (#5054).
+        assert_eq!(quote("a\\d+ b"), "\"a\\d+ b\"");
+        assert_eq!(
+            quote("C:\\Users\\me\\My Documents"),
+            "\"C:\\Users\\me\\My Documents\""
+        );
+        assert_eq!(quote("both \\ and \" here"), "\"both \\ and \\\" here\"");
     }
 
     #[test]
