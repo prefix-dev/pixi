@@ -372,8 +372,7 @@ impl<'p> ExecutableTask<'p> {
 
         let mut missing_outputs_formatted = None;
         // Outputs check
-        if rendered_outputs.is_some()
-            && post_hash.outputs.is_none()
+        if post_hash.outputs.is_none()
             && let Some(globs) = rendered_outputs.as_ref()
         {
             let formatted = globs.iter().map(|g| format!("`{}`", g.inner())).join(", ");
@@ -389,8 +388,7 @@ impl<'p> ExecutableTask<'p> {
 
         let mut missing_inputs_formatted = None;
         // Inputs check
-        if rendered_inputs.is_some()
-            && post_hash.inputs.is_none()
+        if post_hash.inputs.is_none()
             && let Some(globs) = rendered_inputs.as_ref()
         {
             let formatted = globs.iter().map(|g| format!("`{}`", g.inner())).join(", ");
