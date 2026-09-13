@@ -42,7 +42,7 @@ clap_complete = "4.6.3"
 clap_complete_nushell = "4.6.0"
 clap-verbosity-flag = "3.0.2"
 cmp_any = "0.8.1"
-comfy-table = "7.2.1"
+comfy-table = "8.0.0"
 console = "0.16.1"
 console-subscriber = "0.5.0"
 crossbeam-channel = "0.5.14"
@@ -126,6 +126,7 @@ pixi_pypi_spec = { path = "crates/pixi_pypi_spec" }
 pixi_python_status = { path = "crates/pixi_python_status" }
 pixi_record = { path = "crates/pixi_record" }
 pixi_reporters = { path = "crates/pixi_reporters" }
+pixi_script_shell = { path = "crates/pixi_script_shell" }
 pixi_spec = { path = "crates/pixi_spec" }
 pixi_spec_containers = { path = "crates/pixi_spec_containers" }
 pixi_stable_hash = { path = "crates/pixi_stable_hash" }

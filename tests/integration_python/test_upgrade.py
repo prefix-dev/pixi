@@ -1,9 +1,9 @@
 import json
 import os
-import tomli
 from pathlib import Path
 
 import pytest
+import tomli
 
 from .common import (
     CURRENT_PLATFORM,

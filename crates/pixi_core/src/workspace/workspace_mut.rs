@@ -19,7 +19,9 @@ use pixi_manifest::{
     AddDependencyOutcome, DependencyOverwriteBehavior, FeatureName, FeaturesExt, HasFeaturesIter,
     LoadManifestsError, ManifestDocument, ManifestKind, PixiPlatformName, PypiDependencyLocation,
     SpecType, TargetSelector, TomlError, WorkspaceManifest, WorkspaceManifestMut,
-    script::ScriptManifest, toml::TomlDocument, utils::WithSourceCode,
+    script::{ScriptManifest, conda::CondaScriptManifest},
+    toml::TomlDocument,
+    utils::WithSourceCode,
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
@@ -33,7 +35,7 @@ use crate::{
     lock_file::{LockFileDerivedData, ReinstallPackages, UpdateContext, UpdateMode},
     workspace::{
         MatchSpecs, NON_SEMVER_PACKAGES, PypiDeps, SkippedPackage, SourceSpecs, UpdateDeps,
-        WorkspaceStorage, grouped_environment::GroupedEnvironment,
+        WorkspaceStorage, grouped_environment::GroupedEnvironment, workspace_script::ScriptSource,
     },
 };
 
@@ -96,10 +98,29 @@ impl WorkspaceMut {
         let contents = workspace.workspace.provenance.read()?.into_inner();
 
         let workspace_manifest_document = match &workspace.storage {
-            WorkspaceStorage::Script(script) => {
-                ManifestDocument::from_script(script.manifest().clone())
-                    .expect("a loaded script must remain valid")
-            }
+            WorkspaceStorage::Script(script) => match script.source() {
+                ScriptSource::Pep723(manifest) => {
+                    ManifestDocument::from_script((**manifest).clone())
+                        .expect("a loaded script must remain valid")
+                }
+                ScriptSource::CondaScript(manifest) => {
+                    match ManifestDocument::from_conda_script((**manifest).clone()) {
+                        Ok(document) => document,
+                        Err(error) => {
+                            return Err(Box::new(WithSourceCode {
+                                error: TomlError::Generic(pixi_manifest::GenericError::new(
+                                    error.to_string(),
+                                )),
+                                source: NamedSource::new(
+                                    manifest.path().to_string_lossy(),
+                                    Arc::from(contents.as_str()),
+                                ),
+                            })
+                            .into());
+                        }
+                    }
+                }
+            },
             WorkspaceStorage::Project => {
                 let toml = match DocumentMut::from_str(&contents) {
                     Ok(document) => TomlDocument::new(document),
@@ -118,8 +139,8 @@ impl WorkspaceMut {
                     ManifestKind::Pyproject => ManifestDocument::PyProjectToml(toml),
                     ManifestKind::Pixi => ManifestDocument::PixiToml(toml),
                     ManifestKind::MojoProject => ManifestDocument::MojoProjectToml(toml),
-                    ManifestKind::Pep723 => {
-                        unreachable!("PEP 723 workspaces use script storage")
+                    ManifestKind::Pep723 | ManifestKind::CondaScript => {
+                        unreachable!("script workspaces use script storage")
                     }
                 }
             }
@@ -163,7 +184,9 @@ impl WorkspaceMut {
             ManifestKind::Pyproject => ManifestDocument::PyProjectToml(toml),
             ManifestKind::Pixi => ManifestDocument::PixiToml(toml),
             ManifestKind::MojoProject => ManifestDocument::MojoProjectToml(toml),
-            ManifestKind::Pep723 => unreachable!("templates cannot be PEP 723 scripts"),
+            ManifestKind::Pep723 | ManifestKind::CondaScript => {
+                unreachable!("templates cannot be scripts")
+            }
         };
 
         Ok(Self {
@@ -290,14 +313,29 @@ impl WorkspaceMut {
             .expect("workspace is not available")
             .storage
         {
-            let manifest = ScriptManifest::from_path(&manifest_path)
-                .map_err(std::io::Error::other)?
-                .ok_or_else(|| {
-                    std::io::Error::other(
-                        "saved script no longer contains a PEP 723 metadata block",
-                    )
-                })?;
-            script.replace_manifest(manifest);
+            let source = match script.source() {
+                ScriptSource::Pep723(_) => {
+                    let manifest = ScriptManifest::from_path(&manifest_path)
+                        .map_err(std::io::Error::other)?
+                        .ok_or_else(|| {
+                            std::io::Error::other(
+                                "saved script no longer contains a PEP 723 metadata block",
+                            )
+                        })?;
+                    ScriptSource::Pep723(Box::new(manifest))
+                }
+                ScriptSource::CondaScript(_) => {
+                    let manifest = CondaScriptManifest::from_path(&manifest_path)
+                        .map_err(std::io::Error::other)?
+                        .ok_or_else(|| {
+                            std::io::Error::other(
+                                "saved script no longer contains a conda-script block",
+                            )
+                        })?;
+                    ScriptSource::CondaScript(Box::new(manifest))
+                }
+            };
+            script.replace_manifest(source);
         }
         Ok(())
     }

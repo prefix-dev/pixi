@@ -482,7 +482,7 @@ impl PixiControl {
         InitBuilder {
             no_fast_prefix: false,
             args: init::Args {
-                path: self.workspace_path().to_path_buf(),
+                path: Some(self.workspace_path().to_path_buf()),
                 script: None,
                 channels: None,
                 platforms: Vec::new(),
@@ -502,7 +502,7 @@ impl PixiControl {
         InitBuilder {
             no_fast_prefix: false,
             args: init::Args {
-                path: self.workspace_path().to_path_buf(),
+                path: Some(self.workspace_path().to_path_buf()),
                 script: None,
                 channels: None,
                 platforms,

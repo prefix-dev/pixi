@@ -5,6 +5,7 @@ use std::{
 
 use miette::{Context, IntoDiagnostic};
 use pixi_manifest::script::ScriptManifest;
+use pixi_manifest::script::conda::CondaScriptManifest;
 use rattler_lock::LockFile;
 use serde::{Deserialize, Serialize};
 use xxhash_rust::xxh3::xxh3_64;
@@ -25,6 +26,14 @@ struct CachedResolution {
     lock_file: String,
 }
 
+/// The parsed manifest of a script workspace: a PEP 723 Python script or a
+/// `conda-script` code file.
+#[derive(Debug, Clone)]
+pub(super) enum ScriptSource {
+    Pep723(Box<ScriptManifest>),
+    CondaScript(Box<CondaScriptManifest>),
+}
+
 /// Describes where a script reads and writes workspace state.
 ///
 /// Every script has a parsed manifest and a cache directory. A local script
@@ -33,7 +42,7 @@ struct CachedResolution {
 /// lock file may keep its last resolution in the cache directory.
 #[derive(Debug, Clone)]
 pub(super) struct WorkspaceScript {
-    manifest: Box<ScriptManifest>,
+    source: ScriptSource,
     pixi_dir: PathBuf,
 
     /// The adjacent lock-file path for a local script.
@@ -45,35 +54,49 @@ impl WorkspaceScript {
         let pixi_dir = cache_root.join(local_cache_name(manifest.path()));
         let lock_file_path = Some(local_lock_file_path(manifest.path()));
         Self {
-            manifest: Box::new(manifest),
+            source: ScriptSource::Pep723(Box::new(manifest)),
+            pixi_dir,
+            lock_file_path,
+        }
+    }
+
+    pub(super) fn for_local_conda_script(manifest: CondaScriptManifest, cache_root: &Path) -> Self {
+        let pixi_dir = cache_root.join(local_cache_name(manifest.path()));
+        let lock_file_path = Some(local_lock_file_path(manifest.path()));
+        Self {
+            source: ScriptSource::CondaScript(Box::new(manifest)),
             pixi_dir,
             lock_file_path,
         }
     }
 
     pub(super) fn for_transient(
-        manifest: ScriptManifest,
+        source: ScriptSource,
         cache_root: &Path,
         cache_name: &str,
         cache_key: &[u8],
         root: &Path,
     ) -> Self {
         Self {
-            manifest: Box::new(manifest),
+            source,
             pixi_dir: cache_root.join(transient_cache_name(cache_name, cache_key, root)),
             lock_file_path: None,
         }
     }
 
-    pub(super) fn manifest(&self) -> &ScriptManifest {
-        &self.manifest
+    pub(super) fn source(&self) -> &ScriptSource {
+        &self.source
     }
 
-    pub(super) fn replace_manifest(&mut self, new_manifest: ScriptManifest) {
+    pub(super) fn replace_manifest(&mut self, new_source: ScriptSource) {
         if self.lock_file_path.is_some() {
-            self.lock_file_path = Some(local_lock_file_path(new_manifest.path()));
+            let path = match &new_source {
+                ScriptSource::Pep723(manifest) => manifest.path(),
+                ScriptSource::CondaScript(manifest) => manifest.path(),
+            };
+            self.lock_file_path = Some(local_lock_file_path(path));
         }
-        *self.manifest = new_manifest;
+        self.source = new_source;
     }
 
     pub(super) fn pixi_dir(&self) -> &Path {
@@ -256,7 +279,7 @@ impl LockFileDerivedData<'_> {
     }
 }
 
-fn local_lock_file_path(script_path: &Path) -> PathBuf {
+pub(super) fn local_lock_file_path(script_path: &Path) -> PathBuf {
     let mut file_name = script_path
         .file_name()
         .expect("an absolute script path always has a file name")
@@ -387,28 +410,28 @@ mod tests {
         scoped_key.extend_from_slice(key);
         let digest = xxh3_64(&scoped_key);
         let first = WorkspaceScript::for_transient(
-            manifest(&script_path),
+            super::ScriptSource::Pep723(Box::new(manifest(&script_path))),
             &cache_root,
             "HTTPS://example.com/example.py",
             key,
             &root,
         );
         let first_again = WorkspaceScript::for_transient(
-            manifest(&script_path),
+            super::ScriptSource::Pep723(Box::new(manifest(&script_path))),
             &cache_root,
             "HTTPS://example.com/example.py",
             key,
             &root,
         );
         let second = WorkspaceScript::for_transient(
-            manifest(&script_path),
+            super::ScriptSource::Pep723(Box::new(manifest(&script_path))),
             &cache_root,
             "HTTPS://example.com/example.py",
             b"second key",
             &root,
         );
         let other_root = WorkspaceScript::for_transient(
-            manifest(&script_path),
+            super::ScriptSource::Pep723(Box::new(manifest(&script_path))),
             &cache_root,
             "HTTPS://example.com/example.py",
             key,
@@ -435,8 +458,13 @@ mod tests {
         let mut scoped_key = root.as_os_str().as_encoded_bytes().to_vec();
         scoped_key.push(0);
         scoped_key.extend_from_slice(key);
-        let script =
-            WorkspaceScript::for_transient(manifest(&script_path), &cache_root, "://", key, &root);
+        let script = WorkspaceScript::for_transient(
+            super::ScriptSource::Pep723(Box::new(manifest(&script_path))),
+            &cache_root,
+            "://",
+            key,
+            &root,
+        );
         let expected = cache_root.join(format!("{:016x}", xxh3_64(&scoped_key)));
 
         assert_eq!(expected, script.pixi_dir());

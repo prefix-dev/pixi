@@ -178,13 +178,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             if out.is_empty() {
                 eprintln!("Configuration not set");
             }
-            writeln!(std::io::stdout(), "{out}")
-                .map_err(|e| {
-                    if e.kind() == std::io::ErrorKind::BrokenPipe {
-                        std::process::exit(0);
-                    }
-                    e
-                })
+            pixi_utils::io::ignore_broken_pipe(writeln!(std::io::stdout(), "{out}"))
                 .into_diagnostic()?;
         }
         Subcommand::Prepend(args) => alter_config(

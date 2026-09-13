@@ -1,7 +1,8 @@
 """This is a little script to generate a custom pypi simple index from a directory of source packages."""
 
-from pathlib import Path
 import shutil
+from pathlib import Path
+
 from build import ProjectBuilder
 
 indexes_path = Path(__file__).parent
@@ -57,6 +58,6 @@ for index_path in indexes_path.iterdir():
     (index / "index.html").write_text(
         index_html_template.replace(
             "%LINKS%",
-            "\n".join(f'<a href="/{project}">{project}</a>' for project in projects.keys()),
+            "\n".join(f'<a href="/{project}">{project}</a>' for project in projects),
         )
     )

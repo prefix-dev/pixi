@@ -3,19 +3,19 @@ import platform
 import re
 import subprocess
 import sys
-import tomli
 from collections.abc import Sequence
 from enum import IntEnum
 from pathlib import Path
 from typing import Any, override
 
 import pytest
+import tomli
 from rattler import Platform
 
 # Regex pattern to match ANSI escape sequences
 ANSI_ESCAPE_PATTERN = re.compile(r"\x1b\[[0-9;]*m")
 
-PIXI_VERSION = "0.79.0"
+PIXI_VERSION = "0.80.0"
 
 
 ALL_PLATFORMS = '["linux-64", "osx-64", "osx-arm64", "win-64", "linux-ppc64le", "linux-aarch64"]'
@@ -89,6 +89,7 @@ def verify_cli_command(
         env=complete_env,
         cwd=cwd,
         input=stdin.encode() if isinstance(stdin, str) else stdin,
+        check=False,
     )
     # Decode stdout and stderr explicitly using UTF-8
     stdout = process.stdout.decode("utf-8", errors="replace")
@@ -216,11 +217,7 @@ def run_and_get_env(pixi: Path, *args: str, env_var: str) -> tuple[str | None, O
 
     try:
         result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
+            cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False
         )
 
         value = result.stdout.strip()
@@ -313,7 +310,7 @@ def check_command_supports_flags(command_parts: list[str], *flag_names: str) -> 
 
         return tuple(results)
 
-    except (OSError, IOError):
+    except OSError:
         return tuple(False for _ in flag_names)
 
 

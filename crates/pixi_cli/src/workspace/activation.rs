@@ -383,11 +383,7 @@ async fn list(
         output.push_str(&format!("No {what} found {scope}.\n"));
     }
 
-    let _ = write!(std::io::stdout(), "{output}").inspect_err(|e| {
-        if e.kind() == std::io::ErrorKind::BrokenPipe {
-            std::process::exit(0);
-        }
-    });
+    let _ = pixi_utils::io::ignore_broken_pipe(write!(std::io::stdout(), "{output}"));
 
     Ok(())
 }

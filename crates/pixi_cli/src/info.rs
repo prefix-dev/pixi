@@ -598,26 +598,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     if args.json {
-        writeln!(
+        pixi_utils::io::ignore_broken_pipe(writeln!(
             std::io::stdout(),
             "{}",
             serde_json::to_string_pretty(&info).into_diagnostic()?
-        )
-        .map_err(|e| {
-            if e.kind() == std::io::ErrorKind::BrokenPipe {
-                std::process::exit(0);
-            }
-            e
-        })
+        ))
         .into_diagnostic()?;
     } else {
-        writeln!(std::io::stdout(), "{info}")
-            .map_err(|e| {
-                if e.kind() == std::io::ErrorKind::BrokenPipe {
-                    std::process::exit(0);
-                }
-                e
-            })
+        pixi_utils::io::ignore_broken_pipe(writeln!(std::io::stdout(), "{info}"))
             .into_diagnostic()?;
     }
 

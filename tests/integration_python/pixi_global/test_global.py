@@ -2,10 +2,10 @@ import json
 import os
 import platform
 import shutil
-import tomli
 from pathlib import Path
 
 import pytest
+import tomli
 import tomli_w
 from inline_snapshot import snapshot
 
