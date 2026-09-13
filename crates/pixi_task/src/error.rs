@@ -131,3 +131,33 @@ impl Display for InvalidArgValueError {
         )
     }
 }
+
+#[derive(Debug, Error)]
+pub struct MissingGlobsError {
+    pub task_name: String,
+    pub missing_inputs: Option<String>,
+    pub missing_outputs: Option<String>,
+}
+
+impl Display for MissingGlobsError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "no files matched the input or output globs for task '{}'",
+            consts::TASK_STYLE.apply_to(&self.task_name)
+        )
+    }
+}
+
+impl Diagnostic for MissingGlobsError {
+    fn help<'a>(&'a self) -> Option<Box<dyn Display + 'a>> {
+        let mut help = Vec::new();
+        if let Some(inputs) = &self.missing_inputs {
+            help.push(format!("Input globs: {inputs}"));
+        }
+        if let Some(outputs) = &self.missing_outputs {
+            help.push(format!("Output globs: {outputs}"));
+        }
+        Some(Box::new(help.join("\n")))
+    }
+}
