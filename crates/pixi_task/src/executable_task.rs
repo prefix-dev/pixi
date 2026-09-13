@@ -1093,8 +1093,11 @@ exit 0
             command: Some("echo hello".into()),
             inputs: None,
             outputs: None,
-            environment: pixi_core::environment::EnvironmentHash::for_activation(
+            environment: pixi_core::environment::EnvironmentHash::from_environment(
+                &executable_task.run_environment,
                 &std::collections::HashMap::new(),
+                &LockFile::default(),
+                &executable_task.platform,
             ),
         };
 
