@@ -50,7 +50,10 @@ use uv_python::{Interpreter, PythonEnvironment};
 use uv_resolver::{ExcludeNewer, FlatIndex};
 use uv_types::HashStrategy;
 
-use crate::plan::{CachedWheels, RequiredDists};
+use crate::{
+    install_wheel::read_record_file,
+    plan::{CachedWheels, RequiredDists},
+};
 
 /// Extra data available from the manifest, not the lock file
 #[derive(Clone)]
@@ -155,15 +158,39 @@ pub enum ContinuePyPIPrefixUpdate<'a> {
     Skip,
 }
 
+/// Read the RECORD entries of an installed distribution, or `None` when the
+/// file is missing or unreadable.
+fn read_installed_record(dist: &InstalledDist) -> Option<Vec<String>> {
+    let record_path = dist.install_path().join("RECORD");
+    let mut file = fs_err::File::open(&record_path)
+        .inspect_err(|err| {
+            tracing::debug!("could not open {}: {err}", record_path.display());
+        })
+        .ok()?;
+    read_record_file(&mut file)
+        .inspect_err(|err| {
+            tracing::debug!("could not parse {}: {err}", record_path.display());
+        })
+        .ok()
+        .map(|records| records.into_iter().map(|entry| entry.path).collect())
+}
+
 /// Remove site-packages installed for an outdated interpreter so the next run
 /// starts from a clean slate.
 ///
 /// `layout` describes the old interpreter's install scheme — uv needs it to
 /// resolve and validate the paths recorded in each wheel's `RECORD`. The
 /// caller builds it from the old [`PythonInfo`] plus the env prefix.
+///
+/// A distribution whose `RECORD` is now owned by a conda package only loses
+/// its stale `.dist-info`, leaving the conda files in place.
+/// `site_packages_relative` is `site_packages` relative to the prefix root,
+/// the form conda's `paths.json` uses.
 async fn uninstall_outdated_site_packages(
     layout: &uv_install_wheel::Layout,
+    prefix: &Prefix,
     site_packages: &Path,
+    site_packages_relative: &Path,
 ) -> miette::Result<()> {
     let mut dist_dirs = Vec::new();
     for entry in fs_err::read_dir(site_packages).into_diagnostic()? {
@@ -207,7 +234,41 @@ async fn uninstall_outdated_site_packages(
         })
         .collect::<Vec<_>>();
 
+    if installed.is_empty() {
+        return Ok(());
+    }
+
+    // Reading every path of every installed conda package is expensive, so only
+    // do it once we know there is something to uninstall.
+    let conda_paths = match prefix.find_installed_packages() {
+        Ok(conda_packages) => PypiCondaClobberRegistry::with_conda_packages(&conda_packages),
+        Err(err) => {
+            // Best-effort: an empty registry keeps the previous behaviour.
+            tracing::debug!(
+                "could not determine the installed conda packages of {}: {err}",
+                prefix.root().display()
+            );
+            PypiCondaClobberRegistry::default()
+        }
+    };
+
     for dist_info in installed {
+        // Never delete files that a conda package now owns.
+        if let Some(record_paths) = read_installed_record(&dist_info)
+            && let Some(conda_package) = conda_paths.conda_owner_of_installed_record(
+                site_packages_relative,
+                record_paths.iter().map(String::as_str),
+            )
+        {
+            tracing::debug!(
+                "not uninstalling the files of '{}': they are owned by conda package '{}'; removing its stale metadata only",
+                dist_info.name(),
+                conda_package.as_normalized(),
+            );
+            fs_err::remove_dir_all(dist_info.install_path()).into_diagnostic()?;
+            continue;
+        }
+
         uv_installer::uninstall(&dist_info, layout)
             .await
             .expect("uninstallation of old site-packages failed");
@@ -250,7 +311,13 @@ pub async fn on_python_interpreter_change<'a>(
             let site_packages_path = prefix.root().join(&old.site_packages_path);
             if site_packages_path.exists() {
                 let layout = layout_from_python_info(prefix, old);
-                uninstall_outdated_site_packages(&layout, &site_packages_path).await?;
+                uninstall_outdated_site_packages(
+                    &layout,
+                    prefix,
+                    &site_packages_path,
+                    &old.site_packages_path,
+                )
+                .await?;
             }
             Ok(ContinuePyPIPrefixUpdate::Skip)
         }
@@ -259,7 +326,13 @@ pub async fn on_python_interpreter_change<'a>(
                 let site_packages_path = prefix.root().join(&old.site_packages_path);
                 if site_packages_path.exists() {
                     let layout = layout_from_python_info(prefix, old);
-                    uninstall_outdated_site_packages(&layout, &site_packages_path).await?;
+                    uninstall_outdated_site_packages(
+                        &layout,
+                        prefix,
+                        &site_packages_path,
+                        &old.site_packages_path,
+                    )
+                    .await?;
                 }
             }
             Ok(ContinuePyPIPrefixUpdate::Continue(new))
@@ -269,7 +342,13 @@ pub async fn on_python_interpreter_change<'a>(
                 let site_packages_path = prefix.root().join(&info.site_packages_path);
                 if site_packages_path.exists() {
                     let layout = layout_from_python_info(prefix, info);
-                    uninstall_outdated_site_packages(&layout, &site_packages_path).await?;
+                    uninstall_outdated_site_packages(
+                        &layout,
+                        prefix,
+                        &site_packages_path,
+                        &info.site_packages_path,
+                    )
+                    .await?;
                 }
                 return Ok(ContinuePyPIPrefixUpdate::Skip);
             }
