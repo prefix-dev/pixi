@@ -374,6 +374,7 @@ impl<'p> ExecutableTask<'p> {
         // Outputs check
         if post_hash.outputs.is_none()
             && let Some(globs) = rendered_outputs.as_ref()
+            && !globs.is_empty()
         {
             let formatted = globs.iter().map(|g| format!("`{}`", g.inner())).join(", ");
             if !fail_on_missing {
@@ -390,6 +391,7 @@ impl<'p> ExecutableTask<'p> {
         // Inputs check
         if post_hash.inputs.is_none()
             && let Some(globs) = rendered_inputs.as_ref()
+            && !globs.is_empty()
         {
             let formatted = globs.iter().map(|g| format!("`{}`", g.inner())).join(", ");
             if !fail_on_missing {
