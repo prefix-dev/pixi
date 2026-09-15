@@ -34,14 +34,15 @@ use std::{
 };
 
 use async_fd_lock::{LockRead, LockWrite};
-use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{DateTime, Utc};
+use pixi_build_discovery::{CommandSpec, EnvironmentSpec, JsonRpcBackendSpec};
 use pixi_build_types::InputGlobSet;
 use pixi_compute_engine::ComputeCtx;
 use pixi_manifest::InlineContentHash;
 use pixi_path::{AbsPath, AbsPathBuf};
 use pixi_record::{UnresolvedPixiRecord, UnresolvedSourceRecord};
-use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
+use pixi_spec::PixiSpec;
+use rattler_conda_types::{ChannelUrl, PackageName, Platform, RepoDataRecord};
 use rattler_digest::Sha256Hash;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -73,11 +74,73 @@ pub enum SourceMutability {
 
 /// Opaque content-addressed handle for an artifact cache entry.
 ///
-/// Format: url-safe-base64 of the `xxh3_64` over all hashed inputs
+/// Format: lowercase hex of the `xxh3_64` over all hashed inputs
 /// (see [`compute_artifact_cache_key`]). Package name is not included
 /// because the entry lives under a `<package_name>/` parent directory.
+/// The encoding is case-insensitive on purpose -- the key doubles as a
+/// directory name on filesystems that fold case.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ArtifactCacheKey(String);
+
+/// Minimal backend descriptor needed to re-solve a checkout-free hit.
+/// Complex environment specs deliberately use the normal checkout path.
+///
+/// Note what trusting this on the checkout-free path implies: `channels` is
+/// read back off disk and fed into an environment solve before anything has
+/// validated it, and nothing can, because the identifier it is checked
+/// against is re-derived from this same descriptor. The contents of a cache
+/// file therefore choose which channel is contacted and which package is
+/// downloaded and installed. That is acceptable only because the artifact
+/// cache lives inside the workspace: whoever can write this file can also
+/// write `pixi.toml`, which grants arbitrary channels *and* code execution at
+/// build time. Do not move this cache anywhere less trusted without
+/// revisiting it -- and note that constraining the channels to the
+/// workspace's own is not the fix, since `[package.build] channels` routinely
+/// and legitimately names a backend channel the workspace does not list.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub(crate) struct ImmutableBackend {
+    pub identifier: String,
+    name: String,
+    requirement: (PackageName, PixiSpec),
+    channels: Vec<ChannelUrl>,
+}
+
+impl ImmutableBackend {
+    pub(crate) fn new(identifier: String, spec: JsonRpcBackendSpec) -> Option<Self> {
+        let CommandSpec::EnvironmentSpec(environment) = spec.command else {
+            return None;
+        };
+        if !environment.additional_requirements.is_empty()
+            || !environment.constraints.is_empty()
+            || environment.command.is_some()
+            || !matches!(
+                environment.requirement.1,
+                PixiSpec::Version(_) | PixiSpec::DetailedVersion(_)
+            )
+        {
+            return None;
+        }
+        Some(Self {
+            identifier,
+            name: spec.name,
+            requirement: environment.requirement,
+            channels: environment.channels,
+        })
+    }
+
+    pub(crate) fn spec(&self) -> JsonRpcBackendSpec {
+        JsonRpcBackendSpec {
+            name: self.name.clone(),
+            command: CommandSpec::EnvironmentSpec(Box::new(EnvironmentSpec {
+                requirement: self.requirement.clone(),
+                additional_requirements: Default::default(),
+                constraints: Default::default(),
+                channels: self.channels.clone(),
+                command: None,
+            })),
+        }
+    }
+}
 
 impl std::fmt::Display for ArtifactCacheKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -86,24 +149,6 @@ impl std::fmt::Display for ArtifactCacheKey {
 }
 
 /// Compute the artifact cache key for a source build.
-///
-/// Inputs that go into the hash:
-/// - package name, pinned manifest source, pinned build source, variants
-/// - build + host platform
-/// - backend identifier (version + name of the build backend)
-/// - url + sha256 of every binary dep in `build_packages` / `host_packages`,
-///   tagged by bucket so a dep moving build ↔ host invalidates
-/// - sha256 of every source dep artifact, also tagged by bucket
-/// - any user-supplied project-model overrides (build_string_prefix,
-///   build_number) -- these flow into the resulting `.conda`'s build
-///   string and number, so different overrides must not share a cache
-///   entry
-///
-/// Source *files* are not hashed here: the sidecar captures their mtimes
-/// separately so a content change still invalidates the entry on lookup.
-///
-/// The caller provides source-dep sha256s split into build / host buckets
-/// to preserve the same bucket separation applied to binary deps.
 #[allow(clippy::too_many_arguments)]
 pub fn compute_artifact_cache_key(
     record: &UnresolvedSourceRecord,
@@ -121,49 +166,44 @@ pub fn compute_artifact_cache_key(
     record.manifest_source.hash(&mut hasher);
     record.build_source.hash(&mut hasher);
     record.variants.hash(&mut hasher);
-    // An inline package definition's content hash is not otherwise
-    // represented on disk, so it must enter the key explicitly: editing the
-    // inline `[package]` table then invalidates the built artifact even when the
-    // source files are untouched. `None` for ordinary source packages keeps
-    // their key unchanged.
     inline_content_hash.hash(&mut hasher);
     build_platform.hash(&mut hasher);
     host_platform.hash(&mut hasher);
     backend_identifier.hash(&mut hasher);
     project_model_overrides.hash(&mut hasher);
-    // Distinguish artifacts by output format.
     package_format.hash(&mut hasher);
 
-    // Bucket-tagged streams: the same (url, sha256) behaves differently
-    // when installed into the build prefix vs. the host prefix because
-    // run-dep resolution uses different pin-compatibility maps. Hash a
-    // distinct marker per bucket so the two cases can never collide.
-    "build_packages".hash(&mut hasher);
-    for dep in &record.build_packages {
-        if let UnresolvedPixiRecord::Binary(repo) = dep {
-            repo.url.as_str().hash(&mut hasher);
-            repo.package_record.sha256.hash(&mut hasher);
+    for (bucket, dependencies, source_sha256s) in [
+        (
+            "build_packages",
+            &record.build_packages,
+            build_source_dep_sha256s,
+        ),
+        (
+            "host_packages",
+            &record.host_packages,
+            host_source_dep_sha256s,
+        ),
+    ] {
+        bucket.hash(&mut hasher);
+        for dependency in dependencies {
+            if let UnresolvedPixiRecord::Binary(repo) = dependency {
+                repo.url.as_str().hash(&mut hasher);
+                repo.package_record.sha256.hash(&mut hasher);
+            }
+        }
+        for sha256 in source_sha256s {
+            sha256.hash(&mut hasher);
         }
     }
-    for sha in build_source_dep_sha256s {
-        sha.hash(&mut hasher);
-    }
 
-    "host_packages".hash(&mut hasher);
-    for dep in &record.host_packages {
-        if let UnresolvedPixiRecord::Binary(repo) = dep {
-            repo.url.as_str().hash(&mut hasher);
-            repo.package_record.sha256.hash(&mut hasher);
-        }
-    }
-    for sha in host_source_dep_sha256s {
-        sha.hash(&mut hasher);
-    }
-
-    // `host_platform` is already folded into `hasher`, so the hash
-    // alone uniquely identifies the artifact. Dropping the display-only
-    // prefix keeps the on-disk path short on Windows.
-    ArtifactCacheKey(URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes()))
+    // Lowercase hex, not url-safe base64: the key is used verbatim as the
+    // entry's directory name, and base64's alphabet is case-significant while
+    // NTFS and APFS are not, so two distinct keys could share one entry. The
+    // checkout-free path skips the mtime and glob validation that otherwise
+    // notices a wrong entry, so it has nothing to fall back on. Five extra
+    // characters per entry is a cheap way to retire the whole class.
+    ArtifactCacheKey(format!("{:016x}", hasher.finish()))
 }
 
 /// On-disk record that lives next to a cached `.conda`.
@@ -203,6 +243,10 @@ pub struct ArtifactSidecar {
     /// Fully-assembled `RepoDataRecord` for the artifact. Stored so cache
     /// hits can return it without re-reading index.json from the `.conda`.
     pub record: RepoDataRecord,
+
+    /// Checkout-free validation data for an exact immutable Git source.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) immutable_backend: Option<ImmutableBackend>,
 }
 
 impl ArtifactSidecar {
@@ -215,6 +259,7 @@ impl ArtifactSidecar {
         artifact_sha256: Sha256Hash,
         artifact_filename: String,
         record: RepoDataRecord,
+        immutable_backend: Option<ImmutableBackend>,
     ) -> Self {
         let input_files = snapshot
             .iter()
@@ -227,6 +272,7 @@ impl ArtifactSidecar {
             artifact_sha256,
             artifact_filename,
             record,
+            immutable_backend,
         }
     }
 
@@ -245,6 +291,47 @@ impl ArtifactSidecar {
             );
         }
         Cow::Owned(snapshot)
+    }
+}
+
+/// Resolve the sidecar's recorded artifact filename inside `entry_dir`.
+///
+/// `Path::join` neither normalises `..` nor rejects an absolute right-hand
+/// side -- joining an absolute path discards the base entirely -- so a
+/// sidecar that has been tampered with or corrupted could otherwise name any
+/// file on the system, and the cache would hand it back together with the
+/// sidecar's own `RepoDataRecord` vouching for it. The filename is written by
+/// `store_inner` from the built artifact's own file name, so requiring a
+/// single ordinary path component costs nothing legitimate.
+fn artifact_path_within(entry_dir: &Path, artifact_filename: &str) -> Option<PathBuf> {
+    let mut components = Path::new(artifact_filename).components();
+    match (components.next(), components.next()) {
+        (Some(std::path::Component::Normal(name)), None) => Some(entry_dir.join(name)),
+        _ => {
+            tracing::debug!(
+                artifact_filename,
+                "artifact cache sidecar names a file outside its entry, treating as a miss",
+            );
+            None
+        }
+    }
+}
+
+/// Read a sidecar for the checkout-free path, mapping every failure -- absent,
+/// unreadable, locked by another process -- onto a cache miss. A cache that
+/// cannot be read is a reason to rebuild, never a reason to fail a build.
+async fn read_sidecar_or_miss(sidecar_path: &Path) -> Option<Vec<u8>> {
+    match tokio::fs::read(sidecar_path).await {
+        Ok(bytes) => Some(bytes),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => None,
+        Err(err) => {
+            tracing::debug!(
+                path = %sidecar_path.display(),
+                %err,
+                "cannot read artifact cache sidecar, treating as a miss",
+            );
+            None
+        }
     }
 }
 
@@ -578,9 +665,13 @@ impl ArtifactCache {
             }
         }
 
-        let artifact_path = self
-            .entry_dir(package, key)
-            .join(&sidecar.artifact_filename);
+        let entry_dir = self.entry_dir(package, key);
+        let Some(artifact_path) = artifact_path_within(&entry_dir, &sidecar.artifact_filename)
+        else {
+            return Ok(CacheLookup::Miss(CacheMissReason::ArtifactRemoved {
+                path: entry_dir.join(&sidecar.artifact_filename),
+            }));
+        };
         if fs_err::metadata(&artifact_path).is_err() {
             return Ok(CacheLookup::Miss(CacheMissReason::ArtifactRemoved {
                 path: artifact_path,
@@ -721,6 +812,86 @@ impl ArtifactCache {
         ))
     }
 
+    /// Read checkout-free backend validation data from the authoritative
+    /// artifact sidecar. This optimistic read is revalidated under the entry
+    /// lock by [`Self::lookup_immutable`] after the backend is resolved.
+    ///
+    /// Never fails: an unusable sidecar is a cache miss, not a build error.
+    /// This runs before the checkout on every immutable build, so a cache
+    /// directory that is merely unreadable -- a concurrent writer, a virus
+    /// scanner or backup agent holding the handle, a bad mount -- must fall
+    /// back to rebuilding rather than take the build down with it.
+    pub(crate) async fn immutable_backend(
+        &self,
+        package: &PackageName,
+        key: &ArtifactCacheKey,
+    ) -> Option<ImmutableBackend> {
+        let sidecar_path = self.sidecar_path(package, key);
+        let bytes = read_sidecar_or_miss(&sidecar_path).await?;
+        serde_json::from_slice::<ArtifactSidecar>(&bytes)
+            .ok()
+            .and_then(|sidecar| sidecar.immutable_backend)
+    }
+
+    /// Validate and return an immutable artifact under its normal entry lock.
+    ///
+    /// Like [`Self::immutable_backend`], every failure to read the entry is a
+    /// miss: rebuilding is always a safe fallback.
+    pub(crate) async fn lookup_immutable(
+        &self,
+        package: &PackageName,
+        key: &ArtifactCacheKey,
+        expected_backend: &ImmutableBackend,
+        backend_identifier: &str,
+    ) -> Option<CachedArtifact> {
+        let sidecar_path = self.sidecar_path(package, key);
+        let lock_file = match self.open_lock_file_if_exists(package, key).await {
+            Ok(Some(lock_file)) => lock_file,
+            Ok(None) => return None,
+            Err(err) => {
+                tracing::debug!(
+                    path = %self.lock_path(package, key).display(),
+                    %err,
+                    "cannot open artifact cache lock, treating as a miss",
+                );
+                return None;
+            }
+        };
+        let _guard = match lock_file.lock_read().await {
+            Ok(guard) => guard,
+            Err(err) => {
+                tracing::debug!(
+                    path = %self.lock_path(package, key).display(),
+                    err = %err.error,
+                    "cannot lock artifact cache entry, treating as a miss",
+                );
+                return None;
+            }
+        };
+        let bytes = read_sidecar_or_miss(&sidecar_path).await?;
+        let Ok(sidecar) = serde_json::from_slice::<ArtifactSidecar>(&bytes) else {
+            return None;
+        };
+        if expected_backend.identifier != backend_identifier
+            || sidecar.immutable_backend.as_ref() != Some(expected_backend)
+        {
+            return None;
+        }
+        let artifact_path =
+            artifact_path_within(&self.entry_dir(package, key), &sidecar.artifact_filename)?;
+        if fs_err::metadata(&artifact_path).is_err() {
+            return None;
+        }
+
+        let mut record = sidecar.record;
+        record.url = Url::from_file_path(&artifact_path).expect("cache entry paths are absolute");
+        Some(CachedArtifact {
+            artifact: artifact_path,
+            sha256: sidecar.artifact_sha256,
+            record,
+        })
+    }
+
     /// Place `artifact_source` into the cache and write its sidecar.
     ///
     /// `input_files` are absolute paths; their mtimes are captured at store
@@ -745,7 +916,57 @@ impl ArtifactCache {
         input_glob_sets: Vec<InputGlobSet>,
         input_files: impl IntoIterator<Item = AbsPathBuf>,
         build_started: SystemTime,
+        record: RepoDataRecord,
+    ) -> Result<CachedArtifact, ArtifactCacheError> {
+        self.store_inner(
+            package,
+            key,
+            artifact_source,
+            input_glob_sets,
+            input_files,
+            build_started,
+            record,
+            None,
+        )
+        .await
+    }
+
+    /// Store an immutable artifact and its checkout-free backend validation
+    /// data atomically in the authoritative sidecar.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) async fn store_immutable(
+        &self,
+        package: &PackageName,
+        key: &ArtifactCacheKey,
+        artifact_source: &Path,
+        build_started: SystemTime,
+        record: RepoDataRecord,
+        backend: ImmutableBackend,
+    ) -> Result<CachedArtifact, ArtifactCacheError> {
+        self.store_inner(
+            package,
+            key,
+            artifact_source,
+            Vec::new(),
+            Vec::<AbsPathBuf>::new(),
+            build_started,
+            record,
+            Some(backend),
+        )
+        .await
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    async fn store_inner(
+        &self,
+        package: &PackageName,
+        key: &ArtifactCacheKey,
+        artifact_source: &Path,
+        input_glob_sets: Vec<InputGlobSet>,
+        input_files: impl IntoIterator<Item = AbsPathBuf>,
+        build_started: SystemTime,
         mut record: RepoDataRecord,
+        immutable_backend: Option<ImmutableBackend>,
     ) -> Result<CachedArtifact, ArtifactCacheError> {
         let entry_dir = self.entry_dir(package, key);
         let lock_file = self.open_lock_file(package, key).await?;
@@ -807,8 +1028,14 @@ impl ArtifactCache {
             .expect("sha256 task panicked")
             .map_err(|err| ArtifactCacheError::io("hashing artifact", dest.clone(), err))?;
 
-        let sidecar =
-            ArtifactSidecar::new(input_glob_sets, snapshot, sha256, filename, record.clone());
+        let sidecar = ArtifactSidecar::new(
+            input_glob_sets,
+            snapshot,
+            sha256,
+            filename,
+            record.clone(),
+            immutable_backend,
+        );
         let sidecar_path = self.sidecar_path(package, key);
         let bytes = serde_json::to_vec(&sidecar).expect("sidecar serialization cannot fail");
         tokio::fs::write(&sidecar_path, &bytes)
@@ -861,7 +1088,10 @@ mod tests {
     use std::{fs::OpenOptions, str::FromStr, time::SystemTime};
 
     use pixi_compute_engine::ComputeEngine;
+    use pixi_record::{PinnedPathSpec, PinnedSourceSpec, PinnedUrlSpec};
+    use pixi_spec::Subdirectory;
     use rattler_conda_types::{PackageName, PackageRecord};
+    use rattler_digest::{Sha256, compute_file_digest, parse_digest_from_hex};
     use tempfile::TempDir;
 
     use super::*;
@@ -1022,28 +1252,283 @@ mod tests {
         );
     }
 
-    /// An immutable source (git commit, url archive) is fully identified by
-    /// the cache key; the recorded input files may be long gone (e.g. the
-    /// global cache dir holding the git checkout was wiped) without making
-    /// the entry stale. This also covers sidecars written by older versions,
-    /// which still carry file lists for immutable sources.
+    /// A checksum-pinned local URL archive is eligible for immutable artifact
+    /// lookup after its extracted checkout is removed. A path source is not.
     #[tokio::test]
-    async fn lookup_immutable_hits_despite_deleted_input_files() {
-        let (f, input) = Fixture::with_input("main.py", b"body").await;
-
-        // Simulate a wiped cache dir: every recorded input file is gone.
-        fs_err::remove_file(&input).unwrap();
-
-        assert!(
-            f.lookup_with(SourceMutability::Immutable).await.is_some(),
-            "an immutable source must hit even when the recorded input files are gone",
+    async fn pinned_url_hits_after_deleted_checkout_but_path_source_misses() {
+        let archive = Path::new(env!("CARGO_WORKSPACE_DIR")).join("tests/data/url/hello_world.zip");
+        let expected_sha256 = parse_digest_from_hex::<Sha256>(
+            "cceb48dc9667384be394e8c19199252e9e0bdaff98272b19f66a854b4631c163",
+        )
+        .unwrap();
+        assert_eq!(
+            compute_file_digest::<Sha256>(&archive).unwrap(),
+            expected_sha256
         );
+
+        let pinned_url = PinnedSourceSpec::Url(PinnedUrlSpec {
+            url: url::Url::from_file_path(&archive).unwrap(),
+            sha256: expected_sha256,
+            md5: None,
+            subdirectory: Subdirectory::default(),
+        });
+        let pinned_path = PinnedSourceSpec::Path(PinnedPathSpec {
+            path: typed_path::Utf8TypedPathBuf::from("checkout"),
+        });
+        assert!(!pinned_url.is_mutable());
+        assert!(pinned_path.is_mutable());
+
+        let (f, _checkout_file) = Fixture::with_input("main.py", b"body").await;
+        fs_err::remove_dir_all(&f.source).unwrap();
+
+        let mutability = |source: &PinnedSourceSpec| {
+            if source.is_mutable() {
+                SourceMutability::Mutable
+            } else {
+                SourceMutability::Immutable
+            }
+        };
+        assert!(
+            f.lookup_with(mutability(&pinned_url)).await.is_some(),
+            "a pinned URL archive must hit after its prior checkout is removed",
+        );
+        assert_eq!(mutability(&pinned_path), SourceMutability::Mutable);
         assert!(
             matches!(
                 f.lookup_miss().await,
                 CacheMissReason::InputFileRemoved { .. }
             ),
-            "a mutable source with deleted input files must stay a miss",
+            "a path source with a removed checkout must remain a miss",
+        );
+    }
+
+    #[tokio::test]
+    async fn immutable_entry_validates_backend_without_source_tree() {
+        let f = Fixture::new();
+        let mut complex = JsonRpcBackendSpec::default_rattler_build(Vec::new());
+        let CommandSpec::EnvironmentSpec(environment) = &mut complex.command else {
+            unreachable!()
+        };
+        environment
+            .additional_requirements
+            .insert(pkg("extra-tool"), PixiSpec::any());
+        assert!(ImmutableBackend::new("ignored".to_string(), complex).is_none());
+
+        let backend = ImmutableBackend::new(
+            "backend@1".to_string(),
+            JsonRpcBackendSpec::default_rattler_build(Vec::new()),
+        )
+        .unwrap();
+        let stored = f
+            .cache
+            .store_immutable(
+                &pkg("foo"),
+                &key("immutable-key"),
+                &f.artifact,
+                SystemTime::now(),
+                dummy_record("foo"),
+                backend.clone(),
+            )
+            .await
+            .unwrap();
+
+        let persisted = f
+            .cache
+            .immutable_backend(&pkg("foo"), &key("immutable-key"))
+            .await
+            .unwrap();
+        assert_eq!(persisted.spec(), backend.spec());
+        assert!(
+            f.cache
+                .lookup_immutable(&pkg("foo"), &key("immutable-key"), &persisted, "backend@2")
+                .await
+                .is_none()
+        );
+        let hit = f
+            .cache
+            .lookup_immutable(&pkg("foo"), &key("immutable-key"), &persisted, "backend@1")
+            .await
+            .unwrap();
+        assert_eq!(hit.artifact, stored.artifact);
+    }
+
+    /// The checkout-free probe runs before the checkout on every immutable
+    /// build. A cache directory that cannot be read must degrade to a miss --
+    /// rebuilding is always safe -- rather than take the build down. This
+    /// previously surfaced to the user as `CreateWorkDirectory`.
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn unreadable_sidecar_is_a_miss_not_an_error() {
+        use std::os::windows::fs::OpenOptionsExt;
+
+        let f = Fixture::new();
+        let backend = ImmutableBackend::new(
+            "backend@1".to_string(),
+            JsonRpcBackendSpec::default_rattler_build(Vec::new()),
+        )
+        .unwrap();
+        let stored = f
+            .cache
+            .store_immutable(
+                &pkg("foo"),
+                &key("immutable-key"),
+                &f.artifact,
+                SystemTime::now(),
+                dummy_record("foo"),
+                backend.clone(),
+            )
+            .await
+            .unwrap();
+        let persisted = f
+            .cache
+            .immutable_backend(&pkg("foo"), &key("immutable-key"))
+            .await
+            .unwrap();
+
+        // FILE_SHARE_NONE: what a second pixi, a virus scanner or a backup
+        // agent does to the sidecar while it is being read.
+        let sidecar = f.cache.sidecar_path(&pkg("foo"), &key("immutable-key"));
+        let exclusive = OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&sidecar)
+            .unwrap();
+
+        assert!(
+            f.cache
+                .immutable_backend(&pkg("foo"), &key("immutable-key"))
+                .await
+                .is_none(),
+            "an unreadable sidecar must be a miss",
+        );
+        assert!(
+            f.cache
+                .lookup_immutable(&pkg("foo"), &key("immutable-key"), &persisted, "backend@1")
+                .await
+                .is_none(),
+            "an unreadable sidecar must be a miss",
+        );
+
+        drop(exclusive);
+        let hit = f
+            .cache
+            .lookup_immutable(&pkg("foo"), &key("immutable-key"), &persisted, "backend@1")
+            .await
+            .expect("the entry is readable again");
+        assert_eq!(hit.artifact, stored.artifact);
+    }
+
+    /// A sidecar that names a file outside its own entry directory must never
+    /// resolve. `Path::join` normalises nothing and an absolute right-hand
+    /// side discards the base entirely, so without a guard the cache would
+    /// return an arbitrary file plus the sidecar's own `RepoDataRecord`
+    /// vouching for it.
+    #[tokio::test]
+    async fn a_sidecar_cannot_name_a_file_outside_its_entry() {
+        let f = Fixture::new();
+        let backend = ImmutableBackend::new(
+            "backend@1".to_string(),
+            JsonRpcBackendSpec::default_rattler_build(Vec::new()),
+        )
+        .unwrap();
+        f.cache
+            .store_immutable(
+                &pkg("foo"),
+                &key("immutable-key"),
+                &f.artifact,
+                SystemTime::now(),
+                dummy_record("foo"),
+                backend.clone(),
+            )
+            .await
+            .unwrap();
+        let persisted = f
+            .cache
+            .immutable_backend(&pkg("foo"), &key("immutable-key"))
+            .await
+            .unwrap();
+
+        let outside = f._tmp.path().join("outside.conda");
+        fs_err::write(&outside, b"not the cached artifact").unwrap();
+        let sidecar_path = f.cache.sidecar_path(&pkg("foo"), &key("immutable-key"));
+        let original: ArtifactSidecar =
+            serde_json::from_slice(&fs_err::read(&sidecar_path).unwrap()).unwrap();
+
+        for escape in [
+            outside.to_string_lossy().to_string(),
+            "../../../outside.conda".to_string(),
+            "..\\..\\..\\outside.conda".to_string(),
+            "sub/dir.conda".to_string(),
+        ] {
+            let mut tampered = original.clone();
+            tampered.artifact_filename = escape.clone();
+            fs_err::write(&sidecar_path, serde_json::to_vec(&tampered).unwrap()).unwrap();
+
+            assert!(
+                f.cache
+                    .lookup_immutable(&pkg("foo"), &key("immutable-key"), &persisted, "backend@1")
+                    .await
+                    .is_none(),
+                "lookup_immutable must not resolve {escape}",
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn unusable_immutable_entries_are_misses_not_errors() {
+        let f = Fixture::new();
+        let backend = ImmutableBackend::new(
+            "backend@1".to_string(),
+            JsonRpcBackendSpec::default_rattler_build(Vec::new()),
+        )
+        .unwrap();
+        f.cache
+            .store_immutable(
+                &pkg("foo"),
+                &key("immutable-key"),
+                &f.artifact,
+                SystemTime::now(),
+                dummy_record("foo"),
+                backend.clone(),
+            )
+            .await
+            .unwrap();
+        let persisted = f
+            .cache
+            .immutable_backend(&pkg("foo"), &key("immutable-key"))
+            .await
+            .unwrap();
+        let sidecar = f.cache.sidecar_path(&pkg("foo"), &key("immutable-key"));
+
+        for (name, bytes) in [
+            ("truncated", &b"{\"artifact_sha"[..]),
+            ("empty", &b""[..]),
+            ("not json", &b"this is not json"[..]),
+        ] {
+            fs_err::write(&sidecar, bytes).unwrap();
+            assert!(
+                f.cache
+                    .immutable_backend(&pkg("foo"), &key("immutable-key"))
+                    .await
+                    .is_none(),
+                "{name} sidecar must be a miss",
+            );
+            assert!(
+                f.cache
+                    .lookup_immutable(&pkg("foo"), &key("immutable-key"), &persisted, "backend@1")
+                    .await
+                    .is_none(),
+                "{name} sidecar must be a miss",
+            );
+        }
+
+        fs_err::remove_file(&sidecar).unwrap();
+        assert!(
+            f.cache
+                .lookup_immutable(&pkg("foo"), &key("immutable-key"), &persisted, "backend@1")
+                .await
+                .is_none(),
+            "a removed sidecar must be a miss",
         );
     }
 
