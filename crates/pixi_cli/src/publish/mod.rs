@@ -23,7 +23,9 @@ use pixi_command_dispatcher::{
     PackagesDir,
     keys::{ResolveSourcePackageKey, ResolveSourcePackageSpec, SourceBuildKey, SourceBuildSpec},
 };
-use pixi_config::{CacheKind, ConfigCli, IndexChannelConfig, IndexConfig, PackageFormatAndCompression};
+use pixi_config::{
+    CacheKind, ConfigCli, IndexChannelConfig, IndexConfig, PackageFormatAndCompression,
+};
 use pixi_core::{
     Workspace, WorkspaceLocator, environment::sanity_check_workspace, workspace::DiscoveryStart,
 };
@@ -616,13 +618,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Resolve the conda packages (pkgs) directory through the full cache-kind
     // resolution path so that netfs-redirect is honoured.
-    let conda_packages_dir = AbsPathBuf::new(
-        workspace
-            .config()
-            .cache_dir_for(CacheKind::CondaPackages)?,
-    )
-    .expect("conda packages cache dir is not absolute")
-    .into_assume_dir();
+    let conda_packages_dir =
+        AbsPathBuf::new(workspace.config().cache_dir_for(CacheKind::CondaPackages)?)
+            .expect("conda packages cache dir is not absolute")
+            .into_assume_dir();
 
     let mut cache_dirs = CacheDirs::new(cache_dir)
         .with_workspace(workspace_dir)

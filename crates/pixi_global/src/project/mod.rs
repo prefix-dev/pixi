@@ -26,7 +26,8 @@ use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher,
     CommandDispatcherError as DispatcherError, ComputeResultExt, EnvironmentRef, EnvironmentSpec,
     EphemeralEnv, InlinePackage, InstallPixiEnvironmentSpec, Limits, PackagesDir,
-    SourceCheckoutExt, keys::{SolvePixiEnvironmentKey, SolvePixiEnvironmentSpec},
+    SourceCheckoutExt,
+    keys::{SolvePixiEnvironmentKey, SolvePixiEnvironmentSpec},
 };
 use pixi_config::{Config, RunPostLinkScripts, default_channel_config, pixi_home};
 use pixi_consts::consts::{self};
@@ -1674,10 +1675,9 @@ impl Project {
             .expect("conda packages cache dir is not absolute")
             .into_assume_dir();
 
-            let cache_dirs =
-                pixi_command_dispatcher::CacheDirs::new(cache_dir)
-                    .with_workspace(build_dir)
-                    .with_override::<PackagesDir>(conda_packages_dir);
+            let cache_dirs = pixi_command_dispatcher::CacheDirs::new(cache_dir)
+                .with_workspace(build_dir)
+                .with_override::<PackagesDir>(conda_packages_dir);
 
             let root_dir = AbsPathBuf::new(self.root.clone())
                 .expect("root dir is not absolute")
