@@ -158,7 +158,7 @@ reqwest-retry = { package = "astral-reqwest-retry", version = "0.9" }
 retry-policies = "0.5"
 rlimit = "0.11.0"
 roxmltree = "0.21.0"
-rstest = "0.26.0"
+rstest = "0.27.0"
 rustc-hash = "2.1.2"
 rustls-native-certs = "0.8"
 rustls-pki-types = "1"
