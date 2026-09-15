@@ -889,12 +889,8 @@ mod tests {
     }
 
     fn set_modified(path: &Path, modified: SystemTime) {
-        OpenOptions::new()
-            .write(true)
-            .open(path)
-            .unwrap()
-            .set_modified(modified)
-            .unwrap();
+        filetime::set_file_mtime(path, filetime::FileTime::from_system_time(modified))
+            .unwrap_or_else(|e| panic!("set_modified({}) failed: {e}", path.display()));
     }
 
     fn mtime(path: &Path) -> SystemTime {
@@ -1918,6 +1914,10 @@ mod tests {
             .await;
         assert!(f.sidecar().input_files.contains_key(&abs(dir.clone())));
         fs_err::write(dir.join("control.txt"), b"x").unwrap();
+        // Explicitly advance the directory mtime: on filesystems with 1-second
+        // resolution the write above may land in the same second and leave the
+        // mtime unchanged, making the lookup appear fresh.
+        touch(&dir, 1);
         assert!(
             f.lookup().await.is_none(),
             "control: a recorded directory whose contents changed invalidates",
@@ -1936,6 +1936,9 @@ mod tests {
         );
 
         fs_err::write(dir.join("added.txt"), b"x").unwrap();
+        // Same fix: ensure the directory mtime actually advances so the
+        // MtimeOnly comparison detects the change reliably.
+        touch(&dir, 1);
         assert!(
             f.lookup().await.is_none(),
             "changing a recorded input directory must invalidate the entry",
