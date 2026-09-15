@@ -923,6 +923,15 @@ impl Workspace {
         default_build_dir
     }
 
+    /// Whether this project stores any environment resolutions locally.
+    pub(crate) fn has_local_environments(&self) -> bool {
+        matches!(self.storage, WorkspaceStorage::Project)
+            && self
+                .environments()
+                .iter()
+                .any(|env| env.is_lock_file_less())
+    }
+
     /// Returns the path to the lock file of the project
     /// [consts::PROJECT_LOCK_FILE]
     pub fn lock_file_path(&self) -> PathBuf {
