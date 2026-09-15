@@ -1,0 +1,11 @@
+--8<-- [start:example]
+
+## Examples
+
+```shell
+pixi self-update
+pixi self-update --version 0.46.0
+```
+
+
+--8<-- [end:example]
