@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.81.0] - 2026-09-15
+#### ✨ Highlights
+
+`pixi run --script` can now run `conda-script` files directly from HTTP or HTTPS URLs, including GitHub Gists. Pixi downloads the script, reuses its cached environment, and runs it without requiring a local file.
+
+#### Added
+
+- Add remote url support to conda-script by @ruben-arts in [#6981](https://github.com/prefix-dev/pixi/pull/6981)
+- Add PrefixPlatformMismatchError for source build prefixes by @hunger in [#6984](https://github.com/prefix-dev/pixi/pull/6984)
+- Show the build platform of nested derived environments by @hunger in [#6987](https://github.com/prefix-dev/pixi/pull/6987)
+
+
+#### Changed
+
+- Track the platform of a derived environment explicitly by @hunger in [#6985](https://github.com/prefix-dev/pixi/pull/6985)
+- Keep nested derived environments on the build platform by @hunger in [#6986](https://github.com/prefix-dev/pixi/pull/6986)
+
+
+#### Documentation
+
+- Explain how source build-dependencies are built when cross-compiling by @hunger in [#6988](https://github.com/prefix-dev/pixi/pull/6988)
+
+
+#### Fixed
+
+- Use only tombi for TOML formatting by @Hofer-Julian in [#6982](https://github.com/prefix-dev/pixi/pull/6982)
+
+
+#### Refactor
+
+- Return CLI exit codes from main by @baszalmstra in [#6975](https://github.com/prefix-dev/pixi/pull/6975)
+
+
+#### New Contributors
+* @prefix-dev-pixi-upgrades[bot] made their first contribution in [#6980](https://github.com/prefix-dev/pixi/pull/6980)
+
 ### [0.80.0] - 2026-09-07
 #### ✨ Highlights
 
