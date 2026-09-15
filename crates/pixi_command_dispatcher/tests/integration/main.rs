@@ -3354,6 +3354,143 @@ pub async fn test_source_build_key_dedups_across_parallel_installs() {
     );
 }
 
+/// A record of another platform in the build or host environment of a
+/// source package is rejected before anything is installed into the
+/// prefix, with a diagnostic that names the record, the prefix and the
+/// package being built. Install `package-b` for a foreign platform with a
+/// record of this machine's platform smuggled into its host environment,
+/// the shape an upstream platform-tracking bug produces.
+#[tokio::test]
+pub async fn test_prefix_platform_mismatch_is_reported_before_installing() {
+    use pixi_command_dispatcher::{
+        InstallPixiEnvironmentError, PrefixRecordOrigin, SourceBuildError, SourceBuildPrefixKind,
+    };
+    use pixi_record::UnresolvedPixiRecord;
+    use rattler_conda_types::{
+        PackageRecord, RepoDataRecord, VersionWithSource, package::DistArchiveIdentifier,
+    };
+
+    let root_dir = workspaces_dir().join("host-dependency");
+    let tempdir = test_tempdir();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    // Cross-install so the generic "retry without --platform" hint would
+    // apply; the specific error must stand on its own.
+    let target_platform = match tool_platform {
+        Platform::OsxArm64 => Platform::Linux64,
+        _ => Platform::OsxArm64,
+    };
+    let build_env = BuildEnvironment::simple(target_platform, vec![]);
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    let records = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package-b".parse().unwrap(),
+                PathSpec::new("package-b").into(),
+            )]),
+            env_ref: env_ref_of(vec![], build_env.clone()),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .map_err(|e| format_diagnostic(&e))
+    .expect("solve should succeed");
+
+    let mut smuggled = PackageRecord::new(
+        PackageName::new_unchecked("libfoo"),
+        "1.0.0".parse::<VersionWithSource>().unwrap(),
+        "h0".into(),
+    );
+    smuggled.subdir = tool_platform.to_string();
+    let smuggled = RepoDataRecord {
+        package_record: smuggled,
+        identifier: DistArchiveIdentifier::try_from_filename("libfoo-1.0.0-h0.conda").unwrap(),
+        url: Url::parse(&format!(
+            "https://example.com/{tool_platform}/libfoo-1.0.0-h0.conda"
+        ))
+        .unwrap(),
+        channel: None,
+    };
+    let records: Vec<UnresolvedPixiRecord> = records
+        .into_iter()
+        .map(|record| match to_unresolved(record) {
+            UnresolvedPixiRecord::Source(source)
+                if source.name().as_normalized() == "package-b" =>
+            {
+                let mut source = (*source).clone();
+                source
+                    .host_packages
+                    .push(UnresolvedPixiRecord::Binary(Arc::new(smuggled.clone())));
+                UnresolvedPixiRecord::Source(Arc::new(source))
+            }
+            other => other,
+        })
+        .collect();
+
+    let prefix = Prefix::create(tempdir.path().join("prefix")).unwrap();
+    let Err(err) = dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env,
+            ..InstallPixiEnvironmentSpec::new(records, prefix)
+        })
+        .await
+    else {
+        panic!("a record of another platform must not be installed");
+    };
+
+    let CommandDispatcherError::Failed(InstallPixiEnvironmentError::BuildUnresolvedSourceError(
+        built,
+        _,
+        SourceBuildError::PrefixPlatformMismatch(mismatch),
+        generic_help,
+    )) = &err
+    else {
+        panic!("unexpected error: {}", format_diagnostic(&err));
+    };
+    assert_eq!(built.as_normalized(), "package-b");
+    assert_eq!(mismatch.kind, SourceBuildPrefixKind::Host);
+    assert_eq!(mismatch.source_package.as_normalized(), "package-b");
+    assert_eq!(mismatch.package.as_normalized(), "libfoo");
+    assert_eq!(mismatch.origin, PrefixRecordOrigin::Solved);
+    assert_eq!(mismatch.subdir, tool_platform.to_string());
+    assert_eq!(mismatch.expected, target_platform);
+    assert_eq!(
+        mismatch.to_string(),
+        format!(
+            "cannot install 'libfoo' ({tool_platform}) into the host environment of 'package-b', \
+             which is for '{target_platform}'"
+        )
+    );
+    assert!(
+        generic_help.is_none(),
+        "the generic cross-build hint must not be added on top of the specific error"
+    );
+
+    // What the user sees. The specific help lives on the inner error and
+    // reaches the report through the wrapping install error; rendering
+    // wraps long lines, so compare with whitespace collapsed.
+    let rendered = format_diagnostic(&err);
+    let flat = rendered.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(flat.contains(&mismatch.to_string()), "{rendered}");
+    assert!(
+        flat.contains(
+            "this is a bug in pixi's cross-compilation platform tracking, please report it"
+        ),
+        "{rendered}"
+    );
+    assert!(!flat.contains("Retry without '--platform'"), "{rendered}");
+}
+
 /// Two parallel `InstantiateBackendKey` computes for the same backend
 /// spec should resolve to a single backend instantiation. Backends are
 /// frequently shared across environments (workspace + per-package
