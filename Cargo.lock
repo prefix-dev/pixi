@@ -2485,6 +2485,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dirs"
+version = "7.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d57d423b3c82e89b9a24ca3091fee61f456a26edbd28d26c65906f4bc1dcd8f"
+dependencies = [
+ "dirs-sys",
+]
+
+[[package]]
 name = "dirs-sys"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6638,7 +6647,7 @@ name = "pixi_compute_sources"
 version = "0.1.0"
 dependencies = [
  "derive_more",
- "dirs",
+ "dirs 7.0.0",
  "fs-err",
  "futures",
  "hex",
@@ -6671,7 +6680,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "console",
- "dirs",
+ "dirs 7.0.0",
  "fs-err",
  "indexmap 2.14.2",
  "insta",
@@ -6893,7 +6902,7 @@ version = "0.1.0"
 dependencies = [
  "ahash",
  "console",
- "dirs",
+ "dirs 7.0.0",
  "dunce",
  "fancy_display",
  "fs-err",
@@ -7210,7 +7219,7 @@ name = "pixi_spec"
 version = "0.1.0"
 dependencies = [
  "chrono",
- "dirs",
+ "dirs 7.0.0",
  "file_url",
  "hex",
  "humantime",
@@ -8064,7 +8073,7 @@ dependencies = [
  "clap",
  "console",
  "digest 0.11.3",
- "dirs",
+ "dirs 6.0.0",
  "filetime",
  "fs-err",
  "futures",
@@ -8386,7 +8395,7 @@ dependencies = [
  "astral-reqwest-middleware",
  "dashmap",
  "digest 0.11.3",
- "dirs",
+ "dirs 6.0.0",
  "fs-err",
  "fs4",
  "futures",
@@ -8418,7 +8427,7 @@ checksum = "af4b193074dcc4e1ffd126abf5d3e00ffabb9f411adb4bff5f1cccaedfaabd22"
 dependencies = [
  "ahash",
  "core-foundation 0.10.1",
- "dirs",
+ "dirs 6.0.0",
  "fancy-regex",
  "file_url",
  "fs-err",
@@ -8473,7 +8482,7 @@ version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "42ec0147711bd1df3f919da2dbf1bd2a824c92d4a34c1744d63021d02cb3e171"
 dependencies = [
- "dirs",
+ "dirs 6.0.0",
  "fs-err",
  "indexmap 2.14.2",
  "rattler_conda_types",
@@ -8614,7 +8623,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29d63d07127436ed0d66efc976c7df4dc370d6dbd2ba2788ccaa80b441fa93f3"
 dependencies = [
  "configparser",
- "dirs",
+ "dirs 6.0.0",
  "fs-err",
  "hex",
  "indexmap 2.14.2",
@@ -8655,7 +8664,7 @@ dependencies = [
  "aws-smithy-http-client",
  "base64 0.22.1",
  "dbus-secret-service-keyring-store",
- "dirs",
+ "dirs 6.0.0",
  "fs-err",
  "futures",
  "getrandom 0.4.2",
@@ -8776,7 +8785,7 @@ dependencies = [
  "cfg-if 1.0.4",
  "coalesced_map",
  "dashmap",
- "dirs",
+ "dirs 6.0.0",
  "file_url",
  "fs-err",
  "fslock",
@@ -10217,7 +10226,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32824fab5e16e6c4d86dc1ba84489390419a39f97699852b66480bb87d297ed8"
 dependencies = [
  "bstr",
- "dirs",
+ "dirs 6.0.0",
  "os_str_bytes",
 ]
 
