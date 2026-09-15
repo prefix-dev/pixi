@@ -1,7 +1,8 @@
 ---
 source: crates/pixi/tests/integration_rust/add_tests.rs
-expression: project.manifest().source.to_string()
+expression: workspace.workspace.provenance.read().unwrap().into_inner()
 ---
+
 [workspace]
 name = "some-workspace"
 platforms = []
@@ -9,4 +10,4 @@ channels = ['file://<LOCAL_CHANNEL>/']
 preview = ['pixi-build']
 
 [dependencies]
-foo = "*"
+foo = ">=1,<2"

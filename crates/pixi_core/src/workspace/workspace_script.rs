@@ -357,7 +357,7 @@ mod tests {
     fn script_workspace(root: &Path, cache: &Path) -> Workspace {
         let path = root.join("example.py");
         fs_err::write(&path, SOURCE).unwrap();
-        Workspace::from_script(
+        let mut workspace = Workspace::from_script(
             ScriptManifest::from_path(path).unwrap().unwrap(),
             Config {
                 default_channels: vec![NamedChannelOrUrl::Name("testing".into())],
@@ -369,7 +369,21 @@ mod tests {
             },
         )
         .unwrap()
-        .value
+        .value;
+        // These tests exercise cache persistence, not Python resolution. The
+        // script conversion injects Python even for `dependencies = []`;
+        // remove it explicitly rather than relying on empty platforms to skip
+        // solving (empty platforms now resolve for the detected host).
+        workspace
+            .workspace
+            .value
+            .feature_mut(&pixi_manifest::FeatureName::Default)
+            .unwrap()
+            .targets
+            .default_mut()
+            .dependencies
+            .clear();
+        workspace
     }
 
     #[test]
