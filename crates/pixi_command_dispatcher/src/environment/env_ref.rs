@@ -40,13 +40,18 @@ pub enum EnvironmentRef {
 
 impl EnvironmentRef {
     /// Construct a [`Derived`](EnvironmentRef::Derived) env rooted in
-    /// `self`. When `self` is already `Derived`, the chain is flattened
-    /// by inheriting the inner `parent` and taking the outer `kind`.
-    /// This is correct because the kind transforms compose trivially on
-    /// `build_environment`: `Host` is the identity (clones the parent's
-    /// build_environment) and `Build` is absorbing (`to_build_from_build`
-    /// folds any parent down to build). Other spec fields pass through
-    /// unchanged.
+    /// `self`.
+    ///
+    /// When `self` is already `Derived`, the chain is flattened: the new
+    /// ref inherits the inner `parent`, takes the outer `kind` as its
+    /// label, and composes the platform transforms. `Host` is the identity
+    /// on the parent's `build_environment` and `Build` is absorbing
+    /// (`to_build_from_build` folds any parent down to the build
+    /// platform), so the composed [`DerivedPlatform`] is `Build` as soon
+    /// as any derivation in the chain was a `Build` derivation: a package
+    /// solved inside a build environment runs on the build platform, and
+    /// so do its own build and host dependencies. Other spec fields pass
+    /// through unchanged.
     pub fn derived(&self, package: PackageName, derived_env_kind: DerivedEnvKind) -> Self {
         match self {
             EnvironmentRef::Workspace(w) => Self::Derived {
@@ -55,11 +60,16 @@ impl EnvironmentRef {
                 kind: derived_env_kind,
                 platform: DerivedPlatform::of_kind(derived_env_kind),
             },
-            EnvironmentRef::Derived { parent, .. } => Self::Derived {
+            EnvironmentRef::Derived {
+                parent, platform, ..
+            } => Self::Derived {
                 parent: parent.clone(),
                 package,
                 kind: derived_env_kind,
-                platform: DerivedPlatform::of_kind(derived_env_kind),
+                platform: match platform {
+                    DerivedPlatform::Build => DerivedPlatform::Build,
+                    DerivedPlatform::Host => DerivedPlatform::of_kind(derived_env_kind),
+                },
             },
             EnvironmentRef::Ephemeral(eph) => Self::Derived {
                 parent: DerivedParent::Ephemeral(eph.clone()),
@@ -251,5 +261,121 @@ impl fmt::Display for DerivedParent {
                 eph.name, eph.spec.build_environment.host_platform
             ),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use rattler_conda_types::{GenericVirtualPackage, Platform};
+    use rattler_solve::ChannelPriority;
+
+    use pixi_utils::variants::VariantConfig;
+
+    use super::*;
+    use crate::{BuildEnvironment, environment::WorkspaceEnvRegistry};
+
+    fn virtual_package(name: &str) -> GenericVirtualPackage {
+        GenericVirtualPackage {
+            name: name.parse().unwrap(),
+            version: "1".parse().unwrap(),
+            build_string: "0".into(),
+        }
+    }
+
+    /// A cross-compiling parent: host and build differ in platform and in
+    /// virtual packages, so a swapped transform is observable.
+    fn cross_parent() -> (EnvironmentRef, BuildEnvironment) {
+        let build_environment = BuildEnvironment {
+            host_platform: Platform::OsxArm64,
+            host_virtual_packages: vec![virtual_package("__osx")],
+            build_platform: Platform::Linux64,
+            build_virtual_packages: vec![virtual_package("__glibc")],
+        };
+        let env_ref = EnvironmentRef::Ephemeral(EphemeralEnv::new(
+            "publish",
+            EnvironmentSpec {
+                channels: vec![],
+                build_environment: build_environment.clone(),
+                variants: VariantConfig::default(),
+                exclude_newer: None,
+                channel_priority: ChannelPriority::Strict,
+            },
+        ));
+        (env_ref, build_environment)
+    }
+
+    fn resolve(env_ref: &EnvironmentRef) -> Arc<EnvironmentSpec> {
+        // Ephemeral parents never touch the registry.
+        env_ref.resolve(&WorkspaceEnvRegistry::new())
+    }
+
+    fn pkg(name: &str) -> PackageName {
+        PackageName::new_unchecked(name)
+    }
+
+    #[test]
+    fn build_then_host_stays_on_the_build_platform() {
+        let (parent, parent_env) = cross_parent();
+        let nested = parent
+            .derived(pkg("a"), DerivedEnvKind::Build)
+            .derived(pkg("b"), DerivedEnvKind::Host);
+
+        assert_eq!(
+            resolve(&nested).build_environment,
+            parent_env.to_build_from_build(),
+            "the host env of a build dependency is the build platform"
+        );
+        let EnvironmentRef::Derived { kind, platform, .. } = &nested else {
+            panic!("expected a derived env");
+        };
+        assert_eq!(*kind, DerivedEnvKind::Host, "the label keeps the relation");
+        assert_eq!(*platform, DerivedPlatform::Build);
+    }
+
+    #[test]
+    fn host_then_build_moves_to_the_build_platform() {
+        let (parent, parent_env) = cross_parent();
+        let nested = parent
+            .derived(pkg("a"), DerivedEnvKind::Host)
+            .derived(pkg("b"), DerivedEnvKind::Build);
+        assert_eq!(
+            resolve(&nested).build_environment,
+            parent_env.to_build_from_build()
+        );
+    }
+
+    #[test]
+    fn build_then_build_stays_on_the_build_platform() {
+        let (parent, parent_env) = cross_parent();
+        let nested = parent
+            .derived(pkg("a"), DerivedEnvKind::Build)
+            .derived(pkg("b"), DerivedEnvKind::Build);
+        assert_eq!(
+            resolve(&nested).build_environment,
+            parent_env.to_build_from_build()
+        );
+    }
+
+    #[test]
+    fn host_then_host_keeps_the_parent_environment() {
+        let (parent, parent_env) = cross_parent();
+        let nested = parent
+            .derived(pkg("a"), DerivedEnvKind::Host)
+            .derived(pkg("b"), DerivedEnvKind::Host);
+        assert_eq!(resolve(&nested).build_environment, parent_env);
+    }
+
+    #[test]
+    fn refs_differing_only_in_platform_are_distinct_keys() {
+        let (parent, _) = cross_parent();
+        let via_build = parent
+            .derived(pkg("a"), DerivedEnvKind::Build)
+            .derived(pkg("b"), DerivedEnvKind::Host);
+        let via_host = parent
+            .derived(pkg("a"), DerivedEnvKind::Host)
+            .derived(pkg("b"), DerivedEnvKind::Host);
+        assert_ne!(via_build, via_host);
     }
 }

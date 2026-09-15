@@ -1162,6 +1162,191 @@ pub async fn test_manifest_strong_run_export_propagates_from_build_dependency() 
     );
 }
 
+/// Regression test for <https://github.com/prefix-dev/pixi/issues/6846>.
+///
+/// `package_a` has the source package `package_b` as a build *and* a host
+/// dependency, the shape the ROS backend produces for every `package.xml`
+/// dependency. When cross-compiling, the build-dependency copy of
+/// `package_b` runs on the build platform, so its own host environment must
+/// be solved for the build platform too, while the host-dependency copy
+/// targets the host platform. The nested derivation used to lose the build
+/// platform, labelling the build copy with the build platform but solving
+/// its host environment for the target.
+#[tokio::test]
+pub async fn test_cross_compile_build_dependency_is_solved_for_build_platform() {
+    let tempdir = test_tempdir();
+    let dispatcher = cross_build_dependency_dispatcher(&tempdir);
+    let records = solve_cross_build_dependency(&dispatcher, vec![]).await;
+    assert_package_b_copies_are_on_their_platforms(&records);
+}
+
+/// Re-solving with the previous solution as the installed hint, the way a
+/// re-lock does, must keep both copies of `package_b` on their platforms.
+/// Installed-record hints are keyed by package name and source location
+/// only, so both copies share one hint and one of the two nested solves is
+/// seeded with the other copy's host packages. Those must not be locked in.
+#[tokio::test]
+pub async fn test_cross_compile_build_dependency_survives_a_resolve_with_hints() {
+    let tempdir = test_tempdir();
+    let dispatcher = cross_build_dependency_dispatcher(&tempdir);
+    let first = solve_cross_build_dependency(&dispatcher, vec![]).await;
+    let second =
+        solve_cross_build_dependency(&dispatcher, first.into_iter().map(to_unresolved).collect())
+            .await;
+    assert_package_b_copies_are_on_their_platforms(&second);
+}
+
+/// A dispatcher rooted in the `cross-build-dependency` workspace.
+fn cross_build_dependency_dispatcher(tempdir: &tempfile::TempDir) -> CommandDispatcher {
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let root_dir = workspaces_dir().join("cross-build-dependency");
+    CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish()
+}
+
+/// Solve `package_a` of the `cross-build-dependency` workspace for osx-arm64
+/// from linux-64, seeded with `installed` and the hints derived from it.
+/// Both platforms are pinned so the test does not depend on the machine it
+/// runs on.
+async fn solve_cross_build_dependency(
+    dispatcher: &CommandDispatcher,
+    installed: Vec<pixi_record::UnresolvedPixiRecord>,
+) -> Vec<pixi_record::PixiRecord> {
+    let channel_dir = cargo_workspace_dir().join("tests/data/channels/channels/dummy_channel_1");
+    let channel: ChannelUrl = Url::from_directory_path(&channel_dir).unwrap().into();
+    let build_environment = BuildEnvironment {
+        host_platform: Platform::OsxArm64,
+        host_virtual_packages: vec![],
+        build_platform: Platform::Linux64,
+        build_virtual_packages: vec![],
+    };
+    let (installed, installed_source_hints) = installed_with_hints(installed);
+    run_pixi_solve(
+        dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package_a".parse().unwrap(),
+                PathSpec::new("package_a").into(),
+            )]),
+            installed,
+            installed_source_hints,
+            env_ref: env_ref_of(vec![channel], build_environment),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .map_err(|e| format_diagnostic(&e))
+    .expect("the cross-compiling solve should succeed")
+}
+
+/// The build copy of `package_b` and everything in its host environment is
+/// on linux-64; the host copy and its host environment target osx-arm64.
+fn assert_package_b_copies_are_on_their_platforms(records: &[pixi_record::PixiRecord]) {
+    let package_a = records
+        .iter()
+        .find_map(|r| {
+            r.as_source()
+                .filter(|s| s.package_record().name.as_normalized() == "package_a")
+        })
+        .expect("package_a source record is in the solution");
+    assert_eq!(package_a.package_record().subdir, "osx-arm64");
+
+    // The build copy of package_b runs on the build platform, and so does
+    // everything in its host environment.
+    let package_b_for_build = source_dependency(&package_a.build_packages, "package_b");
+    assert_eq!(
+        package_b_for_build.package_record().unwrap().subdir,
+        "linux-64"
+    );
+    let package_b_for_build_source = package_b_for_build.as_source().unwrap();
+    assert_eq!(
+        package_b_for_build_source.variants()["target_platform"].to_string(),
+        "linux-64"
+    );
+    assert_eq!(
+        subdirs(&package_b_for_build_source.host_packages),
+        vec!["linux-64"],
+        "the host environment of a build dependency must be solved for the build platform"
+    );
+    assert_eq!(
+        build_string(&package_b_for_build_source.host_packages, "dummy-b"),
+        "hb0f4dca_0",
+        "the linux-64 build of dummy-b"
+    );
+
+    // The host copy of package_b targets the host platform.
+    let package_b_for_host = source_dependency(&package_a.host_packages, "package_b");
+    assert_eq!(
+        package_b_for_host.package_record().unwrap().subdir,
+        "osx-arm64"
+    );
+    let package_b_for_host_source = package_b_for_host.as_source().unwrap();
+    assert_eq!(
+        package_b_for_host_source.variants()["target_platform"].to_string(),
+        "osx-arm64"
+    );
+    assert_eq!(
+        subdirs(&package_b_for_host_source.host_packages),
+        vec!["osx-arm64"]
+    );
+    assert_eq!(
+        build_string(&package_b_for_host_source.host_packages, "dummy-b"),
+        "h60d57d3_0",
+        "the osx-arm64 build of dummy-b"
+    );
+}
+
+/// The source dependency called `name` among `packages`.
+fn source_dependency<'a>(
+    packages: &'a [pixi_record::UnresolvedPixiRecord],
+    name: &str,
+) -> &'a pixi_record::UnresolvedPixiRecord {
+    packages
+        .iter()
+        .find(|r| {
+            r.as_source()
+                .is_some_and(|s| s.name().as_normalized() == name)
+        })
+        .unwrap_or_else(|| panic!("{name} should be a source dependency"))
+}
+
+/// The distinct subdirs of `packages`, in sorted order.
+fn subdirs(packages: &[pixi_record::UnresolvedPixiRecord]) -> Vec<String> {
+    let mut subdirs: Vec<String> = packages
+        .iter()
+        .map(|r| {
+            r.package_record()
+                .expect("build/host packages are fully resolved")
+                .subdir
+                .clone()
+        })
+        .collect();
+    subdirs.sort();
+    subdirs.dedup();
+    subdirs
+}
+
+/// The build string of the binary package `name` among `packages`.
+fn build_string(packages: &[pixi_record::UnresolvedPixiRecord], name: &str) -> String {
+    packages
+        .iter()
+        .find_map(|r| {
+            r.as_binary()
+                .filter(|b| b.package_record.name.as_normalized() == name)
+        })
+        .unwrap_or_else(|| panic!("{name} should be a binary dependency"))
+        .package_record
+        .build
+        .clone()
+}
+
 /// A package can receive the same source dependency through two channels at
 /// once: implied by a run-export of a build/host env record (carrying the
 /// *pinned* source location) and explicitly through its own run-exports

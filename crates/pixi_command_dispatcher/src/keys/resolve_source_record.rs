@@ -20,12 +20,12 @@ use pixi_record::{
 use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceLocationSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_variant::VariantValue;
-use rattler_conda_types::{PackageName, PackageRecord, package::RunExportsJson};
+use rattler_conda_types::{PackageName, PackageRecord, Platform, package::RunExportsJson};
 use rattler_solve::SolveStrategy;
 
 use crate::{
-    BuildBackendMetadataSpec, DerivedEnvKind, EnvironmentRef, InstalledSourceHints, PtrArc,
-    SourceRecordError, SourceRecordReporterSpec,
+    BuildBackendMetadataSpec, BuildEnvOf, DerivedEnvKind, EnvironmentRef, InstalledSourceHints,
+    PtrArc, SourceRecordError, SourceRecordReporterSpec,
     build::{Dependencies, PinnedSourceCodeLocation, PixiRunExports, convert_extra_dependencies},
     compute_data::{HasGateway, HasSourceRecordReporter},
     cycle::CycleEnvironment,
@@ -515,6 +515,20 @@ async fn nested_solve(
         return Ok(vec![]);
     }
 
+    let nested_env_ref = env_ref.derived(pkg_name.clone(), kind);
+    // The hint describes a locked copy of this package, but hints are keyed
+    // by name and source location only, while a package that is a build
+    // dependency of one package and a host dependency of another is
+    // resolved once per platform. The hint may therefore belong to the
+    // copy of the other platform. The solver treats installed records as
+    // locked candidates and would pick them, so keep only the records that
+    // fit the platform this environment is solved for.
+    let host_platform = ctx
+        .compute(&BuildEnvOf(nested_env_ref.clone()))
+        .await
+        .host_platform;
+    let installed = installed_records_for_platform(installed, host_platform);
+
     let nested_spec = SolvePixiEnvironmentSpec {
         dependencies: dependencies
             .dependencies
@@ -536,7 +550,7 @@ async fn nested_solve(
         installed_source_hints: installed_source_hints.clone(),
         strategy: SolveStrategy::default(),
         preferred_build_source: Arc::clone(preferred_build_source),
-        env_ref: env_ref.derived(pkg_name.clone(), kind),
+        env_ref: nested_env_ref,
         // A nested build/host env solves binary/source build deps; inline
         // definitions apply only to the consumer's direct dependencies.
         inline_packages: Default::default(),
@@ -656,5 +670,85 @@ impl LifecycleKind for SourceRecordReporterLifecycle {
 
     fn on_finished<'r>(active: Active<'r, Self::Reporter<'r>, Self::Id>) {
         active.reporter.on_finished(active.id);
+    }
+}
+
+/// The records of `installed` that can be part of an environment solved
+/// for `platform`: records of that platform, `noarch` records, and records
+/// whose subdir is not a known platform (those are not ours to judge).
+fn installed_records_for_platform(
+    installed: Arc<[UnresolvedPixiRecord]>,
+    platform: Platform,
+) -> Arc<[UnresolvedPixiRecord]> {
+    let fits = |record: &UnresolvedPixiRecord| match record
+        .package_record()
+        .and_then(|record| record.subdir.parse::<Platform>().ok())
+    {
+        Some(subdir) => subdir == Platform::NoArch || subdir == platform,
+        None => true,
+    };
+    if installed.iter().all(fits) {
+        return installed;
+    }
+    installed
+        .iter()
+        .filter(|record| fits(record))
+        .cloned()
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use rattler_conda_types::{RepoDataRecord, VersionWithSource, package::DistArchiveIdentifier};
+    use url::Url;
+
+    use super::*;
+
+    fn binary(name: &str, subdir: &str) -> UnresolvedPixiRecord {
+        let mut package_record = PackageRecord::new(
+            PackageName::new_unchecked(name),
+            "1.0.0".parse::<VersionWithSource>().unwrap(),
+            "h0".into(),
+        );
+        package_record.subdir = subdir.into();
+        UnresolvedPixiRecord::Binary(Arc::new(RepoDataRecord {
+            package_record,
+            identifier: DistArchiveIdentifier::try_from_filename(&format!("{name}-1.0.0-h0.conda"))
+                .unwrap(),
+            url: Url::parse(&format!(
+                "https://example.com/{subdir}/{name}-1.0.0-h0.conda"
+            ))
+            .unwrap(),
+            channel: None,
+        }))
+    }
+
+    fn names(records: &[UnresolvedPixiRecord]) -> Vec<&str> {
+        records.iter().map(|r| r.name().as_normalized()).collect()
+    }
+
+    #[test]
+    fn records_of_the_platform_noarch_and_unknown_subdirs_are_kept() {
+        let installed: Arc<[_]> = Arc::from([
+            binary("libfoo", "linux-64"),
+            binary("pyfoo", "noarch"),
+            binary("mystery", "not-a-platform"),
+        ]);
+        let kept = installed_records_for_platform(installed.clone(), Platform::Linux64);
+        assert!(
+            Arc::ptr_eq(&kept, &installed),
+            "nothing to drop, nothing copied"
+        );
+    }
+
+    #[test]
+    fn records_of_another_platform_are_dropped() {
+        let installed: Arc<[_]> = Arc::from([
+            binary("libfoo", "linux-64"),
+            binary("dummy-b", "osx-arm64"),
+            binary("pyfoo", "noarch"),
+        ]);
+        let kept = installed_records_for_platform(installed, Platform::Linux64);
+        assert_eq!(names(&kept), ["libfoo", "pyfoo"]);
     }
 }
