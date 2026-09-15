@@ -20,9 +20,10 @@ use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
     BackendMetadataDir, BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs,
     ComputeResultExt, CondaPackageFormat, EnvironmentRef, EnvironmentSpec, EphemeralEnv,
+    PackagesDir,
     keys::{ResolveSourcePackageKey, ResolveSourcePackageSpec, SourceBuildKey, SourceBuildSpec},
 };
-use pixi_config::{ConfigCli, IndexChannelConfig, IndexConfig, PackageFormatAndCompression};
+use pixi_config::{CacheKind, ConfigCli, IndexChannelConfig, IndexConfig, PackageFormatAndCompression};
 use pixi_core::{
     Workspace, WorkspaceLocator, environment::sanity_check_workspace, workspace::DiscoveryStart,
 };
@@ -612,7 +613,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace_dir = AbsPathBuf::new(workspace.pixi_dir())
         .expect("pixi dir is not absolute")
         .into_assume_dir();
-    let mut cache_dirs = CacheDirs::new(cache_dir).with_workspace(workspace_dir);
+
+    // Resolve the conda packages (pkgs) directory through the full cache-kind
+    // resolution path so that netfs-redirect is honoured.
+    let conda_packages_dir = AbsPathBuf::new(
+        workspace
+            .config()
+            .cache_dir_for(CacheKind::CondaPackages)?,
+    )
+    .expect("conda packages cache dir is not absolute")
+    .into_assume_dir();
+
+    let mut cache_dirs = CacheDirs::new(cache_dir)
+        .with_workspace(workspace_dir)
+        .with_override::<PackagesDir>(conda_packages_dir);
     if let Some(build_dir) = args.build_dir {
         let build_dir = AbsPathBuf::new(build_dir)
             .expect("build dir is not absolute")

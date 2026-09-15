@@ -1173,7 +1173,21 @@ impl Workspace {
         let workspace_dir = AbsPathBuf::new(self.pixi_dir())
             .expect("pixi dir is not absolute")
             .into_assume_dir();
-        let cache_dirs = CacheDirs::new(cache_dir).with_workspace(workspace_dir);
+
+        // Resolve the conda packages (pkgs) directory through the full
+        // cache-kind resolution path so that netfs-redirect and per-kind
+        // config overrides are honoured. Without this, CacheDirs::new would
+        // compute <raw_cache_root>/pkgs and bypass the redirect entirely.
+        let conda_packages_dir = AbsPathBuf::new(
+            self.config()
+                .cache_dir_for(CacheKind::CondaPackages)?,
+        )
+        .expect("conda packages cache dir is not absolute")
+        .into_assume_dir();
+
+        let cache_dirs = CacheDirs::new(cache_dir)
+            .with_workspace(workspace_dir)
+            .with_override::<pixi_command_dispatcher::PackagesDir>(conda_packages_dir);
 
         // Determine the tool platform to use
         let tool_platform = self.config().tool_platform();
