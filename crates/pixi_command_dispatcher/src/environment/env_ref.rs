@@ -165,7 +165,16 @@ impl EnvironmentRef {
     pub fn display_platform(&self) -> String {
         match self {
             EnvironmentRef::Workspace(ws) => ws.platform().to_string(),
-            EnvironmentRef::Derived { parent, .. } => parent.display_platform(),
+            EnvironmentRef::Derived {
+                parent,
+                platform: DerivedPlatform::Host,
+                ..
+            } => parent.display_platform(),
+            EnvironmentRef::Derived {
+                parent,
+                platform: DerivedPlatform::Build,
+                ..
+            } => parent.display_build_platform(),
             EnvironmentRef::Ephemeral(eph) => eph.spec.build_environment.host_platform.to_string(),
         }
     }
@@ -187,6 +196,26 @@ impl DerivedParent {
         match self {
             DerivedParent::Workspace(ws) => ws.platform().to_string(),
             DerivedParent::Ephemeral(eph) => eph.spec.build_environment.host_platform.to_string(),
+        }
+    }
+
+    /// Display-only *build* platform for this parent, without registry
+    /// access.
+    pub fn display_build_platform(&self) -> String {
+        match self {
+            DerivedParent::Workspace(ws) => ws.build_platform().to_string(),
+            DerivedParent::Ephemeral(eph) => eph.spec.build_environment.build_platform.to_string(),
+        }
+    }
+
+    /// Whether this parent builds on a different platform than it targets.
+    fn is_cross_compiling(&self) -> bool {
+        match self {
+            DerivedParent::Workspace(ws) => ws.is_cross_compiling(),
+            DerivedParent::Ephemeral(eph) => {
+                eph.spec.build_environment.host_platform
+                    != eph.spec.build_environment.build_platform
+            }
         }
     }
 }
@@ -240,8 +269,16 @@ impl fmt::Display for EnvironmentRef {
                 parent,
                 package,
                 kind,
-                ..
-            } => write!(f, "{kind} of {} in {}", package.as_normalized(), parent),
+                platform,
+            } => {
+                write!(f, "{kind} of {} in {}", package.as_normalized(), parent)?;
+                // Only worth mentioning when it differs from the parent's
+                // own platform.
+                if *platform == DerivedPlatform::Build && parent.is_cross_compiling() {
+                    write!(f, " (build platform {})", parent.display_build_platform())?;
+                }
+                Ok(())
+            }
             EnvironmentRef::Ephemeral(eph) => write!(
                 f,
                 "{}@{}",
@@ -365,6 +402,88 @@ mod tests {
             .derived(pkg("a"), DerivedEnvKind::Host)
             .derived(pkg("b"), DerivedEnvKind::Host);
         assert_eq!(resolve(&nested).build_environment, parent_env);
+    }
+
+    #[test]
+    fn display_reports_the_build_platform_of_nested_build_environments() {
+        let (parent, _) = cross_parent();
+        let nested = parent
+            .derived(pkg("a"), DerivedEnvKind::Build)
+            .derived(pkg("b"), DerivedEnvKind::Host);
+        assert_eq!(nested.display_platform(), "linux-64");
+        assert_eq!(
+            nested.to_string(),
+            "Host of b in publish@osx-arm64 (build platform linux-64)"
+        );
+    }
+
+    #[test]
+    fn display_of_direct_build_environments_reports_the_build_platform() {
+        let (parent, _) = cross_parent();
+        let build = parent.derived(pkg("a"), DerivedEnvKind::Build);
+        assert_eq!(build.display_platform(), "linux-64");
+        assert_eq!(
+            build.to_string(),
+            "Build of a in publish@osx-arm64 (build platform linux-64)"
+        );
+    }
+
+    #[test]
+    fn display_of_host_environments_has_no_suffix() {
+        let (parent, _) = cross_parent();
+        let nested = parent
+            .derived(pkg("a"), DerivedEnvKind::Host)
+            .derived(pkg("b"), DerivedEnvKind::Host);
+        assert_eq!(nested.display_platform(), "osx-arm64");
+        assert_eq!(nested.to_string(), "Host of b in publish@osx-arm64");
+    }
+
+    #[test]
+    fn display_of_cross_compiling_workspace_parents_reports_the_build_platform() {
+        let (_, build_environment) = cross_parent();
+        let registry = WorkspaceEnvRegistry::new();
+        let workspace = EnvironmentRef::Workspace(registry.allocate(
+            "default".to_string(),
+            Platform::OsxArm64.to_string(),
+            EnvironmentSpec {
+                channels: vec![],
+                build_environment,
+                variants: VariantConfig::default(),
+                exclude_newer: None,
+                channel_priority: ChannelPriority::Strict,
+            },
+        ));
+        let nested = workspace
+            .derived(pkg("a"), DerivedEnvKind::Build)
+            .derived(pkg("b"), DerivedEnvKind::Host);
+        assert_eq!(nested.display_platform(), "linux-64");
+        assert_eq!(
+            nested.to_string(),
+            "Host of b in default@osx-arm64 (build platform linux-64)"
+        );
+
+        let host = workspace.derived(pkg("a"), DerivedEnvKind::Host);
+        assert_eq!(host.display_platform(), "osx-arm64");
+        assert_eq!(host.to_string(), "Host of a in default@osx-arm64");
+    }
+
+    #[test]
+    fn display_of_native_parents_never_has_a_suffix() {
+        let native = EnvironmentRef::Ephemeral(EphemeralEnv::new(
+            "test",
+            EnvironmentSpec {
+                channels: vec![],
+                build_environment: BuildEnvironment::simple(Platform::Linux64, vec![]),
+                variants: VariantConfig::default(),
+                exclude_newer: None,
+                channel_priority: ChannelPriority::Strict,
+            },
+        ));
+        let nested = native
+            .derived(pkg("a"), DerivedEnvKind::Build)
+            .derived(pkg("b"), DerivedEnvKind::Host);
+        assert_eq!(nested.display_platform(), "linux-64");
+        assert_eq!(nested.to_string(), "Host of b in test@linux-64");
     }
 
     #[test]
