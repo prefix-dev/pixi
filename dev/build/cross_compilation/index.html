@@ -1939,6 +1939,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#source-build-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Source build dependencies
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#summary" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -8814,6 +8825,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#source-build-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Source build dependencies
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#summary" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -9145,6 +9167,14 @@ Pixi will cross-compile the <code>linux-aarch64</code> variant on a <code>linux-
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-13-1"><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="s2">&quot;null&quot;</span>
 </span><span id="__span-13-2"><a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="s2">&quot;noarch&quot;</span>
 </span></code></pre></div></p>
+<hr />
+<h2 id="source-build-dependencies">Source build dependencies<a class="headerlink" href="#source-build-dependencies" title="Permanent link">#</a></h2>
+<p>The rules above are about one package. When a workspace package depends on another <em>source</em> package of the workspace, the platform that dependency is built for depends on the section it is listed in:</p>
+<ul>
+<li>A source package under <code>host-dependencies</code> or <code>run-dependencies</code> is built for the target platform, like the package that depends on it.</li>
+<li>A source package under <code>build-dependencies</code> runs during the build, so it is built natively for the build platform. Its own build and host environments are solved for the build platform as well.</li>
+</ul>
+<p>A package that is both published in its own right and a build dependency of another published package is therefore built twice during a cross-compiling <code>pixi publish</code>: once for the target platform and once for the build platform. That is expected. A backend that lists a dependency in both the build and the host section, as <a href="../backends/pixi-build-ros/"><code>pixi-build-ros</code></a> does for a <code>&lt;depend&gt;</code> in <code>package.xml</code>, triggers this for every such workspace sibling.</p>
 <hr />
 <h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">#</a></h2>
 <table>
