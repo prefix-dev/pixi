@@ -9945,7 +9945,7 @@ It also makes use of `pixi shell-hook` to not rely on Pixi being installed in th
     For more examples, take a look at [pavelzw/pixi-docker-example](https://github.com/pavelzw/pixi-docker-example).
 
 ```Dockerfile
-FROM ghcr.io/prefix-dev/pixi:0.80.0 AS build
+FROM ghcr.io/prefix-dev/pixi:0.81.0 AS build
 
 # copy source code, pixi.toml and pixi.lock to the container
 WORKDIR /app
@@ -10637,7 +10637,7 @@ We created [prefix-dev/setup-pixi](https://github.com/prefix-dev/setup-pixi) to 
 ```yaml
 - uses: prefix-dev/setup-pixi@v0.10.0
   with:
-    pixi-version: v0.80.0
+    pixi-version: v0.81.0
     cache: true
     auth-host: prefix.dev
     auth-token: ${{ secrets.PREFIX_DEV_TOKEN }}
@@ -11579,7 +11579,7 @@ Then, create the following two files in the `.devcontainer` directory:
 ```dockerfile title=".devcontainer/Dockerfile"
 FROM mcr.microsoft.com/devcontainers/base:jammy
 
-ARG PIXI_VERSION=v0.80.0
+ARG PIXI_VERSION=v0.81.0
 
 RUN curl -L -o /usr/local/bin/pixi -fsSL --compressed "https://github.com/prefix-dev/pixi/releases/download/${PIXI_VERSION}/pixi-$(uname -m)-unknown-linux-musl" \
     && chmod +x /usr/local/bin/pixi \
@@ -15332,6 +15332,42 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+### [0.81.0] - 2026-09-15
+#### ✨ Highlights
+
+`pixi run --script` can now run `conda-script` files directly from HTTP or HTTPS URLs, including GitHub Gists. Pixi downloads the script, reuses its cached environment, and runs it without requiring a local file.
+
+#### Added
+
+- Add remote url support to conda-script by @ruben-arts in [#6981](https://github.com/prefix-dev/pixi/pull/6981)
+- Add PrefixPlatformMismatchError for source build prefixes by @hunger in [#6984](https://github.com/prefix-dev/pixi/pull/6984)
+- Show the build platform of nested derived environments by @hunger in [#6987](https://github.com/prefix-dev/pixi/pull/6987)
+
+
+#### Changed
+
+- Track the platform of a derived environment explicitly by @hunger in [#6985](https://github.com/prefix-dev/pixi/pull/6985)
+- Keep nested derived environments on the build platform by @hunger in [#6986](https://github.com/prefix-dev/pixi/pull/6986)
+
+
+#### Documentation
+
+- Explain how source build-dependencies are built when cross-compiling by @hunger in [#6988](https://github.com/prefix-dev/pixi/pull/6988)
+
+
+#### Fixed
+
+- Use only tombi for TOML formatting by @Hofer-Julian in [#6982](https://github.com/prefix-dev/pixi/pull/6982)
+
+
+#### Refactor
+
+- Return CLI exit codes from main by @baszalmstra in [#6975](https://github.com/prefix-dev/pixi/pull/6975)
+
+
+#### New Contributors
+* @prefix-dev-pixi-upgrades[bot] made their first contribution in [#6980](https://github.com/prefix-dev/pixi/pull/6980)
 
 ### [0.80.0] - 2026-09-07
 #### ✨ Highlights
