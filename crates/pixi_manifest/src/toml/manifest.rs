@@ -1195,7 +1195,7 @@ mod test {
     /// lock-file rename passes cannot distinguish from the bare platform.
     #[test]
     fn test_system_requirements_migration_default_matching_sysreq_uses_bare_subdir() {
-        let glibc = pixi_default_versions::default_glibc_version();
+        let glibc = rattler_virtual_packages::defaults::default_glibc_version(Platform::Linux64);
         let workspace_manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             format!(
                 r#"
@@ -1239,8 +1239,9 @@ mod test {
     /// the same way.
     #[test]
     fn test_system_requirements_migration_linux_and_macos_defaults_use_bare_subdir() {
-        let linux = pixi_default_versions::default_linux_version();
-        let macos = pixi_default_versions::default_mac_os_version(Platform::OsxArm64);
+        let linux = rattler_virtual_packages::defaults::default_linux_version();
+        let macos = rattler_virtual_packages::defaults::default_mac_os_version(Platform::OsxArm64)
+            .expect("osx-arm64 has a default macos version");
         for (subdir, requirement) in [
             ("linux-64", format!("linux = \"{linux}\"")),
             ("osx-arm64", format!("macos = \"{macos}\"")),

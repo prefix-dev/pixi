@@ -7,8 +7,12 @@ while the resolved environment stays in Pixi's cache instead of a workspace
 next to the script.
 
 Script commands use `--script <PATH>`. The same `init`, `run`, `add`, `remove`,
-`lock`, and `update` commands used for workspaces can therefore operate on
-either a manifest or a standalone file.
+`install`, `lock`, and `update` commands used for workspaces can therefore
+operate on either a manifest or a standalone file.
+
+For files in other languages there is an experimental
+[`conda-script` block](../tutorials/conda_script.md) that embeds the same
+kind of metadata in any code file.
 
 ## Make a script self-contained
 
@@ -21,9 +25,7 @@ from osgeo import ogr
 
 ogr.UseExceptions()
 
-response = httpx.get(
-    "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson"
-)
+response = httpx.get("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson")
 dataset = ogr.Open(response.text)
 print(f"{dataset.GetLayer().GetFeatureCount()} earthquakes in the past hour")
 ```
@@ -67,12 +69,21 @@ PEP 723 defines two portable fields:
 Pixi reads those fields and extends them with a focused subset of
 `tool.pixi`:
 
-- `tool.pixi.workspace` configures channels, platforms, and resolver options.
+- `tool.pixi.workspace` configures channels, platforms, and resolver options
+  such as `exclude-newer`, `channel-priority` or `solve-strategy`.
 - `tool.pixi.dependencies` lists Conda packages.
 - `tool.pixi.pypi-dependencies` represents PyPI requirements that need
   Pixi-specific fields, such as an index or editable installation.
+- `tool.pixi.constraints` and `tool.pixi.activation` hold constraints and
+  activation settings.
 - `tool.pixi.target.<platform>` holds platform-specific dependencies,
   constraints, and activation settings.
+- `tool.pixi.exclude-newer` and `tool.pixi.pypi-exclude-newer` override the
+  cutoff date per package.
+
+Every other key under `tool.pixi` is rejected with an error pointing at it,
+since a script has one implicit environment and no features, tasks or
+packages.
 
 Other PEP 723 tools can use the portable fields and ignore `tool.pixi`. In the
 example above, another tool can install `httpx`, but only Pixi also provides
@@ -138,6 +149,8 @@ on every invocation and executed from a secure temporary `.py` file, while
 their environment is reused from Pixi's cache. Relative paths in remote
 metadata resolve from the directory where Pixi was invoked.
 
+URLs also support [`conda-script` blocks](../tutorials/conda_script.md).
+
 Remote inputs are execution-only: commands that edit, inspect, export, or lock
 a script continue to require a local path. A remote script has no adjacent lock
 file, so it cannot be run with `--locked` or `--frozen`.
@@ -198,11 +211,24 @@ pixi update --script earthquakes.py
 ```
 
 Without an adjacent lock file, this replaces the cached resolution. The next
-run updates the cached environment to match it. This cache state is disposable.
-Removing it causes Pixi to resolve the script again.
+`run` or `install` updates the cached environment to match it. This cache state
+is disposable. Removing it causes Pixi to resolve the script again.
 
 When an adjacent lock file exists, `update` writes the new resolution there
 instead.
+
+## Install without running
+
+Use `pixi install` to install the script's environment without running the
+script.
+
+```console
+pixi install --script earthquakes.py
+```
+
+This installs the same cached environment that `pixi run --script` would use
+and prints its location. Run this during a container build or before going
+offline to install the environment ahead of time.
 
 ## Inspect and export
 
@@ -282,7 +308,7 @@ command does not take a separate platform override.
 
 A script does not have to declare `platforms`.
 When it doesn't, Pixi resolves it for the machine you run it on, using the [virtual packages](../workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform) it detects there: your CUDA driver, your glibc version, your macOS version.
-A script that needs a glibc newer than Pixi's `2.28` default resolves without you writing anything down.
+A script that needs a glibc newer than Pixi's [default](../workspace/system_requirements.md#default-declared-virtual-packages) resolves without you writing anything down.
 
 To resolve for a fixed target instead:
 

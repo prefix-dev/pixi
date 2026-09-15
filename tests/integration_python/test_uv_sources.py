@@ -1,8 +1,9 @@
 import json
-from pathlib import Path
-import pytest
 import shutil
 import sys
+from pathlib import Path
+
+import pytest
 
 from .common import verify_cli_command
 

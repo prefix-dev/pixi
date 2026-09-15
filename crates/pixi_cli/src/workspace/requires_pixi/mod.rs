@@ -1,3 +1,5 @@
+use std::process::ExitCode;
+
 pub mod get;
 pub mod set;
 pub mod unset;
@@ -37,7 +39,7 @@ pub enum Command {
     Verify,
 }
 
-pub async fn execute(args: Args) -> miette::Result<()> {
+pub async fn execute(args: Args) -> miette::Result<ExitCode> {
     let is_verify = matches!(args.command, Command::Verify);
     let workspace_locator = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
@@ -45,11 +47,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_ignore_pixi_version_check(!is_verify);
 
     match args.command {
-        Command::Get => get::execute(workspace_locator.locate()?).await?,
-        Command::Set(args) => set::execute(workspace_locator.locate()?, args).await?,
-        Command::Unset => unset::execute(workspace_locator.locate()?).await?,
-        Command::Verify => verify::execute(workspace_locator.locate().map(|_| ()))?,
-    }
-
-    Ok(())
+        Command::Get => get::execute(workspace_locator.locate()?).await,
+        Command::Set(args) => set::execute(workspace_locator.locate()?, args).await,
+        Command::Unset => unset::execute(workspace_locator.locate()?).await,
+        Command::Verify => return verify::execute(workspace_locator.locate().map(|_| ())),
+    }?;
+    Ok(ExitCode::SUCCESS)
 }

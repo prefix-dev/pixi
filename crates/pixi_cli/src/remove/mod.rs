@@ -70,7 +70,7 @@ impl Args {
             Ok(())
         } else {
             Err(miette::miette!(
-                help = "A PEP 723 script has one implicit default run environment.",
+                help = "A script has one implicit default run environment.",
                 "`pixi remove --script` does not support {}",
                 unsupported.join(", ")
             ))
@@ -87,6 +87,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_search_start(args.workspace_config.workspace_locator_start())
         .with_cli_config(args.config.clone())
         .locate()?;
+
+    if workspace.is_conda_script() && !args.dependency_config.platforms.is_empty() {
+        return Err(miette::miette!(
+            help = "restrict the dependency with a `when` condition in `[dependencies]`, or write `[tool.pixi.target.<platform>.dependencies]` by hand",
+            "`--platform` cannot edit a conda-script block"
+        ));
+    }
 
     let dependency_options = DependencyOptions {
         feature: args.dependency_config.feature_name(),

@@ -2,7 +2,7 @@ use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use pixi_core::{
     InstallFilter, UpdateLockFileOptions, Workspace,
-    environment::{LockFileUsage, get_update_lock_file_and_prefixes},
+    environment::{LockFileSource, LockFileUsage, get_lock_file_and_prefixes},
     lock_file::{ReinstallEnvironment, UpdateMode},
 };
 use std::sync::Arc;
@@ -43,17 +43,17 @@ pub async fn reinstall<I: Interface>(
         .collect::<Result<Vec<_>, _>>()?;
 
     // Update the prefixes by reinstalling `options.reinstall_packages`
-    get_update_lock_file_and_prefixes(
+    get_lock_file_and_prefixes(
         &environments,
         options.target_platform.as_ref(),
         progress.cloned(),
         UpdateMode::Revalidate,
-        UpdateLockFileOptions {
+        LockFileSource::Update(UpdateLockFileOptions {
             lock_file_usage,
             no_install: false,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
             ..Default::default()
-        },
+        }),
         options.reinstall_packages,
         &InstallFilter::default(),
     )

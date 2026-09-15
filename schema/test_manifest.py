@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import glob
 import json
-import tomli
 import pprint
-
 from pathlib import Path
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
-from jsonschema_rs import validator_for, Validator, ValidationError
+import tomli
+from jsonschema_rs import ValidationError, Validator, validator_for
 
 if TYPE_CHECKING:
     from collections.abc import Iterator

@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import sys
 import json
+import sys
 from copy import deepcopy
-from pathlib import Path
-import tomli
-from typing import Annotated, Any, Literal, ClassVar, cast, override, TYPE_CHECKING
 from enum import Enum
+from pathlib import Path
+from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Literal, cast, override
 
+import tomli
 from pydantic import (
     AnyHttpUrl,
     BaseModel,
@@ -1135,12 +1135,12 @@ class PyPIOptions(StrictBaseModel):
         description="Packages that should NOT be isolated during the build process",
         examples=[["numpy"], True],
     )
-    index_strategy: (
-        Literal["first-index"] | Literal["unsafe-first-match"] | Literal["unsafe-best-match"] | None
-    ) = Field(
-        None,
-        description="The strategy to use when resolving packages from multiple indexes",
-        examples=["first-index", "unsafe-first-match", "unsafe-best-match"],
+    index_strategy: Literal["first-index", "unsafe-first-match", "unsafe-best-match"] | None = (
+        Field(
+            None,
+            description="The strategy to use when resolving packages from multiple indexes",
+            examples=["first-index", "unsafe-first-match", "unsafe-best-match"],
+        )
     )
     no_build: bool | list[PyPIPackageName] | None = Field(
         None,
@@ -1160,12 +1160,7 @@ class PyPIOptions(StrictBaseModel):
         examples=["true", "false"],
     )
     prerelease_mode: (
-        Literal["disallow"]
-        | Literal["allow"]
-        | Literal["if-necessary"]
-        | Literal["explicit"]
-        | Literal["if-necessary-or-explicit"]
-        | None
+        Literal["disallow", "allow", "if-necessary", "explicit", "if-necessary-or-explicit"] | None
     ) = Field(
         None,
         description="The strategy to use when considering pre-release versions",
@@ -1520,7 +1515,7 @@ class PyProjectPartial(PyProjectPixiTool):
 class SchemaJsonEncoder(json.JSONEncoder):
     """A custom schema encoder for normalizing schema to be used with TOML files."""
 
-    HEADER_ORDER: list[str] = [
+    HEADER_ORDER: ClassVar[list[str]] = [
         "$schema",
         "$id",
         "$ref",
@@ -1548,24 +1543,24 @@ class SchemaJsonEncoder(json.JSONEncoder):
         "multipleOf",
         "pattern",
     ]
-    FOOTER_ORDER: list[str] = [
+    FOOTER_ORDER: ClassVar[list[str]] = [
         "examples",
         "$defs",
     ]
-    SORT_NESTED: list[str] = [
+    SORT_NESTED: ClassVar[list[str]] = [
         "items",
     ]
-    SORT_NESTED_OBJ: list[str] = [
+    SORT_NESTED_OBJ: ClassVar[list[str]] = [
         "properties",
         "$defs",
     ]
-    SORT_NESTED_MAYBE_OBJ: list[str] = [
+    SORT_NESTED_MAYBE_OBJ: ClassVar[list[str]] = [
         "additionalProperties",
     ]
-    SORT_NESTED_OBJ_OBJ: list[str] = [
+    SORT_NESTED_OBJ_OBJ: ClassVar[list[str]] = [
         "patternProperties",
     ]
-    SORT_NESTED_ARR: list[str] = [
+    SORT_NESTED_ARR: ClassVar[list[str]] = [
         "anyOf",
         "allOf",
         "oneOf",

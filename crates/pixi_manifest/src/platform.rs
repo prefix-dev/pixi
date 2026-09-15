@@ -4,10 +4,10 @@ use std::ops::Deref;
 use std::str::FromStr;
 
 use archspec::cpu::Microarchitecture;
-use pixi_default_versions::{
+use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform, Version};
+use rattler_virtual_packages::defaults::{
     default_glibc_version, default_linux_version, default_mac_os_version, default_windows_version,
 };
-use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform, Version};
 use rattler_virtual_packages::{Archspec, Cuda, CudaArch, LibC, Linux, Osx, VirtualPackage};
 
 use crate::TargetSelector;
@@ -739,13 +739,13 @@ pub fn subdir_default_virtual_packages(subdir: Platform) -> Vec<GenericVirtualPa
     }
     if subdir.is_linux() {
         defaults.push(version_pkg("__linux", default_linux_version()));
-        defaults.push(version_pkg("__glibc", default_glibc_version()));
+        defaults.push(version_pkg("__glibc", default_glibc_version(subdir)));
     }
     if subdir.is_windows() {
         defaults.push(version_pkg("__win", default_windows_version()));
     }
-    if subdir.is_osx() {
-        defaults.push(version_pkg("__osx", default_mac_os_version(subdir)));
+    if let Some(version) = default_mac_os_version(subdir) {
+        defaults.push(version_pkg("__osx", version));
     }
     if let Some(spec) = Archspec::from_platform(subdir) {
         defaults.push(GenericVirtualPackage {

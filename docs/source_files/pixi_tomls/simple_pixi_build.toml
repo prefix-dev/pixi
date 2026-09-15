@@ -45,6 +45,6 @@ simple_python = { path = "." }
 boost-check = {
   git = "https://github.com/wolfv/pixi-build-examples",
   branch = "main",
-  subdirectory = "boost-check"
+  subdirectory = "boost-check",
 }
 # --8<-- [end:dependencies]

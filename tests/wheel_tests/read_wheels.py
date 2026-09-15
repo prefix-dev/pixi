@@ -1,9 +1,9 @@
-import tomli
-
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Self, Any
-from collections.abc import Iterable
+from typing import Any, Literal, Self
+
+import tomli
 
 
 @dataclass
@@ -100,7 +100,7 @@ class WheelTest:
         with file.open("rb") as f:
             toml = tomli.load(f)
             if not isinstance(toml, dict):
-                raise ValueError("Expected a dictionary")
+                raise TypeError("Expected a dictionary")
             wheels = toml
             return cls({name: PackageSpec.from_toml(spec) for name, spec in wheels.items()})
 

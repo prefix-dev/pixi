@@ -606,6 +606,21 @@ Set the configuration with:
 This feature is experimental because the cache invalidation is very tricky,
 and we don't want to disturb users that are not affected by activation times.
 
+### Running conda scripts
+
+[Conda scripts](../tutorials/conda_script.md) normally need `--experimental` on every `pixi run`.
+Turn the flag into a setting with:
+
+```shell
+# For all of your workspaces
+pixi config set experimental.conda-script true --global
+
+# For a specific workspace
+pixi config set experimental.conda-script true --local
+```
+
+Running a conda script then prints a warning instead of asking for the flag, as a reminder that the format may still change.
+
 ## Mirror configuration
 
 You can configure mirrors for conda channels. We expect that mirrors are exact

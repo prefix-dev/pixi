@@ -952,6 +952,13 @@ pub struct ExperimentalConfig {
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub use_environment_activation_cache: Option<bool>,
+
+    /// The option to opt into running `conda-script` files without passing
+    /// `--experimental` on every invocation. The format follows a draft
+    /// proposal and may still change.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conda_script: Option<bool>,
 }
 
 impl ExperimentalConfig {
@@ -960,14 +967,19 @@ impl ExperimentalConfig {
             use_environment_activation_cache: other
                 .use_environment_activation_cache
                 .or(self.use_environment_activation_cache),
+            conda_script: other.conda_script.or(self.conda_script),
         }
     }
     pub fn use_environment_activation_cache(&self) -> bool {
         self.use_environment_activation_cache.unwrap_or(false)
     }
 
+    pub fn conda_script(&self) -> bool {
+        self.conda_script.unwrap_or(false)
+    }
+
     pub fn is_default(&self) -> bool {
-        self.use_environment_activation_cache.is_none()
+        self.use_environment_activation_cache.is_none() && self.conda_script.is_none()
     }
 }
 
@@ -1468,6 +1480,7 @@ impl From<ConfigCli> for Config {
                 } else {
                     None
                 },
+                conda_script: None,
             },
             pinning_strategy: cli.pinning_strategy,
             allow_symbolic_links: cli.no_symbolic_links.then_some(false),
@@ -1965,6 +1978,7 @@ impl Config {
             "default-channels",
             "detached-environments",
             "experimental",
+            "experimental.conda-script",
             "experimental.use-environment-activation-cache",
             "index-config",
             "index-config.base-url",
@@ -2165,6 +2179,11 @@ impl Config {
 
     pub fn experimental_activation_cache_usage(&self) -> bool {
         self.experimental.use_environment_activation_cache()
+    }
+
+    /// Whether `conda-script` files may run without `--experimental`.
+    pub fn experimental_conda_script(&self) -> bool {
+        self.experimental.conda_script()
     }
 
     /// Retrieve the value for the max_concurrent_solves field.
@@ -2477,6 +2496,10 @@ impl Config {
                 match subkey {
                     "use-environment-activation-cache" => {
                         self.experimental.use_environment_activation_cache =
+                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                    }
+                    "conda-script" => {
+                        self.experimental.conda_script =
                             value.map(|v| v.parse()).transpose().into_diagnostic()?;
                     }
                     _ => return Err(err),
@@ -3188,6 +3211,7 @@ UNUSED = "unused"
             pinning_strategy: Some(PinningStrategy::NoPin),
             experimental: ExperimentalConfig {
                 use_environment_activation_cache: Some(true),
+                conda_script: None,
             },
             loaded_from: Vec::from([PathBuf::from_str("test").unwrap()]),
             shell: ShellConfig {
@@ -3761,6 +3785,13 @@ UNUSED = "unused"
             config.experimental.use_environment_activation_cache,
             Some(true)
         );
+
+        // Test experimental.conda-script
+        config
+            .set("experimental.conda-script", Some("true".to_string()))
+            .unwrap();
+        assert_eq!(config.experimental.conda_script, Some(true));
+        assert!(config.experimental_conda_script());
 
         // Test more repodata-config options
         // disable-jlap has been removed — setting it should error

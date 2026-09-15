@@ -91,7 +91,7 @@ mod tests {
     use super::*;
     use crate::{
         BuildEnvironment,
-        environment::{DerivedEnvKind, DerivedParent, EnvironmentSpec, WorkspaceEnvRegistry},
+        environment::{DerivedEnvKind, EnvironmentSpec, WorkspaceEnvRegistry},
     };
 
     fn channel(url: &str) -> ChannelUrl {
@@ -179,11 +179,8 @@ mod tests {
             spec_with_channels(vec![channel("https://example.com/parent/")]),
         );
 
-        let derived = EnvironmentRef::Derived {
-            parent: DerivedParent::Workspace(parent),
-            package: PackageName::new_unchecked("foo"),
-            kind: DerivedEnvKind::Build,
-        };
+        let derived = EnvironmentRef::Workspace(parent)
+            .derived(PackageName::new_unchecked("foo"), DerivedEnvKind::Build);
 
         let channels = engine.compute(&ChannelsOf(derived)).await.unwrap();
         assert_eq!(
@@ -203,14 +200,17 @@ mod tests {
         };
         let mut spec = spec_with_channels(vec![]);
         spec.build_environment = parent_build_env.clone();
-        let parent = registry.allocate("default".to_string(), Platform::Linux64.to_string(), spec);
+        let parent = EnvironmentRef::Workspace(registry.allocate(
+            "default".to_string(),
+            Platform::Linux64.to_string(),
+            spec,
+        ));
 
         let derived_build = engine
-            .compute(&BuildEnvOf(EnvironmentRef::Derived {
-                parent: DerivedParent::Workspace(parent.clone()),
-                package: PackageName::new_unchecked("foo"),
-                kind: DerivedEnvKind::Build,
-            }))
+            .compute(&BuildEnvOf(parent.derived(
+                PackageName::new_unchecked("foo"),
+                DerivedEnvKind::Build,
+            )))
             .await
             .unwrap();
         assert_eq!(
@@ -220,11 +220,10 @@ mod tests {
         );
 
         let derived_host = engine
-            .compute(&BuildEnvOf(EnvironmentRef::Derived {
-                parent: DerivedParent::Workspace(parent),
-                package: PackageName::new_unchecked("foo"),
-                kind: DerivedEnvKind::Host,
-            }))
+            .compute(&BuildEnvOf(parent.derived(
+                PackageName::new_unchecked("foo"),
+                DerivedEnvKind::Host,
+            )))
             .await
             .unwrap();
         assert_eq!(

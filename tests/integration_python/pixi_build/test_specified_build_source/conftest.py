@@ -32,6 +32,7 @@ def _build_local_cpp_git_repo(repo_path: Path, build_data: Path) -> LocalGitRepo
             capture_output=True,
             text=True,
             encoding="utf-8",
+            check=False,
         )
         if result.returncode != 0:
             raise RuntimeError(

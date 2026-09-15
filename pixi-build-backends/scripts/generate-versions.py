@@ -2,7 +2,7 @@
 
 import json
 import subprocess
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -23,7 +23,7 @@ def main():
     repo_root = script_dir.parent.parent
 
     # Generate version suffix
-    now = datetime.now()
+    now = datetime.now(UTC)
     date_suffix = now.strftime("%Y%m%d")
     time_suffix = now.strftime("%H%M")
     git_hash = get_git_short_hash()
