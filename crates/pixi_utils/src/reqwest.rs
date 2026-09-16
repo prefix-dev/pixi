@@ -58,9 +58,12 @@ pub fn mirror_middleware(config: &Config) -> MirrorMiddleware {
     MirrorMiddleware::from_map(internal_map)
 }
 
-pub fn oci_middleware(client: LazyReqwestClient) -> OciMiddleware {
+/// The OCI middleware, with the configured credentials so private registries
+/// (a mirror on Amazon ECR, a token-protected ghcr.io) can be pulled from.
+pub fn oci_middleware(client: LazyReqwestClient, config: &Config) -> miette::Result<OciMiddleware> {
     let middleware = LazyClient::new(|| ClientWithMiddleware::new(client.into_client(), vec![]));
-    OciMiddleware::new(middleware)
+    let store = get_auth_store(config).into_diagnostic()?;
+    Ok(OciMiddleware::new(middleware).with_authentication_storage(store))
 }
 
 static DEFAULT_REQWEST_USER_AGENT: LazyLock<String> =
@@ -231,7 +234,7 @@ pub fn build_reqwest_middleware_stack(
     // The OCI middleware rewrites `oci://` requests into real registry requests
     // and is a no-op for other URL schemes. It must be installed unconditionally
     // so that `oci://` channels work even without a mirror configured.
-    result.push(Arc::new(oci_middleware(client.clone())));
+    result.push(Arc::new(oci_middleware(client.clone(), config)?));
 
     result.push(Arc::new(GCSMiddleware::default()));
 
@@ -347,7 +350,9 @@ pub fn uv_middlewares(config: &Config, client: LazyReqwestClient) -> Vec<Arc<dyn
 
     if !config.mirror_map().is_empty() {
         middlewares.push(Arc::new(mirror_middleware(config)));
-        middlewares.push(Arc::new(oci_middleware(client.clone())));
+        if let Ok(oci_middleware) = oci_middleware(client.clone(), config) {
+            middlewares.push(Arc::new(oci_middleware));
+        }
     }
 
     // Add authentication middleware after mirror rewriting so it can authenticate
