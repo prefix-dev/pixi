@@ -125,8 +125,12 @@ pub async fn add_conda_dep(
     Ok((update_deps, skipped))
 }
 
-fn manifest_path_string(path: &std::path::Path) -> String {
-    path.to_string_lossy().replace('\\', "/")
+pub fn manifest_path_string(path: &std::path::Path) -> String {
+    if path.as_os_str().is_empty() {
+        ".".to_string()
+    } else {
+        path.to_string_lossy().replace('\\', "/")
+    }
 }
 
 pub async fn add_pypi_dep(

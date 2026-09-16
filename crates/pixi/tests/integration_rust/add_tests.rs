@@ -877,6 +877,135 @@ async fn add_pypi_path_dependency_rewrites_absolute_manifest_path() {
 }
 
 #[tokio::test]
+async fn add_pypi_editable_path_dependency_current_dir() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+    let channel = package_database.into_channel().await.unwrap();
+
+    let pixi = PixiControl::new().unwrap();
+    pixi.init()
+        .with_local_channel(channel.url().to_file_path().unwrap())
+        .with_platforms(vec![Platform::current()])
+        .await
+        .unwrap();
+    pixi.add("python").await.unwrap();
+
+    fs_err::write(
+        pixi.workspace_path().join("pyproject.toml"),
+        "[project]\nname = \"local-pkg\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+
+    let relative_path =
+        pathdiff::diff_paths(pixi.workspace_path(), std::env::current_dir().unwrap()).unwrap();
+
+    pixi.add_pypi("local-pkg")
+        .with_path(relative_path)
+        .set_editable(true)
+        .await
+        .unwrap();
+
+    let manifest = pixi.manifest_contents().unwrap();
+    let normalized = manifest.replace('\\', "/").replace('\'', "\"");
+    assert!(
+        normalized.contains(r#"local-pkg = { path = ".", editable = true }"#),
+        "unexpected manifest:\n{manifest}"
+    );
+}
+
+#[tokio::test]
+async fn add_pypi_editable_path_dependency_in_pyproject() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+    let channel = package_database.into_channel().await.unwrap();
+
+    let pixi = PixiControl::from_pyproject_manifest(&format!(
+        r#"
+[project]
+name = "my-py-project"
+version = "0.1.0"
+
+[tool.pixi.workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+conda-pypi-map = false
+
+[tool.pixi.dependencies]
+python = "3.12.*"
+"#,
+        channel = channel.url(),
+        platform = Platform::current()
+    ))
+    .unwrap();
+
+    let relative_path =
+        pathdiff::diff_paths(pixi.workspace_path(), std::env::current_dir().unwrap()).unwrap();
+
+    pixi.add_pypi("my-py-project")
+        .with_path(relative_path)
+        .set_editable(true)
+        .await
+        .unwrap();
+
+    let manifest = pixi.manifest_contents().unwrap();
+    let normalized = manifest.replace('\\', "/").replace('\'', "\"");
+    assert!(
+        normalized.contains(r#"my-py-project = { path = ".", editable = true }"#),
+        "unexpected manifest:\n{manifest}"
+    );
+}
+
+#[tokio::test]
+async fn add_pypi_path_rejects_pixi_workspace_without_python_package() {
+    setup_tracing();
+
+    let pixi = PixiControl::from_manifest(
+        r#"
+[workspace]
+name = "path-test"
+channels = []
+platforms = ["linux-64"]
+"#,
+    )
+    .unwrap();
+
+    let not_a_python_pkg = pixi.workspace_path().join("pixi-only");
+    fs_err::create_dir_all(&not_a_python_pkg).unwrap();
+    fs_err::write(
+        not_a_python_pkg.join("pyproject.toml"),
+        "[tool.pixi.workspace]\nchannels = []\nplatforms = [\"linux-64\"]\n",
+    )
+    .unwrap();
+
+    let relative_path =
+        pathdiff::diff_paths(&not_a_python_pkg, std::env::current_dir().unwrap()).unwrap();
+
+    let err = pixi
+        .add_pypi("pixi-only")
+        .with_path(relative_path)
+        .await
+        .unwrap_err();
+
+    assert!(
+        err.to_string()
+            .contains("is a pixi workspace, not a Python package source"),
+        "unexpected error message: {err:?}"
+    );
+}
+
+#[tokio::test]
 async fn add_conda_path_dependency_accepts_manifest_files_and_relative_input() {
     setup_tracing();
 
