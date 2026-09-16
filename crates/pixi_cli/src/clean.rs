@@ -12,7 +12,7 @@ use pixi_path::AbsPathBuf;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use crate::cli_config::WorkspaceConfig;
+use crate::cli_config::ScriptWorkspaceConfig;
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use fs_err::tokio as tokio_fs;
@@ -43,10 +43,10 @@ pub struct Args {
     pub config_source: pixi_config::ConfigSourceCli,
 
     #[clap(flatten)]
-    pub workspace_config: WorkspaceConfig,
+    pub workspace_config: ScriptWorkspaceConfig,
 
     #[command(subcommand)]
-    command: Option<Command>,
+    pub command: Option<Command>,
 
     /// The environment directory to remove.
     #[arg(long, short, conflicts_with_all = ["command", "build"])]
@@ -175,21 +175,33 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // Remove all pixi related work from the workspace. Always clean both
         // the default .pixi location and the effective (possibly detached) location
         // so leftover artifacts are removed regardless of config changes.
-        total_removed +=
-            remove_folder_with_progress(workspace.default_environments_dir(), false).await?;
-        total_removed +=
-            remove_folder_with_progress(workspace.default_solve_group_environments_dir(), false)
-                .await?;
-        total_removed += remove_folder_with_progress(workspace.environments_dir(), false).await?;
-        total_removed +=
-            remove_folder_with_progress(workspace.solve_group_environments_dir(), false).await?;
-        total_removed += remove_folder_with_progress(workspace.task_cache_folder(), false).await?;
-        total_removed +=
-            remove_folder_with_progress(workspace.activation_env_cache_folder(), false).await?;
+        // For a script workspace, also prune the entire script exec cache folder.
+        if workspace.is_script() {
+            total_removed += remove_folder_with_progress(workspace.pixi_dir(), false).await?;
+        } else {
+            total_removed +=
+                remove_folder_with_progress(workspace.default_environments_dir(), false).await?;
+            total_removed += remove_folder_with_progress(
+                workspace.default_solve_group_environments_dir(),
+                false,
+            )
+            .await?;
+            total_removed +=
+                remove_folder_with_progress(workspace.environments_dir(), false).await?;
+            total_removed +=
+                remove_folder_with_progress(workspace.solve_group_environments_dir(), false)
+                    .await?;
+            total_removed +=
+                remove_folder_with_progress(workspace.task_cache_folder(), false).await?;
+            total_removed +=
+                remove_folder_with_progress(workspace.activation_env_cache_folder(), false).await?;
+        }
         for dir in workspace_build_cache_dirs(&workspace) {
             total_removed += remove_folder_with_progress(dir, false).await?;
         }
-        prune_workspace_registry().await?;
+        if !workspace.is_script() {
+            prune_workspace_registry().await?;
+        }
     } else {
         if args.activation_cache {
             total_removed +=
