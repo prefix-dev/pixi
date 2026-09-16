@@ -428,6 +428,35 @@ mod tests {
             middlewares.len()
         );
     }
+
+    /// Regression test: the OCI middleware used to be built without pixi's
+    /// authentication store, so `pixi auth login` credentials never reached
+    /// private registries. `OciMiddleware` has no accessor for its store and
+    /// its registry requests hardcode `https://`, so a local round trip is
+    /// not an option; inspect the Debug output instead.
+    #[test]
+    fn test_oci_middleware_uses_the_configured_auth_store() {
+        let dir = tempfile::tempdir().unwrap();
+        let auth_file = dir.path().join("auth.json");
+        fs_err::write(&auth_file, "{}").unwrap();
+
+        let config = Config {
+            authentication_override_file: Some(auth_file.clone()),
+            ..Default::default()
+        };
+        let client = LazyReqwestClient::new(&config).unwrap();
+        let middleware = oci_middleware(client, &config).unwrap();
+
+        let debug = format!("{middleware:?}");
+        assert!(
+            debug.contains("auth_storage: Some("),
+            "OCI middleware was built without an authentication store: {debug}"
+        );
+        assert!(
+            debug.contains(&format!("{auth_file:?}")),
+            "OCI middleware's store does not include the configured auth file: {debug}"
+        );
+    }
 }
 
 /// Behavioral tests for offline mode: with `offline = true`, the full
