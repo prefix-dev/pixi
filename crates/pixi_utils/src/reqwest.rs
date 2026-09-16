@@ -429,11 +429,7 @@ mod tests {
         );
     }
 
-    /// Regression test: the OCI middleware used to be built without pixi's
-    /// authentication store, so `pixi auth login` credentials never reached
-    /// private registries. `OciMiddleware` has no accessor for its store and
-    /// its registry requests hardcode `https://`, so a local round trip is
-    /// not an option; inspect the Debug output instead.
+    // OciMiddleware doesn't expose its auth store, so verify it through Debug output.
     #[test]
     fn test_oci_middleware_uses_the_configured_auth_store() {
         let dir = tempfile::tempdir().unwrap();
