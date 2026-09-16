@@ -109,7 +109,7 @@ jobs:
       - name: Install Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
         with:
-          toolchain: "1.95.0"
+          toolchain: "1.98.1"
           target: ${{ matrix.target }}
           cache: false
           # This action defaults to writing RUSTFLAGS=-D warnings into the job
