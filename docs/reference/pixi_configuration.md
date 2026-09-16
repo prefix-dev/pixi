@@ -659,9 +659,8 @@ team. You can use it like this:
 The GHCR mirror also contains `bioconda` packages. You can search the [available
 packages on Github](https://github.com/orgs/channel-mirrors/packages).
 
-A private OCI registry, or a pull-through cache of the public mirror such as Amazon ECR,
-works the same way. Store its credentials with `pixi auth login <registry-host>`; they are
-looked up by host, so they apply to `oci://` mirrors as well.
+For private OCI registries, credentials configured with
+`pixi auth login <registry-host>` are also used for `oci://` mirrors.
 
 ### Mirrors for PyPi resolving and PyPi package downloading
 

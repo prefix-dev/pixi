@@ -58,12 +58,12 @@ pub fn mirror_middleware(config: &Config) -> MirrorMiddleware {
     MirrorMiddleware::from_map(internal_map)
 }
 
-/// The OCI middleware, with the configured credentials so private registries
-/// (a mirror on Amazon ECR, a token-protected ghcr.io) can be pulled from.
+/// Creates OCI middleware using pixi's authentication store.
 pub fn oci_middleware(client: LazyReqwestClient, config: &Config) -> miette::Result<OciMiddleware> {
-    let middleware = LazyClient::new(|| ClientWithMiddleware::new(client.into_client(), vec![]));
-    let store = get_auth_store(config).into_diagnostic()?;
-    Ok(OciMiddleware::new(middleware).with_authentication_storage(store))
+    let client = LazyClient::new(|| ClientWithMiddleware::new(client.into_client(), vec![]));
+    let auth_store = get_auth_store(config).into_diagnostic()?;
+
+    Ok(OciMiddleware::new(client).with_authentication_storage(auth_store))
 }
 
 static DEFAULT_REQWEST_USER_AGENT: LazyLock<String> =
