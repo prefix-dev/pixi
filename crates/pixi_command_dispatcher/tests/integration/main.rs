@@ -783,8 +783,9 @@ pub async fn test_run_export_on_source_host_dependency() {
 
     // `noarch` exports because the passthrough backend produces NoArch
     // outputs and only noarch run-exports propagate to a NoArch consumer.
+    // Use reverse order to verify canonical sorting.
     let run_exports = RunExportsJson {
-        noarch: vec!["package_b 0.1.0".to_string(), "package_c 0.1.0".to_string()],
+        noarch: vec!["package_c 0.1.0".to_string(), "package_b 0.1.0".to_string()],
         ..Default::default()
     };
     let dispatcher = CommandDispatcher::builder()
@@ -835,6 +836,15 @@ pub async fn test_run_export_on_source_host_dependency() {
             "{dep} must be part of the solution as a source record"
         );
     }
+    assert!(
+        package_a.package_record().depends.is_sorted(),
+        "package_a depends must be canonically sorted, got {:?}",
+        package_a.package_record().depends
+    );
+    assert_eq!(
+        package_a.package_record().depends,
+        vec!["package_b ==0.1.0", "package_c ==0.1.0"]
+    );
 }
 
 /// Manifest-declared `[package.run-exports.noarch]` propagates end to end:
