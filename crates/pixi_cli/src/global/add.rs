@@ -5,7 +5,7 @@ use clap::Parser;
 use pixi_config::{Config, ConfigCli};
 use pixi_global::project::GlobalSpec;
 use pixi_global::{EnvironmentName, Mapping, Project, StateChanges};
-use rattler_conda_types::NamedChannelOrUrl;
+use pixi_manifest::PrioritizedChannel;
 
 /// Adds dependencies to an environment
 ///
@@ -48,8 +48,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
     // Name inference solves the build backend against the channels of the
     // environment the packages are added to.
-    let environment_channels: Vec<NamedChannelOrUrl> =
-        environment.channels().into_iter().cloned().collect();
+    let environment_channels: Vec<PrioritizedChannel> =
+        environment.prioritized_channels().cloned().collect();
 
     async fn apply_changes(
         env_name: &EnvironmentName,
