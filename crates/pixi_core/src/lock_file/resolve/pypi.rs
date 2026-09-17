@@ -7,10 +7,8 @@ use std::{
     path::{Path, PathBuf},
     rc::Rc,
     str::FromStr,
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
-
-use once_cell::sync::OnceCell;
 
 use futures::FutureExt;
 
@@ -74,7 +72,7 @@ use crate::{
         outdated::PypiEnvironmentBuildCache,
         records_by_name::HasNameVersion,
         resolve::{
-            build_dispatch::{LazyBuildDispatch, UvBuildDispatchParams},
+            build_dispatch::{LazyBuildDispatch, LazyBuildDispatchError, UvBuildDispatchParams},
             resolver_provider::CondaResolverProvider,
         },
     },
@@ -153,9 +151,11 @@ pub enum SolveError {
     },
     #[error("failed to resolve pypi dependencies")]
     Other(#[from] ResolveError),
-    #[error("build dispatch initialization failed: {message}")]
+    #[error("build dispatch initialization failed")]
     BuildDispatchPanic {
-        message: String,
+        #[source]
+        #[diagnostic_source]
+        source: LazyBuildDispatchError,
         /// Help carried over from the underlying diagnostic (e.g. the
         /// `CONDA_OVERRIDE_*` hints for an unsupported platform), kept separate
         /// so miette renders it as its own help section.
@@ -575,7 +575,7 @@ pub async fn resolve_pypi(
     // Use cached build dispatch dependencies
     let lazy_build_dispatch_deps = &build_cache.lazy_build_dispatch_deps;
 
-    let last_error = Arc::new(OnceCell::new());
+    let last_error = Arc::new(Mutex::new(None));
 
     // Use cached conda_prefix_updater if available, otherwise create new
     let conda_prefix_updater = build_cache
@@ -854,14 +854,16 @@ pub async fn resolve_pypi(
         Ok(result) => result?,
         Err(panic_payload) => {
             // Try to get the stored initialization error from the last_error holder
-            if let Some(stored_error) = last_error.get() {
-                // The panic is re-wrapped as a plain message, so carry the inner
-                // diagnostic's help (e.g. the `CONDA_OVERRIDE_*` hints for an
-                // unsupported platform) across as a separate field rather than
-                // losing it or mashing it into the message.
+            let stored_error = last_error.lock().unwrap_or_else(|e| e.into_inner()).take();
+            if let Some(stored_error) = stored_error {
+                // The inner diagnostic's help (e.g. the `CONDA_OVERRIDE_*` hints for an
+                // unsupported platform) is carried across in a separate field so
+                // miette renders it in the top-level help section while preserving
+                // the full causal chain from `stored_error`.
+                let help = miette::Diagnostic::help(&stored_error).map(|help| help.to_string());
                 return Err(SolveError::BuildDispatchPanic {
-                    message: format!("{stored_error}"),
-                    help: miette::Diagnostic::help(stored_error).map(|help| help.to_string()),
+                    source: stored_error,
+                    help,
                 }
                 .into());
             } else {
@@ -1425,5 +1427,72 @@ mod tests {
             .given_for_location(&url, &PathBuf::from("C:\\a\\b\\c"))
             .unwrap();
         assert_eq!(path.as_str(), "C:/a/b/c");
+    }
+
+    #[test]
+    fn test_build_dispatch_panic_diagnostic_renders_cause_chain_and_help() {
+        use super::*;
+        use pixi_test_utils::format_diagnostic;
+
+        #[derive(Debug, thiserror::Error)]
+        #[error("operation timed out after 30s")]
+        struct TimeoutError;
+
+        #[derive(Debug, thiserror::Error, miette::Diagnostic)]
+        #[error("failed to fetch tzdata-2025c.conda")]
+        #[diagnostic(help("check your network connection or proxy configuration"))]
+        struct FetchError {
+            #[source]
+            source: TimeoutError,
+        }
+
+        let inner_diag = FetchError {
+            source: TimeoutError,
+        };
+
+        let lazy_err = LazyBuildDispatchError::InitializationError(Box::new(inner_diag));
+        let help = miette::Diagnostic::help(&lazy_err).map(|h| h.to_string());
+        let solve_err = SolveError::BuildDispatchPanic {
+            source: lazy_err,
+            help,
+        };
+
+        let rendered = format_diagnostic(&solve_err);
+        assert!(
+            rendered.contains("build dispatch initialization failed"),
+            "should contain top-level message, got:\n{rendered}"
+        );
+        assert!(
+            rendered.contains("failed to fetch tzdata-2025c.conda"),
+            "should contain intermediate diagnostic, got:\n{rendered}"
+        );
+        assert!(
+            rendered.contains("operation timed out after 30s"),
+            "should contain inner causal source, got:\n{rendered}"
+        );
+        assert!(
+            rendered.contains("check your network connection or proxy configuration"),
+            "should contain actionable help text, got:\n{rendered}"
+        );
+    }
+
+    #[test]
+    fn test_last_error_mutex_take() {
+        use super::*;
+
+        let last_error = Arc::new(Mutex::new(None));
+        assert!(last_error.lock().unwrap().is_none());
+
+        let err = LazyBuildDispatchError::InstallationRequiredButDisallowed;
+        {
+            let mut g = last_error.lock().unwrap();
+            if g.is_none() {
+                *g = Some(err);
+            }
+        }
+
+        let taken = last_error.lock().unwrap().take();
+        assert!(taken.is_some());
+        assert!(last_error.lock().unwrap().is_none());
     }
 }

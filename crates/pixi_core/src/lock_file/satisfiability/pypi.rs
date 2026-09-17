@@ -3,14 +3,13 @@ use std::{
     collections::HashMap,
     path::{Path, PathBuf},
     str::FromStr,
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 use uv_redacted::DisplaySafeUrl;
 
 use dashmap::DashMap;
 use futures::TryStreamExt;
 use itertools::Itertools;
-use once_cell::sync::OnceCell;
 use pep440_rs::VersionSpecifiers;
 use pixi_command_dispatcher::{
     CommandDispatcher, CommandDispatcherError, executor::CancellationAwareFutures,
@@ -789,7 +788,7 @@ async fn read_local_package_metadata(
         .clone();
 
     // Use cached lazy build dispatch dependencies
-    let last_error = Arc::new(OnceCell::new());
+    let last_error = Arc::new(Mutex::new(None));
     // Use building_pixi_records (host platform) for installing Python and building,
     // since we can only run binaries on the host platform
     let building_records: miette::Result<Vec<PixiRecord>> = ctx
