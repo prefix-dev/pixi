@@ -352,7 +352,13 @@ pub async fn execute(args: Args) -> miette::Result<ExitCode> {
         &InstallFilter::default(),
     )
     .await?;
-    let lock_file = lock_file_data.into_lock_file();
+    // Keep `lock_file_data` alive for the whole interactive shell: under the
+    // mount backend it owns the MountGuard (a shared flock) that stops the
+    // sidecar from unmounting the environment mid-session. Borrow the lock file
+    // rather than consuming it — `into_lock_file()` would drop the guard here,
+    // and the shell (started below via a PtySession, which does not replace this
+    // process) would then lose its mount ~grace-period seconds later.
+    let lock_file = lock_file_data.as_lock_file();
 
     // Get the environment variables we need to set activate the environment in the shell.
     let env = get_activated_environment_variables(
@@ -360,7 +366,7 @@ pub async fn execute(args: Args) -> miette::Result<ExitCode> {
         &environment,
         &environment.activation_platform(),
         CurrentEnvVarBehavior::Exclude,
-        Some(&lock_file),
+        Some(lock_file),
         workspace.config().force_activate(),
         workspace.config().experimental_activation_cache_usage(),
     )
