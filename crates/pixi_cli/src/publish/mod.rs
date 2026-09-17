@@ -20,9 +20,12 @@ use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
     BackendMetadataDir, BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs,
     ComputeResultExt, CondaPackageFormat, EnvironmentRef, EnvironmentSpec, EphemeralEnv,
+    PackagesDir,
     keys::{ResolveSourcePackageKey, ResolveSourcePackageSpec, SourceBuildKey, SourceBuildSpec},
 };
-use pixi_config::{ConfigCli, IndexChannelConfig, IndexConfig, PackageFormatAndCompression};
+use pixi_config::{
+    CacheKind, ConfigCli, IndexChannelConfig, IndexConfig, PackageFormatAndCompression,
+};
 use pixi_core::{
     Workspace, WorkspaceLocator, environment::sanity_check_workspace, workspace::DiscoveryStart,
 };
@@ -618,6 +621,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .expect("build dir is not absolute")
             .into_assume_dir();
         cache_dirs.set_override::<BackendMetadataDir>(build_dir);
+    }
+    if let Ok(packages_dir) = workspace.config().cache_dir_for(CacheKind::CondaPackages) {
+        let packages_dir = if packages_dir.is_absolute() {
+            packages_dir
+        } else {
+            workspace.root().join(packages_dir)
+        };
+        if let Ok(abs_packages_dir) = AbsPathBuf::new(packages_dir) {
+            cache_dirs.set_override::<PackagesDir>(abs_packages_dir.into_assume_dir());
+        }
     }
     let progress = std::sync::Arc::new(TopLevelProgress::new(
         pixi_compute_reporters::OperationRegistry::new(),

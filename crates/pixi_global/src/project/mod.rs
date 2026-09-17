@@ -25,10 +25,11 @@ use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher,
     CommandDispatcherError as DispatcherError, ComputeResultExt, EnvironmentRef, EnvironmentSpec,
-    EphemeralEnv, InlinePackage, InstallPixiEnvironmentSpec, Limits, SourceCheckoutExt,
+    EphemeralEnv, InlinePackage, InstallPixiEnvironmentSpec, Limits, PackagesDir,
+    SourceCheckoutExt,
     keys::{SolvePixiEnvironmentKey, SolvePixiEnvironmentSpec},
 };
-use pixi_config::{Config, RunPostLinkScripts, default_channel_config, pixi_home};
+use pixi_config::{CacheKind, Config, RunPostLinkScripts, default_channel_config, pixi_home};
 use pixi_consts::consts::{self};
 use pixi_core::environment::{
     EnvironmentFile, LockedEnvironmentHash, PlatformData, RequiredPlatform, write_environment_file,
@@ -1663,8 +1664,18 @@ impl Project {
             // workspace-scoped caches (source builds and their metadata) have
             // no workspace to live in here and stay under `bld`.
             let build_dir = cache_dir.join(BUILD_DIR).into_assume_dir();
-            let cache_dirs =
+            let mut cache_dirs =
                 pixi_command_dispatcher::CacheDirs::new(cache_dir).with_workspace(build_dir);
+            if let Ok(packages_dir) = self.config().cache_dir_for(CacheKind::CondaPackages) {
+                let packages_dir = if packages_dir.is_absolute() {
+                    packages_dir
+                } else {
+                    self.root.join(packages_dir)
+                };
+                if let Ok(abs_packages_dir) = AbsPathBuf::new(packages_dir) {
+                    cache_dirs.set_override::<PackagesDir>(abs_packages_dir.into_assume_dir());
+                }
+            }
 
             let root_dir = AbsPathBuf::new(self.root.clone())
                 .expect("root dir is not absolute")

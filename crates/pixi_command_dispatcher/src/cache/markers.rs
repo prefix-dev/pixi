@@ -32,6 +32,9 @@ impl CacheLocation for PackagesDir {
     fn base() -> CacheBase {
         CacheBase::Root
     }
+    fn env_override() -> Option<&'static str> {
+        Some("PIXI_CACHE_CONDA_PACKAGES_DIR")
+    }
 }
 
 /// Backend metadata cache + per-source backend scratch tree.
@@ -80,5 +83,63 @@ impl CacheLocation for LegacySourceEnvDir {
     }
     fn base() -> CacheBase {
         CacheBase::Workspace
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pixi_compute_cache_dirs::CacheDirs;
+    use pixi_path::AbsPathBuf;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_packages_dir_env_override() {
+        let root = tempdir().unwrap();
+        let root_abs = AbsPathBuf::new(root.path().to_path_buf())
+            .unwrap()
+            .into_assume_dir();
+        let cache_dirs = CacheDirs::new(root_abs);
+
+        let custom_dir = tempdir().unwrap();
+        let custom_abs = custom_dir.path().to_string_lossy().to_string();
+
+        let resolved = cache_dirs.resolve::<PackagesDir>(|var| {
+            if var == "PIXI_CACHE_CONDA_PACKAGES_DIR" {
+                Some(custom_abs.clone())
+            } else {
+                None
+            }
+        });
+
+        assert_eq!(resolved.as_std_path(), custom_dir.path());
+    }
+
+    #[test]
+    fn test_packages_dir_programmatic_override_wins() {
+        let root = tempdir().unwrap();
+        let root_abs = AbsPathBuf::new(root.path().to_path_buf())
+            .unwrap()
+            .into_assume_dir();
+        let mut cache_dirs = CacheDirs::new(root_abs);
+
+        let override_dir = tempdir().unwrap();
+        let override_abs = AbsPathBuf::new(override_dir.path().to_path_buf())
+            .unwrap()
+            .into_assume_dir();
+        cache_dirs.set_override::<PackagesDir>(override_abs);
+
+        let custom_dir = tempdir().unwrap();
+        let custom_abs = custom_dir.path().to_string_lossy().to_string();
+
+        let resolved = cache_dirs.resolve::<PackagesDir>(|var| {
+            if var == "PIXI_CACHE_CONDA_PACKAGES_DIR" {
+                Some(custom_abs.clone())
+            } else {
+                None
+            }
+        });
+
+        assert_eq!(resolved.as_std_path(), override_dir.path());
     }
 }

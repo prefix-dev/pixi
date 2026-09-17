@@ -2221,3 +2221,92 @@ cuda-arch = "*"
         );
     }
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_install_respects_pixi_cache_conda_packages_dir() {
+    let platform = Platform::current();
+    let channel_path: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/data/channels/channels/dummy_channel_1");
+    let channel_path = fs_err::canonicalize(channel_path).expect("canonicalize channel path");
+    let channel_url = Url::from_directory_path(&channel_path).expect("valid file url");
+    let manifest = format!(
+        r#"
+        [project]
+        name = "test-cache-conda-packages-dir"
+        channels = ["{channel_url}"]
+        platforms = ["{platform}"]
+
+        [dependencies]
+        dummy-a = "*"
+        "#,
+    );
+
+    let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+    pixi.update_lock_file().await.unwrap();
+
+    let tmp_pkg_cache = tempdir().unwrap();
+    let tmp_pkg_path = tmp_pkg_cache.path().to_path_buf();
+
+    temp_env::async_with_vars(
+        [(
+            "PIXI_CACHE_CONDA_PACKAGES_DIR",
+            Some(tmp_pkg_path.to_str().unwrap()),
+        )],
+        async {
+            pixi.install().await.expect("cannot install project");
+        },
+    )
+    .await;
+
+    let entries = fs_err::read_dir(&tmp_pkg_path).unwrap().collect::<Vec<_>>();
+    assert!(
+        !entries.is_empty(),
+        "expected packages to be cached in custom PIXI_CACHE_CONDA_PACKAGES_DIR"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_install_respects_cache_config_conda_packages() {
+    let platform = Platform::current();
+    let channel_path: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/data/channels/channels/dummy_channel_1");
+    let channel_path = fs_err::canonicalize(channel_path).expect("canonicalize channel path");
+    let channel_url = Url::from_directory_path(&channel_path).expect("valid file url");
+    let manifest = format!(
+        r#"
+        [project]
+        name = "test-config-conda-packages-dir"
+        channels = ["{channel_url}"]
+        platforms = ["{platform}"]
+
+        [dependencies]
+        dummy-a = "*"
+        "#,
+    );
+
+    let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+    let tmp_pkg_cache = tempdir().unwrap();
+    let tmp_pkg_path = tmp_pkg_cache.path().to_path_buf();
+
+    let config_path = pixi.workspace().unwrap().pixi_dir().join("config.toml");
+    let config_content = format!(
+        r#"
+        [cache]
+        conda-packages = "{}"
+        "#,
+        tmp_pkg_path.to_string_lossy().replace('\\', "/")
+    );
+    fs_err::write(config_path, config_content).unwrap();
+
+    pixi.update_lock_file().await.unwrap();
+    temp_env::async_with_vars([("PIXI_CACHE_CONDA_PACKAGES_DIR", None::<&str>)], async {
+        pixi.install().await.expect("cannot install project");
+    })
+    .await;
+
+    let entries = fs_err::read_dir(&tmp_pkg_path).unwrap().collect::<Vec<_>>();
+    assert!(
+        !entries.is_empty(),
+        "expected packages to be cached in configured [cache.conda-packages] directory"
+    );
+}

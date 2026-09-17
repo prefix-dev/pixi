@@ -8,7 +8,7 @@ use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pixi_api::workspace::platforms::resolve_platforms;
 use pixi_command_dispatcher::offline::exclusions_for_solve;
-use pixi_config::{self, Config, ConfigCli};
+use pixi_config::{self, CacheKind, Config, ConfigCli};
 use pixi_core::environment::list::{PackageToOutput, print_package_table};
 use pixi_manifest::PixiPlatformName;
 use pixi_manifest::platform::host::{detect_host, host_subdir};
@@ -270,11 +270,13 @@ pub async fn create_exec_prefix(
             .context("failed to determine virtual packages")?,
     );
 
+    let conda_package_cache_dir = config.cache_dir_for(CacheKind::CondaPackages)?;
+
     // `pixi exec` solves outside the command dispatcher, so it has to build
     // the offline exclusions itself rather than inheriting them.
     let excluded_candidates = exclusions_for_solve(
         config.offline(),
-        &PackageCache::new(cache_dir.join(pixi_consts::consts::CONDA_PACKAGE_CACHE_DIR)),
+        &PackageCache::new(&conda_package_cache_dir),
         repodata.iter().flat_map(|repo_data| repo_data.iter()),
     )
     .await
@@ -355,9 +357,7 @@ pub async fn create_exec_prefix(
                 .clear_when_done(true)
                 .finish(),
         )
-        .with_package_cache(PackageCache::new(
-            cache_dir.join(pixi_consts::consts::CONDA_PACKAGE_CACHE_DIR),
-        ));
+        .with_package_cache(PackageCache::new(conda_package_cache_dir));
     if reinstall_all {
         installer = installer.with_reinstall_packages(
             solved_records

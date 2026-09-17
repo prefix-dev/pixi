@@ -38,7 +38,9 @@ use miette::{Diagnostic, IntoDiagnostic};
 use once_cell::sync::OnceCell;
 use pep508_rs::Requirement;
 use pixi_build_frontend::BackendOverride;
-use pixi_command_dispatcher::{CacheDirs, CommandDispatcher, CommandDispatcherBuilder, Limits};
+use pixi_command_dispatcher::{
+    CacheDirs, CommandDispatcher, CommandDispatcherBuilder, Limits, PackagesDir,
+};
 use pixi_config::{CacheKind, Config, RunPostLinkScripts};
 use pixi_consts::consts;
 use pixi_diff::LockFileDiff;
@@ -1173,7 +1175,17 @@ impl Workspace {
         let workspace_dir = AbsPathBuf::new(self.pixi_dir())
             .expect("pixi dir is not absolute")
             .into_assume_dir();
-        let cache_dirs = CacheDirs::new(cache_dir).with_workspace(workspace_dir);
+        let mut cache_dirs = CacheDirs::new(cache_dir).with_workspace(workspace_dir);
+        if let Ok(packages_dir) = self.config().cache_dir_for(CacheKind::CondaPackages) {
+            let packages_dir = if packages_dir.is_absolute() {
+                packages_dir
+            } else {
+                self.root().join(packages_dir)
+            };
+            if let Ok(abs_packages_dir) = AbsPathBuf::new(packages_dir) {
+                cache_dirs.set_override::<PackagesDir>(abs_packages_dir.into_assume_dir());
+            }
+        }
 
         // Determine the tool platform to use
         let tool_platform = self.config().tool_platform();
