@@ -130,6 +130,10 @@ pub struct Args {
     #[clap(short = 'n', long)]
     pub dry_run: bool,
 
+    /// Fail the task if no files match the input or output globs
+    #[arg(long = "fail-on-missing-files", env = "PIXI_FAIL_ON_MISSING_FILES")]
+    pub fail_on_missing_files: bool,
+
     #[clap(long, action = clap::ArgAction::HelpLong)]
     pub help: Option<bool>,
 
@@ -672,13 +676,15 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
             Err(err) => return Err(err.into()),
         }
 
-        // Compute post-run hash, warn on missing globs, and update the cache
+        // Compute post-run hash, check for missing globs, and update the cache
         let post_hash = executable_task
             .compute_post_run_hash(lock_file.as_lock_file(), task_cache)
             .await
             .into_diagnostic()?;
         if let Some(ref hash) = post_hash {
-            executable_task.warn_on_missing_globs(hash);
+            executable_task
+                .check_missing_globs(hash, args.fail_on_missing_files)
+                .into_diagnostic()?;
         }
         executable_task
             .save_cache(post_hash)

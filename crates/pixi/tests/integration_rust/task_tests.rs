@@ -412,5 +412,50 @@ async fn test_clean_env() {
     assert_eq!(result.stdout, "Hello is: world from env\n");
 }
 
+#[tokio::test]
+async fn test_fail_on_missing_files() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().without_channels().await.unwrap();
+
+    let manifest_path = pixi.workspace_path().join("pixi.toml");
+    let manifest_content = fs_err::read_to_string(&manifest_path).unwrap();
+    let task_toml = r#"
+[tasks.missing_task]
+cmd = "echo hello"
+inputs = ["non_existent_input_*.txt"]
+outputs = ["non_existent_output_*.txt"]
+"#;
+    fs_err::write(&manifest_path, format!("{manifest_content}\n{task_toml}")).unwrap();
+
+    // Without --fail-on-missing-files, execution succeeds with exit code 0
+    let result = pixi
+        .run(Args {
+            task: vec!["missing_task".to_string()],
+            workspace_config: ScriptWorkspaceConfig::default(),
+            fail_on_missing_files: false,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(result.exit_code, 0);
+
+    // With --fail-on-missing-files, execution fails
+    let err = pixi
+        .run(Args {
+            task: vec!["missing_task".to_string()],
+            workspace_config: ScriptWorkspaceConfig::default(),
+            fail_on_missing_files: true,
+            ..Default::default()
+        })
+        .await
+        .unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("no files matched the input or output globs")
+    );
+}
+
 // When adding another test with an environment variable, please choose a unique
 // name to avoid collisions

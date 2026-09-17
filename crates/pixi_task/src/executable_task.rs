@@ -29,6 +29,7 @@ use rattler_lock::LockFile;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
+use crate::error::MissingGlobsError;
 use crate::task_graph::{TaskGraph, TaskId};
 use crate::task_hash::{InputHashesError, NameHash, TaskCache, TaskHash};
 
@@ -345,8 +346,14 @@ impl<'p> ExecutableTask<'p> {
         Ok(Some(hash))
     }
 
-    /// Emit warnings for missing input/output globs given a computed hash.
-    pub fn warn_on_missing_globs(&self, post_hash: &TaskHash) {
+    /// Check for missing input/output globs given a computed hash.
+    /// If `fail_on_missing` is false, emits warnings.
+    /// If `fail_on_missing` is true, returns `Err(MissingGlobsError)` if any globs failed to match files.
+    pub fn check_missing_globs(
+        &self,
+        post_hash: &TaskHash,
+        fail_on_missing: bool,
+    ) -> Result<(), MissingGlobsError> {
         let (rendered_inputs, rendered_outputs) = match self.task().as_execute() {
             Ok(exe) => {
                 let context = self.render_context();
@@ -363,31 +370,56 @@ impl<'p> ExecutableTask<'p> {
             Err(_) => (None, None),
         };
 
-        // Outputs warning
-        if rendered_outputs.is_some()
-            && post_hash.outputs.is_none()
+        let mut missing_outputs_formatted = None;
+        // Outputs check
+        if post_hash.outputs.is_none()
             && let Some(globs) = rendered_outputs.as_ref()
+            && !globs.is_empty()
         {
-            tracing::warn!(
-                "No files matched the output globs for task '{}'",
-                self.name().unwrap_or_default()
-            );
             let formatted = globs.iter().map(|g| format!("`{}`", g.inner())).join(", ");
-            tracing::warn!("Output globs: {}", formatted);
+            if !fail_on_missing {
+                tracing::warn!(
+                    "No files matched the output globs for task '{}'",
+                    self.name().unwrap_or_default()
+                );
+                tracing::warn!("Output globs: {}", formatted);
+            }
+            missing_outputs_formatted = Some(formatted);
         }
 
-        // Inputs warning
-        if rendered_inputs.is_some()
-            && post_hash.inputs.is_none()
+        let mut missing_inputs_formatted = None;
+        // Inputs check
+        if post_hash.inputs.is_none()
             && let Some(globs) = rendered_inputs.as_ref()
+            && !globs.is_empty()
         {
-            tracing::warn!(
-                "No files matched the input globs for task '{}'",
-                self.name().unwrap_or_default()
-            );
             let formatted = globs.iter().map(|g| format!("`{}`", g.inner())).join(", ");
-            tracing::warn!("Input globs: {}", formatted);
+            if !fail_on_missing {
+                tracing::warn!(
+                    "No files matched the input globs for task '{}'",
+                    self.name().unwrap_or_default()
+                );
+                tracing::warn!("Input globs: {}", formatted);
+            }
+            missing_inputs_formatted = Some(formatted);
         }
+
+        if fail_on_missing
+            && (missing_inputs_formatted.is_some() || missing_outputs_formatted.is_some())
+        {
+            return Err(MissingGlobsError {
+                task_name: self.name().unwrap_or("default").to_string(),
+                missing_inputs: missing_inputs_formatted,
+                missing_outputs: missing_outputs_formatted,
+            });
+        }
+
+        Ok(())
+    }
+
+    /// Emit warnings for missing input/output globs given a computed hash.
+    pub fn warn_on_missing_globs(&self, post_hash: &TaskHash) {
+        let _ = self.check_missing_globs(post_hash, false);
     }
 
     /// We store the hashes of the inputs and the outputs of the task in a file
@@ -1046,6 +1078,52 @@ exit 0
                 .unwrap()
                 .to_string_lossy()
                 .to_string()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_check_missing_globs() {
+        let file_contents = r#"
+            [tasks]
+            test = { cmd = "echo hello", inputs = ["non_existent_input_*.txt"], outputs = ["non_existent_output_*.txt"] }
+        "#;
+        let workspace = workspace_with(file_contents);
+        let executable_task = task_from_snippet(&workspace, "test");
+        let post_hash = TaskHash {
+            command: Some("echo hello".into()),
+            inputs: None,
+            outputs: None,
+            environment: pixi_core::environment::EnvironmentHash::from_environment(
+                &executable_task.run_environment,
+                &std::collections::HashMap::new(),
+                &LockFile::default(),
+                &executable_task.platform,
+            ),
+        };
+
+        // When fail_on_missing is false, it returns Ok(()) and only logs warning
+        assert!(
+            executable_task
+                .check_missing_globs(&post_hash, false)
+                .is_ok()
+        );
+
+        // When fail_on_missing is true, it returns Err(MissingGlobsError)
+        let err = executable_task
+            .check_missing_globs(&post_hash, true)
+            .unwrap_err();
+        assert_eq!(err.task_name, "test");
+        assert!(err.missing_inputs.is_some());
+        assert!(err.missing_outputs.is_some());
+        assert!(
+            err.missing_inputs
+                .unwrap()
+                .contains("non_existent_input_*.txt")
+        );
+        assert!(
+            err.missing_outputs
+                .unwrap()
+                .contains("non_existent_output_*.txt")
         );
     }
 }
