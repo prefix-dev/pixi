@@ -1,3 +1,4 @@
+use fancy_display::FancyDisplay;
 use miette::IntoDiagnostic;
 use pixi_manifest::{
     EnvironmentName, FeatureName, HasWorkspaceManifest, PixiPlatform, PixiPlatformName,
@@ -39,6 +40,43 @@ pub async fn get_workspace_platform(
         .cloned()
 }
 
+/// Helper to update the lock file and environment prefix for platform commands.
+///
+/// The lock file is solved for every declared platform, but a prefix can only
+/// be materialised for the current system. When none of the environment's
+/// platforms match this machine, skip prefix installation.
+async fn update_platform_lock_file_and_prefix(
+    workspace: &Workspace,
+    progress: Option<std::sync::Arc<pixi_reporters::TopLevelProgress>>,
+    no_install: bool,
+    lock_file_usage: LockFileUsage,
+) -> miette::Result<()> {
+    let default_env = workspace.default_environment();
+    let no_install = no_install || default_env.best_declared_platform().is_none();
+    if no_install && default_env.best_declared_platform().is_none() {
+        tracing::info!(
+            "Skipping prefix installation: no platform supported by environment '{}' matches the current system",
+            default_env.name().fancy_display()
+        );
+    }
+
+    get_update_lock_file_and_prefix(
+        &default_env,
+        progress,
+        UpdateMode::Revalidate,
+        UpdateLockFileOptions {
+            lock_file_usage,
+            no_install,
+            max_concurrent_solves: workspace.config().max_concurrent_solves(),
+            ..Default::default()
+        },
+        ReinstallPackages::default(),
+        &InstallFilter::default(),
+    )
+    .await?;
+    Ok(())
+}
+
 /// Apply an edit to an existing workspace platform identified by `name`.
 /// Updates the lockfile and saves the manifest.
 pub async fn edit<I: Interface>(
@@ -51,18 +89,11 @@ pub async fn edit<I: Interface>(
 ) -> miette::Result<()> {
     workspace.manifest().edit_workspace_platform(&name, edit)?;
 
-    get_update_lock_file_and_prefix(
-        &workspace.workspace().default_environment(),
+    update_platform_lock_file_and_prefix(
+        workspace.workspace(),
         workspace.progress().cloned(),
-        UpdateMode::Revalidate,
-        UpdateLockFileOptions {
-            lock_file_usage,
-            no_install,
-            max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
-            ..Default::default()
-        },
-        ReinstallPackages::default(),
-        &InstallFilter::default(),
+        no_install,
+        lock_file_usage,
     )
     .await?;
     workspace.save().await.into_diagnostic()?;
@@ -85,18 +116,11 @@ pub async fn move_platform<I: Interface>(
         .manifest()
         .move_workspace_platform(&name, &target)?;
 
-    get_update_lock_file_and_prefix(
-        &workspace.workspace().default_environment(),
+    update_platform_lock_file_and_prefix(
+        workspace.workspace(),
         workspace.progress().cloned(),
-        UpdateMode::Revalidate,
-        UpdateLockFileOptions {
-            lock_file_usage,
-            no_install,
-            max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
-            ..Default::default()
-        },
-        ReinstallPackages::default(),
-        &InstallFilter::default(),
+        no_install,
+        lock_file_usage,
     )
     .await?;
     workspace.save().await.into_diagnostic()?;
@@ -177,18 +201,11 @@ pub async fn add_auto_detected<I: Interface>(
         .manifest()
         .move_workspace_platform(&name, &PlatformMove::ToTop)?;
 
-    get_update_lock_file_and_prefix(
-        &workspace.workspace().default_environment(),
+    update_platform_lock_file_and_prefix(
+        workspace.workspace(),
         workspace.progress().cloned(),
-        UpdateMode::Revalidate,
-        UpdateLockFileOptions {
-            lock_file_usage,
-            no_install,
-            max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
-            ..Default::default()
-        },
-        ReinstallPackages::default(),
-        &InstallFilter::default(),
+        no_install,
+        lock_file_usage,
     )
     .await?;
     workspace.save().await.into_diagnostic()?;
@@ -251,18 +268,11 @@ pub async fn add<I: Interface>(
         .add_platforms(platforms.iter(), &feature_name)?;
 
     // Try to update the lock file with the new channels
-    get_update_lock_file_and_prefix(
-        &workspace.workspace().default_environment(),
+    update_platform_lock_file_and_prefix(
+        workspace.workspace(),
         workspace.progress().cloned(),
-        UpdateMode::Revalidate,
-        UpdateLockFileOptions {
-            lock_file_usage,
-            no_install,
-            max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
-            ..Default::default()
-        },
-        ReinstallPackages::default(),
-        &InstallFilter::default(),
+        no_install,
+        lock_file_usage,
     )
     .await?;
     workspace.save().await.into_diagnostic()?;
@@ -307,18 +317,11 @@ pub async fn remove<I: Interface>(
         .manifest()
         .remove_platforms(platforms.iter(), &feature_name)?;
 
-    get_update_lock_file_and_prefix(
-        &workspace.workspace().default_environment(),
+    update_platform_lock_file_and_prefix(
+        workspace.workspace(),
         workspace.progress().cloned(),
-        UpdateMode::Revalidate,
-        UpdateLockFileOptions {
-            lock_file_usage,
-            no_install,
-            max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
-            ..Default::default()
-        },
-        ReinstallPackages::default(),
-        &InstallFilter::default(),
+        no_install,
+        lock_file_usage,
     )
     .await?;
     workspace.save().await.into_diagnostic()?;
@@ -338,4 +341,122 @@ pub async fn remove<I: Interface>(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use pixi_core::{Workspace, environment::LockFileUsage};
+    use pixi_manifest::{FeatureName, PixiPlatform};
+    use rattler_conda_types::Platform;
+
+    use super::*;
+
+    struct MockInterface;
+
+    impl Interface for MockInterface {
+        async fn is_cli(&self) -> bool {
+            false
+        }
+        async fn confirm(&self, _msg: &str) -> miette::Result<bool> {
+            Ok(true)
+        }
+        async fn error(&self, _msg: &str) {}
+        async fn info(&self, _msg: &str) {}
+        async fn success(&self, _msg: &str) {}
+        async fn warning(&self, _msg: &str) {}
+    }
+
+    fn workspace_from(toml: &str) -> (tempfile::TempDir, Workspace) {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp.path().join("pixi.toml");
+        fs_err::write(&path, toml).unwrap();
+        let ws = Workspace::from_path(&path).expect("failed to load workspace");
+        (tmp, ws)
+    }
+
+    #[tokio::test]
+    async fn test_remove_host_platform_without_no_install() {
+        let current_platform = Platform::current();
+        let host = current_platform.as_str();
+        let (_tmp, workspace) = workspace_from(&format!(
+            r#"
+[workspace]
+name = "test-remove-host"
+channels = []
+platforms = ["{host}"]
+"#
+        ));
+        let platform = PixiPlatform::from_subdir(current_platform);
+        let result = remove(
+            &MockInterface,
+            workspace.modify().unwrap(),
+            vec![platform],
+            false,
+            FeatureName::Default,
+            LockFileUsage::Update,
+        )
+        .await;
+
+        assert!(
+            result.is_ok(),
+            "remove host platform failed: {:?}",
+            result.err()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_remove_sole_foreign_platform_without_no_install() {
+        let (_tmp, workspace) = workspace_from(
+            r#"
+[workspace]
+name = "test-platform-remove"
+channels = []
+platforms = ["win-64"]
+"#,
+        );
+        let platform = PixiPlatform::from_subdir(Platform::Win64);
+        let result = remove(
+            &MockInterface,
+            workspace.modify().unwrap(),
+            vec![platform],
+            false,
+            FeatureName::Default,
+            LockFileUsage::Update,
+        )
+        .await;
+
+        assert!(
+            result.is_ok(),
+            "remove foreign platform failed: {:?}",
+            result.err()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_add_foreign_platform_without_no_install() {
+        let (_tmp, workspace) = workspace_from(
+            r#"
+[workspace]
+name = "test-platform-add"
+channels = []
+platforms = ["linux-64"]
+"#,
+        );
+        let platform = PixiPlatform::from_subdir(Platform::Win64);
+        let result = add(
+            &MockInterface,
+            workspace.modify().unwrap(),
+            vec![platform],
+            false,
+            FeatureName::Default,
+            LockFileUsage::Update,
+        )
+        .await;
+
+        assert!(
+            result.is_ok(),
+            "add foreign platform failed: {:?}",
+            result.err()
+        );
+    }
 }

@@ -331,6 +331,17 @@ For the `stub` package, output should be
 
 ---
 
+## Source build dependencies
+
+The rules above are about one package. When a workspace package depends on another *source* package of the workspace, the platform that dependency is built for depends on the section it is listed in:
+
+- A source package under `host-dependencies` or `run-dependencies` is built for the target platform, like the package that depends on it.
+- A source package under `build-dependencies` runs during the build, so it is built natively for the build platform. Its own build and host environments are solved for the build platform as well.
+
+A package that is both published in its own right and a build dependency of another published package is therefore built twice during a cross-compiling `pixi publish`: once for the target platform and once for the build platform. That is expected. A backend that lists a dependency in both the build and the host section, as [`pixi-build-ros`](backends/pixi-build-ros.md) does for a `<depend>` in `package.xml`, triggers this for every such workspace sibling.
+
+---
+
 ## Summary
 
 | Issue | Solution |

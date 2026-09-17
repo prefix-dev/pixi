@@ -5,6 +5,7 @@ use pixi_record::VariantValue;
 use pixi_spec::{SourceLocationSpec, SpecConversionError};
 use rattler_conda_types::{
     ChannelUrl, ConvertSubdirError, InvalidPackageNameError, PackageName, ParseChannelError,
+    Platform,
 };
 use rattler_repodata_gateway::RunExportExtractorError;
 use thiserror::Error;
@@ -46,6 +47,10 @@ pub enum SourceBuildError {
 
     #[error("failed to install the host environment")]
     InstallHostEnvironment(#[source] Arc<InstallPixiEnvironmentError>),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    PrefixPlatformMismatch(#[from] PrefixPlatformMismatchError),
 
     #[error(
         "The build backend does not provide an output matching '{name}' with variants: {}.",
@@ -92,6 +97,88 @@ pub enum SourceBuildError {
 
     #[error(transparent)]
     GlobSet(Arc<pixi_glob::GlobSetError>),
+}
+
+/// The two prefixes a source build installs its resolved dependencies
+/// into.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceBuildPrefixKind {
+    /// Holds the build dependencies; runs on the build platform.
+    Build,
+    /// Holds the host dependencies; targets the host platform.
+    Host,
+}
+
+impl std::fmt::Display for SourceBuildPrefixKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SourceBuildPrefixKind::Build => write!(f, "build"),
+            SourceBuildPrefixKind::Host => write!(f, "host"),
+        }
+    }
+}
+
+/// Where a record that is installed into a build or host prefix came from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PrefixRecordOrigin {
+    /// Pixi's solver picked the record for the environment.
+    Solved,
+    /// A nested source build produced the record for the environment.
+    Built,
+}
+
+/// A record resolved for one platform was about to be installed into a
+/// build or host prefix of another platform.
+///
+/// The build and host environments of a source record are solved
+/// separately from the prefixes they are later installed into. When the
+/// two disagree, the prefix ends up with binaries that cannot run (or be
+/// linked against) on the platform the build backend is told about, which
+/// otherwise surfaces as an opaque failure deep inside the build script.
+#[derive(Debug, Clone, Error)]
+#[error(
+    "cannot install '{}' ({subdir}) into the {kind} environment of '{}', which is for '{expected}'",
+    package.as_normalized(),
+    source_package.as_normalized()
+)]
+pub struct PrefixPlatformMismatchError {
+    /// The prefix the record was about to be installed into.
+    pub kind: SourceBuildPrefixKind,
+    /// The source package whose build or host environment the prefix is.
+    pub source_package: PackageName,
+    /// The record whose subdir does not match.
+    pub package: PackageName,
+    /// Where the record came from.
+    pub origin: PrefixRecordOrigin,
+    /// The subdir the record was resolved for.
+    pub subdir: String,
+    /// The platform of the prefix.
+    pub expected: Platform,
+}
+
+impl Diagnostic for PrefixPlatformMismatchError {
+    fn help<'a>(&'a self) -> Option<Box<dyn std::fmt::Display + 'a>> {
+        let package = self.package.as_normalized();
+        let help = match self.origin {
+            PrefixRecordOrigin::Solved => format!(
+                "'{package}' was picked for '{}' while pixi solved the {} environment of '{}' for \
+                 '{}'; this is a bug in pixi's cross-compilation platform tracking, please report \
+                 it at https://github.com/prefix-dev/pixi/issues together with the output of \
+                 `pixi -vv <command>`",
+                self.subdir,
+                self.kind,
+                self.source_package.as_normalized(),
+                self.expected
+            ),
+            PrefixRecordOrigin::Built => format!(
+                "'{package}' is a source dependency that was built for this environment; its build \
+                 backend was asked to build for '{}' but produced a '{}' package, please report \
+                 this to the maintainers of that backend",
+                self.expected, self.subdir
+            ),
+        };
+        Some(Box::new(help))
+    }
 }
 
 impl From<InvalidPackageNameError> for SourceBuildError {

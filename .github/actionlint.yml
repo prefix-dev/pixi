@@ -5,6 +5,7 @@ self-hosted-runner:
     - windows_arm64_2025_large
     - windows_x64_2025_large
     - namespace-profile-*
+    - nscloud-*
 
 paths:
   .github/workflows/release.yml:
