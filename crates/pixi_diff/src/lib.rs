@@ -8,7 +8,7 @@ use indexmap::IndexMap;
 use itertools::{Either, Itertools};
 use pixi_consts::consts;
 use pixi_manifest::{EnvironmentName, FeaturesExt, PixiPlatformName};
-use rattler_lock::{CondaPackageData, LockFile, LockedPackage, PlatformName};
+use rattler_lock::{CondaPackageData, LockFile, LockedPackage, PlatformName, PypiPackageData};
 use serde::Serialize;
 use serde_json::Value;
 use tabwriter::TabWriter;
@@ -31,6 +31,53 @@ impl PackagesDiff {
 /// Contains the changes between two lock files.
 pub struct LockFileDiff {
     pub environment: IndexMap<String, IndexMap<PlatformName, PackagesDiff>>,
+}
+
+/// Returns true if two Conda packages differ in version, build, location, archive or hash.
+fn conda_package_changed(previous: &CondaPackageData, current: &CondaPackageData) -> bool {
+    match (previous, current) {
+        (CondaPackageData::Binary(prev), CondaPackageData::Binary(curr)) => {
+            prev.package_record.version != curr.package_record.version
+                || prev.package_record.build != curr.package_record.build
+                || prev.package_record.build_number != curr.package_record.build_number
+                || previous.location() != current.location()
+                || prev.file_name != curr.file_name
+                || prev.channel != curr.channel
+                || (prev.package_record.sha256.is_some()
+                    && curr.package_record.sha256.is_some()
+                    && prev.package_record.sha256 != curr.package_record.sha256)
+                || (prev.package_record.md5.is_some()
+                    && curr.package_record.md5.is_some()
+                    && prev.package_record.md5 != curr.package_record.md5)
+        }
+        (CondaPackageData::Source(prev), CondaPackageData::Source(curr)) => {
+            previous.location() != current.location()
+                || prev.identifier_hash != curr.identifier_hash
+                || prev.package_build_source != curr.package_build_source
+        }
+        _ => true,
+    }
+}
+
+/// Returns true if two PyPI packages differ in version, location, hash, or dependencies.
+fn pypi_package_changed(previous: &PypiPackageData, current: &PypiPackageData) -> bool {
+    if previous.version_string() != current.version_string() {
+        return true;
+    }
+    if previous.location() != current.location() {
+        return true;
+    }
+    match (previous, current) {
+        (PypiPackageData::Distribution(prev), PypiPackageData::Distribution(curr)) => {
+            prev.hash != curr.hash
+                || prev.requires_dist != curr.requires_dist
+                || prev.requires_python != curr.requires_python
+        }
+        (PypiPackageData::Source(prev), PypiPackageData::Source(curr)) => {
+            prev.requires_dist != curr.requires_dist || prev.requires_python != curr.requires_python
+        }
+        _ => true,
+    }
 }
 
 impl LockFileDiff {
@@ -78,7 +125,7 @@ impl LockFileDiff {
                         LockedPackage::Conda(data) => {
                             let name = data.name();
                             match previous_conda_packages.remove(name) {
-                                Some(previous) if previous.location() != data.location() => {
+                                Some(previous) if conda_package_changed(previous, data) => {
                                     diff.changed.push((
                                         LockedPackage::Conda(previous.clone()),
                                         LockedPackage::Conda(data.clone()),
@@ -94,7 +141,7 @@ impl LockFileDiff {
                             let name = data.name();
                             match previous_pypi_packages.remove(name) {
                                 Some(previous_data)
-                                    if previous_data.location() != data.location() =>
+                                    if pypi_package_changed(previous_data, data) =>
                                 {
                                     diff.changed.push((
                                         LockedPackage::Pypi(previous_data.clone()),
@@ -388,14 +435,36 @@ impl LockFileDiff {
                     (LockedPackage::Pypi(previous), LockedPackage::Pypi(current)) => {
                         let prev_ver = previous.version_string();
                         let curr_ver = current.version_string();
-                        format!(
-                            "{} {} {}\t{}\t->\t{}",
-                            console::style("~").yellow(),
-                            consts::PypiEmoji,
-                            name,
-                            choose_style(&prev_ver, &curr_ver),
-                            choose_style(&curr_ver, &prev_ver),
-                        )
+                        if prev_ver != curr_ver {
+                            format!(
+                                "{} {} {}\t{}\t->\t{}",
+                                console::style("~").yellow(),
+                                consts::PypiEmoji,
+                                name,
+                                choose_style(&prev_ver, &curr_ver),
+                                choose_style(&curr_ver, &prev_ver),
+                            )
+                        } else if previous.location() != current.location() {
+                            let prev_loc = previous.location().to_string();
+                            let curr_loc = current.location().to_string();
+                            format!(
+                                "{} {} {}\t@ {}\t->\t@ {}",
+                                console::style("~").yellow(),
+                                consts::PypiEmoji,
+                                name,
+                                choose_style(&prev_loc, &curr_loc),
+                                choose_style(&curr_loc, &prev_loc),
+                            )
+                        } else {
+                            format!(
+                                "{} {} {}\t{}\t->\t{}",
+                                console::style("~").yellow(),
+                                consts::PypiEmoji,
+                                name,
+                                choose_style(&prev_ver, &curr_ver),
+                                choose_style(&curr_ver, &prev_ver),
+                            )
+                        }
                     }
                     _ => unreachable!(),
                 };
@@ -641,6 +710,150 @@ mod tests {
             platforms.contains_key(&PlatformName::try_from("linux").unwrap()),
             "the foreign `linux` platform should be preserved, got {:?}",
             platforms.keys().collect::<Vec<_>>()
+        );
+    }
+
+    fn lock_file_with_pypi_package(version: &str, location: UrlOrPath) -> LockFile {
+        use rattler_lock::{PypiDistributionData, PypiPackageData};
+
+        let mut builder = LockFile::builder()
+            .with_platforms(vec![PlatformData {
+                name: PlatformName::try_from("osx-arm64").unwrap(),
+                subdir: Platform::OsxArm64,
+                virtual_packages: vec![],
+            }])
+            .unwrap();
+        builder.set_channels("default", Vec::<rattler_lock::Channel>::new());
+        builder.set_options("default", rattler_lock::SolveOptions::default());
+        builder
+            .add_pypi_package(
+                "default",
+                "osx-arm64",
+                PypiPackageData::Distribution(Box::new(PypiDistributionData {
+                    name: "my-pkg".parse().unwrap(),
+                    version: version.parse().unwrap(),
+                    location: location.into(),
+                    hash: None,
+                    index_url: None,
+                    requires_dist: vec![],
+                    requires_python: None,
+                })),
+            )
+            .unwrap();
+        builder.finish()
+    }
+
+    /// When a PyPI package's version is updated (e.g. bump version of path or
+    /// editable dependency), the location remains unchanged, but the lock file
+    /// diff should detect the package as changed, not up-to-date.
+    #[test]
+    fn diff_detects_changed_pypi_package_with_same_location() {
+        let location = UrlOrPath::Path(".".into());
+        let previous = lock_file_with_pypi_package("0.1.0", location.clone());
+        let current = lock_file_with_pypi_package("0.82.0", location);
+
+        let diff = LockFileDiff::from_lock_files(&previous, &current);
+        assert!(
+            !diff.is_empty(),
+            "diff should not be empty when version changed"
+        );
+
+        let env_diff = diff
+            .environment
+            .get("default")
+            .expect("default environment diff should exist");
+        let platform_diff = env_diff
+            .get(&PlatformName::try_from("osx-arm64").unwrap())
+            .expect("platform diff should exist");
+
+        assert_eq!(platform_diff.changed.len(), 1);
+        assert!(platform_diff.added.is_empty());
+        assert!(platform_diff.removed.is_empty());
+
+        let (prev, curr) = &platform_diff.changed[0];
+        assert_eq!(prev.name(), "my-pkg");
+        assert_eq!(curr.name(), "my-pkg");
+        if let (
+            rattler_lock::LockedPackage::Pypi(prev_pypi),
+            rattler_lock::LockedPackage::Pypi(curr_pypi),
+        ) = (prev, curr)
+        {
+            assert_eq!(prev_pypi.version_string(), "0.1.0");
+            assert_eq!(curr_pypi.version_string(), "0.82.0");
+        } else {
+            panic!("expected PyPI packages in changed diff");
+        }
+    }
+
+    /// When a Conda package's version or build changes at the same location,
+    /// the diff should recognize it as changed.
+    #[test]
+    fn diff_detects_changed_conda_package_with_same_location() {
+        fn conda_package_with_ver_build(ver: &str, build: &str) -> CondaPackageData {
+            CondaPackageData::Binary(Box::new(CondaBinaryData {
+                package_record: PackageRecord::new(
+                    PackageName::new_unchecked("foo"),
+                    Version::from_str(ver).unwrap(),
+                    build.to_string(),
+                ),
+                location: UrlOrPath::Url(Url::parse("https://example.com/channel").unwrap()),
+                file_name: DistArchiveIdentifier::try_from_filename(&format!(
+                    "foo-{ver}-{build}.conda"
+                ))
+                .unwrap(),
+                channel: None,
+            }))
+        }
+
+        let make_lock = |pkg: CondaPackageData| {
+            let mut builder = LockFile::builder()
+                .with_platforms(vec![PlatformData {
+                    name: PlatformName::try_from("osx-arm64").unwrap(),
+                    subdir: Platform::OsxArm64,
+                    virtual_packages: vec![],
+                }])
+                .unwrap();
+            builder.set_channels("default", Vec::<rattler_lock::Channel>::new());
+            builder.set_options("default", rattler_lock::SolveOptions::default());
+            builder
+                .add_conda_package("default", "osx-arm64", pkg)
+                .unwrap();
+            builder.finish()
+        };
+
+        let previous = make_lock(conda_package_with_ver_build("1.0", "0"));
+        let current = make_lock(conda_package_with_ver_build("2.0", "0"));
+
+        let diff = LockFileDiff::from_lock_files(&previous, &current);
+        assert!(
+            !diff.is_empty(),
+            "diff should not be empty when version changed"
+        );
+
+        let env_diff = diff
+            .environment
+            .get("default")
+            .expect("default environment diff should exist");
+        let platform_diff = env_diff
+            .get(&PlatformName::try_from("osx-arm64").unwrap())
+            .expect("platform diff should exist");
+
+        assert_eq!(platform_diff.changed.len(), 1);
+        assert!(platform_diff.added.is_empty());
+        assert!(platform_diff.removed.is_empty());
+    }
+
+    /// When packages are identical, the diff should be empty.
+    #[test]
+    fn diff_empty_when_packages_identical() {
+        let location = UrlOrPath::Path(".".into());
+        let lock1 = lock_file_with_pypi_package("0.1.0", location.clone());
+        let lock2 = lock_file_with_pypi_package("0.1.0", location);
+
+        let diff = LockFileDiff::from_lock_files(&lock1, &lock2);
+        assert!(
+            diff.is_empty(),
+            "diff should be empty when packages are identical"
         );
     }
 }
