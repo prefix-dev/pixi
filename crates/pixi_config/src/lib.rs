@@ -4247,6 +4247,26 @@ UNUSED = "unused"
     }
 
     #[test]
+    fn cache_dir_for_always_redirects_shared_kinds_on_netfs() {
+        let _guard = NETFS_ENV_LOCK.lock().unwrap();
+        let _force = ScopedEnv::set("PIXI_FORCE_NETFS_REDIRECT", "1");
+        let _cache = ScopedEnv::unset("PIXI_CACHE_DIR");
+        let _rattler = ScopedEnv::unset("RATTLER_CACHE_DIR");
+        let _disable = ScopedEnv::unset("PIXI_DISABLE_NETFS_REDIRECT");
+
+        // With netfs-redirect = "always", even CondaPackages (which prefers
+        // shared storage in Auto mode) must be redirected to node-local scratch.
+        let mut config = Config::default();
+        config.cache.netfs_redirect = NetfsRedirect::Always;
+        let got = config.cache_dir_for(CacheKind::CondaPackages).unwrap();
+        assert!(
+            got.starts_with(node_local_scratch_dir()),
+            "expected pkgs to be under node-local scratch with netfs-redirect=always, got: {}",
+            got.display()
+        );
+    }
+
+    #[test]
     fn cache_dir_for_passes_through_when_local() {
         let _guard = NETFS_ENV_LOCK.lock().unwrap();
         let _force = ScopedEnv::unset("PIXI_FORCE_NETFS_REDIRECT");

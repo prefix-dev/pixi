@@ -25,7 +25,8 @@ use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
     BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher,
     CommandDispatcherError as DispatcherError, ComputeResultExt, EnvironmentRef, EnvironmentSpec,
-    EphemeralEnv, InlinePackage, InstallPixiEnvironmentSpec, Limits, SourceCheckoutExt,
+    EphemeralEnv, InlinePackage, InstallPixiEnvironmentSpec, Limits, PackagesDir,
+    SourceCheckoutExt,
     keys::{SolvePixiEnvironmentKey, SolvePixiEnvironmentSpec},
 };
 use pixi_config::{Config, RunPostLinkScripts, default_channel_config, pixi_home};
@@ -1663,8 +1664,20 @@ impl Project {
             // workspace-scoped caches (source builds and their metadata) have
             // no workspace to live in here and stay under `bld`.
             let build_dir = cache_dir.join(BUILD_DIR).into_assume_dir();
-            let cache_dirs =
-                pixi_command_dispatcher::CacheDirs::new(cache_dir).with_workspace(build_dir);
+
+            // Resolve the conda packages (pkgs) directory through the full
+            // cache-kind resolution path so that netfs-redirect is honoured.
+            let conda_packages_dir = AbsPathBuf::new(
+                self.config
+                    .cache_dir_for(pixi_config::CacheKind::CondaPackages)
+                    .map_err(|e| CommandDispatcherError::CacheDirectory(e.into()))?,
+            )
+            .expect("conda packages cache dir is not absolute")
+            .into_assume_dir();
+
+            let cache_dirs = pixi_command_dispatcher::CacheDirs::new(cache_dir)
+                .with_workspace(build_dir)
+                .with_override::<PackagesDir>(conda_packages_dir);
 
             let root_dir = AbsPathBuf::new(self.root.clone())
                 .expect("root dir is not absolute")
