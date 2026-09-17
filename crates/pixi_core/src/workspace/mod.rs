@@ -2433,7 +2433,7 @@ print("hello")
                 .iter()
                 .map(PixiPlatform::subdir)
                 .collect::<Vec<_>>(),
-            [Platform::current()]
+            [Platform::current().expect("host platform")]
         );
     }
 

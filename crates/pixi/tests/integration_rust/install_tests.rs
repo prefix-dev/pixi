@@ -65,7 +65,7 @@ async fn install_run_python() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         "python==3.11.0"
     ));
 
@@ -138,12 +138,12 @@ async fn test_incremental_lock_file() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         "foo ==1"
     ));
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         "bar ==1"
     ));
 
@@ -167,7 +167,7 @@ async fn test_incremental_lock_file() {
     assert!(
         lock.contains_match_spec(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "foo ==2"
         ),
         "expected `foo` to be on version 2 because we changed the requirement"
@@ -175,7 +175,7 @@ async fn test_incremental_lock_file() {
     assert!(
         lock.contains_match_spec(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "bar ==1"
         ),
         "expected `bar` to remain locked to version 1."
@@ -237,7 +237,7 @@ async fn install_locked_with_config() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         python_version
     ));
 
@@ -249,7 +249,7 @@ async fn install_locked_with_config() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         "python==3.9.0"
     ));
 
@@ -312,7 +312,7 @@ async fn install_frozen() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         "python==3.9.1"
     ));
 
@@ -378,7 +378,7 @@ async fn install_frozen_skip() {
 
     // Create a project with a local python dependency 'no-build-editable'
     // and a local conda dependency 'simple-package'
-    let current_platform = Platform::current();
+    let current_platform = Platform::current().expect("host platform");
     let manifest = format!(
         r#"
         [workspace]
@@ -464,7 +464,7 @@ async fn pypi_reinstall_python() {
         .unwrap();
     assert!(pixi.lock_file().await.unwrap().contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         "python==3.11"
     ));
 
@@ -486,7 +486,7 @@ async fn pypi_reinstall_python() {
     pixi.add("python==3.12").with_install(true).await.unwrap();
     assert!(pixi.lock_file().await.unwrap().contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         "python==3.12"
     ));
 
@@ -558,7 +558,7 @@ async fn test_channels_changed() {
     package_database_b.add_package(Package::build("bar", "1").finish());
     let channel_b = package_database_b.into_channel().await.unwrap();
 
-    let platform = Platform::current();
+    let platform = Platform::current().expect("host platform");
     let pixi = PixiControl::from_manifest(&format!(
         r#"
     [project]
@@ -579,7 +579,7 @@ async fn test_channels_changed() {
     assert!(lock_file.contains_match_spec(consts::DEFAULT_ENVIRONMENT_NAME, platform, "bar ==2"));
 
     // Switch the channel around
-    let platform = Platform::current();
+    let platform = Platform::current().expect("host platform");
     pixi.update_manifest(&format!(
         r#"
     [project]
@@ -639,7 +639,7 @@ async fn minimal_lock_file_update_pypi() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_pep508_requirement(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         pep508_rs::Requirement::from_str("click==7.1.2").unwrap()
     ));
 
@@ -656,7 +656,7 @@ async fn minimal_lock_file_update_pypi() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_pep508_requirement(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         pep508_rs::Requirement::from_str("click==7.1.2").unwrap()
     ));
 }
@@ -867,7 +867,7 @@ async fn test_v6_local_archive_path_upgrade() {
 async fn test_no_build_isolation() {
     setup_tracing();
 
-    let current_platform = Platform::current();
+    let current_platform = Platform::current().expect("host platform");
     let setup_py = r#"
 from setuptools import setup, find_packages
 # custom import
@@ -961,7 +961,7 @@ setup(
 async fn test_no_build_isolation_with_dependencies() {
     setup_tracing();
 
-    let current_platform = Platform::current();
+    let current_platform = Platform::current().expect("host platform");
 
     // Create pyproject.toml for package-tdjager (will be installed with build isolation)
     let pyproject_toml_a = r#"
@@ -1108,7 +1108,7 @@ setup(
 async fn test_setuptools_override_failure() {
     setup_tracing();
 
-    let current_platform = Platform::current();
+    let current_platform = Platform::current().expect("host platform");
     let workspace_root = PathBuf::from(env!("CARGO_WORKSPACE_DIR"));
     let pkg_source = workspace_root.join("tests/data/setuptools-override-repro");
     let pkg_path = pkg_source.to_str().unwrap().replace('\\', "/");
@@ -1168,7 +1168,7 @@ async fn test_many_linux_wheel_tag() {
     let pixi = PixiControl::new().unwrap().with_network_access();
     #[cfg(not(target_os = "linux"))]
     pixi.init_with_platforms(vec![
-        Platform::current().to_string(),
+        Platform::current().expect("host platform").to_string(),
         "linux-64".to_string(),
     ])
     .await
@@ -1265,7 +1265,7 @@ async fn pypi_prefix_is_not_created_when_whl() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_pep508_requirement(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         pep508_rs::Requirement::from_str("boltons==24.1.0").unwrap()
     ));
 
@@ -1376,7 +1376,7 @@ async fn conda_pypi_override_correct_per_platform() {
 async fn test_multiple_prefix_update() {
     setup_tracing();
 
-    let current_platform = Platform::current();
+    let current_platform = Platform::current().expect("host platform");
     let virtual_packages = VirtualPackages::detect(&VirtualPackageOverrides::default(), None)
         .unwrap()
         .into_generic_virtual_packages()
@@ -1583,7 +1583,7 @@ async fn install_s3() {
     [dependencies]
     my-webserver = {{ version = "0.1.0", build = "pyh4616a5c_0" }}
     "#,
-        platform = Platform::current(),
+        platform = Platform::current().expect("host platform"),
     );
 
     let pixi = PixiControl::from_manifest(&manifest)
@@ -1643,7 +1643,7 @@ async fn test_exclude_newer() {
     foo = "*"
     "#,
         channel_a = channel.url(),
-        platform = Platform::current()
+        platform = Platform::current().expect("host platform")
     ))
     .unwrap();
 
@@ -1652,7 +1652,7 @@ async fn test_exclude_newer() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         "foo ==2"
     ));
 
@@ -1669,7 +1669,7 @@ async fn test_exclude_newer() {
     foo = "*"
     "#,
         channel_a = channel.url(),
-        platform = Platform::current()
+        platform = Platform::current().expect("host platform")
     ))
     .unwrap();
 
@@ -1678,7 +1678,7 @@ async fn test_exclude_newer() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         "foo ==1"
     ));
 }
@@ -1715,7 +1715,7 @@ async fn test_exclude_newer_per_package_dependency_override() {
     foo = "0d"
     "#,
         channel = channel.url(),
-        platform = Platform::current()
+        platform = Platform::current().expect("host platform")
     ))
     .unwrap();
 
@@ -1724,7 +1724,7 @@ async fn test_exclude_newer_per_package_dependency_override() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         "foo ==2"
     ));
 }
@@ -1753,7 +1753,7 @@ async fn test_exclude_newer_url_channel_override() {
     foo = "*"
     "#,
         channel = channel.url(),
-        platform = Platform::current()
+        platform = Platform::current().expect("host platform")
     ))
     .unwrap();
 
@@ -1762,7 +1762,7 @@ async fn test_exclude_newer_url_channel_override() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         "foo ==2"
     ));
 }
@@ -1805,7 +1805,7 @@ async fn test_exclude_newer_per_package_constraint_override() {
     bar = "0d"
     "#,
         channel = channel.url(),
-        platform = Platform::current()
+        platform = Platform::current().expect("host platform")
     ))
     .unwrap();
 
@@ -1814,7 +1814,7 @@ async fn test_exclude_newer_per_package_constraint_override() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         "bar ==2"
     ));
 }
@@ -1841,7 +1841,7 @@ async fn test_exclude_newer_pypi() {
     [pypi-dependencies]
     boltons = "*"
     "#,
-        platform = Platform::current()
+        platform = Platform::current().expect("host platform")
     ))
     .unwrap()
     .with_network_access();
@@ -1851,7 +1851,7 @@ async fn test_exclude_newer_pypi() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_pep508_requirement(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         "boltons ==20.2.1".parse().unwrap()
     ));
 }
@@ -1877,7 +1877,7 @@ async fn test_uv_skip_wheel_filename_check() {
     )
     .unwrap();
 
-    let current_platform = Platform::current();
+    let current_platform = Platform::current().expect("host platform");
     let wheel_path = canonicalize(
         wheels_dir
             .path()
@@ -2011,7 +2011,7 @@ async fn test_uv_skip_wheel_filename_check() {
 async fn install_all_skips_unsupported_environments() {
     setup_tracing();
 
-    let current_platform = Platform::current();
+    let current_platform = Platform::current().expect("host platform");
     // Pick a platform from a different OS family so that no `best_declared_platform`
     // fallback (e.g. osx-arm64 -> osx-64) accidentally rescues the env.
     let other_platform = if current_platform.is_linux() {

@@ -225,7 +225,7 @@ mod tests {
     #[tokio::test]
     async fn test_shell_hook_unix() {
         let default_shell = rattler_shell::shell::ShellEnum::default();
-        let path_var_name = default_shell.path_var(&Platform::current());
+        let path_var_name = default_shell.path_var(&Platform::current().expect("host platform"));
         let project = WorkspaceLocator::default().locate().unwrap();
         let environment = project.default_environment();
 
@@ -282,7 +282,7 @@ mod tests {
     #[tokio::test]
     async fn test_shell_hook_windows() {
         let default_shell = rattler_shell::shell::ShellEnum::default();
-        let path_var_name = default_shell.path_var(&Platform::current());
+        let path_var_name = default_shell.path_var(&Platform::current().expect("host platform"));
         let project = WorkspaceLocator::default().locate().unwrap();
         let environment = project.default_environment();
 

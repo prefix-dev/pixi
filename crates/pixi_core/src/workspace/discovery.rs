@@ -583,7 +583,7 @@ mod test {
                 .iter()
                 .map(pixi_manifest::PixiPlatform::subdir)
                 .collect::<Vec<_>>(),
-            [Platform::current()]
+            [Platform::current().expect("host platform")]
         );
     }
 

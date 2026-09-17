@@ -1623,7 +1623,7 @@ impl Config {
         // HACK: Use win-64 as the default tool platform if currently running on
         // win-arm64. This is a workaround for the fact that we don't have a
         // good win-arm64 toolchain yet.
-        if Platform::current() == Platform::WinArm64 {
+        if Platform::current().expect("host platform") == Platform::WinArm64 {
             config.tool_platform = Some(Platform::Win64);
         }
 
@@ -2198,7 +2198,8 @@ impl Config {
 
     /// The platform to use to install tools.
     pub fn tool_platform(&self) -> Platform {
-        self.tool_platform.unwrap_or(Platform::current())
+        self.tool_platform
+            .unwrap_or(Platform::current().expect("host platform"))
     }
 
     pub fn get_proxies(&self) -> reqwest::Result<Vec<Proxy>> {

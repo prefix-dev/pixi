@@ -102,7 +102,7 @@ impl Default for SolveCondaEnvironmentSpec {
             source_repodata: vec![],
             binary_repodata: vec![],
             installed: vec![],
-            platform: Platform::current(),
+            platform: Platform::current().expect("host platform"),
             channels: vec![],
             virtual_packages: vec![],
             strategy: SolveStrategy::default(),

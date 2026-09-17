@@ -36,9 +36,9 @@ impl Default for BuildEnvironment {
                 .collect();
 
         Self {
-            host_platform: Platform::current(),
+            host_platform: Platform::current().expect("host platform"),
             host_virtual_packages: virtual_packages.clone(),
-            build_platform: Platform::current(),
+            build_platform: Platform::current().expect("host platform"),
             build_virtual_packages: virtual_packages,
         }
     }
@@ -51,7 +51,7 @@ impl BuildEnvironment {
         Ok(Self {
             host_platform: target_platform,
             host_virtual_packages: vec![],
-            build_platform: Platform::current(),
+            build_platform: Platform::current().expect("host platform"),
             build_virtual_packages: VirtualPackages::detect(
                 &VirtualPackageOverrides::default(),
                 None,

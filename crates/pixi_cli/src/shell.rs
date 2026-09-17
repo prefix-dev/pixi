@@ -74,7 +74,8 @@ fn start_powershell(
         .tempfile()
         .into_diagnostic()?;
 
-    let mut shell_script = ShellScript::new(pwsh.clone(), Platform::current());
+    let mut shell_script =
+        ShellScript::new(pwsh.clone(), Platform::current().expect("host platform"));
     for (key, value) in env {
         shell_script.set_env_var(key, value).into_diagnostic()?;
     }
@@ -115,7 +116,7 @@ fn start_cmdexe(
         .into_diagnostic()?;
 
     // TODO: Should we just execute the activation scripts directly for cmd.exe?
-    let mut shell_script = ShellScript::new(cmdexe, Platform::current());
+    let mut shell_script = ShellScript::new(cmdexe, Platform::current().expect("host platform"));
     for (key, value) in env {
         shell_script.set_env_var(key, value).into_diagnostic()?;
     }
@@ -157,7 +158,7 @@ fn start_winbash(
         .tempfile()
         .into_diagnostic()?;
 
-    let mut shell_script = ShellScript::new(bash, Platform::current());
+    let mut shell_script = ShellScript::new(bash, Platform::current().expect("host platform"));
     for (key, value) in env {
         if key == "PATH" || key == "Path" {
             // For Git Bash on Windows, the PATH must be formatted as POSIX paths according
@@ -224,7 +225,7 @@ async fn start_unix_shell<T: Shell + Copy + 'static>(
         .tempfile()
         .into_diagnostic()?;
 
-    let mut shell_script = ShellScript::new(shell, Platform::current());
+    let mut shell_script = ShellScript::new(shell, Platform::current().expect("host platform"));
     for (key, value) in env {
         shell_script.set_env_var(key, value).into_diagnostic()?;
     }
@@ -292,7 +293,7 @@ async fn start_nu_shell(
         .tempfile()
         .into_diagnostic()?;
 
-    let mut shell_script = ShellScript::new(shell, Platform::current());
+    let mut shell_script = ShellScript::new(shell, Platform::current().expect("host platform"));
     for (key, value) in env {
         if key == "PATH" {
             // split path with PATHSEP

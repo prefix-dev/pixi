@@ -581,7 +581,8 @@ mod tests {
 
         let test_env = project.environment("test").unwrap();
         let env = test_env.get_metadata_env();
-        let current = pixi_manifest::PixiPlatform::from_subdir(Platform::current());
+        let current =
+            pixi_manifest::PixiPlatform::from_subdir(Platform::current().expect("host platform"));
         let post_activation_env = test_env.activation_env(Some(&current));
 
         assert_eq!(env.get("PIXI_ENVIRONMENT_NAME").unwrap(), "test");
@@ -646,7 +647,8 @@ mod tests {
         ZAB = "123test123"
         "#;
         let workspace = Workspace::from_str(Path::new("pixi.toml"), project).unwrap();
-        let current = pixi_manifest::PixiPlatform::from_subdir(Platform::current());
+        let current =
+            pixi_manifest::PixiPlatform::from_subdir(Platform::current().expect("host platform"));
         let post_activation_env = workspace
             .default_environment()
             .activation_env(Some(&current));
@@ -767,7 +769,7 @@ mod tests {
     #[tokio::test]
     async fn test_run_activation_cache_scoped_to_platform() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let current = Platform::current();
+        let current = Platform::current().expect("host platform");
         let workspace = format!(
             r#"
         [workspace]

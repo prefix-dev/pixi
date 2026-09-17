@@ -224,7 +224,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         None => environment
             .best_declared_platform()
             .map(|p| p.name().to_string())
-            .unwrap_or_else(|| Platform::current().to_string()),
+            .unwrap_or_else(|| Platform::current().expect("host platform").to_string()),
     };
 
     let workspace_ctx = cli_context(workspace.clone());

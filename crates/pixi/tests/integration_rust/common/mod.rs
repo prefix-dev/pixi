@@ -700,7 +700,8 @@ impl PixiControl {
             .0;
 
         // Create a task graph from the command line arguments.
-        let fallback_platform = pixi_manifest::PixiPlatform::from_subdir(Platform::current());
+        let fallback_platform =
+            pixi_manifest::PixiPlatform::from_subdir(Platform::current().expect("host platform"));
         let search_env_platform = explicit_environment
             .as_ref()
             .and_then(|e| e.best_declared_platform())
@@ -888,8 +889,8 @@ impl PixiControl {
                 config_cli: self.config_cli(),
                 config_source: isolated_config_source(),
                 lock_and_install_config: Default::default(),
-                target_platform: rattler_conda_types::Platform::current(),
-                build_platform: rattler_conda_types::Platform::current(),
+                target_platform: rattler_conda_types::Platform::current().expect("host platform"),
+                build_platform: rattler_conda_types::Platform::current().expect("host platform"),
                 output_dir: PathBuf::from("."),
                 build_dir: None,
                 clean: false,

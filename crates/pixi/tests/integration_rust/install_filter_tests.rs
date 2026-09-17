@@ -37,7 +37,7 @@ async fn setup_simple_graph_project() -> (PixiControl, LocalChannel) {
 
     let channel = db.into_channel().await.unwrap();
 
-    let platform = Platform::current();
+    let platform = Platform::current().expect("host platform");
     let manifest = format!(
         r#"
         [project]
@@ -184,7 +184,7 @@ async fn install_subset_e2e_skip_with_deps() {
     use url::Url;
 
     // manifest with dependent packages: dummy-g depends on dummy-b
-    let platform = Platform::current();
+    let platform = Platform::current().expect("host platform");
     let channel_path: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/data/channels/channels/dummy_channel_1");
     let channel_path = fs_err::canonicalize(channel_path).expect("canonicalize channel path");

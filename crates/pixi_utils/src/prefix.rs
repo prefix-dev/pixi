@@ -49,10 +49,13 @@ impl Prefix {
     /// Runs the activation scripts of the prefix and returns the environment
     /// variables that were modified as part of this process.
     pub async fn run_activation(&self) -> miette::Result<HashMap<String, String>> {
-        let activator =
-            Activator::from_path(self.root(), ShellEnum::default(), Platform::current())
-                .into_diagnostic()
-                .context("failed to constructor environment activator")?;
+        let activator = Activator::from_path(
+            self.root(),
+            ShellEnum::default(),
+            Platform::current().expect("host platform"),
+        )
+        .into_diagnostic()
+        .context("failed to constructor environment activator")?;
 
         activator
             .run_activation(ActivationVariables::from_env().unwrap_or_default(), None)

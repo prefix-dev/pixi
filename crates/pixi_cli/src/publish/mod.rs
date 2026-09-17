@@ -84,11 +84,11 @@ pub struct Args {
     pub allow_source_dependencies: bool,
 
     /// The target platform to build for (defaults to the current platform)
-    #[clap(long, short, default_value_t = Platform::current())]
+    #[clap(long, short, default_value_t = Platform::current().expect("host platform"))]
     pub target_platform: Platform,
 
     /// The build platform to use for building (defaults to the current platform)
-    #[clap(long, default_value_t = Platform::current())]
+    #[clap(long, default_value_t = Platform::current().expect("host platform"))]
     pub build_platform: Platform,
 
     /// An optional prefix prepended to the auto-generated build string.

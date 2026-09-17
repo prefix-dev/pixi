@@ -182,7 +182,7 @@ impl GenerateRecipe for RGenerator {
         // Generate build script
         let has_native_code = !compilers.is_empty();
         let build_script = BuildScriptContext {
-            build_platform: if Platform::current().is_windows() {
+            build_platform: if Platform::current().expect("host platform").is_windows() {
                 BuildPlatform::Windows
             } else {
                 BuildPlatform::Unix

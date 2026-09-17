@@ -314,7 +314,8 @@ impl Key for SolveCondaKey {
         // platforms in a manifest are never downloaded to this machine, so
         // restricting their solves would make every multi-platform lock-file
         // rewrite fail offline. They solve from cached repodata instead.
-        let restrict_to_local = ctx.global_data().offline() && spec.platform == Platform::current();
+        let restrict_to_local = ctx.global_data().offline()
+            && spec.platform == Platform::current().expect("host platform");
         let excluded_candidates = crate::offline::exclusions_for_solve(
             restrict_to_local,
             ctx.global_data().package_cache(),

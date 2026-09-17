@@ -1589,7 +1589,7 @@ mod tests {
         use strum::IntoEnumIterator;
 
         for subdir in Platform::iter() {
-            if subdir == Platform::NoArch || subdir == Platform::Unknown {
+            if subdir == Platform::NoArch {
                 continue;
             }
             let name = PixiPlatformName::try_from(subdir.as_str()).unwrap_or_else(|e| {
@@ -1652,7 +1652,7 @@ mod tests {
         use strum::IntoEnumIterator;
 
         for subdir in Platform::iter() {
-            if subdir == Platform::NoArch || subdir == Platform::Unknown {
+            if subdir == Platform::NoArch {
                 continue;
             }
 

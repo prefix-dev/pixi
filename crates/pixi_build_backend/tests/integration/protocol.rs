@@ -121,7 +121,7 @@ async fn test_conda_build_v1() {
             name: "minimal-package".parse().unwrap(),
             version: None,
             build: None,
-            subdir: Platform::current(),
+            subdir: Platform::current().expect("host platform"),
             variant: Default::default(),
         },
         work_directory: build_dir.clone(),
@@ -175,7 +175,7 @@ async fn test_conda_outputs_exposes_downprioritize_track_features() {
     let result = intermediate_conda_outputs::<TestGenerateRecipe>(
         Some(model),
         None,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         None,
         None,
     )
@@ -196,7 +196,7 @@ async fn test_conda_outputs_build_string_prefix() {
     let result_no_prefix = intermediate_conda_outputs::<TestGenerateRecipe>(
         Some(model_no_prefix),
         None,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         None,
         None,
     )
@@ -223,7 +223,7 @@ async fn test_conda_outputs_build_string_prefix() {
     let result_with_prefix = intermediate_conda_outputs::<TestGenerateRecipe>(
         Some(model_with_prefix),
         None,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         None,
         None,
     )
@@ -352,7 +352,7 @@ async fn test_conda_outputs_build_number() {
     let result_default = intermediate_conda_outputs::<TestGenerateRecipe>(
         Some(model_default),
         None,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         None,
         None,
     )
@@ -370,7 +370,7 @@ async fn test_conda_outputs_build_number() {
     let result_with_bn = intermediate_conda_outputs::<TestGenerateRecipe>(
         Some(model_with_bn),
         None,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         None,
         None,
     )

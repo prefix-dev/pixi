@@ -218,7 +218,8 @@ fn path_diff(path_before: &str, path_after: &str, prefix: &Prefix) -> miette::Re
     let paths_before: Vec<PathBuf> = std::env::split_paths(&path_before).collect();
     let paths_after: Vec<PathBuf> = std::env::split_paths(path_after).collect();
 
-    let prefix_path_entries = prefix_path_entries(prefix.root(), &Platform::current());
+    let prefix_path_entries =
+        prefix_path_entries(prefix.root(), &Platform::current().expect("host platform"));
 
     // Calculate the PATH diff
     let path_diff = paths_after
