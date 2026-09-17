@@ -769,6 +769,11 @@ impl GlobalInstallBuilder {
         self.args.force_reinstall = force_reinstall;
         self
     }
+
+    pub fn with_exclude_newer(mut self, exclude_newer: pixi_spec::ExcludeNewer) -> Self {
+        self.args.exclude_newer = Some(exclude_newer);
+        self
+    }
 }
 
 impl IntoFuture for GlobalInstallBuilder {

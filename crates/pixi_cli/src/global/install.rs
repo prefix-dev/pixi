@@ -17,6 +17,7 @@ use pixi_global::{
     common::contains_menuinst_document,
     project::{ExposedType, GlobalSpec},
 };
+use pixi_spec::ExcludeNewer;
 
 /// Installs the defined packages in a globally accessible location and exposes their command line applications.
 ///
@@ -49,6 +50,12 @@ pub struct Args {
     /// This is very often used when you want to install `osx-64` packages on `osx-arm64`.
     #[clap(short, long)]
     platform: Option<Platform>,
+
+    /// Do not install packages published after the specified date or duration.
+    ///
+    /// Can be either an absolute date/timestamp (e.g. `2024-01-01`, `2024-01-01T00:00:00Z`) or a relative duration (e.g. `7d`, `2w`).
+    #[clap(long)]
+    pub exclude_newer: Option<ExcludeNewer>,
 
     /// Ensures that all packages will be installed in the same environment
     #[clap(short, long)]
@@ -196,6 +203,12 @@ async fn setup_environment(
         project.manifest.set_platform(env_name, platform)?;
     }
 
+    if let Some(exclude_newer) = args.exclude_newer {
+        project
+            .manifest
+            .set_exclude_newer(env_name, exclude_newer)?;
+    }
+
     let converted_with_inclusions = args
         .with
         .iter()
@@ -297,4 +310,23 @@ async fn sync_exposed_names(
     };
     project.sync_exposed_names(env_name, expose_type).await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+
+    #[test]
+    fn test_parse_exclude_newer_args() {
+        let args =
+            Args::try_parse_from(["install", "python", "--exclude-newer", "2024-01-01"]).unwrap();
+        assert!(args.exclude_newer.is_some());
+
+        let args = Args::try_parse_from(["install", "python", "--exclude-newer", "7d"]).unwrap();
+        assert!(args.exclude_newer.is_some());
+
+        let err = Args::try_parse_from(["install", "python", "--exclude-newer", "invalid-value"]);
+        assert!(err.is_err());
+    }
 }

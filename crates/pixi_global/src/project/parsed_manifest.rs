@@ -11,7 +11,7 @@ use pixi_manifest::{
     toml::{TomlPlatform, WorkspacePackageProperties},
     utils::package_map::{DependencyTable, UniquePackageMap},
 };
-use pixi_spec::PixiSpec;
+use pixi_spec::{ExcludeNewer, PixiSpec};
 use pixi_toml::{TomlFromStr, TomlIndexMap, TomlIndexSet, TomlWith};
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
 use serde::{Serialize, Serializer, ser::SerializeMap};
@@ -118,6 +118,9 @@ impl ManifestParsingError {
 pub struct ParsedManifest {
     /// The version of the manifest
     version: ManifestVersion,
+    /// Default exclude-newer cutoff for all environments
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exclude_newer: Option<ExcludeNewer>,
     /// The environments the project can create.
     pub envs: IndexMap<EnvironmentName, ParsedEnvironment>,
 }
@@ -127,6 +130,7 @@ pub struct ParsedManifest {
 /// manifest's root directory as context).
 struct TomlParsedManifest {
     version: ManifestVersion,
+    exclude_newer: Option<ExcludeNewer>,
     envs: IndexMap<EnvironmentName, TomlParsedEnvironment>,
 }
 
@@ -138,6 +142,9 @@ impl<'de> toml_span::Deserialize<'de> for TomlParsedManifest {
             .optional("version")
             .map(ManifestVersion)
             .unwrap_or_default();
+        let exclude_newer = th
+            .optional::<TomlFromStr<ExcludeNewer>>("exclude-newer")
+            .map(TomlFromStr::into_inner);
         let envs = th
             .optional::<TomlIndexMap<_, TomlParsedEnvironment>>("envs")
             .map(TomlIndexMap::into_inner)
@@ -148,7 +155,11 @@ impl<'de> toml_span::Deserialize<'de> for TomlParsedManifest {
 
         th.finalize(None)?;
 
-        Ok(Self { version, envs })
+        Ok(Self {
+            version,
+            exclude_newer,
+            envs,
+        })
     }
 }
 
@@ -321,6 +332,7 @@ impl TomlParsedManifest {
                 ParsedEnvironment {
                     channels: env.channels,
                     platform: env.platform,
+                    exclude_newer: env.exclude_newer,
                     dependencies,
                     inline_packages,
                     exposed: env.exposed,
@@ -331,6 +343,7 @@ impl TomlParsedManifest {
 
         Ok(ParsedManifest {
             version: self.version,
+            exclude_newer: self.exclude_newer,
             envs,
         })
     }
@@ -366,6 +379,7 @@ where
         Self {
             envs,
             version: ManifestVersion::default(),
+            exclude_newer: None,
         }
     }
 }
@@ -391,6 +405,9 @@ pub struct ParsedEnvironment {
     pub channels: IndexSet<PrioritizedChannel>,
     /// Platform used by the environment.
     pub platform: Option<Platform>,
+    /// Default exclude-newer cutoff for this environment
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exclude_newer: Option<ExcludeNewer>,
     pub dependencies: UniquePackageMap,
     /// Inline package definitions attached to source dependencies. Keyed by
     /// dependency name; the matching source spec lives in
@@ -410,6 +427,7 @@ pub struct ParsedEnvironment {
 struct TomlParsedEnvironment {
     channels: IndexSet<PrioritizedChannel>,
     platform: Option<Platform>,
+    exclude_newer: Option<ExcludeNewer>,
     dependencies: DependencyTable,
     exposed: IndexSet<Mapping>,
     shortcuts: Option<IndexSet<PackageName>>,
@@ -424,6 +442,9 @@ impl<'de> toml_span::Deserialize<'de> for TomlParsedEnvironment {
             .map(TomlIndexSet::into_inner)
             .unwrap_or_default();
         let platform = th.optional::<TomlPlatform>("platform").map(Platform::from);
+        let exclude_newer = th
+            .optional::<TomlFromStr<ExcludeNewer>>("exclude-newer")
+            .map(TomlFromStr::into_inner);
         let dependencies = th.optional("dependencies").unwrap_or_default();
         let exposed = th
             .optional::<TomlMapping>("exposed")
@@ -438,6 +459,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlParsedEnvironment {
         Ok(Self {
             channels,
             platform,
+            exclude_newer,
             dependencies,
             exposed,
             shortcuts,
@@ -701,5 +723,76 @@ mod tests {
         xsv = { version = "*", package.build.backend.name = "pixi-build-rust" }
         "#;
         assert!(ParsedManifest::from_toml_str(contents, std::path::Path::new("")).is_err());
+    }
+
+    #[test]
+    fn test_exclude_newer_top_level_and_env() {
+        let contents = r#"
+        version = 1
+        exclude-newer = "2024-01-01"
+
+        [envs.python]
+        channels = ["conda-forge"]
+        dependencies = { python = "3.11.*" }
+
+        [envs.rust]
+        channels = ["conda-forge"]
+        exclude-newer = "2024-06-01"
+        dependencies = { rust = "*" }
+        "#;
+        let manifest = ParsedManifest::from_toml_str(contents, std::path::Path::new("")).unwrap();
+
+        assert!(manifest.exclude_newer.is_some());
+        let python_env = manifest
+            .envs
+            .get(&EnvironmentName::from_str("python").unwrap())
+            .unwrap();
+        assert_eq!(python_env.exclude_newer, None);
+
+        let rust_env = manifest
+            .envs
+            .get(&EnvironmentName::from_str("rust").unwrap())
+            .unwrap();
+        assert!(rust_env.exclude_newer.is_some());
+        assert_ne!(manifest.exclude_newer, rust_env.exclude_newer);
+    }
+
+    #[test]
+    fn test_exclude_newer_duration() {
+        let contents = r#"
+        exclude-newer = "7d"
+
+        [envs.test]
+        channels = ["conda-forge"]
+        exclude-newer = "2w"
+        dependencies = { python = "*" }
+        "#;
+        let manifest = ParsedManifest::from_toml_str(contents, std::path::Path::new("")).unwrap();
+        assert!(manifest.exclude_newer.is_some());
+        let test_env = manifest
+            .envs
+            .get(&EnvironmentName::from_str("test").unwrap())
+            .unwrap();
+        assert!(test_env.exclude_newer.is_some());
+    }
+
+    #[test]
+    fn test_invalid_exclude_newer() {
+        let contents = r#"
+        exclude-newer = "not-a-valid-date-or-duration"
+
+        [envs.test]
+        channels = ["conda-forge"]
+        dependencies = { python = "*" }
+        "#;
+        assert!(ParsedManifest::from_toml_str(contents, std::path::Path::new("")).is_err());
+
+        let contents_env = r#"
+        [envs.test]
+        channels = ["conda-forge"]
+        exclude-newer = "invalid"
+        dependencies = { python = "*" }
+        "#;
+        assert!(ParsedManifest::from_toml_str(contents_env, std::path::Path::new("")).is_err());
     }
 }

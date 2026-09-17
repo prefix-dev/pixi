@@ -543,6 +543,46 @@ def test_install_adapts_manifest(pixi: Path, tmp_path: Path, dummy_channel_1: st
     assert f"version = {MANIFEST_VERSION}" in manifest.read_text()
 
 
+def test_install_with_exclude_newer(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifest = manifests.joinpath("pixi-global.toml")
+
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "--exclude-newer",
+            "2026-01-01",
+            "dummy-a",
+        ],
+        env=env,
+    )
+
+    manifest_text = manifest.read_text()
+    assert 'exclude-newer = "2026-01-02T00:00:00Z"' in manifest_text
+
+    # Packages uploaded after the cutoff date are excluded
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "--exclude-newer",
+            "2024-01-01",
+            "dummy-b",
+        ],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="is excluded because the package is uploaded after the cutoff date",
+    )
+
+
 def test_existing_manifest_gets_version(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")
