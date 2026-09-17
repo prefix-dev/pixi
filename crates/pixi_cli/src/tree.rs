@@ -11,13 +11,13 @@ use console::Color;
 use fancy_display::FancyDisplay;
 use miette::WrapErr;
 use pep508_rs::{ExtraName, MarkerEnvironment, Requirement};
-use pixi_api::workspace::platforms::resolve_platforms;
+use pixi_api::workspace::platforms::resolve_declared_platform;
 use pixi_core::workspace::Environment;
 use pixi_core::{
     WorkspaceLocator,
     lock_file::{UpdateLockFileOptions, resolve_lock_platform_for},
 };
-use pixi_manifest::{FeaturesExt, HasWorkspaceManifest as _, PixiPlatform, PixiPlatformName};
+use pixi_manifest::{FeaturesExt, PixiPlatform, PixiPlatformName};
 use pixi_uv_conversions::to_marker_environment;
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler_conda_types::PackageName;
@@ -111,16 +111,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_lock_file();
     drop(clear_progress);
 
-    let workspace_platforms = (&workspace)
-        .workspace_manifest()
-        .workspace
-        .platforms
-        .clone();
     let platform = match args.platform {
-        Some(name) => resolve_platforms(&workspace_platforms, std::slice::from_ref(&name))?
-            .into_iter()
-            .next()
-            .expect("resolve_platforms preserves length"),
+        Some(name) => resolve_declared_platform(&workspace, &name)?,
         None => environment
             .best_declared_platform()
             .cloned()
@@ -457,6 +449,7 @@ pub fn direct_dependencies(
 mod tests {
     use super::*;
     use pixi_core::Workspace;
+    use pixi_manifest::HasWorkspaceManifest as _;
     use rattler_conda_types::Platform;
     use rattler_lock::LockFile;
 

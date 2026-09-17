@@ -3,9 +3,9 @@
 //! [`PixiPlatformName`] the caller threads down into the install path, where
 //! membership and host-runnability are checked.
 
-use pixi_api::workspace::platforms::resolve_platforms;
+use pixi_api::workspace::platforms::resolve_declared_platform;
 use pixi_core::Workspace;
-use pixi_manifest::{HasWorkspaceManifest, PixiPlatformName};
+use pixi_manifest::PixiPlatformName;
 
 /// Resolve `--platform` to its canonical workspace platform name. Returns
 /// `Ok(None)` when the flag was unset; the caller threads the result down
@@ -17,11 +17,7 @@ pub(crate) fn resolve_install_platform(
     let Some(name) = platform else {
         return Ok(None);
     };
-    let workspace_platforms = workspace.workspace_manifest().workspace.platforms.clone();
-    let resolved = resolve_platforms(&workspace_platforms, std::slice::from_ref(name))?
-        .into_iter()
-        .next()
-        .expect("resolve_platforms preserves length");
+    let resolved = resolve_declared_platform(workspace, name)?;
     Ok(Some(resolved.name().clone()))
 }
 
@@ -34,9 +30,17 @@ mod tests {
     use super::*;
 
     fn workspace_with_platforms(platforms: &[&str]) -> Workspace {
+        // Entries already written as TOML (an inline table) are passed
+        // through; bare subdir names get quoted.
         let platforms_inline = platforms
             .iter()
-            .map(|p| format!("\"{p}\""))
+            .map(|p| {
+                if p.starts_with('{') {
+                    (*p).to_string()
+                } else {
+                    format!("\"{p}\"")
+                }
+            })
             .collect::<Vec<_>>()
             .join(", ");
         let toml = format!(
@@ -83,6 +87,23 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(resolved.as_str(), target);
+    }
+
+    /// A bare subdir must resolve to the platform the workspace declares for
+    /// that subdir, not to the subdir baseline: the declared entry carries the
+    /// virtual packages, and its synthesized name is what the environment and
+    /// the lock file are keyed by.
+    #[test]
+    fn bare_subdir_resolves_to_the_declared_platform() {
+        let workspace = workspace_with_platforms(&[
+            "osx-arm64",
+            r#"{ platform = "linux-riscv64", glibc = "2.41" }"#,
+        ]);
+        let name = "linux-riscv64".parse().unwrap();
+        let resolved = resolve_install_platform(&workspace, Some(&name))
+            .unwrap()
+            .unwrap();
+        assert_eq!(resolved.as_str(), "linux-riscv64-glibc-2-41");
     }
 
     #[test]
