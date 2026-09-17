@@ -29,12 +29,12 @@ use pixi_pypi_spec::PixiPypiSpec;
 use pixi_record::{LockedGitUrl, PixiRecord};
 use pixi_reporters::{UvReporter, UvReporterOptions};
 use pixi_uv_conversions::{
-    ConversionError, WorkspaceAnchor, as_uv_req, configure_insecure_hosts_for_tls_bypass,
-    convert_uv_requirements_to_pep508, into_pinned_git_spec, into_uv_git_reference,
-    into_uv_git_sha, pypi_cache_config_settings_with_macos_deployment_target,
-    pypi_options_to_build_options, pypi_options_to_index_locations, to_index_strategy,
-    to_prerelease_mode, to_requirements_relative_to, to_uv_normalize, to_uv_version,
-    to_version_specifiers,
+    ConversionError, GitUrlWithPrefix, WorkspaceAnchor, as_uv_req,
+    configure_insecure_hosts_for_tls_bypass, convert_uv_requirements_to_pep508,
+    into_pinned_git_spec, into_uv_git_reference, into_uv_git_sha,
+    pypi_cache_config_settings_with_macos_deployment_target, pypi_options_to_build_options,
+    pypi_options_to_index_locations, to_index_strategy, to_prerelease_mode,
+    to_requirements_relative_to, to_uv_normalize, to_uv_version, to_version_specifiers,
 };
 use pypi_modifiers::{
     pypi_marker_env::determine_marker_environment,
@@ -304,6 +304,36 @@ pub async fn resolve_pypi(
         })
         .collect();
 
+    // Determine git references of packages that are being resolved afresh (not locked).
+    // If a package is targeted for update, its git repository should not be pre-populated
+    // with a stale commit from another locked package sharing the same repository.
+    let locked_package_names: std::collections::HashSet<uv_normalize::PackageName> =
+        locked_pypi_packages
+            .iter()
+            .filter_map(|r| to_uv_normalize(r.name()).ok())
+            .collect();
+
+    let unlocked_git_references: std::collections::HashSet<RepositoryReference> = dependencies
+        .iter()
+        .filter(|(name, _)| !locked_package_names.contains(name))
+        .flat_map(|(_, specs)| {
+            specs.iter().filter_map(|spec| {
+                let git_spec = spec.source.as_git()?;
+                let git_url = GitUrlWithPrefix::from(&git_spec.git);
+                let repository_url = RepositoryUrl::new(&git_url.to_display_safe_url());
+                let git_ref = git_spec
+                    .rev
+                    .as_ref()
+                    .map(|rev| into_uv_git_reference(rev.clone().into()))
+                    .unwrap_or(uv_git_types::GitReference::DefaultBranch);
+                Some(RepositoryReference {
+                    url: repository_url,
+                    reference: git_ref,
+                })
+            })
+        })
+        .collect();
+
     // Pre-populate the git resolver with locked git references.
     // This ensures that when uv resolves git dependencies, it will find the cached commit
     // and not panic in `url_to_precise` function.
@@ -328,6 +358,14 @@ pub async fn resolve_pypi(
                     url: repository_url,
                     reference: uv_reference,
                 };
+
+                if unlocked_git_references.contains(&reference) {
+                    tracing::debug!(
+                        "skipping pre-populating git resolver for {:?} because it is targeted for update",
+                        reference
+                    );
+                    continue;
+                }
 
                 tracing::debug!("pre-populating git resolver: {:?} -> {}", reference, uv_sha);
                 context.shared_state.git().insert(reference, uv_sha);
