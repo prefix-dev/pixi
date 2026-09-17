@@ -476,3 +476,122 @@ async fn test_removing_environment_unsatisfies_lock_file() {
         "environment `b` should have been removed from the lock-file"
     );
 }
+
+/// Regression test for https://github.com/prefix-dev/pixi/issues/6835
+///
+/// When multiple packages originate from the same Git repository and branch,
+/// updating one package with `pixi update <pkg>` should also update the sibling
+/// packages sharing the same repository and branch rather than reporting
+/// that the lock-file was already up-to-date.
+#[tokio::test]
+async fn test_update_shared_git_repo_multi_package() {
+    setup_tracing();
+
+    // Create local package database with Python
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+    let channel = package_database.into_channel().await.unwrap();
+
+    let pixi = PixiControl::new().unwrap();
+
+    // Create local git fixture with two packages (pkg-a, pkg-b) and two commits (v0.1.0, v0.2.0)
+    let fixture = GitRepoFixture::new("multi-package-pypi");
+
+    // Create a new project using our package database.
+    pixi.init()
+        .with_local_channel(channel.url().to_file_path().unwrap())
+        .with_platforms(vec![Platform::current()])
+        .await
+        .unwrap();
+
+    // Add a dependency on `python`
+    pixi.add("python").await.unwrap();
+
+    // Write initial dependencies pinned to first_commit into the manifest
+    let manifest_txt = tokio::fs::read_to_string(pixi.manifest_path())
+        .await
+        .unwrap();
+    let initial_manifest = format!(
+        r#"{manifest_txt}
+[pypi-dependencies]
+pkg-a = {{ git = "{base_url}", subdirectory = "pkg-a", rev = "{first_commit}" }}
+pkg-b = {{ git = "{base_url}", subdirectory = "pkg-b", rev = "{first_commit}" }}
+"#,
+        base_url = fixture.base_url,
+        first_commit = fixture.first_commit(),
+    );
+    tokio::fs::write(pixi.manifest_path(), initial_manifest)
+        .await
+        .unwrap();
+
+    // Solve the initial lock file and verify both packages are locked to first_commit
+    let lock = pixi.update_lock_file().await.unwrap();
+    let pkg_a_first = lock
+        .get_pypi_package_url(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "pkg-a",
+        )
+        .unwrap();
+    let pkg_b_first = lock
+        .get_pypi_package_url(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "pkg-b",
+        )
+        .unwrap();
+
+    assert_eq!(
+        pkg_a_first.as_url().unwrap().fragment().unwrap(),
+        fixture.first_commit()
+    );
+    assert_eq!(
+        pkg_b_first.as_url().unwrap().fragment().unwrap(),
+        fixture.first_commit()
+    );
+
+    // Remove the rev pins from the manifest so both packages track the repository branch
+    let manifest_txt = tokio::fs::read_to_string(pixi.manifest_path())
+        .await
+        .unwrap();
+    let unpinned_manifest =
+        manifest_txt.replace(&format!(", rev = \"{}\"", fixture.first_commit()), "");
+    tokio::fs::write(pixi.manifest_path(), unpinned_manifest)
+        .await
+        .unwrap();
+
+    // Run pixi update targeting ONLY pkg-a
+    pixi.update().with_package("pkg-a").await.unwrap();
+
+    // Verify both pkg-a and pkg-b were updated to the latest commit
+    let lock_updated = pixi.lock_file().await.unwrap();
+    let pkg_a_updated = lock_updated
+        .get_pypi_package_url(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "pkg-a",
+        )
+        .unwrap();
+    let pkg_b_updated = lock_updated
+        .get_pypi_package_url(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Platform::current(),
+            "pkg-b",
+        )
+        .unwrap();
+
+    assert_eq!(
+        pkg_a_updated.as_url().unwrap().fragment().unwrap(),
+        fixture.latest_commit(),
+        "targeted package pkg-a should update to the latest commit"
+    );
+    assert_eq!(
+        pkg_b_updated.as_url().unwrap().fragment().unwrap(),
+        fixture.latest_commit(),
+        "sibling package pkg-b sharing the same git repo should also update to the latest commit"
+    );
+}
