@@ -8,6 +8,7 @@ use std::{
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::LabeledSpan;
+use pep440_rs::VersionSpecifiers;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::ExcludeNewer;
 use pixi_toml::{Same, TomlFromStr, TomlHashMap, TomlIndexMap, TomlWith};
@@ -1050,6 +1051,7 @@ pub struct ExternalWorkspaceProperties {
     pub repository: Option<Url>,
     pub documentation: Option<Url>,
     pub features: IndexMap<FeatureName, Feature>,
+    pub requires_python: Option<VersionSpecifiers>,
 }
 
 #[cfg(test)]
