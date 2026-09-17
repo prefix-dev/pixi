@@ -736,6 +736,134 @@ mod tests {
         );
     }
 
+    /// Regression for prefix-dev/pixi#6770: additional platforms declared by a
+    /// feature (e.g. `osx-arm64`) must not leak into the default environment,
+    /// which only declares `linux-64`.
+    #[test]
+    fn test_feature_platforms_do_not_leak_into_default_environment() {
+        let manifest = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [workspace]
+        name = "repro"
+        channels = []
+        platforms = ["linux-64"]
+
+        [dependencies]
+        foo = "*"
+
+        [feature.dev]
+        platforms = ["linux-64", "osx-arm64"]
+
+        [environments]
+        dev = { features = ["dev"], no-default-feature = true }
+        "#,
+        )
+        .unwrap();
+
+        let default_env = manifest.default_environment();
+        assert_eq!(
+            default_env.platforms(),
+            HashSet::from_iter([pixi_manifest::PixiPlatformName::from(Platform::Linux64)]),
+            "default environment must only support declared workspace platforms, not leaked feature platforms"
+        );
+
+        let dev_env = manifest.environment("dev").unwrap();
+        assert_eq!(
+            dev_env.platforms(),
+            HashSet::from_iter([
+                pixi_manifest::PixiPlatformName::from(Platform::Linux64),
+                pixi_manifest::PixiPlatformName::from(Platform::OsxArm64),
+            ]),
+            "dev environment with no-default-feature must support all feature platforms"
+        );
+    }
+
+    /// When an environment includes the default feature (omitting no-default-feature),
+    /// its supported platforms are the intersection of the default feature
+    /// (workspace platforms) and the included feature.
+    #[test]
+    fn test_feature_platforms_intersection_with_default_feature() {
+        let manifest = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [workspace]
+        name = "repro"
+        channels = []
+        platforms = ["linux-64"]
+
+        [feature.dev]
+        platforms = ["linux-64", "osx-arm64"]
+
+        [environments]
+        dev = ["dev"]
+        "#,
+        )
+        .unwrap();
+
+        let default_env = manifest.default_environment();
+        assert_eq!(
+            default_env.platforms(),
+            HashSet::from_iter([pixi_manifest::PixiPlatformName::from(Platform::Linux64)]),
+        );
+
+        let dev_env = manifest.environment("dev").unwrap();
+        assert_eq!(
+            dev_env.platforms(),
+            HashSet::from_iter([pixi_manifest::PixiPlatformName::from(Platform::Linux64)]),
+            "dev environment including default feature must be bounded by workspace platforms"
+        );
+    }
+
+    /// Test platform intersection across multiple features with named rich platforms.
+    #[test]
+    fn test_environment_platforms_intersection_across_features_and_rich_platform() {
+        let manifest = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [workspace]
+        name = "repro"
+        channels = []
+        platforms = [
+            "linux-64",
+            "osx-64",
+            { name = "jetson", platform = "linux-aarch64", cuda = "13" },
+        ]
+
+        [feature.bla]
+        platforms = ["linux-64", "jetson"]
+
+        [feature.bli]
+        platforms = ["linux-64"]
+
+        [environments]
+        a = ["bla"]
+        b = ["bli"]
+        c = ["bla", "bli"]
+        d = { features = ["bla"], no-default-feature = true }
+        "#,
+        )
+        .unwrap();
+
+        let linux64 = pixi_manifest::PixiPlatformName::from(Platform::Linux64);
+        let jetson = pixi_manifest::PixiPlatformName::try_from("jetson").unwrap();
+
+        let a = manifest.environment("a").unwrap();
+        assert_eq!(
+            a.platforms(),
+            HashSet::from_iter([linux64.clone(), jetson.clone()])
+        );
+
+        let b = manifest.environment("b").unwrap();
+        assert_eq!(b.platforms(), HashSet::from_iter([linux64.clone()]));
+
+        let c = manifest.environment("c").unwrap();
+        assert_eq!(c.platforms(), HashSet::from_iter([linux64.clone()]));
+
+        let d = manifest.environment("d").unwrap();
+        assert_eq!(d.platforms(), HashSet::from_iter([linux64, jetson]));
+    }
+
     #[test]
     fn test_default_tasks() {
         let manifest = Workspace::from_str(

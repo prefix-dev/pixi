@@ -19,31 +19,26 @@ use crate::{
     toml::platform::synthesize_name_string,
 };
 
-/// The subdirs `feature` covers: `None` when it has no `platforms` key (every
-/// subdir), otherwise the subdirs of the workspace platforms it references.
-fn referenced_subdirs(
-    feature: &Feature,
-    workspace_platforms: &IndexSet<PixiPlatform>,
-) -> Option<HashSet<Platform>> {
-    let names = feature.platforms.as_ref()?;
-    Some(
-        names
-            .iter()
-            .filter_map(|name| workspace_platforms.iter().find(|p| p.name() == name))
-            .map(PixiPlatform::subdir)
-            .collect(),
-    )
-}
-
-/// Whether `feature` applies on `subdir` (no `platforms` key means everywhere).
+/// Whether `feature` applies on `subdir`. A feature without explicit platforms
+/// inherits the workspace's declared `default_subdirs`.
 pub(crate) fn feature_supports_subdir(
     feature: &Feature,
     subdir: Platform,
     workspace_platforms: &IndexSet<PixiPlatform>,
+    default_subdirs: &HashSet<Platform>,
 ) -> bool {
-    match referenced_subdirs(feature, workspace_platforms) {
-        None => true,
-        Some(subdirs) => subdirs.contains(&subdir),
+    match feature.platforms.as_ref() {
+        Some(names) => names
+            .iter()
+            .filter_map(|name| workspace_platforms.iter().find(|p| p.name() == name))
+            .any(|p| p.subdir() == subdir),
+        None => {
+            if default_subdirs.is_empty() {
+                true
+            } else {
+                default_subdirs.contains(&subdir)
+            }
+        }
     }
 }
 
@@ -54,8 +49,14 @@ pub(crate) fn feature_supports_platform(
     feature: &Feature,
     platform: &PixiPlatform,
     workspace_platforms: &IndexSet<PixiPlatform>,
+    default_subdirs: &HashSet<Platform>,
 ) -> bool {
-    feature_supports_subdir(feature, platform.subdir(), workspace_platforms)
+    feature_supports_subdir(
+        feature,
+        platform.subdir(),
+        workspace_platforms,
+        default_subdirs,
+    )
 }
 
 /// The distinct workspace platforms the features pin for `subdir`, in first-seen
@@ -159,6 +160,7 @@ fn combined_platform(
 pub(crate) fn combined_platforms(
     features: &[&Feature],
     workspace_platforms: &IndexSet<PixiPlatform>,
+    default_subdirs: &HashSet<Platform>,
 ) -> Result<Vec<PixiPlatform>, TomlError> {
     let subdirs: IndexSet<Platform> = workspace_platforms
         .iter()
@@ -167,9 +169,9 @@ pub(crate) fn combined_platforms(
     subdirs
         .into_iter()
         .filter(|subdir| {
-            features
-                .iter()
-                .all(|feature| feature_supports_subdir(feature, *subdir, workspace_platforms))
+            features.iter().all(|feature| {
+                feature_supports_subdir(feature, *subdir, workspace_platforms, default_subdirs)
+            })
         })
         .map(|subdir| combined_platform(features, subdir, workspace_platforms))
         .collect()
