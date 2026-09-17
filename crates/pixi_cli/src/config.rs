@@ -489,7 +489,7 @@ fn alter_config(
         .into_diagnostic()
         .wrap_err(format!("failed to write config to '{}'", to.display()))?;
 
-    eprintln!("✅ Updated config at {}", to.display());
+    eprintln!("Updated config at {}", to.display());
     Ok(())
 }
 
@@ -701,6 +701,7 @@ fn partial_config(config: &mut Config, key: &str) -> miette::Result<()> {
         "default-channels" => new.default_channels = config.default_channels.clone(),
         "shell" => new.shell = config.shell.clone(),
         "tls-no-verify" => new.tls_no_verify = config.tls_no_verify,
+        "tls-root-certs" => new.tls_root_certs = config.tls_root_certs,
         "offline" => new.offline = config.offline,
         "authentication-override-file" => {
             new.authentication_override_file = config.authentication_override_file.clone()
@@ -713,10 +714,17 @@ fn partial_config(config: &mut Config, key: &str) -> miette::Result<()> {
         "allow-symbolic-links" => new.allow_symbolic_links = config.allow_symbolic_links,
         "allow-hard-links" => new.allow_hard_links = config.allow_hard_links,
         "allow-ref-links" => new.allow_ref_links = config.allow_ref_links,
+        "pinning-strategy" => new.pinning_strategy = config.pinning_strategy,
+        "concurrency" => new.concurrency = config.concurrency.clone(),
+        "experimental" => new.experimental = config.experimental.clone(),
+        "detached-environments" => new.detached_environments = config.detached_environments.clone(),
+        "run-post-link-scripts" => new.run_post_link_scripts = config.run_post_link_scripts.clone(),
         _ => {
             let keys = [
                 "default-channels",
+                "shell",
                 "tls-no-verify",
+                "tls-root-certs",
                 "offline",
                 "authentication-override-file",
                 "mirrors",
@@ -727,6 +735,11 @@ fn partial_config(config: &mut Config, key: &str) -> miette::Result<()> {
                 "allow-symbolic-links",
                 "allow-hard-links",
                 "allow-ref-links",
+                "pinning-strategy",
+                "concurrency",
+                "experimental",
+                "detached-environments",
+                "run-post-link-scripts",
             ];
             return Err(miette::miette!("key must be one of: {}", keys.join(", ")));
         }
@@ -1456,5 +1469,21 @@ region = "us-east-1"
                 .contains("would leave the config file invalid")
                 || err.to_string().contains("missing field `region`")
         );
+    }
+
+    #[test]
+    fn test_partial_config_supported_keys() {
+        let mut config = Config {
+            tls_root_certs: Some(pixi_config::TlsRootCerts::Webpki),
+            ..Default::default()
+        };
+        partial_config(&mut config, "tls-root-certs").unwrap();
+        assert_eq!(
+            config.tls_root_certs,
+            Some(pixi_config::TlsRootCerts::Webpki)
+        );
+
+        let mut config = Config::default();
+        assert!(partial_config(&mut config, "unknown-key").is_err());
     }
 }
