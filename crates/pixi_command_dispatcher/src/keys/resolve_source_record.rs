@@ -285,7 +285,7 @@ async fn assemble_source_record_inner(
     let stringify_pixi_specs = |specs: DependencyMap<PackageName, PixiSpec>,
                                 sources: &mut HashMap<PackageName, RegisteredSource>|
      -> Result<Vec<String>, SourceRecordError> {
-        specs
+        let mut result = specs
             .into_specs()
             .map(|(name, spec)| {
                 track_source(sources, &name, &spec)?;
@@ -294,12 +294,14 @@ async fn assemble_source_record_inner(
                     .map_err(SourceRecordError::from)?
                     .to_string())
             })
-            .collect()
+            .collect::<Result<Vec<_>, SourceRecordError>>()?;
+        result.sort_unstable();
+        Ok(result)
     };
 
     let stringify_binary_specs =
         |specs: DependencyMap<PackageName, BinarySpec>| -> Result<Vec<String>, SourceRecordError> {
-            specs
+            let mut result = specs
                 .into_specs()
                 .map(|(name, spec)| {
                     Ok(spec
@@ -307,10 +309,12 @@ async fn assemble_source_record_inner(
                         .map_err(SourceRecordError::from)?
                         .to_string())
                 })
-                .collect()
+                .collect::<Result<Vec<_>, SourceRecordError>>()?;
+            result.sort_unstable();
+            Ok(result)
         };
 
-    let depends = run_dependencies
+    let mut depends = run_dependencies
         .dependencies
         .clone()
         .into_specs()
@@ -360,8 +364,9 @@ async fn assemble_source_record_inner(
                 .to_string())
         })
         .collect::<Result<Vec<_>, SourceRecordError>>()?;
+    depends.sort_unstable();
 
-    let constrains = run_dependencies
+    let mut constrains = run_dependencies
         .constraints
         .into_specs()
         .map(|(name, withspec)| {
@@ -372,6 +377,7 @@ async fn assemble_source_record_inner(
                 .to_string())
         })
         .collect::<Result<Vec<_>, SourceRecordError>>()?;
+    constrains.sort_unstable();
 
     let run_exports_pixi =
         PixiRunExports::try_from_protocol(&output.run_exports, &compatibility_map)
