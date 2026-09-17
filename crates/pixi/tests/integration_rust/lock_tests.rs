@@ -12,12 +12,12 @@ async fn test_lock_dry_run_doesnt_modify_lock_file() {
     // Add mock packages
     package_database.add_package(
         Package::build("python", "3.11.0")
-            .with_subdir(Platform::current())
+            .with_subdir(Platform::current().expect("host platform"))
             .finish(),
     );
     package_database.add_package(
         Package::build("numpy", "1.24.0")
-            .with_subdir(Platform::current())
+            .with_subdir(Platform::current().expect("host platform"))
             .finish(),
     );
 
@@ -40,7 +40,7 @@ async fn test_lock_dry_run_doesnt_modify_lock_file() {
 
     // Get the original lock file
     let original_lock_file = pixi.lock_file().await.unwrap();
-    let platform = Platform::current();
+    let platform = Platform::current().expect("host platform");
 
     // Verify python is in the original lock file
     assert!(
@@ -96,12 +96,12 @@ async fn test_lock_dry_run_implies_no_install() {
     // Add mock packages
     package_database.add_package(
         Package::build("python", "3.11.0")
-            .with_subdir(Platform::current())
+            .with_subdir(Platform::current().expect("host platform"))
             .finish(),
     );
     package_database.add_package(
         Package::build("numpy", "1.24.0")
-            .with_subdir(Platform::current())
+            .with_subdir(Platform::current().expect("host platform"))
             .finish(),
     );
 

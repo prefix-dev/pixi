@@ -73,7 +73,7 @@ mod tests {
     #[test]
     fn cross_platform_subdir_resolves() {
         let workspace = workspace_with_platforms(&["linux-64", "osx-arm64"]);
-        let target = if Platform::current() == Platform::OsxArm64 {
+        let target = if Platform::current().expect("host platform") == Platform::OsxArm64 {
             "linux-64"
         } else {
             "osx-arm64"

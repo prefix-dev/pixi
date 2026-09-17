@@ -159,7 +159,7 @@ impl GenerateRecipe for RustGenerator {
             source_dir: manifest_root.display().to_string(),
             extra_args: cargo_args,
             has_sccache,
-            is_bash: !Platform::current().is_windows(),
+            is_bash: !Platform::current().expect("host platform").is_windows(),
         }
         .render();
 

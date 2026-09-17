@@ -58,7 +58,7 @@ impl MockRepoData {
         }
 
         // Make sure the current platform is included
-        let current_platform = Platform::current();
+        let current_platform = Platform::current().expect("host platform");
         if !platforms.contains(&current_platform) {
             platforms.insert(current_platform);
         }
@@ -364,6 +364,8 @@ impl PackageBuilder {
                 python_site_packages_path: None,
                 extra_depends: Default::default(),
                 flags: vec![],
+                attestations_sha256: None,
+                indexed_timestamp: None,
             },
             subdir,
             archive_type: self.archive_type,

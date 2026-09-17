@@ -584,7 +584,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     let info = Info {
-        platform: Platform::current().to_string(),
+        platform: Platform::current().expect("host platform").to_string(),
         virtual_packages,
         version: consts::PIXI_VERSION.to_string(),
         tls_backend: tls_backend().to_string(),

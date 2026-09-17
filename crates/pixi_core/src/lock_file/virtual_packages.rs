@@ -648,7 +648,8 @@ packages:
         let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
         let lock_file_path = root_dir.join("../../tests/data/lock_files/pypi-numpy.lock");
         let lock_file = LockFile::from_path(&lock_file_path).unwrap();
-        let platform = pixi_manifest::PixiPlatform::from_subdir(Platform::current());
+        let platform =
+            pixi_manifest::PixiPlatform::from_subdir(Platform::current().expect("host platform"));
 
         // To high version for the wheel, which is fine as we assume backwards compatibility
         let mut overrides = VirtualPackageOverrides::default();
@@ -674,7 +675,7 @@ packages:
             &EnvironmentName::default(),
             Some(overrides),
         );
-        if Platform::current().is_unix() {
+        if Platform::current().expect("host platform").is_unix() {
             assert!(
                 matches!(result, Err(MachineValidationError::WheelTagsMismatch(_, _))),
                 "{result:?}"

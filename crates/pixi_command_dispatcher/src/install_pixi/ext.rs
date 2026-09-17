@@ -190,7 +190,7 @@ async fn install_inner(
             // recipe. Compare the real machine: installs set build_platform to the target.
             // A prefix platform mismatch already carries more specific help.
             let host_platform = shared.build_environment.host_platform;
-            let machine = Platform::current();
+            let machine = Platform::current().expect("host platform");
             sub_ctx
                 .compute(&SourceBuildKey::new(build_spec))
                 .await

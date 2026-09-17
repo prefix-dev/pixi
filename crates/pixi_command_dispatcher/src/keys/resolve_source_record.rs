@@ -445,6 +445,8 @@ async fn assemble_source_record_inner(
         legacy_bz2_size: None,
         extra_depends,
         flags: output.metadata.flags.clone(),
+        attestations_sha256: None,
+        indexed_timestamp: None,
     };
 
     let sources_by_str: BTreeMap<String, SourceLocationSpec> = sources

@@ -300,7 +300,7 @@ impl<'p> Environment<'p> {
             return;
         }
 
-        let current = Platform::current();
+        let current = Platform::current().expect("host platform");
         let Some(best) = self.best_declared_platform().map(|p| p.subdir()) else {
             return;
         };
@@ -1828,9 +1828,9 @@ mod tests {
                 let env = workspace.default_environment();
                 // No declared platforms → None regardless of the (invalid) override.
                 assert!(env.best_declared_platform().is_none());
-                // The host_platform helper still falls back to Platform::current()
+                // The host_platform helper still falls back to Platform::current().expect("host platform")
                 // on invalid values.
-                assert_eq!(host_subdir(), Platform::current(),);
+                assert_eq!(host_subdir(), Platform::current().expect("host platform"),);
             },
         );
     }

@@ -123,7 +123,7 @@ mod custom_platform_scoping {
     /// (declared first, so it is the host's best declared platform) and
     /// `local` (declares `__cuda` like the issue's machine-specific entry).
     fn manifest(targets: &str) -> String {
-        let current = Platform::current();
+        let current = Platform::current().expect("host platform");
         format!(
             r#"
             [workspace]
@@ -254,7 +254,7 @@ mod custom_platform_scoping {
     #[tokio::test(flavor = "current_thread")]
     async fn test_target_activation_scripts_scoped_to_requested_platform() {
         setup_tracing();
-        let ext = if Platform::current().is_windows() {
+        let ext = if Platform::current().expect("host platform").is_windows() {
             "bat"
         } else {
             "sh"

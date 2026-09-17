@@ -813,7 +813,12 @@ mod tests {
             ..Dependency::from("xtensor")
         };
 
-        let result = rosdep_to_conda_package_spec(&dep, &distro, Platform::current(), &package_map);
+        let result = rosdep_to_conda_package_spec(
+            &dep,
+            &distro,
+            Platform::current().expect("host platform"),
+            &package_map,
+        );
         assert!(matches!(
             result,
             Err(PackageMapError::VersionSpecConflict { .. })
@@ -830,7 +835,12 @@ mod tests {
             ..Dependency::from("boost")
         };
 
-        let result = rosdep_to_conda_package_spec(&dep, &distro, Platform::current(), &package_map);
+        let result = rosdep_to_conda_package_spec(
+            &dep,
+            &distro,
+            Platform::current().expect("host platform"),
+            &package_map,
+        );
         assert!(matches!(
             result,
             Err(PackageMapError::VersionSpecMultiplePackages { .. })

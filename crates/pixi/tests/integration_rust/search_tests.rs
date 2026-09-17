@@ -45,14 +45,14 @@ async fn search_return_latest_across_everything() {
 
     package_database.add_package(
         Package::build("foo", "3")
-            .with_subdir(Platform::current())
+            .with_subdir(Platform::current().expect("host platform"))
             .finish(),
     );
 
     let mut latest_package_database = MockRepoData::default();
     latest_package_database.add_package(
         Package::build("foo", "4")
-            .with_subdir(Platform::current())
+            .with_subdir(Platform::current().expect("host platform"))
             .finish(),
     );
 
@@ -74,7 +74,7 @@ async fn search_return_latest_across_everything() {
     let channel_latest = Url::from_file_path(latest_channel_dir).unwrap();
     let channel_not_latest = Url::from_file_path(not_latest_channel_dir).unwrap();
 
-    let platform = Platform::current();
+    let platform = Platform::current().expect("host platform");
     let pixi = PixiControl::from_manifest(&format!(
         r#"
     [project]
@@ -127,7 +127,7 @@ async fn search_falls_back_to_fuzzy_match() {
     let channel_dir = temp_dir.path().join("channel");
     package_database.write_repodata(&channel_dir).await.unwrap();
     let channel = Url::from_file_path(channel_dir).unwrap();
-    let platform = Platform::current();
+    let platform = Platform::current().expect("host platform");
     let pixi = PixiControl::from_manifest(&format!(
         r#"
     [project]
@@ -209,7 +209,7 @@ async fn search_using_match_spec() {
     let channel_dir = temp_dir.path().join("channel");
     package_database.write_repodata(&channel_dir).await.unwrap();
     let channel = Url::from_file_path(channel_dir).unwrap();
-    let platform = Platform::current();
+    let platform = Platform::current().expect("host platform");
     let pixi = PixiControl::from_manifest(&format!(
         r#"
     [project]
@@ -287,7 +287,7 @@ async fn test_search_multiple_versions() {
     let channel_dir = temp_dir.path().join("channel");
     package_database.write_repodata(&channel_dir).await.unwrap();
     let channel = Url::from_file_path(channel_dir).unwrap();
-    let platform = Platform::current();
+    let platform = Platform::current().expect("host platform");
     let pixi = PixiControl::from_manifest(&format!(
         r#"
     [project]
@@ -353,7 +353,7 @@ async fn test_search_multiple_packages_compact_view() {
     let channel_dir = temp_dir.path().join("channel");
     package_database.write_repodata(&channel_dir).await.unwrap();
     let channel = Url::from_file_path(channel_dir).unwrap();
-    let platform = Platform::current();
+    let platform = Platform::current().expect("host platform");
     let pixi = PixiControl::from_manifest(&format!(
         r#"
     [project]
@@ -419,7 +419,7 @@ async fn test_search_limit_zero_names_only() {
     let channel_dir = temp_dir.path().join("channel");
     package_database.write_repodata(&channel_dir).await.unwrap();
     let channel = Url::from_file_path(channel_dir).unwrap();
-    let platform = Platform::current();
+    let platform = Platform::current().expect("host platform");
     let pixi = PixiControl::from_manifest(&format!(
         r#"
     [project]
@@ -465,7 +465,7 @@ async fn test_search_json_output() {
     package_database.add_package(
         Package::build("foo", "2.0.0")
             .with_build("h2_0")
-            .with_subdir(Platform::current())
+            .with_subdir(Platform::current().expect("host platform"))
             .finish(),
     );
 
@@ -473,7 +473,7 @@ async fn test_search_json_output() {
     let channel_dir = temp_dir.path().join("channel");
     package_database.write_repodata(&channel_dir).await.unwrap();
     let channel = Url::from_file_path(channel_dir).unwrap();
-    let platform = Platform::current();
+    let platform = Platform::current().expect("host platform");
     let pixi = PixiControl::from_manifest(&format!(
         r#"
     [project]

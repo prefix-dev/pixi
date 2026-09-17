@@ -74,7 +74,8 @@ fn start_powershell(
         .tempfile()
         .into_diagnostic()?;
 
-    let mut shell_script = ShellScript::new(pwsh.clone(), Platform::current());
+    let mut shell_script =
+        ShellScript::new(pwsh.clone(), Platform::current().expect("host platform"));
     for (key, value) in env {
         shell_script.set_env_var(key, value).into_diagnostic()?;
     }
@@ -115,7 +116,7 @@ fn start_cmdexe(
         .into_diagnostic()?;
 
     // TODO: Should we just execute the activation scripts directly for cmd.exe?
-    let mut shell_script = ShellScript::new(cmdexe, Platform::current());
+    let mut shell_script = ShellScript::new(cmdexe, Platform::current().expect("host platform"));
     for (key, value) in env {
         shell_script.set_env_var(key, value).into_diagnostic()?;
     }
@@ -157,7 +158,7 @@ fn start_winbash(
         .tempfile()
         .into_diagnostic()?;
 
-    let mut shell_script = ShellScript::new(bash, Platform::current());
+    let mut shell_script = ShellScript::new(bash, Platform::current().expect("host platform"));
     for (key, value) in env {
         if key == "PATH" || key == "Path" {
             // For Git Bash on Windows, the PATH must be formatted as POSIX paths according
@@ -224,7 +225,7 @@ async fn start_unix_shell<T: Shell + Copy + 'static>(
         .tempfile()
         .into_diagnostic()?;
 
-    let mut shell_script = ShellScript::new(shell, Platform::current());
+    let mut shell_script = ShellScript::new(shell, Platform::current().expect("host platform"));
     for (key, value) in env {
         shell_script.set_env_var(key, value).into_diagnostic()?;
     }
@@ -292,7 +293,7 @@ async fn start_nu_shell(
         .tempfile()
         .into_diagnostic()?;
 
-    let mut shell_script = ShellScript::new(shell, Platform::current());
+    let mut shell_script = ShellScript::new(shell, Platform::current().expect("host platform"));
     for (key, value) in env {
         if key == "PATH" {
             // split path with PATHSEP
@@ -351,7 +352,13 @@ pub async fn execute(args: Args) -> miette::Result<ExitCode> {
         &InstallFilter::default(),
     )
     .await?;
-    let lock_file = lock_file_data.into_lock_file();
+    // Keep `lock_file_data` alive for the whole interactive shell: under the
+    // mount backend it owns the MountGuard (a shared flock) that stops the
+    // sidecar from unmounting the environment mid-session. Borrow the lock file
+    // rather than consuming it — `into_lock_file()` would drop the guard here,
+    // and the shell (started below via a PtySession, which does not replace this
+    // process) would then lose its mount ~grace-period seconds later.
+    let lock_file = lock_file_data.as_lock_file();
 
     // Get the environment variables we need to set activate the environment in the shell.
     let env = get_activated_environment_variables(
@@ -359,7 +366,7 @@ pub async fn execute(args: Args) -> miette::Result<ExitCode> {
         &environment,
         &environment.activation_platform(),
         CurrentEnvVarBehavior::Exclude,
-        Some(&lock_file),
+        Some(lock_file),
         workspace.config().force_activate(),
         workspace.config().experimental_activation_cache_usage(),
     )

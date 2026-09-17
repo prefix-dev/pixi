@@ -33,7 +33,7 @@ async fn conda_solve_group_functionality() {
         .unwrap();
 
     let channel = Url::from_file_path(channel_dir.path()).unwrap();
-    let platform = Platform::current();
+    let platform = Platform::current().expect("host platform");
     let pixi = PixiControl::from_manifest(&format!(
         r#"
     [project]
@@ -201,7 +201,7 @@ async fn test_solve_group_per_environment_editability() {
         .unwrap();
 
     let channel = Url::from_file_path(channel_dir.path()).unwrap();
-    let platform = Platform::current();
+    let platform = Platform::current().expect("host platform");
 
     let pixi = PixiControl::from_manifest(&format!(
         r#"
@@ -286,7 +286,7 @@ async fn test_transitive_uv_sources_editable_consistency() {
         .unwrap();
 
     let channel = Url::from_file_path(channel_dir.path()).unwrap();
-    let platform = Platform::current();
+    let platform = Platform::current().expect("host platform");
 
     let pixi = PixiControl::from_manifest(&format!(
         r#"

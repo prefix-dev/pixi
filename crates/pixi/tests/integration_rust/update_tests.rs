@@ -40,12 +40,12 @@ async fn test_update() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         "bar ==1"
     ));
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         "foo ==1"
     ));
 
@@ -68,7 +68,7 @@ async fn test_update() {
     assert!(
         lock.contains_match_spec(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "foo ==2"
         ),
         "expected `foo` to be on version 2 because we updated the lock file"
@@ -76,7 +76,7 @@ async fn test_update() {
     assert!(
         lock.contains_match_spec(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "bar ==2"
         ),
         "expected `bar` to be on version 2 because we updated the lock file"
@@ -116,12 +116,12 @@ async fn test_update_single_package() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         "bar ==1"
     ));
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         "foo ==1"
     ));
 
@@ -140,7 +140,7 @@ async fn test_update_single_package() {
     assert!(
         lock.contains_match_spec(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "foo ==2"
         ),
         "expected `foo` to be on version 2 because we updated it"
@@ -148,7 +148,7 @@ async fn test_update_single_package() {
     assert!(
         lock.contains_match_spec(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "bar ==1"
         ),
         "expected `bar` to be on version 1 because only foo should be updated"
@@ -163,12 +163,12 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
     let mut package_database = MockRepoData::default();
     package_database.add_package(
         Package::build("python", "3.12.0")
-            .with_subdir(Platform::current())
+            .with_subdir(Platform::current().expect("host platform"))
             .finish(),
     );
     package_database.add_package(
         Package::build("python", "3.12.1")
-            .with_subdir(Platform::current())
+            .with_subdir(Platform::current().expect("host platform"))
             .finish(),
     );
     let channel = package_database.into_channel().await.unwrap();
@@ -181,7 +181,7 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
     // Create a new project using our package database.
     pixi.init()
         .with_local_channel(channel.url().to_file_path().unwrap())
-        .with_platforms(vec![Platform::current()])
+        .with_platforms(vec![Platform::current().expect("host platform")])
         .await
         .unwrap();
 
@@ -200,7 +200,7 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
     let pkg = lock
         .get_pypi_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "minimal-package",
         )
         .unwrap();
@@ -238,7 +238,7 @@ async fn test_update_conda_package_doesnt_update_git_pypi() {
     let url_or_path = lock
         .get_pypi_package_url(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "minimal-package",
         )
         .unwrap();
@@ -262,12 +262,12 @@ async fn test_update_conda_package_doesnt_update_git_pypi_pinned() {
     let mut package_database = MockRepoData::default();
     package_database.add_package(
         Package::build("python", "3.12.0")
-            .with_subdir(Platform::current())
+            .with_subdir(Platform::current().expect("host platform"))
             .finish(),
     );
     package_database.add_package(
         Package::build("python", "3.12.1")
-            .with_subdir(Platform::current())
+            .with_subdir(Platform::current().expect("host platform"))
             .finish(),
     );
     let channel = package_database.into_channel().await.unwrap();
@@ -280,7 +280,7 @@ async fn test_update_conda_package_doesnt_update_git_pypi_pinned() {
     // Create a new project using our package database.
     pixi.init()
         .with_local_channel(channel.url().to_file_path().unwrap())
-        .with_platforms(vec![Platform::current()])
+        .with_platforms(vec![Platform::current().expect("host platform")])
         .await
         .unwrap();
 
@@ -325,7 +325,7 @@ async fn test_update_git_pypi_when_requested() {
     let mut package_database = MockRepoData::default();
     package_database.add_package(
         Package::build("python", "3.12.0")
-            .with_subdir(Platform::current())
+            .with_subdir(Platform::current().expect("host platform"))
             .finish(),
     );
     let channel = package_database.into_channel().await.unwrap();
@@ -338,7 +338,7 @@ async fn test_update_git_pypi_when_requested() {
     // Create a new project using our package database.
     pixi.init()
         .with_local_channel(channel.url().to_file_path().unwrap())
-        .with_platforms(vec![Platform::current()])
+        .with_platforms(vec![Platform::current().expect("host platform")])
         .await
         .unwrap();
 
@@ -377,7 +377,7 @@ async fn test_update_git_pypi_when_requested() {
     let pkg = lock
         .get_pypi_package_url(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "minimal-package",
         )
         .unwrap();
@@ -413,7 +413,7 @@ async fn test_removing_environment_unsatisfies_lock_file() {
         .unwrap();
 
     let channel = url::Url::from_file_path(channel_dir.path()).unwrap();
-    let platform = Platform::current();
+    let platform = Platform::current().expect("host platform");
 
     // Start with two environments, `a` and `b`, each backed by their own feature.
     let manifest_with_both = format!(
@@ -491,7 +491,7 @@ async fn test_update_shared_git_repo_multi_package() {
     let mut package_database = MockRepoData::default();
     package_database.add_package(
         Package::build("python", "3.12.0")
-            .with_subdir(Platform::current())
+            .with_subdir(Platform::current().expect("host platform"))
             .finish(),
     );
     let channel = package_database.into_channel().await.unwrap();
@@ -504,7 +504,7 @@ async fn test_update_shared_git_repo_multi_package() {
     // Create a new project using our package database.
     pixi.init()
         .with_local_channel(channel.url().to_file_path().unwrap())
-        .with_platforms(vec![Platform::current()])
+        .with_platforms(vec![Platform::current().expect("host platform")])
         .await
         .unwrap();
 
@@ -533,14 +533,14 @@ pkg-b = {{ git = "{base_url}", subdirectory = "pkg-b", rev = "{first_commit}" }}
     let pkg_a_first = lock
         .get_pypi_package_url(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "pkg-a",
         )
         .unwrap();
     let pkg_b_first = lock
         .get_pypi_package_url(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "pkg-b",
         )
         .unwrap();
@@ -572,14 +572,14 @@ pkg-b = {{ git = "{base_url}", subdirectory = "pkg-b", rev = "{first_commit}" }}
     let pkg_a_updated = lock_updated
         .get_pypi_package_url(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "pkg-a",
         )
         .unwrap();
     let pkg_b_updated = lock_updated
         .get_pypi_package_url(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "pkg-b",
         )
         .unwrap();

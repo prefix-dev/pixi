@@ -410,7 +410,7 @@ impl CommandDispatcherBuilder {
         let url_resolver = self.url_resolver.unwrap_or_default();
 
         let tool_platform = self.tool_platform.unwrap_or_else(|| {
-            let platform = Platform::current();
+            let platform = Platform::current().expect("host platform");
             let virtual_packages =
                 VirtualPackages::detect(&VirtualPackageOverrides::default(), None)
                     .unwrap_or_default();

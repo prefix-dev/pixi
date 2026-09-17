@@ -412,7 +412,7 @@ impl GenerateRecipe for PythonGenerator {
             variants,
         );
 
-        let build_platform = Platform::current();
+        let build_platform = Platform::current().expect("host platform");
 
         let editable = effective_editable(params.editable);
 

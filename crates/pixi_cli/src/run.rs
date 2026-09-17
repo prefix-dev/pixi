@@ -723,8 +723,8 @@ fn command_not_found<'p>(workspace: &'p Workspace, explicit_environment: Option<
     }) {
         pixi_progress::println!(
             "\nHelp: This platform ({}) is not supported. Please run the following command to add this platform to the workspace:\n\n\tpixi workspace platform add {}",
-            Platform::current(),
-            Platform::current()
+            Platform::current().expect("host platform"),
+            Platform::current().expect("host platform")
         );
     }
 }
