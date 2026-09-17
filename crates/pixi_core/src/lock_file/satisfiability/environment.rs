@@ -12,8 +12,8 @@ use pixi_manifest::{
 };
 use pixi_pypi_spec::PixiPypiSource;
 use pypi_modifiers::Tags;
-use rattler_conda_types::{ChannelUrl, NamedChannelOrUrl, Platform};
-use rattler_lock::{LockedPackage, PypiIndexes, UrlOrPath};
+use rattler_conda_types::{ChannelUrl, NamedChannelOrUrl};
+use rattler_lock::{LockedPackage, PlatformName, PypiIndexes, UrlOrPath};
 use url::Url;
 use uv_distribution_filename::{DistExtension, ExtensionError, SourceDistExtension, WheelFilename};
 
@@ -194,7 +194,6 @@ pub fn verify_environment_satisfiability(
 
         // Actually check all pypi packages in one iteration
         for (lock_platform, package_it) in locked_environment.pypi_packages_by_platform() {
-            let platform = lock_platform.subdir();
             for package_data in package_it {
                 let record = UnresolvedPypiRecord::from(package_data.clone());
                 let pypi_source = pypi_dependencies
@@ -202,7 +201,7 @@ pub fn verify_environment_satisfiability(
                     .and_then(|specs| specs.last())
                     .map(|spec| &spec.source);
                 no_build_check.check(&record, pypi_source)?;
-                pypi_wheel_tags_check.check(platform, &record)?;
+                pypi_wheel_tags_check.check(lock_platform.name(), &record)?;
             }
         }
     }
@@ -258,7 +257,7 @@ pub fn verify_environment_satisfiability(
 }
 
 struct PypiWheelTagsCheck {
-    platform_wheel_tags: HashMap<Platform, Tags>,
+    platform_wheel_tags: HashMap<PlatformName, Tags>,
 }
 
 impl PypiWheelTagsCheck {
@@ -270,7 +269,7 @@ impl PypiWheelTagsCheck {
             let workspace = environment.workspace_manifest();
             locked_environment
                 .packages_by_platform()
-                .filter_map(|(lock_platform, packages)| {
+                .filter_map(|(lock_platform, mut packages)| {
                     // Try the lockfile's platform name first; if it doesn't
                     // appear in the workspace (post-`[system-requirements]`
                     // migration the bare-subdir name is replaced by a
@@ -286,24 +285,21 @@ impl PypiWheelTagsCheck {
                                 .iter()
                                 .find(|p| p.subdir() == lock_platform.subdir())
                         })?;
-                    Some((pixi_platform, packages))
-                })
-                .flat_map(|(pixi_platform, packages)| {
-                    packages.map(move |package| (pixi_platform, package))
-                })
-                .filter_map(|(pixi_platform, package)| match package {
-                    LockedPackage::Conda(rattler_lock::CondaPackageData::Binary(package)) => {
-                        Some((pixi_platform, package))
-                    }
-                    _ => None,
-                })
-                .filter(move |(_, package)| {
-                    pypi_modifiers::pypi_tags::is_python_record(&package.package_record)
-                })
-                .filter_map(|(pixi_platform, package)| {
-                    pypi_modifiers::pypi_tags::get_pypi_tags(pixi_platform, &package.package_record)
-                        .ok()
-                        .map(|tags| (pixi_platform.subdir(), tags))
+                    let tags = packages.find_map(|package| match package {
+                        LockedPackage::Conda(rattler_lock::CondaPackageData::Binary(package))
+                            if pypi_modifiers::pypi_tags::is_python_record(
+                                &package.package_record,
+                            ) =>
+                        {
+                            pypi_modifiers::pypi_tags::get_pypi_tags(
+                                pixi_platform,
+                                &package.package_record,
+                            )
+                            .ok()
+                        }
+                        _ => None,
+                    })?;
+                    Some((lock_platform.name().clone(), tags))
                 })
                 .collect::<HashMap<_, _>>()
         };
@@ -315,14 +311,14 @@ impl PypiWheelTagsCheck {
 
     pub fn check(
         &self,
-        platform: Platform,
+        platform_name: &PlatformName,
         package_data: &UnresolvedPypiRecord,
     ) -> Result<(), EnvironmentUnsat> {
         let package_data = package_data.as_package_data();
         let Some(package_file_name) = package_data.location().file_name() else {
             return Ok(());
         };
-        let Some(platform_tags) = self.platform_wheel_tags.get(&platform) else {
+        let Some(platform_tags) = self.platform_wheel_tags.get(platform_name) else {
             return Ok(());
         };
         let Ok(wheel) = WheelFilename::from_str(package_file_name) else {
@@ -484,4 +480,121 @@ fn verify_pypi_indexes(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use super::*;
+    use crate::Workspace;
+
+    #[test]
+    fn test_rich_platforms_sharing_subdir_wheel_tags() {
+        let manifest_content = r#"
+        [workspace]
+        name = "rich-wheel-repro"
+        channels = ["conda-forge"]
+        platforms = [
+            "linux-64",
+            { name = "linux-new", platform = "linux-64", glibc = "2.38" },
+        ]
+
+        [dependencies]
+        python = "3.14.*"
+
+        [pypi-dependencies]
+        caio = "==0.12.4"
+        "#;
+        let workspace = Workspace::from_str(Path::new("pixi.toml"), manifest_content).unwrap();
+        let env = workspace.default_environment();
+
+        let lock_str = r#"
+version: 7
+platforms:
+- name: linux-64
+  subdir: linux-64
+- name: linux-new
+  subdir: linux-64
+  virtual-packages:
+  - __glibc=2.38
+environments:
+  default:
+    channels:
+    - url: https://conda.anaconda.org/conda-forge/
+    indexes:
+    - https://pypi.org/simple
+    packages:
+      linux-64:
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.14.2-h32b2ec7_100_cp314.conda
+      - pypi: https://files.pythonhosted.org/packages/caio-0.12.4-py3-none-any.whl
+      linux-new:
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.14.2-h32b2ec7_100_cp314.conda
+      - pypi: https://files.pythonhosted.org/packages/caio-0.12.4-cp314-cp314-manylinux_2_34_x86_64.whl
+packages:
+- conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.14.2-h32b2ec7_100_cp314.conda
+  build_number: 100
+  size: 30000000
+  license: Python-2.0
+  purls: []
+- pypi: https://files.pythonhosted.org/packages/caio-0.12.4-py3-none-any.whl
+  name: caio
+  version: 0.12.4
+- pypi: https://files.pythonhosted.org/packages/caio-0.12.4-cp314-cp314-manylinux_2_34_x86_64.whl
+  name: caio
+  version: 0.12.4
+"#;
+        let lock_file =
+            rattler_lock::LockFile::from_str_with_base_directory(lock_str, None).unwrap();
+        let locked_env = lock_file.environment("default").unwrap();
+
+        // Both platforms should satisfy requirements with their respective wheel tags
+        if let Err(e) = verify_environment_satisfiability(&env, locked_env) {
+            panic!("verification failed: {e:?}");
+        }
+
+        // Now test when linux-64 has a wheel that requires glibc 2.34 (which it does not satisfy)
+        let invalid_lock_str = r#"
+version: 7
+platforms:
+- name: linux-64
+  subdir: linux-64
+- name: linux-new
+  subdir: linux-64
+  virtual-packages:
+  - __glibc=2.38
+environments:
+  default:
+    channels:
+    - url: https://conda.anaconda.org/conda-forge/
+    indexes:
+    - https://pypi.org/simple
+    packages:
+      linux-64:
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.14.2-h32b2ec7_100_cp314.conda
+      - pypi: https://files.pythonhosted.org/packages/caio-0.12.4-cp314-cp314-manylinux_2_34_x86_64.whl
+      linux-new:
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.14.2-h32b2ec7_100_cp314.conda
+      - pypi: https://files.pythonhosted.org/packages/caio-0.12.4-cp314-cp314-manylinux_2_34_x86_64.whl
+packages:
+- conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.14.2-h32b2ec7_100_cp314.conda
+  build_number: 100
+  size: 30000000
+  license: Python-2.0
+  purls: []
+- pypi: https://files.pythonhosted.org/packages/caio-0.12.4-cp314-cp314-manylinux_2_34_x86_64.whl
+  name: caio
+  version: 0.12.4
+"#;
+        let invalid_lock_file =
+            rattler_lock::LockFile::from_str_with_base_directory(invalid_lock_str, None).unwrap();
+        let invalid_locked_env = invalid_lock_file.environment("default").unwrap();
+
+        match verify_environment_satisfiability(&env, invalid_locked_env) {
+            Err(EnvironmentUnsat::PypiWheelTagsMismatch { wheel }) => {
+                assert_eq!(wheel, "caio");
+            }
+            res => panic!("expected PypiWheelTagsMismatch, got {res:?}"),
+        }
+    }
 }
