@@ -387,7 +387,21 @@ pub(crate) async fn ensure_pixi_build_preview_enabled(
 }
 
 fn pypi_path_deps(package: &str, path: &Path, workspace: &Workspace) -> miette::Result<PypiDeps> {
-    let requirement_text = format!("{package} @ {}", manifest_path_string(path));
+    let path_str = manifest_path_string(path);
+    let url_str = if path.is_absolute() {
+        if path_str.starts_with('/') {
+            format!("file://{path_str}")
+        } else {
+            format!("file:///{path_str}")
+        }
+    } else {
+        if path_str.starts_with("./") || path_str.starts_with("../") {
+            path_str
+        } else {
+            format!("./{path_str}")
+        }
+    };
+    let requirement_text = format!("{package} @ {url_str}");
     let requirement = Requirement::parse(&requirement_text, workspace.root()).into_diagnostic()?;
     let name =
         PypiPackageName::from_normalized(requirement.name.clone()).with_source(package.to_string());
