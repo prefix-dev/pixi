@@ -109,7 +109,7 @@ use serde::{Deserialize, Serialize};
 /// tqdm/cli.py,sha256=x_c8nmc4Huc-lKEsAXj78ZiyqSJ9hJ71j7vltY67icw,10509
 /// tqdm-4.62.3.dist-info/RECORD,,
 /// ```
-#[derive(Deserialize, Serialize, PartialOrd, PartialEq, Ord, Eq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialOrd, PartialEq, Ord, Eq)]
 pub(crate) struct RecordEntry {
     pub(crate) path: String,
     pub(crate) hash: Option<String>,

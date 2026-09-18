@@ -10,6 +10,7 @@ use uv_distribution_types::{CachedDist, Name};
 use uv_python::PythonEnvironment;
 
 use ahash::AHashMap;
+use miette::IntoDiagnostic;
 
 use super::install_wheel::{LibKind, get_wheel_info};
 
@@ -176,7 +177,7 @@ impl CondaPrefixPath {
     /// check is best-effort.
     fn from_conda_record(path: PathBuf) -> Option<Self> {
         if path.is_relative() {
-            Some(Self(path))
+            Some(Self(normalize_std(&path)))
         } else {
             tracing::debug!(
                 "ignoring non-relative conda paths.json entry `{}` in the clobber registry",
@@ -302,6 +303,127 @@ impl PypiCondaClobberRegistry {
         }
         Ok(Some(clobber_report))
     }
+
+    /// Return the name of the conda package claiming this path, if any.
+    pub(crate) fn claimed_by_conda_package(
+        &self,
+        prefix_root: &Path,
+        site_packages: &Path,
+        record_entry_path: &str,
+    ) -> Option<&rattler_conda_types::PackageName> {
+        if self.paths_registry.is_empty() {
+            return None;
+        }
+
+        let absolute_target = site_packages.join(record_entry_path);
+        let normalized = normalize_std(&absolute_target);
+        let rel = match normalized.strip_prefix(prefix_root) {
+            Ok(rel) => rel.to_path_buf(),
+            Err(_) => {
+                if let (Ok(canon_root), Ok(canon_site_packages)) = (
+                    dunce::canonicalize(prefix_root),
+                    dunce::canonicalize(site_packages),
+                ) {
+                    let canon_target = normalize_std(&canon_site_packages.join(record_entry_path));
+                    if let Ok(rel) = canon_target.strip_prefix(&canon_root) {
+                        rel.to_path_buf()
+                    } else {
+                        return None;
+                    }
+                } else {
+                    return None;
+                }
+            }
+        };
+
+        let conda_path = CondaPrefixPath::from_conda_record(rel)?;
+        self.paths_registry.get(&conda_path)
+    }
+
+    /// Check if a RECORD entry path is claimed by any installed conda package.
+    #[allow(dead_code)]
+    pub(crate) fn is_claimed_by_conda(
+        &self,
+        prefix_root: &Path,
+        site_packages: &Path,
+        record_entry_path: &str,
+    ) -> bool {
+        self.claimed_by_conda_package(prefix_root, site_packages, record_entry_path)
+            .is_some()
+    }
+}
+
+/// Filters a PyPI package's `RECORD` file in place, removing any entries that are
+/// claimed by installed conda packages in the environment.
+///
+/// When moving a package from PyPI to conda or unlinking an extraneous PyPI package
+/// whose files overlap with an installed conda package, `uv_installer::uninstall`
+/// would otherwise walk the old RECORD and delete the conda package's files from disk.
+/// By removing those entries from RECORD beforehand, `uv_installer::uninstall`
+/// preserves all conda-managed files while removing the PyPI `.dist-info` and any
+/// unshared files.
+pub(crate) fn filter_record_conda_paths(
+    dist_info_path: &Path,
+    prefix_root: &Path,
+    clobber_registry: &PypiCondaClobberRegistry,
+) -> miette::Result<()> {
+    if clobber_registry.paths_registry.is_empty() {
+        return Ok(());
+    }
+
+    let Some(site_packages) = dist_info_path.parent() else {
+        return Ok(());
+    };
+
+    let record_path = dist_info_path.join("RECORD");
+    let Ok(mut record_file) = fs_err::File::open(&record_path) else {
+        return Ok(());
+    };
+
+    let records = match super::install_wheel::read_record_file(&mut record_file) {
+        Ok(records) => records,
+        Err(err) => {
+            tracing::debug!(
+                "Could not parse RECORD file `{}` to check for conda clobbering: {err}",
+                record_path.display()
+            );
+            return Ok(());
+        }
+    };
+
+    let mut any_claimed = false;
+    let mut filtered_records = Vec::with_capacity(records.len());
+    for entry in records {
+        if let Some(conda_pkg) =
+            clobber_registry.claimed_by_conda_package(prefix_root, site_packages, &entry.path)
+        {
+            tracing::debug!(
+                "Preserving file '{}' claimed by installed conda package '{}' during PyPI uninstall",
+                entry.path,
+                conda_pkg.as_source()
+            );
+            any_claimed = true;
+        } else {
+            filtered_records.push(entry);
+        }
+    }
+
+    if !any_claimed {
+        return Ok(());
+    }
+
+    let file = fs_err::File::create(&record_path).into_diagnostic()?;
+    let mut record_writer = csv::WriterBuilder::new()
+        .has_headers(false)
+        .escape(b'"')
+        .from_writer(file);
+
+    for entry in filtered_records {
+        record_writer.serialize(entry).into_diagnostic()?;
+    }
+    record_writer.flush().into_diagnostic()?;
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -505,6 +627,186 @@ mod tests {
         assert_eq!(
             report.to_string(),
             "PyPI package files will overwrite files installed by conda packages:\n  - PyPI package 'prek' overwrites conda package 'prek':\n    - bin/prek-1\n    - bin/prek-2\n    - bin/prek-3\n    - bin/prek-4\n    - bin/prek-5\n    - ... 2 other files\n"
+        );
+    }
+
+    fn mock_clobber_registry(
+        paths: impl IntoIterator<Item = (&'static str, &'static str)>,
+    ) -> super::PypiCondaClobberRegistry {
+        use std::str::FromStr;
+        let mut registry = ahash::AHashMap::default();
+        for (path, pkg) in paths {
+            registry.insert(
+                CondaPrefixPath(PathBuf::from(path)),
+                rattler_conda_types::PackageName::from_str(pkg).unwrap(),
+            );
+        }
+        super::PypiCondaClobberRegistry {
+            paths_registry: registry,
+        }
+    }
+
+    #[test]
+    fn test_is_claimed_by_conda() {
+        let prefix = PathBuf::from("/my/env");
+        let site_packages = prefix.join("lib/python3.12/site-packages");
+        let registry = mock_clobber_registry([
+            ("lib/python3.12/site-packages/pystac/__init__.py", "pystac"),
+            ("lib/python3.12/site-packages/pystac/item.py", "pystac"),
+            ("bin/pystac-cli", "pystac"),
+        ]);
+
+        assert!(registry.is_claimed_by_conda(&prefix, &site_packages, "pystac/__init__.py"));
+        assert!(registry.is_claimed_by_conda(&prefix, &site_packages, "pystac/item.py"));
+        assert!(registry.is_claimed_by_conda(&prefix, &site_packages, "../../../bin/pystac-cli"));
+
+        assert!(!registry.is_claimed_by_conda(&prefix, &site_packages, "pystac/unclaimed.py"));
+        assert!(!registry.is_claimed_by_conda(&prefix, &site_packages, "other/__init__.py"));
+        assert!(!registry.is_claimed_by_conda(
+            &prefix,
+            &site_packages,
+            "pystac-1.15.2.dist-info/RECORD"
+        ));
+        assert!(!registry.is_claimed_by_conda(
+            &prefix,
+            &site_packages,
+            "../../../../../outside/file"
+        ));
+    }
+
+    #[test]
+    fn test_filter_record_conda_paths_removes_claimed_entries() {
+        use crate::install_wheel::read_record_file;
+
+        let temp = tempfile::tempdir().unwrap();
+        let prefix = temp.path().join("env");
+        let site_packages = prefix.join("lib/python3.12/site-packages");
+        let dist_info = site_packages.join("pystac-1.15.2.dist-info");
+        fs_err::create_dir_all(&dist_info).unwrap();
+
+        let record_path = dist_info.join("RECORD");
+        let initial_record_content = "\
+pystac/__init__.py,sha256=aaa,100
+pystac/item.py,sha256=bbb,200
+pystac_extra.py,sha256=ccc,300
+pystac-1.15.2.dist-info/RECORD,,
+";
+        fs_err::write(&record_path, initial_record_content).unwrap();
+
+        let registry = mock_clobber_registry([
+            ("lib/python3.12/site-packages/pystac/__init__.py", "pystac"),
+            ("lib/python3.12/site-packages/pystac/item.py", "pystac"),
+        ]);
+
+        super::filter_record_conda_paths(&dist_info, &prefix, &registry).unwrap();
+
+        let mut record_file = fs_err::File::open(&record_path).unwrap();
+        let records = read_record_file(&mut record_file).unwrap();
+
+        let paths: Vec<String> = records.into_iter().map(|r| r.path).collect();
+        assert_eq!(
+            paths,
+            vec![
+                "pystac_extra.py".to_string(),
+                "pystac-1.15.2.dist-info/RECORD".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn test_filter_record_conda_paths_no_claimed_leaves_file_intact() {
+        use crate::install_wheel::read_record_file;
+
+        let temp = tempfile::tempdir().unwrap();
+        let prefix = temp.path().join("env");
+        let site_packages = prefix.join("lib/python3.12/site-packages");
+        let dist_info = site_packages.join("foo-1.0.0.dist-info");
+        fs_err::create_dir_all(&dist_info).unwrap();
+
+        let record_path = dist_info.join("RECORD");
+        let initial_record_content = "\
+foo/__init__.py,sha256=aaa,100
+foo-1.0.0.dist-info/RECORD,,
+";
+        fs_err::write(&record_path, initial_record_content).unwrap();
+
+        let registry =
+            mock_clobber_registry([("lib/python3.12/site-packages/bar/__init__.py", "bar")]);
+
+        super::filter_record_conda_paths(&dist_info, &prefix, &registry).unwrap();
+
+        let mut record_file = fs_err::File::open(&record_path).unwrap();
+        let records = read_record_file(&mut record_file).unwrap();
+
+        let paths: Vec<String> = records.into_iter().map(|r| r.path).collect();
+        assert_eq!(
+            paths,
+            vec![
+                "foo/__init__.py".to_string(),
+                "foo-1.0.0.dist-info/RECORD".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn test_filter_record_with_conda_packages_end_to_end() {
+        let json = r#"{
+  "name": "pystac",
+  "version": "1.14.3",
+  "build": "pyhd8ed1ab_0",
+  "build_number": 0,
+  "fn": "pystac-1.14.3-pyhd8ed1ab_0.conda",
+  "channel": "https://conda.anaconda.org/conda-forge",
+  "url": "https://conda.anaconda.org/conda-forge/noarch/pystac-1.14.3-pyhd8ed1ab_0.conda",
+  "extracted_package_dir": "/tmp",
+  "files": [],
+  "paths_data": {
+    "paths_version": 1,
+    "paths": [
+      {
+        "_path": "lib/python3.12/site-packages/pystac/__init__.py",
+        "path_type": "hardlink"
+      },
+      {
+        "_path": "lib/python3.12/site-packages/pystac/item.py",
+        "path_type": "hardlink"
+      }
+    ]
+  },
+  "link": {
+    "source": "/tmp",
+    "type": 1
+  }
+}"#;
+        let prefix_record: rattler_conda_types::PrefixRecord = serde_json::from_str(json).unwrap();
+
+        let temp = tempfile::tempdir().unwrap();
+        let prefix = temp.path().join("env");
+        let site_packages = prefix.join("lib/python3.12/site-packages");
+        let dist_info = site_packages.join("pystac-1.15.2.dist-info");
+        fs_err::create_dir_all(&dist_info).unwrap();
+
+        let record_path = dist_info.join("RECORD");
+        let initial_record = "\
+pystac/__init__.py,sha256=111,10
+pystac/item.py,sha256=222,20
+pystac-1.15.2.dist-info/METADATA,sha256=333,30
+pystac-1.15.2.dist-info/RECORD,,
+";
+        fs_err::write(&record_path, initial_record).unwrap();
+
+        let registry = super::PypiCondaClobberRegistry::with_conda_packages(&[prefix_record]);
+        super::filter_record_conda_paths(&dist_info, &prefix, &registry).unwrap();
+
+        let mut record_file = fs_err::File::open(&record_path).unwrap();
+        let records = crate::install_wheel::read_record_file(&mut record_file).unwrap();
+        let paths: Vec<String> = records.into_iter().map(|r| r.path).collect();
+        assert_eq!(
+            paths,
+            vec![
+                "pystac-1.15.2.dist-info/METADATA".to_string(),
+                "pystac-1.15.2.dist-info/RECORD".to_string(),
+            ]
         );
     }
 }

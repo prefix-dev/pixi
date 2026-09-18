@@ -12,6 +12,7 @@ license.workspace = true
 ahash = { workspace = true }
 console = { workspace = true }
 csv = { workspace = true }
+dunce = { workspace = true }
 fancy_display = { workspace = true }
 fs-err = { workspace = true }
 itertools = { workspace = true }

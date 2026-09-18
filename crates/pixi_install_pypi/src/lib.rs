@@ -5,7 +5,7 @@ use std::{
     sync::Arc,
 };
 
-use conda_pypi_clobber::PypiCondaClobberRegistry;
+use conda_pypi_clobber::{PypiCondaClobberRegistry, filter_record_conda_paths};
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, WrapErr};
@@ -162,6 +162,7 @@ pub enum ContinuePyPIPrefixUpdate<'a> {
 /// resolve and validate the paths recorded in each wheel's `RECORD`. The
 /// caller builds it from the old [`PythonInfo`] plus the env prefix.
 async fn uninstall_outdated_site_packages(
+    prefix: &Prefix,
     layout: &uv_install_wheel::Layout,
     site_packages: &Path,
 ) -> miette::Result<()> {
@@ -207,7 +208,23 @@ async fn uninstall_outdated_site_packages(
         })
         .collect::<Vec<_>>();
 
+    if installed.is_empty() {
+        return Ok(());
+    }
+
+    let installed_packages = prefix.find_installed_packages().unwrap_or_default();
+    let clobber_registry = PypiCondaClobberRegistry::with_conda_packages(&installed_packages);
+
     for dist_info in installed {
+        if let Err(e) =
+            filter_record_conda_paths(dist_info.install_path(), prefix.root(), &clobber_registry)
+        {
+            tracing::warn!(
+                "Failed to filter conda paths from RECORD for {}: {e}",
+                dist_info.name()
+            );
+        }
+
         uv_installer::uninstall(&dist_info, layout)
             .await
             .expect("uninstallation of old site-packages failed");
@@ -250,7 +267,7 @@ pub async fn on_python_interpreter_change<'a>(
             let site_packages_path = prefix.root().join(&old.site_packages_path);
             if site_packages_path.exists() {
                 let layout = layout_from_python_info(prefix, old);
-                uninstall_outdated_site_packages(&layout, &site_packages_path).await?;
+                uninstall_outdated_site_packages(prefix, &layout, &site_packages_path).await?;
             }
             Ok(ContinuePyPIPrefixUpdate::Skip)
         }
@@ -259,7 +276,7 @@ pub async fn on_python_interpreter_change<'a>(
                 let site_packages_path = prefix.root().join(&old.site_packages_path);
                 if site_packages_path.exists() {
                     let layout = layout_from_python_info(prefix, old);
-                    uninstall_outdated_site_packages(&layout, &site_packages_path).await?;
+                    uninstall_outdated_site_packages(prefix, &layout, &site_packages_path).await?;
                 }
             }
             Ok(ContinuePyPIPrefixUpdate::Continue(new))
@@ -269,7 +286,7 @@ pub async fn on_python_interpreter_change<'a>(
                 let site_packages_path = prefix.root().join(&info.site_packages_path);
                 if site_packages_path.exists() {
                     let layout = layout_from_python_info(prefix, info);
-                    uninstall_outdated_site_packages(&layout, &site_packages_path).await?;
+                    uninstall_outdated_site_packages(prefix, &layout, &site_packages_path).await?;
                 }
                 return Ok(ContinuePyPIPrefixUpdate::Skip);
             }
@@ -1107,7 +1124,31 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         }
         let start = std::time::Instant::now();
         let layout = setup.venv.interpreter().layout();
+
+        let installed_packages =
+            self.config
+                .prefix
+                .find_installed_packages()
+                .with_context(|| {
+                    format!(
+                        "failed to determine the currently installed packages for {}",
+                        self.config.prefix.root().display()
+                    )
+                })?;
+        let clobber_registry = PypiCondaClobberRegistry::with_conda_packages(&installed_packages);
+
         for dist_info in extraneous.iter().chain(reinstalls.iter().map(|(d, _)| d)) {
+            if let Err(e) = filter_record_conda_paths(
+                dist_info.install_path(),
+                self.config.prefix.root(),
+                &clobber_registry,
+            ) {
+                tracing::warn!(
+                    "Failed to filter conda paths from RECORD for {}: {e}",
+                    dist_info.name()
+                );
+            }
+
             let summary = match uv_installer::uninstall(dist_info, &layout).await {
                 Ok(sum) => sum,
                 // Get error types from uv_installer

@@ -6961,6 +6961,7 @@ dependencies = [
  "assert_matches",
  "console",
  "csv",
+ "dunce",
  "fancy_display",
  "fs-err",
  "itertools 0.15.0",
