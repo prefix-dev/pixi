@@ -181,6 +181,24 @@ impl Middleware for DelegateToClient {
     }
 }
 
+/// Create a dummy reqwest client for middleware builders that delegate
+/// all requests to an existing client stack.
+///
+/// Using `reqwest::Client::new()` unconditionally attempts to load root
+/// certificates from the system store, which panics on platforms without a
+/// conventional system CA store (e.g. Android/Termux, issue #6825), even when
+/// Pixi is configured to use webpki roots.
+///
+/// Disabling built-in system roots via `tls_certs_only([])` ensures that
+/// constructing this unused stub client never attempts to inspect the host
+/// system's certificate store.
+fn stub_reqwest_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .tls_certs_only(std::iter::empty::<reqwest::Certificate>())
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new())
+}
+
 impl PurlDerivationClient {
     /// Construct a new `PurlDerivationClientBuilder` with the provided `Client` and
     /// the resolved on-disk `cache_path` for the conda-pypi mapping cache.
@@ -217,7 +235,7 @@ impl PurlDerivationClient {
 
         let wrapped_client = LazyClient::new(move || {
             let client = client.client().clone();
-            ClientBuilder::new(reqwest::Client::new())
+            ClientBuilder::new(stub_reqwest_client())
                 .with(retry_strategy)
                 .with(cache_strategy)
                 .with(DelegateToClient(client))
@@ -478,4 +496,27 @@ fn replace_pypi_purls(record: &mut RepoDataRecord, purls: impl IntoIterator<Item
         .get_or_insert_with(BTreeSet::new);
     record_purls.retain(|purl| purl.package_type() != "pypi");
     record_purls.extend(purls);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_stub_reqwest_client() {
+        let client = stub_reqwest_client();
+        let _ = client;
+    }
+
+    #[test]
+    fn test_purl_derivation_client_builder() {
+        let base_client = reqwest_middleware::ClientBuilder::new(stub_reqwest_client()).build();
+        let lazy_client = LazyClient::new(move || base_client.clone());
+        let builder = PurlDerivationClient::builder(
+            lazy_client,
+            std::env::temp_dir().join("pixi_test_pypi_mapping"),
+            false,
+        );
+        let _ = builder.client.client();
+    }
 }

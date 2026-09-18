@@ -348,11 +348,13 @@ fn partial_config(config: &mut Config, key: &str) -> miette::Result<()> {
         "default-channels" => new.default_channels = config.default_channels.clone(),
         "shell" => new.shell = config.shell.clone(),
         "tls-no-verify" => new.tls_no_verify = config.tls_no_verify,
+        "tls-root-certs" => new.tls_root_certs = config.tls_root_certs,
         "offline" => new.offline = config.offline,
         "authentication-override-file" => {
             new.authentication_override_file = config.authentication_override_file.clone()
         }
         "mirrors" => new.mirrors = config.mirrors.clone(),
+        "pinning-strategy" => new.pinning_strategy = config.pinning_strategy,
         "repodata-config" => new.repodata_config = config.repodata_config.clone(),
         "index-config" => new.index_config = config.index_config.clone(),
         "pypi-config" => new.pypi_config = config.pypi_config.clone(),
@@ -363,10 +365,13 @@ fn partial_config(config: &mut Config, key: &str) -> miette::Result<()> {
         _ => {
             let keys = [
                 "default-channels",
+                "shell",
                 "tls-no-verify",
+                "tls-root-certs",
                 "offline",
                 "authentication-override-file",
                 "mirrors",
+                "pinning-strategy",
                 "repodata-config",
                 "index-config",
                 "pypi-config",
@@ -382,4 +387,30 @@ fn partial_config(config: &mut Config, key: &str) -> miette::Result<()> {
     *config = new;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pixi_config::TlsRootCerts;
+
+    #[test]
+    fn test_partial_config_supported_keys() {
+        let mut config = Config {
+            tls_root_certs: Some(TlsRootCerts::Webpki),
+            ..Default::default()
+        };
+
+        // tls-root-certs should be preserved and other fields reset
+        assert!(partial_config(&mut config, "tls-root-certs").is_ok());
+        assert_eq!(config.tls_root_certs, Some(TlsRootCerts::Webpki));
+
+        // Invalid keys should error with the list of supported keys
+        let mut config = Config::default();
+        let err = partial_config(&mut config, "nonexistent-key").unwrap_err();
+        let err_msg = err.to_string();
+        assert!(err_msg.contains("tls-root-certs"));
+        assert!(err_msg.contains("shell"));
+        assert!(err_msg.contains("pinning-strategy"));
+    }
 }
