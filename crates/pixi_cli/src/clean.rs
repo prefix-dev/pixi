@@ -187,19 +187,25 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         } else {
             total_removed +=
                 remove_folder_with_progress(workspace.default_environments_dir(), false).await?;
-        total_removed +=
-            remove_folder_with_progress(workspace.default_solve_group_environments_dir(), false)
+            total_removed +=
+                remove_folder_with_progress(
+                    workspace.default_solve_group_environments_dir(),
+                    false,
+                )
                 .await?;
-        total_removed += remove_folder_with_progress(workspace.environments_dir(), false).await?;
-        total_removed +=
-            remove_folder_with_progress(workspace.solve_group_environments_dir(), false).await?;
-        total_removed += remove_folder_with_progress(workspace.task_cache_folder(), false).await?;
-        total_removed +=
-            remove_folder_with_progress(workspace.activation_env_cache_folder(), false).await?;
-        for dir in workspace_build_cache_dirs(&workspace) {
-            total_removed += remove_folder_with_progress(dir, false).await?;
-        }
-        prune_workspace_registry().await?;
+            total_removed +=
+                remove_folder_with_progress(workspace.environments_dir(), false).await?;
+            total_removed +=
+                remove_folder_with_progress(workspace.solve_group_environments_dir(), false)
+                    .await?;
+            total_removed +=
+                remove_folder_with_progress(workspace.task_cache_folder(), false).await?;
+            total_removed +=
+                remove_folder_with_progress(workspace.activation_env_cache_folder(), false).await?;
+            for dir in workspace_build_cache_dirs(&workspace) {
+                total_removed += remove_folder_with_progress(dir, false).await?;
+            }
+            prune_workspace_registry().await?;
         }
     } else {
         if args.activation_cache {

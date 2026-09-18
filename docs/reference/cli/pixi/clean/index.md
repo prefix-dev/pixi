@@ -28,6 +28,8 @@ pixi clean [OPTIONS] [COMMAND]
 :  Only remove the pixi-build cache
 - <a id="arg---workspaces-registry" href="#arg---workspaces-registry">`--workspaces-registry`</a>
 :  Only remove disassociated workspace registries
+- <a id="arg---script" href="#arg---script">`--script <SCRIPT>`</a>
+:  The script to remove the cache/env for
 
 ## Config Options
 - <a id="arg---no-config" href="#arg---no-config">`--no-config`</a>
