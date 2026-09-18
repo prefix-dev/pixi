@@ -1,4 +1,5 @@
 mod install_subset;
+mod local;
 mod outdated;
 mod package_identifier;
 mod platform_rename;
