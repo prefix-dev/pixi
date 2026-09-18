@@ -369,6 +369,7 @@ impl GenerateRecipe for PythonGenerator {
                     pypi_deps,
                     config.pypi_conda_map.as_ref(),
                     &channels,
+                    config.mapping_channel.as_deref(),
                     &cache_dir,
                     "project",
                     mapping_platform,
@@ -388,6 +389,7 @@ impl GenerateRecipe for PythonGenerator {
                     build_system_deps,
                     config.pypi_conda_map.as_ref(),
                     &channels,
+                    config.mapping_channel.as_deref(),
                     &cache_dir,
                     "build-system",
                     mapping_platform,
@@ -1463,6 +1465,175 @@ build-backend = "hatchling.build"
             host_deps,
             vec!["uv", "python"],
             "host deps should only contain uv and python when ignore_pypi_mapping=true"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_mapping_channel_fallback_when_conda_forge_not_in_channels() {
+        let _guard = crate::pypi_mapping::TEST_MUTEX.lock().await;
+        use crate::pypi_mapping::{PyPiPackageLookup, PyPiToCondaMapper};
+        use std::collections::HashMap;
+
+        let conda_forge_map = indexmap::IndexMap::from([(
+            "requests".to_string(),
+            PyPiPackageLookup {
+                format_version: "1".to_string(),
+                channel: "conda-forge".to_string(),
+                pypi_name: "requests".to_string(),
+                conda_versions: indexmap::IndexMap::from([(
+                    "2.28.0".to_string(),
+                    "requests".to_string(),
+                )]),
+            },
+        )]);
+        let test_channels = HashMap::from([("conda-forge".to_string(), conda_forge_map)]);
+        PyPiToCondaMapper::set_test_channel_mappings(test_channels);
+
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+        });
+
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+
+        fs::write(
+            temp_dir.path().join("pyproject.toml"),
+            r#"[project]
+name = "foobar"
+version = "0.1.0"
+dependencies = ["requests>=2.28"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+"#,
+        )
+        .await
+        .expect("Failed to write pyproject.toml");
+
+        let config = PythonBackendConfig {
+            ignore_pypi_mapping: Some(false),
+            ..Default::default()
+        };
+
+        let generated_recipe = PythonGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &config,
+                temp_dir.path().to_path_buf(),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![ChannelUrl::from(
+                    url::Url::parse("https://repo.anaconda.com/pkgs/main").unwrap(),
+                )],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        PyPiToCondaMapper::clear_test_channel_mappings();
+
+        let run_deps: Vec<String> = generated_recipe
+            .recipe
+            .requirements
+            .run
+            .iter()
+            .map(|item| item.to_string())
+            .collect();
+
+        assert!(
+            run_deps.iter().any(|d| d.starts_with("requests")),
+            "run deps should contain mapped requests dependency via conda-forge fallback, got: {:?}",
+            run_deps
+        );
+    }
+
+    #[tokio::test]
+    async fn test_explicit_mapping_channel_in_generate_recipe() {
+        let _guard = crate::pypi_mapping::TEST_MUTEX.lock().await;
+        use crate::pypi_mapping::{PyPiPackageLookup, PyPiToCondaMapper};
+        use std::collections::HashMap;
+
+        let custom_map = indexmap::IndexMap::from([(
+            "requests".to_string(),
+            PyPiPackageLookup {
+                format_version: "1".to_string(),
+                channel: "custom-channel".to_string(),
+                pypi_name: "requests".to_string(),
+                conda_versions: indexmap::IndexMap::from([(
+                    "2.28.0".to_string(),
+                    "custom-requests".to_string(),
+                )]),
+            },
+        )]);
+        let test_channels = HashMap::from([("custom-channel".to_string(), custom_map)]);
+        PyPiToCondaMapper::set_test_channel_mappings(test_channels);
+
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+        });
+
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+
+        fs::write(
+            temp_dir.path().join("pyproject.toml"),
+            r#"[project]
+name = "foobar"
+version = "0.1.0"
+dependencies = ["requests>=2.28"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+"#,
+        )
+        .await
+        .expect("Failed to write pyproject.toml");
+
+        let config = PythonBackendConfig {
+            ignore_pypi_mapping: Some(false),
+            mapping_channel: Some("custom-channel".to_string()),
+            ..Default::default()
+        };
+
+        let generated_recipe = PythonGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &config,
+                temp_dir.path().to_path_buf(),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![ChannelUrl::from(
+                    url::Url::parse("https://repo.anaconda.com/pkgs/main").unwrap(),
+                )],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        PyPiToCondaMapper::clear_test_channel_mappings();
+
+        let run_deps: Vec<String> = generated_recipe
+            .recipe
+            .requirements
+            .run
+            .iter()
+            .map(|item| item.to_string())
+            .collect();
+
+        assert!(
+            run_deps.iter().any(|d| d.starts_with("custom-requests")),
+            "run deps should contain custom-requests from configured mapping channel, got: {:?}",
+            run_deps
         );
     }
 
