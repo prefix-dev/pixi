@@ -546,6 +546,23 @@ impl PixiPlatform {
         a == b
     }
 
+    /// Returns true if `self` shadows `other` when `self` has higher priority than `other`.
+    ///
+    /// A platform `self` shadows `other` if both target the same subdir, and every
+    /// requirement in `self`'s declared virtual packages is satisfied by `other`'s declared
+    /// virtual packages. When that holds, any host system that satisfies `other` will also
+    /// satisfy `self`. Because `self` has higher priority (e.g. earlier declaration order in
+    /// `workspace.platforms`), `self` will always be selected over `other`, meaning `other`
+    /// can never be automatically selected.
+    pub fn shadows(&self, other: &PixiPlatform) -> bool {
+        if self.name == other.name || self.subdir != other.subdir {
+            return false;
+        }
+        self.declared_virtual_packages
+            .iter()
+            .all(|req| capability_satisfied_by(req, &other.declared_virtual_packages))
+    }
+
     /// Apply an in-place edit to this platform.
     ///
     /// Operations are applied in this order so the result is independent of
@@ -1892,5 +1909,119 @@ mod tests {
         let collapsed = glob("cuda**-*");
         assert_eq!(collapsed.as_str(), "cuda*-*");
         assert!(collapsed.matches("cuda-12-64"));
+    }
+
+    #[test]
+    fn platform_shadows_generic_shadows_rich() {
+        let generic = PixiPlatform::from_subdir(Platform::Linux64);
+        let rich = PixiPlatform::new_with_defaults(
+            PixiPlatformName::try_from("gpu-linux-64").unwrap(),
+            Platform::Linux64,
+            vec![gvp("__cuda", "12.0")],
+        )
+        .unwrap();
+
+        // Generic platform shadows the richer platform on the same subdir.
+        assert!(generic.shadows(&rich));
+        // The richer platform does NOT shadow the generic platform.
+        assert!(!rich.shadows(&generic));
+    }
+
+    #[test]
+    fn platform_shadows_different_subdirs_never_shadow() {
+        let linux = PixiPlatform::from_subdir(Platform::Linux64);
+        let osx = PixiPlatform::from_subdir(Platform::OsxArm64);
+        let linux_cuda = PixiPlatform::new_with_defaults(
+            PixiPlatformName::try_from("gpu-linux-64").unwrap(),
+            Platform::Linux64,
+            vec![gvp("__cuda", "12.0")],
+        )
+        .unwrap();
+
+        assert!(!linux.shadows(&osx));
+        assert!(!osx.shadows(&linux));
+        assert!(!osx.shadows(&linux_cuda));
+        assert!(!linux_cuda.shadows(&osx));
+    }
+
+    #[test]
+    fn platform_shadows_cuda_versions() {
+        let cuda11 = PixiPlatform::new_with_defaults(
+            PixiPlatformName::try_from("cuda-11").unwrap(),
+            Platform::Linux64,
+            vec![gvp("__cuda", "11.0")],
+        )
+        .unwrap();
+        let cuda12 = PixiPlatform::new_with_defaults(
+            PixiPlatformName::try_from("cuda-12").unwrap(),
+            Platform::Linux64,
+            vec![gvp("__cuda", "12.0")],
+        )
+        .unwrap();
+
+        // Lower CUDA requirement shadows higher CUDA requirement
+        // (a host satisfying CUDA 12 also satisfies CUDA 11).
+        assert!(cuda11.shadows(&cuda12));
+        assert!(!cuda12.shadows(&cuda11));
+    }
+
+    #[test]
+    fn platform_shadows_different_capabilities() {
+        let cuda = PixiPlatform::new_with_defaults(
+            PixiPlatformName::try_from("cuda-platform").unwrap(),
+            Platform::Linux64,
+            vec![gvp("__cuda", "12.0")],
+        )
+        .unwrap();
+        let amdgpu = PixiPlatform::new_with_defaults(
+            PixiPlatformName::try_from("amdgpu-platform").unwrap(),
+            Platform::Linux64,
+            vec![gvp("__amdgpu", "1.0")],
+        )
+        .unwrap();
+
+        // Different capabilities do not shadow each other.
+        assert!(!cuda.shadows(&amdgpu));
+        assert!(!amdgpu.shadows(&cuda));
+    }
+
+    #[test]
+    fn platform_shadows_archspec_hierarchy() {
+        let v3 = PixiPlatform::new_with_defaults(
+            PixiPlatformName::try_from("v3").unwrap(),
+            Platform::Linux64,
+            vec![archspec("x86_64_v3")],
+        )
+        .unwrap();
+        let zen2 = PixiPlatform::new_with_defaults(
+            PixiPlatformName::try_from("zen2").unwrap(),
+            Platform::Linux64,
+            vec![archspec("zen2")],
+        )
+        .unwrap();
+
+        // x86_64_v3 shadows zen2 (zen2 is a superset of x86_64_v3).
+        assert!(v3.shadows(&zen2));
+        assert!(!zen2.shadows(&v3));
+    }
+
+    #[test]
+    fn platform_shadows_equivalent_platforms() {
+        let p1 = PixiPlatform::new_with_defaults(
+            PixiPlatformName::try_from("linux-a").unwrap(),
+            Platform::Linux64,
+            vec![gvp("__cuda", "12.0")],
+        )
+        .unwrap();
+        let p2 = PixiPlatform::new_with_defaults(
+            PixiPlatformName::try_from("linux-b").unwrap(),
+            Platform::Linux64,
+            vec![gvp("__cuda", "12.0")],
+        )
+        .unwrap();
+
+        // Identical capabilities mutually shadow each other.
+        assert!(p1.shadows(&p2));
+        assert!(p2.shadows(&p1));
     }
 }
