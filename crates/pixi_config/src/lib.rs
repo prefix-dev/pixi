@@ -1548,7 +1548,7 @@ pub struct ShellConfig {
     /// Whether to source completion scripts from the environment or not.
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    source_completion_scripts: Option<bool>,
+    pub source_completion_scripts: Option<bool>,
 
     /// If set to true, pixi will set the PS1 environment variable to a custom
     /// value.
@@ -1962,6 +1962,7 @@ impl Config {
     pub fn get_keys(&self) -> &[&str] {
         &[
             "authentication-override-file",
+            "build",
             "cache",
             "cache.build-tool-environments",
             "cache.conda-packages",
@@ -2262,6 +2263,13 @@ impl Config {
             }
             "authentication-override-file" => {
                 self.authentication_override_file = value.map(PathBuf::from);
+            }
+            "build" => {
+                self.build = value
+                    .map(|v| serde_json::de::from_str(&v))
+                    .transpose()
+                    .into_diagnostic()?
+                    .unwrap_or_default();
             }
             "tls-no-verify" => {
                 self.tls_no_verify = value.map(|v| v.parse()).transpose().into_diagnostic()?;
@@ -3966,6 +3974,12 @@ UNUSED = "unused"
             .set("pinning-strategy", Some("semver".to_string()))
             .unwrap();
         assert_eq!(config.pinning_strategy, Some(PinningStrategy::Semver));
+
+        // Test build
+        config.set("build", Some(r#"{}"#.to_string())).unwrap();
+        assert_eq!(config.build, BuildConfig::default());
+        config.set("build", None).unwrap();
+        assert_eq!(config.build, BuildConfig::default());
 
         config.set("unknown-key", None).unwrap_err();
     }
