@@ -105,6 +105,17 @@ def test_pixi_environment_name_and_ps1(pixi: Path, dummy_channel_1: str) -> None
     )
     assert env_value is None
 
+    # Test that PIXI_ENVIRONMENT_PLATFORM is set with specs and unset without specs
+    platform_value, _ = run_and_get_env(
+        pixi, "--channel", dummy_channel_1, "-s", "dummy-a", env_var="PIXI_ENVIRONMENT_PLATFORM"
+    )
+    assert platform_value is not None
+
+    platform_value, _ = run_and_get_env(
+        pixi, "--channel", dummy_channel_1, env_var="PIXI_ENVIRONMENT_PLATFORM"
+    )
+    assert platform_value is None
+
     # Test PS1 modification
     if sys.platform.startswith("win"):
         prompt_var = "_PIXI_PROMPT"
