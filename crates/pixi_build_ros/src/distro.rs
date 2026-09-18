@@ -1,191 +1,83 @@
-//! ROS distribution index client.
+//! ROS distribution metadata.
 //!
-//! Fetches the ROS distribution index from GitHub and extracts distribution
-//! metadata (ROS1 vs ROS2, Python version, package list).
+//! Maps a ROS distribution name to the ROS version it belongs to. That version
+//! selects the distro mutex package, the `ROS_VERSION` build environment
+//! variable, and whether `ros_workspace` is added as a build dependency.
 
-use std::{collections::HashMap, path::Path};
+/// The ROS 1 distributions.
+///
+/// ROS 1 reached end-of-life with noetic (EOSL May 2025), so this list is
+/// closed and any distribution outside it is ROS 2.
+///
+/// Upstream `index-v4.yaml` only lists `groovy` onward; the earlier names are
+/// included so the list covers every ROS 1 release.
+const ROS1_DISTROS: &[&str] = &[
+    "boxturtle",
+    "cturtle",
+    "diamondback",
+    "electric",
+    "fuerte",
+    "groovy",
+    "hydro",
+    "indigo",
+    "jade",
+    "kinetic",
+    "lunar",
+    "melodic",
+    "noetic",
+];
 
-use http_cache_reqwest::{CACacheManager, Cache, CacheMode, HttpCache, HttpCacheOptions};
-use miette::Diagnostic;
-use reqwest_middleware::ClientBuilder;
-use reqwest_retry::RetryTransientMiddleware;
-use retry_policies::policies::ExponentialBackoff;
-use serde::Deserialize;
-use thiserror::Error;
-
-const INDEX_URL: &str = "https://raw.githubusercontent.com/ros/rosdistro/master/index-v4.yaml";
-
-/// Number of times a transient failure (e.g. HTTP 429) is retried before giving
-/// up on the ROS distribution index request.
-const MAX_RETRIES: u32 = 3;
-
-/// Errors that can occur when fetching ROS distribution info.
-#[derive(Debug, Error, Diagnostic)]
-pub enum DistroError {
-    #[error("failed to fetch ROS distribution index")]
-    Fetch(#[from] reqwest_middleware::Error),
-
-    #[error(
-        "the ROS distribution index at {url} is being rate limited (HTTP 429 Too Many Requests)"
-    )]
-    #[diagnostic(help(
-        "GitHub throttled the request. The response is cached on disk once it \
-         succeeds, so retrying shortly usually resolves this. If it persists, \
-         wait a few minutes before building again."
-    ))]
-    RateLimited { url: String },
-
-    #[error("the ROS distribution index request to {url} failed with HTTP {status}")]
-    Status { url: String, status: u16 },
-
-    #[error("failed to read ROS distribution index response body")]
-    Body(#[from] reqwest::Error),
-
-    #[error("failed to parse ROS distribution index YAML")]
-    ParseIndex(#[source] serde_yaml::Error),
-
-    #[error("distribution '{name}' not found in ROS distribution index")]
-    #[diagnostic(help("Available distributions can be found at https://github.com/ros/rosdistro"))]
-    NotFound { name: String },
+/// The major ROS version a distribution belongs to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RosVersion {
+    Ros1,
+    Ros2,
 }
 
-/// Information about a ROS distribution.
+impl RosVersion {
+    /// The version the given distribution belongs to.
+    fn for_distro(name: &str) -> Self {
+        if ROS1_DISTROS.contains(&name) {
+            Self::Ros1
+        } else {
+            Self::Ros2
+        }
+    }
+
+    /// The mutex package that pins a build to a single ROS distribution.
+    pub fn mutex_package_name(self) -> &'static str {
+        match self {
+            Self::Ros1 => "ros-distro-mutex",
+            Self::Ros2 => "ros2-distro-mutex",
+        }
+    }
+
+    /// The value of the `ROS_VERSION` environment variable.
+    pub fn as_env_value(self) -> &'static str {
+        match self {
+            Self::Ros1 => "1",
+            Self::Ros2 => "2",
+        }
+    }
+}
+
+/// A ROS distribution and the ROS version it belongs to.
 #[derive(Debug, Clone)]
 pub struct Distro {
     pub name: String,
-    pub is_ros1: bool,
-    pub python_version: Option<String>,
+    pub version: RosVersion,
 }
 
 impl Distro {
-    /// Fetch distribution info from the ROS distribution index.
+    /// The distribution with the given name.
     ///
-    /// When `http_cache_dir` is provided, the index response is cached on disk so
-    /// repeated backend invocations within the same workspace avoid hitting the
-    /// network. GitHub rate limits the unauthenticated `raw.githubusercontent.com`
-    /// request (HTTP 429), so it is also retried with exponential backoff.
-    pub async fn fetch(name: &str, http_cache_dir: Option<&Path>) -> Result<Self, DistroError> {
-        let client = reqwest::Client::new();
-        let mut builder = ClientBuilder::from_client(client.into());
-
-        // Cache outermost: a fresh cached index skips the network entirely.
-        if let Some(cache_dir) = http_cache_dir {
-            builder = builder.with(Cache(HttpCache {
-                mode: CacheMode::Default,
-                manager: CACacheManager {
-                    path: cache_dir.to_path_buf(),
-                    remove_opts: Default::default(),
-                },
-                options: HttpCacheOptions::default(),
-            }));
-        }
-
-        // Retry innermost: retries transient 429/5xx, honoring `Retry-After`.
-        let retry_policy = ExponentialBackoff::builder().build_with_max_retries(MAX_RETRIES);
-        builder = builder.with(RetryTransientMiddleware::new_with_policy(retry_policy));
-
-        let client = builder.build();
-
-        let response = client.get(INDEX_URL).send().await?;
-
-        // Retries exhausted still return the last (error) response; check the
-        // status so a 429 body isn't misreported as a YAML parse failure.
-        let status = response.status();
-        if !status.is_success() {
-            return Err(if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
-                DistroError::RateLimited {
-                    url: INDEX_URL.to_string(),
-                }
-            } else {
-                DistroError::Status {
-                    url: INDEX_URL.to_string(),
-                    status: status.as_u16(),
-                }
-            });
-        }
-
-        let index_yaml = response.text().await?;
-
-        let index: DistroIndex =
-            serde_yaml::from_str(&index_yaml).map_err(DistroError::ParseIndex)?;
-
-        let entry = index.distributions.get(name).ok_or(DistroError::NotFound {
-            name: name.to_string(),
-        })?;
-
-        let is_ros1 = entry
-            .distribution_type
-            .as_deref()
-            .map(|t| t == "ros1")
-            .unwrap_or(false);
-
-        Ok(Distro {
-            name: name.to_string(),
-            is_ros1,
-            python_version: entry.python_version.clone(),
-        })
+    /// The name is lowercased and stripped of surrounding whitespace, matching
+    /// the normalization conda applies to the package names derived from it.
+    pub fn new(name: impl Into<String>) -> Self {
+        let name = name.into().trim().to_lowercase();
+        let version = RosVersion::for_distro(&name);
+        Self { name, version }
     }
-
-    /// Create a builder for constructing a Distro without fetching from the network.
-    #[cfg(test)]
-    pub fn builder(name: &str) -> DistroBuilder {
-        DistroBuilder {
-            name: name.to_string(),
-            is_ros1: false,
-            python_version: None,
-        }
-    }
-
-    /// Returns the mutex package name for this distro.
-    pub fn ros_distro_mutex_name(&self) -> String {
-        if self.is_ros1 {
-            "ros-distro-mutex".to_string()
-        } else {
-            "ros2-distro-mutex".to_string()
-        }
-    }
-}
-
-/// Builder for constructing a [`Distro`] in tests.
-#[cfg(test)]
-pub struct DistroBuilder {
-    name: String,
-    is_ros1: bool,
-    python_version: Option<String>,
-}
-
-#[cfg(test)]
-impl DistroBuilder {
-    pub fn ros1(mut self, is_ros1: bool) -> Self {
-        self.is_ros1 = is_ros1;
-        self
-    }
-
-    pub fn python_version(mut self, version: impl Into<String>) -> Self {
-        self.python_version = Some(version.into());
-        self
-    }
-
-    pub fn build(self) -> Distro {
-        Distro {
-            name: self.name,
-            is_ros1: self.is_ros1,
-            python_version: self.python_version,
-        }
-    }
-}
-
-/// The top-level ROS distribution index (index-v4.yaml).
-#[derive(Debug, Deserialize)]
-struct DistroIndex {
-    distributions: HashMap<String, DistroEntry>,
-}
-
-/// An entry in the distribution index.
-#[derive(Debug, Deserialize)]
-struct DistroEntry {
-    distribution_type: Option<String>,
-    python_version: Option<String>,
 }
 
 #[cfg(test)]
@@ -193,47 +85,57 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_distro_ros1() {
-        let distro = Distro::builder("noetic").ros1(true).build();
+    fn test_ros1_distro() {
+        let distro = Distro::new("noetic");
         assert_eq!(distro.name, "noetic");
-        assert!(distro.is_ros1);
-        assert_eq!(distro.ros_distro_mutex_name(), "ros-distro-mutex");
+        assert_eq!(distro.version, RosVersion::Ros1);
     }
 
     #[test]
-    fn test_distro_ros_2() {
-        let distro = Distro::builder("jazzy").build();
-        assert_eq!(distro.name, "jazzy");
-        assert!(!distro.is_ros1);
-        assert_eq!(distro.ros_distro_mutex_name(), "ros2-distro-mutex");
+    fn test_ros2_distro() {
+        assert_eq!(Distro::new("jazzy").version, RosVersion::Ros2);
+        assert_eq!(Distro::new("rolling").version, RosVersion::Ros2);
     }
 
     #[test]
-    fn test_parse_index_yaml() {
-        let yaml = r#"
-distributions:
-  noetic:
-    distribution:
-      - https://example.com/noetic/distribution.yaml
-    distribution_type: ros1
-    python_version: "3"
-  jazzy:
-    distribution:
-      - https://example.com/jazzy/distribution.yaml
-    distribution_type: ros2
-    python_version: "3"
-"#;
+    fn test_every_ros1_distro_is_recognized() {
+        for name in ROS1_DISTROS {
+            assert_eq!(Distro::new(*name).version, RosVersion::Ros1, "{name}");
+        }
+    }
 
-        let index: DistroIndex = serde_yaml::from_str(yaml).unwrap();
-        assert!(index.distributions.contains_key("noetic"));
-        assert!(index.distributions.contains_key("jazzy"));
-        assert_eq!(
-            index.distributions["noetic"].distribution_type.as_deref(),
-            Some("ros1")
-        );
-        assert_eq!(
-            index.distributions["jazzy"].distribution_type.as_deref(),
-            Some("ros2")
-        );
+    /// Distributions released after this code was written are ROS 2, so they
+    /// need no changes here.
+    #[test]
+    fn test_distro_postdating_this_code_is_ros2() {
+        assert_eq!(Distro::new("lyrical").version, RosVersion::Ros2);
+    }
+
+    /// Conda lowercases the package names derived from the distro, so the
+    /// classification has to agree with that rather than with what was typed.
+    #[test]
+    fn test_name_is_normalized() {
+        let distro = Distro::new("  Noetic  ");
+        assert_eq!(distro.name, "noetic");
+        assert_eq!(distro.version, RosVersion::Ros1);
+
+        assert_eq!(Distro::new("JAZZY").name, "jazzy");
+    }
+
+    #[test]
+    fn test_unknown_distro_is_ros2() {
+        assert_eq!(Distro::new("not-a-distro").version, RosVersion::Ros2);
+    }
+
+    #[test]
+    fn test_mutex_package_name() {
+        assert_eq!(RosVersion::Ros1.mutex_package_name(), "ros-distro-mutex");
+        assert_eq!(RosVersion::Ros2.mutex_package_name(), "ros2-distro-mutex");
+    }
+
+    #[test]
+    fn test_env_value() {
+        assert_eq!(RosVersion::Ros1.as_env_value(), "1");
+        assert_eq!(RosVersion::Ros2.as_env_value(), "2");
     }
 }

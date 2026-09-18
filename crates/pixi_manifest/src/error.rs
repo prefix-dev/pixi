@@ -4,7 +4,7 @@ use std::{
     ops::Range,
 };
 
-use crate::{KnownPreviewFeature, ManifestKind, WorkspaceManifest};
+use crate::{KnownPreviewFlag, ManifestKind, WorkspaceManifest};
 use itertools::Itertools;
 use miette::{Diagnostic, LabeledSpan, SourceOffset, SourceSpan};
 use pixi_pypi_spec::Pep508ToPyPiRequirementError;
@@ -193,7 +193,7 @@ pub struct FeatureNotEnabled {
 }
 
 impl FeatureNotEnabled {
-    pub fn new(message: impl Into<Cow<'static, str>>, feature: KnownPreviewFeature) -> Self {
+    pub fn new(message: impl Into<Cow<'static, str>>, feature: KnownPreviewFlag) -> Self {
         Self {
             feature: <&'static str>::from(feature).into(),
             message: message.into(),
@@ -209,7 +209,7 @@ impl FeatureNotEnabled {
 impl Diagnostic for FeatureNotEnabled {
     fn help<'a>(&'a self) -> Option<Box<dyn Display + 'a>> {
         Some(Box::new(format!(
-            "Add `preview = [\"{}\"]` under [workspace] to enable the preview feature",
+            "Run `pixi workspace preview add {}` to enable the preview flag",
             self.feature
         )))
     }

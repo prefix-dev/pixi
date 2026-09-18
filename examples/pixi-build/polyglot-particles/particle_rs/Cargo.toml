@@ -9,4 +9,4 @@ crate-type = ["cdylib"]
 name = "particle_rs"
 
 [dependencies]
-pyo3 = { version = "0.28", features = ["extension-module"] }
+pyo3 = { version = "0.29", features = ["extension-module"] }

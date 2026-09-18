@@ -1,4 +1,6 @@
-use std::{collections::BTreeSet, collections::HashMap, path::Path, str::FromStr};
+use std::{
+    collections::BTreeSet, collections::HashMap, path::Path, process::ExitCode, str::FromStr,
+};
 
 use clap::{Parser, ValueHint};
 use indexmap::IndexSet;
@@ -9,6 +11,8 @@ use pixi_command_dispatcher::offline::exclusions_for_solve;
 use pixi_config::{self, Config, ConfigCli};
 use pixi_core::environment::list::{PackageToOutput, print_package_table};
 use pixi_manifest::PixiPlatformName;
+use pixi_manifest::platform::host::{detect_host, host_subdir};
+use pixi_manifest::platform::solver_generic_virtual_packages;
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 use pixi_utils::prefix::Prefix;
 use pixi_utils::{EnvironmentHash, EnvironmentLock, reqwest::build_reqwest_clients};
@@ -18,7 +22,6 @@ use rattler::{
 };
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, PackageName, Platform};
 use rattler_solve::{SolverImpl, SolverTask, resolvo::Solver};
-use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use reqwest_middleware::ClientWithMiddleware;
 use uv_configuration::initialize_rayon_once;
 
@@ -73,7 +76,7 @@ pub struct Args {
 }
 
 /// CLI entry point for `pixi exec`
-pub async fn execute(args: Args) -> miette::Result<()> {
+pub async fn execute(args: Args) -> miette::Result<ExitCode> {
     let config = Config::with_cli_config(&args.config);
     let cache_dir = pixi_config::get_cache_dir().context("failed to determine cache directory")?;
 
@@ -86,7 +89,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .next()
             .expect("resolve_platforms preserves length")
             .subdir(),
-        None => Platform::current(),
+        None => host_subdir(),
     };
 
     let mut command_iter = args.command.iter();
@@ -176,9 +179,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_context(|| format!("failed to execute '{}'", command))?;
 
     // Mirror the child's exit (including signal deaths like SIGSEGV) so the
-    // parent shell sees the same outcome it would if the child had run
-    // directly.
-    process_exit::exit_with_status(status);
+    // parent shell sees the same outcome it would if the child had run directly.
+    Ok(process_exit::exit_code_from_status(status))
 }
 
 /// Creates a prefix for the `pixi exec` command.
@@ -245,25 +247,28 @@ pub async fn create_exec_prefix(
     let channels = args.channels.resolve_from_config(config)?;
 
     // Get the repodata for the specs
-    let repodata = await_in_progress("fetching repodata for environment", |_| async {
+    let query_output = await_in_progress("fetching repodata for environment", |_| async {
         gateway
             .query(channels, [platform, Platform::NoArch], specs.clone())
             .recursive(true)
+            .channel_notices(true)
             .execute()
             .await
             .into_diagnostic()
     })
     .await
-    .context("failed to get repodata")?
-    .repodata;
+    .context("failed to get repodata")?;
+    for notice in &query_output.notices {
+        pixi_reporters::queue_channel_notice(notice);
+    }
+    let repodata = query_output.repodata;
 
-    // Determine virtual packages of the current platform
-    let virtual_packages: Vec<GenericVirtualPackage> =
-        VirtualPackages::detect(&VirtualPackageOverrides::from_env())
+    // Determine virtual packages of the platform we are targeting
+    let virtual_packages: Vec<GenericVirtualPackage> = solver_generic_virtual_packages(
+        &detect_host(platform)
             .into_diagnostic()
-            .context("failed to determine virtual packages")?
-            .into_generic_virtual_packages()
-            .collect();
+            .context("failed to determine virtual packages")?,
+    );
 
     // `pixi exec` solves outside the command dispatcher, so it has to build
     // the offline exclusions itself rather than inheriting them.

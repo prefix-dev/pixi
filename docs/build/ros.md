@@ -6,7 +6,7 @@ For ROS without Pixi building (not packaging), see the [ROS 2 tutorial](../tutor
 You may also want to read the backend documentation for [pixi-build-ros](backends/pixi-build-ros.md).
 
 !!! warning
-    `pixi-build` is a preview feature and may change before stabilization.
+    `pixi-build` is a preview flag and may change before stabilization.
     Expect rough edges; please report issues so we can improve it.
 
 ## Create a Pixi workspace
@@ -21,7 +21,7 @@ pixi add ros-jazzy-ros2run
 
 This adds the `ros2` cli command to your Pixi environment.
 
-In all examples below, ensure the [build preview](../reference/pixi_manifest.md#preview-features) is enabled in your workspace manifest:
+In all examples below, ensure the [build preview](../reference/pixi_manifest.md#preview-flags) is enabled in your workspace manifest:
 ```toml title="ros_ws/pixi.toml"
 --8<-- "docs/source_files/pixi_workspaces/pixi_build/ros_ws/pixi.toml:preview"
 ```

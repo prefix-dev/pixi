@@ -3,7 +3,7 @@
 The `pixi-build-python` backend is designed for building Python projects using standard Python packaging tools. It provides seamless integration with Pixi's package management workflow while supporting both [PEP 517](https://peps.python.org/pep-0517/) and [PEP 518](https://peps.python.org/pep-0518/) compliant projects.
 
 !!! warning
-    `pixi-build` is a preview feature, and will change until it is stabilized.
+    `pixi-build` is a preview flag, and will change until it is stabilized.
     This is why we require users to opt in to that feature by adding "pixi-build" to `workspace.preview`.
 
     ```toml

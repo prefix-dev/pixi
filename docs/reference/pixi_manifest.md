@@ -107,7 +107,7 @@ Recognised keys on an inline-table entry:
 - Friendly virtual-package keys: `cuda`, `archspec`, `glibc`, `linux`, `macos` (alias `osx`), `windows`. Each maps to the matching `__name` conda virtual package (`cuda` to `__cuda`, `glibc` to `__glibc`, `macos` to `__osx`, etc.).
 - Raw `__name = "version"` entries are accepted as an escape hatch for virtual packages without a friendly key.
 
-Bare-string entries (`"linux-64"`) keep their original meaning: solve for that subdir using whatever virtual packages Pixi auto-detects on the host.
+Bare-string entries (`"linux-64"`) keep their original meaning: solve for that subdir against Pixi's [default declared virtual packages](../workspace/system_requirements.md#default-declared-virtual-packages).
 
 See [Declaring virtual packages per platform](../workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform) for binding features to specific rich entries.
 
@@ -444,8 +444,8 @@ torch = "0d"
 
 ### `build-variants` (optional)
 
-!!! warning "Preview Feature"
-    Build variants require the `pixi-build` preview feature to be enabled:
+!!! warning "Preview Flag"
+    Build variants require the `pixi-build` preview flag to be enabled:
     ```toml
     [workspace]
     preview = ["pixi-build"]
@@ -504,8 +504,8 @@ For detailed examples and tutorials, see the [build variants documentation](../b
 
 ### `build-variants-files` (optional)
 
-!!! warning "Preview Feature"
-    Build variant files require the `pixi-build` preview feature to be enabled:
+!!! warning "Preview Flag"
+    Build variant files require the `pixi-build` preview flag to be enabled:
     ```toml
     [workspace]
     preview = ["pixi-build"]
@@ -532,7 +532,7 @@ Otherwise, it will use `rattler-build`'s syntax as outlined in the [rattler-buil
 
 A pool of conda dependency specs that dependency tables can inherit from per entry by writing `{ workspace = true }`.
 The environment tables (`[dependencies]`, `[feature.*.dependencies]`, `[target.*.dependencies]`, `[constraints]`) can inherit out of the box.
-The package tables (`[package.*-dependencies]`, `[package.run-constraints]`, `[package.build.backend]`) require the `pixi-build` preview feature, as do source (`path`/`git`) entries in the pool itself (see [Workspace Dependencies](../build/workspace_dependencies.md) for the semantics, override rules and error cases).
+The package tables (`[package.*-dependencies]`, `[package.run-constraints]`, `[package.build.backend]`) require the `pixi-build` preview flag, as do source (`path`/`git`) entries in the pool itself (see [Workspace Dependencies](../build/workspace_dependencies.md) for the semantics, override rules and error cases).
 Relative `path` specs are resolved against the workspace manifest's directory and re-anchored per consuming member.
 
 ```toml
@@ -659,6 +659,7 @@ detectron2 = { git = "https://github.com/facebookresearch/detectron2.git", rev =
 
 Setting `no-build-isolation` also affects the order in which PyPI packages are installed.
 Packages are installed in that order:
+
 - conda packages in one go
 - packages with build isolation in one go
 - packages without build isolation installed in the order they are added to `no-build-isolation`
@@ -1393,16 +1394,16 @@ The content is written inline on the environment, creating the environment if it
 The global configuration options are documented in the [global configuration](../reference/pixi_configuration.md) section.
 
 
-## Preview features
-Pixi sometimes introduces new features that are not yet stable, but that we would like for users to test out. These features are called preview features. Preview features are disabled by default and can be enabled by setting the `preview` field in the workspace manifest. The preview field is an array of strings that specify the preview features to enable, or the boolean value `true` to enable all preview features.
+## Preview flags
+Pixi sometimes introduces new features that are not yet stable, but that we would like for users to test out. These features are called preview flags. Preview flags are disabled by default and can be enabled by setting the `preview` field in the workspace manifest. The preview field is an array of strings that specify the preview flags to enable, or the boolean value `true` to enable all preview flags.
 
-An example of a preview feature in the manifest:
+An example of a preview flag in the manifest:
 
 ```toml
 --8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:preview"
 ```
 
-Preview features in the documentation will be marked as such on the relevant pages.
+Preview flags in the documentation will be marked as such on the relevant pages.
 
 ## The `dev` table
 The `dev` table allows you to depend on the development dependencies of a source package.
@@ -1417,7 +1418,7 @@ More information can be found in the [Dev packages](../build/dev.md) documentati
 ## The `package` section
 
 !!! warning "Important note"
-    `pixi-build` is a [preview feature](#preview-features), and will change until it is stabilized.
+    `pixi-build` is a [preview flag](#preview-flags), and will change until it is stabilized.
     Please keep that in mind when you use it for your workspaces.
     ```toml
     --8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:preview"
@@ -1639,7 +1640,7 @@ Url specs and `path` specs pointing at package archives (`.conda` / `.tar.bz2`) 
 
 !!! note "Exporting the package itself"
     A package that exports *itself* (like `package = { path = "." }` above) is recorded without a version restriction when the built package is published.
-    To publish packages with versioned self-exports, declare the export as a binary spec with an explicit version instead.
+    To export the package pinned to the version it was built as, use [`pin-subpackage`](#pin-subpackage-and-pin-compatible) instead.
 
 !!! warning "Path specs in published packages"
     A `path` source spec in a run-export only resolves for consumers that build the package from source within the same workspace layout.
@@ -1651,3 +1652,33 @@ Like the other package dependency tables, every bucket accepts [conditional `if(
 [package.run-exports.weak."if(host_platform == 'linux-64')"]
 libgl = ">=1"
 ```
+
+### `pin-subpackage` and `pin-compatible`
+
+Package dependency tables accept two pin specs that resolve to a concrete version range while the package is built, mirroring rattler-build's [`pin_subpackage` and `pin_compatible`](https://rattler-build.prefix.dev/latest/reference/jinja/#the-pin-functions) functions.
+
+A `pin-compatible` entry pins a dependency to a range derived from the version that was resolved in the *previous* environment.
+For an entry in `run-dependencies` that is the host environment (falling back to the build environment), for an entry in `host-dependencies` it is the build environment.
+The referenced package must be part of that environment, so a `pin-compatible` run dependency usually pairs with a host dependency of the same name:
+
+```toml
+--8<-- "docs/source_files/pixi_tomls/pixi-package-pins.toml:pins"
+```
+
+A `pin-subpackage` entry pins the package *itself* for its consumers, so it is only accepted in the `run-exports` tables and only on an entry named after the package.
+
+Both pins take the same arguments:
+
+- `lower-bound`: A pin expression like `"x.x"` (the number of version segments to keep) or a literal version. Defaults to `"x.x.x.x.x.x"`, which pins to the exact resolved version.
+- `upper-bound`: A pin expression like `"x"` (the segment to bump, exclusive) or a literal version. Defaults to `"x"`, which excludes the next major version.
+- `build`: An optional build-string matcher such as `"mpi_mpich_*"`.
+- `exact`: Pin the exact version and build string. Cannot be combined with any other argument.
+
+A pin expression selects version segments with `x` characters and derives a bound from the resolved version.
+For the lower bound, the version is truncated to the selected segments: `"x.x"` turns `1.2.3` into `>=1.2`.
+For the upper bound, the last selected segment is incremented by one and `.0a0` is appended, so pre-releases of the excluded version do not match: `"x"` turns `1.2.3` into `<2.0a0`, and `"x.x"` turns it into `<1.3.0a0`.
+
+The shorthand `{ pin-compatible = true }` uses the default bounds, matching a bare `pin_compatible('name')` call in a rattler-build recipe.
+If the host environment resolves `libfoo=1.2.3`, the default bounds produce `libfoo >=1.2.3,<2.0a0`.
+
+Pins are not accepted in `build-dependencies` (the build environment is resolved first, so there is nothing to pin against), in `run-constraints`, in `extra-dependencies`, or in any workspace dependency table.

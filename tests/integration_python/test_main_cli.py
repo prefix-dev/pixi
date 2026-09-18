@@ -3,10 +3,11 @@ import os
 import platform
 import shlex
 import shutil
-import tomli
+import subprocess
 from pathlib import Path
 
 import pytest
+import tomli
 import tomli_w
 from dirty_equals import AnyThing, IsDict, IsList, IsStr
 from inline_snapshot import snapshot
@@ -29,6 +30,34 @@ def test_pixi(pixi: Path) -> None:
         [pixi], ExitCode.INCORRECT_USAGE, stdout_excludes=f"[version {PIXI_VERSION}]"
     )
     verify_cli_command([pixi, "--version"], stdout_contains=PIXI_VERSION)
+
+
+def test_pixi_broken_output_pipe(pixi: Path) -> None:
+    read_fd, write_fd = os.pipe()
+    os.close(read_fd)
+    try:
+        help_result = subprocess.run(
+            [pixi, "--help"],
+            stdout=write_fd,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    finally:
+        os.close(write_fd)
+    assert help_result.returncode == ExitCode.SUCCESS
+
+    read_fd, write_fd = os.pipe()
+    os.close(read_fd)
+    try:
+        error_result = subprocess.run(
+            [pixi, "--definitely-invalid"],
+            stdout=subprocess.DEVNULL,
+            stderr=write_fd,
+            check=False,
+        )
+    finally:
+        os.close(write_fd)
+    assert error_result.returncode == ExitCode.INCORRECT_USAGE
 
 
 @pytest.mark.slow
@@ -161,6 +190,102 @@ def test_project_commands(pixi: Path, tmp_pixi_workspace: Path) -> None:
         stdout_contains="osx-arm64",
         stdout_excludes="wasi-wasm32",
     )
+
+    # Preview commands
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "--manifest-path",
+            manifest_path,
+            "preview",
+            "add",
+            "pixi-build",
+        ],
+    )
+    verify_cli_command(
+        [pixi, "workspace", "--manifest-path", manifest_path, "preview", "list"],
+        stdout_contains="pixi-build",
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "--manifest-path",
+            manifest_path,
+            "preview",
+            "add",
+            "not-a-preview-feature",
+        ],
+        ExitCode.INCORRECT_USAGE,
+        stderr_contains=["invalid value 'not-a-preview-feature'", "pixi-build"],
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "--manifest-path",
+            manifest_path,
+            "preview",
+            "remove",
+            "pixi-build",
+        ],
+    )
+    verify_cli_command(
+        [pixi, "workspace", "--manifest-path", manifest_path, "preview", "list"],
+        stdout_excludes="pixi-build",
+    )
+
+    # Preview add works even when the manifest fails to load because the
+    # feature is missing, e.g. a `[package]` section without `pixi-build`
+    package_section = """
+[package]
+name = "test"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "pixi-build-python", version = "*" }
+"""
+    manifest_content = manifest_path.read_text()
+    manifest_path.write_text(manifest_content + package_section)
+    verify_cli_command(
+        [pixi, "workspace", "--manifest-path", manifest_path, "preview", "list"],
+        ExitCode.FAILURE,
+        stderr_contains="pixi workspace preview add pixi-build",
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "--manifest-path",
+            manifest_path,
+            "preview",
+            "add",
+            "pixi-build",
+        ],
+        stderr_contains="Added 'pixi-build'",
+    )
+    # Removing it fails because the manifest would no longer load
+    verify_cli_command(
+        [pixi, "workspace", "--manifest-path", manifest_path, "preview", "remove", "pixi-build"],
+        ExitCode.FAILURE,
+        stderr_contains=["no longer load", "--force"],
+    )
+    # With --force it works, with a warning that the manifest needs it
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "--manifest-path",
+            manifest_path,
+            "preview",
+            "remove",
+            "pixi-build",
+            "--force",
+        ],
+        stderr_contains=["Removed 'pixi-build'", "no longer loads"],
+    )
+    manifest_path.write_text(manifest_content)
 
     # Version commands
     verify_cli_command(
@@ -425,6 +550,153 @@ def test_cli_config_options(
     verify_cli_command(
         [pixi, "install", f"--auth-file={auth_file}", "--manifest-path", manifest_path]
     )
+
+
+def isolated_config_env(tmp_path: Path) -> dict[str, str]:
+    """Point every configuration search path at a private directory.
+
+    The shared and pixi files are addressed through `RATTLER_HOME` and
+    `PIXI_HOME`, the only locations that are env-driven on every platform;
+    `dirs::config_dir` does not follow `XDG_CONFIG_HOME` on Windows. The
+    remaining variables keep the developer's own files out of the run.
+    """
+    home = tmp_path / "home"
+    rattler_home = home / ".rattler"
+    pixi_home = home / ".pixi"
+    xdg = home / "xdg"
+    for directory in (rattler_home, pixi_home, xdg):
+        directory.mkdir(parents=True, exist_ok=True)
+
+    return {
+        "HOME": str(home),
+        "USERPROFILE": str(home),
+        "XDG_CONFIG_HOME": str(xdg),
+        "RATTLER_HOME": str(rattler_home),
+        "PIXI_HOME": str(pixi_home),
+    }
+
+
+def test_config_shared_layer(pixi: Path, tmp_path: Path) -> None:
+    """A shared config file is read, loses against a pixi file, and is never
+    forked into one by `pixi config set`."""
+    env = isolated_config_env(tmp_path)
+    shared_config = Path(env["RATTLER_HOME"]) / "config.toml"
+    pixi_config = Path(env["PIXI_HOME"]) / "config.toml"
+
+    shared_config.write_text(
+        'default-channels = ["shared-channel"]\ntls-no-verify = true\npinning-strategy = "no-pin"\n'
+    )
+    pixi_config.write_text('default-channels = ["pixi-channel"]\n')
+
+    # The pixi file wins, keys only the shared file sets are still used, and a
+    # pixi-only key in a shared file is ignored with a warning.
+    verify_cli_command(
+        [pixi, "config", "list"],
+        env=env,
+        stdout_contains=['default-channels = ["pixi-channel"]', "tls-no-verify = true"],
+        stdout_excludes="shared-channel",
+        stderr_contains="pinning-strategy",
+    )
+
+    # Setting an unrelated key must not copy the shared settings into the pixi
+    # file, otherwise the user silently stops following the shared layer.
+    verify_cli_command([pixi, "config", "set", "--global", "shell.change-ps1", "false"], env=env)
+    written = tomli.loads(pixi_config.read_text())
+    assert written == {"default-channels": ["pixi-channel"], "shell": {"change-ps1": False}}
+
+    # Both layers are reported, and opting out skips the shared one as well.
+    verify_cli_command(
+        [pixi, "info"],
+        env=env,
+        stdout_contains=[str(shared_config), str(pixi_config)],
+    )
+    verify_cli_command(
+        [pixi, "info", "--no-config"],
+        env=env,
+        stdout_excludes=[str(shared_config), str(pixi_config)],
+    )
+
+
+def test_config_list_honors_the_config_source_flags(pixi: Path, tmp_path: Path) -> None:
+    """`config list` can be pointed at one file or told to skip discovery."""
+    env = isolated_config_env(tmp_path)
+    (Path(env["RATTLER_HOME"]) / "config.toml").write_text(
+        'default-channels = ["shared-channel"]\n'
+    )
+    only = tmp_path / "only.toml"
+    only.write_text('default-channels = ["only-channel"]\n')
+
+    # Without a flag the discovered shared file shows up.
+    verify_cli_command([pixi, "config", "list"], env=env, stdout_contains="shared-channel")
+    # `--config-file` replaces the discovered layers with just that file.
+    verify_cli_command(
+        [pixi, "config", "list", "--config-file", only],
+        env=env,
+        stdout_contains="only-channel",
+        stdout_excludes="shared-channel",
+    )
+    # `PIXI_CONFIG_FILE` is the same switch by environment variable.
+    verify_cli_command(
+        [pixi, "config", "list"],
+        env=env | {"PIXI_CONFIG_FILE": str(only)},
+        stdout_contains="only-channel",
+        stdout_excludes="shared-channel",
+    )
+    # `--no-config` drops them all.
+    verify_cli_command(
+        [pixi, "config", "list", "--no-config"], env=env, stdout_excludes="shared-channel"
+    )
+
+
+def test_config_index_config_from_the_shared_layer(pixi: Path, tmp_path: Path) -> None:
+    """`index-config` is a shared key, so a `rattler` file may set it."""
+    env = isolated_config_env(tmp_path)
+    (Path(env["RATTLER_HOME"]) / "config.toml").write_text(
+        "[index-config]\nwrite-zst = false\n\n"
+        '[index-config."s3://bucket/staging"]\nwrite-shards = false\n'
+    )
+
+    listed = verify_cli_command([pixi, "config", "list"], env=env).stdout
+    config = tomli.loads(listed)
+    assert config["index-config"]["write-zst"] is False
+    assert config["index-config"]["s3://bucket/staging"]["write-shards"] is False
+
+
+def test_config_append_extends_the_visible_list(pixi: Path, tmp_path: Path) -> None:
+    """`config append` extends the list the user sees, exactly once, for both
+    the keys that replace lower layers and the ones that concatenate."""
+    env = isolated_config_env(tmp_path)
+    workspace = tmp_path / "home" / "workspace"
+    workspace.mkdir(parents=True)
+
+    # `default-channels` replaces lower layers, `extra-index-urls` concatenates.
+    (Path(env["RATTLER_HOME"]) / "config.toml").write_text(
+        'default-channels = ["shared-channel"]\n'
+    )
+    (Path(env["PIXI_HOME"]) / "config.toml").write_text(
+        '[pypi-config]\nextra-index-urls = ["https://global.example/simple"]\n'
+    )
+    manifest = workspace / "pixi.toml"
+    manifest.write_text('[workspace]\nname = "p"\nchannels = []\nplatforms = ["linux-64"]\n')
+
+    for key, added in [
+        ("default-channels", "extra-channel"),
+        ("pypi-config.extra-index-urls", "https://mine.example/simple"),
+    ]:
+        verify_cli_command(
+            [pixi, "config", "append", "--local", "--manifest-path", manifest, key, added],
+            env=env,
+        )
+
+    listed = verify_cli_command(
+        [pixi, "config", "list", "--manifest-path", manifest], env=env
+    ).stdout
+    config = tomli.loads(listed)
+    assert config["default-channels"] == ["shared-channel", "extra-channel"]
+    assert config["pypi-config"]["extra-index-urls"] == [
+        "https://global.example/simple",
+        "https://mine.example/simple",
+    ]
 
 
 def test_config_allow_links(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
@@ -1875,3 +2147,221 @@ dummy-a = "*"
     )
     parsed_manifest = tomli.loads(manifest_path.read_text())
     assert parsed_manifest["environments"]["test-env"] == ["test"]
+
+
+def test_workspace_activation(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+    manifest_path.write_text(EMPTY_BOILERPLATE_PROJECT)
+    (tmp_pixi_workspace / "setup.sh").write_text("")
+
+    def manifest() -> dict:
+        return tomli.loads(manifest_path.read_text())
+
+    def activation(*args: str | Path) -> list[str | Path]:
+        return [pixi, "workspace", "--manifest-path", manifest_path, "activation", *args]
+
+    # Add activation scripts; re-adding an existing one is a no-op.
+    verify_cli_command(
+        activation("script", "add", "setup.sh"),
+        stderr_contains="Added activation script 'setup.sh'",
+    )
+    # `scripts` is an alias for `script`.
+    verify_cli_command(activation("scripts", "add", "other.sh", "setup.sh"))
+    assert manifest()["activation"]["scripts"] == ["setup.sh", "other.sh"]
+
+    # Prepend moves an existing script to the front.
+    verify_cli_command(
+        activation("script", "prepend", "other.sh"),
+        stderr_contains="Moved activation script 'other.sh' to the front",
+    )
+    assert manifest()["activation"]["scripts"] == ["other.sh", "setup.sh"]
+
+    # Feature and target selectors, including globs and platform families.
+    verify_cli_command(
+        activation("script", "add", "cuda.sh", "--feature", "cuda", "--target", "cuda-*")
+    )
+    assert manifest()["feature"]["cuda"]["target"]["cuda-*"]["activation"]["scripts"] == ["cuda.sh"]
+    verify_cli_command(activation("script", "add", "posix.sh", "--target", "unix"))
+    assert manifest()["target"]["unix"]["activation"]["scripts"] == ["posix.sh"]
+
+    # Environment variables; the value may contain `=`.
+    verify_cli_command(
+        activation("env", "set", "FOO=bar", "MY_VAR=with=equals"),
+        stderr_contains='Set activation environment variable FOO="bar"',
+    )
+    assert manifest()["activation"]["env"] == {"FOO": "bar", "MY_VAR": "with=equals"}
+
+    # Overwriting an existing variable.
+    verify_cli_command(activation("env", "set", "FOO=baz"))
+    assert manifest()["activation"]["env"]["FOO"] == "baz"
+
+    # An `--environment` edit is written inline on the environment.
+    verify_cli_command(activation("env", "set", "DEV=1", "--environment", "dev"))
+    assert manifest()["environments"]["dev"]["activation"]["env"]["DEV"] == "1"
+
+    # Listing, including filters.
+    verify_cli_command(
+        activation("list"),
+        stdout_contains=["setup.sh", "cuda.sh", "FOO", "DEV"],
+    )
+    verify_cli_command(
+        activation("script", "list", "--feature", "cuda"),
+        stdout_contains="cuda.sh",
+        stdout_excludes=["setup.sh", "FOO"],
+    )
+    verify_cli_command(
+        activation("env", "list", "--environment", "dev"),
+        stdout_contains="DEV",
+        stdout_excludes="cuda.sh",
+    )
+    verify_cli_command(
+        activation("list", "--target", "unix"),
+        stdout_contains="posix.sh",
+        stdout_excludes="setup.sh",
+    )
+
+    # Removing an entry that does not exist fails with a clear error.
+    verify_cli_command(
+        activation("env", "remove", "MISSING"),
+        ExitCode.FAILURE,
+        stderr_contains="'MISSING' was not found",
+    )
+    verify_cli_command(
+        activation("script", "remove", "missing.sh", "--feature", "cuda", "--target", "cuda-*"),
+        ExitCode.FAILURE,
+        stderr_contains="'missing.sh' was not found",
+    )
+
+    # Removing the last entries cleans up the emptied activation tables.
+    verify_cli_command(activation("env", "remove", "FOO", "MY_VAR"))
+    verify_cli_command(activation("script", "remove", "other.sh", "setup.sh"))
+    assert "activation" not in manifest()
+    verify_cli_command(
+        activation("script", "remove", "cuda.sh", "--feature", "cuda", "--target", "cuda-*")
+    )
+    assert "activation" not in manifest().get("feature", {}).get("cuda", {}).get("target", {}).get(
+        "cuda-*", {}
+    )
+
+
+def test_workspace_activation_cleanup_safety(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Removal cleanup must never leave a manifest pixi cannot load."""
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+
+    def manifest() -> dict:
+        return tomli.loads(manifest_path.read_text())
+
+    def activation(*args: str | Path) -> list[str | Path]:
+        return [pixi, "workspace", "--manifest-path", manifest_path, "activation", *args]
+
+    # A feature that is still referenced by an environment must stay declared
+    # after its last activation entry is removed.
+    manifest_path.write_text(
+        EMPTY_BOILERPLATE_PROJECT
+        + '\n[feature.f.activation]\nscripts = ["s.sh"]\n\n[environments]\ne = ["f"]\n'
+    )
+    verify_cli_command(activation("script", "remove", "s.sh", "--feature", "f"))
+    assert manifest()["feature"]["f"] == {}
+    assert manifest()["environments"]["e"] == ["f"]
+    verify_cli_command(activation("list"))  # the workspace still loads
+
+    # An unreferenced feature is dropped entirely, so add-then-remove round
+    # trips without leaving a stub.
+    manifest_path.write_text(EMPTY_BOILERPLATE_PROJECT)
+    verify_cli_command(activation("script", "add", "x.sh", "--feature", "tmp"))
+    verify_cli_command(activation("script", "remove", "x.sh", "--feature", "tmp"))
+    assert "feature" not in manifest()
+
+    # An environment table with only `no-default-feature` left would be
+    # rejected by the manifest parser; the cleanup adds `features = []`.
+    manifest_path.write_text(
+        EMPTY_BOILERPLATE_PROJECT
+        + '\n[environments.dev]\nno-default-feature = true\n\n[environments.dev.activation]\nscripts = ["d.sh"]\n'
+    )
+    verify_cli_command(activation("script", "remove", "d.sh", "--environment", "dev"))
+    assert manifest()["environments"]["dev"] == {"no-default-feature": True, "features": []}
+    verify_cli_command(activation("list"))
+
+    # An environment declared as `prod = []` survives a set/remove round trip.
+    manifest_path.write_text(EMPTY_BOILERPLATE_PROJECT + "\n[environments]\nprod = []\n")
+    verify_cli_command(activation("env", "set", "X=1", "--environment", "prod"))
+    verify_cli_command(activation("env", "remove", "X", "--environment", "prod"))
+    assert manifest()["environments"]["prod"] == {"features": []}
+
+    # The same holds for an environment `env set -e` created implicitly: the
+    # activation entry is removed but the environment itself stays declared —
+    # deleting it as a whole is `pixi workspace environment remove`'s job.
+    manifest_path.write_text(EMPTY_BOILERPLATE_PROJECT)
+    verify_cli_command(activation("env", "set", "bla=1", "--environment", "yes"))
+    verify_cli_command(activation("env", "remove", "bla", "--environment", "yes"))
+    assert manifest()["environments"]["yes"] == {"features": []}
+    verify_cli_command(activation("list"))
+
+    # An environment whose only content was its activation keeps a declaration.
+    manifest_path.write_text(
+        EMPTY_BOILERPLATE_PROJECT + '\n[environments.dev.activation.env]\nA = "1"\n'
+    )
+    verify_cli_command(activation("env", "remove", "A", "--environment", "dev"))
+    assert manifest()["environments"]["dev"] == {"features": []}
+    verify_cli_command(activation("list"))
+
+
+def test_workspace_activation_input_validation(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+    manifest_path.write_text(
+        EMPTY_BOILERPLATE_PROJECT + '\n[activation.env]\nOK = "1"\n\n[environments]\ndev = []\n'
+    )
+
+    def activation(*args: str | Path) -> list[str | Path]:
+        return [pixi, "workspace", "--manifest-path", manifest_path, "activation", *args]
+
+    # Keys that are not valid environment variable names are rejected:
+    # activation `export`s them under the platform shell, where they error or
+    # silently set a different variable.
+    for bad in ["MY VAR=x", "MY-VAR=x", "1BAD=x"]:
+        verify_cli_command(
+            activation("env", "set", bad),
+            ExitCode.INCORRECT_USAGE,
+            stderr_contains="not a valid environment variable name",
+        )
+    verify_cli_command(activation("env", "set", "GOOD_1=x"))
+
+    # Empty script paths and feature names are rejected.
+    verify_cli_command(
+        activation("script", "add", ""),
+        ExitCode.INCORRECT_USAGE,
+        stderr_contains="may not be empty",
+    )
+    verify_cli_command(
+        activation("script", "add", "x.sh", "--feature", ""),
+        ExitCode.INCORRECT_USAGE,
+        stderr_contains="may not be empty",
+    )
+
+    # Removal errors are phrased in terms of what the user passed.
+    verify_cli_command(
+        activation("env", "remove", "K", "--environment", "nosuchenv"),
+        ExitCode.FAILURE,
+        stderr_contains="the environment 'nosuchenv' does not exist",
+    )
+    verify_cli_command(
+        activation("env", "remove", "K", "--environment", "dev"),
+        ExitCode.FAILURE,
+        stderr_contains="no activation environment variables are defined for environment 'dev'",
+    )
+    verify_cli_command(
+        activation("script", "remove", "x.sh", "--feature", "nosuchfeat"),
+        ExitCode.FAILURE,
+        stderr_contains="the feature 'nosuchfeat' does not exist",
+    )
+
+    # The list filters validate the feature name and scope the empty message.
+    verify_cli_command(
+        activation("list", "--feature", "nope"),
+        ExitCode.FAILURE,
+        stderr_contains="the feature 'nope' does not exist",
+    )
+    verify_cli_command(
+        activation("env", "list", "--target", "win"),
+        stdout_contains="for the given filter",
+    )

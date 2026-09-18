@@ -412,7 +412,8 @@ impl CommandDispatcherBuilder {
         let tool_platform = self.tool_platform.unwrap_or_else(|| {
             let platform = Platform::current();
             let virtual_packages =
-                VirtualPackages::detect(&VirtualPackageOverrides::default()).unwrap_or_default();
+                VirtualPackages::detect(&VirtualPackageOverrides::default(), None)
+                    .unwrap_or_default();
             (
                 platform,
                 virtual_packages.into_generic_virtual_packages().collect(),

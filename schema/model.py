@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import sys
 import json
+import sys
 from copy import deepcopy
-from pathlib import Path
-import tomli
-from typing import Annotated, Any, Literal, ClassVar, cast, override, TYPE_CHECKING
 from enum import Enum
+from pathlib import Path
+from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Literal, cast, override
 
+import tomli
 from pydantic import (
     AnyHttpUrl,
     BaseModel,
@@ -666,6 +666,82 @@ ConditionalInheritableDependencies = (
     ]
     | None
 )
+
+
+class PinTable(StrictBaseModel):
+    """The arguments of a pin, mirroring rattler-build's `pin_compatible`/`pin_subpackage`.
+
+    Bounds that are not given fall back to the defaults: `lower-bound = "x.x.x.x.x.x"`
+    (pin to the exact resolved version) and `upper-bound = "x"` (next-major exclusive).
+    """
+
+    lower_bound: NonEmptyStr | None = Field(
+        None,
+        description="Lower bound of the pinned range: a pin expression like `x.x` (number of version segments to keep) or a literal version.",
+        examples=["x.x", "1.2.3"],
+    )
+    upper_bound: NonEmptyStr | None = Field(
+        None,
+        description="Upper bound of the pinned range: a pin expression like `x` (the segment to bump, exclusive) or a literal version.",
+        examples=["x", "9.9"],
+    )
+    exact: bool | None = Field(
+        None,
+        description="Pin the exact version and build string. Cannot be combined with the bounds or `build`.",
+    )
+    build: NonEmptyStr | None = Field(
+        None,
+        description="A build-string matcher to add to the pin, e.g. `mpi_mpich_*`.",
+    )
+
+
+class PinCompatibleSpec(StrictBaseModel):
+    """Pin to a version compatible with the one resolved in the previous environment.
+
+    Mirrors rattler-build's `pin_compatible()`: a `pin-compatible` entry in
+    `run-dependencies` resolves against the host environment, one in
+    `host-dependencies` against the build environment.
+    """
+
+    pin_compatible: Literal[True] | PinTable = Field(
+        ...,
+        description="`true` uses the default bounds; a table configures them.",
+    )
+
+
+class PinSubpackageSpec(StrictBaseModel):
+    """Pin the package itself for its consumers.
+
+    Mirrors rattler-build's `pin_subpackage()`. Only valid in the
+    `run-exports` tables, on an entry named after the package itself.
+    """
+
+    pin_subpackage: Literal[True] | PinTable = Field(
+        ...,
+        description="`true` uses the default bounds; a table configures them.",
+    )
+
+
+PinnableMatchSpec = InheritableMatchSpec | PinCompatibleSpec
+RunExportSpec = InheritableMatchSpec | PinCompatibleSpec | PinSubpackageSpec
+
+# Like `ConditionalInheritableDependencies`, but additionally accepting
+# `pin-compatible` entries (the run- and host-dependency tables) or both pin
+# kinds (the run-export buckets).
+ConditionalPinnableDependencies = (
+    dict[
+        CondaPackageName,
+        PinnableMatchSpec | dict[CondaPackageName, PinnableMatchSpec],
+    ]
+    | None
+)
+ConditionalRunExportDependencies = (
+    dict[
+        CondaPackageName,
+        RunExportSpec | dict[CondaPackageName, RunExportSpec],
+    ]
+    | None
+)
 ConditionalExtraDependencies = (
     dict[ExtraName, dict[CondaPackageName, MatchSpec | dict[CondaPackageName, MatchSpec]]] | None
 )
@@ -1059,12 +1135,12 @@ class PyPIOptions(StrictBaseModel):
         description="Packages that should NOT be isolated during the build process",
         examples=[["numpy"], True],
     )
-    index_strategy: (
-        Literal["first-index"] | Literal["unsafe-first-match"] | Literal["unsafe-best-match"] | None
-    ) = Field(
-        None,
-        description="The strategy to use when resolving packages from multiple indexes",
-        examples=["first-index", "unsafe-first-match", "unsafe-best-match"],
+    index_strategy: Literal["first-index", "unsafe-first-match", "unsafe-best-match"] | None = (
+        Field(
+            None,
+            description="The strategy to use when resolving packages from multiple indexes",
+            examples=["first-index", "unsafe-first-match", "unsafe-best-match"],
+        )
     )
     no_build: bool | list[PyPIPackageName] | None = Field(
         None,
@@ -1084,12 +1160,7 @@ class PyPIOptions(StrictBaseModel):
         examples=["true", "false"],
     )
     prerelease_mode: (
-        Literal["disallow"]
-        | Literal["allow"]
-        | Literal["if-necessary"]
-        | Literal["explicit"]
-        | Literal["if-necessary-or-explicit"]
-        | None
+        Literal["disallow", "allow", "if-necessary", "explicit", "if-necessary-or-explicit"] | None
     ) = Field(
         None,
         description="The strategy to use when considering pre-release versions",
@@ -1110,23 +1181,23 @@ class PyPIOptions(StrictBaseModel):
 class RunExports(StrictBaseModel):
     """The run-exports the package declares for its downstream consumers."""
 
-    noarch: ConditionalInheritableDependencies = Field(
+    noarch: ConditionalRunExportDependencies = Field(
         None,
         description="The only run-export bucket applied when the consuming output is `noarch`: added to the run dependencies of noarch consumers that depend on this package in `host-dependencies`.",
     )
-    strong: ConditionalInheritableDependencies = Field(
+    strong: ConditionalRunExportDependencies = Field(
         None,
         description="Added to the run dependencies of consumers that depend on this package in `build-dependencies` or `host-dependencies`.",
     )
-    weak: ConditionalInheritableDependencies = Field(
+    weak: ConditionalRunExportDependencies = Field(
         None,
         description="Added to the run dependencies of consumers that depend on this package in `host-dependencies`.",
     )
-    strong_constraints: ConditionalInheritableDependencies = Field(
+    strong_constraints: ConditionalRunExportDependencies = Field(
         None,
         description="Added to the run constraints of consumers that depend on this package in `build-dependencies` or `host-dependencies`. Constraints only restrict versions and cannot be source specs.",
     )
-    weak_constraints: ConditionalInheritableDependencies = Field(
+    weak_constraints: ConditionalRunExportDependencies = Field(
         None,
         description="Added to the run constraints of consumers that depend on this package in `host-dependencies`. Constraints only restrict versions and cannot be source specs.",
     )
@@ -1185,9 +1256,9 @@ class Package(StrictBaseModel):
 
     build: Build = Field(..., description="The build configuration of the package")
 
-    host_dependencies: ConditionalInheritableDependencies = HostDependenciesField
+    host_dependencies: ConditionalPinnableDependencies = HostDependenciesField
     build_dependencies: ConditionalInheritableDependencies = BuildDependenciesField
-    run_dependencies: ConditionalInheritableDependencies = RunDependenciesField
+    run_dependencies: ConditionalPinnableDependencies = RunDependenciesField
     extra_dependencies: ConditionalExtraDependencies = Field(
         None,
         description="Extra groups that can be requested through MatchSpec extras. Each group uses the same conda package specification syntax as run-dependencies.",
@@ -1444,7 +1515,7 @@ class PyProjectPartial(PyProjectPixiTool):
 class SchemaJsonEncoder(json.JSONEncoder):
     """A custom schema encoder for normalizing schema to be used with TOML files."""
 
-    HEADER_ORDER: list[str] = [
+    HEADER_ORDER: ClassVar[list[str]] = [
         "$schema",
         "$id",
         "$ref",
@@ -1472,24 +1543,24 @@ class SchemaJsonEncoder(json.JSONEncoder):
         "multipleOf",
         "pattern",
     ]
-    FOOTER_ORDER: list[str] = [
+    FOOTER_ORDER: ClassVar[list[str]] = [
         "examples",
         "$defs",
     ]
-    SORT_NESTED: list[str] = [
+    SORT_NESTED: ClassVar[list[str]] = [
         "items",
     ]
-    SORT_NESTED_OBJ: list[str] = [
+    SORT_NESTED_OBJ: ClassVar[list[str]] = [
         "properties",
         "$defs",
     ]
-    SORT_NESTED_MAYBE_OBJ: list[str] = [
+    SORT_NESTED_MAYBE_OBJ: ClassVar[list[str]] = [
         "additionalProperties",
     ]
-    SORT_NESTED_OBJ_OBJ: list[str] = [
+    SORT_NESTED_OBJ_OBJ: ClassVar[list[str]] = [
         "patternProperties",
     ]
-    SORT_NESTED_ARR: list[str] = [
+    SORT_NESTED_ARR: ClassVar[list[str]] = [
         "anyOf",
         "allOf",
         "oneOf",

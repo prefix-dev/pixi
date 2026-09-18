@@ -193,6 +193,7 @@ pub async fn get_build_output(
                     &recipe_path,
                     &output_dir,
                     &timestamp,
+                    host_platform,
                 )
                 .no_build_id(true)
                 .merge_build_and_host(recipe.build().merge_build_and_host_envs)
@@ -208,6 +209,7 @@ pub async fn get_build_output(
                 ),
                 store_recipe: false,
                 force_colors: false,
+                experimental: false,
                 sandbox_config: None,
                 solve_strategy: Default::default(),
                 exclude_newer: None,

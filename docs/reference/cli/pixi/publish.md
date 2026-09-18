@@ -109,14 +109,15 @@ current directory is published instead, as if `--path .` had been
 passed. Use `--path` to build and publish a single package.
 
 Supported destinations for `--target-channel` (alias `--to`):
-  - prefix.dev: `https://prefix.dev/<channel-name>`
-  - anaconda.org: `https://anaconda.org/<owner>/<label>`
-  - Cloudsmith: `cloudsmith://<owner>/<repository>`
-  - S3: `s3://bucket-name`
-  - Quetz: `quetz://server/<channel>`
-  - Artifactory: `artifactory://server/<channel>`
-  - Local filesystem channel (with indexing):
-    `file:///path/to/channel` or a bare path
+
+- prefix.dev: `https://prefix.dev/<channel-name>`
+- anaconda.org: `https://anaconda.org/<owner>/<label>`
+- Cloudsmith: `cloudsmith://<owner>/<repository>`
+- S3: `s3://bucket-name`
+- Quetz: `quetz://server/<channel>`
+- Artifactory: `artifactory://server/<channel>`
+- Local filesystem channel (with indexing):
+  `file:///path/to/channel` or a bare path
 
 Use `--target-dir <PATH>` instead to copy the built package(s) into a
 directory without creating a channel structure.

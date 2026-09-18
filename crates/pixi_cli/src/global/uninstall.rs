@@ -1,5 +1,6 @@
 use crate::global::{
-    EnvironmentAction, report_failed_environments, revert_environment_after_error,
+    EnvironmentAction, report_failed_environment, report_failed_environments,
+    revert_environment_after_error,
 };
 use clap::Parser;
 use miette::Report;
@@ -44,7 +45,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let mut project = last_updated_project.clone();
         match apply_changes(env_name, &mut project).await {
             Ok(state_changes) => {
-                state_changes.report();
+                state_changes.report(&project).await;
                 // Only advance the project when successful
                 last_updated_project = project;
             }
@@ -56,10 +57,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     tracing::warn!("Reverting of the operation failed");
                     tracing::info!("Reversion error: {:?}", revert_err);
                 }
+                report_failed_environment(env_name);
                 errors.push((env_name.clone(), err));
             }
         }
     }
 
-    report_failed_environments(EnvironmentAction::Remove, errors)
+    report_failed_environments(EnvironmentAction::Uninstall, errors)
 }

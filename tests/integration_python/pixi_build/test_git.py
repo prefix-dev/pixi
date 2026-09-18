@@ -186,9 +186,7 @@ def test_build_git_source_deps_from_rev(
     # Replace the rich_example entry using string manipulation
     original = '[dependencies]\nrich_example = { "git" = "file:///" }'
     replacement = (
-        '[dependencies]\nrich_example = {{ "git" = "file:///", "rev" = "{commit_hash}" }}'.format(
-            commit_hash=commit_hash[:7]
-        )
+        f'[dependencies]\nrich_example = {{ "git" = "file:///", "rev" = "{commit_hash[:7]}" }}'
     )
 
     target_git_url = target_git_dir.as_uri()

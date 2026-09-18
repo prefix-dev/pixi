@@ -50,10 +50,12 @@ mod discovered_backend;
 pub mod environment;
 mod ephemeral_env;
 mod errors;
+mod file_fingerprint;
 mod injected_config;
 mod inline_package;
 mod input_globs;
 mod input_hash;
+mod input_snapshot;
 mod install_binary;
 mod install_pixi;
 mod installed_source_hints;
@@ -95,15 +97,16 @@ pub use dev_source_metadata::{
 };
 pub use discovered_backend::DiscoveredBackendKey;
 pub use environment::{
-    BuildEnvOf, ChannelsOf, DerivedEnvKind, DerivedParent, EnvironmentRef, EnvironmentSpec,
-    EphemeralEnv, ExcludeNewerOf, HasWorkspaceEnvRegistry, VariantsOf, WorkspaceEnvId,
-    WorkspaceEnvRef, WorkspaceEnvRegistry,
+    BuildEnvOf, ChannelsOf, DerivedEnvKind, DerivedParent, DerivedPlatform, EnvironmentRef,
+    EnvironmentSpec, EphemeralEnv, ExcludeNewerOf, HasWorkspaceEnvRegistry, VariantsOf,
+    WorkspaceEnvId, WorkspaceEnvRef, WorkspaceEnvRegistry,
 };
 pub use ephemeral_env::{
     EphemeralEnvError, EphemeralEnvKey, EphemeralEnvSpec, InstalledEphemeralEnv,
 };
 pub use errors::{
-    MissingChannelError, SolvePixiEnvironmentError, SourceBuildError, SourceMetadataError,
+    MissingChannelError, PrefixPlatformMismatchError, PrefixRecordOrigin,
+    SolvePixiEnvironmentError, SourceBuildError, SourceBuildPrefixKind, SourceMetadataError,
     SourceRecordError,
 };
 pub use injected_config::{

@@ -1,20 +1,26 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::str::FromStr;
 
 use clap::Parser;
 use miette::IntoDiagnostic;
 use pixi_api::WorkspaceContext;
-use pixi_core::workspace::{PlatformOverrides, PlatformSource};
 use pixi_core::{WorkspaceLocator, environment::LockFileUsage};
 use pixi_manifest::{
     EnvironmentName, FeatureName, FeaturesExt, HasWorkspaceManifest, PixiPlatform,
-    PixiPlatformName, PlatformEdit, PlatformMove, platform::subdir_default_virtual_packages,
+    PixiPlatformName, PlatformEdit, PlatformMove,
+    platform::{
+        candidate_subdirs, capability_satisfied_by,
+        host::{detect_host, host_capabilities, host_subdir, machine_virtual_packages},
+        subdir_default_virtual_packages,
+    },
 };
 use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform, Version};
-use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 
-use crate::{cli_config::ScriptWorkspaceConfig, cli_interface::CliInterface};
+use crate::{
+    cli_config::{ScriptWorkspaceConfig, script_lock_file_usage},
+    cli_interface::{CliInterface, cli_context},
+};
 
 /// Commands to manage workspace platforms.
 #[derive(Parser, Debug)]
@@ -497,11 +503,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
 
-    let lock_file_usage = platform_lock_file_usage(
+    let lock_file_usage = script_lock_file_usage(
+        LockFileUsage::Update,
         args.workspace_config.script.is_some(),
         workspace.lock_file_path().is_file(),
-    );
-    let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
+    )?;
+    let workspace_ctx = cli_context(workspace.clone());
 
     match args.command {
         Command::Add(args) => execute_add(&workspace_ctx, args, lock_file_usage).await,
@@ -511,14 +518,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Command::Remove(args) => {
             execute_remove(&workspace, &workspace_ctx, args, lock_file_usage).await
         }
-    }
-}
-
-fn platform_lock_file_usage(is_script: bool, lock_file_exists: bool) -> LockFileUsage {
-    if is_script && !lock_file_exists {
-        LockFileUsage::Frozen
-    } else {
-        LockFileUsage::Update
     }
 }
 
@@ -636,11 +635,8 @@ async fn execute_add_auto_detected(
     feature: FeatureName,
     lock_file_usage: LockFileUsage,
 ) -> miette::Result<()> {
-    let detected = workspace_ctx.workspace().host_platform(
-        PlatformSource::AutoDetected,
-        PlatformOverrides::EnvironmentVariableOverrides,
-    );
-    let subdir = detected.subdir();
+    let subdir = host_subdir();
+    let detected = detect_host(subdir).into_diagnostic()?;
     let overrides = virtual_packages.into_specs(subdir, raw_specs)?;
     let merged = merge_virtual_packages(detected.customised_virtual_packages(), overrides);
     let explicit = explicit_name.is_some();
@@ -765,27 +761,31 @@ async fn execute_list(
             .map(|p| p.name().as_str())
             .collect::<Vec<_>>()
             .join(" ");
-        writeln!(std::io::stdout(), "{names}")
-            .inspect_err(|e| {
-                if e.kind() == std::io::ErrorKind::BrokenPipe {
-                    std::process::exit(0);
-                }
-            })
+        pixi_utils::io::ignore_broken_pipe(writeln!(std::io::stdout(), "{names}"))
             .into_diagnostic()?;
         return Ok(());
     }
 
     if args.json {
+        // Same snapshot the human output renders, so the two views of one
+        // command cannot disagree about the host.
+        let machine = HostMachine::detect();
         let mut platforms: Vec<serde_json::Value> =
             Vec::with_capacity(workspace_platforms.len() + 1);
-        platforms.push(autodetected_to_json());
+        platforms.push(autodetected_to_json(&machine));
+        // Probe each distinct subdir once. Detecting per row repeats the work,
+        // and repeats the warning when a `CONDA_OVERRIDE_*` value is unusable.
+        let mut probed: HashMap<Platform, Vec<GenericVirtualPackage>> = HashMap::new();
         for p in &workspace_platforms {
+            probed
+                .entry(p.subdir())
+                .or_insert_with(|| machine_virtual_packages(p.subdir()));
             let users = environments_and_features_using(workspace, p);
-            platforms.push(show_to_json(p, &users));
+            platforms.push(show_to_json(p, &users, &probed[&p.subdir()]));
         }
 
         let value = serde_json::json!({
-            "current_subdir": Platform::current().as_str(),
+            "current_subdir": machine.subdir.as_str(),
             "platforms": platforms,
         });
         let _ = writeln!(
@@ -797,12 +797,12 @@ async fn execute_list(
     }
 
     let mut stdout = std::io::stdout();
-    print_autodetected_host(workspace);
+    let machine = HostMachine::detect();
+    print_autodetected_host(&mut stdout, &machine);
 
     if !workspace_platforms.is_empty() {
         let _ = writeln!(stdout, "\n{}", console::style("Platforms:").bold().bright());
     }
-    let machine = HostMachine::detect(workspace);
     let _ = write!(
         stdout,
         "{}",
@@ -866,27 +866,14 @@ async fn execute_remove(
 }
 
 /// Pretty-print rattler's host detection as a "diagnostic" header rather
-/// than another `<name>:` row -- the host has no manifest-side identity, so
-/// labelling it `current:` was misleading. The body is the same
-/// `platform=...[, ...]` payload the workspace rows use; subdir defaults
-/// filter out so it only mentions where the host diverges from pixi's
-/// baseline. Both `PIXI_OVERRIDE_PLATFORM` and the `CONDA_OVERRIDE_*`
-/// virtual-package overrides are respected here so the header agrees
-/// with what the workspace rows are matched against.
-fn print_autodetected_host(workspace: &pixi_core::Workspace) {
-    let subdir = workspace
-        .host_platform(
-            PlatformSource::Defaults,
-            PlatformOverrides::EnvironmentVariableOverrides,
-        )
-        .subdir();
-    let detected: Vec<GenericVirtualPackage> =
-        VirtualPackages::detect_for_platform(subdir, &VirtualPackageOverrides::from_env())
-            .map(|d| d.into_generic_virtual_packages().collect())
-            .unwrap_or_default();
-    let mut stdout = std::io::stdout();
+/// than another `<name>:` row.
+fn print_autodetected_host(stdout: &mut std::io::Stdout, machine: &HostMachine) {
     let _ = writeln!(stdout, "Your current machine was detected as:");
-    let _ = writeln!(stdout, "    {}", inline_entry_body(subdir, &detected));
+    let _ = writeln!(
+        stdout,
+        "    {}",
+        inline_entry_body(machine.subdir, &machine.detected)
+    );
 }
 
 /// Walk all environments + features in the workspace and collect the names of
@@ -937,33 +924,22 @@ struct PlatformUsers {
     environments: Vec<String>,
 }
 
-/// Snapshot of the local machine used to colour platform rows in `list`:
-/// which subdirs we can run packages from (current + arch fallbacks) and
-/// which virtual packages rattler detected on the host.
+/// Snapshot of the local machine used to color platform rows in `list`:
+/// the subdir we target, which subdirs we can run packages from (that one plus
+/// arch fallbacks) and which virtual packages rattler detected on the host.
 struct HostMachine {
+    subdir: Platform,
     candidate_subdirs: Vec<Platform>,
     detected: Vec<GenericVirtualPackage>,
 }
 
 impl HostMachine {
-    fn detect(workspace: &pixi_core::Workspace) -> Self {
-        let current = workspace
-            .host_platform(
-                PlatformSource::Defaults,
-                PlatformOverrides::EnvironmentVariableOverrides,
-            )
-            .subdir();
-        let candidate_subdirs = workspace
-            .workspace_manifest()
-            .workspace
-            .candidate_subdirs(current);
-        // `VirtualPackageOverrides::from_env()` applies the `CONDA_OVERRIDE_*`
-        // family, so this detection matches what the workspace rows are tested against.
-        let detected =
-            VirtualPackages::detect_for_platform(current, &VirtualPackageOverrides::from_env())
-                .map(|d| d.into_generic_virtual_packages().collect::<Vec<_>>())
-                .unwrap_or_default();
+    fn detect() -> Self {
+        let subdir = host_subdir();
+        let candidate_subdirs = candidate_subdirs(subdir);
+        let detected = host_capabilities();
         HostMachine {
+            subdir,
             candidate_subdirs,
             detected,
         }
@@ -976,19 +952,20 @@ impl HostMachine {
         self.candidate_subdirs.contains(&subdir)
     }
 
-    /// `true` when the host advertises a virtual package whose version is
-    /// at least the declared one (conda virtual-package semantics).
+    /// `true` when the host provides the capability `declared` names.
+    ///
+    /// Shares [`capability_satisfied_by`] with the selection machinery, so what
+    /// `list` calls supported is what `run` will actually pick. Rolling the
+    /// version comparison by hand here silently disagreed about `__archspec`,
+    /// which is matched by microarchitecture rather than by version.
     fn satisfies(&self, declared: &GenericVirtualPackage) -> bool {
-        self.detected
-            .iter()
-            .find(|h| h.name == declared.name)
-            .is_some_and(|h| h.version >= declared.version)
+        capability_satisfied_by(declared, &self.detected)
     }
 
     /// Does the current machine support running this platform? Combines
     /// the subdir check with the per-VP satisfaction check on the user-
-    /// customised virtual packages (subdir defaults are pixi's baseline
-    /// and not considered host requirements). Used to colour both the
+    /// customized virtual packages (subdir defaults are pixi's baseline
+    /// and not considered host requirements). Used to color both the
     /// row itself and the env/feature names that reference it.
     fn supports(&self, platform: &PixiPlatform) -> bool {
         let subdir = platform.subdir();
@@ -1180,14 +1157,15 @@ fn render_friendly(
         .collect()
 }
 
-fn show_to_json(platform: &PixiPlatform, users: &PlatformUsers) -> serde_json::Value {
-    let detected: Vec<String> = match platform.virtual_packages() {
-        Ok(detected) => render_friendly(
-            &detected.into_generic_virtual_packages().collect::<Vec<_>>(),
-            None,
-        ),
-        Err(_) => Vec::new(),
-    };
+/// `detected` is what this machine reports for the row's subdir, so a consumer
+/// can diff it against the row's declared packages. Sparse for a subdir this
+/// machine cannot speak about, which is the honest answer.
+fn show_to_json(
+    platform: &PixiPlatform,
+    users: &PlatformUsers,
+    detected: &[GenericVirtualPackage],
+) -> serde_json::Value {
+    let detected: Vec<String> = render_friendly(detected, None);
     serde_json::json!({
         "name": platform.name().as_str(),
         "subdir": platform.subdir().as_str(),
@@ -1205,15 +1183,11 @@ fn show_to_json(platform: &PixiPlatform, users: &PlatformUsers) -> serde_json::V
 /// JSON counterpart to [`print_autodetected_host`]. Carries the same data
 /// shape as a real platform entry plus an `is_autodetected: true` marker so
 /// downstream tooling can tell synthetic rows apart from declared ones.
-fn autodetected_to_json() -> serde_json::Value {
-    let host = PixiPlatform::auto_detected(Platform::current());
-    let detected: Vec<String> = match host.virtual_packages() {
-        Ok(d) => render_friendly(&d.into_generic_virtual_packages().collect::<Vec<_>>(), None),
-        Err(_) => Vec::new(),
-    };
+fn autodetected_to_json(machine: &HostMachine) -> serde_json::Value {
+    let detected: Vec<String> = render_friendly(&machine.detected, None);
     serde_json::json!({
         "name": "current",
-        "subdir": Platform::current().as_str(),
+        "subdir": machine.subdir.as_str(),
         "virtual_packages": Vec::<String>::new(),
         "detected_virtual_packages": detected,
         "features": Vec::<String>::new(),
@@ -1260,6 +1234,7 @@ mod tests {
     /// A host that runs linux-64 with no customised virtual packages.
     fn linux_machine() -> HostMachine {
         HostMachine {
+            subdir: Platform::Linux64,
             candidate_subdirs: vec![Platform::Linux64],
             detected: Vec::new(),
         }
@@ -1288,7 +1263,7 @@ mod tests {
             .next()
             .expect("manifest declares one platform");
         let users = environments_and_features_using(&workspace, platform);
-        let json = show_to_json(platform, &users);
+        let json = show_to_json(platform, &users, &[]);
         assert_eq!(json["features"], serde_json::json!(["cuda"]));
         assert_eq!(
             json["declared_inline_in_environments"],

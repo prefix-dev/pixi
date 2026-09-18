@@ -1,0 +1,10 @@
+---
+source: crates/pixi_manifest/src/manifests/document.rs
+expression: document.to_string()
+---
+[workspace]
+channels = []
+name = "test"
+platforms = []
+
+[dependencies]

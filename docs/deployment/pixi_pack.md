@@ -78,6 +78,20 @@ pixi-pack --platform win-64
 !!! note
     You can only unpack a pack on a system that has the same platform as the pack was created for.
 
+### Named platforms
+
+If your `pixi.toml` defines named platforms (requires a lockfile in version 7 or later), you can pack them by name.
+
+```toml
+platforms = [{ name = "jetson", platform = "linux-aarch64", cuda = "13" }]
+```
+
+```bash
+pixi-pack --platform jetson
+```
+
+You can still pass the underlying conda platform (e.g. `linux-aarch64`) as long as only one named platform uses it; otherwise `pixi-pack` asks you to use one of the platform names instead.
+
 ### Self-Extracting Binaries
 
 You can create a self-extracting binary that contains the packed environment and a script that unpacks the environment.

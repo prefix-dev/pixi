@@ -68,10 +68,10 @@ Lists global environments with their dependencies and exposed commands. Can also
 
 All environments:
 
-- Yellow: the binaries that are exposed.
+- Magenta: the name of the environment.
 - Green: the packages that are explicit dependencies of the environment.
-- Blue: the version of the installed package.
-- Cyan: the name of the environment.
+- Yellow: the binaries that are exposed.
+- Dim: the version of the installed package.
 
 Per environment:
 

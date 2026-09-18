@@ -13,7 +13,6 @@ license.workspace = true
 chrono = { workspace = true }
 dunce = { workspace = true }
 hex = { workspace = true }
-jiff = { workspace = true }
 miette = { workspace = true }
 pathdiff = { workspace = true }
 pep440_rs = { workspace = true }

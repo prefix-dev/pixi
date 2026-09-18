@@ -190,6 +190,19 @@ pub fn virtual_package_applies_to_subdir(name: &str, subdir: Platform) -> bool {
     }
 }
 
+/// Narrow `candidates` to the packages that apply on `subdir`. Shared by the
+/// migration and the deprecation warning that suggests its replacement.
+pub fn virtual_packages_for_subdir(
+    candidates: &[GenericVirtualPackage],
+    subdir: Platform,
+) -> Vec<GenericVirtualPackage> {
+    candidates
+        .iter()
+        .filter(|c| virtual_package_applies_to_subdir(c.name.as_normalized(), subdir))
+        .cloned()
+        .collect()
+}
+
 #[derive(Debug, Clone, Error, Diagnostic)]
 pub enum SystemRequirementsUnionError {
     #[error("two different libc families were specified: '{0}' and '{1}'")]

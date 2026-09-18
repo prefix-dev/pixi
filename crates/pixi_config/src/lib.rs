@@ -15,7 +15,9 @@ use rattler_conda_types::{
     version_spec::{EqualityOperator, LogicalOperator, RangeOperator},
 };
 use rattler_config::config::{CommonConfig, ConfigBase};
-use rattler_config::locations::{ConfigLayer, config_search_paths};
+use rattler_config::locations::{
+    ConfigLayer, ConfigLocation, shared_system_config_path, shared_user_config_paths,
+};
 use rattler_networking::s3_middleware;
 use rattler_repodata_gateway::{Gateway, GatewayBuilder, SourceConfig, fetch::CacheAction};
 use reqwest::{NoProxy, Proxy};
@@ -784,6 +786,7 @@ impl ConfigCliPrompt {
 // tolerant `Deserialize` impl that pixi used to maintain locally —
 // unknown/deprecated keys (e.g. `disable-jlap`) are silently consumed
 // and surface as `serde_ignored` warnings.
+pub use rattler_config::config::index::{IndexChannelConfig, IndexConfig};
 pub use rattler_config::config::repodata_config::{RepodataChannelConfig, RepodataConfig};
 
 #[derive(Parser, Debug, Default, Clone)]
@@ -949,6 +952,13 @@ pub struct ExperimentalConfig {
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub use_environment_activation_cache: Option<bool>,
+
+    /// The option to opt into running `conda-script` files without passing
+    /// `--experimental` on every invocation. The format follows a draft
+    /// proposal and may still change.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conda_script: Option<bool>,
 }
 
 impl ExperimentalConfig {
@@ -957,14 +967,19 @@ impl ExperimentalConfig {
             use_environment_activation_cache: other
                 .use_environment_activation_cache
                 .or(self.use_environment_activation_cache),
+            conda_script: other.conda_script.or(self.conda_script),
         }
     }
     pub fn use_environment_activation_cache(&self) -> bool {
         self.use_environment_activation_cache.unwrap_or(false)
     }
 
+    pub fn conda_script(&self) -> bool {
+        self.conda_script.unwrap_or(false)
+    }
+
     pub fn is_default(&self) -> bool {
-        self.use_environment_activation_cache.is_none()
+        self.use_environment_activation_cache.is_none() && self.conda_script.is_none()
     }
 }
 
@@ -1186,6 +1201,11 @@ pub struct Config {
     #[serde(default, skip_serializing_if = "RepodataConfig::is_empty")]
     pub repodata_config: RepodataConfig,
 
+    /// Options for the channels `pixi publish` indexes, with per-channel
+    /// overrides keyed by channel URL or path.
+    #[serde(default, skip_serializing_if = "IndexConfig::is_empty")]
+    pub index_config: IndexConfig,
+
     /// Configuration for PyPI packages.
     #[serde(default)]
     #[serde(skip_serializing_if = "PyPIConfig::is_default")]
@@ -1297,6 +1317,7 @@ impl Default for Config {
             loaded_from: Vec::new(),
             channel_config: default_channel_config(),
             repodata_config: RepodataConfig::default(),
+            index_config: IndexConfig::default(),
             pypi_config: PyPIConfig::default(),
             s3_options: S3OptionsMap::default(),
             detached_environments: None,
@@ -1320,10 +1341,8 @@ impl Default for Config {
     }
 }
 
-/// Pixi's configuration acts as the tool-specific extension of
-/// [`rattler_config::config::ConfigBase`]: shared configuration files are
-/// parsed through `ConfigBase<Config>`, and the common keys they may contain
-/// are folded into a [`Config`] via the [`From<CommonConfig>`] impl below.
+/// Pixi's tool-specific extension of [`rattler_config::config::ConfigBase`],
+/// which lets shared configuration files be parsed as `ConfigBase<Config>`.
 impl rattler_config::config::Config for Config {
     fn merge_config(self, other: &Self) -> Result<Self, rattler_config::config::MergeError> {
         Ok(Config::merge_config(self, other.clone()))
@@ -1339,9 +1358,11 @@ impl rattler_config::config::Config for Config {
     }
 }
 
-/// The keys shared by all rattler-based tools, as a pixi configuration. Used
-/// to fold a parsed shared configuration file into pixi's own layering; keys
-/// pixi does not model (like `index-config`) are dropped.
+/// Folds the keys shared by all rattler-based tools into pixi's own layering.
+///
+/// Keys pixi does not model are dropped silently: a shared file serves every
+/// rattler-based tool, so a key meant for another one of them is not a
+/// mistake.
 impl From<CommonConfig> for Config {
     fn from(common: CommonConfig) -> Self {
         Self {
@@ -1354,6 +1375,7 @@ impl From<CommonConfig> for Config {
             }),
             mirrors: common.mirrors.into_iter().collect(),
             repodata_config: common.repodata_config,
+            index_config: common.index_config,
             s3_options: common.s3_options,
             concurrency: common.concurrency,
             proxy_config: common.proxy_config,
@@ -1363,6 +1385,28 @@ impl From<CommonConfig> for Config {
             allow_hard_links: common.allow_hard_links,
             allow_ref_links: common.allow_ref_links,
             ..Default::default()
+        }
+    }
+}
+
+/// Warn about a proxy configuration that will not take effect: non-proxy
+/// hosts without a proxy to apply them to, or a proxy that the environment
+/// overrides.
+fn warn_about_proxy_config(config: &Config) {
+    if config.proxy_config.https.is_none() && config.proxy_config.http.is_none() {
+        if !config.proxy_config.non_proxy_hosts.is_empty() {
+            tracing::warn!(
+                "proxy-config.non-proxy-hosts is not empty but will be ignored, as no https or http config is set."
+            )
+        }
+    } else if *USE_PROXY_FROM_ENV {
+        let config_no_proxy =
+            Some(config.proxy_config.non_proxy_hosts.iter().join(",")).filter(|v| !v.is_empty());
+        if (*ENV_HTTPS_PROXY).as_deref() != config.proxy_config.https.as_ref().map(Url::as_str)
+            || (*ENV_HTTP_PROXY).as_deref() != config.proxy_config.http.as_ref().map(Url::as_str)
+            || *ENV_NO_PROXY != config_no_proxy
+        {
+            tracing::info!("proxy configs are overridden by proxy environment vars.")
         }
     }
 }
@@ -1436,6 +1480,7 @@ impl From<ConfigCli> for Config {
                 } else {
                     None
                 },
+                conda_script: None,
             },
             pinning_strategy: cli.pinning_strategy,
             allow_symbolic_links: cli.no_symbolic_links.then_some(false),
@@ -1692,34 +1737,17 @@ impl Config {
             .validate()
             .map_err(|e| ConfigError::ValidationError(e, path.to_path_buf()))?;
 
-        // check proxy config
-        if config.proxy_config.https.is_none() && config.proxy_config.http.is_none() {
-            if !config.proxy_config.non_proxy_hosts.is_empty() {
-                tracing::warn!(
-                    "proxy-config.non-proxy-hosts is not empty but will be ignored, as no https or http config is set."
-                )
-            }
-        } else if *USE_PROXY_FROM_ENV {
-            let config_no_proxy = Some(config.proxy_config.non_proxy_hosts.iter().join(","))
-                .filter(|v| !v.is_empty());
-            if (*ENV_HTTPS_PROXY).as_deref() != config.proxy_config.https.as_ref().map(Url::as_str)
-                || (*ENV_HTTP_PROXY).as_deref()
-                    != config.proxy_config.http.as_ref().map(Url::as_str)
-                || *ENV_NO_PROXY != config_no_proxy
-            {
-                tracing::info!("proxy configs are overridden by proxy environment vars.")
-            }
-        }
+        warn_about_proxy_config(&config);
 
         Ok(config)
     }
 
-    /// Load a shared configuration file (a file every rattler-based tool
-    /// reads, see [`rattler_config::locations::ConfigLayer::Shared`]). Only
-    /// the keys shared by all rattler-based tools are honored; everything
-    /// else - including keys pixi would understand in its own files - is
-    /// ignored with a warning, so a shared file means the same thing to
-    /// every tool reading it.
+    /// Load a shared configuration file, one that every rattler-based tool
+    /// reads (see [`rattler_config::locations::ConfigLayer::Shared`]).
+    ///
+    /// Only the keys shared by all rattler-based tools are honored. Anything
+    /// else is ignored with a warning, even a key pixi would accept in its
+    /// own files, so that a shared file means the same thing to every tool.
     ///
     /// # Returns
     ///
@@ -1745,9 +1773,21 @@ impl Config {
             .into_diagnostic()
             .map_err(|e| ConfigError::ParseError(e, path.to_path_buf()))?;
 
+        // `rattler_config` folds the deprecated `tls-root-certs` spellings
+        // into `system`, so read back what was actually written to keep
+        // warning about them.
+        if let Ok(document) = s.parse::<toml_edit::DocumentMut>()
+            && let Some(spelling) = document
+                .get("tls-root-certs")
+                .and_then(|item| item.as_str())
+            && let Ok(certs) = TlsRootCerts::from_str(spelling)
+        {
+            warn_deprecated_tls_root_certs(Some(certs), Some(&path.display().to_string()));
+        }
+
         if !unused_keys.is_empty() {
             tracing::warn!(
-                "Ignoring '{}' in {}: not keys shared by all rattler-based tools",
+                "Ignoring '{}' in {}: not a key of the shared configuration",
                 console::style(
                     unused_keys
                         .iter()
@@ -1763,6 +1803,13 @@ impl Config {
         let mut config = Config::from(base.common);
         config.loaded_from.push(path.to_path_buf());
         tracing::debug!("Loaded shared config from: {}", path.display());
+
+        config
+            .validate()
+            .map_err(|e| ConfigError::ValidationError(e, path.to_path_buf()))?;
+
+        warn_about_proxy_config(&config);
+
         Ok(config)
     }
 
@@ -1779,20 +1826,26 @@ impl Config {
         Self::from_path(&config_path_system())
     }
 
-    /// Load the system config file from the system path.
+    /// Load the system-wide config layer: the shared file with the pixi file
+    /// merged on top, see [`system_config_locations`].
     ///
     /// # Returns
     ///
     /// The loaded system config
     pub fn load_system() -> Config {
-        Self::try_load_system().unwrap_or_else(|e| {
-            match e {
-                ConfigError::FileNotFound(_) => (), // it's fine that no file is there
-                e => tracing::error!("{e}"),
+        let mut config = Config::default();
+        for location in system_config_locations() {
+            let loaded = match location.layer {
+                ConfigLayer::Shared => Config::from_shared_path(&location.path),
+                ConfigLayer::Tool => Config::from_path(&location.path),
+            };
+            match loaded {
+                Ok(c) => config = config.merge_config(c),
+                Err(ConfigError::FileNotFound(_)) => (), // it's fine that no file is there
+                Err(e) => tracing::error!("{e}"),
             }
-
-            Self::default()
-        })
+        }
+        config
     }
 
     /// Validate the config file.
@@ -1813,15 +1866,10 @@ impl Config {
     ///
     /// - [`GlobalConfigSource::None`]: return [`Config::default`].
     /// - [`GlobalConfigSource::File`]: load only that file.
-    /// - [`GlobalConfigSource::Search`]: load the default locations reported
-    ///   by [`rattler_config::locations::config_search_paths`], merging them
-    ///   in order (lowest precedence first): the system-wide shared file
-    ///   (`/etc/rattler/config.toml`), the system-wide pixi file
-    ///   (`/etc/pixi/config.toml`), the per-user shared files
-    ///   (`$XDG_CONFIG_HOME/rattler/config.toml`, `$RATTLER_HOME` when set),
-    ///   and the per-user pixi files ([`config_path_global`]). Shared files
-    ///   may only contain the keys shared by all rattler-based tools (see
-    ///   [`Config::from_shared_path`]). This case is cached process-wide
+    /// - [`GlobalConfigSource::Search`]: merge every location reported by
+    ///   [`config_search_locations`], lowest precedence first. Shared files
+    ///   may only contain the keys shared by all rattler-based tools, see
+    ///   [`Config::from_shared_path`]. This case is cached process-wide
     ///   because the underlying files are env-independent.
     ///
     /// The project-local `<project>/.pixi/config.toml` layer that
@@ -1831,7 +1879,7 @@ impl Config {
         // (--no-config / --config-file) are per-invocation and can vary.
         static SEARCH_LAYERS: LazyLock<Config> = LazyLock::new(|| {
             let mut config = Config::default();
-            for location in config_search_paths("pixi") {
+            for location in config_search_locations() {
                 let loaded = match location.layer {
                     ConfigLayer::Shared => Config::from_shared_path(&location.path),
                     ConfigLayer::Tool => Config::from_path(&location.path),
@@ -1930,7 +1978,12 @@ impl Config {
             "default-channels",
             "detached-environments",
             "experimental",
+            "experimental.conda-script",
             "experimental.use-environment-activation-cache",
+            "index-config",
+            "index-config.base-url",
+            "index-config.write-shards",
+            "index-config.write-zst",
             "mirrors",
             "offline",
             "pinning-strategy",
@@ -2001,6 +2054,10 @@ impl Config {
                 .repodata_config
                 .merge_config(&other.repodata_config)
                 .expect("RepodataConfig::merge_config is infallible"),
+            index_config: self
+                .index_config
+                .merge_config(&other.index_config)
+                .expect("IndexConfig::merge_config is infallible"),
             pypi_config: self.pypi_config.merge(other.pypi_config),
             s3_options: S3OptionsMap(
                 self.s3_options
@@ -2122,6 +2179,11 @@ impl Config {
 
     pub fn experimental_activation_cache_usage(&self) -> bool {
         self.experimental.use_environment_activation_cache()
+    }
+
+    /// Whether `conda-script` files may run without `--experimental`.
+    pub fn experimental_conda_script(&self) -> bool {
+        self.experimental.conda_script()
     }
 
     /// Retrieve the value for the max_concurrent_solves field.
@@ -2253,6 +2315,36 @@ impl Config {
                     .map(Platform::from_str)
                     .transpose()
                     .into_diagnostic()?;
+            }
+            key if key.starts_with("index-config") => {
+                if key == "index-config" {
+                    self.index_config = value
+                        .map(|v| serde_json::de::from_str(&v))
+                        .transpose()
+                        .into_diagnostic()?
+                        .unwrap_or_default();
+                    return Ok(());
+                } else if !key.starts_with("index-config.") {
+                    return Err(err);
+                }
+
+                let subkey = key.strip_prefix("index-config.").unwrap();
+                match subkey {
+                    "write-zst" => {
+                        self.index_config.default.write_zst =
+                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                    }
+                    "write-shards" => {
+                        self.index_config.default.write_shards =
+                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                    }
+                    "base-url" => {
+                        self.index_config.default.base_url = value;
+                    }
+                    // The remaining keys are lists or per-channel tables; set
+                    // them through the whole `index-config` table instead.
+                    _ => return Err(err),
+                }
             }
             key if key.starts_with("repodata-config") => {
                 if key == "repodata-config" {
@@ -2406,15 +2498,19 @@ impl Config {
                         self.experimental.use_environment_activation_cache =
                             value.map(|v| v.parse()).transpose().into_diagnostic()?;
                     }
+                    "conda-script" => {
+                        self.experimental.conda_script =
+                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                    }
                     _ => return Err(err),
                 }
             }
             key if key.starts_with("concurrency") => {
                 if key == "concurrency" {
                     if let Some(value) = value {
-                        self.pypi_config = serde_json::de::from_str(&value).into_diagnostic()?;
+                        self.concurrency = serde_json::de::from_str(&value).into_diagnostic()?;
                     } else {
-                        self.pypi_config = PyPIConfig::default();
+                        self.concurrency = ConcurrencyConfig::default();
                     }
                     return Ok(());
                 } else if !key.starts_with("concurrency.") {
@@ -2658,6 +2754,54 @@ pub fn config_path_global() -> Vec<PathBuf> {
     .into_iter()
     .flatten()
     .collect()
+}
+
+/// Every configuration file pixi reads by default, from lowest to highest
+/// precedence: the shared system file, the pixi system file, the shared
+/// user files, and the pixi user files.
+///
+/// The pixi paths come from [`config_path_system`] and [`config_path_global`]
+/// rather than from [`rattler_config::locations`], so that a rebranded build
+/// (`PIXI_CONFIG_DIR`, `PIXI_DIR`) keeps reading and writing the same files.
+pub fn config_search_locations() -> Vec<ConfigLocation> {
+    let mut locations = system_config_locations();
+    locations.extend(layer_locations(
+        shared_user_config_paths(),
+        config_path_global(),
+    ));
+    locations
+}
+
+/// The system-wide configuration files: the shared file
+/// (`/etc/rattler/config.toml`) with the pixi file
+/// ([`config_path_system`]) on top.
+pub fn system_config_locations() -> Vec<ConfigLocation> {
+    layer_locations(
+        vec![shared_system_config_path()],
+        vec![config_path_system()],
+    )
+}
+
+/// Pair up the shared and pixi files of one level, shared first so that the
+/// pixi file wins. A path in both is only visited as a pixi file, which
+/// accepts a superset of the shared keys.
+fn layer_locations(shared: Vec<PathBuf>, tool: Vec<PathBuf>) -> Vec<ConfigLocation> {
+    let shared: Vec<PathBuf> = shared
+        .into_iter()
+        .filter(|path| !tool.contains(path))
+        .collect();
+
+    shared
+        .into_iter()
+        .map(|path| ConfigLocation {
+            path,
+            layer: ConfigLayer::Shared,
+        })
+        .chain(tool.into_iter().map(|path| ConfigLocation {
+            path,
+            layer: ConfigLayer::Tool,
+        }))
+        .collect()
 }
 
 #[cfg(test)]
@@ -3067,6 +3211,7 @@ UNUSED = "unused"
             pinning_strategy: Some(PinningStrategy::NoPin),
             experimental: ExperimentalConfig {
                 use_environment_activation_cache: Some(true),
+                conda_script: None,
             },
             loaded_from: Vec::from([PathBuf::from_str("test").unwrap()]),
             shell: ShellConfig {
@@ -3099,6 +3244,17 @@ UNUSED = "unused"
                 per_channel: HashMap::from([(
                     Url::parse("https://conda.anaconda.org/conda-forge").unwrap(),
                     RepodataChannelConfig::default(),
+                )]),
+            },
+            index_config: IndexConfig {
+                default: IndexChannelConfig {
+                    write_zst: Some(false),
+                    write_shards: Some(false),
+                    ..IndexChannelConfig::default()
+                },
+                per_channel: HashMap::from([(
+                    "s3://bucket/staging".to_string(),
+                    IndexChannelConfig::default(),
                 )]),
             },
             run_post_link_scripts: Some(RunPostLinkScripts::Insecure),
@@ -3153,6 +3309,157 @@ UNUSED = "unused"
         assert_eq!(config.pinning_strategy, None);
         assert_eq!(config.shell, ShellConfig::default());
         assert_eq!(config.loaded_from, vec![path]);
+    }
+
+    #[test]
+    fn test_from_shared_path_keeps_index_config() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        fs_err::write(
+            &path,
+            r#"
+            [index-config]
+            write-zst = false
+
+            [index-config."s3://bucket/staging"]
+            write-shards = false
+            "#,
+        )
+        .unwrap();
+
+        let config = Config::from_shared_path(&path).unwrap();
+
+        // The default applies everywhere, the per-channel entry only to the
+        // channel it names.
+        let staging = config.index_config.resolve("s3://bucket/staging");
+        assert_eq!(staging.write_zst, Some(false));
+        assert_eq!(staging.write_shards, Some(false));
+
+        let other = config.index_config.resolve("s3://bucket/stable");
+        assert_eq!(other.write_zst, Some(false));
+        assert_eq!(other.write_shards, None);
+    }
+
+    #[test]
+    fn test_index_config_merges_across_layers() {
+        let shared = Config {
+            index_config: IndexConfig {
+                default: IndexChannelConfig {
+                    write_zst: Some(false),
+                    write_shards: Some(false),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let pixi = Config {
+            index_config: IndexConfig {
+                default: IndexChannelConfig {
+                    write_shards: Some(true),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        let merged = shared.merge_config(pixi).index_config.resolve("s3://any");
+        // The pixi layer wins where it sets a key, the shared one survives
+        // where it does not.
+        assert_eq!(merged.write_shards, Some(true));
+        assert_eq!(merged.write_zst, Some(false));
+    }
+
+    #[test]
+    fn test_from_shared_path_keeps_deprecated_tls_root_certs() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        fs_err::write(&path, "tls-root-certs = \"native\"\n").unwrap();
+
+        // The deprecated spelling still resolves to the system store, which
+        // is what the warning tells the user to write instead.
+        let config = Config::from_shared_path(&path).unwrap();
+        assert_eq!(config.tls_root_certs, Some(TlsRootCerts::System));
+    }
+
+    #[test]
+    fn test_from_shared_path_missing_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("does-not-exist.toml");
+
+        assert!(matches!(
+            Config::from_shared_path(&path),
+            Err(ConfigError::FileNotFound(_))
+        ));
+    }
+
+    #[test]
+    fn test_shared_config_loses_against_pixi_config() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let shared_path = dir.path().join("shared.toml");
+        fs_err::write(
+            &shared_path,
+            r#"
+            default-channels = ["shared-channel"]
+            tls-no-verify = true
+            "#,
+        )
+        .unwrap();
+
+        let pixi_path = dir.path().join("pixi.toml");
+        fs_err::write(&pixi_path, "default-channels = [\"pixi-channel\"]\n").unwrap();
+
+        let shared = Config::from_shared_path(&shared_path).unwrap();
+        let pixi = Config::from_path(&pixi_path).unwrap();
+        let config = shared.merge_config(pixi);
+
+        // The pixi file wins where both set a key.
+        assert_eq!(
+            config.default_channels,
+            vec![NamedChannelOrUrl::from_str("pixi-channel").unwrap()]
+        );
+        // Keys only the shared file sets survive.
+        assert_eq!(config.tls_no_verify, Some(true));
+        assert_eq!(config.loaded_from, vec![pixi_path, shared_path]);
+    }
+
+    #[test]
+    fn test_config_search_locations_order() {
+        let locations = config_search_locations();
+
+        // Pixi keeps computing its own paths, so a rebranded build reads the
+        // files it writes.
+        let pixi_paths: Vec<_> = locations
+            .iter()
+            .filter(|location| location.layer == ConfigLayer::Tool)
+            .map(|location| location.path.clone())
+            .collect();
+        let expected: Vec<_> = std::iter::once(config_path_system())
+            .chain(config_path_global())
+            .collect();
+        assert_eq!(pixi_paths, expected);
+
+        // The system files come first, and within each level the shared file
+        // comes before the pixi one.
+        let layers: Vec<_> = locations.iter().map(|location| location.layer).collect();
+        assert_eq!(layers[0], ConfigLayer::Shared);
+        assert_eq!(layers[1], ConfigLayer::Tool);
+        assert_eq!(locations[0].path, shared_system_config_path());
+        assert_eq!(locations[1].path, config_path_system());
+
+        let user_layers = &layers[2..];
+        let first_pixi = user_layers
+            .iter()
+            .position(|layer| *layer == ConfigLayer::Tool)
+            .expect("there is at least one user-level pixi path");
+        assert!(
+            user_layers[first_pixi..]
+                .iter()
+                .all(|layer| *layer == ConfigLayer::Tool),
+            "no shared file may sit above a user-level pixi file"
+        );
     }
 
     #[test]
@@ -3479,6 +3786,13 @@ UNUSED = "unused"
             Some(true)
         );
 
+        // Test experimental.conda-script
+        config
+            .set("experimental.conda-script", Some("true".to_string()))
+            .unwrap();
+        assert_eq!(config.experimental.conda_script, Some(true));
+        assert!(config.experimental_conda_script());
+
         // Test more repodata-config options
         // disable-jlap has been removed — setting it should error
         assert!(
@@ -3579,6 +3893,35 @@ UNUSED = "unused"
         // Test max-concurrent-solves (legacy accessor)
         assert_eq!(config.max_concurrent_solves(), 5);
         assert_eq!(config.max_concurrent_downloads(), 25);
+
+        // Test concurrency full update (issue #6666)
+        config.pypi_config.index_url = Some(Url::parse("https://my-index.test").unwrap());
+        config
+            .set(
+                "concurrency",
+                Some(r#"{"solves": 10, "downloads": 50}"#.to_string()),
+            )
+            .unwrap();
+        assert_eq!(config.concurrency.solves, 10);
+        assert_eq!(config.concurrency.downloads, 50);
+        assert_eq!(
+            config.pypi_config.index_url,
+            Some(Url::parse("https://my-index.test").unwrap())
+        );
+
+        config.set("concurrency", None).unwrap();
+        assert_eq!(
+            config.concurrency.solves,
+            ConcurrencyConfig::default().solves
+        );
+        assert_eq!(
+            config.concurrency.downloads,
+            ConcurrencyConfig::default().downloads
+        );
+        assert_eq!(
+            config.pypi_config.index_url,
+            Some(Url::parse("https://my-index.test").unwrap())
+        );
 
         // Test tls-no-verify
         config

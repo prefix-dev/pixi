@@ -18,9 +18,7 @@ use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, PackageName};
 
 use crate::{
     Workspace,
-    workspace::{
-        Environment, HasWorkspaceRef, SolveGroup, virtual_packages::get_minimal_virtual_packages,
-    },
+    workspace::{Environment, HasWorkspaceRef, SolveGroup},
 };
 
 /// Either a solve group or an individual environment without a solve group.
@@ -108,10 +106,7 @@ impl<'p> GroupedEnvironment<'p> {
     /// Returns the virtual packages from the group, sourced from the
     /// platform's declared virtual packages with default fillers.
     pub fn virtual_packages(&self, platform: &PixiPlatform) -> Vec<GenericVirtualPackage> {
-        get_minimal_virtual_packages(platform)
-            .into_iter()
-            .map(GenericVirtualPackage::from)
-            .collect()
+        pixi_manifest::platform::solver_generic_virtual_packages(platform)
     }
 
     /// Returns the channel configuration for this grouped environment

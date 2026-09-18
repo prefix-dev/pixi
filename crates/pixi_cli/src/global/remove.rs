@@ -115,7 +115,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .wrap_err(format!("Couldn't remove packages from {env_name}"))
     {
         Ok(state_changes) => {
-            state_changes.report();
+            state_changes.report(&project).await;
         }
         Err(err) => {
             if let Err(revert_err) =

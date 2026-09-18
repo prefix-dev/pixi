@@ -296,10 +296,11 @@ pub struct Target {
 /// five conda run-export buckets.
 ///
 /// The dependency buckets (`noarch`, `strong` and `weak`) reuse
-/// [`PackageSpec`], but the frontend never emits the
-/// [`PackageSpec::PinCompatible`] variant here; a run-export is either a
-/// binary or a source spec. The constraints buckets only restrict versions and
-/// are therefore limited to [`ConstraintSpec`].
+/// [`PackageSpec`], including its pin variants: a run-export may be a binary
+/// or source spec, a self-referential [`PackageSpec::PinSubpackage`], or a
+/// [`PackageSpec::PinCompatible`] against one of the exporter's dependencies.
+/// The constraints buckets only restrict versions and are therefore limited
+/// to [`ConstraintSpec`].
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
@@ -416,6 +417,10 @@ pub enum PackageSpec {
     Source(SourcePackageSpec),
     /// Pin to a version that is compatible with a version from the "previous" environment
     PinCompatible(PinCompatibleSpec),
+    /// Pin to the version and build of the package that declares this spec.
+    /// Only valid where the entry's name equals the declaring package's own
+    /// name, typically in run-exports.
+    PinSubpackage(PinSubpackageSpec),
 }
 
 impl From<BinaryPackageSpec> for PackageSpec {
@@ -431,19 +436,48 @@ impl From<VersionSpec> for PackageSpec {
 }
 
 /// A package spec that can be used for constraints.
-/// Constraints don't support source packages but may support pin_compatible in the future.
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub enum ConstraintSpec {
     /// A binary package constraint (version spec)
-    Binary(BinaryPackageSpec),
+    Binary(Box<BinaryPackageSpec>),
+    /// Constrain to a version that is compatible with a version from the
+    /// "previous" environment
+    PinCompatible(PinCompatibleSpec),
+    /// Constrain to the version and build of the package that declares this
+    /// spec. Only valid where the entry's name equals the declaring package's
+    /// own name, typically in run-export constraints.
+    PinSubpackage(PinSubpackageSpec),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
 #[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct PinCompatibleSpec {
+    /// A minimum pin to a version, using `x.x.x...` as syntax
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lower_bound: Option<PinBound>,
+
+    /// A pin to a version, using `x.x.x...` as syntax
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub upper_bound: Option<PinBound>,
+
+    /// If an exact pin is given, we pin the exact version & hash
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub exact: bool,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub build: Option<String>,
+}
+
+/// The arguments of a self-referential `pin_subpackage`. Structurally
+/// identical to [`PinCompatibleSpec`]; a separate type so the two pin kinds
+/// stay distinguishable in the schema and can evolve independently.
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)]
+#[cfg_attr(feature = "schemars", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct PinSubpackageSpec {
     /// A minimum pin to a version, using `x.x.x...` as syntax
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lower_bound: Option<PinBound>,
@@ -911,6 +945,10 @@ impl Hash for PackageSpec {
                 2u8.hash(state);
                 spec.hash(state);
             }
+            PackageSpec::PinSubpackage(spec) => {
+                3u8.hash(state);
+                spec.hash(state);
+            }
         }
     }
 }
@@ -924,6 +962,14 @@ impl Hash for ConstraintSpec {
                 0u8.hash(state);
                 spec.hash(state);
             }
+            Self::PinCompatible(spec) => {
+                1u8.hash(state);
+                spec.hash(state);
+            }
+            Self::PinSubpackage(spec) => {
+                2u8.hash(state);
+                spec.hash(state);
+            }
         }
     }
 }
@@ -931,6 +977,24 @@ impl Hash for ConstraintSpec {
 impl Hash for PinCompatibleSpec {
     fn hash<H: Hasher>(&self, state: &mut H) {
         let PinCompatibleSpec {
+            lower_bound,
+            upper_bound,
+            exact,
+            build,
+        } = self;
+
+        StableHashBuilder::<H>::new()
+            .field("lower_bound", lower_bound)
+            .field("upper_bound", upper_bound)
+            .field("exact", exact)
+            .field("build", build)
+            .finish(state);
+    }
+}
+
+impl Hash for PinSubpackageSpec {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let PinSubpackageSpec {
             lower_bound,
             upper_bound,
             exact,
@@ -1634,7 +1698,7 @@ mod tests {
         let mut constraints = OrderMap::new();
         constraints.insert(
             SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked("python")),
-            ConstraintSpec::Binary(BinaryPackageSpec::default()),
+            ConstraintSpec::Binary(Box::default()),
         );
 
         let buckets = [
@@ -1694,7 +1758,7 @@ mod tests {
         let mut constraints = OrderMap::new();
         constraints.insert(
             SourcePackageName::from(rattler_conda_types::PackageName::new_unchecked("libfoo")),
-            ConstraintSpec::Binary(BinaryPackageSpec::default()),
+            ConstraintSpec::Binary(Box::default()),
         );
         let target = Target {
             run_exports: Some(RunExports {

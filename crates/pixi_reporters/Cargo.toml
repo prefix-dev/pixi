@@ -11,11 +11,16 @@ license.workspace = true
 
 [dependencies]
 # Standard library
+fs-err = { workspace = true }
 futures = { workspace = true }
 indexmap = { workspace = true }
 itertools = { workspace = true }
+jiff = { workspace = true }
 parking_lot = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 tokio = { workspace = true }
+unicode-width = { workspace = true }
 url = { workspace = true }
 
 # Progress and UI
@@ -31,12 +36,15 @@ tracing = { workspace = true }
 pixi_build_discovery = { workspace = true }
 pixi_command_dispatcher = { workspace = true }
 pixi_compute_reporters = { workspace = true }
+pixi_config = { workspace = true }
+pixi_consts = { workspace = true }
 pixi_git = { workspace = true }
 pixi_progress = { workspace = true }
 
 # Rattler ecosystem
 rattler = { workspace = true }
 rattler_conda_types = { workspace = true }
+rattler_redaction = { workspace = true }
 rattler_repodata_gateway = { workspace = true }
 
 # UV ecosystem
@@ -49,4 +57,4 @@ uv-redacted = { workspace = true }
 uv-resolver = { workspace = true }
 
 [dev-dependencies]
-# Add test dependencies if needed
+tempfile = { workspace = true }

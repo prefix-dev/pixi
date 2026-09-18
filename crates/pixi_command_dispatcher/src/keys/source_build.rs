@@ -18,7 +18,8 @@ use pixi_record::{PixiRecord, UnresolvedPixiRecord, UnresolvedSourceRecord, Vari
 use pixi_spec::{ResolvedExcludeNewer, SourceAnchor, SourceSpec};
 use pixi_variant::VariantSelector;
 use rattler_conda_types::{
-    ChannelUrl, PackageRecord, RepoDataRecord, package::DistArchiveIdentifier, prefix::Prefix,
+    ChannelUrl, PackageName, PackageRecord, Platform, RepoDataRecord,
+    package::DistArchiveIdentifier, prefix::Prefix,
 };
 use rattler_digest::Sha256Hash;
 use tracing::instrument;
@@ -26,7 +27,8 @@ use url::Url;
 
 pub use crate::cache::{ArtifactCache, WorkspaceCache};
 use crate::cache::{
-    ArtifactCacheError, SourceMutability, compute_artifact_cache_key, compute_workspace_key,
+    ArtifactCacheError, CacheLookup, SourceMutability, compute_artifact_cache_key,
+    compute_workspace_key,
     markers::{SourceBuildArtifactsDir, SourceBuildWorkspacesDir},
 };
 use crate::{
@@ -34,9 +36,10 @@ use crate::{
     BackendSourceBuildPrefix, BackendSourceBuildSpec, BackendSourceBuildV1Method, BuildEnvironment,
     BuildProfile, CommandDispatcherError, CommandDispatcherErrorResultExt,
     InstallPixiEnvironmentExt, InstallPixiEnvironmentSpec, InstantiateBackendKey,
-    ProjectModelOverrides, SourceBuildError,
+    PrefixPlatformMismatchError, PrefixRecordOrigin, ProjectModelOverrides, SourceBuildError,
+    SourceBuildPrefixKind,
     build::{Dependencies, PixiRunExports, convert_extra_dependencies},
-    compute_data::HasGateway,
+    compute_data::{HasGateway, HasIoConcurrencySemaphore},
 };
 use pixi_compute_cache_dirs::CacheDirsExt;
 use pixi_compute_sources::SourceCheckoutExt;
@@ -218,7 +221,8 @@ async fn compute_inner(
     // Force-rebuild is handled by wiping the cache entry before calling;
     // this body honors whatever state it finds on disk.
     let artifacts_dir = ctx.cache_dir::<SourceBuildArtifactsDir>().await;
-    let artifact_cache = ArtifactCache::new(artifacts_dir.as_std_path());
+    let artifact_cache = ArtifactCache::new(artifacts_dir.as_std_path())
+        .with_io_concurrency_semaphore(ctx.global_data().io_concurrency_semaphore().cloned());
     let source_dir = build_source_checkout
         .path
         .as_dir_or_file_parent()
@@ -230,21 +234,34 @@ async fn compute_inner(
     } else {
         SourceMutability::Immutable
     };
-    if let Some(hit) = artifact_cache
+    match artifact_cache
         .lookup(ctx, spec.record.name(), &cache_key, &source_dir, mutability)
         .await
         .map_err(map_cache_err)?
     {
-        tracing::debug!(
-            package = %spec.record.name().as_source(),
-            artifact = %hit.artifact.display(),
-            "artifact cache hit",
-        );
-        return Ok(SourceBuildResult {
-            artifact: hit.artifact,
-            artifact_sha256: hit.sha256,
-            record: hit.record,
-        });
+        CacheLookup::Hit(hit) => {
+            tracing::debug!(
+                package = %spec.record.name().as_source(),
+                artifact = %hit.artifact.display(),
+                "artifact cache hit",
+            );
+            return Ok(SourceBuildResult {
+                artifact: hit.artifact,
+                artifact_sha256: hit.sha256,
+                record: hit.record,
+            });
+        }
+        CacheLookup::Miss(reason) => {
+            // Logged at the same level as the hit so a rebuild is never
+            // silent: without the reason, a changed cache key and an
+            // invalidated entry look identical from the outside.
+            tracing::debug!(
+                package = %spec.record.name().as_source(),
+                key = %cache_key,
+                reason = %reason,
+                "artifact cache miss, rebuilding",
+            );
+        }
     }
 
     // Cache miss: now spawn the backend. `InstantiateBackendKey`
@@ -308,7 +325,7 @@ async fn compute_inner(
                 install_prefix(
                     ctx,
                     &spec,
-                    InstallTarget::Build,
+                    SourceBuildPrefixKind::Build,
                     directories.build_prefix.clone(),
                     spec.record.build_packages.clone(),
                     &build_source_dep_records,
@@ -319,7 +336,7 @@ async fn compute_inner(
                 install_prefix(
                     ctx,
                     &spec,
-                    InstallTarget::Host,
+                    SourceBuildPrefixKind::Host,
                     directories.host_prefix.clone(),
                     spec.record.host_packages.clone(),
                     &host_source_dep_records,
@@ -432,6 +449,9 @@ async fn compute_inner(
 
     let editable =
         matches!(spec.build_profile, BuildProfile::Development) && spec.record.has_mutable_source();
+    // Anything the backend reads it reads after this point; a file modified
+    // later gets an unconfirmed fingerprint in the cache entry.
+    let build_started = std::time::SystemTime::now();
     let built = ctx
         .backend_source_build(BackendSourceBuildSpec {
             method: BackendSourceBuildMethod::BuildV1(BackendSourceBuildV1Method {
@@ -494,6 +514,7 @@ async fn compute_inner(
             &built.output_file,
             input_glob_sets,
             input_files,
+            build_started,
             record,
         )
         .await
@@ -673,18 +694,12 @@ async fn fetch_matching_output(
         })
 }
 
-#[derive(Copy, Clone)]
-enum InstallTarget {
-    Build,
-    Host,
-}
-
 /// Install a build or host environment into `prefix`, returning the
 /// fully-resolved `RepoDataRecord`s that end up inside.
 async fn install_prefix(
     ctx: &mut ComputeCtx,
     spec: &SourceBuildSpec,
-    target: InstallTarget,
+    target: SourceBuildPrefixKind,
     prefix_path: PathBuf,
     packages: Vec<UnresolvedPixiRecord>,
     resolved_source_deps: &std::collections::HashMap<
@@ -708,35 +723,45 @@ async fn install_prefix(
         return Ok((Vec::new(), None));
     }
     let build_environment = match target {
-        InstallTarget::Build => spec.build_environment.to_build_from_build(),
-        InstallTarget::Host => spec.build_environment.clone(),
+        SourceBuildPrefixKind::Build => spec.build_environment.to_build_from_build(),
+        SourceBuildPrefixKind::Host => spec.build_environment.clone(),
     };
     let label = match target {
-        InstallTarget::Build => format!("{} (build)", spec.record.name().as_source()),
-        InstallTarget::Host => format!("{} (host)", spec.record.name().as_source()),
+        SourceBuildPrefixKind::Build => format!("{} (build)", spec.record.name().as_source()),
+        SourceBuildPrefixKind::Host => format!("{} (host)", spec.record.name().as_source()),
     };
     // Substitute every source entry with the binary record its build
     // produced. Handing the installer the pre-built binaries keeps it
     // from launching another build of the same package with different
     // build parameters (a different package format, notably).
     let mut records = Vec::with_capacity(packages.len());
-    let install_records = packages
-        .into_iter()
-        .map(|record| match record {
-            UnresolvedPixiRecord::Binary(binary) => {
-                records.push((*binary).clone());
-                UnresolvedPixiRecord::Binary(binary)
-            }
+    let mut install_records = Vec::with_capacity(packages.len());
+    for package in packages {
+        let (record, origin) = match package {
+            UnresolvedPixiRecord::Binary(binary) => (binary, PrefixRecordOrigin::Solved),
             UnresolvedPixiRecord::Source(source) => {
                 let built = resolved_source_deps
                     .get(source.name())
                     .expect("source dependency should have been built by recurse_source_deps")
                     .clone();
-                records.push((*built).clone());
-                UnresolvedPixiRecord::Binary(built)
+                (built, PrefixRecordOrigin::Built)
             }
-        })
-        .collect();
+        };
+        // The records were solved (or built) for
+        // `build_environment.host_platform`; a record of another platform
+        // means the platform tracking upstream went wrong, and installing it
+        // would only produce an opaque failure once the build script tries
+        // to run or link against it.
+        verify_record_matches_platform(
+            target,
+            spec.record.name(),
+            &record,
+            origin,
+            build_environment.host_platform,
+        )?;
+        records.push((*record).clone());
+        install_records.push(UnresolvedPixiRecord::Binary(record));
+    }
     let install_spec = InstallPixiEnvironmentSpec {
         name: label,
         records: install_records,
@@ -757,12 +782,38 @@ async fn install_prefix(
         .install_pixi_environment(install_spec)
         .await
         .map_err_with(|e| match target {
-            InstallTarget::Build => SourceBuildError::InstallBuildEnvironment(Arc::new(e)),
-            InstallTarget::Host => SourceBuildError::InstallHostEnvironment(Arc::new(e)),
+            SourceBuildPrefixKind::Build => SourceBuildError::InstallBuildEnvironment(Arc::new(e)),
+            SourceBuildPrefixKind::Host => SourceBuildError::InstallHostEnvironment(Arc::new(e)),
         })
         .map_err(unwrap_dispatcher_err)?;
 
     Ok((records, Some(result)))
+}
+
+/// Check that `record` is for `platform` (or `noarch`) before it is
+/// installed into the `kind` prefix of `source_package`. A record whose
+/// subdir is not a known platform is left alone; it is not ours to judge.
+fn verify_record_matches_platform(
+    kind: SourceBuildPrefixKind,
+    source_package: &PackageName,
+    record: &RepoDataRecord,
+    origin: PrefixRecordOrigin,
+    platform: Platform,
+) -> Result<(), PrefixPlatformMismatchError> {
+    let Ok(subdir) = record.package_record.subdir.parse::<Platform>() else {
+        return Ok(());
+    };
+    if subdir != Platform::NoArch && subdir != platform {
+        return Err(PrefixPlatformMismatchError {
+            kind,
+            source_package: source_package.clone(),
+            package: record.package_record.name.clone(),
+            origin,
+            subdir: record.package_record.subdir.clone(),
+            expected: platform,
+        });
+    }
+    Ok(())
 }
 
 /// Read index.json out of the freshly-built `.conda` and synthesize a
@@ -855,5 +906,120 @@ impl Directories {
             build_prefix,
             host_prefix,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use miette::Diagnostic;
+    use rattler_conda_types::VersionWithSource;
+
+    use super::*;
+
+    fn package_b() -> PackageName {
+        PackageName::new_unchecked("package_b")
+    }
+
+    fn record(name: &str, subdir: &str) -> RepoDataRecord {
+        let mut package_record = PackageRecord::new(
+            PackageName::new_unchecked(name),
+            "1.0.0".parse::<VersionWithSource>().unwrap(),
+            "h0".into(),
+        );
+        package_record.subdir = subdir.into();
+        RepoDataRecord {
+            package_record,
+            identifier: DistArchiveIdentifier::try_from_filename(&format!("{name}-1.0.0-h0.conda"))
+                .unwrap(),
+            url: Url::parse(&format!(
+                "https://example.com/{subdir}/{name}-1.0.0-h0.conda"
+            ))
+            .unwrap(),
+            channel: None,
+        }
+    }
+
+    fn verify(
+        kind: SourceBuildPrefixKind,
+        record: &RepoDataRecord,
+        origin: PrefixRecordOrigin,
+    ) -> Result<(), PrefixPlatformMismatchError> {
+        verify_record_matches_platform(kind, &package_b(), record, origin, Platform::Linux64)
+    }
+
+    fn help(err: &PrefixPlatformMismatchError) -> String {
+        err.help().expect("the error carries a help").to_string()
+    }
+
+    #[test]
+    fn records_of_the_prefix_platform_and_noarch_pass() {
+        for record in [record("libfoo", "linux-64"), record("pyfoo", "noarch")] {
+            for origin in [PrefixRecordOrigin::Solved, PrefixRecordOrigin::Built] {
+                verify(SourceBuildPrefixKind::Host, &record, origin)
+                    .expect("records of the prefix platform and noarch records are fine");
+            }
+        }
+    }
+
+    #[test]
+    fn solved_record_of_a_foreign_platform_is_a_pixi_bug() {
+        let err = verify(
+            SourceBuildPrefixKind::Build,
+            &record("python", "osx-arm64"),
+            PrefixRecordOrigin::Solved,
+        )
+        .expect_err("an osx-arm64 record must not be installed into a linux-64 prefix");
+
+        assert_eq!(err.kind, SourceBuildPrefixKind::Build);
+        assert_eq!(err.source_package, package_b());
+        assert_eq!(err.package.as_normalized(), "python");
+        assert_eq!(err.origin, PrefixRecordOrigin::Solved);
+        assert_eq!(err.subdir, "osx-arm64");
+        assert_eq!(err.expected, Platform::Linux64);
+        assert_eq!(
+            err.to_string(),
+            "cannot install 'python' (osx-arm64) into the build environment of 'package_b', which \
+             is for 'linux-64'"
+        );
+        assert_eq!(
+            help(&err),
+            "'python' was picked for 'osx-arm64' while pixi solved the build environment of \
+             'package_b' for 'linux-64'; this is a bug in pixi's cross-compilation platform \
+             tracking, please report it at https://github.com/prefix-dev/pixi/issues together \
+             with the output of `pixi -vv <command>`"
+        );
+    }
+
+    #[test]
+    fn built_record_of_a_foreign_platform_is_a_backend_bug() {
+        let err = verify(
+            SourceBuildPrefixKind::Host,
+            &record("libbar", "osx-arm64"),
+            PrefixRecordOrigin::Built,
+        )
+        .expect_err("an osx-arm64 record must not be installed into a linux-64 prefix");
+
+        assert_eq!(err.origin, PrefixRecordOrigin::Built);
+        assert_eq!(
+            err.to_string(),
+            "cannot install 'libbar' (osx-arm64) into the host environment of 'package_b', which \
+             is for 'linux-64'"
+        );
+        assert_eq!(
+            help(&err),
+            "'libbar' is a source dependency that was built for this environment; its build \
+             backend was asked to build for 'linux-64' but produced a 'osx-arm64' package, please \
+             report this to the maintainers of that backend"
+        );
+    }
+
+    #[test]
+    fn record_with_unknown_subdir_is_ignored() {
+        verify(
+            SourceBuildPrefixKind::Host,
+            &record("mystery", "not-a-platform"),
+            PrefixRecordOrigin::Solved,
+        )
+        .expect("a subdir that is not a platform is not checked");
     }
 }

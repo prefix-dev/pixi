@@ -12,14 +12,17 @@ use pixi_core::{
     lock_file::{LockedPackageKind, UpdateContext, filter_lock_file},
 };
 use pixi_diff::{LockFileDiff, LockFileJsonDiff};
+use pixi_git::{git::GitReference, url::RepositoryUrl};
 use pixi_manifest::{EnvironmentName, PixiPlatformName};
-use rattler_lock::LockFile;
+use pixi_record::{LockFileResolver, LockedGitUrl, PinnedSourceSpec, UnresolvedPixiRecord};
+use rattler_lock::{LockFile, LockedPackage};
 
-use crate::cli_config::WorkspaceConfig;
+use crate::cli_config::ScriptWorkspaceConfig;
 
-/// The `update` command checks if there are newer versions of the dependencies and updates the `pixi.lock` file and environments accordingly.
+/// Updates dependencies to newer compatible versions.
 ///
-/// It will only update the lock file if the dependencies in the manifest file are still compatible with the new versions.
+/// Projects and scripts with an adjacent lock file write that lock file. A
+/// script without one writes its cached resolution.
 #[derive(Parser, Debug, Default)]
 pub struct Args {
     #[clap(flatten)]
@@ -29,14 +32,14 @@ pub struct Args {
     pub config: ConfigCli,
 
     #[clap(flatten)]
-    pub project_config: WorkspaceConfig,
+    pub project_config: ScriptWorkspaceConfig,
 
     /// Don't install the (solve) environments needed for pypi-dependencies
     /// solving.
     #[arg(long, env = "PIXI_NO_INSTALL")]
     pub no_install: bool,
 
-    /// Don't actually write the lock file or update any environment.
+    /// Don't write the updated resolution or update any environment.
     #[clap(short = 'n', long)]
     pub dry_run: bool,
 
@@ -134,7 +137,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .locate()?
         .with_cli_config(args.config);
 
-    let specs = UpdateSpecs::from(args.specs);
+    let mut specs = UpdateSpecs::from(args.specs);
 
     // If the user specified an environment name, check to see if it exists.
     if let Some(env) = &specs.environments {
@@ -148,12 +151,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     }
 
-    // Load the current lock file, if any. If none is found, a dummy lock file is
-    // returned.
-    let loaded_lock_file = &workspace
-        .load_lock_file()
-        .await?
-        .into_lock_file_or_empty_with_warning();
+    // Load the current resolution, if any. If none is found, an empty lock file
+    // is returned.
+    let loaded_lock_file = &workspace.load_lock_file_for_update().await?;
 
     // If the user specified a package name, check to see if it is even locked.
     if let Some(packages) = &specs.packages {
@@ -162,27 +162,33 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     }
 
+    // Expand targeted packages to include any other packages sharing the same Git source.
+    expand_specs_for_shared_git_sources(&workspace, loaded_lock_file, &mut specs);
+
     // Unlock dependencies in the lock file that we want to update.
     let relaxed_lock_file = unlock_packages(&workspace, loaded_lock_file, &specs);
 
     // Update the packages in the lock file.
     let progress = pixi_reporters::TopLevelProgress::from_global();
-    let dispatcher = progress
-        .clone()
-        .register_with(workspace.command_dispatcher_builder()?)
+    let dispatcher = workspace
+        .command_dispatcher_builder(Some(&progress))?
         .finish();
-    let updated_lock_file = UpdateContext::builder(&workspace, dispatcher)?
-        .with_lock_file(relaxed_lock_file.clone())
-        .with_no_install(args.no_install)
-        .with_update_targets(specs.packages.clone())
-        .finish()
-        .await?
-        .update()
-        .await?;
+    // Scoped so the bars are cleared before the diff or the JSON is printed.
+    let updated_lock_file = {
+        let _clear_progress = pixi_reporters::TopLevelProgress::clear_when_done(Some(&progress));
+        UpdateContext::builder(&workspace, dispatcher)?
+            .with_lock_file(relaxed_lock_file.clone())
+            .with_no_install(args.no_install)
+            .with_update_targets(specs.packages.clone())
+            .finish()
+            .await?
+            .update()
+            .await?
+    };
 
-    // If we're doing a dry-run, we don't want to write the lock file.
+    // If we're doing a dry-run, we don't want to write the updated resolution.
     if !args.dry_run {
-        updated_lock_file.write_to_disk()?;
+        updated_lock_file.write_updated_resolution().await?;
     }
 
     let lock_file = updated_lock_file.into_lock_file();
@@ -301,4 +307,143 @@ fn unlock_packages(project: &Workspace, lock_file: &LockFile, specs: &UpdateSpec
         };
         !specs.should_relax(env.name(), platform, name)
     })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct GitSourceKey {
+    repository: RepositoryUrl,
+    reference: GitReference,
+}
+
+fn git_source_for_package(
+    package: &LockedPackage,
+    resolver: Option<&LockFileResolver>,
+) -> Option<GitSourceKey> {
+    if let Some(pypi) = package.as_pypi() {
+        if let Some(location) = pypi.location().as_url()
+            && LockedGitUrl::is_locked_git_url(location)
+            && let Ok(pinned_git_spec) = LockedGitUrl::new(location.clone()).to_pinned_git_spec()
+        {
+            let repository = RepositoryUrl::new(&pinned_git_spec.git);
+            let reference = pinned_git_spec.source.reference.into();
+            return Some(GitSourceKey {
+                repository,
+                reference,
+            });
+        }
+    } else if let Some(resolver) = resolver
+        && let Some(record) = resolver.get_for_package(package)
+        && let UnresolvedPixiRecord::Source(src) = record
+    {
+        let git_spec = src
+            .build_source
+            .as_ref()
+            .and_then(|bs| match bs.pinned() {
+                PinnedSourceSpec::Git(git) => Some(git),
+                _ => None,
+            })
+            .or_else(|| match &src.manifest_source {
+                PinnedSourceSpec::Git(git) => Some(git),
+                _ => None,
+            });
+        if let Some(git) = git_spec {
+            let repository = RepositoryUrl::new(&git.git);
+            let reference = git.source.reference.clone().into();
+            return Some(GitSourceKey {
+                repository,
+                reference,
+            });
+        }
+    }
+    None
+}
+
+/// Expands `specs.packages` to include any other packages in the targeted
+/// environments and platforms that share the same Git repository URL and
+/// reference.
+///
+/// In Git, a branch or ref resolves to a single commit. When updating one package
+/// from a Git repository, all packages originating from that repository and reference
+/// must be updated together so that resolvers do not reuse stale cached commits.
+fn expand_specs_for_shared_git_sources(
+    workspace: &Workspace,
+    lock_file: &LockFile,
+    specs: &mut UpdateSpecs,
+) {
+    let Some(packages) = &mut specs.packages else {
+        return;
+    };
+
+    let resolver = LockFileResolver::build(lock_file, workspace.root()).ok();
+
+    // First collect all Git sources for the targeted packages across targeted environments & platforms.
+    let mut target_git_sources = HashSet::new();
+    for (env_name, env) in lock_file.environments() {
+        if let Some(envs) = &specs.environments
+            && !envs.contains(env_name)
+        {
+            continue;
+        }
+        for (lock_platform, pkgs) in env.packages_by_platform() {
+            if let Some(platforms) = &specs.platforms {
+                let Ok(plat) = PixiPlatformName::try_from(lock_platform.name().as_str()) else {
+                    continue;
+                };
+                if !platforms.contains(&plat) {
+                    continue;
+                }
+            }
+            for pkg in pkgs {
+                if packages.contains(pkg.name())
+                    && let Some(key) = git_source_for_package(pkg, resolver.as_ref())
+                {
+                    target_git_sources.insert(key);
+                }
+            }
+        }
+    }
+
+    if target_git_sources.is_empty() {
+        return;
+    }
+
+    // Now find any other packages in the targeted environments & platforms that share the same Git source.
+    let mut additional_packages = Vec::new();
+    for (env_name, env) in lock_file.environments() {
+        if let Some(envs) = &specs.environments
+            && !envs.contains(env_name)
+        {
+            continue;
+        }
+        for (lock_platform, pkgs) in env.packages_by_platform() {
+            if let Some(platforms) = &specs.platforms {
+                let Ok(plat) = PixiPlatformName::try_from(lock_platform.name().as_str()) else {
+                    continue;
+                };
+                if !platforms.contains(&plat) {
+                    continue;
+                }
+            }
+            for pkg in pkgs {
+                let name = pkg.name();
+                if packages.contains(name) {
+                    continue;
+                }
+                if let Some(key) = git_source_for_package(pkg, resolver.as_ref())
+                    && target_git_sources.contains(&key)
+                {
+                    additional_packages.push((name.to_string(), key));
+                }
+            }
+        }
+    }
+
+    for (pkg_name, key) in additional_packages {
+        if packages.insert(pkg_name.clone()) {
+            tracing::info!(
+                "Also updating package '{pkg_name}' because it shares git repository {} with an update target",
+                key.repository.as_url()
+            );
+        }
+    }
 }

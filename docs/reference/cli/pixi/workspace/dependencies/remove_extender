@@ -1,0 +1,15 @@
+
+--8<-- [start:description]
+
+--8<-- [end:description]
+
+--8<-- [start:example]
+
+## Examples
+
+```shell
+pixi workspace dependencies remove numpy
+pixi workspace dependencies rm numpy boltons
+```
+
+--8<-- [end:example]

@@ -7,8 +7,8 @@ use pixi_toml::{TomlHashMap, TomlIndexMap};
 use toml_span::{DeserError, Value, de_helpers::TableHelper};
 
 use crate::{
-    Activation, InlinePackageManifest, KnownPreviewFeature, SpecType, TargetSelector, Task,
-    TaskName, TomlError, Warning, WithWarnings, WorkspaceTarget,
+    Activation, InlinePackageManifest, KnownPreviewFlag, SpecType, TargetSelector, Task, TaskName,
+    TomlError, Warning, WithWarnings, WorkspaceTarget,
     error::GenericError,
     toml::{TomlPackage, WorkspacePackageProperties, preview::TomlPreview, task::TomlTask},
     utils::{
@@ -59,7 +59,7 @@ impl TomlTarget {
         workspace_dependencies: &IndexMap<PackageName, TomlSpec>,
         root_directory: &Path,
     ) -> Result<WithWarnings<WorkspaceTarget>, TomlError> {
-        let pixi_build_enabled = preview.is_enabled(KnownPreviewFeature::PixiBuild);
+        let pixi_build_enabled = preview.is_enabled(KnownPreviewFlag::PixiBuild);
 
         let TomlTarget {
             dependencies,
@@ -83,7 +83,7 @@ impl TomlTarget {
                             None => "Did you mean [package.host-dependencies]?".to_string(),
                             Some(selector) => format!("Did you mean [package.target.{selector}.host-dependencies]?"),
                         })
-                        .with_opt_label("pixi-build is enabled here", preview.get_span(KnownPreviewFeature::PixiBuild))));
+                        .with_opt_label("pixi-build is enabled here", preview.get_span(KnownPreviewFlag::PixiBuild))));
             }
 
             if let Some(build_dependencies) = &build_dependencies {
@@ -95,7 +95,7 @@ impl TomlTarget {
                             None => "Did you mean [package.build-dependencies]?".to_string(),
                             Some(selector) => format!("Did you mean [package.target.{selector}.build-dependencies]?"),
                         })
-                        .with_opt_label("pixi-build is enabled here", preview.get_span(KnownPreviewFeature::PixiBuild))
+                        .with_opt_label("pixi-build is enabled here", preview.get_span(KnownPreviewFlag::PixiBuild))
                 ));
             }
         }
@@ -109,18 +109,21 @@ impl TomlTarget {
             &mut inline_toml,
             workspace_dependencies,
             pixi_build_enabled,
+            "[dependencies]",
         )?;
         let host_dependencies = resolve_dependency_table(
             host_dependencies,
             &mut inline_toml,
             workspace_dependencies,
             pixi_build_enabled,
+            "[host-dependencies]",
         )?;
         let build_dependencies = resolve_dependency_table(
             build_dependencies,
             &mut inline_toml,
             workspace_dependencies,
             pixi_build_enabled,
+            "[build-dependencies]",
         )?;
 
         // Convert the inline package definitions into full package manifests.
@@ -189,7 +192,10 @@ impl TomlTarget {
                     ));
                 }
                 resolved
-                    .into_inner(pixi_build_enabled)
+                    .into_pixi_specs(
+                        "[constraints]",
+                        "Pins are only supported in package dependency tables",
+                    )
                     .map(|index_map| index_map.into_iter().collect())
             })
             .transpose()?;
@@ -232,6 +238,7 @@ fn resolve_dependency_table(
     inline: &mut IndexMap<PackageName, PixiSpanned<TomlPackage>>,
     workspace_dependencies: &IndexMap<PackageName, TomlSpec>,
     pixi_build_enabled: bool,
+    section: &str,
 ) -> Result<Option<PixiSpanned<UniquePackageMap>>, TomlError> {
     let Some(PixiSpanned { span, value }) = table else {
         return Ok(None);
@@ -263,6 +270,10 @@ fn resolve_dependency_table(
             ))));
         }
     }
+    let resolved = resolved.try_into_unique(
+        section,
+        "Pins are only supported in package dependency tables",
+    )?;
     Ok(Some(PixiSpanned {
         span,
         value: resolved,

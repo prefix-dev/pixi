@@ -172,6 +172,10 @@ pub struct CondaOutputMetadata {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub flags: Vec<Flag>,
 
+    /// Track features used to down-prioritize this output during solving.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub track_features: Vec<String>,
+
     /// The noarch type of the package
     pub noarch: NoArchType,
 

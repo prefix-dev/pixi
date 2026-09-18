@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io::Write, path::PathBuf};
+use std::{collections::HashMap, io::Write, path::PathBuf, process::ExitCode};
 
 use clap::Parser;
 use miette::IntoDiagnostic;
@@ -321,7 +321,7 @@ async fn start_nu_shell(
     Ok(process.wait().into_diagnostic()?.code())
 }
 
-pub async fn execute(args: Args) -> miette::Result<()> {
+pub async fn execute(args: Args) -> miette::Result<ExitCode> {
     let config = args
         .activation_config
         .merge_config(args.prompt_config.into())
@@ -357,6 +357,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let env = get_activated_environment_variables(
         workspace.env_vars(),
         &environment,
+        &environment.activation_platform(),
         CurrentEnvVarBehavior::Exclude,
         Some(&lock_file),
         workspace.config().force_activate(),
@@ -457,11 +458,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     match res {
-        Ok(Some(code)) => std::process::exit(code),
-        Ok(None) => std::process::exit(0),
-        Err(e) => {
-            eprintln!("Error starting shell: {e}");
-            std::process::exit(1);
+        Ok(Some(code)) => Ok(crate::process_exit::exit_code_from_code(code)),
+        Ok(None) => Ok(ExitCode::SUCCESS),
+        Err(error) => {
+            eprintln!("Error starting shell: {error}");
+            Ok(ExitCode::FAILURE)
         }
     }
 }

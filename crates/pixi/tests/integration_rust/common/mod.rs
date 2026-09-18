@@ -482,7 +482,7 @@ impl PixiControl {
         InitBuilder {
             no_fast_prefix: false,
             args: init::Args {
-                path: self.workspace_path().to_path_buf(),
+                path: Some(self.workspace_path().to_path_buf()),
                 script: None,
                 channels: None,
                 platforms: Vec::new(),
@@ -502,7 +502,7 @@ impl PixiControl {
         InitBuilder {
             no_fast_prefix: false,
             args: init::Args {
-                path: self.workspace_path().to_path_buf(),
+                path: Some(self.workspace_path().to_path_buf()),
                 script: None,
                 channels: None,
                 platforms,
@@ -548,6 +548,7 @@ impl PixiControl {
                 },
                 config: self.config_cli(),
                 config_source: isolated_config_source(),
+                path: None,
                 editable: false,
                 index: None,
             },
@@ -740,9 +741,15 @@ impl PixiControl {
                             &InstallFilter::default(),
                         )
                         .await?;
-                    let env =
-                        get_task_env(&task.run_environment, args.clean_env, None, false, false)
-                            .await?;
+                    let env = get_task_env(
+                        &task.run_environment,
+                        &task.platform,
+                        args.clean_env,
+                        None,
+                        false,
+                        false,
+                    )
+                    .await?;
                     task_env.insert(env)
                 }
                 Some(task_env) => task_env,
@@ -771,10 +778,13 @@ impl PixiControl {
         InstallBuilder {
             args: Args {
                 environment: None,
-                workspace_config: WorkspaceConfig {
-                    manifest_path: Some(self.manifest_path()),
-                    backend_override: self.backend_override.clone(),
-                    workspace: None,
+                workspace_config: ScriptWorkspaceConfig {
+                    workspace_config: WorkspaceConfig {
+                        manifest_path: Some(self.manifest_path()),
+                        backend_override: self.backend_override.clone(),
+                        workspace: None,
+                    },
+                    script: None,
                 },
                 lock_file_usage: LockFileUsageConfig {
                     frozen: false,
@@ -808,9 +818,12 @@ impl PixiControl {
             args: update::Args {
                 config: self.config_cli(),
                 config_source: isolated_config_source(),
-                project_config: WorkspaceConfig {
-                    manifest_path: Some(self.manifest_path()),
-                    ..Default::default()
+                project_config: ScriptWorkspaceConfig {
+                    workspace_config: WorkspaceConfig {
+                        manifest_path: Some(self.manifest_path()),
+                        ..Default::default()
+                    },
+                    script: None,
                 },
                 no_install: true,
                 dry_run: false,

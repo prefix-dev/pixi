@@ -14,6 +14,7 @@ use crate::{
     setup_tracing,
 };
 use pixi_cli::publish;
+use pixi_core::{UpdateLockFileOptions, environment::LockFileUsage};
 use pixi_test_utils::{GitRepoFixture, MockRepoData, Package, format_diagnostic};
 
 fn write_source_package_manifest(path: &std::path::Path, name: &str, version: &str, extra: &str) {
@@ -2711,6 +2712,432 @@ subdirectory = "."
     assert_eq!(
         extract_git_build_sources(&pixi.lock_file().await.unwrap()),
         new_sources,
+    );
+}
+
+/// A lock file stores the commit a git reference resolved to, not the
+/// reference as written. A manifest pinning an abbreviated `rev` must still
+/// satisfy its own lock, otherwise `--locked` rejects a lock that re-locking
+/// reproduces unchanged.
+#[tokio::test]
+async fn test_abbreviated_git_rev_build_source_keeps_lock_satisfied() {
+    setup_tracing();
+
+    let fixture = GitRepoFixture::new("lock-behaviour-base");
+    let short_rev = fixture.git(&["rev-parse", "--short", "HEAD"]);
+    let full_rev = fixture.git(&["rev-parse", "HEAD"]);
+    assert_ne!(short_rev, full_rev, "expected an abbreviated revision");
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    fs::write(
+        pixi.manifest_path(),
+        format!(
+            r#"
+[workspace]
+channels = []
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "." }}
+
+[package]
+name = "my-package"
+version = "0.1.0"
+
+[package.build]
+backend = {{ name = "passthrough", version = "*" }}
+
+[package.build.source]
+git = "{git_url}"
+subdirectory = "."
+rev = "{short_rev}"
+"#,
+            platform = Platform::current(),
+            git_url = &fixture.base_url,
+        ),
+    )
+    .unwrap();
+
+    write_lock(&pixi).await;
+
+    // Twice: the first proves the lock is satisfied, the second that the first
+    // did not quietly rewrite it.
+    assert_locked_accepts_unchanged(&pixi, "short rev spelling, first check").await;
+    assert_locked_accepts_unchanged(&pixi, "short rev spelling, second check").await;
+}
+
+/// Regression test for gh-6727: a workspace `[package]` that no environment
+/// includes, next to a dependency of the same name. The included package's
+/// build source comes from its own manifest, so the lock stays satisfied. The
+/// uninvolved `[package]` must not be compared against it.
+#[tokio::test]
+async fn test_unincluded_workspace_package_shares_name_with_dependency() {
+    setup_tracing();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    // The dependency: `my-package` builds from a subdirectory, so the lock
+    // records a build source for it.
+    let dependency_dir = pixi.workspace_path().join("dependency");
+    let dependency_source_dir = dependency_dir.join("src");
+    fs::create_dir_all(&dependency_source_dir).unwrap();
+    fs::write(
+        dependency_dir.join("pixi.toml"),
+        r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+source.path = "src"
+"#,
+    )
+    .unwrap();
+    fs::write(
+        dependency_source_dir.join("pixi.toml"),
+        r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+"#,
+    )
+    .unwrap();
+
+    // The workspace declares its own `my-package` without a build source and
+    // never depends on it.
+    fs::write(
+        pixi.manifest_path(),
+        format!(
+            r#"
+[workspace]
+channels = []
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "./dependency" }}
+
+[package]
+name = "my-package"
+version = "0.1.0"
+
+[package.build]
+backend = {{ name = "in-memory", version = "0.1.0" }}
+"#,
+            platform = Platform::current(),
+        ),
+    )
+    .unwrap();
+
+    write_lock(&pixi).await;
+    assert_locked_accepts_unchanged(&pixi, "same-named package outside the environment").await;
+}
+
+/// The raw bytes of the workspace's lock file.
+fn lock_text(pixi: &PixiControl) -> String {
+    fs::read_to_string(pixi.workspace_path().join("pixi.lock")).unwrap()
+}
+
+/// Every path-typed `package_build_source` in the given environment, sorted.
+fn path_build_sources_for_env(lock: &LockFile, env_name: &str) -> Vec<String> {
+    let Some(env) = lock.environment(env_name) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for (_, packages) in env.packages_by_platform() {
+        for pkg in packages {
+            let Some(src) = pkg.as_source_conda() else {
+                continue;
+            };
+            if let Some(PackageBuildSource::Path { path }) = &src.package_build_source {
+                out.push(path.to_string());
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+/// Resolve and write the lock file without building a prefix.
+async fn write_lock(pixi: &PixiControl) {
+    pixi.workspace()
+        .unwrap()
+        .update_lock_file(
+            None,
+            UpdateLockFileOptions {
+                lock_file_usage: LockFileUsage::Update,
+                no_install: true,
+                ..UpdateLockFileOptions::default()
+            },
+        )
+        .await
+        .expect("locking must succeed");
+}
+
+/// The `--locked` satisfiability check, without building a prefix. These tests
+/// are about what the lock file is allowed to contain, so installing would only
+/// cost time.
+async fn verify_locked(pixi: &PixiControl) -> miette::Result<()> {
+    pixi.workspace()?
+        .update_lock_file(
+            None,
+            UpdateLockFileOptions {
+                lock_file_usage: LockFileUsage::Locked,
+                no_install: true,
+                ..UpdateLockFileOptions::default()
+            },
+        )
+        .await
+        .map(|_| ())
+}
+
+/// `--locked` must succeed without touching the lock file.
+async fn assert_locked_accepts_unchanged(pixi: &PixiControl, what: &str) {
+    let before = lock_text(pixi);
+    if let Err(err) = verify_locked(pixi).await {
+        panic!("`--locked` must accept the lock ({what}), got: {err:?}");
+    }
+    assert_eq!(
+        lock_text(pixi),
+        before,
+        "a successful --locked check must leave the lock byte-identical ({what})"
+    );
+}
+
+/// `--locked` must fail without touching the lock file; re-locking must then
+/// rewrite the pin, after which `--locked` must succeed.
+async fn assert_rejected_then_relock_accepts(pixi: &PixiControl, what: &str) {
+    let before = lock_text(pixi);
+    assert!(
+        verify_locked(pixi).await.is_err(),
+        "`--locked` must reject the stale lock after {what}"
+    );
+    assert_eq!(
+        lock_text(pixi),
+        before,
+        "a failed --locked check must leave the lock byte-identical ({what})"
+    );
+    write_lock(pixi).await;
+    assert_ne!(
+        lock_text(pixi),
+        before,
+        "re-locking after {what} must rewrite the pinned build source"
+    );
+    if let Err(err) = verify_locked(pixi).await {
+        panic!("`--locked` must accept the refreshed lock after {what}, got: {err:?}");
+    }
+}
+
+/// A branch that gained commits upstream is not drift. The requested reference
+/// is unchanged, so the locked pin is reused and `--locked` keeps accepting.
+#[tokio::test]
+async fn locked_accepts_branch_build_source_after_upstream_moves() {
+    setup_tracing();
+
+    let fixture = GitRepoFixture::new("lock-behaviour-base");
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    let dep_dir = pixi.workspace_path().join("dep-package");
+    fs::create_dir_all(&dep_dir).unwrap();
+    write_source_package_manifest(
+        &dep_dir,
+        "dep-package",
+        "1.0.0",
+        &format!(
+            r#"
+[package.build.source]
+git = "{}"
+subdirectory = "."
+branch = "main"
+"#,
+            fixture.base_url,
+        ),
+    );
+    write_source_workspace_manifest(&pixi.manifest_path(), &[], &["dep-package"]);
+
+    write_lock(&pixi).await;
+    assert_locked_accepts_unchanged(&pixi, "branch freshly pinned").await;
+
+    // Advance `main` past the pinned commit.
+    fs::write(fixture.repo_path.join("README.md"), "upstream moved\n").unwrap();
+    fixture.git(&["commit", "-am", "upstream moved"]);
+
+    assert_locked_accepts_unchanged(&pixi, "branch moved upstream, pin must be reused").await;
+}
+
+/// A different `source.path` builds different code, so it must invalidate the
+/// lock.
+#[tokio::test]
+async fn locked_rejects_changed_build_source_subdirectory() {
+    setup_tracing();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    let dep_dir = pixi.workspace_path().join("dep-package");
+    for subdir in ["src", "src2"] {
+        let path = dep_dir.join(subdir);
+        fs::create_dir_all(&path).unwrap();
+        write_source_package_manifest(&path, "dep-package", "1.0.0", "");
+    }
+    write_source_package_manifest(&dep_dir, "dep-package", "1.0.0", r#"source.path = "src""#);
+    write_source_workspace_manifest(&pixi.manifest_path(), &[], &["dep-package"]);
+
+    write_lock(&pixi).await;
+    assert_locked_accepts_unchanged(&pixi, "source.path = src").await;
+
+    write_source_package_manifest(&dep_dir, "dep-package", "1.0.0", r#"source.path = "src2""#);
+    assert_rejected_then_relock_accepts(&pixi, "changing source.path from src to src2").await;
+
+    assert_eq!(
+        path_build_sources_for_env(
+            &pixi.lock_file().await.unwrap(),
+            consts::DEFAULT_ENVIRONMENT_NAME
+        ),
+        vec!["src2".to_string()],
+        "after the re-lock the new subdirectory must be recorded"
+    );
+}
+
+/// Build source drift two hops out, in a source dependency of a source
+/// dependency, must invalidate the lock: the check follows each record's own
+/// manifest, not the workspace's.
+#[tokio::test]
+async fn locked_rejects_drift_in_source_dependency_of_source_dependency() {
+    setup_tracing();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    let outer_dir = pixi.workspace_path().join("outer-pkg");
+    let inner_dir = outer_dir.join("inner");
+    for subdir in ["src", "src2"] {
+        let path = inner_dir.join(subdir);
+        fs::create_dir_all(&path).unwrap();
+        write_source_package_manifest(&path, "inner-pkg", "1.0.0", "");
+    }
+    write_source_package_manifest(&inner_dir, "inner-pkg", "1.0.0", r#"source.path = "src""#);
+    fs::create_dir_all(&outer_dir).unwrap();
+    write_source_package_manifest(
+        &outer_dir,
+        "outer-pkg",
+        "1.0.0",
+        r#"
+[package.run-dependencies]
+inner-pkg = { path = "./inner" }
+"#,
+    );
+    write_source_workspace_manifest(&pixi.manifest_path(), &[], &["outer-pkg"]);
+
+    write_lock(&pixi).await;
+    let lock = pixi.lock_file().await.unwrap();
+    for pkg in ["outer-pkg", "inner-pkg"] {
+        assert!(
+            lock.contains_conda_package(consts::DEFAULT_ENVIRONMENT_NAME, Platform::current(), pkg),
+            "{pkg} must be locked"
+        );
+    }
+    assert_locked_accepts_unchanged(&pixi, "nested source dependency in place").await;
+
+    write_source_package_manifest(&inner_dir, "inner-pkg", "1.0.0", r#"source.path = "src2""#);
+    assert_rejected_then_relock_accepts(
+        &pixi,
+        "changing the build source of a source dependency of a source dependency",
+    )
+    .await;
+}
+
+/// Two packages sharing a name from different locations are tracked
+/// independently. Drifting one invalidates the lock, and the re-lock leaves
+/// the other's pin alone.
+#[tokio::test]
+async fn locked_tracks_same_name_packages_from_different_locations_independently() {
+    setup_tracing();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    let pkg_a_dir = pixi.workspace_path().join("pkg-a");
+    let pkg_b_dir = pixi.workspace_path().join("pkg-b");
+    for path in [
+        pkg_a_dir.join("src"),
+        pkg_b_dir.join("src"),
+        pkg_b_dir.join("src2"),
+    ] {
+        fs::create_dir_all(&path).unwrap();
+        write_source_package_manifest(&path, "shared-pkg", "1.0.0", "");
+    }
+    for dir in [&pkg_a_dir, &pkg_b_dir] {
+        write_source_package_manifest(dir, "shared-pkg", "1.0.0", r#"source.path = "src""#);
+    }
+
+    fs::write(
+        pixi.manifest_path(),
+        format!(
+            r#"
+[workspace]
+channels = []
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[feature.a.dependencies]
+shared-pkg = {{ path = "./pkg-a" }}
+
+[feature.b.dependencies]
+shared-pkg = {{ path = "./pkg-b" }}
+
+[environments]
+env-a = ["a"]
+env-b = ["b"]
+"#,
+            platform = Platform::current(),
+        ),
+    )
+    .unwrap();
+
+    write_lock(&pixi).await;
+    assert_locked_accepts_unchanged(&pixi, "two same-name packages in sync").await;
+
+    // Drift only pkg-b's build source.
+    write_source_package_manifest(&pkg_b_dir, "shared-pkg", "1.0.0", r#"source.path = "src2""#);
+    assert_rejected_then_relock_accepts(
+        &pixi,
+        "changing the build source of one of two same-name packages",
+    )
+    .await;
+
+    let lock = pixi.lock_file().await.unwrap();
+    assert_eq!(
+        path_build_sources_for_env(&lock, "env-a"),
+        vec!["src".to_string()],
+        "the untouched package's pin must survive the re-lock"
+    );
+    assert_eq!(
+        path_build_sources_for_env(&lock, "env-b"),
+        vec!["src2".to_string()],
+        "the drifted package's pin must follow its manifest"
     );
 }
 

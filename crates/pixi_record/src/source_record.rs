@@ -228,6 +228,17 @@ impl PinnedBuildSourceSpec {
             PinnedBuildSourceSpec::Relative(_, pinned) => pinned,
         }
     }
+
+    /// Whether both build sources are the same as far as a lock file can tell.
+    ///
+    /// Comparing the specs directly is too strict: writing one to the lock
+    /// drops the `lfs` flag and rewrites a git reference into the commit it
+    /// resolved to, so a pin read back never equals the pin it came from.
+    /// Compare in the lock's own representation instead.
+    pub fn matches_locked(&self, other: &Self) -> bool {
+        build_source_to_package_build_source(Some(self.clone()))
+            == build_source_to_package_build_source(Some(other.clone()))
+    }
 }
 
 impl From<PinnedBuildSourceSpec> for PinnedSourceSpec {
@@ -1273,6 +1284,49 @@ mod tests {
             .finish()
             .render_to_string()
             .expect("failed to render lock file")
+    }
+
+    /// A build source read back from a lock file must still match the pin it
+    /// was written from. A stricter comparison reports a change on every run
+    /// and never converges.
+    #[test]
+    fn build_source_matches_itself_across_a_lock_file() {
+        let commit = "1234567890123456789012345678901234567890";
+        let git_build_source = |reference: GitReference, lfs: Option<bool>| {
+            PinnedBuildSourceSpec::Absolute(PinnedSourceSpec::Git(PinnedGitSpec {
+                git: url::Url::parse("https://example.com/repo.git").expect("valid url"),
+                source: PinnedGitCheckout {
+                    commit: GitSha::from_str(commit).expect("valid sha"),
+                    subdirectory: Default::default(),
+                    reference,
+                    lfs,
+                },
+            }))
+        };
+
+        // What the manifest asked for, freshly resolved.
+        let resolved = git_build_source(GitReference::Rev("1234567".into()), Some(true));
+
+        // The same build source, written to a lock file and read back.
+        let locked = package_build_source_to_build_source(
+            build_source_to_package_build_source(Some(resolved.clone())),
+            &PinnedSourceSpec::Path(PinnedPathSpec {
+                path: "./pkg".into(),
+            }),
+        )
+        .expect("build source round trips")
+        .expect("build source is preserved");
+
+        assert_ne!(
+            resolved, locked,
+            "the round trip is lossy, which is why `matches_locked` exists"
+        );
+        assert!(resolved.matches_locked(&locked));
+        assert!(locked.matches_locked(&resolved));
+
+        // A different commit is a real change and stays visible.
+        let other_commit = git_build_source(GitReference::Branch("main".into()), None);
+        assert!(!other_commit.matches_locked(&locked));
     }
 
     #[test]

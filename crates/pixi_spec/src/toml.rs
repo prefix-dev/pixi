@@ -1837,7 +1837,7 @@ mod test {
                 .as_ref()
                 .unwrap()
                 .to_string(),
-            "(__linux or __osx)"
+            "__linux or __osx"
         );
 
         let spec: PixiSpec = serde_json::from_value(json!({
@@ -1852,7 +1852,7 @@ mod test {
                 .as_ref()
                 .unwrap()
                 .to_string(),
-            "(__unix and (__linux or __osx))"
+            "__unix and (__linux or __osx)"
         );
 
         let mut value = toml_span::parse(
@@ -1870,7 +1870,7 @@ mod test {
                 .as_ref()
                 .unwrap()
                 .to_string(),
-            "(__unix and python[version=\">=3.10\", build=\"*cuda\"])"
+            "__unix and python[version=\">=3.10\", build=\"*cuda\"]"
         );
     }
 
@@ -1883,13 +1883,13 @@ mod test {
     #[test]
     fn test_when_condition_all() {
         let input = json!({ "version": "*", "when": { "all": ["__unix", "python >=3.10"] } });
-        assert_snapshot!(parse_json_condition(input), @"(__unix and python>=3.10)");
+        assert_snapshot!(parse_json_condition(input), @"__unix and python>=3.10");
     }
 
     #[test]
     fn test_when_condition_any() {
         let input = json!({ "version": "*", "when": { "any": ["__linux", "__osx"] } });
-        assert_snapshot!(parse_json_condition(input), @"(__linux or __osx)");
+        assert_snapshot!(parse_json_condition(input), @"__linux or __osx");
     }
 
     #[test]
@@ -1898,7 +1898,7 @@ mod test {
             "version": "*",
             "when": { "all": ["__unix", { "any": ["__linux", "__osx"] }] },
         });
-        assert_snapshot!(parse_json_condition(input), @"(__unix and (__linux or __osx))");
+        assert_snapshot!(parse_json_condition(input), @"__unix and (__linux or __osx)");
     }
 
     #[test]
@@ -1977,14 +1977,14 @@ mod test {
     fn test_when_condition_toml_all_with_expanded_build_match() {
         let input = r#"version = "*"
 when = { all = ["__unix", { package = "python", version = ">=3.10", build = "*cuda" }] }"#;
-        assert_snapshot!(parse_toml_condition(input), @r###"(__unix and python[version=">=3.10", build="*cuda"])"###);
+        assert_snapshot!(parse_toml_condition(input), @r###"__unix and python[version=">=3.10", build="*cuda"]"###);
     }
 
     #[test]
     fn test_when_condition_toml_any() {
         let input = r#"version = "*"
 when = { any = ["__linux", "__osx"] }"#;
-        assert_snapshot!(parse_toml_condition(input), @"(__linux or __osx)");
+        assert_snapshot!(parse_toml_condition(input), @"__linux or __osx");
     }
 
     #[test]

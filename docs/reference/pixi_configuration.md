@@ -50,13 +50,6 @@ The configuration is loaded in the following order:
     | 2            | `C:\ProgramData\pixi\config.toml`                                      | System-wide configuration                             |
     | 1            | `C:\ProgramData\rattler\config.toml`                                   | Shared system-wide configuration                      |
 
-The `rattler` locations hold the configuration shared by all rattler-based
-tools (Pixi, `rattler-build`, ...). These files may only contain the keys
-every tool understands, like `default-channels`, `mirrors`, `s3-options`, or
-`concurrency`; Pixi-specific keys (like `shell` or `detached-environments`)
-belong in the `pixi` locations and produce a warning when found in a shared
-file.
-
 !!! note
 The highest priority wins. If a configuration file is found in a higher priority location, the values from the
 configuration read from lower priority locations are overwritten.
@@ -64,6 +57,12 @@ configuration read from lower priority locations are overwritten.
 !!! note
 To find the locations where `pixi` looks for configuration files, run
 `pixi info -vvv`.
+
+### Configuration shared with other rattler-based tools
+
+The `rattler` locations are read by every rattler-based tool, so a setting placed there applies to Pixi and `rattler-build` alike.
+They accept only the options that all of these tools understand, such as `default-channels`, `mirrors`, `s3-options`, `index-config` and `concurrency`.
+Options that only Pixi knows, like `shell` or `detached-environments`, belong in a `pixi` location; in a `rattler` file Pixi ignores them and warns about it.
 
 ### Skipping or overriding config discovery
 
@@ -96,16 +95,20 @@ The following reference describes all available configuration options.
 
 ### `default-channels`
 
-The default channels to select when running `pixi init` or `pixi global install`.
-This defaults to only conda-forge.
+The `default-channels` provide fallback channels for commands that do not obtain channels from an existing workspace or
+environment. Whether they are used depends on the command, rather than the directory from which it is invoked. Examples
+include `pixi init`, `pixi exec`, creating an environment with `pixi global install`, and running `pixi search` when no
+workspace is discovered. This defaults to only `conda-forge`.
 
 ```toml title="config.toml"
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:default-channels"
 ```
 
 !!! note
-The `default-channels` are only used when initializing a new workspace. Once initialized the `channels` are used from the
-workspace manifest.
+    Commands that operate on an existing workspace use the channels from its manifest rather than `default-channels`.
+    For example, `pixi search` uses the effective channels of the workspace's default environment when it discovers a
+    workspace. Workspace-independent commands such as `pixi exec` still use `default-channels` when invoked from a
+    workspace directory.
 
 ### `shell`
 
@@ -344,6 +347,22 @@ The above settings can be overridden on a per-channel basis by specifying a chan
 --8<-- "docs/source_files/pixi_config_tomls/main_config.toml:prefix-repodata-config"
 ```
 
+### `index-config`
+
+Options for the channels `pixi publish` indexes.
+They are ignored when publishing to a server that indexes on its own, such as prefix.dev, and only apply to the targets Pixi indexes itself: S3 URLs and local filesystem channels.
+
+```toml title="config.toml"
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:index-config"
+```
+
+The above settings can be overridden per channel by using the channel URL or absolute path as the key.
+The longest matching prefix wins, so a general entry can be narrowed for one channel below it.
+
+```toml title="config.toml"
+--8<-- "docs/source_files/pixi_config_tomls/main_config.toml:per-channel-index-config"
+```
+
 ### `pypi-config`
 
 To setup a certain number of defaults for the usage of PyPI registries. You can use the following configuration options:
@@ -437,11 +456,11 @@ priority first):
     (see [Environment-variable escape hatches](#environment-variable-escape-hatches)).
 2. The matching `[cache.<kind>]` path from this config, if set.
 3. The cache root, joined with the kind's subdirectory:
-    1. `PIXI_CACHE_DIR` environment variable
-    2. `RATTLER_CACHE_DIR` environment variable
-    3. `[cache.root]` from this config
-    4. `$XDG_CACHE_HOME/pixi` (when it exists)
-    5. The platform default (e.g. `~/Library/Caches/rattler/cache` on macOS)
+  1. `PIXI_CACHE_DIR` environment variable
+  2. `RATTLER_CACHE_DIR` environment variable
+  3. `[cache.root]` from this config
+  4. `$XDG_CACHE_HOME/pixi` (when it exists)
+  5. The platform default (e.g. `~/Library/Caches/rattler/cache` on macOS)
 4. If the resolved path is on a network filesystem and the kind is not
     "shared-friendly", auto-redirect to node-local scratch (see
     `netfs-redirect` below).
@@ -586,6 +605,21 @@ Set the configuration with:
 !!! note "Why is this experimental?"
 This feature is experimental because the cache invalidation is very tricky,
 and we don't want to disturb users that are not affected by activation times.
+
+### Running conda scripts
+
+[Conda scripts](../tutorials/conda_script.md) normally need `--experimental` on every `pixi run`.
+Turn the flag into a setting with:
+
+```shell
+# For all of your workspaces
+pixi config set experimental.conda-script true --global
+
+# For a specific workspace
+pixi config set experimental.conda-script true --local
+```
+
+Running a conda script then prints a warning instead of asking for the flag, as a reminder that the format may still change.
 
 ## Mirror configuration
 

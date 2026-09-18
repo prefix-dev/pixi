@@ -81,7 +81,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .locate()?
         .with_cli_config(args.config.clone());
 
-    let mut workspace = workspace.modify()?;
+    // One reporter for the whole command: the per-feature solves below and the
+    // `--json --dry-run` solve further down share it instead of each stacking
+    // their own set of bars onto the global multi-progress.
+    let progress = pixi_reporters::TopLevelProgress::from_global();
+    let mut workspace = workspace.modify()?.with_progress(progress.clone());
 
     let features = {
         if let Some(environment_arg) = &args.specs.environment {
@@ -263,10 +267,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         if args.dry_run {
             // Compute a combined diff by solving once against the final in-memory manifest
             // without writing to disk, then revert. Reuse the already-loaded original lock file.
-            let progress = pixi_reporters::TopLevelProgress::from_global();
-            let dispatcher = progress
-                .clone()
-                .register_with(workspace.workspace().command_dispatcher_builder()?)
+            let _clear_progress =
+                pixi_reporters::TopLevelProgress::clear_when_done(Some(&progress));
+            let dispatcher = workspace
+                .workspace()
+                .command_dispatcher_builder(Some(&progress))?
                 .finish();
             let derived = UpdateContext::builder(workspace.workspace(), dispatcher)?
                 .with_lock_file(original_lock_file.clone())

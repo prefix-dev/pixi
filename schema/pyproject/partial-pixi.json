@@ -266,7 +266,7 @@
       "description": "The workspace's metadata information"
     }
   },
-  "$comment": "Generated from `pixi` v0.76.1",
+  "$comment": "Generated from `pixi` v0.81.0",
   "$defs": {
     "Activation": {
       "title": "Activation",
@@ -1879,6 +1879,9 @@
                 "$ref": "#/$defs/InheritableMatchspecTable"
               },
               {
+                "$ref": "#/$defs/PinCompatibleSpec"
+              },
+              {
                 "type": "object",
                 "additionalProperties": {
                   "anyOf": [
@@ -1888,6 +1891,9 @@
                     },
                     {
                       "$ref": "#/$defs/InheritableMatchspecTable"
+                    },
+                    {
+                      "$ref": "#/$defs/PinCompatibleSpec"
                     }
                   ]
                 },
@@ -2027,6 +2033,9 @@
                 "$ref": "#/$defs/InheritableMatchspecTable"
               },
               {
+                "$ref": "#/$defs/PinCompatibleSpec"
+              },
+              {
                 "type": "object",
                 "additionalProperties": {
                   "anyOf": [
@@ -2036,6 +2045,9 @@
                     },
                     {
                       "$ref": "#/$defs/InheritableMatchspecTable"
+                    },
+                    {
+                      "$ref": "#/$defs/PinCompatibleSpec"
                     }
                   ]
                 },
@@ -2077,6 +2089,93 @@
             {
               "workspace": true
             }
+          ]
+        }
+      }
+    },
+    "PinCompatibleSpec": {
+      "title": "PinCompatibleSpec",
+      "description": "Pin to a version compatible with the one resolved in the previous environment.\n\nMirrors rattler-build's `pin_compatible()`: a `pin-compatible` entry in\n`run-dependencies` resolves against the host environment, one in\n`host-dependencies` against the build environment.",
+      "type": "object",
+      "required": [
+        "pin-compatible"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "pin-compatible": {
+          "title": "Pin-Compatible",
+          "description": "`true` uses the default bounds; a table configures them.",
+          "anyOf": [
+            {
+              "type": "boolean",
+              "const": true
+            },
+            {
+              "$ref": "#/$defs/PinTable"
+            }
+          ]
+        }
+      }
+    },
+    "PinSubpackageSpec": {
+      "title": "PinSubpackageSpec",
+      "description": "Pin the package itself for its consumers.\n\nMirrors rattler-build's `pin_subpackage()`. Only valid in the\n`run-exports` tables, on an entry named after the package itself.",
+      "type": "object",
+      "required": [
+        "pin-subpackage"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "pin-subpackage": {
+          "title": "Pin-Subpackage",
+          "description": "`true` uses the default bounds; a table configures them.",
+          "anyOf": [
+            {
+              "type": "boolean",
+              "const": true
+            },
+            {
+              "$ref": "#/$defs/PinTable"
+            }
+          ]
+        }
+      }
+    },
+    "PinTable": {
+      "title": "PinTable",
+      "description": "The arguments of a pin, mirroring rattler-build's `pin_compatible`/`pin_subpackage`.\n\nBounds that are not given fall back to the defaults: `lower-bound = \"x.x.x.x.x.x\"`\n(pin to the exact resolved version) and `upper-bound = \"x\"` (next-major exclusive).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "build": {
+          "title": "Build",
+          "description": "A build-string matcher to add to the pin, e.g. `mpi_mpich_*`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "exact": {
+          "title": "Exact",
+          "description": "Pin the exact version and build string. Cannot be combined with the bounds or `build`.",
+          "type": "boolean"
+        },
+        "lower-bound": {
+          "title": "Lower-Bound",
+          "description": "Lower bound of the pinned range: a pin expression like `x.x` (number of version segments to keep) or a literal version.",
+          "type": "string",
+          "minLength": 1,
+          "examples": [
+            "x.x",
+            "1.2.3"
+          ]
+        },
+        "upper-bound": {
+          "title": "Upper-Bound",
+          "description": "Upper bound of the pinned range: a pin expression like `x` (the segment to bump, exclusive) or a literal version.",
+          "type": "string",
+          "minLength": 1,
+          "examples": [
+            "x",
+            "9.9"
           ]
         }
       }
@@ -2307,19 +2406,11 @@
         "index-strategy": {
           "title": "Index-Strategy",
           "description": "The strategy to use when resolving packages from multiple indexes",
-          "anyOf": [
-            {
-              "type": "string",
-              "const": "first-index"
-            },
-            {
-              "type": "string",
-              "const": "unsafe-first-match"
-            },
-            {
-              "type": "string",
-              "const": "unsafe-best-match"
-            }
+          "type": "string",
+          "enum": [
+            "first-index",
+            "unsafe-first-match",
+            "unsafe-best-match"
           ],
           "examples": [
             "first-index",
@@ -2401,27 +2492,13 @@
         "prerelease-mode": {
           "title": "Prerelease-Mode",
           "description": "The strategy to use when considering pre-release versions",
-          "anyOf": [
-            {
-              "type": "string",
-              "const": "disallow"
-            },
-            {
-              "type": "string",
-              "const": "allow"
-            },
-            {
-              "type": "string",
-              "const": "if-necessary"
-            },
-            {
-              "type": "string",
-              "const": "explicit"
-            },
-            {
-              "type": "string",
-              "const": "if-necessary-or-explicit"
-            }
+          "type": "string",
+          "enum": [
+            "disallow",
+            "allow",
+            "if-necessary",
+            "explicit",
+            "if-necessary-or-explicit"
           ],
           "examples": [
             "disallow",
@@ -2545,6 +2622,12 @@
                 "$ref": "#/$defs/InheritableMatchspecTable"
               },
               {
+                "$ref": "#/$defs/PinCompatibleSpec"
+              },
+              {
+                "$ref": "#/$defs/PinSubpackageSpec"
+              },
+              {
                 "type": "object",
                 "additionalProperties": {
                   "anyOf": [
@@ -2554,6 +2637,12 @@
                     },
                     {
                       "$ref": "#/$defs/InheritableMatchspecTable"
+                    },
+                    {
+                      "$ref": "#/$defs/PinCompatibleSpec"
+                    },
+                    {
+                      "$ref": "#/$defs/PinSubpackageSpec"
                     }
                   ]
                 },
@@ -2581,6 +2670,12 @@
                 "$ref": "#/$defs/InheritableMatchspecTable"
               },
               {
+                "$ref": "#/$defs/PinCompatibleSpec"
+              },
+              {
+                "$ref": "#/$defs/PinSubpackageSpec"
+              },
+              {
                 "type": "object",
                 "additionalProperties": {
                   "anyOf": [
@@ -2590,6 +2685,12 @@
                     },
                     {
                       "$ref": "#/$defs/InheritableMatchspecTable"
+                    },
+                    {
+                      "$ref": "#/$defs/PinCompatibleSpec"
+                    },
+                    {
+                      "$ref": "#/$defs/PinSubpackageSpec"
                     }
                   ]
                 },
@@ -2617,6 +2718,12 @@
                 "$ref": "#/$defs/InheritableMatchspecTable"
               },
               {
+                "$ref": "#/$defs/PinCompatibleSpec"
+              },
+              {
+                "$ref": "#/$defs/PinSubpackageSpec"
+              },
+              {
                 "type": "object",
                 "additionalProperties": {
                   "anyOf": [
@@ -2626,6 +2733,12 @@
                     },
                     {
                       "$ref": "#/$defs/InheritableMatchspecTable"
+                    },
+                    {
+                      "$ref": "#/$defs/PinCompatibleSpec"
+                    },
+                    {
+                      "$ref": "#/$defs/PinSubpackageSpec"
                     }
                   ]
                 },
@@ -2653,6 +2766,12 @@
                 "$ref": "#/$defs/InheritableMatchspecTable"
               },
               {
+                "$ref": "#/$defs/PinCompatibleSpec"
+              },
+              {
+                "$ref": "#/$defs/PinSubpackageSpec"
+              },
+              {
                 "type": "object",
                 "additionalProperties": {
                   "anyOf": [
@@ -2662,6 +2781,12 @@
                     },
                     {
                       "$ref": "#/$defs/InheritableMatchspecTable"
+                    },
+                    {
+                      "$ref": "#/$defs/PinCompatibleSpec"
+                    },
+                    {
+                      "$ref": "#/$defs/PinSubpackageSpec"
                     }
                   ]
                 },
@@ -2689,6 +2814,12 @@
                 "$ref": "#/$defs/InheritableMatchspecTable"
               },
               {
+                "$ref": "#/$defs/PinCompatibleSpec"
+              },
+              {
+                "$ref": "#/$defs/PinSubpackageSpec"
+              },
+              {
                 "type": "object",
                 "additionalProperties": {
                   "anyOf": [
@@ -2698,6 +2829,12 @@
                     },
                     {
                       "$ref": "#/$defs/InheritableMatchspecTable"
+                    },
+                    {
+                      "$ref": "#/$defs/PinCompatibleSpec"
+                    },
+                    {
+                      "$ref": "#/$defs/PinSubpackageSpec"
                     }
                   ]
                 },

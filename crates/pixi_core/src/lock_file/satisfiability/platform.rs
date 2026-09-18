@@ -20,6 +20,7 @@ use pixi_install_pypi::UnresolvedPypiRecord;
 use pixi_manifest::{
     EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName,
 };
+use pixi_pypi_spec::PypiPackageName;
 use pixi_record::{
     DevSourceRecord, LockFileResolver, PixiRecord, SourceRecordData, UnresolvedPixiRecord,
 };
@@ -34,6 +35,7 @@ use rattler_conda_types::{
     ParseMatchSpecError, ParseMatchSpecOptions, RepodataRevision,
 };
 use rattler_lock::{LockedPackage, UrlOrPath};
+use url::Url;
 use uv_distribution_types::{RequirementSource, RequiresPython};
 
 use super::errors::{LocalMetadataMismatch, PlatformUnsat, SolveGroupUnsat};
@@ -41,8 +43,7 @@ use super::legacy;
 use super::pypi::{lock_pypi_packages, pypi_satisfies_editable, pypi_satisfies_requirement};
 use super::pypi_metadata;
 use super::source_record::{
-    verify_build_source_matches_manifest, verify_immutable_record_identity,
-    verify_partial_source_record_against_backend,
+    verify_immutable_record_identity, verify_partial_source_record_against_backend,
 };
 use crate::{
     lock_file::{
@@ -51,8 +52,9 @@ use crate::{
         package_identifier::ConversionError,
         records_by_name::{HasNameVersion, LockedPypiRecordsByName},
     },
-    workspace::{Environment, EnvironmentVars, HasWorkspaceRef, PlatformOverrides, PlatformSource},
+    workspace::{Environment, EnvironmentVars},
 };
+use pixi_manifest::platform::host::host_baseline;
 
 /// Context for verifying platform satisfiability.
 pub struct VerifySatisfiabilityContext<'a> {
@@ -370,16 +372,7 @@ pub async fn verify_platform_satisfiability(
             })?;
 
         // Get host platform records for building (we can only run Python on the host platform)
-        let best_platform_name = Some(
-            ctx.environment
-                .workspace()
-                .host_platform(
-                    PlatformSource::Defaults,
-                    PlatformOverrides::EnvironmentVariableOverrides,
-                )
-                .name()
-                .clone(),
-        );
+        let best_platform_name = Some(host_baseline().name().clone());
         let building_pixi_records = if best_platform_name.as_ref() == Some(&ctx.platform) {
             // Same platform, reuse the records
             Ok(pixi_records_by_name.clone())
@@ -991,10 +984,19 @@ async fn verify_package_platform_satisfiability(
                         .insert(locked_pixi_records.records[pkg_idx.0].name().clone());
                     FoundPackage::Conda(pkg_idx, Vec::new())
                 } else {
-                    match to_normalize(&requirement.name)
-                        .map(|name| locked_pypi_records.index_by_name(&name))
-                    {
-                        Ok(Some(idx)) => {
+                    let pep_name = match to_normalize(&requirement.name) {
+                        Ok(name) => name,
+                        Err(err) => {
+                            // An error occurred while converting the package name.
+                            delayed_pypi_error.get_or_insert_with(|| {
+                                Box::new(PlatformUnsat::from(ConversionError::NameConversion(err)))
+                            });
+                            continue;
+                        }
+                    };
+
+                    match locked_pypi_records.index_by_name(&pep_name) {
+                        Some(idx) => {
                             let record = &locked_pypi_records.records[idx];
 
                             // use the overridden requirements if specified
@@ -1012,12 +1014,18 @@ async fn verify_package_platform_satisfiability(
 
                                 FoundPackage::PyPi(PypiPackageIdx(idx), requirement.extras.to_vec())
                             } else {
+                                let per_package_indexes: Vec<&Url> = pypi_dependencies
+                                    .get(&PypiPackageName::from_normalized(pep_name))
+                                    .map(|specs| specs.iter().filter_map(|s| s.index()).collect())
+                                    .unwrap_or_default();
+
                                 if let Err(err) = pypi_satisfies_requirement(
                                     &requirement,
                                     record,
                                     ctx.project_root,
                                     origin,
                                     &locked_indexes,
+                                    &per_package_indexes,
                                 ) {
                                     delayed_pypi_error.get_or_insert(err);
                                 }
@@ -1025,20 +1033,13 @@ async fn verify_package_platform_satisfiability(
                                 FoundPackage::PyPi(PypiPackageIdx(idx), requirement.extras.to_vec())
                             }
                         }
-                        Ok(None) => {
+                        None => {
                             // The record does not match the spec, the lock file is inconsistent.
                             delayed_pypi_error.get_or_insert_with(|| {
                                 Box::new(PlatformUnsat::UnsatisfiableRequirement(
                                     Box::new(requirement),
                                     source.into_owned(),
                                 ))
-                            });
-                            continue;
-                        }
-                        Err(err) => {
-                            // An error occurred while converting the package name.
-                            delayed_pypi_error.get_or_insert_with(|| {
-                                Box::new(PlatformUnsat::from(ConversionError::NameConversion(err)))
                             });
                             continue;
                         }
@@ -1314,10 +1315,6 @@ async fn verify_package_platform_satisfiability(
     // looked up from the manifest at install time. This allows different
     // environments in a solve-group to have different editability settings for
     // the same path-based package.
-
-    // Verify the pixi build package's package_build_source matches the manifest.
-    verify_build_source_matches_manifest(ctx.environment, locked_pixi_records)
-        .map_err(CommandDispatcherError::Failed)?;
 
     Ok((
         VerifiedIndividualEnvironment {
