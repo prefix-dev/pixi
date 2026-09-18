@@ -1917,7 +1917,11 @@ mod tests {
         f.store(Vec::new(), vec![abs(input.clone()), abs(dir.clone())])
             .await;
         assert!(f.sidecar().input_files.contains_key(&abs(dir.clone())));
+
+        // Sleep slightly to ensure mtime is updated on Windows
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         fs_err::write(dir.join("control.txt"), b"x").unwrap();
+
         assert!(
             f.lookup().await.is_none(),
             "control: a recorded directory whose contents changed invalidates",
@@ -1935,6 +1939,8 @@ mod tests {
              later change to it can ever invalidate the entry",
         );
 
+        // Sleep slightly to ensure mtime is updated on Windows
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         fs_err::write(dir.join("added.txt"), b"x").unwrap();
         assert!(
             f.lookup().await.is_none(),
