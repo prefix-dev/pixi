@@ -217,7 +217,10 @@ impl PurlDerivationClient {
 
         let wrapped_client = LazyClient::new(move || {
             let client = client.client().clone();
-            ClientBuilder::new(reqwest::Client::new())
+            // DelegateToClient performs the request. The inner reqwest client is
+            // unused for I/O; Client::new() still loads system CAs and panics on
+            // hosts without a CA store even when tls-root-certs = "webpki" (#6825).
+            ClientBuilder::new(unused_mapping_http_client())
                 .with(retry_strategy)
                 .with(cache_strategy)
                 .with(DelegateToClient(client))
@@ -478,4 +481,26 @@ fn replace_pypi_purls(record: &mut RepoDataRecord, purls: impl IntoIterator<Item
         .get_or_insert_with(BTreeSet::new);
     record_purls.retain(|purl| purl.package_type() != "pypi");
     record_purls.extend(purls);
+}
+
+/// Inner client for the mapping middleware stack.
+///
+/// Requests go through [`DelegateToClient`]. This client must not load the
+/// system CA store: `reqwest::Client::new()` panics when none are present
+/// (#6825).
+fn unused_mapping_http_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .tls_certs_only(std::iter::empty::<reqwest::Certificate>())
+        .build()
+        .expect("reqwest client without system CA store")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::unused_mapping_http_client;
+
+    #[test]
+    fn unused_mapping_http_client_builds_without_system_cas() {
+        drop(unused_mapping_http_client());
+    }
 }
