@@ -10,6 +10,7 @@ license.workspace = true
 
 [dependencies]
 ahash = { workspace = true }
+chrono = { workspace = true }
 console = { workspace = true }
 dirs = { workspace = true }
 dunce = { workspace = true }

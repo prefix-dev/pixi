@@ -10,6 +10,7 @@ use miette::IntoDiagnostic;
 use pixi_config::Config;
 use pixi_consts::consts;
 use pixi_manifest::{PrioritizedChannel, toml::TomlDocument};
+use pixi_spec::ExcludeNewer;
 use pixi_toml::TomlIndexMap;
 use pixi_utils::{executable_from_path, strip_executable_extension};
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
@@ -310,6 +311,98 @@ impl Manifest {
             platform,
             env_name
         );
+        Ok(())
+    }
+
+    /// Sets the exclude-newer cutoff for a specific environment.
+    pub fn set_exclude_newer(
+        &mut self,
+        env_name: &EnvironmentName,
+        exclude_newer: ExcludeNewer,
+    ) -> miette::Result<()> {
+        // Ensure the environment exists
+        if !self.parsed.envs.contains_key(env_name) {
+            miette::bail!("Environment {} doesn't exist", env_name.fancy_display());
+        }
+
+        // Update self.parsed
+        self.parsed
+            .envs
+            .get_mut(env_name)
+            .ok_or_else(|| {
+                miette::miette!("Can't find environment {} yet", env_name.fancy_display())
+            })?
+            .exclude_newer
+            .replace(exclude_newer);
+
+        // Update self.document
+        self.document
+            .get_or_insert_nested_table(&["envs", env_name.as_str()])?
+            .insert(
+                "exclude-newer",
+                Item::Value(toml_edit::Value::from(exclude_newer.to_string())),
+            );
+
+        tracing::debug!(
+            "Set exclude-newer {} for environment {} in toml document",
+            exclude_newer,
+            env_name
+        );
+        Ok(())
+    }
+
+    /// Removes the exclude-newer cutoff from a specific environment.
+    pub fn remove_exclude_newer(&mut self, env_name: &EnvironmentName) -> miette::Result<()> {
+        if !self.parsed.envs.contains_key(env_name) {
+            miette::bail!("Environment {} doesn't exist", env_name.fancy_display());
+        }
+
+        self.parsed
+            .envs
+            .get_mut(env_name)
+            .ok_or_else(|| {
+                miette::miette!("Can't find environment {} yet", env_name.fancy_display())
+            })?
+            .exclude_newer = None;
+
+        if let Ok(table) = self
+            .document
+            .get_or_insert_nested_table(&["envs", env_name.as_str()])
+        {
+            table.remove("exclude-newer");
+        }
+
+        tracing::debug!(
+            "Removed exclude-newer for environment {} in toml document",
+            env_name
+        );
+        Ok(())
+    }
+
+    /// Sets the top-level manifest exclude-newer cutoff.
+    pub fn set_manifest_exclude_newer(
+        &mut self,
+        exclude_newer: ExcludeNewer,
+    ) -> miette::Result<()> {
+        self.parsed.exclude_newer = Some(exclude_newer);
+        self.document.as_table_mut().insert(
+            "exclude-newer",
+            Item::Value(toml_edit::Value::from(exclude_newer.to_string())),
+        );
+
+        tracing::debug!(
+            "Set top-level exclude-newer {} in toml document",
+            exclude_newer
+        );
+        Ok(())
+    }
+
+    /// Removes the top-level manifest exclude-newer cutoff.
+    pub fn remove_manifest_exclude_newer(&mut self) -> miette::Result<()> {
+        self.parsed.exclude_newer = None;
+        self.document.as_table_mut().remove("exclude-newer");
+
+        tracing::debug!("Removed top-level exclude-newer in toml document");
         Ok(())
     }
 
@@ -1546,5 +1639,48 @@ exposed = { python = "python" }
         let document = manifest.document.to_string();
         let count = document.to_lowercase().matches("pytest").count();
         assert_eq!(count, 1, "pytest is now listed more than once:\n{document}");
+    }
+
+    #[test]
+    fn test_set_and_remove_exclude_newer() {
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        let mut manifest = Manifest::from_str(
+            Path::new("global.toml"),
+            r#"
+[envs.test-env]
+channels = ["conda-forge"]
+dependencies = { python = "*" }
+exposed = { python = "python" }
+"#,
+        )
+        .unwrap();
+
+        let exclude_newer = ExcludeNewer::from_str("2024-01-01").unwrap();
+        manifest
+            .set_exclude_newer(&env_name, exclude_newer)
+            .unwrap();
+
+        assert_eq!(
+            manifest.parsed.envs.get(&env_name).unwrap().exclude_newer,
+            Some(exclude_newer)
+        );
+        let doc_str = manifest.document.to_string();
+        assert!(doc_str.contains("exclude-newer = \"2024-01-02T00:00:00Z\""));
+
+        manifest.remove_exclude_newer(&env_name).unwrap();
+        assert_eq!(
+            manifest.parsed.envs.get(&env_name).unwrap().exclude_newer,
+            None
+        );
+        let doc_str = manifest.document.to_string();
+        assert!(!doc_str.contains("exclude-newer"));
+
+        manifest.set_manifest_exclude_newer(exclude_newer).unwrap();
+        assert_eq!(manifest.parsed.exclude_newer, Some(exclude_newer));
+        assert!(manifest.document.to_string().contains("exclude-newer"));
+
+        manifest.remove_manifest_exclude_newer().unwrap();
+        assert_eq!(manifest.parsed.exclude_newer, None);
+        assert!(!manifest.document.to_string().contains("exclude-newer"));
     }
 }

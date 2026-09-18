@@ -8,6 +8,7 @@ use std::{
     sync::Arc,
 };
 
+use chrono::{DateTime, Utc};
 pub use environment::EnvironmentName;
 use fancy_display::FancyDisplay;
 use fs::tokio as tokio_fs;
@@ -43,7 +44,7 @@ use pixi_manifest::platform::solver_generic_virtual_packages;
 use pixi_manifest::{InlinePackageManifest, PixiPlatform, PrioritizedChannel, WorkspaceManifest};
 use pixi_path::AbsPathBuf;
 use pixi_reporters::TopLevelProgress;
-use pixi_spec::{BinarySpec, PathBinarySpec};
+use pixi_spec::{BinarySpec, ExcludeNewer, PathBinarySpec, ResolvedExcludeNewer};
 use pixi_spec_containers::DependencyMap;
 use pixi_utils::variants::VariantConfig;
 use pixi_utils::{
@@ -569,6 +570,46 @@ impl Project {
         self.config.global_channel_config()
     }
 
+    /// Returns the resolved exclude-newer configuration for an environment,
+    /// combining any environment-specific or manifest-level cutoff with
+    /// channel-specific cutoffs from the environment's channels.
+    pub fn exclude_newer_for_environment(
+        &self,
+        environment: &ParsedEnvironment,
+    ) -> miette::Result<Option<ResolvedExcludeNewer>> {
+        let default_exclude_newer = environment
+            .exclude_newer
+            .or(self.manifest.parsed.exclude_newer);
+
+        let mut exclude_newer = default_exclude_newer
+            .map(|config| ResolvedExcludeNewer::from_datetime(config.cutoff()));
+
+        for prioritized_channel in &environment.channels {
+            let Some(channel_exclude_newer) = prioritized_channel.exclude_newer else {
+                continue;
+            };
+
+            let channel_url = prioritized_channel
+                .channel
+                .clone()
+                .into_base_url(self.global_channel_config())
+                .into_diagnostic()?;
+
+            let config = exclude_newer.get_or_insert_with(|| {
+                ResolvedExcludeNewer::from_datetime(DateTime::<Utc>::MAX_UTC)
+            });
+
+            *config = match channel_exclude_newer {
+                ExcludeNewer::Timestamp(dt) => config.clone().with_channel_cutoff(channel_url, dt),
+                ExcludeNewer::Duration(duration) => config
+                    .clone()
+                    .with_channel_cutoff(channel_url, ExcludeNewer::Duration(duration).cutoff()),
+            };
+        }
+
+        Ok(exclude_newer)
+    }
+
     /// The virtual packages to solve an environment against.
     ///
     /// For the platform this machine targets these are detected from the
@@ -719,6 +760,8 @@ impl Project {
         // a manifest from the source checkout.
         let inline_packages = inline_packages_for_environment(environment);
 
+        let exclude_newer = self.exclude_newer_for_environment(environment)?;
+
         // Create solve spec (compute-engine keys path).
         let solve_spec = SolvePixiEnvironmentSpec {
             dependencies: pixi_specs,
@@ -734,7 +777,7 @@ impl Project {
                     channels: channels.clone(),
                     build_environment: build_environment.clone(),
                     variants: variant_config.clone(),
-                    exclude_newer: None,
+                    exclude_newer: exclude_newer.clone(),
                     channel_priority: Default::default(),
                 },
             )),
@@ -821,7 +864,7 @@ impl Project {
                 prefix: rattler_conda_types::prefix::Prefix::create(prefix.root())
                     .into_diagnostic()?,
                 build_environment,
-                exclude_newer: None,
+                exclude_newer,
                 channels,
                 installed: None,
                 ignore_packages: None,
@@ -2250,5 +2293,79 @@ mod tests {
             Platform::Win64
         };
         assert!(Project::virtual_packages_for(&other).unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_exclude_newer_for_environment_resolution() {
+        let manifest_content = r#"
+        version = 1
+        exclude-newer = "2024-01-01"
+
+        [envs.default-env]
+        channels = ["conda-forge"]
+        dependencies = { python = "*" }
+
+        [envs.overridden-env]
+        channels = ["conda-forge"]
+        exclude-newer = "2024-06-01"
+        dependencies = { python = "*" }
+
+        [envs.channel-cutoff-env]
+        channels = [
+            { channel = "https://conda.anaconda.org/conda-forge", exclude-newer = "2024-03-01" },
+            "https://prefix.dev/my-channel"
+        ]
+        dependencies = { python = "*" }
+        "#;
+        let tempdir = tempfile::tempdir().unwrap();
+        let project = Project::from_str(
+            Path::new("global.toml"),
+            manifest_content,
+            EnvRoot::new(tempdir.path().to_path_buf()).unwrap(),
+            BinDir::new(tempdir.path().to_path_buf()).unwrap(),
+        )
+        .unwrap();
+
+        // 1. default-env inherits top-level exclude-newer
+        let default_env = project
+            .environment(&EnvironmentName::from_str("default-env").unwrap())
+            .unwrap();
+        let default_res = project
+            .exclude_newer_for_environment(default_env)
+            .unwrap()
+            .expect("should have resolved exclude-newer from top-level");
+        let expected_top_cutoff = ExcludeNewer::from_str("2024-01-01").unwrap().cutoff();
+        assert_eq!(default_res.cutoff, expected_top_cutoff);
+        assert!(default_res.channel_cutoffs.is_empty());
+
+        // 2. overridden-env overrides top-level
+        let overridden_env = project
+            .environment(&EnvironmentName::from_str("overridden-env").unwrap())
+            .unwrap();
+        let overridden_res = project
+            .exclude_newer_for_environment(overridden_env)
+            .unwrap()
+            .expect("should have resolved exclude-newer from env");
+        let expected_override_cutoff = ExcludeNewer::from_str("2024-06-01").unwrap().cutoff();
+        assert_eq!(overridden_res.cutoff, expected_override_cutoff);
+        assert!(overridden_res.channel_cutoffs.is_empty());
+
+        // 3. channel-cutoff-env has channel-specific cutoff
+        let channel_env = project
+            .environment(&EnvironmentName::from_str("channel-cutoff-env").unwrap())
+            .unwrap();
+        let channel_res = project
+            .exclude_newer_for_environment(channel_env)
+            .unwrap()
+            .expect("should have resolved exclude-newer");
+        assert_eq!(channel_res.cutoff, expected_top_cutoff);
+        assert_eq!(channel_res.channel_cutoffs.len(), 1);
+        let channel_url =
+            ChannelUrl::from(Url::parse("https://conda.anaconda.org/conda-forge").unwrap());
+        let expected_channel_cutoff = ExcludeNewer::from_str("2024-03-01").unwrap().cutoff();
+        assert_eq!(
+            channel_res.channel_cutoffs.get(&channel_url),
+            Some(&expected_channel_cutoff)
+        );
     }
 }

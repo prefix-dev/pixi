@@ -133,7 +133,13 @@ impl FromStr for ExcludeNewer {
 impl std::fmt::Display for ExcludeNewer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ExcludeNewer::Timestamp(dt) => dt.fmt(f),
+            ExcludeNewer::Timestamp(dt) => {
+                write!(
+                    f,
+                    "{}",
+                    dt.to_rfc3339_opts(chrono::SecondsFormat::Secs, true)
+                )
+            }
             ExcludeNewer::Duration(dur) => humantime::format_duration(*dur).fmt(f),
         }
     }
@@ -195,6 +201,10 @@ fn parse_exclude_newer_str(s: &str) -> Result<ExcludeNewer, String> {
         Ok(timestamp) => return Ok(ExcludeNewer::Timestamp(timestamp.with_timezone(&Utc))),
         Err(err) => err,
     };
+
+    if let Ok(dt) = DateTime::parse_from_str(s, "%Y-%m-%d %H:%M:%S %Z") {
+        return Ok(ExcludeNewer::Timestamp(dt.with_timezone(&Utc)));
+    }
 
     Err(format!(
         "`{s}` is neither a valid duration, date ({date_err}), nor timestamp ({timestamp_err})"

@@ -6901,6 +6901,7 @@ name = "pixi_global"
 version = "0.1.0"
 dependencies = [
  "ahash",
+ "chrono",
  "console",
  "dirs 7.0.0",
  "dunce",

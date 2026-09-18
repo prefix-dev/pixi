@@ -31,6 +31,8 @@ pixi global install [OPTIONS] [PACKAGE]...
 <br>May be provided more than once.
 - <a id="arg---platform" href="#arg---platform">`--platform (-p) <PLATFORM>`</a>
 :  The platform to install the packages for
+- <a id="arg---exclude-newer" href="#arg---exclude-newer">`--exclude-newer <EXCLUDE_NEWER>`</a>
+:  Do not install packages published after the specified date or duration
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
 :  Ensures that all packages will be installed in the same environment
 - <a id="arg---expose" href="#arg---expose">`--expose <EXPOSE>`</a>

@@ -53,3 +53,38 @@ async fn test_source_package_with_passthrough_backend_for_global() {
     let events = observer.events();
     assert!(events.contains(&BackendEvent::CondaBuildV1Called));
 }
+
+/// Test that global install records exclude-newer in manifest
+#[tokio::test]
+async fn test_global_install_with_exclude_newer() {
+    use std::str::FromStr;
+
+    setup_tracing();
+
+    let (instantiator, _observer) =
+        ObservableBackend::instantiator(PassthroughBackend::instantiator());
+
+    let backend_override = BackendOverride::from_memory(instantiator);
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    let root_dir = workspaces_dir()
+        .join("source-backends")
+        .join("source-package");
+
+    let exclude_newer = pixi_spec::ExcludeNewer::from_str("2024-01-01").unwrap();
+
+    pixi.global_install()
+        .with_path(root_dir.to_string_lossy())
+        .with_exclude_newer(exclude_newer)
+        .await
+        .unwrap();
+
+    let manifest_path = pixi
+        .workspace_path()
+        .join("manifests")
+        .join(pixi_consts::consts::GLOBAL_MANIFEST_DEFAULT_NAME);
+    let content = fs_err::read_to_string(manifest_path).unwrap();
+    assert!(content.contains("exclude-newer = \"2024-01-02T00:00:00Z\""));
+}
