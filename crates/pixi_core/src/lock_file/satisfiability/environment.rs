@@ -12,8 +12,8 @@ use pixi_manifest::{
 };
 use pixi_pypi_spec::PixiPypiSource;
 use pypi_modifiers::Tags;
-use rattler_conda_types::{ChannelUrl, NamedChannelOrUrl, Platform};
-use rattler_lock::{LockedPackage, PypiIndexes, UrlOrPath};
+use rattler_conda_types::{ChannelUrl, NamedChannelOrUrl};
+use rattler_lock::{LockedPackage, PlatformName, PypiIndexes, UrlOrPath};
 use url::Url;
 use uv_distribution_filename::{DistExtension, ExtensionError, SourceDistExtension, WheelFilename};
 
@@ -194,7 +194,6 @@ pub fn verify_environment_satisfiability(
 
         // Actually check all pypi packages in one iteration
         for (lock_platform, package_it) in locked_environment.pypi_packages_by_platform() {
-            let platform = lock_platform.subdir();
             for package_data in package_it {
                 let record = UnresolvedPypiRecord::from(package_data.clone());
                 let pypi_source = pypi_dependencies
@@ -202,7 +201,7 @@ pub fn verify_environment_satisfiability(
                     .and_then(|specs| specs.last())
                     .map(|spec| &spec.source);
                 no_build_check.check(&record, pypi_source)?;
-                pypi_wheel_tags_check.check(platform, &record)?;
+                pypi_wheel_tags_check.check(lock_platform.name(), &record)?;
             }
         }
     }
@@ -258,7 +257,7 @@ pub fn verify_environment_satisfiability(
 }
 
 struct PypiWheelTagsCheck {
-    platform_wheel_tags: HashMap<Platform, Tags>,
+    platform_wheel_tags: HashMap<PlatformName, Tags>,
 }
 
 impl PypiWheelTagsCheck {
@@ -286,24 +285,24 @@ impl PypiWheelTagsCheck {
                                 .iter()
                                 .find(|p| p.subdir() == lock_platform.subdir())
                         })?;
-                    Some((pixi_platform, packages))
+                    Some((lock_platform, pixi_platform, packages))
                 })
-                .flat_map(|(pixi_platform, packages)| {
-                    packages.map(move |package| (pixi_platform, package))
+                .flat_map(|(lock_platform, pixi_platform, packages)| {
+                    packages.map(move |package| (lock_platform, pixi_platform, package))
                 })
-                .filter_map(|(pixi_platform, package)| match package {
+                .filter_map(|(lock_platform, pixi_platform, package)| match package {
                     LockedPackage::Conda(rattler_lock::CondaPackageData::Binary(package)) => {
-                        Some((pixi_platform, package))
+                        Some((lock_platform, pixi_platform, package))
                     }
                     _ => None,
                 })
-                .filter(move |(_, package)| {
+                .filter(move |(_, _, package)| {
                     pypi_modifiers::pypi_tags::is_python_record(&package.package_record)
                 })
-                .filter_map(|(pixi_platform, package)| {
+                .filter_map(|(lock_platform, pixi_platform, package)| {
                     pypi_modifiers::pypi_tags::get_pypi_tags(pixi_platform, &package.package_record)
                         .ok()
-                        .map(|tags| (pixi_platform.subdir(), tags))
+                        .map(|tags| (lock_platform.name().clone(), tags))
                 })
                 .collect::<HashMap<_, _>>()
         };
@@ -315,14 +314,14 @@ impl PypiWheelTagsCheck {
 
     pub fn check(
         &self,
-        platform: Platform,
+        platform_name: &PlatformName,
         package_data: &UnresolvedPypiRecord,
     ) -> Result<(), EnvironmentUnsat> {
         let package_data = package_data.as_package_data();
         let Some(package_file_name) = package_data.location().file_name() else {
             return Ok(());
         };
-        let Some(platform_tags) = self.platform_wheel_tags.get(&platform) else {
+        let Some(platform_tags) = self.platform_wheel_tags.get(platform_name) else {
             return Ok(());
         };
         let Ok(wheel) = WheelFilename::from_str(package_file_name) else {
@@ -484,4 +483,138 @@ fn verify_pypi_indexes(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{path::Path, str::FromStr};
+
+    use rattler_conda_types::{
+        PackageName, PackageRecord, Platform, Version, package::DistArchiveIdentifier,
+    };
+    use rattler_lock::{
+        CondaBinaryData, CondaPackageData, LockFile, PlatformData, PlatformName, UrlOrPath,
+        Verbatim,
+    };
+    use url::Url;
+
+    use super::*;
+    use crate::{Workspace, lock_file::tests::make_wheel_package_with};
+
+    #[test]
+    fn test_pypi_wheel_tags_rich_platforms_sharing_subdir() {
+        let mut python_record = PackageRecord::new(
+            PackageName::new_unchecked("python"),
+            Version::from_str("3.12.0").unwrap(),
+            "0".to_string(),
+        );
+        python_record.subdir = "linux-64".to_string();
+        let python_package = CondaPackageData::Binary(Box::new(CondaBinaryData {
+            package_record: python_record,
+            location: UrlOrPath::Url(
+                Url::parse("https://example.com/python-3.12.0-0.conda").unwrap(),
+            ),
+            file_name: DistArchiveIdentifier::try_from_filename("python-3.12.0-0.conda").unwrap(),
+            channel: None,
+        }));
+
+        let wheel_generic = make_wheel_package_with(
+            "caio",
+            "0.12.4",
+            Verbatim::new(UrlOrPath::Path("caio-0.12.4-py3-none-any.whl".into())),
+            None,
+            None,
+            vec![],
+            None,
+        );
+
+        let wheel_manylinux234 = make_wheel_package_with(
+            "caio",
+            "0.12.4",
+            Verbatim::new(UrlOrPath::Path(
+                "caio-0.12.4-cp312-cp312-manylinux_2_34_x86_64.whl".into(),
+            )),
+            None,
+            None,
+            vec![],
+            None,
+        );
+
+        let manifest_content = r#"
+        [workspace]
+        name = "rich-wheel-repro"
+        channels = []
+        platforms = [
+            "linux-64",
+            { name = "linux-new", platform = "linux-64", glibc = "2.38" },
+        ]
+
+        [dependencies]
+        python = "3.12.*"
+
+        [pypi-dependencies]
+        caio = "==0.12.4"
+        "#;
+        let workspace = Workspace::from_str(Path::new("pixi.toml"), manifest_content).unwrap();
+        let env = workspace.default_environment();
+
+        let mut builder = LockFile::builder()
+            .with_platforms(vec![
+                PlatformData {
+                    name: PlatformName::try_from("linux-64").unwrap(),
+                    subdir: Platform::Linux64,
+                    virtual_packages: vec![],
+                },
+                PlatformData {
+                    name: PlatformName::try_from("linux-new").unwrap(),
+                    subdir: Platform::Linux64,
+                    virtual_packages: vec!["__glibc=2.38".to_string()],
+                },
+            ])
+            .unwrap();
+        builder.set_channels("default", Vec::<rattler_lock::Channel>::new());
+        builder.set_options("default", rattler_lock::SolveOptions::default());
+        builder.set_pypi_indexes(
+            "default",
+            rattler_lock::PypiIndexes::from(env.pypi_options()),
+        );
+        builder
+            .add_conda_package("default", "linux-64", python_package.clone())
+            .unwrap();
+        builder
+            .add_conda_package("default", "linux-new", python_package)
+            .unwrap();
+        builder
+            .add_pypi_package("default", "linux-64", wheel_generic.clone())
+            .unwrap();
+        builder
+            .add_pypi_package("default", "linux-new", wheel_manylinux234.clone())
+            .unwrap();
+        let lock_file = builder.finish();
+        let locked_env = lock_file.environment("default").unwrap();
+
+        // 1. Direct PypiWheelTagsCheck verification
+        let check = PypiWheelTagsCheck::new(&env, &locked_env);
+        let linux_64_name = PlatformName::try_from("linux-64").unwrap();
+        let linux_new_name = PlatformName::try_from("linux-new").unwrap();
+
+        let record_generic = UnresolvedPypiRecord::from(wheel_generic);
+        let record_manylinux = UnresolvedPypiRecord::from(wheel_manylinux234);
+
+        // Generic wheel should be compatible with both platforms
+        assert!(check.check(&linux_64_name, &record_generic).is_ok());
+        assert!(check.check(&linux_new_name, &record_generic).is_ok());
+
+        // manylinux_2_34 wheel requires glibc >= 2.34; incompatible with linux-64 (glibc 2.17)
+        assert!(matches!(
+            check.check(&linux_64_name, &record_manylinux),
+            Err(EnvironmentUnsat::PypiWheelTagsMismatch { .. })
+        ));
+
+        // manylinux_2_34 wheel must be compatible with linux-new (glibc 2.38)
+        assert!(check.check(&linux_new_name, &record_manylinux).is_ok());
+
+        // 2. Full environment satisfiability verification
+        assert!(verify_environment_satisfiability(&env, locked_env).is_ok());
+    }
 }
