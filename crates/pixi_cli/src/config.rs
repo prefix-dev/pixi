@@ -273,6 +273,8 @@ fn determine_project_root(common_args: &CommonArgs) -> miette::Result<Option<Pat
 fn load_config(common_args: &CommonArgs, source: &GlobalConfigSource) -> miette::Result<Config> {
     let base_config = if common_args.system {
         Config::load_system()
+    } else if common_args.global {
+        return Ok(Config::load_global_with(source));
     } else {
         Config::load_global_with(source)
     };
