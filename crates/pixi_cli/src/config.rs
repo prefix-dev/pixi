@@ -271,17 +271,19 @@ fn determine_project_root(common_args: &CommonArgs) -> miette::Result<Option<Pat
 /// Load the configuration the given arguments select, taking the global layer
 /// from `source`.
 fn load_config(common_args: &CommonArgs, source: &GlobalConfigSource) -> miette::Result<Config> {
-    let ret = if common_args.system {
+    let base_config = if common_args.system {
         Config::load_system()
-    } else if common_args.global {
-        Config::load_global_with(source)
-    } else if let Some(root) = determine_project_root(common_args)? {
-        Config::load_with(&root, source)
     } else {
         Config::load_global_with(source)
     };
 
-    Ok(ret)
+    let target_path = determine_config_write_path(common_args)?;
+
+    if let Ok(local_config) = Config::from_path(&target_path) {
+        Ok(base_config.merge_config(local_config))
+    } else {
+        Ok(base_config)
+    }
 }
 
 fn determine_config_write_path(common_args: &CommonArgs) -> miette::Result<PathBuf> {
@@ -350,39 +352,52 @@ fn alter_config(
     match mode {
         AlterMode::Prepend | AlterMode::Append => {
             let is_prepend = matches!(mode, AlterMode::Prepend);
+            let input = value.expect("value must be provided");
+
+            fn modify_list<T>(vec: &mut Vec<T>, item: T, is_prepend: bool) {
+                if is_prepend {
+                    vec.insert(0, item);
+                } else {
+                    vec.push(item);
+                }
+            }
 
             match key {
-                // `default-channels` replaces the lower layers rather than
-                // extending them, so the list written here has to be the
-                // whole one the user sees.
+                // `default-channels` replaces the lower layers rather than concatenating them.
+                // If the local file has no override yet, we must write the entire merged list
+                // so lower layers aren't accidentally silenced. If a local list already exists,
+                // we append/prepend to it directly.
                 "default-channels" => {
-                    let input = value.expect("value must be provided");
                     let channel = NamedChannelOrUrl::from_str(&input)
                         .into_diagnostic()
                         .context("invalid channel name")?;
-                    let mut new_channels =
-                        load_config(common_args, &GlobalConfigSource::Search)?.default_channels;
-                    if is_prepend {
-                        new_channels.insert(0, channel);
+
+                    let local_has_channels = !config.default_channels.is_empty();
+
+                    if local_has_channels {
+                        // Local file already has default-channels. Modify the local list and use mode (Prepend/Append)
+                        // to preserve existing multi-line TOML formatting.
+                        modify_list(&mut config.default_channels, channel, is_prepend);
+                        transplant_config_key(&config, &mut toml_doc, key, &mode)?;
                     } else {
-                        new_channels.push(channel);
+                        // Local file is missing default-channels. Load inherited global layers,
+                        // add the channel, and user AlterMode::Set to write the full merged array.
+                        let mut new_channels =
+                            load_config(common_args, &GlobalConfigSource::Search)?.default_channels;
+                        modify_list(&mut new_channels, channel, is_prepend);
+                        config.default_channels = new_channels;
+                        transplant_config_key(&config, &mut toml_doc, key, &AlterMode::Set)?;
                     }
-                    config.default_channels = new_channels;
                 }
                 // `extra-index-urls` is concatenated across layers, so only
                 // this file's own share of the list is edited; copying the
                 // lower layers in would list them twice. A prepend therefore
                 // lands ahead of this file's URLs, but after the lower ones.
                 "pypi-config.extra-index-urls" => {
-                    let input = url::Url::parse(&value.expect("value must be provided"))
+                    let url = url::Url::parse(&input)
                         .map_err(|e| miette::miette!("Invalid URL: {}", e))?;
-                    let mut new_urls = config.pypi_config.extra_index_urls.clone();
-                    if is_prepend {
-                        new_urls.insert(0, input);
-                    } else {
-                        new_urls.push(input);
-                    }
-                    config.pypi_config.extra_index_urls = new_urls;
+                    modify_list(&mut config.pypi_config.extra_index_urls, url, is_prepend);
+                    transplant_config_key(&config, &mut toml_doc, key, &mode)?;
                 }
                 _ => {
                     let list_keys = ["default-channels", "pypi-config.extra-index-urls"];
@@ -394,8 +409,6 @@ fn alter_config(
                     ));
                 }
             }
-
-            transplant_config_key(&config, &mut toml_doc, key, &mode)?;
         }
         AlterMode::Set => {
             // Run set on Config object for validation
@@ -524,10 +537,8 @@ fn transplant_config_key(
             if let Some(new_item) = serialized_array.get(0) {
                 insert_array_element(target_array, 0, new_item.clone());
             }
-        } else {
-            if let Some(new_item) = serialized_array.iter().last() {
-                push_array_element(target_array, new_item.clone());
-            }
+        } else if let Some(new_item) = serialized_array.iter().last() {
+            push_array_element(target_array, new_item.clone());
         }
         return Ok(());
     }
@@ -974,7 +985,7 @@ default-channels = ["conda-forge"]
             test_context.read_config(),
             @r#"
         allow-symbolic-links = true
-        default-channels = ["conda-forge","new-channel"]
+        default-channels = ["conda-forge", "new-channel"]
         "#
         );
     }
