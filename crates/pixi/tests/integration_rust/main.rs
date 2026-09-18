@@ -1,6 +1,7 @@
 use std::sync::Once;
 
 mod add_tests;
+mod clean_tests;
 mod common;
 mod conda_pypi_map_tests;
 mod develop_dependencies_tests;

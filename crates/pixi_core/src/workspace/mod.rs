@@ -788,6 +788,11 @@ impl Workspace {
         )
     }
 
+    /// `true` when this workspace was constructed from a script (PEP 723 or conda-script).
+    pub fn is_script(&self) -> bool {
+        matches!(&self.storage, WorkspaceStorage::Script(_))
+    }
+
     /// Create the detached-environments path for this project if it is set in
     /// the config
     fn detached_environments_path(&self) -> Option<PathBuf> {
