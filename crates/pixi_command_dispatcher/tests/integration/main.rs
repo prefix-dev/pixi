@@ -94,6 +94,7 @@ fn empty_pixi_env_spec() -> SolvePixiEnvironmentSpec {
             },
         )),
         inline_packages: Default::default(),
+        workspace_sources: Default::default(),
     }
 }
 
@@ -3900,5 +3901,176 @@ pub async fn test_solve_pixi_environment_key_dedups_across_ephemeral_env_names()
         conda_solves, 1,
         "dedup at the outer pixi solve should subsume the inner conda \
          solve too; got {conda_solves} queue events"
+    );
+}
+
+#[tokio::test]
+pub async fn test_nested_source_dependency_resolved_from_workspace() {
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let root_dir = test_tempdir();
+    fs::write(
+        root_dir.path().join("pixi.toml"),
+        r#"
+[workspace]
+channels = []
+platforms = []
+preview = ["pixi-build"]
+"#,
+    )
+    .unwrap();
+    fs::create_dir_all(root_dir.path().join("consumer")).unwrap();
+    fs::create_dir_all(root_dir.path().join("nested-dep")).unwrap();
+    fs::write(
+        root_dir.path().join("consumer").join("pixi.toml"),
+        r#"
+[package]
+name = "consumer"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "in-memory", version = "*" }
+
+[package.host-dependencies]
+nested-dep = ">=0.2"
+
+[package.run-dependencies]
+nested-dep = "*"
+"#,
+    )
+    .unwrap();
+    fs::write(
+        root_dir.path().join("nested-dep").join("pixi.toml"),
+        r#"
+[package]
+name = "nested-dep"
+version = "0.2.0"
+
+[package.build]
+backend = { name = "in-memory", version = "*" }
+"#,
+    )
+    .unwrap();
+
+    let scratch = test_tempdir();
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.path()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(scratch.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages);
+    let env_ref = env_ref_of(vec![], build_env);
+
+    // 1. Without workspace_sources, solving consumer fails because nested-dep cannot
+    // be resolved from remote conda channels.
+    let empty_spec = SolvePixiEnvironmentSpec {
+        dependencies: DependencyMap::from_iter([(
+            "consumer".parse().unwrap(),
+            PathSpec::new("consumer").into(),
+        )]),
+        env_ref: env_ref.clone(),
+        ..empty_pixi_env_spec()
+    };
+    let err = run_pixi_solve(&dispatcher, empty_spec).await;
+    assert!(
+        err.is_err(),
+        "solve should fail when nested-dep is not in workspace_sources and channels are empty"
+    );
+
+    // 2. With workspace_sources containing nested-dep, solving consumer succeeds and
+    // resolves nested-dep from source.
+    let mut ws = BTreeMap::new();
+    ws.insert(
+        "nested-dep".parse().unwrap(),
+        SourceLocationSpec::Path(PathSpec::new("nested-dep")),
+    );
+    let spec_with_ws = SolvePixiEnvironmentSpec {
+        dependencies: DependencyMap::from_iter([(
+            "consumer".parse().unwrap(),
+            PathSpec::new("consumer").into(),
+        )]),
+        env_ref: env_ref.clone(),
+        workspace_sources: Arc::new(ws),
+        ..empty_pixi_env_spec()
+    };
+    let records = run_pixi_solve(&dispatcher, spec_with_ws)
+        .await
+        .expect("solve should succeed when nested-dep is declared in workspace_sources");
+
+    let consumer = records
+        .iter()
+        .find_map(|r| {
+            r.as_source()
+                .filter(|s| s.name().as_normalized() == "consumer")
+        })
+        .expect("consumer source record in solve output");
+    assert!(
+        consumer.sources().contains_key("nested-dep"),
+        "nested-dep must be tracked in consumer's sources map"
+    );
+
+    let nested_in_host = consumer
+        .host_packages
+        .iter()
+        .find(|u| u.name().as_normalized() == "nested-dep")
+        .expect("nested-dep in consumer.host_packages");
+    assert_eq!(
+        nested_in_host
+            .package_record()
+            .expect("resolved package record")
+            .version
+            .as_str(),
+        "0.2.0"
+    );
+
+    let nested_in_solution = records
+        .iter()
+        .find_map(|r| {
+            r.as_source()
+                .filter(|s| s.name().as_normalized() == "nested-dep")
+        })
+        .expect("nested-dep source record in top-level solve output");
+    assert_eq!(
+        nested_in_solution.package_record().version.as_str(),
+        "0.2.0"
+    );
+
+    // 3. If workspace_sources points to a version of nested-dep that does not satisfy
+    // consumer's requirement (>=0.2), the nested solve should fail.
+    fs::create_dir_all(root_dir.path().join("incompatible-dep")).unwrap();
+    fs::write(
+        root_dir.path().join("incompatible-dep").join("pixi.toml"),
+        r#"
+[package]
+name = "nested-dep"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "in-memory", version = "*" }
+"#,
+    )
+    .unwrap();
+    let mut ws_incompatible = BTreeMap::new();
+    ws_incompatible.insert(
+        "nested-dep".parse().unwrap(),
+        SourceLocationSpec::Path(PathSpec::new("incompatible-dep")),
+    );
+    let spec_incompatible = SolvePixiEnvironmentSpec {
+        dependencies: DependencyMap::from_iter([(
+            "consumer".parse().unwrap(),
+            PathSpec::new("consumer").into(),
+        )]),
+        env_ref,
+        workspace_sources: Arc::new(ws_incompatible),
+        ..empty_pixi_env_spec()
+    };
+    let err = run_pixi_solve(&dispatcher, spec_incompatible).await;
+    assert!(
+        err.is_err(),
+        "solve should fail when workspace source version does not satisfy backend requirement"
     );
 }
