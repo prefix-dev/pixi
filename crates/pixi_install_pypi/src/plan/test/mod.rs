@@ -1051,6 +1051,39 @@ fn duplicates_are_not_extraneous() {
     assert_eq!(installs.duplicates.len(), 1);
 }
 
+#[test]
+fn test_conda_package_not_extraneous_when_replacing_pypi() {
+    // Only our old PyPI managed package is in site-packages
+    // (e.g. conda package did not create a separate dist-info, or only installed module files)
+    let site_packages = MockedSitePackages::new().add_registry(
+        "aiofiles",
+        "0.6.0",
+        InstalledDistOptions::default(),
+    );
+
+    // Package is no longer required from PyPI
+    let required = RequiredPackages::new();
+
+    // But it is now installed by Conda
+    let conda_package_name = uv_normalize::PackageName::from_str("aiofiles").unwrap();
+    let plan = harness::install_planner().with_conda_packages(vec![conda_package_name]);
+    let required_dists = required.to_required_dists();
+    let installs = plan
+        .plan(
+            &site_packages,
+            NoCache,
+            &required_dists,
+            &uv_configuration::BuildOptions::default(),
+        )
+        .expect("should install");
+
+    // It should NOT be marked as extraneous (which would trigger full uninstallation of package files),
+    // but rather as duplicate (which only cleans up stale PyPI metadata)
+    assert!(installs.extraneous.is_empty());
+    assert_eq!(installs.duplicates.len(), 1);
+    assert_eq!(installs.duplicates[0].name().as_ref(), "aiofiles");
+}
+
 /// Test that custom [tool.uv].cache-keys triggers reinstall when matching files change.
 /// This tests the fix for respecting uv's cache-keys configuration.
 ///
