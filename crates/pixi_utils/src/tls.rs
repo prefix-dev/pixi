@@ -60,8 +60,7 @@ impl Certificates {
     /// Load custom CA certificates from `SSL_CERT_FILE` and `SSL_CERT_DIR`.
     ///
     /// Returns `None` if neither variable is set, the referenced paths are
-    /// missing or inaccessible, or no valid certificates are found (with a
-    /// warning emitted in each case).
+    /// missing or inaccessible, or no valid certificates are found.
     pub fn from_env() -> Option<Self> {
         let mut certs = Self::default();
         let mut has_source = false;
@@ -83,7 +82,7 @@ impl Certificates {
         if has_source { Some(certs) } else { None }
     }
 
-    fn from_ssl_cert_file(value: &std::ffi::OsStr) -> Option<Self> {
+    pub(crate) fn from_ssl_cert_file(value: &std::ffi::OsStr) -> Option<Self> {
         if value.is_empty() {
             return None;
         }
@@ -128,7 +127,7 @@ impl Certificates {
         }
     }
 
-    fn from_ssl_cert_dir(value: &std::ffi::OsStr) -> Option<Self> {
+    pub(crate) fn from_ssl_cert_dir(value: &std::ffi::OsStr) -> Option<Self> {
         if value.is_empty() {
             return None;
         }
@@ -160,7 +159,10 @@ impl Certificates {
         }
 
         if certs.0.is_empty() {
-            tracing::warn!(
+            // Unlike `SSL_CERT_FILE`, it is plausible for this to be intentionally set to an
+            // empty directory that a user could put certificates in (e.g. OpenSSL's
+            // activation script in conda environments).
+            tracing::debug!(
                 "ignoring `SSL_CERT_DIR`: no certificates found in {}",
                 existing.iter().map(|p| p.display().to_string()).join(", ")
             );
@@ -194,5 +196,102 @@ impl Certificates {
 impl From<CertificateResult> for Certificates {
     fn from(result: CertificateResult) -> Self {
         Self(result.certs)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::ffi::OsStr;
+
+    use super::*;
+
+    fn test_cert_pem() -> String {
+        const CHARSET: &[u8; 64] =
+            b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let der = &webpki_root_certs::TLS_SERVER_ROOT_CERTS[0];
+        let mut b64 = String::new();
+        for chunk in der.chunks(3) {
+            let b0 = chunk[0];
+            let b1 = chunk.get(1).copied().unwrap_or(0);
+            let b2 = chunk.get(2).copied().unwrap_or(0);
+            b64.push(CHARSET[(b0 >> 2) as usize] as char);
+            b64.push(CHARSET[(((b0 & 3) << 4) | (b1 >> 4)) as usize] as char);
+            if chunk.len() > 1 {
+                b64.push(CHARSET[(((b1 & 15) << 2) | (b2 >> 6)) as usize] as char);
+            } else {
+                b64.push('=');
+            }
+            if chunk.len() > 2 {
+                b64.push(CHARSET[(b2 & 63) as usize] as char);
+            } else {
+                b64.push('=');
+            }
+        }
+        format!("-----BEGIN CERTIFICATE-----\n{b64}\n-----END CERTIFICATE-----\n")
+    }
+
+    #[test]
+    fn test_empty_ssl_cert_dir_returns_none() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        assert!(Certificates::from_ssl_cert_dir(temp_dir.path().as_os_str()).is_none());
+    }
+
+    #[test]
+    fn test_ssl_cert_dir_with_non_cert_file_returns_none() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        fs_err::write(temp_dir.path().join(".keep"), b"").unwrap();
+        assert!(Certificates::from_ssl_cert_dir(temp_dir.path().as_os_str()).is_none());
+    }
+
+    #[test]
+    fn test_ssl_cert_dir_empty_string_returns_none() {
+        assert!(Certificates::from_ssl_cert_dir(OsStr::new("")).is_none());
+    }
+
+    #[test]
+    fn test_ssl_cert_dir_non_existent_returns_none() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let non_existent = temp_dir.path().join("does_not_exist");
+        assert!(Certificates::from_ssl_cert_dir(non_existent.as_os_str()).is_none());
+    }
+
+    #[test]
+    fn test_ssl_cert_dir_with_valid_cert() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        fs_err::write(temp_dir.path().join("test_cert.crt"), test_cert_pem()).unwrap();
+        let certs = Certificates::from_ssl_cert_dir(temp_dir.path().as_os_str());
+        assert!(certs.is_some());
+        assert!(!certs.unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_ssl_cert_file_with_valid_cert() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let cert_path = temp_dir.path().join("ca.pem");
+        fs_err::write(&cert_path, test_cert_pem()).unwrap();
+        let certs = Certificates::from_ssl_cert_file(cert_path.as_os_str());
+        assert!(certs.is_some());
+        assert!(!certs.unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_ssl_cert_file_non_existent_returns_none() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let cert_path = temp_dir.path().join("non_existent.pem");
+        assert!(Certificates::from_ssl_cert_file(cert_path.as_os_str()).is_none());
+    }
+
+    #[test]
+    fn test_from_env_empty_dir_ignored() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        temp_env::with_vars(
+            [
+                ("SSL_CERT_DIR", Some(temp_dir.path().as_os_str())),
+                ("SSL_CERT_FILE", None),
+            ],
+            || {
+                assert!(Certificates::from_env().is_none());
+            },
+        );
     }
 }
