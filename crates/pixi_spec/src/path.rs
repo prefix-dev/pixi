@@ -246,10 +246,18 @@ impl PathBinarySpec {
 
         // Convert the absolute url to a file:// url
         let local_file_url =
-            file_url::file_path_to_url(path.to_path()).expect("failed to convert path to file url");
+            file_url::file_path_to_url(path.as_str()).expect("failed to convert path to file url");
+
+        let std_path = Path::new(path.as_str());
+        let sha256 = if std_path.is_file() {
+            rattler_digest::compute_file_digest::<rattler_digest::Sha256>(std_path).ok()
+        } else {
+            None
+        };
 
         Ok(NamelessMatchSpec {
             url: Some(local_file_url),
+            sha256,
             ..NamelessMatchSpec::default()
         })
     }
@@ -349,5 +357,25 @@ mod tests {
             source_spec.try_into_source_path().is_ok(),
             "Expected non-binary path to succeed conversion to source path"
         );
+    }
+
+    #[test]
+    fn test_try_into_nameless_match_spec_computes_sha256() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let pkg_path = temp_dir.path().join("test_pkg-1.0.0-0.conda");
+        fs_err::write(&pkg_path, b"test package contents").unwrap();
+
+        let binary_spec = PathBinarySpec {
+            path: Utf8TypedPathBuf::from(pkg_path.to_str().unwrap()),
+        };
+
+        let match_spec = binary_spec
+            .try_into_nameless_match_spec(temp_dir.path())
+            .expect("conversion should succeed");
+
+        assert!(match_spec.sha256.is_some());
+        let expected_sha256 =
+            rattler_digest::compute_file_digest::<rattler_digest::Sha256>(&pkg_path).unwrap();
+        assert_eq!(match_spec.sha256, Some(expected_sha256));
     }
 }

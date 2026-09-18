@@ -16,10 +16,10 @@ use itertools::Itertools;
 use pixi_build_backend_passthrough::{BackendEvent, ObservableBackend, PassthroughBackend};
 use pixi_build_frontend::{BackendOverride, InMemoryOverriddenBackends};
 use pixi_command_dispatcher::{
-    BuildBackendsDir, BuildEnvironment, CacheDirs, CommandDispatcher, CommandDispatcherError,
-    EnvironmentRef, EnvironmentSpec, EphemeralEnv, Executor, InstallPixiEnvironmentExt,
-    InstallPixiEnvironmentSpec, InstantiateToolEnvironmentSpec, SolvePixiEnvironmentError,
-    keys::SolvePixiEnvironmentSpec,
+    BuildBackendsDir, BuildEnvironment, BuildProfile, CacheDirs, CommandDispatcher,
+    CommandDispatcherError, EnvironmentRef, EnvironmentSpec, EphemeralEnv, Executor,
+    InstallPixiEnvironmentExt, InstallPixiEnvironmentSpec, InstantiateToolEnvironmentSpec,
+    SolvePixiEnvironmentError, keys::SolvePixiEnvironmentSpec,
 };
 use pixi_record::PinnedSourceSpec;
 use pixi_spec::{
@@ -251,6 +251,7 @@ pub async fn simple_test() {
             prefix: Prefix::create(&prefix_dir).unwrap(),
             installed: None,
             build_environment: build_env,
+            build_profile: None,
             ignore_packages: None,
             force_reinstall: Default::default(),
             exclude_newer: None,
@@ -3900,5 +3901,88 @@ pub async fn test_solve_pixi_environment_key_dedups_across_ephemeral_env_names()
         conda_solves, 1,
         "dedup at the outer pixi solve should subsume the inner conda \
          solve too; got {conda_solves} queue events"
+    );
+}
+
+/// Verify that an editable build (Development profile on mutable source) and a Release
+/// build produce distinct cached artifacts in the workspace cache, ensuring that development
+/// builds and release builds do not collide in the cache (Issue #6807).
+#[tokio::test]
+pub async fn test_source_build_distinguishes_editable_from_release() {
+    let root_dir = workspaces_dir().join("host-dependency");
+    let tempdir = test_tempdir();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    let records = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package-b".parse().unwrap(),
+                PathSpec::new("package-b").into(),
+            )]),
+            env_ref: env_ref_of(vec![], build_env.clone()),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .map_err(|e| format_diagnostic(&e))
+    .expect("solve should succeed");
+
+    // 1. Install with Development profile (default) -> editable build
+    let prefix_dev = Prefix::create(tempdir.path().join("prefix-dev")).unwrap();
+    let result_dev = dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            build_profile: Some(BuildProfile::Development),
+            ..InstallPixiEnvironmentSpec::new(records.clone(), prefix_dev)
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("development install should succeed");
+
+    let pkg_name = PackageName::new_unchecked("package-b");
+    assert!(
+        result_dev.resolved_source_records.contains_key(&pkg_name),
+        "package-b should be resolved in dev install"
+    );
+
+    // 2. Install with Release profile -> non-editable build
+    let prefix_rel = Prefix::create(tempdir.path().join("prefix-rel")).unwrap();
+    let result_rel = dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            build_profile: Some(BuildProfile::Release),
+            ..InstallPixiEnvironmentSpec::new(records, prefix_rel)
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("release install should succeed");
+
+    assert!(
+        result_rel.resolved_source_records.contains_key(&pkg_name),
+        "package-b should be resolved in release install"
+    );
+
+    // Development and Release builds must have produced distinct cached artifacts
+    let artifacts_dir = tempdir.path().join("artifacts-v0").join("package-b");
+    let entries: Vec<_> = fs::read_dir(&artifacts_dir)
+        .unwrap()
+        .filter_map(Result::ok)
+        .collect();
+    assert_eq!(
+        entries.len(),
+        2,
+        "development and release builds must produce distinct cached artifact entries in the workspace cache"
     );
 }
