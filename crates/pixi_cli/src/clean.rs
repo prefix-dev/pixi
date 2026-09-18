@@ -187,17 +187,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         } else {
             total_removed +=
                 remove_folder_with_progress(workspace.default_environments_dir(), false).await?;
-            total_removed +=
-                remove_folder_with_progress(
-                    workspace.default_solve_group_environments_dir(),
-                    false,
-                )
-                .await?;
+            total_removed += remove_folder_with_progress(
+                workspace.default_solve_group_environments_dir(),
+                false,
+            )
+            .await?;
             total_removed +=
                 remove_folder_with_progress(workspace.environments_dir(), false).await?;
-            total_removed +=
-                remove_folder_with_progress(workspace.solve_group_environments_dir(), false)
-                    .await?;
+            total_removed += remove_folder_with_progress(
+                workspace.solve_group_environments_dir(),
+                false,
+            )
+            .await?;
             total_removed +=
                 remove_folder_with_progress(workspace.task_cache_folder(), false).await?;
             total_removed +=
