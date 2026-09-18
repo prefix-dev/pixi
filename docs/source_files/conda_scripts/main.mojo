@@ -7,7 +7,7 @@
 # entrypoint = "mojo ${SCRIPT}"
 #
 # [dependencies]
-# mojo = "*"
+# mojo = "==1.0.0"
 # emberjson = "*"
 # /// end-conda-script
 
