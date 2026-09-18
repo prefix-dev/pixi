@@ -19,7 +19,7 @@ use itertools::{Either, Itertools};
 pub use manifest::{ExposedType, Manifest, Mapping};
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use once_cell::sync::OnceCell;
-pub use parsed_manifest::{ExposedName, ParsedEnvironment, ParsedManifest};
+pub use parsed_manifest::{ExposedName, ParsedEnvironment, ParsedGlobal, ParsedManifest};
 use pixi_build_discovery::DiscoveryError;
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
@@ -40,10 +40,13 @@ use pixi_manifest::platform::host::{
     HostDetectionError, detect_host, host_subdir, platform_from_detected,
 };
 use pixi_manifest::platform::solver_generic_virtual_packages;
-use pixi_manifest::{InlinePackageManifest, PixiPlatform, PrioritizedChannel, WorkspaceManifest};
+use pixi_manifest::{
+    InlinePackageManifest, PixiPlatform, PrioritizedChannel, WorkspaceManifest,
+    resolve_exclude_newer,
+};
 use pixi_path::AbsPathBuf;
 use pixi_reporters::TopLevelProgress;
-use pixi_spec::{BinarySpec, PathBinarySpec};
+use pixi_spec::{BinarySpec, PathBinarySpec, ResolvedExcludeNewer};
 use pixi_spec_containers::DependencyMap;
 use pixi_utils::variants::VariantConfig;
 use pixi_utils::{
@@ -52,7 +55,7 @@ use pixi_utils::{
     rlimit::try_increase_rlimit_to_sensible,
 };
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, NamedChannelOrUrl, PackageName,
+    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, ParseChannelError,
     Platform, PrefixRecord, menuinst::MenuMode, package::CondaArchiveIdentifier,
 };
 use rattler_networking::LazyClient;
@@ -107,6 +110,8 @@ pub enum InferPackageNameError {
     CommandDispatcher(#[from] CommandDispatcherError),
     #[error("failed to get build backend metadata for package name inference")]
     BuildBackendMetadata(#[source] Box<dyn Diagnostic + Send + Sync>),
+    #[error("failed to resolve the channel for the exclude-newer configuration")]
+    ExcludeNewer(#[from] ParseChannelError),
     #[error("no package outputs found in the specified path/repository")]
     NoPackageOutputs,
     #[error("multiple package outputs found: {}", .package_names.join(", "))]
@@ -569,6 +574,26 @@ impl Project {
         self.config.global_channel_config()
     }
 
+    /// Resolves the manifest's `exclude-newer` cutoff together with the
+    /// overrides of the given channels and of individual packages into
+    /// absolute cutoffs.
+    fn resolved_exclude_newer<'a>(
+        &'a self,
+        channels: impl IntoIterator<Item = &'a PrioritizedChannel>,
+    ) -> Result<Option<ResolvedExcludeNewer>, ParseChannelError> {
+        resolve_exclude_newer(
+            self.manifest.parsed.global.exclude_newer,
+            channels,
+            |channel| {
+                channel
+                    .channel
+                    .clone()
+                    .into_base_url(self.global_channel_config())
+            },
+            &self.manifest.parsed.exclude_newer_package_overrides,
+        )
+    }
+
     /// The virtual packages to solve an environment against.
     ///
     /// For the platform this machine targets these are detected from the
@@ -636,13 +661,11 @@ impl Project {
     fn inline_package_for_channels(
         &self,
         inline: &InlinePackageManifest,
-        channels: impl IntoIterator<Item = NamedChannelOrUrl>,
+        channels: impl IntoIterator<Item = PrioritizedChannel>,
     ) -> InlinePackage {
         InlinePackage {
             manifest: Arc::new(inline.manifest.clone()),
-            workspace: Arc::new(workspace_manifest_with_channels(
-                channels.into_iter().map(PrioritizedChannel::from),
-            )),
+            workspace: Arc::new(workspace_manifest_with_channels(channels)),
             content_hash: inline.content_hash,
         }
     }
@@ -664,6 +687,10 @@ impl Project {
                     .into_channel(self.config.global_channel_config())
             })
             .collect::<Result<Vec<_>, _>>()
+            .into_diagnostic()?;
+
+        let exclude_newer = self
+            .resolved_exclude_newer(&environment.channels)
             .into_diagnostic()?;
 
         let platform = environment.platform.unwrap_or_else(host_subdir);
@@ -734,7 +761,7 @@ impl Project {
                     channels: channels.clone(),
                     build_environment: build_environment.clone(),
                     variants: variant_config.clone(),
-                    exclude_newer: None,
+                    exclude_newer: exclude_newer.clone(),
                     channel_priority: Default::default(),
                 },
             )),
@@ -821,7 +848,7 @@ impl Project {
                 prefix: rattler_conda_types::prefix::Prefix::create(prefix.root())
                     .into_diagnostic()?,
                 build_environment,
-                exclude_newer: None,
+                exclude_newer,
                 channels,
                 installed: None,
                 ignore_packages: None,
@@ -1196,6 +1223,41 @@ impl Project {
 
         let prefix = self.environment_prefix(env_name).await?;
         let prefix_records = prefix.find_installed_packages()?;
+
+        // Installed packages that the current cutoff would exclude mark the
+        // environment out of sync, so tightening `exclude-newer` triggers a
+        // re-solve on the next sync.
+        if let Some(exclude_newer) = self
+            .resolved_exclude_newer(&environment.channels)
+            .into_diagnostic()?
+        {
+            let exclude_newer = rattler_solve::ExcludeNewer::from(exclude_newer);
+            for record in &prefix_records {
+                let package = &record.repodata_record.package_record;
+                let channel = record.repodata_record.channel.as_deref();
+
+                // A package built on this machine records its build time as
+                // timestamp, while the solve only ever sees metadata that
+                // carries none and therefore never excludes it. Such a record
+                // has no channel, and so does a binary package pinned by url,
+                // which the solve does apply the cutoff to. Only an
+                // environment without source dependencies rules the first case
+                // out.
+                if channel.is_none() && !source_package_names.is_empty() {
+                    continue;
+                }
+
+                if exclude_newer.is_excluded(&package.name, channel, package.timestamp.as_ref()) {
+                    tracing::debug!(
+                        "Environment {} out of sync because {} is newer than the exclude-newer cutoff",
+                        env_name.fancy_display(),
+                        package.name.as_source()
+                    );
+                    return Ok(false);
+                }
+            }
+        }
+
         let specs_in_sync = environment_specs_in_sync(
             &prefix_records,
             &specs,
@@ -1719,13 +1781,15 @@ impl Project {
     /// definition instead of reading a manifest from the checkout.
     /// `channels` are the channels of the environment the package is
     /// destined for; the backend and its dependencies are solved against
-    /// them.
+    /// them, subject to the manifest's `exclude-newer` cutoff and the
+    /// channel overrides.
     async fn infer_package_name_from_source_spec(
         &self,
         source_spec: pixi_spec::SourceSpec,
         inline: Option<InlinePackage>,
-        channels: &[NamedChannelOrUrl],
+        channels: &[PrioritizedChannel],
     ) -> Result<PackageName, InferPackageNameError> {
+        let exclude_newer = self.resolved_exclude_newer(channels)?;
         let command_dispatcher = self.command_dispatcher()?;
         let checkout = command_dispatcher
             .engine()
@@ -1739,7 +1803,12 @@ impl Project {
         // Create the metadata spec
         let channels = channels
             .iter()
-            .filter_map(|c| c.clone().into_base_url(self.global_channel_config()).ok())
+            .filter_map(|c| {
+                c.channel
+                    .clone()
+                    .into_base_url(self.global_channel_config())
+                    .ok()
+            })
             .collect();
         let metadata_spec = BuildBackendMetadataSpec {
             manifest_source: pinned_source_spec.clone(),
@@ -1750,7 +1819,7 @@ impl Project {
                     channels,
                     build_environment: pixi_command_dispatcher::BuildEnvironment::default(),
                     variants: VariantConfig::default(),
-                    exclude_newer: None,
+                    exclude_newer,
                     channel_priority: Default::default(),
                 },
             )),
@@ -1790,7 +1859,7 @@ impl Project {
         &self,
         pixi_spec: &pixi_spec::PixiSpec,
         inline: Option<&InlinePackageManifest>,
-        channels: &[NamedChannelOrUrl],
+        channels: &[PrioritizedChannel],
     ) -> Result<PackageName, InferPackageNameError> {
         match pixi_spec.clone().into_source_or_binary() {
             Either::Left(source_spec) => {
