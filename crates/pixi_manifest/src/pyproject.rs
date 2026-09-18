@@ -198,6 +198,10 @@ impl PyProjectManifest {
                 description: package_defaults.description.clone(),
                 authors: package_defaults.authors.clone(),
                 features: implicit_pypi_features,
+                requires_python: pyproject
+                    .project
+                    .as_ref()
+                    .and_then(|p| p.requires_python.clone()),
                 ..Default::default()
             },
             package_defaults,
@@ -301,7 +305,7 @@ fn get_package_defaults(
 /// Try to return a NamelessMatchSpec from a pep508_rs::VersionOrUrl
 /// This will only work if it is not URL and the VersionSpecifier can
 /// successfully be interpreted as a NamelessMatchSpec.version
-fn version_or_url_to_spec(
+pub(crate) fn version_or_url_to_spec(
     version: &Option<VersionSpecifiers>,
 ) -> Result<PixiSpec, RequirementConversionError> {
     match version {
