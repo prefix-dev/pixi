@@ -14,6 +14,25 @@ pub enum BuildScriptError {
     UnsupportedBuildType { build_type: String },
 }
 
+/// Render a build script from the appropriate template for a specific platform.
+pub fn render_build_script_with_platform(
+    build_type: &str,
+    distro: &str,
+    source_dir: &Path,
+    is_windows: bool,
+) -> Result<String, BuildScriptError> {
+    let template = select_template(build_type, is_windows)?;
+
+    let src_dir_str = source_dir.display().to_string();
+    let rendered = template
+        .replace("@SRC_DIR@", &src_dir_str)
+        .replace("@DISTRO@", distro)
+        .replace("@BUILD_DIR@", "build")
+        .replace("@BUILD_TYPE@", "Release");
+
+    Ok(rendered)
+}
+
 /// Render a build script from the appropriate template.
 ///
 /// Selects the template based on `build_type` and platform, then performs
@@ -26,16 +45,7 @@ pub fn render_build_script(
     // Use the current (build) platform, not the host/target platform.
     // The build script runs on the build machine.
     let is_windows = Platform::current().is_windows();
-    let template = select_template(build_type, is_windows)?;
-
-    let src_dir_str = source_dir.display().to_string();
-    let rendered = template
-        .replace("@SRC_DIR@", &src_dir_str)
-        .replace("@DISTRO@", distro)
-        .replace("@BUILD_DIR@", "build")
-        .replace("@BUILD_TYPE@", "Release");
-
-    Ok(rendered)
+    render_build_script_with_platform(build_type, distro, source_dir, is_windows)
 }
 
 fn select_template(build_type: &str, is_windows: bool) -> Result<&'static str, BuildScriptError> {
@@ -82,6 +92,43 @@ mod tests {
 
         assert!(script.contains("/pkg"));
         assert!(script.contains("noetic"));
+    }
+
+    #[test]
+    fn test_render_ament_cmake_windows() {
+        let script = render_build_script_with_platform(
+            "ament_cmake",
+            "humble",
+            &PathBuf::from(r"C:\my\source"),
+            true,
+        )
+        .unwrap();
+
+        assert!(script.contains(r#"set "CMAKE_PYTHON=%PYTHON:\=/%""#));
+        assert!(script.contains(r#"set "CMAKE_PREFIX=%LIBRARY_PREFIX:\=/%""#));
+        assert!(script.contains(r#"set "CMAKE_SRC_DIR=%SRC_DIR:\=/%""#));
+        assert!(script.contains(r#"-DCMAKE_INSTALL_PREFIX="%CMAKE_PREFIX%""#));
+        assert!(script.contains(r#"-DPYTHON_EXECUTABLE="%CMAKE_PYTHON%""#));
+        assert!(script.contains(r#"-DPython_EXECUTABLE="%CMAKE_PYTHON%""#));
+        assert!(script.contains(r#"-DPython3_EXECUTABLE="%CMAKE_PYTHON%""#));
+        assert!(script.contains(r#"-DPYTHON_INSTALL_DIR="%PYTHON_INSTALL_DIR%""#));
+        assert!(script.contains(r#""%CMAKE_SRC_DIR%""#));
+    }
+
+    #[test]
+    fn test_render_catkin_windows() {
+        let script =
+            render_build_script_with_platform("catkin", "noetic", &PathBuf::from(r"C:\pkg"), true)
+                .unwrap();
+
+        assert!(script.contains(r#"set "CMAKE_PYTHON=%PYTHON:\=/%""#));
+        assert!(script.contains(r#"set "CMAKE_PREFIX=%LIBRARY_PREFIX:\=/%""#));
+        assert!(script.contains(r#"set "CMAKE_SRC_DIR=%SRC_DIR:\=/%""#));
+        assert!(script.contains(r#"-DCMAKE_INSTALL_PREFIX="%CMAKE_PREFIX%""#));
+        assert!(script.contains(r#"-DPYTHON_EXECUTABLE="%CMAKE_PYTHON%""#));
+        assert!(script.contains(r#"-DPython_EXECUTABLE="%CMAKE_PYTHON%""#));
+        assert!(script.contains(r#"-DPython3_EXECUTABLE="%CMAKE_PYTHON%""#));
+        assert!(script.contains(r#""%CMAKE_SRC_DIR%""#));
     }
 
     #[test]
