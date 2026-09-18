@@ -412,5 +412,43 @@ async fn test_clean_env() {
     assert_eq!(result.stdout, "Hello is: world from env\n");
 }
 
+#[tokio::test]
+pub async fn task_dependency_unknown_environment() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().await.unwrap();
+
+    pixi.tasks()
+        .add("task0".into(), None, FeatureName::default())
+        .with_commands(["echo task0"])
+        .execute()
+        .await
+        .unwrap();
+
+    let manifest_path = pixi.manifest_path();
+    let mut manifest = fs_err::read_to_string(&manifest_path).unwrap();
+    manifest.push_str(
+        "\n[tasks.task_fail]\ndepends-on = [{ task = \"task0\", environment = \"nonexistent\" }]\n",
+    );
+    fs_err::write(&manifest_path, manifest).unwrap();
+
+    let result = pixi
+        .run(Args {
+            task: vec!["task_fail".to_string()],
+            workspace_config: ScriptWorkspaceConfig::default(),
+            ..Default::default()
+        })
+        .await;
+
+    let err = result.unwrap_err();
+    let err_str = format!("{err:?}");
+    assert!(
+        err_str.contains("environment 'nonexistent' specified for dependency 'task0'")
+            && err_str.contains("'task_fail' does not exist"),
+        "unexpected error message: {err_str}"
+    );
+}
+
 // When adding another test with an environment variable, please choose a unique
 // name to avoid collisions
