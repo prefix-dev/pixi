@@ -871,7 +871,7 @@ async fn add_pypi_path_dependency_rewrites_absolute_manifest_path() {
     let manifest = pixi.manifest_contents().unwrap();
     let normalized_manifest = manifest.replace('\\', "/").replace('\'', "\"");
     assert!(
-        normalized_manifest.contains(r#"python-package = { path = "packages/python package" }"#),
+        normalized_manifest.contains(r#"python-package = { path = "./packages/python package" }"#),
         "unexpected manifest:\n{manifest}"
     );
 }
