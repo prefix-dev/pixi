@@ -23,7 +23,7 @@ use rattler::install::{
 use rattler_conda_types::{ChannelUrl, PackageName, PrefixRecord, RepoDataRecord, prefix::Prefix};
 use thiserror::Error;
 
-use crate::{BuildEnvironment, SourceBuildError};
+use crate::{BuildEnvironment, BuildProfile, SourceBuildError};
 
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -45,6 +45,9 @@ pub struct InstallPixiEnvironmentSpec {
     pub installed: Option<Vec<PrefixRecord>>,
 
     pub build_environment: BuildEnvironment,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub build_profile: Option<BuildProfile>,
 
     #[serde(skip_serializing_if = "HashSet::is_empty")]
     pub force_reinstall: HashSet<rattler_conda_types::PackageName>,
@@ -98,6 +101,7 @@ impl InstallPixiEnvironmentSpec {
             installed: None,
             ignore_packages: None,
             build_environment: BuildEnvironment::default(),
+            build_profile: None,
             force_reinstall: HashSet::new(),
             exclude_newer: None,
             channels: Vec::new(),

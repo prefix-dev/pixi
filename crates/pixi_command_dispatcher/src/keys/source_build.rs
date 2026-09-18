@@ -199,6 +199,9 @@ async fn compute_inner(
         SourceBuildError::Initialize((*err).clone())
     })?;
 
+    let editable =
+        matches!(spec.build_profile, BuildProfile::Development) && spec.record.has_mutable_source();
+
     // Cache key covers structural identity + dep content addresses;
     // source-file freshness lives in the sidecar, not the key.
     let project_model_overrides = ProjectModelOverrides {
@@ -215,6 +218,7 @@ async fn compute_inner(
         &project_model_overrides,
         spec.package_format,
         spec.inline.as_ref().map(|inline| inline.content_hash),
+        editable,
     );
 
     // On artifact cache hit, return without invoking the backend.
@@ -447,8 +451,6 @@ async fn compute_inner(
         convert_extra_dependencies(&output.extra_dependencies, None, &compat_map)
             .map_err(SourceBuildError::from)?;
 
-    let editable =
-        matches!(spec.build_profile, BuildProfile::Development) && spec.record.has_mutable_source();
     // Anything the backend reads it reads after this point; a file modified
     // later gets an unconfirmed fingerprint in the cache entry.
     let build_started = std::time::SystemTime::now();
@@ -769,6 +771,7 @@ async fn install_prefix(
         installed: None,
         ignore_packages: None,
         build_environment,
+        build_profile: None,
         force_reinstall: Default::default(),
         exclude_newer: spec.exclude_newer.clone(),
         channels: spec.channels.clone(),
