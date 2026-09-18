@@ -47,7 +47,7 @@ impl TomlDocument {
     }
 
     /// Returns the manifest as an item
-    pub fn as_item(&mut self) -> &Item {
+    pub fn as_item(&self) -> &Item {
         self.0.as_item()
     }
 
