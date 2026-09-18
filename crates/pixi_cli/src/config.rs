@@ -7,7 +7,11 @@ use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
 use pixi_core::workspace::WorkspaceLocatorError;
 use rattler_conda_types::NamedChannelOrUrl;
-use std::{io::Write, path::PathBuf, str::FromStr};
+use std::{
+    io::Write,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 #[derive(Parser, Debug)]
 enum Subcommand {
@@ -190,7 +194,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Subcommand::Append(args) => {
             alter_config(&args.common, &args.key, Some(args.value), AlterMode::Append)?
         }
-        Subcommand::Set(args) => alter_config(&args.common, &args.key, args.value, AlterMode::Set)?,
+        Subcommand::Set(args) => {
+            let mode = if args.value.is_none() {
+                AlterMode::Unset
+            } else {
+                AlterMode::Set
+            };
+            alter_config(&args.common, &args.key, args.value, mode)?;
+        }
         Subcommand::Unset(args) => alter_config(&args.common, &args.key, None, AlterMode::Unset)?,
     };
     Ok(())
@@ -267,6 +278,90 @@ fn determine_config_write_path(common_args: &CommonArgs) -> miette::Result<PathB
     Ok(write_path)
 }
 
+fn parse_key_path(input: &str) -> Vec<String> {
+    let mut parts = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+    let mut quote_char = '"';
+
+    for ch in input.chars() {
+        if in_quotes {
+            if ch == quote_char {
+                in_quotes = false;
+            } else {
+                current.push(ch);
+            }
+        } else if ch == '"' || ch == '\'' {
+            in_quotes = true;
+            quote_char = ch;
+        } else if ch == '.' {
+            parts.push(current.trim().to_string());
+            current.clear();
+        } else {
+            current.push(ch);
+        }
+    }
+    if !current.is_empty() || input.ends_with('.') {
+        parts.push(current.trim().to_string());
+    }
+    parts
+}
+
+fn remove_table_key_recursive(table: &mut dyn toml_edit::TableLike, parts: &[String]) -> bool {
+    if parts.is_empty() {
+        return false;
+    }
+    if parts.len() == 1 {
+        table.remove(&parts[0]).is_some()
+    } else {
+        let first = &parts[0];
+        let rest = &parts[1..];
+        if let Some(item) = table.get_mut(first)
+            && let Some(subtable) = item.as_table_like_mut()
+        {
+            let removed = remove_table_key_recursive(subtable, rest);
+            if subtable.is_empty() {
+                table.remove(first);
+            }
+            return removed;
+        }
+        false
+    }
+}
+
+fn unset_config_key(path: &Path, key: &str) -> miette::Result<()> {
+    if !path.exists() {
+        return Ok(());
+    }
+
+    let content = fs_err::read_to_string(path)
+        .into_diagnostic()
+        .wrap_err_with(|| format!("failed to read config file '{}'", path.display()))?;
+
+    let mut doc: toml_edit::DocumentMut = match content.parse() {
+        Ok(doc) => doc,
+        Err(_) => return Ok(()),
+    };
+
+    let parts = parse_key_path(key);
+    if parts.is_empty() {
+        return Ok(());
+    }
+
+    remove_table_key_recursive(doc.as_table_mut(), &parts);
+
+    let parent = path.parent().expect("config path should have a parent");
+    fs_err::create_dir_all(parent)
+        .into_diagnostic()
+        .wrap_err_with(|| format!("failed to create directories in '{}'", parent.display()))?;
+
+    fs_err::write(path, doc.to_string())
+        .into_diagnostic()
+        .wrap_err_with(|| format!("failed to write config to '{}'", path.display()))?;
+
+    Ok(())
+}
+
 fn alter_config(
     common_args: &CommonArgs,
     key: &str,
@@ -274,6 +369,12 @@ fn alter_config(
     mode: AlterMode,
 ) -> miette::Result<()> {
     let to = determine_config_write_path(common_args)?;
+
+    if matches!(mode, AlterMode::Unset) {
+        unset_config_key(&to, key)?;
+        eprintln!("Updated config at {}", to.display());
+        return Ok(());
+    }
 
     // Edit only the file that is about to be written. Starting from the
     // merged config would bake every inherited setting into it, so the user
@@ -332,11 +433,12 @@ fn alter_config(
                 }
             }
         }
-        AlterMode::Set | AlterMode::Unset => config.set(key, value)?,
+        AlterMode::Set => config.set(key, value)?,
+        AlterMode::Unset => unreachable!(),
     }
 
     config.save(&to)?;
-    eprintln!("✅ Updated config at {}", to.display());
+    eprintln!("Updated config at {}", to.display());
     Ok(())
 }
 
@@ -382,4 +484,97 @@ fn partial_config(config: &mut Config, key: &str) -> miette::Result<()> {
     *config = new;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::NamedTempFile;
+
+    #[test]
+    fn test_parse_key_path() {
+        assert_eq!(parse_key_path("offline"), vec!["offline"]);
+        assert_eq!(
+            parse_key_path("shell.change-ps1"),
+            vec!["shell", "change-ps1"]
+        );
+        assert_eq!(
+            parse_key_path("repodata-config.disable-jlap"),
+            vec!["repodata-config", "disable-jlap"]
+        );
+        assert_eq!(
+            parse_key_path(r#"repodata-config."https://prefix.dev".disable-bzip2"#),
+            vec!["repodata-config", "https://prefix.dev", "disable-bzip2"]
+        );
+    }
+
+    #[test]
+    fn test_unset_config_key_unknown_key() {
+        let file = NamedTempFile::new().unwrap();
+        let initial_toml = r#"
+[repodata-config]
+disable-jlap = true
+disable-bzip2 = false
+"#;
+        fs_err::write(file.path(), initial_toml).unwrap();
+
+        unset_config_key(file.path(), "repodata-config.disable-jlap").unwrap();
+
+        let modified = fs_err::read_to_string(file.path()).unwrap();
+        assert!(!modified.contains("disable-jlap"));
+        assert!(modified.contains("disable-bzip2 = false"));
+    }
+
+    #[test]
+    fn test_unset_config_key_removes_empty_parent_table() {
+        let file = NamedTempFile::new().unwrap();
+        let initial_toml = r#"
+[repodata-config]
+disable-jlap = true
+"#;
+        fs_err::write(file.path(), initial_toml).unwrap();
+
+        unset_config_key(file.path(), "repodata-config.disable-jlap").unwrap();
+
+        let modified = fs_err::read_to_string(file.path()).unwrap();
+        assert!(!modified.contains("disable-jlap"));
+        assert!(!modified.contains("[repodata-config]"));
+    }
+
+    #[test]
+    fn test_unset_config_key_missing_key_does_not_error() {
+        let file = NamedTempFile::new().unwrap();
+        let initial_toml = r#"
+default-channels = ["conda-forge"]
+"#;
+        fs_err::write(file.path(), initial_toml).unwrap();
+
+        unset_config_key(file.path(), "unknown-key").unwrap();
+        unset_config_key(file.path(), "repodata-config.disable-jlap").unwrap();
+
+        let modified = fs_err::read_to_string(file.path()).unwrap();
+        assert!(modified.contains(r#"default-channels = ["conda-forge"]"#));
+    }
+
+    #[test]
+    fn test_unset_config_key_preserves_comments() {
+        let file = NamedTempFile::new().unwrap();
+        let initial_toml = r#"# Top-level comment
+default-channels = ["conda-forge"]
+
+# Shell options
+[shell]
+change-ps1 = false
+force-activate = true
+"#;
+        fs_err::write(file.path(), initial_toml).unwrap();
+
+        unset_config_key(file.path(), "shell.change-ps1").unwrap();
+
+        let modified = fs_err::read_to_string(file.path()).unwrap();
+        assert!(modified.contains("# Top-level comment"));
+        assert!(modified.contains("# Shell options"));
+        assert!(!modified.contains("change-ps1"));
+        assert!(modified.contains("force-activate = true"));
+    }
 }

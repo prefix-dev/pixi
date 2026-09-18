@@ -818,6 +818,68 @@ def test_config_allow_links(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_
     )
 
 
+def test_config_unset_unknown_keys(pixi: Path, tmp_path: Path) -> None:
+    """Test that `pixi config unset` can remove unknown/deprecated keys."""
+    env = isolated_config_env(tmp_path)
+    config_file = Path(env["PIXI_HOME"]) / "config.toml"
+    config_file.parent.mkdir(parents=True, exist_ok=True)
+    config_file.write_text(
+        """# Custom configuration
+[repodata-config]
+disable-jlap = true
+disable-bzip2 = false
+
+[unknown-table]
+foo = "bar"
+"""
+    )
+
+    # Unset unknown key with --global
+    verify_cli_command(
+        [
+            pixi,
+            "config",
+            "unset",
+            "--global",
+            "repodata-config.disable-jlap",
+        ],
+        env=env,
+    )
+
+    content = config_file.read_text()
+    assert "disable-jlap" not in content
+    assert "disable-bzip2 = false" in content
+    assert "# Custom configuration" in content
+
+    # Unset another unknown key in an unknown table
+    verify_cli_command(
+        [
+            pixi,
+            "config",
+            "unset",
+            "--global",
+            "unknown-table.foo",
+        ],
+        env=env,
+    )
+
+    content2 = config_file.read_text()
+    assert "unknown-table" not in content2
+    assert "foo" not in content2
+
+    # Unsetting a non-existent key does not error
+    verify_cli_command(
+        [
+            pixi,
+            "config",
+            "unset",
+            "--global",
+            "non-existent-key",
+        ],
+        env=env,
+    )
+
+
 def test_dont_add_broken_dep(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
     manifest_path = tmp_pixi_workspace / "pixi.toml"
 
