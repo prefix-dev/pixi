@@ -18,7 +18,7 @@ This backend automatically generates conda packages from R projects by:
 
 - **DESCRIPTION parsing**: Reads package metadata, dependencies (`Imports`, `Depends`, `LinkingTo`), and license information from the standard R `DESCRIPTION` file
 - **Automatic compiler detection**: Detects native code by checking for a `src/` directory or `LinkingTo` fields, and adds C, C++, and Fortran compilers automatically
-- **Dependency mapping**: Converts R package names to conda-forge names (e.g., `curl` becomes `r-curl`, `R6` becomes `r-r6`)
+- **Dependency mapping**: Converts R package names to conda names: CRAN packages become `r-<pkg>`, Bioconductor packages become `bioconductor-<pkg>`, with support for custom overrides
 - **Cross-platform support**: Generates platform-appropriate build scripts for Linux, macOS, and Windows
 
 ## Basic Usage
@@ -199,6 +199,38 @@ Channels to use for resolving R package dependencies.
 channels = ["conda-forge", "r"]
 ```
 
+### `mapping`
+
+- **Type**: `Map<String, String>`
+- **Default**: `{}`
+- **Alias**: `r-conda-map`
+- **Target Merge Behavior**: `Merge` - Platform mappings are merged with base mappings, overriding keys with the same name
+
+Custom mapping of R package names to conda package names. This allows you to override default naming conventions or map packages with non-standard names on Conda channels:
+
+```toml
+[package.build.config]
+mapping = { Biobase = "bioconductor-biobase", my_pkg = "custom-conda-package" }
+
+# Or using the alias:
+[package.build.config.r-conda-map]
+Biobase = "bioconductor-biobase"
+```
+
+### `ignore-description-dependencies`
+
+- **Type**: `Boolean`
+- **Default**: `false`
+- **Alias**: `ignore-description-manifest`
+- **Target Merge Behavior**: `Overwrite` - Target value overrides base value
+
+When set to `true`, `pixi-build-r` does not automatically extract dependencies from the `DESCRIPTION` file. Only dependencies explicitly defined in the `pixi.toml` manifest (`host-dependencies`, `run-dependencies`) will be included in the generated recipe.
+
+```toml
+[package.build.config]
+ignore-description-dependencies = true
+```
+
 ## Dependency Handling
 
 ### Automatic Dependency Parsing
@@ -208,7 +240,15 @@ The backend reads dependencies from the `DESCRIPTION` file:
 - **`Imports`** and **`Depends`** fields are added to both host and run dependencies
 - **`LinkingTo`** fields are added to host dependencies only (compile-time headers)
 - R version constraints are converted to conda format (e.g., `(>= 1.5)` becomes `>=1.5`)
-- R package names are converted to conda names with the `r-` prefix (e.g., `dplyr` becomes `r-dplyr`)
+- CRAN package names are converted to conda names with the `r-` prefix (e.g., `dplyr` becomes `r-dplyr`)
+- Bioconductor package names are converted to conda names with the `bioconductor-` prefix (e.g., `Biobase` becomes `bioconductor-biobase`)
+- Explicit dependencies specified in `host-dependencies` or `run-dependencies` take precedence and prevent redundant or conflicting dependencies from being added from `DESCRIPTION`
+
+### Bioconductor Support
+
+Packages in the Bioconductor ecosystem (hosted on the `bioconda` channel) follow the naming convention `bioconductor-<pkg>`. `pixi-build-r` includes a comprehensive built-in registry of Bioconductor packages. When a package listed in `DESCRIPTION` matches a known Bioconductor package, it is automatically mapped to `bioconductor-<lowercase>` instead of `r-<lowercase>`.
+
+If a package requires a custom name, you can also use `mapping` (or `r-conda-map`) to specify the mapping explicitly.
 
 ### Built-in Packages
 
