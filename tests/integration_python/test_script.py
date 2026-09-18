@@ -1694,3 +1694,18 @@ print("SCRIPT-RAN")
         stdout_contains="SCRIPT-RAN",
         stderr_contains=[f"'{other}'", "does not ask for"],
     )
+def test_clean_script(pixi: Path, tmp_path: Path) -> None:
+    # create a script
+    script_path = tmp_path / 'script.py'
+    script_path.write_text('''# /// script
+# dependencies = ['python']
+# ///
+import sys
+print(sys.version)
+''')
+    
+    # run it to create cache
+    verify_cli_command([pixi, 'run', '--script', str(script_path)])
+    
+    # now clean it
+    verify_cli_command([pixi, 'clean', '--script', str(script_path)])
