@@ -2367,6 +2367,109 @@ pub async fn test_package_rebuilt_across_sessions_when_source_file_modified() {
     );
 }
 
+/// Tests that a package IS rebuilt across sessions when its build configuration
+/// in `[package.build.config]` is modified.
+#[tokio::test]
+pub async fn test_package_rebuilt_across_sessions_when_build_config_modified() {
+    // Copy workspace to temp directory so we can modify files without affecting other tests
+    let source_dir = workspaces_dir().join("host-dependency");
+    let tempdir = test_tempdir();
+    let root_dir = tempdir.path().join("workspace");
+    copy_dir_recursive(&source_dir, &root_dir).unwrap();
+
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let build_env = BuildEnvironment::simple(tool_platform, tool_virtual_packages.clone());
+
+    let build_command_dispatcher = || {
+        CommandDispatcher::builder()
+            .with_root_dir(to_abs_dir(root_dir.clone()))
+            .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+            .with_executor(Executor::Serial)
+            .with_tool_platform(tool_platform, tool_virtual_packages.clone())
+            .with_backend_overrides(BackendOverride::from_memory(
+                PassthroughBackend::instantiator(),
+            ))
+    };
+
+    // First session: solve and install
+    let dispatcher = build_command_dispatcher().finish();
+
+    let records = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([
+                (
+                    "package-a".parse().unwrap(),
+                    PathSpec::new("package-a").into(),
+                ),
+                (
+                    "package-c".parse().unwrap(),
+                    PathSpec::new("package-c").into(),
+                ),
+            ]),
+            env_ref: env_ref_of(vec![], build_env.clone()),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .map_err(|e| format_diagnostic(&e))
+    .expect("solve should succeed");
+
+    let prefix = Prefix::create(tempdir.path().join("prefix")).unwrap();
+    dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            ..InstallPixiEnvironmentSpec::new(records.clone(), prefix.clone())
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("install should succeed");
+
+    // Drop dispatcher to simulate program restart
+    drop(dispatcher);
+
+    // Modify package-b's build configuration in pixi.toml without touching source files
+    let pkg_b_manifest_path = root_dir.join("package-b/pixi.toml");
+    let manifest_content = fs_err::read_to_string(&pkg_b_manifest_path).unwrap();
+    let modified_manifest = manifest_content.replace(
+        "build-globs = [\"TOUCH*\"]",
+        "build-globs = [\"TOUCH*\", \"EXTRA*\"]",
+    );
+    fs_err::write(&pkg_b_manifest_path, modified_manifest).unwrap();
+
+    // Second session: reinstall after build config modification
+    let (reporter, events, _registry) = EventReporter::new();
+    let dispatcher = build_command_dispatcher()
+        .with_event_reporter(reporter)
+        .finish();
+
+    dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env.clone(),
+            ..InstallPixiEnvironmentSpec::new(records, prefix)
+        })
+        .await
+        .map_err(|e| format_diagnostic(&e))
+        .expect("reinstall should succeed");
+
+    let rebuild_packages: Vec<_> = events
+        .take()
+        .iter()
+        .filter_map(|event| match event {
+            event_reporter::Event::BackendSourceBuildQueued { package, .. } => {
+                Some(package.clone())
+            }
+            _ => None,
+        })
+        .collect();
+
+    assert_eq!(
+        rebuild_packages,
+        vec!["package-b"],
+        "Only package-b should be rebuilt after build configuration modification"
+    );
+}
+
 /// Tests that modifying a source file triggers a rebuild of the package.
 ///
 /// This is a focused test that verifies only the file-change detection behavior,
