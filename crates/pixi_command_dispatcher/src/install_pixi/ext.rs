@@ -89,6 +89,7 @@ struct SharedBuildParams {
     channels: Vec<rattler_conda_types::ChannelUrl>,
     exclude_newer: Option<pixi_spec::ResolvedExcludeNewer>,
     build_environment: crate::BuildEnvironment,
+    build_profile: BuildProfile,
     variant_configuration:
         Option<std::collections::BTreeMap<String, Vec<pixi_record::VariantValue>>>,
     variant_files: Option<Vec<std::path::PathBuf>>,
@@ -149,6 +150,7 @@ async fn install_inner(
         channels: spec.channels.clone(),
         exclude_newer: spec.exclude_newer.clone(),
         build_environment: spec.build_environment.clone(),
+        build_profile: spec.build_profile.unwrap_or(BuildProfile::Development),
         variant_configuration: spec.variant_configuration.clone(),
         variant_files: spec.variant_files.clone(),
     };
@@ -171,9 +173,7 @@ async fn install_inner(
                 channels: shared.channels.clone(),
                 exclude_newer: shared.exclude_newer.clone(),
                 build_environment: shared.build_environment.clone(),
-                // Installing a pixi environment always builds in
-                // development mode.
-                build_profile: BuildProfile::Development,
+                build_profile: shared.build_profile,
                 variant_configuration: shared.variant_configuration.clone(),
                 variant_files: shared.variant_files.clone(),
                 // `pixi install` does not expose CLI-level overrides for

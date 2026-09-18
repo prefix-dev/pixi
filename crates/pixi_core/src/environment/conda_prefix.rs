@@ -280,6 +280,7 @@ pub async fn update_prefix_conda(
             force_reinstall,
             ignore_packages,
             build_environment,
+            build_profile: None,
             exclude_newer,
             channels,
             variant_configuration: Some(variant_configuration),
