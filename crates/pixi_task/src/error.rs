@@ -131,3 +131,40 @@ impl Display for InvalidArgValueError {
         )
     }
 }
+
+/// The environment specified for a task dependency does not exist in the workspace.
+#[derive(Debug, Error)]
+pub struct UnknownEnvironmentError {
+    pub task: TaskName,
+    pub dependency: TaskName,
+    pub environment: EnvironmentName,
+    pub available_environments: Vec<EnvironmentName>,
+}
+
+impl Display for UnknownEnvironmentError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "environment '{}' specified for dependency '{}' of task '{}' does not exist",
+            self.environment.fancy_display(),
+            self.dependency.fancy_display(),
+            self.task.fancy_display(),
+        )
+    }
+}
+
+impl Diagnostic for UnknownEnvironmentError {
+    fn help<'a>(&'a self) -> Option<Box<dyn Display + 'a>> {
+        if self.available_environments.is_empty() {
+            None
+        } else {
+            Some(Box::new(format!(
+                "The following environments are available: {}",
+                self.available_environments
+                    .iter()
+                    .map(|env| env.as_str())
+                    .format(", ")
+            )))
+        }
+    }
+}
