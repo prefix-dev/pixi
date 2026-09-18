@@ -1698,7 +1698,7 @@ def test_clean_script(pixi: Path, tmp_path: Path) -> None:
     # create a script
     script_path = tmp_path / 'script.py'
     script_path.write_text('''# /// script
-# dependencies = ['python']
+# dependencies = []
 # ///
 import sys
 print(sys.version)
