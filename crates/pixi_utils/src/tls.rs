@@ -224,27 +224,7 @@ mod tests {
 
     use super::*;
 
-    const TEST_CERT_PEM: &str = concat!(
-        "-----BEGIN CERTIFICATE-----\n",
-        "MIIDDzCCAfegAwIBAgIUKztfxD+3pXjx6ZJeqviN6VntuxAwDQYJKoZIhvcNAQEL\n",
-        "BQAwFzEVMBMGA1UEAwwMVGVzdCBQaXhpIENBMB4XDTI2MDkxOTEwNDQzOVoXDTM2\n",
-        "MDkxNjEwNDQzOVowFzEVMBMGA1UEAwwMVGVzdCBQaXhpIENBMIIBIjANBgkqhkiG\n",
-        "9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwxrwRnx6QlExqc7IdQErCEdfdb2FNqzx8x1g\n",
-        "FMWshdmay+v3Qm0Q4hspuHP51R0kwufjuGGW2e3jTDwk4C162O0OZWrZmNJIIiHD\n",
-        "sdZ1i8i2FW3r3UuOh+cKpVpyaFMrT4t0brkW0Zy2ws8A3eh7aIywmeYziCRwpSid\n",
-        "5thgyc1XExSnQv9hmEKlbT06MOVdnOypy1V0tSPUlm+4rNaUzfvFObs+c8W0QhFv\n",
-        "52nBi4Uj+lUoT+33ixKS5RPFZbO0KbBlaFBaWWab6QrGtpVbjR8MVo4U2H+N3/h0\n",
-        "ccLSSnE8fu8/+Dmo1lSCza+rbEFJgCH73eIebPbHuqG+Gr46xwIDAQABo1MwUTAd\n",
-        "BgNVHQ4EFgQUagYbkw0yCFYHgz5Y3riPJ+lDbZIwHwYDVR0jBBgwFoAUagYbkw0y\n",
-        "CFYHgz5Y3riPJ+lDbZIwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOC\n",
-        "AQEApHTBUKjb1PKoHFHn/JgMkAeRA4/A9iRzD9hItzFk+0j/cwTghpYOvcLB99N/\n",
-        "VjwrghEuPh78fMvuYHfDMaau3ZwRWWljLU72fXTsTi7zlhuEhkzzxOi4uF6F6FEv\n",
-        "fQfEj6QlDYaj5FbH90B9rGqf4ZAAsZRWEl8Gdky/ICEH2BMVT/d7D0zqcxWoMG25\n",
-        "iJFe05DCf2kskCIsMlcOz/oTb/rN4yfxOsTQYaypnzQbltaQ28lUmBFH273Chtq1\n",
-        "a+5m443UMUGCEYtEucUpwjffkrYeAaVvT3HR6xXCUsSg0Pow2gwPrT7QRx5LM3kC\n",
-        "PQRuveraQhjoc/MjmshkDDjONg==\n",
-        "-----END CERTIFICATE-----\n"
-    );
+    const TEST_CERT_PEM: &str = include_str!("../tests/test_cert.crt");
 
     #[test]
     fn test_webpki_roots_non_empty() {
@@ -253,8 +233,11 @@ mod tests {
         assert!(certs.len() > 100);
     }
 
+    static ENV_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
     #[test]
     fn test_for_mode_without_env() {
+        let _lock = ENV_MUTEX.lock().unwrap();
         temp_env::with_vars(
             [
                 ("SSL_CERT_FILE", None::<&str>),
@@ -272,6 +255,7 @@ mod tests {
 
     #[test]
     fn test_for_mode_merges_ssl_cert_file_with_system() {
+        let _lock = ENV_MUTEX.lock().unwrap();
         let mut temp_cert = NamedTempFile::new().unwrap();
         temp_cert.write_all(TEST_CERT_PEM.as_bytes()).unwrap();
 
@@ -298,6 +282,7 @@ mod tests {
 
     #[test]
     fn test_for_mode_merges_ssl_cert_file_with_webpki() {
+        let _lock = ENV_MUTEX.lock().unwrap();
         let mut temp_cert = NamedTempFile::new().unwrap();
         temp_cert.write_all(TEST_CERT_PEM.as_bytes()).unwrap();
 
