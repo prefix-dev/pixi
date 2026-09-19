@@ -4,6 +4,7 @@ mod inputs;
 
 use build_script::{BuildPlatform, BuildScriptContext};
 use config::CMakeBackendConfig;
+use indexmap::IndexMap;
 use miette::IntoDiagnostic;
 use pixi_build_backend::{
     compilers::default_compiler_variants,
@@ -22,6 +23,19 @@ use std::{
     path::Path,
     sync::Arc,
 };
+
+fn is_system_variant(key: &str) -> bool {
+    matches!(
+        key,
+        "target_platform"
+            | "c_compiler"
+            | "cxx_compiler"
+            | "fortran_compiler"
+            | "cuda_compiler"
+            | "c_stdlib"
+            | "c_stdlib_version"
+    )
+}
 
 #[derive(Default, Clone)]
 pub struct CMakeGenerator {}
@@ -109,6 +123,43 @@ impl GenerateRecipe for CMakeGenerator {
             )));
         }
 
+        let mut script_env: IndexMap<String, Value<String>> = config
+            .env
+            .iter()
+            .map(|(k, v)| (k.clone(), Value::new_concrete(v.clone(), None)))
+            .collect();
+
+        // Export user-defined variants to script environment, so that
+        // CMakeLists.txt can read them via $ENV{<KEY>} across the entire
+        // build stack (including git/path source dependencies).
+        let mut sorted_variants: Vec<_> = variants.iter().collect();
+        sorted_variants.sort();
+        for key in &sorted_variants {
+            let key_str = key.0.as_str();
+            if !is_system_variant(key_str) && !script_env.contains_key(key_str) {
+                script_env.insert(
+                    key_str.to_string(),
+                    Value::new_concrete(format!("${{{{ {key_str} }}}}"), None),
+                );
+            }
+        }
+
+        let mut extra_args = config.extra_args.clone();
+        if let Some(cmake_variant_keys) = &config.variants_as_cmake_args {
+            for key in cmake_variant_keys {
+                if key == "*" {
+                    for v in &sorted_variants {
+                        let v_str = v.0.as_str();
+                        if !is_system_variant(v_str) {
+                            extra_args.push(format!("-D{v_str}=${{{{ {v_str} }}}}"));
+                        }
+                    }
+                } else if sorted_variants.iter().any(|v| v.0.as_str() == key) {
+                    extra_args.push(format!("-D{key}=${{{{ {key} }}}}"));
+                }
+            }
+        }
+
         let build_script = BuildScriptContext {
             build_platform: if Platform::current().is_windows() {
                 BuildPlatform::Windows
@@ -116,7 +167,7 @@ impl GenerateRecipe for CMakeGenerator {
                 BuildPlatform::Unix
             },
             source_dir: manifest_root.display().to_string(),
-            extra_args: config.extra_args.clone(),
+            extra_args,
         }
         .render();
 
@@ -126,13 +177,7 @@ impl GenerateRecipe for CMakeGenerator {
             .plan
             .script_mut()
             .expect("generated recipes use script mode") = Script::from_content(build_script)
-            .with_env(
-                config
-                    .env
-                    .iter()
-                    .map(|(k, v)| (k.clone(), Value::new_concrete(v.clone(), None)))
-                    .collect(),
-            )
+            .with_env(script_env)
             .with_secrets(model.secrets.iter().cloned().collect());
 
         Ok(generated_recipe)
@@ -763,6 +808,157 @@ mod tests {
         assert_eq!(
             stdlib_templates[0], "${{ stdlib('c') }}",
             "Default stdlib should be c"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_user_variants_are_exported_to_env() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+        });
+
+        let variants = HashSet::from([
+            NormalizedKey::from("MYFLAG"),
+            NormalizedKey::from("USE_ACC"),
+            NormalizedKey::from("cxx_compiler"),
+            NormalizedKey::from("target_platform"),
+            NormalizedKey::from("c_stdlib"),
+        ]);
+
+        let generated_recipe = CMakeGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &CMakeBackendConfig::default(),
+                PathBuf::from("."),
+                Platform::Linux64,
+                None,
+                &variants,
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let script = generated_recipe.recipe.build.plan.script().unwrap();
+        let env = &script.env;
+
+        // User variants must be exported to environment
+        assert_eq!(
+            env.get("MYFLAG").and_then(|v| v.as_concrete()),
+            Some(&"${{ MYFLAG }}".to_string())
+        );
+        assert_eq!(
+            env.get("USE_ACC").and_then(|v| v.as_concrete()),
+            Some(&"${{ USE_ACC }}".to_string())
+        );
+
+        // System/compiler variants must NOT be exported to environment
+        assert!(!env.contains_key("cxx_compiler"));
+        assert!(!env.contains_key("target_platform"));
+        assert!(!env.contains_key("c_stdlib"));
+    }
+
+    #[tokio::test]
+    async fn test_variants_as_cmake_args() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+        });
+
+        let variants = HashSet::from([
+            NormalizedKey::from("MYFLAG"),
+            NormalizedKey::from("USE_ACC"),
+            NormalizedKey::from("cxx_compiler"),
+        ]);
+
+        let config = CMakeBackendConfig {
+            variants_as_cmake_args: Some(vec!["MYFLAG".to_string()]),
+            ..Default::default()
+        };
+
+        let generated_recipe = CMakeGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &config,
+                PathBuf::from("."),
+                Platform::Linux64,
+                None,
+                &variants,
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let script = generated_recipe.recipe.build.plan.script().unwrap();
+        let debug_str = format!("{script:?}");
+
+        assert!(
+            debug_str.contains("-DMYFLAG=${{ MYFLAG }}"),
+            "Build script should pass -DMYFLAG to cmake: {debug_str}"
+        );
+        assert!(
+            !debug_str.contains("-DUSE_ACC"),
+            "Build script should not pass non-configured variant as cmake arg: {debug_str}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_variants_as_cmake_args_wildcard() {
+        let project_model = project_fixture!({
+            "name": "foobar",
+            "version": "0.1.0",
+        });
+
+        let variants = HashSet::from([
+            NormalizedKey::from("MYFLAG"),
+            NormalizedKey::from("USE_ACC"),
+            NormalizedKey::from("cxx_compiler"),
+        ]);
+
+        let config = CMakeBackendConfig {
+            variants_as_cmake_args: Some(vec!["*".to_string()]),
+            ..Default::default()
+        };
+
+        let generated_recipe = CMakeGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &config,
+                PathBuf::from("."),
+                Platform::Linux64,
+                None,
+                &variants,
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let script = generated_recipe.recipe.build.plan.script().unwrap();
+        let debug_str = format!("{script:?}");
+
+        assert!(
+            debug_str.contains("-DMYFLAG=${{ MYFLAG }}"),
+            "Build script should pass -DMYFLAG to cmake: {debug_str}"
+        );
+        assert!(
+            debug_str.contains("-DUSE_ACC=${{ USE_ACC }}"),
+            "Build script should pass -DUSE_ACC to cmake: {debug_str}"
+        );
+        assert!(
+            !debug_str.contains("-Dcxx_compiler"),
+            "Build script should never pass cxx_compiler to cmake: {debug_str}"
         );
     }
 }
