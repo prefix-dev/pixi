@@ -245,13 +245,14 @@ pub(crate) fn resolve_dependency_path(
     let manifest = if absolute.is_dir() {
         if pypi {
             let pyproject = absolute.join("pyproject.toml");
-            if !pyproject.is_file() {
+            if pyproject.is_file() {
+                pyproject
+            } else {
                 return Err(path_error(
                     path,
                     "directory does not contain pyproject.toml",
                 ));
             }
-            pyproject
         } else {
             let pixi = absolute.join("pixi.toml");
             let pyproject = absolute.join("pyproject.toml");
@@ -269,7 +270,7 @@ pub(crate) fn resolve_dependency_path(
     } else {
         let file_name = absolute.file_name().and_then(|name| name.to_str());
         let supported = if pypi {
-            file_name == Some("pyproject.toml")
+            matches!(file_name, Some("pyproject.toml"))
         } else {
             matches!(
                 file_name,
@@ -316,6 +317,26 @@ pub(crate) fn resolve_dependency_path(
                 manifest.display()
             ));
         }
+    } else if pypi && manifest.file_name().and_then(|name| name.to_str()) == Some("pyproject.toml")
+    {
+        let contents = fs_err::read_to_string(&manifest).into_diagnostic()?;
+        let document = contents
+            .parse::<toml_edit::DocumentMut>()
+            .into_diagnostic()?;
+        let has_python_package =
+            document.get("project").is_some() || document.get("build-system").is_some();
+        if !has_python_package
+            && document
+                .get("tool")
+                .and_then(|tool| tool.get("pixi"))
+                .is_some()
+        {
+            return Err(miette::miette!(
+                help = "Add a `[project]` or `[build-system]` section to the package manifest",
+                "'{}' is a pixi workspace, not a Python package source",
+                manifest.display()
+            ));
+        }
     }
 
     let dependency_path = match manifest.file_name().and_then(|name| name.to_str()) {
@@ -330,18 +351,21 @@ pub(crate) fn resolve_dependency_path(
         .path
         .parent()
         .ok_or_else(|| miette::miette!("workspace manifest has no parent directory"))?;
-    pathdiff::diff_paths(dependency_path, manifest_dir).ok_or_else(|| {
+    let relative = pathdiff::diff_paths(dependency_path, manifest_dir).ok_or_else(|| {
         miette::miette!(
             "could not make dependency path '{}' relative to workspace manifest '{}'",
             dependency_path.display(),
             workspace.workspace.provenance.path.display()
         )
-    })
+    })?;
+    if relative.as_os_str().is_empty() {
+        Ok(PathBuf::from("."))
+    } else {
+        Ok(relative)
+    }
 }
 
-pub(crate) fn manifest_path_string(path: &Path) -> String {
-    path.to_string_lossy().replace('\\', "/")
-}
+pub(crate) use pixi_api::workspace::manifest_path_string;
 
 pub(crate) async fn ensure_pixi_build_preview_enabled(
     workspace: Workspace,
