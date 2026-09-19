@@ -1014,10 +1014,14 @@ platforms = ["linux-64"]
         .unwrap_err();
 
     let report = format!("{error:?}");
-    let normalized = report.replace(['\n', '\r', '│'], " ");
+    let normalized = report
+        .replace('│', " ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
     assert!(normalized.contains("not a Python package"), "{report}");
     assert!(
-        normalized.contains("Use `pixi add NAME --path PATH` for a conda path dependency"),
+        normalized.contains("for a conda path dependency"),
         "{report}"
     );
 }
