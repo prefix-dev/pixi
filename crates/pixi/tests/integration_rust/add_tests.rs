@@ -877,6 +877,198 @@ async fn add_pypi_path_dependency_rewrites_absolute_manifest_path() {
 }
 
 #[tokio::test]
+async fn add_pypi_editable_path_dot() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+    let channel = package_database.into_channel().await.unwrap();
+
+    let pixi = PixiControl::new().unwrap();
+    pixi.init()
+        .with_local_channel(channel.url().to_file_path().unwrap())
+        .with_platforms(vec![Platform::current()])
+        .await
+        .unwrap();
+    pixi.add("python").await.unwrap();
+
+    fs_err::write(
+        pixi.workspace_path().join("pyproject.toml"),
+        "[project]\nname = \"facadedevice\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+
+    pixi.add_pypi("facadedevice")
+        .with_path(pixi.workspace_path())
+        .with_editable(true)
+        .await
+        .unwrap();
+
+    let manifest = pixi.manifest_contents().unwrap();
+    let normalized = manifest.replace('\\', "/").replace('\'', "\"");
+    assert!(
+        normalized.contains(r#"facadedevice = { path = ".", editable = true }"#),
+        "unexpected manifest:\n{manifest}"
+    );
+}
+
+#[tokio::test]
+async fn add_pypi_path_dot_non_editable() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+    let channel = package_database.into_channel().await.unwrap();
+
+    let pixi = PixiControl::new().unwrap();
+    pixi.init()
+        .with_local_channel(channel.url().to_file_path().unwrap())
+        .with_platforms(vec![Platform::current()])
+        .await
+        .unwrap();
+    pixi.add("python").await.unwrap();
+
+    fs_err::write(
+        pixi.workspace_path().join("pyproject.toml"),
+        "[project]\nname = \"facadedevice\"\nversion = \"0.1.0\"\n",
+    )
+    .unwrap();
+
+    pixi.add_pypi("facadedevice")
+        .with_path(pixi.workspace_path())
+        .await
+        .unwrap();
+
+    let manifest = pixi.manifest_contents().unwrap();
+    let normalized = manifest.replace('\\', "/").replace('\'', "\"");
+    assert!(
+        normalized.contains(r#"facadedevice = { path = "." }"#),
+        "unexpected manifest:\n{manifest}"
+    );
+}
+
+#[tokio::test]
+async fn add_conda_path_dot() {
+    setup_tracing();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let platform = Platform::current();
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+[workspace]
+name = "path-test"
+channels = []
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[package]
+name = "my-pkg"
+version = "0.1.0"
+
+[package.build]
+backend = {{ name = "in-memory", version = "*" }}
+"#,
+    ))
+    .unwrap()
+    .with_backend_override(backend_override);
+
+    pixi.add("my-pkg")
+        .with_path(pixi.workspace_path())
+        .await
+        .unwrap();
+
+    let manifest = pixi.manifest_contents().unwrap();
+    let normalized = manifest.replace('\\', "/").replace('\'', "\"");
+    assert!(
+        normalized.contains(r#"my-pkg = { path = "." }"#),
+        "unexpected manifest:\n{manifest}"
+    );
+}
+
+#[tokio::test]
+async fn add_pypi_path_rejects_pixi_workspace_without_python_project() {
+    setup_tracing();
+
+    let pixi = PixiControl::from_manifest(
+        r#"
+[workspace]
+name = "path-test"
+channels = []
+platforms = ["linux-64"]
+"#,
+    )
+    .unwrap();
+
+    let error = pixi
+        .add_pypi("facadedevice")
+        .with_path(pixi.workspace_path())
+        .await
+        .unwrap_err();
+
+    let report = format!("{error:?}");
+    let normalized = report
+        .replace('│', " ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    assert!(normalized.contains("not a Python package"), "{report}");
+    assert!(
+        normalized.contains("for a conda path dependency"),
+        "{report}"
+    );
+}
+
+#[tokio::test]
+async fn add_pypi_path_accepts_setup_py() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(Platform::current())
+            .finish(),
+    );
+    let channel = package_database.into_channel().await.unwrap();
+
+    let pixi = PixiControl::new().unwrap();
+    pixi.init()
+        .with_local_channel(channel.url().to_file_path().unwrap())
+        .with_platforms(vec![Platform::current()])
+        .await
+        .unwrap();
+    pixi.add("python").await.unwrap();
+
+    let package_dir = pixi.workspace_path().join("legacy-pkg");
+    fs_err::create_dir_all(&package_dir).unwrap();
+    fs_err::write(
+        package_dir.join("setup.py"),
+        "from setuptools import setup\nsetup(name='legacy-pkg', version='0.1.0')\n",
+    )
+    .unwrap();
+
+    pixi.add_pypi("legacy-pkg")
+        .with_path(&package_dir)
+        .with_no_lock_file_update(true)
+        .await
+        .unwrap();
+
+    let manifest = pixi.manifest_contents().unwrap();
+    let normalized = manifest.replace('\\', "/").replace('\'', "\"");
+    assert!(
+        normalized.contains(r#"legacy-pkg = { path = "legacy-pkg" }"#),
+        "unexpected manifest:\n{manifest}"
+    );
+}
+
+#[tokio::test]
 async fn add_conda_path_dependency_accepts_manifest_files_and_relative_input() {
     setup_tracing();
 

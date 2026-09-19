@@ -245,13 +245,26 @@ pub(crate) fn resolve_dependency_path(
     let manifest = if absolute.is_dir() {
         if pypi {
             let pyproject = absolute.join("pyproject.toml");
-            if !pyproject.is_file() {
+            let setup_py = absolute.join("setup.py");
+            let setup_cfg = absolute.join("setup.cfg");
+            if pyproject.is_file() {
+                pyproject
+            } else if setup_py.is_file() {
+                setup_py
+            } else if setup_cfg.is_file() {
+                setup_cfg
+            } else if absolute.join("pixi.toml").is_file() {
+                return Err(miette::miette!(
+                    help = "Use `pixi add NAME --path PATH` for a conda path dependency",
+                    "'{}' is a pixi workspace, not a Python package",
+                    path.display()
+                ));
+            } else {
                 return Err(path_error(
                     path,
-                    "directory does not contain pyproject.toml",
+                    "directory does not contain pyproject.toml, setup.py, or setup.cfg",
                 ));
             }
-            pyproject
         } else {
             let pixi = absolute.join("pixi.toml");
             let pyproject = absolute.join("pyproject.toml");
@@ -269,7 +282,7 @@ pub(crate) fn resolve_dependency_path(
     } else {
         let file_name = absolute.file_name().and_then(|name| name.to_str());
         let supported = if pypi {
-            file_name == Some("pyproject.toml")
+            matches!(file_name, Some("pyproject.toml" | "setup.py" | "setup.cfg"))
         } else {
             matches!(
                 file_name,
@@ -277,6 +290,18 @@ pub(crate) fn resolve_dependency_path(
             )
         };
         if !supported {
+            if pypi
+                && matches!(
+                    file_name,
+                    Some("pixi.toml" | "recipe.yaml" | "recipe.yml" | "package.xml")
+                )
+            {
+                return Err(miette::miette!(
+                    help = "Use `pixi add NAME --path PATH` for a conda path dependency",
+                    "'{}' is a conda package manifest, not a Python package manifest",
+                    path.display()
+                ));
+            }
             return Err(path_error(path, "not a supported package manifest"));
         }
         absolute.clone()
@@ -318,8 +343,59 @@ pub(crate) fn resolve_dependency_path(
         }
     }
 
+    if pypi
+        && matches!(
+            manifest.file_name().and_then(|name| name.to_str()),
+            Some("pyproject.toml")
+        )
+    {
+        let contents = fs_err::read_to_string(&manifest).into_diagnostic()?;
+        let document = contents
+            .parse::<toml_edit::DocumentMut>()
+            .into_diagnostic()?;
+        let has_python_package = document.get("project").is_some()
+            || document.get("build-system").is_some()
+            || document
+                .get("tool")
+                .and_then(|t| {
+                    t.get("flit")
+                        .or_else(|| t.get("poetry"))
+                        .or_else(|| t.get("hatch"))
+                        .or_else(|| t.get("setuptools"))
+                        .or_else(|| t.get("maturin"))
+                        .or_else(|| t.get("scikit-build"))
+                        .or_else(|| t.get("meson-python"))
+                })
+                .is_some();
+        if !has_python_package {
+            if document
+                .get("tool")
+                .and_then(|tool| tool.get("pixi"))
+                .and_then(|pixi| pixi.get("package"))
+                .is_some()
+            {
+                return Err(miette::miette!(
+                    help = "Use `pixi add NAME --path PATH` for a conda path dependency",
+                    "'{}' is a pixi-build package source, not a Python package",
+                    manifest.display()
+                ));
+            }
+            if document
+                .get("tool")
+                .and_then(|tool| tool.get("pixi"))
+                .is_some()
+            {
+                return Err(miette::miette!(
+                    help = "Add a `[project]` or `[build-system]` section to the package manifest, or use `pixi add NAME --path PATH` for a conda path dependency",
+                    "'{}' is a pixi workspace, not a Python package",
+                    manifest.display()
+                ));
+            }
+        }
+    }
+
     let dependency_path = match manifest.file_name().and_then(|name| name.to_str()) {
-        Some("pixi.toml" | "pyproject.toml") => manifest
+        Some("pixi.toml" | "pyproject.toml" | "setup.py" | "setup.cfg") => manifest
             .parent()
             .expect("a canonical manifest path has a parent directory"),
         _ => &manifest,
@@ -330,17 +406,23 @@ pub(crate) fn resolve_dependency_path(
         .path
         .parent()
         .ok_or_else(|| miette::miette!("workspace manifest has no parent directory"))?;
-    pathdiff::diff_paths(dependency_path, manifest_dir).ok_or_else(|| {
+    let relative = pathdiff::diff_paths(dependency_path, manifest_dir).ok_or_else(|| {
         miette::miette!(
             "could not make dependency path '{}' relative to workspace manifest '{}'",
             dependency_path.display(),
             workspace.workspace.provenance.path.display()
         )
-    })
+    })?;
+    if relative.as_os_str().is_empty() {
+        Ok(PathBuf::from("."))
+    } else {
+        Ok(relative)
+    }
 }
 
 pub(crate) fn manifest_path_string(path: &Path) -> String {
-    path.to_string_lossy().replace('\\', "/")
+    let s = path.to_string_lossy().replace('\\', "/");
+    if s.is_empty() { ".".to_string() } else { s }
 }
 
 pub(crate) async fn ensure_pixi_build_preview_enabled(
