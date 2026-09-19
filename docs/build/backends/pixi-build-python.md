@@ -409,6 +409,40 @@ pypi-conda-map = { nvidia-cublas-cu12 = false }
 # Result for linux-64: { torch = "pytorch", nvidia-cublas-cu12 = false }
 ```
 
+### `mapping-channel`
+
+- **Type**: `String`
+- **Default**: not set (queries project channels, falling back to `conda-forge`)
+- **Target Merge Behavior**: `Overwrite` - Platform-specific setting takes precedence over base
+
+Specifies the channel name to query for the remote PyPI-to-conda mapping service (for example, `"conda-forge"`).
+
+By default, when `mapping-channel` is not set, the backend queries each channel listed in your project or workspace channels in order. If none of those channels provides a mapping (for example, when using Anaconda's `main` channel or an internal channel not hosted on `conda-mapping.prefix.dev`), the backend automatically falls back to querying `conda-forge`.
+
+You can configure `mapping-channel` explicitly to:
+
+- Pin the mapping source to a specific channel:
+  ```toml
+  [package.build.config]
+  mapping-channel = "conda-forge"
+  ```
+- Disable remote mapping entirely (relying only on `pypi-conda-map` overrides) by setting it to `"none"`:
+  ```toml
+  [package.build.config]
+  mapping-channel = "none"
+  ```
+
+For target-specific configuration, platform-specific setting overrides the base:
+
+```toml
+[package.build.config]
+mapping-channel = "conda-forge"
+
+[package.build.target.win-64.config]
+mapping-channel = "my-win-channel"
+# Result for win-64: "my-win-channel"
+```
+
 ## Automatic PyPI Dependency Mapping
 
 The Python backend can automatically map PyPI dependencies from your `pyproject.toml` to their corresponding conda packages.

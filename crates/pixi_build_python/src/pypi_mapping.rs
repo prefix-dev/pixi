@@ -99,6 +99,14 @@ impl MappedCondaDependency {
     }
 }
 
+#[cfg(test)]
+static TEST_CHANNEL_MAPPINGS: std::sync::RwLock<
+    Option<std::collections::HashMap<String, IndexMap<String, PyPiPackageLookup>>>,
+> = std::sync::RwLock::new(None);
+
+#[cfg(test)]
+pub(crate) static TEST_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 /// Mapper for converting PyPI packages to conda packages.
 pub struct PyPiToCondaMapper {
     cache_dir: Option<PathBuf>,
@@ -113,12 +121,19 @@ pub struct PyPiToCondaMapper {
 impl PyPiToCondaMapper {
     /// Create a new mapper with the given cache directory and channel name.
     pub fn new(cache_dir: Option<PathBuf>, channel_name: String) -> Self {
+        #[cfg(test)]
+        let inline_mappings = TEST_CHANNEL_MAPPINGS
+            .read()
+            .unwrap()
+            .as_ref()
+            .and_then(|map| map.get(&channel_name).cloned());
+
         Self {
             cache_dir,
             client: reqwest::Client::new(),
             channel_name,
             #[cfg(test)]
-            inline_mappings: None,
+            inline_mappings,
         }
     }
 
@@ -132,6 +147,20 @@ impl PyPiToCondaMapper {
             channel_name: "test".to_string(),
             inline_mappings: Some(mappings),
         }
+    }
+
+    /// Set mock channel mappings for unit tests.
+    #[cfg(test)]
+    pub fn set_test_channel_mappings(
+        mappings: std::collections::HashMap<String, IndexMap<String, PyPiPackageLookup>>,
+    ) {
+        *TEST_CHANNEL_MAPPINGS.write().unwrap() = Some(mappings);
+    }
+
+    /// Clear mock channel mappings after unit tests.
+    #[cfg(test)]
+    pub fn clear_test_channel_mappings() {
+        *TEST_CHANNEL_MAPPINGS.write().unwrap() = None;
     }
 
     /// Get the cache file path for a normalized package name.
@@ -430,8 +459,9 @@ impl PyPiToCondaMapper {
                 Ok(l) => l,
                 Err(MappingError::PackageNotFound(_)) => {
                     tracing::warn!(
-                        "PyPI package '{}' has no conda-forge mapping, skipping",
-                        req.name
+                        "PyPI package '{}' has no {} mapping, skipping",
+                        req.name,
+                        self.channel_name
                     );
                     continue;
                 }
@@ -575,13 +605,19 @@ fn apply_user_map(
 }
 
 /// Map PyPI requirements to conda dependencies, consulting the user-defined
-/// `pypi-conda-map` overrides first and the first channel that provides a
-/// valid mapping for the rest.
+/// `pypi-conda-map` overrides first and then querying the mapping service.
 ///
-/// Tries each channel in order and returns the mapped dependencies from the
-/// first channel that successfully maps at least one dependency. Requirements
-/// resolved by the user map never reach the network and do not count towards
-/// the channel selection.
+/// If `mapping_channel` is explicitly provided:
+/// - If it is `"none"` or empty, remote mapping is disabled.
+/// - Otherwise, that channel is queried for mappings.
+///
+/// If `mapping_channel` is not specified:
+/// - Tries each channel in `channels` in order.
+/// - If none of the channels mapped any dependency and `"conda-forge"` was not
+///   already among them, falls back to `"conda-forge"`.
+///
+/// Requirements resolved by the user map never reach the network and do not count
+/// towards channel selection.
 ///
 /// The `context` parameter is used for logging (e.g., "project dependencies" or
 /// "build-system requirements").
@@ -589,6 +625,7 @@ pub async fn map_requirements_with_channels(
     requirements: &[pep508_rs::Requirement<pep508_rs::VerbatimUrl>],
     user_map: Option<&IndexMap<String, PypiCondaMapEntry>>,
     channels: &[ChannelUrl],
+    mapping_channel: Option<&str>,
     cache_dir: &Option<PathBuf>,
     context: &str,
     platform: Platform,
@@ -599,8 +636,52 @@ pub async fn map_requirements_with_channels(
         return user_mapped;
     }
 
+    if let Some(channel) = mapping_channel {
+        if channel == "none" || channel.is_empty() {
+            tracing::debug!(
+                "Remote PyPI-to-conda mapping disabled for {} via mapping-channel = '{}'",
+                context,
+                channel
+            );
+            return user_mapped;
+        }
+
+        let mapper = PyPiToCondaMapper::new(cache_dir.clone(), channel.to_string());
+        match mapper.map_requirements(&remaining, platform).await {
+            Ok(deps) if !deps.is_empty() => {
+                tracing::debug!(
+                    "Using PyPI-to-conda mapping for {} from configured channel '{}'",
+                    context,
+                    channel
+                );
+                user_mapped.extend(deps);
+                return user_mapped;
+            }
+            Ok(_) => {
+                tracing::warn!(
+                    "No PyPI-to-conda mapping found for {} in configured channel '{}'",
+                    context,
+                    channel
+                );
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to get PyPI-to-conda mapping for {} in configured channel '{}': {}",
+                    context,
+                    channel,
+                    e
+                );
+            }
+        }
+        return user_mapped;
+    }
+
+    let mut tried_conda_forge = false;
     for channel in channels {
         if let Some(channel_name) = extract_channel_name(channel) {
+            if channel_name == "conda-forge" {
+                tried_conda_forge = true;
+            }
             let mapper = PyPiToCondaMapper::new(cache_dir.clone(), channel_name.to_string());
             match mapper.map_requirements(&remaining, platform).await {
                 Ok(deps) if !deps.is_empty() => {
@@ -630,6 +711,40 @@ pub async fn map_requirements_with_channels(
             }
         }
     }
+
+    // If none of the channels in channels provided a mapping and conda-forge
+    // was not already tried, fall back to conda-forge.
+    if !tried_conda_forge {
+        tracing::debug!(
+            "No PyPI-to-conda mapping found in project channels for {}, falling back to 'conda-forge'",
+            context
+        );
+        let mapper = PyPiToCondaMapper::new(cache_dir.clone(), "conda-forge".to_string());
+        match mapper.map_requirements(&remaining, platform).await {
+            Ok(deps) if !deps.is_empty() => {
+                tracing::debug!(
+                    "Using PyPI-to-conda fallback mapping for {} from 'conda-forge'",
+                    context
+                );
+                user_mapped.extend(deps);
+                return user_mapped;
+            }
+            Ok(_) => {
+                tracing::warn!(
+                    "No PyPI-to-conda mapping found for {} in fallback channel 'conda-forge'",
+                    context
+                );
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to get PyPI-to-conda fallback mapping for {} in 'conda-forge': {}",
+                    context,
+                    e
+                );
+            }
+        }
+    }
+
     user_mapped
 }
 
@@ -930,6 +1045,7 @@ mod tests {
             &requirements,
             Some(&user_map),
             &[],
+            None,
             &None,
             "test",
             Platform::Linux64,
@@ -938,6 +1054,114 @@ mod tests {
 
         assert_eq!(mapped.len(), 1);
         assert_eq!(mapped[0].name.as_normalized(), "pytorch");
+    }
+
+    fn mock_lookup(channel: &str, pypi_name: &str, conda_name: &str) -> PyPiPackageLookup {
+        PyPiPackageLookup {
+            format_version: "1".to_string(),
+            channel: channel.to_string(),
+            pypi_name: pypi_name.to_string(),
+            conda_versions: IndexMap::from([("1.0.0".to_string(), conda_name.to_string())]),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_map_requirements_with_channels_fallback_to_conda_forge() {
+        let _guard = TEST_MUTEX.lock().await;
+        use std::collections::HashMap;
+        use url::Url;
+
+        let conda_forge_map = IndexMap::from([(
+            "rich".to_string(),
+            mock_lookup("conda-forge", "rich", "rich"),
+        )]);
+        let test_channels = HashMap::from([("conda-forge".to_string(), conda_forge_map)]);
+        PyPiToCondaMapper::set_test_channel_mappings(test_channels);
+
+        let requirements = vec![requirement("rich")];
+        let channels = vec![ChannelUrl::from(
+            Url::parse("https://repo.anaconda.com/pkgs/main").unwrap(),
+        )];
+
+        let mapped = map_requirements_with_channels(
+            &requirements,
+            None,
+            &channels,
+            None,
+            &None,
+            "test",
+            Platform::Linux64,
+        )
+        .await;
+
+        PyPiToCondaMapper::clear_test_channel_mappings();
+
+        assert_eq!(mapped.len(), 1);
+        assert_eq!(mapped[0].name.as_normalized(), "rich");
+    }
+
+    #[tokio::test]
+    async fn test_map_requirements_with_channels_explicit_mapping_channel() {
+        let _guard = TEST_MUTEX.lock().await;
+        use std::collections::HashMap;
+
+        let custom_map = IndexMap::from([(
+            "my-pkg".to_string(),
+            mock_lookup("my-channel", "my-pkg", "my-conda-pkg"),
+        )]);
+        let test_channels = HashMap::from([("my-channel".to_string(), custom_map)]);
+        PyPiToCondaMapper::set_test_channel_mappings(test_channels);
+
+        let requirements = vec![requirement("my-pkg")];
+
+        let mapped = map_requirements_with_channels(
+            &requirements,
+            None,
+            &[],
+            Some("my-channel"),
+            &None,
+            "test",
+            Platform::Linux64,
+        )
+        .await;
+
+        PyPiToCondaMapper::clear_test_channel_mappings();
+
+        assert_eq!(mapped.len(), 1);
+        assert_eq!(mapped[0].name.as_normalized(), "my-conda-pkg");
+    }
+
+    #[tokio::test]
+    async fn test_map_requirements_with_channels_disabled_none() {
+        let _guard = TEST_MUTEX.lock().await;
+        use std::collections::HashMap;
+
+        let conda_forge_map = IndexMap::from([(
+            "rich".to_string(),
+            mock_lookup("conda-forge", "rich", "rich"),
+        )]);
+        let test_channels = HashMap::from([("conda-forge".to_string(), conda_forge_map)]);
+        PyPiToCondaMapper::set_test_channel_mappings(test_channels);
+
+        let requirements = vec![requirement("rich")];
+
+        let mapped = map_requirements_with_channels(
+            &requirements,
+            None,
+            &[],
+            Some("none"),
+            &None,
+            "test",
+            Platform::Linux64,
+        )
+        .await;
+
+        PyPiToCondaMapper::clear_test_channel_mappings();
+
+        assert!(
+            mapped.is_empty(),
+            "mapping should be disabled when mapping_channel is 'none'"
+        );
     }
 
     #[test]

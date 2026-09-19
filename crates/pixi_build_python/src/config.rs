@@ -145,6 +145,12 @@ pub struct PythonBackendConfig {
     /// Defaults to `uv`.
     #[serde(default)]
     pub installer: Option<Installer>,
+    /// Channel name to use for the PyPI-to-conda mapping service (e.g., "conda-forge").
+    /// If not specified, the backend tries the project channels in order and falls
+    /// back to "conda-forge" if no mapping is found. Set to "none" or empty to disable
+    /// remote mapping.
+    #[serde(default)]
+    pub mapping_channel: Option<String>,
 }
 
 impl PythonBackendConfig {
@@ -229,6 +235,10 @@ impl BackendConfig for PythonBackendConfig {
                 .installer
                 .clone()
                 .or_else(|| self.installer.clone()),
+            mapping_channel: target_config
+                .mapping_channel
+                .clone()
+                .or_else(|| self.mapping_channel.clone()),
         })
     }
 }
@@ -353,6 +363,7 @@ mod tests {
             abi3: Some(true),
             skip_pyc_compilation: SkipPycCompilation::All(true),
             installer: Some(Installer::Uv),
+            mapping_channel: None,
         };
 
         let mut target_env = indexmap::IndexMap::new();
@@ -372,6 +383,7 @@ mod tests {
             abi3: Some(false),
             skip_pyc_compilation: SkipPycCompilation::Globs(vec!["tests/**".to_string()]),
             installer: Some(Installer::Pip),
+            mapping_channel: None,
         };
 
         let merged = base_config
@@ -436,6 +448,7 @@ mod tests {
             abi3: None,
             skip_pyc_compilation: SkipPycCompilation::All(true),
             installer: Some(Installer::Pip),
+            mapping_channel: None,
         };
 
         let empty_target_config = PythonBackendConfig::default();
@@ -553,5 +566,32 @@ mod tests {
 
         // Target value should override base value
         assert_eq!(merged.noarch, Some(false));
+    }
+
+    #[test]
+    fn test_mapping_channel_deserialization_and_merge() {
+        use serde_json::json;
+
+        // Deserialization from kebab-case
+        let json_data = json!({"mapping-channel": "conda-forge"});
+        let config: PythonBackendConfig = serde_json::from_value(json_data).unwrap();
+        assert_eq!(config.mapping_channel.as_deref(), Some("conda-forge"));
+
+        // Target overrides base
+        let base = PythonBackendConfig {
+            mapping_channel: Some("conda-forge".to_string()),
+            ..Default::default()
+        };
+        let target = PythonBackendConfig {
+            mapping_channel: Some("custom-channel".to_string()),
+            ..Default::default()
+        };
+        let merged = base.merge_with_target_config(&target).unwrap();
+        assert_eq!(merged.mapping_channel.as_deref(), Some("custom-channel"));
+
+        // Target None preserves base
+        let target_none = PythonBackendConfig::default();
+        let merged = base.merge_with_target_config(&target_none).unwrap();
+        assert_eq!(merged.mapping_channel.as_deref(), Some("conda-forge"));
     }
 }
