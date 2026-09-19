@@ -739,6 +739,7 @@ impl Project {
                 },
             )),
             inline_packages: Arc::new(inline_packages.clone()),
+            workspace_sources: Default::default(),
         };
 
         // Solve via SolvePixiEnvironmentKey (new keys path).

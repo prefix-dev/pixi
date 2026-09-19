@@ -53,6 +53,9 @@ pub struct ResolveSourcePackageSpec {
     /// solves with the previous resolution's `build_packages` /
     /// `host_packages`; all other hints flow through for deeper layers.
     pub installed_source_hints: PtrArc<InstalledSourceHints>,
+    /// Source dependencies declared across the workspace, forwarded to nested
+    /// build/host environment solves.
+    pub workspace_sources: Arc<BTreeMap<PackageName, SourceLocationSpec>>,
 }
 
 /// Compute-engine Key returning every variant's assembled
@@ -178,6 +181,7 @@ async fn resolve_source_package_inner(
     let preferred = Arc::clone(&spec.preferred_build_source);
     let env_ref = spec.env_ref.clone();
     let source_hints = spec.installed_source_hints.clone();
+    let workspace_sources = Arc::clone(&spec.workspace_sources);
     // Fold the inline definition's content hash into each assembled record's
     // identifier so editing the inline table changes the lock entry.
     let inline_content_hash = spec.inline.as_ref().map(|inline| inline.content_hash);
@@ -191,6 +195,7 @@ async fn resolve_source_package_inner(
                 &env_ref,
                 &source_hints,
                 inline_content_hash,
+                &workspace_sources,
             )
             .await
         },

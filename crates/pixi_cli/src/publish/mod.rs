@@ -984,6 +984,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 env_ref: env_ref.clone(),
                 inline: None,
                 installed_source_hints: Default::default(),
+                workspace_sources: Default::default(),
             };
             let records = command_dispatcher
                 .engine()
