@@ -126,7 +126,8 @@ pub async fn add_conda_dep(
 }
 
 fn manifest_path_string(path: &std::path::Path) -> String {
-    path.to_string_lossy().replace('\\', "/")
+    let s = path.to_string_lossy().replace('\\', "/");
+    if s.is_empty() { ".".to_string() } else { s }
 }
 
 pub async fn add_pypi_dep(
