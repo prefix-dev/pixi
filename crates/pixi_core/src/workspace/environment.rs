@@ -1834,4 +1834,49 @@ mod tests {
             },
         );
     }
+
+    #[test]
+    fn test_best_declared_platform_prefers_specific_matching_platform() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let contents = r#"
+        [project]
+        name = "test"
+        channels = []
+        platforms = ["linux-64", { platform = "linux-64", cuda = "12.6" }]
+        "#;
+        let workspace = Workspace::from_str(&temp_dir.path().join("pixi.toml"), contents).unwrap();
+
+        // When host platform is linux-64 with CUDA 12.6 available,
+        // the specialized CUDA platform is preferred even though bare linux-64
+        // was declared first.
+        temp_env::with_vars(
+            [
+                (consts::PIXI_OVERRIDE_PLATFORM, Some("linux-64")),
+                ("CONDA_OVERRIDE_CUDA", Some("12.6")),
+            ],
+            || {
+                let env = workspace.default_environment();
+                let best = env
+                    .best_declared_platform()
+                    .expect("a platform should match");
+                assert_eq!(best.name().as_str(), "linux-64-cuda-12-6");
+            },
+        );
+
+        // When host platform is linux-64 without CUDA,
+        // the CUDA platform is dropped and the bare linux-64 platform is selected.
+        temp_env::with_vars(
+            [
+                (consts::PIXI_OVERRIDE_PLATFORM, Some("linux-64")),
+                ("CONDA_OVERRIDE_CUDA", Some("")),
+            ],
+            || {
+                let env = workspace.default_environment();
+                let best = env
+                    .best_declared_platform()
+                    .expect("bare linux-64 should match");
+                assert_eq!(best.name().as_str(), "linux-64");
+            },
+        );
+    }
 }
