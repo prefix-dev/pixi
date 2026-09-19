@@ -365,7 +365,7 @@ pub(crate) fn resolve_dependency_path(
     }
 }
 
-pub(crate) use pixi_api::workspace::add::manifest_path_string;
+pub(crate) use pixi_api::workspace::manifest_path_string;
 
 pub(crate) async fn ensure_pixi_build_preview_enabled(
     workspace: Workspace,
