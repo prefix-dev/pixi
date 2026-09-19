@@ -4526,3 +4526,42 @@ my-package = {{ path = "./my-package" }}
         .expect_err("`pixi lock --check --dry-run` must fail when a host dependency changed");
     assert!(format_diagnostic(err.as_ref()).contains("not up-to-date"));
 }
+
+#[tokio::test]
+async fn test_source_package_run_dependencies_rejects_channel() {
+    let pixi = PixiControl::new().unwrap();
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir(&source_dir).unwrap();
+    write_source_package_manifest(
+        &source_dir,
+        "my-package",
+        "0.1.0",
+        r#"
+[package.run-dependencies]
+python = { version = ">=3.12", channel = "conda-forge" }
+"#,
+    );
+
+    pixi.update_manifest(&format!(
+        r#"
+[workspace]
+channels = ["conda-forge"]
+platforms = ["{}"]
+preview = ["pixi-build"]
+[dependencies]
+my-package = {{ path = "./my-package" }}
+"#,
+        Platform::current(),
+    ))
+    .unwrap();
+
+    let err = pixi
+        .lock()
+        .await
+        .expect_err("locking must reject channel in package.run-dependencies");
+    let msg = format_diagnostic(err.as_ref());
+    assert!(
+        msg.contains("`channel` is not supported in `[package.run-dependencies]`"),
+        "unexpected error message: {msg}"
+    );
+}

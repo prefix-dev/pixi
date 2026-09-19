@@ -2662,4 +2662,108 @@ mod test {
          help: Use `mypkg = { pin-subpackage = ... }` to pin this package for its consumers
         ");
     }
+
+    #[test]
+    fn test_package_run_exports_rejects_channel() {
+        assert_snapshot!(expect_manifest_failure(&package_manifest(
+            r#"
+        [run-exports.weak]
+        python = { version = ">=3.12", channel = "conda-forge" }
+        "#,
+        )), @r#"
+         × `channel` is not supported in `[package.run-exports]`
+           ╭─[pixi.toml:9:18]
+         8 │         [run-exports.weak]
+         9 │         python = { version = ">=3.12", channel = "conda-forge" }
+           ·                  ───────────────────────┬───────────────────────
+           ·                                         ╰── `channel` specified here
+        10 │
+           ╰────
+         help: A built package cannot specify channels for its dependencies; configure channels in the workspace or environment instead
+        "#);
+    }
+
+    #[test]
+    fn test_package_run_dependencies_conditional_rejects_channel() {
+        assert_snapshot!(expect_manifest_failure(&package_manifest(
+            r#"
+        [run-dependencies."if(linux)"]
+        python = { version = ">=3.12", channel = "conda-forge" }
+        "#,
+        )), @r#"
+         × `channel` is not supported in `[package.run-dependencies]`
+           ╭─[pixi.toml:9:18]
+         8 │         [run-dependencies."if(linux)"]
+         9 │         python = { version = ">=3.12", channel = "conda-forge" }
+           ·                  ───────────────────────┬───────────────────────
+           ·                                         ╰── `channel` specified here
+        10 │
+           ╰────
+         help: A built package cannot specify channels for its dependencies; configure channels in the workspace or environment instead
+        "#);
+    }
+
+    #[test]
+    fn test_package_target_legacy_rejects_channel() {
+        assert_snapshot!(expect_manifest_failure(&package_manifest(
+            r#"
+        [target.linux-64.run-dependencies]
+        python = { version = ">=3.12", channel = "conda-forge" }
+        "#,
+        )), @r#"
+         × `channel` is not supported in `[package.run-dependencies]`
+           ╭─[pixi.toml:9:18]
+         8 │         [target.linux-64.run-dependencies]
+         9 │         python = { version = ">=3.12", channel = "conda-forge" }
+           ·                  ───────────────────────┬───────────────────────
+           ·                                         ╰── `channel` specified here
+        10 │
+           ╰────
+         help: A built package cannot specify channels for its dependencies; configure channels in the workspace or environment instead
+        "#);
+    }
+
+    #[test]
+    fn test_package_run_dependencies_inherited_channel_is_rejected() {
+        let mut workspace = WorkspacePackageProperties::default();
+        let ws = crate::toml::TomlWorkspace::from_toml_str(
+            r#"
+        name = "ws"
+        channels = []
+        platforms = []
+        [dependencies]
+        python = { version = ">=3.12", channel = "conda-forge" }
+        "#,
+        )
+        .unwrap();
+        workspace.dependencies = ws.dependencies.unwrap().value.specs;
+
+        let input = package_manifest(
+            r#"
+        [run-dependencies]
+        python = { workspace = true }
+        "#,
+        );
+        let error = TomlPackage::from_toml_str(&input)
+            .and_then(|w| {
+                w.into_manifest(
+                    workspace,
+                    PackageDefaults::default(),
+                    &Preview::default(),
+                    Path::new(""),
+                )
+            })
+            .expect_err("expected inherited channel to be rejected");
+        assert_snapshot!(format_parse_error(&input, error), @r#"
+         × `channel` is not supported in `[package.run-dependencies]`
+           ╭─[pixi.toml:9:18]
+         8 │         [run-dependencies]
+         9 │         python = { workspace = true }
+           ·                  ──────────┬─────────
+           ·                            ╰── `channel` specified here
+        10 │
+           ╰────
+         help: A built package cannot specify channels for its dependencies; configure channels in the workspace or environment instead
+        "#);
+    }
 }
