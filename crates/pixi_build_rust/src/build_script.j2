@@ -22,6 +22,18 @@ SET "{{ key }}={{ value }}"
 if [ -d "$PREFIX/include/openssl" ]; then
     {{ export("OPENSSL_DIR", env("PREFIX")) }}
 fi
+
+if [ -n "$CARGO_BUILD_TARGET" ] && [ -n "$BUILD" ] && [ -n "$HOST" ] && [ "$BUILD" != "$HOST" ]; then
+    target_env_suffix=$(echo "$CARGO_BUILD_TARGET" | tr '-' '_')
+    if [ -n "$CFLAGS" ]; then
+        eval "export CFLAGS_${target_env_suffix}=\"\${CFLAGS_${target_env_suffix}:+\$CFLAGS_${target_env_suffix} }\$CFLAGS\""
+        unset CFLAGS
+    fi
+    if [ -n "$CXXFLAGS" ]; then
+        eval "export CXXFLAGS_${target_env_suffix}=\"\${CXXFLAGS_${target_env_suffix}:+\$CXXFLAGS_${target_env_suffix} }\$CXXFLAGS\""
+        unset CXXFLAGS
+    fi
+fi
 {%- else -%}
 if exist "%PREFIX%\Library\include\openssl" {{ export("OPENSSL_DIR", env("PREFIX")) }}
 {%- endif %}

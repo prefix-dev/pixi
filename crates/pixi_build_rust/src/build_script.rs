@@ -45,6 +45,18 @@ mod test {
             export OPENSSL_DIR="$PREFIX"
         fi
 
+        if [ -n "$CARGO_BUILD_TARGET" ] && [ -n "$BUILD" ] && [ -n "$HOST" ] && [ "$BUILD" != "$HOST" ]; then
+            target_env_suffix=$(echo "$CARGO_BUILD_TARGET" | tr '-' '_')
+            if [ -n "$CFLAGS" ]; then
+                eval "export CFLAGS_${target_env_suffix}=\"\${CFLAGS_${target_env_suffix}:+\$CFLAGS_${target_env_suffix} }\$CFLAGS\""
+                unset CFLAGS
+            fi
+            if [ -n "$CXXFLAGS" ]; then
+                eval "export CXXFLAGS_${target_env_suffix}=\"\${CXXFLAGS_${target_env_suffix}:+\$CXXFLAGS_${target_env_suffix} }\$CXXFLAGS\""
+                unset CXXFLAGS
+            fi
+        fi
+
 
 
         export CARGO="$BUILD_PREFIX/bin/cargo"
@@ -76,6 +88,18 @@ mod test {
         insta::assert_snapshot!(render(true, true), @r###"
         if [ -d "$PREFIX/include/openssl" ]; then
             export OPENSSL_DIR="$PREFIX"
+        fi
+
+        if [ -n "$CARGO_BUILD_TARGET" ] && [ -n "$BUILD" ] && [ -n "$HOST" ] && [ "$BUILD" != "$HOST" ]; then
+            target_env_suffix=$(echo "$CARGO_BUILD_TARGET" | tr '-' '_')
+            if [ -n "$CFLAGS" ]; then
+                eval "export CFLAGS_${target_env_suffix}=\"\${CFLAGS_${target_env_suffix}:+\$CFLAGS_${target_env_suffix} }\$CFLAGS\""
+                unset CFLAGS
+            fi
+            if [ -n "$CXXFLAGS" ]; then
+                eval "export CXXFLAGS_${target_env_suffix}=\"\${CXXFLAGS_${target_env_suffix}:+\$CXXFLAGS_${target_env_suffix} }\$CXXFLAGS\""
+                unset CXXFLAGS
+            fi
         fi
 
         export RUSTC_WRAPPER="sccache"
