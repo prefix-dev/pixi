@@ -58,9 +58,12 @@ pub fn mirror_middleware(config: &Config) -> MirrorMiddleware {
     MirrorMiddleware::from_map(internal_map)
 }
 
-pub fn oci_middleware(client: LazyReqwestClient) -> OciMiddleware {
-    let middleware = LazyClient::new(|| ClientWithMiddleware::new(client.into_client(), vec![]));
-    OciMiddleware::new(middleware)
+/// Creates OCI middleware using pixi's authentication store.
+pub fn oci_middleware(client: LazyReqwestClient, config: &Config) -> miette::Result<OciMiddleware> {
+    let client = LazyClient::new(|| ClientWithMiddleware::new(client.into_client(), vec![]));
+    let auth_store = get_auth_store(config).into_diagnostic()?;
+
+    Ok(OciMiddleware::new(client).with_authentication_storage(auth_store))
 }
 
 static DEFAULT_REQWEST_USER_AGENT: LazyLock<String> =
@@ -231,7 +234,7 @@ pub fn build_reqwest_middleware_stack(
     // The OCI middleware rewrites `oci://` requests into real registry requests
     // and is a no-op for other URL schemes. It must be installed unconditionally
     // so that `oci://` channels work even without a mirror configured.
-    result.push(Arc::new(oci_middleware(client.clone())));
+    result.push(Arc::new(oci_middleware(client.clone(), config)?));
 
     result.push(Arc::new(GCSMiddleware::default()));
 
@@ -347,7 +350,9 @@ pub fn uv_middlewares(config: &Config, client: LazyReqwestClient) -> Vec<Arc<dyn
 
     if !config.mirror_map().is_empty() {
         middlewares.push(Arc::new(mirror_middleware(config)));
-        middlewares.push(Arc::new(oci_middleware(client.clone())));
+        if let Ok(oci_middleware) = oci_middleware(client.clone(), config) {
+            middlewares.push(Arc::new(oci_middleware));
+        }
     }
 
     // Add authentication middleware after mirror rewriting so it can authenticate
@@ -421,6 +426,31 @@ mod tests {
             2,
             "Expected exactly 2 middlewares (offline, auth) when offline without mirrors, got {}",
             middlewares.len()
+        );
+    }
+
+    // OciMiddleware doesn't expose its auth store, so verify it through Debug output.
+    #[test]
+    fn test_oci_middleware_uses_the_configured_auth_store() {
+        let dir = tempfile::tempdir().unwrap();
+        let auth_file = dir.path().join("auth.json");
+        fs_err::write(&auth_file, "{}").unwrap();
+
+        let config = Config {
+            authentication_override_file: Some(auth_file.clone()),
+            ..Default::default()
+        };
+        let client = LazyReqwestClient::new(&config).unwrap();
+        let middleware = oci_middleware(client, &config).unwrap();
+
+        let debug = format!("{middleware:?}");
+        assert!(
+            debug.contains("auth_storage: Some("),
+            "OCI middleware was built without an authentication store: {debug}"
+        );
+        assert!(
+            debug.contains(&format!("{auth_file:?}")),
+            "OCI middleware's store does not include the configured auth file: {debug}"
         );
     }
 }
