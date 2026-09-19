@@ -159,7 +159,7 @@ Available options:
 
 The default is backend-dependent: `rustls` builds default to `webpki`, `native-tls` builds default to `system`.
 
-If `SSL_CERT_FILE` or `SSL_CERT_DIR` is set, those certificates take precedence over this setting.
+If `SSL_CERT_FILE` or `SSL_CERT_DIR` is set, certificates from those locations are merged with the configured root certificates.
 
 You can override this from the CLI with `--tls-root-certs`.
 

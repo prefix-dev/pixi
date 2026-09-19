@@ -19,25 +19,28 @@ pub struct Certificates(Vec<CertificateDer<'static>>);
 impl Certificates {
     /// Resolve the certificates to install on pixi's reqwest client.
     ///
-    /// Priority follows uv's model:
-    /// 1. `SSL_CERT_FILE` / `SSL_CERT_DIR` env vars (if set and valid)
-    /// 2. The configured [`TlsRootCerts`] mode
+    /// Root certificates for the configured [`TlsRootCerts`] mode are loaded first
+    /// (the system trust store for `System`, or Mozilla roots for `Webpki`), and
+    /// any certificates found in `SSL_CERT_FILE` or `SSL_CERT_DIR` are merged
+    /// into them.
     ///
     /// Deprecation warnings for the legacy [`TlsRootCerts::LegacyNative`] and
     /// [`TlsRootCerts::All`] spellings fire once at config-load time
     /// (`Config::from_toml`), so this function stays silent.
     pub fn for_mode(mode: TlsRootCerts) -> Self {
-        if let Some(env_certs) = Self::from_env() {
-            return env_certs;
-        }
-
         #[allow(deprecated)]
-        match mode {
+        let mut certs = match mode {
             TlsRootCerts::Webpki => Self::webpki_roots(),
             TlsRootCerts::System | TlsRootCerts::LegacyNative | TlsRootCerts::All => {
                 Self::from_native_store()
             }
+        };
+
+        if let Some(env_certs) = Self::from_env() {
+            certs.merge(env_certs);
         }
+
+        certs
     }
 
     /// Load the bundled Mozilla root certificates from `webpki-root-certs`.
@@ -169,9 +172,24 @@ impl Certificates {
         Some(certs)
     }
 
+    /// Number of certificates in this collection.
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
     /// Whether this collection is empty.
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
+    }
+
+    /// Returns the certificates as a slice of DER-encoded certificates.
+    pub fn as_slice(&self) -> &[CertificateDer<'static>] {
+        &self.0
+    }
+
+    /// Check if a certificate is contained in this collection.
+    pub fn contains(&self, cert: &CertificateDer<'_>) -> bool {
+        self.0.iter().any(|c| c.as_ref() == cert.as_ref())
     }
 
     /// Merge another set of certificates into this one, deduplicating after.
@@ -194,5 +212,120 @@ impl Certificates {
 impl From<CertificateResult> for Certificates {
     fn from(result: CertificateResult) -> Self {
         Self(result.certs)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Write;
+
+    use pixi_config::TlsRootCerts;
+    use tempfile::NamedTempFile;
+
+    use super::*;
+
+    const TEST_CERT_PEM: &str = concat!(
+        "-----BEGIN CERTIFICATE-----\n",
+        "MIIDDzCCAfegAwIBAgIUKztfxD+3pXjx6ZJeqviN6VntuxAwDQYJKoZIhvcNAQEL\n",
+        "BQAwFzEVMBMGA1UEAwwMVGVzdCBQaXhpIENBMB4XDTI2MDkxOTEwNDQzOVoXDTM2\n",
+        "MDkxNjEwNDQzOVowFzEVMBMGA1UEAwwMVGVzdCBQaXhpIENBMIIBIjANBgkqhkiG\n",
+        "9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwxrwRnx6QlExqc7IdQErCEdfdb2FNqzx8x1g\n",
+        "FMWshdmay+v3Qm0Q4hspuHP51R0kwufjuGGW2e3jTDwk4C162O0OZWrZmNJIIiHD\n",
+        "sdZ1i8i2FW3r3UuOh+cKpVpyaFMrT4t0brkW0Zy2ws8A3eh7aIywmeYziCRwpSid\n",
+        "5thgyc1XExSnQv9hmEKlbT06MOVdnOypy1V0tSPUlm+4rNaUzfvFObs+c8W0QhFv\n",
+        "52nBi4Uj+lUoT+33ixKS5RPFZbO0KbBlaFBaWWab6QrGtpVbjR8MVo4U2H+N3/h0\n",
+        "ccLSSnE8fu8/+Dmo1lSCza+rbEFJgCH73eIebPbHuqG+Gr46xwIDAQABo1MwUTAd\n",
+        "BgNVHQ4EFgQUagYbkw0yCFYHgz5Y3riPJ+lDbZIwHwYDVR0jBBgwFoAUagYbkw0y\n",
+        "CFYHgz5Y3riPJ+lDbZIwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOC\n",
+        "AQEApHTBUKjb1PKoHFHn/JgMkAeRA4/A9iRzD9hItzFk+0j/cwTghpYOvcLB99N/\n",
+        "VjwrghEuPh78fMvuYHfDMaau3ZwRWWljLU72fXTsTi7zlhuEhkzzxOi4uF6F6FEv\n",
+        "fQfEj6QlDYaj5FbH90B9rGqf4ZAAsZRWEl8Gdky/ICEH2BMVT/d7D0zqcxWoMG25\n",
+        "iJFe05DCf2kskCIsMlcOz/oTb/rN4yfxOsTQYaypnzQbltaQ28lUmBFH273Chtq1\n",
+        "a+5m443UMUGCEYtEucUpwjffkrYeAaVvT3HR6xXCUsSg0Pow2gwPrT7QRx5LM3kC\n",
+        "PQRuveraQhjoc/MjmshkDDjONg==\n",
+        "-----END CERTIFICATE-----\n"
+    );
+
+    #[test]
+    fn test_webpki_roots_non_empty() {
+        let certs = Certificates::webpki_roots();
+        assert!(!certs.is_empty());
+        assert!(certs.len() > 100);
+    }
+
+    #[test]
+    fn test_for_mode_without_env() {
+        temp_env::with_vars(
+            [
+                ("SSL_CERT_FILE", None::<&str>),
+                ("SSL_CERT_DIR", None::<&str>),
+            ],
+            || {
+                let webpki = Certificates::for_mode(TlsRootCerts::Webpki);
+                assert_eq!(webpki.len(), Certificates::webpki_roots().len());
+
+                let system = Certificates::for_mode(TlsRootCerts::System);
+                assert_eq!(system.len(), Certificates::from_native_store().len());
+            },
+        );
+    }
+
+    #[test]
+    fn test_for_mode_merges_ssl_cert_file_with_system() {
+        let mut temp_cert = NamedTempFile::new().unwrap();
+        temp_cert.write_all(TEST_CERT_PEM.as_bytes()).unwrap();
+
+        temp_env::with_vars(
+            [
+                ("SSL_CERT_FILE", Some(temp_cert.path().to_str().unwrap())),
+                ("SSL_CERT_DIR", None::<&str>),
+            ],
+            || {
+                let env_certs = Certificates::from_env().expect("should parse cert from env");
+                assert_eq!(env_certs.len(), 1);
+                let test_cert = &env_certs.as_slice()[0];
+
+                let system = Certificates::for_mode(TlsRootCerts::System);
+                assert!(system.contains(test_cert));
+
+                let native = Certificates::from_native_store();
+                if !native.is_empty() {
+                    assert!(system.len() >= native.len());
+                }
+            },
+        );
+    }
+
+    #[test]
+    fn test_for_mode_merges_ssl_cert_file_with_webpki() {
+        let mut temp_cert = NamedTempFile::new().unwrap();
+        temp_cert.write_all(TEST_CERT_PEM.as_bytes()).unwrap();
+
+        temp_env::with_vars(
+            [
+                ("SSL_CERT_FILE", Some(temp_cert.path().to_str().unwrap())),
+                ("SSL_CERT_DIR", None::<&str>),
+            ],
+            || {
+                let env_certs = Certificates::from_env().expect("should parse cert from env");
+                assert_eq!(env_certs.len(), 1);
+                let test_cert = &env_certs.as_slice()[0];
+
+                let webpki = Certificates::for_mode(TlsRootCerts::Webpki);
+                assert!(webpki.contains(test_cert));
+                assert!(
+                    webpki.len() > Certificates::webpki_roots().len() || webpki.contains(test_cert)
+                );
+            },
+        );
+    }
+
+    #[test]
+    fn test_merge_deduplicates() {
+        let mut certs1 = Certificates::webpki_roots();
+        let initial_len = certs1.len();
+        let certs2 = Certificates::webpki_roots();
+        certs1.merge(certs2);
+        assert_eq!(certs1.len(), initial_len);
     }
 }
