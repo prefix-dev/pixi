@@ -13,7 +13,7 @@ use pixi_build_backend::{
     tools::BackendIdentifier,
     variants::NormalizedKey,
 };
-use rattler_build_recipe::stage0::{Item, Script, SerializableMatchSpec, Value};
+use rattler_build_recipe::stage0::{ConditionalList, Item, Script, SerializableMatchSpec, Value};
 use rattler_conda_types::{ChannelUrl, Platform};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
@@ -24,6 +24,52 @@ fn matchspec_item(
     spec: &str,
 ) -> Result<Item<SerializableMatchSpec>, rattler_conda_types::ParseMatchSpecError> {
     Ok(Item::Value(Value::new_concrete(spec.parse()?, None)))
+}
+
+fn requirement_contains_package(
+    requirements: &ConditionalList<SerializableMatchSpec>,
+    package_names: &[&str],
+) -> bool {
+    requirements
+        .iter()
+        .any(|item| requirement_item_contains_any_package(item, package_names))
+}
+
+fn requirement_item_contains_any_package(
+    item: &Item<SerializableMatchSpec>,
+    package_names: &[&str],
+) -> bool {
+    match item {
+        Item::Value(value) => {
+            if let Some(exact_name) = value.as_concrete().and_then(|spec| spec.0.name.as_exact()) {
+                let normalized = exact_name.as_normalized();
+                if package_names
+                    .iter()
+                    .any(|name| name.eq_ignore_ascii_case(normalized))
+                {
+                    return true;
+                }
+            }
+            if let Some(first_token) = value.to_string().split_whitespace().next() {
+                let pkg = first_token
+                    .split(['=', '<', '>', '~', '!', ' '])
+                    .next()
+                    .unwrap_or(first_token);
+                if package_names
+                    .iter()
+                    .any(|name| name.eq_ignore_ascii_case(pkg))
+                {
+                    return true;
+                }
+            }
+            false
+        }
+        Item::Conditional(cond) => cond
+            .then
+            .iter()
+            .chain(cond.else_value.iter().flat_map(|items| items.iter()))
+            .any(|item| requirement_item_contains_any_package(item, package_names)),
+    }
 }
 
 #[derive(Default, Clone)]
@@ -88,7 +134,8 @@ impl GenerateRecipe for RGenerator {
             manifest_path.clone()
         };
 
-        let mut metadata_provider = DescriptionMetadataProvider::new(&manifest_root);
+        let mut metadata_provider =
+            DescriptionMetadataProvider::new(&manifest_root).with_mapping(config.mapping.clone());
 
         let mut generated_recipe =
             GeneratedRecipe::from_model(model.clone(), &mut metadata_provider).into_diagnostic()?;
@@ -122,61 +169,91 @@ impl GenerateRecipe for RGenerator {
             .run
             .push(matchspec_item("r-base").into_diagnostic()?);
 
-        // Add R package dependencies from DESCRIPTION (Imports + Depends)
-        let r_dependencies = metadata_provider.runtime_dependencies().into_diagnostic()?;
+        // Add R package dependencies from DESCRIPTION (Imports + Depends) unless ignored
+        if !config.ignore_description_dependencies.unwrap_or(false) {
+            let r_dependencies = metadata_provider.runtime_dependencies().into_diagnostic()?;
 
-        for dep in r_dependencies {
-            // Skip packages that are built into r-base (base + recommended packages)
-            if metadata::is_builtin_package(&dep.name) {
-                continue;
+            for dep in r_dependencies {
+                // Skip packages that are built into r-base (base + recommended packages)
+                if metadata::is_builtin_package(&dep.name) {
+                    continue;
+                }
+
+                // Convert R package name to conda package name, respecting custom mapping
+                let conda_name =
+                    metadata::r_package_to_conda_with_mapping(&dep.name, Some(&config.mapping));
+
+                let lower_dep = dep.name.to_lowercase();
+                let r_name = format!("r-{lower_dep}");
+                let bioc_name = format!("bioconductor-{lower_dep}");
+                let candidate_names = [
+                    conda_name.as_str(),
+                    r_name.as_str(),
+                    bioc_name.as_str(),
+                    lower_dep.as_str(),
+                ];
+
+                // Build the dependency spec string
+                let dep_spec = if let Some(version) = &dep.version {
+                    let conda_version = metadata::r_version_to_conda(version);
+                    format!("{} {}", conda_name, conda_version)
+                } else {
+                    conda_name.clone()
+                };
+
+                // Add to host requirements (runtime dependencies) if not already present
+                if !requirement_contains_package(&requirements.host, &candidate_names) {
+                    requirements
+                        .host
+                        .push(matchspec_item(&dep_spec).into_diagnostic()?);
+                }
+
+                // Also add to run requirements if not already present
+                if !requirement_contains_package(&requirements.run, &candidate_names) {
+                    requirements
+                        .run
+                        .push(matchspec_item(&dep_spec).into_diagnostic()?);
+                }
             }
 
-            // Convert R package name to conda package name
-            let conda_name = metadata::r_package_to_conda(&dep.name);
+            // Add LinkingTo dependencies (packages providing headers for C/C++ compilation)
+            let linking_to_deps = metadata_provider.linking_to().into_diagnostic()?;
 
-            // Build the dependency spec string
-            let dep_spec = if let Some(version) = &dep.version {
-                let conda_version = metadata::r_version_to_conda(version);
-                format!("{} {}", conda_name, conda_version)
-            } else {
-                conda_name
-            };
+            for dep in linking_to_deps {
+                // Skip packages that are built into r-base
+                if metadata::is_builtin_package(&dep.name) {
+                    continue;
+                }
 
-            // Add to host requirements (runtime dependencies)
-            requirements
-                .host
-                .push(matchspec_item(&dep_spec).into_diagnostic()?);
+                // Convert R package name to conda package name, respecting custom mapping
+                let conda_name =
+                    metadata::r_package_to_conda_with_mapping(&dep.name, Some(&config.mapping));
 
-            // Also add to run requirements
-            requirements
-                .run
-                .push(matchspec_item(&dep_spec).into_diagnostic()?);
-        }
+                let lower_dep = dep.name.to_lowercase();
+                let r_name = format!("r-{lower_dep}");
+                let bioc_name = format!("bioconductor-{lower_dep}");
+                let candidate_names = [
+                    conda_name.as_str(),
+                    r_name.as_str(),
+                    bioc_name.as_str(),
+                    lower_dep.as_str(),
+                ];
 
-        // Add LinkingTo dependencies (packages providing headers for C/C++ compilation)
-        let linking_to_deps = metadata_provider.linking_to().into_diagnostic()?;
+                if !requirement_contains_package(&requirements.host, &candidate_names) {
+                    // Build the dependency spec string
+                    let dep_spec = if let Some(version) = &dep.version {
+                        let conda_version = metadata::r_version_to_conda(version);
+                        format!("{} {}", conda_name, conda_version)
+                    } else {
+                        conda_name
+                    };
 
-        for dep in linking_to_deps {
-            // Skip packages that are built into r-base
-            if metadata::is_builtin_package(&dep.name) {
-                continue;
+                    // Add to host requirements only (LinkingTo packages provide headers at compile time)
+                    requirements
+                        .host
+                        .push(matchspec_item(&dep_spec).into_diagnostic()?);
+                }
             }
-
-            // Convert R package name to conda package name
-            let conda_name = metadata::r_package_to_conda(&dep.name);
-
-            // Build the dependency spec string
-            let dep_spec = if let Some(version) = &dep.version {
-                let conda_version = metadata::r_version_to_conda(version);
-                format!("{} {}", conda_name, conda_version)
-            } else {
-                conda_name
-            };
-
-            // Add to host requirements only (LinkingTo packages provide headers at compile time)
-            requirements
-                .host
-                .push(matchspec_item(&dep_spec).into_diagnostic()?);
         }
 
         // Generate build script
@@ -655,8 +732,51 @@ Imports:
     async fn test_package_name_derived_from_description_is_r_prefixed() {
         // When the model carries no name (the inline source-dependency flow),
         // the recipe name comes from the DESCRIPTION via the metadata provider.
-        // It must be r-prefixed and lowercased so that a dependent's `Imports`
+        // For CRAN packages, it must be r-prefixed and lowercased so that a dependent's `Imports`
         // (which maps through r_package_to_conda) resolves against it.
+        let temp_dir = TempDir::new().unwrap();
+
+        fs::write(
+            temp_dir.path().join("DESCRIPTION"),
+            "Package: RColorBrewer\nVersion: 1.0.0\nTitle: Test Package\n",
+        )
+        .await
+        .unwrap();
+
+        let project_model = project_fixture!({
+            "version": "1.0.0",
+            "targets": {
+                "defaultTarget": {}
+            }
+        });
+
+        let generated_recipe = RGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &RBackendConfig::default(),
+                temp_dir.path().to_path_buf(),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        assert_eq!(
+            generated_recipe.recipe.package.name.to_string(),
+            "r-rcolorbrewer"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_package_name_derived_from_description_for_bioconductor() {
+        // For Bioconductor packages, the recipe name comes from the DESCRIPTION
+        // and must be bioconductor-prefixed and lowercased.
         let temp_dir = TempDir::new().unwrap();
 
         fs::write(
@@ -692,8 +812,265 @@ Imports:
 
         assert_eq!(
             generated_recipe.recipe.package.name.to_string(),
-            "r-rhdf5lib"
+            "bioconductor-rhdf5lib"
         );
+    }
+
+    #[tokio::test]
+    async fn test_bioconductor_dependencies_auto_mapped() {
+        let temp_dir = TempDir::new().unwrap();
+
+        fs::write(
+            temp_dir.path().join("DESCRIPTION"),
+            "Package: testpkg\nVersion: 1.0.0\nImports: Biobase, GenomicRanges (>= 1.40.0), curl\n",
+        )
+        .await
+        .unwrap();
+
+        let project_model = project_fixture!({
+            "name": "r-testpkg",
+            "version": "1.0.0",
+            "targets": {
+                "defaultTarget": {}
+            }
+        });
+
+        let generated_recipe = RGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &RBackendConfig::default(),
+                temp_dir.path().to_path_buf(),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let host_reqs: Vec<String> = generated_recipe
+            .recipe
+            .requirements
+            .host
+            .iter()
+            .map(|r| r.to_string())
+            .collect();
+        let run_reqs: Vec<String> = generated_recipe
+            .recipe
+            .requirements
+            .run
+            .iter()
+            .map(|r| r.to_string())
+            .collect();
+
+        // Biobase should auto-map to bioconductor-biobase
+        assert!(host_reqs.iter().any(|r| r == "bioconductor-biobase"));
+        assert!(run_reqs.iter().any(|r| r == "bioconductor-biobase"));
+
+        // GenomicRanges should auto-map to bioconductor-genomicranges >=1.40.0
+        assert!(
+            host_reqs
+                .iter()
+                .any(|r| r.contains("bioconductor-genomicranges") && r.contains(">=1.40.0"))
+        );
+        assert!(
+            run_reqs
+                .iter()
+                .any(|r| r.contains("bioconductor-genomicranges") && r.contains(">=1.40.0"))
+        );
+
+        // curl is a CRAN package, should map to r-curl
+        assert!(host_reqs.iter().any(|r| r == "r-curl"));
+        assert!(run_reqs.iter().any(|r| r == "r-curl"));
+    }
+
+    #[tokio::test]
+    async fn test_custom_mapping_in_config() {
+        let temp_dir = TempDir::new().unwrap();
+
+        fs::write(
+            temp_dir.path().join("DESCRIPTION"),
+            "Package: testpkg\nVersion: 1.0.0\nImports: Biobase, SomeOther\n",
+        )
+        .await
+        .unwrap();
+
+        let project_model = project_fixture!({
+            "name": "r-testpkg",
+            "version": "1.0.0",
+            "targets": {
+                "defaultTarget": {}
+            }
+        });
+
+        let mut config = RBackendConfig::default();
+        config
+            .mapping
+            .insert("Biobase".to_string(), "custom-biobase-pkg".to_string());
+        config
+            .mapping
+            .insert("SomeOther".to_string(), "my-custom-other".to_string());
+
+        let generated_recipe = RGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &config,
+                temp_dir.path().to_path_buf(),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let host_reqs: Vec<String> = generated_recipe
+            .recipe
+            .requirements
+            .host
+            .iter()
+            .map(|r| r.to_string())
+            .collect();
+
+        assert!(host_reqs.iter().any(|r| r == "custom-biobase-pkg"));
+        assert!(host_reqs.iter().any(|r| r == "my-custom-other"));
+    }
+
+    #[tokio::test]
+    async fn test_explicit_dependencies_prevent_duplicates_and_conflicts() {
+        let temp_dir = TempDir::new().unwrap();
+
+        fs::write(
+            temp_dir.path().join("DESCRIPTION"),
+            "Package: testpkg\nVersion: 1.0.0\nImports: Biobase\n",
+        )
+        .await
+        .unwrap();
+
+        let project_model = project_fixture!({
+            "name": "r-testpkg",
+            "version": "1.0.0",
+            "targets": {
+                "defaultTarget": {
+                    "hostDependencies": {
+                        "bioconductor-biobase": {
+                            "binary": {
+                                "version": ">=2.60"
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        let generated_recipe = RGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &RBackendConfig::default(),
+                temp_dir.path().to_path_buf(),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let host_reqs: Vec<String> = generated_recipe
+            .recipe
+            .requirements
+            .host
+            .iter()
+            .map(|r| r.to_string())
+            .collect();
+
+        // Host requirements should have exactly 1 biobase spec (the user's explicit >=2.60 constraint),
+        // and NO r-biobase!
+        let biobase_count = host_reqs.iter().filter(|r| r.contains("biobase")).count();
+        assert_eq!(biobase_count, 1);
+        assert!(
+            host_reqs
+                .iter()
+                .any(|r| r.contains("bioconductor-biobase") && r.contains(">=2.60"))
+        );
+        assert!(
+            !host_reqs
+                .iter()
+                .any(|r| r == "r-biobase" || r.starts_with("r-biobase "))
+        );
+    }
+
+    #[tokio::test]
+    async fn test_ignore_description_dependencies() {
+        let temp_dir = TempDir::new().unwrap();
+
+        fs::write(
+            temp_dir.path().join("DESCRIPTION"),
+            "Package: testpkg\nVersion: 1.0.0\nImports: Biobase, curl\nLinkingTo: Rcpp\n",
+        )
+        .await
+        .unwrap();
+
+        let project_model = project_fixture!({
+            "name": "r-testpkg",
+            "version": "1.0.0",
+            "targets": {
+                "defaultTarget": {}
+            }
+        });
+
+        let config = RBackendConfig {
+            ignore_description_dependencies: Some(true),
+            ..Default::default()
+        };
+
+        let generated_recipe = RGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &config,
+                temp_dir.path().to_path_buf(),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let host_reqs: Vec<String> = generated_recipe
+            .recipe
+            .requirements
+            .host
+            .iter()
+            .map(|r| r.to_string())
+            .collect();
+        let run_reqs: Vec<String> = generated_recipe
+            .recipe
+            .requirements
+            .run
+            .iter()
+            .map(|r| r.to_string())
+            .collect();
+
+        // Should only have r-base in host and run requirements
+        assert_eq!(host_reqs, vec!["r-base".to_string()]);
+        assert_eq!(run_reqs, vec!["r-base".to_string()]);
     }
 
     #[tokio::test]
