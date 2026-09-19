@@ -18,8 +18,8 @@ use miette::{Context, IntoDiagnostic};
 use pixi_auth::get_auth_store;
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
-    BackendMetadataDir, BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs,
-    ComputeResultExt, CondaPackageFormat, EnvironmentRef, EnvironmentSpec, EphemeralEnv,
+    BackendMetadataDir, BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, ComputeResultExt,
+    CondaPackageFormat, EnvironmentRef, EnvironmentSpec, EphemeralEnv,
     keys::{ResolveSourcePackageKey, ResolveSourcePackageSpec, SourceBuildKey, SourceBuildSpec},
 };
 use pixi_config::{ConfigCli, IndexChannelConfig, IndexConfig, PackageFormatAndCompression};
@@ -606,24 +606,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let multi_progress = global_multi_progress();
     let anchor_pb = multi_progress.add(ProgressBar::hidden());
-    let cache_dir = AbsPathBuf::new(pixi_config::get_cache_dir()?)
-        .expect("cache dir is not absolute")
-        .into_assume_dir();
-    let workspace_dir = AbsPathBuf::new(workspace.pixi_dir())
-        .expect("pixi dir is not absolute")
-        .into_assume_dir();
-    let mut cache_dirs = CacheDirs::new(cache_dir).with_workspace(workspace_dir);
+    let progress = std::sync::Arc::new(TopLevelProgress::new(
+        pixi_compute_reporters::OperationRegistry::new(),
+        multi_progress,
+        anchor_pb,
+    ));
+    let mut cache_dirs = workspace.cache_dirs()?;
     if let Some(build_dir) = args.build_dir {
         let build_dir = AbsPathBuf::new(build_dir)
             .expect("build dir is not absolute")
             .into_assume_dir();
         cache_dirs.set_override::<BackendMetadataDir>(build_dir);
     }
-    let progress = std::sync::Arc::new(TopLevelProgress::new(
-        pixi_compute_reporters::OperationRegistry::new(),
-        multi_progress,
-        anchor_pb,
-    ));
     let command_dispatcher = workspace
         .command_dispatcher_builder(Some(&progress))?
         .with_cache_dirs(cache_dirs)

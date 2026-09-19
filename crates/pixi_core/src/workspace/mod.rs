@@ -38,7 +38,9 @@ use miette::{Diagnostic, IntoDiagnostic};
 use once_cell::sync::OnceCell;
 use pep508_rs::Requirement;
 use pixi_build_frontend::BackendOverride;
-use pixi_command_dispatcher::{CacheDirs, CommandDispatcher, CommandDispatcherBuilder, Limits};
+use pixi_command_dispatcher::{
+    CacheDirs, CommandDispatcher, CommandDispatcherBuilder, Limits, PackagesDir,
+};
 use pixi_config::{CacheKind, Config, RunPostLinkScripts};
 use pixi_consts::consts;
 use pixi_diff::LockFileDiff;
@@ -1160,6 +1162,31 @@ impl Workspace {
     /// solve / instantiate-backend reporter slots, then lets `progress`
     /// override them with the terminal reporters.
     ///
+    /// Returns the [`CacheDirs`] configured for this workspace, including
+    /// any programmatic overrides such as `cache.conda-packages`.
+    pub fn cache_dirs(&self) -> miette::Result<CacheDirs> {
+        let cache_dir = AbsPathBuf::new(pixi_config::get_cache_dir()?)
+            .expect("cache dir is not absolute")
+            .into_assume_dir();
+        let workspace_dir = AbsPathBuf::new(self.pixi_dir())
+            .expect("pixi dir is not absolute")
+            .into_assume_dir();
+        let mut cache_dirs = CacheDirs::new(cache_dir).with_workspace(workspace_dir);
+        if let Ok(conda_packages_dir) = self.config().cache_dir_for(CacheKind::CondaPackages) {
+            let conda_packages_dir = if conda_packages_dir.is_absolute() {
+                conda_packages_dir
+            } else {
+                dunce::canonicalize(&conda_packages_dir)
+                    .or_else(|_| std::env::current_dir().map(|cwd| cwd.join(&conda_packages_dir)))
+                    .unwrap_or(conda_packages_dir)
+            };
+            if let Ok(abs) = AbsPathBuf::new(conda_packages_dir) {
+                cache_dirs.set_override::<PackagesDir>(abs.into_assume_dir());
+            }
+        }
+        Ok(cache_dirs)
+    }
+
     /// `progress` is mandatory so that no dispatcher can be constructed
     /// without deciding whether its work is visible to the user. Pass `None`
     /// only for genuinely silent paths; `grep` for it to find them all.
@@ -1167,13 +1194,7 @@ impl Workspace {
         &self,
         progress: Option<&Arc<pixi_reporters::TopLevelProgress>>,
     ) -> miette::Result<CommandDispatcherBuilder> {
-        let cache_dir = AbsPathBuf::new(pixi_config::get_cache_dir()?)
-            .expect("cache dir is not absolute")
-            .into_assume_dir();
-        let workspace_dir = AbsPathBuf::new(self.pixi_dir())
-            .expect("pixi dir is not absolute")
-            .into_assume_dir();
-        let cache_dirs = CacheDirs::new(cache_dir).with_workspace(workspace_dir);
+        let cache_dirs = self.cache_dirs()?;
 
         // Determine the tool platform to use
         let tool_platform = self.config().tool_platform();
@@ -2850,5 +2871,29 @@ packages: []
         let warning_b = fs_err::read_to_string(&warning_file).unwrap();
         assert!(warning_b.contains(&target_dir_b.display().to_string()));
         assert!(!warning_b.contains(&target_dir_a.display().to_string()));
+    }
+
+    #[test]
+    fn test_command_dispatcher_builder_respects_conda_packages_cache_dir() {
+        let workspace_dir = tempfile::tempdir().unwrap();
+        let custom_pkgs_dir = tempfile::tempdir().unwrap();
+        let custom_pkgs_path = dunce::canonicalize(custom_pkgs_dir.path()).unwrap();
+
+        let workspace = Workspace::from_str(
+            &workspace_dir.path().join(consts::WORKSPACE_MANIFEST),
+            WORKSPACE_MANIFEST_STR,
+        )
+        .unwrap()
+        .with_cli_config(Config {
+            cache: CacheConfig {
+                conda_packages: Some(custom_pkgs_path.clone()),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+
+        let cache_dirs = workspace.cache_dirs().unwrap();
+        let resolved = cache_dirs.resolve_from_env::<PackagesDir>();
+        assert_eq!(resolved.as_std_path(), custom_pkgs_path.as_path());
     }
 }
