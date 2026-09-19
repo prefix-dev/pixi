@@ -1107,4 +1107,204 @@ default-channels = [
             @r#"default-channels = ["new-channel"]"#
         );
     }
+
+    #[tokio::test]
+    async fn set_kebab_case_overwrites_legacy_snake_case_key() {
+        let test_context = TestContext::setup(Some("tls_no_verify = true"));
+
+        execute_subcommand(Subcommand::Set(SetArgs {
+            key: "tls-no-verify".to_owned(),
+            value: Some("false".to_owned()),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        // Verify tls_no_verify was replaced by tls-no-verify (no duplicate keys)
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @r#"tls-no-verify = false"#
+        );
+
+        // Verify subsequent modifications on the newly canonicalized key work cleanly
+        execute_subcommand(Subcommand::Set(SetArgs {
+            key: "tls-no-verify".to_owned(),
+            value: Some("true".to_owned()),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @r#"tls-no-verify = true"#
+        );
+    }
+
+    #[tokio::test]
+    async fn set_nested_key_reuses_snake_case_parent_table() {
+        let test_context = TestContext::setup(Some(
+            r#"
+[repodata_config]
+disable-sharded = true
+"#,
+        ));
+
+        execute_subcommand(Subcommand::Set(SetArgs {
+            key: "repodata-config.disable-sharded".to_owned(),
+            common: test_context.common_args.clone(),
+            value: Some("false".to_owned()),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+                    test_context.read_config(),
+                    @r#"
+[repodata_config]
+disable-sharded = false
+"#,
+        );
+    }
+
+    #[tokio::test]
+    async fn set_nested_key_overwrites_legacy_snake_case_child() {
+        let test_context = TestContext::setup(Some(
+            r#"
+[repodata-config]
+disable_bzip2 = true
+"#,
+        ));
+
+        execute_subcommand(Subcommand::Set(SetArgs {
+            key: "repodata-config.disable-bzip2".to_owned(),
+            common: test_context.common_args.clone(),
+            value: Some("false".to_owned()),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+                    test_context.read_config(),
+                    @r#"
+[repodata-config]
+disable-bzip2 = false
+"#,
+        );
+    }
+
+    #[tokio::test]
+    async fn append_preserves_snake_case_key() {
+        let test_context = TestContext::setup(Some(
+            r#"
+default_channels = ["conda-forge"]
+"#,
+        ));
+
+        execute_subcommand(Subcommand::Append(PendArgs {
+            key: "default-channels".to_owned(),
+            value: "new-channel".to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @r#"
+default_channels = ["conda-forge", "new-channel"]
+"#,
+        );
+    }
+
+    #[tokio::test]
+    async fn prepend_preserves_snake_case_key() {
+        let test_context = TestContext::setup(Some(
+            r#"
+default_channels = ["conda-forge"]
+"#,
+        ));
+
+        execute_subcommand(Subcommand::Prepend(PendArgs {
+            key: "default-channels".to_owned(),
+            value: "new-channel".to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @r#"
+default_channels = ["new-channel", "conda-forge"]
+"#,
+        );
+    }
+
+    #[tokio::test]
+    async fn unset_snake_case_target_key() {
+        let test_context = TestContext::setup(Some(
+            r#"
+tls_no_verify = true
+"#,
+        ));
+
+        execute_subcommand(Subcommand::Unset(UnsetArgs {
+            key: "tls-no-verify".to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+                    test_context.read_config(),
+                    @"",
+        );
+    }
+
+    #[tokio::test]
+    async fn unset_nested_snake_case_child_key() {
+        let test_context = TestContext::setup(Some(
+            r#"
+[repodata_config]
+disable_zstd = true
+disable-shared = true
+"#,
+        ));
+
+        execute_subcommand(Subcommand::Unset(UnsetArgs {
+            key: "repodata-config.disable-zstd".to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+                    test_context.read_config(),
+                    @ r#"
+[repodata_config]
+disable-shared = true
+"#,
+        );
+    }
+
+    #[tokio::test]
+    async fn unset_invalidating_config_fails() {
+        let test_context = TestContext::setup(Some(
+            r#"
+[s3-options.bucket]
+endpoint-url = "https://my-s3-compatible-host.com"
+force-path-style = true
+region = "us-east-1"
+"#,
+        ));
+
+        let args = Args {
+            subcommand: Subcommand::Unset(UnsetArgs {
+                key: "s3-options.bucket.region".to_owned(),
+                common: test_context.common_args.clone(),
+            }),
+        };
+
+        let result = execute(args).await;
+        let err = result
+            .expect_err("expected unset on required field to return an error, but it succeeded ");
+        assert!(
+            err.to_string()
+                .contains("would leave the config file invalid")
+                || err.to_string().contains("missing field `region`")
+        );
+    }
 }
