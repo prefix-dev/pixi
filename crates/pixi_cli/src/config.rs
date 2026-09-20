@@ -59,8 +59,8 @@ struct CommonArgs {
     #[arg(long, short, conflicts_with_all = &["local", "global", "path"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
     system: bool,
 
-    /// Accept path to a config file
-    #[arg(long, short, conflicts_with_all = &["local", "global", "system"], help_heading = consts::CLAP_CONFIG_OPTIONS, hide = true)]
+    /// Path to a local configuration file
+    #[arg(long, short, conflicts_with_all = &["local", "global", "system"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
     path: Option<PathBuf>,
 
     #[clap(flatten)]
@@ -271,21 +271,27 @@ fn determine_project_root(common_args: &CommonArgs) -> miette::Result<Option<Pat
 /// Load the configuration the given arguments select, taking the global layer
 /// from `source`.
 fn load_config(common_args: &CommonArgs, source: &GlobalConfigSource) -> miette::Result<Config> {
-    let base_config = if common_args.system {
-        Config::load_system()
-    } else if common_args.global {
-        return Ok(Config::load_global_with(source));
-    } else {
-        Config::load_global_with(source)
-    };
-
-    let target_path = determine_config_write_path(common_args)?;
-
-    if let Ok(local_config) = Config::from_path(&target_path) {
-        Ok(base_config.merge_config(local_config))
-    } else {
-        Ok(base_config)
+    if common_args.system {
+        return Ok(Config::load_system());
     }
+
+    if common_args.global {
+        return Ok(Config::load_global_with(source));
+    }
+
+    // If an explicit --path was given, load and merge that specific config file
+    if let Some(path) = &common_args.path {
+        let base_config = Config::load_global_with(source);
+        let local_config = Config::from_path(path).into_diagnostic()?;
+        return Ok(base_config.merge_config(local_config));
+    }
+
+    // Otherwise, check if we are in a project/workspace root
+    if let Some(root) = determine_project_root(common_args)? {
+        return Ok(Config::load_with(&root, source));
+    }
+
+    Ok(Config::load_global_with(source))
 }
 
 fn determine_config_write_path(common_args: &CommonArgs) -> miette::Result<PathBuf> {
