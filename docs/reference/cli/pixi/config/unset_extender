@@ -6,5 +6,6 @@
 pixi config unset default-channels
 pixi config unset --global mirrors
 pixi config unset repodata-config.disable-zstd --system
+pixi config unset shell --path /path/to/config.toml
 ```
 --8<-- [end:example]

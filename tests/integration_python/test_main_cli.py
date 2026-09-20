@@ -647,9 +647,8 @@ def test_config_list_honors_the_config_source_flags(pixi: Path, tmp_path: Path) 
         [pixi, "config", "list", "--no-config"], env=env, stdout_excludes="shared-channel"
     )
 
-def test_config_list_does_not_unconditionally_read_target_path(
-    pixi: Path, tmp_path: Path
-) -> None:
+
+def test_config_list_does_not_unconditionally_read_target_path(pixi: Path, tmp_path: Path) -> None:
     """Ensure write target path is not read unconditionally as an extra layer outside a workspace"""
     env = isolated_config_env(tmp_path)
 
@@ -661,7 +660,7 @@ def test_config_list_does_not_unconditionally_read_target_path(
 
     (Path(env["PIXI_HOME"]) / "config.toml").write_text(
         'default-channels = ["global-channel"]\n'
-        '[pypi-config]\n'
+        "[pypi-config]\n"
         'extra-index-urls = ["https://global.example/simple"]\n'
     )
 
