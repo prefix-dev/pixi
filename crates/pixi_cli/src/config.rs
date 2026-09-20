@@ -318,6 +318,18 @@ fn determine_config_write_path(common_args: &CommonArgs) -> miette::Result<PathB
     Ok(to)
 }
 
+/// Alters a specific key in the user configuration file according to the given `mode`.
+///
+/// Handles reading the existing TOML document (or initializing a new one),
+/// updating key values (including list modifications like `Prepend` and `Append`),
+/// and persisting the formatted result back to the disk.
+///
+/// # Errors
+///
+/// - The target config path cannot be determined or created.
+/// - The existing config file cannot be read or parsed as valid TOML.
+/// - A list-only operation (`Prepend`/`Append`) is attempted on a non-list key.
+/// - Persisting the updated content disk fails.
 fn alter_config(
     common_args: &CommonArgs,
     key: &str,
@@ -356,14 +368,6 @@ fn alter_config(
             let is_prepend = matches!(mode, AlterMode::Prepend);
             let input = value.expect("value must be provided");
 
-            fn modify_list<T>(vec: &mut Vec<T>, item: T, is_prepend: bool) {
-                if is_prepend {
-                    vec.insert(0, item);
-                } else {
-                    vec.push(item);
-                }
-            }
-
             match key {
                 // `default-channels` replaces the lower layers rather than concatenating them.
                 // If the local file has no override yet, we must write the entire merged list
@@ -379,14 +383,22 @@ fn alter_config(
                     if local_has_channels {
                         // Local file already has default-channels. Modify the local list and use mode (Prepend/Append)
                         // to preserve existing multi-line TOML formatting.
-                        modify_list(&mut config.default_channels, channel, is_prepend);
+                        if is_prepend {
+                            config.default_channels.insert(0, channel);
+                        } else {
+                            config.default_channels.push(channel)
+                        }
                         transplant_config_key(&config, &mut toml_doc, key, &mode)?;
                     } else {
                         // Local file is missing default-channels. Load inherited global layers,
                         // add the channel, and user AlterMode::Set to write the full merged array.
                         let mut new_channels =
                             load_config(common_args, &GlobalConfigSource::Search)?.default_channels;
-                        modify_list(&mut new_channels, channel, is_prepend);
+                        if is_prepend {
+                            new_channels.insert(0, channel);
+                        } else {
+                            new_channels.push(channel)
+                        }
                         config.default_channels = new_channels;
                         transplant_config_key(&config, &mut toml_doc, key, &AlterMode::Set)?;
                     }
@@ -398,7 +410,11 @@ fn alter_config(
                 "pypi-config.extra-index-urls" => {
                     let url = url::Url::parse(&input)
                         .map_err(|e| miette::miette!("Invalid URL: {}", e))?;
-                    modify_list(&mut config.pypi_config.extra_index_urls, url, is_prepend);
+                    if is_prepend {
+                        config.pypi_config.extra_index_urls.insert(0, url);
+                    } else {
+                        config.pypi_config.extra_index_urls.push(url);
+                    }
                     transplant_config_key(&config, &mut toml_doc, key, &mode)?;
                 }
                 _ => {
@@ -437,6 +453,13 @@ fn alter_config(
     Ok(())
 }
 
+/// Unset a key from the TOML document, preserving existing formatting and comments.
+///
+/// # Errors
+///
+/// - `key` is not a valid key path.
+/// - The specified key does not exist in the document.
+/// - The unset operation leaves the config as invalid.
 fn unset(toml_doc: &mut TomlDocument, key: &str) -> miette::Result<()> {
     let key_path = KeyPath::parse(key)?;
 
@@ -445,16 +468,25 @@ fn unset(toml_doc: &mut TomlDocument, key: &str) -> miette::Result<()> {
     let parent_table = if top_level_table {
         toml_doc.as_item_mut()
     } else {
+        let parents_keys = resolve_parent_keys(toml_doc, &key_path.parents());
+        let parents_strs: Vec<&str> = parents_keys.iter().map(|s| s.as_str()).collect();
         toml_doc
-            .get_or_insert_nested_item(&key_path.parents())
+            .get_or_insert_nested_item(&parents_strs)
             .into_diagnostic()?
     };
 
     remove_entry(parent_table, key_path.target())
         .into_diagnostic()?
+        .or_else(|| {
+            let alias = legacy_alias(key_path.target())?;
+            remove_entry(parent_table, &alias).ok()?
+        })
         .ok_or_else(|| miette::miette!("Key '{}' not found in configuration file", key))?;
 
     prune_empty_parents(toml_doc, key_path.parents())?;
+
+    Config::from_toml(&toml_doc.to_string(), None)
+        .wrap_err_with(|| format!("Unsetting the {key} would leave the config file invalid"))?;
 
     Ok(())
 }
@@ -490,15 +522,23 @@ fn prune_empty_parents(toml_doc: &mut TomlDocument, mut path: Vec<&str>) -> miet
     Ok(())
 }
 
+/// Transplants a single key from a validated `Config` into an editable TOML document.
+///
+/// We serialize the entire Config and parse it into a temporary document because:
+/// 1. The input value undergoes strict type validation via Serde.
+/// 2. We extract only the specific target leaf node, preventing unrequested default values.
+///
+/// # Errors
+///
+/// - `key` is not a valid key path.
+/// - Serializing `config` or parsing the temporary TOML document fails.
+/// - Navigating or creating nested parent tables in `toml_doc` fails.
 fn transplant_config_key(
     config: &Config,
     toml_doc: &mut TomlDocument,
     key: &str,
     mode: &AlterMode,
 ) -> miette::Result<()> {
-    // We serialize the entire Config and parse it into a temporary document because:
-    // 1. The input value undergoes strict type validation via Serde.
-    // 2. We extract only the specific target leaf node, preventing unrequested default values.
     let key_path = KeyPath::parse(key)?;
 
     let full_serialized = toml_edit::ser::to_string(&config).into_diagnostic()?;
@@ -506,9 +546,10 @@ fn transplant_config_key(
 
     // walk down all the way to the leaf
     let mut current_item = temp_doc.as_item();
-    for part in key.split('.') {
-        current_item = current_item.get(part).unwrap_or(&Item::None);
+    for parent in key_path.parents() {
+        current_item = current_item.get(parent).unwrap_or(&Item::None);
     }
+    current_item = current_item.get(key_path.target()).unwrap_or(&Item::None);
 
     if current_item.is_none() {
         // fall back into unset
@@ -522,8 +563,10 @@ fn transplant_config_key(
     let target_table = if key_path.parents().is_empty() {
         Ok(toml_doc.as_item_mut())
     } else {
+        let parents_keys = resolve_parent_keys(toml_doc, &key_path.parents());
+        let parents_strs: Vec<&str> = parents_keys.iter().map(|s| s.as_str()).collect();
         toml_doc
-            .get_or_insert_nested_item(&key_path.parents())
+            .get_or_insert_nested_item(&parents_strs)
             .into_diagnostic()
     }?;
 
@@ -531,8 +574,17 @@ fn transplant_config_key(
         && let Some(new_value) = current_item.as_value()
         && let Some(serialized_array) = new_value.as_array()
     {
+        // Check which key name to modify
+        let array_key = legacy_alias(&key_path.target_key)
+            .filter(|alias| {
+                target_table
+                    .as_table_like()
+                    .is_some_and(|t| t.contains_key(alias))
+            })
+            .unwrap_or_else(|| key_path.target().to_string());
+
         let target_array = toml_doc
-            .get_or_insert_toml_array_mut(&key_path.parents(), key_path.target())
+            .get_or_insert_toml_array_mut(&key_path.parents(), &array_key)
             .into_diagnostic()?;
 
         if matches!(mode, AlterMode::Prepend) {
@@ -545,6 +597,13 @@ fn transplant_config_key(
         return Ok(());
     }
 
+    // Removing legacy snake_case if exist before `set`
+    if let Some(alias) = legacy_alias(&key_path.target_key) {
+        if let Some(table_like) = target_table.as_table_like_mut() {
+            table_like.remove(&alias);
+        }
+    }
+
     if let Some(value) = current_item.as_value() {
         upsert_entry(target_table, &key_path.target_key, value.clone()).into_diagnostic()?;
     } else if let Some(table_to_insert) = current_item.as_table()
@@ -554,6 +613,43 @@ fn transplant_config_key(
     }
 
     Ok(())
+}
+
+/// Returns the legacy `snake_case` alias for a canonical `kebab-case` key or parent table
+/// if the one exists in the Serde schema
+fn legacy_alias(key: &str) -> Option<String> {
+    match key {
+        "default-channels"
+        | "authentication-override-file"
+        | "tls-no-verify"
+        | "repodata-config"
+        | "change-ps1"
+        | "disable-bzip2"
+        | "disable-zstd" => Some(key.replace('-', "_")),
+        _ => None,
+    }
+}
+
+/// Resolve parent key paths against the TOML document, using existing snake_case aliases on disk if present.
+fn resolve_parent_keys<'a>(doc: &'a TomlDocument, parents: &[&str]) -> Vec<String> {
+    let mut resolved = Vec::with_capacity(parents.len());
+    let mut current_item = doc.as_item();
+
+    for &parent in parents {
+        if let Some(alias) = legacy_alias(parent) {
+            if current_item.get(&alias).is_some() {
+                resolved.push(alias.clone());
+                current_item = current_item.get(&alias).unwrap();
+                continue;
+            }
+        }
+
+        // Fall back to the canonical parent key name
+        resolved.push(parent.to_string());
+        current_item = current_item.get(parent).unwrap_or(&toml_edit::Item::None);
+    }
+
+    resolved
 }
 
 // Trick to show only relevant field of the Config
@@ -751,11 +847,11 @@ mod tests {
 
         insta::assert_snapshot!(
             test_context.read_config(),
-            @r#"
+            @"
         # some comment which should be kept
         allow-symbolic-links = true
         tls-no-verify = false
-        "#
+        "
         );
     }
 
@@ -808,11 +904,11 @@ mod tests {
         insta::assert_snapshot!(
             test_context.read_config(),
             @r#"
-allow-symbolic-links = true
+        allow-symbolic-links = true
 
-[cache]
-root = "/tmp/pixi-cache"
-"#
+        [cache]
+        root = "/tmp/pixi-cache"
+        "#
         );
     }
 
@@ -869,9 +965,9 @@ not-stale-key = "another_value"
         insta::assert_snapshot!(
             test_context.read_config(),
             @r#"
-[shell]
-not-stale-key = "another_value"
-            "#,
+        [shell]
+        not-stale-key = "another_value"
+        "#,
         );
     }
 
@@ -916,9 +1012,9 @@ disable-sharded = false
             test_context.read_config(),
             @r#"
 
-[repodata-config."https://primary.example.com"]
-disable-sharded = false
-"#
+        [repodata-config."https://primary.example.com"]
+        disable-sharded = false
+        "#
         );
     }
 
@@ -961,9 +1057,9 @@ stale-key2 = "some-other-value"
         insta::assert_snapshot!(
             test_context.read_config(),
             @r#"
-# some comment that is being kept from the deleted key
-stale-key = "some-value"
-stale-key2 = "some-other-value"
+        # some comment that is being kept from the deleted key
+        stale-key = "some-value"
+        stale-key2 = "some-other-value"
         "#
         );
     }
@@ -1012,11 +1108,11 @@ default-channels = [
         insta::assert_snapshot!(
             test_context.read_config(),
             @r#"
-allow-symbolic-links = true
-default-channels = [
-    "conda-forge",
-    "new-channel",
-]
+        allow-symbolic-links = true
+        default-channels = [
+            "conda-forge",
+            "new-channel",
+        ]
         "#
         );
     }
@@ -1082,11 +1178,11 @@ default-channels = [
         insta::assert_snapshot!(
             test_context.read_config(),
             @r#"
-allow-symbolic-links = true
-default-channels = [
-    "new-channel",
-    "conda-forge",
-]
+        allow-symbolic-links = true
+        default-channels = [
+            "new-channel",
+            "conda-forge",
+        ]
         "#
         );
     }
@@ -1122,7 +1218,7 @@ default-channels = [
         // Verify tls_no_verify was replaced by tls-no-verify (no duplicate keys)
         insta::assert_snapshot!(
             test_context.read_config(),
-            @r#"tls-no-verify = false"#
+            @"tls-no-verify = false"
         );
 
         // Verify subsequent modifications on the newly canonicalized key work cleanly
@@ -1135,7 +1231,7 @@ default-channels = [
 
         insta::assert_snapshot!(
             test_context.read_config(),
-            @r#"tls-no-verify = true"#
+            @"tls-no-verify = true"
         );
     }
 
@@ -1157,10 +1253,11 @@ disable-sharded = true
 
         insta::assert_snapshot!(
                     test_context.read_config(),
-                    @r#"
-[repodata_config]
-disable-sharded = false
-"#,
+                    @"
+
+        [repodata_config]
+        disable-sharded = false
+        ",
         );
     }
 
@@ -1182,10 +1279,11 @@ disable_bzip2 = true
 
         insta::assert_snapshot!(
                     test_context.read_config(),
-                    @r#"
-[repodata-config]
-disable-bzip2 = false
-"#,
+                    @"
+
+        [repodata-config]
+        disable-bzip2 = false
+        ",
         );
     }
 
@@ -1207,8 +1305,9 @@ default_channels = ["conda-forge"]
         insta::assert_snapshot!(
             test_context.read_config(),
             @r#"
-default_channels = ["conda-forge", "new-channel"]
-"#,
+
+        default_channels = ["conda-forge", "new-channel"]
+        "#,
         );
     }
 
@@ -1230,8 +1329,9 @@ default_channels = ["conda-forge"]
         insta::assert_snapshot!(
             test_context.read_config(),
             @r#"
-default_channels = ["new-channel", "conda-forge"]
-"#,
+
+        default_channels = ["new-channel", "conda-forge"]
+        "#,
         );
     }
 
@@ -1273,10 +1373,11 @@ disable-shared = true
 
         insta::assert_snapshot!(
                     test_context.read_config(),
-                    @ r#"
-[repodata_config]
-disable-shared = true
-"#,
+                    @ "
+
+        [repodata_config]
+        disable-shared = true
+        ",
         );
     }
 
