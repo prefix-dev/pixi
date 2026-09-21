@@ -16,22 +16,6 @@ pub enum BackendVerbosity {
 }
 
 impl BackendVerbosity {
-    /// Convert Pixi's CLI flag counts to a single backend logging mode.
-    /// Quiet takes precedence, matching Pixi's own logging configuration.
-    pub fn from_cli(quiet: u8, verbose: u8) -> Self {
-        if quiet > 0 {
-            return Self::Quiet;
-        }
-
-        match verbose {
-            // Backends default to INFO, matching Pixi's -v. Keep the backend's
-            // default output at normal verbosity too, but never enable DEBUG.
-            0 | 1 => Self::Default,
-            2 => Self::Debug,
-            _ => Self::Trace,
-        }
-    }
-
     fn args(self) -> &'static [&'static str] {
         match self {
             Self::Default => &[],
@@ -178,14 +162,11 @@ mod tests {
     use super::{BackendVerbosity, IsolatedTool, SystemTool, Tool};
 
     #[test]
-    fn backend_verbosity_matches_pixi_cli_levels() {
-        assert!(BackendVerbosity::from_cli(0, 0).args().is_empty());
-        assert!(BackendVerbosity::from_cli(0, 1).args().is_empty());
-        assert_eq!(BackendVerbosity::from_cli(0, 2).args(), ["-v"]);
-        assert_eq!(BackendVerbosity::from_cli(0, 3).args(), ["-v", "-v"]);
-        assert_eq!(BackendVerbosity::from_cli(0, 4).args(), ["-v", "-v"]);
-        assert_eq!(BackendVerbosity::from_cli(1, 4).args(), ["-q", "-q", "-q"]);
-        assert_eq!(BackendVerbosity::from_cli(4, 1).args(), ["-q", "-q", "-q"]);
+    fn backend_verbosity_arguments() {
+        assert!(BackendVerbosity::Default.args().is_empty());
+        assert_eq!(BackendVerbosity::Debug.args(), ["-v"]);
+        assert_eq!(BackendVerbosity::Trace.args(), ["-v", "-v"]);
+        assert_eq!(BackendVerbosity::Quiet.args(), ["-q", "-q", "-q"]);
     }
 
     #[test]
