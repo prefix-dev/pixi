@@ -6937,6 +6937,7 @@ dependencies = [
  "rattler_networking",
  "rattler_repodata_gateway",
  "rattler_shell",
+ "rattler_solve",
  "regex",
  "rstest",
  "serde",

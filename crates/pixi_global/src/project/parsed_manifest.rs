@@ -11,7 +11,7 @@ use pixi_manifest::{
     toml::{TomlPlatform, WorkspacePackageProperties},
     utils::package_map::{DependencyTable, UniquePackageMap},
 };
-use pixi_spec::PixiSpec;
+use pixi_spec::{ExcludeNewer, PixiSpec};
 use pixi_toml::{TomlFromStr, TomlIndexMap, TomlIndexSet, TomlWith};
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
 use serde::{Serialize, Serializer, ser::SerializeMap};
@@ -118,8 +118,41 @@ impl ManifestParsingError {
 pub struct ParsedManifest {
     /// The version of the manifest
     version: ManifestVersion,
+    /// The settings that apply to every environment.
+    #[serde(skip_serializing_if = "ParsedGlobal::is_empty")]
+    pub global: ParsedGlobal,
+    /// Cutoffs that override [`ParsedGlobal::exclude_newer`] for individual
+    /// packages, in every environment.
+    #[serde(rename = "exclude-newer", skip_serializing_if = "IndexMap::is_empty")]
+    pub exclude_newer_package_overrides: IndexMap<PackageName, ExcludeNewer>,
     /// The environments the project can create.
     pub envs: IndexMap<EnvironmentName, ParsedEnvironment>,
+}
+
+/// The settings of the `[global]` table, which apply to every environment.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct ParsedGlobal {
+    /// Packages uploaded after this cutoff are excluded from every
+    /// environment's solve.
+    #[serde(rename = "exclude-newer", skip_serializing_if = "Option::is_none")]
+    pub exclude_newer: Option<ExcludeNewer>,
+}
+
+impl ParsedGlobal {
+    fn is_empty(&self) -> bool {
+        self.exclude_newer.is_none()
+    }
+}
+
+impl<'de> toml_span::Deserialize<'de> for ParsedGlobal {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let mut th = TableHelper::new(value)?;
+        let exclude_newer = th
+            .optional::<TomlWith<_, TomlFromStr<_>>>("exclude-newer")
+            .map(TomlWith::into_inner);
+        th.finalize(None)?;
+        Ok(Self { exclude_newer })
+    }
 }
 
 /// The toml-stage of [`ParsedManifest`]: deserialized as-is from the document,
@@ -127,6 +160,8 @@ pub struct ParsedManifest {
 /// manifest's root directory as context).
 struct TomlParsedManifest {
     version: ManifestVersion,
+    global: ParsedGlobal,
+    exclude_newer_package_overrides: IndexMap<PackageName, ExcludeNewer>,
     envs: IndexMap<EnvironmentName, TomlParsedEnvironment>,
 }
 
@@ -138,6 +173,8 @@ impl<'de> toml_span::Deserialize<'de> for TomlParsedManifest {
             .optional("version")
             .map(ManifestVersion)
             .unwrap_or_default();
+        let global = th.optional::<ParsedGlobal>("global").unwrap_or_default();
+        let exclude_newer_package_overrides = parse_exclude_newer_package_overrides(&mut th);
         let envs = th
             .optional::<TomlIndexMap<_, TomlParsedEnvironment>>("envs")
             .map(TomlIndexMap::into_inner)
@@ -148,7 +185,50 @@ impl<'de> toml_span::Deserialize<'de> for TomlParsedManifest {
 
         th.finalize(None)?;
 
-        Ok(Self { version, envs })
+        Ok(Self {
+            version,
+            global,
+            exclude_newer_package_overrides,
+            envs,
+        })
+    }
+}
+
+/// Parses the top-level `exclude-newer` table of per-package cutoffs.
+///
+/// A scalar here is the manifest-wide cutoff written in the wrong place, so it
+/// is reported as such instead of as a bare type mismatch. Errors join the ones
+/// the [`TableHelper`] has already collected, the way its own `optional` does,
+/// so parsing continues and reports the rest of the manifest too.
+fn parse_exclude_newer_package_overrides<'de>(
+    th: &mut TableHelper<'de>,
+) -> IndexMap<PackageName, ExcludeNewer> {
+    let Some((_, mut value)) = th.take("exclude-newer") else {
+        return IndexMap::new();
+    };
+
+    if value.as_table().is_none() {
+        th.errors.push(toml_span::Error {
+            kind: toml_span::ErrorKind::Custom(
+                "expected a table of per-package `exclude-newer` cutoffs, set `exclude-newer` in the `[global]` table to apply a cutoff to every environment"
+                    .into(),
+            ),
+            span: value.span,
+            line_info: None,
+        });
+        return IndexMap::new();
+    }
+
+    match TomlIndexMap::<PackageName, TomlFromStr<ExcludeNewer>>::deserialize(&mut value) {
+        Ok(overrides) => overrides
+            .into_inner()
+            .into_iter()
+            .map(|(name, cutoff)| (name, cutoff.into_inner()))
+            .collect(),
+        Err(err) => {
+            th.errors.extend(err.errors);
+            IndexMap::new()
+        }
     }
 }
 
@@ -331,6 +411,8 @@ impl TomlParsedManifest {
 
         Ok(ParsedManifest {
             version: self.version,
+            global: self.global,
+            exclude_newer_package_overrides: self.exclude_newer_package_overrides,
             envs,
         })
     }
@@ -366,6 +448,8 @@ where
         Self {
             envs,
             version: ManifestVersion::default(),
+            global: ParsedGlobal::default(),
+            exclude_newer_package_overrides: IndexMap::new(),
         }
     }
 }
@@ -459,6 +543,14 @@ impl ParsedEnvironment {
         PrioritizedChannel::sort_channels_by_priority(&self.channels).collect()
     }
 
+    /// The channels with their priority and `exclude-newer` override, sorted
+    /// by priority.
+    pub fn prioritized_channels(&self) -> impl Iterator<Item = &PrioritizedChannel> {
+        self.channels
+            .iter()
+            .sorted_by_key(|channel| std::cmp::Reverse(channel.priority.unwrap_or(0)))
+    }
+
     /// Splits the dependencies into source and binary requirements.
     pub(crate) fn split_into_source_and_binary_requirements(
         &self,
@@ -529,6 +621,7 @@ mod tests {
     use std::str::FromStr;
 
     use insta::assert_snapshot;
+    use itertools::Itertools;
     use rattler_conda_types::PackageName;
 
     use super::{EnvironmentName, ParsedManifest};
@@ -551,6 +644,69 @@ mod tests {
                 .collect::<Vec<_>>()
                 .join("\n")
         )
+    }
+
+    #[test]
+    fn test_exclude_newer() {
+        let contents = r#"
+        [global]
+        exclude-newer = "2025-01-01"
+
+        [exclude-newer]
+        python = "0d"
+
+        [envs.python]
+        channels = [{ channel = "conda-forge", exclude-newer = "7d" }]
+        [envs.python.dependencies]
+        python = "3.11.*"
+        "#;
+        let manifest = ParsedManifest::from_toml_str(contents, std::path::Path::new("")).unwrap();
+        assert_snapshot!(manifest.global.exclude_newer.unwrap(), @"2025-01-02 00:00:00 UTC");
+        assert_snapshot!(
+            manifest
+                .exclude_newer_package_overrides
+                .iter()
+                .map(|(name, cutoff)| format!("{} = {cutoff}", name.as_source()))
+                .join(", "),
+            @"python = 0s"
+        );
+        let env = &manifest.envs[&EnvironmentName::from_str("python").unwrap()];
+        assert_snapshot!(
+            env.channels
+                .iter()
+                .map(|channel| channel.exclude_newer.unwrap().to_string())
+                .join(", "),
+            @"7days"
+        );
+    }
+
+    #[test]
+    fn test_invalid_exclude_newer() {
+        let contents = r#"
+        [global]
+        exclude-newer = "date"
+
+        [envs.python]
+        channels = ["conda-forge"]
+        "#;
+        let err = ParsedManifest::from_toml_str(contents, std::path::Path::new(""))
+            .unwrap_err()
+            .to_string();
+        assert_snapshot!(err, @"`date` is neither a valid duration, date (input contains invalid characters), nor timestamp (premature end of input)");
+    }
+
+    #[test]
+    fn test_exclude_newer_scalar_at_top_level() {
+        let contents = r#"
+        exclude-newer = "7d"
+
+        [envs.python]
+        channels = ["conda-forge"]
+        "#;
+        let err = ParsedManifest::from_toml_str(contents, std::path::Path::new(""))
+            .unwrap_err()
+            .to_string();
+        assert_snapshot!(err, @"expected a table of per-package `exclude-newer` cutoffs, set `exclude-newer` in the `[global]` table to apply a cutoff to every environment");
     }
 
     #[test]
