@@ -3,28 +3,41 @@ use std::{collections::HashMap, path::PathBuf};
 
 /// Verbosity flags to pass to a build backend process.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
-pub struct BackendVerbosity {
-    quiet: u8,
-    verbose: u8,
+pub enum BackendVerbosity {
+    /// Use the backend's default logging level (INFO).
+    #[default]
+    Default,
+    /// Enable debug build logging.
+    Debug,
+    /// Enable trace build logging.
+    Trace,
+    /// Disable build logging.
+    Quiet,
 }
 
 impl BackendVerbosity {
-    /// Construct backend verbosity from Pixi's CLI flag counts.
+    /// Convert Pixi's CLI flag counts to a single backend logging mode.
+    /// Quiet takes precedence, matching Pixi's own logging configuration.
     pub fn from_cli(quiet: u8, verbose: u8) -> Self {
-        Self { quiet, verbose }
-    }
-
-    fn args(self) -> Vec<&'static str> {
-        if self.quiet > 0 {
-            return vec!["-q"; 3];
+        if quiet > 0 {
+            return Self::Quiet;
         }
 
-        match self.verbose {
+        match verbose {
             // Backends default to INFO, matching Pixi's -v. Keep the backend's
             // default output at normal verbosity too, but never enable DEBUG.
-            0 | 1 => Vec::new(),
-            2 => vec!["-v"],
-            _ => vec!["-v"; 2],
+            0 | 1 => Self::Default,
+            2 => Self::Debug,
+            _ => Self::Trace,
+        }
+    }
+
+    fn args(self) -> &'static [&'static str] {
+        match self {
+            Self::Default => &[],
+            Self::Debug => &["-v"],
+            Self::Trace => &["-v", "-v"],
+            Self::Quiet => &["-q", "-q", "-q"],
         }
     }
 }
@@ -179,7 +192,7 @@ mod tests {
     fn tool_commands_include_verbosity() {
         let tool = Tool::from(SystemTool::new("backend"));
         assert_eq!(
-            tool.command_with_verbosity(BackendVerbosity::from_cli(0, 3))
+            tool.command_with_verbosity(BackendVerbosity::Trace)
                 .get_args()
                 .collect::<Vec<_>>(),
             [OsStr::new("-v"), OsStr::new("-v")]
@@ -192,7 +205,7 @@ mod tests {
             HashMap::new(),
         ));
         assert_eq!(
-            tool.command_with_verbosity(BackendVerbosity::from_cli(1, 4))
+            tool.command_with_verbosity(BackendVerbosity::Quiet)
                 .get_args()
                 .collect::<Vec<_>>(),
             [OsStr::new("-q"), OsStr::new("-q"), OsStr::new("-q")]

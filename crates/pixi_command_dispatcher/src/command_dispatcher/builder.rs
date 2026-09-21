@@ -599,8 +599,8 @@ mod tests {
 
     #[tokio::test]
     async fn dispatcher_snapshots_scoped_backend_verbosity_per_instance() {
-        let trace = BackendVerbosity::from_cli(0, 4);
-        let quiet = BackendVerbosity::from_cli(1, 4);
+        let trace = BackendVerbosity::Trace;
+        let quiet = BackendVerbosity::Quiet;
 
         let (trace_dispatcher, quiet_dispatcher) = tokio::join!(
             scope_backend_verbosity(trace, async {
@@ -629,7 +629,7 @@ mod tests {
 
     #[test]
     fn explicit_backend_verbosity_overrides_the_execution_context_default() {
-        let verbosity = BackendVerbosity::from_cli(0, 3);
+        let verbosity = BackendVerbosity::Trace;
         let dispatcher = CommandDispatcherBuilder::default()
             .with_backend_verbosity(verbosity)
             .finish();
