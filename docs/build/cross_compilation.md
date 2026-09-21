@@ -163,7 +163,7 @@ name    = "cpp_math"
 version = "0.1.0"
 
 [package.build]
-backend = { name = "pixi-build-rattler-build", version = "*" }
+backend = { name = "pixi-build-rattler-build" }
 
 [tasks]
 start = "python -c 'import cpp_math; print(cpp_math.add(1, 2))'"
