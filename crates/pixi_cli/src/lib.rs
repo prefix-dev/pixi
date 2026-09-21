@@ -289,7 +289,14 @@ pub async fn execute() -> miette::Result<ExitCode> {
         return Ok(ExitCode::from(2));
     };
 
-    execute_command(command, &global_options).await
+    pixi_command_dispatcher::scope_backend_verbosity(
+        pixi_build_frontend::tool::BackendVerbosity::from_cli(
+            global_options.quiet,
+            global_options.verbose,
+        ),
+        execute_command(command, &global_options),
+    )
+    .await
 }
 
 #[cfg(feature = "console-subscriber")]
