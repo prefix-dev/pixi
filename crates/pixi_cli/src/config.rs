@@ -604,10 +604,10 @@ fn transplant_config_key(
     }
 
     // Removing legacy snake_case if exist before `set`
-    if let Some(alias) = legacy_alias(&key_path.target_key) {
-        if let Some(table_like) = target_table.as_table_like_mut() {
-            table_like.remove(&alias);
-        }
+    if let Some(alias) = legacy_alias(&key_path.target_key)
+        && let Some(table_like) = target_table.as_table_like_mut()
+    {
+        table_like.remove(&alias);
     }
 
     if let Some(value) = current_item.as_value() {
@@ -637,17 +637,19 @@ fn legacy_alias(key: &str) -> Option<String> {
 }
 
 /// Resolve parent key paths against the TOML document, using existing snake_case aliases on disk if present.
-fn resolve_parent_keys<'a>(doc: &'a TomlDocument, parents: &[&str]) -> Vec<String> {
+fn resolve_parent_keys(doc: &TomlDocument, parents: &[&str]) -> Vec<String> {
     let mut resolved = Vec::with_capacity(parents.len());
     let mut current_item = doc.as_item();
 
     for &parent in parents {
-        if let Some(alias) = legacy_alias(parent) {
-            if current_item.get(&alias).is_some() {
-                resolved.push(alias.clone());
-                current_item = current_item.get(&alias).unwrap();
-                continue;
-            }
+        if let Some(alias) = legacy_alias(parent)
+            && current_item.get(&alias).is_some()
+        {
+            resolved.push(alias.clone());
+            current_item = current_item
+                .get(&alias)
+                .expect("The current item should have the alias in it");
+            continue;
         }
 
         // Fall back to the canonical parent key name
