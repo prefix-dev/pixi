@@ -38,6 +38,7 @@ pub mod install;
 pub mod list;
 pub mod lock;
 pub(crate) mod match_spec_or_path;
+pub mod mount;
 pub mod offline;
 mod process_exit;
 pub mod publish;
@@ -52,6 +53,7 @@ pub mod shell;
 pub mod shell_hook;
 pub mod task;
 pub mod tree;
+pub mod umount;
 pub mod update;
 pub mod upgrade;
 pub mod upload;
@@ -189,6 +191,8 @@ pub enum Command {
     #[clap(visible_alias = "ls")]
     List(list::Args),
     Lock(lock::Args),
+    Mount(mount::Args),
+    Umount(umount::Args),
     Reinstall(reinstall::Args),
     Publish(publish::Args),
     #[clap(visible_alias = "rm")]
@@ -405,6 +409,8 @@ pub async fn execute_command(
         Command::Update(cmd) => update::execute(cmd).await.map(|()| ExitCode::SUCCESS),
         Command::Upgrade(cmd) => upgrade::execute(cmd).await.map(|()| ExitCode::SUCCESS),
         Command::Lock(cmd) => lock::execute(cmd).await.map(|()| ExitCode::SUCCESS),
+        Command::Mount(cmd) => mount::execute(cmd).await.map(|()| ExitCode::SUCCESS),
+        Command::Umount(cmd) => umount::execute(cmd).await.map(|()| ExitCode::SUCCESS),
         Command::Exec(args) => exec::execute(args).await,
         Command::Build(args) => build::execute(args).await.map(|()| ExitCode::SUCCESS),
         Command::External(args) => command_info::execute_external_command(args),

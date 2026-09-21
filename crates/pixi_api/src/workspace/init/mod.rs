@@ -186,7 +186,7 @@ fn is_init_dir_equal_to_pixi_home_parent(init_dir: &Path) -> bool {
 
 fn resolve_platforms(options: &InitOptions) -> Vec<String> {
     if options.platforms.is_empty() {
-        vec![Platform::current().to_string()]
+        vec![Platform::current().expect("host platform").to_string()]
     } else {
         // Dedup so a repeated `--platform` (or one matching the current
         // platform) doesn't write a manifest the parser then rejects.

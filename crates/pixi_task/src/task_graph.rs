@@ -1519,7 +1519,7 @@ mod test {
     /// (https://github.com/prefix-dev/pixi/issues/6773).
     #[test]
     fn test_platform_template_renders_pinned_custom_platform() {
-        let current = Platform::current();
+        let current = Platform::current().expect("host platform");
         let workspace_str = format!(
             r#"
         [workspace]

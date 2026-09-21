@@ -142,6 +142,10 @@ Config {
     experimental: ExperimentalConfig {
         use_environment_activation_cache: None,
         conda_script: None,
+        environment_backend: None,
+        mount_backend: None,
+        mount_read_only: None,
+        mount_grace_period: None,
     },
     concurrency: ConcurrencyConfig {
         solves: 1,

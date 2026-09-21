@@ -503,7 +503,7 @@ mod tests {
         let loaded = LoadedVariantConfig::from_recipe_path(
             source_dir,
             &recipe_path,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             std::iter::empty(),
         )
         .unwrap();
@@ -532,7 +532,7 @@ mod tests {
         let loaded = LoadedVariantConfig::from_recipe_path(
             source_dir,
             &recipe_path,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             std::iter::empty(),
         )
         .unwrap();
@@ -564,7 +564,7 @@ mod tests {
         let loaded = LoadedVariantConfig::from_recipe_path(
             source_dir,
             &recipe_path,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             std::iter::empty(),
         )
         .unwrap();

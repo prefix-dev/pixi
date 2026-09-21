@@ -62,7 +62,7 @@ async fn offline_add_from_local_channel_succeeds() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         "foo==1"
     ));
 }

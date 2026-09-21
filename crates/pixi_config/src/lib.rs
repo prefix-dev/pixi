@@ -943,6 +943,89 @@ impl Default for DetachedEnvironments {
     }
 }
 
+/// How environments are materialised on disk.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum EnvironmentBackend {
+    /// Traditional: extract and hardlink packages into the environment directory.
+    #[default]
+    Link,
+    /// Virtual: serve packages via a mounted filesystem (FUSE or NFS).
+    Mount,
+}
+
+impl std::str::FromStr for EnvironmentBackend {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "link" => Ok(Self::Link),
+            "mount" => Ok(Self::Mount),
+            _ => Err(format!(
+                "unknown environment backend: {s} (expected 'link' or 'mount')"
+            )),
+        }
+    }
+}
+
+/// Transport backend for mounted environments.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum MountBackend {
+    /// Auto-detect: NFS on macOS, FUSE on Linux.
+    #[default]
+    Auto,
+    /// NFS userspace server (no kernel extension required on macOS).
+    Nfs,
+    /// FUSE (requires libfuse3 on Linux, macFUSE on macOS).
+    Fuse,
+}
+
+impl std::str::FromStr for MountBackend {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "auto" => Ok(Self::Auto),
+            "nfs" => Ok(Self::Nfs),
+            "fuse" => Ok(Self::Fuse),
+            _ => Err(format!(
+                "unknown mount backend: {s} (expected 'auto', 'nfs', or 'fuse')"
+            )),
+        }
+    }
+}
+
+/// What to do when a writable mount's persistent overlay was created for a
+/// different version of the environment (for example after `pixi add` changes
+/// the lock file). The overlay may hold files the user wants to keep, such as
+/// the results of `pip install`, so reusing it ("adopting" it for the new
+/// environment) is the default.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum OverlayMismatch {
+    /// Refuse to mount, so nothing is silently reused or lost. The user resolves
+    /// it by removing the overlay or changing this setting.
+    Error,
+    /// Reuse ("adopt") the overlay for the new environment, printing a warning.
+    #[default]
+    Warn,
+    /// Reuse the overlay for the new environment silently.
+    Ignore,
+}
+
+impl std::str::FromStr for OverlayMismatch {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "error" => Ok(Self::Error),
+            "warn" => Ok(Self::Warn),
+            "ignore" => Ok(Self::Ignore),
+            _ => Err(format!(
+                "unknown overlay mismatch policy: {s} (expected 'error', 'warn', or 'ignore')"
+            )),
+        }
+    }
+}
+
 #[derive(Default, Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct ExperimentalConfig {
@@ -959,6 +1042,33 @@ pub struct ExperimentalConfig {
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub conda_script: Option<bool>,
+    /// How environments are materialised: "link" (default) or "mount".
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub environment_backend: Option<EnvironmentBackend>,
+
+    /// Transport for mounted environments: "auto" (default), "nfs", or "fuse".
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mount_backend: Option<MountBackend>,
+
+    /// When true, mounted environments are read-only (no writable overlay).
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mount_read_only: Option<bool>,
+
+    /// How long (in seconds) the mount sidecar stays alive after the last
+    /// client disconnects. Defaults to 120.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mount_grace_period: Option<u64>,
+
+    /// What to do when a writable mount's persistent overlay was created for a
+    /// different version of the environment: "error", "warn" (default), or
+    /// "ignore". See [`OverlayMismatch`].
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mount_overlay_mismatch: Option<OverlayMismatch>,
 }
 
 impl ExperimentalConfig {
@@ -968,6 +1078,11 @@ impl ExperimentalConfig {
                 .use_environment_activation_cache
                 .or(self.use_environment_activation_cache),
             conda_script: other.conda_script.or(self.conda_script),
+            environment_backend: other.environment_backend.or(self.environment_backend),
+            mount_backend: other.mount_backend.or(self.mount_backend),
+            mount_read_only: other.mount_read_only.or(self.mount_read_only),
+            mount_grace_period: other.mount_grace_period.or(self.mount_grace_period),
+            mount_overlay_mismatch: other.mount_overlay_mismatch.or(self.mount_overlay_mismatch),
         }
     }
     pub fn use_environment_activation_cache(&self) -> bool {
@@ -979,7 +1094,13 @@ impl ExperimentalConfig {
     }
 
     pub fn is_default(&self) -> bool {
-        self.use_environment_activation_cache.is_none() && self.conda_script.is_none()
+        self.use_environment_activation_cache.is_none()
+            && self.conda_script.is_none()
+            && self.environment_backend.is_none()
+            && self.mount_backend.is_none()
+            && self.mount_read_only.is_none()
+            && self.mount_grace_period.is_none()
+            && self.mount_overlay_mismatch.is_none()
     }
 }
 
@@ -1480,7 +1601,7 @@ impl From<ConfigCli> for Config {
                 } else {
                     None
                 },
-                conda_script: None,
+                ..Default::default()
             },
             pinning_strategy: cli.pinning_strategy,
             allow_symbolic_links: cli.no_symbolic_links.then_some(false),
@@ -1623,7 +1744,7 @@ impl Config {
         // HACK: Use win-64 as the default tool platform if currently running on
         // win-arm64. This is a workaround for the fact that we don't have a
         // good win-arm64 toolchain yet.
-        if Platform::current() == Platform::WinArm64 {
+        if Platform::current().expect("host platform") == Platform::WinArm64 {
             config.tool_platform = Some(Platform::Win64);
         }
 
@@ -1979,6 +2100,11 @@ impl Config {
             "detached-environments",
             "experimental",
             "experimental.conda-script",
+            "experimental.environment-backend",
+            "experimental.mount-backend",
+            "experimental.mount-grace-period",
+            "experimental.mount-overlay-mismatch",
+            "experimental.mount-read-only",
             "experimental.use-environment-activation-cache",
             "index-config",
             "index-config.base-url",
@@ -2186,6 +2312,92 @@ impl Config {
         self.experimental.conda_script()
     }
 
+    /// How environments are materialised. Env var `PIXI_ENVIRONMENT_BACKEND`
+    /// takes precedence over the config file value; a set-but-unparseable value
+    /// is warned about and ignored.
+    pub fn environment_backend(&self) -> EnvironmentBackend {
+        if let Ok(v) = std::env::var("PIXI_ENVIRONMENT_BACKEND") {
+            match v.parse::<EnvironmentBackend>() {
+                Ok(backend) => return backend,
+                Err(e) => tracing::warn!("ignoring invalid PIXI_ENVIRONMENT_BACKEND={v:?}: {e}"),
+            }
+        }
+        self.experimental.environment_backend.unwrap_or_default()
+    }
+
+    /// Transport for mounted environments. Env var `PIXI_MOUNT_BACKEND`
+    /// takes precedence over the config file value. An env var that is set but
+    /// unparseable is warned about and ignored rather than silently dropped.
+    pub fn mount_backend(&self) -> MountBackend {
+        if let Ok(v) = std::env::var("PIXI_MOUNT_BACKEND") {
+            match v.parse::<MountBackend>() {
+                Ok(backend) => return backend,
+                Err(e) => tracing::warn!("ignoring invalid PIXI_MOUNT_BACKEND={v:?}: {e}"),
+            }
+        }
+        self.experimental.mount_backend.unwrap_or_default()
+    }
+
+    /// Whether mounted environments are read-only. Env var
+    /// `PIXI_MOUNT_READ_ONLY` takes precedence. An env var that is set but
+    /// unparseable is warned about and ignored rather than silently dropped.
+    pub fn mount_read_only(&self) -> bool {
+        if let Ok(v) = std::env::var("PIXI_MOUNT_READ_ONLY") {
+            match v.parse::<bool>() {
+                Ok(read_only) => return read_only,
+                Err(_) => tracing::warn!(
+                    "ignoring invalid PIXI_MOUNT_READ_ONLY={v:?} (expected `true` or `false`)"
+                ),
+            }
+        }
+        self.experimental.mount_read_only.unwrap_or(false)
+    }
+
+    /// Grace period in seconds for the mount sidecar after the last client
+    /// disconnects. Env var `PIXI_MOUNT_GRACE_PERIOD` takes precedence over the
+    /// config file value. Defaults to 120 seconds. A configured value of `0`
+    /// would tear the mount down almost immediately after every use (thrashing),
+    /// so it is clamped up to 1 second with a warning.
+    pub fn mount_grace_period(&self) -> u64 {
+        let configured = std::env::var("PIXI_MOUNT_GRACE_PERIOD")
+            .ok()
+            .and_then(|v| match v.parse::<u64>() {
+                Ok(n) => Some(n),
+                Err(_) => {
+                    tracing::warn!("ignoring invalid PIXI_MOUNT_GRACE_PERIOD={v:?}");
+                    None
+                }
+            })
+            .or(self.experimental.mount_grace_period);
+        match configured {
+            Some(0) => {
+                tracing::warn!(
+                    "mount grace period of 0 would remount on nearly every command; \
+                     clamping to 1 second"
+                );
+                1
+            }
+            Some(v) => v,
+            None => 120,
+        }
+    }
+
+    /// Policy for reusing a writable mount's persistent overlay when it was
+    /// created for a different version of the environment. Env var
+    /// `PIXI_MOUNT_OVERLAY_MISMATCH` takes precedence over the config file value.
+    /// Defaults to [`OverlayMismatch::Warn`].
+    pub fn mount_overlay_mismatch(&self) -> OverlayMismatch {
+        if let Ok(v) = std::env::var("PIXI_MOUNT_OVERLAY_MISMATCH") {
+            match v.parse::<OverlayMismatch>() {
+                Ok(policy) => return policy,
+                Err(e) => {
+                    tracing::warn!("ignoring invalid PIXI_MOUNT_OVERLAY_MISMATCH={v:?}: {e}")
+                }
+            }
+        }
+        self.experimental.mount_overlay_mismatch.unwrap_or_default()
+    }
+
     /// Retrieve the value for the max_concurrent_solves field.
     pub fn max_concurrent_solves(&self) -> usize {
         self.concurrency.solves
@@ -2198,7 +2410,8 @@ impl Config {
 
     /// The platform to use to install tools.
     pub fn tool_platform(&self) -> Platform {
-        self.tool_platform.unwrap_or(Platform::current())
+        self.tool_platform
+            .unwrap_or(Platform::current().expect("host platform"))
     }
 
     pub fn get_proxies(&self) -> reqwest::Result<Vec<Proxy>> {
@@ -2501,6 +2714,32 @@ impl Config {
                     "conda-script" => {
                         self.experimental.conda_script =
                             value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                    }
+                    "environment-backend" => {
+                        self.experimental.environment_backend = value
+                            .map(|v| v.parse::<EnvironmentBackend>())
+                            .transpose()
+                            .map_err(|e| miette!("{e}"))?;
+                    }
+                    "mount-backend" => {
+                        self.experimental.mount_backend = value
+                            .map(|v| v.parse::<MountBackend>())
+                            .transpose()
+                            .map_err(|e| miette!("{e}"))?;
+                    }
+                    "mount-read-only" => {
+                        self.experimental.mount_read_only =
+                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                    }
+                    "mount-grace-period" => {
+                        self.experimental.mount_grace_period =
+                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                    }
+                    "mount-overlay-mismatch" => {
+                        self.experimental.mount_overlay_mismatch = value
+                            .map(|v| v.parse::<OverlayMismatch>())
+                            .transpose()
+                            .map_err(|e| miette!("{e}"))?;
                     }
                     _ => return Err(err),
                 }
@@ -3211,7 +3450,7 @@ UNUSED = "unused"
             pinning_strategy: Some(PinningStrategy::NoPin),
             experimental: ExperimentalConfig {
                 use_environment_activation_cache: Some(true),
-                conda_script: None,
+                ..Default::default()
             },
             loaded_from: Vec::from([PathBuf::from_str("test").unwrap()]),
             shell: ShellConfig {

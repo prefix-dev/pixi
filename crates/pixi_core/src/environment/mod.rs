@@ -1,6 +1,7 @@
 pub(crate) mod conda_metadata;
 mod conda_prefix;
 pub mod list;
+pub mod mount_sidecar;
 pub use conda_prefix::{CondaPrefixUpdated, CondaPrefixUpdater, CondaPrefixUpdaterBuilder};
 use dialoguer::theme::ColorfulTheme;
 use futures::{FutureExt, StreamExt, TryStreamExt, stream};
@@ -931,7 +932,7 @@ pub async fn get_lock_file_and_prefixes<'env>(
         && target_platform.is_some()
         && let Some(platform) = environments[0].named_or_best_declared_platform(target_platform)
     {
-        let current = Platform::current();
+        let current = Platform::current().expect("host platform");
         let subdir = platform.subdir();
         if !candidate_subdirs(current).contains(&subdir) {
             tracing::warn!(

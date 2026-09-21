@@ -607,7 +607,7 @@ mod tests {
     /// satisfied, and not at all when it isn't.
     #[test]
     fn classify_runnability_falls_back_to_lock_minimum() {
-        let current = Platform::current();
+        let current = Platform::current().expect("host platform");
         let manifest = format!(
             r#"
             [workspace]
@@ -671,7 +671,7 @@ packages:
     /// the resolved packages need none of the unsatisfied virtual packages.
     #[test]
     fn minimum_compatible_platform_ignores_unused_requirement() {
-        let current = Platform::current();
+        let current = Platform::current().expect("host platform");
         let manifest = format!(
             r#"
             [workspace]
@@ -732,7 +732,7 @@ packages:
     /// tasks in empty environments under an unsatisfiable system requirement.
     #[test]
     fn minimum_compatible_platform_runs_empty_environment() {
-        let current = Platform::current();
+        let current = Platform::current().expect("host platform");
         let manifest = format!(
             r#"
             [workspace]
@@ -767,7 +767,7 @@ packages: []
     /// without consulting any lock file.
     #[test]
     fn classify_runnability_by_design_via_declared_platform() {
-        let current = Platform::current();
+        let current = Platform::current().expect("host platform");
         let manifest = format!(
             r#"
             [workspace]
@@ -792,7 +792,7 @@ packages: []
     /// lacks: nothing it installs can require them.
     #[test]
     fn classify_runnability_no_dependencies() {
-        let current = Platform::current();
+        let current = Platform::current().expect("host platform");
         let manifest = format!(
             r#"
             [workspace]
@@ -813,7 +813,7 @@ packages: []
     /// prefix, so an environment declaring only those still has dependencies.
     #[test]
     fn classify_runnability_counts_dev_dependencies() {
-        let current = Platform::current();
+        let current = Platform::current().expect("host platform");
         let manifest = format!(
             r#"
             [workspace]
@@ -1087,8 +1087,8 @@ packages: []
         for (name, env_var) in ignored_here {
             let error = RunPlatformUnsupportedError {
                 environment: EnvironmentName::Default,
-                platform: PixiPlatformName::from(Platform::current()),
-                subdir: Platform::current(),
+                platform: PixiPlatformName::from(Platform::current().expect("host platform")),
+                subdir: Platform::current().expect("host platform"),
                 failure: RunPlatformFailure::UnmetRequirements(vec![
                     MatchSpec::from_str(name, rattler_conda_types::ParseStrictness::Lenient)
                         .unwrap(),

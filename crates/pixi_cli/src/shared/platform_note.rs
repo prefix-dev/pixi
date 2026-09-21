@@ -11,7 +11,7 @@ use rattler_conda_types::Platform;
 pub(crate) fn installed_platform_note(environment: &Environment<'_>) -> Option<String> {
     let (resolved, _minimum) = environment.installed_platforms();
     let subdir = resolved?.subdir();
-    let host = Platform::current();
+    let host = Platform::current().expect("host platform");
     if subdir == host {
         Some(subdir.to_string())
     } else {

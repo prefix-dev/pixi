@@ -5,7 +5,7 @@
 //! * *the platform we target* -- [`host_subdir`], which honors
 //!   `PIXI_OVERRIDE_PLATFORM`. Everything that selects, solves, or installs an
 //!   environment goes through it.
-//! * *the machine we execute on* -- `Platform::current()`, which is right only
+//! * *the machine we execute on* -- `Platform::current().expect("host platform")`, which is right only
 //!   where pixi is about to run or build something locally (source builds
 //!   cannot cross-compile, and the build backends run on the real host).
 //!
@@ -37,7 +37,7 @@ pub enum HostDetectionError {
 /// The subdir pixi treats as this machine's, honoring `PIXI_OVERRIDE_PLATFORM`.
 ///
 /// This is *the platform we target*. Use it everywhere pixi selects, solves,
-/// or installs an environment; reach for `Platform::current()` only where pixi
+/// or installs an environment; reach for `Platform::current().expect("host platform")` only where pixi
 /// is about to run or build something on this machine for real.
 ///
 /// Only `PIXI_OVERRIDE_PLATFORM` is read here, so an invalid `CONDA_OVERRIDE_*`
@@ -52,7 +52,7 @@ pub fn host_subdir() -> Platform {
                 None
             }
         })
-        .unwrap_or_else(Platform::current)
+        .unwrap_or_else(|| Platform::current().expect("host platform"))
 }
 
 /// What a `CONDA_OVERRIDE_*` variable says about the virtual package it
@@ -298,7 +298,7 @@ fn subdir_baseline(subdir: Platform) -> PixiPlatform {
 ///
 /// For a subdir this machine runs, that is what rattler detects with
 /// `CONDA_OVERRIDE_*` on top. Detection runs *for the subdir* rather than for
-/// `Platform::current()`, so a `PIXI_OVERRIDE_PLATFORM` target is not labelled
+/// `Platform::current().expect("host platform")`, so a `PIXI_OVERRIDE_PLATFORM` target is not labelled
 /// with the real machine's architecture.
 ///
 /// For any other subdir there is nothing to detect - a Linux box cannot report
@@ -321,7 +321,7 @@ pub fn detect_host(subdir: Platform) -> Result<PixiPlatform, HostDetectionError>
 /// true macOS version, while `linux-aarch64` on an x86 box reports nothing,
 /// rather than lending it this machine's glibc and kernel.
 fn machine_runs(subdir: Platform) -> bool {
-    candidate_subdirs(Platform::current()).contains(&subdir)
+    candidate_subdirs(Platform::current().expect("host platform")).contains(&subdir)
 }
 
 /// The raw virtual packages rattler reports for `subdir`, with
@@ -350,7 +350,7 @@ fn probe_machine(subdir: Platform) -> Result<Vec<GenericVirtualPackage>, HostDet
 /// per-slot pass override it.
 fn detection_overrides(subdir: Platform) -> VirtualPackageOverrides {
     let mut overrides = VirtualPackageOverrides::default();
-    if subdir != Platform::current() {
+    if subdir != Platform::current().expect("host platform") {
         overrides.archspec = Some(Override::String(
             Archspec::from_platform(subdir).map_or_else(
                 || String::from("0"),

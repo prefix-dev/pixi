@@ -376,7 +376,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_remove_host_platform_without_no_install() {
-        let current_platform = Platform::current();
+        let current_platform = Platform::current().expect("host platform");
         let host = current_platform.as_str();
         let (_tmp, workspace) = workspace_from(&format!(
             r#"

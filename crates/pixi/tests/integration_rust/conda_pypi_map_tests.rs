@@ -47,7 +47,7 @@ async fn test_purl_are_added_for_pypi() {
 
     // Check if boltons has a purl
     let p = lock_file
-        .platform(&Platform::current().to_string())
+        .platform(&Platform::current().expect("host platform").to_string())
         .unwrap();
     lock_file
         .default_environment()
@@ -70,7 +70,7 @@ async fn test_purl_are_added_for_pypi() {
 
     // Check if boltons has a purl
     let p = lock_file
-        .platform(&Platform::current().to_string())
+        .platform(&Platform::current().expect("host platform").to_string())
         .unwrap();
     lock_file
         .default_environment()
@@ -97,12 +97,12 @@ async fn test_purl_are_added_for_pypi() {
     // Check if boltons exists only as conda dependency
     assert!(lock_file.contains_match_spec(
         DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         "boltons"
     ));
     assert!(!lock_file.contains_pypi_package(
         DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         "boltons"
     ));
 }

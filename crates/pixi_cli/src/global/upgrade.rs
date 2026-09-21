@@ -14,7 +14,7 @@ pub struct Args {
     channels: ChannelsConfig,
 
     /// The platform to install the package for.
-    #[clap(long, default_value_t = Platform::current())]
+    #[clap(long, default_value_t = Platform::current().expect("host platform"))]
     platform: Platform,
 }
 

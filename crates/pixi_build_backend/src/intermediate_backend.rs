@@ -643,14 +643,14 @@ where
         &self,
         params: CondaBuildV1Params,
     ) -> miette::Result<CondaBuildV1Result> {
-        let host_platform = params
-            .host_prefix
-            .as_ref()
-            .map_or_else(Platform::current, |prefix| prefix.platform);
-        let build_platform = params
-            .build_prefix
-            .as_ref()
-            .map_or_else(Platform::current, |prefix| prefix.platform);
+        let host_platform = params.host_prefix.as_ref().map_or_else(
+            || Platform::current().expect("host platform"),
+            |prefix| prefix.platform,
+        );
+        let build_platform = params.build_prefix.as_ref().map_or_else(
+            || Platform::current().expect("host platform"),
+            |prefix| prefix.platform,
+        );
 
         let config = self
             .target_config

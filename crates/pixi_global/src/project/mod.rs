@@ -697,7 +697,7 @@ impl Project {
 
         // Source dependencies are built on this machine, so they can only
         // target the platform we are running on.
-        if platform != Platform::current()
+        if platform != Platform::current().expect("host platform")
             && let Some(source_package) = environment
                 .dependencies
                 .specs
@@ -712,7 +712,7 @@ impl Project {
                 "environment {} requests platform '{platform}', but '{}' is a source dependency that has to be built on the current machine ('{}'); cross-platform source builds are not supported",
                 env_name.fancy_display(),
                 source_package.as_normalized(),
-                Platform::current(),
+                Platform::current().expect("host platform"),
             ));
         }
 
@@ -1571,7 +1571,9 @@ impl Project {
             rattler_menuinst::install_menuitems_for_record(
                 prefix.root(),
                 &record,
-                environment.platform.unwrap_or_else(Platform::current),
+                environment
+                    .platform
+                    .unwrap_or_else(|| Platform::current().expect("host platform")),
                 MenuMode::User,
             )
             .into_diagnostic()?;
@@ -2313,7 +2315,7 @@ mod tests {
     /// machine's detected packages.
     #[test]
     fn test_virtual_packages_for_non_current_platform_is_empty() {
-        let other = if Platform::current().only_platform() == Some("win") {
+        let other = if Platform::current().expect("host platform").only_platform() == Some("win") {
             Platform::Linux64
         } else {
             Platform::Win64

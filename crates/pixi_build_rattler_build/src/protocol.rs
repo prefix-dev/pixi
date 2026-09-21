@@ -352,14 +352,14 @@ impl Protocol for RattlerBuildBackend {
         &self,
         params: CondaBuildV1Params,
     ) -> miette::Result<CondaBuildV1Result> {
-        let host_platform = params
-            .host_prefix
-            .as_ref()
-            .map_or_else(Platform::current, |prefix| prefix.platform);
-        let build_platform = params
-            .build_prefix
-            .as_ref()
-            .map_or_else(Platform::current, |prefix| prefix.platform);
+        let host_platform = params.host_prefix.as_ref().map_or_else(
+            || Platform::current().expect("host platform"),
+            |prefix| prefix.platform,
+        );
+        let build_platform = params.build_prefix.as_ref().map_or_else(
+            || Platform::current().expect("host platform"),
+            |prefix| prefix.platform,
+        );
 
         // Construct a `VariantConfig` based on the input parameters. We only
         // have a single variant here so we can just use the variant from the

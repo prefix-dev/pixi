@@ -103,7 +103,7 @@ preview = ["pixi-build"]
 my-package = {{ path = "./my-package" }}
 "#,
         channel.url(),
-        Platform::current()
+        Platform::current().expect("host platform")
     );
 
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
@@ -116,7 +116,7 @@ my-package = {{ path = "./my-package" }}
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "cmake",
         ),
         "cmake should be in the lock file (build dependency of dev package)"
@@ -125,7 +125,7 @@ my-package = {{ path = "./my-package" }}
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "openssl",
         ),
         "openssl should be in the lock file (host dependency of dev package)"
@@ -134,7 +134,7 @@ my-package = {{ path = "./my-package" }}
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "python",
         ),
         "python should be in the lock file (run dependency of dev package)"
@@ -143,7 +143,7 @@ my-package = {{ path = "./my-package" }}
     assert!(
         !lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "my-package",
         ),
         "my-package itself should NOT be in the lock file (it's a dev dependency)"
@@ -206,7 +206,7 @@ preview = ["pixi-build"]
 package-a = {{ path = "./package-a" }}
 "#,
         channel.url(),
-        Platform::current()
+        Platform::current().expect("host platform")
     );
 
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
@@ -218,7 +218,7 @@ package-a = {{ path = "./package-a" }}
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "gcc",
         ),
         "gcc should be in the lock file (build dependency of package-a)"
@@ -227,7 +227,7 @@ package-a = {{ path = "./package-a" }}
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "requests",
         ),
         "requests should be in the lock file (run dependency of package-a)"
@@ -238,7 +238,7 @@ package-a = {{ path = "./package-a" }}
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "numpy",
         ),
         "numpy should be in the lock file (run dependency of package-b, which is a source dependency of package-a)"
@@ -248,7 +248,7 @@ package-a = {{ path = "./package-a" }}
     assert!(
         !lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "package-a",
         ),
         "package-a should NOT be in the lock file (it's a dev dependency)"
@@ -260,7 +260,7 @@ package-a = {{ path = "./package-a" }}
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "package-b",
         ),
         "package-b SHOULD be in the lock file (it's a source dependency that needs to be built)"
@@ -322,7 +322,7 @@ package-x = {{ path = "./package-x" }}
 package-y = {{ path = "{}" }}
 "#,
         channel.url(),
-        Platform::current(),
+        Platform::current().expect("host platform"),
         package_y_path.to_string_lossy().replace('\\', "\\\\")
     );
 
@@ -335,7 +335,7 @@ package-y = {{ path = "{}" }}
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "cmake",
         ),
         "cmake should be in the lock file (build dependency of package-x)"
@@ -344,7 +344,7 @@ package-y = {{ path = "{}" }}
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "openssl",
         ),
         "openssl should be in the lock file (host dependency of package-y)"
@@ -356,7 +356,7 @@ package-y = {{ path = "{}" }}
     assert!(
         !lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "package-x",
         ),
         "package-x should NOT be in the lock file (it's a dev dependency)"
@@ -365,7 +365,7 @@ package-y = {{ path = "{}" }}
     assert!(
         !lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "package-y",
         ),
         "package-y should NOT be in the lock file (it's a dev dependency)"
@@ -412,7 +412,7 @@ test = ["test-feature"]
 feature-package = {{ path = "./feature-package" }}
 "#,
         channel.url(),
-        Platform::current()
+        Platform::current().expect("host platform")
     );
 
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
@@ -422,14 +422,18 @@ feature-package = {{ path = "./feature-package" }}
 
     // Verify that zlib is in the "test" environment but not in the default environment
     assert!(
-        lock_file.contains_conda_package("test", Platform::current(), "zlib",),
+        lock_file.contains_conda_package(
+            "test",
+            Platform::current().expect("host platform"),
+            "zlib",
+        ),
         "zlib should be in the test environment lock file (run dependency of feature-package)"
     );
 
     assert!(
         !lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "zlib",
         ),
         "zlib should NOT be in the default environment (feature-package is only in test-feature)"
@@ -437,7 +441,11 @@ feature-package = {{ path = "./feature-package" }}
 
     // Verify that feature-package itself is not built
     assert!(
-        !lock_file.contains_conda_package("test", Platform::current(), "feature-package",),
+        !lock_file.contains_conda_package(
+            "test",
+            Platform::current().expect("host platform"),
+            "feature-package",
+        ),
         "feature-package should NOT be in the lock file (it's a dev dependency)"
     );
 }
@@ -502,7 +510,7 @@ dependent-package = {{ path = "./dependent-package" }}
 shared-package = {{ path = "{}" }}
 "#,
         channel.url(),
-        Platform::current(),
+        Platform::current().expect("host platform"),
         shared_package_path.to_string_lossy().replace('\\', "\\\\")
     );
 
@@ -515,7 +523,7 @@ shared-package = {{ path = "{}" }}
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "python",
         ),
         "python should be in the lock file (run dependency of shared-package)"
@@ -525,7 +533,7 @@ shared-package = {{ path = "{}" }}
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "numpy",
         ),
         "numpy should be in the lock file (run dependency of dependent-package)"
@@ -535,7 +543,7 @@ shared-package = {{ path = "{}" }}
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "dependent-package",
         ),
         "dependent-package SHOULD be in the lock file (it's a regular source dependency)"
@@ -550,7 +558,7 @@ shared-package = {{ path = "{}" }}
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "shared-package",
         ),
         "shared-package SHOULD be in the lock file (it's built as a source dependency of dependent-package)"
@@ -594,8 +602,8 @@ preview = ["pixi-build"]
 platform-package = {{ path = "./platform-package" }}
 "#,
         channel.url(),
-        Platform::current(),
-        Platform::current()
+        Platform::current().expect("host platform"),
+        Platform::current().expect("host platform")
     );
 
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
@@ -607,7 +615,7 @@ platform-package = {{ path = "./platform-package" }}
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "make",
         ),
         "make should be in the lock file (run dependency of platform-package)"
@@ -617,7 +625,7 @@ platform-package = {{ path = "./platform-package" }}
     assert!(
         !lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "platform-package",
         ),
         "platform-package should NOT be in the lock file (it's a dev dependency)"
@@ -667,7 +675,7 @@ variant-python-package = {{ path = "./variant-python-package" }}
 python = ["3.10", "3.12"]
 "#,
         channel.url(),
-        Platform::current()
+        Platform::current().expect("host platform")
     );
 
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
@@ -679,7 +687,7 @@ python = ["3.10", "3.12"]
     assert!(
         lock_file.contains_match_spec(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "python ==3.12.0",
         ),
         "Should select python 3.12 (highest available variant), not 3.13"
@@ -730,7 +738,7 @@ variant-python-package = {{ path = "./variant-python-package" }}
 python = ["3.10", "3.12"]
 "#,
         channel.url(),
-        Platform::current()
+        Platform::current().expect("host platform")
     );
 
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
@@ -742,7 +750,7 @@ python = ["3.10", "3.12"]
     assert!(
         lock_file.contains_match_spec(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Platform::current().expect("host platform"),
             "python ==3.10.0",
         ),
         "Should select python 3.10 (constrained by dependency <3.12), not 3.12"
@@ -804,7 +812,7 @@ prod = {{ solve-group = "main" }}
 dev = {{ features = ["dev-feature"], solve-group = "main" }}
 "#,
         channel.url(),
-        Platform::current()
+        Platform::current().expect("host platform")
     );
 
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
@@ -814,39 +822,67 @@ dev = {{ features = ["dev-feature"], solve-group = "main" }}
 
     // Both environments should have python (shared dependency)
     assert!(
-        lock_file.contains_conda_package("prod", Platform::current(), "python"),
+        lock_file.contains_conda_package(
+            "prod",
+            Platform::current().expect("host platform"),
+            "python"
+        ),
         "prod environment should have python"
     );
     assert!(
-        lock_file.contains_conda_package("dev", Platform::current(), "python"),
+        lock_file.contains_conda_package(
+            "dev",
+            Platform::current().expect("host platform"),
+            "python"
+        ),
         "dev environment should have python"
     );
 
     // The dev environment should have the dependencies brought in by dev-tools
     // (cmake and make are run-dependencies of dev-tools)
     assert!(
-        lock_file.contains_conda_package("dev", Platform::current(), "cmake"),
+        lock_file.contains_conda_package(
+            "dev",
+            Platform::current().expect("host platform"),
+            "cmake"
+        ),
         "dev environment should have cmake (run-dependency of dev-tools)"
     );
     assert!(
-        lock_file.contains_conda_package("dev", Platform::current(), "make"),
+        lock_file.contains_conda_package(
+            "dev",
+            Platform::current().expect("host platform"),
+            "make"
+        ),
         "dev environment should have make (run-dependency of dev-tools)"
     );
 
     // The prod environment should NOT have cmake and make
     // (they are only brought in by dev-tools which is only in the dev environment)
     assert!(
-        !lock_file.contains_conda_package("prod", Platform::current(), "cmake"),
+        !lock_file.contains_conda_package(
+            "prod",
+            Platform::current().expect("host platform"),
+            "cmake"
+        ),
         "prod environment should NOT have cmake"
     );
     assert!(
-        !lock_file.contains_conda_package("prod", Platform::current(), "make"),
+        !lock_file.contains_conda_package(
+            "prod",
+            Platform::current().expect("host platform"),
+            "make"
+        ),
         "prod environment should NOT have make"
     );
 
     // dev-tools itself should NOT be built (it's a dev dependency)
     assert!(
-        !lock_file.contains_conda_package("dev", Platform::current(), "dev-tools"),
+        !lock_file.contains_conda_package(
+            "dev",
+            Platform::current().expect("host platform"),
+            "dev-tools"
+        ),
         "dev-tools should NOT be in the lock file (it's a dev dependency)"
     );
 }

@@ -148,7 +148,7 @@ fn default_cache_dirs() -> CacheDirs {
 /// TODO: Once conda-forge supports `WinArm64`, we can remove this
 /// normalization.
 fn tool_platform() -> (Platform, Vec<GenericVirtualPackage>) {
-    let platform = match Platform::current() {
+    let platform = match Platform::current().expect("host platform") {
         Platform::WinArm64 => Platform::Win64,
         platform => platform,
     };

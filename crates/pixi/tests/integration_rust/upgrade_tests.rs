@@ -16,7 +16,7 @@ use pixi_test_utils::{MockRepoData, Package};
 async fn pypi_dependency_index_preserved_on_upgrade() {
     setup_tracing();
 
-    let platform = Platform::current();
+    let platform = Platform::current().expect("host platform");
 
     // Create local conda channel with python
     let mut package_database = MockRepoData::default();
@@ -88,7 +88,10 @@ async fn pypi_dependency_index_preserved_on_upgrade() {
     // Redact platform-specific and path-specific information for consistent snapshots
     let content = pixi.manifest_contents().unwrap_or_default();
     let redacted_content = content
-        .replace(&Platform::current().to_string(), "[PLATFORM]")
+        .replace(
+            &Platform::current().expect("host platform").to_string(),
+            "[PLATFORM]",
+        )
         .replace(&channel.url().to_string(), "[CHANNEL_URL]")
         .replace(&pypi_index_url.to_string(), "[PYPI_INDEX_URL]");
     assert_snapshot!(redacted_content, @r###"
@@ -109,7 +112,7 @@ async fn pypi_dependency_index_preserved_on_upgrade() {
 async fn upgrade_command_updates_platform_specific_version() {
     setup_tracing();
 
-    let platform = Platform::current();
+    let platform = Platform::current().expect("host platform");
     let mut package_database = MockRepoData::default();
     package_database.add_package(
         Package::build("python", "3.12.0")
@@ -297,7 +300,7 @@ async fn upgrade_command_keeps_specs_in_declared_target() {
 async fn pypi_dependency_upgrade_uses_custom_index() {
     setup_tracing();
 
-    let platform = Platform::current();
+    let platform = Platform::current().expect("host platform");
 
     // Create local conda channel with Python
     let mut package_db = MockRepoData::default();

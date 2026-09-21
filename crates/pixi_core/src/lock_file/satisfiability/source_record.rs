@@ -950,6 +950,8 @@ fn build_full_source_record_from_output(
             SourceRecordData::Partial(partial) => partial.experimental_extra_depends.clone(),
         },
         flags: output.metadata.flags.clone(),
+        attestations_sha256: None,
+        indexed_timestamp: None,
     };
     let sources: std::collections::BTreeMap<String, SourceLocationSpec> = match &record.data {
         SourceRecordData::Full(full) => full.sources.clone(),

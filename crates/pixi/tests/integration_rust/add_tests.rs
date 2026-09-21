@@ -61,17 +61,17 @@ async fn add_functionality() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         "rattler==3"
     ));
     assert!(!lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         "rattler==2"
     ));
     assert!(!lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         "rattler==1"
     ));
 
@@ -80,7 +80,7 @@ async fn add_functionality() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(!lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         "rattler==1"
     ));
 }
@@ -114,7 +114,7 @@ async fn add_with_channel() {
     let mut specs = project
         .default_environment()
         .combined_dependencies(Some(&pixi_manifest::PixiPlatform::from_subdir(
-            Platform::current(),
+            Platform::current().expect("host platform"),
         )))
         .into_specs();
 
@@ -182,7 +182,7 @@ async fn add_functionality_union() {
     let dependencies = project.default_environment().dependencies(
         SpecType::Run,
         Some(&pixi_manifest::PixiPlatform::from_subdir(
-            Platform::current(),
+            Platform::current().expect("host platform"),
         )),
     );
     let (name, _) = dependencies.into_specs().next().unwrap();
@@ -190,7 +190,7 @@ async fn add_functionality_union() {
     let host_deps = project.default_environment().dependencies(
         SpecType::Host,
         Some(&pixi_manifest::PixiPlatform::from_subdir(
-            Platform::current(),
+            Platform::current().expect("host platform"),
         )),
     );
     let (name, _) = host_deps.into_specs().next().unwrap();
@@ -198,7 +198,7 @@ async fn add_functionality_union() {
     let build_deps = project.default_environment().dependencies(
         SpecType::Build,
         Some(&pixi_manifest::PixiPlatform::from_subdir(
-            Platform::current(),
+            Platform::current().expect("host platform"),
         )),
     );
     let (name, _) = build_deps.into_specs().next().unwrap();
@@ -208,17 +208,17 @@ async fn add_functionality_union() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         "rattler==1"
     ));
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         "libcomputer==1.2"
     ));
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         "libidk==3.1"
     ));
 }
@@ -247,7 +247,7 @@ async fn add_functionality_os() {
     let pixi = PixiControl::new().unwrap();
 
     pixi.init_with_platforms(vec![
-        Platform::current().to_string(),
+        Platform::current().expect("host platform").to_string(),
         Platform::LinuxS390X.to_string(),
     ])
     .with_local_channel(channel_dir.path())
@@ -304,7 +304,11 @@ async fn add_pypi_functionality() {
 
     // Create local conda channel with Python for multiple platforms
     let mut package_db = MockRepoData::default();
-    for platform in [Platform::current(), Platform::Linux64, Platform::Osx64] {
+    for platform in [
+        Platform::current().expect("host platform"),
+        Platform::Linux64,
+        Platform::Osx64,
+    ] {
         package_db.add_package(
             Package::build("python", "3.12.0")
                 .with_subdir(platform)
@@ -319,7 +323,7 @@ async fn add_pypi_functionality() {
         .without_channels()
         .with_local_channel(channel.url().to_file_path().unwrap())
         .with_platforms(vec![
-            Platform::current(),
+            Platform::current().expect("host platform"),
             Platform::Linux64,
             Platform::Osx64,
         ])
@@ -385,7 +389,7 @@ async fn add_pypi_functionality() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_pypi_package(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Platform::current().expect("host platform"),
         "pipx"
     ));
     assert!(lock.contains_pep508_requirement(
@@ -468,14 +472,14 @@ async fn add_pypi_extra_functionality() {
     let mut package_db = MockRepoData::default();
     package_db.add_package(
         Package::build("python", "3.12.0")
-            .with_subdir(Platform::current())
+            .with_subdir(Platform::current().expect("host platform"))
             .finish(),
     );
     let channel = package_db.into_channel().await.unwrap();
 
     let channel_url = channel.url();
     let index_url = pypi_index.index_url();
-    let platform = Platform::current();
+    let platform = Platform::current().expect("host platform");
 
     // Create manifest with local channel and pypi index
     let pixi = PixiControl::from_manifest(&format!(
@@ -842,7 +846,7 @@ async fn add_pypi_path_dependency_rewrites_absolute_manifest_path() {
     let mut package_database = MockRepoData::default();
     package_database.add_package(
         Package::build("python", "3.12.0")
-            .with_subdir(Platform::current())
+            .with_subdir(Platform::current().expect("host platform"))
             .finish(),
     );
     let channel = package_database.into_channel().await.unwrap();
@@ -850,7 +854,7 @@ async fn add_pypi_path_dependency_rewrites_absolute_manifest_path() {
     let pixi = PixiControl::new().unwrap();
     pixi.init()
         .with_local_channel(channel.url().to_file_path().unwrap())
-        .with_platforms(vec![Platform::current()])
+        .with_platforms(vec![Platform::current().expect("host platform")])
         .await
         .unwrap();
     pixi.add("python").await.unwrap();
@@ -1026,7 +1030,7 @@ async fn direct_pixi_manifest_input_is_stored_as_directory() {
     setup_tracing();
 
     let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
-    let platform = Platform::current();
+    let platform = Platform::current().expect("host platform");
     let pixi = PixiControl::from_manifest(&format!(
         r#"
 [workspace]
@@ -1428,7 +1432,7 @@ channels = ["https://prefix.dev/conda-forge"]
 platforms = ["{platform}"]
 
 "#,
-            platform = Platform::current()
+            platform = Platform::current().expect("host platform")
         )
         .as_str(),
     )
@@ -1460,7 +1464,7 @@ platforms = ["{platform}"]
 
     let lock_file = pixi.lock_file().await.unwrap();
     let p = lock_file
-        .platform(&Platform::current().to_string())
+        .platform(&Platform::current().expect("host platform").to_string())
         .unwrap();
 
     let boltons = lock_file
@@ -1599,7 +1603,7 @@ async fn add_pypi_with_index() {
     let mut package_db = MockRepoData::default();
     package_db.add_package(
         Package::build("python", "3.12.0")
-            .with_subdir(Platform::current())
+            .with_subdir(Platform::current().expect("host platform"))
             .finish(),
     );
     let channel = package_db.into_channel().await.unwrap();
@@ -1664,7 +1668,7 @@ dependencies = {{
 test = ["test"]
 "#,
         channel = local_channel.url(),
-        platform = Platform::current()
+        platform = Platform::current().expect("host platform")
     ))
     .unwrap();
 
@@ -1716,7 +1720,7 @@ foobar = {{
 }}
 "#,
         channel = local_channel.url(),
-        platform = Platform::current()
+        platform = Platform::current().expect("host platform")
     ))
     .unwrap();
 
