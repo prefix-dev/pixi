@@ -31,10 +31,9 @@ To use the Rust backend in your `pixi.toml`, add it to your package's build conf
 name = "rust_package"
 version = "0.1.0"
 
-[package.build]
-backend = { name = "pixi-build-rust", version = "*" }
+[package.build.backend]
+name = "pixi-build-rust"
 channels = ["https://prefix.dev/conda-forge"]
-
 ```
 
 ### Automatic Metadata Detection
@@ -64,8 +63,8 @@ repository = "https://github.com/user/my-rust-tool"
 You can create a minimal `pixi.toml`:
 
 ```toml
-[package.build]
-backend = { name = "pixi-build-rust", version = "*" }
+[package.build.backend]
+name = "pixi-build-rust"
 channels = ["https://prefix.dev/conda-forge"]
 ```
 
