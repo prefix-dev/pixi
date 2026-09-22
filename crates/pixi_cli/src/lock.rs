@@ -88,16 +88,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let progress = pixi_reporters::TopLevelProgress::from_global();
     // Scoped so the bars are cleared before the diff or the JSON is printed.
     let clear_progress = pixi_reporters::TopLevelProgress::clear_when_done(Some(&progress));
+    // `--check` must be read-only: never write pixi.lock (even when it is missing).
+    // Imply dry-run semantics so a missing/outdated lockfile surfaces as a check failure
+    // without creating or rewriting the file.
+    let read_only = args.check || args.dry_run;
     let (LockFileDerivedData { lock_file, .. }, lock_updated) = workspace
         .update_lock_file(
             Some(progress.clone()),
             UpdateLockFileOptions {
-                lock_file_usage: if args.dry_run {
+                lock_file_usage: if read_only {
                     LockFileUsage::DryRun
                 } else {
                     LockFileUsage::Update
                 },
-                no_install: args.no_install_config.no_install || args.dry_run,
+                no_install: args.no_install_config.no_install || read_only,
                 upgrade_lock_file_format: true,
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
             },
@@ -114,7 +118,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let json_diff = LockFileJsonDiff::new(Some(workspace.named_environments()), diff);
         let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
         println!("{json}");
-    } else if args.dry_run {
+    } else if args.dry_run && !args.check {
         if lock_updated {
             eprintln!(
                 "{}Dry-run: lock file would be updated (not written to disk)",
@@ -129,7 +133,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 console::style(console::Emoji("i ", "i ")).blue()
             );
         }
-    } else if lock_updated {
+    } else if lock_updated && !args.check {
         eprintln!(
             "{}Updated lock file",
             console::style(console::Emoji("✔ ", "")).green()
@@ -137,7 +141,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         diff.print()
             .into_diagnostic()
             .context("failed to print lock file diff")?;
-    } else {
+    } else if !args.check {
         eprintln!(
             "{}Lock-file was already up-to-date",
             console::style(console::Emoji("✔ ", "")).green()
@@ -146,6 +150,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     if args.check && lock_updated {
         miette::bail!("lock file not up-to-date with the workspace");
+    }
+
+    if args.check && !lock_updated {
+        eprintln!(
+            "{}Lock-file was already up-to-date",
+            console::style(console::Emoji("✔ ", "")).green()
+        );
     }
 
     Ok(())
