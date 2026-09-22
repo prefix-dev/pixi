@@ -4375,7 +4375,7 @@ name = "cpp_math"
 version = "0.1.0"
 
 [package.build]
-backend = { name = "pixi-build-cmake", version = "*" }
+backend = { name = "pixi-build-cmake" }
 ```
 
 If the source is on your machine, you can install it like this:
@@ -7760,7 +7760,7 @@ Install a certain build backend by adding it to the `package.build` section of t
 --8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:build-system"
 ```
 
-For custom backend channels, you can add the channel to the `channels` section of the manifest file:
+For custom backend channels, you can add the channel to the `channels` field of the `backend` table:
 ```toml
 --8<-- "docs/source_files/pixi_tomls/pixi-build-backend-channel.toml:build"
 ```
@@ -8119,7 +8119,7 @@ name    = "cpp_math"
 version = "0.1.0"
 
 [package.build]
-backend = { name = "pixi-build-rattler-build", version = "*" }
+backend = { name = "pixi-build-rattler-build" }
 
 [tasks]
 start = "python -c 'import cpp_math; print(cpp_math.add(1, 2))'"
@@ -8634,7 +8634,7 @@ In `package` you specify properties specific to the package you want to build.
 ```
 
 Packages are built by using build backends.
-By specifying `package.build.backend` and `package.build.channels` you determine which backend is used and from which channel it will be downloaded.
+By specifying `package.build.backend` you determine which backend is used, and with `package.build.backend.channels` from which channel it will be downloaded.
 
 There are [different build backends available](backends.md). 
 
@@ -15161,11 +15161,12 @@ The build system is a table that can contain the following fields:
   - `git`: a string representing URL to the source repository.
   - `rev`: a string representing SHA revision to checkout.
   - `subdirectory`: a string representing path to subdirectory to use.
-- `channels`: specifies the channels to get the build backend from.
 - `flags`: package variant flags recorded in the produced package metadata.
 - `backend`: specifies the build backend to use. This is a table that can contain the following fields:
   - `name`: the name of the build backend to use. This will also be the executable name.
   - `version`: the version of the build backend to use. Optional; when omitted it defaults to `*` (any version).
+  - `channels`: the channels to get the build backend from. When omitted the workspace channels are used.
+  - `additional-dependencies`: extra packages to install alongside the build backend.
 - `config`: a table that contains the configuration options for the build backend.
 - `target`: a table that can contain target specific build configuration.
   - Each target can have its own `config` table to override or extend the base configuration for specific platforms.
