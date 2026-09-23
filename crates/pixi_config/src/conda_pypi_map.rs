@@ -260,99 +260,6 @@ mod conda_pypi_map_serde {
     }
 }
 
-#[cfg(test)]
-mod conda_pypi_map_serde_tests {
-    use super::*;
-
-    fn parse(toml: &str) -> Result<CondaPypiMap, toml_edit::de::Error> {
-        toml_edit::de::from_str::<HashMap<String, CondaPypiMap>>(&format!("key = {toml}"))
-            .map(|mut m| m.remove("key").unwrap())
-    }
-
-    #[test]
-    fn test_serde_false_is_disabled() {
-        assert_eq!(parse("false").unwrap(), CondaPypiMap::Disabled);
-    }
-
-    #[test]
-    fn test_serde_true_is_rejected() {
-        assert!(parse("true").is_err());
-    }
-
-    #[test]
-    fn test_serde_bare_location_is_overlay() {
-        let map = parse(r#"{ conda-forge = "https://example.com/m.json" }"#).unwrap();
-        let CondaPypiMap::Map(entries) = map else {
-            panic!("expected a map");
-        };
-        let entry = &entries[&NamedChannelOrUrl::Name("conda-forge".into())];
-        assert_eq!(
-            entry,
-            &CondaPypiMapEntry::from_location("https://example.com/m.json".into())
-        );
-    }
-
-    #[test]
-    fn test_serde_full_spec_and_channel_false() {
-        let map = parse(
-            r#"{ conda-forge = { location = "https://example.com/m.json", mapping-mode = "replace", same-name-heuristic = false }, internal = false }"#,
-        )
-        .unwrap();
-        let CondaPypiMap::Map(entries) = map else {
-            panic!("expected a map");
-        };
-        assert_eq!(
-            entries[&NamedChannelOrUrl::Name("internal".into())],
-            CondaPypiMapEntry::Disabled
-        );
-        let CondaPypiMapEntry::Map(spec) = &entries[&NamedChannelOrUrl::Name("conda-forge".into())]
-        else {
-            panic!("expected a spec");
-        };
-        assert_eq!(spec.location.as_deref(), Some("https://example.com/m.json"));
-        assert_eq!(spec.mapping_mode, CondaPypiMappingMode::Replace);
-        assert_eq!(spec.same_name_heuristic, Some(false));
-    }
-
-    #[test]
-    fn test_serde_inline_mapping_values() {
-        let map = parse(
-            r#"{ conda-forge = { mapping = { conda-name = "pypi-name", multi-name = ["first-name", "second-name"], not-on-pypi = false } } }"#,
-        )
-        .unwrap();
-        let CondaPypiMap::Map(entries) = map else {
-            panic!("expected a map");
-        };
-        let CondaPypiMapEntry::Map(spec) = &entries[&NamedChannelOrUrl::Name("conda-forge".into())]
-        else {
-            panic!("expected a spec");
-        };
-        let mapping = spec.mapping.as_ref().unwrap();
-        assert_eq!(mapping["conda-name"], vec!["pypi-name".to_string()]);
-        assert_eq!(mapping["multi-name"].len(), 2);
-        assert!(mapping["not-on-pypi"].is_empty());
-    }
-
-    #[test]
-    fn test_serde_empty_entry_table_is_rejected() {
-        assert!(parse("{ conda-forge = {} }").is_err());
-    }
-
-    #[test]
-    fn test_serde_roundtrip() {
-        for toml in [
-            "false",
-            r#"{ conda-forge = "https://example.com/m.json" }"#,
-            r#"{ conda-forge = { location = "https://example.com/m.json", mapping-mode = "replace", same-name-heuristic = false }, internal = false }"#,
-        ] {
-            let value = parse(toml).unwrap();
-            let json = serde_json::to_string(&value).unwrap();
-            let back: CondaPypiMap = serde_json::from_str(&json).unwrap();
-            assert_eq!(back, value, "round-trip failed for {toml}");
-        }
-    }
-}
-
 // --- toml_span (manifest dialect) ---
 
 impl<'de> toml_span::Deserialize<'de> for CondaPypiMap {
@@ -468,6 +375,99 @@ impl<'de> toml_span::Deserialize<'de> for TomlCondaPypiMapValue {
             other => {
                 Err(expected("a string, a list of strings or `false`", other, value.span).into())
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod conda_pypi_map_serde_tests {
+    use super::*;
+
+    fn parse(toml: &str) -> Result<CondaPypiMap, toml_edit::de::Error> {
+        toml_edit::de::from_str::<HashMap<String, CondaPypiMap>>(&format!("key = {toml}"))
+            .map(|mut m| m.remove("key").unwrap())
+    }
+
+    #[test]
+    fn test_serde_false_is_disabled() {
+        assert_eq!(parse("false").unwrap(), CondaPypiMap::Disabled);
+    }
+
+    #[test]
+    fn test_serde_true_is_rejected() {
+        assert!(parse("true").is_err());
+    }
+
+    #[test]
+    fn test_serde_bare_location_is_overlay() {
+        let map = parse(r#"{ conda-forge = "https://example.com/m.json" }"#).unwrap();
+        let CondaPypiMap::Map(entries) = map else {
+            panic!("expected a map");
+        };
+        let entry = &entries[&NamedChannelOrUrl::Name("conda-forge".into())];
+        assert_eq!(
+            entry,
+            &CondaPypiMapEntry::from_location("https://example.com/m.json".into())
+        );
+    }
+
+    #[test]
+    fn test_serde_full_spec_and_channel_false() {
+        let map = parse(
+            r#"{ conda-forge = { location = "https://example.com/m.json", mapping-mode = "replace", same-name-heuristic = false }, internal = false }"#,
+        )
+        .unwrap();
+        let CondaPypiMap::Map(entries) = map else {
+            panic!("expected a map");
+        };
+        assert_eq!(
+            entries[&NamedChannelOrUrl::Name("internal".into())],
+            CondaPypiMapEntry::Disabled
+        );
+        let CondaPypiMapEntry::Map(spec) = &entries[&NamedChannelOrUrl::Name("conda-forge".into())]
+        else {
+            panic!("expected a spec");
+        };
+        assert_eq!(spec.location.as_deref(), Some("https://example.com/m.json"));
+        assert_eq!(spec.mapping_mode, CondaPypiMappingMode::Replace);
+        assert_eq!(spec.same_name_heuristic, Some(false));
+    }
+
+    #[test]
+    fn test_serde_inline_mapping_values() {
+        let map = parse(
+            r#"{ conda-forge = { mapping = { conda-name = "pypi-name", multi-name = ["first-name", "second-name"], not-on-pypi = false } } }"#,
+        )
+        .unwrap();
+        let CondaPypiMap::Map(entries) = map else {
+            panic!("expected a map");
+        };
+        let CondaPypiMapEntry::Map(spec) = &entries[&NamedChannelOrUrl::Name("conda-forge".into())]
+        else {
+            panic!("expected a spec");
+        };
+        let mapping = spec.mapping.as_ref().unwrap();
+        assert_eq!(mapping["conda-name"], vec!["pypi-name".to_string()]);
+        assert_eq!(mapping["multi-name"].len(), 2);
+        assert!(mapping["not-on-pypi"].is_empty());
+    }
+
+    #[test]
+    fn test_serde_empty_entry_table_is_rejected() {
+        assert!(parse("{ conda-forge = {} }").is_err());
+    }
+
+    #[test]
+    fn test_serde_roundtrip() {
+        for toml in [
+            "false",
+            r#"{ conda-forge = "https://example.com/m.json" }"#,
+            r#"{ conda-forge = { location = "https://example.com/m.json", mapping-mode = "replace", same-name-heuristic = false }, internal = false }"#,
+        ] {
+            let value = parse(toml).unwrap();
+            let json = serde_json::to_string(&value).unwrap();
+            let back: CondaPypiMap = serde_json::from_str(&json).unwrap();
+            assert_eq!(back, value, "round-trip failed for {toml}");
         }
     }
 }
