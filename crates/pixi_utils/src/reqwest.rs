@@ -247,9 +247,7 @@ pub fn build_reqwest_middleware_stack(
     let store = get_auth_store(config).into_diagnostic()?;
     result.push(Arc::new(S3Middleware::new(s3_config, store)));
 
-    result.push(Arc::new(
-        get_auth_middleware(config).expect("could not create auth middleware"),
-    ));
+    result.push(Arc::new(get_auth_middleware(config).into_diagnostic()?));
 
     // Reacts to `WWW-Authenticate` challenges
     result.push(Arc::new(AuthChallengeMiddleware::default()));
@@ -338,7 +336,15 @@ impl LazyReqwestClient {
     }
 }
 
-pub fn uv_middlewares(config: &Config, client: LazyReqwestClient) -> Vec<Arc<dyn Middleware>> {
+/// The middlewares pixi adds to the clients uv builds.
+///
+/// Fails when the authentication store cannot be created, for instance when
+/// the configured auth file is malformed, so the problem is reported instead
+/// of silently losing credentials.
+pub fn uv_middlewares(
+    config: &Config,
+    client: LazyReqwestClient,
+) -> miette::Result<Vec<Arc<dyn Middleware>>> {
     let mut middlewares: Vec<Arc<dyn Middleware>> = Vec::new();
 
     // Reject every request before any other middleware when in offline mode.
@@ -350,18 +356,14 @@ pub fn uv_middlewares(config: &Config, client: LazyReqwestClient) -> Vec<Arc<dyn
 
     if !config.mirror_map().is_empty() {
         middlewares.push(Arc::new(mirror_middleware(config)));
-        if let Ok(oci_middleware) = oci_middleware(client.clone(), config) {
-            middlewares.push(Arc::new(oci_middleware));
-        }
+        middlewares.push(Arc::new(oci_middleware(client.clone(), config)?));
     }
 
     // Add authentication middleware after mirror rewriting so it can authenticate
     // against the rewritten URLs (important for mirrors that require different
     // credentials)
-    if let Ok(auth_middleware) = get_auth_middleware(config) {
-        middlewares.push(Arc::new(auth_middleware));
-    }
-    middlewares
+    middlewares.push(Arc::new(get_auth_middleware(config).into_diagnostic()?));
+    Ok(middlewares)
 }
 
 #[cfg(test)]
@@ -382,7 +384,7 @@ mod tests {
         );
 
         let client = LazyReqwestClient::new(&config).unwrap();
-        let middlewares = uv_middlewares(&config, client);
+        let middlewares = uv_middlewares(&config, client).unwrap();
 
         // Should have: mirror + OCI + auth middleware
         assert!(
@@ -398,7 +400,7 @@ mod tests {
         // This ensures existing non-mirror auth scenarios continue to work
         let config = Config::default();
         let client = LazyReqwestClient::new(&config).unwrap();
-        let middlewares = uv_middlewares(&config, client);
+        let middlewares = uv_middlewares(&config, client).unwrap();
 
         // Should have: auth middleware only
         assert_eq!(
@@ -418,7 +420,7 @@ mod tests {
             ..Default::default()
         };
         let client = LazyReqwestClient::new(&config).unwrap();
-        let middlewares = uv_middlewares(&config, client);
+        let middlewares = uv_middlewares(&config, client).unwrap();
 
         // Should have: offline + auth middleware
         assert_eq!(
@@ -426,6 +428,25 @@ mod tests {
             2,
             "Expected exactly 2 middlewares (offline, auth) when offline without mirrors, got {}",
             middlewares.len()
+        );
+    }
+
+    /// A malformed auth file must be reported, not turned into a client
+    /// that silently has no credentials.
+    #[test]
+    fn test_uv_middlewares_reports_a_malformed_auth_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let auth_file = dir.path().join("auth.json");
+        fs_err::write(&auth_file, "not json").unwrap();
+
+        let config = Config {
+            authentication_override_file: Some(auth_file),
+            ..Default::default()
+        };
+        let client = LazyReqwestClient::new(&config).unwrap();
+        assert!(
+            uv_middlewares(&config, client).is_err(),
+            "a malformed auth file must be an error"
         );
     }
 
