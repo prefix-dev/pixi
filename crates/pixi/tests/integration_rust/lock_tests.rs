@@ -171,7 +171,10 @@ async fn test_lock_check_does_not_create_missing_lock_file() {
     // Ensure there is no lockfile on disk.
     let lock_path = pixi.workspace_path().join("pixi.lock");
     let _ = fs_err::remove_file(&lock_path);
-    assert!(!lock_path.exists(), "precondition: pixi.lock must be absent");
+    assert!(
+        !lock_path.exists(),
+        "precondition: pixi.lock must be absent"
+    );
 
     // First --check should fail and must not create the lockfile.
     let err = pixi.lock().with_check(true).await.unwrap_err();

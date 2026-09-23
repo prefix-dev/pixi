@@ -118,22 +118,28 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let json_diff = LockFileJsonDiff::new(Some(workspace.named_environments()), diff);
         let json = serde_json::to_string_pretty(&json_diff).expect("failed to convert to json");
         println!("{json}");
-    } else if args.dry_run && !args.check {
+    } else if read_only {
         if lock_updated {
+            let prefix = if args.dry_run { "Dry-run: " } else { "" };
             eprintln!(
-                "{}Dry-run: lock file would be updated (not written to disk)",
+                "{}{prefix}lock file would be updated (not written to disk)",
                 console::style(console::Emoji("i ", "i ")).blue()
             );
             diff.print()
                 .into_diagnostic()
                 .context("failed to print lock file diff")?;
+        } else if args.check {
+            eprintln!(
+                "{}Lock-file was already up-to-date",
+                console::style(console::Emoji("✔ ", "")).green()
+            );
         } else {
             eprintln!(
                 "{}Dry-run: lock file would not change",
                 console::style(console::Emoji("i ", "i ")).blue()
             );
         }
-    } else if lock_updated && !args.check {
+    } else if lock_updated {
         eprintln!(
             "{}Updated lock file",
             console::style(console::Emoji("✔ ", "")).green()
@@ -141,7 +147,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         diff.print()
             .into_diagnostic()
             .context("failed to print lock file diff")?;
-    } else if !args.check {
+    } else {
         eprintln!(
             "{}Lock-file was already up-to-date",
             console::style(console::Emoji("✔ ", "")).green()
@@ -150,13 +156,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     if args.check && lock_updated {
         miette::bail!("lock file not up-to-date with the workspace");
-    }
-
-    if args.check && !lock_updated {
-        eprintln!(
-            "{}Lock-file was already up-to-date",
-            console::style(console::Emoji("✔ ", "")).green()
-        );
     }
 
     Ok(())
