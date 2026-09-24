@@ -14,6 +14,7 @@ use pixi_build_types::procedures::{
     conda_outputs::{CondaOutput, CondaOutputsParams},
 };
 use pixi_compute_engine::{ComputeCtx, Key};
+use pixi_path::AbsPathBuf;
 use pixi_record::{PixiRecord, UnresolvedPixiRecord, UnresolvedSourceRecord, VariantValue};
 use pixi_spec::{ResolvedExcludeNewer, SourceAnchor, SourceSpec};
 use pixi_variant::VariantSelector;
@@ -498,10 +499,15 @@ async fn compute_inner(
     // paths into the machine-local cache dir that lookup never consults.
     let (input_glob_sets, input_files) = match mutability {
         SourceMutability::Mutable => {
-            let input_files =
+            let mut input_files =
                 crate::input_globs::collect_input_files(ctx, &built.input_glob_sets, &source_dir)
                     .await
                     .map_err(SourceBuildError::GlobSet)?;
+            // Inline packages have a synthetic manifest path; their content
+            // hash is already part of the cache key.
+            if spec.inline.is_none() {
+                input_files.push(manifest_file(ctx, manifest_checkout.path.as_std_path()).await?);
+            }
             (built.input_glob_sets, input_files)
         }
         SourceMutability::Immutable => (Vec::new(), Vec::new()),
@@ -844,6 +850,22 @@ async fn synthesize_repodata(
         url: Url::from_file_path(output_file).expect("the output file should be a valid URL"),
         channel: None,
     })
+}
+
+/// The manifest the backend was discovered from.
+async fn manifest_file(
+    ctx: &mut ComputeCtx,
+    source_path: &std::path::Path,
+) -> Result<AbsPathBuf, SourceBuildError> {
+    let discovered = crate::inline_package::discover_backend(ctx, source_path, None)
+        .await
+        .map_err(|err| {
+            SourceBuildError::Initialize(crate::InstantiateBackendError::Discovery(err))
+        })?;
+    Ok(
+        AbsPathBuf::new(discovered.init_params.manifest_path.clone())
+            .expect("discovered manifest paths are absolute"),
+    )
 }
 
 /// Compute the sha256 of a file on a blocking thread.
