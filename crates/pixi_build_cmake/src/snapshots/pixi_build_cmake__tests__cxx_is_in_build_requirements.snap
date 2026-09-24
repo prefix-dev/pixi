@@ -34,6 +34,7 @@ build:
   post_process: []
 requirements:
   build:
+    - "${{ compiler('c') }}"
     - "${{ compiler('cxx') }}"
     - cmake
     - ninja
