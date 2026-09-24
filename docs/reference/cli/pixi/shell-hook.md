@@ -15,7 +15,8 @@ pixi shell-hook [OPTIONS]
 
 ## Options
 - <a id="arg---shell" href="#arg---shell">`--shell (-s) <SHELL>`</a>
-:  Sets the shell, options: [`bash`,  `zsh`,  `xonsh`,  `cmd`, `powershell`,  `fish`,  `nushell`]
+:  Sets the shell. Defaults to the shell pixi was invoked from
+<br>**options**: `bash`, `brush`, `busybox`, `cmd`, `dash`, `fish`, `ksh`, `nu`, `nushell`, `powershell`, `powershell_ise`, `sh`, `xonsh`, `zsh`
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
 :  The environment to activate in the script
 - <a id="arg---json" href="#arg---json">`--json`</a>
