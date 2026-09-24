@@ -66,7 +66,7 @@ fn build_render_context(dir: &Path, options: &InitOptions, config: &Config) -> R
         default_name: get_name_from_dir(dir).unwrap_or_else(|_| String::from("new_workspace")),
         version: "0.1.0".to_string(),
         author: get_default_author(),
-        platforms: resolve_platforms(options),
+        platforms: resolve_platforms(options, config),
         channels: resolve_channels_from_options(options, config),
         index_url: config.pypi_config.index_url.clone(),
         extra_index_urls: config.pypi_config.extra_index_urls.clone(),
@@ -184,14 +184,20 @@ fn is_init_dir_equal_to_pixi_home_parent(init_dir: &Path) -> bool {
         .unwrap_or(false)
 }
 
-fn resolve_platforms(options: &InitOptions) -> Vec<String> {
-    if options.platforms.is_empty() {
-        vec![Platform::current().to_string()]
+fn resolve_platforms(options: &InitOptions, config: &Config) -> Vec<String> {
+    let platforms = if options.platforms.is_empty() {
+        let platforms = config.default_platforms();
+        if platforms.is_empty() {
+            vec![Platform::current().to_string()]
+        } else {
+            platforms
+        }
     } else {
-        // Dedup so a repeated `--platform` (or one matching the current
-        // platform) doesn't write a manifest the parser then rejects.
-        options.platforms.iter().cloned().unique().collect()
-    }
+        options.platforms.clone()
+    };
+
+    // A repeated platform would produce a manifest that fails validation.
+    platforms.into_iter().unique().collect()
 }
 
 fn resolve_channels_from_options(options: &InitOptions, config: &Config) -> Vec<NamedChannelOrUrl> {
@@ -1227,5 +1233,30 @@ mod tests {
         assert!(!outcome.pyproject_exists);
         assert_eq!(outcome.mojo_exists, pre_existing_mojo);
         assert!(outcome.pixi_exists);
+    }
+
+    #[test]
+    fn resolve_platforms_uses_config_defaults_unless_explicit() {
+        let mut options = InitOptions {
+            path: PathBuf::new(),
+            channels: None,
+            platforms: Vec::new(),
+            env_file: None,
+            format: None,
+            scm: None,
+            conda_pypi_mapping: None,
+        };
+        let config = Config {
+            default_platforms: vec!["win-64".to_string(), "linux-64".to_string()],
+            ..Config::default()
+        };
+
+        assert_eq!(
+            resolve_platforms(&options, &config),
+            config.default_platforms
+        );
+
+        options.platforms = vec!["osx-64".to_string(), "osx-64".to_string()];
+        assert_eq!(resolve_platforms(&options, &config), vec!["osx-64"]);
     }
 }
