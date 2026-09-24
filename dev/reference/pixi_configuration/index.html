@@ -10056,6 +10056,8 @@ team. You can use it like this:</p>
 </span></code></pre></div>
 <p>The GHCR mirror also contains <code>bioconda</code> packages. You can search the <a href="https://github.com/orgs/channel-mirrors/packages">available
 packages on Github</a>.</p>
+<p>For private OCI registries, credentials configured with
+<code>pixi auth login &lt;registry-host&gt;</code> are also used for <code>oci://</code> mirrors.</p>
 <h3 id="mirrors-for-pypi-resolving-and-pypi-package-downloading">Mirrors for PyPi resolving and PyPi package downloading<a class="headerlink" href="#mirrors-for-pypi-resolving-and-pypi-package-downloading" title="Permanent link">#</a></h3>
 <p>The mirrors also affect the PyPi resolving and downloading steps of <code>uv</code>.
 You can set mirrors for the main pypi index and extra indices. But the base part of
