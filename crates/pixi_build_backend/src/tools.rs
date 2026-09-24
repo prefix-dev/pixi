@@ -481,6 +481,7 @@ pub fn output_directory(
 mod tests {
     use fs_err as fs;
     use rattler_conda_types::Platform;
+    use std::path::{Path, PathBuf};
     use tempfile::tempdir;
 
     use super::{
@@ -492,18 +493,18 @@ mod tests {
         let dirs = output_directory(
             OneOrMultipleOutputs::Single("pkg".into()),
             "/short/work".into(),
-            std::path::Path::new("/r/recipe.yaml"),
+            Path::new("/r/recipe.yaml"),
         );
         assert_eq!(dirs.host_prefix.as_os_str().len(), 255);
     }
 
     #[test]
     fn test_host_prefix_unpadded_when_build_dir_exceeds_255() {
-        let work_dir = std::path::PathBuf::from(format!("/{}", "a".repeat(300)));
+        let work_dir = PathBuf::from(format!("/{}", "a".repeat(300)));
         let dirs = output_directory(
             OneOrMultipleOutputs::Single("pkg".into()),
             work_dir.clone(),
-            std::path::Path::new("/r/recipe.yaml"),
+            Path::new("/r/recipe.yaml"),
         );
         assert_eq!(dirs.host_prefix, work_dir.join("host_env"));
     }
