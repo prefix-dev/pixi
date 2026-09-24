@@ -15,11 +15,8 @@ static CRAN_SPDX_MAP: LazyLock<HashMap<String, String>> = LazyLock::new(|| {
 
 /// R packages that are built into r-base and should not be listed as separate dependencies.
 ///
-/// This includes:
-/// - Base packages (14): ship with every R installation
-/// - Recommended packages (15): included in all binary distributions of R
-///
-/// See: <https://cran.r-project.org/doc/FAQ/R-FAQ.html>
+/// Recommended packages are not listed because conda-forge packages them
+/// separately from r-base.
 pub const R_BUILTIN_PACKAGES: &[&str] = &[
     // Base packages (Priority: base)
     "base",
@@ -36,23 +33,6 @@ pub const R_BUILTIN_PACKAGES: &[&str] = &[
     "tcltk",
     "tools",
     "utils",
-    // Recommended packages (Priority: recommended)
-    // These are included in all binary distributions of R
-    "KernSmooth",
-    "MASS",
-    "Matrix",
-    "boot",
-    "class",
-    "cluster",
-    "codetools",
-    "foreign",
-    "lattice",
-    "mgcv",
-    "nlme",
-    "nnet",
-    "rpart",
-    "spatial",
-    "survival",
 ];
 
 /// Check if an R package is built into r-base
@@ -715,10 +695,11 @@ Imports:
         }
 
         #[test]
-        fn test_is_builtin_package() {
+        fn test_only_base_packages_are_builtin() {
             assert!(is_builtin_package("stats"));
-            assert!(is_builtin_package("MASS"));
-            assert!(is_builtin_package("mass")); // case insensitive
+            assert!(is_builtin_package("STATS"));
+            assert!(!is_builtin_package("MASS"));
+            assert!(!is_builtin_package("boot"));
             assert!(!is_builtin_package("curl"));
             assert!(!is_builtin_package("ggplot2"));
         }
