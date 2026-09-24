@@ -1,12 +1,12 @@
-from collections.abc import Callable, Iterator
-from pathlib import Path
-from typing import Any
 import os
-import stat
 import shutil
+import stat
 import sys
 import tempfile
 import time
+from collections.abc import Callable, Iterator
+from pathlib import Path
+from typing import Any
 
 import pytest
 

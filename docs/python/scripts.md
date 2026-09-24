@@ -25,9 +25,7 @@ from osgeo import ogr
 
 ogr.UseExceptions()
 
-response = httpx.get(
-    "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson"
-)
+response = httpx.get("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson")
 dataset = ogr.Open(response.text)
 print(f"{dataset.GetLayer().GetFeatureCount()} earthquakes in the past hour")
 ```
@@ -150,6 +148,8 @@ Remote scripts must already contain a PEP 723 metadata block. They are fetched
 on every invocation and executed from a secure temporary `.py` file, while
 their environment is reused from Pixi's cache. Relative paths in remote
 metadata resolve from the directory where Pixi was invoked.
+
+URLs also support [`conda-script` blocks](../tutorials/conda_script.md).
 
 Remote inputs are execution-only: commands that edit, inspect, export, or lock
 a script continue to require a local path. A remote script has no adjacent lock

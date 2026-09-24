@@ -38,7 +38,7 @@ The Python package has a single function `main`.
 Calling that, will print a table containing the name, age and city of three people.
 
 ```py title="src/python_rich/__init__.py"
---8<-- "docs/source_files/pixi_workspaces/pixi_build/python/src/python_rich/__init__.py"
+--8 < --"docs/source_files/pixi_workspaces/pixi_build/python/src/python_rich/__init__.py"
 ```
 
 

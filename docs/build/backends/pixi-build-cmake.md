@@ -30,11 +30,9 @@ To use the CMake backend in your `pixi.toml`, add it to your package's build con
 name = "cmake_package"
 version = "0.1.0"
 
-[package.build]
-backend = { name = "pixi-build-cmake", version = "*" }
-channels = [
-  "https://prefix.dev/conda-forge",
-]
+[package.build.backend]
+name = "pixi-build-cmake"
+channels = ["https://prefix.dev/conda-forge"]
 ```
 
 ### Required Dependencies

@@ -3,14 +3,13 @@ use std::{
     collections::HashMap,
     path::{Path, PathBuf},
     str::FromStr,
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 use uv_redacted::DisplaySafeUrl;
 
 use dashmap::DashMap;
 use futures::TryStreamExt;
 use itertools::Itertools;
-use once_cell::sync::OnceCell;
 use pep440_rs::VersionSpecifiers;
 use pixi_command_dispatcher::{
     CommandDispatcher, CommandDispatcherError, executor::CancellationAwareFutures,
@@ -131,12 +130,17 @@ pub(crate) fn pypi_satisfies_editable(
 /// (already verified against the manifest); a requirement with no
 /// per-package `index` is satisfied by any of them. Empty slice falls back
 /// to the default PyPI URL (pre-v7 lock files).
+///
+/// `per_package_indexes` are any custom per-package indexes configured for this
+/// package in the manifest (e.g. from `[tool.pixi.pypi-dependencies]`), which also
+/// satisfy an unindexed requirement for the same package.
 pub(crate) fn pypi_satisfies_requirement(
     spec: &uv_distribution_types::Requirement,
     locked_record: &LockedPypiRecord,
     project_root: &Path,
     origin: RequirementOrigin,
     locked_indexes: &[&Url],
+    per_package_indexes: &[&Url],
 ) -> Result<(), Box<PlatformUnsat>> {
     let locked_data = &locked_record.data;
     if spec.name.to_string() != locked_data.name().to_string() {
@@ -189,7 +193,20 @@ pub(crate) fn pypi_satisfies_requirement(
             ) {
                 (Some(required_index), Some(locked_url)) => {
                     let required_url: Url = required_index.url.url().clone().into();
-                    if locked_url != &required_url {
+                    // When a package is resolved from a local directory / file:// index,
+                    // rattler_lock stores its location as a Path and strips index_url during
+                    // deserialization (defaulting it to default_index). If the locked package
+                    // is a local Path whose location is within the required file:// index path,
+                    // it satisfies the required index.
+                    let satisfies_file_index = if let Ok(index_path) = required_url.to_file_path()
+                        && let UrlOrPath::Path(pkg_path) = &**locked_data.location()
+                    {
+                        Path::new(pkg_path.as_str()).starts_with(&index_path)
+                    } else {
+                        false
+                    };
+
+                    if !satisfies_file_index && locked_url != &required_url {
                         return Err(PlatformUnsat::LockedPyPIIndexMismatch {
                             name: spec.name.to_string(),
                             expected_index: required_url.to_string(),
@@ -201,6 +218,9 @@ pub(crate) fn pypi_satisfies_requirement(
                 (None, Some(locked_url)) if origin == RequirementOrigin::Manifest => {
                     // Issue #6060: accept the locked URL if it matches any
                     // env-level configured index; fall back to PyPI default.
+                    // Also accept any per-package index configured for this package
+                    // (e.g. from [tool.pixi.pypi-dependencies] when coexisting with
+                    // [project].dependencies or across multiple features, issue #6834).
                     let default_index = &*pixi_consts::consts::DEFAULT_PYPI_INDEX_URL;
                     let effective_indexes: &[&Url] = if locked_indexes.is_empty() {
                         std::slice::from_ref(&default_index)
@@ -209,11 +229,19 @@ pub(crate) fn pypi_satisfies_requirement(
                     };
                     let acceptable = effective_indexes
                         .iter()
+                        .copied()
+                        .chain(per_package_indexes.iter().copied())
                         .any(|configured| pypi_index_urls_match(configured, locked_url));
                     if !acceptable {
+                        let all_expected = effective_indexes
+                            .iter()
+                            .copied()
+                            .chain(per_package_indexes.iter().copied())
+                            .format(", ")
+                            .to_string();
                         return Err(PlatformUnsat::LockedPyPIIndexMismatch {
                             name: spec.name.to_string(),
-                            expected_index: effective_indexes.iter().format(", ").to_string(),
+                            expected_index: all_expected,
                             locked_index: locked_url.to_string(),
                         }
                         .into());
@@ -767,7 +795,7 @@ async fn read_local_package_metadata(
         .clone();
 
     // Use cached lazy build dispatch dependencies
-    let last_error = Arc::new(OnceCell::new());
+    let last_error = Arc::new(Mutex::new(None));
     // Use building_pixi_records (host platform) for installing Python and building,
     // since we can only run binaries on the host platform
     let building_records: miette::Result<Vec<PixiRecord>> = ctx
@@ -932,6 +960,7 @@ mod tests {
             &project_root,
             RequirementOrigin::Manifest,
             &[],
+            &[],
         )
         .unwrap_err();
 
@@ -961,6 +990,7 @@ mod tests {
             &project_root,
             RequirementOrigin::Manifest,
             &[],
+            &[],
         )
         .unwrap();
         let non_matching_spec = pep508_requirement_to_uv_requirement(
@@ -972,6 +1002,7 @@ mod tests {
             &locked_data,
             &project_root,
             RequirementOrigin::Manifest,
+            &[],
             &[],
         )
         .unwrap_err();
@@ -988,6 +1019,7 @@ mod tests {
             &locked_data,
             &project_root,
             RequirementOrigin::Manifest,
+            &[],
             &[],
         )
         .unwrap_err();
@@ -1011,6 +1043,7 @@ mod tests {
             &locked_data_default_branch,
             &project_root,
             RequirementOrigin::Manifest,
+            &[],
             &[],
         )
         .unwrap();
@@ -1042,6 +1075,7 @@ mod tests {
             &locked,
             Path::new("/"),
             RequirementOrigin::RequiresDist,
+            &[],
             &[],
         )
         .unwrap_err();
@@ -1096,6 +1130,7 @@ mod tests {
             &project_root,
             RequirementOrigin::Manifest,
             &[],
+            &[],
         )
         .unwrap();
     }
@@ -1134,6 +1169,7 @@ mod tests {
             &project_root,
             RequirementOrigin::Manifest,
             &[],
+            &[],
         )
         .unwrap();
     }
@@ -1166,6 +1202,7 @@ mod tests {
             Path::new(""),
             RequirementOrigin::Manifest,
             &[],
+            &[],
         )
         .unwrap();
     }
@@ -1193,6 +1230,7 @@ mod tests {
             &locked_data,
             Path::new(""),
             RequirementOrigin::Manifest,
+            &[],
             &[],
         )
         .unwrap();
@@ -1246,6 +1284,7 @@ mod tests {
             Path::new(""),
             RequirementOrigin::Manifest,
             &[],
+            &[],
         )
         .unwrap();
     }
@@ -1279,6 +1318,7 @@ mod tests {
             Path::new(""),
             RequirementOrigin::Manifest,
             &[],
+            &[],
         )
         .unwrap();
     }
@@ -1307,6 +1347,7 @@ mod tests {
             &locked_data,
             Path::new(""),
             RequirementOrigin::Manifest,
+            &[],
             &[],
         )
         .unwrap();
@@ -1349,6 +1390,7 @@ mod tests {
             Path::new(""),
             RequirementOrigin::Manifest,
             &[],
+            &[],
         )
         .unwrap();
 
@@ -1367,6 +1409,7 @@ mod tests {
             &locked_data,
             Path::new(""),
             RequirementOrigin::Manifest,
+            &[],
             &[],
         )
         .unwrap_err();
@@ -1406,6 +1449,7 @@ mod tests {
             &locked_data,
             &project_root,
             RequirementOrigin::Manifest,
+            &[],
             &[],
         );
         assert!(
@@ -1457,6 +1501,7 @@ mod tests {
             &project_root,
             RequirementOrigin::Manifest,
             &[],
+            &[],
         )
         .expect_err("direct requirement without index must not satisfy custom-index lock");
 
@@ -1466,6 +1511,7 @@ mod tests {
             &locked_data,
             &project_root,
             RequirementOrigin::RequiresDist,
+            &[],
             &[],
         )
         .expect("transitive requirement with no pep508 index must satisfy a custom-index lock");
@@ -1506,6 +1552,7 @@ mod tests {
             &locked_data,
             &project_root,
             RequirementOrigin::RequiresDist,
+            &[],
             &[],
         )
         .expect(
@@ -1570,6 +1617,7 @@ mod tests {
             &project_root,
             RequirementOrigin::Manifest,
             &[],
+            &[],
         );
         assert!(
             result.is_err(),
@@ -1601,6 +1649,7 @@ mod tests {
             &locked_data,
             &project_root,
             RequirementOrigin::Manifest,
+            &[],
             &[],
         );
         assert!(
@@ -1635,6 +1684,7 @@ mod tests {
             &locked_data,
             &project_root,
             RequirementOrigin::Manifest,
+            &[],
             &[],
         );
         assert!(
@@ -1675,6 +1725,7 @@ mod tests {
             &project_root,
             RequirementOrigin::Manifest,
             &[&Url::parse(custom_index).unwrap()],
+            &[],
         );
         assert!(result.is_ok(), "{:?}", result.unwrap_err());
 
@@ -1685,6 +1736,7 @@ mod tests {
             &project_root,
             RequirementOrigin::Manifest,
             &[&Url::parse(&format!("{custom_index}/")).unwrap()],
+            &[],
         );
         assert!(result_with_trailing_slash.is_ok());
 
@@ -1695,6 +1747,7 @@ mod tests {
             &project_root,
             RequirementOrigin::Manifest,
             &[&Url::parse("https://unrelated.example.com/simple").unwrap()],
+            &[],
         );
         assert!(result_unrelated.is_err());
     }
@@ -1732,6 +1785,7 @@ mod tests {
                 &*pixi_consts::consts::DEFAULT_PYPI_INDEX_URL,
                 &Url::parse(extra_index).unwrap(),
             ],
+            &[],
         );
         assert!(result.is_ok(), "{:?}", result.unwrap_err());
     }
@@ -1771,6 +1825,7 @@ mod tests {
             &project_root,
             RequirementOrigin::Manifest,
             &[],
+            &[],
         );
         assert!(
             result.is_ok(),
@@ -1778,5 +1833,80 @@ mod tests {
              requirement with an explicit index, got: {:?}",
             result.unwrap_err()
         );
+    }
+
+    /// Regression test for #6834: a manifest requirement with no per-package
+    /// `index` (e.g. from PEP 621 `[project].dependencies`) must satisfy a lock
+    /// file recorded against a custom per-package index if that per-package index
+    /// is configured in `[tool.pixi.pypi-dependencies]`.
+    #[test]
+    fn test_pypi_per_package_index_satisfies_manifest_requirement() {
+        let custom_index = "https://download.pytorch.org/whl/cpu";
+
+        let locked_data = lock_for_test(make_wheel_package_with(
+            "typing-extensions",
+            "4.15.0",
+            "https://download.pytorch.org/whl/cpu/typing_extensions-4.15.0-py3-none-any.whl"
+                .parse()
+                .expect("failed to parse url"),
+            None,
+            Some(Url::parse(custom_index).unwrap()),
+            vec![],
+            None,
+        ));
+
+        // PEP 621 requirement has no index
+        let spec = pep508_requirement_to_uv_requirement(
+            pep508_rs::Requirement::from_str("typing-extensions==4.15.0").unwrap(),
+        )
+        .unwrap();
+
+        let project_root = PathBuf::from_str("/").unwrap();
+
+        // 1. When per_package_indexes includes the custom index, it must satisfy.
+        let result = pypi_satisfies_requirement(
+            &spec,
+            &locked_data,
+            &project_root,
+            RequirementOrigin::Manifest,
+            &[],
+            &[&Url::parse(custom_index).unwrap()],
+        );
+        assert!(result.is_ok(), "{:?}", result.unwrap_err());
+
+        // 2. Trailing slash on per_package_indexes must still match.
+        let result_with_trailing_slash = pypi_satisfies_requirement(
+            &spec,
+            &locked_data,
+            &project_root,
+            RequirementOrigin::Manifest,
+            &[],
+            &[&Url::parse(&format!("{custom_index}/")).unwrap()],
+        );
+        assert!(result_with_trailing_slash.is_ok());
+
+        // 3. When the user removes the per-package index (empty per_package_indexes),
+        // it must invalidate because the locked package was from the custom index
+        // but now only default PyPI is configured.
+        let result_removed = pypi_satisfies_requirement(
+            &spec,
+            &locked_data,
+            &project_root,
+            RequirementOrigin::Manifest,
+            &[],
+            &[],
+        );
+        assert!(result_removed.is_err());
+
+        // 4. An unrelated per-package index must also invalidate.
+        let result_unrelated = pypi_satisfies_requirement(
+            &spec,
+            &locked_data,
+            &project_root,
+            RequirementOrigin::Manifest,
+            &[],
+            &[&Url::parse("https://unrelated.example.com/simple").unwrap()],
+        );
+        assert!(result_unrelated.is_err());
     }
 }

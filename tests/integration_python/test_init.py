@@ -1,7 +1,7 @@
-import tomli
 from pathlib import Path
 
 import pytest
+import tomli
 from dirty_equals import IsPartialDict
 from inline_snapshot import snapshot
 

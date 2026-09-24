@@ -39,11 +39,24 @@ pub(super) struct WorkspaceEnvInner {
     pub(super) id: WorkspaceEnvId,
     pub(super) name: String,
     pub(super) platform: String,
+    /// The platform the environment builds on, when it is not the
+    /// platform it targets. `None` for the common, native case.
+    pub(super) build_platform: Option<String>,
 }
 
 impl WorkspaceEnvRef {
-    pub(super) fn new(id: WorkspaceEnvId, name: String, platform: String) -> Self {
-        Self(Arc::new(WorkspaceEnvInner { id, name, platform }))
+    pub(super) fn new(
+        id: WorkspaceEnvId,
+        name: String,
+        platform: String,
+        build_platform: Option<String>,
+    ) -> Self {
+        Self(Arc::new(WorkspaceEnvInner {
+            id,
+            name,
+            platform,
+            build_platform,
+        }))
     }
 
     #[inline]
@@ -59,6 +72,21 @@ impl WorkspaceEnvRef {
     #[inline]
     pub fn platform(&self) -> &str {
         &self.0.platform
+    }
+
+    /// Display label of the platform the environment builds on. The same
+    /// as [`platform`](Self::platform) unless the environment
+    /// cross-compiles.
+    #[inline]
+    pub fn build_platform(&self) -> &str {
+        self.0.build_platform.as_deref().unwrap_or(&self.0.platform)
+    }
+
+    /// Whether the environment builds on a different platform than it
+    /// targets.
+    #[inline]
+    pub fn is_cross_compiling(&self) -> bool {
+        self.0.build_platform.is_some()
     }
 }
 
@@ -85,7 +113,12 @@ mod tests {
     use super::*;
 
     fn mk(id: u32, name: &str, platform: Platform) -> WorkspaceEnvRef {
-        WorkspaceEnvRef::new(WorkspaceEnvId(id), name.to_string(), platform.to_string())
+        WorkspaceEnvRef::new(
+            WorkspaceEnvId(id),
+            name.to_string(),
+            platform.to_string(),
+            None,
+        )
     }
 
     fn hash_of(ws: &WorkspaceEnvRef) -> u64 {

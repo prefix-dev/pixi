@@ -893,15 +893,13 @@ fn build_full_source_record_from_output(
     use pixi_record::{FullSourceRecordData, SourceRecord as FullRecord};
     use rattler_conda_types::PackageRecord;
 
-    // Reuse the locked record's resolved depends/constrains when
-    // available. For a partial-only record the lock file carried
-    // `depends` but not `constrains`, so default constrains to empty.
+    // Reuse the locked record's resolved depends/constrains when available.
     let (depends, constrains): (Vec<String>, Vec<String>) = match &record.data {
         SourceRecordData::Full(full) => (
             full.package_record.depends.clone(),
             full.package_record.constrains.clone(),
         ),
-        SourceRecordData::Partial(partial) => (partial.depends.clone(), Vec::new()),
+        SourceRecordData::Partial(partial) => (partial.depends.clone(), partial.constrains.clone()),
     };
     let package_record = PackageRecord {
         size: None,

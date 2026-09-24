@@ -35,8 +35,8 @@ preview = ["pixi-build"]
 name = "r-mypackage"
 version = "1.0.0"
 
-[package.build]
-backend = { name = "pixi-build-r", version = "*" }
+[package.build.backend]
+name = "pixi-build-r"
 channels = ["https://prefix.dev/conda-forge"]
 ```
 

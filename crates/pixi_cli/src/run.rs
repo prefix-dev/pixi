@@ -3,7 +3,7 @@ use std::{
     convert::identity,
     ffi::OsString,
     io::Read,
-    string::String,
+    process::ExitCode,
 };
 
 #[cfg(unix)]
@@ -46,8 +46,8 @@ use crate::cli_config::{
 };
 use crate::process_exit;
 use crate::run_script::{
-    RunScriptInput, STDIN_SCRIPT_COMMAND, StdinScriptCommand, prepare_remote_script,
-    prepare_stdin_script, transient_script_cache_key,
+    RemoteScriptManifest, RunScriptInput, STDIN_SCRIPT_COMMAND, StdinScriptCommand,
+    prepare_remote_script, prepare_stdin_script, transient_script_cache_key,
 };
 use crate::shared::install_platform::resolve_install_platform;
 
@@ -166,7 +166,7 @@ impl Args {
 /// CLI entry point for `pixi run`
 /// When running the sigints are ignored and child can react to them. As it
 /// pleases.
-pub async fn execute(mut args: Args) -> miette::Result<()> {
+pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
     args.validate_script_options()?;
 
     // Following statements don't spawn any progress bar, so set
@@ -188,7 +188,7 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
         .map(RunScriptInput::classify);
     let requested_lock_file_usage = args.lock_and_install_config.lock_file_usage()?;
     let global_config_source = args.config_source.source();
-    let mut _remote_script_file = None;
+    let mut _remote_script_directory = None;
     let mut stdin_script_command = None;
     let workspace = match script_input {
         Some(RunScriptInput::Remote(url)) => {
@@ -196,24 +196,46 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
             let root = std::env::current_dir().into_diagnostic()?;
             let config = pixi_config::Config::load_with(&root, &global_config_source)
                 .merge_config(cli_config);
-            let prepared = prepare_remote_script(url, &config, &root).await?;
+            let prepared = prepare_remote_script(url, &config, &root, args.experimental).await?;
             let cache_key =
                 transient_script_cache_key(b"remote", prepared.original_url.as_str().as_bytes());
+            let manifest = match prepared.manifest {
+                RemoteScriptManifest::Pep723(manifest) => manifest,
+                RemoteScriptManifest::CondaScript(manifest) => {
+                    let entrypoint = manifest.metadata().entrypoint.clone();
+                    let workspace = Workspace::from_transient_conda_script(
+                        manifest,
+                        config,
+                        root,
+                        &prepared.cache_name,
+                        &cache_key,
+                    )?;
+                    if not_hidden {
+                        global_multi_progress()
+                            .set_draw_target(ProgressDrawTarget::stderr_with_hz(20));
+                    }
+                    let code =
+                        crate::conda_script::execute_run(workspace, entrypoint, args).await?;
+                    drop(prepared.directory);
+                    return Ok(process_exit::exit_code_from_code(code));
+                }
+            };
+            let script_path = manifest.path().to_owned();
             let WithWarnings {
                 value: workspace,
                 warnings,
             } = Workspace::from_transient_script(
-                prepared.manifest,
+                manifest,
                 config,
                 root,
-                prepared.file.path().to_owned(),
+                script_path,
                 &prepared.cache_name,
                 &cache_key,
             )?;
             for warning in warnings {
                 tracing::warn!("{warning}");
             }
-            _remote_script_file = Some(prepared.file);
+            _remote_script_directory = Some(prepared.directory);
             workspace
         }
         Some(RunScriptInput::Stdin) => {
@@ -259,24 +281,18 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
             // A conda-script block takes this file off the PEP 723 path; a
             // file with both kinds of block is rejected by the detection.
             if let Some(manifest) = crate::conda_script::detect_with_fallback(&path, opted_in)? {
-                if !opted_in {
-                    return Err(miette::miette!(
-                        help = "conda-script support is experimental; opt in with `pixi config set experimental.conda-script true --global`, or add `--experimental` to this run",
-                        "{} contains a conda-script block",
-                        path.display()
-                    ));
-                }
-                if !args.experimental {
-                    eprintln!(
-                        "{}Running {} through `experimental.conda-script`, a draft format that may still change",
-                        console::style(console::Emoji("⚠️ ", "warning: ")).yellow(),
-                        path.display(),
-                    );
-                }
+                crate::conda_script::ensure_enabled(
+                    args.experimental,
+                    &config,
+                    &path.display().to_string(),
+                )?;
                 if not_hidden {
                     global_multi_progress().set_draw_target(ProgressDrawTarget::stderr_with_hz(20));
                 }
-                return crate::conda_script::execute_run(manifest, args, config).await;
+                let entrypoint = manifest.metadata().entrypoint.clone();
+                let workspace = Workspace::from_conda_script(manifest, config)?;
+                let code = crate::conda_script::execute_run(workspace, entrypoint, args).await?;
+                return Ok(process_exit::exit_code_from_code(code));
             }
             WorkspaceLocator::for_cli()
                 .with_global_config_source(global_config_source)
@@ -328,7 +344,7 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
     // Print all available tasks if no task is provided
     if args.task.is_empty() {
         command_not_found(&workspace, explicit_environment);
-        return Ok(());
+        return Ok(ExitCode::SUCCESS);
     }
 
     // We expect progress bar to be used afterwards, so set draw
@@ -651,7 +667,7 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
                 if code == 127 {
                     command_not_found(&workspace, explicit_environment.clone());
                 }
-                process_exit::exit_with_code(code);
+                return Ok(process_exit::exit_code_from_code(code));
             }
             Err(err) => return Err(err.into()),
         }
@@ -670,7 +686,7 @@ pub async fn execute(mut args: Args) -> miette::Result<()> {
             .into_diagnostic()?;
     }
 
-    Ok(())
+    Ok(ExitCode::SUCCESS)
 }
 
 /// Called when a command was not found.
@@ -818,17 +834,6 @@ fn reset_cursor() {
     let term = console::Term::stdout();
     let _ = term.show_cursor();
 }
-
-// /// Exit the process with the appropriate exit code for a SIGINT.
-// fn exit_process_on_sigint() {
-//     // https://learn.microsoft.com/en-us/cpp/c-runtime-library/signal-constants
-//     #[cfg(target_os = "windows")]
-//     std::process::exit(3);
-//
-//     // POSIX compliant OSs: 128 + SIGINT (2)
-//     #[cfg(not(target_os = "windows"))]
-//     std::process::exit(130);
-// }
 
 /// Runs a task future forwarding any signals received to the process.
 ///

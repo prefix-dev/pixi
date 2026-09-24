@@ -30,6 +30,15 @@ $ pixi run --script main.R
 
 Pixi solves the dependencies, installs the environment into its cache and runs the entrypoint inside it.
 
+You can also run a script directly from an HTTP or HTTPS URL, including a GitHub Gist:
+
+```shell
+pixi run --experimental --script https://gist.github.com/ruben-arts/1dba132edbf91adcd604f12fbd181683
+```
+
+Pixi downloads the script into a temporary directory, preserving its filename, and reuses the cached environment.
+The [remote script rules](../python/scripts.md#run-the-script) also apply here.
+
 ## More languages
 
 Ideally, dependencies also come from a conda channel.

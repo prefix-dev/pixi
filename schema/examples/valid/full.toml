@@ -8,7 +8,7 @@ conda-pypi-map = {
   "robostack" = "robostack_mapping.json",
   "conda-forge" = {
     location = "https://repo.prefix.dev/conda-forge",
-    mapping-mode = "replace"
+    mapping-mode = "replace",
   },
   "pytorch" = {
     mapping-mode = "overlay",
@@ -114,7 +114,7 @@ detailed-full = {
   channel = "pytorch",
   subdir = "linux-64",
   md5 = "6f5902ac237024bdd0c176cb93063dc4",
-  sha256 = "a948904f2f0f479b8f8197694b30184b0d2ed1c1cd2a1ec0fb85d299a192a447"
+  sha256 = "a948904f2f0f479b8f8197694b30184b0d2ed1c1cd2a1ec0fb85d299a192a447",
 }
 detailed2 = { version = ">=1.2.3", build = "py34_0" }
 detailed3 = { version = ">=1.2.3", build-number = ">=1" }
@@ -124,19 +124,19 @@ detailed6 = { version = ">=1.2.3", subdir = "linux-64" }
 detailed7 = { version = ">=1.2.3", md5 = "6f5902ac237024bdd0c176cb93063dc4" }
 detailed8 = {
   version = ">=1.2.3",
-  sha256 = "a948904f2f0f479b8f8197694b30184b0d2ed1c1cd2a1ec0fb85d299a192a447"
+  sha256 = "a948904f2f0f479b8f8197694b30184b0d2ed1c1cd2a1ec0fb85d299a192a447",
 }
 test = "*"
 test1 = "*"
 
 md5 = {
   url = "https://example.com/package-1.2.3-asdf2.conda",
-  md5 = "6f5902ac237024bdd0c176cb93063dc4"
+  md5 = "6f5902ac237024bdd0c176cb93063dc4",
 }
 package_path = { path = "path/to/package-1.2.3-abc1.conda" }
 sha256 = {
   url = "https://example.com/package-1.2.3-asdf2.conda",
-  sha256 = "a948904f2f0f479b8f8197694b30184b0d2ed1c1cd2a1ec0fb85d299a192a447"
+  sha256 = "a948904f2f0f479b8f8197694b30184b0d2ed1c1cd2a1ec0fb85d299a192a447",
 }
 
 git = { git = "https://github.com/prefix-dev/pixi", branch = "main" }
@@ -145,7 +145,7 @@ git3 = { git = "https://github.com/prefix-dev/rattler", rev = "v0.1.0" }
 git4 = {
   git = "https://github.com/prefix-dev/rattler",
   rev = "v0.1.0",
-  subdirectory = "python"
+  subdirectory = "python",
 }
 # path = { path = "~/path/to/package" }
 # path2 = { path = "path/to/package" }
@@ -242,9 +242,7 @@ platforms = ["linux-64", "osx-arm64"]
 pypi-dependencies = { torch = "==1.9.0" }
 system-requirements = { cuda = "12" }
 target.osx-arm64 = { dependencies = { mlx = "x.y.z" } }
-tasks = {
-  warmup = { cmd = "python warmup.py", description = "Warmup the GPU" }
-}
+tasks = { warmup = { cmd = "python warmup.py", description = "Warmup the GPU" } }
 
 # Channels and Platforms are not available as separate tables as they are implemented as lists
 [feature.cuda2]
@@ -273,7 +271,7 @@ mlx = "x.y.z"
 [feature.dev.pypi-dependencies]
 ribasim = {
   git = "https://github.com/Deltares/Ribasim.git",
-  subdirectory = "python/ribasim"
+  subdirectory = "python/ribasim",
 }
 ribasim2 = { path = "test/riba", subdirectory = "python/ribasim" }
 

@@ -71,14 +71,14 @@ impl WorkspaceScript {
     }
 
     pub(super) fn for_transient(
-        manifest: ScriptManifest,
+        source: ScriptSource,
         cache_root: &Path,
         cache_name: &str,
         cache_key: &[u8],
         root: &Path,
     ) -> Self {
         Self {
-            source: ScriptSource::Pep723(Box::new(manifest)),
+            source,
             pixi_dir: cache_root.join(transient_cache_name(cache_name, cache_key, root)),
             lock_file_path: None,
         }
@@ -410,28 +410,28 @@ mod tests {
         scoped_key.extend_from_slice(key);
         let digest = xxh3_64(&scoped_key);
         let first = WorkspaceScript::for_transient(
-            manifest(&script_path),
+            super::ScriptSource::Pep723(Box::new(manifest(&script_path))),
             &cache_root,
             "HTTPS://example.com/example.py",
             key,
             &root,
         );
         let first_again = WorkspaceScript::for_transient(
-            manifest(&script_path),
+            super::ScriptSource::Pep723(Box::new(manifest(&script_path))),
             &cache_root,
             "HTTPS://example.com/example.py",
             key,
             &root,
         );
         let second = WorkspaceScript::for_transient(
-            manifest(&script_path),
+            super::ScriptSource::Pep723(Box::new(manifest(&script_path))),
             &cache_root,
             "HTTPS://example.com/example.py",
             b"second key",
             &root,
         );
         let other_root = WorkspaceScript::for_transient(
-            manifest(&script_path),
+            super::ScriptSource::Pep723(Box::new(manifest(&script_path))),
             &cache_root,
             "HTTPS://example.com/example.py",
             key,
@@ -458,8 +458,13 @@ mod tests {
         let mut scoped_key = root.as_os_str().as_encoded_bytes().to_vec();
         scoped_key.push(0);
         scoped_key.extend_from_slice(key);
-        let script =
-            WorkspaceScript::for_transient(manifest(&script_path), &cache_root, "://", key, &root);
+        let script = WorkspaceScript::for_transient(
+            super::ScriptSource::Pep723(Box::new(manifest(&script_path))),
+            &cache_root,
+            "://",
+            key,
+            &root,
+        );
         let expected = cache_root.join(format!("{:016x}", xxh3_64(&scoped_key)));
 
         assert_eq!(expected, script.pixi_dir());
