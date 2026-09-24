@@ -35,6 +35,9 @@ pixi run [OPTIONS] [TASK]...
 :  Enable template rendering for the command arguments
 - <a id="arg---dry-run" href="#arg---dry-run">`--dry-run (-n)`</a>
 :  Run the task in dry-run mode (only print the command that would run)
+- <a id="arg---fail-on-missing-files" href="#arg---fail-on-missing-files">`--fail-on-missing-files`</a>
+:  Fail the task if no files match the input or output globs
+<br>**env**: `PIXI_FAIL_ON_MISSING_FILES`
 - <a id="arg---help" href="#arg---help">`--help`</a>
 :
 

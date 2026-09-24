@@ -767,6 +767,15 @@ impl PixiControl {
             if output.exit_code != 0 {
                 return Err(RunError::NonZeroExitCode(output.exit_code).into());
             }
+
+            let post_hash = task
+                .compute_post_run_hash(&lock_file, None)
+                .await
+                .into_diagnostic()?;
+            if let Some(ref hash) = post_hash {
+                task.check_missing_globs(hash, args.fail_on_missing_files)
+                    .into_diagnostic()?;
+            }
         }
 
         Ok(result)
