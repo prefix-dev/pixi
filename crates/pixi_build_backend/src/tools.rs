@@ -481,14 +481,16 @@ pub fn output_directory(
 mod tests {
     use fs_err as fs;
     use rattler_conda_types::Platform;
+    #[cfg(not(target_os = "windows"))]
     use std::path::{Path, PathBuf};
     use tempfile::tempdir;
 
-    use super::{
-        LoadedVariantConfig, OneOrMultipleOutputs, VARIANTS_CONFIG_FILE, output_directory,
-    };
+    use super::{LoadedVariantConfig, VARIANTS_CONFIG_FILE};
+    #[cfg(not(target_os = "windows"))]
+    use super::{OneOrMultipleOutputs, output_directory};
 
     #[test]
+    #[cfg(not(target_os = "windows"))]
     fn test_host_prefix_padded_to_255() {
         let dirs = output_directory(
             OneOrMultipleOutputs::Single("pkg".into()),
@@ -499,6 +501,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(target_os = "windows"))]
     fn test_host_prefix_unpadded_when_build_dir_exceeds_255() {
         let work_dir = PathBuf::from(format!("/{}", "a".repeat(300)));
         let dirs = output_directory(
