@@ -23,6 +23,9 @@ use pixi_core::{
     lock_file::{CondaPrefixUpdater, ReinstallPackages, UpdateMode},
     workspace::{HasWorkspaceRef, grouped_environment::GroupedEnvironment},
 };
+// Only used by the linux-gated `a_lapsed_pin_offers_no_alternatives` test below.
+#[cfg(target_os = "linux")]
+use pixi_core::workspace::platform_options::alternative_platforms;
 use pixi_manifest::{FeatureName, FeaturesExt};
 use pixi_record::PixiRecord;
 use rattler_conda_types::{Platform, RepoDataRecord};
@@ -2151,6 +2154,146 @@ no-deps = "*"
             .iter()
             .any(|vp| vp.name.as_normalized() == "__linux" && vp.version.to_string() == "5.4"),
         "resolved platform should declare __linux 5.4, got {virtual_packages:?}"
+    );
+}
+
+/// A platform that becomes runnable after an environment is installed must not
+/// take the prefix over: it stays put until asked with `--platform`.
+///
+/// `tuned` is declared *first*, so it would win on a fresh workspace -- the
+/// point is that an installed environment ignores that ordering. Both `__linux`
+/// versions sit below any realistic host kernel so both really run here.
+/// Linux-only: `__linux` only gates installs on linux hosts.
+#[cfg(target_os = "linux")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn a_newly_runnable_platform_does_not_move_an_installed_environment() {
+    let channel_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/data/channels/channels/virtual_packages");
+    let channel_path = fs_err::canonicalize(channel_path).expect("canonicalize channel path");
+    let channel_url = Url::from_directory_path(&channel_path).expect("valid file url");
+
+    let manifest = |platforms: &str| {
+        format!(
+            r#"
+[workspace]
+name = "platform-pin"
+channels = ["{channel_url}"]
+platforms = [{platforms}]
+
+[dependencies]
+no-deps = "*"
+"#
+        )
+    };
+
+    // The `__linux` version recorded in `conda-meta/pixi` identifies which of
+    // the two platforms the prefix was installed for.
+    let recorded_linux_version = |pixi: &PixiControl| {
+        let marker_path = pixi
+            .default_env_path()
+            .unwrap()
+            .join(consts::CONDA_META_DIR)
+            .join(consts::ENVIRONMENT_FILE_NAME);
+        let marker: serde_json::Value =
+            serde_json::from_str(&fs_err::read_to_string(&marker_path).unwrap()).unwrap();
+        let virtual_packages: Vec<rattler_conda_types::GenericVirtualPackage> =
+            serde_json::from_value(marker["resolved_platform"]["virtual_packages"].clone())
+                .expect("resolved_platform should record virtual packages");
+        virtual_packages
+            .iter()
+            .find(|vp| vp.name.as_normalized() == "__linux")
+            .map(|vp| vp.version.to_string())
+            .expect("resolved platform should declare __linux")
+    };
+
+    // Install with only the plain `linux-64` platform available.
+    let pixi = PixiControl::from_manifest(&manifest(r#""linux-64""#)).unwrap();
+    pixi.install().await.unwrap();
+    let installed_for = recorded_linux_version(&pixi);
+
+    // A second platform shows up that also runs here, declared ahead of the
+    // installed one so platform selection would prefer it.
+    pixi.update_manifest(&manifest(
+        r#"{ name = "tuned", platform = "linux-64", linux = "5.4" }, "linux-64""#,
+    ))
+    .unwrap();
+    pixi.install().await.unwrap();
+    assert_eq!(
+        recorded_linux_version(&pixi),
+        installed_for,
+        "an installed environment must stay on its platform when another becomes runnable"
+    );
+
+    // Asking for the other platform switches, and the switch is recorded, so it
+    // survives later commands that pass no `--platform`.
+    pixi.install().with_platform_name("tuned").await.unwrap();
+    assert_eq!(
+        recorded_linux_version(&pixi),
+        "5.4",
+        "`--platform` must move the environment"
+    );
+    pixi.install().await.unwrap();
+    assert_eq!(
+        recorded_linux_version(&pixi),
+        "5.4",
+        "a later bare install must not undo the switch"
+    );
+}
+
+/// A machine that cannot run the platform its environment is installed for gets
+/// no alternatives offered: the pin has lapsed, so the environment is about to
+/// move whatever the user picks, and listing options would imply a choice.
+///
+/// `future` demands a kernel no host has, so it is installable only via
+/// `--platform` and never runnable. Linux-only: `__linux` only gates installs on
+/// linux hosts.
+#[cfg(target_os = "linux")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn a_lapsed_pin_offers_no_alternatives() {
+    let channel_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/data/channels/channels/virtual_packages");
+    let channel_path = fs_err::canonicalize(channel_path).expect("canonicalize channel path");
+    let channel_url = Url::from_directory_path(&channel_path).expect("valid file url");
+
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+[workspace]
+name = "lapsed-pin"
+channels = ["{channel_url}"]
+platforms = [
+  {{ name = "low", platform = "linux-64", linux = "4.18" }},
+  {{ name = "future", platform = "linux-64", linux = "99.0" }},
+  "linux-64",
+]
+
+[dependencies]
+no-deps = "*"
+"#
+    ))
+    .unwrap();
+
+    // Installed for a runnable platform, the other runnable one is an option.
+    pixi.install().await.unwrap();
+    let workspace = pixi.workspace().unwrap();
+    let options = alternative_platforms(&workspace.default_environment())
+        .expect("a runnable pin with another runnable platform has alternatives");
+    assert_eq!(options.installed.name().as_str(), "low");
+    assert_eq!(
+        options
+            .alternatives
+            .iter()
+            .map(|platform| platform.name().as_str())
+            .collect::<Vec<_>>(),
+        ["linux-64"],
+        "`future` is declared but cannot run here, so it is not an option"
+    );
+
+    // Installed for a platform this machine can't run, nothing is offered.
+    pixi.install().with_platform_name("future").await.unwrap();
+    let workspace = pixi.workspace().unwrap();
+    assert!(
+        alternative_platforms(&workspace.default_environment()).is_none(),
+        "a lapsed pin must not be offered alternatives"
     );
 }
 
