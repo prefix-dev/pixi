@@ -188,6 +188,10 @@ async fn setup_environment(
 
     // Modify the project to include the new environment
     if !project.manifest.parsed.envs.contains_key(env_name) {
+        let channels = channels
+            .into_iter()
+            .map(|channel| channel.channel)
+            .collect();
         project.manifest.add_environment(env_name, Some(channels))?;
         state_changes.insert_change(env_name, StateChange::AddedEnvironment);
     }

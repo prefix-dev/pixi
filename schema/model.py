@@ -1300,7 +1300,9 @@ class SourceLocation(StrictBaseModel):
 class Build(StrictBaseModel):
     backend: BuildBackend = Field(..., description="The build backend to instantiate")
     channels: list[Channel] | None = Field(
-        None, description="The `conda` channels that are used to fetch the build backend from"
+        None,
+        deprecated=True,
+        description="The `conda` channels that are used to fetch the build backend from. Deprecated in favor of `backend.channels`",
     )
     flags: list[FlagName] | None = Field(
         None,
@@ -1308,7 +1310,9 @@ class Build(StrictBaseModel):
         examples=[["cuda", "blas_openblas"]],
     )
     additional_dependencies: Dependencies = Field(
-        None, description="Additional dependencies to install alongside the build backend"
+        None,
+        deprecated=True,
+        description="Additional dependencies to install alongside the build backend. Deprecated in favor of `backend.additional-dependencies`",
     )
     config: dict[str, Any] | None = Field(
         None, description="The configuration of the build backend"

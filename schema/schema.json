@@ -343,7 +343,8 @@
       "properties": {
         "additional-dependencies": {
           "title": "Additional-Dependencies",
-          "description": "Additional dependencies to install alongside the build backend",
+          "deprecated": true,
+          "description": "Additional dependencies to install alongside the build backend. Deprecated in favor of `backend.additional-dependencies`",
           "type": "object",
           "additionalProperties": {
             "anyOf": [
@@ -378,7 +379,8 @@
         },
         "channels": {
           "title": "Channels",
-          "description": "The `conda` channels that are used to fetch the build backend from",
+          "deprecated": true,
+          "description": "The `conda` channels that are used to fetch the build backend from. Deprecated in favor of `backend.channels`",
           "type": "array",
           "items": {
             "anyOf": [

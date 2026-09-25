@@ -1,6 +1,5 @@
 use std::collections::HashSet;
 
-use chrono::{DateTime, Utc};
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::Diagnostic;
@@ -14,6 +13,7 @@ use crate::{
     CondaConstraints, CondaDependencies, Feature, PixiPlatform, PixiPlatformName,
     PrioritizedChannel, PyPiDependencies, SpecType,
     dependencies::CondaDevDependencies,
+    exclude_newer::resolve_exclude_newer,
     has_features_iter::HasFeaturesIter,
     has_manifest_ref::HasWorkspaceManifest,
     platform_composition::{combined_platform_name, feature_supports_subdir},
@@ -397,48 +397,19 @@ impl<'source, FeatureCollection> FeaturesExt<'source> for FeatureCollection wher
 
 fn exclude_newer_config_resolved_impl<'source, T, F>(
     features: &T,
-    mut channel_key: F,
+    channel_key: F,
 ) -> Result<Option<ResolvedExcludeNewer>, ParseChannelError>
 where
     T: FeaturesExt<'source> + ?Sized,
     F: FnMut(&PrioritizedChannel) -> Result<ChannelUrl, ParseChannelError>,
 {
-    let mut exclude_newer = features
-        .exclude_newer_raw()
-        .map(|config| ResolvedExcludeNewer::from_datetime(config.cutoff()));
-
-    for channel in features.prioritized_channels().into_values() {
-        let Some(channel_exclude_newer) = channel.exclude_newer else {
-            continue;
-        };
-
-        let channel_key = channel_key(channel)?;
-        let config = exclude_newer
-            .get_or_insert_with(|| ResolvedExcludeNewer::from_datetime(DateTime::<Utc>::MAX_UTC));
-
-        *config = match channel_exclude_newer {
-            ExcludeNewer::Timestamp(dt) => config.clone().with_channel_cutoff(channel_key, dt),
-            ExcludeNewer::Duration(duration) => config
-                .clone()
-                .with_channel_cutoff(channel_key, ExcludeNewer::Duration(duration).cutoff()),
-        };
-    }
-
-    for (name, package_exclude_newer) in &features
-        .workspace_manifest()
-        .workspace
-        .exclude_newer_package_overrides
-    {
-        let config = exclude_newer
-            .get_or_insert_with(|| ResolvedExcludeNewer::from_datetime(DateTime::<Utc>::MAX_UTC));
-
-        *config = match package_exclude_newer {
-            ExcludeNewer::Timestamp(dt) => config.clone().with_package_cutoff(name.clone(), *dt),
-            ExcludeNewer::Duration(duration) => config
-                .clone()
-                .with_package_cutoff(name.clone(), ExcludeNewer::Duration(*duration).cutoff()),
-        };
-    }
-
-    Ok(exclude_newer)
+    resolve_exclude_newer(
+        features.exclude_newer_raw(),
+        features.prioritized_channels().into_values(),
+        channel_key,
+        &features
+            .workspace_manifest()
+            .workspace
+            .exclude_newer_package_overrides,
+    )
 }
