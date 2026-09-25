@@ -9,7 +9,11 @@ use pixi_core::workspace::WorkspaceLocatorError;
 use pixi_manifest::toml::TomlDocument;
 use pixi_toml_edit::{insert_array_element, push_array_element, remove_entry, upsert_entry};
 use rattler_conda_types::NamedChannelOrUrl;
-use std::{io::Write, path::PathBuf, str::FromStr};
+use std::{
+    io::Write,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 use toml_edit::{DocumentMut, Item, Key};
 
 #[derive(Parser, Debug)]
@@ -279,10 +283,18 @@ fn load_config(common_args: &CommonArgs, source: &GlobalConfigSource) -> miette:
         return Ok(Config::load_global_with(source));
     }
 
-    // If an explicit --path was given, load and merge that specific config file
+    // If an explicit --path was given, load and merge that specific config file.
     if let Some(path) = &common_args.path {
         let base_config = Config::load_global_with(source);
-        let local_config = Config::from_path(path).into_diagnostic()?;
+        if global_source_contains_path(source, path) {
+            return Ok(base_config);
+        }
+
+        let local_config = match Config::from_path(path) {
+            Ok(config) => config,
+            Err(ConfigError::FileNotFound(_)) => Config::default(),
+            Err(error) => return Err(error).into_diagnostic(),
+        };
         return Ok(base_config.merge_config(local_config));
     }
 
@@ -292,6 +304,24 @@ fn load_config(common_args: &CommonArgs, source: &GlobalConfigSource) -> miette:
     }
 
     Ok(Config::load_global_with(source))
+}
+
+fn global_source_contains_path(source: &GlobalConfigSource, path: &Path) -> bool {
+    match source {
+        GlobalConfigSource::Search => pixi_config::config_search_locations()
+            .iter()
+            .any(|location| same_config_path(&location.path, path)),
+        GlobalConfigSource::File(source_path) => same_config_path(source_path, path),
+        GlobalConfigSource::None => false,
+    }
+}
+
+fn same_config_path(left: &Path, right: &Path) -> bool {
+    left == right
+        || fs_err::canonicalize(left)
+            .ok()
+            .zip(fs_err::canonicalize(right).ok())
+            .is_some_and(|(left, right)| left == right)
 }
 
 fn determine_config_write_path(common_args: &CommonArgs) -> miette::Result<PathBuf> {
@@ -384,7 +414,11 @@ fn alter_config(
                         .into_diagnostic()
                         .context("invalid channel name")?;
 
-                    let local_has_channels = !config.default_channels.is_empty();
+                    let local_has_channels = toml_doc
+                        .as_item()
+                        .get("default-channels")
+                        .or_else(|| toml_doc.as_item().get("default_channels"))
+                        .is_some();
 
                     if local_has_channels {
                         // Local file already has default-channels. Modify the local list and use mode (Prepend/Append)
@@ -603,11 +637,9 @@ fn transplant_config_key(
         return Ok(());
     }
 
-    // Removing legacy snake_case if exist before `set`
-    if let Some(alias) = legacy_alias(&key_path.target_key)
-        && let Some(table_like) = target_table.as_table_like_mut()
-    {
-        table_like.remove(&alias);
+    // Replace legacy snake_case keys while preserving their comments.
+    if let Some(alias) = legacy_alias(&key_path.target_key) {
+        let _ = remove_entry(target_table, &alias).into_diagnostic()?;
     }
 
     if let Some(value) = current_item.as_value() {
@@ -631,6 +663,7 @@ fn legacy_alias(key: &str) -> Option<String> {
         | "repodata-config"
         | "change-ps1"
         | "disable-bzip2"
+        | "disable-sharded"
         | "disable-zstd" => Some(key.replace('-', "_")),
         _ => None,
     }
@@ -1214,7 +1247,8 @@ default-channels = [
 
     #[tokio::test]
     async fn set_kebab_case_overwrites_legacy_snake_case_key() {
-        let test_context = TestContext::setup(Some("tls_no_verify = true"));
+        let test_context =
+            TestContext::setup(Some("other = 1\n# keep this comment\ntls_no_verify = true"));
 
         execute_subcommand(Subcommand::Set(SetArgs {
             key: "tls-no-verify".to_owned(),
@@ -1223,10 +1257,13 @@ default-channels = [
         }))
         .await;
 
-        // Verify tls_no_verify was replaced by tls-no-verify (no duplicate keys)
         insta::assert_snapshot!(
             test_context.read_config(),
-            @"tls-no-verify = false"
+            @"
+        other = 1
+        # keep this comment
+        tls-no-verify = false
+        "
         );
 
         // Verify subsequent modifications on the newly canonicalized key work cleanly
@@ -1239,7 +1276,11 @@ default-channels = [
 
         insta::assert_snapshot!(
             test_context.read_config(),
-            @"tls-no-verify = true"
+            @"
+        other = 1
+        # keep this comment
+        tls-no-verify = true
+        "
         );
     }
 
@@ -1368,13 +1409,13 @@ tls_no_verify = true
         let test_context = TestContext::setup(Some(
             r#"
 [repodata_config]
-disable_zstd = true
+disable_sharded = true
 disable-shared = true
 "#,
         ));
 
         execute_subcommand(Subcommand::Unset(UnsetArgs {
-            key: "repodata-config.disable-zstd".to_owned(),
+            key: "repodata-config.disable-sharded".to_owned(),
             common: test_context.common_args.clone(),
         }))
         .await;

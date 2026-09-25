@@ -740,6 +740,54 @@ def test_config_append_extends_the_visible_list(pixi: Path, tmp_path: Path) -> N
     ]
 
 
+def test_config_append_respects_explicit_empty_default_channels(pixi: Path, tmp_path: Path) -> None:
+    env = isolated_config_env(tmp_path)
+    (Path(env["RATTLER_HOME"]) / "config.toml").write_text(
+        'default-channels = ["shared-channel"]\n'
+    )
+    target = tmp_path / "target.toml"
+    target.write_text("# deliberate empty override\ndefault-channels = []\n")
+
+    verify_cli_command(
+        [pixi, "config", "append", "--path", target, "default-channels", "added"],
+        env=env,
+    )
+
+    assert tomli.loads(target.read_text())["default-channels"] == ["added"]
+    assert "# deliberate empty override" in target.read_text()
+
+
+def test_config_append_creates_explicit_path(pixi: Path, tmp_path: Path) -> None:
+    env = isolated_config_env(tmp_path)
+    (Path(env["RATTLER_HOME"]) / "config.toml").write_text(
+        'default-channels = ["shared-channel"]\n'
+    )
+    target = tmp_path / "nested" / "target.toml"
+
+    verify_cli_command(
+        [pixi, "config", "append", "--path", target, "default-channels", "added"],
+        env=env,
+    )
+
+    assert tomli.loads(target.read_text())["default-channels"] == [
+        "shared-channel",
+        "added",
+    ]
+
+
+def test_config_path_is_not_loaded_twice(pixi: Path, tmp_path: Path) -> None:
+    env = isolated_config_env(tmp_path)
+    target = tmp_path / "target.toml"
+    target.write_text('[pypi-config]\nextra-index-urls = ["https://example.test/simple"]\n')
+
+    listed = verify_cli_command(
+        [pixi, "config", "list", "--path", target],
+        env=env | {"PIXI_CONFIG_FILE": str(target)},
+    ).stdout
+
+    assert tomli.loads(listed)["pypi-config"]["extra-index-urls"] == ["https://example.test/simple"]
+
+
 def test_config_allow_links(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
     """Test that allow-*-links config keys can be set, read, and unset via the CLI."""
     manifest_path = tmp_pixi_workspace / "pixi.toml"
