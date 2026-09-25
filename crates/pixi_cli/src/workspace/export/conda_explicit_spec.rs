@@ -201,9 +201,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
+        .with_cli_config(args.config.clone())
         .locate()
-        .await?
-        .with_cli_config(args.config.clone());
+        .await?;
 
     let lock_file_usage = script_lock_file_usage(
         args.lock_file_update_config.lock_file_usage()?,

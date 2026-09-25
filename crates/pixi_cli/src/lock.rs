@@ -3,6 +3,7 @@ use miette::{Context, IntoDiagnostic};
 use pixi_core::{
     WorkspaceLocator,
     environment::LockFileUsage,
+    host::{cli_detector_consent, probe_conda_script},
     lock_file::{LockFileDerivedData, UpdateLockFileOptions},
 };
 use pixi_diff::{LockFileDiff, LockFileJsonDiff};
@@ -55,14 +56,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .to_owned();
         let config = pixi_config::Config::load_with(&root, &args.config_source.source())
             .merge_config(args.config.clone().into());
+        let host = probe_conda_script(&manifest, &root, &config, cli_detector_consent(Some(&root)))
+            .await?;
         let pixi_manifest::WithWarnings {
             value: workspace,
             warnings,
-        } = pixi_core::Workspace::from_conda_script(
-            manifest,
-            config,
-            pixi_core::host::HostDetection::detect().await,
-        )?;
+        } = pixi_core::Workspace::from_conda_script(manifest, config, host)?;
         for warning in warnings {
             tracing::warn!("{warning}");
         }

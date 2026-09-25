@@ -1,11 +1,12 @@
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use clap::Parser;
 use miette::IntoDiagnostic;
 use pixi_api::WorkspaceContext;
-use pixi_core::{WorkspaceLocator, environment::LockFileUsage};
+use pixi_core::{WorkspaceLocator, environment::LockFileUsage, host::DenyAll};
 use pixi_manifest::{
     EnvironmentName, FeatureName, FeaturesExt, HasWorkspaceManifest, PixiPlatform,
     PixiPlatformName, PlatformEdit, PlatformMove,
@@ -14,7 +15,10 @@ use pixi_manifest::{
         subdir_default_virtual_packages,
     },
 };
-use rattler_conda_types::{GenericVirtualPackage, PackageName, Subdir, Version};
+use rattler_conda_types::{
+    GenericVirtualPackage, PackageName, Subdir, Version,
+    virtual_package_detector::VirtualPackageName,
+};
 
 use crate::{
     cli_config::{ScriptWorkspaceConfig, script_lock_file_usage},
@@ -38,11 +42,9 @@ pub struct Args {
 /// in a clap struct so the rules (parsing, validation, conversion to
 /// `GenericVirtualPackage`) live in one place.
 ///
-/// Mirrors the TOML's per-virtual-package keys (`cuda`, `archspec`, `glibc`,
-/// `linux`, `macos`, `windows`). Virtual packages without a friendly flag are
-/// declared as trailing `__name[=version[=build_string]]` positionals on the
-/// surrounding `add` / `edit` command, matching the `__name` raw-key escape
-/// hatch in the TOML layer.
+/// Mirrors the TOML's built-in virtual-package shortcuts. Other capabilities
+/// use trailing `name=version[=build_string]` positionals; Pixi adds the
+/// canonical `__` prefix before passing them to the platform model.
 #[derive(Parser, Debug, Default, Clone)]
 pub struct VirtualPackageArgs {
     /// Declare a `__cuda` virtual package at the given version, e.g. `12.0`.
@@ -94,13 +96,14 @@ impl VirtualPackageArgs {
             && self.windows.is_none()
     }
 
-    /// Translate the friendly flags plus any trailing raw `__name=value`
-    /// positionals into a vector of [`GenericVirtualPackage`]. `subdir` is
-    /// used to reject nonsensical combinations (e.g. `--glibc` on win-64).
+    /// Translate the built-in flags plus arbitrary trailing
+    /// `name=version[=build_string]` positionals into
+    /// [`GenericVirtualPackage`] values. `subdir` rejects invalid combinations
+    /// such as `--glibc` on `win-64`.
     pub fn into_specs(
         self,
         subdir: Subdir,
-        raw_specs: &[String],
+        custom_specs: &[String],
     ) -> miette::Result<Vec<GenericVirtualPackage>> {
         let mut specs = Vec::new();
         let mut seen_names = HashSet::new();
@@ -176,10 +179,8 @@ impl VirtualPackageArgs {
             push_unique(&mut specs, &mut seen_names, "__win", version, String::new())?;
         }
 
-        for raw in raw_specs {
-            let gvp = parse_raw_virtual_package(raw)?;
-            // Reject duplicates so the order of `--cuda 12.0 __cuda=11.0`
-            // can't silently shadow the friendly value.
+        for spec in custom_specs {
+            let gvp = parse_virtual_package_spec(spec)?;
             let name = gvp.name.as_normalized().to_string();
             if !seen_names.insert(name.clone()) {
                 miette::bail!(
@@ -244,28 +245,30 @@ fn parse_virtual_package_version(flag: &str, value: &str) -> miette::Result<Vers
         .map_err(|e| miette::miette!("{flag}: '{value}' is not a valid version: {e}"))
 }
 
-fn parse_raw_virtual_package(spec: &str) -> miette::Result<GenericVirtualPackage> {
-    // `splitn` keeps trailing '=' segments in the build string, matching the
-    // manifest's raw parser, instead of silently dropping them.
-    let mut parts = spec.splitn(3, '=');
-    let name_str = parts.next().unwrap_or("");
-    if name_str.strip_prefix("__").is_none_or(str::is_empty) {
-        miette::bail!(
-            "'{spec}' is not a virtual package spec: name must start with '__' followed by a name (e.g. '__cuda=12.0')"
-        );
+fn canonical_virtual_package_name(key: &str) -> miette::Result<PackageName> {
+    if key.starts_with("__") {
+        miette::bail!("virtual-package name '{key}' must omit the '__' prefix");
     }
-    let name = PackageName::try_from(name_str)
+    let conda_name = format!("__{key}");
+    VirtualPackageName::try_from(conda_name)
+        .map(VirtualPackageName::into_package_name)
+        .map_err(|error| miette::miette!("'{key}' is not a valid virtual-package name: {error}"))
+}
+
+fn parse_virtual_package_spec(spec: &str) -> miette::Result<GenericVirtualPackage> {
+    let mut parts = spec.splitn(3, '=');
+    let key = parts.next().unwrap_or("");
+    let name = canonical_virtual_package_name(key)?;
+    let version_str = parts.next().ok_or_else(|| {
+        miette::miette!(
+            "'{spec}' is not a virtual-package spec: expected name=version[=build_string]"
+        )
+    })?;
+    let version = Version::from_str(version_str)
         .into_diagnostic()
-        .map_err(|e| miette::miette!("'{name_str}' is not a valid virtual package name: {e}"))?;
-    let version = parts
-        .next()
-        .map(|v| {
-            Version::from_str(v)
-                .into_diagnostic()
-                .map_err(|e| miette::miette!("'{v}' is not a valid virtual package version: {e}"))
-        })
-        .transpose()?
-        .unwrap_or_else(zero_version);
+        .map_err(|error| {
+            miette::miette!("'{version_str}' is not a valid virtual-package version: {error}")
+        })?;
     let build_string = parts.next().unwrap_or("").to_string();
     pixi_manifest::platform::validate_virtual_package_build_string(&name, &build_string)
         .map_err(|message| miette::miette!("{message}"))?;
@@ -274,6 +277,12 @@ fn parse_raw_virtual_package(spec: &str) -> miette::Result<GenericVirtualPackage
         version,
         build_string,
     })
+}
+
+fn is_virtual_package_positional(input: &str) -> bool {
+    input
+        .split_once('=')
+        .is_some_and(|(_, value)| Subdir::from_str(value).is_err())
 }
 
 /// Parse a positional add argument. Accepts either a bare subdir
@@ -297,29 +306,29 @@ fn parse_add_positional(input: &str) -> miette::Result<(PixiPlatformName, Subdir
 
 #[derive(Parser, Debug, Default)]
 pub struct AddArgs {
-    /// Platforms to add, optionally followed by raw virtual-package specs.
+    /// Platforms to add, optionally followed by arbitrary virtual-package specs.
     ///
-    /// Each non-`__`-prefixed entry is either a bare conda subdir
-    /// (`linux-64`) or `<name>=<subdir>` for a custom-named platform
-    /// (`gpu-linux=linux-64`).
+    /// A bare conda subdir (`linux-64`) or `<name>=<subdir>`
+    /// (`gpu-linux=linux-64`) adds a platform. Any other
+    /// `<name>=<version>[=<build_string>]` entry declares a virtual package on
+    /// the single platform in the same invocation. Pixi adds the canonical
+    /// `__` prefix to virtual-package names.
     ///
-    /// With `--auto-detect`, give at most a single bare `<name>` (no
-    /// `=<subdir>`) to name the detected platform; `<name>=<subdir>` is
-    /// rejected because the subdir is detected from this machine.
+    /// With `--auto-detect`, give at most a single bare `<name>` to name the
+    /// detected platform. Virtual-package specs override detected values.
     ///
-    /// Each `__`-prefixed entry is a raw virtual-package spec
-    /// (`__name[=version[=build_string]]`) and is attached to the
-    /// (single) custom-named platform in the same invocation. This mirrors
-    /// the `__name = "..."` raw-key escape hatch in pixi.toml for virtual
-    /// packages without a friendly flag (`--cuda`, `--archspec`, ...).
-    ///
-    /// When any virtual-package (friendly flag or raw spec) is set, exactly
-    /// one platform may be given.
+    /// When any virtual package is set, exactly one platform may be given.
     #[clap(
         num_args=0..,
-        value_name = "PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]",
+        value_name = "PLATFORM|NAME=PLATFORM|VP=VERSION[=BUILD]",
     )]
     pub platform: Vec<String>,
+
+    /// Declare an arbitrary virtual package explicitly. Use this when its
+    /// version is also a conda subdir name, which would otherwise parse as a
+    /// `<name>=<subdir>` platform entry.
+    #[clap(long = "virtual-package", value_name = "NAME=VERSION[=BUILD]")]
+    pub custom_virtual_packages: Vec<String>,
 
     /// Detect this machine's platform (subdir and virtual packages) instead of
     /// naming a subdir. Optionally pass a single `<name>` to name it; any
@@ -351,13 +360,12 @@ pub struct EditArgs {
     /// Name of the platform to edit.
     pub name: PixiPlatformName,
 
-    /// Raw virtual-package specs (`__name[=version[=build_string]]`) to
-    /// declare or update on this platform. Use the friendly flags
-    /// (`--cuda`, `--archspec`, ...) for virtual packages that have one;
-    /// this trailing positional list is the escape hatch for everything
-    /// else, mirroring the `__name = "..."` raw keys accepted in pixi.toml.
-    #[clap(value_name = "__NAME[=VERSION[=BUILD]]")]
-    pub raw_virtual_packages: Vec<String>,
+    /// Arbitrary virtual-package specs (`name=version[=build_string]`) to
+    /// declare or update on this platform. Pixi adds the canonical `__`
+    /// prefix. Use the built-in flags (`--cuda`, `--archspec`, ...) for their
+    /// specialized validation and syntax.
+    #[clap(value_name = "NAME=VERSION[=BUILD]")]
+    pub custom_virtual_packages: Vec<String>,
 
     /// Set a new conda subdir for this platform.
     #[clap(long, value_name = "SUBDIR")]
@@ -366,7 +374,7 @@ pub struct EditArgs {
     #[clap(flatten)]
     pub virtual_packages: VirtualPackageArgs,
 
-    /// Remove the named virtual package from this platform. Can be repeated.
+    /// Remove an unprefixed virtual-package name from this platform. Can be repeated.
     #[clap(long = "remove-virtual-package", value_name = "NAME", num_args = 1)]
     pub remove_virtual_packages: Vec<String>,
 
@@ -526,11 +534,13 @@ async fn execute_add(
     args: AddArgs,
     lock_file_usage: LockFileUsage,
 ) -> miette::Result<()> {
-    // Positionals beginning with `__` are raw virtual-package specs; the rest
-    // are platform entries. The split mirrors the TOML's `__name = "..."`
-    // raw-key form.
-    let (raw_specs, platform_entries): (Vec<String>, Vec<String>) =
-        args.platform.into_iter().partition(|s| s.starts_with("__"));
+    // A right-hand side that names a conda subdir is a platform entry.
+    // Everything else containing `=` is an arbitrary virtual-package spec.
+    let (mut custom_specs, platform_entries): (Vec<String>, Vec<String>) = args
+        .platform
+        .into_iter()
+        .partition(|input| is_virtual_package_positional(input));
+    custom_specs.extend(args.custom_virtual_packages);
 
     // `--auto-detect` detects this machine instead of naming a subdir; any
     // virtual-package flags then override the detected values.
@@ -556,7 +566,7 @@ async fn execute_add(
             workspace_ctx,
             explicit_name,
             args.virtual_packages,
-            &raw_specs,
+            &custom_specs,
             args.no_install,
             crate::cli_config::feature_from_flags(args.environment.as_ref(), args.feature.as_ref()),
             lock_file_usage,
@@ -568,11 +578,11 @@ async fn execute_add(
         miette::bail!("at least one platform argument is required");
     }
 
-    let virtual_packages_present = !args.virtual_packages.is_empty() || !raw_specs.is_empty();
+    let virtual_packages_present = !args.virtual_packages.is_empty() || !custom_specs.is_empty();
 
     if virtual_packages_present && platform_entries.len() != 1 {
         miette::bail!(
-            "virtual-package flags or `__name=value` positionals require exactly one platform argument; got {}",
+            "virtual-package flags or `name=version` positionals require exactly one platform argument; got {}",
             platform_entries.len()
         );
     }
@@ -604,7 +614,7 @@ async fn execute_add(
                 "virtual packages require a custom platform name; use `<name>=<subdir>` (e.g. `gpu-{subdir}={subdir}`) instead of the bare subdir"
             );
         }
-        let specs = args.virtual_packages.into_specs(subdir, &raw_specs)?;
+        let specs = args.virtual_packages.into_specs(subdir, &custom_specs)?;
         platforms.push(PixiPlatform::new_with_defaults(name, subdir, specs).into_diagnostic()?);
     } else {
         for (name, subdir) in parsed {
@@ -630,15 +640,20 @@ async fn execute_add_auto_detected(
     workspace_ctx: &WorkspaceContext<CliInterface>,
     explicit_name: Option<PixiPlatformName>,
     virtual_packages: VirtualPackageArgs,
-    raw_specs: &[String],
+    custom_specs: &[String],
     no_install: bool,
     feature: FeatureName,
     lock_file_usage: LockFileUsage,
 ) -> miette::Result<()> {
-    let host = workspace_ctx.workspace().host();
+    // Every consented detector runs here, whether or not a platform declares
+    // its names: the point is to capture what this machine provides.
+    let host = workspace_ctx
+        .workspace()
+        .detect_host_with_all_detectors(Arc::new(DenyAll))
+        .await?;
     let subdir = host.subdir();
     let detected = host.platform().into_diagnostic()?.clone();
-    let overrides = virtual_packages.into_specs(subdir, raw_specs)?;
+    let overrides = virtual_packages.into_specs(subdir, custom_specs)?;
     let merged = merge_virtual_packages(detected.customised_virtual_packages(), overrides);
     let explicit = explicit_name.is_some();
     let candidate =
@@ -688,17 +703,14 @@ async fn execute_edit(
     let insert_or_update_virtual_packages = args
         .virtual_packages
         .clone()
-        .into_specs(subdir, &args.raw_virtual_packages)?;
+        .into_specs(subdir, &args.custom_virtual_packages)?;
 
     let remove_virtual_packages: Vec<PackageName> = args
         .remove_virtual_packages
         .iter()
-        .map(|raw| {
-            PackageName::try_from(raw.as_str())
-                .into_diagnostic()
-                .map_err(|e| {
-                    miette::miette!("--remove-virtual-package: '{raw}' is not a valid name: {e}")
-                })
+        .map(|key| {
+            canonical_virtual_package_name(key)
+                .map_err(|error| miette::miette!("--remove-virtual-package: {error}"))
         })
         .collect::<miette::Result<_>>()?;
 
@@ -711,7 +723,7 @@ async fn execute_edit(
 
     if edit.is_noop() {
         miette::bail!(
-            "nothing to do: pass at least one of --subdir, a virtual-package flag (--cuda, --archspec, --glibc, --linux, --macos, --windows), a `__name=value` positional, --remove-virtual-package, or --clear-virtual-packages"
+            "nothing to do: pass at least one of --subdir, a virtual-package flag (--cuda, --archspec, --glibc, --linux, --macos, --windows), a `name=version` positional, --remove-virtual-package, or --clear-virtual-packages"
         );
     }
 
@@ -767,10 +779,14 @@ async fn execute_list(
         return Ok(());
     }
 
+    // Every consented detector contributes to the host entry, whether or not
+    // a platform declares its names.
+    let host = workspace
+        .detect_host_with_all_detectors(Arc::new(DenyAll))
+        .await?;
+    let machine = HostMachine::from_host(&host);
+
     if args.json {
-        // Same snapshot the human output renders, so the two views of one
-        // command cannot disagree about the host.
-        let machine = HostMachine::from_host(workspace.host());
         let mut platforms: Vec<serde_json::Value> =
             Vec::with_capacity(workspace_platforms.len() + 1);
         platforms.push(autodetected_to_json(&machine));
@@ -798,7 +814,6 @@ async fn execute_list(
     }
 
     let mut stdout = std::io::stdout();
-    let machine = HostMachine::from_host(workspace.host());
     print_autodetected_host(&mut stdout, &machine);
 
     if !workspace_platforms.is_empty() {
@@ -1333,11 +1348,16 @@ mod tests {
     }
 
     #[test]
-    fn parse_raw_virtual_package_keeps_trailing_segments_in_build_string() {
-        // Extra '=' segments belong to the build string -- as in the
-        // manifest's raw parser -- rather than being silently dropped.
-        let package = parse_raw_virtual_package("__foo=1=special=build").unwrap();
+    fn parse_virtual_package_spec_adds_prefix_and_keeps_build_string() {
+        let package = parse_virtual_package_spec("site_service=1=special=build").unwrap();
+        assert_eq!(package.name.as_normalized(), "__site_service");
         assert_eq!(package.build_string, "special=build");
+    }
+
+    #[test]
+    fn parse_virtual_package_spec_rejects_prefixed_names() {
+        let error = parse_virtual_package_spec("__amdgpu=0").unwrap_err();
+        assert!(error.to_string().contains("must omit the '__' prefix"));
     }
 
     #[test]
@@ -1351,9 +1371,7 @@ mod tests {
             error.to_string().contains("did you mean 'x86_64_v3'"),
             "{error}"
         );
-        // The raw form is validated too, including a trailing segment that
-        // only survives because the parser keeps it.
-        let error = parse_raw_virtual_package("__archspec=0=x86_64_v3=oops").unwrap_err();
+        let error = parse_virtual_package_spec("archspec=0=x86_64_v3=oops").unwrap_err();
         assert!(
             error.to_string().contains("not a known archspec"),
             "{error}"
@@ -1361,14 +1379,31 @@ mod tests {
     }
 
     #[test]
-    fn into_specs_rejects_raw_positional_duplicate_of_friendly_flag() {
+    fn into_specs_rejects_custom_positional_duplicate_of_builtin_flag() {
         let args = VirtualPackageArgs {
             cuda: Some("12.0".into()),
             ..Default::default()
         };
-        let err = args
-            .into_specs(Subdir::Linux64, &["__cuda=11.0".to_string()])
+        let error = args
+            .into_specs(Subdir::Linux64, &["cuda=11.0".to_string()])
             .unwrap_err();
-        assert!(err.to_string().contains("more than once"), "{err}");
+        assert!(error.to_string().contains("more than once"), "{error}");
+    }
+
+    #[test]
+    fn add_positionals_distinguish_platforms_from_virtual_packages() {
+        assert!(!is_virtual_package_positional("gpu=linux-64"));
+        assert!(is_virtual_package_positional("amdgpu=0"));
+        assert!(is_virtual_package_positional("site_service=2=h1"));
+    }
+
+    #[test]
+    fn remove_name_adds_canonical_prefix() {
+        assert_eq!(
+            canonical_virtual_package_name("amdgpu")
+                .unwrap()
+                .as_normalized(),
+            "__amdgpu"
+        );
     }
 }

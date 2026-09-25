@@ -302,17 +302,16 @@ def test_add_archspec_build_string(pixi: Path, tmp_pixi_workspace: Path) -> None
     assert entry["archspec"] == "x86_64_v3"
 
 
-def test_add_raw_virtual_package_repeated(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    """Raw virtual-package specs are passed as trailing `__name=value`
-    positionals, mirroring the `__name = "..."` escape hatch in pixi.toml."""
+def test_add_custom_virtual_package_repeated(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Unprefixed virtual-package specs are accepted as trailing positionals."""
     _seed_workspace(tmp_pixi_workspace)
     _run_platform(
         pixi,
         tmp_pixi_workspace,
         "add",
         "rich-linux=linux-64",
-        "__cuda=12.0",
-        "__glibc=2.40",
+        "cuda=12.0",
+        "glibc=2.40",
         "--no-install",
     )
     entry = next(
@@ -397,7 +396,7 @@ def test_add_cuda_arch_without_cuda_rejected(pixi: Path, tmp_pixi_workspace: Pat
 def test_edit_removing_cuda_strands_cuda_arch_rejected(
     pixi: Path, tmp_pixi_workspace: Path
 ) -> None:
-    """Removing `__cuda` from a platform that still declares `__cuda_arch`
+    """Removing `cuda` from a platform that still declares `__cuda_arch`
     would strand the arch package; the edit is rejected."""
     _seed_workspace(tmp_pixi_workspace)
     _run_platform(
@@ -417,7 +416,7 @@ def test_edit_removing_cuda_strands_cuda_arch_rejected(
         "edit",
         "gpu",
         "--remove-virtual-package",
-        "__cuda",
+        "cuda",
         "--no-install",
         expected_exit_code=ExitCode.FAILURE,
         stderr_contains="`__cuda_arch` requires `__cuda`",
@@ -425,14 +424,14 @@ def test_edit_removing_cuda_strands_cuda_arch_rejected(
 
 
 def test_add_duplicate_virtual_package_rejected(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    """`--cuda` and a `__cuda=...` raw positional together should error."""
+    """`--cuda` and a `cuda=...` positional together should error."""
     _seed_workspace(tmp_pixi_workspace)
     _run_platform(
         pixi,
         tmp_pixi_workspace,
         "add",
         "gpu-linux=linux-64",
-        "__cuda=11.0",
+        "cuda=11.0",
         "--cuda",
         "12.0",
         "--no-install",
@@ -453,24 +452,6 @@ def test_add_duplicate_platform_rejected(pixi: Path, tmp_pixi_workspace: Path) -
         "--no-install",
         expected_exit_code=ExitCode.FAILURE,
         stderr_contains="more than once",
-    )
-
-
-def test_add_invalid_virtual_package_name(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    """A trailing positional that doesn't start with `__` is treated as a
-    second platform entry, which then trips the single-platform-with-vps rule."""
-    _seed_workspace(tmp_pixi_workspace)
-    _run_platform(
-        pixi,
-        tmp_pixi_workspace,
-        "add",
-        "weird=linux-64",
-        "--cuda",
-        "12.0",
-        "cuda=12.0",
-        "--no-install",
-        expected_exit_code=ExitCode.FAILURE,
-        stderr_contains="exactly one platform",
     )
 
 
@@ -822,7 +803,7 @@ def test_edit_remove_named_vp(pixi: Path, tmp_pixi_workspace: Path) -> None:
         "edit",
         "gpu-linux",
         "--remove-virtual-package",
-        "__cuda",
+        "cuda",
         "--no-install",
     )
     entry = next(
@@ -1579,55 +1560,6 @@ def test_list_respects_pixi_override_platform(pixi: Path, tmp_pixi_workspace: Pa
     assert f"platform={other}" in out.stdout
 
 
-def test_list_dims_unreachable_environments_and_features(
-    pixi: Path, tmp_pixi_workspace: Path
-) -> None:
-    """An env/feature whose platforms are all unreachable on this host is
-    dimmed in the `Used in ...` continuation lines. Reachable entries
-    on the same line keep their normal styling."""
-    other = "linux-aarch64" if CURRENT_PLATFORM != "linux-aarch64" else "osx-arm64"
-    manifest = tmp_pixi_workspace / "pixi.toml"
-    manifest.write_text(
-        f"""\
-[workspace]
-name = "platform-test"
-channels = []
-platforms = ["{CURRENT_PLATFORM}", "{other}"]
-
-[feature.only-other]
-platforms = ["{other}"]
-
-[feature.host-side]
-platforms = ["{CURRENT_PLATFORM}"]
-
-[environments]
-unreachable = ["only-other"]
-"""
-    )
-    # `--color always` forces the ANSI sequences through so we can spot
-    # the dim escape (`ESC[2m`) around the unreachable names.
-    out = verify_cli_command(
-        [
-            str(pixi),
-            "--color",
-            "always",
-            "workspace",
-            "--manifest-path",
-            str(manifest),
-            "platform",
-            "list",
-        ],
-    )
-    dim = "\x1b[2m"
-    # `unreachable` is the environment whose only feature pins a
-    # non-host subdir, so it must be dim-wrapped.
-    assert f"{dim}unreachable" in out.stdout
-    # `only-other` is dim because its sole platform doesn't run here;
-    # `host-side` is reachable and must stay un-dimmed.
-    assert f"{dim}only-other" in out.stdout
-    assert f"{dim}host-side" not in out.stdout
-
-
 def test_list_marks_rich_platform_unsupported_when_vps_unsatisfied(
     pixi: Path, tmp_pixi_workspace: Path
 ) -> None:
@@ -1641,7 +1573,7 @@ def test_list_marks_rich_platform_unsupported_when_vps_unsatisfied(
         tmp_pixi_workspace,
         "add",
         f"cuda-pinned={CURRENT_PLATFORM}",
-        "__cuda=999.0",
+        "cuda=999.0",
         "--no-install",
     )
     out = _run_platform(pixi, tmp_pixi_workspace, "list")

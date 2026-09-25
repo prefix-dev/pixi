@@ -85,8 +85,8 @@ Each inline-table entry has:
 - `platform`: the conda subdir the entry targets (e.g. `linux-64`, `osx-arm64`). Required.
 - `name`: optional workspace-scoped identifier the platform is referenced by elsewhere (in `feature.<name>.platforms`, in lockfile rows, in CLI commands).
   When omitted, Pixi synthesizes a name from `platform` plus the declared virtual packages, so two entries that declare the same set in different key order share the same identifier.
-- Friendly keys for the common virtual packages: `cuda`, `archspec`, `glibc`, `linux`, `macos` (alias `osx`), `windows`.
-  Each maps onto the matching `__name` conda virtual package (`cuda` -> `__cuda`, `glibc` -> `__glibc`, `macos` -> `__osx`, etc.).
+- Built-in keys for common virtual packages: `cuda`, `archspec`, `glibc`, `linux`, `macos` (alias `osx`), `windows`.
+  Each maps onto the matching conda virtual package and keeps its specialized syntax and validation.
 - `archspec` names a CPU microarchitecture (`x86_64_v3`, `skylake`, `m1`,
   `armv8.2a`, ...) rather than a version. The name must be one the bundled
   [archspec](https://github.com/archspec/archspec) database knows, and Pixi
@@ -96,6 +96,9 @@ Each inline-table entry has:
   not `x86-64-v3`). A CPU newer than the bundled database can't be named until
   Pixi ships an updated archspec; set `archspec = "0"` to declare the
   microarchitecture explicitly unknown.
+  Plain names default to virtual-package version `0`. Use
+  `archspec = "1=zen5"` to preserve an explicit version alongside the
+  microarchitecture.
   Unlike every other virtual package, a machine does not satisfy `archspec` by
   carrying a high enough version.
   It satisfies it by being that microarchitecture or one the archspec database
@@ -114,9 +117,15 @@ Each inline-table entry has:
 
   `driver` is exactly equivalent to the bare `cuda = "12.0"` form. Per the
   conda CEP, `__cuda_arch` is meaningless without `__cuda`, so `arch` requires
-  `driver`; declaring `arch` (or a raw `__cuda_arch`) alone is rejected.
+  `driver`; declaring `arch` or `cuda_arch` alone is rejected.
 
-- For virtual packages without a friendly key, a raw `__name = "version"` entry is also accepted as an escape hatch, for example `__conda_forge_openmpi = "5.0"` for a name a channel-registered detector reports. The solver treats it as available exactly like the friendly keys, and a machine satisfies it when it provides that name at the declared version or newer. Pixi's built-in detection only reports the names it knows (`__win`, `__osx`, `__linux`, `__cuda`, `__cuda_arch`, `__archspec`, and the libc family `__glibc`/`__musl`/`__eglibc`); any other name has to come from a detector for the host check to pass.
+- Every other non-structural key maps to a virtual package by adding `__`.
+  For example, `amdgpu = "0"` declares `__amdgpu=0`, while
+  `site_service = "2=h1"` declares version `2` with build string `h1`.
+  Names use the detector protocol's validation rules. A machine satisfies a
+  declaration when it reports the same name and build string at the declared
+  version or newer. Pixi's built-in detection reports only the names it knows,
+  so other names must come from a channel-registered detector.
 
 A feature's `platforms` array is a list of names that must each resolve to a workspace platform (or be a bare conda subdir, which Pixi treats as an alias for that subdir).
 This is how you bind a feature to the rich variant:
@@ -176,10 +185,10 @@ Pixi's built-in detection only knows the virtual packages listed above.
 A channel can register **virtual package detectors** in its repodata: small packages whose executable reports further virtual packages, such as the version of an MPI runtime or a driver installed outside of the environment.
 Each registration names the detector package and the virtual packages it reports.
 
-Pixi runs a detector only when a workspace platform declares one of the names it reports beyond the subdir's baseline, as a raw `__name = "version"` entry or through a friendly key such as `cuda`, and only for the machine it runs on.
+Pixi runs a detector only when a workspace platform declares one of the names it reports beyond the subdir's baseline, through a direct key such as `site_service = "2"` or a built-in key such as `cuda`, and only for the machine it runs on.
 A detector registered for a built-in name replaces Pixi's own detection of that name.
 The detector is installed into an environment of its own, cached under the [`virtual-package-detectors` cache](../reference/pixi_configuration.md#cache), and run with the configured timeout.
-Its results extend the built-in detection, so a workspace that declares `__conda_forge_openmpi = "5.0"` is usable on a machine where the detector reports that version or newer, and skipped otherwise.
+Its results extend the built-in detection, so a workspace that declares `conda_forge_openmpi = "5.0"` is usable on a machine where the detector reports that version or newer, and skipped otherwise.
 A detector that fails, times out, or reports something malformed contributes nothing and is reported as a warning.
 Other detectors' valid results and explicit overrides remain available when one detector fails.
 
@@ -188,8 +197,8 @@ Channel relations then determine the resolved order.
 A higher-priority accepted registration reserves its names even if its detector is denied or skipped; a lower-priority detector cannot take over those names.
 
 Running a detector executes code from the channel.
-The first time one is needed, Pixi shows what running it installs and asks whether to run it.
-The answer, allow or deny, is stored in the [`virtual-package-detectors` configuration](../reference/pixi_configuration.md#virtual-package-detectors): by default in the configuration shared with other rattler-based tools, or in Pixi's own user configuration.
+The first time one is needed, Pixi asks whether to trust the channel's current and future detectors. The default is no.
+Both allow and deny decisions are saved for either this repository or all repositories using shared configuration. Repository-local permission requires an approval outside the checkout, so a copied or modified checkout cannot approve itself.
 Without a terminal, a detector without a stored decision is skipped with a warning that names the configuration key to set.
 A stored `deny` skips it silently.
 
@@ -206,11 +215,11 @@ Detector-provided names can still be overridden with `CONDA_OVERRIDE_<NAME>`, li
 
 [`pixi workspace platform`](../reference/cli/pixi/workspace/platform/index.md) is the CLI surface for these entries:
 
-- `pixi workspace platform add <PLATFORM> [--cuda 12.0] [--cuda-arch 8.6] [--glibc 2.28] ...`
+- `pixi workspace platform add <PLATFORM> [--cuda 12.0] [site_service=2=h1] [--virtual-package kernel_api=linux-64] ...`
   appends bare subdirs or rich platforms (or the current machine via
   `--auto-detect`, see above). `--cuda-arch` requires `--cuda` (or
   an existing `__cuda`) and serializes as `cuda = { driver, arch }`.
-- `pixi workspace platform edit <NAME> [--cuda 12.1] [--remove-virtual-package __glibc]` mutates a custom platform's declared virtual packages.
+- `pixi workspace platform edit <NAME> [--cuda 12.1] [--remove-virtual-package glibc]` mutates a custom platform's declared virtual packages.
 - `pixi workspace platform move <NAME> --to-top | --to-bottom | --before <NAME> | --after <NAME>` reorders an entry; since order is selection priority, this is how you promote or demote a platform.
 - `pixi workspace platform list` inspects what is declared.
 - `pixi workspace platform remove <NAME>` drops an entry.

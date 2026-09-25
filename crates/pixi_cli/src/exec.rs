@@ -10,7 +10,7 @@ use pixi_api::workspace::platforms::resolve_platforms;
 use pixi_command_dispatcher::offline::exclusions_for_solve;
 use pixi_config::{self, Config, ConfigCli};
 use pixi_core::environment::list::{PackageToOutput, print_package_table};
-use pixi_core::host::{HostDetection, HostDetector, WantedNames};
+use pixi_core::host::{HostDetection, HostDetector, WantedNames, cli_detector_consent};
 use pixi_manifest::PixiPlatformName;
 use pixi_manifest::platform::host::host_subdir;
 use pixi_manifest::platform::solver_generic_virtual_packages;
@@ -27,10 +27,7 @@ use rattler_virtual_package_detectors::referenced_virtual_packages;
 use reqwest_middleware::ClientWithMiddleware;
 use uv_configuration::initialize_rayon_once;
 
-use crate::{
-    cli_config::ChannelsConfig, detector_consent::detector_consent,
-    match_spec_or_path::MatchSpecOrPath, process_exit,
-};
+use crate::{cli_config::ChannelsConfig, match_spec_or_path::MatchSpecOrPath, process_exit};
 
 /// Run a command and install it in a temporary environment.
 ///
@@ -291,7 +288,7 @@ pub async fn create_exec_prefix(
         );
         HostDetector::with_gateway(
             config.clone(),
-            detector_consent(),
+            cli_detector_consent(None),
             client.clone().into(),
             gateway.clone(),
         )
