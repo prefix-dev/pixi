@@ -63,6 +63,7 @@ To find the locations where `pixi` looks for configuration files, run
 The `rattler` locations are read by every rattler-based tool, so a setting placed there applies to Pixi and `rattler-build` alike.
 They accept only the options that all of these tools understand, such as `default-channels`, `mirrors`, `s3-options`, `index-config` and `concurrency`.
 Options that only Pixi knows, like `shell` or `detached-environments`, belong in a `pixi` location; in a `rattler` file Pixi ignores them and warns about it.
+`pixi config set --shared`, `unset --shared` and `edit --shared` operate on the user-level `rattler` file and refuse keys that are not shared by all tools.
 
 ### Skipping or overriding config discovery
 
@@ -551,6 +552,35 @@ debugging:
 
 For persistent behavior, prefer `[cache.netfs-redirect]` or
 `PIXI_CACHE_NETFS_REDIRECT`.
+
+### `virtual-package-detectors`
+
+Channels can register virtual package detectors: small packages whose executable reports virtual packages such as an externally installed MPI.
+Running a detector executes code from the channel. Pixi asks whether to trust the channel's current and future detectors, then whether to save the decision for this repository or for all repositories using shared configuration.
+Repository decisions are stored in `.pixi/config.toml` and take precedence over shared decisions.
+A local `allow` requires an approval outside the checkout, bound to the repository's canonical path and the channel URL. Use the dialog or `pixi config set --local` to grant that approval.
+Copying a checkout or editing its configuration cannot grant execution permission. A local `deny` needs no approval.
+`--offline` also applies to detector discovery and installation.
+Detectors inherit the host environment during activation and execution, including non-UTF-8 values on Unix.
+
+```toml title="config.toml"
+[virtual-package-detectors]
+# How long a detector, and separately its activation, may run. At most 300.
+timeout-seconds = 30
+
+# Decisions per registration origin, the channel's base URL.
+[virtual-package-detectors.consent]
+"https://conda.anaconda.org/conda-forge" = "allow"
+```
+
+A decision is `"allow"` or `"deny"`. Quote the channel URL because it contains dots:
+
+```shell
+pixi config set --shared 'virtual-package-detectors.consent."https://conda.anaconda.org/conda-forge"' allow
+pixi config set --local 'virtual-package-detectors.consent."https://conda.anaconda.org/conda-forge"' deny
+pixi config unset --local 'virtual-package-detectors.consent."https://conda.anaconda.org/conda-forge"'
+pixi config list virtual-package-detectors.timeout-seconds
+```
 
 ## Experimental
 

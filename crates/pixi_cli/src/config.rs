@@ -2,15 +2,17 @@ use crate::cli_config::WorkspaceConfig;
 use clap::Parser;
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_config;
-use pixi_config::{Config, ConfigError, GlobalConfigSource};
+use pixi_config::{Config, ConfigError, DetectorDecision, GlobalConfigSource};
 use pixi_consts::consts;
-use pixi_core::WorkspaceLocator;
 use pixi_core::workspace::WorkspaceLocatorError;
+use pixi_core::{WorkspaceLocator, host::HostDetection};
 use pixi_manifest::toml::TomlDocument;
 use pixi_toml_edit::{insert_array_element, push_array_element, remove_entry, upsert_entry};
-use rattler_conda_types::NamedChannelOrUrl;
+use rattler_conda_types::{ChannelUrl, NamedChannelOrUrl};
+use serde_json::Value as JsonValue;
 use std::{
     io::Write,
+    iter::once,
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -52,19 +54,25 @@ enum Subcommand {
 #[derive(Parser, Debug, Clone)]
 struct CommonArgs {
     /// Operation on project-local configuration
-    #[arg(long, short, conflicts_with_all = &["global", "system", "path"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    #[arg(long, short, conflicts_with_all = &["global", "system", "shared", "path"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
     local: bool,
 
     /// Operation on global configuration
-    #[arg(long, short, conflicts_with_all = &["local", "system", "path"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    #[arg(long, short, conflicts_with_all = &["local", "system", "shared", "path"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
     global: bool,
 
     /// Operation on system configuration
-    #[arg(long, short, conflicts_with_all = &["local", "global", "path"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    #[arg(long, short, conflicts_with_all = &["local", "global", "shared", "path"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
     system: bool,
 
+    /// Operation on the configuration shared with other rattler-based tools
+    /// (`~/.config/rattler/config.toml`), which only accepts the keys every
+    /// such tool understands
+    #[arg(long, conflicts_with_all = &["local", "global", "system", "path"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    shared: bool,
+
     /// Path to a local configuration file
-    #[arg(long, short, conflicts_with_all = &["local", "global", "system"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    #[arg(long, short, conflicts_with_all = &["local", "global", "system", "shared"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
     path: Option<PathBuf>,
 
     #[clap(flatten)]
@@ -257,6 +265,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
 async fn determine_project_root(common_args: &CommonArgs) -> miette::Result<Option<PathBuf>> {
     let workspace = WorkspaceLocator::default()
+        .with_host(HostDetection::builtin())
         .with_closest_package(false) // Dont care about the package
         .with_emit_warnings(false) // No reason to emit warnings
         .with_consider_environment(true)
@@ -291,6 +300,10 @@ async fn load_config(
 ) -> miette::Result<Config> {
     if common_args.system {
         return Ok(Config::load_system());
+    }
+
+    if common_args.shared {
+        return Ok(Config::load_shared());
     }
 
     if common_args.global {
@@ -338,34 +351,60 @@ fn same_config_path(left: &Path, right: &Path) -> bool {
             .is_some_and(|(left, right)| left == right)
 }
 
+fn resolved_config_write_path(path: &Path) -> Option<PathBuf> {
+    let mut existing = path;
+    let mut missing = Vec::new();
+    loop {
+        if let Ok(mut resolved) = fs_err::canonicalize(existing) {
+            for component in missing.iter().rev() {
+                resolved.push(component);
+            }
+            return Some(resolved);
+        }
+        missing.push(existing.file_name()?);
+        existing = existing.parent()?;
+        if existing.as_os_str().is_empty() {
+            existing = Path::new(".");
+        }
+    }
+}
+
 async fn determine_config_write_path(common_args: &CommonArgs) -> miette::Result<PathBuf> {
+    Ok(determine_config_write_destination(common_args).await?.0)
+}
+
+async fn determine_config_write_destination(
+    common_args: &CommonArgs,
+) -> miette::Result<(PathBuf, Option<PathBuf>)> {
     if let Some(path) = &common_args.path {
-        return Ok(path.clone());
+        let repository = determine_project_root(common_args).await?.filter(|root| {
+            let local = root.join(consts::PIXI_DIR).join(consts::CONFIG_FILE);
+            same_config_path(path, &local)
+                || resolved_config_write_path(path)
+                    .zip(resolved_config_write_path(&local))
+                    .is_some_and(|(path, local)| path == local)
+        });
+        return Ok((path.clone(), repository));
     }
 
     if common_args.system {
-        return Ok(pixi_config::config_path_system());
+        return Ok((pixi_config::config_path_system(), None));
+    }
+
+    if common_args.shared {
+        return Ok((pixi_config::shared_user_config_write_path(), None));
     }
 
     if !common_args.global
         && let Some(root) = determine_project_root(common_args).await?
     {
-        return Ok(root.join(consts::PIXI_DIR).join(consts::CONFIG_FILE));
+        return Ok((
+            root.join(consts::PIXI_DIR).join(consts::CONFIG_FILE),
+            Some(root),
+        ));
     }
 
-    let mut global_locations = pixi_config::config_path_global();
-    let mut to = global_locations
-        .pop()
-        .expect("should have at least one global config path");
-
-    for p in global_locations {
-        if p.exists() {
-            to = p;
-            break;
-        }
-    }
-
-    Ok(to)
+    Ok((pixi_config::user_config_write_path(), None))
 }
 
 /// Alters a specific key in the user configuration file according to the given `mode`.
@@ -386,7 +425,11 @@ async fn alter_config(
     value: Option<String>,
     mode: AlterMode,
 ) -> miette::Result<()> {
-    let to = determine_config_write_path(common_args).await?;
+    let (mut to, repository) = determine_config_write_destination(common_args).await?;
+    let keys_before = match fs_err::read_to_string(&to) {
+        Ok(contents) if common_args.shared => Config::keys_not_shared(&contents)?,
+        _ => Vec::new(),
+    };
     let content = match fs_err::read_to_string(&to) {
         Ok(s) => s,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
@@ -413,6 +456,24 @@ async fn alter_config(
         Err(e) => return Err(e).into_diagnostic(),
     };
 
+    let consent_before = if let Some(root) = &repository {
+        let segments = Key::parse(key).into_diagnostic()?;
+        let is_consent = segments
+            .first()
+            .is_some_and(|segment| segment.get() == "virtual-package-detectors")
+            && (segments.len() == 1
+                || segments
+                    .get(1)
+                    .is_some_and(|segment| segment.get() == "consent"));
+        if is_consent {
+            to = pixi_config::repository_detector_config_path(root)?;
+            Some(config.virtual_package_detectors.clone())
+        } else {
+            None
+        }
+    } else {
+        None
+    };
     match mode {
         AlterMode::Prepend | AlterMode::Append => {
             let is_prepend = matches!(mode, AlterMode::Prepend);
@@ -486,14 +547,39 @@ async fn alter_config(
         }
         AlterMode::Set => {
             // Run set on Config object for validation
+            let has_value = value.is_some();
             config.set(key, value)?;
 
-            transplant_config_key(&config, &mut toml_doc, key, &mode)?;
+            let written = transplant_config_key(&config, &mut toml_doc, key, &mode)?;
+            if has_value && !written {
+                return Err(miette::miette!(
+                    "the key '{key}' was accepted but could not be written; this is a bug in pixi"
+                ));
+            }
         }
         AlterMode::Unset => unset(&mut toml_doc, key)?,
     }
 
     let contents = toml_doc.to_string();
+    if common_args.shared {
+        // Only keys this edit adds are checked; a foreign key that was
+        // already in the file is not this command's doing.
+        let mut not_shared = Config::keys_not_shared(&contents)?;
+        not_shared.retain(|key| !keys_before.contains(key));
+        if !not_shared.is_empty() {
+            return Err(miette::miette!(
+                "'{}' is not a key shared by all rattler-based tools, so it cannot be written to \
+                 the shared configuration. Use `--global` to set it for pixi alone.",
+                not_shared.join("', '")
+            ));
+        }
+    }
+    let approval_changes = if let Some(before) = &consent_before {
+        let after = Config::from_toml(&contents, None)?.0;
+        repository_consent_changes(before, &after.virtual_package_detectors, key)?
+    } else {
+        Vec::new()
+    };
     let parent = to.parent().expect("config path should have a parent");
     fs_err::create_dir_all(parent)
         .into_diagnostic()
@@ -501,12 +587,53 @@ async fn alter_config(
             "failed to create directories in '{}'",
             parent.display()
         ))?;
+    if consent_before.is_some()
+        && let Some(root) = &repository
+    {
+        to = pixi_config::repository_detector_config_path(root)?;
+    }
     fs_err::write(&to, contents)
         .into_diagnostic()
         .wrap_err(format!("failed to write config to '{}'", to.display()))?;
 
+    if !approval_changes.is_empty() {
+        let root = repository.expect("local consent changes require a repository");
+        pixi_config::update_repository_detector_approvals(&root, approval_changes)?;
+    }
     eprintln!("✅ Updated config at {}", to.display());
     Ok(())
+}
+
+fn repository_consent_changes(
+    before: &pixi_config::VirtualPackageDetectorsConfig,
+    after: &pixi_config::VirtualPackageDetectorsConfig,
+    key: &str,
+) -> miette::Result<Vec<(ChannelUrl, Option<DetectorDecision>)>> {
+    let segments = Key::parse(key).into_diagnostic()?;
+    let segments: Vec<&str> = segments.iter().map(Key::get).collect();
+    match segments.as_slice() {
+        ["virtual-package-detectors"] | ["virtual-package-detectors", "consent"] => {
+            let mut changes: Vec<_> = before
+                .consent
+                .keys()
+                .filter(|origin| !after.consent.contains_key(*origin))
+                .map(|origin| (origin.clone(), None))
+                .collect();
+            changes.extend(
+                after
+                    .consent
+                    .iter()
+                    .map(|(origin, decision)| (origin.clone(), Some(*decision))),
+            );
+            Ok(changes)
+        }
+        ["virtual-package-detectors", "consent", origin] => {
+            let origin = ChannelUrl::from(url::Url::parse(origin).into_diagnostic()?);
+            let decision = after.consent(&origin);
+            Ok(vec![(origin, decision)])
+        }
+        _ => Ok(Vec::new()),
+    }
 }
 
 /// Unset a key from the TOML document, preserving existing formatting and comments.
@@ -531,12 +658,9 @@ fn unset(toml_doc: &mut TomlDocument, key: &str) -> miette::Result<()> {
             .into_diagnostic()?
     };
 
-    remove_entry(parent_table, key_path.target())
-        .into_diagnostic()?
-        .or_else(|| {
-            let alias = legacy_alias(key_path.target())?;
-            remove_entry(parent_table, &alias).ok()?
-        })
+    key_spellings(key_path.target())
+        .iter()
+        .find_map(|spelling| remove_entry(parent_table, spelling).ok().flatten())
         .ok_or_else(|| miette::miette!("Key '{}' not found in configuration file", key))?;
 
     prune_empty_parents(toml_doc, key_path.parents())?;
@@ -594,24 +718,28 @@ fn transplant_config_key(
     toml_doc: &mut TomlDocument,
     key: &str,
     mode: &AlterMode,
-) -> miette::Result<()> {
+) -> miette::Result<bool> {
     let key_path = KeyPath::parse(key)?;
 
     let full_serialized = toml_edit::ser::to_string(&config).into_diagnostic()?;
     let temp_doc = full_serialized.parse::<DocumentMut>().into_diagnostic()?;
 
-    // walk down all the way to the leaf
+    // Walk down all the way to the leaf. The serialized document spells every
+    // segment the way the configuration does, which may differ from the key
+    // as the user typed it.
     let mut current_item = temp_doc.as_item();
     for parent in key_path.parents() {
-        current_item = current_item.get(parent).unwrap_or(&Item::None);
+        current_item = get_any_spelling(current_item, parent).unwrap_or(&Item::None);
     }
-    current_item = current_item.get(key_path.target()).unwrap_or(&Item::None);
+    current_item = get_any_spelling(current_item, key_path.target()).unwrap_or(&Item::None);
 
     if current_item.is_none() {
         // fall back into unset
         match unset(toml_doc, key) {
-            Ok(()) => return Ok(()),
-            Err(e) if e.to_string().contains("not found in configuration file") => return Ok(()),
+            Ok(()) => return Ok(false),
+            Err(e) if e.to_string().contains("not found in configuration file") => {
+                return Ok(false);
+            }
             Err(e) => return Err(e),
         }
     }
@@ -650,23 +778,64 @@ fn transplant_config_key(
         } else if let Some(new_item) = serialized_array.iter().last() {
             push_array_element(target_array, new_item.clone());
         }
-        return Ok(());
+        return Ok(true);
     }
 
     // Replace legacy snake_case keys while preserving their comments.
     if let Some(alias) = legacy_alias(&key_path.target_key) {
         let _ = remove_entry(target_table, &alias).into_diagnostic()?;
     }
+    let target_key = key_spellings(key_path.target())
+        .into_iter()
+        .find(|spelling| target_table.get(spelling).is_some())
+        .or_else(|| canonical_channel_url(key_path.target()))
+        .unwrap_or_else(|| key_path.target().to_string());
 
     if let Some(value) = current_item.as_value() {
-        upsert_entry(target_table, &key_path.target_key, value.clone()).into_diagnostic()?;
+        upsert_entry(target_table, &target_key, value.clone()).into_diagnostic()?;
     } else if let Some(table_to_insert) = current_item.as_table()
         && let Some(table_like) = target_table.as_table_like_mut()
     {
-        table_like.insert(key_path.target(), Item::Table(table_to_insert.clone()));
+        table_like.insert(&target_key, Item::Table(table_to_insert.clone()));
     }
 
-    Ok(())
+    Ok(true)
+}
+
+/// Looks `segment` up in `item` under any of its spellings.
+fn get_any_spelling<'a>(item: &'a Item, segment: &str) -> Option<&'a Item> {
+    key_spellings(segment)
+        .iter()
+        .find_map(|spelling| item.get(spelling))
+}
+
+/// The spellings a key segment may have in a configuration file: as given,
+/// its legacy snake_case alias, and for a channel URL its canonical form,
+/// which is how the configuration serializes it.
+fn key_spellings(segment: &str) -> Vec<String> {
+    let mut spellings = vec![segment.to_string()];
+    spellings.extend(legacy_alias(segment));
+    spellings.extend(canonical_channel_url(segment));
+    if let Ok(url) = url::Url::parse(segment)
+        && !url.cannot_be_a_base()
+    {
+        let channel = ChannelUrl::from(url);
+        spellings.push(format!("{}/", channel.as_str().trim_end_matches('/')));
+    }
+    spellings
+}
+
+/// The spelling the configuration serializes a channel URL segment with,
+/// when it differs from `segment`.
+fn canonical_channel_url(segment: &str) -> Option<String> {
+    let url = url::Url::parse(segment)
+        .ok()
+        .filter(|url| !url.cannot_be_a_base())?;
+    let canonical = rattler_conda_types::ChannelUrl::from(url)
+        .as_str()
+        .trim_end_matches('/')
+        .to_string();
+    (canonical != segment).then_some(canonical)
 }
 
 /// Returns the legacy `snake_case` alias for a canonical `kebab-case` key or parent table
@@ -691,69 +860,75 @@ fn resolve_parent_keys(doc: &TomlDocument, parents: &[&str]) -> Vec<String> {
     let mut current_item = doc.as_item();
 
     for &parent in parents {
-        if let Some(alias) = legacy_alias(parent)
-            && current_item.get(&alias).is_some()
-        {
-            resolved.push(alias.clone());
-            current_item = current_item
-                .get(&alias)
-                .expect("The current item should have the alias in it");
-            continue;
-        }
-
-        // Fall back to the canonical parent key name
-        resolved.push(parent.to_string());
-        current_item = current_item.get(parent).unwrap_or(&toml_edit::Item::None);
+        let spellings = key_spellings(parent);
+        let present = spellings
+            .iter()
+            .find(|spelling| current_item.get(spelling).is_some());
+        // A new table takes the spelling the configuration serializes.
+        let chosen = present
+            .or_else(|| canonical_channel_url(parent).map(|_| &spellings[spellings.len() - 1]))
+            .cloned()
+            .unwrap_or_else(|| parent.to_string());
+        current_item = current_item.get(&chosen).unwrap_or(&toml_edit::Item::None);
+        resolved.push(chosen);
     }
 
     resolved
 }
 
-/// Extract only the value at the (possibly nested) `key` from the config,
-/// wrapped in its parent tables so it serializes like the full config would.
-fn partial_config(config: &Config, key: &str) -> miette::Result<serde_json::Value> {
+/// Extract the selected value, wrapped in its parent tables.
+fn partial_config(config: &Config, key: &str) -> miette::Result<JsonValue> {
     let key_path = KeyPath::parse(key)?;
-    let segments: Vec<&str> = key_path
-        .parents()
-        .into_iter()
-        .chain([key_path.target()])
-        .collect();
-
-    if !is_known_key(config.get_keys(), &segments) {
+    if !is_known_key(config.get_keys(), &key_path) {
         return Err(miette::miette!(
-            "Unknown key: {}\nSupported keys:\n\t{}",
+            "unknown key: {}\nSupported keys:\n\t{}",
             console::style(key).red(),
             config.get_keys().join(",\n\t")
         ));
     }
 
-    // Go through TOML rather than `serde_json::to_value`: TOML has no null, so
-    // unset fields are dropped instead of showing up as nulls.
-    let mut value: serde_json::Value =
+    // TOML omits unset fields instead of serializing them as null.
+    let mut value: JsonValue =
         toml_edit::de::from_str(&toml_edit::ser::to_string(config).into_diagnostic()?)
             .into_diagnostic()?;
-    for segment in &segments {
-        match value.get_mut(*segment) {
+    for segment in key_path
+        .parent_keys
+        .iter()
+        .map(String::as_str)
+        .chain(once(key_path.target()))
+    {
+        match value.get_mut(segment) {
             Some(child) => value = child.take(),
-            None => return Ok(serde_json::Value::Object(Default::default())),
+            None => return Ok(JsonValue::Object(Default::default())),
         }
     }
 
-    Ok(segments.iter().rev().fold(value, |value, segment| {
-        serde_json::Value::Object([(segment.to_string(), value)].into_iter().collect())
-    }))
+    Ok(key_path
+        .parent_keys
+        .iter()
+        .map(String::as_str)
+        .chain(once(key_path.target()))
+        .rev()
+        .fold(value, |value, segment| {
+            JsonValue::Object([(segment.to_string(), value)].into_iter().collect())
+        }))
 }
 
-/// Whether `segments` matches one of the supported keys, where a `<...>`
-/// placeholder (e.g. `s3-options.<bucket>`) matches any single segment.
-fn is_known_key(known_keys: &[&str], segments: &[&str]) -> bool {
+/// Match supported keys, with each `<...>` placeholder matching one segment.
+fn is_known_key(known_keys: &[&str], key_path: &KeyPath) -> bool {
     known_keys.iter().any(|known| {
-        let known: Vec<&str> = known.split('.').collect();
-        known.len() == segments.len()
-            && known
-                .iter()
-                .zip(segments)
-                .all(|(known, segment)| known.starts_with('<') || known == segment)
+        let mut known_segments = known.split('.');
+        let matches = key_path
+            .parent_keys
+            .iter()
+            .map(String::as_str)
+            .chain(once(key_path.target()))
+            .all(|segment| {
+                known_segments
+                    .next()
+                    .is_some_and(|known| known.starts_with('<') || known == segment)
+            });
+        matches && known_segments.next().is_none()
     })
 }
 
@@ -785,6 +960,7 @@ mod tests {
                 local: false,
                 global: false,
                 system: false,
+                shared: false,
                 path: Some(config_path.clone()),
                 workspace_config: WorkspaceConfig {
                     manifest_path: Some(temp_dir.path().to_path_buf()),
@@ -805,6 +981,255 @@ mod tests {
         let result = execute(args).await;
 
         result.expect("The subcommand execution failed");
+    }
+
+    #[tokio::test]
+    async fn channel_consent_round_trips_across_url_spellings() {
+        let context = TestContext::setup(Some("default-channels = [\"conda-forge\"]\n"));
+        let origin = ChannelUrl::from(url::Url::parse("https://prefix.dev/conda-forge").unwrap());
+        let typed = "virtual-package-detectors.consent.\"https://prefix.dev/conda-forge/\"";
+        alter_config(
+            &context.common_args,
+            typed,
+            Some("allow".to_string()),
+            AlterMode::Set,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            Config::from_path(&context.config_path)
+                .unwrap()
+                .virtual_package_detectors
+                .consent(&origin),
+            Some(DetectorDecision::Allow)
+        );
+        alter_config(
+            &context.common_args,
+            "virtual-package-detectors.consent.\"https://prefix.dev/conda-forge\"",
+            Some("deny".to_string()),
+            AlterMode::Set,
+        )
+        .await
+        .unwrap();
+        let config = Config::from_path(&context.config_path).unwrap();
+        assert_eq!(
+            config.virtual_package_detectors.consent(&origin),
+            Some(DetectorDecision::Deny)
+        );
+        assert_eq!(config.virtual_package_detectors.consent.len(), 1);
+        alter_config(&context.common_args, typed, None, AlterMode::Unset)
+            .await
+            .unwrap();
+        let config = Config::from_path(&context.config_path).unwrap();
+        assert_eq!(config.virtual_package_detectors.consent(&origin), None);
+        assert_eq!(
+            config.default_channels,
+            vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]
+        );
+    }
+
+    #[tokio::test]
+    async fn repository_consent_edits_follow_the_destination() {
+        for (local_scope, explicit_path) in [(true, false), (false, false), (false, true)] {
+            local_consent_authorizes_only_explicit_channels_and_revokes_removed_decisions(
+                local_scope,
+                explicit_path,
+            )
+            .await;
+        }
+    }
+
+    async fn local_consent_authorizes_only_explicit_channels_and_revokes_removed_decisions(
+        local_scope: bool,
+        explicit_path: bool,
+    ) {
+        let directory = tempfile::tempdir().unwrap();
+        let repository = directory.path().join("repository");
+        let config_home = directory.path().join("user-config");
+        fs_err::create_dir_all(&repository).unwrap();
+        fs_err::write(
+            repository.join("pixi.toml"),
+            "[workspace]\nname = \"consent-test\"\nchannels = []\n",
+        )
+        .unwrap();
+        let args = CommonArgs {
+            local: local_scope,
+            global: false,
+            system: false,
+            shared: false,
+            path: explicit_path
+                .then(|| repository.join(consts::PIXI_DIR).join(consts::CONFIG_FILE)),
+            workspace_config: WorkspaceConfig {
+                manifest_path: Some(repository.join("pixi.toml")),
+                ..Default::default()
+            },
+        };
+        let first = ChannelUrl::from(url::Url::parse("https://prefix.dev/first").unwrap());
+        let second = ChannelUrl::from(url::Url::parse("https://prefix.dev/second").unwrap());
+        let local = repository.join(consts::PIXI_DIR).join(consts::CONFIG_FILE);
+        temp_env::async_with_vars(
+            [
+                ("XDG_CONFIG_HOME", Some(config_home.as_os_str())),
+                ("APPDATA", Some(config_home.as_os_str())),
+            ],
+            async {
+                pixi_config::write_detector_decision(&local, &first, DetectorDecision::Allow)
+                    .unwrap();
+                pixi_config::write_detector_decision(&local, &second, DetectorDecision::Allow)
+                    .unwrap();
+                alter_config(
+                    &args,
+                    "virtual-package-detectors.timeout-seconds",
+                    Some("10".to_string()),
+                    AlterMode::Set,
+                )
+                .await
+                .unwrap();
+                let source = GlobalConfigSource::None;
+                let config = Config::load_with(&repository, &source);
+                assert_eq!(config.virtual_package_detectors.consent(&first), None);
+                assert_eq!(config.virtual_package_detectors.consent(&second), None);
+                let key = "virtual-package-detectors.consent.\"https://prefix.dev/first/\"";
+                alter_config(&args, key, Some("allow".to_string()), AlterMode::Set)
+                    .await
+                    .unwrap();
+                let config = Config::load_with(&repository, &source);
+                assert_eq!(
+                    config.virtual_package_detectors.consent(&first),
+                    Some(DetectorDecision::Allow)
+                );
+                assert_eq!(config.virtual_package_detectors.consent(&second), None);
+                alter_config(&args, key, Some("deny".to_string()), AlterMode::Set)
+                    .await
+                    .unwrap();
+                pixi_config::write_detector_decision(&local, &first, DetectorDecision::Allow)
+                    .unwrap();
+                assert_eq!(
+                    Config::load_with(&repository, &source)
+                        .virtual_package_detectors
+                        .consent(&first),
+                    None
+                );
+                alter_config(&args, key, Some("allow".to_string()), AlterMode::Set)
+                    .await
+                    .unwrap();
+                alter_config(&args, key, None, AlterMode::Unset)
+                    .await
+                    .unwrap();
+                pixi_config::write_detector_decision(&local, &first, DetectorDecision::Allow)
+                    .unwrap();
+                assert_eq!(
+                    Config::load_with(&repository, &source)
+                        .virtual_package_detectors
+                        .consent(&first),
+                    None
+                );
+                alter_config(
+                    &args,
+                    "virtual-package-detectors.consent",
+                    Some(r#"{"https://prefix.dev/second/": "allow"}"#.to_string()),
+                    AlterMode::Set,
+                )
+                .await
+                .unwrap();
+                let config = Config::load_with(&repository, &source);
+                assert_eq!(config.virtual_package_detectors.consent(&first), None);
+                assert_eq!(
+                    config.virtual_package_detectors.consent(&second),
+                    Some(DetectorDecision::Allow)
+                );
+                alter_config(
+                    &args,
+                    "virtual-package-detectors",
+                    Some(r#"{"timeout-seconds": 20}"#.to_string()),
+                    AlterMode::Set,
+                )
+                .await
+                .unwrap();
+                pixi_config::write_detector_decision(&local, &second, DetectorDecision::Allow)
+                    .unwrap();
+                assert_eq!(
+                    Config::load_with(&repository, &source)
+                        .virtual_package_detectors
+                        .consent(&second),
+                    None
+                );
+            },
+        )
+        .await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn repository_consent_edits_cannot_modify_linked_external_configs() {
+        for link_kind in ["directory", "file", "hardlink"] {
+            for (local_scope, explicit_path) in [(true, false), (false, false), (false, true)] {
+                let directory = tempfile::tempdir().unwrap();
+                let repository = directory.path().join("repository");
+                let external = directory.path().join("external");
+                let config_home = directory.path().join("user-config");
+                fs_err::create_dir_all(&repository).unwrap();
+                fs_err::create_dir_all(&external).unwrap();
+                fs_err::write(
+                    repository.join("pixi.toml"),
+                    "[workspace]\nname = \"consent-test\"\nchannels = []\n",
+                )
+                .unwrap();
+                let target = external.join(consts::CONFIG_FILE);
+                let original = "offline = true\n";
+                fs_err::write(&target, original).unwrap();
+                let local_directory = repository.join(consts::PIXI_DIR);
+                let local = local_directory.join(consts::CONFIG_FILE);
+                if link_kind == "directory" {
+                    std::os::unix::fs::symlink(&external, &local_directory).unwrap();
+                } else {
+                    fs_err::create_dir(&local_directory).unwrap();
+                    if link_kind == "file" {
+                        std::os::unix::fs::symlink(&target, &local).unwrap();
+                    } else {
+                        fs_err::hard_link(&target, &local).unwrap();
+                    }
+                }
+                let args = CommonArgs {
+                    local: local_scope,
+                    global: false,
+                    system: false,
+                    shared: false,
+                    path: explicit_path.then_some(local),
+                    workspace_config: WorkspaceConfig {
+                        manifest_path: Some(repository.join("pixi.toml")),
+                        ..Default::default()
+                    },
+                };
+                temp_env::async_with_vars(
+                    [
+                        ("XDG_CONFIG_HOME", Some(config_home.as_os_str())),
+                        ("APPDATA", Some(config_home.as_os_str())),
+                    ],
+                    async {
+                        assert!(
+                            alter_config(
+                                &args,
+                                "virtual-package-detectors.consent.\"https://prefix.dev/first\"",
+                                Some("allow".to_string()),
+                                AlterMode::Set,
+                            )
+                            .await
+                            .is_err(),
+                            "{link_kind}, local={local_scope}, explicit={explicit_path}"
+                        );
+                        assert_eq!(fs_err::read_to_string(&target).unwrap(), original);
+                        assert!(
+                            !config_home
+                                .join(consts::CONFIG_DIR)
+                                .join("detector-approvals.json")
+                                .exists()
+                        );
+                    },
+                )
+                .await;
+            }
+        }
     }
 
     #[tokio::test]
@@ -829,6 +1254,92 @@ mod tests {
         assert_eq!(config_write_path, config_path);
     }
 
+    fn shared_args() -> CommonArgs {
+        CommonArgs {
+            local: false,
+            global: false,
+            system: false,
+            shared: true,
+            path: None,
+            workspace_config: WorkspaceConfig::default(),
+        }
+    }
+
+    /// `--shared` writes the user-level rattler file and only accepts keys
+    /// every rattler-based tool understands.
+    #[tokio::test]
+    async fn shared_writes_the_rattler_file_and_refuses_pixi_keys() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let config_home = temp_dir.path().join("config-home");
+        let rattler_home = config_home.join("rattler");
+        fs_err::create_dir_all(&config_home).unwrap();
+        temp_env::async_with_vars(
+            [
+                ("XDG_CONFIG_HOME", Some(config_home.to_str().unwrap())),
+                ("RATTLER_HOME", Some(rattler_home.to_str().unwrap())),
+            ],
+            async {
+                let args = shared_args();
+                let path = determine_config_write_path(&args).await.unwrap();
+                assert_eq!(path, rattler_home.join("config.toml"));
+
+                alter_config(
+                    &args,
+                    "virtual-package-detectors.consent.\"https://conda.anaconda.org/conda-forge\"",
+                    Some("allow".to_string()),
+                    AlterMode::Set,
+                )
+                .await
+                .unwrap();
+                let origin = ChannelUrl::from(
+                    url::Url::parse("https://conda.anaconda.org/conda-forge").unwrap(),
+                );
+                assert_eq!(
+                    Config::from_shared_path(&path)
+                        .unwrap()
+                        .virtual_package_detectors
+                        .consent(&origin),
+                    Some(DetectorDecision::Allow)
+                );
+
+                assert!(
+                    alter_config(
+                        &args,
+                        "shell.change-ps1",
+                        Some("false".to_string()),
+                        AlterMode::Set,
+                    )
+                    .await
+                    .is_err()
+                );
+                assert_eq!(
+                    Config::from_shared_path(&path)
+                        .unwrap()
+                        .virtual_package_detectors
+                        .consent(&origin),
+                    Some(DetectorDecision::Allow)
+                );
+
+                alter_config(
+                    &args,
+                    "virtual-package-detectors.consent.\"https://conda.anaconda.org/conda-forge\"",
+                    None,
+                    AlterMode::Unset,
+                )
+                .await
+                .unwrap();
+                assert_eq!(
+                    Config::from_shared_path(&path)
+                        .unwrap()
+                        .virtual_package_detectors
+                        .consent(&origin),
+                    None
+                );
+            },
+        )
+        .await;
+    }
+
     #[tokio::test]
     async fn set_creates_missing_pixi_directory() {
         let temp_dir = tempfile::tempdir().unwrap();
@@ -846,6 +1357,7 @@ mod tests {
             local: false,
             global: false,
             system: false,
+            shared: false,
             path: None,
             workspace_config: WorkspaceConfig {
                 manifest_path: Some(temp_dir.path().to_path_buf()),
@@ -1479,45 +1991,12 @@ region = "us-east-1"
         );
     }
 
-    fn partial_toml(config_toml: &str, key: &str) -> String {
-        let (config, _) = Config::from_toml(config_toml, None).unwrap();
-        let partial = partial_config(&config, key).unwrap();
-        toml_edit::ser::to_string_pretty(&partial).unwrap()
-    }
-
-    #[tokio::test]
-    async fn list_accepts_every_supported_key() {
-        let test_context = TestContext::setup(None);
-
-        let mut rejected = Vec::new();
-        for key in Config::default().get_keys() {
-            let key = key.replace("<bucket>", "my-bucket");
-            let result = execute(Args {
-                subcommand: Subcommand::List(ListArgs {
-                    key: Some(key.clone()),
-                    json: false,
-                    common: test_context.common_args.clone(),
-                    config_source: pixi_config::ConfigSourceCli {
-                        no_config: true,
-                        ..Default::default()
-                    },
-                }),
-            })
-            .await;
-            if result.is_err() {
-                rejected.push(key);
-            }
-        }
-
-        assert!(
-            rejected.is_empty(),
-            "`pixi config list <key>` rejects supported keys: {rejected:?}"
-        );
-    }
-
     #[test]
     fn test_partial_config_nested_keys() {
-        let config = r#"
+        let (config, _) = Config::from_toml(
+            r#"
+default-channels = ["conda-forge"]
+
 [pypi-config]
 index-url = "https://pypi.example.com/simple"
 extra-index-urls = ["https://extra.example.com/simple"]
@@ -1526,23 +2005,42 @@ extra-index-urls = ["https://extra.example.com/simple"]
 endpoint-url = "https://s3.example.com"
 region = "eu-west-1"
 addressing-style = "path"
-"#;
-        insta::assert_snapshot!(partial_toml(config, "pypi-config.index-url"), @r#"
-        [pypi-config]
-        index-url = "https://pypi.example.com/simple"
-        "#);
-        insta::assert_snapshot!(partial_toml(config, r#"s3-options."my.bucket".region"#), @r#"
-        [s3-options."my.bucket"]
-        region = "eu-west-1"
-        "#);
+
+[virtual-package-detectors]
+timeout-seconds = 7
+"#,
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            partial_config(&config, "pypi-config.index-url").unwrap(),
+            serde_json::json!({
+                "pypi-config": {"index-url": "https://pypi.example.com/simple"}
+            })
+        );
+        assert_eq!(
+            partial_config(&config, r#"s3-options."my.bucket".region"#).unwrap(),
+            serde_json::json!({"s3-options": {"my.bucket": {"region": "eu-west-1"}}})
+        );
+        assert_eq!(
+            partial_config(&config, "virtual-package-detectors.timeout-seconds").unwrap(),
+            serde_json::json!({"virtual-package-detectors": {"timeout-seconds": 7}})
+        );
     }
 
     #[test]
     fn test_partial_config_unset_and_unknown_keys() {
-        assert_eq!(partial_toml("", "detached-environments"), "");
-
-        let err = partial_config(&Config::default(), "not-a-key").unwrap_err();
-        assert!(err.to_string().contains("Unknown key"));
-        assert!(partial_config(&Config::default(), "offline.nested").is_err());
+        let (config, _) = Config::from_toml("default-channels = [\"conda-forge\"]", None).unwrap();
+        assert_eq!(
+            partial_config(&config, "s3-options.missing.region").unwrap(),
+            serde_json::json!({})
+        );
+        for key in [
+            "not-a-key",
+            "offline.nested",
+            "s3-options.missing.not-a-field",
+        ] {
+            assert!(partial_config(&config, key).is_err(), "{key}");
+        }
     }
 }
