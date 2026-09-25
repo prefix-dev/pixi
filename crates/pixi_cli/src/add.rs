@@ -383,7 +383,8 @@ pub(crate) async fn ensure_pixi_build_preview_enabled(
         .with_global_config_source(config_source.source())
         .with_search_start(search_start)
         .with_cli_config(config)
-        .locate()?)
+        .locate()
+        .await?)
 }
 
 fn pypi_path_deps(package: &str, path: &Path, workspace: &Workspace) -> miette::Result<PypiDeps> {
@@ -413,7 +414,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .with_cli_config(args.config.clone())
-        .locate()?;
+        .locate()
+        .await?;
 
     // Apply backend override if provided (primarily for testing)
     if let Some(backend_override) = args
