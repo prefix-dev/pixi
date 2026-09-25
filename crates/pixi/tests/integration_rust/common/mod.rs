@@ -551,6 +551,7 @@ impl PixiControl {
                 path: None,
                 editable: false,
                 index: None,
+                channel: None,
             },
         }
     }

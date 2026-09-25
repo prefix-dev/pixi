@@ -34,6 +34,9 @@ pixi add [OPTIONS] <SPEC>...
 :  The local path to use when adding a path dependency
 - <a id="arg---editable" href="#arg---editable">`--editable`</a>
 :  Whether the pypi requirement should be editable
+- <a id="arg---channel" href="#arg---channel">`--channel (-c) <CHANNEL>`</a>
+:  One or more channels to use for this dependency. These channels will also be added to the workspace
+<br>May be provided more than once.
 - <a id="arg---index" href="#arg---index">`--index <INDEX>`</a>
 :  The PyPI index URL to use for this dependency. Only applicable when adding pypi dependencies
 
