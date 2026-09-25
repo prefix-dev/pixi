@@ -27,7 +27,6 @@ use pixi_uv_conversions::{
 };
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record, macos_deployment_target};
-use rattler_conda_types::GenericVirtualPackage;
 use rattler_lock::UrlOrPath;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
@@ -771,10 +770,7 @@ async fn read_local_package_metadata(
             CondaPrefixUpdater::builder(
                 group,
                 prefix_platform.clone(),
-                virtual_packages
-                    .into_iter()
-                    .map(GenericVirtualPackage::from)
-                    .collect(),
+                virtual_packages,
                 ctx.command_dispatcher.clone(),
             )
             .finish()

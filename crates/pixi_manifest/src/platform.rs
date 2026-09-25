@@ -770,20 +770,18 @@ pub fn is_subdir_default(gvp: &GenericVirtualPackage, subdir: Subdir) -> bool {
     })
 }
 
-/// Convert a platform's declared virtual packages into the form rattler's
-/// solver wants.
+/// The declared virtual packages rattler has a typed slot for, in the form
+/// rattler's solver wants.
 ///
 /// The manifest and rattler disagree on how a virtual package is spelled --
 /// the manifest writes empty build strings and pins `__archspec` to version 0,
 /// rattler stamps `"0"` and version 1 (see `host::canonicalize_detected`). The
-/// round trip through the typed [`VirtualPackage`] restores rattler's spelling,
-/// so this is the *only* supported way to hand a [`PixiPlatform`]'s packages to
-/// a solver. Passing `declared_virtual_packages()` straight through makes every
-/// package that depends on `__archspec 1=<micro>` unsolvable.
+/// round trip through the typed [`VirtualPackage`] restores rattler's spelling.
+/// Passing `declared_virtual_packages()` straight through makes every package
+/// that depends on `__archspec 1=<micro>` unsolvable.
 ///
-/// Unknown conda virtual-package names (those rattler has no typed slot for)
-/// are dropped -- they round-trip through the manifest but never influence
-/// solving directly.
+/// Names rattler has no typed slot for are not part of this list; see
+/// [`solver_generic_virtual_packages`] for the complete set a solve is given.
 pub fn solver_virtual_packages(platform: &PixiPlatform) -> Vec<VirtualPackage> {
     platform
         .declared_virtual_packages()
@@ -792,12 +790,31 @@ pub fn solver_virtual_packages(platform: &PixiPlatform) -> Vec<VirtualPackage> {
         .collect()
 }
 
-/// [`solver_virtual_packages`] in the generic form most solver callers hold.
+/// Every declared virtual package in the form a solve is given. Built-in
+/// packages pass through [`solver_virtual_packages`] for rattler-specific
+/// normalization. Detector-defined names stay generic. An omitted build
+/// string becomes `0`, the detector protocol default.
 pub fn solver_generic_virtual_packages(platform: &PixiPlatform) -> Vec<GenericVirtualPackage> {
-    solver_virtual_packages(platform)
+    let mut packages: Vec<GenericVirtualPackage> = solver_virtual_packages(platform)
         .into_iter()
         .map(GenericVirtualPackage::from)
-        .collect()
+        .collect();
+    packages.extend(
+        platform
+            .declared_virtual_packages()
+            .iter()
+            .filter(|gvp| generic_to_virtual_package(gvp).is_none())
+            .map(|gvp| GenericVirtualPackage {
+                name: gvp.name.clone(),
+                version: gvp.version.clone(),
+                build_string: if gvp.build_string.is_empty() {
+                    "0".to_string()
+                } else {
+                    gvp.build_string.clone()
+                },
+            }),
+    );
+    packages
 }
 
 fn generic_to_virtual_package(gvp: &GenericVirtualPackage) -> Option<VirtualPackage> {
@@ -855,13 +872,11 @@ pub fn candidate_subdirs(current: Subdir) -> Vec<Subdir> {
 
 /// Returns `true` when `system` provides the capability `required` names.
 ///
-/// Every virtual package but one is a version: the system satisfies it by
-/// carrying the same name at a version at least as high. `__archspec` is the
-/// exception -- per CEP 30 its version is a constant and the microarchitecture
-/// lives in the build string -- so it is compared through the archspec
-/// database instead, where a host satisfies a requirement by being that
-/// microarchitecture or a strict superset of it (`zen2` covers `x86_64_v3`,
-/// `haswell` does not cover `zen2`).
+/// Versioned virtual packages are satisfied by the same name and build string
+/// at a version at least as high. Empty build strings and `"0"` are the same
+/// default build. `__amdgpu_arch` requires an exact version because AMD GPU
+/// code objects are architecture-specific. `__archspec` compares
+/// microarchitectures through the archspec database.
 pub fn capability_satisfied_by(
     required: &GenericVirtualPackage,
     system: &[GenericVirtualPackage],
@@ -869,9 +884,24 @@ pub fn capability_satisfied_by(
     if required.name.as_normalized() == "__archspec" {
         return archspec_capability_satisfied_by(required, system);
     }
-    system
-        .iter()
-        .any(|provided| provided.name == required.name && provided.version >= required.version)
+    system.iter().any(|provided| {
+        provided.name == required.name
+            && if required.name.as_normalized() == "__amdgpu_arch" {
+                provided.version == required.version
+            } else {
+                provided.version >= required.version
+            }
+            && normalized_build_string(&provided.build_string)
+                == normalized_build_string(&required.build_string)
+    })
+}
+
+fn normalized_build_string(build_string: &str) -> &str {
+    if build_string.is_empty() {
+        "0"
+    } else {
+        build_string
+    }
 }
 
 /// The `__archspec` half of [`capability_satisfied_by`].
@@ -967,7 +997,7 @@ pub fn validate_archspec_name(name: &str) -> Result<(), String> {
     }
 }
 
-/// Validate the build string of a raw `__name = "version[=build]"` entry.
+/// Validate a declared virtual package's build string.
 /// Every user-facing parser routes through this, so the CLI and the manifest
 /// accept exactly the same values. Only `__archspec` constrains its build
 /// string today.
@@ -1205,6 +1235,56 @@ mod tests {
     }
 
     #[test]
+    fn raw_virtual_packages_reach_the_solver() {
+        let platform = PixiPlatform::new_with_defaults(
+            PixiPlatformName::try_from("hpc").unwrap(),
+            Subdir::Linux64,
+            vec![
+                GenericVirtualPackage {
+                    name: PackageName::try_from("__conda_forge_openmpi").unwrap(),
+                    version: Version::from_str("5.0.10").unwrap(),
+                    build_string: String::new(),
+                },
+                GenericVirtualPackage {
+                    name: PackageName::try_from("__site_service").unwrap(),
+                    version: Version::from_str("2").unwrap(),
+                    build_string: "h1".to_string(),
+                },
+            ],
+        )
+        .unwrap();
+
+        // The typed list has no slot for the raw names.
+        assert!(
+            solver_virtual_packages(&platform)
+                .iter()
+                .all(|vp| !matches!(vp, VirtualPackage::Cuda(_)))
+        );
+        let generic = solver_generic_virtual_packages(&platform);
+        let raw: Vec<String> = generic
+            .iter()
+            .filter(|gvp| !gvp.name.as_normalized().starts_with("__glibc"))
+            .filter(|gvp| {
+                !matches!(
+                    gvp.name.as_normalized(),
+                    "__unix" | "__linux" | "__archspec"
+                )
+            })
+            .map(ToString::to_string)
+            .collect();
+        assert_eq!(
+            raw,
+            ["__conda_forge_openmpi=5.0.10=0", "__site_service=2=h1"]
+        );
+        // The subdir defaults are still there, in rattler's spelling.
+        assert!(
+            generic
+                .iter()
+                .any(|gvp| gvp.name.as_normalized() == "__glibc")
+        );
+    }
+
+    #[test]
     fn validate_archspec_name_rejects_unknown_names() {
         assert_eq!(validate_archspec_name("x86_64_v3"), Ok(()));
         assert_eq!(validate_archspec_name("m1"), Ok(()));
@@ -1289,6 +1369,38 @@ mod tests {
             vec![gvp("__cuda", "12")]
         );
         assert_eq!(unsatisfied_capabilities(&required, &[]).len(), 1);
+    }
+
+    #[test]
+    fn capability_matching_requires_the_declared_build_string() {
+        let mut required = gvp("__site_service", "2");
+        required.build_string = "h1".to_string();
+
+        let mut matching = gvp("__site_service", "3");
+        matching.build_string = "h1".to_string();
+        assert!(capability_satisfied_by(&required, &[matching]));
+
+        let mut other_build = gvp("__site_service", "3");
+        other_build.build_string = "h2".to_string();
+        assert!(!capability_satisfied_by(&required, &[other_build]));
+
+        let required_default = gvp("__amdgpu", "0");
+        let mut provided_default = gvp("__amdgpu", "0");
+        provided_default.build_string = "0".to_string();
+        assert!(capability_satisfied_by(
+            &required_default,
+            &[provided_default]
+        ));
+
+        let required_arch = gvp("__amdgpu_arch", "9.0.10");
+        assert!(capability_satisfied_by(
+            &required_arch,
+            &[gvp("__amdgpu_arch", "9.0.10")]
+        ));
+        assert!(!capability_satisfied_by(
+            &required_arch,
+            &[gvp("__amdgpu_arch", "11.0.0")]
+        ));
     }
 
     #[test]

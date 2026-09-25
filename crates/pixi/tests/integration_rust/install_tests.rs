@@ -2154,19 +2154,8 @@ no-deps = "*"
     );
 }
 
-/// A declared `__cuda_arch` must reach the solver and select the build matching
-/// each platform's compute capability. The local `virtual_packages` channel
-/// ships three `cuda-arch` builds, each requiring a different `__cuda_arch`
-/// minimum (`sm90` >=9, `sm100` >=10, `sm120` >=12) with ascending build
-/// numbers, so the solver picks the highest build still satisfied by the
-/// platform's declared arch.
-///
-/// This is the offline regression test for forwarding `__cuda_arch`: before
-/// that wiring the declaration never reached the solver and every platform
-/// failed with "no candidates were found for __cuda_arch". Both spellings are
-/// covered -- the raw `__cuda_arch` key and the friendly `cuda = { driver, arch }`
-/// table. Linux-only: `__cuda_arch` is a CUDA/linux concept and the fixture
-/// builds are linux-64 only.
+/// Declared CUDA compute capabilities select matching builds from the local
+/// linux-64 channel, through both `cuda_arch` and `cuda = { driver, arch }`.
 #[cfg(target_os = "linux")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn cuda_arch_selects_matching_build() {
@@ -2175,16 +2164,14 @@ async fn cuda_arch_selects_matching_build() {
     let channel_path = fs_err::canonicalize(channel_path).expect("canonicalize channel path");
     let channel_url = Url::from_directory_path(&channel_path).expect("valid file url");
 
-    // Each platform declares a distinct `__cuda_arch`. `arch9` uses the raw
-    // `__cuda_arch` key; the other two use the friendly `cuda = { driver, arch }`
-    // table -- both must route to the right build.
+    // Cover both direct and grouped CUDA declarations.
     let manifest = format!(
         r#"
 [workspace]
 name = "cuda-arch-routing"
 channels = ["{channel_url}"]
 platforms = [
-    {{ name = "arch9", platform = "linux-64", cuda = "13", __cuda_arch = "9" }},
+    {{ name = "arch9", platform = "linux-64", cuda = "13", cuda_arch = "9" }},
     {{ name = "arch10", platform = "linux-64", cuda = {{ driver = "13", arch = "10" }} }},
     {{ name = "arch12", platform = "linux-64", cuda = {{ driver = "13", arch = "12" }} }},
 ]
