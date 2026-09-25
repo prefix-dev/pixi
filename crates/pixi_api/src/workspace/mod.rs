@@ -3,7 +3,7 @@
 pub mod platforms;
 
 pub(crate) mod add;
-pub use add::{DependencyOptions, GitOptions};
+pub use add::{DependencyOptions, GitOptions, manifest_path_string};
 
 pub(crate) mod remove;
 pub use remove::RemoveError;
