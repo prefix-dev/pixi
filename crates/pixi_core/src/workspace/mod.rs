@@ -238,6 +238,7 @@ fn set_implicit_script_platforms(
     platforms: IndexSet<PixiPlatform>,
 ) {
     workspace.use_platform_composition = platforms.iter().all(PixiPlatform::is_subdir_platform);
+    workspace.workspace_platforms = platforms.clone();
     workspace.platforms = platforms;
 }
 

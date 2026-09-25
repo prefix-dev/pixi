@@ -62,6 +62,9 @@ pub struct Workspace {
     /// The platforms this project supports
     pub platforms: IndexSet<PixiPlatform>,
 
+    /// The platforms explicitly declared in the workspace section of the project
+    pub workspace_platforms: IndexSet<PixiPlatform>,
+
     /// The license as a valid SPDX string (e.g. MIT AND Apache-2.0)
     pub license: Option<String>,
 
