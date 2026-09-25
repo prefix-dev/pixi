@@ -911,13 +911,11 @@ pub fn candidate_subdirs(current: Subdir) -> Vec<Subdir> {
 
 /// Returns `true` when `system` provides the capability `required` names.
 ///
-/// Most virtual packages are satisfied by the same name at a version at least
-/// as high. `__amdgpu_arch` instead requires the exact ISA version: a different
-/// architecture is not necessarily compatible. `__archspec` carries its
-/// microarchitecture in the build string (its version is constant per CEP 30),
-/// so it is compared through the archspec database instead, where a host
-/// satisfies a requirement by being that microarchitecture or a strict
-/// superset of it (`zen2` covers `x86_64_v3`, `haswell` does not cover `zen2`).
+/// Versioned virtual packages are satisfied by the same name and build string
+/// at a version at least as high. Empty build strings and `"0"` are the same
+/// default build. `__amdgpu_arch` requires an exact version because AMD GPU
+/// code objects are architecture-specific. `__archspec` compares
+/// microarchitectures through the archspec database.
 pub fn capability_satisfied_by(
     required: &GenericVirtualPackage,
     system: &[GenericVirtualPackage],
@@ -925,15 +923,24 @@ pub fn capability_satisfied_by(
     if required.name.as_normalized() == "__archspec" {
         return archspec_capability_satisfied_by(required, system);
     }
-    let exact_version = required.name.as_normalized() == "__amdgpu_arch";
     system.iter().any(|provided| {
         provided.name == required.name
-            && if exact_version {
+            && if required.name.as_normalized() == "__amdgpu_arch" {
                 provided.version == required.version
             } else {
                 provided.version >= required.version
             }
+            && normalized_build_string(&provided.build_string)
+                == normalized_build_string(&required.build_string)
     })
+}
+
+fn normalized_build_string(build_string: &str) -> &str {
+    if build_string.is_empty() {
+        "0"
+    } else {
+        build_string
+    }
 }
 
 /// The `__archspec` half of [`capability_satisfied_by`].
@@ -1387,6 +1394,56 @@ mod tests {
     }
 
     #[test]
+    fn raw_virtual_packages_reach_the_solver() {
+        let platform = PixiPlatform::new_with_defaults(
+            PixiPlatformName::try_from("hpc").unwrap(),
+            Subdir::Linux64,
+            vec![
+                GenericVirtualPackage {
+                    name: PackageName::try_from("__conda_forge_openmpi").unwrap(),
+                    version: Version::from_str("5.0.10").unwrap(),
+                    build_string: String::new(),
+                },
+                GenericVirtualPackage {
+                    name: PackageName::try_from("__site_service").unwrap(),
+                    version: Version::from_str("2").unwrap(),
+                    build_string: "h1".to_string(),
+                },
+            ],
+        )
+        .unwrap();
+
+        // The typed list has no slot for the raw names.
+        assert!(
+            solver_virtual_packages(&platform)
+                .iter()
+                .all(|vp| !matches!(vp, VirtualPackage::Cuda(_)))
+        );
+        let generic = solver_generic_virtual_packages(&platform);
+        let raw: Vec<String> = generic
+            .iter()
+            .filter(|gvp| !gvp.name.as_normalized().starts_with("__glibc"))
+            .filter(|gvp| {
+                !matches!(
+                    gvp.name.as_normalized(),
+                    "__unix" | "__linux" | "__archspec"
+                )
+            })
+            .map(ToString::to_string)
+            .collect();
+        assert_eq!(
+            raw,
+            ["__conda_forge_openmpi=5.0.10=0", "__site_service=2=h1"]
+        );
+        // The subdir defaults are still there, in rattler's spelling.
+        assert!(
+            generic
+                .iter()
+                .any(|gvp| gvp.name.as_normalized() == "__glibc")
+        );
+    }
+
+    #[test]
     fn manifest_archspec_shorthand_reaches_the_solver_as_version_one() {
         let platform = PixiPlatform::new_with_defaults(
             PixiPlatformName::try_from("zen-host").unwrap(),
@@ -1512,6 +1569,26 @@ mod tests {
     }
 
     #[test]
+    fn manifest_explicit_standardized_records_reach_the_solver() {
+        let packages = vec![
+            GenericVirtualPackage {
+                build_string: "custom_build".to_string(),
+                ..gvp("__linux", "6.8")
+            },
+            GenericVirtualPackage {
+                version: Version::major(7),
+                ..archspec("zen2")
+            },
+            GenericVirtualPackage {
+                build_string: "custom_unix".to_string(),
+                ..gvp("__unix", "3")
+            },
+        ];
+        let platform = rich("explicit", Subdir::Linux64, packages.clone());
+        assert_eq!(platform.solver_records().as_ref(), packages.as_slice());
+    }
+
+    #[test]
     fn validate_archspec_name_rejects_unknown_names() {
         assert_eq!(validate_archspec_name("x86_64_v3"), Ok(()));
         assert_eq!(validate_archspec_name("m1"), Ok(()));
@@ -1600,6 +1677,38 @@ mod tests {
             vec![gvp("__cuda", "12")]
         );
         assert_eq!(unsatisfied_capabilities(&required, &[]).len(), 1);
+    }
+
+    #[test]
+    fn capability_matching_requires_the_declared_build_string() {
+        let mut required = gvp("__site_service", "2");
+        required.build_string = "h1".to_string();
+
+        let mut matching = gvp("__site_service", "3");
+        matching.build_string = "h1".to_string();
+        assert!(capability_satisfied_by(&required, &[matching]));
+
+        let mut other_build = gvp("__site_service", "3");
+        other_build.build_string = "h2".to_string();
+        assert!(!capability_satisfied_by(&required, &[other_build]));
+
+        let required_default = gvp("__amdgpu", "0");
+        let mut provided_default = gvp("__amdgpu", "0");
+        provided_default.build_string = "0".to_string();
+        assert!(capability_satisfied_by(
+            &required_default,
+            &[provided_default]
+        ));
+
+        let required_arch = gvp("__amdgpu_arch", "9.0.10");
+        assert!(capability_satisfied_by(
+            &required_arch,
+            &[gvp("__amdgpu_arch", "9.0.10")]
+        ));
+        assert!(!capability_satisfied_by(
+            &required_arch,
+            &[gvp("__amdgpu_arch", "11.0.0")]
+        ));
     }
 
     #[test]
