@@ -90,10 +90,11 @@ pub async fn execute_impl<W: Write>(
     let workspace = match WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.project_config.workspace_locator_start())
+        .with_cli_config(args.config.clone())
         .locate()
         .await
     {
-        Ok(project) => Some(project.with_cli_config(args.config.clone())),
+        Ok(project) => Some(project),
         Err(WorkspaceLocatorError::WorkspaceNotFound(_)) => {
             debug!("No project file found, continuing without project configuration.",);
             None

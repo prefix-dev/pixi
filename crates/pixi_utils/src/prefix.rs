@@ -3,7 +3,8 @@ use itertools::Itertools;
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use rattler_conda_types::{PackageName, PrefixRecord, Subdir};
 use rattler_shell::{
-    activation::{ActivationVariables, Activator},
+    activation::{ActivationVariables, Activator, PathModificationBehavior},
+    environment::EnvironmentSnapshot,
     shell::ShellEnum,
 };
 use std::{
@@ -57,8 +58,16 @@ impl Prefix {
         .into_diagnostic()
         .context("failed to constructor environment activator")?;
 
+        let environment = EnvironmentSnapshot::from_system();
+        let variables = ActivationVariables {
+            conda_prefix: environment.get("CONDA_PREFIX").map(PathBuf::from),
+            path: None,
+            path_modification_behavior: PathModificationBehavior::Prepend,
+            current_env: environment.unicode_variables(),
+        };
+
         activator
-            .run_activation(ActivationVariables::from_env().unwrap_or_default(), None)
+            .run_activation(variables, Some(environment.iter().collect()))
             .into_diagnostic()
             .context("failed to run activation")
     }

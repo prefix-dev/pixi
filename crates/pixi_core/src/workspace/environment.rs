@@ -2,7 +2,7 @@ use std::{
     collections::{HashMap, HashSet},
     fmt::Debug,
     hash::{Hash, Hasher},
-    sync::Once,
+    sync::{Arc, Once},
 };
 
 use indexmap::IndexMap;
@@ -18,7 +18,7 @@ use super::{
     SolveGroup,
     errors::{UnknownTask, UnsupportedPlatformError},
 };
-use crate::{Workspace, workspace::HasWorkspaceRef};
+use crate::{Workspace, host::HostDetection, workspace::HasWorkspaceRef};
 use pixi_manifest::platform::host::host_baseline;
 
 /// Describes a single environment from a project manifest. This is used to
@@ -83,6 +83,16 @@ impl<'p> Environment<'p> {
     /// Returns the name of this environment.
     pub fn name(&self) -> &'p EnvironmentName {
         &self.environment.name
+    }
+
+    /// Host capabilities detected with this environment's effective solve channels.
+    pub fn host(&self) -> &'p HostDetection {
+        self.workspace
+            .environment_hosts
+            .get()
+            .and_then(|hosts| hosts.get(self.name()))
+            .map(Arc::as_ref)
+            .unwrap_or(&self.workspace.host)
     }
 
     /// Returns the solve group to which this environment belongs, or `None` if
@@ -172,8 +182,8 @@ impl<'p> Environment<'p> {
     /// the environment itself declares support for, and return the most
     /// preferred one.
     pub fn best_declared_platform(&self) -> Option<&'p PixiPlatform> {
-        let current = self.workspace.host().subdir();
-        let system_virtual_packages = self.workspace.host().capabilities().to_vec();
+        let current = self.host().subdir();
+        let system_virtual_packages = self.host().capabilities();
         let env_platforms = self.platforms();
 
         // The candidates are the workspace platforms whose subdir matches this
@@ -182,7 +192,7 @@ impl<'p> Environment<'p> {
         let candidates = self
             .workspace_manifest()
             .workspace
-            .possible_pixi_platforms(current, &system_virtual_packages);
+            .possible_pixi_platforms(current, system_virtual_packages);
         let selected = candidates
             .iter()
             .copied()
@@ -266,17 +276,17 @@ impl<'p> Environment<'p> {
     /// virtual packages declared by the workspace's host-subdir platforms
     /// this machine doesn't provide so the user can see what to mock.
     pub fn unsupported_platform_error(&self) -> UnsupportedPlatformError {
-        let current = self.workspace.host().subdir();
-        let system_virtual_packages = self.workspace.host().capabilities().to_vec();
+        let current = self.host().subdir();
+        let system_virtual_packages = self.host().capabilities();
         let env_platforms = self.platforms();
         let workspace = &self.workspace_manifest().workspace;
         let unsatisfied_requirements = workspace.unsatisfied_platform_requirements(
             current,
-            &system_virtual_packages,
+            system_virtual_packages,
             &env_platforms,
         );
         let platform_diagnostics =
-            workspace.platform_match_diagnostics(current, &system_virtual_packages, &env_platforms);
+            workspace.platform_match_diagnostics(current, system_virtual_packages, &env_platforms);
         UnsupportedPlatformError {
             environments_platforms: env_platforms.into_iter().collect(),
             environment: self.name().clone(),

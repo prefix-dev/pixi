@@ -67,7 +67,7 @@ pub fn verify_current_platform_can_run_environment(
                 lock_file,
                 current_platform,
                 environment.name(),
-                environment.workspace.host(),
+                environment.host(),
             )?;
         }
         return Ok(());
@@ -107,7 +107,7 @@ pub fn minimum_compatible_declared_platform<'p>(
     environment: &Environment<'p>,
     lock_file: &LockFile,
 ) -> Result<&'p PixiPlatform, Vec<MatchSpec>> {
-    let host = environment.workspace.host();
+    let host = environment.host();
     let current = host.subdir();
     let system_virtual_packages = host.capabilities();
     let candidate_subdirs = candidate_subdirs(current);
@@ -412,7 +412,7 @@ pub fn verify_run_platform(
         // Auto-detected machine: its real virtual packages, and the subdirs it
         // can run (current subdir plus architecture fallbacks).
         None => {
-            let host = environment.workspace.host();
+            let host = environment.host();
             let current = host.subdir();
             let subdirs = candidate_subdirs(current);
             (

@@ -131,6 +131,11 @@ impl WorkspaceManifest {
         features
     }
 
+    /// Returns every feature, including the default feature, in manifest order.
+    pub fn features(&self) -> &IndexMap<FeatureName, Feature> {
+        &self.features
+    }
+
     /// Returns the default feature.
     ///
     /// This is the feature that is added implicitly by the tables at the root

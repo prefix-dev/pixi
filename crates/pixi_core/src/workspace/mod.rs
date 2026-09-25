@@ -64,7 +64,10 @@ use rattler_conda_types::{
 use rattler_lock::LockFile;
 use thiserror::Error;
 
-use crate::host::HostDetection;
+use crate::host::{
+    DenyAll, DetectorConsent, HostDetection, HostDetector, HostProbeError, HostScope, WantedNames,
+    s3_config_of,
+};
 use crate::lock_file::LockedPackageKind;
 use pixi_manifest::platform::host::platform_from_detected;
 use pixi_manifest::platform::unsatisfied_capabilities;
@@ -72,7 +75,7 @@ use rattler_networking::{LazyClient, s3_middleware};
 use rattler_repodata_gateway::Gateway;
 pub use registry::{WorkspaceRegistry, WorkspaceRegistryError};
 pub use solve_group::SolveGroup;
-use tokio::sync::Semaphore;
+use tokio::sync::{Mutex, Semaphore};
 pub use workspace_mut::WorkspaceMut;
 use xxhash_rust::xxh3::xxh3_64;
 
@@ -137,6 +140,8 @@ const NON_SEMVER_PACKAGES: [&str; 11] = [
     "python", "rust", "julia", "gcc", "gxx", "gfortran", "nodejs", "deno", "r", "r-base", "perl",
 ];
 
+type HostScopeCache = Vec<(HostScope, Arc<HostDetection>)>;
+
 /// The pixi workspace, this main struct to interact with a workspace.
 ///
 /// This structs holds manifests of the workspace and optionally the current
@@ -194,8 +199,17 @@ pub struct Workspace {
     /// Optional backend override for testing purposes
     backend_override: Option<BackendOverride>,
 
-    /// What this machine provides, detected when the workspace was located.
+    /// The host supplied to synchronous constructors and script workspaces.
     host: HostDetection,
+
+    /// The consent policy used by discovery, including this process's decisions.
+    detector_consent: Option<Arc<dyn DetectorConsent>>,
+
+    /// Host capabilities prepared with each environment's effective solve scope.
+    environment_hosts: Arc<AsyncCell<HashMap<EnvironmentName, Arc<HostDetection>>>>,
+
+    /// Detections retained across manifest edits for unchanged solve scopes.
+    environment_host_scopes: Arc<Mutex<HostScopeCache>>,
 }
 
 #[derive(Debug, Clone)]
@@ -409,17 +423,30 @@ impl Workspace {
         source: &pixi_config::GlobalConfigSource,
         host: HostDetection,
     ) -> Self {
-        // Get the absolute path of the manifest, preserving symlinks by only
-        // canonicalizing the parent directory
-        let manifest_path = manifest.workspace.provenance.absolute_path();
-        // Take the parent after canonicalizing to ensure this works even when the
-        // manifest
-        let root = manifest_path
+        let config = Config::load_with(&Self::root_of(&manifest), source);
+        Self::from_manifests_with_config(manifest, config, host)
+    }
+
+    /// The directory the workspace manifest lives in, following the parent's
+    /// symlinks but not the manifest's own.
+    fn root_of(manifest: &Manifests) -> PathBuf {
+        manifest
+            .workspace
+            .provenance
+            .absolute_path()
             .parent()
             .expect("manifest path should always have a parent")
-            .to_owned();
+            .to_owned()
+    }
 
-        let config = Config::load_with(&root, source);
+    /// Like [`Self::from_manifests`] with a configuration that was already
+    /// loaded for the workspace root.
+    pub(crate) fn from_manifests_with_config(
+        manifest: Manifests,
+        config: Config,
+        host: HostDetection,
+    ) -> Self {
+        let root = Self::root_of(&manifest);
         Self::from_parsed(
             manifest.workspace,
             manifest.package,
@@ -440,26 +467,7 @@ impl Workspace {
     ) -> Self {
         let env_vars = Workspace::init_env_vars(&workspace.value.environments);
         let manifest_location_name = root.file_name().map(|p| p.to_string_lossy().into_owned());
-        let s3_options = workspace.value.workspace.s3_options.clone();
-        let s3_config = s3_options
-            .unwrap_or_default()
-            .iter()
-            .map(|(key, value)| {
-                (
-                    key.clone(),
-                    s3_middleware::S3Config::Custom {
-                        endpoint_url: value.endpoint_url.clone(),
-                        region: value.region.clone(),
-                        addressing_style: if value.force_path_style {
-                            s3_middleware::S3AddressingStyle::Path
-                        } else {
-                            s3_middleware::S3AddressingStyle::VirtualHost
-                        },
-                        credentials_provider: None,
-                    },
-                )
-            })
-            .collect::<HashMap<String, s3_middleware::S3Config>>();
+        let s3_config = s3_config_of(&workspace.value);
 
         Self {
             root,
@@ -476,6 +484,9 @@ impl Workspace {
             concurrent_downloads_semaphore: OnceCell::default(),
             backend_override: None,
             host,
+            detector_consent: None,
+            environment_hosts: Arc::new(AsyncCell::new()),
+            environment_host_scopes: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -724,9 +735,107 @@ impl Workspace {
             .collect()
     }
 
-    /// What this machine provides, as detected when the workspace was located.
+    /// What this machine provides for the default environment's solve channels.
     pub fn host(&self) -> &HostDetection {
-        &self.host
+        self.default_environment().host()
+    }
+
+    /// Retains a script's discovery policy and already-probed host.
+    fn retain_script_host(&mut self, consent: Arc<dyn DetectorConsent>) {
+        let host = Arc::new(self.host.clone());
+        let hosts = self
+            .environments()
+            .into_iter()
+            .map(|environment| (environment.name().clone(), host.clone()))
+            .collect();
+        self.detector_consent = Some(consent);
+        self.environment_hosts = Arc::new(AsyncCell::new_with(hosts));
+    }
+
+    /// Prepares host detections once for each distinct environment solve scope.
+    async fn prepare_environment_hosts(
+        &mut self,
+        consent: Arc<dyn DetectorConsent>,
+    ) -> Result<(), HostProbeError> {
+        self.detector_consent = Some(consent);
+        self.refresh_environment_hosts().await
+    }
+
+    /// Invalidates environment mappings without discarding unchanged detections.
+    fn invalidate_environment_hosts(&mut self) {
+        match Arc::get_mut(&mut self.environment_hosts) {
+            Some(hosts) => {
+                hosts.take();
+            }
+            None => self.environment_hosts = Arc::new(AsyncCell::new()),
+        }
+    }
+
+    /// Refreshes invalidated hosts before asynchronous solve and install decisions.
+    pub(crate) async fn refresh_environment_hosts(&self) -> Result<(), HostProbeError> {
+        let Some(consent) = &self.detector_consent else {
+            // Synchronous constructors and explicitly injected hosts never probe.
+            return Ok(());
+        };
+        if self.environment_hosts.get().is_some() {
+            return Ok(());
+        }
+        // Keep detector futures out of every solve, install and mutation future.
+        self.environment_hosts
+            .get_or_try_init(Box::pin(async {
+                let mut cache = self.environment_host_scopes.lock().await;
+                let detector = OnceCell::new();
+                let mut hosts = HashMap::new();
+                for environment in self.environments() {
+                    let scope = HostScope::for_environment(
+                        &grouped_environment::GroupedEnvironment::from(environment.clone()),
+                    )?;
+                    let host = match cache.iter().find(|(cached, _)| cached == &scope) {
+                        Some((_, host)) => host.clone(),
+                        None => {
+                            let detector =
+                                detector.get_or_try_init(|| self.host_detector(consent.clone()))?;
+                            let host = Arc::new(scope.detect(detector).await?);
+                            cache.push((scope, host.clone()));
+                            host
+                        }
+                    };
+                    hosts.insert(environment.name().clone(), host);
+                }
+                Ok::<_, HostProbeError>(hosts)
+            }))
+            .await?;
+        Ok(())
+    }
+
+    fn host_detector(
+        &self,
+        consent: Arc<dyn DetectorConsent>,
+    ) -> Result<HostDetector, HostProbeError> {
+        Ok(HostDetector::with_gateway(
+            self.config().clone(),
+            consent,
+            self.authenticated_client()
+                .map_err(|error| HostProbeError::Client(error.to_string()))?
+                .clone(),
+            self.repodata_gateway()
+                .map_err(|error| HostProbeError::Client(error.to_string()))?
+                .clone(),
+        ))
+    }
+
+    /// Probes every consented detector registered by the default environment's
+    /// effective solve channels, whether or not a platform declares its names.
+    pub async fn detect_host_with_all_detectors(&self) -> Result<HostDetection, HostProbeError> {
+        let channels = grouped_environment::GroupedEnvironment::from(self.default_environment())
+            .channel_urls(&self.channel_config())
+            .map_err(HostProbeError::Channel)?;
+        let consent = self
+            .detector_consent
+            .clone()
+            .unwrap_or_else(|| Arc::new(DenyAll));
+        let detector = self.host_detector(consent)?;
+        Ok(detector.detect(&channels, WantedNames::All).await?)
     }
 
     pub fn env_vars(&self) -> &HashMap<EnvironmentName, EnvironmentVars> {
@@ -1563,13 +1672,71 @@ mod tests {
     use insta::{assert_debug_snapshot, assert_snapshot};
     use itertools::Itertools;
     use pixi_config::{CacheConfig, Config, DetachedEnvironments};
-    use pixi_manifest::{FeatureName, FeaturesExt, HasWorkspaceManifest, script::ScriptManifest};
+    use pixi_manifest::{
+        FeatureName, FeaturesExt, HasWorkspaceManifest, NewEnvironment, script::ScriptManifest,
+    };
     use pypi_mapping::{MappingMode, ProjectDefinedChannelMapping, ProjectDefinedMappingLocation};
     use rattler_conda_types::{Channel, GenericVirtualPackage, NamedChannelOrUrl, Subdir, Version};
     use url::Url;
     use xxhash_rust::xxh3::xxh3_64;
 
     use super::*;
+
+    #[tokio::test]
+    async fn environment_mutation_reuses_hosts_for_unchanged_solve_scopes() {
+        let directory = tempfile::tempdir().unwrap();
+        let manifest_path = directory.path().join("pixi.toml");
+        let source = r#"
+            [workspace]
+            name = "host-lifecycle"
+            channels = []
+            platforms = ["linux-64"]
+        "#;
+        fs_err::write(&manifest_path, source).unwrap();
+        let mut workspace = Workspace::from_str(&manifest_path, source).unwrap();
+        let host = Arc::new(HostDetection::from_platform(
+            PixiPlatform::new(
+                PixiPlatformName::try_from("host").unwrap(),
+                Subdir::Linux64,
+                vec![GenericVirtualPackage {
+                    name: PackageName::from_str("__scope_capability").unwrap(),
+                    version: Version::from_str("3").unwrap(),
+                    build_string: String::new(),
+                }],
+            )
+            .unwrap(),
+        ));
+        let scope = HostScope::for_environment(&grouped_environment::GroupedEnvironment::from(
+            workspace.default_environment(),
+        ))
+        .unwrap();
+        workspace
+            .environment_host_scopes
+            .lock()
+            .await
+            .push((scope, host.clone()));
+        workspace
+            .prepare_environment_hosts(Arc::new(DenyAll))
+            .await
+            .unwrap();
+
+        let mut modified = workspace.clone().modify().unwrap();
+        modified
+            .manifest()
+            .add_environment(NewEnvironment::new("extra"))
+            .unwrap();
+        modified
+            .workspace()
+            .refresh_environment_hosts()
+            .await
+            .unwrap();
+
+        let extra = modified.workspace().environment("extra").unwrap();
+        assert!(std::ptr::eq(extra.host(), host.as_ref()));
+        assert!(std::ptr::eq(modified.workspace().host(), workspace.host()));
+        assert!(workspace.environment("extra").is_none());
+        assert_eq!(workspace.environment_host_scopes.lock().await.len(), 1);
+    }
 
     /// A platform row carries whatever package names were written into it, and
     /// a long enough one spells out past the platform-name limit. Such a row is
