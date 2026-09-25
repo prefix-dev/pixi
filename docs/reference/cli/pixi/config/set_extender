@@ -9,6 +9,7 @@ pixi config set repodata-config.disable-zstd true --system
 pixi config set --global detached-environments "/opt/pixi/envs"
 pixi config set detached-environments false
 pixi config set s3-options.my-bucket '{"endpoint-url": "http://localhost:9000", "force-path-style": true, "region": "auto"}'
+pixi config set default-channels '["conda-forge", "bioconda"]' --path /path/to/config.toml
 ```
 
 --8<-- [end:example]
