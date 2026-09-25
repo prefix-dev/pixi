@@ -67,14 +67,18 @@ if ! await_prompt; then
     exit 1
 fi
 
-zpty -w probe "fpath=(${(q)completion_dir} \$fpath)"
-zpty -w probe "autoload -Uz compinit && compinit -u -d ${(q)workspace}/.zcompdump"
+# A single setup command produces one prompt after every step has completed.
 # Tab must insert a unique match outright instead of opening a menu, so that
 # the buffer alone tells us what was offered.
-zpty -w probe 'unsetopt auto_menu auto_list'
-zpty -w probe "report_buffer() { print -r -- \$BUFFER >! ${(q)buffer_file} }"
-zpty -w probe 'zle -N report_buffer; bindkey "^G" report_buffer'
-zpty -w probe "cd ${(q)workspace}"
+setup_commands=(
+    "fpath=(${(q)completion_dir} \$fpath)"
+    "autoload -Uz compinit && compinit -u -d ${(q)workspace}/.zcompdump"
+    'unsetopt auto_menu auto_list'
+    "report_buffer() { print -r -- \$BUFFER >! ${(q)buffer_file} }"
+    'zle -N report_buffer; bindkey "^G" report_buffer'
+    "cd ${(q)workspace}"
+)
+zpty -w probe "${(j:; :)setup_commands}"
 if ! await_prompt; then
     print -u2 "zsh-completion-probe: the probe shell did not finish setup within ${TIMEOUT}s"
     exit 1

@@ -15,8 +15,8 @@
 
 use rattler_conda_types::{GenericVirtualPackage, Subdir, Version};
 use rattler_virtual_packages::{
-    Archspec, Cuda, CudaArch, DetectVirtualPackageError, EnvOverride, LibC, Linux, Osx, Override,
-    VirtualPackageOverrides, VirtualPackages, Windows,
+    AmdGpu, AmdGpuArch, Archspec, Cuda, CudaArch, DetectVirtualPackageError, EnvOverride, LibC,
+    Linux, Osx, Override, VirtualPackageOverrides, VirtualPackages, Windows,
 };
 
 use super::{
@@ -37,7 +37,7 @@ pub enum HostDetectionError {
 /// The subdir pixi treats as this machine's, honoring `PIXI_OVERRIDE_PLATFORM`.
 ///
 /// This is *the platform we target*. Use it everywhere pixi selects, solves,
-/// or installs an environment; reach for `Subdir::current()` only where pixi
+/// or installs an environment. Reach for `Subdir::current()` only where pixi
 /// is about to run or build something on this machine for real.
 ///
 /// Only `PIXI_OVERRIDE_PLATFORM` is read here, so an invalid `CONDA_OVERRIDE_*`
@@ -52,8 +52,8 @@ pub fn host_subdir() -> Subdir {
                 None
             }
         })
-        .or(Subdir::current())
-        .unwrap_or(Subdir::NoArch)
+        .or_else(Subdir::current)
+        .expect("pixi runs on a known conda platform")
 }
 
 /// What a `CONDA_OVERRIDE_*` variable says about the virtual package it
@@ -136,6 +136,8 @@ pub fn apply_conda_overrides(packages: &mut Vec<GenericVirtualPackage>, subdir: 
     let linux = version_override::<Linux>(|linux| linux.version);
     let osx = version_override::<Osx>(|osx| osx.version);
     let cuda_arch = version_override::<CudaArch>(|arch| arch.version);
+    let amdgpu = version_override::<AmdGpu>(|_| Version::major(0));
+    let amdgpu_arch = version_override::<AmdGpuArch>(|arch| arch.version);
     // `Windows::parse_version` always fills the version in, so the fallback
     // only covers the unreachable `None` arm of rattler's optional field.
     let win = version_override::<Windows>(|win| win.version.unwrap_or_else(|| Version::major(0)));
@@ -144,6 +146,8 @@ pub fn apply_conda_overrides(packages: &mut Vec<GenericVirtualPackage>, subdir: 
         let outcome = match package.name.as_normalized() {
             "__cuda" => cuda.clone(),
             "__cuda_arch" => cuda_arch.clone(),
+            "__amdgpu" => amdgpu.clone(),
+            "__amdgpu_arch" => amdgpu_arch.clone(),
             "__linux" => linux.clone(),
             "__osx" => osx.clone(),
             "__win" => win.clone(),
@@ -182,6 +186,8 @@ pub fn apply_conda_overrides(packages: &mut Vec<GenericVirtualPackage>, subdir: 
 
     add_missing("__cuda", cuda.pinned());
     add_missing("__cuda_arch", cuda_arch.pinned());
+    add_missing("__amdgpu", amdgpu.pinned());
+    add_missing("__amdgpu_arch", amdgpu_arch.pinned());
     add_missing("__osx", osx.pinned());
     add_missing("__linux", linux.pinned());
     add_missing("__win", win.pinned());
@@ -190,6 +196,15 @@ pub fn apply_conda_overrides(packages: &mut Vec<GenericVirtualPackage>, subdir: 
     // driver, and rattler drops it the same way in `VirtualPackages::detect`.
     if !packages.iter().any(|p| p.name.as_normalized() == "__cuda") {
         packages.retain(|p| p.name.as_normalized() != "__cuda_arch");
+    }
+
+    // AMD GPU architectures are meaningful only when AMD GPU presence is
+    // available, matching rattler's detection and override behavior.
+    if !packages
+        .iter()
+        .any(|p| p.name.as_normalized() == "__amdgpu")
+    {
+        packages.retain(|p| p.name.as_normalized() != "__amdgpu_arch");
     }
 
     apply_glibc_override(packages, subdir);
@@ -322,7 +337,8 @@ pub fn detect_host(subdir: Subdir) -> Result<PixiPlatform, HostDetectionError> {
 /// true macOS version, while `linux-aarch64` on an x86 box reports nothing,
 /// rather than lending it this machine's glibc and kernel.
 fn machine_runs(subdir: Subdir) -> bool {
-    candidate_subdirs(Subdir::current().unwrap_or(Subdir::NoArch)).contains(&subdir)
+    candidate_subdirs(Subdir::current().expect("pixi runs on a known conda platform"))
+        .contains(&subdir)
 }
 
 /// The raw virtual packages rattler reports for `subdir`, with
@@ -351,7 +367,7 @@ fn probe_machine(subdir: Subdir) -> Result<Vec<GenericVirtualPackage>, HostDetec
 /// per-slot pass override it.
 fn detection_overrides(subdir: Subdir) -> VirtualPackageOverrides {
     let mut overrides = VirtualPackageOverrides::default();
-    if subdir != Subdir::current().unwrap_or(Subdir::NoArch) {
+    if subdir != Subdir::current().expect("pixi runs on a known conda platform") {
         overrides.archspec = Some(Override::String(
             Archspec::from_platform(subdir).map_or_else(
                 || String::from("0"),
@@ -550,6 +566,38 @@ mod tests {
             .find(|p| p.name.as_normalized() == "__cuda")
             .expect("__cuda should be added from the override");
         assert_eq!(cuda.version, Version::from_str("12.0").unwrap());
+    }
+
+    #[test]
+    fn amdgpu_overrides_add_coupled_presence_and_architecture() {
+        let packages = temp_env::with_var("CONDA_OVERRIDE_AMDGPU", Some("0"), || {
+            temp_env::with_var("CONDA_OVERRIDE_AMDGPU_ARCH", Some("9.0.10"), || {
+                let mut packages = Vec::new();
+                apply_conda_overrides(&mut packages, Subdir::Linux64);
+                packages
+            })
+        });
+
+        assert!(has_package(&packages, "__amdgpu"));
+        let arch = packages
+            .iter()
+            .find(|package| package.name.as_normalized() == "__amdgpu_arch")
+            .expect("AMDGPU architecture override should add __amdgpu_arch");
+        assert_eq!(arch.version, Version::from_str("9.0.10").unwrap());
+    }
+
+    #[test]
+    fn empty_amdgpu_override_removes_presence_and_architecture() {
+        let packages = temp_env::with_var("CONDA_OVERRIDE_AMDGPU", Some(""), || {
+            temp_env::with_var("CONDA_OVERRIDE_AMDGPU_ARCH", Some("9.0.10"), || {
+                let mut packages = vec![detected("__amdgpu", "0")];
+                apply_conda_overrides(&mut packages, Subdir::Linux64);
+                packages
+            })
+        });
+
+        assert!(!has_package(&packages, "__amdgpu"));
+        assert!(!has_package(&packages, "__amdgpu_arch"));
     }
 
     fn libc_package(name: &str, version: &str) -> GenericVirtualPackage {
