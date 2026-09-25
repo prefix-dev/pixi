@@ -28,6 +28,7 @@ pub mod command_info;
 pub mod completion;
 mod conda_script;
 pub mod config;
+mod detector_consent;
 pub mod exec;
 pub mod global;
 pub mod has_specs;

@@ -10,6 +10,7 @@ license.workspace = true
 
 [dependencies]
 async-once-cell = { workspace = true }
+async-trait = { workspace = true }
 barrier_cell = { workspace = true }
 console = { workspace = true }
 dashmap = { workspace = true }
@@ -59,11 +60,13 @@ pypi_modifiers = { workspace = true }
 rattler = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true }
+rattler_environment_digest = { workspace = true }
 rattler_lock = { workspace = true }
 rattler_networking = { workspace = true, default-features = false }
 rattler_repodata_gateway = { workspace = true }
 rattler_shell = { workspace = true }
 rattler_solve = { workspace = true }
+rattler_virtual_package_detectors = { workspace = true }
 rattler_virtual_packages = { workspace = true }
 rstest = { workspace = true }
 serde = { workspace = true }
