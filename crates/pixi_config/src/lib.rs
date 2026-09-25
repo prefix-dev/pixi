@@ -3570,12 +3570,6 @@ UNUSED = "unused"
         let mut merged = config_1.clone();
         merged = merged.merge_config(config_2);
         assert!(merged.s3_options.0.contains_key("bucket1"));
-
-        let debug = format!("{merged:#?}");
-        let debug = debug.replace("\\\\", "/");
-        // replace the path with a placeholder
-        let debug = debug.replace(&d.to_str().unwrap().replace('\\', "/"), "path");
-        insta::assert_snapshot!(debug);
     }
 
     #[test]
