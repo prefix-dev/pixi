@@ -344,6 +344,22 @@ impl CommandDispatcher {
         self.data.allow_ref_links
     }
 
+    /// Solves an environment whose repodata and host capabilities are already
+    /// known, using the normal solve concurrency limit and reporters.
+    pub async fn solve_conda_environment(
+        &self,
+        spec: crate::SolveCondaEnvironmentSpec,
+    ) -> Result<
+        Vec<pixi_record::PixiRecord>,
+        CommandDispatcherError<crate::SolveCondaEnvironmentError>,
+    > {
+        use crate::solve_binary::SolveCondaExt;
+        self.engine
+            .with_ctx(async |ctx| ctx.solve_conda(spec).await)
+            .await
+            .map_err_into_dispatcher(std::convert::identity)
+    }
+
     /// Returns the metadata of the source spec.
     ///
     /// Thin wrapper over [`crate::BuildBackendMetadataKey`]; dedup and

@@ -64,7 +64,10 @@ use rattler_conda_types::{
 use rattler_lock::LockFile;
 use thiserror::Error;
 
-use crate::host::HostDetection;
+use crate::host::{
+    DetectorConsent, HostDetection, HostDetector, HostProbeError, WantedNames, manifest_channels,
+    s3_config_of,
+};
 use crate::lock_file::LockedPackageKind;
 use pixi_manifest::platform::host::platform_from_detected;
 use pixi_manifest::platform::unsatisfied_capabilities;
@@ -409,17 +412,30 @@ impl Workspace {
         source: &pixi_config::GlobalConfigSource,
         host: HostDetection,
     ) -> Self {
-        // Get the absolute path of the manifest, preserving symlinks by only
-        // canonicalizing the parent directory
-        let manifest_path = manifest.workspace.provenance.absolute_path();
-        // Take the parent after canonicalizing to ensure this works even when the
-        // manifest
-        let root = manifest_path
+        let config = Config::load_with(&Self::root_of(&manifest), source);
+        Self::from_manifests_with_config(manifest, config, host)
+    }
+
+    /// The directory the workspace manifest lives in, following the parent's
+    /// symlinks but not the manifest's own.
+    fn root_of(manifest: &Manifests) -> PathBuf {
+        manifest
+            .workspace
+            .provenance
+            .absolute_path()
             .parent()
             .expect("manifest path should always have a parent")
-            .to_owned();
+            .to_owned()
+    }
 
-        let config = Config::load_with(&root, source);
+    /// Like [`Self::from_manifests`] with a configuration that was already
+    /// loaded for the workspace root.
+    pub(crate) fn from_manifests_with_config(
+        manifest: Manifests,
+        config: Config,
+        host: HostDetection,
+    ) -> Self {
+        let root = Self::root_of(&manifest);
         Self::from_parsed(
             manifest.workspace,
             manifest.package,
@@ -440,26 +456,7 @@ impl Workspace {
     ) -> Self {
         let env_vars = Workspace::init_env_vars(&workspace.value.environments);
         let manifest_location_name = root.file_name().map(|p| p.to_string_lossy().into_owned());
-        let s3_options = workspace.value.workspace.s3_options.clone();
-        let s3_config = s3_options
-            .unwrap_or_default()
-            .iter()
-            .map(|(key, value)| {
-                (
-                    key.clone(),
-                    s3_middleware::S3Config::Custom {
-                        endpoint_url: value.endpoint_url.clone(),
-                        region: value.region.clone(),
-                        addressing_style: if value.force_path_style {
-                            s3_middleware::S3AddressingStyle::Path
-                        } else {
-                            s3_middleware::S3AddressingStyle::VirtualHost
-                        },
-                        credentials_provider: None,
-                    },
-                )
-            })
-            .collect::<HashMap<String, s3_middleware::S3Config>>();
+        let s3_config = s3_config_of(&workspace.value);
 
         Self {
             root,
@@ -727,6 +724,26 @@ impl Workspace {
     /// What this machine provides, as detected when the workspace was located.
     pub fn host(&self) -> &HostDetection {
         &self.host
+    }
+
+    /// Probes the host again with every consented detector the workspace's
+    /// channels register, whether or not a platform declares its names.
+    pub async fn detect_host_with_all_detectors(
+        &self,
+        consent: Arc<dyn DetectorConsent>,
+    ) -> Result<HostDetection, HostProbeError> {
+        let channels = manifest_channels(&self.workspace.value, &self.channel_config())?;
+        let detector = HostDetector::with_gateway(
+            self.config().clone(),
+            consent,
+            self.authenticated_client()
+                .map_err(|error| HostProbeError::Client(error.to_string()))?
+                .clone(),
+            self.repodata_gateway()
+                .map_err(|error| HostProbeError::Client(error.to_string()))?
+                .clone(),
+        );
+        Ok(detector.detect(&channels, WantedNames::All).await?)
     }
 
     pub fn env_vars(&self) -> &HashMap<EnvironmentName, EnvironmentVars> {
