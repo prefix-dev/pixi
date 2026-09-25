@@ -256,12 +256,12 @@ rattler_redaction = { version = "0.2.2", default-features = false }
 rattler_repodata_gateway = { version = "0.33", default-features = false }
 rattler_s3 = { version = "0.2", default-features = false }
 rattler_shell = { version = "0.27", default-features = false }
-rattler_solve = { version = "9.0", default-features = false }
+rattler_solve = { version = "10.0", default-features = false }
 rattler_upload = { version = "0.10", default-features = false, features = [
   "s3",
   "sigstore-sign",
 ] }
-rattler_virtual_packages = { version = "6.0", default-features = false }
+rattler_virtual_packages = { version = "7.0", default-features = false }
 simple_spawn_blocking = { version = "1.1.0", default-features = false }
 
 # Rattler build crates
