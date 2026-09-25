@@ -116,7 +116,7 @@ Each inline-table entry has:
   conda CEP, `__cuda_arch` is meaningless without `__cuda`, so `arch` requires
   `driver`; declaring `arch` (or a raw `__cuda_arch`) alone is rejected.
 
-- For virtual packages without a friendly key, a raw `__name = "version"` entry is also accepted as an escape hatch. Only the virtual packages pixi knows how to override (`__win`, `__osx`, `__linux`, `__cuda`, `__archspec`, and the libc family `__glibc`/`__musl`/`__eglibc`) take effect at detection; any other raw `__name` is stored but ignored when checking host compatibility.
+- For virtual packages without a friendly key, a raw `__name = "version"` entry is also accepted as an escape hatch, for example `__conda_forge_openmpi = "5.0"` for a name a channel-registered detector reports. The solver treats it as available exactly like the friendly keys, and a machine satisfies it when it provides that name at the declared version or newer. Pixi's built-in detection only reports the names it knows (`__win`, `__osx`, `__linux`, `__cuda`, `__cuda_arch`, `__archspec`, and the libc family `__glibc`/`__musl`/`__eglibc`); any other name has to come from a detector for the host check to pass.
 
 A feature's `platforms` array is a list of names that must each resolve to a workspace platform (or be a bare conda subdir, which Pixi treats as an alias for that subdir).
 This is how you bind a feature to the rich variant:

@@ -11,11 +11,10 @@ use fancy_display::FancyDisplay;
 use miette::Diagnostic;
 use pixi_manifest::{
     EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName,
-    platform::{candidate_subdirs, solver_virtual_packages, unsatisfied_capabilities},
+    platform::{candidate_subdirs, solver_generic_virtual_packages, unsatisfied_capabilities},
 };
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Subdir};
 use rattler_lock::LockFile;
-use rattler_virtual_packages::VirtualPackage;
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::path::PathBuf;
@@ -563,14 +562,17 @@ impl Environment<'_> {
     /// Reads them straight off `platform.declared_virtual_packages()`: the
     /// subdir baseline is materialised by [`PixiPlatform::from_subdir`], so
     /// there is no separate "compute defaults" step.
-    pub fn virtual_packages(&self, platform: &PixiPlatform) -> Vec<VirtualPackage> {
-        solver_virtual_packages(platform)
+    pub fn virtual_packages(&self, platform: &PixiPlatform) -> Vec<GenericVirtualPackage> {
+        solver_generic_virtual_packages(platform)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
+
+    use pixi_manifest::platform::solver_virtual_packages;
+    use rattler_virtual_packages::VirtualPackage;
 
     use insta::assert_debug_snapshot;
     use itertools::Itertools;

@@ -1323,10 +1323,10 @@ impl WorkspaceManifestMut<'_> {
         if pixi_platforms.is_empty() {
             return Ok(IndexSet::new());
         }
+        let added_to_workspace = self.add_workspace_platforms(&pixi_platforms)?;
         self.ensure_inline_environment(feature_name)?;
         let platform_names: IndexSet<PixiPlatformName> =
             pixi_platforms.iter().map(|p| p.name().clone()).collect();
-        let added_to_workspace = self.add_workspace_platforms(&pixi_platforms)?;
         let added_to_feature = self.add_feature_platforms(platform_names, feature_name)?;
         Ok(pixi_platforms
             .into_iter()

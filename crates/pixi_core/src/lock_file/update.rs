@@ -50,7 +50,7 @@ use pixi_uv_conversions::{
 use pypi_mapping::{self, PurlDerivationClient};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{Arch, GenericVirtualPackage, PackageName, ParseChannelError};
+use rattler_conda_types::{Arch, PackageName, ParseChannelError};
 use rattler_lock::{LockFile, LockedPackage, ParseCondaLockError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -1380,10 +1380,7 @@ impl<'p> LockFileDerivedData<'p> {
                         CondaPrefixUpdater::builder(
                             group,
                             pixi_platform.clone(),
-                            virtual_packages
-                                .into_iter()
-                                .map(GenericVirtualPackage::from)
-                                .collect(),
+                            virtual_packages,
                             self.command_dispatcher.clone(),
                         )
                         .finish()?
@@ -3274,11 +3271,7 @@ async fn spawn_extract_environment_task(
             .wrap_err("failed to get variant configuration")?;
 
         // Get virtual packages for the build environment
-        let virtual_packages: Vec<_> = environment
-            .virtual_packages(pixi_platform)
-            .into_iter()
-            .map(GenericVirtualPackage::from)
-            .collect();
+        let virtual_packages = environment.virtual_packages(pixi_platform);
 
         let build_environment = BuildEnvironment::simple(pixi_platform.subdir(), virtual_packages);
 
