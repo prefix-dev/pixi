@@ -211,11 +211,11 @@ pub async fn create_exec_prefix(
         has_guessed_package,
     );
 
-    let prefix = Prefix::new(
-        cache_dir
-            .join(pixi_consts::consts::CACHED_ENVS_DIR)
-            .join(environment_hash.name(dir_prefix.as_deref())),
-    );
+    let exec_env_dir = config
+        .cache_dir_for(pixi_config::CacheKind::ExecEnvironments)
+        .unwrap_or_else(|_| cache_dir.join(pixi_consts::consts::CACHED_ENVS_DIR));
+
+    let prefix = Prefix::new(exec_env_dir.join(environment_hash.name(dir_prefix.as_deref())));
 
     // Cross-process install lock. The prefix is content-addressed by
     // `environment_hash`, so any prior finish here is reusable.
@@ -270,11 +270,15 @@ pub async fn create_exec_prefix(
             .context("failed to determine virtual packages")?,
     );
 
+    let conda_packages_dir = config
+        .cache_dir_for(pixi_config::CacheKind::CondaPackages)
+        .unwrap_or_else(|_| cache_dir.join(pixi_consts::consts::CONDA_PACKAGE_CACHE_DIR));
+
     // `pixi exec` solves outside the command dispatcher, so it has to build
     // the offline exclusions itself rather than inheriting them.
     let excluded_candidates = exclusions_for_solve(
         config.offline(),
-        &PackageCache::new(cache_dir.join(pixi_consts::consts::CONDA_PACKAGE_CACHE_DIR)),
+        &PackageCache::new(conda_packages_dir.clone()),
         repodata.iter().flat_map(|repo_data| repo_data.iter()),
     )
     .await
@@ -355,9 +359,7 @@ pub async fn create_exec_prefix(
                 .clear_when_done(true)
                 .finish(),
         )
-        .with_package_cache(PackageCache::new(
-            cache_dir.join(pixi_consts::consts::CONDA_PACKAGE_CACHE_DIR),
-        ));
+        .with_package_cache(PackageCache::new(conda_packages_dir));
     if reinstall_all {
         installer = installer.with_reinstall_packages(
             solved_records

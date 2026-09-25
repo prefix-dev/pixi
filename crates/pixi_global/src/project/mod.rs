@@ -1725,8 +1725,27 @@ impl Project {
             // workspace-scoped caches (source builds and their metadata) have
             // no workspace to live in here and stay under `bld`.
             let build_dir = cache_dir.join(BUILD_DIR).into_assume_dir();
-            let cache_dirs =
+            let mut cache_dirs =
                 pixi_command_dispatcher::CacheDirs::new(cache_dir).with_workspace(build_dir);
+            if let Ok(conda_packages_dir) = self
+                .config()
+                .cache_dir_for(pixi_config::CacheKind::CondaPackages)
+            {
+                let conda_packages_dir = if conda_packages_dir.is_absolute() {
+                    conda_packages_dir
+                } else {
+                    dunce::canonicalize(&conda_packages_dir)
+                        .or_else(|_| {
+                            std::env::current_dir().map(|cwd| cwd.join(&conda_packages_dir))
+                        })
+                        .unwrap_or(conda_packages_dir)
+                };
+                if let Ok(abs) = AbsPathBuf::new(conda_packages_dir) {
+                    cache_dirs.set_override::<pixi_command_dispatcher::PackagesDir>(
+                        abs.into_assume_dir(),
+                    );
+                }
+            }
 
             let root_dir = AbsPathBuf::new(self.root.clone())
                 .expect("root dir is not absolute")
