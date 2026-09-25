@@ -41,7 +41,18 @@ fn find_similar_commands(input: &str) -> Vec<String> {
     let mut suggestions: Vec<(f64, String)> = Vec::new();
     let threshold = 0.6;
 
+    let input_len = input.chars().count();
+
     for command in available_commands {
+        // Jaro similarity is not normalised by length, so a one-character
+        // command scores above the threshold against any long input that
+        // happens to contain that character. Skip anything shorter than half
+        // the input, which keeps the short aliases as suggestions for short
+        // typos without letting them beat a real near-match.
+        if command.chars().count() * 2 < input_len {
+            continue;
+        }
+
         let similarity = strsim::jaro(input, &command);
         if similarity > threshold {
             suggestions.push((similarity, command));
@@ -210,5 +221,32 @@ mod tests {
     fn test_tee_suggests_tree() {
         let suggestions = find_similar_commands("tee");
         assert!(suggestions.contains(&"tree".to_string()));
+    }
+
+    #[test]
+    fn test_long_nonsense_does_not_suggest_a_single_character_alias() {
+        assert!(find_similar_commands("foo-bar-spam").is_empty());
+    }
+
+    #[test]
+    fn test_common_typos_still_resolve() {
+        for (typo, expected) in [
+            ("isntall", "install"),
+            ("remvoe", "remove"),
+            ("serch", "search"),
+            ("tre", "tree"),
+        ] {
+            let suggestions = find_similar_commands(typo);
+            assert!(
+                suggestions.contains(&expected.to_string()),
+                "{typo} should still suggest {expected}, got {suggestions:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_short_typo_still_suggests_a_single_character_alias() {
+        let suggestions = find_similar_commands("xx");
+        assert!(suggestions.contains(&"x".to_string()));
     }
 }
