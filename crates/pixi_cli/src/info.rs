@@ -462,6 +462,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_global_config_source(source.clone())
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()
+        .await
         .ok();
 
     let (pixi_folder_size, cache_size) = if args.extended {

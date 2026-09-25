@@ -1111,7 +1111,7 @@ impl<'p> LockFileDerivedData<'p> {
                         &self.lock_file,
                         best_declared_platform,
                         environment.name(),
-                        None,
+                        environment.workspace().host(),
                     )
                     .wrap_err(format!(
                         "Cannot install environment '{}'",

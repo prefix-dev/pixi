@@ -64,10 +64,9 @@ use rattler_conda_types::{
 use rattler_lock::LockFile;
 use thiserror::Error;
 
+use crate::host::HostDetection;
 use crate::lock_file::LockedPackageKind;
-use pixi_manifest::platform::host::{
-    detect_host, host_capabilities, host_subdir, platform_from_detected,
-};
+use pixi_manifest::platform::host::platform_from_detected;
 use pixi_manifest::platform::unsatisfied_capabilities;
 use rattler_networking::{LazyClient, s3_middleware};
 use rattler_repodata_gateway::Gateway;
@@ -194,6 +193,9 @@ pub struct Workspace {
 
     /// Optional backend override for testing purposes
     backend_override: Option<BackendOverride>,
+
+    /// What this machine provides, detected when the workspace was located.
+    host: HostDetection,
 }
 
 #[derive(Debug, Clone)]
@@ -222,7 +224,7 @@ pub enum ScriptWorkspaceError {
     HostDetection {
         subdir: Subdir,
         #[source]
-        source: pixi_manifest::platform::host::HostDetectionError,
+        source: crate::host::HostUndetected,
     },
 }
 
@@ -266,12 +268,16 @@ fn set_implicit_script_platforms(
 /// A lock file that does not parse is left to the loader to report.
 fn implicit_script_platforms(
     lock_file_path: Option<&Path>,
+    host: &HostDetection,
 ) -> Result<IndexSet<PixiPlatform>, ScriptWorkspaceError> {
-    let subdir = host_subdir();
-    let host = detect_host(subdir).map_err(|error| ScriptWorkspaceError::HostDetection {
-        subdir,
-        source: error,
-    })?;
+    let subdir = host.subdir();
+    let host = host
+        .platform()
+        .map_err(|error| ScriptWorkspaceError::HostDetection {
+            subdir,
+            source: error,
+        })?
+        .clone();
 
     // A lock file that does not parse is passed over silently: the loader reads
     // the same file moments later and reports why it is unusable, with a
@@ -401,6 +407,7 @@ impl Workspace {
     pub(crate) fn from_manifests(
         manifest: Manifests,
         source: &pixi_config::GlobalConfigSource,
+        host: HostDetection,
     ) -> Self {
         // Get the absolute path of the manifest, preserving symlinks by only
         // canonicalizing the parent directory
@@ -419,6 +426,7 @@ impl Workspace {
             root,
             config,
             WorkspaceStorage::Project,
+            host,
         )
     }
 
@@ -428,6 +436,7 @@ impl Workspace {
         root: PathBuf,
         config: Config,
         storage: WorkspaceStorage,
+        host: HostDetection,
     ) -> Self {
         let env_vars = Workspace::init_env_vars(&workspace.value.environments);
         let manifest_location_name = root.file_name().map(|p| p.to_string_lossy().into_owned());
@@ -466,6 +475,7 @@ impl Workspace {
             repodata_gateway: Default::default(),
             concurrent_downloads_semaphore: OnceCell::default(),
             backend_override: None,
+            host,
         }
     }
 
@@ -476,6 +486,7 @@ impl Workspace {
     pub fn from_script(
         script: ScriptManifest,
         config: Config,
+        host: HostDetection,
     ) -> Result<WithWarnings<Self>, ScriptWorkspaceError> {
         let script_path = script.path().to_owned();
         let script_manifest = script.clone();
@@ -503,7 +514,7 @@ impl Workspace {
                 .expect("a local script has an adjacent lock-file path");
             set_implicit_script_platforms(
                 &mut manifest.workspace,
-                implicit_script_platforms(Some(&lock_file_path))?,
+                implicit_script_platforms(Some(&lock_file_path), &host)?,
             );
         }
         let workspace =
@@ -515,6 +526,7 @@ impl Workspace {
             root,
             config,
             WorkspaceStorage::Script(workspace_script),
+            host,
         ))
         .with_warnings(warnings))
     }
@@ -526,6 +538,7 @@ impl Workspace {
     pub fn from_conda_script(
         script: CondaScriptManifest,
         config: Config,
+        host: HostDetection,
     ) -> Result<WithWarnings<Self>, ScriptWorkspaceError> {
         let script_path = script.path().to_owned();
         let root = script_path
@@ -537,7 +550,7 @@ impl Workspace {
             None
         } else {
             let lock_file_path = local_lock_file_path(&script_path);
-            Some(implicit_script_platforms(Some(&lock_file_path))?)
+            Some(implicit_script_platforms(Some(&lock_file_path), &host)?)
         };
         let (manifest, warnings) = script
             .into_workspace_manifest(implicit_platforms, &root)
@@ -559,6 +572,7 @@ impl Workspace {
             root,
             config,
             WorkspaceStorage::Script(workspace_script),
+            host,
         ))
         .with_warnings(warnings))
     }
@@ -570,13 +584,14 @@ impl Workspace {
         root: PathBuf,
         cache_name: &str,
         cache_key: &[u8],
+        host: HostDetection,
     ) -> Result<WithWarnings<Self>, ScriptWorkspaceError> {
         let script_path = script.path().to_owned();
         let script_config = script.workspace_config().map_err(Box::new)?;
         let implicit_platforms = if script_config.platforms_explicit {
             None
         } else {
-            Some(implicit_script_platforms(None)?)
+            Some(implicit_script_platforms(None, &host)?)
         };
         let (manifest, warnings) = script
             .into_workspace_manifest(implicit_platforms, &root)
@@ -602,6 +617,7 @@ impl Workspace {
             root,
             config,
             WorkspaceStorage::Script(workspace_script),
+            host,
         ))
         .with_warnings(warnings))
     }
@@ -614,6 +630,7 @@ impl Workspace {
         provenance_path: PathBuf,
         cache_name: &str,
         cache_key: &[u8],
+        host: HostDetection,
     ) -> Result<WithWarnings<Self>, ScriptWorkspaceError> {
         let script_manifest = script.clone();
         let script_config = script.workspace_config()?;
@@ -631,7 +648,7 @@ impl Workspace {
             // is the only platform it can be resolved for.
             set_implicit_script_platforms(
                 &mut manifest.workspace,
-                implicit_script_platforms(None)?,
+                implicit_script_platforms(None, &host)?,
             );
         }
 
@@ -656,6 +673,7 @@ impl Workspace {
             root,
             config,
             WorkspaceStorage::Script(workspace_script),
+            host,
         ))
         .with_warnings(warnings))
     }
@@ -676,7 +694,11 @@ impl Workspace {
         let WithWarnings {
             value: manifests, ..
         } = Manifests::from_workspace_manifest_path(manifest_path.to_path_buf())?;
-        Ok(Self::from_manifests(manifests, source))
+        Ok(Self::from_manifests(
+            manifests,
+            source,
+            HostDetection::builtin(),
+        ))
     }
 
     /// Constructs a workspace from a manifest string loaded from a specific
@@ -690,6 +712,7 @@ impl Workspace {
         Ok(Self::from_manifests(
             manifests,
             &pixi_config::GlobalConfigSource::Search,
+            HostDetection::builtin(),
         ))
     }
 
@@ -699,6 +722,11 @@ impl Workspace {
             .iter()
             .map(|environment| (environment.name.clone(), EnvironmentVars::new()))
             .collect()
+    }
+
+    /// What this machine provides, as detected when the workspace was located.
+    pub fn host(&self) -> &HostDetection {
+        &self.host
     }
 
     pub fn env_vars(&self) -> &HashMap<EnvironmentName, EnvironmentVars> {
@@ -1183,12 +1211,12 @@ impl Workspace {
 
         // Determine the tool platform to use
         let tool_platform = self.config().tool_platform();
-        let host_subdir = host_subdir();
+        let host_subdir = self.host.subdir();
         let tool_virtual_packages = if tool_platform.only_platform() == host_subdir.only_platform()
         {
             // If the tool platform is the same as the current platform, we just assume the
             // same virtual packages apply.
-            host_capabilities()
+            self.host.capabilities().to_vec()
         } else {
             vec![]
         };
@@ -1530,6 +1558,8 @@ fn write_warning_file(
 mod tests {
     use std::str::FromStr;
 
+    use pixi_manifest::platform::host::{detect_host, host_subdir};
+
     use insta::{assert_debug_snapshot, assert_snapshot};
     use itertools::Itertools;
     use pixi_config::{CacheConfig, Config, DetachedEnvironments};
@@ -1572,7 +1602,7 @@ packages: []
         let lock_file_path = dir.path().join("script.py.pixi.lock");
         fs_err::write(&lock_file_path, lock_source).unwrap();
 
-        let platforms = implicit_script_platforms(Some(&lock_file_path))
+        let platforms = implicit_script_platforms(Some(&lock_file_path), &HostDetection::builtin())
             .expect("an unnameable row must not fail the whole lookup");
 
         // The bare-subdir row came through, so the lock really was read.
@@ -2238,6 +2268,7 @@ platforms = []
                 },
                 ..Default::default()
             },
+            HostDetection::builtin(),
         )
         .unwrap()
         .value
@@ -2274,6 +2305,7 @@ platforms = []
                 },
                 ..Default::default()
             },
+            HostDetection::builtin(),
         )
         .unwrap()
         .value;
@@ -2341,6 +2373,7 @@ platforms = []
                 },
                 ..Default::default()
             },
+            HostDetection::builtin(),
         )
         .unwrap()
         .value;
@@ -2588,7 +2621,7 @@ print("hello")
         fs_err::write(&lock_file_path, baseline_lock_source(subdir)).unwrap();
 
         assert_eq!(
-            implicit_script_platforms(Some(&lock_file_path)).unwrap(),
+            implicit_script_platforms(Some(&lock_file_path), &HostDetection::builtin()).unwrap(),
             IndexSet::from([host])
         );
     }
@@ -2632,7 +2665,8 @@ packages: []
         let lock_file_path = dir.path().join("script.py.pixi.lock");
         fs_err::write(&lock_file_path, lock_source).unwrap();
 
-        let platforms = implicit_script_platforms(Some(&lock_file_path)).unwrap();
+        let platforms =
+            implicit_script_platforms(Some(&lock_file_path), &HostDetection::builtin()).unwrap();
         assert_eq!(
             platforms
                 .iter()
@@ -2672,7 +2706,7 @@ packages: []
         fs_err::write(&lock_file_path, lock_source).unwrap();
 
         assert_eq!(
-            implicit_script_platforms(Some(&lock_file_path)).unwrap(),
+            implicit_script_platforms(Some(&lock_file_path), &HostDetection::builtin()).unwrap(),
             IndexSet::from([host])
         );
     }

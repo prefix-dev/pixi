@@ -81,7 +81,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // Warning about unused features before the environment they are meant
         // for even exists would be confusing.
         .with_ignore_unused_feature_warnings(matches!(args.command, Command::Add(_)))
-        .locate()?;
+        .locate()
+        .await?;
 
     let workspace_ctx = cli_context(workspace);
 
