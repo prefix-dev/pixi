@@ -102,6 +102,14 @@ impl DetectorScript {
             .map(|body| format!("ping -n 21 127.0.0.1 >nul\r\n{body}"));
         script
     }
+
+    #[cfg(unix)]
+    pub(crate) fn unix_only(script: impl Into<String>) -> Self {
+        Self {
+            unix: script.into(),
+            windows: None,
+        }
+    }
 }
 
 fn unix_quote(value: &str) -> String {
@@ -191,7 +199,7 @@ async fn write_channel(channel: &Path) {
     write_channel_with(channel, &[Detector::default_report()]).await;
 }
 
-/// A workspace on `subdir` whose platform declares canonical detector names,
+/// A workspace on `subdir` whose platform declares the supplied TOML keys,
 /// using `channel`, with the detector cache under the workspace.
 fn workspace_declaring(channel: &Url, subdir: Subdir, declares: &[(&str, &str)]) -> PixiControl {
     let platform = if declares.is_empty() {
@@ -199,13 +207,7 @@ fn workspace_declaring(channel: &Url, subdir: Subdir, declares: &[(&str, &str)])
     } else {
         let entries = declares
             .iter()
-            .map(|(name, version)| {
-                format!(
-                    r#"{} = "{version}""#,
-                    name.strip_prefix("__")
-                        .expect("canonical virtual-package name")
-                )
-            })
+            .map(|(name, version)| format!(r#"{name} = "{version}""#))
             .collect::<Vec<_>>()
             .join(", ");
         format!(r#"{{ platform = "{subdir}", {entries} }}"#)
@@ -232,7 +234,7 @@ platforms = [{platform}]
     pixi
 }
 
-/// A workspace on the current subdir whose platform declares `test_good`,
+/// A workspace on the current subdir whose platform declares `__test_good`,
 /// using `channel`, with the detector cache under the workspace.
 fn workspace_for(channel: &Url, declares_test_good: bool) -> PixiControl {
     let subdir = Subdir::current().unwrap();
@@ -451,7 +453,7 @@ async fn a_detector_for_a_built_in_name_runs_when_a_friendly_key_declares_it() {
     };
     write_channel_with(channel_dir.path(), &[cuda]).await;
     let channel = Url::from_directory_path(channel_dir.path()).unwrap();
-    let pixi = workspace_declaring(&channel, Subdir::current().unwrap(), &[("__cuda", "12.0")]);
+    let pixi = workspace_declaring(&channel, Subdir::current().unwrap(), &[("cuda", "12.0")]);
     store_consent(&pixi, &channel, "allow");
 
     let workspace = locate(&pixi).await;
@@ -574,6 +576,32 @@ async fn a_malformed_report_is_reported() {
     let failures = host.detector_failures();
     assert_eq!(failures.len(), 1, "{failures:?}");
     assert_eq!(test_good_version(host), None);
+}
+
+#[tokio::test]
+async fn a_report_with_an_unprefixed_name_is_rejected_without_partial_results() {
+    let channel_dir = tempfile::tempdir().unwrap();
+    write_channel_with(
+        channel_dir.path(),
+        &[Detector::good(DetectorScript::report(
+            r#"{"version":1,"virtual_packages":{"__test_good":{"version":"1.2.3"},"test_good":{"version":"9.9"}}}"#,
+        ))],
+    )
+    .await;
+    let channel = Url::from_directory_path(channel_dir.path()).unwrap();
+    let pixi = workspace_for(&channel, true);
+    store_consent(&pixi, &channel, "allow");
+
+    let workspace = locate(&pixi).await;
+    let host = workspace.host();
+    assert_eq!(host.detector_failures().len(), 1);
+    assert!(host.detector_results().is_empty());
+    assert_eq!(test_good_version(host), None);
+    assert!(
+        host.capabilities()
+            .iter()
+            .all(|package| package.name.as_normalized() != "test_good")
+    );
 }
 
 #[tokio::test]
