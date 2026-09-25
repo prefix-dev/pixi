@@ -33,12 +33,11 @@ use pixi_consts::consts::{self};
 use pixi_core::environment::{
     EnvironmentFile, LockedEnvironmentHash, PlatformData, RequiredPlatform, write_environment_file,
 };
+use pixi_core::host::{HostDetection, HostUndetected};
 use pixi_core::lock_file::virtual_packages::required_virtual_package_specs;
 use pixi_core::repodata::Repodata;
 use pixi_core::workspace::stdlib_variants::{StdlibVersionPin, derive_stdlib_variants};
-use pixi_manifest::platform::host::{
-    HostDetectionError, detect_host, host_subdir, platform_from_detected,
-};
+use pixi_manifest::platform::host::{host_subdir, platform_from_detected};
 use pixi_manifest::platform::solver_generic_virtual_packages;
 use pixi_manifest::{
     InlinePackageManifest, PixiPlatform, PrioritizedChannel, WorkspaceManifest,
@@ -159,6 +158,8 @@ pub struct Project {
     top_level_progress: OnceCell<Arc<pixi_reporters::TopLevelProgress>>,
     /// Optional backend override for testing purposes
     backend_override: Option<BackendOverride>,
+    /// What this machine provides, detected when the project was loaded.
+    host: HostDetection,
 }
 
 impl Debug for Project {
@@ -343,6 +344,7 @@ impl Project {
             command_dispatcher: OnceCell::new(),
             top_level_progress: OnceCell::new(),
             backend_override: None,
+            host: HostDetection::builtin(),
         }
     }
 
@@ -601,15 +603,15 @@ impl Project {
     /// so the solve respects run constraints on virtual packages. For any other
     /// platform the machine can't be inspected, so the list is empty.
     fn virtual_packages_for(
+        host: &HostDetection,
         platform: &Subdir,
-    ) -> Result<Vec<GenericVirtualPackage>, HostDetectionError> {
-        let host = host_subdir();
+    ) -> Result<Vec<GenericVirtualPackage>, HostUndetected> {
         if platform
             .only_platform()
-            .map(|p| p == host.only_platform().unwrap_or(""))
+            .map(|p| p == host.subdir().only_platform().unwrap_or(""))
             .unwrap_or(false)
         {
-            Ok(solver_generic_virtual_packages(&detect_host(host)?))
+            Ok(solver_generic_virtual_packages(host.platform()?))
         } else {
             Ok(vec![])
         }
@@ -716,7 +718,8 @@ impl Project {
             ));
         }
 
-        let solve_virtual_packages = Self::virtual_packages_for(&platform).into_diagnostic()?;
+        let solve_virtual_packages =
+            Self::virtual_packages_for(&self.host, &platform).into_diagnostic()?;
 
         // Convert dependency specs to binary specs for CommandDispatcher
         let mut pixi_specs = DependencyMap::default();
@@ -2321,6 +2324,10 @@ mod tests {
         } else {
             Subdir::Win64
         };
-        assert!(Project::virtual_packages_for(&other).unwrap().is_empty());
+        assert!(
+            Project::virtual_packages_for(&HostDetection::builtin(), &other)
+                .unwrap()
+                .is_empty()
+        );
     }
 }

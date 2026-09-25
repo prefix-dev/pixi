@@ -91,6 +91,7 @@ pub async fn execute_impl<W: Write>(
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()
+        .await
     {
         Ok(project) => Some(project.with_cli_config(args.config.clone())),
         Err(WorkspaceLocatorError::WorkspaceNotFound(_)) => {

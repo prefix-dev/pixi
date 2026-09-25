@@ -58,7 +58,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let pixi_manifest::WithWarnings {
             value: workspace,
             warnings,
-        } = pixi_core::Workspace::from_conda_script(manifest, config)?;
+        } = pixi_core::Workspace::from_conda_script(
+            manifest,
+            config,
+            pixi_core::host::HostDetection::detect().await,
+        )?;
         for warning in warnings {
             tracing::warn!("{warning}");
         }
@@ -68,7 +72,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .with_global_config_source(args.config_source.source())
             .with_search_start(args.workspace_config.workspace_locator_start())
             .with_cli_config(args.config.clone())
-            .locate()?
+            .locate()
+            .await?
     };
 
     // Apply backend override if provided (primarily for testing)
