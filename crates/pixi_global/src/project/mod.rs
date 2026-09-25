@@ -33,9 +33,7 @@ use pixi_consts::consts::{self};
 use pixi_core::environment::{
     EnvironmentFile, LockedEnvironmentHash, PlatformData, RequiredPlatform, write_environment_file,
 };
-use pixi_core::host::{
-    DetectorConsent, HostDetection, HostDetector, HostUndetected, NonInteractiveConsent,
-};
+use pixi_core::host::{DetectorConsent, HostDetection, HostDetector, cli_detector_consent};
 use pixi_core::lock_file::virtual_packages::required_virtual_package_specs;
 use pixi_core::repodata::Repodata;
 use pixi_core::workspace::stdlib_variants::{StdlibVersionPin, derive_stdlib_variants};
@@ -349,7 +347,7 @@ impl Project {
             top_level_progress: OnceCell::new(),
             backend_override: None,
             host: OnceCell::new(),
-            detector_consent: Arc::new(NonInteractiveConsent::default()),
+            detector_consent: cli_detector_consent(None),
         }
     }
 
@@ -614,27 +612,6 @@ impl Project {
         )
     }
 
-    /// The virtual packages to solve an environment against.
-    ///
-    /// For the platform this machine targets these are detected from the
-    /// machine, honoring `CONDA_OVERRIDE_*` (e.g. `CONDA_OVERRIDE_CUDA=12.0`)
-    /// so the solve respects run constraints on virtual packages. For any other
-    /// platform the machine can't be inspected, so the list is empty.
-    fn virtual_packages_for(
-        host: &HostDetection,
-        platform: &Subdir,
-    ) -> Result<Vec<GenericVirtualPackage>, HostUndetected> {
-        if platform
-            .only_platform()
-            .map(|p| p == host.subdir().only_platform().unwrap_or(""))
-            .unwrap_or(false)
-        {
-            Ok(solver_generic_virtual_packages(host.platform()?))
-        } else {
-            Ok(vec![])
-        }
-    }
-
     /// The build variants to build source packages with for `platform`.
     ///
     /// A workspace derives `c_stdlib`/`c_stdlib_version` build variants from
@@ -736,37 +713,33 @@ impl Project {
             ));
         }
 
-        // Detectors registered by the environment's channels run for the host
-        // when the repodata of the dependencies can reference their names.
-        let host = if platform == self.host().subdir() {
-            let channel_config = self.config.global_channel_config();
-            let mut specs = Vec::new();
-            for (name, spec) in &environment.dependencies.specs {
-                if let Some(nameless) = spec
-                    .clone()
-                    .try_into_nameless_match_spec(channel_config)
-                    .into_diagnostic()?
-                {
-                    specs.push(MatchSpec::from_nameless(nameless, name.clone().into()));
-                }
+        // Discover registrations for the target, honoring overrides without
+        // executing detectors on a foreign platform.
+        let channel_config = self.config.global_channel_config();
+        let mut specs = Vec::new();
+        for (name, spec) in &environment.dependencies.specs {
+            if let Some(nameless) = spec
+                .clone()
+                .try_into_nameless_match_spec(channel_config)
+                .into_diagnostic()?
+            {
+                specs.push(MatchSpec::from_nameless(nameless, name.clone().into()));
             }
-            let channel_urls: Vec<ChannelUrl> = channels
-                .iter()
-                .map(|channel| channel.base_url.clone())
-                .collect();
-            HostDetector::with_gateway(
-                self.config.clone(),
-                self.detector_consent.clone(),
-                self.authenticated_client()?.clone(),
-                self.repodata_gateway()?.clone(),
-            )
-            .detect_for_specs(&channel_urls, platform, &specs)
-            .await?
-        } else {
-            self.host().clone()
-        };
+        }
+        let channel_urls: Vec<ChannelUrl> = channels
+            .iter()
+            .map(|channel| channel.base_url.clone())
+            .collect();
+        let host = HostDetector::with_gateway(
+            self.config.clone(),
+            self.detector_consent.clone(),
+            self.authenticated_client()?.clone(),
+            self.repodata_gateway()?.clone(),
+        )
+        .detect_for_specs(&channel_urls, platform, &specs)
+        .await?;
         let solve_virtual_packages =
-            Self::virtual_packages_for(&host, &platform).into_diagnostic()?;
+            solver_generic_virtual_packages(host.platform().into_diagnostic()?);
 
         // Convert dependency specs to binary specs for CommandDispatcher
         let mut pixi_specs = DependencyMap::default();
@@ -2357,23 +2330,6 @@ mod tests {
         assert!(
             Project::build_variants(Subdir::OsxArm64, &device, &channels)
                 .variant_configuration
-                .is_empty()
-        );
-    }
-
-    /// A platform on a different OS than the local machine can't be inspected
-    /// for virtual packages, so the solve gets an empty list rather than this
-    /// machine's detected packages.
-    #[test]
-    fn test_virtual_packages_for_non_current_platform_is_empty() {
-        let other = if Subdir::current().unwrap_or(Subdir::NoArch).only_platform() == Some("win") {
-            Subdir::Linux64
-        } else {
-            Subdir::Win64
-        };
-        assert!(
-            Project::virtual_packages_for(&HostDetection::builtin(), &other)
-                .unwrap()
                 .is_empty()
         );
     }

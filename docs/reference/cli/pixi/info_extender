@@ -11,5 +11,9 @@ pixi info --extended
 --8<-- [end:example]
 
 --8<-- [start:description]
+The virtual-package list includes effective values from trusted [channel-registered detectors](../../../workspace/multi_platform_configuration.md#virtual-package-detectors) and explicit overrides.
+Detector entries show whether each detector ran, was cached, failed, or was skipped; failures include captured standard-error diagnostics.
+Invalid virtual-package overrides fail the command instead of displaying fallback detection.
+
 More information [here](../../../advanced/explain_info_command.md).
 --8<-- [end:description]

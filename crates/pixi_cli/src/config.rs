@@ -546,15 +546,9 @@ async fn alter_config(
         }
         AlterMode::Set => {
             // Run set on Config object for validation
-            let has_value = value.is_some();
             config.set(key, value)?;
 
-            let written = transplant_config_key(&config, &mut toml_doc, key, &mode)?;
-            if has_value && !written {
-                return Err(miette::miette!(
-                    "the key '{key}' was accepted but could not be written; this is a bug in pixi"
-                ));
-            }
+            transplant_config_key(&config, &mut toml_doc, key, &mode)?;
         }
         AlterMode::Unset => unset(&mut toml_doc, key)?,
     }
@@ -658,6 +652,7 @@ fn prune_empty_parents(toml_doc: &mut TomlDocument, mut path: Vec<&str>) -> miet
 }
 
 /// Transplants a single key from a validated `Config` into an editable TOML document.
+/// Empty values omitted by serialization remove the corresponding entry.
 ///
 /// We serialize the entire Config and parse it into a temporary document because:
 /// 1. The input value undergoes strict type validation via Serde.
@@ -673,7 +668,7 @@ fn transplant_config_key(
     toml_doc: &mut TomlDocument,
     key: &str,
     mode: &AlterMode,
-) -> miette::Result<bool> {
+) -> miette::Result<()> {
     let key_path = KeyPath::parse(key)?;
 
     let full_serialized = toml_edit::ser::to_string(&config).into_diagnostic()?;
@@ -691,9 +686,9 @@ fn transplant_config_key(
     if current_item.is_none() {
         // fall back into unset
         match unset(toml_doc, key) {
-            Ok(()) => return Ok(false),
+            Ok(()) => return Ok(()),
             Err(e) if e.to_string().contains("not found in configuration file") => {
-                return Ok(false);
+                return Ok(());
             }
             Err(e) => return Err(e),
         }
@@ -733,7 +728,7 @@ fn transplant_config_key(
         } else if let Some(new_item) = serialized_array.iter().last() {
             push_array_element(target_array, new_item.clone());
         }
-        return Ok(true);
+        return Ok(());
     }
 
     // Replace legacy snake_case keys while preserving their comments.
@@ -754,7 +749,7 @@ fn transplant_config_key(
         table_like.insert(&target_key, Item::Table(table_to_insert.clone()));
     }
 
-    Ok(true)
+    Ok(())
 }
 
 /// Looks `segment` up in `item` under any of its spellings.
@@ -852,7 +847,10 @@ fn partial_config(config: &Config, key: &str) -> miette::Result<JsonValue> {
         .map(String::as_str)
         .chain(once(key_path.target()))
     {
-        match value.get_mut(segment) {
+        let spelling = key_spellings(segment)
+            .into_iter()
+            .find(|spelling| value.get(spelling).is_some());
+        match spelling.as_deref().and_then(|key| value.get_mut(key)) {
             Some(child) => value = child.take(),
             None => return Ok(JsonValue::Object(Default::default())),
         }
@@ -952,12 +950,18 @@ mod tests {
         )
         .await
         .unwrap();
+        let config = Config::from_path(&context.config_path).unwrap();
         assert_eq!(
-            Config::from_path(&context.config_path)
-                .unwrap()
-                .virtual_package_detectors
-                .consent(&origin),
+            config.virtual_package_detectors.consent(&origin),
             Some(DetectorDecision::Allow)
+        );
+        assert_eq!(
+            partial_config(&config, typed).unwrap(),
+            serde_json::json!({
+                "virtual-package-detectors": {
+                    "consent": {"https://prefix.dev/conda-forge/": "allow"}
+                }
+            })
         );
         alter_config(
             &context.common_args,
@@ -982,6 +986,36 @@ mod tests {
             config.default_channels,
             vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]
         );
+    }
+
+    #[tokio::test]
+    async fn empty_detector_config_revokes_consent() {
+        let origin = ChannelUrl::from(url::Url::parse("https://prefix.dev/conda-forge").unwrap());
+        for key in [
+            "virtual-package-detectors.consent",
+            "virtual-package-detectors",
+        ] {
+            let context = TestContext::setup(Some(
+                r#"default-channels = ["conda-forge"]
+[virtual-package-detectors.consent]
+"https://prefix.dev/conda-forge" = "allow"
+"#,
+            ));
+            alter_config(
+                &context.common_args,
+                key,
+                Some("{}".to_string()),
+                AlterMode::Set,
+            )
+            .await
+            .unwrap();
+            let config = Config::from_path(&context.config_path).unwrap();
+            assert_eq!(config.virtual_package_detectors.consent(&origin), None);
+            assert_eq!(
+                config.default_channels,
+                vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()]
+            );
+        }
     }
 
     #[tokio::test]

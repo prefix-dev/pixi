@@ -113,7 +113,7 @@ switch-to-remote-uv = {
   description = "Switch back to remote uv dependencies",
 }
 update-rattler = {
-  cmd = "cargo upgrade --incompatible allow -p rattler -p file_url -p rattler_cache -p rattler_conda_types -p rattler_digest -p rattler_lock -p rattler_networking -p rattler_repodata_gateway -p rattler_shell -p rattler_solve -p rattler_virtual_packages",
+  cmd = "cargo upgrade --incompatible allow --package rattler --package file_url --package rattler_cache --package rattler_conda_types --package rattler_config --package rattler_digest --package rattler_environment_digest --package rattler_index --package rattler_lock --package rattler_menuinst --package rattler_networking --package rattler_package_streaming --package rattler_redaction --package rattler_repodata_gateway --package rattler_s3 --package rattler_shell --package rattler_solve --package rattler_upload --package rattler_virtual_package_detectors --package rattler_virtual_packages --package simple_spawn_blocking",
   description = "Update rattler dependencies to latest versions",
 }
 

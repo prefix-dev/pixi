@@ -10,7 +10,7 @@ use pixi_api::workspace::platforms::resolve_platforms;
 use pixi_command_dispatcher::offline::exclusions_for_solve;
 use pixi_config::{self, Config, ConfigCli};
 use pixi_core::environment::list::{PackageToOutput, print_package_table};
-use pixi_core::host::{HostDetection, HostDetector, WantedNames};
+use pixi_core::host::{HostDetector, WantedNames, cli_detector_consent};
 use pixi_manifest::PixiPlatformName;
 use pixi_manifest::platform::host::host_subdir;
 use pixi_manifest::platform::solver_generic_virtual_packages;
@@ -28,10 +28,7 @@ use rattler_solve::{SolverImpl, SolverTask, resolvo::Solver};
 use reqwest_middleware::ClientWithMiddleware;
 use uv_threads::initialize_rayon_once;
 
-use crate::{
-    cli_config::ChannelsConfig, detector_consent::detector_consent,
-    match_spec_or_path::MatchSpecOrPath, process_exit,
-};
+use crate::{cli_config::ChannelsConfig, match_spec_or_path::MatchSpecOrPath, process_exit};
 
 /// Run a command and install it in a temporary environment.
 ///
@@ -273,34 +270,29 @@ pub async fn create_exec_prefix(
     }
     let repodata = query_output.repodata;
 
-    // Determine virtual packages of the platform we are targeting. Detectors
-    // registered by the channels run for the host when the fetched repodata
-    // can reference their names.
-    let host = if platform == host_subdir() {
-        let mut wanted = referenced_virtual_packages(
-            repodata
-                .iter()
-                .flat_map(|subdir| subdir.iter())
-                .map(|record| &record.package_record),
-        );
-        wanted.extend(
-            specs
-                .iter()
-                .filter_map(|spec| spec.name.as_exact())
-                .filter(|name| name.as_normalized().starts_with("__"))
-                .cloned(),
-        );
-        HostDetector::with_gateway(
-            config.clone(),
-            detector_consent(),
-            client.clone().into(),
-            gateway.clone(),
-        )
-        .detect(&channel_urls, WantedNames::Only(wanted))
-        .await?
-    } else {
-        HostDetection::builtin_for(platform)
-    };
+    // Discover registrations for the target, honoring overrides without
+    // executing detectors on a foreign platform.
+    let mut wanted = referenced_virtual_packages(
+        repodata
+            .iter()
+            .flat_map(|subdir| subdir.iter())
+            .map(|record| &record.package_record),
+    );
+    wanted.extend(
+        specs
+            .iter()
+            .filter_map(|spec| spec.name.as_exact())
+            .filter(|name| name.as_normalized().starts_with("__"))
+            .cloned(),
+    );
+    let host = HostDetector::with_gateway(
+        config.clone(),
+        cli_detector_consent(None),
+        client.clone().into(),
+        gateway.clone(),
+    )
+    .detect_for_target(&channel_urls, platform, WantedNames::Only(wanted))
+    .await?;
     let virtual_packages: Vec<GenericVirtualPackage> = solver_generic_virtual_packages(
         host.platform()
             .into_diagnostic()

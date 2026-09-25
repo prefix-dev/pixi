@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Trust virtual package detectors per channel, with user-wide decisions or repository-local decisions that can be shared with colleagues.
+- Use channel-registered detector capabilities for platform selection, installation, and host solves.
+- Select detectors per environment or solve group, preserving declared virtual package requirements.
+
+### Fixed
+
+- Avoid stack overflow when adding, editing, moving or removing platforms in conda scripts.
+
 ### [0.81.0] - 2026-09-15
 #### ✨ Highlights
 
