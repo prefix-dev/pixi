@@ -12,6 +12,7 @@ use clap::builder::styling::{AnsiColor, Color, Style};
 use clap::{CommandFactory, Parser};
 use indicatif::ProgressDrawTarget;
 use miette::IntoDiagnostic;
+use pixi_build_frontend::tool::BackendVerbosity;
 use pixi_consts::consts;
 use pixi_core::environment::LockFileUsage;
 use pixi_progress::global_multi_progress;
@@ -165,6 +166,23 @@ impl GlobalOptions {
     }
 }
 
+impl From<&GlobalOptions> for BackendVerbosity {
+    fn from(options: &GlobalOptions) -> Self {
+        // Quiet takes precedence, matching Pixi's own logging configuration.
+        if options.quiet > 0 {
+            return Self::Quiet;
+        }
+
+        match options.verbose {
+            // Backends default to INFO, matching Pixi's -v. Keep the backend's
+            // default output at normal verbosity too, but never enable DEBUG.
+            0 | 1 => Self::Default,
+            2 => Self::Debug,
+            _ => Self::Trace,
+        }
+    }
+}
+
 #[derive(Parser, Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum Command {
@@ -289,7 +307,11 @@ pub async fn execute() -> miette::Result<ExitCode> {
         return Ok(ExitCode::from(2));
     };
 
-    execute_command(command, &global_options).await
+    pixi_command_dispatcher::scope_backend_verbosity(
+        BackendVerbosity::from(&global_options),
+        execute_command(command, &global_options),
+    )
+    .await
 }
 
 #[cfg(feature = "console-subscriber")]
@@ -551,6 +573,32 @@ fn print_installed_commands() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn backend_verbosity_from_global_options() {
+        for (flags, expected) in [
+            (vec![], BackendVerbosity::Default),
+            (vec!["-v"], BackendVerbosity::Default),
+            (vec!["-vv"], BackendVerbosity::Debug),
+            (vec!["-vvv"], BackendVerbosity::Trace),
+            (vec!["-vvvv"], BackendVerbosity::Trace),
+            (vec!["-q"], BackendVerbosity::Quiet),
+            (vec!["-q", "-vvvv"], BackendVerbosity::Quiet),
+            (vec!["-vvvv", "-q"], BackendVerbosity::Quiet),
+        ] {
+            let args = Args::try_parse_from(
+                std::iter::once("pixi")
+                    .chain(flags.iter().copied())
+                    .chain(["info"]),
+            )
+            .unwrap();
+            assert_eq!(
+                BackendVerbosity::from(&args.global_options),
+                expected,
+                "{flags:?}"
+            );
+        }
+    }
 
     #[test]
     fn script_selector_is_exposed_only_by_the_explicit_allowlist() {

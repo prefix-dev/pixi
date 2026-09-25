@@ -1,6 +1,31 @@
 use rattler_conda_types::VersionWithSource;
 use std::{collections::HashMap, path::PathBuf};
 
+/// Verbosity flags to pass to a build backend process.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub enum BackendVerbosity {
+    /// Use the backend's default logging level (INFO).
+    #[default]
+    Default,
+    /// Enable debug build logging.
+    Debug,
+    /// Enable trace build logging.
+    Trace,
+    /// Disable build logging.
+    Quiet,
+}
+
+impl BackendVerbosity {
+    fn args(self) -> &'static [&'static str] {
+        match self {
+            Self::Default => &[],
+            Self::Debug => &["-v"],
+            Self::Trace => &["-v", "-v"],
+            Self::Quiet => &["-q", "-q", "-q"],
+        }
+    }
+}
+
 /// A tool that can be invoked.
 #[derive(Debug)]
 pub enum Tool {
@@ -110,7 +135,12 @@ impl Tool {
     /// Construct a new command that enables invocation of the tool.
     /// TODO: whether to inject proxy config
     pub fn command(&self) -> std::process::Command {
-        match self {
+        self.command_with_verbosity(BackendVerbosity::default())
+    }
+
+    /// Construct a new command with explicit backend verbosity.
+    pub fn command_with_verbosity(&self, verbosity: BackendVerbosity) -> std::process::Command {
+        let mut command = match self {
             Tool::Isolated(tool) => {
                 let mut cmd = std::process::Command::new(&tool.command);
                 cmd.envs(tool.activation_scripts.clone());
@@ -118,6 +148,56 @@ impl Tool {
                 cmd
             }
             Tool::System(tool) => std::process::Command::new(&tool.command),
-        }
+        };
+
+        command.args(verbosity.args());
+        command
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::HashMap, ffi::OsStr};
+
+    use super::{BackendVerbosity, IsolatedTool, SystemTool, Tool};
+
+    #[test]
+    fn backend_verbosity_arguments() {
+        assert!(BackendVerbosity::Default.args().is_empty());
+        assert_eq!(BackendVerbosity::Debug.args(), ["-v"]);
+        assert_eq!(BackendVerbosity::Trace.args(), ["-v", "-v"]);
+        assert_eq!(BackendVerbosity::Quiet.args(), ["-q", "-q", "-q"]);
+    }
+
+    #[test]
+    fn tool_commands_include_verbosity() {
+        let tool = Tool::from(SystemTool::new("backend"));
+        assert_eq!(
+            tool.command_with_verbosity(BackendVerbosity::Trace)
+                .get_args()
+                .collect::<Vec<_>>(),
+            [OsStr::new("-v"), OsStr::new("-v")]
+        );
+
+        let tool = Tool::from(IsolatedTool::new(
+            "backend",
+            None,
+            "/prefix",
+            HashMap::new(),
+        ));
+        assert_eq!(
+            tool.command_with_verbosity(BackendVerbosity::Quiet)
+                .get_args()
+                .collect::<Vec<_>>(),
+            [OsStr::new("-q"), OsStr::new("-q"), OsStr::new("-q")]
+        );
+
+        assert!(
+            Tool::from(SystemTool::new("backend"))
+                .command()
+                .get_args()
+                .next()
+                .is_none()
+        );
     }
 }
