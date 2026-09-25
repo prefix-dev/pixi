@@ -34,6 +34,17 @@ pub struct RBackendConfig {
     /// Defaults to ["conda-forge"] if not specified
     #[serde(default)]
     pub channels: Option<Vec<String>>,
+
+    /// Custom mapping of R package names to conda package names.
+    ///
+    /// For example: `mapping = { "Biobase" = "bioconductor-biobase" }`
+    #[serde(default, alias = "r-conda-map")]
+    pub mapping: IndexMap<String, String>,
+
+    /// Ignore dependencies declared in the DESCRIPTION file.
+    /// If true, only dependencies explicitly declared in the pixi manifest are used.
+    #[serde(default, alias = "ignore-description-manifest")]
+    pub ignore_description_dependencies: Option<bool>,
 }
 
 impl BackendConfig for RBackendConfig {
@@ -67,6 +78,14 @@ impl BackendConfig for RBackendConfig {
                 .channels
                 .clone()
                 .or_else(|| self.channels.clone()),
+            mapping: {
+                let mut merged_mapping = self.mapping.clone();
+                merged_mapping.extend(target_config.mapping.clone());
+                merged_mapping
+            },
+            ignore_description_dependencies: target_config
+                .ignore_description_dependencies
+                .or(self.ignore_description_dependencies),
         })
     }
 }
@@ -116,6 +135,7 @@ mod tests {
             extra_input_globs: vec!["**/*.R".to_string()],
             compilers: Some(vec!["c".to_string()]),
             channels: Some(vec!["conda-forge".to_string()]),
+            ..Default::default()
         };
 
         let target_config = RBackendConfig {
@@ -125,6 +145,7 @@ mod tests {
             extra_input_globs: vec![],
             compilers: Some(vec!["c".to_string(), "cxx".to_string()]),
             channels: None,
+            ..Default::default()
         };
 
         let merged = base_config
@@ -147,5 +168,81 @@ mod tests {
 
         // Base channels should be used (target is None)
         assert_eq!(merged.channels, Some(vec!["conda-forge".to_string()]));
+    }
+
+    #[test]
+    fn test_deserialize_mapping_and_aliases() {
+        // Test `mapping`
+        let json_data = json!({
+            "mapping": {
+                "Biobase": "bioconductor-biobase",
+                "DESeq2": "bioconductor-deseq2"
+            },
+            "ignore-description-dependencies": true
+        });
+        let config: RBackendConfig = serde_json::from_value(json_data).unwrap();
+        assert_eq!(
+            config.mapping.get("Biobase").map(String::as_str),
+            Some("bioconductor-biobase")
+        );
+        assert_eq!(
+            config.mapping.get("DESeq2").map(String::as_str),
+            Some("bioconductor-deseq2")
+        );
+        assert_eq!(config.ignore_description_dependencies, Some(true));
+
+        // Test alias `r-conda-map` and `ignore-description-manifest`
+        let json_alias = json!({
+            "r-conda-map": {
+                "limma": "bioconductor-limma"
+            },
+            "ignore-description-manifest": false
+        });
+        let config_alias: RBackendConfig = serde_json::from_value(json_alias).unwrap();
+        assert_eq!(
+            config_alias.mapping.get("limma").map(String::as_str),
+            Some("bioconductor-limma")
+        );
+        assert_eq!(config_alias.ignore_description_dependencies, Some(false));
+    }
+
+    #[test]
+    fn test_merge_with_target_config_mapping() {
+        let base_config = RBackendConfig {
+            mapping: IndexMap::from([
+                ("Biobase".to_string(), "bioconductor-biobase".to_string()),
+                ("shared".to_string(), "base-val".to_string()),
+            ]),
+            ignore_description_dependencies: Some(false),
+            ..Default::default()
+        };
+
+        let target_config = RBackendConfig {
+            mapping: IndexMap::from([
+                ("shared".to_string(), "target-val".to_string()),
+                ("DESeq2".to_string(), "bioconductor-deseq2".to_string()),
+            ]),
+            ignore_description_dependencies: Some(true),
+            ..Default::default()
+        };
+
+        let merged = base_config
+            .merge_with_target_config(&target_config)
+            .unwrap();
+
+        assert_eq!(merged.mapping.len(), 3);
+        assert_eq!(
+            merged.mapping.get("Biobase").map(String::as_str),
+            Some("bioconductor-biobase")
+        );
+        assert_eq!(
+            merged.mapping.get("shared").map(String::as_str),
+            Some("target-val")
+        );
+        assert_eq!(
+            merged.mapping.get("DESeq2").map(String::as_str),
+            Some("bioconductor-deseq2")
+        );
+        assert_eq!(merged.ignore_description_dependencies, Some(true));
     }
 }
