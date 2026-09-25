@@ -397,7 +397,18 @@ impl<'p> Environment<'p> {
         name: &TaskName,
         platform: Option<&'p PixiPlatform>,
     ) -> Result<&'p Task, UnknownTask<'_>> {
-        match self.tasks(platform).map(|tasks| tasks.get(name).copied()) {
+        let task = self.tasks(platform).map(|tasks| {
+            tasks.get(name).copied().or_else(|| {
+                tasks.values().copied().find(|task| {
+                    matches!(
+                        task,
+                        Task::Execute(execute)
+                            if execute.alias.as_ref().is_some_and(|alias| alias == name)
+                    )
+                })
+            })
+        });
+        match task {
             Err(_) | Ok(None) => Err(UnknownTask {
                 project: self.workspace,
                 environment: self.name().clone(),

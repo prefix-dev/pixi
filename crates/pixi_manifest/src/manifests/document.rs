@@ -2152,6 +2152,7 @@ dev = ["dev"]
                     env: None,
                     default_environment: None,
                     description: None,
+                    alias: None,
                     clean_env: false,
                     args: None,
                 })),
