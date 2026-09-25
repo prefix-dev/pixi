@@ -262,6 +262,7 @@ rattler_upload = { version = "0.12", default-features = false, features = [
   "sigstore-sign",
 ] }
 rattler_virtual_packages = { version = "8.0", default-features = false }
+rattler_virtual_package_detectors = { version = "0.1", default-features = false }
 simple_spawn_blocking = { version = "1.1.0", default-features = false }
 
 # Rattler build crates
@@ -274,6 +275,35 @@ rattler_build_types = { version = "0.1.13" }
 rattler_build_variant_config = { version = "0.1.14" }
 
 [patch.crates-io]
+coalesced_map = { git = "https://github.com/conda/rattler", rev = "fa3416e6b9fc5cb08339910ec891ce5679bf17d1" }
+file_url = { git = "https://github.com/conda/rattler", rev = "fa3416e6b9fc5cb08339910ec891ce5679bf17d1" }
+path_resolver = { git = "https://github.com/conda/rattler", rev = "fa3416e6b9fc5cb08339910ec891ce5679bf17d1" }
+rattler = { git = "https://github.com/conda/rattler", rev = "fa3416e6b9fc5cb08339910ec891ce5679bf17d1" }
+rattler_cache = { git = "https://github.com/conda/rattler", rev = "fa3416e6b9fc5cb08339910ec891ce5679bf17d1" }
+rattler_conda_types = { git = "https://github.com/conda/rattler", rev = "fa3416e6b9fc5cb08339910ec891ce5679bf17d1" }
+rattler_conda_version = { git = "https://github.com/conda/rattler", rev = "fa3416e6b9fc5cb08339910ec891ce5679bf17d1" }
+rattler_config = { git = "https://github.com/conda/rattler", rev = "fa3416e6b9fc5cb08339910ec891ce5679bf17d1" }
+rattler_digest = { git = "https://github.com/conda/rattler", rev = "fa3416e6b9fc5cb08339910ec891ce5679bf17d1" }
+rattler_git = { git = "https://github.com/conda/rattler", rev = "fa3416e6b9fc5cb08339910ec891ce5679bf17d1" }
+rattler_index = { git = "https://github.com/conda/rattler", rev = "fa3416e6b9fc5cb08339910ec891ce5679bf17d1" }
+rattler_lock = { git = "https://github.com/conda/rattler", rev = "fa3416e6b9fc5cb08339910ec891ce5679bf17d1" }
+rattler_macros = { git = "https://github.com/conda/rattler", rev = "fa3416e6b9fc5cb08339910ec891ce5679bf17d1" }
+rattler_menuinst = { git = "https://github.com/conda/rattler", rev = "fa3416e6b9fc5cb08339910ec891ce5679bf17d1" }
+rattler_networking = { git = "https://github.com/conda/rattler", rev = "fa3416e6b9fc5cb08339910ec891ce5679bf17d1" }
+rattler_package_streaming = { git = "https://github.com/conda/rattler", rev = "fa3416e6b9fc5cb08339910ec891ce5679bf17d1" }
+rattler_prefix_guard = { git = "https://github.com/conda/rattler", rev = "fa3416e6b9fc5cb08339910ec891ce5679bf17d1" }
+rattler_pty = { git = "https://github.com/conda/rattler", rev = "fa3416e6b9fc5cb08339910ec891ce5679bf17d1" }
+rattler_redaction = { git = "https://github.com/conda/rattler", rev = "fa3416e6b9fc5cb08339910ec891ce5679bf17d1" }
+rattler_repodata_gateway = { git = "https://github.com/conda/rattler", rev = "fa3416e6b9fc5cb08339910ec891ce5679bf17d1" }
+rattler_s3 = { git = "https://github.com/conda/rattler", rev = "fa3416e6b9fc5cb08339910ec891ce5679bf17d1" }
+rattler_shell = { git = "https://github.com/conda/rattler", rev = "fa3416e6b9fc5cb08339910ec891ce5679bf17d1" }
+rattler_sigstore = { git = "https://github.com/conda/rattler", rev = "fa3416e6b9fc5cb08339910ec891ce5679bf17d1" }
+rattler_solve = { git = "https://github.com/conda/rattler", rev = "fa3416e6b9fc5cb08339910ec891ce5679bf17d1" }
+rattler_upload = { git = "https://github.com/conda/rattler", rev = "fa3416e6b9fc5cb08339910ec891ce5679bf17d1" }
+rattler_virtual_package_detectors = { git = "https://github.com/conda/rattler", rev = "fa3416e6b9fc5cb08339910ec891ce5679bf17d1" }
+rattler_virtual_packages = { git = "https://github.com/conda/rattler", rev = "fa3416e6b9fc5cb08339910ec891ce5679bf17d1" }
+simple_spawn_blocking = { git = "https://github.com/conda/rattler", rev = "fa3416e6b9fc5cb08339910ec891ce5679bf17d1" }
+
 version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "d8efd77673c9a90792da9da31b6c0da7ea8a324b" }
 
 # Redirect crates.io's `reqwest-middleware` to a local shim that re-exports
