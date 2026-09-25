@@ -2367,12 +2367,9 @@ pub async fn test_package_rebuilt_across_sessions_when_source_file_modified() {
     );
 }
 
-/// Tests that modifying a source file triggers a rebuild of the package.
-///
-/// This is a focused test that verifies only the file-change detection behavior,
-/// without testing dependency chains or force rebuild flags.
-#[tokio::test]
-pub async fn test_package_rebuilt_when_source_file_modified() {
+/// Builds package-b, applies `modify` to its source directory, and asserts
+/// that a fresh dispatcher rebuilds it.
+async fn assert_package_b_rebuilt_after(modify: impl FnOnce(&Path)) {
     // Copy workspace to temp directory so we can modify files without affecting other tests
     let source_dir = workspaces_dir().join("host-dependency");
     let tempdir = test_tempdir();
@@ -2423,11 +2420,7 @@ pub async fn test_package_rebuilt_when_source_file_modified() {
     // Drop dispatcher to flush caches (simulating program restart)
     drop(dispatcher);
 
-    // Create a file that matches package-b's build glob pattern ("TOUCH*")
-    let _touch_file = tempfile::Builder::new()
-        .prefix("TOUCH")
-        .tempfile_in(root_dir.join("package-b"))
-        .unwrap();
+    modify(&root_dir.join("package-b"));
 
     // Second pass: reinstall with new dispatcher, expect rebuild
     let (reporter, events, _registry) = EventReporter::new();
@@ -2458,8 +2451,33 @@ pub async fn test_package_rebuilt_when_source_file_modified() {
     assert_eq!(
         rebuild_packages,
         vec!["package-b"],
-        "Package should be rebuilt when source file is modified"
+        "Package should be rebuilt after modification"
     );
+}
+
+/// Tests that modifying a source file triggers a rebuild of the package.
+///
+/// This is a focused test that verifies only the file-change detection behavior,
+/// without testing dependency chains or force rebuild flags.
+#[tokio::test]
+pub async fn test_package_rebuilt_when_source_file_modified() {
+    // Create a file that matches package-b's build glob pattern ("TOUCH*")
+    assert_package_b_rebuilt_after(|package_dir| {
+        fs_err::write(package_dir.join("TOUCH"), "").unwrap();
+    })
+    .await;
+}
+
+/// The manifest is not matched by package-b's build globs, so only the
+/// manifest itself can invalidate the cached artifact.
+#[tokio::test]
+pub async fn test_package_rebuilt_when_manifest_modified() {
+    assert_package_b_rebuilt_after(|package_dir| {
+        let manifest = package_dir.join("pixi.toml");
+        let contents = fs_err::read_to_string(&manifest).unwrap();
+        fs_err::write(&manifest, contents + "\n").unwrap();
+    })
+    .await;
 }
 
 /// Tests that a package is NOT rebuilt when no source files have changed.
