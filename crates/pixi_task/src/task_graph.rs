@@ -38,7 +38,7 @@ use crate::{
 /// Single quotes within arguments are handled by ending the single-quoted
 /// section, adding a double-quoted single quote, and continuing:
 /// `it's` becomes `'it'"'"'s'`
-fn join_args_with_single_quotes<'a>(args: impl IntoIterator<Item = &'a str>) -> String {
+pub(crate) fn join_args_with_single_quotes<'a>(args: impl IntoIterator<Item = &'a str>) -> String {
     args.into_iter()
         .map(|arg| {
             // Use single quotes, replacing any ' with '"'"'
