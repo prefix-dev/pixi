@@ -459,7 +459,7 @@ pub fn output_directory(
         }
 
         let placeholder = placeholder
-            [0..placeholder_length - build_dir.join("host_env").as_os_str().len()]
+            [0..placeholder_length.saturating_sub(build_dir.join("host_env").as_os_str().len())]
             .to_string();
 
         build_dir.join(format!("host_env{placeholder}"))
@@ -481,9 +481,36 @@ pub fn output_directory(
 mod tests {
     use fs_err as fs;
     use rattler_conda_types::Platform;
+    #[cfg(not(target_os = "windows"))]
+    use std::path::{Path, PathBuf};
     use tempfile::tempdir;
 
     use super::{LoadedVariantConfig, VARIANTS_CONFIG_FILE};
+    #[cfg(not(target_os = "windows"))]
+    use super::{OneOrMultipleOutputs, output_directory};
+
+    #[test]
+    #[cfg(not(target_os = "windows"))]
+    fn test_host_prefix_padded_to_255() {
+        let dirs = output_directory(
+            OneOrMultipleOutputs::Single("pkg".into()),
+            "/short/work".into(),
+            Path::new("/r/recipe.yaml"),
+        );
+        assert_eq!(dirs.host_prefix.as_os_str().len(), 255);
+    }
+
+    #[test]
+    #[cfg(not(target_os = "windows"))]
+    fn test_host_prefix_unpadded_when_build_dir_exceeds_255() {
+        let work_dir = PathBuf::from(format!("/{}", "a".repeat(300)));
+        let dirs = output_directory(
+            OneOrMultipleOutputs::Single("pkg".into()),
+            work_dir.clone(),
+            Path::new("/r/recipe.yaml"),
+        );
+        assert_eq!(dirs.host_prefix, work_dir.join("host_env"));
+    }
 
     #[test]
     fn test_source_dir_variants_tracked_in_input_globs() {
