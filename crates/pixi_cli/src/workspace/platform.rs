@@ -10,8 +10,7 @@ use pixi_manifest::{
     EnvironmentName, FeatureName, FeaturesExt, HasWorkspaceManifest, PixiPlatform,
     PixiPlatformName, PlatformEdit, PlatformMove,
     platform::{
-        candidate_subdirs, capability_satisfied_by,
-        host::{detect_host, host_capabilities, host_subdir, machine_virtual_packages},
+        candidate_subdirs, capability_satisfied_by, host::machine_virtual_packages,
         subdir_default_virtual_packages,
     },
 };
@@ -501,7 +500,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
-        .locate()?;
+        .locate()
+        .await?;
 
     let lock_file_usage = script_lock_file_usage(
         LockFileUsage::Update,
@@ -635,8 +635,9 @@ async fn execute_add_auto_detected(
     feature: FeatureName,
     lock_file_usage: LockFileUsage,
 ) -> miette::Result<()> {
-    let subdir = host_subdir();
-    let detected = detect_host(subdir).into_diagnostic()?;
+    let host = workspace_ctx.workspace().host();
+    let subdir = host.subdir();
+    let detected = host.platform().into_diagnostic()?.clone();
     let overrides = virtual_packages.into_specs(subdir, raw_specs)?;
     let merged = merge_virtual_packages(detected.customised_virtual_packages(), overrides);
     let explicit = explicit_name.is_some();
@@ -769,7 +770,7 @@ async fn execute_list(
     if args.json {
         // Same snapshot the human output renders, so the two views of one
         // command cannot disagree about the host.
-        let machine = HostMachine::detect();
+        let machine = HostMachine::from_host(workspace.host());
         let mut platforms: Vec<serde_json::Value> =
             Vec::with_capacity(workspace_platforms.len() + 1);
         platforms.push(autodetected_to_json(&machine));
@@ -797,7 +798,7 @@ async fn execute_list(
     }
 
     let mut stdout = std::io::stdout();
-    let machine = HostMachine::detect();
+    let machine = HostMachine::from_host(workspace.host());
     print_autodetected_host(&mut stdout, &machine);
 
     if !workspace_platforms.is_empty() {
@@ -934,10 +935,10 @@ struct HostMachine {
 }
 
 impl HostMachine {
-    fn detect() -> Self {
-        let subdir = host_subdir();
+    fn from_host(host: &pixi_core::host::HostDetection) -> Self {
+        let subdir = host.subdir();
         let candidate_subdirs = candidate_subdirs(subdir);
-        let detected = host_capabilities();
+        let detected = host.capabilities().to_vec();
         HostMachine {
             subdir,
             candidate_subdirs,

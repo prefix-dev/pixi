@@ -9,7 +9,6 @@ use crate::workspace::{
 };
 use fancy_display::FancyDisplay;
 use miette::Diagnostic;
-use pixi_manifest::platform::host::{host_capabilities, host_subdir};
 use pixi_manifest::{
     EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName,
     platform::{candidate_subdirs, solver_virtual_packages, unsatisfied_capabilities},
@@ -69,7 +68,7 @@ pub fn verify_current_platform_can_run_environment(
                 lock_file,
                 current_platform,
                 environment.name(),
-                None,
+                environment.workspace.host(),
             )?;
         }
         return Ok(());
@@ -109,8 +108,9 @@ pub fn minimum_compatible_declared_platform<'p>(
     environment: &Environment<'p>,
     lock_file: &LockFile,
 ) -> Result<&'p PixiPlatform, Vec<MatchSpec>> {
-    let current = host_subdir();
-    let system_virtual_packages = host_capabilities();
+    let host = environment.workspace.host();
+    let current = host.subdir();
+    let system_virtual_packages = host.capabilities();
     let candidate_subdirs = candidate_subdirs(current);
 
     let manifest = environment.workspace_manifest();
@@ -133,7 +133,7 @@ pub fn minimum_compatible_declared_platform<'p>(
         // only content is tasks still runs under an unsatisfiable requirement.
         let unsatisfied = required
             .get(subdir)
-            .map(|specs| unmet_requirements(specs, &system_virtual_packages))
+            .map(|specs| unmet_requirements(specs, system_virtual_packages))
             .unwrap_or_default();
         if unsatisfied.is_empty() {
             if let Some(declared) = declared_platforms
@@ -413,11 +413,12 @@ pub fn verify_run_platform(
         // Auto-detected machine: its real virtual packages, and the subdirs it
         // can run (current subdir plus architecture fallbacks).
         None => {
-            let current = host_subdir();
+            let host = environment.workspace.host();
+            let current = host.subdir();
             let subdirs = candidate_subdirs(current);
             (
                 subdirs,
-                host_capabilities(),
+                host.capabilities().to_vec(),
                 PixiPlatformName::from(current),
                 current,
             )
@@ -660,6 +661,13 @@ packages:
             classify_environment_runnability(
                 &environment,
                 Some(&lock("  depends:\n  - __cuda >=9999\n")),
+            ),
+            EnvironmentRunnability::Unsupported,
+        );
+        assert_eq!(
+            classify_environment_runnability(
+                &environment,
+                Some(&lock("  depends:\n  - __test_detector_capability >=3\n")),
             ),
             EnvironmentRunnability::Unsupported,
         );
@@ -1009,6 +1017,27 @@ packages: []
             }
             other => panic!("expected BelowMinimum, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn classify_custom_capability_resolution_and_package_floor() {
+        let name = "__test_detector_capability";
+        let resolved = platform_data(Subdir::Linux64, vec![gvp(name, "4")]);
+        let minimum = required_platform(Subdir::Linux64, &["__test_detector_capability >=3"]);
+        for capabilities in [vec![], vec![gvp(name, "2")]] {
+            assert_eq!(
+                classify_run_platform(&[Subdir::Linux64], &capabilities, &resolved, &minimum),
+                RunPlatformVerdict::BelowMinimum(minimum.requirements().to_vec()),
+            );
+        }
+        assert_eq!(
+            classify_run_platform(&[Subdir::Linux64], &[gvp(name, "3")], &resolved, &minimum),
+            RunPlatformVerdict::OnlyMinimum(vec![gvp(name, "4")]),
+        );
+        assert_eq!(
+            classify_run_platform(&[Subdir::Linux64], &[gvp(name, "4")], &resolved, &minimum),
+            RunPlatformVerdict::Compatible,
+        );
     }
 
     #[test]
