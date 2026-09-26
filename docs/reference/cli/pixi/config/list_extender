@@ -7,5 +7,7 @@ pixi config list default-channels
 pixi config list --json
 pixi config list --system
 pixi config list -g
+pixi config list --describe
+pixi config list --describe tls-no-verify
 ```
 --8<-- [end:example]
