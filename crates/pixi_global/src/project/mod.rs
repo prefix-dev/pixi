@@ -77,7 +77,7 @@ use crate::{
         channel_url_to_prioritized_channel, expose_scripts_sync_status, find_package_records,
     },
     find_executables, find_executables_for_many_records,
-    install::{create_executable_trampolines, script_exec_mapping},
+    install::{create_executable_trampolines, matches_entry_point, script_exec_mapping},
     project::environment::environment_specs_in_sync,
 };
 
@@ -1347,15 +1347,14 @@ impl Project {
             .environment(env_name)
             .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
 
-        let exposed: HashSet<&str> = environment
-            .exposed
-            .iter()
-            .map(|map| map.executable_name())
-            .collect();
-
         let exposed_executables: Vec<_> = all_executables
             .iter()
-            .filter(|executable| exposed.contains(executable.name.as_str()))
+            .filter(|executable| {
+                environment.exposed.iter().any(|map| {
+                    matches_entry_point(executable, map.executable_relname())
+                        || matches_entry_point(executable, map.executable_name())
+                })
+            })
             .cloned()
             .collect();
 
@@ -1365,7 +1364,7 @@ impl Project {
             .map(|mapping| {
                 script_exec_mapping(
                     mapping.exposed_name(),
-                    mapping.executable_name(),
+                    mapping.executable_relname(),
                     exposed_executables.iter(),
                     &self.bin_dir,
                     &env_dir,

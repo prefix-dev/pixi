@@ -16,13 +16,64 @@ use rattler_conda_types::{
 };
 use rattler_shell::activation::prefix_path_entries;
 use std::collections::{HashMap, HashSet};
-use std::{env, path::PathBuf, str::FromStr};
+use std::{
+    env,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use fs_err::tokio as tokio_fs;
 
-/// Maps an entry point in the environment to a concrete `ScriptExecMapping`.
+/// Returns a priority tuple for an executable when resolving ambiguous entry points.
 ///
-/// This function takes an entry point and a list of executable names and paths,
+/// 1. Top-level known binary folder (e.g. `bin/` or `Scripts/`) has highest priority (tier 0).
+/// 2. Nested binary folder whose directory name is `bin` or `Scripts` has tier 1 (e.g. `<target>/bin/`).
+/// 3. Any other executable directory has tier 2.
+///
+/// Ties within the same tier are broken deterministically by shallowest component count,
+/// path length, and lexicographical path comparison.
+fn executable_priority(executable: &Executable) -> (u8, usize, usize, &Path) {
+    let tier = if executable.path.parent().is_some_and(is_binary_folder) {
+        0
+    } else if executable
+        .path
+        .parent()
+        .and_then(Path::file_name)
+        .is_some_and(|name| name == "bin" || name == "Scripts")
+    {
+        1
+    } else {
+        2
+    };
+
+    (
+        tier,
+        executable.path.components().count(),
+        executable.path.as_os_str().len(),
+        &executable.path,
+    )
+}
+
+/// Checks whether an executable matches the given entry point.
+/// An entry point can be an executable name (e.g. `python`) or a relative path
+/// (e.g. `x86_64-conda-linux-gnu/bin/objdump` or `Scripts/pip.exe`).
+pub(crate) fn matches_entry_point(executable: &Executable, entry_point: &str) -> bool {
+    let entry_path = Path::new(entry_point);
+    if executable.name == entry_point {
+        return true;
+    }
+    if executable.path == entry_path || executable.path.ends_with(entry_path) {
+        return true;
+    }
+    let stripped_path = executable.path.with_file_name(&executable.name);
+    if stripped_path == entry_path || stripped_path.ends_with(entry_path) {
+        return true;
+    }
+
+    false
+}
+
+/// Checks if the entry point is in the list of executables
 /// and returns a `ScriptExecMapping` that contains the path to the script and
 /// the original executable.
 /// # Returns
@@ -43,21 +94,17 @@ pub(crate) fn script_exec_mapping<'a>(
     let all_executables = executables.collect_vec();
     let matching_executables = all_executables
         .iter()
-        .filter(|executable| executable.name == entry_point)
+        .copied()
+        .filter(|executable| matches_entry_point(executable, entry_point))
         .collect_vec();
     let executable_count = matching_executables.len();
 
     let target_executable_opt = if executable_count > 1 {
-        // keep only the first executable in a known binary folder
-        matching_executables.iter().find(|executable| {
-            if let Some(parent) = executable.path.parent() {
-                is_binary_folder(parent)
-            } else {
-                false
-            }
-        })
+        matching_executables
+            .into_iter()
+            .min_by_key(|executable| executable_priority(executable))
     } else {
-        matching_executables.first()
+        matching_executables.first().copied()
     };
 
     match target_executable_opt {
@@ -71,6 +118,7 @@ pub(crate) fn script_exec_mapping<'a>(
             all_executables
                 .iter()
                 .map(|exec| exec.name.clone())
+                .unique()
                 .collect_vec()
         )),
     }
@@ -559,6 +607,142 @@ mod tests {
             actual.original_executable, expected.original_executable,
             "testing original_executable"
         );
+    }
+
+    #[tokio::test]
+    async fn test_script_exec_mapping_nested_bin_priority() {
+        let exposed_executables = [
+            Executable::new(
+                "objdump".to_string(),
+                PathBuf::from("libexec/gcc/x86_64-conda-linux-gnu/14.2.0/objdump"),
+            ),
+            Executable::new(
+                "objdump".to_string(),
+                PathBuf::from("x86_64-conda-linux-gnu/bin/objdump"),
+            ),
+        ];
+
+        let tmp_home_dir = tempfile::tempdir().unwrap();
+        let tmp_home_dir_path = tmp_home_dir.path().to_path_buf();
+        let env_root = EnvRoot::new(tmp_home_dir_path.clone()).unwrap();
+        let env_name = EnvironmentName::from_str("test").unwrap();
+        let env_dir = EnvDir::from_env_root(env_root, &env_name).await.unwrap();
+        let bin_dir = BinDir::new(tmp_home_dir_path.clone()).unwrap();
+
+        let exposed_name = ExposedName::from_str("objdump").unwrap();
+        let actual = script_exec_mapping(
+            &exposed_name,
+            "objdump",
+            exposed_executables.iter(),
+            &bin_dir,
+            &env_dir,
+        )
+        .unwrap();
+
+        assert_eq!(
+            actual.original_executable,
+            PathBuf::from("x86_64-conda-linux-gnu/bin/objdump")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_script_exec_mapping_shallowest_depth_fallback() {
+        let exposed_executables = [
+            Executable::new(
+                "helper".to_string(),
+                PathBuf::from("tools/deep/nested/helper"),
+            ),
+            Executable::new("helper".to_string(), PathBuf::from("tools/helper")),
+        ];
+
+        let tmp_home_dir = tempfile::tempdir().unwrap();
+        let tmp_home_dir_path = tmp_home_dir.path().to_path_buf();
+        let env_root = EnvRoot::new(tmp_home_dir_path.clone()).unwrap();
+        let env_name = EnvironmentName::from_str("test").unwrap();
+        let env_dir = EnvDir::from_env_root(env_root, &env_name).await.unwrap();
+        let bin_dir = BinDir::new(tmp_home_dir_path.clone()).unwrap();
+
+        let exposed_name = ExposedName::from_str("helper").unwrap();
+        let actual = script_exec_mapping(
+            &exposed_name,
+            "helper",
+            exposed_executables.iter(),
+            &bin_dir,
+            &env_dir,
+        )
+        .unwrap();
+
+        assert_eq!(actual.original_executable, PathBuf::from("tools/helper"));
+    }
+
+    #[tokio::test]
+    async fn test_script_exec_mapping_explicit_relative_path() {
+        let exposed_executables = [
+            Executable::new(
+                "objdump".to_string(),
+                PathBuf::from("libexec/gcc/x86_64-conda-linux-gnu/14.2.0/objdump"),
+            ),
+            Executable::new(
+                "objdump".to_string(),
+                PathBuf::from("x86_64-conda-linux-gnu/bin/objdump"),
+            ),
+        ];
+
+        let tmp_home_dir = tempfile::tempdir().unwrap();
+        let tmp_home_dir_path = tmp_home_dir.path().to_path_buf();
+        let env_root = EnvRoot::new(tmp_home_dir_path.clone()).unwrap();
+        let env_name = EnvironmentName::from_str("test").unwrap();
+        let env_dir = EnvDir::from_env_root(env_root, &env_name).await.unwrap();
+        let bin_dir = BinDir::new(tmp_home_dir_path.clone()).unwrap();
+
+        let exposed_name = ExposedName::from_str("gcc-objdump").unwrap();
+        let actual = script_exec_mapping(
+            &exposed_name,
+            "libexec/gcc/x86_64-conda-linux-gnu/14.2.0/objdump",
+            exposed_executables.iter(),
+            &bin_dir,
+            &env_dir,
+        )
+        .unwrap();
+
+        assert_eq!(
+            actual.original_executable,
+            PathBuf::from("libexec/gcc/x86_64-conda-linux-gnu/14.2.0/objdump")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_script_exec_mapping_error_deduplication() {
+        let exposed_executables = [
+            Executable::new(
+                "objdump".to_string(),
+                PathBuf::from("x86_64-conda-linux-gnu/bin/objdump"),
+            ),
+            Executable::new(
+                "objdump".to_string(),
+                PathBuf::from("libexec/gcc/x86_64-conda-linux-gnu/14.2.0/objdump"),
+            ),
+        ];
+
+        let tmp_home_dir = tempfile::tempdir().unwrap();
+        let tmp_home_dir_path = tmp_home_dir.path().to_path_buf();
+        let env_root = EnvRoot::new(tmp_home_dir_path.clone()).unwrap();
+        let env_name = EnvironmentName::from_str("test").unwrap();
+        let env_dir = EnvDir::from_env_root(env_root, &env_name).await.unwrap();
+        let bin_dir = BinDir::new(tmp_home_dir_path.clone()).unwrap();
+
+        let exposed_name = ExposedName::from_str("nonexistent").unwrap();
+        let err = script_exec_mapping(
+            &exposed_name,
+            "nonexistent",
+            exposed_executables.iter(),
+            &bin_dir,
+            &env_dir,
+        )
+        .unwrap_err();
+
+        let err_msg = err.to_string();
+        assert!(err_msg.contains("[\"objdump\"]"));
     }
 
     #[test]
