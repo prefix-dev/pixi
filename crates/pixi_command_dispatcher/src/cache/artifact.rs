@@ -51,6 +51,7 @@ use url::Url;
 use xxhash_rust::xxh3::Xxh3;
 
 use crate::file_fingerprint::spawn_blocking_with_io_permit;
+use crate::input_hash::ConfigurationHash;
 use crate::input_snapshot::{
     InputFileState, InputSnapshot, SnapshotFreshness, StaleFile, StaleFileReason,
 };
@@ -115,6 +116,7 @@ pub fn compute_artifact_cache_key(
     project_model_overrides: &crate::ProjectModelOverrides,
     package_format: Option<pixi_build_types::procedures::conda_build_v1::CondaPackageFormat>,
     inline_content_hash: Option<InlineContentHash>,
+    configuration_hash: ConfigurationHash,
 ) -> ArtifactCacheKey {
     let mut hasher = Xxh3::new();
     record.name().as_normalized().hash(&mut hasher);
@@ -127,6 +129,7 @@ pub fn compute_artifact_cache_key(
     // source files are untouched. `None` for ordinary source packages keeps
     // their key unchanged.
     inline_content_hash.hash(&mut hasher);
+    configuration_hash.hash(&mut hasher);
     build_platform.hash(&mut hasher);
     host_platform.hash(&mut hasher);
     backend_identifier.hash(&mut hasher);
@@ -2227,6 +2230,7 @@ mod cache_key_tests {
     use typed_path::Utf8TypedPathBuf;
 
     use super::compute_artifact_cache_key;
+    use crate::input_hash::ConfigurationHash;
 
     fn record(name: &str) -> UnresolvedSourceRecord {
         let mut pr = PackageRecord::new(
@@ -2296,6 +2300,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            ConfigurationHash::default(),
         )
         .to_string()
     }
@@ -2366,6 +2371,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            ConfigurationHash::default(),
         )
         .to_string();
         let k2 = compute_artifact_cache_key(
@@ -2378,6 +2384,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            ConfigurationHash::default(),
         )
         .to_string();
         assert_ne!(k1, k2);
@@ -2396,6 +2403,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            ConfigurationHash::default(),
         )
         .to_string();
         let k2 = compute_artifact_cache_key(
@@ -2408,6 +2416,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            ConfigurationHash::default(),
         )
         .to_string();
         assert_ne!(k1, k2);
@@ -2490,6 +2499,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            ConfigurationHash::default(),
         )
         .to_string();
         let k2 = compute_artifact_cache_key(
@@ -2502,6 +2512,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            ConfigurationHash::default(),
         )
         .to_string();
         assert_ne!(k1, k2);
@@ -2524,6 +2535,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            ConfigurationHash::default(),
         )
         .to_string();
         let host_only = compute_artifact_cache_key(
@@ -2536,6 +2548,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            ConfigurationHash::default(),
         )
         .to_string();
         assert_ne!(build_only, host_only);
@@ -2600,6 +2613,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            ConfigurationHash::default(),
         );
         let osx_arm = compute_artifact_cache_key(
             &r,
@@ -2611,6 +2625,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            ConfigurationHash::default(),
         );
         assert_ne!(linux, osx_arm);
     }
@@ -2628,6 +2643,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            ConfigurationHash::default(),
         );
         let prefixed = compute_artifact_cache_key(
             &r,
@@ -2642,6 +2658,7 @@ mod cache_key_tests {
             },
             None,
             None,
+            ConfigurationHash::default(),
         );
         assert_ne!(bare, prefixed);
     }
@@ -2659,6 +2676,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            ConfigurationHash::default(),
         );
         let numbered = compute_artifact_cache_key(
             &r,
@@ -2673,6 +2691,7 @@ mod cache_key_tests {
             },
             None,
             None,
+            ConfigurationHash::default(),
         );
         assert_ne!(bare, numbered);
     }
@@ -2695,6 +2714,7 @@ mod cache_key_tests {
                 compression_level: Default::default(),
             }),
             None,
+            ConfigurationHash::default(),
         );
         let tar_bz2 = compute_artifact_cache_key(
             &r,
@@ -2709,6 +2729,7 @@ mod cache_key_tests {
                 compression_level: Default::default(),
             }),
             None,
+            ConfigurationHash::default(),
         );
         assert_ne!(conda, tar_bz2);
     }
@@ -2735,6 +2756,7 @@ mod cache_key_tests {
                 &Default::default(),
                 Some(pf(level)),
                 None,
+                ConfigurationHash::default(),
             )
         };
         let default_level = key(CondaCompressionLevel::Named(NamedCompressionLevel::Default));
@@ -2743,5 +2765,39 @@ mod cache_key_tests {
         assert_ne!(default_level, max_level);
         assert_ne!(default_level, numeric_level);
         assert_ne!(max_level, numeric_level);
+    }
+
+    #[test]
+    fn configuration_hash_matters() {
+        let r = record("foo");
+        let k1 = compute_artifact_cache_key(
+            &r,
+            Platform::Linux64,
+            Platform::Linux64,
+            "b",
+            &[],
+            &[],
+            &Default::default(),
+            None,
+            None,
+            ConfigurationHash::default(),
+        );
+        let config_json = serde_json::json!({
+            "extra-args": ["-DMYFLAG=ON"]
+        });
+        let custom_hash = ConfigurationHash::compute(Some(&config_json), None);
+        let k2 = compute_artifact_cache_key(
+            &r,
+            Platform::Linux64,
+            Platform::Linux64,
+            "b",
+            &[],
+            &[],
+            &Default::default(),
+            None,
+            None,
+            custom_hash,
+        );
+        assert_ne!(k1, k2);
     }
 }
