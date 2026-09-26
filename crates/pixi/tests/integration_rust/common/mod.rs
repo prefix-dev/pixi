@@ -86,6 +86,10 @@ pub struct RunResult {
 
 /// Hides the progress bars for the tests
 fn hide_progress_bars() {
+    // SAFETY: `set_var` is called during test harness setup
+    unsafe {
+        std::env::set_var("PIXI_TEST", "1");
+    }
     global_multi_progress().set_draw_target(ProgressDrawTarget::hidden());
 }
 

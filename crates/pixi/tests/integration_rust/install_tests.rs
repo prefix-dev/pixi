@@ -615,6 +615,203 @@ async fn install_conda_meta_history() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn install_moved_environment_error_and_recreate() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().await.unwrap();
+    pixi.install().await.unwrap();
+
+    let prefix = pixi.default_env_path().unwrap();
+    let prefix_marker = prefix
+        .join(consts::CONDA_META_DIR)
+        .join(consts::PREFIX_FILE_NAME);
+    assert!(prefix_marker.exists());
+
+    let original_contents = fs_err::read_to_string(&prefix_marker).unwrap();
+
+    // Simulate moving the environment by writing a different previous path
+    let fake_old_path = "/fake/previous/path/to/environment/conda-meta";
+    fs_err::write(&prefix_marker, fake_old_path).unwrap();
+
+    // pixi install in non-interactive environment should fail and NOT overwrite the marker
+    let result = pixi.install().await;
+    assert!(
+        result.is_err(),
+        "expected install to fail on moved environment"
+    );
+    let err_msg = format!("{:?}", result.unwrap_err());
+    assert!(
+        err_msg.contains("The environment directory has moved"),
+        "expected relocation error message, got: {err_msg}"
+    );
+
+    // Verify the marker was NOT silently overwritten
+    let current_marker = fs_err::read_to_string(&prefix_marker).unwrap();
+    assert_eq!(
+        current_marker, fake_old_path,
+        "prefix marker should not be overwritten when relocation is detected"
+    );
+
+    // After removing the moved environment directory, install should succeed
+    fs_err::remove_dir_all(&prefix).unwrap();
+    pixi.install().await.unwrap();
+
+    let new_marker = fs_err::read_to_string(&prefix_marker).unwrap();
+    assert_eq!(
+        new_marker, original_contents,
+        "prefix marker should be recreated with the correct path"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn run_moved_environment_error() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    pixi.init().await.unwrap();
+    pixi.install().await.unwrap();
+
+    pixi.tasks()
+        .add("test-task".into(), None, FeatureName::default())
+        .with_commands(["echo hello"])
+        .execute()
+        .await
+        .unwrap();
+
+    let prefix = pixi.default_env_path().unwrap();
+    let prefix_marker = prefix
+        .join(consts::CONDA_META_DIR)
+        .join(consts::PREFIX_FILE_NAME);
+
+    // Simulate moving the environment by writing a different previous path
+    let fake_old_path = "/fake/previous/path/to/environment/conda-meta";
+    fs_err::write(&prefix_marker, fake_old_path).unwrap();
+
+    // pixi run should detect the moved environment and fail cleanly
+    let result = pixi_cli::run::execute(run::Args {
+        task: vec!["test-task".to_string()],
+        workspace_config: ScriptWorkspaceConfig {
+            workspace_config: pixi_cli::cli_config::WorkspaceConfig {
+                manifest_path: Some(pixi.manifest_path()),
+                ..Default::default()
+            },
+            script: None,
+        },
+        config_source: crate::common::isolated_config_source(),
+        ..Default::default()
+    })
+    .await;
+    assert!(result.is_err(), "expected run to fail on moved environment");
+    let err_msg = format!("{:?}", result.unwrap_err());
+    assert!(
+        err_msg.contains("The environment directory has moved"),
+        "expected relocation error message, got: {err_msg}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn run_moved_environment_only_checks_used_environment() {
+    setup_tracing();
+
+    let manifest = format!(
+        r#"
+        [workspace]
+        name = "test-multi-env-relocate"
+        channels = ["dummy"]
+        platforms = ["{platform}"]
+
+        [tasks]
+        default-task = "echo hello-default"
+
+        [feature.feat-b.tasks]
+        b-task = "echo hello-b"
+
+        [environments]
+        default = {{ features = [] }}
+        b = {{ features = ["feat-b"] }}
+        "#,
+        platform = Platform::current()
+    );
+
+    let pixi = PixiControl::from_manifest(&manifest).unwrap();
+    // Install all environments
+    pixi.install().with_all(true).await.unwrap();
+
+    let env_b_prefix = pixi.env_path("b").unwrap();
+    let env_b_marker = env_b_prefix
+        .join(consts::CONDA_META_DIR)
+        .join(consts::PREFIX_FILE_NAME);
+    assert!(env_b_marker.exists());
+
+    // Corrupt environment b's prefix marker to simulate environment b being moved
+    let fake_old_path = "/fake/previous/path/to/b/conda-meta";
+    fs_err::write(&env_b_marker, fake_old_path).unwrap();
+
+    // 1. Running a task in the default environment must succeed because default was not moved
+    let result_default = pixi_cli::run::execute(run::Args {
+        task: vec!["default-task".to_string()],
+        workspace_config: ScriptWorkspaceConfig {
+            workspace_config: pixi_cli::cli_config::WorkspaceConfig {
+                manifest_path: Some(pixi.manifest_path()),
+                ..Default::default()
+            },
+            script: None,
+        },
+        config_source: crate::common::isolated_config_source(),
+        ..Default::default()
+    })
+    .await;
+    assert!(
+        result_default.is_ok(),
+        "running default-task should succeed because default environment is untouched: {:?}",
+        result_default.err()
+    );
+
+    // 2. Running a task in environment b must fail because environment b was moved
+    let result_b = pixi_cli::run::execute(run::Args {
+        task: vec!["b-task".to_string()],
+        workspace_config: ScriptWorkspaceConfig {
+            workspace_config: pixi_cli::cli_config::WorkspaceConfig {
+                manifest_path: Some(pixi.manifest_path()),
+                ..Default::default()
+            },
+            script: None,
+        },
+        config_source: crate::common::isolated_config_source(),
+        ..Default::default()
+    })
+    .await;
+    assert!(
+        result_b.is_err(),
+        "running b-task should fail because environment b was moved"
+    );
+    let err_msg = format!("{:?}", result_b.unwrap_err());
+    assert!(
+        err_msg.contains("The environment directory has moved"),
+        "expected relocation error message, got: {err_msg}"
+    );
+
+    // 3. Installing only default environment must succeed
+    let install_default = pixi
+        .install()
+        .with_environment(vec!["default".to_string()])
+        .await;
+    assert!(
+        install_default.is_ok(),
+        "installing default should succeed because default is untouched: {:?}",
+        install_default.err()
+    );
+
+    // 4. Installing environment b must fail
+    let install_b = pixi.install().with_environment(vec!["b".to_string()]).await;
+    assert!(
+        install_b.is_err(),
+        "installing environment b should fail because environment b was moved"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 #[cfg_attr(
     any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
     ignore

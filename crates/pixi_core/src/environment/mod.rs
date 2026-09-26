@@ -63,12 +63,36 @@ pub async fn verify_prefix_location_unchanged(environment_dir: &Path) -> miette:
             Err(e).into_diagnostic()
         }
         // Check if the path in the file aligns with the current path.
-        Ok(p) if prefix_file.starts_with(&p) => Ok(()),
         Ok(p) => {
-            let path = Path::new(&p);
-            prefix_location_changed(environment_dir, path.parent().unwrap_or(path)).await
+            let p_trimmed = p.trim();
+            let is_unchanged = prefix_file.starts_with(p_trimmed)
+                || dunce::canonicalize(&prefix_file)
+                    .ok()
+                    .zip(dunce::canonicalize(p_trimmed).ok())
+                    .map(|(c_prefix, c_p)| c_prefix.starts_with(&c_p))
+                    .unwrap_or(false);
+
+            if is_unchanged {
+                Ok(())
+            } else {
+                let path = Path::new(p_trimmed);
+                prefix_location_changed(environment_dir, path.parent().unwrap_or(path)).await
+            }
         }
     }
+}
+
+fn is_interactive() -> bool {
+    use std::io::IsTerminal;
+    if cfg!(test)
+        || matches!(std::env::var("CI").as_deref(), Ok("1" | "true"))
+        || std::env::var_os("RUST_TEST_THREADS").is_some()
+        || std::env::var_os("PIXI_TEST").is_some()
+        || !std::io::stdin().is_terminal()
+    {
+        return false;
+    }
+    console::user_attended()
 }
 
 /// Called when the prefix has moved to a new location.
@@ -83,16 +107,20 @@ async fn prefix_location_changed(
         ..ColorfulTheme::default()
     };
 
-    let user_value = dialoguer::Confirm::with_theme(&theme)
-        .with_prompt(format!(
-            "The environment directory seems have to moved! Environments are non-relocatable, moving them can cause issues.\n\n\t{} -> {}\n\nThis can be fixed by reinstall the environment from the lock file in the new location.\n\nDo you want to automatically recreate the environment?",
-            previous_dir.display(),
-            environment_dir.display()
-        ))
-        .report(false)
-        .default(true)
-        .interact_opt()
-        .map_or(None, std::convert::identity);
+    let user_value = if is_interactive() {
+        dialoguer::Confirm::with_theme(&theme)
+            .with_prompt(format!(
+                "The environment directory seems to have moved! Environments are non-relocatable, moving them can cause issues.\n\n\t{} -> {}\n\nThis can be fixed by reinstalling the environment from the lock file in the new location.\n\nDo you want to automatically recreate the environment?",
+                previous_dir.display(),
+                environment_dir.display()
+            ))
+            .report(false)
+            .default(true)
+            .interact_opt()
+            .map_or(None, std::convert::identity)
+    } else {
+        None
+    };
     if user_value == Some(true) {
         await_in_progress("removing old environment", |_| {
             tokio::fs::remove_dir_all(environment_dir)
@@ -104,9 +132,11 @@ async fn prefix_location_changed(
     } else {
         Err(miette::diagnostic!(
             help = "Remove the environment directory, pixi will recreate it on the next run.",
-            "The environment directory has moved from `{}` to `{}`. Environments are non-relocatable, moving them can cause issues.", previous_dir.display(), environment_dir.display()
+            "The environment directory has moved from `{}` to `{}`. Environments are non-relocatable, moving them can cause issues.",
+            previous_dir.display(),
+            environment_dir.display()
         )
-            .into())
+        .into())
     }
 }
 
@@ -616,14 +646,9 @@ pub fn read_environment_file(environment_dir: &Path) -> miette::Result<Option<En
 }
 
 /// Runs the following checks to make sure the project is in a sane state:
-///     1. It verifies that the prefix location is unchanged.
-///     2. It verifies that the system requirements are met.
-///     3. It verifies the absence of the `env` folder.
-///     4. It verifies that the prefix contains a `.gitignore` file.
+///     1. It verifies the absence of the `env` folder.
+///     2. It verifies that the prefix contains a `.gitignore` file.
 pub async fn sanity_check_workspace(project: &Workspace) -> miette::Result<()> {
-    // Sanity check of prefix location
-    verify_prefix_location_unchanged(project.environments_dir().as_path()).await?;
-
     // TODO: remove on a 1.0 release
     // Check for old `env` folder as we moved to `envs` in 0.13.0
     let old_pixi_env_dir = project.pixi_dir().join("env");
@@ -1317,5 +1342,32 @@ mod tests {
             Some(&42),
             "the rest of the marker was lost with the unreadable requirement"
         );
+    }
+
+    #[tokio::test]
+    async fn test_verify_prefix_location_unchanged() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let env_dir = temp_dir.path().join("env");
+        let conda_meta = env_dir.join(consts::CONDA_META_DIR);
+        tokio::fs::create_dir_all(&conda_meta).await.unwrap();
+
+        // 1. Missing prefix file returns Ok
+        assert!(verify_prefix_location_unchanged(&env_dir).await.is_ok());
+
+        // 2. Matching prefix file returns Ok
+        let prefix_file = conda_meta.join(consts::PREFIX_FILE_NAME);
+        tokio::fs::write(&prefix_file, conda_meta.to_string_lossy().as_bytes())
+            .await
+            .unwrap();
+        assert!(verify_prefix_location_unchanged(&env_dir).await.is_ok());
+
+        // 3. Moved prefix file in non-interactive mode returns Err
+        tokio::fs::write(&prefix_file, "/old/path/to/conda-meta")
+            .await
+            .unwrap();
+        let result = verify_prefix_location_unchanged(&env_dir).await;
+        assert!(result.is_err());
+        let err_msg = format!("{:?}", result.unwrap_err());
+        assert!(err_msg.contains("The environment directory has moved"));
     }
 }
