@@ -19,7 +19,7 @@ glob = { workspace = true }
 indexmap = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true, features = ["fancy-no-backtrace"] }
-minijinja = { workspace = true, features = ["builtins"] }
+minijinja = { workspace = true, features = ["builtins", "json"] }
 once_cell.workspace = true
 pathdiff = { workspace = true }
 pep440_rs = { workspace = true }

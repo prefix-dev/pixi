@@ -139,6 +139,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                             let environment = th
                                 .optional::<TomlFromStr<EnvironmentName>>("environment")
                                 .map(TomlFromStr::into_inner);
+                            th.finalize(None)?;
 
                             deps.push(Dependency::new(&name, args, environment));
                         }
@@ -215,7 +216,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlTask {
                                     let environment = th
                                         .optional::<TomlFromStr<EnvironmentName>>("environment")
                                         .map(TomlFromStr::into_inner);
-                                    // If the creating a new dependency fails, it means the environment name is invalid and exists hence we can safely unwrap the environment
+                                    th.finalize(None)?;
                                     Ok(Dependency::new(&name, args, environment))
                                 }
                                 inner => Err(expected("string or table", inner, span).into()),
