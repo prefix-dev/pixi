@@ -142,7 +142,7 @@ impl PythonGenerator {
         }
     }
 
-    /// Read the entry points from the pyproject.toml and return them as a list.
+    /// Read the entry points (`scripts` and `gui-scripts`) from the pyproject.toml and return them as a list.
     ///
     /// If the manifest is not a pyproject.toml file no entry-points are added.
     pub(crate) fn entry_points(
@@ -152,10 +152,15 @@ impl PythonGenerator {
             .as_ref()
             .and_then(|p| p.project.as_ref())
             .and_then(|p| p.scripts.as_ref());
+        let gui_scripts = pyproject_manifest
+            .as_ref()
+            .and_then(|p| p.project.as_ref())
+            .and_then(|p| p.gui_scripts.as_ref());
 
         let items: Vec<Item<EntryPoint>> = scripts
             .into_iter()
             .flatten()
+            .chain(gui_scripts.into_iter().flatten())
             .flat_map(|(name, entry_point)| {
                 EntryPoint::from_str(&format!("{name} = {entry_point}"))
                     .map(|ep| Item::Value(Value::new_concrete(ep, None)))
@@ -1703,6 +1708,80 @@ build-backend = "setuptools.build_meta"
         assert!(
             config.ignore_pypi_mapping(),
             "ignore_pypi_mapping should default to true"
+        );
+    }
+
+    #[test]
+    fn test_entry_points_none() {
+        let entry_points = PythonGenerator::entry_points(None);
+        assert!(entry_points.is_empty());
+    }
+
+    #[test]
+    fn test_entry_points_scripts_and_gui_scripts() {
+        let manifest_str = r#"
+            [project]
+            name = "mre"
+            version = "0.1.0"
+            scripts = { app-debug = "mre:main" }
+            gui-scripts = { app = "mre:main" }
+        "#;
+        let pyproject: PyProjectToml = toml::from_str(manifest_str).unwrap();
+        let entry_points = PythonGenerator::entry_points(Some(pyproject));
+
+        let eps: Vec<EntryPoint> = entry_points
+            .into_vec()
+            .into_iter()
+            .filter_map(|item| match item {
+                Item::Value(v) => v.into_concrete(),
+                _ => None,
+            })
+            .collect();
+
+        assert_eq!(
+            eps,
+            vec![
+                EntryPoint {
+                    command: "app-debug".to_string(),
+                    module: "mre".to_string(),
+                    function: "main".to_string(),
+                },
+                EntryPoint {
+                    command: "app".to_string(),
+                    module: "mre".to_string(),
+                    function: "main".to_string(),
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn test_entry_points_only_gui_scripts() {
+        let manifest_str = r#"
+            [project]
+            name = "mre"
+            version = "0.1.0"
+            gui-scripts = { app = "mre:main" }
+        "#;
+        let pyproject: PyProjectToml = toml::from_str(manifest_str).unwrap();
+        let entry_points = PythonGenerator::entry_points(Some(pyproject));
+
+        let eps: Vec<EntryPoint> = entry_points
+            .into_vec()
+            .into_iter()
+            .filter_map(|item| match item {
+                Item::Value(v) => v.into_concrete(),
+                _ => None,
+            })
+            .collect();
+
+        assert_eq!(
+            eps,
+            vec![EntryPoint {
+                command: "app".to_string(),
+                module: "mre".to_string(),
+                function: "main".to_string(),
+            }]
         );
     }
 }
