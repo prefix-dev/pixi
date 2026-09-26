@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use indexmap::IndexMap;
 use pixi_build_types::ConditionalExpression;
@@ -16,7 +19,9 @@ use crate::{
     package::Package,
     target::PackageTarget,
     toml::{
-        TomlPackageBuild, manifest::ExternalWorkspaceProperties, package_target::TomlPackageTarget,
+        TomlPackageBuild, TomlRunExports,
+        manifest::ExternalWorkspaceProperties,
+        package_target::{TomlPackageTarget, TomlRunExportsTarget},
         reject_glob_in_package_target,
     },
     utils::{
@@ -141,6 +146,7 @@ pub struct TomlPackage {
     pub documentation: Option<WorkspaceInheritableField<Url>>,
 
     // Fields that are package-specific and cannot be inherited
+    pub publish: Option<bool>,
     pub build: TomlPackageBuild,
     pub host_dependencies: Option<PixiSpanned<ConditionalInheritablePackageMap>>,
     pub build_dependencies: Option<PixiSpanned<ConditionalInheritablePackageMap>>,
@@ -148,6 +154,7 @@ pub struct TomlPackage {
     pub extra_dependencies:
         IndexMap<PixiSpanned<String>, PixiSpanned<ConditionalInheritablePackageMap>>,
     pub run_constraints: Option<PixiSpanned<ConditionalInheritablePackageMap>>,
+    pub run_exports: Option<TomlRunExports>,
     pub target: IndexMap<PixiSpanned<TargetSelector>, TomlPackageTarget>,
 
     pub span: Span,
@@ -191,6 +198,8 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackage {
             .map(TomlWith::into_inner)
             .unwrap_or_default();
         let run_constraints = th.optional("run-constraints");
+        let run_exports = th.optional("run-exports");
+        let publish = th.optional("publish");
         let build = th.required("build")?;
         let target = th
             .optional::<TomlWith<_, TomlIndexMap<_, Same>>>("target")
@@ -214,6 +223,8 @@ impl<'de> toml_span::Deserialize<'de> for TomlPackage {
             run_dependencies,
             extra_dependencies,
             run_constraints,
+            run_exports,
+            publish,
             build,
             target,
             span: value.span,
@@ -369,6 +380,14 @@ impl TomlPackage {
             "version",
         )?;
 
+        // The pin name rules compare against the package's own name as a
+        // `PackageName`. A name that is not a valid conda package name cannot
+        // be built anyway, so it leaves the rules unchecked just like an
+        // unnamed package does.
+        let package_name = name
+            .as_deref()
+            .and_then(|name| PackageName::from_str(name).ok());
+
         // Split each package-level dependency table into its unconditional
         // entries and any `if(<expression>)` sub-tables.
         let (run_unconditional, run_conditional) = split_section(self.run_dependencies);
@@ -376,6 +395,18 @@ impl TomlPackage {
             split_section(self.run_constraints);
         let (host_unconditional, host_conditional) = split_section(self.host_dependencies);
         let (build_unconditional, build_conditional) = split_section(self.build_dependencies);
+
+        let run_exports = self.run_exports.unwrap_or_default();
+        let (noarch_exports_unconditional, noarch_exports_conditional) =
+            split_section(run_exports.noarch);
+        let (strong_exports_unconditional, strong_exports_conditional) =
+            split_section(run_exports.strong);
+        let (weak_exports_unconditional, weak_exports_conditional) =
+            split_section(run_exports.weak);
+        let (strong_constraints_exports_unconditional, strong_constraints_exports_conditional) =
+            split_section(run_exports.strong_constraints);
+        let (weak_constraints_exports_unconditional, weak_constraints_exports_conditional) =
+            split_section(run_exports.weak_constraints);
 
         let mut extra_unconditional: IndexMap<
             PixiSpanned<String>,
@@ -405,20 +436,42 @@ impl TomlPackage {
             host_dependencies: host_unconditional,
             build_dependencies: build_unconditional,
             extra_dependencies: extra_unconditional,
+            run_exports: TomlRunExportsTarget {
+                noarch: noarch_exports_unconditional,
+                strong: strong_exports_unconditional,
+                weak: weak_exports_unconditional,
+                strong_constraints: strong_constraints_exports_unconditional,
+                weak_constraints: weak_constraints_exports_unconditional,
+            },
         }
-        .into_package_target(preview, &workspace_dependencies)?;
+        .into_package_target(preview, &workspace_dependencies, package_name.as_ref())?;
 
         // Fold the conditional sub-tables into one `TomlPackageTarget` per
         // distinct expression, merging across the dependency sections.
         type SectionField =
             fn(&mut TomlPackageTarget) -> &mut Option<PixiSpanned<InheritablePackageMap>>;
-        let sections: [(Vec<ConditionalSpecs>, SectionField); 4] = [
+        let sections: [(Vec<ConditionalSpecs>, SectionField); 9] = [
             (run_conditional, |target| &mut target.run_dependencies),
             (constraints_conditional, |target| {
                 &mut target.run_constraints
             }),
             (host_conditional, |target| &mut target.host_dependencies),
             (build_conditional, |target| &mut target.build_dependencies),
+            (noarch_exports_conditional, |target| {
+                &mut target.run_exports.noarch
+            }),
+            (strong_exports_conditional, |target| {
+                &mut target.run_exports.strong
+            }),
+            (weak_exports_conditional, |target| {
+                &mut target.run_exports.weak
+            }),
+            (strong_constraints_exports_conditional, |target| {
+                &mut target.run_exports.strong_constraints
+            }),
+            (weak_constraints_exports_conditional, |target| {
+                &mut target.run_exports.weak_constraints
+            }),
         ];
         let mut conditional_targets: IndexMap<ConditionalExpression, TomlPackageTarget> =
             IndexMap::new();
@@ -481,7 +534,11 @@ impl TomlPackage {
         let mut conditional_dependencies: IndexMap<ConditionalExpression, PackageTarget> =
             IndexMap::new();
         for (expression, toml_target) in conditional_targets {
-            let target = toml_target.into_package_target(preview, &workspace_dependencies)?;
+            let target = toml_target.into_package_target(
+                preview,
+                &workspace_dependencies,
+                package_name.as_ref(),
+            )?;
             conditional_dependencies.insert(expression, target);
         }
 
@@ -612,6 +669,7 @@ impl TomlPackage {
                     package_defaults.documentation,
                     "documentation",
                 )?,
+                publish: self.publish.unwrap_or(false),
             },
             build: build_result.value,
             dependencies: default_package_target,
@@ -730,13 +788,12 @@ mod test {
     use assert_matches::assert_matches;
     use fs_err as fs;
     use insta::assert_snapshot;
-    use pixi_spec::PixiSpec;
     use pixi_test_utils::format_parse_error;
     use rattler_conda_types::PackageName;
     use tempfile::TempDir;
 
     use super::*;
-    use crate::{KnownPreviewFeature, SpecType, toml::FromTomlStr};
+    use crate::{KnownPreviewFlag, SpecType, toml::FromTomlStr};
     use pixi_build_types::ConditionalExpression;
 
     /// Parses a manifest using only `Preview::default()` and asserts it succeeds.
@@ -760,7 +817,7 @@ mod test {
     fn assert_single_version(
         deps: &std::collections::HashMap<
             SpecType,
-            pixi_spec_containers::DependencyMap<PackageName, PixiSpec>,
+            pixi_spec_containers::DependencyMap<PackageName, crate::PackageDependencySpec>,
         >,
         spec_type: SpecType,
         name: &str,
@@ -777,6 +834,8 @@ mod test {
             specs
                 .iter()
                 .next()
+                .unwrap()
+                .as_spec()
                 .unwrap()
                 .as_version_spec()
                 .unwrap()
@@ -1826,7 +1885,7 @@ mod test {
         );
 
         // With pixi-build enabled the same input parses.
-        let preview = Preview::from_iter([KnownPreviewFeature::PixiBuild]);
+        let preview = Preview::from_iter([KnownPreviewFlag::PixiBuild]);
         TomlPackage::from_toml_str(input)
             .and_then(|w| {
                 w.into_manifest(
@@ -1837,6 +1896,400 @@ mod test {
                 )
             })
             .expect("source specs in run-constraints must be allowed when pixi-build is enabled");
+    }
+
+    /// Asserts that a run-export bucket contains exactly one entry for `name`
+    /// whose version spec stringifies to `expected`.
+    #[track_caller]
+    /// Returns the version string of a binary constraint in a run-export
+    /// constraints bucket, panicking on a missing entry or any other spec
+    /// kind.
+    fn constrained_version(
+        bucket: &pixi_spec_containers::DependencyMap<PackageName, crate::PackageConstraintSpec>,
+        name: &str,
+    ) -> String {
+        match bucket
+            .get(&PackageName::from_str(name).unwrap())
+            .and_then(|specs| specs.iter().next())
+            .unwrap_or_else(|| panic!("missing {name} in constraints bucket"))
+        {
+            crate::PackageConstraintSpec::Binary(pixi_spec::BinarySpec::Version(version)) => {
+                version.to_string()
+            }
+            other => panic!("expected a version spec, got {other:?}"),
+        }
+    }
+
+    fn assert_run_export_version(
+        bucket: &pixi_spec_containers::DependencyMap<PackageName, crate::PackageDependencySpec>,
+        name: &str,
+        expected: &str,
+    ) {
+        let specs = bucket
+            .get(&PackageName::from_str(name).unwrap())
+            .unwrap_or_else(|| panic!("missing {name} in run-export bucket"));
+        assert_eq!(specs.len(), 1, "expected exactly one spec for {name}");
+        assert_eq!(
+            specs
+                .iter()
+                .next()
+                .unwrap()
+                .as_spec()
+                .unwrap()
+                .as_version_spec()
+                .unwrap()
+                .to_string(),
+            expected,
+        );
+    }
+
+    #[test]
+    fn test_package_run_exports_all_buckets() {
+        // Each `[package.run-exports.<bucket>]` table must land in the matching
+        // bucket of the default target.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [run-exports.noarch]
+        noarch-dep = "==1.0"
+
+        [run-exports.strong]
+        strong-dep = "==2.0"
+
+        [run-exports.weak]
+        weak-dep = "==3.0"
+
+        [run-exports.strong-constraints]
+        strong-constrained = ">=4.0"
+
+        [run-exports.weak-constraints]
+        weak-constrained = ">=5.0"
+        "#;
+
+        let manifest = parse_package(input);
+        let run_exports = &manifest.dependencies.run_exports;
+
+        assert_run_export_version(&run_exports.noarch, "noarch-dep", "==1.0");
+        assert_run_export_version(&run_exports.strong, "strong-dep", "==2.0");
+        assert_run_export_version(&run_exports.weak, "weak-dep", "==3.0");
+
+        assert_eq!(
+            constrained_version(&run_exports.strong_constraints, "strong-constrained"),
+            ">=4.0"
+        );
+        assert_eq!(
+            constrained_version(&run_exports.weak_constraints, "weak-constrained"),
+            ">=5.0"
+        );
+    }
+
+    #[test]
+    fn test_package_run_exports_conditional() {
+        // An `if(...)` sub-table inside a run-export bucket becomes a
+        // conditional target with only that bucket populated.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [run-exports.weak]
+        shared = "==1.0"
+
+        [run-exports.weak."if(host_platform == 'linux-64')"]
+        libgl = "==2.0"
+        "#;
+
+        let manifest = parse_package(input);
+        assert_run_export_version(&manifest.dependencies.run_exports.weak, "shared", "==1.0");
+
+        let linux = manifest
+            .conditional_dependencies
+            .get(&ConditionalExpression::new("host_platform == 'linux-64'"))
+            .expect("conditional target should exist");
+        assert_run_export_version(&linux.run_exports.weak, "libgl", "==2.0");
+        assert!(
+            linux.dependencies.is_empty(),
+            "no dependency buckets should be populated"
+        );
+    }
+
+    #[test]
+    fn test_package_run_exports_workspace_inheritance() {
+        // A `{ workspace = true }` entry in a run-export bucket resolves
+        // against the `[workspace.dependencies]` pool.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [run-exports.weak]
+        libfoo = { workspace = true }
+        "#;
+
+        let workspace_toml = r#"
+        name = "ws"
+        channels = []
+        platforms = []
+
+        [dependencies]
+        libfoo = "1.*"
+        "#;
+        let workspace = WorkspacePackageProperties {
+            dependencies: crate::toml::TomlWorkspace::from_toml_str(workspace_toml)
+                .expect("workspace must parse")
+                .dependencies
+                .expect("dependencies table")
+                .value
+                .specs,
+            ..Default::default()
+        };
+
+        let manifest = TomlPackage::from_toml_str(input)
+            .and_then(|w| {
+                w.into_manifest(
+                    workspace,
+                    PackageDefaults::default(),
+                    &Preview::default(),
+                    Path::new(""),
+                )
+            })
+            .expect("expected manifest to parse")
+            .value;
+        assert_run_export_version(&manifest.dependencies.run_exports.weak, "libfoo", "1.*");
+    }
+
+    #[test]
+    fn test_package_run_exports_source_spec_requires_pixi_build() {
+        // Source specs in the dependency-style buckets follow the same
+        // pixi-build preview gate as the other dependency tables.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [run-exports.weak]
+        local-pkg = { path = "./local" }
+        "#;
+
+        let err = TomlPackage::from_toml_str(input)
+            .and_then(|w| {
+                w.into_manifest(
+                    WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
+                    &Preview::default(),
+                    Path::new(""),
+                )
+            })
+            .unwrap_err();
+        let rendered = format_parse_error(input, err);
+        assert!(
+            rendered.contains("pixi-build"),
+            "expected pixi-build gating error, got: {rendered}"
+        );
+
+        // With pixi-build enabled the same input parses and the source spec is
+        // kept.
+        let preview = Preview::from_iter([KnownPreviewFlag::PixiBuild]);
+        let manifest = TomlPackage::from_toml_str(input)
+            .and_then(|w| {
+                w.into_manifest(
+                    WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
+                    &preview,
+                    Path::new(""),
+                )
+            })
+            .expect("source specs in run-exports must parse with pixi-build enabled")
+            .value;
+        let specs = manifest
+            .dependencies
+            .run_exports
+            .weak
+            .get(&PackageName::from_str("local-pkg").unwrap())
+            .expect("local-pkg must be present");
+        assert!(specs.iter().next().unwrap().is_source());
+    }
+
+    #[test]
+    fn test_package_run_exports_rejects_source_in_constraints() {
+        // The constraints buckets only restrict versions; a source spec is
+        // rejected even with pixi-build enabled.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [run-exports.weak-constraints]
+        local-pkg = { path = "./local" }
+        "#;
+
+        let preview = Preview::from_iter([KnownPreviewFlag::PixiBuild]);
+        let err = TomlPackage::from_toml_str(input)
+            .and_then(|w| {
+                w.into_manifest(
+                    WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
+                    &preview,
+                    Path::new(""),
+                )
+            })
+            .unwrap_err();
+        assert_snapshot!(format_parse_error(input, err), @r#"
+         × source specs are not supported in run-export constraints
+           ╭─[pixi.toml:9:21]
+         8 │         [run-exports.weak-constraints]
+         9 │         local-pkg = { path = "./local" }
+           ·                     ──────────┬─────────
+           ·                               ╰── source spec specified here
+        10 │
+           ╰────
+         help: A constraint only restricts the version of a package that is installed for another reason; use a version spec instead
+        "#);
+    }
+
+    #[test]
+    fn test_package_run_exports_rejects_url_spec() {
+        // Url specs are rejected in every run-export bucket; the exported spec
+        // is recorded in the built package where a url is meaningless.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [run-exports.strong]
+        libbar = { url = "https://example.com/libbar-1.0-h123.conda" }
+        "#;
+
+        let err = TomlPackage::from_toml_str(input)
+            .and_then(|w| {
+                w.into_manifest(
+                    WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
+                    &Preview::default(),
+                    Path::new(""),
+                )
+            })
+            .unwrap_err();
+        assert_snapshot!(format_parse_error(input, err), @r#"
+         × url specs are not supported in `[package.run-exports]`
+           ╭─[pixi.toml:9:18]
+         8 │         [run-exports.strong]
+         9 │         libbar = { url = "https://example.com/libbar-1.0-h123.conda" }
+           ·                  ──────────────────────────┬──────────────────────────
+           ·                                            ╰── url spec specified here
+        10 │
+           ╰────
+         help: Use a version spec or a `path` or `git` source spec instead
+        "#);
+    }
+
+    #[test]
+    fn test_package_run_exports_rejects_binary_path_spec() {
+        // A path to a package archive would be absolutized into a
+        // machine-local file url in the built package's metadata; rejected in
+        // every bucket, like url specs.
+        let input = r#"
+        name = "pkg"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [run-exports.weak-constraints]
+        libbar = { path = "./libbar-1.0-h123.conda" }
+        "#;
+
+        let err = TomlPackage::from_toml_str(input)
+            .and_then(|w| {
+                w.into_manifest(
+                    WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
+                    &Preview::default(),
+                    Path::new(""),
+                )
+            })
+            .unwrap_err();
+        assert_snapshot!(format_parse_error(input, err), @r#"
+         × paths to package archives are not supported in `[package.run-exports]`
+           ╭─[pixi.toml:9:18]
+         8 │         [run-exports.weak-constraints]
+         9 │         libbar = { path = "./libbar-1.0-h123.conda" }
+           ·                  ──────────────────┬─────────────────
+           ·                                    ╰── package archive path specified here
+        10 │
+           ╰────
+         help: Use a version spec or a `path` source spec pointing at a source directory instead
+        "#);
+    }
+
+    #[test]
+    fn test_package_run_exports_rejects_unknown_bucket() {
+        // A typo like `strong-constrains` must be flagged so users don't
+        // silently lose their run-exports.
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        name = "pkg"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [run-exports.strong-constrains]
+        oops = ">=1.0"
+        "#,
+        ), @r#"
+         × Unexpected keys, expected only 'noarch', 'strong', 'weak', 'strong-constraints', 'weak-constraints'
+          ╭─[pixi.toml:8:22]
+        7 │
+        8 │         [run-exports.strong-constrains]
+          ·                      ────────┬────────
+          ·                              ╰── 'strong-constrains' was not expected here
+        9 │         oops = ">=1.0"
+          ╰────
+         help: Did you mean 'strong-constraints'?
+        "#);
+    }
+
+    #[test]
+    fn test_package_run_exports_rejected_in_target() {
+        // The deprecated `[package.target.<selector>]` tables do not support
+        // run-exports; use an `if(...)` sub-table inside the bucket instead.
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        name = "pkg"
+        version = "1.0"
+
+        [build]
+        backend = { name = "bla", version = "1.0" }
+
+        [target.linux-64.run-exports.weak]
+        libfoo = "==1.0"
+        "#,
+        ), @r#"
+         × Unexpected keys, expected only 'run-dependencies', 'run-constraints', 'host-dependencies', 'build-dependencies', 'extra-dependencies'
+          ╭─[pixi.toml:8:26]
+        7 │
+        8 │         [target.linux-64.run-exports.weak]
+          ·                          ─────┬─────
+          ·                               ╰── 'run-exports' was not expected here
+        9 │         libfoo = "==1.0"
+          ╰────
+         help: Did you mean 'run-constraints'?
+        "#);
     }
 
     #[test]
@@ -1933,10 +2386,280 @@ mod test {
             branch: None,
             rev: None,
             tag: None,
+            lfs: None,
             subdirectory: None,
             md5: None,
             sha256: None,
         });
         spec
+    }
+
+    /// Parses a manifest all the way through `into_manifest` and formats the
+    /// error. The pin section matrix is enforced during that lowering, not
+    /// during the TOML parse itself.
+    #[must_use]
+    fn expect_manifest_failure(pixi_toml: &str) -> String {
+        let error = TomlPackage::from_toml_str(pixi_toml)
+            .and_then(|w| {
+                w.into_manifest(
+                    WorkspacePackageProperties::default(),
+                    PackageDefaults::default(),
+                    &Preview::default(),
+                    Path::new(""),
+                )
+            })
+            .expect_err("expected the manifest to be rejected");
+        format_parse_error(pixi_toml, error)
+    }
+
+    /// The boilerplate around a package manifest body.
+    fn package_manifest(body: &str) -> String {
+        format!(
+            r#"
+        name = "mypkg"
+        version = "0.1.0"
+
+        [build]
+        backend = {{ name = "bla", version = "1.0" }}
+        {body}"#
+        )
+    }
+
+    #[test]
+    fn test_pin_compatible_in_run_and_host_dependencies() {
+        let manifest = parse_package(&package_manifest(
+            r#"
+        [build-dependencies]
+        cmake = "*"
+
+        [host-dependencies]
+        boltons = ">=2,<3"
+
+        [run-dependencies]
+        boltons = { pin-compatible = true }
+
+        [host-dependencies.zlib]
+        pin-compatible = { lower-bound = "x.x", build = "py*" }
+        "#,
+        ));
+
+        let run = manifest
+            .dependencies
+            .run_dependencies()
+            .expect("run bucket");
+        let boltons = run
+            .get(&PackageName::from_str("boltons").unwrap())
+            .and_then(|specs| specs.iter().next())
+            .expect("boltons in run deps");
+        let crate::PackageDependencySpec::PinCompatible(pin) = boltons else {
+            panic!("expected a pin-compatible entry, got {boltons:?}");
+        };
+        assert_eq!(pin, &pixi_spec::Pin::default());
+
+        let host = manifest
+            .dependencies
+            .host_dependencies()
+            .expect("host bucket");
+        let zlib = host
+            .get(&PackageName::from_str("zlib").unwrap())
+            .and_then(|specs| specs.iter().next())
+            .expect("zlib in host deps");
+        let crate::PackageDependencySpec::PinCompatible(pin) = zlib else {
+            panic!("expected a pin-compatible entry, got {zlib:?}");
+        };
+        assert_eq!(pin.build.as_deref(), Some("py*"));
+    }
+
+    #[test]
+    fn test_pin_subpackage_in_run_dependencies_is_rejected() {
+        assert_snapshot!(expect_manifest_failure(&package_manifest(
+            r#"
+        [run-dependencies]
+        mypkg = { pin-subpackage = true }
+        "#,
+        )), @"
+         × `pin-subpackage` is not allowed in `[package.run-dependencies]`
+           ╭─[pixi.toml:9:17]
+         8 │         [run-dependencies]
+         9 │         mypkg = { pin-subpackage = true }
+           ·                 ────────────┬────────────
+           ·                             ╰── pin-subpackage used here
+        10 │
+           ╰────
+         help: `pin-subpackage` pins the package itself for its consumers and is only supported in the `[package.run-exports]` tables
+        ");
+    }
+
+    #[test]
+    fn test_pin_compatible_own_name_in_run_dependencies_is_rejected() {
+        assert_snapshot!(expect_manifest_failure(&package_manifest(
+            r#"
+        [run-dependencies]
+        mypkg = { pin-compatible = true }
+        "#,
+        )), @"
+         × `pin-compatible` cannot reference the package's own name
+           ╭─[pixi.toml:9:17]
+         8 │         [run-dependencies]
+         9 │         mypkg = { pin-compatible = true }
+           ·                 ────────────┬────────────
+           ·                             ╰── pin-compatible used here
+        10 │
+           ╰────
+         help: `pin-compatible` pins a dependency to the version it resolved to in the build or host environment, and a package is never part of its own; use `pin-subpackage` in `[package.run-exports]` to
+               pin the package itself for consumers
+        ");
+    }
+
+    #[test]
+    fn test_pin_in_build_dependencies_is_rejected() {
+        assert_snapshot!(expect_manifest_failure(&package_manifest(
+            r#"
+        [build-dependencies]
+        cmake = { pin-compatible = true }
+        "#,
+        )), @"
+         × `pin-compatible` is not allowed in `[package.build-dependencies]`
+           ╭─[pixi.toml:9:17]
+         8 │         [build-dependencies]
+         9 │         cmake = { pin-compatible = true }
+           ·                 ────────────┬────────────
+           ·                             ╰── pin-compatible used here
+        10 │
+           ╰────
+         help: The build environment is resolved first, so there is no earlier environment to pin against
+        ");
+    }
+
+    #[test]
+    fn test_pin_in_run_constraints_is_rejected() {
+        assert_snapshot!(expect_manifest_failure(&package_manifest(
+            r#"
+        [run-constraints]
+        boltons = { pin-compatible = true }
+        "#,
+        )), @"
+         × `pin-compatible` is not allowed in `[package.run-constraints]`
+           ╭─[pixi.toml:9:19]
+         8 │         [run-constraints]
+         9 │         boltons = { pin-compatible = true }
+           ·                   ────────────┬────────────
+           ·                               ╰── pin-compatible used here
+        10 │
+           ╰────
+         help: Pins are supported in `[package.run-dependencies]`, `[package.host-dependencies]`, and the `[package.run-exports]` tables
+        ");
+    }
+
+    #[test]
+    fn test_pin_in_extra_dependencies_is_rejected() {
+        assert_snapshot!(expect_manifest_failure(&package_manifest(
+            r#"
+        [extra-dependencies.dev]
+        boltons = { pin-compatible = true }
+        "#,
+        )), @"
+         × `pin-compatible` is not allowed in `[package.extra-dependencies]`
+           ╭─[pixi.toml:9:19]
+         8 │         [extra-dependencies.dev]
+         9 │         boltons = { pin-compatible = true }
+           ·                   ────────────┬────────────
+           ·                               ╰── pin-compatible used here
+        10 │
+           ╰────
+         help: Pins are supported in `[package.run-dependencies]`, `[package.host-dependencies]`, and the `[package.run-exports]` tables
+        ");
+    }
+
+    #[test]
+    fn test_pin_subpackage_in_run_exports() {
+        let manifest = parse_package(&package_manifest(
+            r#"
+        [run-exports.weak]
+        mypkg = { pin-subpackage = { upper-bound = "x.x" } }
+
+        [run-exports.strong]
+        boltons = { pin-compatible = true }
+        "#,
+        ));
+        let run_exports = &manifest.dependencies.run_exports;
+        let mypkg = run_exports
+            .weak
+            .get(&PackageName::from_str("mypkg").unwrap())
+            .and_then(|specs| specs.iter().next())
+            .expect("mypkg in weak run-exports");
+        assert_matches!(mypkg, crate::PackageDependencySpec::PinSubpackage(_));
+        let boltons = run_exports
+            .strong
+            .get(&PackageName::from_str("boltons").unwrap())
+            .and_then(|specs| specs.iter().next())
+            .expect("boltons in strong run-exports");
+        assert_matches!(boltons, crate::PackageDependencySpec::PinCompatible(_));
+    }
+
+    #[test]
+    fn test_pin_in_run_export_constraints() {
+        let manifest = parse_package(&package_manifest(
+            r#"
+        [run-exports.strong-constraints]
+        mypkg = { pin-subpackage = { exact = true } }
+
+        [run-exports.weak-constraints]
+        openssl = { pin-compatible = { upper-bound = "x" } }
+        "#,
+        ));
+        let run_exports = &manifest.dependencies.run_exports;
+        let mypkg = run_exports
+            .strong_constraints
+            .get(&PackageName::from_str("mypkg").unwrap())
+            .and_then(|specs| specs.iter().next())
+            .expect("mypkg in strong constraints");
+        assert_matches!(mypkg, crate::PackageConstraintSpec::PinSubpackage(_));
+        let openssl = run_exports
+            .weak_constraints
+            .get(&PackageName::from_str("openssl").unwrap())
+            .and_then(|specs| specs.iter().next())
+            .expect("openssl in weak constraints");
+        assert_matches!(openssl, crate::PackageConstraintSpec::PinCompatible(_));
+    }
+
+    #[test]
+    fn test_pin_subpackage_wrong_name_in_run_exports_is_rejected() {
+        assert_snapshot!(expect_manifest_failure(&package_manifest(
+            r#"
+        [run-exports.weak]
+        otherpkg = { pin-subpackage = true }
+        "#,
+        )), @"
+         × `pin-subpackage` can only reference the package's own name (`mypkg`), not `otherpkg`
+           ╭─[pixi.toml:9:20]
+         8 │         [run-exports.weak]
+         9 │         otherpkg = { pin-subpackage = true }
+           ·                    ────────────┬────────────
+           ·                                ╰── pin-subpackage used here
+        10 │
+           ╰────
+         help: Use `mypkg = { pin-subpackage = ... }` to pin this package for its consumers, or `otherpkg = { pin-compatible = ... }` to pin a dependency to the version it resolved to
+        ");
+    }
+
+    #[test]
+    fn test_pin_compatible_own_name_in_run_exports_is_rejected() {
+        assert_snapshot!(expect_manifest_failure(&package_manifest(
+            r#"
+        [run-exports.weak]
+        mypkg = { pin-compatible = true }
+        "#,
+        )), @"
+         × `pin-compatible` cannot reference the package's own name (`mypkg`)
+           ╭─[pixi.toml:9:17]
+         8 │         [run-exports.weak]
+         9 │         mypkg = { pin-compatible = true }
+           ·                 ────────────┬────────────
+           ·                             ╰── pin-compatible used here
+        10 │
+           ╰────
+         help: Use `mypkg = { pin-subpackage = ... }` to pin this package for its consumers
+        ");
     }
 }

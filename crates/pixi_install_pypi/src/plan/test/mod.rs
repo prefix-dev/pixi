@@ -792,6 +792,118 @@ fn test_installed_git_require_git_commit_mismatch() {
     );
 }
 
+/// When only the `lfs` flag differs between the installed dist and the lock
+/// we should reinstall, in both directions
+#[test]
+fn test_installed_git_lfs_mismatch() {
+    let commit = "9d4f36d87dae9a968fb527e2cb87e8a507b0beb3";
+    let installed_url = Url::parse("git+https://github.com/pypa/pip.git@some-branch")
+        .expect("could not parse git url");
+
+    // Installed without LFS, locked with `lfs=true`
+    let site_packages = MockedSitePackages::new().add_git(
+        "pip",
+        "1.0.0",
+        installed_url.clone(),
+        InstalledDistOptions::default(),
+    );
+    let locked_lfs_url = Url::parse(
+        format!("git+https://github.com/pypa/pip.git?branch=some-branch&lfs=true#{commit}")
+            .as_str(),
+    )
+    .expect("could not parse git url");
+    let required = RequiredPackages::new().add_git("pip", "1.0.0", locked_lfs_url.clone());
+
+    let plan = harness::install_planner();
+    let required_dists = required.to_required_dists();
+    let installs = plan
+        .plan(
+            &site_packages,
+            NoCache,
+            &required_dists,
+            &uv_configuration::BuildOptions::default(),
+        )
+        .expect("should install");
+
+    assert_matches!(
+        installs.reinstalls[0].1,
+        NeedReinstall::GitLfsMismatch {
+            installed_lfs: false,
+            locked_lfs: true
+        }
+    );
+
+    // Installed with LFS, locked without the flag
+    let site_packages = MockedSitePackages::new().add_git(
+        "pip",
+        "1.0.0",
+        installed_url,
+        InstalledDistOptions::default().with_git_lfs(true),
+    );
+    let locked_url = Url::parse(
+        format!("git+https://github.com/pypa/pip.git?branch=some-branch#{commit}").as_str(),
+    )
+    .expect("could not parse git url");
+    let required = RequiredPackages::new().add_git("pip", "1.0.0", locked_url);
+
+    let required_dists = required.to_required_dists();
+    let installs = plan
+        .plan(
+            &site_packages,
+            NoCache,
+            &required_dists,
+            &uv_configuration::BuildOptions::default(),
+        )
+        .expect("should install");
+
+    assert_matches!(
+        installs.reinstalls[0].1,
+        NeedReinstall::GitLfsMismatch {
+            installed_lfs: true,
+            locked_lfs: false
+        }
+    );
+}
+
+/// When both the installed dist and the lock agree on `lfs=true`
+/// no reinstall is needed
+#[test]
+fn test_installed_git_lfs_the_same() {
+    let commit = "9d4f36d87dae9a968fb527e2cb87e8a507b0beb3";
+    let installed_url = Url::parse("git+https://github.com/pypa/pip.git@some-branch")
+        .expect("could not parse git url");
+
+    let site_packages = MockedSitePackages::new().add_git(
+        "pip",
+        "1.0.0",
+        installed_url,
+        InstalledDistOptions::default().with_git_lfs(true),
+    );
+    let locked_lfs_url = Url::parse(
+        format!("git+https://github.com/pypa/pip.git?branch=some-branch&lfs=true#{commit}")
+            .as_str(),
+    )
+    .expect("could not parse git url");
+    let required = RequiredPackages::new().add_git("pip", "1.0.0", locked_lfs_url);
+
+    let plan = harness::install_planner();
+    let required_dists = required.to_required_dists();
+    let installs = plan
+        .plan(
+            &site_packages,
+            NoCache,
+            &required_dists,
+            &uv_configuration::BuildOptions::default(),
+        )
+        .expect("should install");
+
+    assert!(
+        installs.reinstalls.is_empty(),
+        "expected no reinstalls but got {:?}",
+        installs.reinstalls
+    );
+}
+
 /// When having a git installed, and we require the same version from the registry
 /// we should reinstall, otherwise we should not
 /// note that we are using full git commits here, because it seems from my (Tim)

@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
+    sync::LazyLock,
 };
 
 use indexmap::{IndexMap, IndexSet};
@@ -12,7 +13,7 @@ use toml_span::{DeserError, Span, Spanned, Value, de_helpers::TableHelper, value
 use url::Url;
 
 use crate::{
-    KnownPreviewFeature, PixiPlatform, PrioritizedChannel, S3Options, TargetSelector, Targets,
+    KnownPreviewFlag, PixiPlatform, PrioritizedChannel, S3Options, TargetSelector, Targets,
     TomlError, WithWarnings, Workspace,
     error::GenericError,
     pypi::pypi_options::PypiOptions,
@@ -91,7 +92,7 @@ pub struct TomlWorkspaceTarget {
 }
 
 /// The TOML representation of the `[[workspace]]` section in a pixi manifest.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct TomlWorkspace {
     // In TOML the workspace name can be empty. It is a required field though, but this is enforced
     // when converting the TOML model to the actual manifest. When using a PyProject we want to use
@@ -127,6 +128,15 @@ pub struct TomlWorkspace {
 }
 
 impl TomlWorkspace {
+    /// The `[workspace.dependencies]` pool that `{ workspace = true }`
+    /// entries resolve against. An absent table acts as an empty pool.
+    pub fn dependency_pool(&self) -> &IndexMap<PackageName, TomlSpec> {
+        static EMPTY: LazyLock<IndexMap<PackageName, TomlSpec>> = LazyLock::new(IndexMap::new);
+        self.dependencies
+            .as_ref()
+            .map_or(&EMPTY, |deps| &deps.value.specs)
+    }
+
     /// Converts the TOML representation of the workspace section to the actual
     /// workspace.
     ///
@@ -200,16 +210,16 @@ impl TomlWorkspace {
         // Source specs gated on pixi-build. Path specs are left
         // workspace-relative; members re-base them at inheritance time.
         let dependencies = if let Some(deps) = self.dependencies {
-            let pixi_build_enabled = preview.is_enabled(KnownPreviewFeature::PixiBuild);
+            let pixi_build_enabled = preview.is_enabled(KnownPreviewFlag::PixiBuild);
             let specs = deps.value.specs;
             if !pixi_build_enabled
                 && let Some((name, _)) = specs.iter().find(|(_, s)| toml_spec_is_source(s))
             {
                 return Err(GenericError::new(
-                    "conda source dependencies are not allowed without enabling the 'pixi-build' preview feature",
+                    "conda source dependencies are not allowed without enabling the 'pixi-build' preview flag",
                 )
                 .with_help(
-                    "Add `preview = [\"pixi-build\"]` to the `workspace` table of your manifest",
+                    "Run `pixi workspace preview add pixi-build` to enable the preview flag",
                 )
                 .with_span_label(format!("source dependency `{}`", name.as_source()))
                 .with_opt_span(deps.span.clone())
@@ -590,6 +600,88 @@ mod test {
                 rattler_conda_types::Platform::Linux64,
                 rattler_conda_types::Platform::OsxArm64,
             ]
+        );
+    }
+
+    #[test]
+    fn test_platform_match_diagnostics_and_unsatisfied_requirements() {
+        use std::collections::HashSet;
+
+        use rattler_conda_types::{GenericVirtualPackage, Platform};
+
+        use crate::PixiPlatformName;
+
+        let input = r#"
+        channels = []
+        platforms = [
+          "linux-64",
+          { name = "gpu-linux", platform = "linux-64", cuda = "12.0" },
+          { name = "mac", platform = "osx-arm64" },
+        ]
+        "#;
+        let workspace = TomlWorkspace::from_toml_str(input)
+            .unwrap()
+            .into_workspace(ExternalWorkspaceProperties::default(), Path::new(""))
+            .unwrap()
+            .value;
+        let env_platforms: HashSet<PixiPlatformName> = ["gpu-linux", "mac"]
+            .into_iter()
+            .map(|name| PixiPlatformName::try_from(name).unwrap())
+            .collect();
+
+        // A cuda-less linux-64 host: `linux-64` is not declared by the
+        // environment and must not appear; `gpu-linux` misses `__cuda` (its
+        // materialised subdir defaults must not count); `mac` needs a subdir
+        // this host can't run.
+        let diagnostics =
+            workspace.platform_match_diagnostics(Platform::Linux64, &[], &env_platforms);
+        assert_eq!(diagnostics.len(), 2);
+
+        let gpu = &diagnostics[0];
+        assert_eq!(gpu.name.as_str(), "gpu-linux");
+        assert_eq!(gpu.subdir, Platform::Linux64);
+        assert!(gpu.subdir_matches_host);
+        assert!(!gpu.matches_host());
+        let unsatisfied: Vec<String> = gpu
+            .unsatisfied_virtual_packages
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        assert_eq!(unsatisfied, vec!["__cuda=12.0".to_string()]);
+
+        let mac = &diagnostics[1];
+        assert_eq!(mac.name.as_str(), "mac");
+        assert_eq!(mac.subdir, Platform::OsxArm64);
+        assert!(!mac.subdir_matches_host);
+        assert!(mac.unsatisfied_virtual_packages.is_empty());
+        assert!(!mac.matches_host());
+
+        // The aggregate requirements only cover host-runnable subdirs, so
+        // `mac` contributes nothing.
+        let requirements: Vec<String> = workspace
+            .unsatisfied_platform_requirements(Platform::Linux64, &[], &env_platforms)
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        assert_eq!(requirements, vec!["__cuda=12.0".to_string()]);
+
+        // With a recent-enough host cuda, `gpu-linux` runs and nothing is
+        // unsatisfied.
+        let host_cuda = GenericVirtualPackage {
+            name: "__cuda".parse().unwrap(),
+            version: "12.4".parse().unwrap(),
+            build_string: "0".to_string(),
+        };
+        let diagnostics = workspace.platform_match_diagnostics(
+            Platform::Linux64,
+            std::slice::from_ref(&host_cuda),
+            &env_platforms,
+        );
+        assert!(diagnostics[0].matches_host());
+        assert!(
+            workspace
+                .unsatisfied_platform_requirements(Platform::Linux64, &[host_cuda], &env_platforms)
+                .is_empty()
         );
     }
 

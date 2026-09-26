@@ -20,12 +20,12 @@ use pixi_record::{
 use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceLocationSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_variant::VariantValue;
-use rattler_conda_types::{PackageName, PackageRecord, package::RunExportsJson};
+use rattler_conda_types::{PackageName, PackageRecord, Platform, package::RunExportsJson};
 use rattler_solve::SolveStrategy;
 
 use crate::{
-    BuildBackendMetadataSpec, DerivedEnvKind, EnvironmentRef, InstalledSourceHints, PtrArc,
-    SourceRecordError, SourceRecordReporterSpec,
+    BuildBackendMetadataSpec, BuildEnvOf, DerivedEnvKind, EnvironmentRef, InstalledSourceHints,
+    PtrArc, SourceRecordError, SourceRecordReporterSpec,
     build::{Dependencies, PinnedSourceCodeLocation, PixiRunExports, convert_extra_dependencies},
     compute_data::{HasGateway, HasSourceRecordReporter},
     cycle::CycleEnvironment,
@@ -34,6 +34,7 @@ use crate::{
     reporter::SourceRecordReporter,
 };
 use pixi_compute_reporters::{Active, LifecycleKind, ReporterLifecycle};
+use pixi_manifest::InlineContentHash;
 
 /// Resolve one variant's [`SourceRecord`] from an assembled
 /// [`CondaOutput`] + pinned source location.
@@ -54,6 +55,7 @@ pub(super) async fn assemble_source_record(
     preferred_build_source: &Arc<BTreeMap<PackageName, PinnedSourceSpec>>,
     env_ref: &EnvironmentRef,
     installed_source_hints: &PtrArc<InstalledSourceHints>,
+    inline_content_hash: Option<InlineContentHash>,
 ) -> Result<Arc<SourceRecord>, SourceRecordError> {
     // Reporter lifecycle for this variant's source-record assembly.
     // Build a `SourceRecordReporterSpec` from the data flowing through here so
@@ -75,6 +77,7 @@ pub(super) async fn assemble_source_record(
             env_ref: env_ref.clone(),
             build_string_prefix: None,
             build_number: None,
+            inline: None,
         },
         exclude_newer: None,
     };
@@ -97,6 +100,7 @@ pub(super) async fn assemble_source_record(
         preferred_build_source,
         env_ref,
         installed_source_hints,
+        inline_content_hash,
     );
     match active_id {
         Some(id) => id.scope_active(work).await,
@@ -112,6 +116,7 @@ async fn assemble_source_record_inner(
     preferred_build_source: &Arc<BTreeMap<PackageName, PinnedSourceSpec>>,
     env_ref: &EnvironmentRef,
     installed_source_hints: &PtrArc<InstalledSourceHints>,
+    inline_content_hash: Option<InlineContentHash>,
 ) -> Result<Arc<SourceRecord>, SourceRecordError> {
     let source_location = SourceLocationSpec::from(source.manifest_source().clone());
     let source_anchor = SourceAnchor::from(source_location.clone());
@@ -225,53 +230,78 @@ async fn assemble_source_record_inner(
             output.metadata.subdir,
         );
 
-    let mut sources: HashMap<PackageName, SourceLocationSpec> = HashMap::new();
+    /// A source location in the `sources` bookkeeping, tagged with how it
+    /// was registered. Explicit registrations come from source specs the
+    /// backend declared (run deps, the record's own run-exports, extras)
+    /// and carry the manifest spelling; implied ones are derived from
+    /// pinned build/host env records and may spell the same source
+    /// differently (a pinned commit vs. a branch, or a differently written
+    /// relative path).
+    enum RegisteredSource {
+        Explicit(SourceLocationSpec),
+        Implied(SourceLocationSpec),
+    }
+
+    let mut sources: HashMap<PackageName, RegisteredSource> = HashMap::new();
 
     // Record a source-typed PixiSpec's location into `sources`, erroring
-    // if the same (name, location) is registered twice. Only the location
-    // is tracked; the matchspec selectors live on the dependency itself.
-    let mut track_source = |name: &PackageName, spec: &PixiSpec| -> Result<(), SourceRecordError> {
+    // if the same package is explicitly registered from two different
+    // locations. An explicit registration replaces an implied one, so the
+    // outcome does not depend on which of the two is encountered first.
+    // Only the location is tracked; the matchspec selectors live on the
+    // dependency itself.
+    fn track_source(
+        sources: &mut HashMap<PackageName, RegisteredSource>,
+        name: &PackageName,
+        spec: &PixiSpec,
+    ) -> Result<(), SourceRecordError> {
         if let Either::Left(source) = spec.clone().into_source_or_binary() {
             let location = source.location;
             match sources.entry(name.clone()) {
-                std::collections::hash_map::Entry::Occupied(entry) => {
-                    if entry.get() == &location {
-                        return Err(SourceRecordError::DuplicateSourceDependency {
-                            package: name.clone(),
-                            source1: Box::new(entry.get().clone()),
-                            source2: Box::new(location.clone()),
-                        });
+                std::collections::hash_map::Entry::Occupied(mut entry) => match entry.get() {
+                    RegisteredSource::Explicit(existing) => {
+                        if existing != &location {
+                            return Err(SourceRecordError::DuplicateSourceDependency {
+                                package: name.clone(),
+                                source1: Box::new(existing.clone()),
+                                source2: Box::new(location.clone()),
+                            });
+                        }
                     }
-                }
+                    RegisteredSource::Implied(_) => {
+                        entry.insert(RegisteredSource::Explicit(location));
+                    }
+                },
                 std::collections::hash_map::Entry::Vacant(entry) => {
-                    entry.insert(location);
+                    entry.insert(RegisteredSource::Explicit(location));
                 }
             }
         }
         Ok(())
-    };
+    }
 
     // Stringify a PixiSpec dep map into a `Vec<String>`, threading source
     // locations through `track_source` for the per-source bookkeeping.
-    let stringify_pixi_specs =
-        |specs: DependencyMap<PackageName, PixiSpec>,
-         track_source: &mut dyn FnMut(&PackageName, &PixiSpec) -> Result<(), SourceRecordError>|
-         -> Result<Vec<String>, SourceRecordError> {
-            specs
-                .into_specs()
-                .map(|(name, spec)| {
-                    track_source(&name, &spec)?;
-                    Ok(spec
-                        .to_match_spec(&name, &channel_config)
-                        .map_err(SourceRecordError::from)?
-                        .to_string())
-                })
-                .collect()
-        };
+    let stringify_pixi_specs = |specs: DependencyMap<PackageName, PixiSpec>,
+                                sources: &mut HashMap<PackageName, RegisteredSource>|
+     -> Result<Vec<String>, SourceRecordError> {
+        let mut result = specs
+            .into_specs()
+            .map(|(name, spec)| {
+                track_source(sources, &name, &spec)?;
+                Ok(spec
+                    .to_match_spec(&name, &channel_config)
+                    .map_err(SourceRecordError::from)?
+                    .to_string())
+            })
+            .collect::<Result<Vec<_>, SourceRecordError>>()?;
+        result.sort_unstable();
+        Ok(result)
+    };
 
     let stringify_binary_specs =
         |specs: DependencyMap<PackageName, BinarySpec>| -> Result<Vec<String>, SourceRecordError> {
-            specs
+            let mut result = specs
                 .into_specs()
                 .map(|(name, spec)| {
                     Ok(spec
@@ -279,15 +309,54 @@ async fn assemble_source_record_inner(
                         .map_err(SourceRecordError::from)?
                         .to_string())
                 })
-                .collect()
+                .collect::<Result<Vec<_>, SourceRecordError>>()?;
+            result.sort_unstable();
+            Ok(result)
         };
 
-    let depends = run_dependencies
+    let mut depends = run_dependencies
         .dependencies
         .clone()
         .into_specs()
         .map(|(name, withspec)| {
-            track_source(&name, &withspec.value)?;
+            if withspec.source.is_none() {
+                track_source(&mut sources, &name, &withspec.value)?;
+            }
+
+            // Register implied source dependencies leniently (an explicit
+            // source spec wins, no matter whether it is registered through
+            // the run deps above or through the record's own run-exports or
+            // extras later):
+            // - a run-export-introduced source spec carries the pinned
+            //   location of the build/host env record it was extracted
+            //   from, which can spell the same source differently than an
+            //   explicit spec (e.g. a pinned commit vs. a branch);
+            // - a binary-shaped run dep on a package that was built from
+            //   source in this record's build/host envs (e.g. `python
+            //   >=3.12` while the host env holds a source-built python)
+            //   must resolve to that same source at install time — the
+            //   package was linked against it.
+            // Pinned locations are workspace-root-relative while `sources`
+            // entries are read relative to this record's manifest, so
+            // relativize first.
+            if !sources.contains_key(&name) {
+                let implied_location = match withspec.value.clone().into_source_or_binary() {
+                    Either::Left(source) if withspec.source.is_some() => Some(source.location),
+                    Either::Left(_) => None,
+                    Either::Right(_) => compatibility_map.get(&name).and_then(|r| match r {
+                        PixiRecord::Source(source) => {
+                            Some(SourceLocationSpec::from(source.manifest_source().clone()))
+                        }
+                        PixiRecord::Binary(_) => None,
+                    }),
+                };
+                if let Some(location) =
+                    implied_location.and_then(|loc| source_anchor.relativize_location(loc))
+                {
+                    sources.insert(name.clone(), RegisteredSource::Implied(location));
+                }
+            }
+
             Ok(withspec
                 .value
                 .to_match_spec(&name, &channel_config)
@@ -295,8 +364,9 @@ async fn assemble_source_record_inner(
                 .to_string())
         })
         .collect::<Result<Vec<_>, SourceRecordError>>()?;
+    depends.sort_unstable();
 
-    let constrains = run_dependencies
+    let mut constrains = run_dependencies
         .constraints
         .into_specs()
         .map(|(name, withspec)| {
@@ -307,15 +377,16 @@ async fn assemble_source_record_inner(
                 .to_string())
         })
         .collect::<Result<Vec<_>, SourceRecordError>>()?;
+    constrains.sort_unstable();
 
     let run_exports_pixi =
         PixiRunExports::try_from_protocol(&output.run_exports, &compatibility_map)
             .map_err(SourceRecordError::from)?;
 
     let run_exports = RunExportsJson {
-        weak: stringify_pixi_specs(run_exports_pixi.weak, &mut track_source)?,
-        strong: stringify_pixi_specs(run_exports_pixi.strong, &mut track_source)?,
-        noarch: stringify_pixi_specs(run_exports_pixi.noarch, &mut track_source)?,
+        weak: stringify_pixi_specs(run_exports_pixi.weak, &mut sources)?,
+        strong: stringify_pixi_specs(run_exports_pixi.strong, &mut sources)?,
+        noarch: stringify_pixi_specs(run_exports_pixi.noarch, &mut sources)?,
         weak_constrains: stringify_binary_specs(run_exports_pixi.weak_constrains)?,
         strong_constrains: stringify_binary_specs(run_exports_pixi.strong_constrains)?,
     };
@@ -330,7 +401,7 @@ async fn assemble_source_record_inner(
             .map(|(group, specs)| {
                 Ok((
                     group.into_inner(),
-                    stringify_pixi_specs(specs, &mut track_source)?,
+                    stringify_pixi_specs(specs, &mut sources)?,
                 ))
             })
             .collect::<Result<BTreeMap<String, Vec<String>>, SourceRecordError>>()?;
@@ -369,7 +440,7 @@ async fn assemble_source_record_inner(
             .map(|purls| purls.iter().cloned().collect()),
         python_site_packages_path: output.metadata.python_site_packages_path.clone(),
         features: None,
-        track_features: vec![],
+        track_features: output.metadata.track_features.clone(),
         legacy_bz2_md5: None,
         legacy_bz2_size: None,
         extra_depends,
@@ -378,7 +449,11 @@ async fn assemble_source_record_inner(
 
     let sources_by_str: BTreeMap<String, SourceLocationSpec> = sources
         .into_iter()
-        .map(|(name, source)| (name.as_source().to_string(), source))
+        .map(|(name, source)| {
+            let (RegisteredSource::Explicit(location) | RegisteredSource::Implied(location)) =
+                source;
+            (name.as_source().to_string(), location)
+        })
         .collect();
 
     // `SourceRecord::new` derives `identifier_hash` from the contents.
@@ -410,6 +485,10 @@ async fn assemble_source_record_inner(
             .into_iter()
             .map(pixi_record::UnresolvedPixiRecord::from)
             .collect(),
+        // `pixi_record` is below `pixi_manifest` in the dependency graph and
+        // cannot name `InlineContentHash`, so unwrap to the raw `u64` here, at
+        // the one crate boundary where the newtype can no longer travel.
+        inline_content_hash.map(InlineContentHash::as_u64),
     );
 
     Ok(Arc::new(record))
@@ -442,6 +521,20 @@ async fn nested_solve(
         return Ok(vec![]);
     }
 
+    let nested_env_ref = env_ref.derived(pkg_name.clone(), kind);
+    // The hint describes a locked copy of this package, but hints are keyed
+    // by name and source location only, while a package that is a build
+    // dependency of one package and a host dependency of another is
+    // resolved once per platform. The hint may therefore belong to the
+    // copy of the other platform. The solver treats installed records as
+    // locked candidates and would pick them, so keep only the records that
+    // fit the platform this environment is solved for.
+    let host_platform = ctx
+        .compute(&BuildEnvOf(nested_env_ref.clone()))
+        .await
+        .host_platform;
+    let installed = installed_records_for_platform(installed, host_platform);
+
     let nested_spec = SolvePixiEnvironmentSpec {
         dependencies: dependencies
             .dependencies
@@ -463,7 +556,10 @@ async fn nested_solve(
         installed_source_hints: installed_source_hints.clone(),
         strategy: SolveStrategy::default(),
         preferred_build_source: Arc::clone(preferred_build_source),
-        env_ref: env_ref.derived(pkg_name.clone(), kind),
+        env_ref: nested_env_ref,
+        // A nested build/host env solves binary/source build deps; inline
+        // definitions apply only to the consumer's direct dependencies.
+        inline_packages: Default::default(),
     };
 
     // Wrap the nested SolvePixiEnvironmentKey call in a cycle
@@ -501,9 +597,15 @@ async fn nested_solve(
         // not a wrapping "solve the build/host environment" error.
         crate::SolvePixiEnvironmentError::Cycle(cycle) => SourceRecordError::Cycle(cycle),
         other => match cycle_env {
-            CycleEnvironment::Build => SourceRecordError::SolveBuildEnvironment(Box::new(other)),
+            CycleEnvironment::Build => SourceRecordError::SolveBuildEnvironment {
+                package: pkg_name.clone(),
+                error: Box::new(other),
+            },
             CycleEnvironment::Host | CycleEnvironment::Run => {
-                SourceRecordError::SolveHostEnvironment(Box::new(other))
+                SourceRecordError::SolveHostEnvironment {
+                    package: pkg_name.clone(),
+                    error: Box::new(other),
+                }
             }
         },
     })?;
@@ -574,5 +676,85 @@ impl LifecycleKind for SourceRecordReporterLifecycle {
 
     fn on_finished<'r>(active: Active<'r, Self::Reporter<'r>, Self::Id>) {
         active.reporter.on_finished(active.id);
+    }
+}
+
+/// The records of `installed` that can be part of an environment solved
+/// for `platform`: records of that platform, `noarch` records, and records
+/// whose subdir is not a known platform (those are not ours to judge).
+fn installed_records_for_platform(
+    installed: Arc<[UnresolvedPixiRecord]>,
+    platform: Platform,
+) -> Arc<[UnresolvedPixiRecord]> {
+    let fits = |record: &UnresolvedPixiRecord| match record
+        .package_record()
+        .and_then(|record| record.subdir.parse::<Platform>().ok())
+    {
+        Some(subdir) => subdir == Platform::NoArch || subdir == platform,
+        None => true,
+    };
+    if installed.iter().all(fits) {
+        return installed;
+    }
+    installed
+        .iter()
+        .filter(|record| fits(record))
+        .cloned()
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use rattler_conda_types::{RepoDataRecord, VersionWithSource, package::DistArchiveIdentifier};
+    use url::Url;
+
+    use super::*;
+
+    fn binary(name: &str, subdir: &str) -> UnresolvedPixiRecord {
+        let mut package_record = PackageRecord::new(
+            PackageName::new_unchecked(name),
+            "1.0.0".parse::<VersionWithSource>().unwrap(),
+            "h0".into(),
+        );
+        package_record.subdir = subdir.into();
+        UnresolvedPixiRecord::Binary(Arc::new(RepoDataRecord {
+            package_record,
+            identifier: DistArchiveIdentifier::try_from_filename(&format!("{name}-1.0.0-h0.conda"))
+                .unwrap(),
+            url: Url::parse(&format!(
+                "https://example.com/{subdir}/{name}-1.0.0-h0.conda"
+            ))
+            .unwrap(),
+            channel: None,
+        }))
+    }
+
+    fn names(records: &[UnresolvedPixiRecord]) -> Vec<&str> {
+        records.iter().map(|r| r.name().as_normalized()).collect()
+    }
+
+    #[test]
+    fn records_of_the_platform_noarch_and_unknown_subdirs_are_kept() {
+        let installed: Arc<[_]> = Arc::from([
+            binary("libfoo", "linux-64"),
+            binary("pyfoo", "noarch"),
+            binary("mystery", "not-a-platform"),
+        ]);
+        let kept = installed_records_for_platform(installed.clone(), Platform::Linux64);
+        assert!(
+            Arc::ptr_eq(&kept, &installed),
+            "nothing to drop, nothing copied"
+        );
+    }
+
+    #[test]
+    fn records_of_another_platform_are_dropped() {
+        let installed: Arc<[_]> = Arc::from([
+            binary("libfoo", "linux-64"),
+            binary("dummy-b", "osx-arm64"),
+            binary("pyfoo", "noarch"),
+        ]);
+        let kept = installed_records_for_platform(installed, Platform::Linux64);
+        assert_eq!(names(&kept), ["libfoo", "pyfoo"]);
     }
 }

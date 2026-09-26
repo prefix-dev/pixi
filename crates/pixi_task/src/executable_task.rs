@@ -20,15 +20,16 @@ use pixi_core::{
     workspace::{Environment, HasWorkspaceRef},
 };
 use pixi_manifest::{
-    Task, TaskName,
+    PixiPlatform, Task, TaskName,
     task::{ArgValues, TaskRenderContext, TemplateStringError},
 };
 use pixi_progress::await_in_progress;
+use pixi_utils::atomic_write::atomic_write;
 use rattler_lock::LockFile;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
-use crate::task_graph::{TaskGraph, TaskId};
+use crate::task_graph::{TaskGraph, TaskId, join_args_with_single_quotes};
 use crate::task_hash::{InputHashesError, NameHash, TaskCache, TaskHash};
 
 /// Runs task in project.
@@ -97,6 +98,9 @@ pub struct ExecutableTask<'p> {
     pub run_environment: Environment<'p>,
     pub args: ArgValues,
     pub init_cwd: Option<PathBuf>,
+    /// The platform this task is rendered, hashed and activated for: the
+    /// `pixi run --platform` pin, or the environment's own default.
+    pub platform: PixiPlatform,
 }
 
 impl<'p> ExecutableTask<'p> {
@@ -107,6 +111,11 @@ impl<'p> ExecutableTask<'p> {
         init_cwd: Option<PathBuf>,
     ) -> Self {
         let node = &task_graph[task_id];
+        let platform = task_graph
+            .platform()
+            .or_else(|| crate::task_environment::default_search_platform(&node.run_environment))
+            .cloned()
+            .unwrap_or_else(|| node.run_environment.activation_platform());
 
         Self {
             workspace: task_graph.project(),
@@ -115,6 +124,7 @@ impl<'p> ExecutableTask<'p> {
             run_environment: node.run_environment.clone(),
             args: node.args.clone().unwrap_or_default(),
             init_cwd,
+            platform,
         }
     }
 
@@ -142,7 +152,7 @@ impl<'p> ExecutableTask<'p> {
     /// This includes the platform, environment name, manifest path, and arguments.
     pub fn render_context(&self) -> pixi_manifest::task::TaskRenderContext<'_> {
         pixi_manifest::task::TaskRenderContext {
-            platform: self.run_environment.best_declared_platform(),
+            platform: Some(&self.platform),
             environment_name: self.run_environment.name(),
             manifest_path: Some(&self.workspace.workspace.provenance.path),
             args: Some(&self.args),
@@ -169,16 +179,14 @@ impl<'p> ExecutableTask<'p> {
             let export = get_export_specific_task_env(self.task.as_ref(), &context)
                 .map_err(FailedToParseShellScript::ArgumentReplacement)?;
 
-            // Append the command line arguments verbatim
+            // Preserve command-line arguments as literal shell arguments.
             let extra = self.args.extra_args();
             let cli_args = if extra.is_empty() {
                 String::new()
             } else {
                 format!(
                     " {}",
-                    extra
-                        .iter()
-                        .format_with(" ", |arg, f| f(&format_args!("'{arg}'")))
+                    join_args_with_single_quotes(extra.iter().map(String::as_str))
                 )
             };
 
@@ -207,7 +215,7 @@ impl<'p> ExecutableTask<'p> {
             // Parse the shell command
             deno_task_shell::parser::parse(full_script.trim())
                 .map_err(|e| FailedToParseShellScript::ParseError {
-                    source: e,
+                    source: e.into(),
                     task: full_script.to_string(),
                 })
                 .map(Some)
@@ -324,6 +332,7 @@ impl<'p> ExecutableTask<'p> {
                     &self.run_environment,
                     &std::collections::HashMap::new(),
                     lock_file,
+                    &self.platform,
                 ),
             }
         };
@@ -403,16 +412,36 @@ impl<'p> ExecutableTask<'p> {
         let args_hash = TaskHash::task_args_hash(self).unwrap_or_default();
         let cache_name = self.cache_name(args_hash);
         let cache_file = self.project().task_cache_folder().join(cache_name);
-        if cache_file.exists() {
-            let cache = tokio_fs::read_to_string(&cache_file).await?;
-            let cache: TaskCache = serde_json::from_str(&cache)?;
-            let hash = TaskHash::from_task(self, lock_file).await;
-            if let Ok(Some(hash)) = hash {
-                if hash.computation_hash() != cache.hash {
-                    return Ok(CanSkip::No(Some(hash)));
-                } else {
-                    return Ok(CanSkip::Yes);
-                }
+        let cache = match tokio_fs::read_to_string(&cache_file).await {
+            Ok(cache) => cache,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(CanSkip::No(None));
+            }
+            Err(err) => return Err(err),
+        };
+        let cache: TaskCache = match serde_json::from_str(&cache) {
+            Ok(cache) => cache,
+            Err(err) => {
+                // A truncated or corrupt cache is a miss, not a hard failure.
+                // Disk-full writes have left zero-byte files that then
+                // blocked every later `pixi run` with a generic JSON EOF.
+                tracing::warn!(
+                    path = %cache_file.display(),
+                    error = %err,
+                    "ignoring corrupt task-cache entry"
+                );
+                // Leave the rejected entry in place until a successful run
+                // replaces it. Removing it here could unlink a valid entry
+                // concurrently written after this process read the bad bytes.
+                return Ok(CanSkip::No(None));
+            }
+        };
+        let hash = TaskHash::from_task(self, lock_file).await;
+        if let Ok(Some(hash)) = hash {
+            if hash.computation_hash() != cache.hash {
+                return Ok(CanSkip::No(Some(hash)));
+            } else {
+                return Ok(CanSkip::Yes);
             }
         }
         Ok(CanSkip::No(None))
@@ -452,8 +481,7 @@ impl<'p> ExecutableTask<'p> {
         let cache = TaskCache {
             hash: new_hash.computation_hash(),
         };
-        let cache = serde_json::to_string(&cache)?;
-        Ok(tokio::fs::write(&cache_file, cache).await?)
+        Ok(atomic_write(&cache_file, serde_json::to_string(&cache)?).await?)
     }
 }
 
@@ -529,8 +557,11 @@ fn get_export_specific_task_env(
 /// Determine the environment variables to use when executing a command. The
 /// method combines the activation environment with the system environment
 /// variables.
+///
+/// `platform` selects which `[target.*]` activation applies.
 pub async fn get_task_env(
     environment: &Environment<'_>,
+    platform: &PixiPlatform,
     clean_env: bool,
     lock_file: Option<&LockFile>,
     force_activate: bool,
@@ -546,6 +577,7 @@ pub async fn get_task_env(
         get_activated_environment_variables(
             environment.workspace().env_vars(),
             environment,
+            platform,
             env_var_behavior,
             lock_file,
             force_activate,
@@ -573,8 +605,114 @@ pub async fn get_task_env(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::task_hash::ComputationHash;
     use pixi_manifest::task::{ArgValues, TypedArg};
     use std::path::Path;
+
+    #[test]
+    fn empty_task_cache_json_is_a_parse_error() {
+        let err = serde_json::from_str::<TaskCache>("").expect_err("empty cache must not parse");
+        assert!(
+            err.to_string().to_ascii_lowercase().contains("eof") || err.is_eof(),
+            "expected an EOF-class parse error, got {err}"
+        );
+    }
+
+    #[test]
+    fn valid_task_cache_json_roundtrips() {
+        let cache = TaskCache {
+            hash: ComputationHash::from("abc123".to_string()),
+        };
+        let encoded = serde_json::to_string(&cache).expect("encode");
+        let decoded: TaskCache = serde_json::from_str(&encoded).expect("decode");
+        assert_eq!(decoded.hash, cache.hash);
+    }
+
+    #[tokio::test]
+    async fn can_skip_treats_empty_cache_file_as_miss_without_unlinking_it() {
+        let tmp = tempfile::tempdir().unwrap();
+        let workspace = workspace_at(tmp.path(), "repro = { cmd = \"echo task-ran\" }");
+        let task = task_from_snippet(&workspace, "repro");
+        let args_hash = TaskHash::task_args_hash(&task).unwrap_or_default();
+        let cache_file = workspace
+            .task_cache_folder()
+            .join(task.cache_name(args_hash));
+        tokio::fs::create_dir_all(cache_file.parent().unwrap())
+            .await
+            .unwrap();
+        tokio::fs::write(&cache_file, "").await.unwrap();
+
+        let result = task.can_skip(&LockFile::default()).await.unwrap();
+        assert!(
+            matches!(result, CanSkip::No(None)),
+            "empty cache must be a miss"
+        );
+        assert!(
+            cache_file.exists(),
+            "leave the rejected entry for a successful run to replace atomically"
+        );
+    }
+
+    #[tokio::test]
+    async fn can_skip_treats_missing_cache_file_as_miss() {
+        let tmp = tempfile::tempdir().unwrap();
+        let workspace = workspace_at(tmp.path(), "repro = { cmd = \"echo task-ran\" }");
+        let task = task_from_snippet(&workspace, "repro");
+
+        let result = task.can_skip(&LockFile::default()).await.unwrap();
+
+        assert!(matches!(result, CanSkip::No(None)));
+    }
+
+    #[tokio::test]
+    async fn save_cache_atomically_overwrites_existing_entry() {
+        let tmp = tempfile::tempdir().unwrap();
+        let workspace = workspace_at(
+            tmp.path(),
+            "repro = { cmd = \"echo task-ran\", outputs = [\"output.txt\"] }",
+        );
+        let output = tmp.path().join("output.txt");
+        tokio_fs::write(&output, "first").await.unwrap();
+        let task = task_from_snippet(&workspace, "repro");
+        let lock_file = LockFile::default();
+
+        let first_hash = TaskHash::from_task(&task, &lock_file)
+            .await
+            .unwrap()
+            .unwrap();
+        task.save_cache(Some(first_hash)).await.unwrap();
+        let cache_file = workspace
+            .task_cache_folder()
+            .join(task.cache_name(TaskHash::task_args_hash(&task).unwrap_or_default()));
+        let first_cache: TaskCache =
+            serde_json::from_str(&tokio_fs::read_to_string(&cache_file).await.unwrap()).unwrap();
+
+        tokio_fs::write(&output, "second-version").await.unwrap();
+        let second_hash = TaskHash::from_task(&task, &lock_file)
+            .await
+            .unwrap()
+            .unwrap();
+        let expected_hash = second_hash.computation_hash();
+        task.save_cache(Some(second_hash)).await.unwrap();
+
+        let second_cache: TaskCache =
+            serde_json::from_str(&tokio_fs::read_to_string(&cache_file).await.unwrap()).unwrap();
+        assert_ne!(first_cache.hash, second_cache.hash);
+        assert_eq!(second_cache.hash, expected_hash);
+        assert!(matches!(
+            task.can_skip(&lock_file).await.unwrap(),
+            CanSkip::Yes
+        ));
+
+        let mut entries = tokio_fs::read_dir(workspace.task_cache_folder())
+            .await
+            .unwrap();
+        assert_eq!(
+            entries.next_entry().await.unwrap().unwrap().path(),
+            cache_file
+        );
+        assert!(entries.next_entry().await.unwrap().is_none());
+    }
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
@@ -703,6 +841,7 @@ mod tests {
             run_environment: workspace.default_environment(),
             args: ArgValues::default(),
             init_cwd: None,
+            platform: workspace.default_environment().activation_platform(),
         };
 
         let script = executable_task.as_script().unwrap().unwrap();
@@ -722,6 +861,45 @@ mod tests {
             run_environment: workspace.default_environment(),
             args: ArgValues::default(),
             init_cwd: None,
+            platform: workspace.default_environment().activation_platform(),
+        }
+    }
+
+    fn workspace_at(root: &Path, task_definition: &str) -> Workspace {
+        let manifest = root.join("pixi.toml");
+        let file_contents = format!("{PROJECT_BOILERPLATE}\n[tasks]\n{task_definition}\n");
+        fs_err::write(&manifest, &file_contents).unwrap();
+        Workspace::from_str(&manifest, &file_contents).unwrap()
+    }
+
+    #[tokio::test]
+    async fn extra_args_preserve_quotes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let workspace = workspace_at(tmp.path(), r#"say = "echo""#);
+        let arguments = [
+            "O'Reilly",
+            r#"He said "it's fine""#,
+            r"C:\Users\O'Reilly\file.txt",
+            "a'; echo another command; echo 'b",
+            "",
+        ];
+        let extra: Vec<String> = arguments.iter().map(|arg| (*arg).to_owned()).collect();
+        for args in [
+            ArgValues::FreeFormArgs(extra.clone()),
+            ArgValues::TypedArgs {
+                args: vec![],
+                extra,
+            },
+        ] {
+            let mut task = task_from_snippet(&workspace, "say");
+            task.args = args;
+            let output = task
+                .execute_with_pipes(&HashMap::new(), None)
+                .await
+                .unwrap();
+            assert_eq!(output.exit_code, 0);
+            assert_eq!(output.stdout, format!("{}\n", arguments.join(" ")));
+            assert_eq!(output.stderr, "");
         }
     }
 
@@ -819,9 +997,9 @@ echo last
             script,
             "echo hello &&\necho world\necho piped |\ncat\n# comment\n\necho last"
         );
-        // `echo hello && echo world`, `echo piped | cat`, the comment line,
-        // and `echo last`.
-        assert_eq!(parsed_item_count(&script), 4);
+        // `echo hello && echo world`, `echo piped | cat`, and `echo last`.
+        // Comments are ignored by deno_task_shell's parser.
+        assert_eq!(parsed_item_count(&script), 3);
     }
 
     #[test]
@@ -881,9 +1059,16 @@ exit 0
         .unwrap();
 
         let environment = workspace.default_environment();
-        let env = get_task_env(&environment, false, None, false, false)
-            .await
-            .unwrap();
+        let env = get_task_env(
+            &environment,
+            &environment.activation_platform(),
+            false,
+            None,
+            false,
+            false,
+        )
+        .await
+        .unwrap();
         assert_eq!(
             env.get("INIT_CWD").unwrap(),
             &std::env::current_dir()

@@ -5,6 +5,7 @@ use pixi_record::VariantValue;
 use pixi_spec::{SourceLocationSpec, SpecConversionError};
 use rattler_conda_types::{
     ChannelUrl, ConvertSubdirError, InvalidPackageNameError, PackageName, ParseChannelError,
+    Platform,
 };
 use rattler_repodata_gateway::RunExportExtractorError;
 use thiserror::Error;
@@ -47,8 +48,13 @@ pub enum SourceBuildError {
     #[error("failed to install the host environment")]
     InstallHostEnvironment(#[source] Arc<InstallPixiEnvironmentError>),
 
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    PrefixPlatformMismatch(#[from] PrefixPlatformMismatchError),
+
     #[error(
-        "The build backend does not provide an output matching '{name}' with variants {variants:?}."
+        "The build backend does not provide an output matching '{name}' with variants: {}.",
+        format_variants(variants)
     )]
     MissingOutput {
         name: String,
@@ -64,7 +70,14 @@ pub enum SourceBuildError {
     InvalidPackageName(#[source] Arc<InvalidPackageNameError>),
 
     #[error(transparent)]
+    #[diagnostic(transparent)]
     PinCompatibleError(#[from] PinCompatibleError),
+
+    #[error(
+        "the build backend returned an unresolved `pin-subpackage` spec for '{}'",
+        .0.as_normalized()
+    )]
+    UnresolvedPinSubpackage(PackageName),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -84,6 +97,88 @@ pub enum SourceBuildError {
 
     #[error(transparent)]
     GlobSet(Arc<pixi_glob::GlobSetError>),
+}
+
+/// The two prefixes a source build installs its resolved dependencies
+/// into.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SourceBuildPrefixKind {
+    /// Holds the build dependencies; runs on the build platform.
+    Build,
+    /// Holds the host dependencies; targets the host platform.
+    Host,
+}
+
+impl std::fmt::Display for SourceBuildPrefixKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            SourceBuildPrefixKind::Build => write!(f, "build"),
+            SourceBuildPrefixKind::Host => write!(f, "host"),
+        }
+    }
+}
+
+/// Where a record that is installed into a build or host prefix came from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PrefixRecordOrigin {
+    /// Pixi's solver picked the record for the environment.
+    Solved,
+    /// A nested source build produced the record for the environment.
+    Built,
+}
+
+/// A record resolved for one platform was about to be installed into a
+/// build or host prefix of another platform.
+///
+/// The build and host environments of a source record are solved
+/// separately from the prefixes they are later installed into. When the
+/// two disagree, the prefix ends up with binaries that cannot run (or be
+/// linked against) on the platform the build backend is told about, which
+/// otherwise surfaces as an opaque failure deep inside the build script.
+#[derive(Debug, Clone, Error)]
+#[error(
+    "cannot install '{}' ({subdir}) into the {kind} environment of '{}', which is for '{expected}'",
+    package.as_normalized(),
+    source_package.as_normalized()
+)]
+pub struct PrefixPlatformMismatchError {
+    /// The prefix the record was about to be installed into.
+    pub kind: SourceBuildPrefixKind,
+    /// The source package whose build or host environment the prefix is.
+    pub source_package: PackageName,
+    /// The record whose subdir does not match.
+    pub package: PackageName,
+    /// Where the record came from.
+    pub origin: PrefixRecordOrigin,
+    /// The subdir the record was resolved for.
+    pub subdir: String,
+    /// The platform of the prefix.
+    pub expected: Platform,
+}
+
+impl Diagnostic for PrefixPlatformMismatchError {
+    fn help<'a>(&'a self) -> Option<Box<dyn std::fmt::Display + 'a>> {
+        let package = self.package.as_normalized();
+        let help = match self.origin {
+            PrefixRecordOrigin::Solved => format!(
+                "'{package}' was picked for '{}' while pixi solved the {} environment of '{}' for \
+                 '{}'; this is a bug in pixi's cross-compilation platform tracking, please report \
+                 it at https://github.com/prefix-dev/pixi/issues together with the output of \
+                 `pixi -vv <command>`",
+                self.subdir,
+                self.kind,
+                self.source_package.as_normalized(),
+                self.expected
+            ),
+            PrefixRecordOrigin::Built => format!(
+                "'{package}' is a source dependency that was built for this environment; its build \
+                 backend was asked to build for '{}' but produced a '{}' package, please report \
+                 this to the maintainers of that backend",
+                self.expected, self.subdir
+            ),
+        };
+        Some(Box::new(help))
+    }
 }
 
 impl From<InvalidPackageNameError> for SourceBuildError {
@@ -112,6 +207,9 @@ impl From<DependenciesError> for SourceBuildError {
             }
             DependenciesError::PinCompatibleError(error) => {
                 SourceBuildError::PinCompatibleError(error)
+            }
+            DependenciesError::UnresolvedPinSubpackage(name) => {
+                SourceBuildError::UnresolvedPinSubpackage(name)
             }
         }
     }
@@ -145,19 +243,21 @@ pub enum SourceRecordError {
     #[error("failed to amend run exports for {0} environment")]
     RunExportsExtraction(String, #[source] Arc<RunExportExtractorError>),
 
-    #[error("while trying to solve the build environment for the package")]
-    SolveBuildEnvironment(
+    #[error("failed to solve the build environment for package '{}'", package.as_source())]
+    SolveBuildEnvironment {
+        package: PackageName,
         #[diagnostic_source]
         #[source]
-        Box<SolvePixiEnvironmentError>,
-    ),
+        error: Box<SolvePixiEnvironmentError>,
+    },
 
-    #[error("while trying to solve the host environment for the package")]
-    SolveHostEnvironment(
+    #[error("failed to solve the host environment for package '{}'", package.as_source())]
+    SolveHostEnvironment {
+        package: PackageName,
         #[diagnostic_source]
         #[source]
-        Box<SolvePixiEnvironmentError>,
-    ),
+        error: Box<SolvePixiEnvironmentError>,
+    },
 
     #[error(transparent)]
     SpecConversionError(Arc<SpecConversionError>),
@@ -166,7 +266,14 @@ pub enum SourceRecordError {
     InvalidPackageName(Arc<InvalidPackageNameError>),
 
     #[error(transparent)]
+    #[diagnostic(transparent)]
     PinCompatibleError(#[from] PinCompatibleError),
+
+    #[error(
+        "the build backend returned an unresolved `pin-subpackage` spec for '{}'",
+        .0.as_normalized()
+    )]
+    UnresolvedPinSubpackage(PackageName),
 
     #[error("found two source dependencies for {} but for different sources ({source1} and {source2})", package.as_source()
     )]
@@ -219,6 +326,9 @@ impl From<DependenciesError> for SourceRecordError {
             DependenciesError::PinCompatibleError(error) => {
                 SourceRecordError::PinCompatibleError(error)
             }
+            DependenciesError::UnresolvedPinSubpackage(name) => {
+                SourceRecordError::UnresolvedPinSubpackage(name)
+            }
         }
     }
 }
@@ -231,6 +341,9 @@ pub enum SolvePixiEnvironmentError {
 
     #[error("failed to solve the environment")]
     SolveError(#[source] Arc<rattler_solve::SolveError>),
+
+    #[error("failed to read the package cache")]
+    CacheIndexError(#[source] Arc<std::io::Error>),
 
     #[error(transparent)]
     SpecConversionError(Arc<SpecConversionError>),
@@ -258,6 +371,60 @@ pub enum SolvePixiEnvironmentError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     SourceMetadata(SourceMetadataError),
+
+    /// Resolving a source package that is part of the environment failed.
+    /// Names the package and its source location so failures deep inside
+    /// nested build/host environments can be traced back to the package
+    /// they belong to.
+    #[error("failed to resolve source package '{}' (at '{source}')", name.as_source())]
+    ResolveSourcePackage {
+        name: PackageName,
+        source: Box<SourceLocationSpec>,
+        #[diagnostic_source]
+        #[source]
+        error: Box<SourceRecordError>,
+    },
+}
+
+impl SolvePixiEnvironmentError {
+    /// Returns the backend discovery failure this solve error ultimately
+    /// stems from, if any. Walks the typed error chain, including the solve
+    /// errors of nested build and host environments.
+    pub fn discovery_error(&self) -> Option<&pixi_build_discovery::DiscoveryError> {
+        match self {
+            SolvePixiEnvironmentError::SourceMetadata(err) => err.discovery_error(),
+            SolvePixiEnvironmentError::DevSourceMetadataError(err) => err.discovery_error(),
+            SolvePixiEnvironmentError::ResolveSourcePackage { error, .. } => {
+                error.discovery_error()
+            }
+            _ => None,
+        }
+    }
+}
+
+impl SourceMetadataError {
+    /// Returns the backend discovery failure this error ultimately stems
+    /// from, if any.
+    pub fn discovery_error(&self) -> Option<&pixi_build_discovery::DiscoveryError> {
+        match self {
+            SourceMetadataError::BuildBackendMetadata(err) => err.discovery_error(),
+            SourceMetadataError::SourceRecord(err) => err.discovery_error(),
+            _ => None,
+        }
+    }
+}
+
+impl SourceRecordError {
+    /// Returns the backend discovery failure this error ultimately stems
+    /// from, if any.
+    pub fn discovery_error(&self) -> Option<&pixi_build_discovery::DiscoveryError> {
+        match self {
+            SourceRecordError::BuildBackendMetadata(err) => err.discovery_error(),
+            SourceRecordError::SolveBuildEnvironment { error, .. }
+            | SourceRecordError::SolveHostEnvironment { error, .. } => error.discovery_error(),
+            _ => None,
+        }
+    }
 }
 
 impl From<SourceMetadataError> for SolvePixiEnvironmentError {
@@ -315,6 +482,12 @@ impl Borrow<dyn Diagnostic> for Box<SolvePixiEnvironmentError> {
     }
 }
 
+impl Borrow<dyn Diagnostic> for Box<SourceRecordError> {
+    fn borrow(&self) -> &(dyn Diagnostic + 'static) {
+        self.as_ref()
+    }
+}
+
 impl From<SolveCondaEnvironmentError> for SolvePixiEnvironmentError {
     fn from(err: SolveCondaEnvironmentError) -> Self {
         match err {
@@ -334,5 +507,100 @@ impl From<SolveCondaEnvironmentError> for SolvePixiEnvironmentError {
 impl From<crate::DevSourceMetadataError> for SolvePixiEnvironmentError {
     fn from(err: crate::DevSourceMetadataError) -> Self {
         Self::DevSourceMetadataError(err)
+    }
+}
+
+/// Formats a variant map as `key=value` pairs for error messages.
+fn format_variants(variants: &BTreeMap<String, VariantValue>) -> String {
+    if variants.is_empty() {
+        return "none".to_string();
+    }
+    variants
+        .iter()
+        .map(|(key, value)| format!("{key}={value}"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::BuildBackendMetadataError;
+
+    fn discovery_failure() -> pixi_build_discovery::DiscoveryError {
+        pixi_build_discovery::DiscoveryError::FailedToDiscover {
+            path: "/some/source".to_string(),
+            help: "help".to_string(),
+        }
+    }
+
+    fn metadata_error() -> BuildBackendMetadataError {
+        BuildBackendMetadataError::Discovery(Arc::new(discovery_failure()))
+    }
+
+    #[test]
+    fn discovery_error_is_found_behind_build_backend_metadata() {
+        let err = SolvePixiEnvironmentError::SourceMetadata(
+            SourceMetadataError::BuildBackendMetadata(metadata_error()),
+        );
+        assert!(matches!(
+            err.discovery_error(),
+            Some(pixi_build_discovery::DiscoveryError::FailedToDiscover { .. })
+        ));
+    }
+
+    #[test]
+    fn discovery_error_is_found_behind_source_record() {
+        let err = SolvePixiEnvironmentError::SourceMetadata(SourceMetadataError::SourceRecord(
+            SourceRecordError::BuildBackendMetadata(metadata_error()),
+        ));
+        assert!(err.discovery_error().is_some());
+    }
+
+    #[test]
+    fn discovery_error_is_found_behind_nested_build_environment_solve() {
+        // A discovery failure while solving the build environment of another
+        // source dependency nests a full solve error inside the outer one.
+        let inner = SolvePixiEnvironmentError::SourceMetadata(
+            SourceMetadataError::BuildBackendMetadata(metadata_error()),
+        );
+        let err = SolvePixiEnvironmentError::SourceMetadata(SourceMetadataError::SourceRecord(
+            SourceRecordError::SolveBuildEnvironment {
+                package: PackageName::new_unchecked("some-package"),
+                error: Box::new(inner),
+            },
+        ));
+        assert!(err.discovery_error().is_some());
+    }
+
+    #[test]
+    fn missing_output_error_prints_the_variants() {
+        let mut variants = BTreeMap::new();
+        variants.insert("python".to_string(), VariantValue::from("3.12".to_string()));
+        let err = SourceBuildError::MissingOutput {
+            name: "wusel".to_string(),
+            variants,
+        };
+
+        insta::assert_snapshot!(
+            err,
+            @"The build backend does not provide an output matching 'wusel' with variants: python=3.12."
+        );
+    }
+
+    #[test]
+    fn discovery_error_is_found_behind_backend_initialization() {
+        let err = SolvePixiEnvironmentError::SourceMetadata(
+            SourceMetadataError::BuildBackendMetadata(BuildBackendMetadataError::Initialize(
+                InstantiateBackendError::Discovery(Arc::new(discovery_failure())),
+            )),
+        );
+        assert!(err.discovery_error().is_some());
+    }
+
+    #[test]
+    fn unrelated_solve_error_has_no_discovery_error() {
+        let err = SolvePixiEnvironmentError::Cycle(Cycle { stack: Vec::new() });
+        assert!(err.discovery_error().is_none());
     }
 }

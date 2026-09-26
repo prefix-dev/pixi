@@ -43,6 +43,7 @@ An example of this would be the [`libglib_activate.sh`](https://github.com/conda
 Thus, just adding the `bin` directory to the `PATH` is not enough.
 
 Shell used for activation:
+
 - On Windows, Pixi executes activation under `cmd.exe`.
 - On Linux and macOS, Pixi executes activation under `bash`.
 
@@ -53,6 +54,15 @@ You can modify the activation with the `activation` table in the manifest, you c
 --8<-- "docs/source_files/pixi_tomls/activation.toml:activation"
 ```
 Find the reference for the `activation` table [here](../reference/pixi_manifest.md#the-activation-table).
+
+Instead of editing the manifest by hand, you can also manage the `activation` table through the [`pixi workspace activation`](../reference/cli/pixi/workspace/activation/index.md) command:
+
+```shell
+pixi workspace activation script add setup.sh
+pixi workspace activation script add win_setup.bat --target win
+pixi workspace activation env set DEBUG=true --feature dev
+pixi workspace activation list
+```
 
 --8<-- "docs/partials/conda-style-activation.md"
 
@@ -86,7 +96,7 @@ If you look at the `.pixi/envs` directory, you will see a directory for each env
 
 These directories are conda environments, and you can use them as such, but you cannot manually edit them, this should always go through the `pixi.toml`.
 Pixi will always make sure the environment is in sync with the `pixi.lock` file.
-If this is not the case then all the commands that use the environment will automatically it, e.g. `pixi run`, `pixi shell`.
+If this is not the case then all the commands that use the environment will automatically sync it, e.g. `pixi run`, `pixi shell`.
 
 ### Environment Metadata
 On environment creation, Pixi will add a small file containing some metadata.

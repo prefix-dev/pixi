@@ -83,6 +83,12 @@ pub struct SolveCondaEnvironmentSpec {
     /// Exclude packages newer than the configured default and per-channel cutoffs.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exclude_newer: Option<ResolvedExcludeNewer>,
+
+    /// Records the solver may not select, mapped to the reason why. Populated
+    /// in offline mode with everything that is not available without network
+    /// access. See [`crate::offline`].
+    #[serde(skip)]
+    pub excluded_candidates: HashMap<Url, Arc<str>>,
 }
 
 impl Default for SolveCondaEnvironmentSpec {
@@ -102,6 +108,7 @@ impl Default for SolveCondaEnvironmentSpec {
             strategy: SolveStrategy::default(),
             channel_priority: ChannelPriority::default(),
             exclude_newer: None,
+            excluded_candidates: HashMap::new(),
         }
     }
 }
@@ -304,6 +311,7 @@ impl SolveCondaEnvironmentSpec {
                 exclude_newer,
                 strategy: self.strategy,
                 constraints: constrains_match_specs,
+                excluded_candidates: self.excluded_candidates,
                 ..rattler_solve::SolverTask::from_iter(solvable_records)
             };
 

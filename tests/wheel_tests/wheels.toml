@@ -40,6 +40,7 @@ version = "*"
 [rerun-sdk]
 target = "linux-64"
 version = "*"
+
 # Use these system requirements
 # because the wheel requires a higher version of glibc than the conda counterpart
 [rerun-sdk.system-requirements]
@@ -52,11 +53,13 @@ version = "*"
 [meshio]
 extras = "all"
 version = "*"
+
 [meshio.system-requirements]
 macos = "14.0"
 
 [[jax]]
 version = "*"
+
 [[jax]]
 extras = "cuda12"
 version = "*"
@@ -64,5 +67,6 @@ version = "*"
 [nvidia-cuda-nvrtc-cu11]
 target = "linux-64"
 version = "*"
+
 [nvidia-cuda-nvrtc-cu11.system-requirements]
 cuda = "11.0"

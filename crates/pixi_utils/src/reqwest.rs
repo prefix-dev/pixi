@@ -11,7 +11,7 @@ use pixi_config::Config;
 use pixi_consts::consts;
 use rattler_networking::{
     AuthChallengeMiddleware, GCSMiddleware, LazyClient, MirrorMiddleware, OciMiddleware,
-    S3Middleware, mirror_middleware::Mirror,
+    OfflineMiddleware, S3Middleware, mirror_middleware::Mirror,
 };
 use reqwest::Client;
 use reqwest_middleware::{ClientWithMiddleware, Middleware};
@@ -58,9 +58,12 @@ pub fn mirror_middleware(config: &Config) -> MirrorMiddleware {
     MirrorMiddleware::from_map(internal_map)
 }
 
-pub fn oci_middleware(client: LazyReqwestClient) -> OciMiddleware {
-    let middleware = LazyClient::new(|| ClientWithMiddleware::new(client.into_client(), vec![]));
-    OciMiddleware::new(middleware)
+/// Creates OCI middleware using pixi's authentication store.
+pub fn oci_middleware(client: LazyReqwestClient, config: &Config) -> miette::Result<OciMiddleware> {
+    let client = LazyClient::new(|| ClientWithMiddleware::new(client.into_client(), vec![]));
+    let auth_store = get_auth_store(config).into_diagnostic()?;
+
+    Ok(OciMiddleware::new(client).with_authentication_storage(auth_store))
 }
 
 static DEFAULT_REQWEST_USER_AGENT: LazyLock<String> =
@@ -207,6 +210,14 @@ pub fn build_reqwest_middleware_stack(
 ) -> miette::Result<Box<[Arc<dyn Middleware>]>> {
     let mut result: Vec<Arc<dyn Middleware>> = Vec::new();
 
+    // The offline middleware must be the very first middleware in the stack so
+    // that in offline mode every request is rejected before any other
+    // middleware (retry, mirror rewriting, authentication) can run, let alone
+    // reach the network.
+    if config.offline() {
+        result.push(Arc::new(OfflineMiddleware));
+    }
+
     // Retry middleware must come before mirror middleware so that when a mirror
     // returns a server error (e.g. 500), the retry will go through the mirror
     // middleware again, which will then select a different mirror due to the
@@ -223,7 +234,7 @@ pub fn build_reqwest_middleware_stack(
     // The OCI middleware rewrites `oci://` requests into real registry requests
     // and is a no-op for other URL schemes. It must be installed unconditionally
     // so that `oci://` channels work even without a mirror configured.
-    result.push(Arc::new(oci_middleware(client.clone())));
+    result.push(Arc::new(oci_middleware(client.clone(), config)?));
 
     result.push(Arc::new(GCSMiddleware::default()));
 
@@ -236,9 +247,7 @@ pub fn build_reqwest_middleware_stack(
     let store = get_auth_store(config).into_diagnostic()?;
     result.push(Arc::new(S3Middleware::new(s3_config, store)));
 
-    result.push(Arc::new(
-        get_auth_middleware(config).expect("could not create auth middleware"),
-    ));
+    result.push(Arc::new(get_auth_middleware(config).into_diagnostic()?));
 
     // Reacts to `WWW-Authenticate` challenges
     result.push(Arc::new(AuthChallengeMiddleware::default()));
@@ -327,23 +336,34 @@ impl LazyReqwestClient {
     }
 }
 
-pub fn uv_middlewares(config: &Config, client: LazyReqwestClient) -> Vec<Arc<dyn Middleware>> {
-    let mut middlewares: Vec<Arc<dyn Middleware>> = if config.mirror_map().is_empty() {
-        vec![]
-    } else {
-        vec![
-            Arc::new(mirror_middleware(config)),
-            Arc::new(oci_middleware(client.clone())),
-        ]
-    };
+/// The middlewares pixi adds to the clients uv builds.
+///
+/// Fails when the authentication store cannot be created, for instance when
+/// the configured auth file is malformed, so the problem is reported instead
+/// of silently losing credentials.
+pub fn uv_middlewares(
+    config: &Config,
+    client: LazyReqwestClient,
+) -> miette::Result<Vec<Arc<dyn Middleware>>> {
+    let mut middlewares: Vec<Arc<dyn Middleware>> = Vec::new();
+
+    // Reject every request before any other middleware when in offline mode.
+    // uv's own `Connectivity::Offline` already avoids the network, but the
+    // middleware guarantees it even for clients uv builds itself.
+    if config.offline() {
+        middlewares.push(Arc::new(OfflineMiddleware));
+    }
+
+    if !config.mirror_map().is_empty() {
+        middlewares.push(Arc::new(mirror_middleware(config)));
+        middlewares.push(Arc::new(oci_middleware(client.clone(), config)?));
+    }
 
     // Add authentication middleware after mirror rewriting so it can authenticate
     // against the rewritten URLs (important for mirrors that require different
     // credentials)
-    if let Ok(auth_middleware) = get_auth_middleware(config) {
-        middlewares.push(Arc::new(auth_middleware));
-    }
-    middlewares
+    middlewares.push(Arc::new(get_auth_middleware(config).into_diagnostic()?));
+    Ok(middlewares)
 }
 
 #[cfg(test)]
@@ -364,7 +384,7 @@ mod tests {
         );
 
         let client = LazyReqwestClient::new(&config).unwrap();
-        let middlewares = uv_middlewares(&config, client);
+        let middlewares = uv_middlewares(&config, client).unwrap();
 
         // Should have: mirror + OCI + auth middleware
         assert!(
@@ -380,7 +400,7 @@ mod tests {
         // This ensures existing non-mirror auth scenarios continue to work
         let config = Config::default();
         let client = LazyReqwestClient::new(&config).unwrap();
-        let middlewares = uv_middlewares(&config, client);
+        let middlewares = uv_middlewares(&config, client).unwrap();
 
         // Should have: auth middleware only
         assert_eq!(
@@ -389,6 +409,167 @@ mod tests {
             "Expected exactly 1 middleware (auth) when no mirrors configured, got {}",
             middlewares.len()
         );
+    }
+
+    #[test]
+    fn test_uv_middlewares_offline_adds_blocking_middleware() {
+        // In offline mode the offline middleware is added even when no mirrors
+        // are configured, so uv-built clients cannot reach the network either.
+        let config = Config {
+            offline: Some(true),
+            ..Default::default()
+        };
+        let client = LazyReqwestClient::new(&config).unwrap();
+        let middlewares = uv_middlewares(&config, client).unwrap();
+
+        // Should have: offline + auth middleware
+        assert_eq!(
+            middlewares.len(),
+            2,
+            "Expected exactly 2 middlewares (offline, auth) when offline without mirrors, got {}",
+            middlewares.len()
+        );
+    }
+
+    /// A malformed auth file must be reported, not turned into a client
+    /// that silently has no credentials.
+    #[test]
+    fn test_uv_middlewares_reports_a_malformed_auth_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let auth_file = dir.path().join("auth.json");
+        fs_err::write(&auth_file, "not json").unwrap();
+
+        let config = Config {
+            authentication_override_file: Some(auth_file),
+            ..Default::default()
+        };
+        let client = LazyReqwestClient::new(&config).unwrap();
+        assert!(
+            uv_middlewares(&config, client).is_err(),
+            "a malformed auth file must be an error"
+        );
+    }
+
+    // OciMiddleware doesn't expose its auth store, so verify it through Debug output.
+    #[test]
+    fn test_oci_middleware_uses_the_configured_auth_store() {
+        let dir = tempfile::tempdir().unwrap();
+        let auth_file = dir.path().join("auth.json");
+        fs_err::write(&auth_file, "{}").unwrap();
+
+        let config = Config {
+            authentication_override_file: Some(auth_file.clone()),
+            ..Default::default()
+        };
+        let client = LazyReqwestClient::new(&config).unwrap();
+        let middleware = oci_middleware(client, &config).unwrap();
+
+        let debug = format!("{middleware:?}");
+        assert!(
+            debug.contains("auth_storage: Some("),
+            "OCI middleware was built without an authentication store: {debug}"
+        );
+        assert!(
+            debug.contains(&format!("{auth_file:?}")),
+            "OCI middleware's store does not include the configured auth file: {debug}"
+        );
+    }
+}
+
+/// Behavioral tests for offline mode: with `offline = true`, the full
+/// middleware stack produced by [`build_reqwest_middleware_stack`] must reject
+/// every request before it reaches the network.
+#[cfg(test)]
+mod offline_tests {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+
+    use pixi_config::Config;
+    use reqwest_middleware::ClientWithMiddleware;
+
+    use super::*;
+
+    /// Spawn a local HTTP server that counts every request it receives.
+    async fn spawn_counting_server(hits: Arc<AtomicUsize>) -> String {
+        use axum::routing::get;
+
+        let app = axum::Router::new().route(
+            "/",
+            get(move || {
+                let hits = hits.clone();
+                async move {
+                    hits.fetch_add(1, Ordering::SeqCst);
+                    "ok"
+                }
+            }),
+        );
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        format!("http://{addr}/")
+    }
+
+    fn offline_client() -> ClientWithMiddleware {
+        let config = Config {
+            offline: Some(true),
+            ..Default::default()
+        };
+        let lazy_client = LazyReqwestClient::new(&config).unwrap();
+        let middleware = build_reqwest_middleware_stack(&config, &lazy_client, None).unwrap();
+        ClientWithMiddleware::new(lazy_client.into_client(), middleware)
+    }
+
+    /// Render an error and its source chain, one cause per line.
+    fn error_chain(err: &dyn std::error::Error) -> String {
+        let mut lines = vec![err.to_string()];
+        let mut source = err.source();
+        while let Some(err) = source {
+            lines.push(format!("  caused by: {err}"));
+            source = err.source();
+        }
+        lines.join("\n")
+    }
+
+    #[tokio::test]
+    async fn offline_mode_blocks_requests_before_they_reach_the_network() {
+        let hits = Arc::new(AtomicUsize::new(0));
+        let url = spawn_counting_server(hits.clone()).await;
+
+        let err = offline_client()
+            .get(&url)
+            .send()
+            .await
+            .expect_err("offline mode should reject the request");
+
+        assert_eq!(
+            hits.load(Ordering::SeqCst),
+            0,
+            "the server must never see a request in offline mode"
+        );
+        insta::assert_snapshot!(
+            error_chain(&err),
+            @"network access is disabled by offline mode"
+        );
+    }
+
+    #[tokio::test]
+    async fn online_mode_does_not_block_requests() {
+        // Sanity check: without `offline = true` the same stack lets requests
+        // through, so the offline test above really exercises the middleware.
+        let hits = Arc::new(AtomicUsize::new(0));
+        let url = spawn_counting_server(hits.clone()).await;
+
+        let config = Config::default();
+        let lazy_client = LazyReqwestClient::new(&config).unwrap();
+        let middleware = build_reqwest_middleware_stack(&config, &lazy_client, None).unwrap();
+        let client = ClientWithMiddleware::new(lazy_client.into_client(), middleware);
+
+        let response = client.get(&url).send().await.unwrap();
+        assert_eq!(response.status(), 200);
+        assert_eq!(hits.load(Ordering::SeqCst), 1);
     }
 }
 

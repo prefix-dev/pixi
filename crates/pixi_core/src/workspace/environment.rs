@@ -6,7 +6,7 @@ use std::{
 };
 
 use indexmap::IndexMap;
-use itertools::Either;
+use itertools::{Either, Itertools};
 use pixi_consts::consts;
 use pixi_manifest::{
     self as manifest, EnvironmentName, Feature, FeatureName, FeaturesExt, HasFeaturesIter,
@@ -18,10 +18,8 @@ use super::{
     SolveGroup,
     errors::{UnknownTask, UnsupportedPlatformError},
 };
-use crate::{
-    Workspace,
-    workspace::{HasWorkspaceRef, PlatformOverrides, PlatformSource},
-};
+use crate::{Workspace, workspace::HasWorkspaceRef};
+use pixi_manifest::platform::host::{host_baseline, host_capabilities, host_subdir};
 
 /// Describes a single environment from a project manifest. This is used to
 /// describe environments that can be installed and activated.
@@ -105,14 +103,12 @@ impl<'p> Environment<'p> {
             .join(self.environment.name.as_str())
     }
 
-    /// The platforms recorded in this environment's `conda-meta/pixi` marker
-    /// file: `(resolved, minimum_supported)`. Both are `None` when the
-    /// environment isn't installed yet or was written by an older pixi.
+    /// What this environment's `conda-meta/pixi` marker file records
     pub fn installed_platforms(
         &self,
     ) -> (
         Option<crate::environment::PlatformData>,
-        Option<crate::environment::PlatformData>,
+        Option<crate::environment::RequiredPlatform>,
     ) {
         match crate::environment::read_environment_file(&self.dir()) {
             Ok(Some(file)) => (file.resolved_platform, file.minimum_supported_platform),
@@ -176,27 +172,48 @@ impl<'p> Environment<'p> {
     /// the environment itself declares support for, and return the most
     /// preferred one.
     pub fn best_declared_platform(&self) -> Option<&'p PixiPlatform> {
-        let current = self
-            .workspace
-            .host_platform(
-                PlatformSource::Defaults,
-                PlatformOverrides::EnvironmentVariableOverrides,
-            )
-            .subdir();
-        let system_virtual_packages = self
-            .workspace
-            .host_platform(
-                PlatformSource::AutoDetected,
-                PlatformOverrides::EnvironmentVariableOverrides,
-            )
-            .declared_virtual_packages()
-            .to_vec();
+        let current = host_subdir();
+        let system_virtual_packages = host_capabilities();
         let env_platforms = self.platforms();
-        self.workspace_manifest()
+
+        // The candidates are the workspace platforms whose subdir matches this
+        // host and whose declared virtual packages the host satisfies; the
+        // selection is the first that the environment itself declares.
+        let candidates = self
+            .workspace_manifest()
             .workspace
-            .possible_pixi_platforms(current, &system_virtual_packages)
-            .into_iter()
-            .find(|p| env_platforms.contains(p.name()))
+            .possible_pixi_platforms(current, &system_virtual_packages);
+        let selected = candidates
+            .iter()
+            .copied()
+            .find(|p| env_platforms.contains(p.name()));
+
+        if tracing::enabled!(tracing::Level::DEBUG) {
+            let mut declared: Vec<&str> = env_platforms.iter().map(|p| p.as_str()).collect();
+            declared.sort_unstable();
+            tracing::debug!(
+                "selecting best platform for environment '{}' on host subdir '{}' \
+                 (host virtual packages: [{}]); environment declares [{}]; \
+                 host-runnable candidates [{}]; selected {}",
+                self.name(),
+                current,
+                system_virtual_packages
+                    .iter()
+                    // Render the build string too: `__archspec` matches by the
+                    // microarchitecture it carries there, not by its version.
+                    .map(ToString::to_string)
+                    .format(", "),
+                declared.iter().format(", "),
+                candidates.iter().map(|p| p.name().as_str()).format(", "),
+                match selected {
+                    Some(p) => format!("'{}'", p.name().as_str()),
+                    None => "<none>: no host-runnable candidate is declared by this environment"
+                        .to_string(),
+                },
+            );
+        }
+
+        selected
     }
 
     /// Picks the workspace platform install/solve should target, with
@@ -219,36 +236,56 @@ impl<'p> Environment<'p> {
         self.workspace_manifest().workspace.platform_by_name(name)
     }
 
+    /// The platform this environment was last installed for, if it still
+    /// declares it, otherwise the best declared platform. Keeps runs
+    /// consistent with the prefix on disk.
+    pub fn installed_or_best_declared_platform(&self) -> Option<&'p PixiPlatform> {
+        if let Some(installed) = self.installed_resolved_platform() {
+            let env_platforms = self.platforms();
+            if env_platforms.is_empty() || env_platforms.contains(installed.name()) {
+                return Some(installed);
+            }
+        }
+        self.best_declared_platform()
+    }
+
+    /// The platform to activate this environment for when the caller has none
+    /// to pin, e.g. `pixi shell` or a `pixi run` without `--platform`.
+    ///
+    /// Falls back to a bare host platform if the workspace declares nothing
+    /// usable (e.g. `platforms = []`), so activation still works. Enforcing
+    /// declared-platform support is the lock-file path's job.
+    pub fn activation_platform(&self) -> PixiPlatform {
+        self.installed_or_best_declared_platform()
+            .cloned()
+            .unwrap_or_else(host_baseline)
+    }
+
     /// Builds an [`UnsupportedPlatformError`] for the case where
     /// [`Self::best_declared_platform`] has just returned `None`, diagnosing which
     /// virtual packages declared by the workspace's host-subdir platforms
     /// this machine doesn't provide so the user can see what to mock.
     pub fn unsupported_platform_error(&self) -> UnsupportedPlatformError {
-        let current = self
-            .workspace
-            .host_platform(
-                PlatformSource::Defaults,
-                PlatformOverrides::EnvironmentVariableOverrides,
-            )
-            .subdir();
-        let system_virtual_packages = self
-            .workspace
-            .host_platform(
-                PlatformSource::AutoDetected,
-                PlatformOverrides::EnvironmentVariableOverrides,
-            )
-            .declared_virtual_packages()
-            .to_vec();
+        let current = host_subdir();
+        let system_virtual_packages = host_capabilities();
         let env_platforms = self.platforms();
-        let unsatisfied_requirements = self
-            .workspace_manifest()
-            .workspace
-            .unsatisfied_platform_requirements(current, &system_virtual_packages, &env_platforms);
+        let workspace = &self.workspace_manifest().workspace;
+        let unsatisfied_requirements = workspace.unsatisfied_platform_requirements(
+            current,
+            &system_virtual_packages,
+            &env_platforms,
+        );
+        let platform_diagnostics =
+            workspace.platform_match_diagnostics(current, &system_virtual_packages, &env_platforms);
         UnsupportedPlatformError {
             environments_platforms: env_platforms.into_iter().collect(),
             environment: self.name().clone(),
             platform: current,
             unsatisfied_requirements,
+            // Filled in by the caller that has a lock file to derive them from;
+            // this diagnosis only knows the declared platforms.
+            unmet_requirements: Vec::new(),
+            platform_diagnostics,
         }
     }
 
@@ -256,7 +293,7 @@ impl<'p> Environment<'p> {
     /// (e.g. Rosetta on Apple Silicon Macs).
     ///
     /// This should only be called when the environment is actually being
-    /// installed or activated — not during lock file solving, which is
+    /// installed or activated -- not during lock file solving, which is
     /// cross-platform and does not use emulation.
     pub fn emit_emulation_warning(&self) {
         if std::env::var(consts::PIXI_OVERRIDE_PLATFORM).is_ok() {
@@ -325,7 +362,7 @@ impl<'p> Environment<'p> {
     pub fn tasks(
         &self,
         platform: Option<&'p PixiPlatform>,
-    ) -> Result<IndexMap<&'p TaskName, &'p Task>, UnsupportedPlatformError> {
+    ) -> Result<IndexMap<&'p TaskName, &'p Task>, Box<UnsupportedPlatformError>> {
         self.validate_platform_support(platform)?;
         let result = self
             .features()
@@ -423,16 +460,18 @@ impl<'p> Environment<'p> {
     fn validate_platform_support(
         &self,
         platform: Option<&PixiPlatform>,
-    ) -> Result<(), UnsupportedPlatformError> {
+    ) -> Result<(), Box<UnsupportedPlatformError>> {
         if let Some(platform) = platform
             && !self.platforms().contains(platform.name())
         {
-            return Err(UnsupportedPlatformError {
+            return Err(Box::new(UnsupportedPlatformError {
                 environments_platforms: self.platforms().into_iter().collect(),
                 environment: self.name().clone(),
                 platform: platform.subdir(),
                 unsatisfied_requirements: Vec::new(),
-            });
+                unmet_requirements: Vec::new(),
+                platform_diagnostics: Vec::new(),
+            }));
         }
 
         Ok(())
@@ -474,8 +513,7 @@ impl<'p> HasFeaturesIter<'p> for Environment<'p> {
         let manifest = self.workspace_manifest();
         let environment_features = self.environment.features.iter().map(|feature_name| {
             manifest
-                .features
-                .get(&FeatureName::from(feature_name.clone()))
+                .feature(feature_name)
                 .expect("feature usage should have been validated upfront")
         });
 
@@ -645,6 +683,56 @@ mod tests {
         assert!(
             virtual_packages.contains("__cuda") && virtual_packages.contains("__glibc"),
             "composed platform must carry both requirements, got {virtual_packages:?}"
+        );
+    }
+
+    /// Regression for prefix-dev/pixi#6493: a workspace declaring both a bare
+    /// subdir platform and a custom rich variant of the same subdir
+    /// (`linux-64` plus `linux-64-cuda`) must not assign the cuda variant to
+    /// an environment whose feature pins the bare `linux-64`. The bare-subdir
+    /// shorthand in `PixiPlatform::matches_reference` otherwise drags every
+    /// same-subdir variant into the environment, producing spurious cuda
+    /// entries in the lock file for cpu-only environments.
+    #[test]
+    fn test_bare_subdir_feature_excludes_custom_rich_platform() {
+        let manifest = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [workspace]
+        name = "repro"
+        channels = []
+        platforms = [
+            "linux-64",
+            { name = "linux-64-cuda", platform = "linux-64", cuda = "12" },
+        ]
+
+        [environments]
+        cpu = { features = ["cpu"] }
+        cuda = { features = ["cuda"] }
+
+        [feature.cpu]
+        platforms = ["linux-64"]
+
+        [feature.cuda]
+        platforms = ["linux-64-cuda"]
+        "#,
+        )
+        .unwrap();
+
+        let cpu = manifest.environment("cpu").unwrap();
+        assert_eq!(
+            cpu.platforms(),
+            HashSet::from_iter([pixi_manifest::PixiPlatformName::from(Platform::Linux64)]),
+            "cpu environment pinned to bare `linux-64` must not gain the cuda variant"
+        );
+
+        let cuda = manifest.environment("cuda").unwrap();
+        assert_eq!(
+            cuda.platforms(),
+            HashSet::from_iter([
+                pixi_manifest::PixiPlatformName::try_from("linux-64-cuda").unwrap()
+            ]),
+            "cuda environment must resolve to exactly the named variant"
         );
     }
 
@@ -1698,23 +1786,8 @@ mod tests {
         }
     }
 
-    struct EnvVarGuard;
-
-    // prevents race conditions on the env variable PIXI_OVERRIDE_PLATFORM
-    static ENV_VAR_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-    impl Drop for EnvVarGuard {
-        fn drop(&mut self) {
-            unsafe {
-                std::env::remove_var(consts::PIXI_OVERRIDE_PLATFORM);
-            }
-        }
-    }
-
     #[test]
     fn test_best_declared_platform_override_env_var() {
-        let _lock = ENV_VAR_MUTEX.lock().unwrap();
-
         let temp_dir = tempfile::tempdir().unwrap();
         let contents = r#"
         [project]
@@ -1723,30 +1796,22 @@ mod tests {
         platforms = []
         "#;
         let workspace = Workspace::from_str(&temp_dir.path().join("pixi.toml"), contents).unwrap();
-        unsafe {
-            std::env::set_var(consts::PIXI_OVERRIDE_PLATFORM, "linux-aarch64");
-        }
-        let _guard = EnvVarGuard;
 
-        let env = workspace.default_environment();
-        // No declared platforms → None even with a valid override.
-        assert!(env.best_declared_platform().is_none());
-        // The host_platform helper honours the override.
-        assert_eq!(
-            workspace
-                .host_platform(
-                    PlatformSource::Defaults,
-                    PlatformOverrides::EnvironmentVariableOverrides
-                )
-                .subdir(),
-            Platform::LinuxAarch64,
+        temp_env::with_var(
+            consts::PIXI_OVERRIDE_PLATFORM,
+            Some("linux-aarch64"),
+            || {
+                let env = workspace.default_environment();
+                // No declared platforms → None even with a valid override.
+                assert!(env.best_declared_platform().is_none());
+                // The host_platform helper honours the override.
+                assert_eq!(host_subdir(), Platform::LinuxAarch64,);
+            },
         );
     }
 
     #[test]
     fn test_best_declared_platform_override_invalid_value() {
-        let _lock = ENV_VAR_MUTEX.lock().unwrap();
-
         let temp_dir = tempfile::tempdir().unwrap();
         let contents = r#"
         [project]
@@ -1755,23 +1820,18 @@ mod tests {
         platforms = []
         "#;
         let workspace = Workspace::from_str(&temp_dir.path().join("pixi.toml"), contents).unwrap();
-        unsafe {
-            std::env::set_var(consts::PIXI_OVERRIDE_PLATFORM, "not-a-platform");
-        }
-        let _guard = EnvVarGuard;
 
-        let env = workspace.default_environment();
-        // No declared platforms → None regardless of the (invalid) override.
-        assert!(env.best_declared_platform().is_none());
-        // The host_platform helper still falls back to Platform::current() on invalid values.
-        assert_eq!(
-            workspace
-                .host_platform(
-                    PlatformSource::Defaults,
-                    PlatformOverrides::EnvironmentVariableOverrides
-                )
-                .subdir(),
-            Platform::current(),
+        temp_env::with_var(
+            consts::PIXI_OVERRIDE_PLATFORM,
+            Some("not-a-platform"),
+            || {
+                let env = workspace.default_environment();
+                // No declared platforms → None regardless of the (invalid) override.
+                assert!(env.best_declared_platform().is_none());
+                // The host_platform helper still falls back to Platform::current()
+                // on invalid values.
+                assert_eq!(host_subdir(), Platform::current(),);
+            },
         );
     }
 }

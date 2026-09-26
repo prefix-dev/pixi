@@ -1,6 +1,5 @@
 use std::collections::HashSet;
 
-use chrono::{DateTime, Utc};
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::Diagnostic;
@@ -14,6 +13,7 @@ use crate::{
     CondaConstraints, CondaDependencies, Feature, PixiPlatform, PixiPlatformName,
     PrioritizedChannel, PyPiDependencies, SpecType,
     dependencies::CondaDevDependencies,
+    exclude_newer::resolve_exclude_newer,
     has_features_iter::HasFeaturesIter,
     has_manifest_ref::HasWorkspaceManifest,
     platform_composition::{combined_platform_name, feature_supports_subdir},
@@ -170,7 +170,12 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     /// up front during parsing).
     ///
     /// Otherwise a workspace platform is supported when every selected feature
-    /// supports it by name or bare subdir.
+    /// supports it by name or bare subdir. The bare-subdir shorthand only
+    /// widens: on subdirs where a feature pins a platform by exact name, only
+    /// the exactly pinned platforms remain, so a feature constrained to
+    /// `linux-64` does not drag a declared `linux-64-cuda` variant into the
+    /// environment (prefix-dev/pixi#6493) while a sibling feature pinning
+    /// that variant by name still selects it.
     fn platforms(&self) -> HashSet<PixiPlatformName> {
         let workspace = &self.workspace_manifest().workspace;
         if workspace.use_platform_composition {
@@ -197,12 +202,26 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
                 })
                 .collect();
         }
+        let exact_names: HashSet<&PixiPlatformName> = self
+            .features()
+            .filter_map(|feature| feature.platforms.as_ref())
+            .flatten()
+            .collect();
+        let exact_subdirs: HashSet<Platform> = workspace
+            .platforms
+            .iter()
+            .filter(|platform| exact_names.contains(platform.name()))
+            .map(PixiPlatform::subdir)
+            .collect();
         workspace
             .platforms
             .iter()
             .filter(|platform| {
                 self.features()
                     .all(|feature| feature.supports_platform(Some(platform)))
+            })
+            .filter(|platform| {
+                exact_names.contains(platform.name()) || !exact_subdirs.contains(&platform.subdir())
             })
             .map(|platform| platform.name().clone())
             .collect()
@@ -378,48 +397,19 @@ impl<'source, FeatureCollection> FeaturesExt<'source> for FeatureCollection wher
 
 fn exclude_newer_config_resolved_impl<'source, T, F>(
     features: &T,
-    mut channel_key: F,
+    channel_key: F,
 ) -> Result<Option<ResolvedExcludeNewer>, ParseChannelError>
 where
     T: FeaturesExt<'source> + ?Sized,
     F: FnMut(&PrioritizedChannel) -> Result<ChannelUrl, ParseChannelError>,
 {
-    let mut exclude_newer = features
-        .exclude_newer_raw()
-        .map(|config| ResolvedExcludeNewer::from_datetime(config.cutoff()));
-
-    for channel in features.prioritized_channels().into_values() {
-        let Some(channel_exclude_newer) = channel.exclude_newer else {
-            continue;
-        };
-
-        let channel_key = channel_key(channel)?;
-        let config = exclude_newer
-            .get_or_insert_with(|| ResolvedExcludeNewer::from_datetime(DateTime::<Utc>::MAX_UTC));
-
-        *config = match channel_exclude_newer {
-            ExcludeNewer::Timestamp(dt) => config.clone().with_channel_cutoff(channel_key, dt),
-            ExcludeNewer::Duration(duration) => config
-                .clone()
-                .with_channel_cutoff(channel_key, ExcludeNewer::Duration(duration).cutoff()),
-        };
-    }
-
-    for (name, package_exclude_newer) in &features
-        .workspace_manifest()
-        .workspace
-        .exclude_newer_package_overrides
-    {
-        let config = exclude_newer
-            .get_or_insert_with(|| ResolvedExcludeNewer::from_datetime(DateTime::<Utc>::MAX_UTC));
-
-        *config = match package_exclude_newer {
-            ExcludeNewer::Timestamp(dt) => config.clone().with_package_cutoff(name.clone(), *dt),
-            ExcludeNewer::Duration(duration) => config
-                .clone()
-                .with_package_cutoff(name.clone(), ExcludeNewer::Duration(*duration).cutoff()),
-        };
-    }
-
-    Ok(exclude_newer)
+    resolve_exclude_newer(
+        features.exclude_newer_raw(),
+        features.prioritized_channels().into_values(),
+        channel_key,
+        &features
+            .workspace_manifest()
+            .workspace
+            .exclude_newer_package_overrides,
+    )
 }

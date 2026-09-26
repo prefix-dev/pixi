@@ -7,7 +7,7 @@ That we can also test using pixi.
 We'll later combine this example together with a Python package.
 
 !!! warning
-    `pixi-build` is a preview feature, and will change until it is stabilized.
+    `pixi-build` is a preview flag, and will change until it is stabilized.
     Please keep that in mind when you use it for your workspaces.
 
 ## Creating a New Workspace

@@ -14,8 +14,8 @@ use pixi_core::{
 };
 use pixi_diff::{LockFileDiff, LockFileJsonDiff};
 use pixi_manifest::{
-    DependencyOverwriteBehavior, FeatureName, PixiPlatform, SpecType, TargetSelector,
-    WorkspaceTarget,
+    DependencyOverwriteBehavior, EnvironmentName, FeatureName, PixiPlatform, SpecType,
+    TargetSelector, WorkspaceTarget,
 };
 use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
@@ -65,6 +65,10 @@ pub struct UpgradeSpecsArgs {
     #[clap(long = "feature", short = 'f')]
     pub feature: Option<FeatureName>,
 
+    /// The environment whose inline dependencies should be updated
+    #[clap(long = "environment", short = 'e', conflicts_with = "feature")]
+    pub environment: Option<EnvironmentName>,
+
     /// The packages which should be excluded
     #[clap(long, conflicts_with = "packages")]
     pub exclude: Option<Vec<String>>,
@@ -77,10 +81,30 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .locate()?
         .with_cli_config(args.config.clone());
 
-    let mut workspace = workspace.modify()?;
+    // One reporter for the whole command: the per-feature solves below and the
+    // `--json --dry-run` solve further down share it instead of each stacking
+    // their own set of bars onto the global multi-progress.
+    let progress = pixi_reporters::TopLevelProgress::from_global();
+    let mut workspace = workspace.modify()?.with_progress(progress.clone());
 
     let features = {
-        if let Some(feature_arg) = &args.specs.feature {
+        if let Some(environment_arg) = &args.specs.environment {
+            // The inline dependencies of an environment live on its
+            // synthesized feature.
+            let manifest = &workspace.workspace().workspace.value;
+            let feature_name = FeatureName::environment(environment_arg);
+            match manifest.feature(&feature_name) {
+                Some(feature) => Vec::from([feature.clone()]),
+                None if manifest.environment(environment_arg).is_some() => miette::bail!(
+                    "the environment {} does not define any content inline",
+                    environment_arg.fancy_display()
+                ),
+                None => miette::bail!(
+                    "could not find an environment named {}",
+                    environment_arg.fancy_display()
+                ),
+            }
+        } else if let Some(feature_arg) = &args.specs.feature {
             // Ensure that the given feature exists
             let Some(feature) = workspace.workspace().workspace.value.feature(feature_arg) else {
                 miette::bail!(
@@ -94,9 +118,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .workspace()
                 .workspace
                 .value
-                .features
-                .clone()
-                .into_values()
+                .all_features()
+                .map(|(_, feature)| feature.clone())
                 .collect()
         }
     };
@@ -145,6 +168,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .into_lock_file_or_empty_with_warning();
 
     let mut printed_any = false;
+    let mut inherited_packages = IndexSet::new();
 
     for (feature_name, specs) in specs_by_feature {
         let SpecsByTarget {
@@ -153,8 +177,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             per_target,
         } = specs;
 
-        if (!default_match_specs.is_empty() || !default_pypi_deps.is_empty())
-            && let (Some(update), _) = workspace
+        if !default_match_specs.is_empty() || !default_pypi_deps.is_empty() {
+            let (update, skipped) = workspace
                 .update_dependencies(
                     default_match_specs,
                     default_pypi_deps,
@@ -167,15 +191,22 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     args.dry_run,
                     DependencyOverwriteBehavior::Overwrite,
                 )
-                .await?
-        {
-            let diff = update.lock_file_diff;
-            if !args.json {
-                diff.print()
-                    .into_diagnostic()
-                    .context("failed to print lock file diff")?;
+                .await?;
+            inherited_packages.extend(
+                skipped
+                    .into_iter()
+                    .filter(|package| package.inherits_workspace)
+                    .map(|package| package.name),
+            );
+            if let Some(update) = update {
+                let diff = update.lock_file_diff;
+                if !args.json {
+                    diff.print()
+                        .into_diagnostic()
+                        .context("failed to print lock file diff")?;
+                }
+                printed_any = true;
             }
-            printed_any = true;
         }
 
         for (target, (target_match_specs, target_pypi_deps)) in per_target {
@@ -183,7 +214,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 continue;
             }
 
-            if let (Some(update), _) = workspace
+            let (update, skipped) = workspace
                 .update_dependencies(
                     target_match_specs,
                     target_pypi_deps,
@@ -196,8 +227,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     args.dry_run,
                     DependencyOverwriteBehavior::Overwrite,
                 )
-                .await?
-            {
+                .await?;
+            inherited_packages.extend(
+                skipped
+                    .into_iter()
+                    .filter(|package| package.inherits_workspace)
+                    .map(|package| package.name),
+            );
+            if let Some(update) = update {
                 let diff = update.lock_file_diff;
                 if !args.json {
                     if printed_any {
@@ -212,15 +249,29 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     }
 
+    if !inherited_packages.is_empty() && !args.json {
+        eprintln!(
+            "{}Dependencies inheriting from `[workspace.dependencies]` were left unchanged: {}",
+            console::style(console::Emoji("i ", "i ")).blue(),
+            inherited_packages
+                .iter()
+                .map(|name| console::style(name).bold().to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        eprintln!("  Update the corresponding `[workspace.dependencies]` entries to upgrade them");
+    }
+
     // If JSON is requested, emit a single combined diff once.
     if args.json {
         if args.dry_run {
             // Compute a combined diff by solving once against the final in-memory manifest
             // without writing to disk, then revert. Reuse the already-loaded original lock file.
-            let progress = pixi_reporters::TopLevelProgress::from_global();
-            let dispatcher = progress
-                .clone()
-                .register_with(workspace.workspace().command_dispatcher_builder()?)
+            let _clear_progress =
+                pixi_reporters::TopLevelProgress::clear_when_done(Some(&progress));
+            let dispatcher = workspace
+                .workspace()
+                .command_dispatcher_builder(Some(&progress))?
                 .finish();
             let derived = UpdateContext::builder(workspace.workspace(), dispatcher)?
                 .with_lock_file(original_lock_file.clone())

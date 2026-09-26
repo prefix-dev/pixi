@@ -7,8 +7,8 @@ use clap::Parser;
 use indexmap::IndexMap;
 use indexmap::IndexSet;
 use miette::{IntoDiagnostic, Report};
+use pixi_api::DefaultContext;
 use pixi_api::workspace::platforms::resolve_platforms;
-use pixi_api::{DefaultContext, WorkspaceContext};
 use pixi_config::default_channel_config;
 use pixi_core::{WorkspaceLocator, workspace::WorkspaceLocatorError};
 use pixi_manifest::{FeaturesExt, HasWorkspaceManifest, PixiPlatformName};
@@ -22,7 +22,7 @@ use url::Url;
 
 use crate::{
     cli_config::{ChannelsConfig, WorkspaceConfig},
-    cli_interface::CliInterface,
+    cli_interface::{CliInterface, cli_context},
 };
 
 /// Search a conda package
@@ -43,6 +43,9 @@ pub struct Args {
 
     #[clap(flatten)]
     pub project_config: WorkspaceConfig,
+
+    #[clap(flatten)]
+    pub config: pixi_config::ConfigCli,
 
     /// The platform to search packages for.
     /// By default, searches all platforms from the manifest (or all known
@@ -90,7 +93,7 @@ pub async fn execute_impl<W: Write>(
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()
     {
-        Ok(project) => Some(project),
+        Ok(project) => Some(project.with_cli_config(args.config.clone())),
         Err(WorkspaceLocatorError::WorkspaceNotFound(_)) => {
             debug!("No project file found, continuing without project configuration.",);
             None
@@ -155,21 +158,38 @@ pub async fn execute_impl<W: Write>(
     )
     .into_diagnostic()?;
 
-    let packages = if let Some(workspace) = workspace {
+    // Only fetch records for the packages that will be shown; the total
+    // fuzzy match count comes back separately for the "... and N more" hint.
+    let fuzzy_limit = if args.json || args.limit_packages < 0 {
+        None
+    } else {
+        Some(args.limit_packages as usize)
+    };
+
+    let result = if let Some(workspace) = workspace {
         await_in_progress("searching packages...", |_| async {
-            WorkspaceContext::new(CliInterface {}, workspace)
-                .search(matchspec, channels, platforms)
+            cli_context(workspace)
+                .search(matchspec, channels, platforms, fuzzy_limit)
                 .await
         })
         .await?
     } else {
+        let config = pixi_config::Config::load_global_with(&args.config_source.source())
+            .merge_config(args.config.clone().into());
         await_in_progress("searching packages...", |_| async {
             DefaultContext::new(CliInterface {})
-                .search(matchspec, channels, platforms)
+                .search(config, matchspec, channels, platforms, fuzzy_limit)
                 .await
         })
         .await?
     };
+    // Keep machine-readable output quiet, matching conda's JSON behavior.
+    if !args.json {
+        for notice in &result.notices {
+            pixi_reporters::queue_channel_notice(notice);
+        }
+    }
+    let packages = result.packages;
 
     if args.json {
         let json_output = build_json_output(&packages);
@@ -192,8 +212,13 @@ pub async fn execute_impl<W: Write>(
         };
 
         // Print search results with detailed info for first N packages
-        if let Err(e) = print_search_results(&packages, out, limit_packages, limit_versions)
-            && e.kind() != std::io::ErrorKind::BrokenPipe
+        if let Err(e) = print_search_results(
+            &packages,
+            out,
+            limit_packages,
+            limit_versions,
+            result.fuzzy_matches,
+        ) && e.kind() != std::io::ErrorKind::BrokenPipe
         {
             return Err(e).into_diagnostic();
         }
@@ -213,6 +238,7 @@ fn print_search_results<W: Write>(
     out: &mut W,
     limit_packages: Option<usize>,
     limit_versions: Option<usize>,
+    fuzzy_matches: Option<usize>,
 ) -> io::Result<()> {
     // Group packages by name
     let mut by_name: IndexMap<&PackageName, Vec<&RepoDataRecord>> = IndexMap::new();
@@ -223,10 +249,14 @@ fn print_search_results<W: Write>(
             .push(pkg);
     }
 
+    // The fuzzy fallback only fetches records for the packages that are
+    // shown; it reports the total match count for the hint below.
+    let total_packages = fuzzy_matches.unwrap_or(by_name.len());
+
     let channel_config = default_channel_config();
 
     // Single package name => show detailed view
-    if by_name.len() == 1 {
+    if by_name.len() == 1 && total_packages <= 1 {
         let (name, records) = by_name.iter().next().expect("by_name has exactly 1 entry");
         // When limit is 0, only print the package name
         if limit_versions == Some(0) {
@@ -310,7 +340,7 @@ fn print_search_results<W: Write>(
         }
     }
 
-    let remaining_packages = by_name.len().saturating_sub(n_packages);
+    let remaining_packages = total_packages.saturating_sub(by_name.len().min(n_packages));
     if remaining_packages > 0 {
         let label = if remaining_packages == 1 {
             "package"

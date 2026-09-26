@@ -1,9 +1,10 @@
 use crate::Workspace;
+use crate::lock_file::virtual_packages::spec_version;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::{Diagnostic, LabeledSpan};
-use pixi_manifest::{EnvironmentName, PixiPlatformName, TaskName};
-use rattler_conda_types::{GenericVirtualPackage, Platform, Version};
+use pixi_manifest::{EnvironmentName, PixiPlatformName, PlatformMatchDiagnosis, TaskName};
+use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Platform, Version};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
@@ -26,7 +27,27 @@ pub struct UnsupportedPlatformError {
     /// platform mismatch isn't caused by missing virtual packages -- for
     /// example, when the user explicitly asked for a platform the
     /// environment doesn't declare at all.
+    ///
+    /// These are capabilities a manifest declares, so they stay
+    /// [`GenericVirtualPackage`]. What the *resolved packages* require lives in
+    /// [`Self::unmet_requirements`], which is a different kind of thing.
     pub unsatisfied_requirements: Vec<GenericVirtualPackage>,
+
+    /// Virtual-package requirements the resolved packages place on the machine
+    /// that it does not meet, read from the lock file. Set only once the
+    /// declared platforms have already been ruled out, so it explains why the
+    /// lock-derived fallback failed too.
+    ///
+    /// Match specs rather than concrete virtual packages: a `depends` entry
+    /// carries a version range and a build-string pattern, and reporting one as
+    /// a value it never had misleads.
+    pub unmet_requirements: Vec<MatchSpec>,
+
+    /// Why each platform the environment declares does not run on this
+    /// machine (unrunnable subdir or missing virtual packages). Empty when no
+    /// breakdown is available (e.g. an explicit `--platform` the environment
+    /// doesn't declare).
+    pub platform_diagnostics: Vec<PlatformMatchDiagnosis>,
 }
 
 impl Error for UnsupportedPlatformError {}
@@ -44,25 +65,95 @@ impl Display for UnsupportedPlatformError {
                 )
             }
         };
-        if self.unsatisfied_requirements.is_empty() {
-            match &self.environment {
+        let breakdown: Vec<&PlatformMatchDiagnosis> = self
+            .platform_diagnostics
+            .iter()
+            .filter(|d| !d.matches_host())
+            .collect();
+
+        // Nothing to elaborate: keep the terse legacy message.
+        if breakdown.is_empty()
+            && self.unsatisfied_requirements.is_empty()
+            && self.unmet_requirements.is_empty()
+        {
+            return match &self.environment {
                 EnvironmentName::Default => write!(
                     f,
                     "{lead}.\nAdd it with 'pixi workspace platform add {}'.",
                     self.platform,
                 ),
                 EnvironmentName::Named(_) => write!(f, "{lead}"),
-            }
-        } else {
+            };
+        }
+
+        write!(f, "{lead} on this machine.")?;
+
+        if breakdown.is_empty() {
+            // No per-platform breakdown available; fall back to the aggregate line.
             write!(
                 f,
-                "{lead} on this machine:\n\
-                no declared platform's virtual packages are satisfied here.\n\n\
-                Unsatisfied requirements: {}",
-                format_requirements(&self.unsatisfied_requirements),
-            )
+                "\nNo declared platform's virtual packages are satisfied here."
+            )?;
+        } else {
+            write!(f, "\n\nDeclared platforms and why none runs here:")?;
+            for diagnosis in breakdown {
+                write!(f, "\n  - {}", format_platform_diagnosis(diagnosis))?;
+            }
         }
+
+        if !self.unsatisfied_requirements.is_empty() {
+            write!(
+                f,
+                "\n\nUnsatisfied requirements: {}",
+                format_requirements(&self.unsatisfied_requirements),
+            )?;
+        }
+
+        if !self.unmet_requirements.is_empty() {
+            write!(
+                f,
+                "\n\nThe installed packages also require: {}",
+                format_specs(&self.unmet_requirements),
+            )?;
+        }
+
+        // Adding the host platform to the workspace is the primary remedy for
+        // the default environment; named environments get their platform list
+        // from features, where the workspace-level hint may not apply.
+        match &self.environment {
+            EnvironmentName::Default => write!(
+                f,
+                "\n\nAdd it with 'pixi workspace platform add {}'.",
+                self.platform,
+            )?,
+            EnvironmentName::Named(_) => {}
+        }
+        Ok(())
     }
+}
+
+/// One line in the "declared platforms and why none runs here" list: the
+/// platform's name (with its subdir when they differ) followed by the reason
+/// it can't run -- an unrunnable subdir or the virtual packages this machine
+/// doesn't provide.
+fn format_platform_diagnosis(diagnosis: &PlatformMatchDiagnosis) -> String {
+    let label = if diagnosis.name.as_str() == diagnosis.subdir.as_str() {
+        diagnosis.name.as_str().to_string()
+    } else {
+        format!("{} (subdir {})", diagnosis.name.as_str(), diagnosis.subdir)
+    };
+    let reason = if !diagnosis.subdir_matches_host {
+        format!(
+            "requires subdir '{}', which this machine can't run",
+            diagnosis.subdir
+        )
+    } else {
+        format!(
+            "missing virtual packages: {}",
+            format_requirements(&diagnosis.unsatisfied_virtual_packages),
+        )
+    };
+    format!("{label}: {reason}")
 }
 
 impl Diagnostic for UnsupportedPlatformError {
@@ -71,11 +162,16 @@ impl Diagnostic for UnsupportedPlatformError {
     }
 
     fn help(&self) -> Option<Box<dyn Display + '_>> {
-        let overrides: Vec<String> = self
-            .unsatisfied_requirements
+        // Both kinds can be mocked the same way, so the hints are pooled --
+        // but each reads its own shape to find the name and version.
+        let declared = self.unsatisfied_requirements.iter().filter_map(|req| {
+            conda_override_hint(req.name.as_normalized(), Some(&req.version), self.platform)
+        });
+        let required = self
+            .unmet_requirements
             .iter()
-            .filter_map(|req| conda_override_hint(req.name.as_normalized(), Some(&req.version)))
-            .collect();
+            .filter_map(|spec| spec_override_hint(spec, self.platform));
+        let overrides: Vec<String> = declared.chain(required).unique().collect();
 
         let base = if overrides.is_empty() {
             format!(
@@ -116,10 +212,52 @@ fn format_requirements(reqs: &[GenericVirtualPackage]) -> String {
         .join(", ")
 }
 
-/// `CONDA_OVERRIDE_*` hint for a missing virtual package: the required
-/// version when known, a realistic example otherwise. `None` for virtual
-/// packages without a known override (e.g. `__unix`).
-pub(crate) fn conda_override_hint(name: &str, version: Option<&Version>) -> Option<String> {
+/// Render lock-derived requirements.
+pub(crate) fn format_specs(specs: &[MatchSpec]) -> String {
+    specs.iter().map(ToString::to_string).join(", ")
+}
+
+/// `CONDA_OVERRIDE_*` hint for an unmet requirement, `None` when the spec names
+/// no single virtual package or that package has no override `target` honors.
+pub(crate) fn spec_override_hint(spec: &MatchSpec, target: Platform) -> Option<String> {
+    conda_override_hint(
+        spec.name.as_exact()?.as_normalized(),
+        spec.version.as_ref().and_then(spec_version),
+        target,
+    )
+}
+
+/// `CONDA_OVERRIDE_*` hints for a set of unmet requirements, deduplicated and
+/// in the order the requirements appear.
+pub(crate) fn spec_override_hints(specs: &[MatchSpec], target: Platform) -> Vec<String> {
+    specs
+        .iter()
+        .filter_map(|spec| spec_override_hint(spec, target))
+        .unique()
+        .collect()
+}
+
+/// Whether setting `CONDA_OVERRIDE_*` for `name` has any effect when the target
+/// platform is `target` (as defined in CEP-30).
+fn override_applies_to(name: &str, target: Platform) -> bool {
+    match name {
+        "__glibc" | "__linux" => target.is_linux(),
+        "__osx" => target.is_osx(),
+        "__win" => target.is_windows(),
+        _ => true,
+    }
+}
+
+/// `CONDA_OVERRIDE_*` hint for a virtual package the machine does not provide:
+/// the required version when known, a realistic example otherwise.
+///
+/// `None` when there is no such variable (e.g. `__unix`), or when `target` is a
+/// platform that ignores it
+pub(crate) fn conda_override_hint(
+    name: &str,
+    version: Option<&Version>,
+    target: Platform,
+) -> Option<String> {
     let env_var = match name {
         "__glibc" => "CONDA_OVERRIDE_GLIBC",
         "__cuda" => "CONDA_OVERRIDE_CUDA",
@@ -129,6 +267,9 @@ pub(crate) fn conda_override_hint(name: &str, version: Option<&Version>) -> Opti
         "__archspec" => "CONDA_OVERRIDE_ARCHSPEC",
         _ => return None,
     };
+    if !override_applies_to(name, target) {
+        return None;
+    }
     // A version-0 requirement means "any version"; "=0" reads like nonsense,
     // so suggest a realistic value instead.
     let example = match version.filter(|v| **v != Version::major(0)) {
@@ -196,7 +337,13 @@ mod tests {
             environment: EnvironmentName::Default,
             platform: Platform::Linux64,
             unsatisfied_requirements: unsatisfied,
+            unmet_requirements: vec![],
+            platform_diagnostics: vec![],
         }
+    }
+
+    fn spec(raw: &str) -> MatchSpec {
+        MatchSpec::from_str(raw, rattler_conda_types::ParseStrictness::Lenient).unwrap()
     }
 
     #[test]
@@ -231,6 +378,132 @@ mod tests {
         );
         assert!(
             display.contains("Unsatisfied requirements: __cuda >= 11"),
+            "{display}"
+        );
+    }
+
+    #[test]
+    fn lock_derived_requirements_render_as_specs() {
+        let mut e = err(vec![]);
+        e.unmet_requirements = vec![
+            spec("__glibc >=2.28"),
+            spec("__archspec 1.* ^(x86_64_v3|skylake)$"),
+        ];
+        let display = e.to_string();
+        assert!(
+            display.contains("The installed packages also require: __glibc >=2.28"),
+            "{display}"
+        );
+        // The build-string pattern is shown as written, not flattened.
+        assert!(display.contains("^(x86_64_v3|skylake)$"), "{display}");
+
+        let help = e.help().unwrap().to_string();
+        assert!(help.contains("CONDA_OVERRIDE_GLIBC=2.28"), "{help}");
+    }
+
+    #[test]
+    fn declared_and_lock_derived_sections_coexist() {
+        let mut e = err(vec![vp("__cuda", "12.0")]);
+        e.unmet_requirements = vec![spec("__glibc >=2.28")];
+        let display = e.to_string();
+        assert!(
+            display.contains("Unsatisfied requirements: __cuda >= 12.0"),
+            "{display}"
+        );
+        assert!(
+            display.contains("The installed packages also require: __glibc >=2.28"),
+            "{display}"
+        );
+        let help = e.help().unwrap().to_string();
+        assert!(help.contains("CONDA_OVERRIDE_CUDA=12"), "{help}");
+        assert!(help.contains("CONDA_OVERRIDE_GLIBC=2.28"), "{help}");
+    }
+
+    fn diagnosis(
+        name: &str,
+        subdir: Platform,
+        subdir_matches_host: bool,
+        unsatisfied: Vec<GenericVirtualPackage>,
+    ) -> PlatformMatchDiagnosis {
+        PlatformMatchDiagnosis {
+            name: PixiPlatformName::try_from(name).unwrap(),
+            subdir,
+            subdir_matches_host,
+            unsatisfied_virtual_packages: unsatisfied,
+        }
+    }
+
+    #[test]
+    fn breakdown_lists_missing_virtual_packages_per_platform() {
+        let mut e = err(vec![vp("__cuda", "12.0")]);
+        e.environment = EnvironmentName::Named("gpu".into());
+        e.platform_diagnostics = vec![diagnosis(
+            "gpu-linux",
+            Platform::Linux64,
+            true,
+            vec![vp("__cuda", "12.0")],
+        )];
+        let display = e.to_string();
+        assert!(
+            display.contains("Declared platforms and why none runs here:"),
+            "{display}"
+        );
+        assert!(
+            display.contains("gpu-linux (subdir linux-64): missing virtual packages: __cuda >= 12"),
+            "{display}"
+        );
+    }
+
+    #[test]
+    fn breakdown_reports_unrunnable_subdir() {
+        let mut e = err(vec![]);
+        e.environment = EnvironmentName::Named("mac".into());
+        e.platform_diagnostics = vec![diagnosis("osx-arm64", Platform::OsxArm64, false, vec![])];
+        let display = e.to_string();
+        assert!(
+            display
+                .contains("osx-arm64: requires subdir 'osx-arm64', which this machine can't run"),
+            "{display}"
+        );
+    }
+
+    #[test]
+    fn breakdown_skips_platforms_that_match_host() {
+        // A platform that runs here (subdir ok, no unmet VPs) is filtered out of
+        // the "why none runs here" list.
+        let mut e = err(vec![]);
+        e.environment = EnvironmentName::Named("gpu".into());
+        e.platform_diagnostics = vec![
+            diagnosis("linux-64", Platform::Linux64, true, vec![]),
+            diagnosis(
+                "gpu-linux",
+                Platform::Linux64,
+                true,
+                vec![vp("__cuda", "12.0")],
+            ),
+        ];
+        let display = e.to_string();
+        assert!(!display.contains("linux-64:"), "{display}");
+        assert!(
+            display.contains("gpu-linux (subdir linux-64):"),
+            "{display}"
+        );
+    }
+
+    #[test]
+    fn breakdown_keeps_platform_add_hint_for_default_environment() {
+        let mut e = err(vec![]);
+        e.platform_diagnostics = vec![diagnosis("win-64", Platform::Win64, false, vec![])];
+        let display = e.to_string();
+        assert!(
+            display.contains("Add it with 'pixi workspace platform add linux-64'."),
+            "{display}"
+        );
+
+        e.environment = EnvironmentName::Named("gpu".into());
+        let display = e.to_string();
+        assert!(
+            !display.contains("pixi workspace platform add"),
             "{display}"
         );
     }

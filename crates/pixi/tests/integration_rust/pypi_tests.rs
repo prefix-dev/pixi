@@ -167,7 +167,9 @@ index-url = "{index_url}"
 "#,
     );
 
-    let pixi = PixiControl::from_pyproject_manifest(&pyproject).unwrap();
+    let pixi = PixiControl::from_pyproject_manifest(&pyproject)
+        .unwrap()
+        .with_network_access();
     write_subproject(&pixi, "mine", "0.1.0").unwrap();
     write_subproject(&pixi, "also_mine", "2.1.0").unwrap();
 
@@ -236,7 +238,9 @@ dynamic-dep = {{ path = "./dynamic-dep" }}
 "#,
     );
 
-    let pixi = PixiControl::from_pyproject_manifest(&pyproject).unwrap();
+    let pixi = PixiControl::from_pyproject_manifest(&pyproject)
+        .unwrap()
+        .with_network_access();
 
     // Create a source dependency with a dynamic version
     fs_err::create_dir(pixi.workspace_path().join("dynamic-dep")).unwrap();
@@ -782,9 +786,11 @@ async fn test_index_strategy() {
         idx_a = idx_a.index_url(),
         idx_b = idx_b.index_url(),
         idx_c = idx_c.index_url(),
-    ));
+    ))
+    .unwrap()
+    .with_network_access();
 
-    let lock_file = pixi.unwrap().update_lock_file().await.unwrap();
+    let lock_file = pixi.update_lock_file().await.unwrap();
 
     assert_eq!(
         lock_file.get_pypi_package_version("default", platform, "foo"),
@@ -1127,9 +1133,11 @@ async fn pin_torch() {
         torch = {{ version = "*", index = "https://download.pytorch.org/whl/cu124" }}
         "#,
         channel_url = channel.url(),
-    ));
+    ))
+    .unwrap()
+    .with_network_access();
 
-    let lock_file = pixi.unwrap().update_lock_file().await.unwrap();
+    let lock_file = pixi.update_lock_file().await.unwrap();
     // So the check is as follows:
     // 1. The PyPI index is the main index-url, so normally torch would be taken from there.
     // 2. We manually check if it is taken from the whl/cu124 index instead.
@@ -1272,7 +1280,8 @@ async fn test_allow_insecure_host() {
         channel_url = channel.url(),
         pypi_index_url = pypi_index.index_url(),
     ))
-    .unwrap();
+    .unwrap()
+    .with_network_access();
     // will occur ssl error
     assert!(
         pixi.update_lock_file().await.is_err(),
@@ -1337,7 +1346,8 @@ async fn test_tls_no_verify_with_pypi_dependencies() {
         channel_url = channel.url(),
         pypi_index_url = pypi_index.index_url(),
     ))
-    .unwrap();
+    .unwrap()
+    .with_network_access();
 
     // First verify that it fails with SSL errors when tls-no-verify is not set
     assert!(
@@ -1421,7 +1431,8 @@ async fn test_tls_verify_still_fails_without_config() {
         channel_url = channel.url(),
         pypi_index_url = pypi_index.index_url(),
     ))
-    .unwrap();
+    .unwrap()
+    .with_network_access();
 
     // Without tls-no-verify, this should fail with SSL errors
     let result = pixi.update_lock_file().await;
@@ -1496,7 +1507,8 @@ async fn test_indexes_are_passed_when_solving_build_pypi_dependencies() {
         platform = Platform::current(),
         index_url = simple.index_url(),
     ))
-    .unwrap();
+    .unwrap()
+    .with_network_access();
 
     let project_path = pixi.workspace_path();
     let src_dir = project_path.join("src").join("pypi_build_index");
@@ -1616,7 +1628,8 @@ async fn test_index_strategy_respected_for_build_dependencies() {
         first_extra_index = first_extra_index.index_url(),
         second_extra_index = second_extra_index.index_url(),
     ))
-    .unwrap();
+    .unwrap()
+    .with_network_access();
 
     let project_path = pixi.workspace_path();
     let src_dir = project_path.join("src").join("index_strategy_build");
@@ -2007,7 +2020,9 @@ test-static-pkg = {{ path = ".", editable = true }}
 "#,
     );
 
-    let pixi = PixiControl::from_pyproject_manifest(&pyproject).unwrap();
+    let pixi = PixiControl::from_pyproject_manifest(&pyproject)
+        .unwrap()
+        .with_network_access();
 
     // Create the package source files
     let src_dir = pixi.workspace_path().join("src").join("test_static_pkg");
@@ -2083,7 +2098,9 @@ dev = {{ features = ["dev"] }}
 "#,
     );
 
-    let pixi = PixiControl::from_pyproject_manifest(&pyproject).unwrap();
+    let pixi = PixiControl::from_pyproject_manifest(&pyproject)
+        .unwrap()
+        .with_network_access();
 
     let src_dir = pixi.workspace_path().join("src").join("foo");
     fs_err::create_dir_all(&src_dir).unwrap();
@@ -2182,7 +2199,9 @@ test-cache-pkg = {{ path = "." }}
 "#,
     );
 
-    let pixi = PixiControl::from_pyproject_manifest(&pyproject).unwrap();
+    let pixi = PixiControl::from_pyproject_manifest(&pyproject)
+        .unwrap()
+        .with_network_access();
 
     // Create the package source files
     let src_dir = pixi.workspace_path().join("src").join("test_cache_pkg");
@@ -2462,7 +2481,8 @@ async fn test_index_url_omitted_for_default_pypi() {
         "#,
         channel_url = channel.url(),
     ))
-    .unwrap();
+    .unwrap()
+    .with_network_access();
 
     let lock_file = pixi.update_lock_file().await.unwrap();
 
@@ -2566,7 +2586,8 @@ async fn sha256_registry_fixture(workspace_name: &str) -> (HttpIndex, PixiContro
         platform = platform,
         index_url = index.index_url(),
     ))
-    .unwrap();
+    .unwrap()
+    .with_network_access();
 
     (index, pixi)
 }
@@ -2696,4 +2717,85 @@ async fn test_lock_file_pins_sha256_and_install_verifies_it() {
         },
     )
     .await;
+}
+
+/// Test that a PyPI dependency declared in both `[project].dependencies` (PEP 621)
+/// and `[tool.pixi.pypi-dependencies]` with a custom per-package index satisfies
+/// lock-file satisfiability and does not perpetually mark the lock file as out-of-date.
+/// Regression test for <https://github.com/prefix-dev/pixi/issues/6834>.
+#[tokio::test]
+async fn test_pyproject_pypi_custom_index_satisfies_lock() {
+    setup_tracing();
+
+    let platform = Platform::current();
+
+    // Create local conda channel with Python
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+
+    // Custom index with "torch"
+    let custom_index = PyPIDatabase::new()
+        .with(PyPIPackage::new("torch", "2.0.0"))
+        .into_simple_index()
+        .unwrap();
+
+    let pyproject = format!(
+        r#"
+        [project]
+        name = "test-repro-6834"
+        version = "0.1.0"
+        dependencies = ["torch>=2.0.0"]
+
+        [tool.pixi.workspace]
+        channels = ["{channel_url}"]
+        platforms = ["{platform}"]
+        conda-pypi-map = false
+
+        [tool.pixi.dependencies]
+        python = "==3.12.0"
+
+        [tool.pixi.pypi-dependencies]
+        torch = {{ version = "==2.0.0", index = "{custom_index_url}" }}
+        "#,
+        channel_url = channel.url(),
+        platform = platform,
+        custom_index_url = custom_index.index_url(),
+    );
+
+    let pixi = PixiControl::from_pyproject_manifest(&pyproject).unwrap();
+
+    // Initial lock resolution must succeed
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
+    // Verify torch is locked to the custom index
+    let p = lock_file
+        .platform(&platform.to_string())
+        .expect("platform should exist");
+    let env = lock_file
+        .environment("default")
+        .expect("default environment should exist");
+    let torch = env
+        .pypi_packages(p)
+        .expect("should have pypi packages")
+        .find(|data| data.name().as_ref() == "torch")
+        .expect("torch should be in pypi packages");
+    let torch_wheel = torch.as_wheel().expect("torch should be a wheel package");
+    assert_eq!(
+        torch_wheel.index_url.as_ref().map(|u| u.as_str()),
+        Some(custom_index.index_url().as_str()),
+        "torch should have index_url set to the custom index"
+    );
+
+    // Prior to the fix for #6834, pixi lock --check would fail because the
+    // unindexed requirement from [project].dependencies was rejected with
+    // LockedPyPIIndexMismatch against the locked package from the custom index.
+    pixi.lock()
+        .with_check(true)
+        .await
+        .expect("lock file should satisfy manifest without being outdated");
 }

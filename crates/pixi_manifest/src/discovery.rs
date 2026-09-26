@@ -123,6 +123,9 @@ impl Manifests {
             ManifestKind::Pyproject => PyProjectManifest::deserialize(&mut toml)
                 .map_err(TomlError::from)
                 .and_then(|manifest| manifest.into_workspace_manifest(manifest_dir)),
+            ManifestKind::Pep723 | ManifestKind::CondaScript => {
+                unreachable!("scripts are loaded through the script manifest adapter")
+            }
         };
 
         // Handle any errors that occurred during parsing.
@@ -203,7 +206,7 @@ pub enum WorkspaceDiscoveryError {
     consts::PIXI_VERSION
 )]
 #[diagnostic(help(
-    "update pixi to a version that satisfies '{requires_pixi}' with `pixi self-update`"
+    "install a version of pixi that satisfies '{requires_pixi}' with `pixi self-update --version <version>` (a plain `pixi self-update` installs the latest version, which may not satisfy this requirement)"
 ))]
 pub struct PixiVersionMismatchError {
     pub requires_pixi: VersionSpec,
@@ -225,7 +228,7 @@ pub struct InvalidRequiresPixiError {
 }
 
 /// Result of the early `requires-pixi` check.
-enum RequiresPixiCheck {
+pub(crate) enum RequiresPixiCheck {
     /// Field is absent or the current pixi version satisfies the constraint.
     Satisfied,
     /// The current pixi version does not satisfy the constraint.
@@ -242,17 +245,22 @@ enum RequiresPixiCheck {
 
 /// Extract and check the `requires-pixi` field from a parsed TOML tree before
 /// full deserialization.
-fn check_requires_pixi_early(toml: &toml_span::Value<'_>, kind: ManifestKind) -> RequiresPixiCheck {
+pub(crate) fn check_requires_pixi_early(
+    toml: &toml_span::Value<'_>,
+    kind: ManifestKind,
+) -> RequiresPixiCheck {
     let pointer = match kind {
         ManifestKind::Pixi | ManifestKind::MojoProject => "/workspace/requires-pixi",
-        ManifestKind::Pyproject => "/tool/pixi/workspace/requires-pixi",
+        ManifestKind::Pyproject | ManifestKind::Pep723 | ManifestKind::CondaScript => {
+            "/tool/pixi/workspace/requires-pixi"
+        }
     };
     let Some(value) = toml.pointer(pointer) else {
         return RequiresPixiCheck::Satisfied;
     };
     let Some(spec_str) = value.as_str() else {
         // Non-string values (e.g. integers, bools) will be caught as schema
-        // errors during full deserialization — skip the version check here.
+        // errors during full deserialization -- skip the version check here.
         return RequiresPixiCheck::Satisfied;
     };
     let span = SourceSpan::new(value.span.start.into(), value.span.end - value.span.start);
@@ -589,6 +597,9 @@ impl WorkspaceDiscoverer {
                         }
                         continue;
                     }
+                }
+                ManifestKind::Pep723 | ManifestKind::CondaScript => {
+                    unreachable!("workspace discovery does not infer arbitrary scripts")
                 }
             };
 

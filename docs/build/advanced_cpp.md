@@ -12,7 +12,7 @@ To illustrate this, we will use the same C++ package as in the previous tutorial
 This will unveil the hidden complexity of the build process, and give you a better grasp of how backends work.
 
 !!! warning
-    `pixi-build` is a preview feature, and will change until it is stabilized.
+    `pixi-build` is a preview flag, and will change until it is stabilized.
     Please keep that in mind when you use it for your workspaces.
 
 !!! hint

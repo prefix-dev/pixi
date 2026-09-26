@@ -141,6 +141,6 @@ pixi exec rattler-index s3 s3://my-bucket/my-channel \
     --region us-east-1
 ```
 
-See the [S3 deployment documentation](../../../deployment/s3.md) for more details.
+See the [S3 deployment documentation](../../../../deployment/s3.md) for more details.
 
 --8<-- [end:example]

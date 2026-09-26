@@ -1,0 +1,14 @@
+---
+source: crates/pixi_manifest/src/toml/manifest.rs
+assertion_line: 2757
+expression: "expect_parse_warnings(r#\"\n        [workspace]\n        name = \"test\"\n        channels = []\n        platforms = ['win-64', 'osx-64', 'linux-64']\n\n        [system-requirements]\n        libc = { family = \"glibc\", version = \"2.28\" }\n        \"#,)"
+---
+  ⚠ the `[system-requirements]` table is deprecated in favor of virtual packages on `platforms`
+   ╭─[pixi.toml:7:9]
+ 6 │
+ 7 │ ╭─▶         [system-requirements]
+ 8 │ ├─▶         libc = { family = "glibc", version = "2.28" }
+   · ╰──── declare these on the `platforms` entries instead
+ 9 │
+   ╰────
+  help: e.g. platforms = ["win-64", "osx-64", { name = "my-linux-64", platform = "linux-64", glibc = "2.28" }]

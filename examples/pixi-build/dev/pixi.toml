@@ -14,9 +14,9 @@ test = [{ task = "start" }]
 # This will install all the dependencies of this project into the default environment
 minimal-example = { path = "." }
 
-#[dependencies]
+# [dependencies]
 ## This will install the `minimal-example` package into the default environment
-#minimal-example = { path = "." }
+# minimal-example = { path = "." }
 
 [package]
 name = "minimal-example"

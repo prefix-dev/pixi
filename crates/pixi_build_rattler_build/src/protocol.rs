@@ -198,6 +198,20 @@ impl Protocol for RattlerBuildBackend {
                     license: recipe.about.license.clone().map(|l| l.to_string()),
                     license_family: recipe.about.license_family.clone(),
                     flags: build.flags.clone(),
+                    track_features: build
+                        .variant
+                        .down_prioritize_variant
+                        .map(|priority| {
+                            (0..priority.unsigned_abs())
+                                .map(|index| {
+                                    format!(
+                                        "{}-p-{index}",
+                                        recipe.package().name().as_normalized()
+                                    )
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default(),
                     noarch,
                     purls: None,
                     python_site_packages_path,
@@ -490,6 +504,7 @@ impl Protocol for RattlerBuildBackend {
                 ),
                 store_recipe: false,
                 force_colors: true,
+                experimental: self.config.experimental.unwrap_or(false),
                 sandbox_config: None,
                 exclude_newer: None,
                 env_isolation: Default::default(),
@@ -668,6 +683,15 @@ impl ProtocolInstantiator for RattlerBuildBackendInstantiator {
                 target: Target,
                 workspace_deps: &mut HashMap<String, SourcePackageSpec>,
             ) -> miette::Result<()> {
+                // Run-exports come from the recipe for this backend; silently
+                // ignoring a manifest-declared table would drop them from the
+                // built package.
+                if target.run_exports.as_ref().is_some_and(|re| !re.is_empty()) {
+                    return Err(miette::miette!(
+                        "`[package.run-exports]` is not supported in pixi-build-rattler-build; declare run-exports in the recipe instead"
+                    ));
+                }
+
                 for dep_list in [
                     target.build_dependencies,
                     target.host_dependencies,
@@ -691,9 +715,17 @@ impl ProtocolInstantiator for RattlerBuildBackendInstantiator {
                                 ));
                             }
                             pixi_build_types::PackageSpec::PinCompatible(_) => {
-                                // PinCompatible dependencies are not yet supported
+                                // Pins come from the recipe for this backend.
                                 return Err(miette::miette!(
-                                    "PinCompatible dependency '{}' is not yet supported in pixi-build-rattler-build.",
+                                    "`pin-compatible` dependency '{}' is not supported in pixi-build-rattler-build; use `${{{{ pin_compatible('{}') }}}}` in the recipe instead",
+                                    name,
+                                    name
+                                ));
+                            }
+                            pixi_build_types::PackageSpec::PinSubpackage(_) => {
+                                return Err(miette::miette!(
+                                    "`pin-subpackage` dependency '{}' is not supported in pixi-build-rattler-build; use `${{{{ pin_subpackage('{}') }}}}` in the recipe instead",
+                                    name,
                                     name
                                 ));
                             }
@@ -1070,6 +1102,61 @@ numpy:
       name: foobar
       version: 0.1.0
     "#;
+
+    #[tokio::test]
+    async fn test_manifest_run_exports_are_rejected() {
+        // Run-exports belong in the recipe for this backend; accepting the
+        // manifest table would silently drop them from the built package.
+        let tmp = tempdir().unwrap();
+        let recipe_path = tmp.path().join("recipe.yaml");
+        fs::write(&recipe_path, FAKE_RECIPE).unwrap();
+
+        let run_exports = pixi_build_types::RunExports {
+            weak: Some(
+                [(
+                    pixi_build_types::SourcePackageName::from(
+                        rattler_conda_types::PackageName::new_unchecked("libzlib"),
+                    ),
+                    pixi_build_types::PackageSpec::Binary(Box::default()),
+                )]
+                .into_iter()
+                .collect(),
+            ),
+            ..Default::default()
+        };
+        let project_model = pixi_build_types::ProjectModel {
+            targets: Some(pixi_build_types::Targets {
+                default_target: Some(Target {
+                    run_exports: Some(run_exports),
+                    ..Default::default()
+                }),
+                conditional: None,
+            }),
+            ..Default::default()
+        };
+
+        let result = RattlerBuildBackendInstantiator::new(LoggingOutputHandler::default())
+            .initialize(InitializeParams {
+                workspace_directory: None,
+                checkout_root: None,
+                source_directory: None,
+                manifest_path: recipe_path,
+                project_model: Some(project_model),
+                configuration: None,
+                target_configuration: None,
+                cache_directory: None,
+                workspace_scratch_directory: None,
+            })
+            .await;
+        let err = match result {
+            Ok(_) => panic!("manifest-declared run-exports must be rejected"),
+            Err(err) => err,
+        };
+        assert!(
+            err.to_string().contains("run-exports"),
+            "unexpected error: {err}"
+        );
+    }
 
     async fn try_initialize(
         manifest_path: impl AsRef<Path>,

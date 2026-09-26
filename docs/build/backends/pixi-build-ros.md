@@ -5,7 +5,7 @@ No more requirement to use `colcon` or `catkin_tools` to build your ROS packages
 It provides seamless integration with Pixi's package management workflow while supporting ROS1 and ROS2 packages with automatic dependency resolution.
 
 !!! warning
-    `pixi-build` is a preview feature, and will change until it is stabilized.
+    `pixi-build` is a preview flag, and will change until it is stabilized.
     This is why we require users to opt in to that feature by adding "pixi-build" to `workspace.preview`.
 
     ```toml
@@ -37,7 +37,7 @@ channels = [
 platforms = ["linux-64", "osx-arm64"]
 
 [package.build]
-backend = { name = "pixi-build-ros", version = "*" }
+backend = { name = "pixi-build-ros" }
 
 [package.build.config]
 distro = "jazzy"  # or "humble", "noetic", etc.
@@ -198,6 +198,8 @@ The ROS backend keeps the following variables in sync with the selected distro, 
 
 These values are available both while evaluating `package.xml` conditionals and during the generated build script. Any custom entries you provide in `env` are merged on top of these defaults.
 If you explicitly set `ROS_DISTRO` or `ROS_VERSION` in `env`, your values take precedence over the defaults.
+
+--8<-- "docs/partials/build-config-env-expansion.md"
 
 ### `debug-dir`
 

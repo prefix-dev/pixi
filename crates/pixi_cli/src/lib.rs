@@ -16,7 +16,7 @@ use pixi_consts::consts;
 use pixi_core::environment::LockFileUsage;
 use pixi_progress::global_multi_progress;
 
-use std::{env, io::IsTerminal};
+use std::{env, io::IsTerminal, process::ExitCode};
 use tracing::level_filters::LevelFilter;
 
 pub mod add;
@@ -26,6 +26,7 @@ pub mod cli_config;
 pub mod cli_interface;
 pub mod command_info;
 pub mod completion;
+mod conda_script;
 pub mod config;
 pub mod exec;
 pub mod global;
@@ -37,11 +38,13 @@ pub mod install;
 pub mod list;
 pub mod lock;
 pub(crate) mod match_spec_or_path;
+pub mod offline;
 mod process_exit;
 pub mod publish;
 pub mod reinstall;
 pub mod remove;
 pub mod run;
+mod run_script;
 pub mod search;
 pub mod self_update;
 mod shared;
@@ -150,6 +153,18 @@ impl Args {
     }
 }
 
+impl GlobalOptions {
+    /// How much of the reports of `pixi global` is shown. This rides along with
+    /// the logging flags rather than having a knob of its own.
+    fn report_verbosity(&self) -> pixi_global::report::Verbosity {
+        if self.quiet > 0 {
+            pixi_global::report::Verbosity::Quiet
+        } else {
+            pixi_global::report::Verbosity::Normal
+        }
+    }
+}
+
 #[derive(Parser, Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum Command {
@@ -232,50 +247,48 @@ impl LockFileUsageConfig {
     }
 }
 
-pub async fn execute() -> miette::Result<()> {
-    let args = Args::parse();
+pub async fn execute() -> miette::Result<ExitCode> {
+    let args = match Args::try_parse() {
+        Ok(args) => args,
+        Err(error) => {
+            let exit_code = process_exit::exit_code_from_code(error.exit_code());
+            pixi_utils::io::ignore_broken_pipe(error.print()).into_diagnostic()?;
+            return Ok(exit_code);
+        }
+    };
 
-    // Extract values we need before moving args
     let no_progress = args.no_progress();
-
     set_console_colors(&args);
 
     let use_colors = console::colors_enabled_stderr();
     let in_ci = matches!(env::var("CI").as_deref(), Ok("1" | "true"));
     let no_wrap = matches!(env::var("PIXI_NO_WRAP").as_deref(), Ok("1" | "true"));
-    // Set up the default miette handler based on whether we want colors or not.
     miette::set_hook(Box::new(move |_| {
         Box::new(
             miette::MietteHandlerOpts::default()
                 .color(use_colors)
                 .with_syntax_highlighting(miette_arborium::MietteHighlighter::new())
-                // Don't wrap lines in CI environments or when explicitly specified to avoid
-                // breaking logs and tests.
                 .wrap_lines(!in_ci && !no_wrap)
                 .build(),
         )
     }))?;
 
-    // Hide all progress bars if the user requested it.
     if no_progress {
         global_multi_progress().set_draw_target(ProgressDrawTarget::hidden());
     }
 
-    // Handle `--list`: print installed commands and exit 0
     if args.list {
         print_installed_commands();
-        return Ok(());
+        return Ok(ExitCode::SUCCESS);
     }
 
-    // Setup logging for the application.
     setup_logging(&args, use_colors)?;
+    pixi_global::report::set_verbosity(args.global_options.report_verbosity());
 
     let (Some(command), global_options) = (args.command, args.global_options) else {
-        // match CI expectations
-        std::process::exit(2);
+        return Ok(ExitCode::from(2));
     };
 
-    // Execute the command
     execute_command(command, &global_options).await
 }
 
@@ -354,41 +367,51 @@ fn setup_logging(args: &Args, use_colors: bool) -> miette::Result<()> {
 pub async fn execute_command(
     command: Command,
     global_options: &GlobalOptions,
-) -> miette::Result<()> {
-    match command {
-        Command::Completion(cmd) => completion::execute(cmd),
-        Command::Config(cmd) => config::execute(cmd).await,
-        Command::Init(cmd) => init::execute(cmd).await,
-        Command::Add(cmd) => add::execute(cmd).await,
-        Command::Clean(cmd) => clean::execute(cmd).await,
+) -> miette::Result<ExitCode> {
+    let result = match command {
+        Command::Completion(cmd) => completion::execute(cmd).map(|()| ExitCode::SUCCESS),
+        Command::Config(cmd) => config::execute(cmd).await.map(|()| ExitCode::SUCCESS),
+        Command::Init(cmd) => init::execute(cmd).await.map(|()| ExitCode::SUCCESS),
+        Command::Add(cmd) => add::execute(cmd).await.map(|()| ExitCode::SUCCESS),
+        Command::Clean(cmd) => clean::execute(cmd).await.map(|()| ExitCode::SUCCESS),
         Command::Run(cmd) => run::execute(cmd).await,
-        Command::Global(cmd) => global::execute(cmd).await,
-        Command::Auth(cmd) => rattler::cli::auth::execute(cmd).await.into_diagnostic(),
-        Command::Install(cmd) => install::execute(cmd).await,
-        Command::Reinstall(cmd) => reinstall::execute(cmd).await,
+        Command::Global(cmd) => global::execute(cmd).await.map(|()| ExitCode::SUCCESS),
+        Command::Auth(cmd) => rattler::cli::auth::execute(cmd)
+            .await
+            .into_diagnostic()
+            .map(|()| ExitCode::SUCCESS),
+        Command::Install(cmd) => install::execute(cmd).await.map(|()| ExitCode::SUCCESS),
+        Command::Reinstall(cmd) => reinstall::execute(cmd).await.map(|()| ExitCode::SUCCESS),
         Command::Shell(cmd) => shell::execute(cmd).await,
-        Command::ShellHook(cmd) => shell_hook::execute(cmd).await,
-        Command::Task(cmd) => task::execute(cmd).await,
-        Command::Info(cmd) => info::execute(cmd).await,
-        Command::Import(cmd) => import::execute(cmd).await,
-        Command::Publish(cmd) => publish::execute(cmd).await,
-        Command::Upload(cmd) => upload::execute(cmd).await,
-        Command::Search(cmd) => search::execute(cmd).await,
+        Command::ShellHook(cmd) => shell_hook::execute(cmd).await.map(|()| ExitCode::SUCCESS),
+        Command::Task(cmd) => task::execute(cmd).await.map(|()| ExitCode::SUCCESS),
+        Command::Info(cmd) => info::execute(cmd).await.map(|()| ExitCode::SUCCESS),
+        Command::Import(cmd) => import::execute(cmd).await.map(|()| ExitCode::SUCCESS),
+        Command::Publish(cmd) => publish::execute(cmd).await.map(|()| ExitCode::SUCCESS),
+        Command::Upload(cmd) => upload::execute(cmd).await.map(|()| ExitCode::SUCCESS),
+        Command::Search(cmd) => search::execute(cmd).await.map(|()| ExitCode::SUCCESS),
         Command::Workspace(cmd) => workspace::execute(cmd).await,
-        Command::Remove(cmd) => remove::execute(cmd).await,
+        Command::Remove(cmd) => remove::execute(cmd).await.map(|()| ExitCode::SUCCESS),
         #[cfg(feature = "self_update")]
-        Command::SelfUpdate(cmd) => self_update::execute(cmd, global_options).await,
+        Command::SelfUpdate(cmd) => self_update::execute(cmd, global_options)
+            .await
+            .map(|()| ExitCode::SUCCESS),
         #[cfg(not(feature = "self_update"))]
-        Command::SelfUpdate(cmd) => self_update::execute_stub(cmd, global_options).await,
-        Command::List(cmd) => list::execute(cmd).await,
-        Command::Tree(cmd) => tree::execute(cmd).await,
-        Command::Update(cmd) => update::execute(cmd).await,
-        Command::Upgrade(cmd) => upgrade::execute(cmd).await,
-        Command::Lock(cmd) => lock::execute(cmd).await,
+        Command::SelfUpdate(cmd) => self_update::execute_stub(cmd, global_options)
+            .await
+            .map(|()| ExitCode::SUCCESS),
+        Command::List(cmd) => list::execute(cmd).await.map(|()| ExitCode::SUCCESS),
+        Command::Tree(cmd) => tree::execute(cmd).await.map(|()| ExitCode::SUCCESS),
+        Command::Update(cmd) => update::execute(cmd).await.map(|()| ExitCode::SUCCESS),
+        Command::Upgrade(cmd) => upgrade::execute(cmd).await.map(|()| ExitCode::SUCCESS),
+        Command::Lock(cmd) => lock::execute(cmd).await.map(|()| ExitCode::SUCCESS),
         Command::Exec(args) => exec::execute(args).await,
-        Command::Build(args) => build::execute(args).await,
+        Command::Build(args) => build::execute(args).await.map(|()| ExitCode::SUCCESS),
         Command::External(args) => command_info::execute_external_command(args),
-    }
+    };
+
+    pixi_reporters::display_channel_notices();
+    result.map_err(offline::attach_offline_hint)
 }
 
 /// Whether to use colored log format.
@@ -528,6 +551,152 @@ fn print_installed_commands() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn script_selector_is_exposed_only_by_the_explicit_allowlist() {
+        fn collect(
+            command: &clap::Command,
+            parent: &str,
+            commands: &mut std::collections::BTreeSet<String>,
+        ) {
+            let path = if parent.is_empty() {
+                command.get_name().to_string()
+            } else {
+                format!("{parent} {}", command.get_name())
+            };
+            if command
+                .get_arguments()
+                .any(|argument| argument.get_long() == Some("script") && !argument.is_hide_set())
+            {
+                commands.insert(path.clone());
+            }
+            for subcommand in command.get_subcommands() {
+                collect(subcommand, &path, commands);
+            }
+        }
+
+        let command = Args::command();
+        command.clone().debug_assert();
+
+        let mut actual = std::collections::BTreeSet::new();
+        collect(&command, "", &mut actual);
+
+        let expected = [
+            "pixi add",
+            "pixi init",
+            "pixi install",
+            "pixi list",
+            "pixi lock",
+            "pixi remove",
+            "pixi run",
+            "pixi tree",
+            "pixi update",
+            "pixi workspace channel",
+            "pixi workspace export conda-environment",
+            "pixi workspace export conda-explicit-spec",
+            "pixi workspace platform",
+        ]
+        .into_iter()
+        .map(str::to_string)
+        .collect();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn workspace_only_mutations_reject_the_script_selector() {
+        for command in [
+            &["workspace", "description", "get"][..],
+            &["workspace", "environment", "list"],
+            &["workspace", "feature", "list"],
+            &["workspace", "name", "get"],
+            &["workspace", "register", "list"],
+            &["workspace", "requires-pixi", "get"],
+            &["workspace", "version", "get"],
+            &["task", "list"],
+        ] {
+            let mut args = vec!["pixi"];
+            args.extend_from_slice(command);
+            args.extend(["--script", "example.py"]);
+            assert!(
+                Args::try_parse_from(args).is_err(),
+                "`pixi {}` unexpectedly accepted --script",
+                command.join(" ")
+            );
+        }
+    }
+
+    #[test]
+    fn shared_script_selector_parses_and_conflicts_at_the_command_level() {
+        let parsed =
+            Args::try_parse_from(["pixi", "run", "-s", "example.py", "python", "-V"]).unwrap();
+        let Some(Command::Run(run)) = parsed.command else {
+            panic!("expected the run command");
+        };
+        assert_eq!(
+            run.workspace_config.script.as_deref(),
+            Some(std::path::Path::new("example.py"))
+        );
+
+        assert!(
+            Args::try_parse_from([
+                "pixi",
+                "run",
+                "--script",
+                "example.py",
+                "--manifest-path",
+                "pixi.toml",
+                "python",
+            ])
+            .is_err()
+        );
+        assert!(
+            Args::try_parse_from([
+                "pixi",
+                "run",
+                "--script",
+                "example.py",
+                "--workspace",
+                "registered",
+                "python",
+            ])
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn script_execution_forwards_trailing_arguments() {
+        let parsed = Args::try_parse_from([
+            "pixi",
+            "run",
+            "--frozen",
+            "--script",
+            "example.py",
+            "first",
+            "--second",
+        ])
+        .unwrap();
+        let Some(Command::Run(run)) = parsed.command else {
+            panic!("expected the run command");
+        };
+        assert_eq!(
+            run.workspace_config.script.as_deref(),
+            Some(std::path::Path::new("example.py"))
+        );
+        assert_eq!(run.task, ["first", "--second"]);
+        assert!(run.lock_and_install_config.lock_file_usage().is_ok());
+    }
+
+    #[test]
+    fn script_initialization_is_available_on_init() {
+        let parsed = Args::try_parse_from(["pixi", "init", "--script", "example.py"]).unwrap();
+        let Some(Command::Init(init)) = parsed.command else {
+            panic!("expected the init command");
+        };
+        assert_eq!(
+            init.script.as_deref(),
+            Some(std::path::Path::new("example.py"))
+        );
+    }
 
     #[test]
     fn test_clap_boolean_env_var_behavior() {

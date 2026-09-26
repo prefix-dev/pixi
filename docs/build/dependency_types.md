@@ -99,6 +99,38 @@ This is useful to avoid having to specify the same dependencies in both sections
 As most packages on conda-forge will have these `run-exports` defined.
 When using something like `zlib`, you would only need to specify it in the `host-dependencies` section, and it will be used as a run-dependency automatically.
 
+Pixi packages can declare run-exports of their own through the [`[package.run-exports]` tables](../reference/pixi_manifest.md#run-exports).
+A library package typically weak-exports itself, so consumers that put it in `host-dependencies` automatically receive it as a run dependency:
+
+```toml
+[package.run-exports.weak]
+mylib = { path = "." }
+```
+
+To export the package pinned to the version it was built as, use a [`pin-subpackage` spec](../reference/pixi_manifest.md#pin-subpackage-and-pin-compatible) instead:
+
+```toml
+[package.run-exports.weak]
+mylib = { pin-subpackage = { upper-bound = "x.x" } }
+```
+
+Note that consumers building `noarch` packages only receive the `noarch` bucket; declare the export there as well when it should reach them.
+
+#### Pinning run dependencies to the host environment
+
+A run dependency can be pinned to a range derived from the version that the host environment resolved, using a [`pin-compatible` spec](../reference/pixi_manifest.md#pin-subpackage-and-pin-compatible).
+This mirrors `pin_compatible` in a rattler-build recipe:
+
+```toml
+[package.host-dependencies]
+boltons = ">=24,<26"
+
+[package.run-dependencies]
+boltons = { pin-compatible = { lower-bound = "x.x" } }
+```
+
+If the host environment resolves `boltons=25.0.0`, the run dependency becomes `boltons >=25.0,<26.0a0`.
+
 
 ### [Dependencies (Run Dependencies)](../reference/pixi_manifest.md#dependencies)
 

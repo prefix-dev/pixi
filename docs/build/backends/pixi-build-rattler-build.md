@@ -4,7 +4,7 @@ The `pixi-build-rattler-build` backend enables building conda packages using rat
 This backend is designed for projects that either have existing recipe.yaml files or where customization is necessary that isn't possible with the currently available backends.
 
 !!! warning
-    `pixi-build` is a preview feature, and will change until it is stabilized.
+    `pixi-build` is a preview flag, and will change until it is stabilized.
     This is why we require users to opt in to that feature by adding "pixi-build" to `workspace.preview`.
 
     ```toml
@@ -31,8 +31,8 @@ To use the rattler-build backend in your `pixi.toml`, specify it in your build s
 name = "rattler_build_package"
 version = "0.1.0"
 
-[package.build]
-backend = { name = "pixi-build-rattler-build", version = "*" }
+[package.build.backend]
+name = "pixi-build-rattler-build"
 channels = ["https://prefix.dev/conda-forge"]
 ```
 
@@ -75,6 +75,8 @@ This is intentional because:
 
 This way, the recipe maintains full control over binary dependencies while the project
 model only provides the workspace structure information that the recipe cannot know.
+
+For the same reason, `[package.run-exports]` is not supported with this backend: declare run-exports in the recipe's `requirements.run_exports` instead.
 
 To specify source dependencies, add them to `build-dependencies`, `host-dependencies` or `run-dependencies` in the package manifest:
 

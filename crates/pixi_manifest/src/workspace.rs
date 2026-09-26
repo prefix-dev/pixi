@@ -17,11 +17,17 @@ use url::Url;
 use super::pypi::pypi_options::PypiOptions;
 use crate::{
     PixiPlatform, PixiPlatformName, PrioritizedChannel, S3Options, TargetSelector, Targets,
+    platform::{candidate_subdirs, capability_satisfied_by, is_subdir_default},
     preview::Preview,
 };
 use minijinja::{AutoEscape, Environment, UndefinedBehavior};
 use once_cell::sync::Lazy;
 
+/// The Jinja environment used to render task templates.
+///
+/// Booleans and `none` render the way Jinja2 does, as `True`, `False` and
+/// `None`. Use `{% if %}` to branch on a boolean, and `| lower` when a task
+/// needs the lowercase spelling.
 pub static JINJA_ENV: Lazy<Environment<'static>> = Lazy::new(|| {
     let mut env = Environment::new();
     env.set_undefined_behavior(UndefinedBehavior::Strict);
@@ -83,7 +89,7 @@ pub struct Workspace {
     /// The S3 options supported in the project
     pub s3_options: Option<HashMap<String, S3Options>>,
 
-    /// Preview features
+    /// Preview flags
     pub preview: Preview,
 
     /// Build variants defined directly in the manifest.
@@ -156,7 +162,7 @@ impl Workspace {
         current: Platform,
         system_virtual_packages: &[GenericVirtualPackage],
     ) -> Vec<&PixiPlatform> {
-        let candidate_subdirs = self.candidate_subdirs(current);
+        let candidate_subdirs = candidate_subdirs(current);
 
         // Subdir-default virtual packages are pixi's assumed baseline for
         // the target subdir, not a host requirement -- a `win-64` entry's
@@ -167,8 +173,8 @@ impl Workspace {
         let satisfies_system = |p: &&PixiPlatform| {
             p.declared_virtual_packages()
                 .iter()
-                .filter(|declared| !crate::platform::is_subdir_default(declared, p.subdir()))
-                .all(|declared| satisfied_by_system(declared, system_virtual_packages))
+                .filter(|declared| !is_subdir_default(declared, p.subdir()))
+                .all(|declared| capability_satisfied_by(declared, system_virtual_packages))
         };
 
         let mut result: Vec<&PixiPlatform> = Vec::new();
@@ -195,23 +201,6 @@ impl Workspace {
         result
     }
 
-    /// Subdirs pixi will consider when matching the host platform: `current`
-    /// plus the same architecture fallbacks used by
-    /// [`Self::possible_pixi_platforms`].
-    pub fn candidate_subdirs(&self, current: Platform) -> Vec<Platform> {
-        let mut candidate_subdirs: Vec<Platform> = vec![current];
-        if current.is_osx() && current != Platform::Osx64 {
-            candidate_subdirs.push(Platform::Osx64);
-        }
-        if current.is_windows() && current != Platform::Win64 {
-            candidate_subdirs.push(Platform::Win64);
-        }
-        if current == Platform::Win64 {
-            candidate_subdirs.push(Platform::Win32);
-        }
-        candidate_subdirs
-    }
-
     /// Declared virtual packages from `env_platforms` whose host subdir
     /// matches `current` but whose requirement is not provided by
     /// `system_virtual_packages`. Powers the
@@ -223,43 +212,87 @@ impl Workspace {
         system_virtual_packages: &[GenericVirtualPackage],
         env_platforms: &HashSet<PixiPlatformName>,
     ) -> Vec<GenericVirtualPackage> {
-        let candidate_subdirs = self.candidate_subdirs(current);
         let mut unsatisfied: Vec<GenericVirtualPackage> = Vec::new();
-        for subdir in &candidate_subdirs {
-            for platform in self
-                .platforms
-                .iter()
-                .filter(|p| p.subdir() == *subdir)
-                .filter(|p| env_platforms.contains(p.name()))
-            {
-                for declared in platform.declared_virtual_packages() {
-                    // Skip materialised subdir defaults: they're not a host
-                    // requirement, see `possible_pixi_platforms`.
-                    if crate::platform::is_subdir_default(declared, platform.subdir()) {
-                        continue;
-                    }
-                    if !satisfied_by_system(declared, system_virtual_packages)
-                        && !unsatisfied
-                            .iter()
-                            .any(|u| u.name == declared.name && u.version == declared.version)
-                    {
-                        unsatisfied.push(declared.clone());
-                    }
+        for diagnosis in self
+            .platform_match_diagnostics(current, system_virtual_packages, env_platforms)
+            .into_iter()
+            .filter(|d| d.subdir_matches_host)
+        {
+            for declared in diagnosis.unsatisfied_virtual_packages {
+                if !unsatisfied
+                    .iter()
+                    .any(|u| u.name == declared.name && u.version == declared.version)
+                {
+                    unsatisfied.push(declared);
                 }
             }
         }
         unsatisfied
     }
+
+    /// Explain, for each platform an environment declares, why it does or
+    /// does not run on the current host: whether its subdir is runnable here
+    /// and which declared virtual packages the host fails to provide. Subdir
+    /// defaults never count as unsatisfied (they're pixi's baseline, not a
+    /// host requirement, see [`Self::possible_pixi_platforms`]).
+    ///
+    /// Platforms are returned in workspace declaration order.
+    pub fn platform_match_diagnostics(
+        &self,
+        current: Platform,
+        system_virtual_packages: &[GenericVirtualPackage],
+        env_platforms: &HashSet<PixiPlatformName>,
+    ) -> Vec<PlatformMatchDiagnosis> {
+        let candidate_subdirs = candidate_subdirs(current);
+        self.platforms
+            .iter()
+            .filter(|p| env_platforms.contains(p.name()))
+            .map(|p| {
+                let subdir = p.subdir();
+                let unsatisfied_virtual_packages = p
+                    .declared_virtual_packages()
+                    .iter()
+                    .filter(|declared| !is_subdir_default(declared, subdir))
+                    .filter(|declared| !capability_satisfied_by(declared, system_virtual_packages))
+                    .cloned()
+                    .collect();
+                PlatformMatchDiagnosis {
+                    name: p.name().clone(),
+                    subdir,
+                    subdir_matches_host: candidate_subdirs.contains(&subdir),
+                    unsatisfied_virtual_packages,
+                }
+            })
+            .collect()
+    }
 }
 
-/// Returns true if `declared` is provided by the system: the system must list
-/// a virtual package of the same name with a version at least as high as the
-/// declared one.
-fn satisfied_by_system(declared: &GenericVirtualPackage, system: &[GenericVirtualPackage]) -> bool {
-    system
-        .iter()
-        .find(|s| s.name == declared.name)
-        .is_some_and(|s| s.version >= declared.version)
+/// Why a single declared platform does or does not run on the current host,
+/// produced by [`Workspace::platform_match_diagnostics`].
+#[derive(Debug, Clone)]
+pub struct PlatformMatchDiagnosis {
+    /// The declared platform's name.
+    pub name: PixiPlatformName,
+
+    /// The conda subdir the platform targets.
+    pub subdir: Platform,
+
+    /// Whether `subdir` is one the current host can run (its own subdir or an
+    /// architecture fallback such as `win-64` → `win-32`).
+    pub subdir_matches_host: bool,
+
+    /// Declared virtual packages (excluding subdir defaults) the host does not
+    /// provide at a high enough version. Empty when the only mismatch is the
+    /// subdir, or when the platform runs here.
+    pub unsatisfied_virtual_packages: Vec<GenericVirtualPackage>,
+}
+
+impl PlatformMatchDiagnosis {
+    /// `true` when this platform runs on the current host: its subdir matches
+    /// and every declared virtual package is satisfied.
+    pub fn matches_host(&self) -> bool {
+        self.subdir_matches_host && self.unsatisfied_virtual_packages.is_empty()
+    }
 }
 
 /// A source that contributes additional build variant definitions.
@@ -286,6 +319,7 @@ pub enum BuildVariantSource {
 pub enum ChannelPriority {
     #[default]
     Strict,
+    Flexible,
     Disabled,
 }
 
@@ -299,6 +333,7 @@ impl From<ChannelPriority> for rattler_solve::ChannelPriority {
     fn from(value: ChannelPriority) -> Self {
         match value {
             ChannelPriority::Strict => rattler_solve::ChannelPriority::Strict,
+            ChannelPriority::Flexible => rattler_solve::ChannelPriority::Flexible,
             ChannelPriority::Disabled => rattler_solve::ChannelPriority::Disabled,
         }
     }
@@ -308,6 +343,7 @@ impl From<rattler_solve::ChannelPriority> for ChannelPriority {
     fn from(value: rattler_solve::ChannelPriority) -> Self {
         match value {
             rattler_solve::ChannelPriority::Strict => ChannelPriority::Strict,
+            rattler_solve::ChannelPriority::Flexible => ChannelPriority::Flexible,
             rattler_solve::ChannelPriority::Disabled => ChannelPriority::Disabled,
         }
     }

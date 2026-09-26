@@ -83,6 +83,10 @@ pub struct CondaPrefixUpdaterInner {
     pub exclude_newer: Option<ResolvedExcludeNewer>,
     pub command_dispatcher: CommandDispatcher,
 
+    /// Inline package definitions for this environment, used to
+    /// build source packages without an on-disk manifest.
+    pub inline_packages: HashMap<PackageName, pixi_command_dispatcher::InlinePackage>,
+
     /// A flag that indicates if the prefix was created.
     created: AsyncOnceCell<CondaPrefixUpdated>,
 }
@@ -110,6 +114,11 @@ impl CondaPrefixUpdaterBuilder<'_> {
             .group
             .exclude_newer_config_resolved(&self.group.channel_config())
             .into_diagnostic()?;
+        let inline_packages = self
+            .group
+            .combined_inline_packages(Some(&self.platform))
+            .into_iter()
+            .collect();
 
         Ok(CondaPrefixUpdater::new(
             channels,
@@ -120,6 +129,7 @@ impl CondaPrefixUpdaterBuilder<'_> {
             variant_config,
             exclude_newer,
             self.command_dispatcher,
+            inline_packages,
         ))
     }
 }
@@ -156,6 +166,7 @@ impl CondaPrefixUpdater {
         variant_config: VariantConfig,
         exclude_newer: Option<ResolvedExcludeNewer>,
         command_dispatcher: CommandDispatcher,
+        inline_packages: HashMap<PackageName, pixi_command_dispatcher::InlinePackage>,
     ) -> Self {
         Self {
             inner: Arc::new(CondaPrefixUpdaterInner {
@@ -167,6 +178,7 @@ impl CondaPrefixUpdater {
                 variant_config,
                 exclude_newer,
                 command_dispatcher,
+                inline_packages,
                 created: Default::default(),
             }),
         }
@@ -200,6 +212,7 @@ impl CondaPrefixUpdater {
                     self.inner.command_dispatcher.clone(),
                     reinstall_packages,
                     ignore_packages,
+                    self.inner.inline_packages.clone(),
                 )
                 .await?;
 
@@ -232,6 +245,7 @@ pub async fn update_prefix_conda(
     command_dispatcher: CommandDispatcher,
     reinstall_packages: Option<HashSet<PackageName>>,
     ignore_packages: Option<HashSet<PackageName>>,
+    inline_packages: HashMap<PackageName, pixi_command_dispatcher::InlinePackage>,
 ) -> miette::Result<CondaPrefixInstallResult> {
     // Try to increase the rlimit to a sensible value for installation.
     try_increase_rlimit_to_sensible();
@@ -270,6 +284,7 @@ pub async fn update_prefix_conda(
             channels,
             variant_configuration: Some(variant_configuration),
             variant_files: Some(variant_files),
+            inline_packages,
         })
         .await?;
 

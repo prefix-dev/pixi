@@ -16,9 +16,11 @@ use pixi_command_dispatcher::{MissingChannelError, SolvePixiEnvironmentError::Mi
 use pixi_config::PinningStrategy;
 use pixi_diff::LockFileDiff;
 use pixi_manifest::{
-    DependencyOverwriteBehavior, FeatureName, FeaturesExt, HasFeaturesIter, LoadManifestsError,
-    ManifestDocument, ManifestKind, PixiPlatformName, PypiDependencyLocation, SpecType,
-    TargetSelector, TomlError, WorkspaceManifest, WorkspaceManifestMut, toml::TomlDocument,
+    AddDependencyOutcome, DependencyOverwriteBehavior, FeatureName, FeaturesExt, HasFeaturesIter,
+    LoadManifestsError, ManifestDocument, ManifestKind, PixiPlatformName, PypiDependencyLocation,
+    SpecType, TargetSelector, TomlError, WorkspaceManifest, WorkspaceManifestMut,
+    script::{ScriptManifest, conda::CondaScriptManifest},
+    toml::TomlDocument,
     utils::WithSourceCode,
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
@@ -32,8 +34,8 @@ use crate::{
     environment::LockFileUsage,
     lock_file::{LockFileDerivedData, ReinstallPackages, UpdateContext, UpdateMode},
     workspace::{
-        MatchSpecs, NON_SEMVER_PACKAGES, PypiDeps, SourceSpecs, UpdateDeps,
-        grouped_environment::GroupedEnvironment,
+        MatchSpecs, NON_SEMVER_PACKAGES, PypiDeps, SkippedPackage, SourceSpecs, UpdateDeps,
+        WorkspaceStorage, grouped_environment::GroupedEnvironment, workspace_script::ScriptSource,
     },
 };
 
@@ -80,6 +82,10 @@ pub struct WorkspaceMut {
 
     // The parsed toml document.
     workspace_manifest_document: ManifestDocument,
+
+    // Reports solve, download and install progress to the user. `None` keeps
+    // the work silent, which is what non-terminal consumers want.
+    progress: Option<Arc<pixi_reporters::TopLevelProgress>>,
 }
 
 impl WorkspaceMut {
@@ -91,25 +97,53 @@ impl WorkspaceMut {
         // Read the contents of the file
         let contents = workspace.workspace.provenance.read()?.into_inner();
 
-        // Parse the contents
-        let toml = match DocumentMut::from_str(&contents) {
-            Ok(document) => TomlDocument::new(document),
-            Err(err) => {
-                return Err(Box::new(WithSourceCode {
-                    source: NamedSource::new(
-                        workspace.workspace.provenance.path.to_string_lossy(),
-                        Arc::from(contents),
-                    ),
-                    error: TomlError::from(err),
-                })
-                .into());
+        let workspace_manifest_document = match &workspace.storage {
+            WorkspaceStorage::Script(script) => match script.source() {
+                ScriptSource::Pep723(manifest) => {
+                    ManifestDocument::from_script((**manifest).clone())
+                        .expect("a loaded script must remain valid")
+                }
+                ScriptSource::CondaScript(manifest) => {
+                    match ManifestDocument::from_conda_script((**manifest).clone()) {
+                        Ok(document) => document,
+                        Err(error) => {
+                            return Err(Box::new(WithSourceCode {
+                                error: TomlError::Generic(pixi_manifest::GenericError::new(
+                                    error.to_string(),
+                                )),
+                                source: NamedSource::new(
+                                    manifest.path().to_string_lossy(),
+                                    Arc::from(contents.as_str()),
+                                ),
+                            })
+                            .into());
+                        }
+                    }
+                }
+            },
+            WorkspaceStorage::Project => {
+                let toml = match DocumentMut::from_str(&contents) {
+                    Ok(document) => TomlDocument::new(document),
+                    Err(err) => {
+                        return Err(Box::new(WithSourceCode {
+                            source: NamedSource::new(
+                                workspace.workspace.provenance.path.to_string_lossy(),
+                                Arc::from(contents),
+                            ),
+                            error: TomlError::from(err),
+                        })
+                        .into());
+                    }
+                };
+                match workspace.workspace.provenance.kind {
+                    ManifestKind::Pyproject => ManifestDocument::PyProjectToml(toml),
+                    ManifestKind::Pixi => ManifestDocument::PixiToml(toml),
+                    ManifestKind::MojoProject => ManifestDocument::MojoProjectToml(toml),
+                    ManifestKind::Pep723 | ManifestKind::CondaScript => {
+                        unreachable!("script workspaces use script storage")
+                    }
+                }
             }
-        };
-
-        let workspace_manifest_document = match workspace.workspace.provenance.kind {
-            ManifestKind::Pyproject => ManifestDocument::PyProjectToml(toml),
-            ManifestKind::Pixi => ManifestDocument::PixiToml(toml),
-            ManifestKind::MojoProject => ManifestDocument::MojoProjectToml(toml),
         };
 
         Ok(Self {
@@ -121,6 +155,7 @@ impl WorkspaceMut {
 
             workspace: Some(workspace),
             workspace_manifest_document,
+            progress: None,
         })
     }
 
@@ -149,6 +184,9 @@ impl WorkspaceMut {
             ManifestKind::Pyproject => ManifestDocument::PyProjectToml(toml),
             ManifestKind::Pixi => ManifestDocument::PixiToml(toml),
             ManifestKind::MojoProject => ManifestDocument::MojoProjectToml(toml),
+            ManifestKind::Pep723 | ManifestKind::CondaScript => {
+                unreachable!("templates cannot be scripts")
+            }
         };
 
         Ok(Self {
@@ -157,12 +195,61 @@ impl WorkspaceMut {
 
             workspace: Some(workspace),
             workspace_manifest_document,
+            progress: None,
         })
+    }
+
+    /// Reports the progress of any solve, download or install this instance
+    /// triggers. Without it the work runs silently.
+    pub fn with_progress(mut self, progress: Arc<pixi_reporters::TopLevelProgress>) -> Self {
+        self.progress = Some(progress);
+        self
+    }
+
+    /// The progress reporter attached with [`Self::with_progress`], if any.
+    pub fn progress(&self) -> Option<&Arc<pixi_reporters::TopLevelProgress>> {
+        self.progress.as_ref()
     }
 
     /// Returns the kind of manifest this workspace is derived from.
     fn kind(&self) -> ManifestKind {
         self.workspace_manifest_document.kind()
+    }
+
+    /// Forget the platforms pixi picked for a script that declares none, so an
+    /// edit sees the empty list the script actually has.
+    ///
+    /// A script's `platforms` are injected into the parsed manifest at load
+    /// time, which makes them look declared to every mutation: an add would
+    /// find the platform "already there" and write nothing. Nothing is lost by
+    /// dropping them, since they are recomputed on the next load.
+    pub fn forget_implicit_script_platforms(&mut self) {
+        if !self
+            .workspace
+            .as_ref()
+            .expect("workspace is not available")
+            .script_platforms_are_implicit()
+        {
+            return;
+        }
+        self.workspace
+            .as_mut()
+            .expect("workspace is not available")
+            .workspace
+            .value
+            .workspace
+            .platforms
+            .clear();
+        // `use_platform_composition` was set from the injected platforms. With
+        // none left, an environment resolves its platform by subdir name, which
+        // is what an empty `platforms` parses to.
+        self.workspace
+            .as_mut()
+            .expect("workspace is not available")
+            .workspace
+            .value
+            .workspace
+            .use_platform_composition = true;
     }
 
     /// Returns a [`WorkspaceManifestMut`] which implements methods to modify a
@@ -212,13 +299,44 @@ impl WorkspaceMut {
     /// This is useful if an operation needs to save the changes but still needs
     /// to continue the modification.
     async fn save_inner(&mut self) -> Result<(), std::io::Error> {
-        let new_contents = self.workspace_manifest_document.to_string();
-        pixi_utils::atomic_write::atomic_write(
-            &self.workspace().workspace.provenance.path,
-            new_contents,
-        )
-        .await?;
+        let manifest_path = self.workspace().workspace.provenance.path.clone();
+        let new_contents = self
+            .workspace_manifest_document
+            .render()
+            .map_err(std::io::Error::other)?;
+        pixi_utils::atomic_write::atomic_write(&manifest_path, new_contents).await?;
         self.modified = true;
+
+        if let WorkspaceStorage::Script(script) = &mut self
+            .workspace
+            .as_mut()
+            .expect("workspace is not available")
+            .storage
+        {
+            let source = match script.source() {
+                ScriptSource::Pep723(_) => {
+                    let manifest = ScriptManifest::from_path(&manifest_path)
+                        .map_err(std::io::Error::other)?
+                        .ok_or_else(|| {
+                            std::io::Error::other(
+                                "saved script no longer contains a PEP 723 metadata block",
+                            )
+                        })?;
+                    ScriptSource::Pep723(Box::new(manifest))
+                }
+                ScriptSource::CondaScript(_) => {
+                    let manifest = CondaScriptManifest::from_path(&manifest_path)
+                        .map_err(std::io::Error::other)?
+                        .ok_or_else(|| {
+                            std::io::Error::other(
+                                "saved script no longer contains a conda-script block",
+                            )
+                        })?;
+                    ScriptSource::CondaScript(Box::new(manifest))
+                }
+            };
+            script.replace_manifest(source);
+        }
         Ok(())
     }
 
@@ -266,7 +384,7 @@ impl WorkspaceMut {
         editable: bool,
         dry_run: bool,
         overwrite_behavior: DependencyOverwriteBehavior,
-    ) -> Result<(Option<UpdateDeps>, Vec<String>), miette::Error> {
+    ) -> Result<(Option<UpdateDeps>, Vec<SkippedPackage>), miette::Error> {
         let mut conda_specs_to_add_constraints_for = IndexMap::new();
         let mut pypi_specs_to_add_constraints_for = IndexMap::new();
         let mut conda_packages = HashSet::new();
@@ -278,7 +396,7 @@ impl WorkspaceMut {
             let pixi_spec =
                 PixiSpec::from_nameless_matchspec(nameless_spec.clone(), &channel_config);
 
-            let added = self.manifest().add_dependency(
+            let outcome = self.manifest().add_dependency(
                 &name,
                 &pixi_spec,
                 spec_type,
@@ -286,14 +404,20 @@ impl WorkspaceMut {
                 feature_name,
                 overwrite_behavior,
             )?;
-            if added {
-                if nameless_spec.version.is_none() {
-                    conda_specs_to_add_constraints_for
-                        .insert(name.clone(), (spec_type, nameless_spec));
+            match outcome {
+                AddDependencyOutcome::Added => {
+                    if nameless_spec.version.is_none() {
+                        conda_specs_to_add_constraints_for
+                            .insert(name.clone(), (spec_type, nameless_spec));
+                    }
+                    conda_packages.insert(name);
                 }
-                conda_packages.insert(name);
-            } else {
-                skipped_packages.push(name.as_normalized().to_string());
+                AddDependencyOutcome::AlreadyExists | AddDependencyOutcome::InheritsWorkspace => {
+                    skipped_packages.push(SkippedPackage {
+                        name: name.as_normalized().to_string(),
+                        inherits_workspace: outcome == AddDependencyOutcome::InheritsWorkspace,
+                    });
+                }
             }
         }
 
@@ -326,14 +450,16 @@ impl WorkspaceMut {
                 }
                 pypi_packages.insert(name.as_normalized().clone());
             } else {
-                skipped_packages.push(name.as_normalized().to_string());
+                skipped_packages.push(SkippedPackage {
+                    name: name.as_normalized().to_string(),
+                    inherits_workspace: false,
+                });
             }
         }
 
-        // Only save the project if it is a pyproject.toml
-        // This is required to ensure that the changes are found by tools like `pixi
-        // build` and `uv`
-        if self.kind() == ManifestKind::Pyproject {
+        // Save Python-backed manifests before resolving so tools like `pixi
+        // build` and `uv` observe the changes.
+        if matches!(self.kind(), ManifestKind::Pyproject | ManifestKind::Pep723) {
             self.save_inner().await.into_diagnostic()?;
         }
 
@@ -407,6 +533,10 @@ impl WorkspaceMut {
                 .map(|(e, p)| (e.as_str(), p.clone()))
                 .collect(),
         );
+        // Held across the solve and install so the caller's summary output is
+        // not written over bars that have finished but are still rendered.
+        let _clear_progress = pixi_reporters::TopLevelProgress::clear_when_done(self.progress());
+
         let LockFileDerivedData {
             workspace: _, // We don't need the project here
             lock_file,
@@ -421,7 +551,9 @@ impl WorkspaceMut {
             ..
         } = UpdateContext::builder(
             self.workspace(),
-            self.workspace().command_dispatcher_builder()?.finish(),
+            self.workspace()
+                .command_dispatcher_builder(self.progress.as_ref())?
+                .finish(),
         )?
         .with_lock_file(unlocked_lock_file)
         .with_no_install(no_install || dry_run)
@@ -470,10 +602,8 @@ impl WorkspaceMut {
             implicit_constraints.extend(pypi_constraints);
         }
 
-        // Only save the project if it is a pyproject.toml
-        // This is required to ensure that the changes are found by tools like `pixi
-        // build` and `uv`
-        if self.kind() == ManifestKind::Pyproject {
+        // Save Python-backed manifests again after applying resolved constraints.
+        if matches!(self.kind(), ManifestKind::Pyproject | ManifestKind::Pep723) {
             self.save_inner().await.into_diagnostic()?;
         }
 

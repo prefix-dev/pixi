@@ -79,7 +79,11 @@ async fn generate_activation_script(
             .unwrap_or_else(|| ShellEnum::from_env().unwrap_or_default())
     });
 
-    let activator = get_activator(environment, shell.clone())?;
+    let activator = get_activator(
+        environment,
+        shell.clone(),
+        &environment.activation_platform(),
+    )?;
 
     let path = std::env::var("PATH")
         .ok()
@@ -128,9 +132,12 @@ async fn generate_environment_json(
     force_activate: bool,
     experimental_cache: bool,
 ) -> miette::Result<String> {
+    // Resolve the platform once so the env vars and the reported scripts agree.
+    let platform = environment.activation_platform();
     let environment_variables = get_activated_environment_variables(
         environment.workspace().env_vars(),
         environment,
+        &platform,
         CurrentEnvVarBehavior::Exclude,
         Some(lock_file),
         force_activate,
@@ -139,7 +146,7 @@ async fn generate_environment_json(
     .await?;
 
     let activation_scripts: Vec<PathBuf> = environment
-        .activation_scripts(environment.best_declared_platform())
+        .activation_scripts(Some(&platform))
         .into_iter()
         .map(|s| environment.workspace().root().join(s))
         .filter(|p| p.is_file())

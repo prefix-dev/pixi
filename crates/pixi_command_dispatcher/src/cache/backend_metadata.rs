@@ -16,12 +16,14 @@ use crate::build::CanonicalSourceCodeLocation;
 use crate::input_hash::{
     BackendBinaryFingerprint, BackendSpecHash, ConfigurationHash, ProjectModelHash,
 };
+use crate::input_snapshot::InputSnapshot;
 use rattler_conda_types::PackageName;
 
 use crate::BuildEnvironment;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_build_discovery::EnabledProtocols;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
+use pixi_manifest::InlineContentHash;
 use pixi_path::AbsPathBuf;
 use pixi_record::VariantValue;
 use pixi_spec::ResolvedExcludeNewer;
@@ -77,6 +79,12 @@ pub struct BuildBackendMetadataCacheKey {
 
     /// The pinned source location
     pub source: CanonicalSourceCodeLocation,
+
+    /// Content hash of the inline package definition, if any. The
+    /// inline manifest replaces on-disk discovery, so the same source location
+    /// with a different inline table must not share a cache entry; editing the
+    /// table changes this hash and forces a rebuild.
+    pub inline_content_hash: Option<InlineContentHash>,
 }
 
 impl BuildBackendMetadataCache {
@@ -120,6 +128,7 @@ impl MetadataCacheKey<BuildBackendMetadataCache> for BuildBackendMetadataCacheKe
         host_virtual_packages.hash(&mut hasher);
 
         self.enabled_protocols.hash(&mut hasher);
+        self.inline_content_hash.hash(&mut hasher);
         let source_dir = self.source.cache_unique_key();
         CacheKeyString::new(format!(
             "{source_dir}/{}-{}",
@@ -211,7 +220,14 @@ pub struct BuildBackendMetadataCacheEntry {
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub input_files: BTreeSet<pixi_path::AbsPathBuf>,
 
-    /// The timestamp of when the metadata was computed.
+    /// Validation state for the input and variant files. Size and mtime are
+    /// compared first; contents are hashed only when the mtime moved.
+    #[serde(default, skip_serializing_if = "InputSnapshot::is_empty")]
+    pub(crate) input_file_states: InputSnapshot,
+
+    /// The timestamp of when the metadata was computed. Files without a
+    /// recorded state (entries written before fingerprints existed) count as
+    /// unchanged while their mtime stays at or before this.
     pub timestamp: std::time::SystemTime,
 
     /// The outputs as reported by the build backend.
@@ -227,10 +243,6 @@ impl MetadataCacheEntry<BuildBackendMetadataCache> for BuildBackendMetadataCache
 impl VersionedCacheEntry<BuildBackendMetadataCache> for BuildBackendMetadataCacheEntry {
     fn cache_version(&self) -> u64 {
         self.cache_version
-    }
-
-    fn set_cache_version(&mut self, version: u64) {
-        self.cache_version = version;
     }
 }
 

@@ -1,20 +1,20 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use indexmap::{IndexMap, IndexSet};
 use miette::IntoDiagnostic;
 use pixi_core::workspace::{
-    Environment, PypiDeps, UpdateDeps, WorkspaceMut, virtual_packages::EnvironmentRunnability,
+    Environment, PypiDeps, SkippedPackage, UpdateDeps, WorkspaceMut,
+    virtual_packages::EnvironmentRunnability,
 };
 use pixi_core::{Workspace, environment::LockFileUsage};
 use pixi_manifest::{
-    EnvironmentName, Feature, FeatureName, PixiPlatform, PixiPlatformName, PlatformEdit,
-    PlatformMove, PrioritizedChannel, SpecType, TargetSelector, Task, TaskName,
+    EnvironmentName, Feature, FeatureName, KnownPreviewFlag, PixiPlatform, PixiPlatformName,
+    PlatformEdit, PlatformMove, PrioritizedChannel, SpecType, TargetSelector, Task, TaskName,
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{
-    Channel, MatchSpec, NamedChannelOrUrl, PackageName, Platform, RepoDataRecord,
-};
+use rattler_conda_types::{Channel, MatchSpec, NamedChannelOrUrl, PackageName, Platform};
 
 use crate::interface::Interface;
 use crate::workspace::add::GitOptions;
@@ -36,17 +36,21 @@ impl<I: Interface> DefaultContext<I> {
     /// Search for packages matching a [`MatchSpec`]
     pub async fn search(
         &self,
+        config: pixi_config::Config,
         matchspec: MatchSpec,
         channels: IndexSet<Channel>,
         platforms: Vec<Platform>,
-    ) -> miette::Result<Vec<RepoDataRecord>> {
-        crate::workspace::search::search(None, matchspec, channels, platforms).await
+        fuzzy_limit: Option<usize>,
+    ) -> miette::Result<crate::workspace::search::SearchResult> {
+        crate::workspace::search::search(None, config, matchspec, channels, platforms, fuzzy_limit)
+            .await
     }
 }
 
 pub struct WorkspaceContext<I: Interface> {
     interface: I,
     workspace: Workspace,
+    progress: Option<Arc<pixi_reporters::TopLevelProgress>>,
 }
 
 impl<I: Interface> WorkspaceContext<I> {
@@ -54,7 +58,16 @@ impl<I: Interface> WorkspaceContext<I> {
         Self {
             interface,
             workspace,
+            progress: None,
         }
+    }
+
+    /// Reports solve, download and install progress of every operation this
+    /// context performs. Consumers that are not driving a terminal leave this
+    /// unset and the work stays silent.
+    pub fn with_progress(mut self, progress: Arc<pixi_reporters::TopLevelProgress>) -> Self {
+        self.progress = Some(progress);
+        self
     }
 
     pub fn workspace(&self) -> &Workspace {
@@ -62,7 +75,17 @@ impl<I: Interface> WorkspaceContext<I> {
     }
 
     pub fn workspace_mut(&self) -> miette::Result<WorkspaceMut> {
-        self.workspace.clone().modify().into_diagnostic()
+        Ok(self.attach_progress(self.workspace.clone().modify().into_diagnostic()?))
+    }
+
+    /// Hands this context's reporter to `workspace` so the solves, downloads
+    /// and installs it triggers are visible. Every `WorkspaceMut` this context
+    /// hands out must go through here, or that work runs silently.
+    fn attach_progress(&self, workspace: WorkspaceMut) -> WorkspaceMut {
+        match &self.progress {
+            Some(progress) => workspace.with_progress(progress.clone()),
+            None => workspace,
+        }
     }
 
     pub async fn init(interface: I, options: InitOptions) -> miette::Result<Workspace> {
@@ -86,6 +109,103 @@ impl<I: Interface> WorkspaceContext<I> {
             &self.interface,
             self.workspace_mut()?,
             description,
+        )
+        .await
+    }
+
+    pub async fn preview_flags(&self) -> Vec<KnownPreviewFlag> {
+        crate::workspace::workspace::preview::list(&self.workspace).await
+    }
+
+    /// Enable preview flags by editing the manifest directly, so a
+    /// manifest that fails to load exactly because a flag is missing,
+    /// e.g. a `[package]` section without `pixi-build`, can still be fixed.
+    pub async fn add_preview_flags(
+        interface: I,
+        manifest_path: std::path::PathBuf,
+        flags: Vec<KnownPreviewFlag>,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::preview::add(&interface, manifest_path, flags).await
+    }
+
+    /// Disable preview flags by editing the manifest directly, like
+    /// [`Self::add_preview_flags`]. Errors without saving when the
+    /// manifest would no longer load, unless `force` is set.
+    pub async fn remove_preview_flags(
+        interface: I,
+        manifest_path: std::path::PathBuf,
+        flags: Vec<KnownPreviewFlag>,
+        force: bool,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::preview::remove(&interface, manifest_path, flags, force).await
+    }
+
+    pub async fn list_activation(&self) -> Vec<crate::workspace::ActivationEntry> {
+        crate::workspace::workspace::activation::list(&self.workspace).await
+    }
+
+    pub async fn add_activation_scripts(
+        &self,
+        scripts: Vec<String>,
+        prepend: bool,
+        target: Option<TargetSelector>,
+        feature: FeatureName,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::activation::add_scripts(
+            &self.interface,
+            self.workspace_mut()?,
+            scripts,
+            prepend,
+            target,
+            feature,
+        )
+        .await
+    }
+
+    pub async fn remove_activation_scripts(
+        &self,
+        scripts: Vec<String>,
+        target: Option<TargetSelector>,
+        feature: FeatureName,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::activation::remove_scripts(
+            &self.interface,
+            self.workspace_mut()?,
+            scripts,
+            target,
+            feature,
+        )
+        .await
+    }
+
+    pub async fn set_activation_env(
+        &self,
+        variables: Vec<(String, String)>,
+        target: Option<TargetSelector>,
+        feature: FeatureName,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::activation::set_env(
+            &self.interface,
+            self.workspace_mut()?,
+            variables,
+            target,
+            feature,
+        )
+        .await
+    }
+
+    pub async fn remove_activation_env(
+        &self,
+        keys: Vec<String>,
+        target: Option<TargetSelector>,
+        feature: FeatureName,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::activation::remove_env(
+            &self.interface,
+            self.workspace_mut()?,
+            keys,
+            target,
+            feature,
         )
         .await
     }
@@ -137,7 +257,8 @@ impl<I: Interface> WorkspaceContext<I> {
         &self,
         platform: Vec<PixiPlatform>,
         no_install: bool,
-        feature: Option<String>,
+        feature: FeatureName,
+        lock_file_usage: LockFileUsage,
     ) -> miette::Result<()> {
         crate::workspace::workspace::platform::add(
             &self.interface,
@@ -145,6 +266,7 @@ impl<I: Interface> WorkspaceContext<I> {
             platform,
             no_install,
             feature,
+            lock_file_usage,
         )
         .await
     }
@@ -153,7 +275,8 @@ impl<I: Interface> WorkspaceContext<I> {
         &self,
         platform: Vec<PixiPlatform>,
         no_install: bool,
-        feature: Option<String>,
+        feature: FeatureName,
+        lock_file_usage: LockFileUsage,
     ) -> miette::Result<()> {
         crate::workspace::workspace::platform::remove(
             &self.interface,
@@ -161,6 +284,7 @@ impl<I: Interface> WorkspaceContext<I> {
             platform,
             no_install,
             feature,
+            lock_file_usage,
         )
         .await
     }
@@ -170,6 +294,7 @@ impl<I: Interface> WorkspaceContext<I> {
         name: PixiPlatformName,
         edit: PlatformEdit,
         no_install: bool,
+        lock_file_usage: LockFileUsage,
     ) -> miette::Result<()> {
         crate::workspace::workspace::platform::edit(
             &self.interface,
@@ -177,6 +302,7 @@ impl<I: Interface> WorkspaceContext<I> {
             name,
             edit,
             no_install,
+            lock_file_usage,
         )
         .await
     }
@@ -186,6 +312,7 @@ impl<I: Interface> WorkspaceContext<I> {
         name: PixiPlatformName,
         target: PlatformMove,
         no_install: bool,
+        lock_file_usage: LockFileUsage,
     ) -> miette::Result<()> {
         crate::workspace::workspace::platform::move_platform(
             &self.interface,
@@ -193,6 +320,27 @@ impl<I: Interface> WorkspaceContext<I> {
             name,
             target,
             no_install,
+            lock_file_usage,
+        )
+        .await
+    }
+
+    pub async fn add_auto_detected_platform(
+        &self,
+        candidate: PixiPlatform,
+        explicit_name: bool,
+        no_install: bool,
+        feature: FeatureName,
+        lock_file_usage: LockFileUsage,
+    ) -> miette::Result<()> {
+        crate::workspace::workspace::platform::add_auto_detected(
+            &self.interface,
+            self.workspace_mut()?,
+            candidate,
+            explicit_name,
+            no_install,
+            feature,
+            lock_file_usage,
         )
         .await
     }
@@ -252,6 +400,7 @@ impl<I: Interface> WorkspaceContext<I> {
             explicit,
             no_install,
             lock_file_usage,
+            self.progress.as_ref(),
         )
         .await
     }
@@ -329,7 +478,7 @@ impl<I: Interface> WorkspaceContext<I> {
         spec_type: SpecType,
         dep_options: DependencyOptions,
         git_options: GitOptions,
-    ) -> miette::Result<(Option<UpdateDeps>, Vec<String>)> {
+    ) -> miette::Result<(Option<UpdateDeps>, Vec<SkippedPackage>)> {
         Box::pin(crate::workspace::add::add_conda_dep(
             self.workspace_mut()?,
             specs,
@@ -345,7 +494,7 @@ impl<I: Interface> WorkspaceContext<I> {
         pypi_deps: PypiDeps,
         editable: bool,
         options: DependencyOptions,
-    ) -> miette::Result<(Option<UpdateDeps>, Vec<String>)> {
+    ) -> miette::Result<(Option<UpdateDeps>, Vec<SkippedPackage>)> {
         Box::pin(crate::workspace::add::add_pypi_dep(
             self.workspace_mut()?,
             pypi_deps,
@@ -361,7 +510,7 @@ impl<I: Interface> WorkspaceContext<I> {
         spec_type: SpecType,
         dep_options: DependencyOptions,
     ) -> Result<(), RemoveError> {
-        let workspace_mut = self.workspace.clone().modify()?;
+        let workspace_mut = self.attach_progress(self.workspace.clone().modify()?);
         Box::pin(crate::workspace::remove::remove_conda_deps(
             workspace_mut,
             specs,
@@ -376,7 +525,7 @@ impl<I: Interface> WorkspaceContext<I> {
         pypi_deps: PypiDeps,
         options: DependencyOptions,
     ) -> Result<(), RemoveError> {
-        let workspace_mut = self.workspace.clone().modify()?;
+        let workspace_mut = self.attach_progress(self.workspace.clone().modify()?);
         Box::pin(crate::workspace::remove::remove_pypi_deps(
             workspace_mut,
             pypi_deps,
@@ -395,6 +544,7 @@ impl<I: Interface> WorkspaceContext<I> {
             &self.workspace,
             options,
             lock_file_usage,
+            self.progress.as_ref(),
         )
         .await
     }
@@ -429,6 +579,7 @@ impl<I: Interface> WorkspaceContext<I> {
         &self,
         name: TaskName,
         task: Task,
+        feature: FeatureName,
         platform: Option<PixiPlatformName>,
     ) -> miette::Result<()> {
         crate::workspace::task::alias_task(
@@ -436,6 +587,7 @@ impl<I: Interface> WorkspaceContext<I> {
             self.workspace_mut()?,
             name,
             task,
+            feature,
             platform,
         )
         .await
@@ -463,8 +615,16 @@ impl<I: Interface> WorkspaceContext<I> {
         matchspec: MatchSpec,
         channels: IndexSet<Channel>,
         platforms: Vec<Platform>,
-    ) -> miette::Result<Vec<RepoDataRecord>> {
-        crate::workspace::search::search(Some(&self.workspace), matchspec, channels, platforms)
-            .await
+        fuzzy_limit: Option<usize>,
+    ) -> miette::Result<crate::workspace::search::SearchResult> {
+        crate::workspace::search::search(
+            Some(&self.workspace),
+            self.workspace.config().clone(),
+            matchspec,
+            channels,
+            platforms,
+            fuzzy_limit,
+        )
+        .await
     }
 }

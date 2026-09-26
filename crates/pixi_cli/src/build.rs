@@ -60,6 +60,12 @@ pub struct Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
+    // `pixi build` predates workspace-wide publishing and always operated on
+    // a single package. Anchoring the publish invocation to the current
+    // directory when no `--path` is given keeps it that way instead of
+    // fanning out to every workspace member.
+    let path = args.path.unwrap_or_else(|| PathBuf::from("."));
+
     let mut cmd_parts = vec!["pixi publish".to_string()];
 
     if args.target_platform != Platform::current() {
@@ -74,9 +80,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     if args.clean {
         cmd_parts.push("--clean".to_string());
     }
-    if let Some(ref path) = args.path {
-        cmd_parts.push(format!("--path {}", path.display()));
-    }
+    cmd_parts.push(format!("--path {}", path.display()));
     if args.output_dir != Path::new(".") {
         cmd_parts.push(format!("--target-dir {}", args.output_dir.display()));
     }
@@ -96,17 +100,21 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         config_cli: args.config_cli,
         config_source: args.config_source,
         backend_override: args.backend_override,
+        // `pixi build` historically built packages with source dependencies,
+        // uploading only the addressed package's artifacts.
+        allow_source_dependencies: true,
         target_platform: args.target_platform,
         build_platform: args.build_platform,
         build_string_prefix: None,
         build_number: None,
         build_dir: args.build_dir,
         clean: args.clean,
-        path: args.path,
+        path: Some(path),
         target_channel: None,
         target_dir: Some(args.output_dir),
         force: false,
-        skip_existing: true,
+        no_skip_existing: false,
+        dry_run: false,
         generate_attestation: false,
         variant: Vec::new(),
         variant_config: Vec::new(),

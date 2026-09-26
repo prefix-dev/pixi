@@ -50,6 +50,10 @@ pub struct UvResolutionContext {
     pub extra_build_variables: ExtraBuildVariables,
     pub preview: Preview,
     pub workspace_cache: WorkspaceCache,
+    /// Whether uv is allowed to access the network. Derived from pixi's
+    /// offline mode: when offline, uv resolves and installs from its cache
+    /// only.
+    pub connectivity: Connectivity,
     /// HTTP timeout for uv operations, read from UV_HTTP_TIMEOUT,
     /// UV_REQUEST_TIMEOUT, or HTTP_TIMEOUT environment variables.
     pub http_timeout: Option<Duration>,
@@ -194,7 +198,7 @@ impl UvResolutionContext {
         // uv crates read a global `PREVIEW` static (`uv_preview::get` /
         // `uv_preview::is_enabled`) from feature-flag-gated code paths, and
         // panic if it has not been initialized. Pixi never opts in to any
-        // preview features but must still register the value so those reads
+        // preview flags but must still register the value so those reads
         // don't crash while, for instance, building a local source dist.
         let _ = uv_preview::set(preview);
 
@@ -207,7 +211,7 @@ impl UvResolutionContext {
             capabilities: IndexCapabilities::default(),
             allow_insecure_host,
             shared_state: SharedState::default(),
-            extra_middleware: ExtraMiddleware(uv_middlewares(config, client.clone())),
+            extra_middleware: ExtraMiddleware(uv_middlewares(config, client.clone())?),
             proxies: config.get_proxies().into_diagnostic()?,
             tls_no_verify: config.tls_no_verify(),
             client: client.into_client(),
@@ -217,6 +221,11 @@ impl UvResolutionContext {
             extra_build_variables: ExtraBuildVariables::default(),
             preview,
             workspace_cache: WorkspaceCache::default(),
+            connectivity: if config.offline() {
+                Connectivity::Offline
+            } else {
+                Connectivity::Online
+            },
             http_timeout,
             http_retries,
         })

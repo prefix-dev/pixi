@@ -1,6 +1,8 @@
+use crate::global::{EnvironmentAction, report_failed_environment, report_failed_environments};
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use pixi_config::{Config, ConfigCli};
+use pixi_global::report::EnvStatus;
 
 /// Sync global manifest with installed environments
 #[derive(Parser, Debug)]
@@ -16,8 +18,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?
         .with_cli_config(config.clone());
 
-    let mut has_changed = false;
-
     // Prune environments that are not listed
     let state_change = project.prune_old_environments().await?;
 
@@ -29,16 +29,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     if state_change.has_changed() {
-        has_changed = true;
-        state_change.report();
+        state_change.report(&project).await;
     }
 
     // Remove broken files
     if let Err(err) = project.remove_broken_files().await {
         tracing::warn!("Couldn't remove broken files\n{err:?}")
     }
-
-    let mut errors = Vec::new();
 
     // Phase 1: install all environments in parallel, sharing one dispatcher.
     let env_names: Vec<_> = project.environments().keys().cloned().collect();
@@ -51,45 +48,61 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     project.clear_progress();
 
     // Phase 2: expose executables, shortcuts and completions sequentially, since
-    // they write into directories shared across all environments.
-    for (env_name, install_result) in env_names.iter().zip(install_results) {
-        let result = match install_result {
-            Ok(mut state_changes) => match project.sync_environment_expose(env_name).await {
-                Ok(expose_changes) => {
-                    state_changes |= expose_changes;
-                    Ok(state_changes)
-                }
-                Err(err) => Err(err),
-            },
-            Err(err) => Err(err),
-        };
-        match result {
-            Ok(state_change) => {
-                if state_change.has_changed() {
-                    has_changed = true;
-                    state_change.report();
+    // they write into directories shared across all environments. Drive a spinner
+    // over the loop so a sync that installs nothing still shows progress instead of
+    // appearing frozen while executables are (re)exposed and trampolines rebuilt
+    // (#6658). Reports use `pixi_progress::println!`, which suspends the spinner, so
+    // change output stays readable above it.
+    let total = env_names.len();
+    let (unchanged, errors) =
+        pixi_progress::await_in_progress("Syncing global environments", |pb| async move {
+            // `sync` sweeps every environment rather than the ones the user
+            // named, so the unchanged ones are counted instead of getting a
+            // block of their own.
+            let mut unchanged = 0;
+            let mut errors = Vec::new();
+            for (index, (env_name, install_result)) in
+                env_names.iter().zip(install_results).enumerate()
+            {
+                pb.set_message(format!(
+                    "syncing {} ({}/{total})",
+                    env_name.fancy_display(),
+                    index + 1
+                ));
+                let result = match install_result {
+                    Ok(mut state_changes) => {
+                        match project.sync_environment_expose(env_name).await {
+                            Ok(expose_changes) => {
+                                state_changes |= expose_changes;
+                                Ok(state_changes)
+                            }
+                            Err(err) => Err(err),
+                        }
+                    }
+                    Err(err) => Err(err),
+                };
+                match result {
+                    Ok(state_change) => {
+                        for env_report in state_change.reports_or_warn(&project).await {
+                            if env_report.status == Some(EnvStatus::Unchanged) {
+                                unchanged += 1;
+                            } else {
+                                pixi_global::report::print(&env_report);
+                            }
+                        }
+                    }
+                    Err(err) => {
+                        report_failed_environment(env_name);
+                        errors.push((env_name.clone(), err));
+                    }
                 }
             }
-            Err(err) => errors.push((env_name, err)),
-        }
-    }
+            (unchanged, errors)
+        })
+        .await;
 
-    if !has_changed {
-        eprintln!(
-            "{}Nothing to do. The pixi global installation is already up-to-date.",
-            console::style(console::Emoji("✔ ", "")).green()
-        );
-    }
+    pixi_global::report::print_unchanged_summary(unchanged);
+    pixi_global::report::print_nothing_to_do();
 
-    if errors.is_empty() {
-        Ok(())
-    } else {
-        for (env_name, err) in errors {
-            tracing::warn!(
-                "Couldn't sync environment {}\n{err:?}",
-                env_name.fancy_display(),
-            );
-        }
-        Err(miette::miette!("Some environments couldn't be synced."))
-    }
+    report_failed_environments(EnvironmentAction::Sync, errors)
 }

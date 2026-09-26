@@ -15,7 +15,7 @@ use rattler_conda_types::{
 };
 use rattler_lock::{CondaPackageData, LockFile, LockedPackage, PypiPackageData, UrlOrPath};
 
-use crate::cli_config::WorkspaceConfig;
+use crate::cli_config::ScriptWorkspaceConfig;
 
 #[derive(Debug, Default, Parser)]
 pub struct Args {
@@ -23,7 +23,7 @@ pub struct Args {
     pub config_source: pixi_config::ConfigSourceCli,
 
     #[clap(flatten)]
-    pub workspace_config: WorkspaceConfig,
+    pub workspace_config: ScriptWorkspaceConfig,
 
     /// Explicit path to export the environment file to.
     pub output_path: Option<PathBuf>,
@@ -422,6 +422,13 @@ fn channels_with_nodefaults(channels: Vec<NamedChannelOrUrl>) -> Vec<NamedChanne
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
+    if args.workspace_config.script.is_some() && args.environment.is_some() {
+        return Err(miette::miette!(
+            help = "A PEP 723 script has one implicit default run environment.",
+            "`pixi workspace export conda-environment --script` does not support --environment"
+        ));
+    }
+
     let workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
@@ -527,7 +534,7 @@ mod tests {
             output_path: None,
             platform: Some(Platform::Osx64),
             environment: Some("default".to_string()),
-            workspace_config: WorkspaceConfig::default(),
+            workspace_config: ScriptWorkspaceConfig::default(),
             config_source: Default::default(),
             name: None,
             from_lock_file: false,
@@ -559,7 +566,7 @@ mod tests {
             output_path: None,
             platform: None,
             environment: Some("default".to_string()),
-            workspace_config: WorkspaceConfig::default(),
+            workspace_config: ScriptWorkspaceConfig::default(),
             config_source: Default::default(),
             name: None,
             from_lock_file: false,
@@ -592,7 +599,7 @@ mod tests {
             output_path: None,
             platform: None,
             environment: Some("default".to_string()),
-            workspace_config: WorkspaceConfig::default(),
+            workspace_config: ScriptWorkspaceConfig::default(),
             config_source: Default::default(),
             name: None,
             from_lock_file: false,
@@ -630,7 +637,7 @@ mod tests {
             output_path: None,
             platform: None,
             environment: Some("alternative".to_string()),
-            workspace_config: WorkspaceConfig::default(),
+            workspace_config: ScriptWorkspaceConfig::default(),
             config_source: Default::default(),
             name: None,
             from_lock_file: false,
@@ -663,7 +670,7 @@ mod tests {
             output_path: None,
             platform: None,
             environment: Some("default".to_string()),
-            workspace_config: WorkspaceConfig::default(),
+            workspace_config: ScriptWorkspaceConfig::default(),
             config_source: Default::default(),
             name: None,
             from_lock_file: false,
@@ -695,7 +702,7 @@ mod tests {
             output_path: None,
             platform: Some(Platform::OsxArm64),
             environment: Some("default".to_string()),
-            workspace_config: WorkspaceConfig::default(),
+            workspace_config: ScriptWorkspaceConfig::default(),
             config_source: Default::default(),
             name: None,
             from_lock_file: false,
@@ -735,7 +742,7 @@ mod tests {
             output_path: None,
             platform: Some(Platform::Osx64),
             environment: Some("default".to_string()),
-            workspace_config: WorkspaceConfig::default(),
+            workspace_config: ScriptWorkspaceConfig::default(),
             config_source: Default::default(),
             name: None,
             from_lock_file: false,
@@ -836,7 +843,7 @@ mod tests {
             output_path: None,
             platform: Some(Platform::Osx64),
             environment: Some("default".to_string()),
-            workspace_config: WorkspaceConfig::default(),
+            workspace_config: ScriptWorkspaceConfig::default(),
             config_source: Default::default(),
             name: Some(env_name.clone()),
             from_lock_file: false,

@@ -1,6 +1,5 @@
 ---
 source: crates/pixi_config/src/lib.rs
-assertion_line: 2831
 expression: debug
 ---
 Config {
@@ -20,6 +19,7 @@ Config {
         false,
     ),
     tls_root_certs: None,
+    offline: None,
     mirrors: {
         Url {
             scheme: "https",
@@ -86,33 +86,47 @@ Config {
         },
         per_channel: {},
     },
+    index_config: IndexConfig {
+        default: IndexChannelConfig {
+            write_zst: None,
+            write_shards: None,
+            repodata_revisions: None,
+            package_revision_assignment: None,
+            base_url: None,
+            notices: None,
+            channel_relations: None,
+        },
+        per_channel: {},
+    },
     pypi_config: PyPIConfig {
         index_url: None,
         extra_index_urls: [],
         keyring_provider: None,
         allow_insecure_host: [],
     },
-    s3_options: {
-        "bucket1": S3Options {
-            endpoint_url: Url {
-                scheme: "https",
-                cannot_be_a_base: false,
-                username: "",
-                password: None,
-                host: Some(
-                    Domain(
-                        "my-s3-host",
+    s3_options: S3OptionsMap(
+        {
+            "bucket1": S3Options {
+                endpoint_url: Url {
+                    scheme: "https",
+                    cannot_be_a_base: false,
+                    username: "",
+                    password: None,
+                    host: Some(
+                        Domain(
+                            "my-s3-host",
+                        ),
                     ),
-                ),
-                port: None,
-                path: "/",
-                query: None,
-                fragment: None,
+                    port: None,
+                    path: "/",
+                    query: None,
+                    fragment: None,
+                },
+                region: "us-east-1",
+                force_path_style: false,
             },
-            region: "us-east-1",
-            force_path_style: false,
         },
-    },
+    ),
     detached_environments: Some(
         Boolean(
             true,
@@ -127,6 +141,7 @@ Config {
     },
     experimental: ExperimentalConfig {
         use_environment_activation_cache: None,
+        conda_script: None,
     },
     concurrency: ConcurrencyConfig {
         solves: 1,

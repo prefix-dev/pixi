@@ -1,4 +1,5 @@
 from dataclasses import dataclass, fields
+
 from rich.console import Console
 from rich.table import Table
 

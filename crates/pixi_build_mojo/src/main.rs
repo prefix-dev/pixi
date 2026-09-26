@@ -91,7 +91,12 @@ impl GenerateRecipe for MojoGenerator {
 
         let build_script = BuildScriptContext { bins, pkg }.render();
 
-        generated_recipe.recipe.build.script = Script::from_content(build_script)
+        *generated_recipe
+            .recipe
+            .build
+            .plan
+            .script_mut()
+            .expect("generated recipes use script mode") = Script::from_content(build_script)
             .with_env(
                 config
                     .env
@@ -360,7 +365,15 @@ mod tests {
             .await
             .expect("Failed to generate recipe");
 
-        let content = generated_recipe.recipe.build.script.content.unwrap();
+        let content = generated_recipe
+            .recipe
+            .build
+            .plan
+            .script()
+            .expect("generated recipes use script mode")
+            .content
+            .clone()
+            .unwrap();
         let script = content
             .iter()
             .next()
@@ -477,7 +490,7 @@ mod tests {
             .await
             .expect("Failed to generate recipe");
 
-        insta::assert_yaml_snapshot!(generated_recipe.recipe.build.script,
+        insta::assert_yaml_snapshot!(generated_recipe.recipe.build.plan.script().unwrap(),
         {
             ".content" => "[ ... script ... ]",
         });

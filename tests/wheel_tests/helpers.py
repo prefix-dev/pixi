@@ -1,11 +1,10 @@
 import os
 import pathlib
 import subprocess
-import tomllib
-import tomli_w
-
 from typing import Any
 
+import tomli
+import tomli_w
 
 StrPath = str | os.PathLike[str]
 LOG_DIR = pathlib.Path(__file__).parent / ".logs"
@@ -32,7 +31,7 @@ def add_system_requirements(
     to the manifest file.
     """
     with manifest_path.open("rb") as f:
-        manifest = tomllib.load(f)
+        manifest = tomli.load(f)
     manifest["system-requirements"] = system_requirements
     with manifest_path.open("wb") as f:
         tomli_w.dump(manifest, f)

@@ -9,7 +9,7 @@ use std::{
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use minijinja::{Environment, context};
-use pixi_config::{Config, get_default_author, pixi_home};
+use pixi_config::{Config, S3OptionsMap, get_default_author, pixi_home};
 use pixi_consts::consts;
 use pixi_core::{Workspace, workspace::WorkspaceMut};
 use pixi_manifest::{
@@ -57,7 +57,7 @@ pub struct RenderContext {
     pub channels: Vec<NamedChannelOrUrl>,
     pub index_url: Option<Url>,
     pub extra_index_urls: Vec<Url>,
-    pub s3_options: HashMap<String, pixi_config::S3Options>,
+    pub s3_options: S3OptionsMap,
     pub conda_pypi_mapping: Option<CondaPypiMap>,
 }
 
@@ -468,7 +468,7 @@ fn render_workspace(
     platforms: &Vec<String>,
     index_url: Option<&Url>,
     extra_index_urls: &Vec<Url>,
-    s3_options: HashMap<String, pixi_config::S3Options>,
+    s3_options: S3OptionsMap,
     env_vars: Option<&HashMap<String, String>>,
     pypi_mapping: Option<&CondaPypiMap>,
 ) -> String {
@@ -591,7 +591,7 @@ fn quote_toml_string(value: &str) -> String {
 }
 
 fn relevant_s3_options(
-    s3_options: HashMap<String, pixi_config::S3Options>,
+    s3_options: S3OptionsMap,
     channels: Vec<NamedChannelOrUrl>,
 ) -> HashMap<String, pixi_config::S3Options> {
     // only take s3 options in manifest if they are used in the default channels
@@ -611,6 +611,7 @@ fn relevant_s3_options(
         .collect::<Vec<_>>();
 
     s3_options
+        .0
         .into_iter()
         .filter(|(key, _)| s3_buckets.contains(key))
         .collect()

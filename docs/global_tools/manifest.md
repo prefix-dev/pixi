@@ -82,6 +82,40 @@ exposed = { snakemake = "snakemake" }
 More information on channels can be found [here](../advanced/channel_logic.md).
 
 
+## Exclude newer
+
+The `exclude-newer` key of the `[global]` table excludes packages uploaded after a cutoff from the solve of every environment in the manifest.
+This reduces the risk of installing recently published packages that might turn out to be compromised.
+It accepts the same values as the [workspace manifest](../reference/pixi_manifest.md#exclude-newer-optional): an RFC 3339 timestamp, a `YYYY-MM-DD` date, or a duration relative to the time of the solve.
+A date is interpreted as the start of the following day in UTC, so `2026-03-30` means `2026-03-31T00:00:00Z`.
+
+A channel can override the cutoff with its own `exclude-newer` value, and the `[exclude-newer]` table overrides it for individual packages:
+
+```toml
+version = 1
+
+[global]
+exclude-newer = "7d"
+
+[exclude-newer]
+my-tool = "0d"
+
+[envs.tools]
+channels = [
+    { channel = "https://my.internal/channel", exclude-newer = "0d" },
+    "conda-forge",
+]
+dependencies = { my-tool = "*" }
+exposed = { my-tool = "my-tool" }
+```
+
+A package override applies to every environment that contains the package, and takes precedence over a channel override, which in turn takes precedence over the cutoff in `[global]`.
+Both tables work on their own: without a cutoff in `[global]`, only the packages and channels that have an override are excluded.
+
+Global environments have no PyPI dependencies, so there is no equivalent of the workspace's `[pypi-exclude-newer]` table.
+
+An environment containing a package that is newer than the cutoff counts as out of sync, so tightening the cutoff re-solves it on the next `pixi global sync`.
+
 
 ## Dependencies
 
@@ -123,6 +157,70 @@ You can [`remove`](../reference/cli/pixi/global/remove.md) dependencies by runni
 ```shell
 pixi global remove --environment my-env package-a package-b
 ```
+
+
+## Source dependencies
+
+Instead of a Conda package from a channel, you can install a tool built from source.
+Point `pixi global install` at a git repository or a local path:
+
+```shell
+pixi global install --git https://github.com/prefix-dev/rattler-build rattler-build
+pixi global install --path ./my-tool
+```
+
+If the source contains a pixi package manifest, that's all you need.
+If it doesn't, tell pixi how to build it with `--build-backend`:
+
+```shell
+pixi global install --git https://github.com/BurntSushi/xsv.git --build-backend pixi-build-rust
+```
+
+This records an *inline package definition* under the `package` key of the dependency:
+
+```toml
+[envs.xsv]
+channels = ["conda-forge"]
+[envs.xsv.dependencies]
+xsv = { git = "https://github.com/BurntSushi/xsv.git", package.build.backend.name = "pixi-build-rust" }
+```
+
+When pixi can infer the package name from the source you can omit it, so the command above
+installs the `xsv` environment without naming it explicitly.
+If a source produces several differently-named packages, name the ones you want:
+
+```shell
+pixi global install --path ./workspace foo bar
+```
+
+When `--build-backend` or `--package` is combined with several named packages,
+the same inline definition is recorded for each of them.
+
+The `--build-backend` value accepts an optional version constraint, e.g.
+`--build-backend "pixi-build-rust>=0.3,<0.4"`.
+Any other field of the package definition can be set with `--package DOTTED_KEY=TOML_VALUE`,
+which maps directly onto the keys under `package`.
+The value must be valid TOML, so strings need their quotes:
+
+```shell
+pixi global install --git https://github.com/some/tool \
+  --build-backend pixi-build-python \
+  --package 'host-dependencies.hatchling="*"'
+```
+
+Anything expressible in a [pixi package manifest](../build/getting_started.md) is allowed here;
+the CLI flags are just a shortcut for editing the definition by hand with
+[`pixi global edit`](../reference/cli/pixi/global/edit.md).
+
+!!! note
+    Source dependencies are built on your machine, so an environment that contains one
+    can only target your current platform. Setting a different `platform` for such an
+    environment is an error.
+
+`pixi global sync` rebuilds a source dependency when its *specification* changes
+(for example an edited git revision or `package` table).
+To pick up new commits of an unpinned git dependency or new content of a local path,
+run [`pixi global update`](../reference/cli/pixi/global/update.md).
 
 
 ## Platform

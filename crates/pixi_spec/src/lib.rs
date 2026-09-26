@@ -24,7 +24,7 @@ use std::{fmt::Display, path::PathBuf, str::FromStr};
 
 pub use detailed::DetailedSpec;
 pub use dev_source::DevSourceSpec;
-pub use exclude_newer::{ExcludeNewer, ResolvedExcludeNewer};
+pub use exclude_newer::{ExcludeNewer, ResolvedExcludeNewer, to_saturating_jiff_timestamp};
 pub use git::{GitLocationSpec, GitReference, GitReferenceError, GitSpec};
 use itertools::Either;
 pub use matchspec_fields::MatchspecFields;
@@ -701,6 +701,7 @@ impl From<GitSpec> for SourceSpec {
                 git: value.git,
                 rev: value.rev,
                 subdirectory: value.subdirectory,
+                lfs: value.lfs,
             }),
             matchspec,
         }
@@ -973,9 +974,15 @@ impl From<UrlSpec> for rattler_lock::source::UrlSourceLocation {
 #[cfg(feature = "rattler_lock")]
 impl From<rattler_lock::source::GitSourceLocation> for GitLocationSpec {
     fn from(value: rattler_lock::source::GitSourceLocation) -> Self {
+        let rattler_lock::source::GitSourceLocation {
+            git,
+            rev,
+            subdirectory,
+            lfs,
+        } = value;
         Self {
-            git: value.git,
-            rev: match value.rev {
+            git,
+            rev: match rev {
                 Some(rattler_lock::source::GitReference::Branch(branch)) => {
                     Some(GitReference::Branch(branch))
                 }
@@ -983,10 +990,10 @@ impl From<rattler_lock::source::GitSourceLocation> for GitLocationSpec {
                 Some(rattler_lock::source::GitReference::Rev(rev)) => Some(GitReference::Rev(rev)),
                 None => None,
             },
-            subdirectory: value
-                .subdirectory
+            subdirectory: subdirectory
                 .and_then(|s| Subdirectory::try_from(s).ok())
                 .unwrap_or_default(),
+            lfs,
         }
     }
 }
@@ -1005,6 +1012,7 @@ impl From<GitLocationSpec> for rattler_lock::source::GitSourceLocation {
                 Some(GitReference::DefaultBranch) | None => None,
             },
             subdirectory: value.subdirectory.to_option_string(),
+            lfs: value.lfs,
         }
     }
 }
@@ -1037,6 +1045,26 @@ mod test {
     use url::Url;
 
     use crate::{BinarySpec, MatchspecFields, PixiSpec};
+
+    /// The LFS flag must survive the `rattler_lock` round-trip because the
+    /// requested specs feed the source records' identity hashes.
+    #[cfg(feature = "rattler_lock")]
+    #[test]
+    fn test_git_location_lfs_roundtrips_through_rattler_lock() {
+        use crate::{GitLocationSpec, GitReference, Subdirectory};
+
+        for lfs in [None, Some(true), Some(false)] {
+            let spec = GitLocationSpec::new(
+                Url::parse("https://github.com/example/repo.git").unwrap(),
+                Some(GitReference::Branch("main".into())),
+                Subdirectory::default(),
+            )
+            .with_lfs(lfs);
+            let locked: rattler_lock::source::GitSourceLocation = spec.clone().into();
+            let back: GitLocationSpec = locked.into();
+            assert_eq!(back, spec, "lfs = {lfs:?} should round-trip");
+        }
+    }
 
     #[test]
     fn test_is_binary() {

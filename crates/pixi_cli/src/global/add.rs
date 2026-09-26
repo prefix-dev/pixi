@@ -4,7 +4,8 @@ use crate::global::revert_environment_after_error;
 use clap::Parser;
 use pixi_config::{Config, ConfigCli};
 use pixi_global::project::GlobalSpec;
-use pixi_global::{EnvironmentName, Mapping, Project, StateChange, StateChanges};
+use pixi_global::{EnvironmentName, Mapping, Project, StateChanges};
+use pixi_manifest::PrioritizedChannel;
 
 /// Adds dependencies to an environment
 ///
@@ -39,12 +40,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?
         .with_cli_config(config.clone());
 
-    if project_original.environment(&args.environment).is_none() {
+    let Some(environment) = project_original.environment(&args.environment) else {
         miette::bail!(
             "Environment {} doesn't exist. You can create a new environment with `pixi global install`.",
             &args.environment
         );
-    }
+    };
+    // Name inference solves the build backend against the channels of the
+    // environment the packages are added to.
+    let environment_channels: Vec<PrioritizedChannel> =
+        environment.prioritized_channels().cloned().collect();
 
     async fn apply_changes(
         env_name: &EnvironmentName,
@@ -68,31 +73,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let sync_changes = project.sync_environment(env_name, None).await?;
         project.clear_progress();
 
-        // Figure out added packages and their corresponding versions from EnvironmentUpdate
-        let requested_package_names: Vec<_> =
-            specs.iter().map(|spec| spec.name().clone()).collect();
-
-        // Extract EnvironmentUpdate from sync changes if present
-        if let Some(changes_for_env) = sync_changes.changes_for_env(env_name) {
-            for change in changes_for_env {
-                if let StateChange::UpdatedEnvironment(environment_update) = change {
-                    let user_requested_changes =
-                        environment_update.user_requested_changes(&requested_package_names);
-
-                    // Convert to StateChange::AddedPackage for packages that were installed or upgraded
-                    state_changes
-                        .add_packages_from_install_changes(
-                            env_name,
-                            user_requested_changes,
-                            project,
-                        )
-                        .await?;
-                    break;
-                }
-            }
-        }
-
-        // Add the sync changes
+        // The sync already carries the environment update describing every
+        // package that moved, so nothing has to be derived on top of it.
         state_changes |= sync_changes;
 
         state_changes |= project.sync_completions(env_name).await?;
@@ -108,6 +90,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             project_original.global_channel_config(),
             &project_original.root,
             &project_original,
+            &environment_channels,
         )
         .await?;
 
@@ -122,7 +105,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     .await
     {
         Ok(state_changes) => {
-            state_changes.report();
+            state_changes.report(&project_modified).await;
             Ok(())
         }
         Err(err) => {
@@ -132,7 +115,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 tracing::warn!("Reverting of the operation failed");
                 tracing::info!("Reversion error: {:?}", revert_err);
             }
-            Err(err)
+            Err(err.wrap_err(format!(
+                "Couldn't add packages to environment {}",
+                args.environment
+            )))
         }
     }
 }

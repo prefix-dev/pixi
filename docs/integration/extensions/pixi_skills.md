@@ -42,7 +42,7 @@ channels = ["conda-forge", "https://prefix.dev/skill-forge"]
 [dependencies]
 polars = ">=1,<2"
 
-[feature.dev.dependencies]
+[environments.dev.dependencies]
 agent-skill-polars = "*"
 ```
 

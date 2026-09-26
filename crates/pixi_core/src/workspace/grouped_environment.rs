@@ -1,5 +1,7 @@
+use std::collections::{BTreeMap, HashSet};
 use std::fmt::Display;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use fancy_display::FancyDisplay;
 use indexmap::IndexMap;
@@ -7,8 +9,8 @@ use itertools::Either;
 use ordermap::OrderSet;
 use pixi_consts::consts;
 use pixi_manifest::{
-    EnvironmentName, Feature, HasFeaturesIter, HasWorkspaceManifest, PixiPlatform,
-    WorkspaceManifest,
+    EnvironmentName, Feature, FeaturesExt, HasFeaturesIter, HasWorkspaceManifest,
+    InlinePackageManifest, PixiPlatform, WorkspaceManifest,
 };
 use pixi_spec::SourceLocationSpec;
 use pixi_utils::prefix::Prefix;
@@ -16,9 +18,7 @@ use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, PackageName};
 
 use crate::{
     Workspace,
-    workspace::{
-        Environment, HasWorkspaceRef, SolveGroup, virtual_packages::get_minimal_virtual_packages,
-    },
+    workspace::{Environment, HasWorkspaceRef, SolveGroup},
 };
 
 /// Either a solve group or an individual environment without a solve group.
@@ -106,10 +106,7 @@ impl<'p> GroupedEnvironment<'p> {
     /// Returns the virtual packages from the group, sourced from the
     /// platform's declared virtual packages with default fillers.
     pub fn virtual_packages(&self, platform: &PixiPlatform) -> Vec<GenericVirtualPackage> {
-        get_minimal_virtual_packages(platform)
-            .into_iter()
-            .map(GenericVirtualPackage::from)
-            .collect()
+        pixi_manifest::platform::solver_generic_virtual_packages(platform)
     }
 
     /// Returns the channel configuration for this grouped environment
@@ -133,6 +130,63 @@ impl<'p> GroupedEnvironment<'p> {
             }
         }
         result
+    }
+
+    /// Returns the combined inline package definitions for this grouped
+    /// environment, resolved into dispatcher
+    /// [`InlinePackage`](pixi_command_dispatcher::InlinePackage)s ready to thread
+    /// through the solve and install. Definitions from all features are merged;
+    /// later features override earlier ones with the same name. The consuming
+    /// workspace manifest is attached so the backend can be built without an
+    /// on-disk manifest.
+    pub fn combined_inline_packages(
+        &self,
+        platform: Option<&PixiPlatform>,
+    ) -> BTreeMap<PackageName, pixi_command_dispatcher::InlinePackage> {
+        let mut merged: IndexMap<PackageName, &InlinePackageManifest> = IndexMap::new();
+        let mut decided: HashSet<PackageName> = HashSet::new();
+        // `features` yields features from highest to lowest priority. The
+        // highest priority feature that declares a package as a *source*
+        // dependency decides whether it carries an inline definition; a plain
+        // source declaration in a higher priority feature suppresses an inline
+        // definition from a lower priority one. Binary declarations don't
+        // decide anything: the dependency merge combines specs across
+        // features, so a binary constraint in one feature still resolves to
+        // the source location (and inline definition) of another.
+        for feature in self
+            .features()
+            .filter(|f| self.feature_supports_platform(f, platform))
+        {
+            let feature_inline = feature.inline_packages(platform);
+            let Some(dependencies) = feature.combined_dependencies(platform) else {
+                continue;
+            };
+            for (name, spec) in dependencies.iter_specs() {
+                if spec.is_source()
+                    && decided.insert(name.clone())
+                    && let Some(manifest) = feature_inline.get(name)
+                {
+                    merged.insert(name.clone(), *manifest);
+                }
+            }
+        }
+        if merged.is_empty() {
+            return BTreeMap::new();
+        }
+        let workspace = Arc::new(self.workspace_manifest().clone());
+        merged
+            .into_iter()
+            .map(|(name, inline)| {
+                (
+                    name,
+                    pixi_command_dispatcher::InlinePackage {
+                        manifest: Arc::new(inline.manifest.clone()),
+                        workspace: workspace.clone(),
+                        content_hash: inline.content_hash,
+                    },
+                )
+            })
+            .collect()
     }
 }
 

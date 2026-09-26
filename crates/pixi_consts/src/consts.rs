@@ -16,7 +16,7 @@ pub const PYPROJECT_MANIFEST: &str = "pyproject.toml";
 pub const CONFIG_FILE: &str = "config.toml";
 pub const PIXI_VERSION: &str = match option_env!("PIXI_VERSION") {
     Some(v) => v,
-    None => "0.71.3",
+    None => "0.81.0",
 };
 pub const PREFIX_FILE_NAME: &str = "pixi_env_prefix";
 pub const ENVIRONMENTS_DIR: &str = "envs";
@@ -29,6 +29,7 @@ pub const ACTIVATION_ENV_CACHE_DIR: &str = "activation-env-v0";
 pub const PIXI_UV_INSTALLER: &str = "uv-pixi";
 pub const CONDA_PACKAGE_CACHE_DIR: &str = rattler_cache::PACKAGE_CACHE_DIR;
 pub const CONDA_REPODATA_CACHE_DIR: &str = rattler_cache::REPODATA_CACHE_DIR;
+pub const CHANNEL_NOTICES_CACHE_DIR: &str = "notices";
 // TODO: move to rattler
 pub const CONDA_META_DIR: &str = "conda-meta";
 pub const CONDA_MENU_SCHEMA_DIR: &str = "Menu";
@@ -178,3 +179,17 @@ impl Display for PypiEmoji {
         }
     }
 }
+
+/// Warning shown when an offline solve writes the lock file.
+///
+/// The versions recorded are the newest ones available locally, which may be
+/// older than what the channels offer. `pixi.lock` is usually committed, so
+/// this needs to be visible rather than silent.
+pub const OFFLINE_LOCK_FILE_WARNING: &str = "`pixi.lock` was written from a solve restricted to locally available packages, so it may pin older versions than the channels offer.\nRe-run `pixi update` without `--offline` to refresh it.";
+
+/// Warning shown when offline mode cannot cover the whole workspace.
+///
+/// The restriction applies to conda packages. PyPI dependencies are resolved
+/// by uv, which pixi runs with offline connectivity but cannot restrict to
+/// cached distributions, so a solve that succeeds may still need the network.
+pub const OFFLINE_PYPI_WARNING: &str = "offline mode restricts conda packages only. This workspace has PyPI dependencies, which may still require network access.";

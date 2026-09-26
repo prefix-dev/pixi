@@ -20,3 +20,21 @@ impl HasDownloadClient for DataStore {
         self.get::<LazyClient>()
     }
 }
+
+/// Whether pixi runs in offline mode. Stored in the engine's global data so
+/// Keys that access the network through means other than the shared HTTP
+/// client (e.g. git subprocesses) can refuse to do so, and so solves can
+/// restrict themselves to candidates that are available locally.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Offline(pub bool);
+
+/// Access the offline mode flag. Absent data means "online".
+pub trait HasOffline {
+    fn offline(&self) -> bool;
+}
+
+impl HasOffline for DataStore {
+    fn offline(&self) -> bool {
+        self.try_get::<Offline>().is_some_and(|offline| offline.0)
+    }
+}

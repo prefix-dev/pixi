@@ -12,22 +12,24 @@ commits. Heavy install/publish flows that don't fit pytest live in
   block at the top of `pixi.lock` is rewritten regardless of `--no-install`)
 
 To keep the suite fast everything uses `--no-install` and a manifest with no
-channels/dependencies so no network is involved.
+channels/dependencies so no network is involved. The one exception is the
+`--locked` legacy-alias test, which installs an empty environment (still
+offline) because `--locked` satisfiability is exactly what it verifies.
 """
 
 from __future__ import annotations
 
 import json
 import sys
-import tomllib
 from pathlib import Path
 from typing import Any
 
 import pytest
+import tomli
 import yaml
+from rattler.lock import LockFile
 
 from .common import CURRENT_PLATFORM, ExitCode, verify_cli_command
-
 
 # ----------------------------------------------------------------------------
 # helpers
@@ -60,7 +62,7 @@ def _platforms_from_toml(manifest: Path) -> list[str | dict[str, Any]]:
 
     Bare-string entries come back as `str`, inline-table entries as `dict`.
     """
-    data = tomllib.loads(manifest.read_text())
+    data = tomli.loads(manifest.read_text())
     return data["workspace"]["platforms"]
 
 
@@ -72,6 +74,22 @@ def _lockfile_platforms(workspace_dir: Path) -> list[str | dict[str, Any]]:
     return data.get("platforms", [])
 
 
+def _alias_platform_in_lockfile(workspace_dir: Path, real_name: str, alias: str) -> None:
+    """Rewrite `pixi.lock` so the platform row named `real_name` is keyed by
+    `alias` instead, mimicking the short `pN` aliases older pixi versions
+    wrote to disk for rich platforms."""
+    lock_path = workspace_dir / "pixi.lock"
+    data = yaml.safe_load(lock_path.read_text())
+    for platform in data.get("platforms", []):
+        if isinstance(platform, dict) and platform.get("name") == real_name:
+            platform["name"] = alias
+    for env in (data.get("environments") or {}).values():
+        packages = env.get("packages") or {}
+        if real_name in packages:
+            packages[alias] = packages.pop(real_name)
+    lock_path.write_text(yaml.safe_dump(data))
+
+
 def _run_platform(
     pixi: Path,
     workspace: Path,
@@ -80,6 +98,8 @@ def _run_platform(
     stdout_contains: list[str] | str | None = None,
     stderr_contains: list[str] | str | None = None,
     stdout_excludes: list[str] | str | None = None,
+    stderr_excludes: list[str] | str | None = None,
+    env: dict[str, str] | None = None,
 ):
     """Run `pixi workspace platform <args>` against a temp workspace."""
     return verify_cli_command(
@@ -95,6 +115,8 @@ def _run_platform(
         stdout_contains=stdout_contains,
         stderr_contains=stderr_contains,
         stdout_excludes=stdout_excludes,
+        stderr_excludes=stderr_excludes,
+        env=env,
         # Strip ANSI so we can match against the actual text without colour
         # codes interfering. The CLI emits colour by default.
         strip_ansi=True,
@@ -138,7 +160,10 @@ def test_add_alias_a_works(pixi: Path, tmp_pixi_workspace: Path) -> None:
 
 
 def test_add_custom_name_with_subdir(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    _seed_workspace(tmp_pixi_workspace)
+    # Seed a different subdir so the custom-named `linux-64` entry isn't a
+    # duplicate definition of an already-declared `linux-64` (which the host
+    # would supply via CURRENT_PLATFORM on a linux runner).
+    _seed_workspace(tmp_pixi_workspace, ["win-64"])
     _run_platform(pixi, tmp_pixi_workspace, "add", "gpu-linux=linux-64", "--no-install")
     platforms = _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
     entry = next(p for p in platforms if isinstance(p, dict) and p["name"] == "gpu-linux")
@@ -540,7 +565,7 @@ def test_add_to_named_feature(pixi: Path, tmp_pixi_workspace: Path) -> None:
         "gpu",
         "--no-install",
     )
-    data = tomllib.loads(manifest.read_text())
+    data = tomli.loads(manifest.read_text())
     assert "linux-64" in data["feature"]["gpu"]["platforms"]
 
 
@@ -563,7 +588,7 @@ def test_add_rich_platform_to_named_feature(pixi: Path, tmp_pixi_workspace: Path
         "gpu",
         "--no-install",
     )
-    data = tomllib.loads(manifest.read_text())
+    data = tomli.loads(manifest.read_text())
     # Feature lists the platform by name.
     assert "gpu-linux" in data["feature"]["gpu"]["platforms"]
     # Workspace got the rich entry with the declared VP.
@@ -602,17 +627,96 @@ def test_lockfile_records_custom_platform_and_vps(pixi: Path, tmp_pixi_workspace
         "--no-install",
     )
     lock_platforms = _lockfile_platforms(tmp_pixi_workspace)
-    # Rich platforms are written under a short alias (e.g. `p1`) rather than
-    # their manifest name; they are matched back to `gpu-linux` by identity
-    # (subdir + virtual packages) when the lock file is read.
+    # Rich platforms are written under their manifest name so that lockfile
+    # consumers (e.g. pixi-pack) can look a platform up by the same name the
+    # manifest uses.
     entry = next(
         p
         for p in lock_platforms
         if isinstance(p, dict) and "__cuda=12.0" in p.get("virtual-packages", [])
     )
     assert entry["subdir"] == "linux-64"
-    assert entry["name"] != "gpu-linux"
-    assert entry["name"].startswith("p")
+    assert entry["name"] == "gpu-linux"
+
+
+def test_install_locked_succeeds_with_legacy_platform_aliases(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """A lockfile written by an older pixi keys rich platforms by short
+    aliases (`p1`). Such a lockfile is still satisfiable -- the alias is
+    matched back to the manifest platform by identity (subdir + virtual
+    packages) -- so `pixi install --locked` succeeds and, because `--locked`
+    never writes, leaves the file byte-for-byte untouched."""
+    manifest = _seed_workspace(tmp_pixi_workspace)
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "add",
+        "gpu-linux=linux-64",
+        "--cuda",
+        "12.0",
+        "--no-install",
+    )
+    _alias_platform_in_lockfile(tmp_pixi_workspace, "gpu-linux", "p1")
+    lock_path = tmp_pixi_workspace / "pixi.lock"
+    before = lock_path.read_text()
+
+    verify_cli_command(
+        [str(pixi), "install", "--locked", "--manifest-path", str(manifest)],
+    )
+
+    assert lock_path.read_text() == before, "--locked must not rewrite the lock file"
+
+
+def test_lock_rewrites_legacy_platform_aliases(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """`pixi lock` on an otherwise up-to-date lockfile that still uses the
+    legacy short aliases rewrites the platform names to the manifest names
+    without re-solving anything."""
+    manifest = _seed_workspace(tmp_pixi_workspace)
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "add",
+        "gpu-linux=linux-64",
+        "--cuda",
+        "12.0",
+        "--no-install",
+    )
+    _alias_platform_in_lockfile(tmp_pixi_workspace, "gpu-linux", "p1")
+
+    verify_cli_command([str(pixi), "lock", "--manifest-path", str(manifest)])
+
+    names = [
+        p if isinstance(p, str) else p["name"] for p in _lockfile_platforms(tmp_pixi_workspace)
+    ]
+    assert "gpu-linux" in names
+    assert "p1" not in names
+
+
+def test_lock_rewrites_renamed_platform_without_resolve(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """Renaming a platform in `pixi.toml` must not require a re-solve: the
+    locked row is matched by identity, and `pixi lock` persists the new name."""
+    manifest = _seed_workspace(tmp_pixi_workspace)
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "add",
+        "gpu-linux=linux-64",
+        "--cuda",
+        "12.0",
+        "--no-install",
+    )
+    manifest.write_text(manifest.read_text().replace('"gpu-linux"', '"cuda-linux"'))
+
+    verify_cli_command([str(pixi), "lock", "--manifest-path", str(manifest)])
+
+    names = [
+        p if isinstance(p, str) else p["name"] for p in _lockfile_platforms(tmp_pixi_workspace)
+    ]
+    assert "cuda-linux" in names
+    assert "gpu-linux" not in names
 
 
 def test_lockfile_records_removed_platform_lazy_pruning(
@@ -899,6 +1003,232 @@ def test_move_unknown_platform_rejected(pixi: Path, tmp_pixi_workspace: Path) ->
         expected_exit_code=ExitCode.FAILURE,
         stderr_contains="win-64",
     )
+
+
+# ----------------------------------------------------------------------------
+# add auto-detected
+#
+# Detection depends on the host machine, so these assert host-independent
+# behaviour (the detected subdir, idempotency, errors, overrides) rather than
+# exact virtual-package values or synthesised names.
+# ----------------------------------------------------------------------------
+
+
+def _subdir(entry: str | dict[str, Any]) -> str:
+    """The conda subdir of a `platforms` entry (bare string or inline table)."""
+    return entry if isinstance(entry, str) else entry["platform"]
+
+
+def test_add_auto_detected_lands_first_for_this_machine(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    _seed_workspace(tmp_pixi_workspace)
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "add",
+        "--auto-detect",
+        "--no-install",
+        stderr_contains="detected from this machine",
+    )
+    platforms = _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
+    # The detected platform targets this machine's subdir and is first so it
+    # wins selection.
+    assert _subdir(platforms[0]) == CURRENT_PLATFORM
+
+
+def test_add_auto_detected_is_idempotent(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    _seed_workspace(tmp_pixi_workspace)
+    _run_platform(pixi, tmp_pixi_workspace, "add", "--auto-detect", "--no-install")
+    before = _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
+    # Re-running on the same machine finds the existing definition: no new
+    # entry, and the hint is suppressed. Uses the `--auto-detected` alias.
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "add",
+        "--auto-detected",
+        "--no-install",
+        stderr_contains="already matches this machine",
+        stderr_excludes="detected from this machine",
+    )
+    assert _platforms_from_toml(tmp_pixi_workspace / "pixi.toml") == before
+
+
+def test_add_auto_detected_duplicate_definition_rejected(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    _seed_workspace(tmp_pixi_workspace)
+    _run_platform(pixi, tmp_pixi_workspace, "add", "first", "--auto-detect", "--no-install")
+    # Same machine, same definition, different explicit name -> rejected.
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "add",
+        "second",
+        "--auto-detect",
+        "--no-install",
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="already declared as",
+    )
+
+
+def test_add_auto_detected_rejects_explicit_subdir(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    _seed_workspace(tmp_pixi_workspace)
+    # `<name>=<subdir>` conflicts with detection: the subdir comes from the
+    # machine, so only a bare `<name>` is allowed alongside `--auto-detect`.
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "add",
+        f"gpu={CURRENT_PLATFORM}",
+        "--auto-detect",
+        "--no-install",
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="not `<name>=<subdir>`",
+    )
+
+
+def test_add_auto_detected_override_writes_virtual_package(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    _seed_workspace(tmp_pixi_workspace)
+    # A virtual-package flag overrides detection, so `cuda` is written
+    # regardless of the host's actual capabilities.
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "add",
+        "gpu",
+        "--auto-detect",
+        "--cuda",
+        "99.0",
+        "--no-install",
+    )
+    entry = next(
+        p
+        for p in _platforms_from_toml(tmp_pixi_workspace / "pixi.toml")
+        if isinstance(p, dict) and p.get("name") == "gpu"
+    )
+    assert entry["platform"] == CURRENT_PLATFORM
+    assert entry["cuda"] == "99.0"
+
+
+def test_add_auto_detected_to_feature(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest = _seed_workspace(tmp_pixi_workspace)
+    manifest.write_text(
+        manifest.read_text() + '\n[feature.gpu]\nplatforms = []\n[environments]\ngpu = ["gpu"]\n'
+    )
+    _run_platform(
+        pixi,
+        tmp_pixi_workspace,
+        "add",
+        "machine",
+        "--auto-detect",
+        "--feature",
+        "gpu",
+        "--no-install",
+    )
+    data = tomli.loads(manifest.read_text())
+    assert "machine" in data["feature"]["gpu"]["platforms"]
+
+
+# ----------------------------------------------------------------------------
+# PEP 723 scripts
+#
+# A script keeps its workspace in an inline metadata block and its lock file in
+# an adjacent `<script>.pixi.lock`, which need not exist yet. A PEP 723 script
+# always depends on python, so these point at a local channel holding a
+# stand-in for it rather than reaching out to conda-forge.
+# ----------------------------------------------------------------------------
+
+
+def _write_script(workspace: Path, channel: str) -> Path:
+    """Write `analysis.py` with an inline metadata block and return its path."""
+    script = workspace / "analysis.py"
+    script.write_text(
+        f'''# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# channels = ["{channel}"]
+# ///
+print("hello")
+'''
+    )
+    return script
+
+
+def _platforms_from_script(script: Path) -> list[str | dict[str, Any]]:
+    """Parse `[tool.pixi.workspace].platforms` from a script's PEP 723 block."""
+    lines = script.read_text().splitlines()
+    start = lines.index("# /// script")
+    end = lines.index("# ///", start + 1)
+    block = "\n".join(line.removeprefix("#").removeprefix(" ") for line in lines[start + 1 : end])
+    return tomli.loads(block)["tool"]["pixi"]["workspace"]["platforms"]
+
+
+def test_add_auto_detected_to_script_without_lock_file(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_python_channel: str
+) -> None:
+    """A script whose adjacent lock file doesn't exist yet still resolves.
+
+    Installing consults the lock file, so a policy that neither solves nor
+    checks staleness leaves the install step with nothing to read.
+    """
+    script = _write_script(tmp_pixi_workspace, dummy_python_channel)
+
+    verify_cli_command(
+        [
+            str(pixi),
+            "workspace",
+            "platform",
+            "add",
+            "--script",
+            str(script),
+            "--auto-detect",
+        ],
+        stderr_contains="detected from this machine",
+        strip_ansi=True,
+    )
+
+    assert _subdir(_platforms_from_script(script)[0]) == CURRENT_PLATFORM
+    # Resolving a lockless script happens in memory; it must not start
+    # persisting a lock file the user never asked for.
+    assert not script.with_name("analysis.py.pixi.lock").exists()
+    assert not (tmp_pixi_workspace / "pixi.lock").exists()
+
+
+def test_add_auto_detected_to_script_updates_existing_lock_file(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_python_channel: str
+) -> None:
+    """With a lock file already on disk the platform lands in it as usual."""
+    script = _write_script(tmp_pixi_workspace, dummy_python_channel)
+    lock = script.with_name("analysis.py.pixi.lock")
+
+    verify_cli_command([str(pixi), "lock", "--script", str(script)], strip_ansi=True)
+    assert lock.exists()
+
+    verify_cli_command(
+        [
+            str(pixi),
+            "workspace",
+            "platform",
+            "add",
+            "--script",
+            str(script),
+            "--auto-detect",
+        ],
+        stderr_contains="detected from this machine",
+        strip_ansi=True,
+    )
+
+    assert _subdir(_platforms_from_script(script)[0]) == CURRENT_PLATFORM
+    # Rich entries are written to the lock file under a short alias, so match
+    # on the subdir rather than on the manifest name.
+    assert any(str(p.subdir) == CURRENT_PLATFORM for p in LockFile.from_path(lock).platforms())
+    assert not (tmp_pixi_workspace / "pixi.lock").exists()
 
 
 # ----------------------------------------------------------------------------

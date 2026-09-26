@@ -355,6 +355,7 @@ def test_detached_environments_run(pixi: Path, tmp_path: Path, dummy_channel_1: 
     )
 
 
+@pytest.mark.slow
 def test_run_help(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     manifest.write_text(EMPTY_BOILERPLATE_PROJECT)
@@ -1533,6 +1534,7 @@ multiple-depends = {{ cmd = "echo hello from depends", depends-on = [{{ task = "
     )
 
 
+@pytest.mark.slow
 def test_caching_multiple_tasks_with_depends_on_args(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """Test ``depends-on`` with the same inputs, outputs, but different args, are cached independently.
 

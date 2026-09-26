@@ -3,7 +3,7 @@
 The `pixi-build-rust` backend is designed for building Rust projects using [Cargo](https://doc.rust-lang.org/cargo/), Rust's native build system and package manager. It provides seamless integration with Pixi's package management workflow while maintaining cross-platform compatibility.
 
 !!! warning
-    `pixi-build` is a preview feature, and will change until it is stabilized.
+    `pixi-build` is a preview flag, and will change until it is stabilized.
     This is why we require users to opt in to that feature by adding "pixi-build" to `workspace.preview`.
 
     ```toml
@@ -31,10 +31,9 @@ To use the Rust backend in your `pixi.toml`, add it to your package's build conf
 name = "rust_package"
 version = "0.1.0"
 
-[package.build]
-backend = { name = "pixi-build-rust", version = "*" }
+[package.build.backend]
+name = "pixi-build-rust"
 channels = ["https://prefix.dev/conda-forge"]
-
 ```
 
 ### Automatic Metadata Detection
@@ -64,8 +63,8 @@ repository = "https://github.com/user/my-rust-tool"
 You can create a minimal `pixi.toml`:
 
 ```toml
-[package.build]
-backend = { name = "pixi-build-rust", version = "*" }
+[package.build.backend]
+name = "pixi-build-rust"
 channels = ["https://prefix.dev/conda-forge"]
 ```
 
@@ -144,6 +143,8 @@ env = { RUST_LOG = "info", COMMON_VAR = "base" }
 env = { COMMON_VAR = "linux", CARGO_PROFILE_RELEASE_LTO = "true" }
 # Result for linux-64: { RUST_LOG = "info", COMMON_VAR = "linux", CARGO_PROFILE_RELEASE_LTO = "true" }
 ```
+
+--8<-- "docs/partials/build-config-env-expansion.md"
 
 ### `debug-dir`
 

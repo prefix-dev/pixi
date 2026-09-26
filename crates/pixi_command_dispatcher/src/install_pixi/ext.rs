@@ -16,6 +16,7 @@ use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
 use crate::BuildProfile;
 use crate::CommandDispatcherError;
 use crate::CondaPackageFormat;
+use crate::SourceBuildError;
 use crate::cache::markers::{SourceBuildArtifactsDir, SourceBuildWorkspacesDir};
 use crate::compute_data::{
     HasAllowExecuteLinkScripts, HasAllowLinkOptions, HasIoConcurrencySemaphore, HasPackageCache,
@@ -151,8 +152,12 @@ async fn install_inner(
         variant_configuration: spec.variant_configuration.clone(),
         variant_files: spec.variant_files.clone(),
     };
+    // Inline package definitions for the source records in this
+    // install, looked up per record by name when building from source.
+    let inline_packages = Arc::new(std::mem::take(&mut spec.inline_packages));
     let mapper = {
         let shared = shared.clone();
+        let inline_packages = inline_packages.clone();
         async move |sub_ctx: &mut ComputeCtx,
                     source: Arc<pixi_record::UnresolvedSourceRecord>|
                     -> Result<
@@ -179,16 +184,20 @@ async fn install_inner(
                 // Source packages built during `pixi install` are unpacked
                 // immediately, so use the cheapest compression.
                 package_format: Some(CondaPackageFormat::fast()),
+                inline: inline_packages.get(&name).cloned(),
             };
             // A failed cross-build is usually the platform mismatch, not the
             // recipe. Compare the real machine: installs set build_platform to the target.
+            // A prefix platform mismatch already carries more specific help.
             let host_platform = shared.build_environment.host_platform;
             let machine = Platform::current();
             sub_ctx
                 .compute(&SourceBuildKey::new(build_spec))
                 .await
                 .map_err(|err| {
-                    let help = (host_platform != machine).then(|| {
+                    let is_cross_build = host_platform != machine;
+                    let has_own_help = matches!(err, SourceBuildError::PrefixPlatformMismatch(_));
+                    let help = (is_cross_build && !has_own_help).then(|| {
                         format!(
                             "The package was being built for platform '{host_platform}' on a \
                              '{machine}' machine; cross-building source packages often fails. \

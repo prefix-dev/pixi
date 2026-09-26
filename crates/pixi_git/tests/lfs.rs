@@ -74,10 +74,8 @@ fn fetch_without_lfs_leaves_pointer() {
     let cache = tempfile::tempdir().unwrap();
 
     let git_url = GitUrl::try_from(repo.base_url.clone()).unwrap();
-    // Tri-state `None` = "no opinion": don't set GIT_LFS_SKIP_SMUDGE, don't
-    // run `git lfs fetch`. The smudge filter still runs during reset, but
-    // git-lfs has nothing to fetch from a brand-new clone, so files end up
-    // as the pointer.
+    // Without an LFS request no `git lfs fetch` runs and the smudge filter
+    // is force-skipped, so files end up as the pointer.
     let fetch = GitSource::new(git_url, panic_client(), cache.path())
         .with_lfs(Some(false))
         .fetch()

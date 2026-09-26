@@ -7,10 +7,8 @@ use std::{
     path::{Path, PathBuf},
     rc::Rc,
     str::FromStr,
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
-
-use once_cell::sync::OnceCell;
 
 use futures::FutureExt;
 
@@ -29,12 +27,12 @@ use pixi_pypi_spec::PixiPypiSpec;
 use pixi_record::{LockedGitUrl, PixiRecord};
 use pixi_reporters::{UvReporter, UvReporterOptions};
 use pixi_uv_conversions::{
-    ConversionError, WorkspaceAnchor, as_uv_req, configure_insecure_hosts_for_tls_bypass,
-    convert_uv_requirements_to_pep508, into_pinned_git_spec, into_uv_git_reference,
-    into_uv_git_sha, pypi_cache_config_settings_with_macos_deployment_target,
-    pypi_options_to_build_options, pypi_options_to_index_locations, to_index_strategy,
-    to_prerelease_mode, to_requirements_relative_to, to_uv_normalize, to_uv_version,
-    to_version_specifiers,
+    ConversionError, GitUrlWithPrefix, WorkspaceAnchor, as_uv_req,
+    configure_insecure_hosts_for_tls_bypass, convert_uv_requirements_to_pep508,
+    into_pinned_git_spec, into_uv_git_reference, into_uv_git_sha,
+    pypi_cache_config_settings_with_macos_deployment_target, pypi_options_to_build_options,
+    pypi_options_to_index_locations, to_index_strategy, to_prerelease_mode,
+    to_requirements_relative_to, to_uv_normalize, to_uv_version, to_version_specifiers,
 };
 use pypi_modifiers::{
     pypi_marker_env::determine_marker_environment,
@@ -48,7 +46,7 @@ use rattler_lock::{
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_cache_key::RepositoryUrl;
-use uv_client::{Connectivity, FlatIndexClient, RegistryClient, RegistryClientBuilder};
+use uv_client::{FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_configuration::{Constraints, Overrides};
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
@@ -74,16 +72,14 @@ use crate::{
         outdated::PypiEnvironmentBuildCache,
         records_by_name::HasNameVersion,
         resolve::{
-            build_dispatch::{LazyBuildDispatch, UvBuildDispatchParams},
+            build_dispatch::{LazyBuildDispatch, LazyBuildDispatchError, UvBuildDispatchParams},
             resolver_provider::CondaResolverProvider,
         },
     },
-    workspace::{
-        Environment, EnvironmentVars, HasWorkspaceRef, PlatformOverrides, PlatformSource,
-        grouped_environment::GroupedEnvironment,
-    },
+    workspace::{Environment, EnvironmentVars, grouped_environment::GroupedEnvironment},
 };
 use pixi_command_dispatcher::CommandDispatcher;
+use pixi_manifest::platform::host::host_baseline;
 use pixi_uv_context::UvResolutionContext;
 use rattler_conda_types::GenericVirtualPackage;
 
@@ -155,8 +151,17 @@ pub enum SolveError {
     },
     #[error("failed to resolve pypi dependencies")]
     Other(#[from] ResolveError),
-    #[error("build dispatch initialization failed: {message}")]
-    BuildDispatchPanic { message: String },
+    #[error("build dispatch initialization failed")]
+    BuildDispatchPanic {
+        #[source]
+        #[diagnostic_source]
+        source: LazyBuildDispatchError,
+        /// Help carried over from the underlying diagnostic (e.g. the
+        /// `CONDA_OVERRIDE_*` hints for an unsupported platform), kept separate
+        /// so miette renders it as its own help section.
+        #[help]
+        help: Option<String>,
+    },
     #[error("unexpected panic during PyPI resolution: {message}")]
     GeneralPanic { message: String },
 
@@ -236,6 +241,9 @@ pub async fn resolve_pypi(
     pb.set_message("resolving pypi dependencies");
 
     // Determine which pypi packages are already installed as conda package.
+    PypiPackageIdentifier::trace_legacy_purl_fallbacks(
+        locked_pixi_records.iter().filter_map(PixiRecord::as_binary),
+    );
     let conda_python_packages = locked_pixi_records
         .iter()
         .flat_map(|record| {
@@ -296,6 +304,36 @@ pub async fn resolve_pypi(
         })
         .collect();
 
+    // Determine git references of packages that are being resolved afresh (not locked).
+    // If a package is targeted for update, its git repository should not be pre-populated
+    // with a stale commit from another locked package sharing the same repository.
+    let locked_package_names: std::collections::HashSet<uv_normalize::PackageName> =
+        locked_pypi_packages
+            .iter()
+            .filter_map(|r| to_uv_normalize(r.name()).ok())
+            .collect();
+
+    let unlocked_git_references: std::collections::HashSet<RepositoryReference> = dependencies
+        .iter()
+        .filter(|(name, _)| !locked_package_names.contains(name))
+        .flat_map(|(_, specs)| {
+            specs.iter().filter_map(|spec| {
+                let git_spec = spec.source.as_git()?;
+                let git_url = GitUrlWithPrefix::from(&git_spec.git);
+                let repository_url = RepositoryUrl::new(&git_url.to_display_safe_url());
+                let git_ref = git_spec
+                    .rev
+                    .as_ref()
+                    .map(|rev| into_uv_git_reference(rev.clone().into()))
+                    .unwrap_or(uv_git_types::GitReference::DefaultBranch);
+                Some(RepositoryReference {
+                    url: repository_url,
+                    reference: git_ref,
+                })
+            })
+        })
+        .collect();
+
     // Pre-populate the git resolver with locked git references.
     // This ensures that when uv resolves git dependencies, it will find the cached commit
     // and not panic in `url_to_precise` function.
@@ -320,6 +358,14 @@ pub async fn resolve_pypi(
                     url: repository_url,
                     reference: uv_reference,
                 };
+
+                if unlocked_git_references.contains(&reference) {
+                    tracing::debug!(
+                        "skipping pre-populating git resolver for {:?} because it is targeted for update",
+                        reference
+                    );
+                    continue;
+                }
 
                 tracing::debug!("pre-populating git resolver: {:?} -> {}", reference, uv_sha);
                 context.shared_state.git().insert(reference, uv_sha);
@@ -411,7 +457,7 @@ pub async fn resolve_pypi(
         let base_client_builder = context.base_client_builder(
             allow_insecure_hosts,
             Some(&marker_environment),
-            Connectivity::Online,
+            context.connectivity,
         );
 
         let mut uv_client_builder =
@@ -446,7 +492,7 @@ pub async fn resolve_pypi(
     let flat_index = {
         let flat_index_client = FlatIndexClient::new(
             registry_client.cached_client(),
-            Connectivity::Online,
+            context.connectivity,
             &context.cache,
         );
         let flat_index_urls: Vec<&IndexUrl> = index_locations
@@ -529,7 +575,7 @@ pub async fn resolve_pypi(
     // Use cached build dispatch dependencies
     let lazy_build_dispatch_deps = &build_cache.lazy_build_dispatch_deps;
 
-    let last_error = Arc::new(OnceCell::new());
+    let last_error = Arc::new(Mutex::new(None));
 
     // Use cached conda_prefix_updater if available, otherwise create new
     let conda_prefix_updater = build_cache
@@ -543,10 +589,7 @@ pub async fn resolve_pypi(
             let prefix_platform: &PixiPlatform = match environment.best_declared_platform() {
                 Some(p) => p,
                 None => {
-                    host_platform = environment.workspace().host_platform(
-                        PlatformSource::Defaults,
-                        PlatformOverrides::EnvironmentVariableOverrides,
-                    );
+                    host_platform = host_baseline();
                     &host_platform
                 }
             };
@@ -811,9 +854,16 @@ pub async fn resolve_pypi(
         Ok(result) => result?,
         Err(panic_payload) => {
             // Try to get the stored initialization error from the last_error holder
-            if let Some(stored_error) = last_error.get() {
+            let stored_error = last_error.lock().unwrap_or_else(|e| e.into_inner()).take();
+            if let Some(stored_error) = stored_error {
+                // The inner diagnostic's help (e.g. the `CONDA_OVERRIDE_*` hints for an
+                // unsupported platform) is carried across in a separate field so
+                // miette renders it in the top-level help section while preserving
+                // the full causal chain from `stored_error`.
+                let help = miette::Diagnostic::help(&stored_error).map(|help| help.to_string());
                 return Err(SolveError::BuildDispatchPanic {
-                    message: format!("{stored_error}"),
+                    source: stored_error,
+                    help,
                 }
                 .into());
             } else {
@@ -1377,5 +1427,72 @@ mod tests {
             .given_for_location(&url, &PathBuf::from("C:\\a\\b\\c"))
             .unwrap();
         assert_eq!(path.as_str(), "C:/a/b/c");
+    }
+
+    #[test]
+    fn test_build_dispatch_panic_diagnostic_renders_cause_chain_and_help() {
+        use super::*;
+        use pixi_test_utils::format_diagnostic;
+
+        #[derive(Debug, thiserror::Error)]
+        #[error("operation timed out after 30s")]
+        struct TimeoutError;
+
+        #[derive(Debug, thiserror::Error, miette::Diagnostic)]
+        #[error("failed to fetch tzdata-2025c.conda")]
+        #[diagnostic(help("check your network connection or proxy configuration"))]
+        struct FetchError {
+            #[source]
+            source: TimeoutError,
+        }
+
+        let inner_diag = FetchError {
+            source: TimeoutError,
+        };
+
+        let lazy_err = LazyBuildDispatchError::InitializationError(Box::new(inner_diag));
+        let help = miette::Diagnostic::help(&lazy_err).map(|h| h.to_string());
+        let solve_err = SolveError::BuildDispatchPanic {
+            source: lazy_err,
+            help,
+        };
+
+        let rendered = format_diagnostic(&solve_err);
+        assert!(
+            rendered.contains("build dispatch initialization failed"),
+            "should contain top-level message, got:\n{rendered}"
+        );
+        assert!(
+            rendered.contains("failed to fetch tzdata-2025c.conda"),
+            "should contain intermediate diagnostic, got:\n{rendered}"
+        );
+        assert!(
+            rendered.contains("operation timed out after 30s"),
+            "should contain inner causal source, got:\n{rendered}"
+        );
+        assert!(
+            rendered.contains("check your network connection or proxy configuration"),
+            "should contain actionable help text, got:\n{rendered}"
+        );
+    }
+
+    #[test]
+    fn test_last_error_mutex_take() {
+        use super::*;
+
+        let last_error = Arc::new(Mutex::new(None));
+        assert!(last_error.lock().unwrap().is_none());
+
+        let err = LazyBuildDispatchError::InstallationRequiredButDisallowed;
+        {
+            let mut g = last_error.lock().unwrap();
+            if g.is_none() {
+                *g = Some(err);
+            }
+        }
+
+        let taken = last_error.lock().unwrap().take();
+        assert!(taken.is_some());
+        assert!(last_error.lock().unwrap().is_none());
     }
 }

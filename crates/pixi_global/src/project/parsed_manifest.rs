@@ -6,8 +6,12 @@ use indexmap::{IndexMap, IndexSet};
 use itertools::{Either, Itertools};
 use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Report};
 use pixi_consts::consts;
-use pixi_manifest::{PrioritizedChannel, toml::TomlPlatform, utils::package_map::UniquePackageMap};
-use pixi_spec::PixiSpec;
+use pixi_manifest::{
+    InlinePackageManifest, KnownPreviewFlag, Preview, PrioritizedChannel,
+    toml::{TomlPlatform, WorkspacePackageProperties},
+    utils::package_map::{DependencyTable, UniquePackageMap},
+};
+use pixi_spec::{ExcludeNewer, PixiSpec};
 use pixi_toml::{TomlFromStr, TomlIndexMap, TomlIndexSet, TomlWith};
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
 use serde::{Serialize, Serializer, ser::SerializeMap};
@@ -114,11 +118,54 @@ impl ManifestParsingError {
 pub struct ParsedManifest {
     /// The version of the manifest
     version: ManifestVersion,
+    /// The settings that apply to every environment.
+    #[serde(skip_serializing_if = "ParsedGlobal::is_empty")]
+    pub global: ParsedGlobal,
+    /// Cutoffs that override [`ParsedGlobal::exclude_newer`] for individual
+    /// packages, in every environment.
+    #[serde(rename = "exclude-newer", skip_serializing_if = "IndexMap::is_empty")]
+    pub exclude_newer_package_overrides: IndexMap<PackageName, ExcludeNewer>,
     /// The environments the project can create.
     pub envs: IndexMap<EnvironmentName, ParsedEnvironment>,
 }
 
-impl<'de> toml_span::Deserialize<'de> for ParsedManifest {
+/// The settings of the `[global]` table, which apply to every environment.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct ParsedGlobal {
+    /// Packages uploaded after this cutoff are excluded from every
+    /// environment's solve.
+    #[serde(rename = "exclude-newer", skip_serializing_if = "Option::is_none")]
+    pub exclude_newer: Option<ExcludeNewer>,
+}
+
+impl ParsedGlobal {
+    fn is_empty(&self) -> bool {
+        self.exclude_newer.is_none()
+    }
+}
+
+impl<'de> toml_span::Deserialize<'de> for ParsedGlobal {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let mut th = TableHelper::new(value)?;
+        let exclude_newer = th
+            .optional::<TomlWith<_, TomlFromStr<_>>>("exclude-newer")
+            .map(TomlWith::into_inner);
+        th.finalize(None)?;
+        Ok(Self { exclude_newer })
+    }
+}
+
+/// The toml-stage of [`ParsedManifest`]: deserialized as-is from the document,
+/// before inline package definitions are converted (which requires the
+/// manifest's root directory as context).
+struct TomlParsedManifest {
+    version: ManifestVersion,
+    global: ParsedGlobal,
+    exclude_newer_package_overrides: IndexMap<PackageName, ExcludeNewer>,
+    envs: IndexMap<EnvironmentName, TomlParsedEnvironment>,
+}
+
+impl<'de> toml_span::Deserialize<'de> for TomlParsedManifest {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         let mut th = TableHelper::new(value)?;
 
@@ -126,8 +173,10 @@ impl<'de> toml_span::Deserialize<'de> for ParsedManifest {
             .optional("version")
             .map(ManifestVersion)
             .unwrap_or_default();
+        let global = th.optional::<ParsedGlobal>("global").unwrap_or_default();
+        let exclude_newer_package_overrides = parse_exclude_newer_package_overrides(&mut th);
         let envs = th
-            .optional::<TomlIndexMap<_, ParsedEnvironment>>("envs")
+            .optional::<TomlIndexMap<_, TomlParsedEnvironment>>("envs")
             .map(TomlIndexMap::into_inner)
             .unwrap_or_default();
 
@@ -136,13 +185,56 @@ impl<'de> toml_span::Deserialize<'de> for ParsedManifest {
 
         th.finalize(None)?;
 
-        Ok(Self { version, envs })
+        Ok(Self {
+            version,
+            global,
+            exclude_newer_package_overrides,
+            envs,
+        })
+    }
+}
+
+/// Parses the top-level `exclude-newer` table of per-package cutoffs.
+///
+/// A scalar here is the manifest-wide cutoff written in the wrong place, so it
+/// is reported as such instead of as a bare type mismatch. Errors join the ones
+/// the [`TableHelper`] has already collected, the way its own `optional` does,
+/// so parsing continues and reports the rest of the manifest too.
+fn parse_exclude_newer_package_overrides<'de>(
+    th: &mut TableHelper<'de>,
+) -> IndexMap<PackageName, ExcludeNewer> {
+    let Some((_, mut value)) = th.take("exclude-newer") else {
+        return IndexMap::new();
+    };
+
+    if value.as_table().is_none() {
+        th.errors.push(toml_span::Error {
+            kind: toml_span::ErrorKind::Custom(
+                "expected a table of per-package `exclude-newer` cutoffs, set `exclude-newer` in the `[global]` table to apply a cutoff to every environment"
+                    .into(),
+            ),
+            span: value.span,
+            line_info: None,
+        });
+        return IndexMap::new();
+    }
+
+    match TomlIndexMap::<PackageName, TomlFromStr<ExcludeNewer>>::deserialize(&mut value) {
+        Ok(overrides) => overrides
+            .into_inner()
+            .into_iter()
+            .map(|(name, cutoff)| (name, cutoff.into_inner()))
+            .collect(),
+        Err(err) => {
+            th.errors.extend(err.errors);
+            IndexMap::new()
+        }
     }
 }
 
 fn ensure_unique_exposed_names(
     value: &mut Value<'_>,
-    envs: &IndexMap<EnvironmentName, ParsedEnvironment>,
+    envs: &IndexMap<EnvironmentName, TomlParsedEnvironment>,
 ) -> Result<(), DeserError> {
     let mut exposed_names = IndexSet::new();
     let mut duplicates = IndexMap::new();
@@ -176,7 +268,7 @@ fn ensure_unique_exposed_names(
 
 fn ensure_unique_shortcut_names(
     value: &mut Value<'_>,
-    envs: &IndexMap<EnvironmentName, ParsedEnvironment>,
+    envs: &IndexMap<EnvironmentName, TomlParsedEnvironment>,
 ) -> Result<(), DeserError> {
     let mut shortcut_names = IndexSet::new();
     let mut duplicates = IndexMap::new();
@@ -207,7 +299,14 @@ fn ensure_unique_shortcut_names(
 
 impl ParsedManifest {
     /// Parses a toml string into a project manifest.
-    pub(crate) fn from_toml_str(source: &str) -> Result<Self, ManifestParsingError> {
+    ///
+    /// `root_directory` is the directory containing the manifest file; it is
+    /// used to resolve and convert inline package definitions attached to
+    /// source dependencies.
+    pub(crate) fn from_toml_str(
+        source: &str,
+        root_directory: &Path,
+    ) -> Result<Self, ManifestParsingError> {
         let mut toml_value = toml_span::parse(source)?;
 
         let version = toml_value
@@ -215,8 +314,8 @@ impl ParsedManifest {
             .and_then(|table| table.get("version"))
             .and_then(|version| version.as_integer());
 
-        match ParsedManifest::deserialize(&mut toml_value) {
-            Ok(manifest) => Ok(manifest),
+        match TomlParsedManifest::deserialize(&mut toml_value) {
+            Ok(manifest) => manifest.into_parsed_manifest(root_directory),
             Err(e) => {
                 let error = e
                     .errors
@@ -238,6 +337,84 @@ impl ParsedManifest {
                 }
             }
         }
+    }
+}
+
+impl TomlParsedManifest {
+    /// Converts the toml-stage manifest into a [`ParsedManifest`], turning
+    /// each environment's inline package definitions into
+    /// [`InlinePackageManifest`]s.
+    fn into_parsed_manifest(
+        self,
+        root_directory: &Path,
+    ) -> Result<ParsedManifest, ManifestParsingError> {
+        // The global manifest has no preview mechanism; source dependencies
+        // (and with them inline package definitions) are simply supported, so
+        // conversion runs with the pixi-build preview flag enabled.
+        let preview = Preview::from_iter([KnownPreviewFlag::PixiBuild]);
+
+        let mut envs = IndexMap::with_capacity(self.envs.len());
+        for (env_name, env) in self.envs {
+            let DependencyTable {
+                specs: dependencies,
+                inline_packages: inline_toml,
+            } = env.dependencies;
+
+            // The global manifest has no `[workspace.dependencies]` pool to
+            // inherit from, so `{ workspace = true }` entries are rejected.
+            let dependencies = dependencies.into_direct().map_err(|e| {
+                ManifestParsingError::TomlError(
+                    e.errors
+                        .into_iter()
+                        .next()
+                        .expect("there should be at least one error"),
+                )
+            })?;
+
+            let mut inline_packages = IndexMap::with_capacity(inline_toml.len());
+            for (name, package) in inline_toml {
+                let span = package.span.clone();
+                // There is no workspace to inherit from, so `{ workspace =
+                // true }` fields in inline definitions fail to resolve, and
+                // package defaults stay empty.
+                let converted = InlinePackageManifest::from_toml_package(
+                    &name,
+                    package.value,
+                    WorkspacePackageProperties::default(),
+                    &preview,
+                    root_directory,
+                )
+                .map_err(|e| {
+                    ManifestParsingError::TomlError(toml_span::Error {
+                        kind: toml_span::ErrorKind::Custom(e.to_string().into()),
+                        span: span
+                            .map(|range| toml_span::Span::new(range.start, range.end))
+                            .unwrap_or_default(),
+                        line_info: None,
+                    })
+                })?;
+                inline_packages.insert(name, converted.value);
+            }
+
+            envs.insert(
+                env_name,
+                ParsedEnvironment {
+                    channels: env.channels,
+                    platform: env.platform,
+                    dependencies,
+                    inline_packages,
+                    exposed: env.exposed,
+                    shortcuts: env.shortcuts,
+                },
+            );
+        }
+
+        Ok(ParsedManifest {
+            version: self.version,
+            global: self.global,
+            exclude_newer_package_overrides: self.exclude_newer_package_overrides,
+            envs,
+        })
     }
 }
 
@@ -271,6 +448,8 @@ where
         Self {
             envs,
             version: ManifestVersion::default(),
+            global: ParsedGlobal::default(),
+            exclude_newer_package_overrides: IndexMap::new(),
         }
     }
 }
@@ -297,12 +476,30 @@ pub struct ParsedEnvironment {
     /// Platform used by the environment.
     pub platform: Option<Platform>,
     pub dependencies: UniquePackageMap,
+    /// Inline package definitions attached to source dependencies. Keyed by
+    /// dependency name; the matching source spec lives in
+    /// [`Self::dependencies`].
+    #[serde(skip)]
+    pub inline_packages: IndexMap<PackageName, InlinePackageManifest>,
     #[serde(default, serialize_with = "serialize_expose_mappings")]
     pub exposed: IndexSet<Mapping>,
     pub shortcuts: Option<IndexSet<PackageName>>,
 }
 
-impl<'de> toml_span::Deserialize<'de> for ParsedEnvironment {
+/// The toml-stage of [`ParsedEnvironment`]: inline package definitions are
+/// still raw [`TomlPackage`](pixi_manifest::toml::TomlPackage)s inside the
+/// [`DependencyTable`]; they are converted by
+/// [`TomlParsedManifest::into_parsed_manifest`], which has the root directory
+/// as context.
+struct TomlParsedEnvironment {
+    channels: IndexSet<PrioritizedChannel>,
+    platform: Option<Platform>,
+    dependencies: DependencyTable,
+    exposed: IndexSet<Mapping>,
+    shortcuts: Option<IndexSet<PackageName>>,
+}
+
+impl<'de> toml_span::Deserialize<'de> for TomlParsedEnvironment {
     fn deserialize(value: &mut toml_span::Value<'de>) -> Result<Self, DeserError> {
         let mut th = TableHelper::new(value)?;
 
@@ -342,8 +539,16 @@ impl ParsedEnvironment {
     }
 
     /// Returns the channels associated with this environment.
-    pub(crate) fn channels(&self) -> IndexSet<&NamedChannelOrUrl> {
+    pub fn channels(&self) -> IndexSet<&NamedChannelOrUrl> {
         PrioritizedChannel::sort_channels_by_priority(&self.channels).collect()
+    }
+
+    /// The channels with their priority and `exclude-newer` override, sorted
+    /// by priority.
+    pub fn prioritized_channels(&self) -> impl Iterator<Item = &PrioritizedChannel> {
+        self.channels
+            .iter()
+            .sorted_by_key(|channel| std::cmp::Reverse(channel.priority.unwrap_or(0)))
     }
 
     /// Splits the dependencies into source and binary requirements.
@@ -413,9 +618,13 @@ impl AsRef<str> for ExposedName {
 
 #[cfg(test)]
 mod tests {
-    use insta::assert_snapshot;
+    use std::str::FromStr;
 
-    use super::ParsedManifest;
+    use insta::assert_snapshot;
+    use itertools::Itertools;
+    use rattler_conda_types::PackageName;
+
+    use super::{EnvironmentName, ParsedManifest};
 
     #[test]
     fn test_invalid_key() {
@@ -427,12 +636,77 @@ mod tests {
         assert_snapshot!(
             examples
                 .into_iter()
-                .map(|example| ParsedManifest::from_toml_str(example)
-                    .unwrap_err()
-                    .to_string())
+                .map(
+                    |example| ParsedManifest::from_toml_str(example, std::path::Path::new(""))
+                        .unwrap_err()
+                        .to_string()
+                )
                 .collect::<Vec<_>>()
                 .join("\n")
         )
+    }
+
+    #[test]
+    fn test_exclude_newer() {
+        let contents = r#"
+        [global]
+        exclude-newer = "2025-01-01"
+
+        [exclude-newer]
+        python = "0d"
+
+        [envs.python]
+        channels = [{ channel = "conda-forge", exclude-newer = "7d" }]
+        [envs.python.dependencies]
+        python = "3.11.*"
+        "#;
+        let manifest = ParsedManifest::from_toml_str(contents, std::path::Path::new("")).unwrap();
+        assert_snapshot!(manifest.global.exclude_newer.unwrap(), @"2025-01-02 00:00:00 UTC");
+        assert_snapshot!(
+            manifest
+                .exclude_newer_package_overrides
+                .iter()
+                .map(|(name, cutoff)| format!("{} = {cutoff}", name.as_source()))
+                .join(", "),
+            @"python = 0s"
+        );
+        let env = &manifest.envs[&EnvironmentName::from_str("python").unwrap()];
+        assert_snapshot!(
+            env.channels
+                .iter()
+                .map(|channel| channel.exclude_newer.unwrap().to_string())
+                .join(", "),
+            @"7days"
+        );
+    }
+
+    #[test]
+    fn test_invalid_exclude_newer() {
+        let contents = r#"
+        [global]
+        exclude-newer = "date"
+
+        [envs.python]
+        channels = ["conda-forge"]
+        "#;
+        let err = ParsedManifest::from_toml_str(contents, std::path::Path::new(""))
+            .unwrap_err()
+            .to_string();
+        assert_snapshot!(err, @"`date` is neither a valid duration, date (input contains invalid characters), nor timestamp (premature end of input)");
+    }
+
+    #[test]
+    fn test_exclude_newer_scalar_at_top_level() {
+        let contents = r#"
+        exclude-newer = "7d"
+
+        [envs.python]
+        channels = ["conda-forge"]
+        "#;
+        let err = ParsedManifest::from_toml_str(contents, std::path::Path::new(""))
+            .unwrap_err()
+            .to_string();
+        assert_snapshot!(err, @"expected a table of per-package `exclude-newer` cutoffs, set `exclude-newer` in the `[global]` table to apply a cutoff to every environment");
     }
 
     #[test]
@@ -453,7 +727,7 @@ mod tests {
         "python" = "python"
         "python3" = "python"
         "#;
-        let manifest = ParsedManifest::from_toml_str(contents);
+        let manifest = ParsedManifest::from_toml_str(contents, std::path::Path::new(""));
 
         fn remove_ansi_escape_sequences(input: &str) -> String {
             use regex::Regex;
@@ -482,7 +756,7 @@ mod tests {
         [envs.python.exposed]
         python = "python"
         "#;
-        let manifest = ParsedManifest::from_toml_str(contents);
+        let manifest = ParsedManifest::from_toml_str(contents, std::path::Path::new(""));
 
         assert!(manifest.is_err());
         assert_snapshot!(manifest.unwrap_err());
@@ -501,7 +775,7 @@ mod tests {
 
         // Replace the pixi-bin-name with the actual executable name that can be variable at runtime in tests
         let contents = contents.replace("pixi-bin-name", pixi_utils::executable_name());
-        let manifest = ParsedManifest::from_toml_str(contents.as_str());
+        let manifest = ParsedManifest::from_toml_str(contents.as_str(), std::path::Path::new(""));
 
         assert!(manifest.is_err());
         // Replace back the executable name with "pixi" to satisfy the snapshot
@@ -541,6 +815,47 @@ mod tests {
         [envs.python3-10.exposed]
         "python3.10" = "python"
         "#;
-        let _manifest = ParsedManifest::from_toml_str(contents).unwrap();
+        let _manifest = ParsedManifest::from_toml_str(contents, std::path::Path::new("")).unwrap();
+    }
+
+    /// An inline package definition attached to a git source dependency is
+    /// parsed into an `InlinePackageManifest`, and the surrounding spec
+    /// remains a source spec in the dependency map.
+    #[test]
+    fn test_inline_package_definition() {
+        let contents = r#"
+        [envs.xsv]
+        channels = ["conda-forge"]
+        [envs.xsv.dependencies]
+        xsv = { git = "https://github.com/BurntSushi/xsv.git", package.build.backend.name = "pixi-build-rust" }
+        "#;
+        let manifest = ParsedManifest::from_toml_str(contents, std::path::Path::new("")).unwrap();
+
+        let env_name = EnvironmentName::from_str("xsv").unwrap();
+        let env = manifest.envs.get(&env_name).unwrap();
+        let name = PackageName::from_str("xsv").unwrap();
+
+        // The source spec is retained as a dependency.
+        assert!(env.dependencies.specs.get(&name).unwrap().is_source());
+
+        // The inline definition is converted and keyed by dependency name.
+        let inline = env.inline_packages.get(&name).unwrap();
+        assert_eq!(
+            inline.manifest.build.backend.name.as_normalized(),
+            "pixi-build-rust"
+        );
+    }
+
+    /// An inline definition without a source location is meaningless and
+    /// rejected, matching the workspace inline syntax.
+    #[test]
+    fn test_inline_package_requires_source() {
+        let contents = r#"
+        [envs.xsv]
+        channels = ["conda-forge"]
+        [envs.xsv.dependencies]
+        xsv = { version = "*", package.build.backend.name = "pixi-build-rust" }
+        "#;
+        assert!(ParsedManifest::from_toml_str(contents, std::path::Path::new("")).is_err());
     }
 }

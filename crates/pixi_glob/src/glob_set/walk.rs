@@ -1,6 +1,7 @@
 //! Contains the directory walking implementation
 use itertools::Itertools;
 use parking_lot::Mutex;
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -241,6 +242,8 @@ pub fn walk_globs(
         results.append(&mut leaves);
     }
 
+    dedup_matches(&mut results);
+
     // Log some statistics as long as we are unsure with regards to performance
     let matched = results.len();
     let elapsed = start.elapsed();
@@ -259,6 +262,13 @@ pub fn walk_globs(
     );
 
     Ok(results)
+}
+
+/// Drop repeated paths: readdir is not duplicate-free on every filesystem
+/// (e.g. FUSE-backed mounts like virtiofs or NFS under concurrent load).
+fn dedup_matches(results: &mut Vec<Match>) {
+    let mut seen = HashSet::with_capacity(results.len());
+    results.retain(|m| seen.insert(m.path().to_path_buf()));
 }
 
 /// Ensures plain file names behave as "current directory" matches for the ignore crate.
@@ -451,9 +461,12 @@ pub fn set_ignore_hidden_patterns(patterns: &[String]) -> Option<Vec<String>> {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
+    use crate::glob_set::Match;
     use crate::glob_set::walk::set_ignore_hidden_patterns;
 
-    use super::anchor_literal_pattern;
+    use super::{anchor_literal_pattern, dedup_matches};
 
     #[test]
     fn anchors_literal_file_patterns() {
@@ -483,6 +496,24 @@ mod tests {
         assert_eq!(
             anchor_literal_pattern("../pixi.toml".to_string()),
             "../pixi.toml"
+        );
+    }
+
+    #[test]
+    fn dedup_matches_collapses_identical_paths() {
+        let mut results = vec![
+            Match::Leaf(PathBuf::from("/ws/pkg_b/package.xml")),
+            Match::Leaf(PathBuf::from("/ws/pkg_a/package.xml")),
+            Match::Leaf(PathBuf::from("/ws/pkg_b/package.xml")),
+        ];
+        dedup_matches(&mut results);
+        let paths: Vec<_> = results.iter().map(Match::path).collect();
+        assert_eq!(
+            paths,
+            vec![
+                std::path::Path::new("/ws/pkg_b/package.xml"),
+                std::path::Path::new("/ws/pkg_a/package.xml"),
+            ]
         );
     }
 

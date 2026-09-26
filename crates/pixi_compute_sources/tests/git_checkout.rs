@@ -10,7 +10,7 @@ use common::{EngineConfig, LifecycleReporter, build_test_engine};
 use pixi_compute_sources::GitSourceCheckoutExt;
 use pixi_record::PinnedSourceSpec;
 use pixi_spec::{GitLocationSpec, Subdirectory};
-use pixi_test_utils::GitRepoFixture;
+use pixi_test_utils::{GitRepoFixture, git_lfs_available};
 
 /// `pin_and_checkout_git` against a fresh fixture clones the repo,
 /// returns a checkout pointing at the head commit, and produces a
@@ -50,6 +50,39 @@ async fn pin_and_checkout_git_default_branch() {
         }
         other => panic!("expected git pinned spec, got {other:?}"),
     }
+}
+
+/// A spec with `lfs = Some(true)` materialises LFS-tracked files as real
+/// content instead of leaving git-lfs pointer files in the checkout.
+#[tokio::test]
+async fn pin_and_checkout_git_with_lfs() {
+    if !git_lfs_available() {
+        eprintln!("skipping pin_and_checkout_git_with_lfs: git-lfs is not installed");
+        return;
+    }
+    let repo = GitRepoFixture::new("lfs-sample");
+    let original = fs_err::read(repo.repo_path.join("data.bin")).expect("fixture has data.bin");
+
+    let engine = build_test_engine(EngineConfig {
+        sequential: true,
+        ..Default::default()
+    });
+
+    let spec = GitLocationSpec::new(repo.base_url.clone(), None, Subdirectory::default())
+        .with_lfs(Some(true));
+
+    let checkout = engine
+        .with_ctx(async |ctx| ctx.pin_and_checkout_git(spec).await)
+        .await
+        .expect("engine scope")
+        .expect("git checkout should succeed");
+
+    let data = checkout.path.as_std_path().join("data.bin");
+    let got = fs_err::read(&data).expect("data.bin missing from checkout");
+    assert_eq!(
+        got, original,
+        "data.bin should be the real blob, not an LFS pointer"
+    );
 }
 
 /// One git checkout fires the full reporter sequence. The

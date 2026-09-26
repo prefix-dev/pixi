@@ -1,0 +1,6 @@
+---
+source: crates/pixi_manifest/src/toml/manifest.rs
+expression: "expect_parse_failure(r#\"\n        [workspace]\n        name = \"test\"\n        channels = []\n        platforms = [\"linux-64\", { platform = \"linux-64\", cuda = \"12.9\" }]\n\n        [feature.gpu]\n        platforms = [\"linux-64-cuda-13-0\"]\n\n        [environments]\n        gpu = [\"gpu\"]\n        \"#,)"
+---
+  × feature 'gpu' references platform 'linux-64-cuda-13-0' which is not declared in the workspace
+  help: the workspace declares: linux-64, linux-64-cuda-12-9. no platform entry sets a `name`, so those names were derived for you; add `name = "..."` to an entry to choose your own

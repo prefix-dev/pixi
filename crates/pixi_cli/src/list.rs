@@ -5,10 +5,7 @@ use comfy_table::{Cell, CellAlignment, ContentArrangement, Table, presets::NOTHI
 use console::Style;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
-use pixi_api::{
-    WorkspaceContext,
-    workspace::{Package, PackageKind},
-};
+use pixi_api::workspace::{Package, PackageKind};
 use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
 use pixi_manifest::PixiPlatformName;
@@ -16,8 +13,10 @@ use rattler_conda_types::Platform;
 use serde::Serialize;
 
 use crate::{
-    cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig},
-    cli_interface::CliInterface,
+    cli_config::{
+        LockFileUpdateConfig, NoInstallConfig, ScriptWorkspaceConfig, script_lock_file_usage,
+    },
+    cli_interface::cli_context,
 };
 
 // an enum to sort by size or name
@@ -183,7 +182,7 @@ pub struct Args {
     pub fields: Vec<Field>,
 
     #[clap(flatten)]
-    pub workspace_config: WorkspaceConfig,
+    pub workspace_config: ScriptWorkspaceConfig,
 
     /// The environment to list packages for. Defaults to the default
     /// environment.
@@ -202,12 +201,23 @@ pub struct Args {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
+    if args.workspace_config.script.is_some() && args.environment.is_some() {
+        return Err(miette::miette!(
+            help = "A script has one implicit default run environment.",
+            "`pixi list --script` does not support --environment"
+        ));
+    }
+
     let workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
 
-    let lock_file_usage = args.lock_file_update_config.lock_file_usage()?;
+    let lock_file_usage = script_lock_file_usage(
+        args.lock_file_update_config.lock_file_usage()?,
+        args.workspace_config.script.is_some(),
+        workspace.lock_file_path().is_file(),
+    )?;
     let environment = workspace.environment_from_name_or_env_var(args.environment.clone())?;
     let platform_display: String = match &args.platform {
         Some(p) => p.to_string(),
@@ -217,7 +227,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .unwrap_or_else(|| Platform::current().to_string()),
     };
 
-    let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
+    let workspace_ctx = cli_context(workspace.clone());
     let mut packages_to_output = workspace_ctx
         .list_packages(
             args.regex,
@@ -342,7 +352,7 @@ fn get_field_cell(package: &Package, field: Field) -> Cell {
 fn print_packages_as_table(packages: &[Package], fields: &[Field]) {
     let mut table = Table::new();
     table
-        .load_preset(NOTHING)
+        .load_style(NOTHING)
         .set_content_arrangement(ContentArrangement::Disabled);
 
     // Set up header row

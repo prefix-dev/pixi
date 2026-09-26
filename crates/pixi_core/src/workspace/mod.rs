@@ -7,11 +7,13 @@ mod has_project_ref;
 pub mod registry;
 mod repodata;
 mod solve_group;
-mod stdlib_variants;
+pub mod stdlib_variants;
 pub mod virtual_packages;
 mod workspace_mut;
+mod workspace_script;
 
 use self::errors::VariantsError;
+use self::workspace_script::{ScriptSource, WorkspaceScript, local_lock_file_path};
 #[cfg(not(windows))]
 use std::os::unix::fs::symlink;
 use std::{
@@ -31,19 +33,21 @@ use async_once_cell::OnceCell as AsyncCell;
 pub use discovery::{DiscoveryStart, WorkspaceLocator, WorkspaceLocatorError};
 pub use environment::Environment;
 pub use has_project_ref::HasWorkspaceRef;
-use indexmap::Equivalent;
-use miette::IntoDiagnostic;
+use indexmap::{Equivalent, IndexSet};
+use miette::{Diagnostic, IntoDiagnostic};
 use once_cell::sync::OnceCell;
 use pep508_rs::Requirement;
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{CacheDirs, CommandDispatcher, CommandDispatcherBuilder, Limits};
-use pixi_config::{Config, RunPostLinkScripts};
+use pixi_config::{CacheKind, Config, RunPostLinkScripts};
 use pixi_consts::consts;
 use pixi_diff::LockFileDiff;
+use pixi_manifest::script::conda::CondaScriptManifest;
 use pixi_manifest::{
-    AssociateProvenance, BuildVariantSource, EnvironmentName, Environments, HasWorkspaceManifest,
-    LoadManifestsError, ManifestProvenance, Manifests, PackageManifest, PixiPlatform,
-    PixiPlatformName, SpecType, WithProvenance, WithWarnings, WorkspaceManifest,
+    AssociateProvenance, BuildVariantSource, EnvironmentName, Environments, FeaturesExt,
+    HasWorkspaceManifest, LoadManifestsError, ManifestKind, ManifestProvenance, Manifests,
+    PackageManifest, PixiPlatform, PixiPlatformName, PrioritizedChannel, SpecType, WithProvenance,
+    WithWarnings, WorkspaceManifest, script::ScriptManifest,
 };
 use pixi_path::AbsPathBuf;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
@@ -55,16 +59,18 @@ use pixi_utils::{
 };
 use pypi_mapping::PurlDerivationMode;
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, Platform, Version,
+    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, Platform,
 };
 use rattler_lock::LockFile;
+use thiserror::Error;
 
 use crate::lock_file::LockedPackageKind;
+use pixi_manifest::platform::host::{
+    detect_host, host_capabilities, host_subdir, platform_from_detected,
+};
+use pixi_manifest::platform::unsatisfied_capabilities;
 use rattler_networking::{LazyClient, s3_middleware};
 use rattler_repodata_gateway::Gateway;
-use rattler_virtual_packages::{
-    Cuda, EnvOverride, LibC, Linux, Osx, Override, VirtualPackageOverrides, VirtualPackages,
-};
 pub use registry::{WorkspaceRegistry, WorkspaceRegistryError};
 pub use solve_group::SolveGroup;
 use tokio::sync::Semaphore;
@@ -145,6 +151,8 @@ pub struct Workspace {
     /// Root folder of the workspace
     root: PathBuf,
 
+    storage: WorkspaceStorage,
+
     /// The name of the workspace based on the location of the workspace.
     /// This is used to determine the name of the workspace when no name is
     /// specified.
@@ -188,6 +196,183 @@ pub struct Workspace {
     backend_override: Option<BackendOverride>,
 }
 
+#[derive(Debug, Clone)]
+enum WorkspaceStorage {
+    Project,
+    Script(WorkspaceScript),
+}
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum ScriptWorkspaceError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Manifest(#[from] pixi_manifest::script::ScriptManifestError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    CondaScript(#[from] Box<pixi_manifest::script::conda::CondaScriptError>),
+
+    #[error("failed to resolve the script environment cache directory: {0}")]
+    CacheDirectory(String),
+
+    #[error("failed to determine the virtual packages of this machine for '{subdir}'")]
+    #[diagnostic(help(
+        "a script without `platforms` is resolved for this machine. Declare the platforms in the script metadata to resolve it for a fixed target instead."
+    ))]
+    HostDetection {
+        subdir: Platform,
+        #[source]
+        source: pixi_manifest::platform::host::HostDetectionError,
+    },
+}
+
+/// Install the platforms picked for a script that declares none.
+///
+/// `use_platform_composition` is decided while parsing, and a script without
+/// `platforms` parses with an empty set, which reads as "every platform is a
+/// bare subdir". Composition would then resolve an environment's
+/// platform by *subdir name* and never find the rich platform injected here, so
+/// the flag is recomputed for the platforms actually installed.
+fn set_implicit_script_platforms(
+    workspace: &mut pixi_manifest::Workspace,
+    platforms: IndexSet<PixiPlatform>,
+) {
+    workspace.use_platform_composition = platforms.iter().all(PixiPlatform::is_subdir_platform);
+    workspace.platforms = platforms;
+}
+
+/// The platforms a script that declares none is resolved for.
+///
+/// Such a script is resolved for the machine it runs on, like its no-manifest
+/// siblings `pixi exec` and `pixi global`, while a workspace takes "the current
+/// platform" to mean the bare subdir with pixi's assumed defaults. Otherwise a
+/// script on a machine with CUDA, or with a glibc newer than pixi's 2.28 floor,
+/// is solved against packages that machine does not need to be limited to.
+///
+/// An adjacent lock file wins while it is usable, so a `pixi lock --script`
+/// keeps reproducing rather than being re-solved for a marginally different
+/// host. Its platforms are rebuilt in full, virtual packages included, since
+/// bare subdirs would lose the machine they were locked for. Their names are
+/// synthesized from their contents rather than taken from the lock, so a lock
+/// written by an older pixi under `p1`/`p2` aliases still maps on;
+/// `align_platform_names` matches the rows by identity either way.
+///
+/// A recorded platform is kept only when it says something this machine can
+/// honour. One this machine cannot run, and one that records nothing beyond
+/// pixi's defaults for the subdir, both give way to the host and a re-solve.
+/// Rows for other subdirs are dropped. All three warn, since the next write to
+/// the lock file makes them permanent.
+///
+/// A lock file that does not parse is left to the loader to report.
+fn implicit_script_platforms(
+    lock_file_path: Option<&Path>,
+) -> Result<IndexSet<PixiPlatform>, ScriptWorkspaceError> {
+    let subdir = host_subdir();
+    let host = detect_host(subdir).map_err(|error| ScriptWorkspaceError::HostDetection {
+        subdir,
+        source: error,
+    })?;
+
+    // A lock file that does not parse is passed over silently: the loader reads
+    // the same file moments later and reports why it is unusable, with a
+    // position in the file that is not available here.
+    let Some(lock_file) = lock_file_path
+        .filter(|path| path.is_file())
+        .and_then(|path| LockFile::from_path(path).ok())
+    else {
+        return Ok(IndexSet::from([host]));
+    };
+
+    // A row carrying nothing beyond the subdir baseline records no machine at
+    // all, and adopting it would pin the script to pixi's defaults. When the
+    // host is itself baseline the two are the same platform, so there is
+    // nothing to reject and no re-solve to trigger on every run.
+    let host_is_baseline = host.customised_virtual_packages().is_empty();
+
+    let mut foreign_subdirs: IndexSet<Platform> = IndexSet::new();
+    let mut rejected_baseline = false;
+    let mut rejected_unrunnable = false;
+    let mut locked: IndexSet<PixiPlatform> = IndexSet::new();
+    for row in lock_file.platforms() {
+        // A lock can hold rows for other subdirs, from a script that declared
+        // `platforms` and had the line removed since. Keeping those would make
+        // every later run solve and lock for a platform it no longer asks for.
+        if row.subdir() != subdir {
+            foreign_subdirs.insert(row.subdir());
+            continue;
+        }
+        let Ok(recorded) = platform_from_detected(row.subdir(), locked_virtual_packages(&row))
+        else {
+            continue;
+        };
+        if !host_is_baseline && recorded.customised_virtual_packages().is_empty() {
+            rejected_baseline = true;
+            continue;
+        }
+        if !unsatisfied_capabilities(
+            &recorded.customised_virtual_packages(),
+            host.declared_virtual_packages(),
+        )
+        .is_empty()
+        {
+            rejected_unrunnable = true;
+            continue;
+        }
+        locked.insert(recorded);
+    }
+
+    // `--frozen` and `--locked` consume the lock file without writing, so none
+    // of these warnings may claim that it *is* rewritten.
+    if !foreign_subdirs.is_empty() {
+        tracing::warn!(
+            "the lock file next to this script also records {}, which a script without \
+             `platforms` does not ask for, so the next write to the lock file drops those \
+             rows.\n\
+             Declare `platforms` in the script metadata to keep locking for them.",
+            foreign_subdirs
+                .iter()
+                .map(|subdir| format!("'{}'", subdir.as_str()))
+                .collect::<Vec<_>>()
+                .join(", "),
+        );
+    }
+
+    if locked.is_empty() {
+        if rejected_unrunnable {
+            tracing::warn!(
+                "the lock file next to this script records a platform this machine cannot run, \
+                 so the script is resolved for '{}' instead, and the next write to the lock file \
+                 replaces what it records.\n\
+                 Declare `platforms` in the script metadata to keep locking for a fixed target.",
+                host.name().as_str(),
+            );
+        } else if rejected_baseline {
+            tracing::warn!(
+                "the lock file next to this script records pixi's defaults for '{}' rather than \
+                 the machine it was locked on, so the script is resolved for '{}' instead, and \
+                 the next write to the lock file replaces what it records.\n\
+                 Declare `platforms` in the script metadata to keep locking for a fixed target.",
+                subdir.as_str(),
+                host.name().as_str(),
+            );
+        }
+        return Ok(IndexSet::from([host]));
+    }
+
+    Ok(locked)
+}
+
+/// The virtual packages a lock-file platform row records, as the typed form.
+/// Entries the current pixi cannot parse are dropped; they can only have come
+/// from a newer pixi, and a platform is defined by what we can compare.
+fn locked_virtual_packages(platform: &rattler_lock::Platform<'_>) -> Vec<GenericVirtualPackage> {
+    platform
+        .virtual_packages()
+        .iter()
+        .filter_map(|raw| pixi_manifest::platform::parse_locked_virtual_package(raw))
+        .collect()
+}
+
 impl Debug for Workspace {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Project")
@@ -210,137 +395,6 @@ pub type PypiDeps = indexmap::IndexMap<
 pub type MatchSpecs = indexmap::IndexMap<PackageName, (MatchSpec, SpecType)>;
 pub type SourceSpecs = indexmap::IndexMap<PackageName, (SourceSpec, SpecType)>;
 
-/// Where the virtual packages of a host [`PixiPlatform`] come from.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PlatformSource {
-    /// Pixi's fixed per-subdir defaults: deterministic and machine-independent.
-    Defaults,
-    /// The virtual packages actually detected on this machine.
-    AutoDetected,
-}
-
-/// Whether environment-variable overrides are honored when building a host
-/// [`PixiPlatform`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PlatformOverrides {
-    /// Ignore `PIXI_OVERRIDE_PLATFORM` and `CONDA_OVERRIDE_*`.
-    NoOverrides,
-    /// Honor `PIXI_OVERRIDE_PLATFORM` for the subdir and `CONDA_OVERRIDE_*` for
-    /// the detected virtual packages (via [`VirtualPackageOverrides::from_env`]).
-    EnvironmentVariableOverrides,
-}
-
-/// Apply `CONDA_OVERRIDE_*` env vars to `packages`, matching upstream rattler
-/// semantics: unset keeps the current version, non-empty replaces it (adding
-/// the package if it wasn't detected at all), and empty removes the package
-/// entirely. Rattler drives this per slot via `detect_with_fallback`;
-/// `Ok(Some(v))` = use v, `Ok(None)` = disabled, error = leave untouched.
-fn apply_environment_variable_overrides(packages: &mut Vec<GenericVirtualPackage>) {
-    let env = Override::DefaultEnvVar;
-    packages.retain_mut(|package| {
-        let base = package.version.clone();
-        let outcome: Option<Option<Version>> = match package.name.as_normalized() {
-            "__cuda" => Cuda::detect_with_fallback(&env, || Ok(Some(Cuda { version: base })))
-                .ok()
-                .map(|cuda| cuda.map(|cuda| cuda.version)),
-            "__linux" => Linux::detect_with_fallback(&env, || Ok(Some(Linux { version: base })))
-                .ok()
-                .map(|linux| linux.map(|linux| linux.version)),
-            "__osx" => Osx::detect_with_fallback(&env, || Ok(Some(Osx { version: base })))
-                .ok()
-                .map(|osx| osx.map(|osx| osx.version)),
-            // The libc family is handled by `apply_glibc_override` below, since
-            // the single glibc env var must not rewrite `__musl`/`__eglibc`.
-            _ => None,
-        };
-        match outcome {
-            // Override (or unset fallback) produced a version: keep it.
-            Some(Some(version)) => {
-                package.version = version;
-                true
-            }
-            // Variable was set empty: disable the package.
-            Some(None) => false,
-            // Not env-overridable, or detection failed: leave untouched.
-            None => true,
-        }
-    });
-
-    // Overrides can introduce packages the machine lacks (`CONDA_OVERRIDE_CUDA`
-    // without a GPU), matching rattler; the `Ok(None)` fallback adds only set vars.
-    let mut add_missing = |name: &str, version: Option<Version>| {
-        let Some(version) = version else { return };
-        if packages.iter().any(|p| p.name.as_normalized() == name) {
-            return;
-        }
-        packages.push(GenericVirtualPackage {
-            name: name.parse().expect("static virtual package name is valid"),
-            version,
-            build_string: "0".to_string(),
-        });
-    };
-    add_missing(
-        "__cuda",
-        Cuda::detect_with_fallback(&env, || Ok(None))
-            .ok()
-            .flatten()
-            .map(|cuda| cuda.version),
-    );
-    add_missing(
-        "__osx",
-        Osx::detect_with_fallback(&env, || Ok(None))
-            .ok()
-            .flatten()
-            .map(|osx| osx.version),
-    );
-    add_missing(
-        "__linux",
-        Linux::detect_with_fallback(&env, || Ok(None))
-            .ok()
-            .flatten()
-            .map(|linux| linux.version),
-    );
-
-    apply_glibc_override(packages);
-}
-
-/// Apply `CONDA_OVERRIDE_GLIBC` (rattler's only libc slot) to `packages`. The
-/// glibc env var governs glibc alone: unset leaves libc packages untouched, an
-/// empty value removes `__glibc`, and a concrete version pins
-/// `__glibc=<version>=0` and drops `__musl`/`__eglibc` (one libc family
-/// applies).
-fn apply_glibc_override(packages: &mut Vec<GenericVirtualPackage>) {
-    // Read the variable rattler would and reuse its empty-vs-version parsing.
-    let Ok(value) = std::env::var(LibC::DEFAULT_ENV_NAME) else {
-        return;
-    };
-    match LibC::parse_version_opt(&value) {
-        // `CONDA_OVERRIDE_GLIBC=""`: drop `__glibc`, leave `__musl`/`__eglibc`.
-        Ok(None) => packages.retain(|p| p.name.as_normalized() != "__glibc"),
-        // `CONDA_OVERRIDE_GLIBC=<version>`: glibc becomes the active libc.
-        Ok(Some(libc)) => {
-            packages.retain(|p| !matches!(p.name.as_normalized(), "__musl" | "__eglibc"));
-            if let Some(glibc) = packages
-                .iter_mut()
-                .find(|p| p.name.as_normalized() == "__glibc")
-            {
-                glibc.version = libc.version;
-                glibc.build_string = "0".to_string();
-            } else {
-                packages.push(GenericVirtualPackage {
-                    name: "__glibc"
-                        .parse()
-                        .expect("static virtual package name is valid"),
-                    version: libc.version,
-                    build_string: "0".to_string(),
-                });
-            }
-        }
-        // Unparsable value: leave the detected packages untouched.
-        Err(_) => {}
-    }
-}
-
 impl Workspace {
     /// Core constructor: takes parsed manifests and loads the workspace config
     /// using `source` for the system + user-level layer.
@@ -348,7 +402,6 @@ impl Workspace {
         manifest: Manifests,
         source: &pixi_config::GlobalConfigSource,
     ) -> Self {
-        let env_vars = Workspace::init_env_vars(&manifest.workspace.value.environments);
         // Get the absolute path of the manifest, preserving symlinks by only
         // canonicalizing the parent directory
         let manifest_path = manifest.workspace.provenance.absolute_path();
@@ -359,10 +412,26 @@ impl Workspace {
             .expect("manifest path should always have a parent")
             .to_owned();
 
-        // Determine the name of the workspace based on the location of the manifest.
-        let manifest_location_name = root.file_name().map(|p| p.to_string_lossy().into_owned());
+        let config = Config::load_with(&root, source);
+        Self::from_parsed(
+            manifest.workspace,
+            manifest.package,
+            root,
+            config,
+            WorkspaceStorage::Project,
+        )
+    }
 
-        let s3_options = manifest.workspace.value.workspace.s3_options.clone();
+    fn from_parsed(
+        workspace: WithProvenance<WorkspaceManifest>,
+        package: Option<WithProvenance<PackageManifest>>,
+        root: PathBuf,
+        config: Config,
+        storage: WorkspaceStorage,
+    ) -> Self {
+        let env_vars = Workspace::init_env_vars(&workspace.value.environments);
+        let manifest_location_name = root.file_name().map(|p| p.to_string_lossy().into_owned());
+        let s3_options = workspace.value.workspace.s3_options.clone();
         let s3_config = s3_options
             .unwrap_or_default()
             .iter()
@@ -378,13 +447,13 @@ impl Workspace {
             })
             .collect::<HashMap<String, s3_middleware::S3Config>>();
 
-        let config = Config::load_with(&root, source);
         Self {
             root,
+            storage,
             manifest_location_name,
             client: Default::default(),
-            workspace: manifest.workspace,
-            package: manifest.package,
+            workspace,
+            package,
             env_vars,
             derivation_mode: Default::default(),
             config,
@@ -393,6 +462,197 @@ impl Workspace {
             concurrent_downloads_semaphore: OnceCell::default(),
             backend_override: None,
         }
+    }
+
+    /// Construct an isolated workspace for a local PEP 723 script.
+    ///
+    /// `config` must include both the selected global configuration and CLI overrides so the
+    /// cached environment path and default channels are final when the workspace is constructed.
+    pub fn from_script(
+        script: ScriptManifest,
+        config: Config,
+    ) -> Result<WithWarnings<Self>, ScriptWorkspaceError> {
+        let script_path = script.path().to_owned();
+        let script_manifest = script.clone();
+        let script_config = script.workspace_config()?;
+        let (mut manifest, warnings) = script.into_workspace_manifest()?;
+
+        if !script_config.channels_explicit {
+            manifest.workspace.channels = config
+                .default_channels()
+                .into_iter()
+                .map(PrioritizedChannel::from)
+                .collect();
+        }
+        let root = script_path
+            .parent()
+            .expect("an absolute script path always has a parent")
+            .to_owned();
+        let cache_root = config
+            .cache_dir_for(CacheKind::ExecEnvironments)
+            .map_err(|error| ScriptWorkspaceError::CacheDirectory(error.to_string()))?;
+        let workspace_script = WorkspaceScript::for_local(script_manifest, &cache_root);
+        if !script_config.platforms_explicit {
+            let lock_file_path = workspace_script
+                .lock_file_path()
+                .expect("a local script has an adjacent lock-file path");
+            set_implicit_script_platforms(
+                &mut manifest.workspace,
+                implicit_script_platforms(Some(&lock_file_path))?,
+            );
+        }
+        let workspace =
+            manifest.with_provenance(ManifestProvenance::new(script_path, ManifestKind::Pep723));
+
+        Ok(WithWarnings::from(Self::from_parsed(
+            workspace,
+            None,
+            root,
+            config,
+            WorkspaceStorage::Script(workspace_script),
+        ))
+        .with_warnings(warnings))
+    }
+
+    /// Construct an isolated workspace for a local `conda-script` file.
+    ///
+    /// `config` must include both the selected global configuration and CLI
+    /// overrides, like [`Workspace::from_script`].
+    pub fn from_conda_script(
+        script: CondaScriptManifest,
+        config: Config,
+    ) -> Result<WithWarnings<Self>, ScriptWorkspaceError> {
+        let script_path = script.path().to_owned();
+        let root = script_path
+            .parent()
+            .expect("an absolute script path always has a parent")
+            .to_owned();
+        let script_config = script.workspace_config().map_err(Box::new)?;
+        let implicit_platforms = if script_config.platforms_explicit {
+            None
+        } else {
+            let lock_file_path = local_lock_file_path(&script_path);
+            Some(implicit_script_platforms(Some(&lock_file_path))?)
+        };
+        let (manifest, warnings) = script
+            .into_workspace_manifest(implicit_platforms, &root)
+            .map_err(Box::new)?;
+
+        let cache_root = config
+            .cache_dir_for(CacheKind::ExecEnvironments)
+            .map_err(|error| ScriptWorkspaceError::CacheDirectory(error.to_string()))?;
+        let workspace_script = WorkspaceScript::for_local_conda_script(script, &cache_root);
+
+        let workspace = manifest.with_provenance(ManifestProvenance::new(
+            script_path,
+            ManifestKind::CondaScript,
+        ));
+
+        Ok(WithWarnings::from(Self::from_parsed(
+            workspace,
+            None,
+            root,
+            config,
+            WorkspaceStorage::Script(workspace_script),
+        ))
+        .with_warnings(warnings))
+    }
+
+    /// Construct an isolated workspace for a downloaded `conda-script` file.
+    pub fn from_transient_conda_script(
+        script: CondaScriptManifest,
+        config: Config,
+        root: PathBuf,
+        cache_name: &str,
+        cache_key: &[u8],
+    ) -> Result<WithWarnings<Self>, ScriptWorkspaceError> {
+        let script_path = script.path().to_owned();
+        let script_config = script.workspace_config().map_err(Box::new)?;
+        let implicit_platforms = if script_config.platforms_explicit {
+            None
+        } else {
+            Some(implicit_script_platforms(None)?)
+        };
+        let (manifest, warnings) = script
+            .into_workspace_manifest(implicit_platforms, &root)
+            .map_err(Box::new)?;
+        let cache_root = config
+            .cache_dir_for(CacheKind::ExecEnvironments)
+            .map_err(|error| ScriptWorkspaceError::CacheDirectory(error.to_string()))?;
+        let workspace_script = WorkspaceScript::for_transient(
+            ScriptSource::CondaScript(Box::new(script)),
+            &cache_root,
+            cache_name,
+            cache_key,
+            &root,
+        );
+        let workspace = manifest.with_provenance(ManifestProvenance::new(
+            script_path,
+            ManifestKind::CondaScript,
+        ));
+
+        Ok(WithWarnings::from(Self::from_parsed(
+            workspace,
+            None,
+            root,
+            config,
+            WorkspaceStorage::Script(workspace_script),
+        ))
+        .with_warnings(warnings))
+    }
+
+    /// Construct an isolated workspace for a transient PEP 723 script.
+    pub fn from_transient_script(
+        script: ScriptManifest,
+        config: Config,
+        root: PathBuf,
+        provenance_path: PathBuf,
+        cache_name: &str,
+        cache_key: &[u8],
+    ) -> Result<WithWarnings<Self>, ScriptWorkspaceError> {
+        let script_manifest = script.clone();
+        let script_config = script.workspace_config()?;
+        let (mut manifest, warnings) = script.into_workspace_manifest()?;
+
+        if !script_config.channels_explicit {
+            manifest.workspace.channels = config
+                .default_channels()
+                .into_iter()
+                .map(PrioritizedChannel::from)
+                .collect();
+        }
+        if !script_config.platforms_explicit {
+            // A transient script has nowhere to keep a lock file, so the host
+            // is the only platform it can be resolved for.
+            set_implicit_script_platforms(
+                &mut manifest.workspace,
+                implicit_script_platforms(None)?,
+            );
+        }
+
+        let cache_root = config
+            .cache_dir_for(CacheKind::ExecEnvironments)
+            .map_err(|error| ScriptWorkspaceError::CacheDirectory(error.to_string()))?;
+        let workspace_script = WorkspaceScript::for_transient(
+            ScriptSource::Pep723(Box::new(script_manifest)),
+            &cache_root,
+            cache_name,
+            cache_key,
+            &root,
+        );
+        let workspace = manifest.with_provenance(ManifestProvenance::new(
+            provenance_path,
+            ManifestKind::Pep723,
+        ));
+
+        Ok(WithWarnings::from(Self::from_parsed(
+            workspace,
+            None,
+            root,
+            config,
+            WorkspaceStorage::Script(workspace_script),
+        ))
+        .with_warnings(warnings))
     }
 
     /// Loads a workspace from a manifest file using the default global-config
@@ -485,20 +745,55 @@ impl Workspace {
     /// Returns the default pixi directory of the workspace [consts::PIXI_DIR],
     /// always pointing to `.pixi` regardless of detached-environments configuration.
     pub fn default_pixi_dir(&self) -> PathBuf {
-        self.root.join(consts::PIXI_DIR)
+        match &self.storage {
+            WorkspaceStorage::Project => self.root.join(consts::PIXI_DIR),
+            WorkspaceStorage::Script(script) => script.pixi_dir().to_owned(),
+        }
     }
 
     /// Returns the effective pixi directory for the workspace. When
     /// detached-environments is configured, this returns the project-specific
     /// detached path instead of the default `.pixi` directory.
     pub fn pixi_dir(&self) -> PathBuf {
+        if let WorkspaceStorage::Script(script) = &self.storage {
+            return script.pixi_dir().to_owned();
+        }
         self.detached_environments_path()
             .unwrap_or_else(|| self.default_pixi_dir())
+    }
+
+    /// `true` when this is a script that declares no `platforms`, so the
+    /// platform it resolves for was picked from the machine rather than from
+    /// the script metadata.
+    pub fn script_platforms_are_implicit(&self) -> bool {
+        let WorkspaceStorage::Script(script) = &self.storage else {
+            return false;
+        };
+        match script.source() {
+            ScriptSource::Pep723(manifest) => manifest
+                .workspace_config()
+                .is_ok_and(|config| !config.platforms_explicit),
+            ScriptSource::CondaScript(manifest) => manifest
+                .workspace_config()
+                .is_ok_and(|config| !config.platforms_explicit),
+        }
+    }
+
+    /// `true` when this workspace was constructed from a conda-script file.
+    pub fn is_conda_script(&self) -> bool {
+        matches!(
+            &self.storage,
+            WorkspaceStorage::Script(script)
+                if matches!(script.source(), ScriptSource::CondaScript(_))
+        )
     }
 
     /// Create the detached-environments path for this project if it is set in
     /// the config
     fn detached_environments_path(&self) -> Option<PathBuf> {
+        if matches!(self.storage, WorkspaceStorage::Script(_)) {
+            return None;
+        }
         if let Ok(Some(detached_environments_path)) = self.config().detached_environments_dir() {
             Some(detached_environments_path.join(format!(
                 "{}-{}",
@@ -631,7 +926,20 @@ impl Workspace {
     /// Returns the path to the lock file of the project
     /// [consts::PROJECT_LOCK_FILE]
     pub fn lock_file_path(&self) -> PathBuf {
-        self.root.join(consts::PROJECT_LOCK_FILE)
+        match &self.storage {
+            WorkspaceStorage::Project => self.root.join(consts::PROJECT_LOCK_FILE),
+            WorkspaceStorage::Script(script) => script
+                .lock_file_path()
+                .expect("transient script workspaces do not have a lock file path"),
+        }
+    }
+
+    /// Returns the lock file path when this workspace can persist a lock file.
+    pub fn persistent_lock_file_path(&self) -> Option<PathBuf> {
+        match &self.storage {
+            WorkspaceStorage::Project => Some(self.root.join(consts::PROJECT_LOCK_FILE)),
+            WorkspaceStorage::Script(script) => script.lock_file_path(),
+        }
     }
 
     /// Returns the default environment of the project.
@@ -716,6 +1024,44 @@ impl Workspace {
             })
     }
 
+    /// Resolves a conda subdir to the workspace platform that targets it.
+    ///
+    /// Commands that take a bare subdir on the command line (`pixi publish
+    /// --target-platform linux-64`) need the declared platform behind it: the
+    /// system requirements that a build depends on (`glibc`, `macos`, `cuda`,
+    /// ...) live on the `[workspace] platforms` entries, which may carry a
+    /// synthesized name like `linux-64-glibc-2-34`. Reaching for
+    /// [`PixiPlatform::from_subdir`] instead picks up pixi's portable defaults
+    /// (`__glibc = 2.28`), so the declared requirements silently drop out of
+    /// both the derived `c_stdlib`/`c_stdlib_version` build variants and the
+    /// virtual packages the build environments solve against
+    /// (prefix-dev/pixi#6709).
+    ///
+    /// Candidates are the declared platforms for `subdir` in manifest order,
+    /// preferring one the default environment selects -- which is also the
+    /// entry the composition pass registers for the legacy
+    /// `[system-requirements]` shape. A subdir the workspace does not declare
+    /// (cross-building for `osx-arm64` from a linux-only workspace, say) falls
+    /// back to the subdir baseline.
+    pub fn pixi_platform_for_subdir(&self, subdir: Platform) -> PixiPlatform {
+        let candidates: Vec<&PixiPlatform> = self
+            .workspace
+            .value
+            .workspace
+            .platforms
+            .iter()
+            .filter(|platform| platform.subdir() == subdir)
+            .collect();
+
+        let environment_platforms = self.default_environment().platforms();
+        candidates
+            .iter()
+            .find(|platform| environment_platforms.contains(platform.name()))
+            .or(candidates.first())
+            .map(|platform| (*platform).clone())
+            .unwrap_or_else(|| PixiPlatform::from_subdir(subdir))
+    }
+
     /// Returns the resolved variant configuration for a given platform.
     pub fn variants(&self, platform: &PixiPlatform) -> Result<VariantConfig, VariantsError> {
         // Get inline variants for all targets
@@ -751,15 +1097,18 @@ impl Workspace {
             .map(|prioritized| &prioritized.channel)
             .chain(
                 manifest
-                    .features
-                    .values()
-                    .filter_map(|feature| feature.channels.as_ref())
+                    .all_features()
+                    .filter_map(|(_, feature)| feature.channels.as_ref())
                     .flatten()
                     .map(|prioritized| &prioritized.channel),
             )
             .filter_map(|channel| channel.clone().into_base_url(&channel_config).ok())
             .collect();
-        for (key, value) in stdlib_variants::derive_stdlib_variants(platform, &channel_urls) {
+        for (key, value) in stdlib_variants::derive_stdlib_variants(
+            platform,
+            &channel_urls,
+            stdlib_variants::StdlibVersionPin::Exact,
+        ) {
             variant_configuration
                 .entry(key)
                 .or_insert_with(|| vec![value]);
@@ -808,8 +1157,16 @@ impl Workspace {
 
     /// Returns a pre-filled command dispatcher builder. Seeds a
     /// [`RayonPrimer`](crate::rayon_primer::RayonPrimer) in the install /
-    /// solve / instantiate-backend reporter slots; UI reporters override.
-    pub fn command_dispatcher_builder(&self) -> miette::Result<CommandDispatcherBuilder> {
+    /// solve / instantiate-backend reporter slots, then lets `progress`
+    /// override them with the terminal reporters.
+    ///
+    /// `progress` is mandatory so that no dispatcher can be constructed
+    /// without deciding whether its work is visible to the user. Pass `None`
+    /// only for genuinely silent paths; `grep` for it to find them all.
+    pub fn command_dispatcher_builder(
+        &self,
+        progress: Option<&Arc<pixi_reporters::TopLevelProgress>>,
+    ) -> miette::Result<CommandDispatcherBuilder> {
         let cache_dir = AbsPathBuf::new(pixi_config::get_cache_dir()?)
             .expect("cache dir is not absolute")
             .into_assume_dir();
@@ -820,30 +1177,22 @@ impl Workspace {
 
         // Determine the tool platform to use
         let tool_platform = self.config().tool_platform();
-        let host = self.host_platform(
-            PlatformSource::Defaults,
-            PlatformOverrides::EnvironmentVariableOverrides,
-        );
-        let tool_virtual_packages =
-            if tool_platform.only_platform() == host.subdir().only_platform() {
-                // If the tool platform is the same as the current platform, we just assume the
-                // same virtual packages apply.
-                self.host_platform(
-                    PlatformSource::AutoDetected,
-                    PlatformOverrides::EnvironmentVariableOverrides,
-                )
-                .declared_virtual_packages()
-                .to_vec()
-            } else {
-                vec![]
-            };
+        let host_subdir = host_subdir();
+        let tool_virtual_packages = if tool_platform.only_platform() == host_subdir.only_platform()
+        {
+            // If the tool platform is the same as the current platform, we just assume the
+            // same virtual packages apply.
+            host_capabilities()
+        } else {
+            vec![]
+        };
 
         let root_dir = AbsPathBuf::new(self.root().to_path_buf())
             .expect("root dir is not absolute")
             .into_assume_dir();
 
         let rayon_primer = std::sync::Arc::new(crate::rayon_primer::RayonPrimer::default());
-        Ok(CommandDispatcher::builder()
+        let builder = CommandDispatcher::builder()
             .with_gateway(self.repodata_gateway()?.clone())
             .with_cache_dirs(cache_dirs)
             .with_root_dir(root_dir)
@@ -867,10 +1216,17 @@ impl Workspace {
             .with_allow_symbolic_links(self.config.allow_symbolic_links)
             .with_allow_hard_links(self.config.allow_hard_links)
             .with_allow_ref_links(self.config.allow_ref_links)
+            .with_offline(self.config.offline())
             .with_pixi_install_reporter(rayon_primer.clone())
             .with_pixi_solve_reporter(rayon_primer.clone())
             .with_instantiate_backend_reporter(rayon_primer)
-            .with_tool_platform(tool_platform, tool_virtual_packages))
+            .with_tool_platform(tool_platform, tool_virtual_packages);
+
+        // Registered last so the terminal reporters win over the primers above.
+        Ok(match progress {
+            Some(progress) => progress.clone().register_with(builder),
+            None => builder,
+        })
     }
 
     fn lazy_client_and_authenticated_client(
@@ -883,53 +1239,6 @@ impl Workspace {
 
     pub fn config(&self) -> &Config {
         &self.config
-    }
-
-    /// The platform pixi treats as this machine's host.
-    ///
-    /// `source` selects whether the virtual packages are pixi's per-subdir
-    /// defaults (deterministic) or the set actually detected on this machine;
-    /// `overrides` selects whether the `PIXI_OVERRIDE_PLATFORM` (subdir) and
-    /// `CONDA_OVERRIDE_*` (virtual package) environment variables are honored.
-    pub fn host_platform(
-        &self,
-        source: PlatformSource,
-        overrides: PlatformOverrides,
-    ) -> PixiPlatform {
-        let subdir = match overrides {
-            PlatformOverrides::NoOverrides => Platform::current(),
-            PlatformOverrides::EnvironmentVariableOverrides => {
-                std::env::var(consts::PIXI_OVERRIDE_PLATFORM)
-                    .ok()
-                    .and_then(|value| match value.parse::<Platform>() {
-                        Ok(platform) => Some(platform),
-                        Err(_) => {
-                            tracing::warn!(
-                                "Invalid value for PIXI_OVERRIDE_PLATFORM='{value}', ignoring."
-                            );
-                            None
-                        }
-                    })
-                    .unwrap_or_else(Platform::current)
-            }
-        };
-
-        let mut virtual_packages = match source {
-            PlatformSource::Defaults => PixiPlatform::from_subdir(subdir)
-                .declared_virtual_packages()
-                .to_vec(),
-            PlatformSource::AutoDetected => {
-                VirtualPackages::detect(&VirtualPackageOverrides::default())
-                    .map(|detected| detected.into_generic_virtual_packages().collect())
-                    .unwrap_or_default()
-            }
-        };
-
-        if let PlatformOverrides::EnvironmentVariableOverrides = overrides {
-            apply_environment_variable_overrides(&mut virtual_packages);
-        }
-
-        PixiPlatform::from_required_virtual_packages(subdir, virtual_packages)
     }
 
     /// Construct a [`ChannelConfig`] that is specific to this project. This
@@ -988,16 +1297,31 @@ pub struct UpdateDeps {
     pub lock_file_diff: LockFileDiff,
 }
 
+/// A package that `update_dependencies` left untouched in the manifest.
+#[derive(Debug, Clone)]
+pub struct SkippedPackage {
+    /// The normalized package name.
+    pub name: String,
+    /// True when the manifest entry inherits from `[workspace.dependencies]`
+    /// via `{ workspace = true }`.
+    pub inherits_workspace: bool,
+}
+
 impl<'source> HasWorkspaceManifest<'source> for &'source Workspace {
     fn workspace_manifest(&self) -> &'source WorkspaceManifest {
         &self.workspace.value
     }
 }
 
-/// Get or initialize the activated environment variables
+/// Get or initialize the activated environment variables.
+///
+/// Note: the result is memoized per environment and behavior, not per
+/// platform, so callers activating the same environment with the same
+/// behavior must pass the same platform within one process.
 pub async fn get_activated_environment_variables<'a>(
     project_env_vars: &'a HashMap<EnvironmentName, EnvironmentVars>,
     environment: &Environment<'_>,
+    platform: &PixiPlatform,
     current_env_var_behavior: CurrentEnvVarBehavior,
     lock_file: Option<&LockFile>,
     force_activate: bool,
@@ -1015,6 +1339,7 @@ pub async fn get_activated_environment_variables<'a>(
                 .get_or_try_init(async {
                     initialize_env_variables(
                         environment,
+                        platform,
                         current_env_var_behavior,
                         lock_file,
                         force_activate,
@@ -1029,6 +1354,7 @@ pub async fn get_activated_environment_variables<'a>(
                 .get_or_try_init(async {
                     initialize_env_variables(
                         environment,
+                        platform,
                         current_env_var_behavior,
                         lock_file,
                         force_activate,
@@ -1043,6 +1369,7 @@ pub async fn get_activated_environment_variables<'a>(
                 .get_or_try_init(async {
                     initialize_env_variables(
                         environment,
+                        platform,
                         current_env_var_behavior,
                         lock_file,
                         force_activate,
@@ -1199,14 +1526,63 @@ mod tests {
 
     use insta::{assert_debug_snapshot, assert_snapshot};
     use itertools::Itertools;
-    use pixi_config::{Config, DetachedEnvironments};
-    use pixi_manifest::{FeatureName, FeaturesExt, HasWorkspaceManifest};
+    use pixi_config::{CacheConfig, Config, DetachedEnvironments};
+    use pixi_manifest::{FeatureName, FeaturesExt, HasWorkspaceManifest, script::ScriptManifest};
     use pypi_mapping::{MappingMode, ProjectDefinedChannelMapping, ProjectDefinedMappingLocation};
-    use rattler_conda_types::{Channel, Platform, Version};
+    use rattler_conda_types::{
+        Channel, GenericVirtualPackage, NamedChannelOrUrl, Platform, Version,
+    };
     use url::Url;
     use xxhash_rust::xxh3::xxh3_64;
 
     use super::*;
+
+    /// A platform row carries whatever package names were written into it, and
+    /// a long enough one spells out past the platform-name limit. Such a row is
+    /// skipped: the rest of the lock still counts, and nothing panics.
+    #[test]
+    fn an_unnameable_locked_platform_is_skipped() {
+        let subdir = host_subdir();
+        // `MAX_PLATFORM_NAME_BYTES` is private to `pixi_manifest`, so this is
+        // simply longer than any cap that crate would plausibly carry.
+        let unnameable = format!("__{}", "a".repeat(1024));
+        let lock_source = format!(
+            r#"version: 7
+platforms:
+- name: {subdir}
+  subdir: {subdir}
+- name: unnameable
+  subdir: {subdir}
+  virtual-packages:
+  - {unnameable}=1
+environments:
+  default:
+    channels:
+    - url: https://conda.anaconda.org/conda-forge/
+    packages: {{}}
+packages: []
+"#
+        );
+
+        let dir = tempfile::tempdir().unwrap();
+        let lock_file_path = dir.path().join("script.py.pixi.lock");
+        fs_err::write(&lock_file_path, lock_source).unwrap();
+
+        let platforms = implicit_script_platforms(Some(&lock_file_path))
+            .expect("an unnameable row must not fail the whole lookup");
+
+        // The bare-subdir row came through, so the lock really was read.
+        assert!(
+            platforms.iter().any(|p| p.subdir() == subdir),
+            "got {:?}",
+            platforms.iter().map(|p| p.name().as_str()).collect_vec()
+        );
+        assert!(
+            !platforms.iter().any(|p| p.name().as_str().contains("aaaa")),
+            "the unnameable row should have been skipped, got {:?}",
+            platforms.iter().map(|p| p.name().as_str()).collect_vec()
+        );
+    }
 
     const PROJECT_BOILERPLATE: &str = r#"
         [project]
@@ -1215,77 +1591,6 @@ mod tests {
         channels = []
         platforms = ["linux-64", "win-64"]
         "#;
-
-    /// `CONDA_OVERRIDE_*` must be able to *introduce* a virtual package the
-    /// machine doesn't provide (e.g. cuda on a GPU-less box), not just
-    /// override detected ones.
-    #[test]
-    fn override_adds_undetected_virtual_package() {
-        let packages = temp_env::with_var("CONDA_OVERRIDE_CUDA", Some("12.0"), || {
-            let mut packages = Vec::new();
-            apply_environment_variable_overrides(&mut packages);
-            packages
-        });
-
-        let cuda = packages
-            .iter()
-            .find(|p| p.name.as_normalized() == "__cuda")
-            .expect("__cuda should be added from the override");
-        assert_eq!(cuda.version, Version::from_str("12.0").unwrap());
-    }
-
-    fn libc_package(name: &str, version: &str) -> GenericVirtualPackage {
-        GenericVirtualPackage {
-            name: name.parse().unwrap(),
-            version: Version::from_str(version).unwrap(),
-            build_string: "0".to_string(),
-        }
-    }
-
-    fn has_package(packages: &[GenericVirtualPackage], name: &str) -> bool {
-        packages.iter().any(|p| p.name.as_normalized() == name)
-    }
-
-    /// An empty `CONDA_OVERRIDE_GLIBC` drops `__glibc` but must leave a
-    /// non-glibc libc family (here `__musl`) untouched -- the glibc slot only
-    /// governs glibc.
-    #[test]
-    fn empty_glibc_override_drops_glibc_but_keeps_musl() {
-        let packages = temp_env::with_var("CONDA_OVERRIDE_GLIBC", Some(""), || {
-            let mut packages = vec![
-                libc_package("__glibc", "2.28"),
-                libc_package("__musl", "1.2"),
-            ];
-            apply_environment_variable_overrides(&mut packages);
-            packages
-        });
-
-        assert!(!has_package(&packages, "__glibc"));
-        assert!(has_package(&packages, "__musl"));
-    }
-
-    /// A `CONDA_OVERRIDE_GLIBC` version makes glibc the active libc: it pins
-    /// `__glibc=<version>=0` and displaces any detected `__musl`/`__eglibc`.
-    #[test]
-    fn glibc_version_override_displaces_other_libc_families() {
-        let packages = temp_env::with_var("CONDA_OVERRIDE_GLIBC", Some("2.40"), || {
-            let mut packages = vec![
-                libc_package("__musl", "1.2"),
-                libc_package("__eglibc", "2.30"),
-            ];
-            apply_environment_variable_overrides(&mut packages);
-            packages
-        });
-
-        assert!(!has_package(&packages, "__musl"));
-        assert!(!has_package(&packages, "__eglibc"));
-        let glibc = packages
-            .iter()
-            .find(|p| p.name.as_normalized() == "__glibc")
-            .expect("a glibc version override should add __glibc");
-        assert_eq!(glibc.version, Version::from_str("2.40").unwrap());
-        assert_eq!(glibc.build_string, "0");
-    }
 
     /// Every legacy `[system-requirements]` shape parses through the
     /// `[system-requirements]`-to-platforms migration and ends up as a
@@ -1572,21 +1877,21 @@ mod tests {
             workspace
                 .workspace
                 .value
-                .tasks(Some(&osx64), &FeatureName::DEFAULT)
+                .tasks(Some(&osx64), &FeatureName::Default)
                 .unwrap()
         );
         assert_debug_snapshot!(
             workspace
                 .workspace
                 .value
-                .tasks(Some(&win64), &FeatureName::DEFAULT)
+                .tasks(Some(&win64), &FeatureName::Default)
                 .unwrap()
         );
         assert_debug_snapshot!(
             workspace
                 .workspace
                 .value
-                .tasks(Some(&linux64), &FeatureName::DEFAULT)
+                .tasks(Some(&linux64), &FeatureName::Default)
                 .unwrap()
         );
     }
@@ -1629,6 +1934,131 @@ mod tests {
             Some(&vec![VariantValue::String(
                 "macosx_deployment_target".to_string()
             )])
+        );
+    }
+
+    /// Reproduces #6566: a custom platform with a patch-level macOS version
+    /// (`macos = "15.1.1"` -> `__osx = 15.1.1`) must derive a `major.minor`
+    /// `c_stdlib_version`. `macosx_deployment_target_<subdir>` is only published
+    /// at `major.minor`, so a `15.1.1` pin resolves to no candidate and the build
+    /// solve fails.
+    #[test]
+    fn osx_patch_version_truncated_to_major_minor() {
+        let file_contents = r#"
+            [workspace]
+            name = "foo"
+            channels = ["conda-forge"]
+            platforms = ["osx-arm64"]
+            "#;
+        let workspace = Workspace::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+
+        let platform = pixi_manifest::PixiPlatform::new(
+            pixi_manifest::PixiPlatformName::from_str("my-mac").unwrap(),
+            Platform::OsxArm64,
+            vec![GenericVirtualPackage {
+                name: "__osx".parse().unwrap(),
+                version: Version::from_str("15.1.1").unwrap(),
+                build_string: "0".to_string(),
+            }],
+        )
+        .unwrap();
+
+        let variants = workspace.variants(&platform).unwrap().variant_configuration;
+
+        assert_eq!(
+            variants.get("c_stdlib_version"),
+            Some(&vec![VariantValue::String("15.1".to_string())])
+        );
+    }
+
+    /// Same as [`osx_patch_version_truncated_to_major_minor`] for the linux
+    /// `sysroot` provider: `glibc` is likewise only published at `major.minor`,
+    /// so a patch-level `__glibc` must be truncated before it becomes a pin.
+    #[test]
+    fn glibc_patch_version_truncated_to_major_minor() {
+        let file_contents = r#"
+            [workspace]
+            name = "foo"
+            channels = ["conda-forge"]
+            platforms = ["linux-64"]
+            "#;
+        let workspace = Workspace::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+
+        let platform = pixi_manifest::PixiPlatform::new(
+            pixi_manifest::PixiPlatformName::from_str("my-linux").unwrap(),
+            Platform::Linux64,
+            vec![GenericVirtualPackage {
+                name: "__glibc".parse().unwrap(),
+                version: Version::from_str("2.28.1").unwrap(),
+                build_string: "0".to_string(),
+            }],
+        )
+        .unwrap();
+
+        let variants = workspace.variants(&platform).unwrap().variant_configuration;
+
+        assert_eq!(
+            variants.get("c_stdlib_version"),
+            Some(&vec![VariantValue::String("2.28".to_string())])
+        );
+    }
+
+    /// Reproduces #6709: a subdir handed to `pixi publish`/`pixi build` must
+    /// resolve to the platform the workspace declares for it, so its system
+    /// requirements reach the build. Resolving to the subdir baseline instead
+    /// would pin `c_stdlib_version` to pixi's default `2.28` and hand the build
+    /// solve a `__glibc = 2.28`, making the declared `glibc = "2.34"`
+    /// unreachable from a recipe.
+    #[test]
+    fn subdir_resolves_to_declared_platform() {
+        let file_contents = r#"
+            [workspace]
+            name = "foo"
+            channels = ["conda-forge"]
+            platforms = [{ platform = "linux-64", glibc = "2.34" }]
+            "#;
+        let workspace = Workspace::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+
+        let platform = workspace.pixi_platform_for_subdir(Platform::Linux64);
+        assert_eq!(
+            platform
+                .declared_virtual_packages()
+                .iter()
+                .find(|vp| vp.name.as_normalized() == "__glibc")
+                .map(|vp| vp.version.to_string()),
+            Some("2.34".to_string())
+        );
+
+        let variants = workspace.variants(&platform).unwrap().variant_configuration;
+        assert_eq!(
+            variants.get("c_stdlib_version"),
+            Some(&vec![VariantValue::String("2.34".to_string())])
+        );
+    }
+
+    /// A workspace that declares plain subdirs keeps the subdir baseline, and a
+    /// subdir it doesn't declare at all (cross-building) falls back to it too.
+    #[test]
+    fn subdir_without_declared_customisation_uses_baseline() {
+        let file_contents = r#"
+            [workspace]
+            name = "foo"
+            channels = ["conda-forge"]
+            platforms = ["linux-64"]
+            "#;
+        let workspace = Workspace::from_str(Path::new("pixi.toml"), file_contents).unwrap();
+
+        let declared = workspace.pixi_platform_for_subdir(Platform::Linux64);
+        assert_eq!(
+            declared.declared_virtual_packages(),
+            PixiPlatform::from_subdir(Platform::Linux64).declared_virtual_packages()
+        );
+
+        let undeclared = workspace.pixi_platform_for_subdir(Platform::OsxArm64);
+        assert_eq!(undeclared.name().as_str(), "osx-arm64");
+        assert_eq!(
+            undeclared.declared_virtual_packages(),
+            PixiPlatform::from_subdir(Platform::OsxArm64).declared_virtual_packages()
         );
     }
 
@@ -1789,6 +2219,469 @@ name = "myproj"
 channels = []
 platforms = []
 "#;
+
+    fn script_workspace(source: &str, root: &Path, cache: &Path) -> Workspace {
+        let path = root.join("example.py");
+        fs_err::write(&path, source).unwrap();
+        let script = ScriptManifest::from_path(path).unwrap().unwrap();
+        Workspace::from_script(
+            script,
+            Config {
+                default_channels: vec![NamedChannelOrUrl::Name("testing".into())],
+                cache: CacheConfig {
+                    exec_environments: Some(cache.to_owned()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .value
+    }
+
+    #[test]
+    fn conda_script_workspace_merges_tool_pixi_into_the_default_environment() {
+        let root = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+        let path = root.path().join("example.c");
+        fs_err::write(
+            &path,
+            r#"// /// conda-script
+// channels = ["testing"]
+// entrypoint = "run ${SCRIPT}"
+//
+// [dependencies]
+// zlib = "1.3.*"
+//
+// [tool.pixi.pypi-dependencies]
+// requests = ">=2"
+// /// end-conda-script
+"#,
+        )
+        .unwrap();
+        let script = CondaScriptManifest::from_path(&path).unwrap().unwrap();
+
+        let workspace = Workspace::from_conda_script(
+            script,
+            Config {
+                cache: CacheConfig {
+                    exec_environments: Some(cache.path().to_owned()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .value;
+
+        let manifest = &workspace.workspace.value;
+        assert_eq!(
+            manifest
+                .workspace
+                .channels
+                .iter()
+                .map(|channel| channel.channel.to_string())
+                .collect::<Vec<_>>(),
+            ["testing"]
+        );
+        assert_eq!(manifest.environments.iter().count(), 1);
+        let default_environment = workspace.default_environment();
+        assert!(
+            default_environment
+                .pypi_dependencies(None)
+                .contains_key(&PypiPackageName::from_str("requests").unwrap()),
+            "`tool.pixi.pypi-dependencies` must reach the default environment"
+        );
+        assert!(
+            default_environment
+                .combined_dependencies(None)
+                .contains_key(&PackageName::from_str("zlib").unwrap()),
+            "the block's `[dependencies]` must reach the default environment"
+        );
+        assert!(
+            !manifest.workspace.platforms.is_empty(),
+            "a conda-script workspace resolves for the machine it runs on"
+        );
+        assert!(workspace.script_platforms_are_implicit());
+        assert_eq!(
+            workspace.lock_file_path(),
+            root.path().join("example.c.pixi.lock")
+        );
+    }
+
+    #[test]
+    fn conda_script_workspace_honours_declared_platforms() {
+        let root = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+        let path = root.path().join("example.c");
+        fs_err::write(
+            &path,
+            r#"// /// conda-script
+// channels = ["testing"]
+// entrypoint = "run ${SCRIPT}"
+//
+// [tool.pixi.workspace]
+// platforms = ["linux-64", "win-64"]
+// /// end-conda-script
+"#,
+        )
+        .unwrap();
+        let script = CondaScriptManifest::from_path(&path).unwrap().unwrap();
+
+        let workspace = Workspace::from_conda_script(
+            script,
+            Config {
+                cache: CacheConfig {
+                    exec_environments: Some(cache.path().to_owned()),
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+        )
+        .unwrap()
+        .value;
+
+        assert_eq!(
+            workspace
+                .workspace
+                .value
+                .workspace
+                .platforms
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>(),
+            ["linux-64", "win-64"]
+        );
+        assert!(!workspace.script_platforms_are_implicit());
+    }
+
+    #[test]
+    fn script_workspace_separates_source_state_and_lock_paths() {
+        let root = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+        let workspace = script_workspace(
+            r#"# /// script
+# dependencies = []
+# ///
+print("hello")
+"#,
+            root.path(),
+            cache.path(),
+        );
+
+        assert_eq!(workspace.root(), root.path());
+        assert_eq!(workspace.display_name(), "example");
+        assert_eq!(
+            workspace.workspace.provenance.path,
+            root.path().join("example.py")
+        );
+        assert_eq!(
+            workspace.lock_file_path(),
+            root.path().join("example.py.pixi.lock")
+        );
+        assert!(workspace.default_pixi_dir().starts_with(cache.path()));
+        assert!(
+            workspace
+                .default_pixi_dir()
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("example-")
+        );
+        assert_eq!(workspace.pixi_dir(), workspace.default_pixi_dir());
+        assert_eq!(
+            workspace.default_environment().dir(),
+            workspace
+                .default_pixi_dir()
+                .join(consts::ENVIRONMENTS_DIR)
+                .join("default")
+        );
+        assert!(!root.path().join(consts::PIXI_DIR).exists());
+        assert!(!workspace.lock_file_path().exists());
+
+        let workspace_env = workspace.get_metadata_env();
+        assert_eq!(
+            workspace_env["PIXI_PROJECT_ROOT"],
+            root.path().to_string_lossy()
+        );
+        assert_eq!(workspace_env["PIXI_PROJECT_NAME"], "example");
+        assert_eq!(
+            workspace_env["PIXI_PROJECT_MANIFEST"],
+            root.path().join("example.py").to_string_lossy()
+        );
+
+        let environment_env = workspace.default_environment().get_metadata_env();
+        assert_eq!(environment_env["PIXI_ENVIRONMENT_NAME"], "default");
+
+        assert_eq!(
+            workspace
+                .workspace
+                .value
+                .workspace
+                .channels
+                .iter()
+                .map(|channel| channel.channel.to_string())
+                .collect::<Vec<_>>(),
+            ["testing"]
+        );
+        assert_eq!(
+            workspace
+                .workspace
+                .value
+                .workspace
+                .platforms
+                .iter()
+                .map(PixiPlatform::subdir)
+                .collect::<Vec<_>>(),
+            [Platform::current()]
+        );
+    }
+
+    #[test]
+    fn script_workspace_respects_explicit_empty_defaults() {
+        let root = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+        let workspace = script_workspace(
+            r#"# /// script
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# channels = []
+# platforms = []
+#
+# [tool.pixi.dependencies]
+# ///
+"#,
+            root.path(),
+            cache.path(),
+        );
+
+        assert!(workspace.workspace.value.workspace.channels.is_empty());
+        assert!(workspace.workspace.value.workspace.platforms.is_empty());
+    }
+
+    /// Declaring `platforms` opts a script out of host detection, so it keeps
+    /// the bare subdir it asks for instead of this machine's virtual packages.
+    #[test]
+    fn script_workspace_keeps_explicitly_declared_platforms() {
+        let root = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+        let subdir = host_subdir();
+        let workspace = script_workspace(
+            &format!(
+                r#"# /// script
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# channels = []
+# platforms = ["{subdir}"]
+# ///
+"#
+            ),
+            root.path(),
+            cache.path(),
+        );
+
+        assert!(!workspace.script_platforms_are_implicit());
+        let platforms = &workspace.workspace.value.workspace.platforms;
+        assert_eq!(
+            platforms.iter().map(PixiPlatform::subdir).collect_vec(),
+            [subdir]
+        );
+        assert!(
+            platforms
+                .iter()
+                .all(|platform| platform.customised_virtual_packages().is_empty()),
+            "host detection leaked into an explicitly declared platform: {:?}",
+            platforms
+        );
+    }
+
+    #[test]
+    fn script_workspace_cache_identity_includes_the_absolute_path() {
+        let first_root = tempfile::tempdir().unwrap();
+        let second_root = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+        let source = "# /// script\n# dependencies = []\n# ///\n";
+
+        let first = script_workspace(source, first_root.path(), cache.path());
+        let first_again = script_workspace(source, first_root.path(), cache.path());
+        let second = script_workspace(source, second_root.path(), cache.path());
+
+        assert_eq!(first.default_pixi_dir(), first_again.default_pixi_dir());
+        assert_ne!(first.default_pixi_dir(), second.default_pixi_dir());
+    }
+
+    #[test]
+    fn script_workspace_drops_foreign_subdirs_from_a_lock_file() {
+        let root = tempfile::tempdir().unwrap();
+        let cache = tempfile::tempdir().unwrap();
+        let host = host_subdir();
+        // A subdir this machine cannot run. A lock file can hold one when the
+        // script declared `platforms` and had the line removed since.
+        let foreign = if host.is_windows() {
+            Platform::Linux64
+        } else {
+            Platform::Win64
+        };
+        let lock_file = LockFile::builder()
+            .with_platforms(
+                [host, foreign]
+                    .into_iter()
+                    .map(|subdir| rattler_lock::PlatformData {
+                        name: rattler_lock::PlatformName::try_from(subdir.as_str()).unwrap(),
+                        subdir,
+                        virtual_packages: Vec::new(),
+                    })
+                    .collect(),
+            )
+            .unwrap()
+            .finish();
+        lock_file
+            .to_path(&root.path().join("example.py.pixi.lock"))
+            .unwrap();
+
+        let workspace = script_workspace(
+            "# /// script\n# dependencies = []\n# ///\n",
+            root.path(),
+            cache.path(),
+        );
+
+        assert_eq!(
+            workspace
+                .workspace
+                .value
+                .workspace
+                .platforms
+                .iter()
+                .map(PixiPlatform::subdir)
+                .collect::<Vec<_>>(),
+            [host]
+        );
+    }
+
+    /// A row carrying nothing beyond the subdir baseline records no machine,
+    /// so adopting it would pin the script to pixi's defaults on a machine that
+    /// offers more.
+    #[test]
+    fn a_baseline_locked_platform_gives_way_to_the_host() {
+        let subdir = host_subdir();
+        let host = detect_host(subdir).unwrap();
+        if host.customised_virtual_packages().is_empty() {
+            // This machine is itself the baseline, so the recorded row already
+            // is the host and there is nothing to prefer over it.
+            return;
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let lock_file_path = dir.path().join("script.py.pixi.lock");
+        fs_err::write(&lock_file_path, baseline_lock_source(subdir)).unwrap();
+
+        assert_eq!(
+            implicit_script_platforms(Some(&lock_file_path)).unwrap(),
+            IndexSet::from([host])
+        );
+    }
+
+    /// A row this machine satisfies is reused exactly as recorded, so a
+    /// `pixi lock --script` keeps reproducing rather than being re-solved for a
+    /// marginally different host.
+    #[test]
+    fn a_locked_platform_the_host_satisfies_is_reused() {
+        let subdir = host_subdir();
+        let host = detect_host(subdir).unwrap();
+        // One of the machine's own virtual packages: customised, so it is not
+        // the baseline, and satisfied, so it survives the capability check.
+        let Some(recorded) = host.customised_virtual_packages().first().cloned() else {
+            return;
+        };
+        let build = if recorded.build_string.is_empty() {
+            "0"
+        } else {
+            recorded.build_string.as_str()
+        };
+        let lock_source = format!(
+            r#"version: 7
+platforms:
+- name: recorded
+  subdir: {subdir}
+  virtual-packages:
+  - {name}={version}={build}
+environments:
+  default:
+    channels:
+    - url: https://conda.anaconda.org/conda-forge/
+    packages: {{}}
+packages: []
+"#,
+            name = recorded.name.as_normalized(),
+            version = recorded.version,
+        );
+
+        let dir = tempfile::tempdir().unwrap();
+        let lock_file_path = dir.path().join("script.py.pixi.lock");
+        fs_err::write(&lock_file_path, lock_source).unwrap();
+
+        let platforms = implicit_script_platforms(Some(&lock_file_path)).unwrap();
+        assert_eq!(
+            platforms
+                .iter()
+                .map(PixiPlatform::customised_virtual_packages)
+                .collect::<Vec<_>>(),
+            [vec![recorded]],
+        );
+    }
+
+    /// A row for this subdir that demands more than the machine offers gives
+    /// way to the host, rather than failing on a platform the script never
+    /// declared.
+    #[test]
+    fn a_locked_platform_the_host_cannot_run_gives_way_to_the_host() {
+        let subdir = host_subdir();
+        let host = detect_host(subdir).unwrap();
+        // No machine reports a CUDA driver this new, so the recorded platform
+        // is customised (not the baseline) and unsatisfiable.
+        let lock_source = format!(
+            r#"version: 7
+platforms:
+- name: recorded
+  subdir: {subdir}
+  virtual-packages:
+  - __cuda=99=0
+environments:
+  default:
+    channels:
+    - url: https://conda.anaconda.org/conda-forge/
+    packages: {{}}
+packages: []
+"#
+        );
+
+        let dir = tempfile::tempdir().unwrap();
+        let lock_file_path = dir.path().join("script.py.pixi.lock");
+        fs_err::write(&lock_file_path, lock_source).unwrap();
+
+        assert_eq!(
+            implicit_script_platforms(Some(&lock_file_path)).unwrap(),
+            IndexSet::from([host])
+        );
+    }
+
+    fn baseline_lock_source(subdir: Platform) -> String {
+        format!(
+            r#"version: 7
+platforms:
+- name: {subdir}
+  subdir: {subdir}
+environments:
+  default:
+    channels:
+    - url: https://conda.anaconda.org/conda-forge/
+    packages: {{}}
+packages: []
+"#
+        )
+    }
 
     #[test]
     fn test_dirs_without_detached() {

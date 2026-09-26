@@ -48,7 +48,7 @@ pub enum ConvertDependencyError {
     #[error("could not parse version spec for variant key {0}: {1}")]
     VariantSpecParseError(String, rattler_conda_types::ParseMatchSpecError),
 
-    #[error("could not apply pin. The following subpackage is not available: {0:?}")]
+    #[error("could not apply pin. The following subpackage is not available: {}", .0.as_source())]
     SubpackageNotFound(PackageName),
 
     #[error("could not apply pin: {0}")]
@@ -142,7 +142,11 @@ fn convert_dependency(
     let match_spec = match dependency {
         Dependency::Spec(spec) => {
             let spec = *spec;
-            // Convert back to source spec if it is a source spec.
+            // Convert back to source spec if it is a source spec. The URL
+            // encodes only the location; the matchspec selectors travel on
+            // the spec itself and must be carried back over. The exhaustive
+            // construction forces revisiting this when `SourcePackageSpec`
+            // gains a selector field.
             if let Some(source_package) =
                 spec.url.clone().and_then(from_source_url_to_source_package)
             {
@@ -151,7 +155,17 @@ fn convert_dependency(
                 };
                 return Ok(pbt::NamedSpec {
                     name: pbt::SourcePackageName::from(name.clone()),
-                    spec: pbt::PackageSpec::Source(source_package),
+                    spec: pbt::PackageSpec::Source(pbt::SourcePackageSpec {
+                        location: source_package.location,
+                        version: spec.version.clone(),
+                        build: spec.build.clone(),
+                        build_number: spec.build_number.clone(),
+                        extras: spec.extras.clone(),
+                        flags: spec.flags.clone(),
+                        subdir: spec.subdir.clone(),
+                        license: spec.license.clone(),
+                        condition: spec.condition.clone(),
+                    }),
                 });
             }
 
@@ -198,17 +212,34 @@ fn convert_dependency(
         .get(name.as_source())
         .or_else(|| sources.get(name.as_normalized()))
     {
-        let mut source_spec = source_spec.clone();
-        // Merge in the spec details
-        source_spec.version = spec.version.or(source_spec.version);
-        source_spec.build = spec.build.or(source_spec.build);
-        source_spec.build_number = spec.build_number.or(source_spec.build_number);
-        source_spec.subdir = spec.subdir.or(source_spec.subdir);
-        source_spec.license = spec.license.or(source_spec.license);
+        // Merge the dependency's own selectors over the source mapping's.
+        // The exhaustive destructure forces revisiting this when
+        // `SourcePackageSpec` gains a selector field.
+        let pbt::SourcePackageSpec {
+            location,
+            version,
+            build,
+            build_number,
+            extras,
+            flags,
+            subdir,
+            license,
+            condition,
+        } = source_spec.clone();
 
         Ok(pbt::NamedSpec {
             name: pbt::SourcePackageName::from(name.clone()),
-            spec: pbt::PackageSpec::Source(source_spec),
+            spec: pbt::PackageSpec::Source(pbt::SourcePackageSpec {
+                location,
+                version: spec.version.or(version),
+                build: spec.build.or(build),
+                build_number: spec.build_number.or(build_number),
+                extras: spec.extras.or(extras),
+                flags: spec.flags.or(flags),
+                subdir: spec.subdir.or(subdir),
+                license: spec.license.or(license),
+                condition: spec.condition.or(condition),
+            }),
         })
     } else {
         Ok(pbt::NamedSpec {
@@ -238,7 +269,7 @@ fn convert_constraint_dependency(
             // Apply a variant if it is applicable.
             if let Some(NamedSpec { spec, name }) = apply_variant_and_convert(&spec, variant)? {
                 return Ok(NamedSpec {
-                    spec: pbt::ConstraintSpec::Binary(spec),
+                    spec: pbt::ConstraintSpec::Binary(Box::new(spec)),
                     name,
                 });
             }
@@ -253,13 +284,27 @@ fn convert_constraint_dependency(
                 .apply(&subpackage.version, &subpackage.build_string)
                 .map_err(ConvertDependencyError::PinApplyError)?
         }
-        _ => todo!("Handle other dependency types"),
+        Dependency::PinCompatible(pin) => {
+            // A pin against the previous environment cannot be resolved by
+            // the backend; it is passed through for pixi to resolve against
+            // the solved records.
+            let pin = &pin.pin_compatible;
+            return Ok(pbt::NamedSpec {
+                name: pbt::SourcePackageName::from(pin.name.clone()),
+                spec: pbt::ConstraintSpec::PinCompatible(pbt::PinCompatibleSpec {
+                    lower_bound: pin.args.lower_bound.clone().map(convert_pin_bound),
+                    upper_bound: pin.args.upper_bound.clone().map(convert_pin_bound),
+                    exact: pin.args.exact,
+                    build: pin.args.build.clone(),
+                }),
+            });
+        }
     };
 
     // Apply a variant if it is applicable.
     if let Some(NamedSpec { spec, name }) = apply_variant_and_convert(&match_spec, variant)? {
         return Ok(NamedSpec {
-            spec: pbt::ConstraintSpec::Binary(spec),
+            spec: pbt::ConstraintSpec::Binary(Box::new(spec)),
             name,
         });
     }
@@ -271,7 +316,7 @@ fn convert_constraint_dependency(
 
     Ok(pbt::NamedSpec {
         name: pbt::SourcePackageName::from(name.clone()),
-        spec: pbt::ConstraintSpec::Binary(convert_nameless_matchspec(spec)),
+        spec: pbt::ConstraintSpec::Binary(Box::new(convert_nameless_matchspec(spec))),
     })
 }
 
@@ -374,4 +419,37 @@ pub fn apply_variant(
             }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use rattler_build_recipe::stage1::PinSubpackage;
+    use rattler_build_types::{Pin, PinArgs};
+
+    use super::*;
+
+    #[test]
+    fn subpackage_not_found_error_prints_the_package_name() {
+        let dependency = Dependency::PinSubpackage(PinSubpackage {
+            pin_subpackage: Pin {
+                name: PackageName::from_str("wusel").unwrap(),
+                args: PinArgs::default(),
+            },
+        });
+
+        let error = convert_dependency(
+            dependency,
+            &BTreeMap::new(),
+            &HashMap::new(),
+            &HashMap::new(),
+        )
+        .unwrap_err();
+
+        insta::assert_snapshot!(
+            error,
+            @"could not apply pin. The following subpackage is not available: wusel"
+        );
+    }
 }

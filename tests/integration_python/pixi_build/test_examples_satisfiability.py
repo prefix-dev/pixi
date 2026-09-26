@@ -1,16 +1,16 @@
-import tomllib
 from pathlib import Path
-from typing import TypeAlias, cast
+from typing import cast
 
 import pytest
+import tomli
 
 from .common import current_platform, repo_root, verify_cli_command
 
-Workspace: TypeAlias = dict[str, object]
+type Workspace = dict[str, object]
 
 
 def workspace_from_manifest(manifest_path: Path) -> Workspace | None:
-    manifest = cast(dict[str, object], tomllib.loads(manifest_path.read_text()))
+    manifest = cast(dict[str, object], tomli.loads(manifest_path.read_text()))
     if manifest_path.name == "pyproject.toml":
         # Only consider pyproject.toml files that configure a pixi workspace
         # to avoid testing non-pixi files.

@@ -2,11 +2,11 @@
 source: crates/pixi_manifest/src/toml/manifest.rs
 expression: "expect_parse_failure(r#\"\n        [workspace]\n        channels = []\n        platforms = []\n\n        [run-dependencies]\n        \"#,)"
 ---
-  × [run-dependencies] are only available when using the `pixi-build` feature.
+  × [run-dependencies] are only available when using the `pixi-build` preview flag.
    ╭─[pixi.toml:6:9]
  5 │
  6 │         [run-dependencies]
    ·         ───────────────────
  7 │
    ╰────
-  help: Add `preview = ["pixi-build"]` under [workspace] to enable the preview feature
+  help: Run `pixi workspace preview add pixi-build` to enable the preview flag

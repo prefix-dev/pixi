@@ -1,8 +1,8 @@
 __version__ = "1.0.0"
 
+import site
 import sys
 from pathlib import Path
-import site
 
 
 def is_editable() -> bool:

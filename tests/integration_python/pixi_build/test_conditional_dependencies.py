@@ -3,6 +3,7 @@
 from pathlib import Path
 from typing import Any
 
+import pytest
 import tomli_w
 from rattler.lock import LockFile
 
@@ -64,6 +65,7 @@ def locked_package_names(workspace_dir: Path) -> dict[str, set[str]]:
     }
 
 
+@pytest.mark.slow
 def test_simple_conditional_dependency(
     pixi: Path, tmp_pixi_workspace: Path, target_specific_channel_1: str
 ) -> None:
@@ -87,6 +89,7 @@ def test_simple_conditional_dependency(
     assert "package-unix" not in packages["win-64"]
 
 
+@pytest.mark.slow
 def test_complex_conditional_expression(
     pixi: Path, tmp_pixi_workspace: Path, target_specific_channel_1: str
 ) -> None:
@@ -106,6 +109,7 @@ def test_complex_conditional_expression(
     assert "package-unix" not in packages["win-64"]
 
 
+@pytest.mark.slow
 def test_variant_conditional_expression(
     pixi: Path, tmp_pixi_workspace: Path, target_specific_channel_1: str
 ) -> None:
@@ -130,6 +134,7 @@ def test_variant_conditional_expression(
     assert "package-windows" not in packages["linux-64"]
 
 
+@pytest.mark.slow
 def test_invalid_conditional_expression(
     pixi: Path, tmp_pixi_workspace: Path, target_specific_channel_1: str
 ) -> None:

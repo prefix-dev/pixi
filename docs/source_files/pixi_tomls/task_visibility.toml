@@ -11,9 +11,12 @@ cmd = "echo git clone {{ url }}"
 # Hidden task that clones a dependency
 [tasks._clone-subproject]
 depends-on = [
-  { task = "_git-clone", args = [
-    "https://git.hub/org/subproject.git",
-  ] },
+  {
+    task = "_git-clone",
+    args = [
+      "https://git.hub/org/subproject.git",
+    ]
+  },
 ]
 
 # Task to build the project which depends on cloning a dependency

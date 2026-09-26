@@ -2,12 +2,19 @@ use crate::cli_config::WorkspaceConfig;
 use clap::Parser;
 use miette::{IntoDiagnostic, WrapErr};
 use pixi_config;
-use pixi_config::Config;
+use pixi_config::{Config, ConfigError, GlobalConfigSource};
 use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
 use pixi_core::workspace::WorkspaceLocatorError;
+use pixi_manifest::toml::TomlDocument;
+use pixi_toml_edit::{insert_array_element, push_array_element, remove_entry, upsert_entry};
 use rattler_conda_types::NamedChannelOrUrl;
-use std::{io::Write, path::PathBuf, str::FromStr};
+use std::{
+    io::Write,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
+use toml_edit::{DocumentMut, Item, Key};
 
 #[derive(Parser, Debug)]
 enum Subcommand {
@@ -45,16 +52,20 @@ enum Subcommand {
 #[derive(Parser, Debug, Clone)]
 struct CommonArgs {
     /// Operation on project-local configuration
-    #[arg(long, short, conflicts_with_all = &["global", "system"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    #[arg(long, short, conflicts_with_all = &["global", "system", "path"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
     local: bool,
 
     /// Operation on global configuration
-    #[arg(long, short, conflicts_with_all = &["local", "system"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    #[arg(long, short, conflicts_with_all = &["local", "system", "path"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
     global: bool,
 
     /// Operation on system configuration
-    #[arg(long, short, conflicts_with_all = &["local", "global"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    #[arg(long, short, conflicts_with_all = &["local", "global", "path"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
     system: bool,
+
+    /// Path to a local configuration file
+    #[arg(long, short, conflicts_with_all = &["local", "global", "system"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    path: Option<PathBuf>,
 
     #[clap(flatten)]
     pub workspace_config: WorkspaceConfig,
@@ -82,6 +93,9 @@ struct ListArgs {
     /// Describe every configuration option with its type, default, and a short explanation
     #[arg(long)]
     describe: bool,
+
+    #[clap(flatten)]
+    config_source: pixi_config::ConfigSourceCli,
 
     #[clap(flatten)]
     common: CommonArgs,
@@ -135,6 +149,44 @@ pub struct Args {
     subcommand: Subcommand,
 }
 
+#[derive(Debug)]
+pub struct KeyPath {
+    parent_keys: Vec<String>,
+    target_key: String,
+}
+
+impl KeyPath {
+    pub fn parse(key: &str) -> miette::Result<Self> {
+        let mut parts = Key::parse(key)
+            .into_diagnostic()
+            .wrap_err_with(|| format!("failed to parse the key '{key}'"))?;
+
+        if parts.is_empty() {
+            return Err(miette::miette!("Key path cannot be empty"));
+        }
+
+        let target_key = parts
+            .pop()
+            .ok_or_else(|| miette::miette!("Expected a target key"))?
+            .get()
+            .to_string();
+        let parent_keys = parts.into_iter().map(|k| k.get().to_string()).collect();
+
+        Ok(Self {
+            parent_keys,
+            target_key,
+        })
+    }
+
+    pub fn parents(&self) -> Vec<&str> {
+        self.parent_keys.iter().map(|s| s.as_str()).collect()
+    }
+
+    pub fn target(&self) -> &str {
+        &self.target_key
+    }
+}
+
 pub async fn execute(args: Args) -> miette::Result<()> {
     match args.subcommand {
         Subcommand::Edit(args) => {
@@ -164,7 +216,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             child.wait().into_diagnostic()?;
         }
         Subcommand::List(args) => {
-            let mut config = load_config(&args.common)?;
+            let mut config = load_config(&args.common, &args.config_source.source())?;
 
             if args.describe {
                 let out = render_describe(&config, args.key.as_deref(), args.json)?;
@@ -192,13 +244,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             if out.is_empty() {
                 eprintln!("Configuration not set");
             }
-            writeln!(std::io::stdout(), "{out}")
-                .map_err(|e| {
-                    if e.kind() == std::io::ErrorKind::BrokenPipe {
-                        std::process::exit(0);
-                    }
-                    e
-                })
+            pixi_utils::io::ignore_broken_pipe(writeln!(std::io::stdout(), "{out}"))
                 .into_diagnostic()?;
         }
         Subcommand::Prepend(args) => alter_config(
@@ -243,85 +289,190 @@ fn determine_project_root(common_args: &CommonArgs) -> miette::Result<Option<Pat
     }
 }
 
-fn load_config(common_args: &CommonArgs) -> miette::Result<Config> {
-    let ret = if common_args.system {
-        Config::load_system()
-    } else if common_args.global {
-        Config::load_global()
-    } else if let Some(root) = determine_project_root(common_args)? {
-        Config::load(&root)
-    } else {
-        Config::load_global()
-    };
+/// Load the configuration the given arguments select, taking the global layer
+/// from `source`.
+fn load_config(common_args: &CommonArgs, source: &GlobalConfigSource) -> miette::Result<Config> {
+    if common_args.system {
+        return Ok(Config::load_system());
+    }
 
-    Ok(ret)
+    if common_args.global {
+        return Ok(Config::load_global_with(source));
+    }
+
+    // If an explicit --path was given, load and merge that specific config file.
+    if let Some(path) = &common_args.path {
+        let base_config = Config::load_global_with(source);
+        if global_source_contains_path(source, path) {
+            return Ok(base_config);
+        }
+
+        let local_config = match Config::from_path(path) {
+            Ok(config) => config,
+            Err(ConfigError::FileNotFound(_)) => Config::default(),
+            Err(error) => return Err(error).into_diagnostic(),
+        };
+        return Ok(base_config.merge_config(local_config));
+    }
+
+    // Otherwise, check if we are in a project/workspace root
+    if let Some(root) = determine_project_root(common_args)? {
+        return Ok(Config::load_with(&root, source));
+    }
+
+    Ok(Config::load_global_with(source))
+}
+
+fn global_source_contains_path(source: &GlobalConfigSource, path: &Path) -> bool {
+    match source {
+        GlobalConfigSource::Search => pixi_config::config_search_locations()
+            .iter()
+            .any(|location| same_config_path(&location.path, path)),
+        GlobalConfigSource::File(source_path) => same_config_path(source_path, path),
+        GlobalConfigSource::None => false,
+    }
+}
+
+fn same_config_path(left: &Path, right: &Path) -> bool {
+    left == right
+        || fs_err::canonicalize(left)
+            .ok()
+            .zip(fs_err::canonicalize(right).ok())
+            .is_some_and(|(left, right)| left == right)
 }
 
 fn determine_config_write_path(common_args: &CommonArgs) -> miette::Result<PathBuf> {
-    let write_path = if common_args.system {
-        pixi_config::config_path_system()
-    } else {
-        if let Some(root) = determine_project_root(common_args)?
-            && !common_args.global
-        {
-            return Ok(root.join(consts::PIXI_DIR).join(consts::CONFIG_FILE));
+    if let Some(path) = &common_args.path {
+        return Ok(path.clone());
+    }
+
+    if common_args.system {
+        return Ok(pixi_config::config_path_system());
+    }
+
+    if !common_args.global
+        && let Some(root) = determine_project_root(common_args)?
+    {
+        return Ok(root.join(consts::PIXI_DIR).join(consts::CONFIG_FILE));
+    }
+
+    let mut global_locations = pixi_config::config_path_global();
+    let mut to = global_locations
+        .pop()
+        .expect("should have at least one global config path");
+
+    for p in global_locations {
+        if p.exists() {
+            to = p;
+            break;
         }
+    }
 
-        let mut global_locations = pixi_config::config_path_global();
-        let mut to = global_locations
-            .pop()
-            .expect("should have at least one global config path");
-
-        for p in global_locations {
-            if p.exists() {
-                to = p;
-                break;
-            }
-        }
-
-        to
-    };
-
-    Ok(write_path)
+    Ok(to)
 }
 
+/// Alters a specific key in the user configuration file according to the given `mode`.
+///
+/// Handles reading the existing TOML document (or initializing a new one),
+/// updating key values (including list modifications like `Prepend` and `Append`),
+/// and persisting the formatted result back to the disk.
+///
+/// # Errors
+///
+/// - The target config path cannot be determined or created.
+/// - The existing config file cannot be read or parsed as valid TOML.
+/// - A list-only operation (`Prepend`/`Append`) is attempted on a non-list key.
+/// - Persisting the updated content disk fails.
 fn alter_config(
     common_args: &CommonArgs,
     key: &str,
     value: Option<String>,
     mode: AlterMode,
 ) -> miette::Result<()> {
-    let mut config = load_config(common_args)?;
     let to = determine_config_write_path(common_args)?;
+    let content = match fs_err::read_to_string(&to) {
+        Ok(s) => s,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(e) => {
+            return Err(e)
+                .into_diagnostic()
+                .context("failed to read config file");
+        }
+    };
+
+    let doc_mut = content
+        .parse::<toml_edit::DocumentMut>()
+        .into_diagnostic()
+        .context("failed to parse TOML")?;
+
+    let mut toml_doc = TomlDocument::new(doc_mut);
+
+    // Edit only the file that is about to be written. Starting from the
+    // merged config would bake every inherited setting into it, so the user
+    // would silently stop following the layers they inherit from.
+    let mut config = match Config::from_path(&to) {
+        Ok(config) => config,
+        Err(ConfigError::FileNotFound(_)) => Config::default(),
+        Err(e) => return Err(e).into_diagnostic(),
+    };
 
     match mode {
         AlterMode::Prepend | AlterMode::Append => {
             let is_prepend = matches!(mode, AlterMode::Prepend);
+            let input = value.expect("value must be provided");
 
             match key {
+                // `default-channels` replaces the lower layers rather than concatenating them.
+                // If the local file has no override yet, we must write the entire merged list
+                // so lower layers aren't accidentally silenced. If a local list already exists,
+                // we append/prepend to it directly.
                 "default-channels" => {
-                    let input = value.expect("value must be provided");
                     let channel = NamedChannelOrUrl::from_str(&input)
                         .into_diagnostic()
                         .context("invalid channel name")?;
-                    let mut new_channels = config.default_channels.clone();
-                    if is_prepend {
-                        new_channels.insert(0, channel);
+
+                    let local_has_channels = toml_doc
+                        .as_item()
+                        .get("default-channels")
+                        .or_else(|| toml_doc.as_item().get("default_channels"))
+                        .is_some();
+
+                    if local_has_channels {
+                        // Local file already has default-channels. Modify the local list and use mode (Prepend/Append)
+                        // to preserve existing multi-line TOML formatting.
+                        if is_prepend {
+                            config.default_channels.insert(0, channel);
+                        } else {
+                            config.default_channels.push(channel)
+                        }
+                        transplant_config_key(&config, &mut toml_doc, key, &mode)?;
                     } else {
-                        new_channels.push(channel);
+                        // Local file is missing default-channels. Load inherited global layers,
+                        // add the channel, and user AlterMode::Set to write the full merged array.
+                        let mut new_channels =
+                            load_config(common_args, &GlobalConfigSource::Search)?.default_channels;
+                        if is_prepend {
+                            new_channels.insert(0, channel);
+                        } else {
+                            new_channels.push(channel)
+                        }
+                        config.default_channels = new_channels;
+                        transplant_config_key(&config, &mut toml_doc, key, &AlterMode::Set)?;
                     }
-                    config.default_channels = new_channels;
                 }
+                // `extra-index-urls` is concatenated across layers, so only
+                // this file's own share of the list is edited; copying the
+                // lower layers in would list them twice. A prepend therefore
+                // lands ahead of this file's URLs, but after the lower ones.
                 "pypi-config.extra-index-urls" => {
-                    let input = url::Url::parse(&value.expect("value must be provided"))
+                    let url = url::Url::parse(&input)
                         .map_err(|e| miette::miette!("Invalid URL: {}", e))?;
-                    let mut new_urls = config.pypi_config().extra_index_urls.clone();
                     if is_prepend {
-                        new_urls.insert(0, input);
+                        config.pypi_config.extra_index_urls.insert(0, url);
                     } else {
-                        new_urls.push(input);
+                        config.pypi_config.extra_index_urls.push(url);
                     }
-                    config.pypi_config.extra_index_urls = new_urls;
+                    transplant_config_key(&config, &mut toml_doc, key, &mode)?;
                 }
                 _ => {
                     let list_keys = ["default-channels", "pypi-config.extra-index-urls"];
@@ -334,196 +485,229 @@ fn alter_config(
                 }
             }
         }
-        AlterMode::Set | AlterMode::Unset => config.set(key, value)?,
+        AlterMode::Set => {
+            // Run set on Config object for validation
+            config.set(key, value)?;
+
+            transplant_config_key(&config, &mut toml_doc, key, &mode)?;
+        }
+        AlterMode::Unset => unset(&mut toml_doc, key)?,
     }
 
-    config.save(&to)?;
+    let contents = toml_doc.to_string();
+    let parent = to.parent().expect("config path should have a parent");
+    fs_err::create_dir_all(parent)
+        .into_diagnostic()
+        .wrap_err(format!(
+            "failed to create directories in '{}'",
+            parent.display()
+        ))?;
+    fs_err::write(&to, contents)
+        .into_diagnostic()
+        .wrap_err(format!("failed to write config to '{}'", to.display()))?;
+
     eprintln!("✅ Updated config at {}", to.display());
     Ok(())
 }
 
-fn render_describe(
-    config: &Config,
-    key_filter: Option<&str>,
-    json: bool,
-) -> miette::Result<String> {
-    let descriptions = config.describe_keys();
+/// Unset a key from the TOML document, preserving existing formatting and comments.
+///
+/// # Errors
+///
+/// - `key` is not a valid key path.
+/// - The specified key does not exist in the document.
+/// - The unset operation leaves the config as invalid.
+fn unset(toml_doc: &mut TomlDocument, key: &str) -> miette::Result<()> {
+    let key_path = KeyPath::parse(key)?;
 
-    let selected: Vec<&pixi_config::ConfigOptionDescription> = if let Some(k) = key_filter {
-        let matches: Vec<_> = descriptions.iter().filter(|o| o.key == k).collect();
-        if matches.is_empty() {
-            return Err(miette::miette!(
-                "Unknown configuration key '{}'. Run `pixi config list --describe` to list every available key.",
-                k
-            ));
-        }
-        matches
+    let top_level_table = key_path.parents().is_empty();
+
+    let parent_table = if top_level_table {
+        toml_doc.as_item_mut()
     } else {
-        descriptions.iter().collect()
+        let parents_keys = resolve_parent_keys(toml_doc, &key_path.parents());
+        let parents_strs: Vec<&str> = parents_keys.iter().map(|s| s.as_str()).collect();
+        toml_doc
+            .get_or_insert_nested_item(&parents_strs)
+            .into_diagnostic()?
     };
 
-    let doc = toml_edit::ser::to_string_pretty(config)
-        .into_diagnostic()
-        .and_then(|s| s.parse::<toml_edit::DocumentMut>().into_diagnostic())?;
+    remove_entry(parent_table, key_path.target())
+        .into_diagnostic()?
+        .or_else(|| {
+            let alias = legacy_alias(key_path.target())?;
+            remove_entry(parent_table, &alias).ok()?
+        })
+        .ok_or_else(|| miette::miette!("Key '{}' not found in configuration file", key))?;
 
-    if json {
-        let arr: Vec<serde_json::Value> = selected
-            .iter()
-            .map(|opt| {
-                let value = if opt.key.contains("<bucket>") {
-                    serde_json::Value::Null
-                } else {
-                    lookup_dotted(doc.as_table(), opt.key)
-                        .map(toml_item_to_json)
-                        .unwrap_or(serde_json::Value::Null)
-                };
-                serde_json::json!({
-                    "key": opt.key,
-                    "description": opt.description,
-                    "type": opt.value_type,
-                    "default": opt.default,
-                    "value": value,
-                })
-            })
-            .collect();
-        return serde_json::to_string_pretty(&arr).into_diagnostic();
+    prune_empty_parents(toml_doc, key_path.parents())?;
+
+    Config::from_toml(&toml_doc.to_string(), None)
+        .wrap_err_with(|| format!("Unsetting the {key} would leave the config file invalid"))?;
+
+    Ok(())
+}
+
+fn prune_empty_parents(toml_doc: &mut TomlDocument, mut path: Vec<&str>) -> miette::Result<()> {
+    if path.is_empty() {
+        return Ok(());
     }
 
-    let mut out = String::new();
-    for (i, opt) in selected.iter().enumerate() {
-        if i > 0 {
-            out.push('\n');
-        }
-        out.push_str("# ");
-        out.push_str(opt.description);
-        out.push('\n');
-        out.push_str("# Type: ");
-        out.push_str(opt.value_type);
-        out.push('\n');
-        out.push_str("# Default: ");
-        out.push_str(opt.default);
-        out.push('\n');
+    let is_empty = toml_doc
+        .get_nested_table(&path)
+        .map(|t| t.is_empty())
+        .unwrap_or(false);
 
-        let current = if opt.key.contains("<bucket>") {
-            None
-        } else {
-            lookup_dotted(doc.as_table(), opt.key).map(format_toml_value)
+    if is_empty {
+        let Some(key_target_to_remove) = path.pop() else {
+            return Ok(());
         };
 
-        match current {
-            Some(value) => {
-                out.push_str(opt.key);
-                out.push_str(" = ");
-                out.push_str(&value);
-                out.push('\n');
-            }
-            None => {
-                out.push_str("# ");
-                out.push_str(opt.key);
-                out.push_str(" = ");
-                out.push_str(opt.default);
-                out.push('\n');
-            }
-        }
+        let parent_of_target = if path.is_empty() {
+            toml_doc.as_item_mut()
+        } else {
+            toml_doc
+                .get_or_insert_nested_item(&path)
+                .into_diagnostic()?
+        };
+
+        remove_entry(parent_of_target, key_target_to_remove).into_diagnostic()?;
+
+        prune_empty_parents(toml_doc, path)?;
     }
-    Ok(out)
+
+    Ok(())
 }
 
-fn lookup_dotted<'a>(table: &'a toml_edit::Table, key: &str) -> Option<&'a toml_edit::Item> {
-    let mut parts = key.split('.');
-    let first = parts.next()?;
-    let mut item = table.get(first)?;
-    for part in parts {
-        item = item.as_table().and_then(|t| t.get(part))?;
-    }
-    Some(item)
-}
+/// Transplants a single key from a validated `Config` into an editable TOML document.
+///
+/// We serialize the entire Config and parse it into a temporary document because:
+/// 1. The input value undergoes strict type validation via Serde.
+/// 2. We extract only the specific target leaf node, preventing unrequested default values.
+///
+/// # Errors
+///
+/// - `key` is not a valid key path.
+/// - Serializing `config` or parsing the temporary TOML document fails.
+/// - Navigating or creating nested parent tables in `toml_doc` fails.
+fn transplant_config_key(
+    config: &Config,
+    toml_doc: &mut TomlDocument,
+    key: &str,
+    mode: &AlterMode,
+) -> miette::Result<()> {
+    let key_path = KeyPath::parse(key)?;
 
-fn format_toml_value(item: &toml_edit::Item) -> String {
-    match item {
-        toml_edit::Item::Value(v) => v.to_string().trim().to_string(),
-        toml_edit::Item::Table(t) => table_to_inline(t).to_string().trim().to_string(),
-        toml_edit::Item::ArrayOfTables(arr) => {
-            let mut out = toml_edit::Array::new();
-            for t in arr {
-                out.push(table_to_inline(t));
+    let full_serialized = toml_edit::ser::to_string(&config).into_diagnostic()?;
+    let temp_doc = full_serialized.parse::<DocumentMut>().into_diagnostic()?;
+
+    // walk down all the way to the leaf
+    let mut current_item = temp_doc.as_item();
+    for parent in key_path.parents() {
+        current_item = current_item.get(parent).unwrap_or(&Item::None);
+    }
+    current_item = current_item.get(key_path.target()).unwrap_or(&Item::None);
+
+    if current_item.is_none() {
+        // fall back into unset
+        match unset(toml_doc, key) {
+            Ok(()) => return Ok(()),
+            Err(e) if e.to_string().contains("not found in configuration file") => return Ok(()),
+            Err(e) => return Err(e),
+        }
+    }
+
+    let target_table = if key_path.parents().is_empty() {
+        Ok(toml_doc.as_item_mut())
+    } else {
+        let parents_keys = resolve_parent_keys(toml_doc, &key_path.parents());
+        let parents_strs: Vec<&str> = parents_keys.iter().map(|s| s.as_str()).collect();
+        toml_doc
+            .get_or_insert_nested_item(&parents_strs)
+            .into_diagnostic()
+    }?;
+
+    if let AlterMode::Append | AlterMode::Prepend = mode
+        && let Some(new_value) = current_item.as_value()
+        && let Some(serialized_array) = new_value.as_array()
+    {
+        // Check which key name to modify
+        let array_key = legacy_alias(&key_path.target_key)
+            .filter(|alias| {
+                target_table
+                    .as_table_like()
+                    .is_some_and(|t| t.contains_key(alias))
+            })
+            .unwrap_or_else(|| key_path.target().to_string());
+
+        let target_array = toml_doc
+            .get_or_insert_toml_array_mut(&key_path.parents(), &array_key)
+            .into_diagnostic()?;
+
+        if matches!(mode, AlterMode::Prepend) {
+            if let Some(new_item) = serialized_array.get(0) {
+                insert_array_element(target_array, 0, new_item.clone());
             }
-            out.to_string().trim().to_string()
+        } else if let Some(new_item) = serialized_array.iter().last() {
+            push_array_element(target_array, new_item.clone());
         }
-        toml_edit::Item::None => String::new(),
+        return Ok(());
+    }
+
+    // Replace legacy snake_case keys while preserving their comments.
+    if let Some(alias) = legacy_alias(&key_path.target_key) {
+        let _ = remove_entry(target_table, &alias).into_diagnostic()?;
+    }
+
+    if let Some(value) = current_item.as_value() {
+        upsert_entry(target_table, &key_path.target_key, value.clone()).into_diagnostic()?;
+    } else if let Some(table_to_insert) = current_item.as_table()
+        && let Some(table_like) = target_table.as_table_like_mut()
+    {
+        table_like.insert(key_path.target(), Item::Table(table_to_insert.clone()));
+    }
+
+    Ok(())
+}
+
+/// Returns the legacy `snake_case` alias for a canonical `kebab-case` key or parent table
+/// if the one exists in the Serde schema
+fn legacy_alias(key: &str) -> Option<String> {
+    match key {
+        "default-channels"
+        | "authentication-override-file"
+        | "tls-no-verify"
+        | "repodata-config"
+        | "change-ps1"
+        | "disable-bzip2"
+        | "disable-sharded"
+        | "disable-zstd" => Some(key.replace('-', "_")),
+        _ => None,
     }
 }
 
-fn table_to_inline(table: &toml_edit::Table) -> toml_edit::InlineTable {
-    let mut inline = toml_edit::InlineTable::new();
-    for (k, v) in table.iter() {
-        if let Some(val) = item_to_value(v) {
-            inline.insert(k, val);
-        }
-    }
-    inline
-}
+/// Resolve parent key paths against the TOML document, using existing snake_case aliases on disk if present.
+fn resolve_parent_keys(doc: &TomlDocument, parents: &[&str]) -> Vec<String> {
+    let mut resolved = Vec::with_capacity(parents.len());
+    let mut current_item = doc.as_item();
 
-fn item_to_value(item: &toml_edit::Item) -> Option<toml_edit::Value> {
-    match item {
-        toml_edit::Item::Value(v) => Some(v.clone()),
-        toml_edit::Item::Table(t) => Some(toml_edit::Value::InlineTable(table_to_inline(t))),
-        toml_edit::Item::ArrayOfTables(arr) => {
-            let mut out = toml_edit::Array::new();
-            for t in arr {
-                out.push(table_to_inline(t));
-            }
-            Some(toml_edit::Value::Array(out))
+    for &parent in parents {
+        if let Some(alias) = legacy_alias(parent)
+            && current_item.get(&alias).is_some()
+        {
+            resolved.push(alias.clone());
+            current_item = current_item
+                .get(&alias)
+                .expect("The current item should have the alias in it");
+            continue;
         }
-        toml_edit::Item::None => None,
-    }
-}
 
-fn toml_item_to_json(item: &toml_edit::Item) -> serde_json::Value {
-    match item {
-        toml_edit::Item::Value(v) => toml_value_to_json(v),
-        toml_edit::Item::Table(t) => {
-            let mut map = serde_json::Map::new();
-            for (k, v) in t.iter() {
-                map.insert(k.to_string(), toml_item_to_json(v));
-            }
-            serde_json::Value::Object(map)
-        }
-        toml_edit::Item::ArrayOfTables(arr) => serde_json::Value::Array(
-            arr.iter()
-                .map(|t| {
-                    let mut map = serde_json::Map::new();
-                    for (k, v) in t.iter() {
-                        map.insert(k.to_string(), toml_item_to_json(v));
-                    }
-                    serde_json::Value::Object(map)
-                })
-                .collect(),
-        ),
-        toml_edit::Item::None => serde_json::Value::Null,
+        // Fall back to the canonical parent key name
+        resolved.push(parent.to_string());
+        current_item = current_item.get(parent).unwrap_or(&toml_edit::Item::None);
     }
-}
 
-fn toml_value_to_json(v: &toml_edit::Value) -> serde_json::Value {
-    match v {
-        toml_edit::Value::String(s) => serde_json::Value::String(s.value().to_string()),
-        toml_edit::Value::Integer(i) => serde_json::Value::Number((*i.value()).into()),
-        toml_edit::Value::Float(f) => serde_json::Number::from_f64(*f.value())
-            .map(serde_json::Value::Number)
-            .unwrap_or(serde_json::Value::Null),
-        toml_edit::Value::Boolean(b) => serde_json::Value::Bool(*b.value()),
-        toml_edit::Value::Datetime(d) => serde_json::Value::String(d.to_string()),
-        toml_edit::Value::Array(arr) => {
-            serde_json::Value::Array(arr.iter().map(toml_value_to_json).collect())
-        }
-        toml_edit::Value::InlineTable(t) => {
-            let mut map = serde_json::Map::new();
-            for (k, v) in t.iter() {
-                map.insert(k.to_string(), toml_value_to_json(v));
-            }
-            serde_json::Value::Object(map)
-        }
-    }
+    resolved
 }
 
 // Trick to show only relevant field of the Config
@@ -534,11 +718,13 @@ fn partial_config(config: &mut Config, key: &str) -> miette::Result<()> {
         "default-channels" => new.default_channels = config.default_channels.clone(),
         "shell" => new.shell = config.shell.clone(),
         "tls-no-verify" => new.tls_no_verify = config.tls_no_verify,
+        "offline" => new.offline = config.offline,
         "authentication-override-file" => {
             new.authentication_override_file = config.authentication_override_file.clone()
         }
         "mirrors" => new.mirrors = config.mirrors.clone(),
         "repodata-config" => new.repodata_config = config.repodata_config.clone(),
+        "index-config" => new.index_config = config.index_config.clone(),
         "pypi-config" => new.pypi_config = config.pypi_config.clone(),
         "proxy-config" => new.proxy_config = config.proxy_config.clone(),
         "allow-symbolic-links" => new.allow_symbolic_links = config.allow_symbolic_links,
@@ -548,9 +734,11 @@ fn partial_config(config: &mut Config, key: &str) -> miette::Result<()> {
             let keys = [
                 "default-channels",
                 "tls-no-verify",
+                "offline",
                 "authentication-override-file",
                 "mirrors",
                 "repodata-config",
+                "index-config",
                 "pypi-config",
                 "proxy-config",
                 "allow-symbolic-links",
@@ -564,4 +752,726 @@ fn partial_config(config: &mut Config, key: &str) -> miette::Result<()> {
     *config = new;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct TestContext {
+        pub config_path: PathBuf,
+        pub common_args: CommonArgs,
+        pub _temp_dir: tempfile::TempDir,
+    }
+
+    impl TestContext {
+        fn read_config(&self) -> String {
+            let config_read_result = fs_err::read_to_string(&self.config_path);
+
+            config_read_result.expect("Should be able to read the config file after update")
+        }
+
+        fn setup(config_content: Option<&str>) -> Self {
+            let temp_dir = tempfile::tempdir().unwrap();
+            let project_root = temp_dir.path();
+
+            let config_path = project_root.join("config.toml");
+            fs_err::write(&config_path, config_content.unwrap_or("")).unwrap();
+
+            let common_args = CommonArgs {
+                local: false,
+                global: false,
+                system: false,
+                path: Some(config_path.clone()),
+                workspace_config: WorkspaceConfig {
+                    manifest_path: Some(temp_dir.path().to_path_buf()),
+                    ..Default::default()
+                },
+            };
+
+            Self {
+                _temp_dir: temp_dir,
+                common_args,
+                config_path,
+            }
+        }
+    }
+
+    async fn execute_subcommand(subcommand: Subcommand) {
+        let args = Args { subcommand };
+        let result = execute(args).await;
+
+        result.expect("The subcommand execution failed");
+    }
+
+    #[test]
+    fn test_determine_config_write_path() {
+        let test_context = TestContext::setup(None);
+        let mut config_path = test_context.config_path.clone();
+
+        let mut config_write_path = determine_config_write_path(&test_context.common_args)
+            .expect("Determine config write path should have succeeded");
+
+        if cfg!(target_os = "macos") {
+            config_path = config_path
+                .canonicalize()
+                .expect("Failed to canonicalize temp directory path");
+
+            config_write_path = config_write_path
+                .canonicalize()
+                .expect("Failed to canonicalize temp directory path");
+        }
+
+        assert_eq!(config_write_path, config_path);
+    }
+
+    #[tokio::test]
+    async fn set_creates_missing_pixi_directory() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let project_root = temp_dir.path();
+
+        fs_err::write(
+            project_root.join("pixi.toml"),
+            r#"[workspace]
+            name = "test-workspace"
+            channels = []"#,
+        )
+        .unwrap();
+
+        let common_args = CommonArgs {
+            local: false,
+            global: false,
+            system: false,
+            path: None,
+            workspace_config: WorkspaceConfig {
+                manifest_path: Some(temp_dir.path().to_path_buf()),
+                ..Default::default()
+            },
+        };
+
+        execute_subcommand(Subcommand::Set(SetArgs {
+            key: "pinning-strategy".to_owned(),
+            value: Some("semver".to_owned()),
+            common: common_args,
+        }))
+        .await;
+
+        // Assert that the file AND the directory now exist
+        let config_path = project_root.join(".pixi/config.toml");
+        assert!(config_path.exists(), "Config file should have been created");
+        assert!(
+            config_path.parent().unwrap().exists(),
+            "Parent directory should have been created"
+        );
+    }
+
+    #[tokio::test]
+    async fn list_empty_config() {
+        let test_context = TestContext::setup(None);
+
+        execute_subcommand(Subcommand::List(ListArgs {
+            key: None,
+            json: false,
+            common: test_context.common_args,
+            config_source: pixi_config::ConfigSourceCli::default(),
+        }))
+        .await;
+    }
+
+    #[tokio::test]
+    async fn set_valid_key() {
+        let test_context = TestContext::setup(None);
+
+        execute_subcommand(Subcommand::Set(SetArgs {
+            key: "pinning-strategy".to_owned(),
+            value: Some("semver".to_owned()),
+            common: test_context.common_args,
+        }))
+        .await;
+    }
+
+    #[tokio::test]
+    async fn set_preserves_comments() {
+        let test_context = TestContext::setup(Some(
+            "# some comment which should be kept\nallow-symbolic-links = true",
+        ));
+
+        execute_subcommand(Subcommand::Set(SetArgs {
+            key: "tls-no-verify".to_owned(),
+            value: Some("false".to_owned()),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @"
+        # some comment which should be kept
+        allow-symbolic-links = true
+        tls-no-verify = false
+        "
+        );
+    }
+
+    #[tokio::test]
+    async fn set_non_existent_key_to_none() {
+        let test_context = TestContext::setup(Some("allow-symbolic-links = true"));
+
+        execute_subcommand(Subcommand::Set(SetArgs {
+            key: "tls-no-verify".to_owned(),
+            value: None,
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @"allow-symbolic-links = true"
+        );
+    }
+
+    #[tokio::test]
+    async fn set_existing_key_to_none_removes_key() {
+        let test_context = TestContext::setup(Some("allow-symbolic-links = true"));
+
+        execute_subcommand(Subcommand::Set(SetArgs {
+            key: "allow-symbolic-links".to_owned(),
+            value: None,
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @""
+        );
+    }
+
+    #[cfg(not(windows))]
+    #[tokio::test]
+    async fn set_table_creation() {
+        let test_context = TestContext::setup(Some("allow-symbolic-links = true"));
+
+        execute_subcommand(Subcommand::Set(SetArgs {
+            key: "cache.root".to_owned(),
+            value: Some("/tmp/pixi-cache".to_owned()),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @r#"
+        allow-symbolic-links = true
+
+        [cache]
+        root = "/tmp/pixi-cache"
+        "#
+        );
+    }
+
+    #[tokio::test]
+    async fn unset_dotted_key() {
+        let test_context = TestContext::setup(Some(
+            r#"[repodata-config."https://prefix.dev"]
+disable-sharded = false"#,
+        ));
+
+        execute_subcommand(Subcommand::Unset(UnsetArgs {
+            key: "repodata-config.\"https://prefix.dev\".disable-sharded".to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @""
+        );
+    }
+
+    #[tokio::test]
+    async fn unset_missing_key() {
+        let test_context = TestContext::setup(None);
+
+        let args = Args {
+            subcommand: Subcommand::Unset(UnsetArgs {
+                key: "pinning-strategy".to_owned(),
+                common: test_context.common_args,
+            }),
+        };
+        let result = execute(args).await;
+
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("not found in configuration file"));
+    }
+
+    #[tokio::test]
+    async fn unset_on_existing_stale_key() {
+        let test_context = TestContext::setup(Some(
+            r#"[shell]
+stale-key = "some_value"
+not-stale-key = "another_value"
+            "#,
+        ));
+
+        execute_subcommand(Subcommand::Unset(UnsetArgs {
+            key: "shell.stale-key".to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @r#"
+        [shell]
+        not-stale-key = "another_value"
+        "#,
+        );
+    }
+
+    #[tokio::test]
+    async fn unset_on_stale_key_removes_empty_parent_table() {
+        let test_context = TestContext::setup(Some(
+            r#"[shell]
+            stale-key = "some_value"
+            "#,
+        ));
+
+        execute_subcommand(Subcommand::Unset(UnsetArgs {
+            key: "shell.stale-key".to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @""
+        );
+    }
+
+    #[tokio::test]
+    async fn unset_key_with_sibling_kept() {
+        let test_context = TestContext::setup(Some(
+            r#"[repodata-config."https://backup.example.com"]
+disable-zstd = true
+
+[repodata-config."https://primary.example.com"]
+disable-sharded = false
+"#,
+        ));
+
+        execute_subcommand(Subcommand::Unset(UnsetArgs {
+            key: r#"repodata-config."https://backup.example.com".disable-zstd"#.to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @r#"
+
+        [repodata-config."https://primary.example.com"]
+        disable-sharded = false
+        "#
+        );
+    }
+
+    #[tokio::test]
+    async fn unset_key_removes_nested_empty_parent_table() {
+        let test_context = TestContext::setup(Some(
+            r#"[pypi-options]
+index-url = "https://pypi.org/simple"
+"#,
+        ));
+
+        execute_subcommand(Subcommand::Unset(UnsetArgs {
+            key: "pypi-options.index-url".to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @""
+        );
+    }
+
+    #[tokio::test]
+    async fn unset_config_key_keeps_its_comment() {
+        let test_context = TestContext::setup(Some(
+            r#"# some comment that is being kept from the deleted key
+allow-symbolic-links = true
+stale-key = "some-value"
+stale-key2 = "some-other-value"
+        "#,
+        ));
+
+        execute_subcommand(Subcommand::Unset(UnsetArgs {
+            key: "allow-symbolic-links".to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @r#"
+        # some comment that is being kept from the deleted key
+        stale-key = "some-value"
+        stale-key2 = "some-other-value"
+        "#
+        );
+    }
+
+    #[tokio::test]
+    async fn append_single_line() {
+        let test_context = TestContext::setup(Some(
+            r#"allow-symbolic-links = true
+default-channels = ["conda-forge"]
+"#,
+        ));
+
+        execute_subcommand(Subcommand::Append(PendArgs {
+            key: "default-channels".to_owned(),
+            value: "new-channel".to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @r#"
+        allow-symbolic-links = true
+        default-channels = ["conda-forge", "new-channel"]
+        "#
+        );
+    }
+
+    #[tokio::test]
+    async fn append_multi_line() {
+        let test_context = TestContext::setup(Some(
+            r#"allow-symbolic-links = true
+default-channels = [
+    "conda-forge",
+]
+        "#,
+        ));
+
+        execute_subcommand(Subcommand::Append(PendArgs {
+            key: "default-channels".to_owned(),
+            value: "new-channel".to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @r#"
+        allow-symbolic-links = true
+        default-channels = [
+            "conda-forge",
+            "new-channel",
+        ]
+        "#
+        );
+    }
+
+    #[tokio::test]
+    async fn append_from_scratch() {
+        let test_context = TestContext::setup(None);
+
+        execute_subcommand(Subcommand::Append(PendArgs {
+            key: "default-channels".to_owned(),
+            value: "new-channel".to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @r#"default-channels = ["new-channel"]"#
+        );
+    }
+
+    #[tokio::test]
+    async fn prepend_single_line() {
+        let test_context = TestContext::setup(Some(
+            r#"allow-symbolic-links = true
+default-channels = ["conda-forge"]
+"#,
+        ));
+
+        execute_subcommand(Subcommand::Prepend(PendArgs {
+            key: "default-channels".to_owned(),
+            value: "new-channel".to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @r#"
+        allow-symbolic-links = true
+        default-channels = ["new-channel", "conda-forge"]
+        "#
+        );
+    }
+
+    #[tokio::test]
+    async fn prepend_multi_line() {
+        let test_context = TestContext::setup(Some(
+            r#"allow-symbolic-links = true
+default-channels = [
+    "conda-forge",
+]
+        "#,
+        ));
+
+        execute_subcommand(Subcommand::Prepend(PendArgs {
+            key: "default-channels".to_owned(),
+            value: "new-channel".to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @r#"
+        allow-symbolic-links = true
+        default-channels = [
+            "new-channel",
+            "conda-forge",
+        ]
+        "#
+        );
+    }
+
+    #[tokio::test]
+    async fn prepend_from_scratch() {
+        let test_context = TestContext::setup(None);
+
+        execute_subcommand(Subcommand::Prepend(PendArgs {
+            key: "default-channels".to_owned(),
+            value: "new-channel".to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @r#"default-channels = ["new-channel"]"#
+        );
+    }
+
+    #[tokio::test]
+    async fn set_kebab_case_overwrites_legacy_snake_case_key() {
+        let test_context =
+            TestContext::setup(Some("other = 1\n# keep this comment\ntls_no_verify = true"));
+
+        execute_subcommand(Subcommand::Set(SetArgs {
+            key: "tls-no-verify".to_owned(),
+            value: Some("false".to_owned()),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @"
+        other = 1
+        # keep this comment
+        tls-no-verify = false
+        "
+        );
+
+        // Verify subsequent modifications on the newly canonicalized key work cleanly
+        execute_subcommand(Subcommand::Set(SetArgs {
+            key: "tls-no-verify".to_owned(),
+            value: Some("true".to_owned()),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @"
+        other = 1
+        # keep this comment
+        tls-no-verify = true
+        "
+        );
+    }
+
+    #[tokio::test]
+    async fn set_nested_key_reuses_snake_case_parent_table() {
+        let test_context = TestContext::setup(Some(
+            r#"
+[repodata_config]
+disable-sharded = true
+"#,
+        ));
+
+        execute_subcommand(Subcommand::Set(SetArgs {
+            key: "repodata-config.disable-sharded".to_owned(),
+            common: test_context.common_args.clone(),
+            value: Some("false".to_owned()),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+                    test_context.read_config(),
+                    @"
+
+        [repodata_config]
+        disable-sharded = false
+        ",
+        );
+    }
+
+    #[tokio::test]
+    async fn set_nested_key_overwrites_legacy_snake_case_child() {
+        let test_context = TestContext::setup(Some(
+            r#"
+[repodata-config]
+disable_bzip2 = true
+"#,
+        ));
+
+        execute_subcommand(Subcommand::Set(SetArgs {
+            key: "repodata-config.disable-bzip2".to_owned(),
+            common: test_context.common_args.clone(),
+            value: Some("false".to_owned()),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+                    test_context.read_config(),
+                    @"
+
+        [repodata-config]
+        disable-bzip2 = false
+        ",
+        );
+    }
+
+    #[tokio::test]
+    async fn append_preserves_snake_case_key() {
+        let test_context = TestContext::setup(Some(
+            r#"
+default_channels = ["conda-forge"]
+"#,
+        ));
+
+        execute_subcommand(Subcommand::Append(PendArgs {
+            key: "default-channels".to_owned(),
+            value: "new-channel".to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @r#"
+
+        default_channels = ["conda-forge", "new-channel"]
+        "#,
+        );
+    }
+
+    #[tokio::test]
+    async fn prepend_preserves_snake_case_key() {
+        let test_context = TestContext::setup(Some(
+            r#"
+default_channels = ["conda-forge"]
+"#,
+        ));
+
+        execute_subcommand(Subcommand::Prepend(PendArgs {
+            key: "default-channels".to_owned(),
+            value: "new-channel".to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+            test_context.read_config(),
+            @r#"
+
+        default_channels = ["new-channel", "conda-forge"]
+        "#,
+        );
+    }
+
+    #[tokio::test]
+    async fn unset_snake_case_target_key() {
+        let test_context = TestContext::setup(Some(
+            r#"
+tls_no_verify = true
+"#,
+        ));
+
+        execute_subcommand(Subcommand::Unset(UnsetArgs {
+            key: "tls-no-verify".to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+                    test_context.read_config(),
+                    @"",
+        );
+    }
+
+    #[tokio::test]
+    async fn unset_nested_snake_case_child_key() {
+        let test_context = TestContext::setup(Some(
+            r#"
+[repodata_config]
+disable_sharded = true
+disable-shared = true
+"#,
+        ));
+
+        execute_subcommand(Subcommand::Unset(UnsetArgs {
+            key: "repodata-config.disable-sharded".to_owned(),
+            common: test_context.common_args.clone(),
+        }))
+        .await;
+
+        insta::assert_snapshot!(
+                    test_context.read_config(),
+                    @ "
+
+        [repodata_config]
+        disable-shared = true
+        ",
+        );
+    }
+
+    #[tokio::test]
+    async fn unset_invalidating_config_fails() {
+        let test_context = TestContext::setup(Some(
+            r#"
+[s3-options.bucket]
+endpoint-url = "https://my-s3-compatible-host.com"
+force-path-style = true
+region = "us-east-1"
+"#,
+        ));
+
+        let args = Args {
+            subcommand: Subcommand::Unset(UnsetArgs {
+                key: "s3-options.bucket.region".to_owned(),
+                common: test_context.common_args.clone(),
+            }),
+        };
+
+        let result = execute(args).await;
+        let err = result
+            .expect_err("expected unset on required field to return an error, but it succeeded ");
+        assert!(
+            err.to_string()
+                .contains("would leave the config file invalid")
+                || err.to_string().contains("missing field `region`")
+        );
+    }
 }

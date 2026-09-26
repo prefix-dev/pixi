@@ -193,6 +193,27 @@ pub enum GitError {
     #[error("failed to fetch {0}: {1}")]
     Fetch(String, String),
 
+    #[error(
+        "fetching git repository `{repository}` requires network access, but pixi is in offline mode and the requested revision is not available in the local cache"
+    )]
+    Offline { repository: String },
+
+    #[error(
+        "updating the git submodules of the checkout at `{repository}` requires network access, but pixi is in offline mode and they are not available in the local cache"
+    )]
+    OfflineSubmodule { repository: String },
+
+    #[error("`git {0}` failed: {1}")]
+    Command(String, String),
+
+    #[error("could not find a branch, tag, or commit named `{reference}` in `{repository}`")]
+    ReferenceNotFound {
+        reference: String,
+        repository: String,
+        #[source]
+        source: Box<GitError>,
+    },
+
     #[error("failed to fetch LFS objects for {0}: {1}")]
     LfsFetch(String, String),
 

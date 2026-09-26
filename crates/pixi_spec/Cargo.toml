@@ -1,13 +1,13 @@
 [package]
-authors.workspace = true
-description = "Provides a Rust representation of a Pixi spec"
-edition.workspace = true
-homepage.workspace = true
-license.workspace = true
 name = "pixi_spec"
-readme.workspace = true
-repository.workspace = true
 version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+description = "Provides a Rust representation of a Pixi spec"
+readme.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
 
 [dependencies]
 chrono = { workspace = true, features = ["serde"] }
@@ -39,7 +39,7 @@ pixi_toml = { workspace = true }
 toml-span = { workspace = true }
 
 [dev-dependencies]
-insta = { workspace = true, features = ["yaml", "filters"] }
+insta = { workspace = true, features = ["filters", "yaml"] }
 pixi_test_utils = { workspace = true }
 rattler_lock = { workspace = true }
 serde_json = { workspace = true, features = ["preserve_order"] }

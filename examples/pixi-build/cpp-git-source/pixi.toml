@@ -1,3 +1,7 @@
+[package]
+name = "sdl_example"
+version = "0.1.0"
+
 [package.build.source]
 git = "https://github.com/prefix-dev/pixi-build-testsuite.git"
 # branch = "fix/logging_tests"
@@ -10,10 +14,6 @@ channels = [
 ]
 name = "pixi-build-cmake"
 version = "*"
-
-[package]
-name = "sdl_example"
-version = "0.1.0"
 
 [package.host-dependencies]
 # This ensures that SDL2 is available at build time.

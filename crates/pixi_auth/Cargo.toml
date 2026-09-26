@@ -1,20 +1,20 @@
 [package]
-authors.workspace = true
-description = "Authentication utilities for pixi"
-edition.workspace = true
-homepage.workspace = true
-license.workspace = true
 name = "pixi_auth"
-readme.workspace = true
-repository.workspace = true
 version = "0.1.0"
-
-[features]
-default = ["rustls"]
-native-tls = ["rattler_networking/native-tls"]
-rustls = ["rattler_networking/rustls"]
+authors.workspace = true
+edition.workspace = true
+description = "Authentication utilities for pixi"
+readme.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
 
 [dependencies]
 pixi_config = { workspace = true }
 rattler_networking = { workspace = true, features = ["system-integration"] }
 tracing = { workspace = true }
+
+[features]
+default = ["rustls"]
+native-tls = ["rattler_networking/native-tls"]
+rustls = ["rattler_networking/rustls"]

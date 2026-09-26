@@ -61,6 +61,10 @@ flowchart TD
 This method ensures the solver only adds a package to the candidates if it's found in the highest priority channel available.
 If you have 10 channels and the package is found in the 5th channel it will exclude the next 5 channels from the candidates if they also contain the package.
 
+This behavior is controlled by the [`channel-priority`](../reference/pixi_manifest.md#channel-priority-optional) setting and defaults to `strict`.
+With `channel-priority = "flexible"` the candidates of lower-priority channels stay available to the solver: per package, the candidates of a higher-priority channel are exhausted first, and only then does the solver fall back to the next channel, regardless of the version.
+With `channel-priority = "disabled"` all channels are treated equally and the solver picks candidates from any of them.
+
 ## Use Case: pytorch and nvidia with conda-forge
 A common use case is to use `pytorch` with `nvidia` drivers, while also needing the `conda-forge` channel for the main dependencies.
 ```toml
@@ -94,7 +98,7 @@ If you want to force a specific priority for a channel, you can use the `priorit
 The higher the number, the higher the priority.
 Non specified priorities are set to 0 but the index in the array still counts as a priority, where the first in the list has the highest priority.
 
-This priority definition is mostly important for [multiple environments](../workspace/multi_environment.md) with different channel priorities, as by default feature channels are prepended to the workspace channels.
+This priority definition is mostly important for [multiple environments](../workspace/multi_environment.md) with different channel priorities, as by default environment and feature channels are prepended to the workspace channels.
 
 ```toml
 [workspace]
@@ -102,19 +106,14 @@ name = "test_channel_priority"
 platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
 channels = ["conda-forge"]
 
-[feature.a]
+[environments.a]
 channels = ["nvidia"]
 
-[feature.b]
+[environments.b]
 channels = [ "pytorch", {channel = "nvidia", priority = 1}]
 
-[feature.c]
+[environments.c]
 channels = [ "pytorch", {channel = "nvidia", priority = -1}]
-
-[environments]
-a = ["a"]
-b = ["b"]
-c = ["c"]
 ```
 This example creates 4 environments, `a`, `b`, `c`, and the default environment.
 Which will have the following channel order:

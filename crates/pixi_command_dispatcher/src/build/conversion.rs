@@ -48,6 +48,7 @@ pub fn from_source_package_location_spec(
 
         SourcePackageLocationSpec::Git(git) => SourceLocationSpec::Git(GitLocationSpec {
             git: git.git,
+            lfs: git.lfs,
             rev: git.rev.map(|r| match r {
                 pixi_build_frontend::types::GitReference::Branch(b) => {
                     pixi_spec::GitReference::Branch(b)

@@ -1,3 +1,6 @@
+#:tombi toml-version = "v1.0.0"
+# The Python packaging ecosystem parses this file with TOML 1.0 parsers
+
 # --8<-- [start:use-envs]
 [project]
 name = "pytorch-conda-forge"
@@ -5,24 +8,15 @@ name = "pytorch-conda-forge"
 [tool.pixi.workspace]
 channels = ["https://prefix.dev/conda-forge"]
 platforms = [
-  "linux-64",
+  # The CUDA platform is listed first, so it wins platform selection on a machine with a CUDA driver.
   { name = "linux-64-cuda", platform = "linux-64", cuda = "12.0" },
+  { name = "linux-64-cpu", platform = "linux-64" },
 ]
 
-[tool.pixi.feature.gpu]
-platforms = ["linux-64-cuda"]
-
-[tool.pixi.feature.gpu.dependencies]
+[tool.pixi.target.linux-64-cuda.dependencies]
 cuda-version = "12.6.*"
 pytorch-gpu = "*"
 
-[tool.pixi.feature.cpu]
-platforms = ["linux-64"]
-
-[tool.pixi.feature.cpu.dependencies]
+[tool.pixi.target.linux-64-cpu.dependencies]
 pytorch-cpu = "*"
-
-[tool.pixi.environments]
-cpu = ["cpu"]
-default = ["gpu"]
 # --8<-- [end:use-envs]

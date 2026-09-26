@@ -1203,11 +1203,11 @@ mod tests {
 
         // Test is_linux
         let t = TemplateString::from("{{ pixi.is_linux }}");
-        assert_eq!(t.render(&context).unwrap(), "true");
+        assert_eq!(t.render(&context).unwrap(), "True");
 
         // Test is_win
         let t = TemplateString::from("{{ pixi.is_win }}");
-        assert_eq!(t.render(&context).unwrap(), "false");
+        assert_eq!(t.render(&context).unwrap(), "False");
 
         // Test environment
         let t = TemplateString::from("{{ pixi.environment.name }}");
@@ -1291,5 +1291,111 @@ mod tests {
         };
         let rendered = t.render(&context).expect("should render init_cwd");
         assert_eq!(rendered, format!("{}/test", cwd.display()));
+    }
+}
+
+/// Pins how MiniJinja renders booleans and `none` in task templates.
+///
+/// Since MiniJinja 2.22 these render the way Jinja2 does, as `True`, `False`
+/// and `None`, on every path that turns a value into text. These tests exist
+/// so that stays uniform: a partial fix that changes one path and not the
+/// others is worse than either spelling.
+#[cfg(test)]
+mod jinja_rendering_tests {
+    use std::str::FromStr;
+
+    use rattler_conda_types::Platform;
+
+    use super::{ArgValues, TaskRenderContext, TemplateString, TypedArg};
+    use crate::{EnvironmentName, PixiPlatform};
+
+    fn render(template: &str) -> String {
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        let platform = PixiPlatform::from_subdir(Platform::Linux64);
+        let context = TaskRenderContext {
+            platform: Some(&platform),
+            environment_name: &env_name,
+            manifest_path: None,
+            args: None,
+            init_cwd: None,
+        };
+        TemplateString::from(template)
+            .render(&context)
+            .expect("template should render")
+    }
+
+    #[test]
+    fn booleans_render_the_same_on_every_path() {
+        assert_eq!(render("{{ pixi.is_linux }}"), "True");
+        assert_eq!(render("{{ pixi.is_win }}"), "False");
+        assert_eq!(render("{{ pixi.is_linux | string }}"), "True");
+        assert_eq!(render(r#"{{ "x=" ~ pixi.is_win }}"#), "x=False");
+        assert_eq!(render("{{ [pixi.is_linux] }}"), "[True]");
+        assert_eq!(render("{{ {'w': pixi.is_win} }}"), "{\"w\": False}");
+        assert_eq!(render("{{ true }}"), "True");
+        assert_eq!(render("{{ false }}"), "False");
+    }
+
+    #[test]
+    fn none_renders_the_same_on_every_path() {
+        assert_eq!(render("{{ none }}"), "None");
+        assert_eq!(render("{{ none | string }}"), "None");
+        assert_eq!(render(r#"{{ "x=" ~ none }}"#), "x=None");
+    }
+
+    /// The documented way to get the lowercase spelling a shell expects.
+    #[test]
+    fn lower_filter_gives_the_shell_spelling() {
+        assert_eq!(render("{{ pixi.is_linux | lower }}"), "true");
+        assert_eq!(render("{{ pixi.is_win | lower }}"), "false");
+        assert_eq!(render(r#"{{ ("x=" ~ pixi.is_win) | lower }}"#), "x=false");
+    }
+
+    /// `tojson` is JSON, so it stays lowercase regardless of display spelling.
+    #[test]
+    fn tojson_stays_json() {
+        assert_eq!(render("{{ pixi.is_linux | tojson }}"), "true");
+        assert_eq!(render("{{ pixi.is_win | tojson }}"), "false");
+    }
+
+    /// Branching on a boolean is unaffected, and is the recommended form.
+    #[test]
+    fn if_guards_still_branch_correctly() {
+        assert_eq!(
+            render("{% if pixi.is_linux %}yes{% else %}no{% endif %}"),
+            "yes"
+        );
+        assert_eq!(
+            render("{% if pixi.is_win %}yes{% else %}no{% endif %}"),
+            "no"
+        );
+    }
+
+    /// Task args are always strings, so a `--flag true` arg is unaffected by
+    /// the display spelling. Recorded so a future typed-arg change is caught.
+    #[test]
+    fn typed_args_are_strings_not_booleans() {
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        let platform = PixiPlatform::from_subdir(Platform::Linux64);
+        let args = ArgValues::TypedArgs {
+            args: vec![TypedArg {
+                name: "flag".into(),
+                value: "true".into(),
+            }],
+            extra: vec![],
+        };
+        let context = TaskRenderContext {
+            platform: Some(&platform),
+            environment_name: &env_name,
+            manifest_path: None,
+            args: Some(&args),
+            init_cwd: None,
+        };
+        assert_eq!(
+            TemplateString::from("{{ flag }}|{{ flag | string }}")
+                .render(&context)
+                .unwrap(),
+            "true|true"
+        );
     }
 }
