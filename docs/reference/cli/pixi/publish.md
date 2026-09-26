@@ -14,6 +14,8 @@ pixi publish [OPTIONS]
 ```
 
 ## Options
+- <a id="arg---allow-source-dependencies" href="#arg---allow-source-dependencies">`--allow-source-dependencies`</a>
+:  Skip the self-contained check of a publish
 - <a id="arg---target-platform" href="#arg---target-platform">`--target-platform (-t) <TARGET_PLATFORM>`</a>
 :  The target platform to build for (defaults to the current platform)
 <br>**default**: `current_platform`
@@ -29,7 +31,9 @@ pixi publish [OPTIONS]
 - <a id="arg---clean" href="#arg---clean">`--clean (-c)`</a>
 :  Whether to clean the build directory before building
 - <a id="arg---path" href="#arg---path">`--path <PATH>`</a>
-:  The path to a directory containing a package manifest, or to a specific manifest file
+:  The path to a directory containing a package manifest, or to a specific manifest file. Repeat this flag or pass multiple paths to publish multiple packages together
+<br>May be provided more than once.
+<br>**aliases**: paths
 - <a id="arg---target-channel" href="#arg---target-channel">`--target-channel <TARGET_CHANNEL>`</a>
 :  The target channel to publish packages to. Accepts a URL (prefix.dev, anaconda.org, cloudsmith://, s3://, quetz://, artifactory://) or a local filesystem path / `file://` URL for an indexed local channel
 <br>**aliases**: to
