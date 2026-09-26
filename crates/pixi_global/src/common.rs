@@ -274,8 +274,8 @@ pub enum StateChange {
     UpdatedEnvironment(EnvironmentUpdate),
     InstalledShortcut(String),
     UninstalledShortcut(String),
-    AddedCompletion(String),
-    RemovedCompletion(String),
+    AddedCompletion(String, String),
+    RemovedCompletion(String, String),
 }
 
 #[must_use]
@@ -500,7 +500,7 @@ async fn build_report(
     let mut dependencies: BTreeMap<String, Item> = BTreeMap::new();
     let mut exposed: BTreeMap<String, Item> = BTreeMap::new();
     let mut shortcuts: BTreeMap<String, Item> = BTreeMap::new();
-    let mut completions: BTreeMap<String, Item> = BTreeMap::new();
+    let mut completions: BTreeMap<String, (Marker, IndexSet<String>)> = BTreeMap::new();
     // The last environment-level change wins: `--force-reinstall` removes the
     // environment and creates it again, and that reads as an install.
     let mut environment_change = None;
@@ -555,14 +555,40 @@ async fn build_report(
             StateChange::UninstalledShortcut(name) => {
                 shortcuts.insert(name.clone(), Item::plain(Marker::Removed, name.clone()));
             }
-            StateChange::AddedCompletion(name) => {
-                completions.insert(name.clone(), Item::plain(Marker::Added, name.clone()));
+            StateChange::AddedCompletion(name, shell) => {
+                let (marker, shells) = completions
+                    .entry(name.clone())
+                    .or_insert_with(|| (Marker::Added, IndexSet::new()));
+                if *marker != Marker::Added {
+                    *marker = Marker::Added;
+                    shells.clear();
+                }
+                shells.insert(shell.clone());
             }
-            StateChange::RemovedCompletion(name) => {
-                completions.insert(name.clone(), Item::plain(Marker::Removed, name.clone()));
+            StateChange::RemovedCompletion(name, shell) => {
+                let (marker, shells) = completions
+                    .entry(name.clone())
+                    .or_insert_with(|| (Marker::Removed, IndexSet::new()));
+                if *marker != Marker::Removed {
+                    *marker = Marker::Removed;
+                    shells.clear();
+                }
+                shells.insert(shell.clone());
             }
         }
     }
+
+    let completion_items: BTreeMap<String, Item> = completions
+        .into_iter()
+        .map(|(name, (marker, shells))| {
+            let detail = if shells.is_empty() {
+                None
+            } else {
+                Some(format!("({})", shells.iter().join(", ")))
+            };
+            (name.clone(), Item::plain(marker, name).with_detail(detail))
+        })
+        .collect();
 
     // An environment that holds a single dependency named after itself says
     // everything about it in the header, so a row would repeat the name
@@ -576,7 +602,9 @@ async fn build_report(
     push_row(&mut rows, Label::Dependencies, dependencies);
     push_row(&mut rows, Label::Exposed, exposed);
     push_row(&mut rows, Label::Shortcuts, shortcuts);
-    push_row(&mut rows, Label::Completions, completions);
+    if report::verbosity() >= report::Verbosity::Verbose {
+        push_row(&mut rows, Label::Completions, completion_items);
+    }
 
     let status = match environment_change {
         Some(status) => status,
@@ -871,6 +899,7 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
+    use crate::Project;
     use crate::trampoline::Configuration;
 
     #[tokio::test]
@@ -1140,5 +1169,81 @@ mod tests {
 
         assert_eq!(to_remove.pop().unwrap().exposed_name().to_string(), "test");
         assert!(to_add.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_completions_report_verbosity() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let project = Project::from_str(
+            &PathBuf::from("dummy"),
+            r#"
+            [envs.test]
+            channels = ["conda-forge"]
+            [envs.test.dependencies]
+            python = "*"
+            [envs.test.exposed]
+            python = "python"
+            "#,
+            EnvRoot::new(tempdir.path().to_path_buf()).unwrap(),
+            BinDir::new(tempdir.path().to_path_buf()).unwrap(),
+        )
+        .unwrap();
+
+        let env_name = EnvironmentName::from_str("test").unwrap();
+
+        // 1. With Verbosity::Normal (default), completions row is omitted
+        report::set_verbosity(report::Verbosity::Normal);
+        let mut state_changes = StateChanges::default();
+        state_changes.insert_change(
+            &env_name,
+            StateChange::AddedCompletion("rattler".into(), "bash".into()),
+        );
+        state_changes.insert_change(
+            &env_name,
+            StateChange::AddedCompletion("rattler".into(), "zsh".into()),
+        );
+        state_changes.insert_change(
+            &env_name,
+            StateChange::AddedCompletion("rattler".into(), "fish".into()),
+        );
+
+        let reports = state_changes.into_reports(&project).await.unwrap();
+        assert_eq!(reports.len(), 1);
+        let report = &reports[0];
+        assert!(!report.rows.iter().any(|r| r.label == Label::Completions));
+
+        // 2. With Verbosity::Verbose, completions row is included with grouped shells
+        report::set_verbosity(report::Verbosity::Verbose);
+        let mut state_changes = StateChanges::default();
+        state_changes.insert_change(
+            &env_name,
+            StateChange::AddedCompletion("rattler".into(), "bash".into()),
+        );
+        state_changes.insert_change(
+            &env_name,
+            StateChange::AddedCompletion("rattler".into(), "zsh".into()),
+        );
+        state_changes.insert_change(
+            &env_name,
+            StateChange::AddedCompletion("rattler".into(), "fish".into()),
+        );
+
+        let reports = state_changes.into_reports(&project).await.unwrap();
+        assert_eq!(reports.len(), 1);
+        let report = &reports[0];
+        let completion_row = report
+            .rows
+            .iter()
+            .find(|r| r.label == Label::Completions)
+            .unwrap();
+        assert_eq!(completion_row.items.len(), 1);
+        assert_eq!(completion_row.items[0].name, "rattler");
+        assert_eq!(
+            completion_row.items[0].detail.as_deref(),
+            Some("(bash, zsh, fish)")
+        );
+
+        // Reset verbosity to normal
+        report::set_verbosity(report::Verbosity::Normal);
     }
 }
