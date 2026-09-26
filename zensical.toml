@@ -385,6 +385,14 @@ nav = [
                   { "verify" = "reference/cli/pixi/workspace/requires-pixi/verify.md" },
                 ]
               },
+              {
+                "requires-python" = [
+                  "reference/cli/pixi/workspace/requires-python/index.md",
+                  { "get" = "reference/cli/pixi/workspace/requires-python/get.md" },
+                  { "set" = "reference/cli/pixi/workspace/requires-python/set.md" },
+                  { "unset" = "reference/cli/pixi/workspace/requires-python/unset.md" },
+                ]
+              },
             ]
           },
         ]

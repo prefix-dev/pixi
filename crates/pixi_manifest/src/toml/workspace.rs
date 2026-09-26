@@ -262,6 +262,7 @@ impl TomlWorkspace {
                     .collect(),
             ),
             requires_pixi: self.requires_pixi,
+            requires_python: external.requires_python,
             exclude_newer: self.exclude_newer,
             exclude_newer_package_overrides: IndexMap::default(),
             pypi_exclude_newer_package_overrides: IndexMap::default(),
