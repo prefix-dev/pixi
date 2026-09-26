@@ -648,6 +648,47 @@ def test_config_list_honors_the_config_source_flags(pixi: Path, tmp_path: Path) 
     )
 
 
+def test_config_list_does_not_unconditionally_read_target_path(pixi: Path, tmp_path: Path) -> None:
+    """Ensure write target path is not read unconditionally as an extra layer outside a workspace"""
+    env = isolated_config_env(tmp_path)
+
+    cwd = tmp_path / "empty_dir"
+    cwd.mkdir()
+
+    # Create an empty pixi.toml so it won't go up and find the one inside the repo
+    (tmp_path / "pixi.toml").write_text("")
+
+    (Path(env["PIXI_HOME"]) / "config.toml").write_text(
+        'default-channels = ["global-channel"]\n'
+        "[pypi-config]\n"
+        'extra-index-urls = ["https://global.example/simple"]\n'
+    )
+
+    custom_config = tmp_path / "custom.toml"
+    custom_config.write_text('default-channels = ["custom-channel"]\n')
+
+    # Check that global is ignored when running with --no-config
+    result = verify_cli_command(
+        [pixi, "config", "list", "--no-config"],
+        env=env,
+        stdout_excludes="global-channel",
+        cwd=cwd,
+    )
+
+    # config-file should override PIXI_HOME completely
+    verify_cli_command(
+        [pixi, "config", "list", "--config-file", custom_config],
+        env=env,
+        cwd=cwd,
+        stdout_contains="custom-channel",
+        stdout_excludes="global-channel",
+    )
+
+    # Check global is loaded only once
+    result = verify_cli_command([pixi, "config", "list"], cwd=cwd, env=env)
+    assert result.stdout.count("https://global.example/simple") == 1
+
+
 def test_config_index_config_from_the_shared_layer(pixi: Path, tmp_path: Path) -> None:
     """`index-config` is a shared key, so a `rattler` file may set it."""
     env = isolated_config_env(tmp_path)
@@ -697,6 +738,54 @@ def test_config_append_extends_the_visible_list(pixi: Path, tmp_path: Path) -> N
         "https://global.example/simple",
         "https://mine.example/simple",
     ]
+
+
+def test_config_append_respects_explicit_empty_default_channels(pixi: Path, tmp_path: Path) -> None:
+    env = isolated_config_env(tmp_path)
+    (Path(env["RATTLER_HOME"]) / "config.toml").write_text(
+        'default-channels = ["shared-channel"]\n'
+    )
+    target = tmp_path / "target.toml"
+    target.write_text("# deliberate empty override\ndefault-channels = []\n")
+
+    verify_cli_command(
+        [pixi, "config", "append", "--path", target, "default-channels", "added"],
+        env=env,
+    )
+
+    assert tomli.loads(target.read_text())["default-channels"] == ["added"]
+    assert "# deliberate empty override" in target.read_text()
+
+
+def test_config_append_creates_explicit_path(pixi: Path, tmp_path: Path) -> None:
+    env = isolated_config_env(tmp_path)
+    (Path(env["RATTLER_HOME"]) / "config.toml").write_text(
+        'default-channels = ["shared-channel"]\n'
+    )
+    target = tmp_path / "nested" / "target.toml"
+
+    verify_cli_command(
+        [pixi, "config", "append", "--path", target, "default-channels", "added"],
+        env=env,
+    )
+
+    assert tomli.loads(target.read_text())["default-channels"] == [
+        "shared-channel",
+        "added",
+    ]
+
+
+def test_config_path_is_not_loaded_twice(pixi: Path, tmp_path: Path) -> None:
+    env = isolated_config_env(tmp_path)
+    target = tmp_path / "target.toml"
+    target.write_text('[pypi-config]\nextra-index-urls = ["https://example.test/simple"]\n')
+
+    listed = verify_cli_command(
+        [pixi, "config", "list", "--path", target],
+        env=env | {"PIXI_CONFIG_FILE": str(target)},
+    ).stdout
+
+    assert tomli.loads(listed)["pypi-config"]["extra-index-urls"] == ["https://example.test/simple"]
 
 
 def test_config_allow_links(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:

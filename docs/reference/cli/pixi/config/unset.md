@@ -25,6 +25,8 @@ pixi config unset [OPTIONS] <KEY>
 :  Operation on global configuration
 - <a id="arg---system" href="#arg---system">`--system (-s)`</a>
 :  Operation on system configuration
+- <a id="arg---path" href="#arg---path">`--path (-p) <PATH>`</a>
+:  Path to a local configuration file
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path (-m) <MANIFEST_PATH>`</a>

@@ -31,10 +31,9 @@ To use the Python backend in your `pixi.toml`, add it to your package's build co
 name = "python_package"
 version = "0.1.0"
 
-[package.build]
-backend = { name = "pixi-build-python", version = "*" }
+[package.build.backend]
+name = "pixi-build-python"
 channels = ["https://prefix.dev/conda-forge"]
-
 ```
 
 ### Required Dependencies
