@@ -150,9 +150,11 @@ impl Workspace {
     /// Return every workspace [`PixiPlatform`] whose subdir matches `current`
     /// or one of the fallback subdirs used by
     /// `Environment::best_platform_with_current`, ordered from most to least
-    /// appropriate. Within each subdir bucket, platforms are returned in
-    /// workspace declaration order (so a custom-named variant declared after
-    /// the bare subdir-bound platform comes second).
+    /// appropriate. Within each subdir bucket, platforms are ordered by
+    /// specificity: specialized platforms with user-customized virtual packages
+    /// (e.g. CUDA or custom glibc) that the host satisfies are preferred over
+    /// less specific or bare subdir platforms, falling back to workspace declaration
+    /// order when specificity is equal.
     ///
     /// Platforms whose declared virtual packages are not satisfied by
     /// `system_virtual_packages` are filtered out -- e.g. a `__cuda`-requiring
@@ -179,12 +181,27 @@ impl Workspace {
 
         let mut result: Vec<&PixiPlatform> = Vec::new();
         for subdir in &candidate_subdirs {
-            result.extend(
-                self.platforms
+            let mut matching: Vec<&PixiPlatform> = self
+                .platforms
+                .iter()
+                .filter(|p| p.subdir() == *subdir)
+                .filter(satisfies_system)
+                .collect();
+
+            // Platforms with user-customized virtual packages represent more
+            // specific host targets (e.g. CUDA, custom glibc or archspec versions)
+            // and should be preferred over less specific or bare subdir platforms.
+            // Stable sort preserves workspace declaration order when specificity is equal.
+            matching.sort_by_key(|p| {
+                let custom_count = p
+                    .declared_virtual_packages()
                     .iter()
-                    .filter(|p| p.subdir() == *subdir)
-                    .filter(satisfies_system),
-            );
+                    .filter(|declared| !is_subdir_default(declared, p.subdir()))
+                    .count();
+                std::cmp::Reverse(custom_count)
+            });
+
+            result.extend(matching);
         }
 
         // Single-workspace-platform WASM fallback, mirroring
