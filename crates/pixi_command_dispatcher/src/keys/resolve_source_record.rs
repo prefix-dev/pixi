@@ -17,7 +17,9 @@ use pixi_compute_reporters::OperationId;
 use pixi_record::{
     FullSourceRecordData, PinnedSourceSpec, PixiRecord, SourceRecord, UnresolvedPixiRecord,
 };
-use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceLocationSpec};
+use pixi_spec::{
+    BinarySpec, MatchspecFields, PixiSpec, SourceAnchor, SourceLocationSpec, SourceSpec,
+};
 use pixi_spec_containers::DependencyMap;
 use pixi_variant::VariantValue;
 use rattler_conda_types::{PackageName, PackageRecord, Platform, package::RunExportsJson};
@@ -48,6 +50,7 @@ use pixi_manifest::InlineContentHash;
 /// in the subtree remain visible.
 ///
 /// Reports progress via `Arc<dyn SourceRecordReporter>` set on the engine `DataStore`, if any.
+#[allow(clippy::too_many_arguments)]
 pub(super) async fn assemble_source_record(
     ctx: &mut ComputeCtx,
     source: &PinnedSourceCodeLocation,
@@ -56,6 +59,7 @@ pub(super) async fn assemble_source_record(
     env_ref: &EnvironmentRef,
     installed_source_hints: &PtrArc<InstalledSourceHints>,
     inline_content_hash: Option<InlineContentHash>,
+    workspace_sources: &Arc<BTreeMap<PackageName, SourceLocationSpec>>,
 ) -> Result<Arc<SourceRecord>, SourceRecordError> {
     // Reporter lifecycle for this variant's source-record assembly.
     // Build a `SourceRecordReporterSpec` from the data flowing through here so
@@ -101,6 +105,7 @@ pub(super) async fn assemble_source_record(
         env_ref,
         installed_source_hints,
         inline_content_hash,
+        workspace_sources,
     );
     match active_id {
         Some(id) => id.scope_active(work).await,
@@ -108,7 +113,7 @@ pub(super) async fn assemble_source_record(
     }
 }
 
-#[allow(clippy::result_large_err)]
+#[allow(clippy::result_large_err, clippy::too_many_arguments)]
 async fn assemble_source_record_inner(
     ctx: &mut ComputeCtx,
     source: &PinnedSourceCodeLocation,
@@ -117,6 +122,7 @@ async fn assemble_source_record_inner(
     env_ref: &EnvironmentRef,
     installed_source_hints: &PtrArc<InstalledSourceHints>,
     inline_content_hash: Option<InlineContentHash>,
+    workspace_sources: &Arc<BTreeMap<PackageName, SourceLocationSpec>>,
 ) -> Result<Arc<SourceRecord>, SourceRecordError> {
     let source_location = SourceLocationSpec::from(source.manifest_source().clone());
     let source_anchor = SourceAnchor::from(source_location.clone());
@@ -157,6 +163,7 @@ async fn assemble_source_record_inner(
         build_dependencies.clone(),
         Arc::clone(&installed_build_packages),
         installed_source_hints,
+        workspace_sources,
     )
     .await?;
 
@@ -201,6 +208,7 @@ async fn assemble_source_record_inner(
         host_dependencies.clone(),
         Arc::clone(&installed_host_packages),
         installed_source_hints,
+        workspace_sources,
     )
     .await?;
 
@@ -343,12 +351,21 @@ async fn assemble_source_record_inner(
                 let implied_location = match withspec.value.clone().into_source_or_binary() {
                     Either::Left(source) if withspec.source.is_some() => Some(source.location),
                     Either::Left(_) => None,
-                    Either::Right(_) => compatibility_map.get(&name).and_then(|r| match r {
-                        PixiRecord::Source(source) => {
-                            Some(SourceLocationSpec::from(source.manifest_source().clone()))
-                        }
-                        PixiRecord::Binary(_) => None,
-                    }),
+                    Either::Right(_) => compatibility_map
+                        .get(&name)
+                        .and_then(|r| match r {
+                            PixiRecord::Source(source) => {
+                                Some(SourceLocationSpec::from(source.manifest_source().clone()))
+                            }
+                            PixiRecord::Binary(_) => None,
+                        })
+                        .or_else(|| {
+                            if name != pkg_name {
+                                workspace_sources.get(&name).cloned()
+                            } else {
+                                None
+                            }
+                        }),
                 };
                 if let Some(location) =
                     implied_location.and_then(|loc| source_anchor.relativize_location(loc))
@@ -516,6 +533,7 @@ async fn nested_solve(
     dependencies: Dependencies,
     installed: Arc<[UnresolvedPixiRecord]>,
     installed_source_hints: &PtrArc<InstalledSourceHints>,
+    workspace_sources: &Arc<BTreeMap<PackageName, SourceLocationSpec>>,
 ) -> Result<Vec<PixiRecord>, SourceRecordError> {
     if dependencies.dependencies.is_empty() {
         return Ok(vec![]);
@@ -534,13 +552,35 @@ async fn nested_solve(
         .await
         .host_platform;
     let installed = installed_records_for_platform(installed, host_platform);
+    let channel_config = ctx.compute(&ChannelConfigKey).await;
+
+    let mapped_dependencies: DependencyMap<PackageName, PixiSpec> = dependencies
+        .dependencies
+        .into_specs()
+        .map(|(name, withspec)| {
+            let spec = match withspec.value.into_source_or_binary() {
+                Either::Right(binary)
+                    if &name != pkg_name
+                        && let Some(source_location) = workspace_sources.get(&name) =>
+                {
+                    let matchspec = binary
+                        .try_into_nameless_match_spec(&channel_config)
+                        .map(|nameless| MatchspecFields::from_nameless_match_spec(&nameless))
+                        .unwrap_or_default();
+                    PixiSpec::from(SourceSpec {
+                        location: source_location.clone(),
+                        matchspec,
+                    })
+                }
+                Either::Left(source) => PixiSpec::from(source),
+                Either::Right(binary) => PixiSpec::from(binary),
+            };
+            (name, spec)
+        })
+        .collect();
 
     let nested_spec = SolvePixiEnvironmentSpec {
-        dependencies: dependencies
-            .dependencies
-            .into_specs()
-            .map(|(name, withspec)| (name, withspec.value))
-            .collect(),
+        dependencies: mapped_dependencies,
         constraints: dependencies
             .constraints
             .into_specs()
@@ -560,6 +600,7 @@ async fn nested_solve(
         // A nested build/host env solves binary/source build deps; inline
         // definitions apply only to the consumer's direct dependencies.
         inline_packages: Default::default(),
+        workspace_sources: Arc::clone(workspace_sources),
     };
 
     // Wrap the nested SolvePixiEnvironmentKey call in a cycle
