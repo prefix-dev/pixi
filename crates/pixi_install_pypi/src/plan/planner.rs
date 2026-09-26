@@ -37,6 +37,8 @@ pub struct InstallPlanner {
     lock_file_dir: PathBuf,
     // Packages that should never be marked as extraneous
     ignored_extraneous: HashSet<uv_normalize::PackageName>,
+    // Conda packages installed in the environment
+    conda_packages: HashSet<uv_normalize::PackageName>,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -59,6 +61,7 @@ impl InstallPlanner {
             uv_cache,
             lock_file_dir: lock_file_dir.as_ref().to_path_buf(),
             ignored_extraneous: HashSet::new(),
+            conda_packages: HashSet::new(),
         }
     }
 
@@ -69,6 +72,7 @@ impl InstallPlanner {
             uv_cache: self.uv_cache.with_refresh(refresh),
             lock_file_dir: self.lock_file_dir.clone(),
             ignored_extraneous: self.ignored_extraneous,
+            conda_packages: self.conda_packages,
         }
     }
 
@@ -80,6 +84,19 @@ impl InstallPlanner {
         I: IntoIterator<Item = uv_normalize::PackageName>,
     {
         self.ignored_extraneous = names.into_iter().collect();
+        self
+    }
+
+    /// Provide a list of conda packages that are installed in the environment.
+    /// If an installed PyPI distribution matches a package in this list and is no longer
+    /// required as a PyPI dependency, it will be treated as duplicate metadata to remove
+    /// rather than an extraneous package to uninstall, preventing removal of the files
+    /// installed by conda.
+    pub fn with_conda_packages<I>(mut self, names: I) -> Self
+    where
+        I: IntoIterator<Item = uv_normalize::PackageName>,
+    {
+        self.conda_packages = names.into_iter().collect();
         self
     }
 
@@ -242,35 +259,27 @@ impl InstallPlanner {
             }
         }
         // So it may happen that both conda and PyPI have installed a package with the same name
-        // but different versions, in that case, we want to split into extraneous and duplicates
+        // but different versions, in that case, we want to split into extraneous and duplicates.
+        // Additionally, if a package is now provided by conda, any stale PyPI distribution
+        // must be treated as duplicate metadata rather than extraneous to avoid uninstalling
+        // the files just installed by conda.
         let (extraneous, duplicates): (Vec<_>, Vec<_>) =
-            extraneous.into_iter().partition_map(|(_, dists)| {
-                if dists.len() > 1 {
-                    Either::Right(
-                        dists
-                            .into_iter()
-                            .filter_map(|d| {
-                                if let Extraneous::Ours(dist) = d {
-                                    Some(dist.clone())
-                                } else {
-                                    None
-                                }
-                            })
-                            .collect::<Vec<_>>(),
-                    )
+            extraneous.into_iter().partition_map(|(name, dists)| {
+                let is_duplicate = dists.len() > 1 || self.conda_packages.contains(name);
+                let ours = dists
+                    .into_iter()
+                    .filter_map(|d| {
+                        if let Extraneous::Ours(dist) = d {
+                            Some(dist.clone())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                if is_duplicate {
+                    Either::Right(ours)
                 } else {
-                    Either::Left(
-                        dists
-                            .into_iter()
-                            .filter_map(|d| {
-                                if let Extraneous::Ours(dist) = d {
-                                    Some(dist.clone())
-                                } else {
-                                    None
-                                }
-                            })
-                            .collect::<Vec<_>>(),
-                    )
+                    Either::Left(ours)
                 }
             });
 

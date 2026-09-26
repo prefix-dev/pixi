@@ -2,6 +2,7 @@ use std::{
     collections::{HashMap, HashSet},
     path::Path,
     pin::Pin,
+    str::FromStr,
     sync::Arc,
 };
 
@@ -361,6 +362,7 @@ struct UvInstallerPlannerConfig {
     /// [`CacheScopedBuildContext`].
     cache_config_settings: ConfigSettings,
     venv: PythonEnvironment,
+    conda_packages: HashSet<PackageName>,
 }
 
 /// Internal setup data for the uv installer
@@ -567,6 +569,23 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
 
         let venv = PythonEnvironment::from_interpreter(interpreter);
 
+        let mut conda_packages = HashSet::new();
+        for record in pixi_records {
+            if let Ok(name) = PackageName::from_str(record.name().as_source()) {
+                conda_packages.insert(name);
+            }
+            if let Ok(name) = PackageName::from_str(record.name().as_normalized()) {
+                conda_packages.insert(name);
+            }
+            if let Some(purls) = &record.package_record().purls {
+                for purl in purls.iter().filter(|p| p.package_type() == "pypi") {
+                    if let Ok(name) = PackageName::from_str(purl.name()) {
+                        conda_packages.insert(name);
+                    }
+                }
+            }
+        }
+
         Ok(UvInstallerPlannerConfig {
             tags,
             index_locations,
@@ -574,6 +593,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             config_settings,
             cache_config_settings,
             venv,
+            conda_packages,
         })
     }
 
@@ -710,6 +730,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             self.config.lock_file_dir,
         )
         .with_ignored_extraneous(self.ignored_extraneous.clone())
+        .with_conda_packages(planner_config.conda_packages.clone())
         .plan(
             &site_packages,
             CachedWheels::new(registry_index, built_wheel_index, hash_strategy),
