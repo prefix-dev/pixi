@@ -911,8 +911,13 @@ def test_config_describe(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: 
     manifest_path = tmp_pixi_workspace / "pixi.toml"
     verify_cli_command([pixi, "init", "--channel", dummy_channel_1, tmp_pixi_workspace])
 
+    # The `tmp_pixi_workspace` fixture seeds a project-local config that sets
+    # several of the keys asserted on below. Remove it, and pass `--no-config`,
+    # so the output only reflects built-in defaults and what this test sets.
+    (tmp_pixi_workspace / ".pixi" / "config.toml").unlink()
+
     verify_cli_command(
-        [pixi, "config", "list", "--describe", "--manifest-path", manifest_path],
+        [pixi, "config", "list", "--describe", "--no-config", "--manifest-path", manifest_path],
         stdout_contains=[
             "# Type: bool",
             "# Default: false",
@@ -924,7 +929,16 @@ def test_config_describe(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: 
     )
 
     verify_cli_command(
-        [pixi, "config", "list", "--describe", "tls-no-verify", "--manifest-path", manifest_path],
+        [
+            pixi,
+            "config",
+            "list",
+            "--describe",
+            "--no-config",
+            "tls-no-verify",
+            "--manifest-path",
+            manifest_path,
+        ],
         stdout_contains=[
             "# Disable TLS certificate verification",
             "# Type: bool",
@@ -946,7 +960,16 @@ def test_config_describe(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: 
         ]
     )
     verify_cli_command(
-        [pixi, "config", "list", "--describe", "tls-no-verify", "--manifest-path", manifest_path],
+        [
+            pixi,
+            "config",
+            "list",
+            "--describe",
+            "--no-config",
+            "tls-no-verify",
+            "--manifest-path",
+            manifest_path,
+        ],
         stdout_contains=["tls-no-verify = true"],
         stdout_excludes=["# tls-no-verify ="],
     )
@@ -957,6 +980,7 @@ def test_config_describe(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: 
             "config",
             "list",
             "--describe",
+            "--no-config",
             "--json",
             "tls-no-verify",
             "--manifest-path",
@@ -976,6 +1000,7 @@ def test_config_describe(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: 
             "config",
             "list",
             "--describe",
+            "--no-config",
             "not-a-real-key",
             "--manifest-path",
             manifest_path,

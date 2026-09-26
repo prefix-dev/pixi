@@ -139,16 +139,52 @@ static CONFIG_OPTION_DESCRIPTIONS: &[ConfigOptionDescription] = &[
         default: "(empty)",
     },
     ConfigOptionDescription {
+        key: "experimental.conda-script",
+        description: "Allow running `conda-script` files without passing `--experimental` on every invocation. The format follows a draft proposal and may still change.",
+        value_type: "bool",
+        default: "false",
+    },
+    ConfigOptionDescription {
         key: "experimental.use-environment-activation-cache",
         description: "Cache activated environment variables between commands.",
         value_type: "bool",
         default: "false",
     },
     ConfigOptionDescription {
+        key: "index-config",
+        description: "Options for the channels `pixi publish` indexes, with per-channel overrides keyed by channel URL or path. See `index-config.*` keys; can also be set as a JSON object.",
+        value_type: "table",
+        default: "(empty)",
+    },
+    ConfigOptionDescription {
+        key: "index-config.base-url",
+        description: "`info.base_url` value written to generated repodata.",
+        value_type: "string",
+        default: "(unset)",
+    },
+    ConfigOptionDescription {
+        key: "index-config.write-shards",
+        description: "Whether to write `repodata_shards.msgpack.zst` and shard files when indexing a channel.",
+        value_type: "bool",
+        default: "true",
+    },
+    ConfigOptionDescription {
+        key: "index-config.write-zst",
+        description: "Whether to write `repodata.json.zst` when indexing a channel.",
+        value_type: "bool",
+        default: "true",
+    },
+    ConfigOptionDescription {
         key: "mirrors",
         description: "Mirror redirects, mapping a channel URL to a list of mirror URLs.",
         value_type: "map of URL → array of URLs",
         default: "{}",
+    },
+    ConfigOptionDescription {
+        key: "offline",
+        description: "Don't access the network and only use locally cached data. Operations that need data that is not cached will fail.",
+        value_type: "bool",
+        default: "false",
     },
     ConfigOptionDescription {
         key: "pinning-strategy",
