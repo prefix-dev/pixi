@@ -423,8 +423,6 @@ impl JsonRpcBackend {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
     use super::{InitializeError, JsonRpcBackend};
     use crate::tool::{SystemTool, Tool};
 
@@ -434,10 +432,11 @@ mod tests {
             .enable_all()
             .build()
             .unwrap();
+        let root = std::env::temp_dir();
         let err = runtime.block_on(JsonRpcBackend::setup(
-            PathBuf::from("/tmp"),
-            PathBuf::from("/tmp/pixi.toml"),
-            PathBuf::from("/tmp"),
+            root.clone(),
+            root.join("pixi.toml"),
+            root.clone(),
             None,
             None,
             None,

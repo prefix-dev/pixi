@@ -34,7 +34,7 @@ fn build_spawn_sites_are_allowlisted() {
 }
 
 fn visit(dir: &Path, workspace: &Path, unexpected: &mut Vec<String>) {
-    let entries = match std::fs::read_dir(dir) {
+    let entries = match fs_err::read_dir(dir) {
         Ok(entries) => entries,
         Err(_) => return,
     };
@@ -55,7 +55,7 @@ fn visit(dir: &Path, workspace: &Path, unexpected: &mut Vec<String>) {
         if ALLOWLIST.iter().any(|allowed| relative == *allowed) {
             continue;
         }
-        let contents = std::fs::read_to_string(&path).unwrap_or_default();
+        let contents = fs_err::read_to_string(&path).unwrap_or_default();
         if contents.contains("Command::new") || contents.contains(".spawn()") {
             unexpected.push(relative);
         }
