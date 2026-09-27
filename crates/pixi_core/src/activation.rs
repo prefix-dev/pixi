@@ -95,7 +95,14 @@ const ENV_PREFIX: &str = "PIXI_ENVIRONMENT_";
 
 impl Environment<'_> {
     /// Returns environment variables and their values that should be injected when running a command.
-    pub(crate) fn get_metadata_env(&self) -> IndexMap<String, String> {
+    pub(crate) fn get_metadata_env(
+        &self,
+        platform: Option<&PixiPlatform>,
+    ) -> IndexMap<String, String> {
+        let platform = match platform {
+            Some(platform) => platform.clone(),
+            None => self.activation_platform(),
+        };
         let prompt = match self.name() {
             EnvironmentName::Named(name) => {
                 format!("{}:{}", self.workspace().display_name(), name)
@@ -105,6 +112,10 @@ impl Environment<'_> {
 
         IndexMap::from_iter([
             (format!("{ENV_PREFIX}NAME"), self.name().to_string()),
+            (
+                format!("{ENV_PREFIX}PLATFORM"),
+                platform.as_str().to_string(),
+            ),
             (
                 format!("{ENV_PREFIX}PLATFORMS"),
                 self.platforms().iter().map(|plat| plat.as_str()).join(","),
@@ -171,9 +182,10 @@ pub fn get_activator<'p>(
         .extend(additional_activation_scripts);
 
     // Add the environment variables from the project (pre-activation script vars).
-    activator
-        .env_vars
-        .extend(get_static_environment_variables(environment));
+    activator.env_vars.extend(get_static_environment_variables(
+        environment,
+        Some(platform),
+    ));
 
     // Add environment variables that should be applied after activation scripts run.
     activator
@@ -423,6 +435,7 @@ pub async fn run_activation(
 /// Returns IndexMap to stay sorted, as pixi should export the metadata before exporting variables that could depend on it.
 pub(crate) fn get_static_environment_variables<'p>(
     environment: &'p Environment<'p>,
+    platform: Option<&PixiPlatform>,
 ) -> IndexMap<String, String> {
     // Get environment variables from the pixi project meta data
     let project_env = environment.workspace().get_metadata_env();
@@ -438,7 +451,7 @@ pub(crate) fn get_static_environment_variables<'p>(
     shell_env.insert("CONDA_DEFAULT_ENV".to_string(), env_name);
 
     // Get environment variables from the pixi environment
-    let environment_env = environment.get_metadata_env();
+    let environment_env = environment.get_metadata_env(platform);
 
     // Combine the environments
     project_env
@@ -573,18 +586,26 @@ mod tests {
         let project = Workspace::from_str(Path::new("pixi.toml"), multi_env_workspace).unwrap();
 
         let default_env = project.default_environment();
-        let env = default_env.get_metadata_env();
+        let env = default_env.get_metadata_env(None);
 
         assert_eq!(env.get("PIXI_ENVIRONMENT_NAME").unwrap(), "default");
         assert!(env.get("PIXI_ENVIRONMENT_PLATFORMS").is_some());
+        assert_eq!(
+            env.get("PIXI_ENVIRONMENT_PLATFORM").unwrap(),
+            default_env.activation_platform().as_str()
+        );
         assert!(env.get("PIXI_PROMPT").unwrap().contains("pixi"));
 
         let test_env = project.environment("test").unwrap();
-        let env = test_env.get_metadata_env();
         let current = pixi_manifest::PixiPlatform::from_subdir(Platform::current());
+        let env = test_env.get_metadata_env(Some(&current));
         let post_activation_env = test_env.activation_env(Some(&current));
 
         assert_eq!(env.get("PIXI_ENVIRONMENT_NAME").unwrap(), "test");
+        assert_eq!(
+            env.get("PIXI_ENVIRONMENT_PLATFORM").unwrap(),
+            current.as_str()
+        );
         assert!(env.get("PIXI_PROMPT").unwrap().contains("pixi"));
         assert!(env.get("PIXI_PROMPT").unwrap().contains("test"));
         assert!(

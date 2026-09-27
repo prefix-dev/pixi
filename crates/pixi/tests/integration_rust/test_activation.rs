@@ -38,6 +38,12 @@ async fn test_pixi_only_env_activation() {
     }
 
     assert!(pixi_only_env.get("CONDA_PREFIX").is_some());
+    assert_eq!(
+        pixi_only_env
+            .get("PIXI_ENVIRONMENT_PLATFORM")
+            .map(String::as_str),
+        Some(default_env.activation_platform().as_str())
+    );
     assert!(pixi_only_env.get("DIRTY_VAR_1").is_none());
     // This is not a pixi var, so it is not included in pixi_only.
     assert!(pixi_only_env.get(HOME).is_none());
@@ -102,6 +108,12 @@ async fn test_clean_env_activation() {
     .await
     .unwrap();
     assert!(clean_env.get("CONDA_PREFIX").is_some());
+    assert_eq!(
+        clean_env
+            .get("PIXI_ENVIRONMENT_PLATFORM")
+            .map(String::as_str),
+        Some(default_env.activation_platform().as_str())
+    );
     assert!(clean_env.get("DIRTY_VAR_3").is_none());
 
     // This is not a pixi var, but it is passed into a clean env.
@@ -195,11 +207,19 @@ mod custom_platform_scoping {
         assert_eq!(vars.get("BAR").map(String::as_str), Some("foo"));
         assert_eq!(vars.get("ONLY_GENERIC"), None);
         assert_eq!(vars.get("COMMON").map(String::as_str), Some("always"));
+        assert_eq!(
+            vars.get("PIXI_ENVIRONMENT_PLATFORM").map(String::as_str),
+            Some("local")
+        );
 
         let vars = activated(&pixi, Some("generic")).await;
         assert_eq!(vars.get("BAR"), None);
         assert_eq!(vars.get("ONLY_GENERIC").map(String::as_str), Some("yes"));
         assert_eq!(vars.get("COMMON").map(String::as_str), Some("always"));
+        assert_eq!(
+            vars.get("PIXI_ENVIRONMENT_PLATFORM").map(String::as_str),
+            Some("generic")
+        );
     }
 
     /// With no platform requested and nothing installed, activation resolves
@@ -211,6 +231,10 @@ mod custom_platform_scoping {
         let vars = activated(&pixi, None).await;
         assert_eq!(vars.get("ONLY_GENERIC").map(String::as_str), Some("yes"));
         assert_eq!(vars.get("BAR"), None);
+        assert_eq!(
+            vars.get("PIXI_ENVIRONMENT_PLATFORM").map(String::as_str),
+            Some("generic")
+        );
     }
 
     /// With no platform requested but the environment installed for `local`,
@@ -247,6 +271,10 @@ mod custom_platform_scoping {
         let vars = activated(&pixi, None).await;
         assert_eq!(vars.get("BAR").map(String::as_str), Some("foo"));
         assert_eq!(vars.get("ONLY_GENERIC"), None);
+        assert_eq!(
+            vars.get("PIXI_ENVIRONMENT_PLATFORM").map(String::as_str),
+            Some("local")
+        );
     }
 
     /// `[target.<custom-platform>.activation] scripts` are scoped like the

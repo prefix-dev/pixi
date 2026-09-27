@@ -352,6 +352,10 @@ impl PixiPlatform {
         &self.name
     }
 
+    pub fn as_str(&self) -> &str {
+        self.name.as_str()
+    }
+
     pub fn set_name(&mut self, name: PixiPlatformName) -> Result<(), PixiPlatformError> {
         // A platform without virtual packages must always be named after its
         // subdir, so a bare subdir-platform can't be renamed, and a VP-bearing

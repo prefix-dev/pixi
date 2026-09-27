@@ -2410,8 +2410,15 @@ print("hello")
             root.path().join("example.py").to_string_lossy()
         );
 
-        let environment_env = workspace.default_environment().get_metadata_env();
+        let environment_env = workspace.default_environment().get_metadata_env(None);
         assert_eq!(environment_env["PIXI_ENVIRONMENT_NAME"], "default");
+        assert_eq!(
+            environment_env["PIXI_ENVIRONMENT_PLATFORM"],
+            workspace
+                .default_environment()
+                .activation_platform()
+                .as_str()
+        );
 
         assert_eq!(
             workspace

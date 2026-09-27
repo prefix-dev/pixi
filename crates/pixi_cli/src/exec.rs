@@ -138,6 +138,10 @@ pub async fn execute(args: Args) -> miette::Result<ExitCode> {
         let env_name = format!("temp:{}", package_names.into_iter().format(","));
 
         activation_env.insert("PIXI_ENVIRONMENT_NAME".into(), env_name.clone());
+        activation_env.insert(
+            "PIXI_ENVIRONMENT_PLATFORM".into(),
+            platform.as_str().to_string(),
+        );
 
         if !args.no_modify_ps1 && std::env::current_dir().is_ok() {
             let (prompt_var, prompt_value) = if cfg!(windows) {
