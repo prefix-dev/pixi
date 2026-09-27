@@ -1002,7 +1002,7 @@ async fn test_publish_fails_before_build_or_upload_when_one_variant_is_unsatisfi
         build_number: None,
         build_dir: None,
         clean: false,
-        path: Some(pixi.manifest_path()),
+        path: vec![pixi.manifest_path()],
         target_channel: Some(target_url.to_string()),
         target_dir: None,
         force: false,
@@ -3442,7 +3442,7 @@ async fn test_publish_without_target_builds_but_does_not_upload() {
         build_number: None,
         build_dir: None,
         clean: false,
-        path: Some(pixi.manifest_path()),
+        path: vec![pixi.manifest_path()],
         target_channel: None,
         target_dir: None,
         force: false,
@@ -3484,7 +3484,7 @@ async fn publish_from_directory(
 
 fn publish_args_for_test(
     backend_override: Option<BackendOverride>,
-    path: Option<PathBuf>,
+    path: impl IntoIterator<Item = PathBuf>,
     target_dir: Option<PathBuf>,
 ) -> publish::Args {
     publish::Args {
@@ -3497,7 +3497,7 @@ fn publish_args_for_test(
         build_number: None,
         build_dir: None,
         clean: false,
-        path,
+        path: path.into_iter().collect(),
         target_channel: None,
         target_dir,
         force: false,
@@ -3913,6 +3913,124 @@ async fn test_publish_allow_source_dependencies_keeps_historic_build_behavior() 
     assert_eq!(conda_artifact_names(publish_dir.path()), vec!["cpp"]);
 }
 
+/// Publishing multiple packages with `--path` allows publishing packages where one
+/// has a source run dependency on another in the batch, without requiring `publish = true`.
+#[tokio::test]
+async fn test_publish_multiple_paths_succeeds_with_run_dependency() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    write_three_package_workspace(pixi.workspace_path(), None, None, None);
+
+    let publish_dir = tempfile::tempdir().unwrap();
+    // Supply them in reverse dependency order: cpp first, then core.
+    let paths = vec![
+        pixi.workspace_path().join("cpp"),
+        pixi.workspace_path().join("core"),
+    ];
+    let args = publish_args_for_test(
+        Some(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        )),
+        paths,
+        Some(publish_dir.path().to_path_buf()),
+    );
+    publish::execute(args)
+        .await
+        .expect("publishing multiple packages with satisfied run dependencies should succeed");
+
+    // Both packages should be built and uploaded.
+    assert_eq!(
+        conda_artifact_names(publish_dir.path()),
+        vec!["core", "cpp"]
+    );
+}
+
+/// Publishing multiple packages where a source run dependency is missing from the batch fails
+/// with a diagnostic suggesting to add the missing package to `--path`.
+#[tokio::test]
+async fn test_publish_multiple_paths_missing_dependency_fails() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    write_three_package_workspace(pixi.workspace_path(), None, None, None);
+
+    // kit depends on cpp; cpp depends on core. Neither kit nor cpp produce core.
+    let paths = vec![
+        pixi.workspace_path().to_path_buf(),
+        pixi.workspace_path().join("cpp"),
+    ];
+    let args = publish_args_for_test(
+        Some(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        )),
+        paths,
+        None,
+    );
+    let err = publish::execute(args)
+        .await
+        .expect_err("publishing multiple packages with missing source run dependency should fail");
+
+    insta::assert_snapshot!(format_diagnostic(err.as_ref()), @"
+    × package 'cpp' has source run dependencies (core) and cannot be published on its own
+    help: An explicit publish must be self-contained. Specify the missing source dependencies with `--path`, or set `publish = true` in the `[package]` section of the packages and their source
+          dependencies, then run `pixi publish` without `--path` to publish them together.
+    ");
+}
+
+/// CLI `--allow-source-dependencies` flag allows publishing packages even if some source run
+/// dependencies are not included in the publish batch.
+#[tokio::test]
+async fn test_publish_allow_source_dependencies_flag() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    write_three_package_workspace(pixi.workspace_path(), None, None, None);
+
+    let publish_dir = tempfile::tempdir().unwrap();
+    let mut args = publish_args_for_test(
+        Some(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        )),
+        vec![pixi.workspace_path().join("cpp")],
+        Some(publish_dir.path().to_path_buf()),
+    );
+    args.allow_source_dependencies = true;
+    publish::execute(args)
+        .await
+        .expect("publish with --allow-source-dependencies should succeed");
+
+    assert_eq!(conda_artifact_names(publish_dir.path()), vec!["cpp"]);
+}
+
+/// Publishing with duplicate `--path` arguments deduplicates the paths.
+#[tokio::test]
+async fn test_publish_multiple_paths_deduplicates_same_path() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    write_three_package_workspace(pixi.workspace_path(), None, None, None);
+
+    let publish_dir = tempfile::tempdir().unwrap();
+    // Supply duplicate paths for core.
+    let paths = vec![
+        pixi.workspace_path().join("core"),
+        pixi.workspace_path().join("core"),
+    ];
+    let args = publish_args_for_test(
+        Some(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        )),
+        paths,
+        Some(publish_dir.path().to_path_buf()),
+    );
+    publish::execute(args)
+        .await
+        .expect("publishing duplicate paths should deduplicate and succeed");
+
+    assert_eq!(conda_artifact_names(publish_dir.path()), vec!["core"]);
+}
+
 /// A workspace without a single opted-in package falls back to publishing
 /// the package at the current directory, as if `--path .` had been passed.
 #[tokio::test]
@@ -4042,7 +4160,7 @@ backend.version = "0.1.0"
         build_number: None,
         build_dir: None,
         clean: false,
-        path: Some(pixi.manifest_path()),
+        path: vec![pixi.manifest_path()],
         target_channel: None,
         target_dir: None,
         force: false,
@@ -4168,7 +4286,7 @@ host-lib = "*"
         build_number: None,
         build_dir: None,
         clean: false,
-        path: Some(pixi.manifest_path()),
+        path: vec![pixi.manifest_path()],
         target_channel: None,
         target_dir: Some(target_dir.path().to_path_buf()),
         force: false,

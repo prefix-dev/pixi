@@ -4,7 +4,7 @@ use pixi_consts::consts::{
     WORKSPACE_MANIFEST,
 };
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     ffi::OsStr,
     fmt,
     path::{Path, PathBuf},
@@ -77,10 +77,11 @@ pub struct Args {
     #[clap(skip)]
     pub backend_override: Option<BackendOverride>,
 
-    /// Skip the self-contained check of a single-package publish. Set by the
-    /// deprecated `pixi build` delegation, which historically built packages
-    /// with source dependencies.
-    #[clap(skip)]
+    /// Skip the self-contained check of a publish.
+    ///
+    /// Allows publishing packages even if some source run dependencies are missing from
+    /// the publish batch.
+    #[arg(long)]
     pub allow_source_dependencies: bool,
 
     /// The target platform to build for (defaults to the current platform)
@@ -108,16 +109,17 @@ pub struct Args {
     pub clean: bool,
 
     /// The path to a directory containing a package manifest, or to a specific manifest file.
+    /// Repeat this flag or pass multiple paths to publish multiple packages together.
     ///
-    /// When given, only that package is built and published - whether or not
-    /// it sets `publish = true`. The package must be self-contained:
-    /// publishing it alone fails if any of its run dependencies is a source
-    /// dependency. Build and host source dependencies are only consumed
-    /// while building and are fine.
+    /// When given, only the specified package(s) are built and published - whether or
+    /// not they set `publish = true`. The specified packages must be self-contained:
+    /// any source run dependency must either be produced by one of the specified packages
+    /// or `--allow-source-dependencies` must be set. Build and host source dependencies
+    /// are only consumed while building and are fine.
     ///
     /// Supported manifest files: `package.xml`, `recipe.yaml`, `pixi.toml`, `pyproject.toml`, or `mojoproject.toml`.
-    #[arg(long)]
-    pub path: Option<PathBuf>,
+    #[arg(long, value_name = "PATH", num_args = 1.., visible_alias = "paths")]
+    pub path: Vec<PathBuf>,
 
     /// The target channel to publish packages to. Accepts a URL (prefix.dev, anaconda.org, cloudsmith://, s3://, quetz://, artifactory://) or a local filesystem path / `file://` URL for an indexed local channel.
     ///
@@ -509,8 +511,8 @@ async fn validate_package_manifest(path: &PathBuf) -> miette::Result<()> {
     Ok(())
 }
 
-async fn determine_discovery_start(path: &Option<PathBuf>) -> miette::Result<DiscoveryStart> {
-    match path {
+async fn determine_discovery_start(paths: &[PathBuf]) -> miette::Result<DiscoveryStart> {
+    match paths.first() {
         Some(path) => {
             // We need to solve the path to an absolute path
             // because we can point to specific package manifest file
@@ -710,15 +712,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     };
 
-    // Determine which packages to publish: a single one when `--path` is
-    // given, otherwise every package in the workspace that opts in with
-    // `publish = true`, ordered so that dependencies are built and uploaded
-    // before their dependents. A workspace without a single opted-in package
-    // falls back to publishing the package at the current directory, as if
-    // `--path .` had been passed.
-    let mut single_package_path = args.path.clone();
+    // Determine which packages to publish: when `--path` is given, publish
+    // the specified packages. Otherwise, publish every package in the
+    // workspace that opts in with `publish = true`, ordered so that
+    // dependencies are built and uploaded before their dependents. A workspace
+    // without a single opted-in package falls back to publishing the package
+    // at the current directory, as if `--path .` had been passed.
+    let mut explicit_paths = args.path.clone();
     let mut workspace_set = None;
-    if single_package_path.is_none() {
+    if explicit_paths.is_empty() {
         workspace_set =
             discovery::resolve_publish_set(&workspace, &command_dispatcher, &make_metadata_spec)
                 .await?;
@@ -728,39 +730,37 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                  directory",
                 console::style(console::Emoji("ℹ️  ", "")).blue(),
             );
-            single_package_path = Some(PathBuf::from("."));
+            explicit_paths = vec![PathBuf::from(".")];
         }
     }
-    let single_package_mode = single_package_path.is_some();
-    let (package_sources, cycle_members) = match (&single_package_path, workspace_set) {
-        (Some(path), _) => {
-            validate_package_manifest(path).await?;
-            let package_manifest_path_canonical = dunce::canonicalize(path)
-                .into_diagnostic()
-                .with_context(|| {
-                    format!("failed to canonicalize manifest path '{}'", path.display())
-                })?;
-            let manifest_path_spec =
-                pathdiff::diff_paths(&package_manifest_path_canonical, workspace.root())
-                    .unwrap_or_else(|| package_manifest_path_canonical.clone());
-            let manifest_source: PinnedSourceSpec = PinnedPathSpec {
-                path: manifest_path_spec.to_string_lossy().into_owned().into(),
+    let explicit_mode = workspace_set.is_none();
+    let (package_sources, mut cycle_members) = match (&workspace_set, explicit_paths) {
+        (Some(resolved), _) => (resolved.packages.clone(), resolved.cycle_members.clone()),
+        (None, paths) => {
+            let mut seen_canonical = HashSet::new();
+            let mut sources = Vec::new();
+            for path in paths {
+                validate_package_manifest(&path).await?;
+                let package_manifest_path_canonical = dunce::canonicalize(&path)
+                    .into_diagnostic()
+                    .with_context(|| {
+                        format!("failed to canonicalize manifest path '{}'", path.display())
+                    })?;
+                if !seen_canonical.insert(package_manifest_path_canonical.clone()) {
+                    continue;
+                }
+                let manifest_path_spec =
+                    pathdiff::diff_paths(&package_manifest_path_canonical, workspace.root())
+                        .unwrap_or_else(|| package_manifest_path_canonical.clone());
+                let manifest_source: PinnedSourceSpec = PinnedPathSpec {
+                    path: manifest_path_spec.to_string_lossy().into_owned().into(),
+                }
+                .into();
+                sources.push(manifest_source);
             }
-            .into();
-            (vec![manifest_source], Vec::new())
+            (sources, Vec::new())
         }
-        (None, Some(resolved)) => (resolved.packages, resolved.cycle_members),
-        (None, None) => unreachable!("an empty workspace set switches to single-package mode"),
     };
-
-    if !cycle_members.is_empty() {
-        pixi_progress::println!(
-            "{}dependency cycle among workspace packages involving {}; uploads cannot be fully \
-             dependency-ordered, so the target may be inconsistent until every upload finishes",
-            console::style(console::Emoji("⚠️  ", "warning: ")).yellow(),
-            cycle_members.join(", "),
-        );
-    }
 
     // Fetch the backend metadata of every package. For packages that were
     // just resolved from the publish set this is a cache hit. Packages
@@ -789,13 +789,108 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         );
     }
 
-    // A single-package publish is a batch of one, so the closure rule demands
-    // that its run dependencies name no source packages beyond its own
-    // outputs: nothing else in the batch could satisfy them on the target.
+    if explicit_mode && package_plans.len() > 1 {
+        let mut output_owners: HashMap<String, String> = HashMap::new();
+        for (manifest_source, backend_metadata) in &package_plans {
+            for output in &backend_metadata.metadata.outputs {
+                let output_name = output.metadata.name.as_normalized().to_string();
+                if let Some(owner) = output_owners.get(&output_name) {
+                    return Err(miette::diagnostic!(
+                        help = "Packages in the publish set must have unique names. Specify \
+                                only one package producing '{output_name}'.",
+                        "packages '{owner}' and '{manifest_source}' both produce an output \
+                         named '{output_name}'",
+                    )
+                    .into());
+                }
+                output_owners.insert(output_name, manifest_source.to_string());
+            }
+        }
+
+        let mut output_to_package_idx: HashMap<String, usize> = HashMap::new();
+        for (idx, (_, backend_metadata)) in package_plans.iter().enumerate() {
+            for output in &backend_metadata.metadata.outputs {
+                output_to_package_idx.insert(
+                    output
+                        .metadata
+                        .name
+                        .as_normalized()
+                        .to_string()
+                        .to_lowercase(),
+                    idx,
+                );
+            }
+        }
+
+        let mut member_dependencies: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+        for (idx, (_, backend_metadata)) in package_plans.iter().enumerate() {
+            for output in &backend_metadata.metadata.outputs {
+                for (dep_name, _) in discovery::output_source_dependencies(output) {
+                    if let Some(&dep_idx) = output_to_package_idx
+                        .get(&dep_name.to_lowercase())
+                        .filter(|&&dep_idx| dep_idx != idx)
+                    {
+                        member_dependencies
+                            .entry(idx.to_string())
+                            .or_default()
+                            .insert(dep_idx.to_string());
+                    }
+                }
+            }
+        }
+
+        let members: BTreeSet<String> = (0..package_plans.len()).map(|i| i.to_string()).collect();
+        let ordering = discovery::dependency_order(&members, &member_dependencies);
+        cycle_members = ordering
+            .cycle_members
+            .iter()
+            .filter_map(|k| k.parse::<usize>().ok())
+            .filter_map(|i| package_plans.get(i).map(|(s, _)| s.to_string()))
+            .collect();
+
+        let mut plan_map: HashMap<String, _> = package_plans
+            .into_iter()
+            .enumerate()
+            .map(|(i, p)| (i.to_string(), p))
+            .collect();
+        package_plans = ordering
+            .order
+            .into_iter()
+            .filter_map(|key| plan_map.remove(&key))
+            .collect();
+    }
+
+    if !cycle_members.is_empty() {
+        pixi_progress::println!(
+            "{}dependency cycle among workspace packages involving {}; uploads cannot be fully \
+             dependency-ordered, so the target may be inconsistent until every upload finishes",
+            console::style(console::Emoji("⚠️  ", "warning: ")).yellow(),
+            cycle_members.join(", "),
+        );
+    }
+
+    // When packages are explicitly specified (via `--path` or falling back to
+    // the current directory), validate that their run dependencies are
+    // satisfied within the batch. Any source run dependency not produced
+    // by one of the packages in the batch would fail to be satisfied on the
+    // target channel.
     // Build and host source dependencies are only consumed while building
     // and are fine, as are dependencies on sibling outputs (e.g. through
     // `pin_subpackage`), which are published together with the package.
-    if single_package_mode && !args.allow_source_dependencies {
+    if explicit_mode && !args.allow_source_dependencies {
+        let batch_output_names: BTreeSet<String> = package_plans
+            .iter()
+            .flat_map(|(_, plan)| &plan.metadata.outputs)
+            .map(|output| {
+                output
+                    .metadata
+                    .name
+                    .as_normalized()
+                    .to_string()
+                    .to_lowercase()
+            })
+            .collect();
+
         for (_, backend_metadata) in &package_plans {
             let output_names: BTreeSet<String> = backend_metadata
                 .metadata
@@ -809,7 +904,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .iter()
                 .flat_map(discovery::output_source_run_dependencies)
                 .map(|(name, _)| name)
-                .filter(|name| !output_names.contains(&name.to_lowercase()))
+                .filter(|name| !batch_output_names.contains(&name.to_lowercase()))
                 .collect();
             if !source_dependencies.is_empty() {
                 let packages = output_names
@@ -833,24 +928,35 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                          and cannot be published on their own"
                     )
                 };
-                return Err(miette::diagnostic!(
-                    help = "A single-package publish must be self-contained. Set \
-                            `publish = true` in the `[package]` section of the package and \
-                            its source dependencies, then run `pixi publish` without `--path` \
-                            to publish them together.",
-                    "{message}",
-                )
-                .into());
+                let help = if package_plans.len() == 1 {
+                    "A single-package publish must be self-contained. Set `publish = true` in \
+                     the `[package]` section of the package and its source dependencies, then \
+                     run `pixi publish` without `--path` to publish them together."
+                } else {
+                    "An explicit publish must be self-contained. Specify the missing source \
+                     dependencies with `--path`, or set `publish = true` in the `[package]` \
+                     section of the packages and their source dependencies, then run `pixi publish` \
+                     without `--path` to publish them together."
+                };
+                return Err(miette::diagnostic!(help = help, "{message}",).into());
             }
         }
     }
 
     if package_plans.len() > 1 {
-        pixi_progress::println!(
-            "\n{}Publishing {} workspace packages that set `publish = true`",
-            console::style(console::Emoji("🔍 ", "")).cyan(),
-            package_plans.len(),
-        );
+        if explicit_mode {
+            pixi_progress::println!(
+                "\n{}Publishing {} specified packages",
+                console::style(console::Emoji("🔍 ", "")).cyan(),
+                package_plans.len(),
+            );
+        } else {
+            pixi_progress::println!(
+                "\n{}Publishing {} workspace packages that set `publish = true`",
+                console::style(console::Emoji("🔍 ", "")).cyan(),
+                package_plans.len(),
+            );
+        }
     }
 
     let packages: Vec<_> = package_plans
