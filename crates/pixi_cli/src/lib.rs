@@ -611,6 +611,7 @@ mod tests {
             &["workspace", "name", "get"],
             &["workspace", "register", "list"],
             &["workspace", "requires-pixi", "get"],
+            &["workspace", "requires-python", "get"],
             &["workspace", "version", "get"],
             &["task", "list"],
         ] {
@@ -623,6 +624,20 @@ mod tests {
                 command.join(" ")
             );
         }
+    }
+
+    #[test]
+    fn test_requires_python_cli_parsing() {
+        assert!(Args::try_parse_from(["pixi", "workspace", "requires-python", "get"]).is_ok());
+        assert!(Args::try_parse_from(["pixi", "project", "requires-python", "get"]).is_ok());
+        assert!(
+            Args::try_parse_from(["pixi", "workspace", "requires-python", "set", ">=3.10"]).is_ok()
+        );
+        assert!(
+            Args::try_parse_from(["pixi", "project", "requires-python", "set", ">=3.10"]).is_ok()
+        );
+        assert!(Args::try_parse_from(["pixi", "workspace", "requires-python", "unset"]).is_ok());
+        assert!(Args::try_parse_from(["pixi", "project", "requires-python", "unset"]).is_ok());
     }
 
     #[test]

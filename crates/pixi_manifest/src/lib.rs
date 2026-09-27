@@ -55,6 +55,8 @@ pub use manifests::{
 use miette::Diagnostic;
 pub use package::Package;
 pub use package_dependency_spec::{PackageConstraintSpec, PackageDependencySpec};
+pub use pep440_rs;
+pub use pep508_rs;
 pub use platform::{
     PixiPlatform, PixiPlatformError, PixiPlatformName, PixiPlatformNameError, PlatformEdit,
     PlatformGlob, PlatformGlobError, PlatformMove, candidate_subdirs,

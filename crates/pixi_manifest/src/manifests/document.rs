@@ -1290,6 +1290,51 @@ impl ManifestDocument {
         Ok(())
     }
 
+    /// Returns the requires-python version requirement of the project if present
+    pub fn requires_python(&self) -> Option<String> {
+        let ManifestDocument::PyProjectToml(doc) = self else {
+            return None;
+        };
+        doc.as_table()
+            .get("project")
+            .and_then(|p| p.get("requires-python"))
+            .and_then(|v| v.as_str())
+            .map(ToString::to_string)
+    }
+
+    /// Unsets/Sets the requires-python version requirement of the project
+    pub fn set_requires_python(&mut self, version: Option<&str>) -> Result<(), TomlError> {
+        if !self.is_pyproject_toml() {
+            return Err(TomlError::Generic(GenericError::new(
+                "`requires-python` is only supported in `pyproject.toml` manifests",
+            )));
+        }
+
+        let table = self.as_table_mut();
+        if let Some(version) = version {
+            if !table.contains_key("project") {
+                table.insert("project", Item::Table(Table::new()));
+            }
+            let project = table
+                .get_mut("project")
+                .and_then(|p| p.as_table_like_mut())
+                .ok_or_else(|| {
+                    TomlError::Generic(GenericError::new("`[project]` is not a table"))
+                })?;
+            if let Some(item) = project.get_mut("requires-python") {
+                *item = value(version);
+            } else {
+                project.insert("requires-python", value(version));
+            }
+        } else if table.contains_key("project")
+            && let Some(project) = table.get_mut("project").and_then(|p| p.as_table_like_mut())
+        {
+            project.remove("requires-python");
+        }
+
+        Ok(())
+    }
+
     /// Adds a preview flag to the `preview` array of the workspace,
     /// returns false if it was already enabled
     pub fn add_preview_flag(&mut self, flag: &str) -> Result<bool, TomlError> {
@@ -2521,5 +2566,49 @@ preview = true
         platforms = []
         preview = ["pixi-build"]
         "###);
+    }
+
+    #[test]
+    fn test_requires_python_pyproject() {
+        let mut document = ManifestDocument::empty_pyproject();
+        assert_eq!(document.requires_python(), None);
+
+        document.set_requires_python(Some(">=3.10")).unwrap();
+        assert_eq!(document.requires_python().as_deref(), Some(">=3.10"));
+        insta::assert_snapshot!(document.render().unwrap(), @r###"
+        [project]
+        name = "test"
+        requires-python = ">=3.10"
+        [tool.pixi.workspace]
+        channels = []
+        platforms = []
+        "###);
+
+        document.set_requires_python(Some(">=3.11")).unwrap();
+        assert_eq!(document.requires_python().as_deref(), Some(">=3.11"));
+
+        document.set_requires_python(None).unwrap();
+        assert_eq!(document.requires_python(), None);
+        insta::assert_snapshot!(document.render().unwrap(), @r###"
+        [project]
+        name = "test"
+        [tool.pixi.workspace]
+        channels = []
+        platforms = []
+        "###);
+    }
+
+    #[test]
+    fn test_requires_python_pixi_toml_error() {
+        let mut document = pixi_toml_document(
+            r#"
+[workspace]
+name = "test"
+channels = []
+platforms = []
+"#,
+        );
+        assert_eq!(document.requires_python(), None);
+        assert!(document.set_requires_python(Some(">=3.10")).is_err());
     }
 }

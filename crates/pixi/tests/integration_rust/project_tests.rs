@@ -1,5 +1,6 @@
 use std::collections::BTreeSet;
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use crate::common::PixiControl;
 use crate::setup_tracing;
@@ -188,4 +189,81 @@ fn parse_valid_docs_configs() {
             );
         }
     }
+}
+
+#[tokio::test]
+async fn test_workspace_requires_python_cli() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    let pyproject_path = pixi.workspace_path().join("pyproject.toml");
+    fs_err::write(
+        &pyproject_path,
+        r#"[project]
+name = "test-pyproject"
+version = "0.1.0"
+requires-python = ">=3.11"
+
+[tool.pixi.workspace]
+channels = []
+platforms = ["linux-64"]
+"#,
+    )
+    .unwrap();
+
+    let workspace = pixi.workspace().unwrap();
+    assert_eq!(
+        workspace.workspace.value.workspace.requires_python,
+        Some(pixi_manifest::pep440_rs::VersionSpecifiers::from_str(">=3.11").unwrap())
+    );
+
+    // Run set command
+    let set_args = pixi_cli::workspace::requires_python::set::Args {
+        spec: ">=3.12".to_string(),
+    };
+    pixi_cli::workspace::requires_python::set::execute(workspace, set_args)
+        .await
+        .unwrap();
+
+    // Verify file content updated
+    let content = fs_err::read_to_string(&pyproject_path).unwrap();
+    assert!(content.contains("requires-python = \">=3.12\""));
+
+    // Reload workspace and verify
+    let workspace = pixi.workspace().unwrap();
+    assert_eq!(
+        workspace.workspace.value.workspace.requires_python,
+        Some(pixi_manifest::pep440_rs::VersionSpecifiers::from_str(">=3.12").unwrap())
+    );
+
+    // Run get command
+    pixi_cli::workspace::requires_python::get::execute(workspace)
+        .await
+        .unwrap();
+
+    let workspace = pixi.workspace().unwrap();
+
+    // Run unset command
+    pixi_cli::workspace::requires_python::unset::execute(workspace)
+        .await
+        .unwrap();
+
+    let content = fs_err::read_to_string(&pyproject_path).unwrap();
+    assert!(!content.contains("requires-python"));
+
+    let workspace = pixi.workspace().unwrap();
+    assert_eq!(workspace.workspace.value.workspace.requires_python, None);
+
+    // Test on pixi.toml fails
+    let pixi2 = PixiControl::new().unwrap();
+    pixi2.init().await.unwrap();
+    let ws2 = pixi2.workspace().unwrap();
+    let set_args = pixi_cli::workspace::requires_python::set::Args {
+        spec: ">=3.12".to_string(),
+    };
+    assert!(
+        pixi_cli::workspace::requires_python::set::execute(ws2, set_args)
+            .await
+            .is_err()
+    );
 }

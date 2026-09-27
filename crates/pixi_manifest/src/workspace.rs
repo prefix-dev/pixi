@@ -4,6 +4,7 @@ use std::{
 };
 
 use indexmap::{IndexMap, IndexSet};
+use pep440_rs::VersionSpecifiers;
 use pixi_pypi_spec::PypiPackageName;
 use pixi_spec::{ExcludeNewer, TomlSpec};
 use pixi_toml::TomlEnum;
@@ -100,6 +101,9 @@ pub struct Workspace {
 
     /// Version requirement for pixi itself
     pub requires_pixi: Option<VersionSpec>,
+
+    /// Version requirement for python in pyproject.toml projects
+    pub requires_python: Option<VersionSpecifiers>,
 
     /// Exclude package candidates that are newer than this date.
     pub exclude_newer: Option<ExcludeNewer>,

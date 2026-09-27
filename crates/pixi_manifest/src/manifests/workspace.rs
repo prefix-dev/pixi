@@ -12,7 +12,7 @@ use miette::{Context, IntoDiagnostic, SourceCode, miette};
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{
-    NamedChannelOrUrl, ParseStrictness::Strict, Platform, Version, VersionSpec,
+    NamedChannelOrUrl, PackageName, ParseStrictness::Strict, Platform, Version, VersionSpec,
 };
 use toml_edit::Value;
 
@@ -1869,6 +1869,64 @@ impl WorkspaceManifestMut<'_> {
         };
         self.document.set_requires_pixi(version).into_diagnostic()
     }
+
+    /// Set/Unset the requires-python version requirement
+    ///
+    /// This function modifies both the workspace and the TOML document. Use
+    /// `ManifestProvenance::save` to persist the changes to disk.
+    pub fn set_requires_python(&mut self, version: Option<&str>) -> miette::Result<()> {
+        if !self.document.is_pyproject_toml() {
+            miette::bail!(
+                "`requires-python` is only supported in `pyproject.toml` manifests. For `pixi.toml`, specify python under `[dependencies]`."
+            );
+        }
+
+        // Update in both the manifest and the toml
+        let parsed_spec = match version {
+            Some(v) => Some(
+                pep440_rs::VersionSpecifiers::from_str(v)
+                    .into_diagnostic()
+                    .context("could not convert to a valid PEP 440 version specifier")?,
+            ),
+            None => None,
+        };
+
+        self.workspace.workspace.requires_python = parsed_spec.clone();
+        self.document
+            .set_requires_python(version)
+            .into_diagnostic()?;
+
+        // If python is not explicitly defined in [tool.pixi.dependencies],
+        // keep the default target's python dependency in sync with requires-python
+        let has_explicit_pixi_python = self
+            .document
+            .manifest()
+            .as_table()
+            .get("tool")
+            .and_then(|t| t.get("pixi"))
+            .and_then(|p| p.get("dependencies"))
+            .and_then(|d| d.get("python"))
+            .is_some();
+
+        if !has_explicit_pixi_python {
+            let python = PackageName::from_str("python").unwrap();
+            let target = self.workspace.default_feature_mut().targets.default_mut();
+            if let Some(spec) = parsed_spec {
+                if let Ok(pixi_spec) = crate::pyproject::version_or_url_to_spec(&Some(spec)) {
+                    target.add_dependency(
+                        &python,
+                        &pixi_spec,
+                        SpecType::Run,
+                        crate::InternalDependencyBehavior::Overwrite,
+                    );
+                }
+            } else {
+                let _ = target.remove_dependency(&python, SpecType::Run);
+            }
+        }
+
+        Ok(())
+    }
 }
 
 /// The channel a `channels` array element refers to: either a bare string or
@@ -2301,6 +2359,61 @@ start = "python -m flask run --port=5050"
         );
 
         assert_snapshot!(manifest.document.to_string());
+    }
+
+    #[test]
+    fn test_set_requires_python_pyproject() {
+        let mut workspace = parse_pyproject_toml(PYPROJECT_BOILERPLATE);
+        assert_eq!(
+            workspace.manifest.workspace.requires_python,
+            Some(pep440_rs::VersionSpecifiers::from_str(">=3.11").unwrap())
+        );
+
+        let python = PackageName::from_str("python").unwrap();
+        assert!(
+            workspace
+                .manifest
+                .default_feature_mut()
+                .targets
+                .default_mut()
+                .has_dependency(&python, SpecType::Run, None)
+        );
+
+        let mut editable = workspace.editable();
+        editable.set_requires_python(Some(">=3.12")).unwrap();
+        assert_eq!(
+            editable.workspace.workspace.requires_python,
+            Some(pep440_rs::VersionSpecifiers::from_str(">=3.12").unwrap())
+        );
+        assert_eq!(
+            editable.document.requires_python().as_deref(),
+            Some(">=3.12")
+        );
+
+        // Unsetting removes it
+        editable.set_requires_python(None).unwrap();
+        assert_eq!(editable.workspace.workspace.requires_python, None);
+        assert_eq!(editable.document.requires_python(), None);
+        assert!(
+            !editable
+                .workspace
+                .default_feature_mut()
+                .targets
+                .default_mut()
+                .has_dependency(&python, SpecType::Run, None)
+        );
+
+        // Invalid spec fails
+        assert!(
+            editable
+                .set_requires_python(Some("not a valid spec!!"))
+                .is_err()
+        );
+
+        // On pixi.toml it fails
+        let mut pixi_ws = parse_pixi_toml(PROJECT_BOILERPLATE);
+        let mut pixi_editable = pixi_ws.editable();
+        assert!(pixi_editable.set_requires_python(Some(">=3.10")).is_err());
     }
 
     #[test]

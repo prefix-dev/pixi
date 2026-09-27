@@ -29,6 +29,7 @@ pixi workspace [OPTIONS] <COMMAND>
 | [`preview`](preview/index.md) | Commands to manage workspace preview flags |
 | [`register`](register/index.md) | Commands to manage the registry of workspaces. Default command will add a new workspace |
 | [`requires-pixi`](requires-pixi/index.md) | Commands to manage the pixi minimum version requirement |
+| [`requires-python`](requires-python/index.md) | Commands to manage the Python version requirement (requires-python) in pyproject.toml |
 
 
 ## Global Options

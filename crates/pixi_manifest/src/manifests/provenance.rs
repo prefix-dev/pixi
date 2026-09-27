@@ -74,6 +74,11 @@ impl ManifestProvenance {
             _ => self.path.to_path_buf(),
         }
     }
+
+    /// Returns `true` if the manifest is a `pyproject.toml` file.
+    pub fn is_pyproject(&self) -> bool {
+        self.kind == ManifestKind::Pyproject
+    }
 }
 
 impl From<ManifestKind> for ManifestProvenance {
