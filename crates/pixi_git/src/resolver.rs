@@ -55,6 +55,7 @@ impl GitResolver {
     ///
     /// `lfs` overrides the LFS preference when `Some`; `None` keeps the
     /// environment-derived default of [`GitSource`].
+    #[allow(clippy::too_many_arguments)]
     pub async fn fetch(
         &self,
         url: GitUrl,

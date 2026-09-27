@@ -36,7 +36,7 @@ pub struct Args {
 
     /// Don't install the (solve) environments needed for pypi-dependencies
     /// solving.
-    #[arg(long, short, help_heading = consts::CLAP_UPDATE_OPTIONS)]
+    #[arg(long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub no_install: bool,
 
     #[clap(flatten)]

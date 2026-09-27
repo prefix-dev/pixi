@@ -74,7 +74,7 @@ pixi update [OPTIONS] [PACKAGES]...
 :  Use environment activation cache (experimental)
 
 ## Update Options
-- <a id="arg---no-install" href="#arg---no-install">`--no-install (-n)`</a>
+- <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
 :  Don't install the (solve) environments needed for pypi-dependencies solving
 - <a id="arg---no-build" href="#arg---no-build">`--no-build`</a>
 :  Refuse to invoke build backends while updating the lock file
