@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use crate::common::PixiControl;
 use pixi_test_utils::{MockRepoData, Package};
 use rattler_conda_types::Platform;
@@ -203,45 +201,73 @@ other = ["other"]
 }
 
 #[tokio::test]
-async fn conda_binary_path_is_not_refused() {
-    let archive = Path::new(env!("CARGO_WORKSPACE_DIR")).join(
-        "tests/data/channels/channels/shortcuts_channel_1/noarch/pixi-editor-1.0.0-h4616a5c_0.conda",
-    );
-    let pixi = PixiControl::from_manifest(&platform_manifest(&format!(
+async fn conda_binary_path_locks() {
+    let pixi = PixiControl::new().unwrap();
+    let package = Package::build("dummy-bin", "1.0.0")
+        .with_subdir(Platform::NoArch)
+        .finish();
+    let archive = pixi.workspace_path().join("dummy-bin-1.0.0-h0_0.conda");
+    pixi_test_utils::create_conda_package(&package, &archive).unwrap();
+    let archive = archive.display().to_string().replace('\\', "/");
+    let channel = MockRepoData::default().into_channel().await.unwrap();
+    pixi.update_manifest(&format!(
         r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+
 [dependencies]
-pixi-editor = {{ path = "{}" }}
+dummy-bin = {{ path = "{archive}" }}
 "#,
-        archive.display()
-    )))
+        channel = channel.url(),
+        platform = Platform::current(),
+    ))
     .unwrap();
-    let err = pixi.lock().with_no_build(true).await;
-    if let Err(err) = err {
-        let message = format!("{err:?}");
-        assert!(
-            !message.contains("refusing to invoke a build backend"),
-            "binary archive must not be treated as a source spec: {message}"
-        );
-    }
+    pixi.lock().with_no_build(true).await.unwrap();
+    let lock = fs_err::read_to_string(pixi.manifest_path().with_file_name("pixi.lock")).unwrap();
+    assert!(lock.contains("dummy-bin"), "{lock}");
 }
 
 #[tokio::test]
-async fn pypi_wheel_path_is_not_refused() {
-    let pixi = PixiControl::from_manifest(&platform_manifest(
+async fn pypi_wheel_path_locks() {
+    let platform = Platform::current();
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+    let index = crate::common::pypi_index::Database::new()
+        .with(crate::common::pypi_index::PyPIPackage::new("foo", "1.0.0"))
+        .into_flat_index()
+        .unwrap();
+    let wheel = index
+        .path()
+        .join("foo-1.0.0-py3-none-any.whl")
+        .display()
+        .to_string()
+        .replace('\\', "/");
+    let pixi = PixiControl::from_manifest(&format!(
         r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+conda-pypi-map = false
+
+[dependencies]
+python = "==3.12.0"
+
 [pypi-dependencies]
-mypkg = { path = "./mypkg.whl" }
+foo = {{ path = "{wheel}" }}
 "#,
+        channel = channel.url(),
     ))
     .unwrap();
-    let err = pixi.lock().with_no_build(true).await;
-    if let Err(err) = err {
-        let message = format!("{err:?}");
-        assert!(
-            !message.contains("refusing to invoke a build backend"),
-            "wheel path must not be treated as a source build: {message}"
-        );
-    }
+    pixi.lock().with_no_build(true).await.unwrap();
+    let lock_path = pixi.manifest_path().with_file_name("pixi.lock");
+    let lock = fs_err::read_to_string(lock_path).unwrap();
+    assert!(lock.contains("foo"), "{lock}");
 }
 
 #[tokio::test]

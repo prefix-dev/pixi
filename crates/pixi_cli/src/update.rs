@@ -17,7 +17,7 @@ use pixi_manifest::{EnvironmentName, PixiPlatformName};
 use pixi_record::{LockFileResolver, LockedGitUrl, PinnedSourceSpec, UnresolvedPixiRecord};
 use rattler_lock::{LockFile, LockedPackage};
 
-use crate::cli_config::ScriptWorkspaceConfig;
+use crate::cli_config::{NoBuildConfig, ScriptWorkspaceConfig};
 
 /// Updates dependencies to newer compatible versions.
 ///
@@ -36,11 +36,11 @@ pub struct Args {
 
     /// Don't install the (solve) environments needed for pypi-dependencies
     /// solving.
-    #[arg(long, help_heading = consts::CLAP_UPDATE_OPTIONS)]
+    #[arg(long, env = "PIXI_NO_INSTALL", help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub no_install: bool,
 
     #[clap(flatten)]
-    pub no_build_config: crate::cli_config::NoBuildConfig,
+    pub no_build_config: NoBuildConfig,
 
     /// Don't write the updated resolution or update any environment.
     #[clap(short = 'n', long)]

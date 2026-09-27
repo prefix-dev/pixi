@@ -1259,11 +1259,16 @@ impl<'p> LockFileDerivedData<'p> {
                     .set_cache_refresh(uv_reinstall, uv_packages);
 
                 let non_isolated_packages = environment.pypi_options().no_build_isolation;
-                let no_build = environment
+                let manifest_no_build = environment
                     .pypi_options()
                     .no_build
                     .clone()
                     .unwrap_or_default();
+                let no_build = if self.command_dispatcher.build_execution_permit().is_allowed() {
+                    manifest_no_build
+                } else {
+                    manifest_no_build.union(&pixi_manifest::pypi::pypi_options::NoBuild::All)
+                };
                 let no_binary = environment
                     .pypi_options()
                     .no_binary

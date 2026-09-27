@@ -17,7 +17,6 @@ miette = { workspace = true, features = ["fancy-no-backtrace", "serde"] }
 ordermap = { workspace = true }
 pixi_build_discovery = { workspace = true }
 pixi_build_types = { workspace = true }
-pixi_utils = { workspace = true, default-features = false }
 rattler_conda_types = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

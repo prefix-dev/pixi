@@ -21,7 +21,24 @@ use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{MatchSpec, PackageName, StringMatcher};
 
-use crate::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
+use crate::cli_config::{LockFileUpdateConfig, NoBuildConfig, NoInstallConfig, WorkspaceConfig};
+
+async fn restore_lock_and_revert(
+    lock_path: &std::path::Path,
+    original_lock_bytes: Option<&[u8]>,
+    workspace: WorkspaceMut,
+) -> miette::Result<()> {
+    match original_lock_bytes {
+        Some(bytes) => fs_err::write(lock_path, bytes).into_diagnostic()?,
+        None => {
+            if lock_path.is_file() {
+                fs_err::remove_file(lock_path).into_diagnostic()?;
+            }
+        }
+    }
+    workspace.revert().await.into_diagnostic()?;
+    Ok(())
+}
 
 /// Checks if there are newer versions of the dependencies and upgrades them in the lock file and manifest file.
 ///
@@ -39,7 +56,7 @@ pub struct Args {
     pub no_install_config: NoInstallConfig,
 
     #[clap(flatten)]
-    pub no_build_config: crate::cli_config::NoBuildConfig,
+    pub no_build_config: NoBuildConfig,
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
 
@@ -173,6 +190,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .load_lock_file()
         .await?
         .into_lock_file_or_empty_with_warning();
+    let lock_path = workspace.workspace().lock_file_path();
+    let original_lock_bytes = if args.no_build_config.no_build {
+        fs_err::read(&lock_path).ok()
+    } else {
+        None
+    };
 
     let mut printed_any = false;
     let mut inherited_packages = IndexSet::new();
@@ -204,7 +227,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 Ok(result) => result,
                 Err(err) => {
                     if args.no_build_config.no_build {
-                        workspace.revert().await.into_diagnostic()?;
+                        restore_lock_and_revert(
+                            &lock_path,
+                            original_lock_bytes.as_deref(),
+                            workspace,
+                        )
+                        .await?;
                     }
                     return Err(err);
                 }
@@ -250,7 +278,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 Ok(result) => result,
                 Err(err) => {
                     if args.no_build_config.no_build {
-                        workspace.revert().await.into_diagnostic()?;
+                        restore_lock_and_revert(
+                            &lock_path,
+                            original_lock_bytes.as_deref(),
+                            workspace,
+                        )
+                        .await?;
                     }
                     return Err(err);
                 }
@@ -303,14 +336,39 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 dispatcher_builder = dispatcher_builder.refuse_build_execution();
             }
             let dispatcher = dispatcher_builder.finish();
-            let derived = UpdateContext::builder(workspace.workspace(), dispatcher)?
+            let derived = match UpdateContext::builder(workspace.workspace(), dispatcher)?
                 .with_lock_file(original_lock_file.clone())
                 .with_no_install(args.no_install_config.no_install || args.dry_run)
                 .with_no_build(args.no_build_config.no_build)
                 .finish()
-                .await?
-                .update()
-                .await?;
+                .await
+            {
+                Ok(context) => match context.update().await {
+                    Ok(derived) => derived,
+                    Err(err) => {
+                        if args.no_build_config.no_build {
+                            restore_lock_and_revert(
+                                &lock_path,
+                                original_lock_bytes.as_deref(),
+                                workspace,
+                            )
+                            .await?;
+                        }
+                        return Err(err);
+                    }
+                },
+                Err(err) => {
+                    if args.no_build_config.no_build {
+                        restore_lock_and_revert(
+                            &lock_path,
+                            original_lock_bytes.as_deref(),
+                            workspace,
+                        )
+                        .await?;
+                    }
+                    return Err(err);
+                }
+            };
             let diff = LockFileDiff::from_lock_files(&original_lock_file, &derived.lock_file);
             let json_diff =
                 LockFileJsonDiff::new(Some(workspace.workspace().named_environments()), diff);

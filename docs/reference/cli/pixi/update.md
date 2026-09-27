@@ -76,6 +76,7 @@ pixi update [OPTIONS] [PACKAGES]...
 ## Update Options
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
 :  Don't install the (solve) environments needed for pypi-dependencies solving
+<br>**env**: `PIXI_NO_INSTALL`
 - <a id="arg---no-build" href="#arg---no-build">`--no-build`</a>
 :  Refuse to invoke build backends while updating the lock file
 <br>**env**: `PIXI_NO_BUILD`

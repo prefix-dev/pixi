@@ -303,12 +303,12 @@ impl GitRemote {
         locked_rev: Option<GitOid>,
         client: &LazyClient,
         lfs: Option<bool>,
-        build_execution: &pixi_utils::BuildExecutionPermit,
+        allow_build_execution: bool,
         offline: bool,
     ) -> Result<(GitDatabase, GitOid), GitError> {
-        build_execution
-            .check()
-            .map_err(|_| GitError::BuildExecutionDenied)?;
+        if !allow_build_execution {
+            return Err(GitError::BuildExecutionDenied);
+        }
         let locked_ref = locked_rev.map(|oid| GitReference::FullCommit(oid.to_string()));
         let reference = locked_ref.as_ref().unwrap_or(reference);
         if let Some(mut db) = db {
@@ -318,7 +318,7 @@ impl GitRemote {
                 reference,
                 client,
                 offline,
-                build_execution,
+                allow_build_execution,
             )?;
 
             let resolved_commit_hash = match locked_rev {
@@ -334,7 +334,7 @@ impl GitRemote {
                             self.url.as_str(),
                             rev,
                             offline,
-                            build_execution,
+                            allow_build_execution,
                         )
                     })
                     .flatten();
@@ -355,7 +355,7 @@ impl GitRemote {
             reference,
             client,
             offline,
-            build_execution,
+            allow_build_execution,
         )?;
         let rev = match locked_rev {
             Some(rev) => rev,
@@ -372,7 +372,15 @@ impl GitRemote {
         };
 
         let ready = (lfs == Some(true))
-            .then(|| maybe_fetch_lfs(&mut repo, self.url.as_str(), rev, offline, build_execution))
+            .then(|| {
+                maybe_fetch_lfs(
+                    &mut repo,
+                    self.url.as_str(),
+                    rev,
+                    offline,
+                    allow_build_execution,
+                )
+            })
             .flatten();
 
         Ok((
@@ -820,11 +828,11 @@ pub(crate) fn fetch(
     reference: &GitReference,
     client: &LazyClient,
     offline: bool,
-    build_execution: &pixi_utils::BuildExecutionPermit,
+    allow_build_execution: bool,
 ) -> Result<(), GitError> {
-    build_execution
-        .check()
-        .map_err(|_| GitError::BuildExecutionDenied)?;
+    if !allow_build_execution {
+        return Err(GitError::BuildExecutionDenied);
+    }
     let oid_to_fetch = match github_fast_path(repo, remote_url, reference, client, offline) {
         Ok(FastPathRev::UpToDate) => return Ok(()),
         Ok(FastPathRev::NeedsFetch(rev)) => Some(rev),
@@ -919,7 +927,7 @@ pub(crate) fn fetch(
             refspecs.as_slice(),
             tags,
             offline,
-            build_execution,
+            allow_build_execution,
         ),
         RefspecStrategy::First => {
             // Try each refspec
@@ -932,7 +940,7 @@ pub(crate) fn fetch(
                         std::slice::from_ref(refspec),
                         tags,
                         offline,
-                        build_execution,
+                        allow_build_execution,
                     );
 
                     // Stop after the first success and log failures
@@ -970,7 +978,7 @@ fn maybe_fetch_lfs(
     url: &str,
     revision: GitOid,
     offline: bool,
-    build_execution: &pixi_utils::BuildExecutionPermit,
+    allow_build_execution: bool,
 ) -> Option<bool> {
     // git-lfs is a separate binary with its own HTTP client that ignores
     // `GIT_ALLOW_PROTOCOL`, so the only way to guarantee no network access in
@@ -993,7 +1001,7 @@ fn maybe_fetch_lfs(
             return Some(false);
         }
     };
-    match fetch_lfs(lfs, repo, url, revision, build_execution) {
+    match fetch_lfs(lfs, repo, url, revision, allow_build_execution) {
         Ok(fsck_ok) => Some(fsck_ok),
         Err(err) => {
             tracing::warn!("failed to fetch LFS objects for {url} at {revision}: {err}");
@@ -1012,11 +1020,11 @@ fn fetch_lfs(
     repo: &mut GitRepository,
     url: &str,
     revision: GitOid,
-    build_execution: &pixi_utils::BuildExecutionPermit,
+    allow_build_execution: bool,
 ) -> Result<bool, GitError> {
-    build_execution
-        .check()
-        .map_err(|_| GitError::BuildExecutionDenied)?;
+    if !allow_build_execution {
+        return Err(GitError::BuildExecutionDenied);
+    }
     tracing::debug!("fetching LFS objects for {url} at {revision}");
     let output = lfs
         .cmd()
@@ -1043,11 +1051,11 @@ fn fetch_with_cli(
     refspecs: &[String],
     tags: bool,
     offline: bool,
-    build_execution: &pixi_utils::BuildExecutionPermit,
+    allow_build_execution: bool,
 ) -> Result<(), GitError> {
-    build_execution
-        .check()
-        .map_err(|_| GitError::BuildExecutionDenied)?;
+    if !allow_build_execution {
+        return Err(GitError::BuildExecutionDenied);
+    }
     let mut cmd = Command::new(GIT.as_ref().map_err(|err| err.clone())?);
     cmd.arg("fetch");
     if tags {

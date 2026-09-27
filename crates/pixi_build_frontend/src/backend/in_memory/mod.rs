@@ -82,11 +82,11 @@ impl BoxedInMemoryBackend {
     pub fn initialize(
         &self,
         params: InitializeParams,
-        build_execution: pixi_utils::BuildExecutionPermit,
+        allow_build_execution: bool,
     ) -> Result<Box<dyn InMemoryBackend>, Box<CommunicationError>> {
-        build_execution
-            .check()
-            .map_err(|_| Box::new(CommunicationError::BuildExecutionDenied))?;
+        if !allow_build_execution {
+            return Err(Box::new(CommunicationError::BuildExecutionDenied));
+        }
         (self.initialize)(params)
     }
 

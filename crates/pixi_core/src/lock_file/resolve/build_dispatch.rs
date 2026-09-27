@@ -341,6 +341,9 @@ impl<'a> LazyBuildDispatch<'a> {
     /// Lazy initialization of the `BuildDispatch`. This also implies
     /// initializing the conda prefix.
     async fn get_or_try_init(&self) -> Result<&BuildDispatch<'a>, LazyBuildDispatchError> {
+        if self.refuse_source_builds {
+            return Err(LazyBuildDispatchError::BuildExecutionDenied);
+        }
         self.build_dispatch
             .get_or_try_init(async {
                 initialize_uv_flags(None);

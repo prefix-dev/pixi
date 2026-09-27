@@ -368,7 +368,7 @@ impl InstantiateBackendKey {
             api_version,
             cache_dir_root,
             workspace_scratch_directory,
-            ctx.global_data().build_execution_permit().clone(),
+            ctx.global_data().build_execution_permit().is_allowed(),
         )
         .await
     }
@@ -410,7 +410,7 @@ impl InstantiateBackendKey {
                     configuration: init_params.configuration.clone(),
                     target_configuration: init_params.target_configuration.clone(),
                 },
-                ctx.global_data().build_execution_permit().clone(),
+                ctx.global_data().build_execution_permit().is_allowed(),
             )
             .map_err(|e| Arc::new(InstantiateBackendError::InMemory(Arc::new(*e))))?;
         Ok(Arc::new(Mutex::new(Backend::new(
@@ -652,7 +652,7 @@ async fn spawn_json_rpc(
     api_version: PixiBuildApiVersion,
     cache_dir_root: PathBuf,
     workspace_scratch_directory: Option<PathBuf>,
-    build_execution: pixi_utils::BuildExecutionPermit,
+    allow_build_execution: bool,
 ) -> Result<BackendHandle, Arc<InstantiateBackendError>> {
     let project_model = project_model_overrides.apply(init_params.project_model.clone());
     let backend = JsonRpcBackend::setup(
@@ -666,7 +666,7 @@ async fn spawn_json_rpc(
         Some(cache_dir_root),
         workspace_scratch_directory,
         tool,
-        build_execution,
+        allow_build_execution,
     )
     .await
     .map_err(|e| Arc::new(InstantiateBackendError::JsonRpc(Arc::new(e))))?;

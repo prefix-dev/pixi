@@ -64,7 +64,7 @@ impl GitResolver {
         offline: bool,
         lfs: Option<bool>,
         reporter: Option<Arc<dyn Reporter>>,
-        build_execution: pixi_utils::BuildExecutionPermit,
+        allow_build_execution: bool,
     ) -> Result<Fetch, GitError> {
         debug!("Fetching source distribution from Git: {url}");
 
@@ -94,7 +94,7 @@ impl GitResolver {
         // Fetch the Git repository.
         let source = GitSource::new(url.clone(), client, cache)
             .with_offline(offline)
-            .with_build_execution_permit(build_execution);
+            .with_allow_build_execution(allow_build_execution);
         let source = if lfs.is_some() {
             source.with_lfs(lfs)
         } else {

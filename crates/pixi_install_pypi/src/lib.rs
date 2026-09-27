@@ -985,6 +985,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         let build_dispatch = CacheScopedBuildContext::new(
             self.create_build_dispatch(setup, &env_vars),
             setup.cache_config_settings.clone(),
+            matches!(self.build_config.no_build, NoBuild::All),
         );
 
         let distribution_database = DistributionDatabase::new(

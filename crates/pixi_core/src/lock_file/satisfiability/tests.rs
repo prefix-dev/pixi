@@ -136,7 +136,7 @@ async fn verify_lock_file_satisfiability(
         let locked_env = lock_file
             .environment(env.name().as_str())
             .ok_or_else(|| LockfileUnsat::EnvironmentMissing(env.name().to_string()))?;
-        verify_environment_satisfiability(&env, locked_env)
+        verify_environment_satisfiability(&env, locked_env, false)
             .map_err(|e| LockfileUnsat::Environment(env.name().to_string(), e))?;
 
         for platform in env.platforms() {

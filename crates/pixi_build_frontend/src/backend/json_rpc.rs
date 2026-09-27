@@ -160,15 +160,15 @@ impl JsonRpcBackend {
         cache_dir: Option<PathBuf>,
         workspace_scratch_directory: Option<PathBuf>,
         tool: Tool,
-        build_execution: pixi_utils::BuildExecutionPermit,
+        allow_build_execution: bool,
     ) -> Result<Self, InitializeError> {
         debug_assert!(source_dir.is_absolute());
         debug_assert!(manifest_path.is_absolute());
         debug_assert!(workspace_root.is_absolute());
         debug_assert!(checkout_root.as_ref().is_none_or(|p| p.is_absolute()));
-        build_execution
-            .check()
-            .map_err(|_| InitializeError::BuildExecutionDenied)?;
+        if !allow_build_execution {
+            return Err(InitializeError::BuildExecutionDenied);
+        }
         // Spawn the tool and capture stdin/stdout.
         let command = tool.command();
         let program_name = command.get_program().to_string_lossy().into_owned();
@@ -444,7 +444,7 @@ mod tests {
             None,
             None,
             Tool::from(SystemTool::new("definitely-not-a-pixi-build-backend")),
-            pixi_utils::BuildExecutionPermit::deny(),
+            false,
         ));
         assert!(matches!(err, Err(InitializeError::BuildExecutionDenied)));
     }

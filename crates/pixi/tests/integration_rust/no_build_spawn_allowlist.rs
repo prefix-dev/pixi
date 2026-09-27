@@ -1,5 +1,5 @@
 //! Fails if a new subprocess spawn appears on the lockfile build path
-//! outside the files that check [`pixi_utils::BuildExecutionPermit`].
+//! outside the files that check [`pixi_compute_engine::BuildExecutionPermit`].
 use std::path::Path;
 
 const ROOTS: &[&str] = &[

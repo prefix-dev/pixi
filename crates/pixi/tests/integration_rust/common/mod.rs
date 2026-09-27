@@ -19,7 +19,8 @@ use indicatif::ProgressDrawTarget;
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use pixi_cli::LockFileUsageConfig;
 use pixi_cli::cli_config::{
-    ChannelsConfig, LockFileUpdateConfig, NoInstallConfig, ScriptWorkspaceConfig, WorkspaceConfig,
+    ChannelsConfig, LockFileUpdateConfig, NoBuildConfig, NoInstallConfig, ScriptWorkspaceConfig,
+    WorkspaceConfig,
 };
 use pixi_cli::{
     add, build,
@@ -826,7 +827,7 @@ impl PixiControl {
                     script: None,
                 },
                 no_install: true,
-                no_build_config: pixi_cli::cli_config::NoBuildConfig { no_build: false },
+                no_build_config: NoBuildConfig { no_build: false },
                 dry_run: false,
                 specs: Default::default(),
                 json: false,
@@ -873,7 +874,7 @@ impl PixiControl {
                 },
                 config: self.config_cli(),
                 no_install_config: NoInstallConfig { no_install: false },
-                no_build_config: pixi_cli::cli_config::NoBuildConfig { no_build: false },
+                no_build_config: NoBuildConfig { no_build: false },
                 check: false,
                 json: false,
                 dry_run: false,

@@ -260,6 +260,7 @@
 
 mod abort_on_drop;
 mod any_key;
+mod build_execution;
 mod builder;
 mod ctx;
 mod cycle;
@@ -274,6 +275,7 @@ mod key_graph;
 mod short_type_name;
 
 pub use any_key::AnyKey;
+pub use build_execution::{BuildExecutionDenied, BuildExecutionPermit};
 pub use builder::ComputeEngineBuilder;
 pub use ctx::{ComputeCtx, ParallelBuilder};
 pub use cycle::CycleError;

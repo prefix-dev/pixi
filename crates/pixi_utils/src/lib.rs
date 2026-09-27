@@ -1,5 +1,4 @@
 pub mod atomic_write;
-pub mod build_execution;
 pub mod cache;
 pub mod conda_environment_file;
 mod environment_fingerprint;
@@ -19,7 +18,6 @@ pub use executable_utils::{
     executable_from_path, executable_name, is_binary_folder, strip_executable_extension,
 };
 
-pub use build_execution::{BuildExecutionDenied, BuildExecutionPermit};
 pub use cache::EnvironmentHash;
 pub use environment_fingerprint::EnvironmentFingerprint;
 pub use environment_lock::EnvironmentLock;

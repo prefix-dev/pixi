@@ -26,7 +26,7 @@ use crate::{
 use pixi_build_discovery::EnabledProtocols;
 use pixi_build_frontend::BackendOverride;
 use pixi_compute_cache_dirs::CacheDirsKey;
-use pixi_compute_engine::ComputeEngine;
+use pixi_compute_engine::{BuildExecutionPermit, ComputeEngine};
 use pixi_compute_env_vars::EnvVarsKey;
 use pixi_compute_sources::{
     GitCheckoutReporter, GitCheckoutSemaphore, RootDir, UrlCheckoutReporter, UrlCheckoutSemaphore,
@@ -70,7 +70,7 @@ pub struct CommandDispatcherBuilder {
     allow_ref_links: Option<bool>,
 
     /// When denied, build-backend spawns and source checkouts fail closed.
-    build_execution_permit: pixi_utils::BuildExecutionPermit,
+    build_execution_permit: BuildExecutionPermit,
 
     // Per-key reporters; each registered separately into the engine
     // `DataStore` at `finish()` so per-key compute bodies can read just
@@ -312,7 +312,7 @@ impl CommandDispatcherBuilder {
     /// for this dispatcher. Used by `pixi lock` / `update` / `upgrade --no-build`.
     pub fn refuse_build_execution(self) -> Self {
         Self {
-            build_execution_permit: pixi_utils::BuildExecutionPermit::deny(),
+            build_execution_permit: BuildExecutionPermit::deny(),
             ..self
         }
     }

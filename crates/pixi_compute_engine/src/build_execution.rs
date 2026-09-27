@@ -3,12 +3,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use thiserror::Error;
 
-/// Whether this command-dispatcher session may execute a build backend,
-/// check out a source repository, or build a PyPI source distribution.
+/// Whether this compute session may execute a build backend, check out a
+/// source repository, or build a PyPI source distribution.
 ///
-/// Shared as an [`Arc`] so compute tasks and spawn helpers observe the same
-/// decision. Denied permits are fail-closed: a caller that does not hold an
-/// explicit [`Self::allow`] cannot spawn.
+/// Stored in the [`crate::DataStore`] so every compute task sees the same
+/// decision. A missing entry is not permission to spawn: readers must treat
+/// absence as deny.
 #[derive(Debug, Clone)]
 pub struct BuildExecutionPermit {
     allowed: Arc<AtomicBool>,
@@ -21,7 +21,7 @@ pub struct BuildExecutionDenied;
 
 impl BuildExecutionPermit {
     /// Permit build-backend execution. Callers that are not `pixi lock`,
-    /// `pixi update`, or `pixi upgrade --no-build` must pass this explicitly.
+    /// `pixi update`, or `pixi upgrade --no-build` pass this explicitly.
     pub fn allow() -> Self {
         Self {
             allowed: Arc::new(AtomicBool::new(true)),

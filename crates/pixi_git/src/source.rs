@@ -73,8 +73,8 @@ pub struct GitSource {
     /// revisions already present in the local git database can be checked
     /// out.
     offline: bool,
-    /// When denied, fetch and checkout refuse before spawning git.
-    build_execution: pixi_utils::BuildExecutionPermit,
+    /// When false, fetch and checkout refuse before spawning git.
+    allow_build_execution: bool,
 }
 
 impl GitSource {
@@ -87,17 +87,17 @@ impl GitSource {
             reporter: None,
             lfs: lfs_enabled_from_env(),
             offline: false,
-            build_execution: pixi_utils::BuildExecutionPermit::allow(),
+            allow_build_execution: true,
         }
     }
 
-    /// Refuse checkout when `permit` is denied. Lockfile refresh under
-    /// `--no-build` passes a denied permit so a new caller of [`Self::fetch`]
-    /// still cannot spawn git.
+    /// Refuse checkout when `allow` is false. Lockfile refresh under
+    /// `--no-build` passes false so a caller of [`Self::fetch`] cannot omit
+    /// the check.
     #[must_use]
-    pub fn with_build_execution_permit(self, permit: pixi_utils::BuildExecutionPermit) -> Self {
+    pub fn with_allow_build_execution(self, allow: bool) -> Self {
         Self {
-            build_execution: permit,
+            allow_build_execution: allow,
             ..self
         }
     }
@@ -127,9 +127,9 @@ impl GitSource {
     /// Fetch the underlying Git repository at the given revision.
     #[instrument(skip(self), fields(repository = %self.git.repository, rev = self.git.precise.map(tracing::field::display)))]
     pub fn fetch(self) -> Result<Fetch, GitError> {
-        self.build_execution
-            .check()
-            .map_err(|_| GitError::BuildExecutionDenied)?;
+        if !self.allow_build_execution {
+            return Err(GitError::BuildExecutionDenied);
+        }
         // Compute the canonical URL for the repository.
         let canonical = RepositoryUrl::new(&self.git.repository);
 
@@ -181,7 +181,7 @@ impl GitSource {
                     locked_rev.map(GitOid::from),
                     &self.client,
                     self.lfs,
-                    &self.build_execution,
+                    self.allow_build_execution,
                     // In offline mode only the local `file` transport is
                     // allowed; fetching from a remote over the network fails
                     // with `GitError::Offline`.

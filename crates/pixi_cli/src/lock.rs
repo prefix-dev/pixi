@@ -7,8 +7,7 @@ use pixi_core::{
 };
 use pixi_diff::{LockFileDiff, LockFileJsonDiff};
 
-use crate::cli_config::NoInstallConfig;
-use crate::cli_config::ScriptWorkspaceConfig;
+use crate::cli_config::{NoBuildConfig, NoInstallConfig, ScriptWorkspaceConfig};
 
 /// Solve environment and update the lock file without installing the
 /// environments.
@@ -28,7 +27,7 @@ pub struct Args {
     pub no_install_config: NoInstallConfig,
 
     #[clap(flatten)]
-    pub no_build_config: crate::cli_config::NoBuildConfig,
+    pub no_build_config: NoBuildConfig,
 
     /// Output the changes in JSON format.
     #[clap(long)]

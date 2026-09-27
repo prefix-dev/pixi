@@ -25,7 +25,6 @@ pixi_compute_network = { workspace = true }
 pixi_compute_reporters = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_git = { workspace = true }
-pixi_utils = { workspace = true, default-features = false }
 pixi_path = { workspace = true }
 pixi_record = { workspace = true }
 pixi_spec = { workspace = true }

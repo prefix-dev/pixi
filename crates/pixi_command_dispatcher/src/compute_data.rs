@@ -10,7 +10,7 @@
 
 use std::sync::Arc;
 
-use pixi_compute_engine::DataStore;
+use pixi_compute_engine::{BuildExecutionPermit, DataStore};
 use rattler::package_cache::PackageCache;
 use rattler_repodata_gateway::Gateway;
 use tokio::sync::Semaphore;
@@ -156,30 +156,27 @@ impl HasPackageCache for DataStore {
 }
 
 /// Access the build-execution permit shared by spawn helpers.
+///
+/// A missing permit is deny. Callers that may spawn must insert
+/// [`BuildExecutionPermit::allow`] explicitly.
 pub trait HasBuildExecutionPermit {
-    fn build_execution_permit(&self) -> &pixi_utils::BuildExecutionPermit;
+    fn build_execution_permit(&self) -> &BuildExecutionPermit;
 }
 
 impl HasBuildExecutionPermit for DataStore {
-    fn build_execution_permit(&self) -> &pixi_utils::BuildExecutionPermit {
-        self.try_get::<pixi_utils::BuildExecutionPermit>()
-            .unwrap_or_else(|| {
-                // Tests that populate the store by hand and production paths that
-                // forget to register a permit must not accidentally deny. The
-                // lock/update/upgrade path always registers an explicit permit.
-                // A missing permit is treated as allow only for store reads;
-                // spawn helpers that require a permit argument still fail closed
-                // when the caller passes [`pixi_utils::BuildExecutionPermit::deny`].
-                thread_local_allow()
-            })
+    fn build_execution_permit(&self) -> &BuildExecutionPermit {
+        if let Some(permit) = self.try_get::<BuildExecutionPermit>() {
+            permit
+        } else {
+            missing_permit_denies()
+        }
     }
 }
 
-fn thread_local_allow() -> &'static pixi_utils::BuildExecutionPermit {
+fn missing_permit_denies() -> &'static BuildExecutionPermit {
     use std::sync::LazyLock;
-    static ALLOW: LazyLock<pixi_utils::BuildExecutionPermit> =
-        LazyLock::new(pixi_utils::BuildExecutionPermit::allow);
-    &ALLOW
+    static DENY: LazyLock<BuildExecutionPermit> = LazyLock::new(BuildExecutionPermit::deny);
+    &DENY
 }
 
 /// Newtype around the `execute_link_scripts` bool so it can be stored
