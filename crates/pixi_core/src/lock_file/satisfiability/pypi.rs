@@ -648,8 +648,14 @@ async fn read_local_package_metadata(
             )
         })?;
 
+    let manifest_no_build = pypi_options.no_build.clone().unwrap_or_default();
+    let no_build = if ctx.command_dispatcher.build_execution_permit().is_allowed() {
+        manifest_no_build
+    } else {
+        manifest_no_build.union(&pixi_manifest::pypi::pypi_options::NoBuild::All)
+    };
     let build_options = pypi_options_to_build_options(
-        &pypi_options.no_build.clone().unwrap_or_default(),
+        &no_build,
         &pypi_options.no_binary.clone().unwrap_or_default(),
     )
     .map_err(|e| {
@@ -808,6 +814,7 @@ async fn read_local_package_metadata(
         deployment_target,
         false,
         Arc::clone(&last_error),
+        !ctx.command_dispatcher.build_execution_permit().is_allowed(),
     );
 
     // Create distribution database

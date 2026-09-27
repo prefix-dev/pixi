@@ -37,6 +37,9 @@ pub struct Args {
 
     #[clap(flatten)]
     pub no_install_config: NoInstallConfig,
+
+    #[clap(flatten)]
+    pub no_build_config: crate::cli_config::NoBuildConfig,
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
 
@@ -160,6 +163,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let lock_file_usage = args.lock_file_update_config.lock_file_usage()?;
 
+    if args.no_build_config.no_build {
+        pixi_core::lock_file::refuse_if_would_execute(workspace.workspace())?;
+    }
+
     // Capture original lock file for combined JSON output (non-dry-run).
     let original_lock_file = workspace
         .workspace()
@@ -178,7 +185,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         } = specs;
 
         if !default_match_specs.is_empty() || !default_pypi_deps.is_empty() {
-            let (update, skipped) = workspace
+            let update_result = workspace
                 .update_dependencies(
                     default_match_specs,
                     default_pypi_deps,
@@ -190,8 +197,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     false,
                     args.dry_run,
                     DependencyOverwriteBehavior::Overwrite,
+                    args.no_build_config.no_build,
                 )
-                .await?;
+                .await;
+            let (update, skipped) = match update_result {
+                Ok(result) => result,
+                Err(err) => {
+                    if args.no_build_config.no_build {
+                        workspace.revert().await.into_diagnostic()?;
+                    }
+                    return Err(err);
+                }
+            };
             inherited_packages.extend(
                 skipped
                     .into_iter()
@@ -214,7 +231,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 continue;
             }
 
-            let (update, skipped) = workspace
+            let update_result = workspace
                 .update_dependencies(
                     target_match_specs,
                     target_pypi_deps,
@@ -226,8 +243,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     false,
                     args.dry_run,
                     DependencyOverwriteBehavior::Overwrite,
+                    args.no_build_config.no_build,
                 )
-                .await?;
+                .await;
+            let (update, skipped) = match update_result {
+                Ok(result) => result,
+                Err(err) => {
+                    if args.no_build_config.no_build {
+                        workspace.revert().await.into_diagnostic()?;
+                    }
+                    return Err(err);
+                }
+            };
             inherited_packages.extend(
                 skipped
                     .into_iter()
@@ -269,13 +296,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             // without writing to disk, then revert. Reuse the already-loaded original lock file.
             let _clear_progress =
                 pixi_reporters::TopLevelProgress::clear_when_done(Some(&progress));
-            let dispatcher = workspace
+            let mut dispatcher_builder = workspace
                 .workspace()
-                .command_dispatcher_builder(Some(&progress))?
-                .finish();
+                .command_dispatcher_builder(Some(&progress))?;
+            if args.no_build_config.no_build {
+                dispatcher_builder = dispatcher_builder.refuse_build_execution();
+            }
+            let dispatcher = dispatcher_builder.finish();
             let derived = UpdateContext::builder(workspace.workspace(), dispatcher)?
                 .with_lock_file(original_lock_file.clone())
                 .with_no_install(args.no_install_config.no_install || args.dry_run)
+                .with_no_build(args.no_build_config.no_build)
                 .finish()
                 .await?
                 .update()

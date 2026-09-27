@@ -56,6 +56,7 @@ You may want to have more control over the interplay between the manifest, the l
 - `--frozen`: install the environment as defined in the lock file, doesn't update `pixi.lock` if it isn't up-to-date with [manifest file](../reference/pixi_manifest.md). It can also be controlled by the `PIXI_FROZEN` environment variable (example: `PIXI_FROZEN=true`).
 - `--locked`: only install if the `pixi.lock` is up-to-date with the [manifest file](../reference/pixi_manifest.md). It can also be controlled by the `PIXI_LOCKED` environment variable (example: `PIXI_LOCKED=true`). Conflicts with `--frozen`.
 - `--no-install`: don't modify the environment, only modify the lock file. It can also be controlled by the `PIXI_NO_INSTALL` environment variable (example: `PIXI_NO_INSTALL=true`).
+- `--no-build` / `PIXI_NO_BUILD=1`: refuse to invoke a build backend while updating the lock file. `pixi lock`, `pixi update`, and `pixi upgrade` exit with an error if a conda source dependency, the workspace package, or a PyPI sdist, path, git, or url dependency would have to be built. Channel-only solves and PyPI wheels with static metadata still succeed, and the lock file is not written when the command refuses. This is the option for unattended lock refresh. `pixi install` does not accept it. It is not [`[pypi-options] no-build`](../reference/pixi_manifest.md#no-build).
 
 ## Committing your lock file
 

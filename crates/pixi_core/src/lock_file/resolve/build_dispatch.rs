@@ -226,6 +226,9 @@ pub struct LazyBuildDispatch<'a> {
     /// Whether to disallow installing the conda prefix.
     pub disallow_install_conda_prefix: bool,
 
+    /// When set, `setup_build` and `direct_build` refuse before uv can spawn.
+    refuse_source_builds: bool,
+
     workspace_cache: WorkspaceCache,
 
     pub ignore_packages: Option<HashSet<rattler_conda_types::PackageName>>,
@@ -273,6 +276,9 @@ pub enum LazyBuildDispatchError {
         "installation of conda environment is required to solve PyPI source dependencies but `--no-install` flag has been set"
     )]
     InstallationRequiredButDisallowed,
+    #[error("refusing to invoke a build backend for a PyPI source distribution")]
+    #[diagnostic(help("drop --no-build to resolve source dependencies"))]
+    BuildExecutionDenied,
     #[error(transparent)]
     #[diagnostic(transparent)]
     InitializationError(Box<dyn miette::Diagnostic + Send + Sync>),
@@ -311,6 +317,7 @@ impl<'a> LazyBuildDispatch<'a> {
         macos_deployment_target: Option<String>,
         disallow_install_conda_prefix: bool,
         last_error: Arc<Mutex<Option<LazyBuildDispatchError>>>,
+        refuse_source_builds: bool,
     ) -> Self {
         Self {
             params,
@@ -323,6 +330,7 @@ impl<'a> LazyBuildDispatch<'a> {
             build_dispatch: AsyncCell::new(),
             lazy_deps,
             disallow_install_conda_prefix,
+            refuse_source_builds,
             workspace_cache: WorkspaceCache::default(),
             ignore_packages,
             macos_deployment_target,
@@ -554,6 +562,9 @@ impl BuildContext for LazyBuildDispatch<'_> {
         build_output: BuildOutput,
         build_stack: BuildStack,
     ) -> Result<Self::SourceDistBuilder, impl IsBuildBackendError> {
+        if self.refuse_source_builds {
+            return Err(LazyBuildDispatchError::BuildExecutionDenied);
+        }
         let dispatch = self.get_or_try_init().await?;
         Box::pin(dispatch.setup_build(
             source,
@@ -579,6 +590,9 @@ impl BuildContext for LazyBuildDispatch<'_> {
         build_kind: BuildKind,
         version_id: Option<&'a str>,
     ) -> Result<Option<DistFilename>, impl IsBuildBackendError> {
+        if self.refuse_source_builds {
+            return Err(LazyBuildDispatchError::BuildExecutionDenied);
+        }
         let dispatch = self.get_or_try_init().await?;
         Box::pin(dispatch.direct_build(
             source,

@@ -108,6 +108,7 @@ pub async fn add_conda_dep(
         false,
         dry_run,
         DependencyOverwriteBehavior::OverwriteIfExplicit,
+        false,
     ))
     .await
     {
@@ -165,6 +166,7 @@ pub async fn add_pypi_dep(
         editable,
         dry_run,
         DependencyOverwriteBehavior::OverwriteIfExplicit,
+        false,
     ))
     .await
     {

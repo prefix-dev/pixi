@@ -76,10 +76,17 @@ pub struct BoxedInMemoryBackend {
 
 impl BoxedInMemoryBackend {
     /// Initializes the backend with the given parameters.
+    ///
+    /// `build_execution` is required. A denied permit returns before the
+    /// in-memory backend runs, so a future instantiator cannot skip the check.
     pub fn initialize(
         &self,
         params: InitializeParams,
+        build_execution: pixi_utils::BuildExecutionPermit,
     ) -> Result<Box<dyn InMemoryBackend>, Box<CommunicationError>> {
+        build_execution
+            .check()
+            .map_err(|_| Box::new(CommunicationError::BuildExecutionDenied))?;
         (self.initialize)(params)
     }
 

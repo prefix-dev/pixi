@@ -73,6 +73,8 @@ pub struct GitSource {
     /// revisions already present in the local git database can be checked
     /// out.
     offline: bool,
+    /// When denied, fetch and checkout refuse before spawning git.
+    build_execution: pixi_utils::BuildExecutionPermit,
 }
 
 impl GitSource {
@@ -85,6 +87,18 @@ impl GitSource {
             reporter: None,
             lfs: lfs_enabled_from_env(),
             offline: false,
+            build_execution: pixi_utils::BuildExecutionPermit::allow(),
+        }
+    }
+
+    /// Refuse checkout when `permit` is denied. Lockfile refresh under
+    /// `--no-build` passes a denied permit so a new caller of [`Self::fetch`]
+    /// still cannot spawn git.
+    #[must_use]
+    pub fn with_build_execution_permit(self, permit: pixi_utils::BuildExecutionPermit) -> Self {
+        Self {
+            build_execution: permit,
+            ..self
         }
     }
 
@@ -113,6 +127,9 @@ impl GitSource {
     /// Fetch the underlying Git repository at the given revision.
     #[instrument(skip(self), fields(repository = %self.git.repository, rev = self.git.precise.map(tracing::field::display)))]
     pub fn fetch(self) -> Result<Fetch, GitError> {
+        self.build_execution
+            .check()
+            .map_err(|_| GitError::BuildExecutionDenied)?;
         // Compute the canonical URL for the repository.
         let canonical = RepositoryUrl::new(&self.git.repository);
 
@@ -164,6 +181,7 @@ impl GitSource {
                     locked_rev.map(GitOid::from),
                     &self.client,
                     self.lfs,
+                    &self.build_execution,
                     // In offline mode only the local `file` transport is
                     // allowed; fetching from a remote over the network fails
                     // with `GitError::Offline`.

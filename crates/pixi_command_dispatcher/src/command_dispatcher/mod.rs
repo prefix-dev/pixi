@@ -126,6 +126,9 @@ pub(crate) struct CommandDispatcherData {
     /// be a different platform.
     pub tool_platform: (Platform, Vec<GenericVirtualPackage>),
 
+    /// When denied, build backends and source checkouts must not run.
+    pub build_execution_permit: pixi_utils::BuildExecutionPermit,
+
     /// True if execution of link scripts is enabled.
     pub execute_link_scripts: bool,
 
@@ -188,6 +191,11 @@ impl CommandDispatcher {
     /// Constructs a new builder for the command dispatcher.
     pub fn builder() -> CommandDispatcherBuilder {
         CommandDispatcherBuilder::default()
+    }
+
+    /// Whether this dispatcher may spawn a build backend or check out source.
+    pub fn build_execution_permit(&self) -> &pixi_utils::BuildExecutionPermit {
+        &self.data.build_execution_permit
     }
 
     /// Returns the executor used by the command dispatcher.

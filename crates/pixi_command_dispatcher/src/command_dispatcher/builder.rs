@@ -69,6 +69,9 @@ pub struct CommandDispatcherBuilder {
     /// Allow ref links (copy-on-write) during package installation.
     allow_ref_links: Option<bool>,
 
+    /// When denied, build-backend spawns and source checkouts fail closed.
+    build_execution_permit: pixi_utils::BuildExecutionPermit,
+
     // Per-key reporters; each registered separately into the engine
     // `DataStore` at `finish()` so per-key compute bodies can read just
     // the reporter they need without depending on a single umbrella
@@ -305,6 +308,15 @@ impl CommandDispatcherBuilder {
         }
     }
 
+    /// Deny build-backend execution, source checkouts, and PyPI source builds
+    /// for this dispatcher. Used by `pixi lock` / `update` / `upgrade --no-build`.
+    pub fn refuse_build_execution(self) -> Self {
+        Self {
+            build_execution_permit: pixi_utils::BuildExecutionPermit::deny(),
+            ..self
+        }
+    }
+
     /// Sets whether the dispatcher runs in offline mode. In offline mode
     /// operations that require network access outside of the (already
     /// offline-guarded) download client, like git fetches, are refused.
@@ -457,6 +469,7 @@ impl CommandDispatcherBuilder {
             package_cache,
             tool_platform,
             execute_link_scripts: self.execute_link_scripts,
+            build_execution_permit: self.build_execution_permit.clone(),
             allow_symbolic_links: self.allow_symbolic_links,
             allow_hard_links: self.allow_hard_links,
             allow_ref_links: self.allow_ref_links,
@@ -488,6 +501,7 @@ impl CommandDispatcherBuilder {
             .with_data(data.package_cache.clone())
             .with_data(data.workspace_env_registry.clone())
             .with_data(AllowExecuteLinkScripts(data.execute_link_scripts))
+            .with_data(data.build_execution_permit.clone())
             .with_data(AllowLinkOptions {
                 allow_symbolic_links: data.allow_symbolic_links,
                 allow_hard_links: data.allow_hard_links,

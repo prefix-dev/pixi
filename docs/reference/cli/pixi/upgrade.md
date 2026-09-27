@@ -78,6 +78,9 @@ pixi upgrade [OPTIONS] [PACKAGES]...
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
 :  Don't modify the environment, only modify the lock file
 <br>**env**: `PIXI_NO_INSTALL`
+- <a id="arg---no-build" href="#arg---no-build">`--no-build`</a>
+:  Refuse to invoke build backends while updating the lock file
+<br>**env**: `PIXI_NO_BUILD`
 - <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>
 :  Install the environment as defined in the lock file, doesn't update lock file if it isn't up-to-date with the manifest file
 <br>**env**: `PIXI_FROZEN`

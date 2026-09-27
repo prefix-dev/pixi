@@ -68,6 +68,9 @@ pixi lock [OPTIONS]
 - <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
 :  Don't modify the environment, only modify the lock file
 <br>**env**: `PIXI_NO_INSTALL`
+- <a id="arg---no-build" href="#arg---no-build">`--no-build`</a>
+:  Refuse to invoke build backends while updating the lock file
+<br>**env**: `PIXI_NO_BUILD`
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path (-m) <MANIFEST_PATH>`</a>

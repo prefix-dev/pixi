@@ -356,8 +356,16 @@ impl Workspace {
 
         let glob_hash_cache = GlobHashCache::default();
 
+        if options.no_build {
+            crate::lock_file::refuse_if_would_execute(self)?;
+        }
+
         // Construct a command dispatcher to run the tasks.
-        let command_dispatcher = self.command_dispatcher_builder(progress.as_ref())?.finish();
+        let mut command_dispatcher_builder = self.command_dispatcher_builder(progress.as_ref())?;
+        if options.no_build {
+            command_dispatcher_builder = command_dispatcher_builder.refuse_build_execution();
+        }
+        let command_dispatcher = command_dispatcher_builder.finish();
 
         // Get the package cache from the dispatcher.
         let package_cache = command_dispatcher.package_cache().clone();
@@ -628,6 +636,10 @@ pub struct UpdateLockFileOptions {
 
     /// Don't install anything to disk.
     pub no_install: bool,
+
+    /// Refuse to invoke build backends. Source dependencies fail the solve
+    /// instead of being built, and the lock file is not written.
+    pub no_build: bool,
 
     /// If true, rewrite the lock file to the latest format version even when
     /// its content is already up-to-date. Set by `pixi lock`, `pixi update`,
@@ -1887,6 +1899,9 @@ pub struct UpdateContextBuilder<'p> {
     /// a python interpreter.
     no_install: bool,
 
+    /// Refuse build-backend execution for this update.
+    no_build: bool,
+
     /// The package cache to use during the update process.
     package_cache: Option<PackageCache>,
 
@@ -1930,6 +1945,11 @@ impl<'p> UpdateContextBuilder<'p> {
     /// a python interpreter.
     pub fn with_no_install(self, no_install: bool) -> Self {
         Self { no_install, ..self }
+    }
+
+    /// Refuse build backends while this update computes the lock file.
+    pub fn with_no_build(self, no_build: bool) -> Self {
+        Self { no_build, ..self }
     }
 
     /// Sets the current lock file that should be used to determine the
@@ -1982,6 +2002,9 @@ impl<'p> UpdateContextBuilder<'p> {
 
     /// Construct the context.
     pub async fn finish(self) -> miette::Result<UpdateContext<'p>> {
+        if self.no_build {
+            crate::lock_file::refuse_if_would_execute(self.project)?;
+        }
         let project = self.project;
         let package_cache = match self.package_cache {
             Some(package_cache) => package_cache,
@@ -2268,6 +2291,7 @@ impl<'p> UpdateContext<'p> {
             lock_file: LockFile::default(),
             outdated_environments: None,
             no_install: true,
+            no_build: false,
             package_cache: None,
             io_concurrency_limit: None,
             glob_hash_cache: None,

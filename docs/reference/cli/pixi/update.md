@@ -19,9 +19,6 @@ pixi update [OPTIONS] [PACKAGES]...
 <br>May be provided more than once.
 
 ## Options
-- <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
-:  Don't install the (solve) environments needed for pypi-dependencies solving
-<br>**env**: `PIXI_NO_INSTALL`
 - <a id="arg---dry-run" href="#arg---dry-run">`--dry-run (-n)`</a>
 :  Don't write the updated resolution or update any environment
 - <a id="arg---environment" href="#arg---environment">`--environment (-e) <ENVIRONMENT>`</a>
@@ -75,6 +72,13 @@ pixi update [OPTIONS] [PACKAGES]...
 <br>**env**: `PIXI_TLS_ROOT_CERTS`
 - <a id="arg---use-environment-activation-cache" href="#arg---use-environment-activation-cache">`--use-environment-activation-cache`</a>
 :  Use environment activation cache (experimental)
+
+## Update Options
+- <a id="arg---no-install" href="#arg---no-install">`--no-install (-n)`</a>
+:  Don't install the (solve) environments needed for pypi-dependencies solving
+- <a id="arg---no-build" href="#arg---no-build">`--no-build`</a>
+:  Refuse to invoke build backends while updating the lock file
+<br>**env**: `PIXI_NO_BUILD`
 
 ## Global Options
 - <a id="arg---manifest-path" href="#arg---manifest-path">`--manifest-path (-m) <MANIFEST_PATH>`</a>

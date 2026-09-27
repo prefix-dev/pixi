@@ -149,6 +149,10 @@ impl Key for CheckoutGit {
         // Pass the original `GitUrl` straight through so the resolver
         // honours `precise` when set (pinned checkout) and advances to
         // the branch HEAD when not (fresh resolve).
+        let build_execution = data
+            .try_get::<pixi_utils::BuildExecutionPermit>()
+            .cloned()
+            .unwrap_or_default();
         Arc::new(
             resolver
                 .fetch(
@@ -158,6 +162,7 @@ impl Key for CheckoutGit {
                     offline,
                     self.lfs,
                     None,
+                    build_execution,
                 )
                 .await,
         )

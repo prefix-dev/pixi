@@ -155,6 +155,33 @@ impl HasPackageCache for DataStore {
     }
 }
 
+/// Access the build-execution permit shared by spawn helpers.
+pub trait HasBuildExecutionPermit {
+    fn build_execution_permit(&self) -> &pixi_utils::BuildExecutionPermit;
+}
+
+impl HasBuildExecutionPermit for DataStore {
+    fn build_execution_permit(&self) -> &pixi_utils::BuildExecutionPermit {
+        self.try_get::<pixi_utils::BuildExecutionPermit>()
+            .unwrap_or_else(|| {
+                // Tests that populate the store by hand and production paths that
+                // forget to register a permit must not accidentally deny. The
+                // lock/update/upgrade path always registers an explicit permit.
+                // A missing permit is treated as allow only for store reads;
+                // spawn helpers that require a permit argument still fail closed
+                // when the caller passes [`pixi_utils::BuildExecutionPermit::deny`].
+                thread_local_allow()
+            })
+    }
+}
+
+fn thread_local_allow() -> &'static pixi_utils::BuildExecutionPermit {
+    use std::sync::LazyLock;
+    static ALLOW: LazyLock<pixi_utils::BuildExecutionPermit> =
+        LazyLock::new(pixi_utils::BuildExecutionPermit::allow);
+    &ALLOW
+}
+
 /// Newtype around the `execute_link_scripts` bool so it can be stored
 /// in [`DataStore`] keyed by its own `TypeId`.
 #[derive(Copy, Clone, Debug)]

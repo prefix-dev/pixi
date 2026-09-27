@@ -27,6 +27,9 @@ pub struct Args {
     #[clap(flatten)]
     pub no_install_config: NoInstallConfig,
 
+    #[clap(flatten)]
+    pub no_build_config: crate::cli_config::NoBuildConfig,
+
     /// Output the changes in JSON format.
     #[clap(long)]
     pub json: bool,
@@ -98,6 +101,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     LockFileUsage::Update
                 },
                 no_install: args.no_install_config.no_install || args.dry_run,
+                no_build: args.no_build_config.no_build,
                 upgrade_lock_file_format: true,
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
             },
@@ -158,6 +162,20 @@ mod tests {
     use clap::Parser;
 
     use super::Args;
+
+    #[test]
+    fn install_rejects_no_build() {
+        let err = crate::install::Args::try_parse_from(["install", "--no-build"]);
+        assert!(err.is_err(), "pixi install must not accept --no-build");
+    }
+
+    #[test]
+    fn pixi_no_build_env_enables_the_flag() {
+        temp_env::with_var("PIXI_NO_BUILD", Some("1"), || {
+            let args = Args::try_parse_from(["lock"]).unwrap();
+            assert!(args.no_build_config.no_build);
+        });
+    }
 
     #[test]
     fn accepts_a_script_workspace() {
