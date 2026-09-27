@@ -352,7 +352,7 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
     if not_hidden {
         global_multi_progress().set_draw_target(ProgressDrawTarget::stderr_with_hz(20));
     }
-    // Sanity check of prefix location
+    // Workspace sanity check
     sanity_check_workspace(&workspace).await?;
 
     // `--platform` pins which declared platform the environment is installed

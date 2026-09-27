@@ -71,7 +71,7 @@ use crate::{
     environment::{
         CondaPrefixUpdated, EnvironmentFile, InstallFilter, LockFileUsage, LockedEnvironmentHash,
         PerEnvironmentAndPlatform, PerGroup, PerGroupAndPlatform, PlatformData, RequiredPlatform,
-        read_environment_file, write_environment_file,
+        read_environment_file, verify_prefix_location_unchanged, write_environment_file,
     },
     lock_file::{
         self,
@@ -937,6 +937,11 @@ impl<'p> LockFileDerivedData<'p> {
         reinstall_packages: &ReinstallPackages,
         filter: &InstallFilter,
     ) -> miette::Result<Prefix> {
+        let grouped_environment = GroupedEnvironment::from(environment.clone());
+        if !matches!(reinstall_packages, ReinstallPackages::All) {
+            verify_prefix_location_unchanged(&grouped_environment.dir()).await?;
+        }
+
         // Check if the prefix is already up-to-date by validating the hash with the
         // environment file
         let hash = self.locked_environment_hash(environment)?;
