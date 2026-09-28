@@ -1,11 +1,12 @@
 use miette::Diagnostic;
 use pixi_manifest::PixiPlatform;
+use pixi_manifest::platform::default_mac_os_version;
 use rattler_conda_types::MatchSpec;
 use rattler_conda_types::{
     Arch, GenericVirtualPackage, PackageName, PackageRecord, Platform, Version,
 };
 use rattler_virtual_packages::VirtualPackage;
-use rattler_virtual_packages::defaults::{default_glibc_version, default_mac_os_version};
+use rattler_virtual_packages::defaults::default_glibc_version;
 use regex::Regex;
 use std::str::FromStr;
 use std::sync::OnceLock;
@@ -494,7 +495,7 @@ mod tests {
         // No declaration falls back to the subdir default.
         assert_eq!(
             macos_deployment_target(&PixiPlatform::from_subdir(Platform::OsxArm64)),
-            Some("13.0".to_string())
+            Some("14.0".to_string())
         );
 
         // Non-macOS targets get nothing.

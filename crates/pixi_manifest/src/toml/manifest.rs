@@ -1240,7 +1240,7 @@ mod test {
     #[test]
     fn test_system_requirements_migration_linux_and_macos_defaults_use_bare_subdir() {
         let linux = rattler_virtual_packages::defaults::default_linux_version();
-        let macos = rattler_virtual_packages::defaults::default_mac_os_version(Platform::OsxArm64)
+        let macos = crate::platform::default_mac_os_version(Platform::OsxArm64)
             .expect("osx-arm64 has a default macos version");
         for (subdir, requirement) in [
             ("linux-64", format!("linux = \"{linux}\"")),

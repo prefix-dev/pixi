@@ -6,7 +6,7 @@ use std::str::FromStr;
 use archspec::cpu::Microarchitecture;
 use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform, Version};
 use rattler_virtual_packages::defaults::{
-    default_glibc_version, default_linux_version, default_mac_os_version, default_windows_version,
+    default_glibc_version, default_linux_version, default_windows_version,
 };
 use rattler_virtual_packages::{Archspec, Cuda, CudaArch, LibC, Linux, Osx, VirtualPackage};
 
@@ -758,6 +758,19 @@ pub fn subdir_default_virtual_packages(subdir: Platform) -> Vec<GenericVirtualPa
     defaults
 }
 
+/// The macOS version pixi assumes for `subdir` when none is declared, or
+/// `None` for non-macOS subdirs.
+///
+/// osx-arm64 defaults to 14.0 rather than rattler's 13.0: every Apple Silicon
+/// Mac can run 14, and major wheels (torch, onnxruntime, ...) no longer ship
+/// arm64 wheels for older releases.
+pub fn default_mac_os_version(subdir: Platform) -> Option<Version> {
+    match subdir {
+        Platform::OsxArm64 => Some("14.0".parse().expect("static version")),
+        _ => rattler_virtual_packages::defaults::default_mac_os_version(subdir),
+    }
+}
+
 /// Returns `true` if `gvp` is exactly the value `subdir_default_virtual_packages`
 /// would emit for `subdir`.
 ///  Used by the TOML layer to elide default-matching
@@ -768,6 +781,35 @@ pub fn is_subdir_default(gvp: &GenericVirtualPackage, subdir: Platform) -> bool 
     subdir_default_virtual_packages(subdir).iter().any(|d| {
         d.name == gvp.name && d.version == gvp.version && d.build_string == gvp.build_string
     })
+}
+
+/// Like [`is_subdir_default`], but for a virtual package recorded in a lock
+/// file: a value at or below the current default counts as a default too.
+///
+/// Raising a default (osx-arm64 `__osx` 13.0 -> 14.0) must not invalidate
+/// locks solved against the old value -- everything they picked also runs on
+/// the higher baseline. Names that `platform` customises never qualify, so an
+/// explicit pin keeps its exact comparison.
+pub fn is_locked_subdir_default(locked: &GenericVirtualPackage, platform: &PixiPlatform) -> bool {
+    let subdir = platform.subdir();
+    if is_subdir_default(locked, subdir) {
+        return true;
+    }
+    if platform
+        .customised_virtual_packages()
+        .iter()
+        .any(|customised| customised.name == locked.name)
+    {
+        return false;
+    }
+    let canonical_build = |build: &str| if build == "0" { "" } else { build }.to_string();
+    subdir_default_virtual_packages(subdir)
+        .iter()
+        .any(|default| {
+            default.name == locked.name
+                && canonical_build(&default.build_string) == canonical_build(&locked.build_string)
+                && locked.version <= default.version
+        })
 }
 
 /// Convert a platform's declared virtual packages into the form rattler's
@@ -1883,6 +1925,35 @@ mod tests {
         assert!(PlatformGlob::looks_like_glob("cuda-?"));
         assert!(PlatformGlob::looks_like_glob("cuda-[abc]"));
         assert!(!PlatformGlob::looks_like_glob("cuda-win-64"));
+    }
+
+    /// A lock solved against a lower default stays valid after the default
+    /// is raised; a higher value or an explicit pin does not.
+    #[test]
+    fn locked_default_at_or_below_current_counts_as_default() {
+        let subdir_platform = PixiPlatform::from_subdir(Platform::OsxArm64);
+        assert!(is_locked_subdir_default(&gvp("__osx", "14.0"), &subdir_platform));
+        assert!(is_locked_subdir_default(&gvp("__osx", "13.0"), &subdir_platform));
+        assert!(!is_locked_subdir_default(&gvp("__osx", "15.0"), &subdir_platform));
+        assert!(!is_locked_subdir_default(&gvp("__cuda", "12.0"), &subdir_platform));
+
+        let linux = PixiPlatform::from_subdir(Platform::Linux64);
+        assert!(is_locked_subdir_default(&gvp("__glibc", "2.17"), &linux));
+        let other_arch = GenericVirtualPackage {
+            name: PackageName::try_from("__archspec").unwrap(),
+            version: Version::major(0),
+            build_string: "haswell".to_string(),
+        };
+        assert!(!is_locked_subdir_default(&other_arch, &linux));
+
+        let pinned = PixiPlatform::new_with_defaults(
+            PixiPlatformName::try_from("osx-arm64-macos-13").unwrap(),
+            Platform::OsxArm64,
+            vec![gvp("__osx", "13.0")],
+        )
+        .unwrap();
+        assert!(!is_locked_subdir_default(&gvp("__osx", "13.0"), &pinned));
+        assert!(!is_locked_subdir_default(&gvp("__osx", "12.0"), &pinned));
     }
 
     /// Runs of `*` collapse to a single wildcard so the glob crate never sees
