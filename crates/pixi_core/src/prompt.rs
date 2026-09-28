@@ -13,7 +13,16 @@ pub fn zsh_hook() -> &'static str {
 
 /// Sets default pixi prompt for posix shells
 pub fn posix_prompt(env_name: &str) -> String {
-    format!("export PS1=\"({env_name}) ${{PS1:-}}\"")
+    // Guard against repeated invocations: only modify PS1 if we haven't already
+    // set it for this environment. This prevents the prompt prefix from being
+    // prepended multiple times when shell-hook is evaluated more than once for
+    // the same environment (see #5599).
+    format!(
+        r#"if [ "${{__PIXI_PROMPT_MODIFIED-}}" != "({env_name}) " ]; then
+export PS1="({env_name}) ${{PS1:-}}"
+export __PIXI_PROMPT_MODIFIED="({env_name}) "
+fi"#
+    )
 }
 
 /// Sets default pixi prompt for the fish shell
@@ -72,17 +81,30 @@ pub fn xonsh_prompt() -> String {
 
 /// Sets default pixi prompt for the powershell
 pub fn powershell_prompt(env_name: &str) -> String {
+    // Guard against repeated invocations: only wrap the prompt function if we
+    // haven't already done so for this environment. Without this guard, running
+    // shell-hook multiple times causes infinite recursion in the prompt function,
+    // leading to a stack overflow (see #5599).
     format!(
-        "$old_prompt = $function:prompt\n\
-         function prompt {{\"({env_name}) $($old_prompt.Invoke())\"}}"
+        "if ($Env:__PIXI_PROMPT_MODIFIED -ne '({env_name}) ') {{\n\
+         $__pixi_original_prompt = $function:prompt\n\
+         function prompt {{\"({env_name}) $($__pixi_original_prompt.Invoke())\"}}\n\
+         $Env:__PIXI_PROMPT_MODIFIED = '({env_name}) '\n\
+         }}"
     )
 }
 
 /// Sets default pixi prompt for the Nu shell
 pub fn nu_prompt(env_name: &str) -> String {
+    // Guard against repeated invocations: only wrap PROMPT_COMMAND if we haven't
+    // already done so for this environment. Without this guard, running
+    // shell-hook multiple times nests the prompt indefinitely (see #5599).
     format!(
-        "let old_prompt = $env.PROMPT_COMMAND; \
-         $env.PROMPT_COMMAND = {{|| echo $\"\\({env_name}\\) (do $old_prompt)\"}}"
+        "if ($env | get -i __PIXI_PROMPT_MODIFIED | default '') != '({env_name}) ' {{ \
+         let old_prompt = $env.PROMPT_COMMAND; \
+         $env.PROMPT_COMMAND = {{|| echo $\"\\({env_name}\\) (do $old_prompt)\"}}; \
+         $env.__PIXI_PROMPT_MODIFIED = '({env_name}) ' \
+         }}"
     )
 }
 
