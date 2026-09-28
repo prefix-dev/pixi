@@ -443,6 +443,19 @@ fn alter_config(
                         transplant_config_key(&config, &mut toml_doc, key, &AlterMode::Set)?;
                     }
                 }
+                // Like `default-channels`, `default-platforms` replaces lower
+                // layers, so append and prepend operate on the effective list.
+                "default-platforms" => {
+                    let input = value.expect("value must be provided");
+                    let mut platforms =
+                        load_config(common_args, &GlobalConfigSource::Search)?.default_platforms;
+                    if is_prepend {
+                        platforms.insert(0, input);
+                    } else {
+                        platforms.push(input);
+                    }
+                    config.default_platforms = platforms;
+                }
                 // `extra-index-urls` is concatenated across layers, so only
                 // this file's own share of the list is edited; copying the
                 // lower layers in would list them twice. A prepend therefore
@@ -458,7 +471,11 @@ fn alter_config(
                     transplant_config_key(&config, &mut toml_doc, key, &mode)?;
                 }
                 _ => {
-                    let list_keys = ["default-channels", "pypi-config.extra-index-urls"];
+                    let list_keys = [
+                        "default-channels",
+                        "default-platforms",
+                        "pypi-config.extra-index-urls",
+                    ];
                     let msg_cmd = if is_prepend { "prepend" } else { "append" };
                     return Err(miette::miette!(
                         "{} is only supported for list keys: {}",
@@ -699,6 +716,7 @@ fn partial_config(config: &mut Config, key: &str) -> miette::Result<()> {
 
     match key {
         "default-channels" => new.default_channels = config.default_channels.clone(),
+        "default-platforms" => new.default_platforms = config.default_platforms.clone(),
         "shell" => new.shell = config.shell.clone(),
         "tls-no-verify" => new.tls_no_verify = config.tls_no_verify,
         "offline" => new.offline = config.offline,
@@ -716,6 +734,7 @@ fn partial_config(config: &mut Config, key: &str) -> miette::Result<()> {
         _ => {
             let keys = [
                 "default-channels",
+                "default-platforms",
                 "tls-no-verify",
                 "offline",
                 "authentication-override-file",
