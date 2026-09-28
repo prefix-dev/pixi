@@ -29,7 +29,6 @@ const CHECKOUT_READY_LOCK: &str = ".ok";
 /// Such a checkout may contain LFS pointer files instead of the real content
 /// and is only reused while still offline; see [`GitCheckout::is_fresh`].
 const CHECKOUT_LFS_DEGRADED: &str = "lfs-degraded";
-pub const GIT_DIR: &str = "GIT_DIR";
 pub const GIT_TERMINAL_PROMPT: &str = "GIT_TERMINAL_PROMPT";
 pub const GIT_LFS_SKIP_SMUDGE: &str = "GIT_LFS_SKIP_SMUDGE";
 pub const GIT_ALLOW_PROTOCOL: &str = "GIT_ALLOW_PROTOCOL";
@@ -40,6 +39,32 @@ pub enum GitBinaryError {
     GitNotFound,
     #[error(transparent)]
     Other(#[from] which::Error),
+}
+
+/// Environment variables that select which repository, work tree, index or
+/// object store git operates on. Git exports some of these to hooks and to
+/// commands it spawns (for example `git rebase --exec`), where they take
+/// precedence over the working directory. pixi only ever runs git against its
+/// own cache, so an inherited value would make git act on the user's
+/// repository instead. githooks(5) recommends unsetting them for the same
+/// reason, and uv does the same (astral-sh/uv#19088).
+const GIT_REPOSITORY_ENV_VARS: &[&str] = &[
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_COMMON_DIR",
+];
+
+/// Creates a `git` [`Command`] that does not inherit any of the
+/// [`GIT_REPOSITORY_ENV_VARS`], so it only operates on its working directory.
+fn git_command(git: &Path) -> Command {
+    let mut cmd = Command::new(git);
+    for var in GIT_REPOSITORY_ENV_VARS {
+        cmd.env_remove(var);
+    }
+    cmd
 }
 
 /// A global cache of the result of `which git`.
@@ -66,7 +91,7 @@ pub struct GitLfs {
 impl GitLfs {
     fn probe() -> Result<Self, GitBinaryError> {
         let git = GIT.as_ref().map_err(|e| e.clone())?.clone();
-        let ok = Command::new(&git)
+        let ok = git_command(&git)
             .args(["lfs", "version"])
             .env(GIT_TERMINAL_PROMPT, "0")
             .output()
@@ -81,7 +106,7 @@ impl GitLfs {
 
     /// Fresh `git lfs` command with `GIT_TERMINAL_PROMPT=0` already set.
     pub fn cmd(&self) -> Command {
-        let mut c = Command::new(&self.git);
+        let mut c = git_command(&self.git);
         c.arg("lfs").env(GIT_TERMINAL_PROMPT, "0");
         c
     }
@@ -438,7 +463,7 @@ impl GitDatabase {
     /// Get a short OID for a `revision`, usually 7 chars or more if ambiguous.
     pub(crate) fn to_short_id(&self, revision: GitOid) -> Result<String, GitError> {
         let output = git_output(
-            Command::new(GIT.as_ref().map_err(|e| e.clone())?)
+            git_command(GIT.as_ref().map_err(|e| e.clone())?)
                 .arg("rev-parse")
                 .arg("--short")
                 .arg(revision.as_str())
@@ -469,7 +494,7 @@ impl GitRepository {
     pub(crate) fn open(path: &Path) -> Result<GitRepository, GitError> {
         // Make sure there is a Git repository at the specified path.
         git_output(
-            Command::new(GIT.as_ref().map_err(|e| e.clone())?)
+            git_command(GIT.as_ref().map_err(|e| e.clone())?)
                 .arg("rev-parse")
                 .current_dir(path),
         )?;
@@ -483,7 +508,7 @@ impl GitRepository {
     fn init(path: &Path) -> Result<GitRepository, GitError> {
         // Initialize the repository.
         git_output(
-            Command::new(GIT.as_ref().map_err(|e| e.clone())?)
+            git_command(GIT.as_ref().map_err(|e| e.clone())?)
                 .arg("init")
                 .current_dir(path),
         )?;
@@ -496,7 +521,7 @@ impl GitRepository {
     /// Parses the object ID of the given `refname`.
     fn rev_parse(&self, refname: &str) -> Result<GitOid, GitError> {
         let result = git_output(
-            Command::new(GIT.as_ref().map_err(|e| e.clone())?)
+            git_command(GIT.as_ref().map_err(|e| e.clone())?)
                 .arg("rev-parse")
                 .arg(refname)
                 .current_dir(&self.path),
@@ -519,7 +544,6 @@ impl GitRepository {
             .cmd()
             .arg("ls-files")
             .arg("--name-only")
-            .env_remove(GIT_DIR)
             .current_dir(&self.path)
             .output();
         match output {
@@ -540,7 +564,6 @@ impl GitRepository {
             .arg("fsck")
             .arg("--objects")
             .arg(revision.as_str())
-            .env_remove(GIT_DIR)
             .current_dir(&self.path)
             .output();
         match output {
@@ -602,7 +625,7 @@ impl GitCheckout {
         // hardlinks to set up the repository. This should speed up the clone operation
         // quite a bit if it works.
         let output = git_output(
-            Command::new(GIT.as_ref().map_err(|e| e.clone())?)
+            git_command(GIT.as_ref().map_err(|e| e.clone())?)
                 .arg("clone")
                 .arg("--local")
                 // Make sure to pass the local file path and not a file://... url. If given a url,
@@ -691,7 +714,7 @@ impl GitCheckout {
         let skip_smudge = lfs_skip_smudge_env(lfs);
 
         // Perform the hard reset.
-        let mut reset_cmd = Command::new(GIT.as_ref().map_err(|e| e.clone())?);
+        let mut reset_cmd = git_command(GIT.as_ref().map_err(|e| e.clone())?);
         if let Some(url) = offline_lfs_url {
             // The smudge filter is allowed to run offline because the local
             // database holds validated LFS artifacts. Pin the LFS endpoint to
@@ -726,7 +749,7 @@ impl GitCheckout {
         // are never part of the bare database, so this clones them from their
         // remotes — in offline mode restrict git to the local `file`
         // transport so no network access can occur.
-        let mut submodule_cmd = Command::new(GIT.as_ref().map_err(|e| e.clone())?);
+        let mut submodule_cmd = git_command(GIT.as_ref().map_err(|e| e.clone())?);
         submodule_cmd
             .arg("submodule")
             .arg("update")
@@ -982,7 +1005,6 @@ fn fetch_lfs(
         .arg("fetch")
         .arg(url)
         .arg(revision.as_str())
-        .env_remove(GIT_DIR)
         .env_remove(GIT_LFS_SKIP_SMUDGE)
         .current_dir(&repo.path)
         .output()?;
@@ -1003,7 +1025,7 @@ fn fetch_with_cli(
     tags: bool,
     offline: bool,
 ) -> Result<(), GitError> {
-    let mut cmd = Command::new(GIT.as_ref().map_err(|err| err.clone())?);
+    let mut cmd = git_command(GIT.as_ref().map_err(|err| err.clone())?);
     cmd.arg("fetch");
     if tags {
         cmd.arg("--tags");
@@ -1012,11 +1034,6 @@ fn fetch_with_cli(
         .arg("--update-head-ok") // see discussion in #2078
         .arg(url)
         .args(refspecs)
-        //     // If cargo is run by git (for example, the `exec` command in `git
-        //     // rebase`), the GIT_DIR is set by git and will point to the wrong
-        //     // location (this takes precedence over the cwd). Make sure this is
-        //     // unset so git will look at cwd for the repo.
-        .env_remove(GIT_DIR)
         // Disable interactive credential prompts so an unreachable or
         // non-existent remote fails fast instead of hanging waiting for
         // input on the controlling TTY.
