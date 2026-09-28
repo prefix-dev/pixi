@@ -1,0 +1,7 @@
+---
+source: crates/pixi_core/src/lock_file/satisfiability/tests.rs
+expression: s
+---
+environment 'default' does not satisfy the requirements of the project for platform 'linux-64'
+    Diagnostic severity: error
+    Caused by: the requirement 'my-package *[extras=[baz]]' could not be satisfied (required by '<environment>')

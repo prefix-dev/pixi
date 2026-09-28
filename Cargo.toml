@@ -283,6 +283,45 @@ version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "d8efd776
 # `astral-reqwest-middleware` (rattler, rattler-build, uv).
 reqwest-middleware = { path = "patches/reqwest_middleware_shim" }
 
+# TEMPORARY: `Matches<PackageRecord>` on crates.io does not look at a spec's
+# `extras`, so a locked record that does not declare a requested extra still
+# counts as a match and the extra's dependencies are silently dropped. The
+# branch below is the released rattler 0.52.1 point plus that one fix
+# (conda/rattler#2868); every crate version is identical to what crates.io
+# publishes, so this only changes the matching behaviour.
+#
+# All of them have to be patched, not just `rattler_conda_types`: a patched
+# crate resolves its rattler siblings from the git checkout, so leaving any of
+# them on crates.io puts two copies of e.g. `rattler_digest` in the graph and
+# the types stop being interchangeable across the rattler/rattler-build
+# boundary. Remove the whole block once the fix is released.
+coalesced_map = { git = "https://github.com/pavelzw/rattler", branch = "extras-matchspec-0.52" }
+file_url = { git = "https://github.com/pavelzw/rattler", branch = "extras-matchspec-0.52" }
+path_resolver = { git = "https://github.com/pavelzw/rattler", branch = "extras-matchspec-0.52" }
+rattler = { git = "https://github.com/pavelzw/rattler", branch = "extras-matchspec-0.52" }
+rattler_cache = { git = "https://github.com/pavelzw/rattler", branch = "extras-matchspec-0.52" }
+rattler_conda_types = { git = "https://github.com/pavelzw/rattler", branch = "extras-matchspec-0.52" }
+rattler_conda_version = { git = "https://github.com/pavelzw/rattler", branch = "extras-matchspec-0.52" }
+rattler_config = { git = "https://github.com/pavelzw/rattler", branch = "extras-matchspec-0.52" }
+rattler_digest = { git = "https://github.com/pavelzw/rattler", branch = "extras-matchspec-0.52" }
+rattler_git = { git = "https://github.com/pavelzw/rattler", branch = "extras-matchspec-0.52" }
+rattler_index = { git = "https://github.com/pavelzw/rattler", branch = "extras-matchspec-0.52" }
+rattler_lock = { git = "https://github.com/pavelzw/rattler", branch = "extras-matchspec-0.52" }
+rattler_macros = { git = "https://github.com/pavelzw/rattler", branch = "extras-matchspec-0.52" }
+rattler_menuinst = { git = "https://github.com/pavelzw/rattler", branch = "extras-matchspec-0.52" }
+rattler_networking = { git = "https://github.com/pavelzw/rattler", branch = "extras-matchspec-0.52" }
+rattler_package_streaming = { git = "https://github.com/pavelzw/rattler", branch = "extras-matchspec-0.52" }
+rattler_prefix_guard = { git = "https://github.com/pavelzw/rattler", branch = "extras-matchspec-0.52" }
+rattler_pty = { git = "https://github.com/pavelzw/rattler", branch = "extras-matchspec-0.52" }
+rattler_redaction = { git = "https://github.com/pavelzw/rattler", branch = "extras-matchspec-0.52" }
+rattler_repodata_gateway = { git = "https://github.com/pavelzw/rattler", branch = "extras-matchspec-0.52" }
+rattler_s3 = { git = "https://github.com/pavelzw/rattler", branch = "extras-matchspec-0.52" }
+rattler_shell = { git = "https://github.com/pavelzw/rattler", branch = "extras-matchspec-0.52" }
+rattler_solve = { git = "https://github.com/pavelzw/rattler", branch = "extras-matchspec-0.52" }
+rattler_upload = { git = "https://github.com/pavelzw/rattler", branch = "extras-matchspec-0.52" }
+rattler_virtual_packages = { git = "https://github.com/pavelzw/rattler", branch = "extras-matchspec-0.52" }
+simple_spawn_blocking = { git = "https://github.com/pavelzw/rattler", branch = "extras-matchspec-0.52" }
+
 # Strip debug info from dependencies: faster links, much smaller `target/`,
 # while keeping full debuggability for our own crates.
 # See https://matklad.github.io/2021/09/04/fast-rust-builds.html

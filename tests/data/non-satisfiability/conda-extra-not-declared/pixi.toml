@@ -1,0 +1,12 @@
+[workspace]
+channels = ["https://conda.anaconda.org/extras-test"]
+platforms = ["linux-64"]
+
+# The locked `my-package` advertises only the `foo` extra, but the manifest asks
+# for `baz`. A record that does not declare a requested extra cannot satisfy the
+# spec: whatever `baz` depends on would be missing from the environment. So the
+# lock file has to be reported as out of date rather than accepted with the
+# extra quietly ignored.
+
+[dependencies]
+my-package = { version = "*", extras = ["baz"] }
