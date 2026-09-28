@@ -1,5 +1,10 @@
-use std::{collections::HashMap, path::PathBuf, sync::LazyLock};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+    sync::LazyLock,
+};
 
+use indexmap::IndexMap;
 use miette::Diagnostic;
 use once_cell::unsync::OnceCell;
 use pixi_build_backend::generated_recipe::MetadataProvider;
@@ -12,6 +17,20 @@ static CRAN_SPDX_MAP: LazyLock<HashMap<String, String>> = LazyLock::new(|| {
     let json_str = include_str!("../license_mapping/cran_spdx_licenses.json");
     serde_json::from_str(json_str).expect("Failed to parse cran_spdx_licenses.json")
 });
+
+/// Bioconductor software packages list loaded from JSON file.
+/// Bioconductor packages in conda use the 'bioconductor-' prefix instead of 'r-'.
+static BIOCONDUCTOR_PACKAGES: LazyLock<HashSet<String>> = LazyLock::new(|| {
+    let json_str = include_str!("../bioconductor_mapping/bioconductor_packages.json");
+    let packages: Vec<String> =
+        serde_json::from_str(json_str).expect("Failed to parse bioconductor_packages.json");
+    packages.into_iter().map(|s| s.to_lowercase()).collect()
+});
+
+/// Check if an R package is a known Bioconductor package.
+pub fn is_bioconductor_package(name: &str) -> bool {
+    BIOCONDUCTOR_PACKAGES.contains(&name.to_lowercase())
+}
 
 /// R packages that are built into r-base and should not be listed as separate dependencies.
 ///
@@ -177,19 +196,46 @@ pub fn parse_r_dependencies(deps_str: &str) -> Vec<RDependency> {
     dependencies
 }
 
-/// Convert R package name to conda package name
+/// Convert R package name to conda package name without custom mapping.
 ///
-/// R packages in conda typically use lowercase with 'r-' prefix:
-/// - "curl" -> "r-curl"
-/// - "jsonlite" -> "r-jsonlite"
-/// - "R6" -> "r-r6"
+/// Converts R package names according to conda packaging conventions:
+/// - "R" -> "r-base"
+/// - Bioconductor packages -> `bioconductor-<lowercase>` (e.g. "Biobase" -> "bioconductor-biobase")
+/// - CRAN / other R packages -> `r-<lowercase>` (e.g. "curl" -> "r-curl", "jsonlite" -> "r-jsonlite")
+#[allow(dead_code)]
 pub fn r_package_to_conda(name: &str) -> String {
+    r_package_to_conda_with_mapping(name, None)
+}
+
+/// Convert R package name to conda package name, respecting custom user mapping.
+///
+/// If a custom mapping is provided and contains the package name (case-insensitively),
+/// the mapped name is used.
+/// Otherwise, falls back to Bioconductor (`bioconductor-<pkg>`) or CRAN (`r-<pkg>`) convention.
+pub fn r_package_to_conda_with_mapping(
+    name: &str,
+    mapping: Option<&IndexMap<String, String>>,
+) -> String {
     // Special case: "R" refers to the R language itself, which is r-base
     if name == "R" {
         return "r-base".to_string();
     }
 
-    format!("r-{}", name.to_lowercase())
+    // User-provided mapping takes highest precedence
+    if let Some(mapping) = mapping {
+        for (k, v) in mapping {
+            if k.eq_ignore_ascii_case(name) {
+                return v.clone();
+            }
+        }
+    }
+
+    let lower = name.to_lowercase();
+    if is_bioconductor_package(&lower) {
+        format!("bioconductor-{lower}")
+    } else {
+        format!("r-{lower}")
+    }
 }
 
 /// Convert R version constraint to conda version constraint
@@ -230,6 +276,7 @@ struct DescriptionData {
 pub struct DescriptionMetadataProvider {
     manifest_root: PathBuf,
     description_data: OnceCell<DescriptionData>,
+    mapping: Option<IndexMap<String, String>>,
 }
 
 impl DescriptionMetadataProvider {
@@ -237,7 +284,13 @@ impl DescriptionMetadataProvider {
         Self {
             manifest_root: manifest_root.into(),
             description_data: OnceCell::default(),
+            mapping: None,
         }
+    }
+
+    pub fn with_mapping(mut self, mapping: IndexMap<String, String>) -> Self {
+        self.mapping = Some(mapping);
+        self
     }
 
     /// Parse DESCRIPTION file in DCF (Debian Control File) format
@@ -377,7 +430,7 @@ impl MetadataProvider for DescriptionMetadataProvider {
             .ensure_data()?
             .package
             .as_deref()
-            .map(r_package_to_conda))
+            .map(|pkg| r_package_to_conda_with_mapping(pkg, self.mapping.as_ref())))
     }
 
     fn version(&mut self) -> Result<Option<Version>, Self::Error> {
@@ -482,20 +535,63 @@ License: GPL-3
 
     #[test]
     fn test_name_is_conda_normalized() {
-        // The provided name must match what dependents require: a mixed-case
-        // DESCRIPTION `Package:` such as `Rhdf5lib` becomes `r-rhdf5lib`, the
-        // same value `r_package_to_conda` produces for a dependency on it. This
-        // is what makes source->source R dependencies resolvable.
-        let content = r#"Package: Rhdf5lib
+        // Bioconductor packages become bioconductor-<lowercase>
+        let content_bioc = r#"Package: Rhdf5lib
+Version: 1.0.0
+"#;
+        let temp_dir_bioc = create_test_description(content_bioc);
+        let mut provider_bioc = DescriptionMetadataProvider::new(temp_dir_bioc.path());
+
+        assert_eq!(
+            provider_bioc.name().unwrap(),
+            Some("bioconductor-rhdf5lib".to_string())
+        );
+        assert_eq!(
+            provider_bioc.name().unwrap(),
+            Some(r_package_to_conda("Rhdf5lib"))
+        );
+
+        // CRAN packages become r-<lowercase>
+        let content_cran = r#"Package: RColorBrewer
+Version: 1.1-3
+"#;
+        let temp_dir_cran = create_test_description(content_cran);
+        let mut provider_cran = DescriptionMetadataProvider::new(temp_dir_cran.path());
+
+        assert_eq!(
+            provider_cran.name().unwrap(),
+            Some("r-rcolorbrewer".to_string())
+        );
+        assert_eq!(
+            provider_cran.name().unwrap(),
+            Some(r_package_to_conda("RColorBrewer"))
+        );
+    }
+
+    #[test]
+    fn test_custom_mapping_in_metadata_provider() {
+        let content = r#"Package: CustomPkg
 Version: 1.0.0
 "#;
         let temp_dir = create_test_description(content);
-        let mut provider = DescriptionMetadataProvider::new(temp_dir.path());
+        let mut mapping = IndexMap::new();
+        mapping.insert("CustomPkg".to_string(), "custom-conda-name".to_string());
+        let mut provider =
+            DescriptionMetadataProvider::new(temp_dir.path()).with_mapping(mapping.clone());
 
-        assert_eq!(provider.name().unwrap(), Some("r-rhdf5lib".to_string()));
         assert_eq!(
             provider.name().unwrap(),
-            Some(r_package_to_conda("Rhdf5lib"))
+            Some("custom-conda-name".to_string())
+        );
+
+        assert_eq!(
+            r_package_to_conda_with_mapping("CustomPkg", Some(&mapping)),
+            "custom-conda-name"
+        );
+        // Case-insensitive mapping lookup
+        assert_eq!(
+            r_package_to_conda_with_mapping("custompkg", Some(&mapping)),
+            "custom-conda-name"
         );
     }
 
