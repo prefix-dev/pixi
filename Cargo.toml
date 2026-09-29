@@ -144,7 +144,7 @@ pypi_modifiers = { path = "crates/pypi_modifiers" }
 pyproject-toml = "0.13.7"
 
 bzip2 = "0.6.1"
-lzma-rust2 = { version = "0.20", default-features = false, features = [
+lzma-rust2 = { version = "0.21", default-features = false, features = [
   "std",
   "xz",
 ] }
@@ -173,7 +173,7 @@ serde-untagged = "0.1.6"
 serde-value = "0.7.0"
 serde_with = "3.18.0"
 serde_yaml = "0.9.34"
-sevenz-rust2 = "0.22.0"
+sevenz-rust2 = "0.23.0"
 shlex = "2.0.0"
 signal-hook = "0.3.17"
 slotmap = "1.0.7"
