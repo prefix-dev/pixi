@@ -217,7 +217,17 @@ impl PurlDerivationClient {
 
         let wrapped_client = LazyClient::new(move || {
             let client = client.client().clone();
-            ClientBuilder::new(reqwest::Client::new())
+            // The underlying reqwest::Client is never actually used because DelegateToClient
+            // intercepts all terminal requests and forwards them to `client` (which has the
+            // real TLS roots, proxy, and auth configured).
+            //
+            // By bypassing root cert loading on this dummy client, we avoid panics on systems
+            // with no system CA bundle (e.g. Termux/Android) when tls-root-certs = "webpki" is set.
+            let base_client = reqwest::Client::builder()
+                .danger_accept_invalid_certs(true)
+                .build()
+                .unwrap_or_default();
+            ClientBuilder::new(base_client)
                 .with(retry_strategy)
                 .with(cache_strategy)
                 .with(DelegateToClient(client))
