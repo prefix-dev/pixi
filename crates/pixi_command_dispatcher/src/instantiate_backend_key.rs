@@ -42,6 +42,7 @@ use crate::compute_data::HasInstantiateBackendReporter;
 use crate::ephemeral_env::{EphemeralEnvError, EphemeralEnvKey, EphemeralEnvSpec};
 use crate::injected_config::ToolBuildEnvironmentKey;
 use crate::inline_package::discover_backend;
+use crate::input_hash::ConfigurationHash;
 use crate::reporter::InstantiateBackendReporter;
 use crate::resolved_backend_command::{ResolvedBackendCommand, ResolvedBackendCommandKey};
 use pixi_compute_cache_dirs::CacheDirsKey;
@@ -506,32 +507,35 @@ fn ephemeral_env_spec_for(
 /// keys, so when an actual instantiation runs later in the same
 /// process the work is shared via the engine's dedup; the only thing
 /// this skips is the spawn / handshake / activation step.
-///
-/// Returned format:
-/// - In-memory backends: the
-///   [`BoxedInMemoryBackend::identifier`] string.
-/// - System backends: the resolved system command name (the override
-///   command or, falling back, the discovered backend's name).
-/// - Environment-spec backends: `"<command>@<resolved_version>"`,
-///   where `command` is the backend command (the override command or,
-///   falling back, the backend's name) and `resolved_version` is the
-///   primary package's version as solved by [`EphemeralEnvKey`].
-///
-/// The string is suitable as input to a content-addressed cache key
-/// where "the same logical backend" should round-trip identically
-/// across processes — every component comes from a deterministic
-/// resolve step, none from an instance handle.
-pub async fn resolve_backend_identifier(
+/// The resolved identity of a backend, including its stable identifier
+/// and configuration hash.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ResolvedBackendIdentity {
+    /// Identifier string for the backend (e.g. `pixi-build-cmake` or `backend@1.0.0`).
+    pub identifier: String,
+    /// Hash of the backend configuration from `[package.build.config]` and
+    /// `[package.build.target.<selector>.config]`.
+    pub configuration_hash: ConfigurationHash,
+}
+
+/// Resolve a stable backend identity (identifier + configuration hash)
+/// WITHOUT spawning the JSON-RPC backend.
+pub async fn resolve_backend_identity(
     ctx: &mut ComputeCtx,
     source_path: &std::path::Path,
     manifest_source_anchor: SourceAnchor,
     exclude_newer: Option<ResolvedExcludeNewer>,
     inline: Option<&InlinePackage>,
-) -> Result<String, Arc<InstantiateBackendError>> {
+) -> Result<ResolvedBackendIdentity, Arc<InstantiateBackendError>> {
     let discovered = discover_backend(ctx, source_path, inline)
         .await
         .map_err(InstantiateBackendError::Discovery)
         .map_err(Arc::new)?;
+
+    let configuration_hash = ConfigurationHash::compute(
+        discovered.init_params.configuration.as_ref(),
+        discovered.init_params.target_configuration.as_ref(),
+    );
 
     let BackendSpec::JsonRpc(resolved_spec) = discovered
         .backend_spec
@@ -542,12 +546,12 @@ pub async fn resolve_backend_identifier(
         .compute(&ResolvedBackendCommandKey::new(resolved_spec.clone()))
         .await;
 
-    match resolved_command.as_ref() {
-        ResolvedBackendCommand::InMemory(in_mem) => Ok(in_mem.identifier().to_string()),
-        ResolvedBackendCommand::Spec(CommandSpec::System(system_spec)) => Ok(system_spec
+    let identifier = match resolved_command.as_ref() {
+        ResolvedBackendCommand::InMemory(in_mem) => in_mem.identifier().to_string(),
+        ResolvedBackendCommand::Spec(CommandSpec::System(system_spec)) => system_spec
             .command
             .clone()
-            .unwrap_or_else(|| resolved_spec.name.clone())),
+            .unwrap_or_else(|| resolved_spec.name.clone()),
         ResolvedBackendCommand::Spec(CommandSpec::EnvironmentSpec(env_spec)) => {
             let ephemeral_spec = ephemeral_env_spec_for(env_spec, exclude_newer);
             let installed = ctx
@@ -562,9 +566,36 @@ pub async fn resolve_backend_identifier(
                 .command
                 .clone()
                 .unwrap_or_else(|| resolved_spec.name.clone());
-            Ok(format!("{cmd}@{version}"))
+            format!("{cmd}@{version}")
         }
-    }
+    };
+
+    Ok(ResolvedBackendIdentity {
+        identifier,
+        configuration_hash,
+    })
+}
+
+/// The string is suitable as input to a content-addressed cache key
+/// where "the same logical backend" should round-trip identically
+/// across processes — every component comes from a deterministic
+/// resolve step, none from an instance handle.
+pub async fn resolve_backend_identifier(
+    ctx: &mut ComputeCtx,
+    source_path: &std::path::Path,
+    manifest_source_anchor: SourceAnchor,
+    exclude_newer: Option<ResolvedExcludeNewer>,
+    inline: Option<&InlinePackage>,
+) -> Result<String, Arc<InstantiateBackendError>> {
+    resolve_backend_identity(
+        ctx,
+        source_path,
+        manifest_source_anchor,
+        exclude_newer,
+        inline,
+    )
+    .await
+    .map(|identity| identity.identifier)
 }
 
 /// Build a [`Tool::System`] that runs the backend's executable directly

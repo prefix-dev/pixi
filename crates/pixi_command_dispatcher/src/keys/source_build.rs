@@ -187,7 +187,7 @@ async fn compute_inner(
         .path
         .as_dir_or_file_parent()
         .to_path_buf();
-    let backend_identifier = crate::resolve_backend_identifier(
+    let backend_identity = crate::resolve_backend_identity(
         ctx,
         manifest_checkout.path.as_std_path(),
         manifest_anchor.clone(),
@@ -209,12 +209,13 @@ async fn compute_inner(
         &spec.record,
         spec.build_environment.build_platform,
         spec.build_environment.host_platform,
-        &backend_identifier,
+        &backend_identity.identifier,
         &build_source_dep_sha256s,
         &host_source_dep_sha256s,
         &project_model_overrides,
         spec.package_format,
         spec.inline.as_ref().map(|inline| inline.content_hash),
+        backend_identity.configuration_hash,
     );
 
     // On artifact cache hit, return without invoking the backend.
@@ -293,7 +294,8 @@ async fn compute_inner(
         &spec.record,
         spec.build_environment.build_platform,
         spec.build_environment.host_platform,
-        &backend_identifier,
+        &backend_identity.identifier,
+        backend_identity.configuration_hash,
     );
     let workspaces_dir = ctx.cache_dir::<SourceBuildWorkspacesDir>().await;
     let workspace_cache = WorkspaceCache::new(workspaces_dir.as_std_path());
