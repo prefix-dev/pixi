@@ -33,21 +33,38 @@ pushd build
 :: TODO: setup testing logic
 set SKIP_TESTING=true
 
+:: Normalize paths to forward slashes for CMake to avoid invalid escape characters in generated cmake scripts
+if defined LIBRARY_PREFIX (
+    set "CMAKE_PREFIX=%LIBRARY_PREFIX:\=/%"
+) else (
+    set "CMAKE_PREFIX=%LIBRARY_PREFIX%"
+)
+if defined PYTHON (
+    set "CMAKE_PYTHON=%PYTHON:\=/%"
+) else (
+    set "CMAKE_PYTHON=%PYTHON%"
+)
+if defined SRC_DIR (
+    set "CMAKE_SRC_DIR=%SRC_DIR:\=/%"
+) else (
+    set "CMAKE_SRC_DIR=%SRC_DIR%"
+)
+
 cmake ^
     -G "Ninja" ^
     --compile-no-warning-as-error ^
-    -DCMAKE_INSTALL_PREFIX=%LIBRARY_PREFIX% ^
+    -DCMAKE_INSTALL_PREFIX="%CMAKE_PREFIX%" ^
     -DCMAKE_BUILD_TYPE=Release ^
     -DCMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP=ON ^
     -DBUILD_SHARED_LIBS=ON ^
-    -DPYTHON_EXECUTABLE=%PYTHON% ^
-    -DPython_EXECUTABLE=%PYTHON% ^
-    -DPython3_EXECUTABLE=%PYTHON% ^
+    -DPYTHON_EXECUTABLE="%CMAKE_PYTHON%" ^
+    -DPython_EXECUTABLE="%CMAKE_PYTHON%" ^
+    -DPython3_EXECUTABLE="%CMAKE_PYTHON%" ^
     -DSETUPTOOLS_DEB_LAYOUT=OFF ^
     -DBoost_USE_STATIC_LIBS=OFF ^
     %CATKIN_BUILD_BINARY_PACKAGE_ARGS% ^
     -DCATKIN_SKIP_TESTING=%SKIP_TESTING% ^
-    %SRC_DIR%
+    "%CMAKE_SRC_DIR%"
 if errorlevel 1 exit 1
 
 if "%PKG_NAME%" == "ros-@DISTRO@-eigenpy" (

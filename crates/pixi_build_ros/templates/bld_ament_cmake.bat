@@ -35,21 +35,38 @@ set "CMAKE_GENERATOR=Ninja"
 :: The equivalent in bash is PYTHON_INSTALL_DIR=`python -c ...`
 FOR /F "tokens=* USEBACKQ" %%i IN (`python -c "import os;print(os.path.relpath(os.environ['SP_DIR'],os.environ['LIBRARY_PREFIX']).replace('\\','/'))"`) DO SET PYTHON_INSTALL_DIR=%%i
 
+:: Normalize paths to forward slashes for CMake to avoid invalid escape characters in generated cmake scripts
+if defined LIBRARY_PREFIX (
+    set "CMAKE_PREFIX=%LIBRARY_PREFIX:\=/%"
+) else (
+    set "CMAKE_PREFIX=%LIBRARY_PREFIX%"
+)
+if defined PYTHON (
+    set "CMAKE_PYTHON=%PYTHON:\=/%"
+) else (
+    set "CMAKE_PYTHON=%PYTHON%"
+)
+if defined SRC_DIR (
+    set "CMAKE_SRC_DIR=%SRC_DIR:\=/%"
+) else (
+    set "CMAKE_SRC_DIR=%SRC_DIR%"
+)
+
 cmake ^
     -G "%CMAKE_GENERATOR%" ^
-    -DCMAKE_INSTALL_PREFIX=%LIBRARY_PREFIX% ^
+    -DCMAKE_INSTALL_PREFIX="%CMAKE_PREFIX%" ^
     -DCMAKE_BUILD_TYPE=%BUILD_TYPE% ^
     -DCMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP=True ^
-    -DPYTHON_EXECUTABLE=%PYTHON% ^
-    -DPython_EXECUTABLE=%PYTHON% ^
-    -DPython3_EXECUTABLE=%PYTHON% ^
+    -DPYTHON_EXECUTABLE="%CMAKE_PYTHON%" ^
+    -DPython_EXECUTABLE="%CMAKE_PYTHON%" ^
+    -DPython3_EXECUTABLE="%CMAKE_PYTHON%" ^
     -DSETUPTOOLS_DEB_LAYOUT=OFF ^
     -DBUILD_SHARED_LIBS=ON ^
     -DBUILD_TESTING=OFF ^
     -DCMAKE_OBJECT_PATH_MAX=255 ^
     --compile-no-warning-as-error ^
-    -DPYTHON_INSTALL_DIR=%PYTHON_INSTALL_DIR% ^
-    %SRC_DIR%
+    -DPYTHON_INSTALL_DIR="%PYTHON_INSTALL_DIR%" ^
+    "%CMAKE_SRC_DIR%"
 if errorlevel 1 exit 1
 
 :: We explicitly pass %CPU_COUNT% to cmake --build as we are not using Ninja,
