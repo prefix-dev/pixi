@@ -52,13 +52,7 @@ pub(crate) fn script_exec_mapping<'a>(
         matching_executables
             .iter()
             .copied()
-            .find(|executable| {
-                if let Some(parent) = executable.path.parent() {
-                    is_binary_folder(parent)
-                } else {
-                    false
-                }
-            })
+            .find(|executable| executable.path.parent().is_some_and(is_binary_folder))
             .or_else(|| {
                 matching_executables
                     .iter()
