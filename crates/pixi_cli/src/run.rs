@@ -425,9 +425,13 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
     } else {
         None
     };
+    let platform_override_active =
+        std::env::var(pixi_consts::consts::PIXI_OVERRIDE_PLATFORM).is_ok();
     let search_environment =
         SearchEnvironments::from_opt_env(&workspace, explicit_environment.clone(), search_platform)
-            .with_disambiguate_fn(disambiguate_task_interactive);
+            .with_disambiguate_fn(move |problem| {
+                disambiguate_task_interactive(problem, platform_override_active)
+            });
 
     let task_graph = TaskGraph::from_cmd_args(
         &workspace,
@@ -778,28 +782,57 @@ async fn execute_task(
     Ok(())
 }
 
+/// Filters candidate environments for an ambiguous task to those runnable on this machine.
+///
+/// If `platform_override_active` is true, or if no candidate is runnable on this machine,
+/// all candidates are preserved.
+fn filter_runnable_candidates<'p>(
+    environments: &[TaskAndEnvironment<'p>],
+    platform_override_active: bool,
+) -> Vec<TaskAndEnvironment<'p>> {
+    if platform_override_active {
+        return environments.to_vec();
+    }
+
+    let runnable: Vec<_> = environments
+        .iter()
+        .filter(|(env, _)| env.best_declared_platform().is_some())
+        .cloned()
+        .collect();
+
+    if runnable.is_empty() {
+        environments.to_vec()
+    } else {
+        runnable
+    }
+}
+
 /// Called to disambiguate between environments to run a task in.
 fn disambiguate_task_interactive<'p>(
     problem: &AmbiguousTask<'p>,
+    platform_override_active: bool,
 ) -> Option<TaskAndEnvironment<'p>> {
+    let candidates = filter_runnable_candidates(&problem.environments, platform_override_active);
+
     // If any of the candidate tasks declares a `default-environment` that
     // corresponds to one of the candidate environments, prefer that
     // environment automatically.
-    if let Some(idx) = problem.environments.iter().position(|(env, task)| {
+    if let Some(idx) = candidates.iter().position(|(env, task)| {
         if let Some(default_env_name) = task.default_environment() {
             default_env_name == env.name()
         } else {
             false
         }
     }) {
-        return Some(problem.environments[idx].clone());
+        return Some(candidates[idx].clone());
     }
 
-    let environment_names = problem
-        .environments
-        .iter()
-        .map(|(env, _)| env.name())
-        .collect_vec();
+    // If only one candidate is runnable on the current machine, there is no ambiguity.
+    if candidates.len() == 1 {
+        return Some(candidates[0].clone());
+    }
+
+    let environment_names = candidates.iter().map(|(env, _)| env.name()).collect_vec();
     let theme = ColorfulTheme {
         active_item_style: console::Style::new().for_stderr().magenta(),
         ..ColorfulTheme::default()
@@ -820,7 +853,7 @@ fn disambiguate_task_interactive<'p>(
         .default(0)
         .interact_opt()
         .map_or(None, identity)
-        .map(|idx| problem.environments[idx].clone())
+        .map(|idx| candidates[idx].clone())
 }
 
 /// `dialoguer` doesn't clean up your term if it's aborted via e.g. `SIGINT` or
@@ -936,5 +969,112 @@ mod tests {
     fn experimental_requires_a_script() {
         assert!(Args::try_parse_from(["run", "--experimental", "--script", "main.c"]).is_ok());
         assert!(Args::try_parse_from(["run", "--experimental", "task"]).is_err());
+    }
+
+    #[test]
+    fn test_filter_runnable_candidates_removes_unsupported() {
+        use rattler_conda_types::Platform;
+        use std::path::Path;
+
+        let host = Platform::current();
+        let foreign = match host {
+            Platform::Linux64 => Platform::LinuxRiscv64,
+            _ => Platform::LinuxRiscv64,
+        };
+
+        let manifest_str = format!(
+            r#"
+            [workspace]
+            channels = []
+            platforms = ["{host}", "{foreign}"]
+
+            [tasks]
+            test = "echo test"
+
+            [feature.host]
+            platforms = ["{host}"]
+
+            [feature.foreign]
+            platforms = ["{foreign}"]
+
+            [environments]
+            env-host = ["host"]
+            env-foreign = ["foreign"]
+            "#
+        );
+
+        let workspace =
+            pixi_core::Workspace::from_str(Path::new("pixi.toml"), &manifest_str).unwrap();
+        let env_host = workspace.environment("env-host").unwrap();
+        let task_host = env_host
+            .task(&"test".into(), env_host.best_declared_platform())
+            .unwrap();
+
+        let env_foreign = workspace.environment("env-foreign").unwrap();
+        let task_foreign = env_foreign.task(&"test".into(), None).unwrap();
+
+        let candidates = vec![
+            (env_host.clone(), task_host),
+            (env_foreign.clone(), task_foreign),
+        ];
+
+        let filtered = super::filter_runnable_candidates(&candidates, false);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].0.name().as_str(), "env-host");
+
+        // When disambiguating, the single runnable candidate is returned automatically without prompt
+        let problem = pixi_task::AmbiguousTask {
+            task_name: "test".into(),
+            depended_on_by: None,
+            environments: candidates.clone(),
+        };
+        let selected = super::disambiguate_task_interactive(&problem, false);
+        assert_eq!(selected.unwrap().0.name().as_str(), "env-host");
+
+        // When override is active, both candidates are preserved
+        let filtered_override = super::filter_runnable_candidates(&candidates, true);
+        assert_eq!(filtered_override.len(), 2);
+    }
+
+    #[test]
+    fn test_filter_runnable_candidates_preserves_all_if_none_runnable() {
+        use rattler_conda_types::Platform;
+        use std::path::Path;
+
+        let manifest_str = r#"
+            [workspace]
+            channels = []
+            platforms = ["linux-riscv64", "emscripten-wasm32"]
+
+            [tasks]
+            test = "echo test"
+
+            [feature.f1]
+            platforms = ["linux-riscv64"]
+
+            [feature.f2]
+            platforms = ["emscripten-wasm32"]
+
+            [environments]
+            env1 = ["f1"]
+            env2 = ["f2"]
+        "#;
+
+        let workspace =
+            pixi_core::Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
+        let env1 = workspace.environment("env1").unwrap();
+        let task1 = env1.task(&"test".into(), None).unwrap();
+
+        let env2 = workspace.environment("env2").unwrap();
+        let task2 = env2.task(&"test".into(), None).unwrap();
+
+        let candidates = vec![(env1, task1), (env2, task2)];
+
+        if Platform::current() != Platform::LinuxRiscv64
+            && Platform::current() != Platform::EmscriptenWasm32
+        {
+            let filtered = super::filter_runnable_candidates(&candidates, false);
+            assert_eq!(filtered.len(), 2);
+        }
     }
 }

@@ -412,5 +412,53 @@ async fn test_clean_env() {
     assert_eq!(result.stdout, "Hello is: world from env\n");
 }
 
-// When adding another test with an environment variable, please choose a unique
-// name to avoid collisions
+/// Regression test for <https://github.com/prefix-dev/pixi/issues/6624>:
+/// When a task is defined in multiple environments whose platforms differ,
+/// environments unsupported on the current host machine should be filtered out.
+/// If only one runnable environment remains, it should be selected without ambiguity.
+#[tokio::test]
+async fn test_run_disambiguate_filters_unsupported_platforms() {
+    setup_tracing();
+
+    let host = Platform::current();
+    let foreign = match host {
+        Platform::Linux64 => Platform::LinuxRiscv64,
+        _ => Platform::LinuxRiscv64,
+    };
+
+    let manifest = format!(
+        r#"
+        [workspace]
+        name = "test-disambiguate"
+        channels = []
+        platforms = ["{host}", "{foreign}"]
+
+        [tasks]
+        echo-task = "echo hello-from-task"
+
+        [feature.host]
+        platforms = ["{host}"]
+
+        [feature.foreign]
+        platforms = ["{foreign}"]
+
+        [environments]
+        host-env = ["host"]
+        foreign-env = ["foreign"]
+        "#
+    );
+
+    let pixi = PixiControl::from_manifest(&manifest).unwrap();
+
+    let result = pixi
+        .run(Args {
+            task: vec!["echo-task".to_string()],
+            workspace_config: ScriptWorkspaceConfig::default(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(result.exit_code, 0);
+    assert!(result.stdout.contains("hello-from-task"));
+}
