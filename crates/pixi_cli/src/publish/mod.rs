@@ -1381,17 +1381,36 @@ async fn upload_to_anaconda(
         );
     }
 
-    let anaconda_data = AnacondaData::new(
-        owner,
-        Some(vec![channel]),
-        None,
-        None,
-        ForceOverwrite(ctx.force),
-    );
+    for package_path in package_paths {
+        let anaconda_data = AnacondaData::new(
+            owner.clone(),
+            Some(vec![channel.clone()]),
+            None,
+            None,
+            ForceOverwrite(ctx.force),
+        );
 
-    upload_package_to_anaconda(&ctx.auth_storage, &package_paths.to_vec(), anaconda_data)
+        if let Err(err) = upload_package_to_anaconda(
+            &ctx.auth_storage,
+            &vec![package_path.clone()],
+            anaconda_data,
+        )
         .await
-        .into_diagnostic()
+        {
+            let report = miette::Report::new(err);
+            if ctx.skip_existing && is_already_exists_error(&report) {
+                let file_name = package_path
+                    .file_name()
+                    .map(|f| f.to_string_lossy().to_string())
+                    .unwrap_or_else(|| package_path.display().to_string());
+                pixi_progress::println!("Skipping '{}' (already exists)", file_name);
+            } else {
+                return Err(report);
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// Upload packages to Cloudsmith.
@@ -1441,6 +1460,15 @@ async fn upload_to_cloudsmith(
         .context("Failed to upload packages to Cloudsmith")
 }
 
+/// Returns true if the report indicates an already-existing package conflict (HTTP 409 or similar).
+fn is_already_exists_error(err: &miette::Report) -> bool {
+    let msg = format!("{err:?}");
+    msg.contains("409 Conflict")
+        || msg.contains("Status: 409")
+        || msg.contains("Already published")
+        || msg.contains("FileAlreadyExists")
+}
+
 /// Upload packages to a Quetz server.
 async fn upload_to_quetz(
     url: &Url,
@@ -1461,9 +1489,25 @@ async fn upload_to_quetz(
     let mut server_url = rewrite_scheme_to_https(url, "quetz")?;
     server_url.set_path("");
 
-    let quetz_data = QuetzData::new(server_url, channel, None);
+    for package_path in package_paths {
+        let quetz_data = QuetzData::new(server_url.clone(), channel.clone(), None);
+        if let Err(err) =
+            upload_package_to_quetz(&ctx.auth_storage, &vec![package_path.clone()], quetz_data)
+                .await
+        {
+            if ctx.skip_existing && is_already_exists_error(&err) {
+                let file_name = package_path
+                    .file_name()
+                    .map(|f| f.to_string_lossy().to_string())
+                    .unwrap_or_else(|| package_path.display().to_string());
+                pixi_progress::println!("Skipping '{}' (already exists)", file_name);
+            } else {
+                return Err(err);
+            }
+        }
+    }
 
-    upload_package_to_quetz(&ctx.auth_storage, &package_paths.to_vec(), quetz_data).await
+    Ok(())
 }
 
 /// Upload packages to an Artifactory server.
@@ -1486,10 +1530,28 @@ async fn upload_to_artifactory(
     let mut server_url = rewrite_scheme_to_https(url, "artifactory")?;
     server_url.set_path("");
 
-    let artifactory_data = ArtifactoryData::new(server_url, channel);
-
-    upload_package_to_artifactory(&ctx.auth_storage, &package_paths.to_vec(), artifactory_data)
+    for package_path in package_paths {
+        let artifactory_data = ArtifactoryData::new(server_url.clone(), channel.clone());
+        if let Err(err) = upload_package_to_artifactory(
+            &ctx.auth_storage,
+            &vec![package_path.clone()],
+            artifactory_data,
+        )
         .await
+        {
+            if ctx.skip_existing && is_already_exists_error(&err) {
+                let file_name = package_path
+                    .file_name()
+                    .map(|f| f.to_string_lossy().to_string())
+                    .unwrap_or_else(|| package_path.display().to_string());
+                pixi_progress::println!("Skipping '{}' (already exists)", file_name);
+            } else {
+                return Err(err);
+            }
+        }
+    }
+
+    Ok(())
 }
 
 /// The indexing options for `target`, a channel URL or an absolute path.
@@ -1995,5 +2057,32 @@ mod tests {
         let url = Url::parse("https://example.com/conda_dev").unwrap();
         let rewritten = rewrite_scheme_to_https(&url, "artifactory").unwrap();
         assert_eq!(rewritten, url);
+    }
+
+    #[test]
+    fn test_is_already_exists_error_detects_conflict() {
+        let err409 = miette::miette!(
+            "HTTP status client error (409 Conflict) for url (https://server/api/upload/pkg.conda)"
+        );
+        assert!(is_already_exists_error(&err409));
+
+        let status409 = miette::miette!(
+            "Failed to upload package file: pkg.conda\nStatus: 409\nBody: already exists"
+        );
+        assert!(is_already_exists_error(&status409));
+
+        let already_pub =
+            miette::miette!("Already published at this version and build number (409 Conflict)");
+        assert!(is_already_exists_error(&already_pub));
+
+        let anaconda_exists =
+            miette::miette!("FileAlreadyExists: pkg.conda already exists in owner/channel");
+        assert!(is_already_exists_error(&anaconda_exists));
+
+        let err500 = miette::miette!("HTTP status server error (500 Internal Server Error)");
+        assert!(!is_already_exists_error(&err500));
+
+        let err404 = miette::miette!("HTTP status client error (404 Not Found)");
+        assert!(!is_already_exists_error(&err404));
     }
 }
