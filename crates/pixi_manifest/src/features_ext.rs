@@ -177,6 +177,18 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     /// environment (prefix-dev/pixi#6493) while a sibling feature pinning
     /// that variant by name still selects it.
     fn platforms(&self) -> HashSet<PixiPlatformName> {
+        if self.is_lock_file_less() {
+            let Ok(host) = self.workspace_manifest().workspace.local_platform() else {
+                // Environment preparation reports the detection error.
+                return HashSet::new();
+            };
+            return self
+                .features()
+                .all(|feature| self.feature_supports_platform(feature, Some(host)))
+                .then(|| host.name().clone())
+                .into_iter()
+                .collect();
+        }
         let workspace = &self.workspace_manifest().workspace;
         if workspace.use_platform_composition {
             let features: Vec<&Feature> = self.features().collect();
@@ -227,6 +239,14 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
             .collect()
     }
 
+    /// Empty platform declarations opt into host-only, locally cached resolution.
+    fn is_lock_file_less(&self) -> bool {
+        self.workspace_manifest().workspace.platforms.is_empty()
+            || self
+                .features()
+                .any(|feature| feature.platforms.as_ref().is_some_and(IndexSet::is_empty))
+    }
+
     /// Whether `feature` contributes to `platform` in this collection. On the
     /// composition path a feature matches by subdir (so it applies to the
     /// composed platform); otherwise it matches by name or bare subdir.
@@ -235,6 +255,12 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
         feature: &Feature,
         platform: Option<&PixiPlatform>,
     ) -> bool {
+        if self.is_lock_file_less() {
+            // Only the empty-list opt-in is unrestricted. Nonempty feature
+            // restrictions (including exact rich-platform names) still apply.
+            return feature.platforms.as_ref().is_some_and(IndexSet::is_empty)
+                || feature.supports_platform(platform);
+        }
         let Some(platform) = platform else {
             return true;
         };

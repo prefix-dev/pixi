@@ -463,19 +463,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .unwrap_or_else(|| environment.name().as_str().to_string());
 
     let env_yaml = if args.from_lock_file {
-        let lock_file_path = workspace.lock_file_path();
-        if !lock_file_path.is_file() {
+        let lock_file = workspace.load_lock_file().await?.into_lock_file()?;
+        if lock_file.environment(environment.name().as_str()).is_none() {
             miette::bail!(
                 help = "Run `pixi lock` (or another command that updates the lock file) first.",
-                "no lock file found at '{}'",
-                lock_file_path.display(),
+                "no locked resolution found for environment '{}'",
+                environment.name(),
             );
         }
-        let lock_file = LockFile::from_path(&lock_file_path)
-            .into_diagnostic()
-            .with_context(|| {
-                format!("failed to read lock file at '{}'", lock_file_path.display())
-            })?;
         build_env_yaml_from_lock_file(&platform, &environment, &lock_file, name, !args.no_pypi)?
     } else {
         build_env_yaml(

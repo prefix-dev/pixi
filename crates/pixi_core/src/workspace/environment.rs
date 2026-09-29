@@ -172,6 +172,10 @@ impl<'p> Environment<'p> {
     /// the environment itself declares support for, and return the most
     /// preferred one.
     pub fn best_declared_platform(&self) -> Option<&'p PixiPlatform> {
+        if self.is_lock_file_less() {
+            let host = self.workspace_manifest().workspace.local_platform().ok()?;
+            return self.platforms().contains(host.name()).then_some(host);
+        }
         let current = host_subdir();
         let system_virtual_packages = host_capabilities();
         let env_platforms = self.platforms();
@@ -563,6 +567,42 @@ mod tests {
             .map(|c| c.as_str())
             .collect_vec();
         assert_eq!(channels, vec!["foo", "bar"]);
+    }
+
+    #[test]
+    fn test_local_platform_uses_detected_virtual_packages() {
+        let expected = pixi_manifest::platform::host::detect_host(host_subdir()).unwrap();
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            &format!(
+                r#"
+[workspace]
+name = "detected"
+channels = []
+platforms = ["{}"]
+[environments.local]
+platforms = []
+"#,
+                host_subdir()
+            ),
+        )
+        .unwrap();
+        let env = workspace.environment("local").unwrap();
+        let actual = env.best_declared_platform().unwrap();
+        assert_eq!(actual, &expected);
+        assert_eq!(env.platforms(), HashSet::from([expected.name().clone()]));
+        // This is the registry lookup used to populate the solver and lock file.
+        assert_eq!(
+            env.workspace_manifest()
+                .workspace
+                .platform_by_name(expected.name()),
+            Some(&expected)
+        );
+        // The portable environment must keep its declared baseline.
+        assert_eq!(
+            workspace.default_environment().platforms(),
+            HashSet::from([host_subdir().into()])
+        );
     }
 
     #[test]
@@ -1802,8 +1842,11 @@ mod tests {
             Some("linux-aarch64"),
             || {
                 let env = workspace.default_environment();
-                // No declared platforms → None even with a valid override.
-                assert!(env.best_declared_platform().is_none());
+                // Local resolutions honor the target-platform override.
+                assert_eq!(
+                    env.best_declared_platform().unwrap().subdir(),
+                    Platform::LinuxAarch64
+                );
                 // The host_platform helper honours the override.
                 assert_eq!(host_subdir(), Platform::LinuxAarch64,);
             },
@@ -1826,8 +1869,11 @@ mod tests {
             Some("not-a-platform"),
             || {
                 let env = workspace.default_environment();
-                // No declared platforms → None regardless of the (invalid) override.
-                assert!(env.best_declared_platform().is_none());
+                // An invalid override falls back to the native host platform.
+                assert_eq!(
+                    env.best_declared_platform().unwrap().subdir(),
+                    Platform::current()
+                );
                 // The host_platform helper still falls back to Platform::current()
                 // on invalid values.
                 assert_eq!(host_subdir(), Platform::current(),);

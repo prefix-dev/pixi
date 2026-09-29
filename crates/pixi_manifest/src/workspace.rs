@@ -1,6 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
+    sync::{Arc, OnceLock},
 };
 
 use indexmap::{IndexMap, IndexSet};
@@ -17,7 +18,11 @@ use url::Url;
 use super::pypi::pypi_options::PypiOptions;
 use crate::{
     PixiPlatform, PixiPlatformName, PrioritizedChannel, S3Options, TargetSelector, Targets,
-    platform::{candidate_subdirs, capability_satisfied_by, is_subdir_default},
+    platform::{
+        candidate_subdirs, capability_satisfied_by,
+        host::{HostDetectionError, detect_host, host_subdir},
+        is_subdir_default,
+    },
     preview::Preview,
 };
 use minijinja::{AutoEscape, Environment, UndefinedBehavior};
@@ -130,12 +135,30 @@ pub struct Workspace {
     /// Cleared for workspaces that declare custom rich platforms, which are
     /// matched by name instead.
     pub use_platform_composition: bool,
+
+    /// Detected host capabilities for local resolutions, never serialized to the manifest.
+    pub local_platform: OnceLock<Result<PixiPlatform, Arc<HostDetectionError>>>,
 }
 
 impl Workspace {
-    /// Look up a configured [`PixiPlatform`] by its name.
+    /// Detect once per workspace, including CUDA, libc and CPU capabilities.
+    /// Detection failures are surfaced, never replaced with baseline assumptions.
+    pub fn local_platform(&self) -> Result<&PixiPlatform, Arc<HostDetectionError>> {
+        self.local_platform
+            .get_or_init(|| detect_host(host_subdir()).map_err(Arc::new))
+            .as_ref()
+            .map_err(Arc::clone)
+    }
+
+    /// Look up a configured platform, or the implicit local host platform.
     pub fn platform_by_name(&self, name: &PixiPlatformName) -> Option<&PixiPlatform> {
-        self.platforms.iter().find(|p| p.name() == name)
+        self.platforms
+            .iter()
+            .find(|p| p.name() == name)
+            .or_else(|| {
+                let host = self.local_platform().ok()?;
+                (host.name() == name).then_some(host)
+            })
     }
 
     /// Returns the [`TargetSelector`] used to key the target table for a

@@ -98,6 +98,9 @@ pub enum LockFileLoadResult {
     /// The lock file was successfully loaded
     Loaded {
         lock_file: LockFile,
+        /// Oldest on-disk format, before platform alignment or local-lock merging.
+        /// Rebuilding with `LockFileBuilder` always reports the latest version.
+        source_format_version: rattler_lock::FileFormatVersion,
         /// `true` when the load-time pass renamed at least one platform to
         /// match the manifest (a manifest rename, or legacy `pN` aliases
         /// written by older pixi versions). The loaded lock file then
@@ -247,8 +250,15 @@ impl LockFileLoadResult {
 fn lock_file_for_usage(
     lock_file_result: LockFileLoadResult,
     lock_file_usage: LockFileUsage,
-) -> miette::Result<(LockFile, bool)> {
+) -> miette::Result<(LockFile, bool, rattler_lock::FileFormatVersion)> {
     let platform_names_realigned = lock_file_result.platform_names_realigned();
+    let source_format_version = match &lock_file_result {
+        LockFileLoadResult::Loaded {
+            source_format_version,
+            ..
+        } => *source_format_version,
+        LockFileLoadResult::VersionMismatch { .. } => rattler_lock::FileFormatVersion::LATEST,
+    };
 
     if lock_file_result.is_version_mismatch()
         && matches!(
@@ -283,6 +293,7 @@ fn lock_file_for_usage(
     Ok((
         lock_file_result.into_lock_file_or_empty_with_warning(),
         platform_names_realigned,
+        source_format_version,
     ))
 }
 
@@ -342,17 +353,27 @@ impl Workspace {
         options: UpdateLockFileOptions,
         input: LockFileInput,
     ) -> miette::Result<(LockFileDerivedData<'_>, bool)> {
+        super::local::validate(self)?;
         let persist_lock_file = input.should_persist();
-        let (lock_file, platform_names_realigned) = match input {
+        let (lock_file, platform_names_realigned, source_format_version) = match input {
             LockFileInput::Workspace => {
                 lock_file_for_usage(self.load_lock_file().await?, options.lock_file_usage)?
             }
             LockFileInput::Provided(lock_file) => {
-                align_platform_names(lock_file, self.workspace_manifest(), self.root())
+                let source_format_version = lock_file.version();
+                let (lock_file, realigned) =
+                    align_platform_names(lock_file, self.workspace_manifest(), self.root());
+                (lock_file, realigned, source_format_version)
             }
         };
 
-        let needs_format_upgrade = lock_file.version() < rattler_lock::FileFormatVersion::LATEST;
+        let needs_format_upgrade = source_format_version < rattler_lock::FileFormatVersion::LATEST;
+        if self.has_local_environments()
+            && needs_format_upgrade
+            && !options.upgrade_lock_file_format
+        {
+            return Err(super::local::format_upgrade_required());
+        }
 
         let glob_hash_cache = GlobHashCache::default();
 
@@ -392,7 +413,7 @@ impl Workspace {
                 tracing::warn!(
                     "the lock file is up-to-date but uses an older format (v{}), \
                      run `pixi lock` to upgrade to v{} for improved reproducibility",
-                    derived.lock_file.version(),
+                    source_format_version,
                     rattler_lock::FileFormatVersion::LATEST,
                 );
             } else {
@@ -440,7 +461,7 @@ impl Workspace {
             tracing::warn!(
                 "the lock file is up-to-date but uses an older format (v{}), \
                  re-solving all environments using locked content to upgrade to v{}",
-                derived.lock_file.version(),
+                source_format_version,
                 rattler_lock::FileFormatVersion::LATEST,
             );
             for env in self.environments() {
@@ -497,7 +518,8 @@ impl Workspace {
         // Write the lock file to disk
 
         if persist_lock_file && options.lock_file_usage != LockFileUsage::DryRun {
-            lock_file_derived_data.write_to_disk()?;
+            lock_file_derived_data
+                .write_to_disk_with_format_upgrade(options.upgrade_lock_file_format)?;
         }
 
         Ok((lock_file_derived_data, true))
@@ -517,10 +539,61 @@ impl Workspace {
     pub async fn load_lock_file(&self) -> miette::Result<LockFileLoadResult> {
         let Some(lock_file_path) = self.persistent_lock_file_path() else {
             return Ok(LockFileLoadResult::Loaded {
+                source_format_version: rattler_lock::FileFormatVersion::LATEST,
                 lock_file: LockFile::default(),
                 platform_names_realigned: false,
             });
         };
+        let loaded = self.load_lock_file_at_path(lock_file_path).await?;
+        if !self.has_local_environments() {
+            return Ok(loaded);
+        }
+        let LockFileLoadResult::Loaded {
+            lock_file,
+            mut source_format_version,
+            mut platform_names_realigned,
+        } = loaded
+        else {
+            return Ok(loaded);
+        };
+        let mut files = vec![lock_file];
+        let mut names = vec![Vec::new()];
+        for env in self.environments() {
+            let name = env.name().as_str().to_owned();
+            if env.is_lock_file_less() {
+                // Also persist a storage-mode transition when cached packages still satisfy.
+                platform_names_realigned |= files[0].environment(&name).is_some();
+                let loaded = self
+                    .load_lock_file_at_path(super::local::path(self, &env))
+                    .await?;
+                let LockFileLoadResult::Loaded {
+                    lock_file,
+                    source_format_version: local_version,
+                    platform_names_realigned: realigned,
+                } = loaded
+                else {
+                    return Ok(loaded);
+                };
+                platform_names_realigned |= realigned;
+                source_format_version = source_format_version.min(local_version);
+                files.push(lock_file);
+                names.push(vec![name]);
+            } else {
+                names[0].push(name);
+            }
+        }
+        let inputs: Vec<_> = files.iter().zip(names).collect();
+        Ok(LockFileLoadResult::Loaded {
+            lock_file: super::local::combine(self, &inputs)?,
+            source_format_version,
+            platform_names_realigned,
+        })
+    }
+
+    async fn load_lock_file_at_path(
+        &self,
+        lock_file_path: std::path::PathBuf,
+    ) -> miette::Result<LockFileLoadResult> {
         let manifest = self.workspace_manifest().clone();
         let workspace_root = self.root().to_path_buf();
         if lock_file_path.is_file() {
@@ -528,6 +601,7 @@ impl Workspace {
             tokio::task::spawn_blocking(move || {
                 LockFile::from_path(&lock_file_path)
                     .map(|lock| {
+                        let source_format_version = lock.version();
                         // Rewrite locked platform names to match the manifest's
                         // current platforms by identity (subdir + customised
                         // virtual packages). A user who renames an entry in
@@ -545,6 +619,7 @@ impl Workspace {
                             );
                         LockFileLoadResult::Loaded {
                             lock_file,
+                            source_format_version,
                             platform_names_realigned,
                         }
                     })
@@ -569,6 +644,7 @@ impl Workspace {
             .unwrap_or_else(|e| Err(e).into_diagnostic())
         } else {
             Ok(LockFileLoadResult::Loaded {
+                source_format_version: rattler_lock::FileFormatVersion::LATEST,
                 lock_file: LockFile::default(),
                 platform_names_realigned: false,
             })
@@ -782,6 +858,10 @@ impl<'p> LockFileDerivedData<'p> {
 
     /// Write the lock file to disk.
     pub fn write_to_disk(&self) -> miette::Result<()> {
+        self.write_to_disk_with_format_upgrade(false)
+    }
+
+    fn write_to_disk_with_format_upgrade(&self, allow_format_upgrade: bool) -> miette::Result<()> {
         // An offline solve records the newest versions available on this
         // machine, which may be older than what the channels offer. The lock
         // file is usually committed, so say so rather than let a downgrade
@@ -802,6 +882,9 @@ impl<'p> LockFileDerivedData<'p> {
             }
         }
 
+        if self.workspace.has_local_environments() {
+            return super::local::write(self.workspace, &self.lock_file, allow_format_upgrade);
+        }
         let lock_file_path = self.workspace.persistent_lock_file_path().ok_or_else(|| {
             miette::miette!("transient script workspaces cannot write lock files")
         })?;
@@ -2263,6 +2346,7 @@ impl<'p> UpdateContext<'p> {
         project: &'p Workspace,
         command_dispatcher: CommandDispatcher,
     ) -> miette::Result<UpdateContextBuilder<'p>> {
+        super::local::validate(project)?;
         Ok(UpdateContextBuilder {
             project,
             lock_file: LockFile::default(),

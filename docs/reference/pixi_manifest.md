@@ -81,6 +81,55 @@ To access private or public channels on [prefix.dev](https://prefix.dev/channels
 Defines the list of platforms that the workspace supports.
 Pixi solves the dependencies for all these platforms and puts them in the lock file (`pixi.lock`).
 
+#### Local resolutions (`platforms = []`)
+
+An empty platform list opts into **lock-file-less mode**: dependencies remain declarative,
+but their resolution is cached locally rather than committed in `pixi.lock`.
+Set `workspace.platforms = []` for the whole workspace, or `platforms = []` on an
+individual environment (or one of its features) to mix local and regular environments:
+
+```toml
+[workspace]
+name = "example"
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-arm64"]
+
+[environments.dev]
+platforms = []
+dependencies = { python = "3.12.*" }
+```
+
+Each local environment resolves against the **detected virtual packages of the
+current machine**, including CUDA, libc and CPU capabilities, rather than portable
+baseline assumptions. `CONDA_OVERRIDE_*` and `PIXI_OVERRIDE_PLATFORM` are honored.
+Detection failures are reported rather than silently falling back to a baseline.
+It stores its single-environment lock at
+`.pixi/locks/<environment>/<platform>.lock`. It is excluded from `pixi.lock`;
+a wholly local workspace does not need a root lock file. An empty workspace
+platform list also applies to environments that exclude the default feature.
+Nonempty platform restrictions on included features still apply: if any feature
+excludes the host platform, preparation fails rather than dropping its dependencies
+or ignoring the restriction. Exact rich-platform names must match the detected
+host platform; they are not treated as bare-subdir restrictions.
+
+Normal environment preparation checks the cached resolution against the manifest.
+Hand edits, `pixi add`, and `pixi remove` therefore update it using the existing
+solver and installation machinery. Deleting the local lock causes the next normal
+preparation to resolve again. This is not a portable or reproducible resolution
+across machines: commit a regular lock file when that guarantee is needed.
+
+`--locked` still requires an up-to-date cached resolution, `--frozen` skips its
+satisfiability check, and dry runs do not write locks. Local environments cannot
+belong to a solve group. Existing workspace-wide update behavior is unchanged:
+preparing one environment may also refresh other outdated environments.
+
+Before using local resolutions with an older shared lock or local cache, run
+`pixi lock` once to explicitly upgrade the format and re-solve all environments.
+Normal preparation and dependency edits refuse this migration rather than silently
+rewriting an older lock. `pixi lock --dry-run` previews it without writing files.
+
+#### Declared platforms
+
 ```toml
 --8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_platforms"
 ```

@@ -269,6 +269,7 @@ impl TomlWorkspace {
             root_directory: root_directory.to_path_buf(),
             must_migrate: false,
             use_platform_composition: false,
+            local_platform: Default::default(),
         })
         .with_warnings(warnings))
     }
