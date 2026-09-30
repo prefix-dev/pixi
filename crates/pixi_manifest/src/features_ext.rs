@@ -178,6 +178,13 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     /// that variant by name still selects it.
     fn platforms(&self) -> HashSet<PixiPlatformName> {
         let workspace = &self.workspace_manifest().workspace;
+        let default_platforms = if workspace.workspace_platforms.is_empty() {
+            &workspace.platforms
+        } else {
+            &workspace.workspace_platforms
+        };
+        let default_subdirs: HashSet<Platform> =
+            default_platforms.iter().map(PixiPlatform::subdir).collect();
         if workspace.use_platform_composition {
             let features: Vec<&Feature> = self.features().collect();
             let subdirs: IndexSet<Platform> = workspace
@@ -189,7 +196,12 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
                 .into_iter()
                 .filter(|subdir| {
                     features.iter().all(|feature| {
-                        feature_supports_subdir(feature, *subdir, &workspace.platforms)
+                        feature_supports_subdir(
+                            feature,
+                            *subdir,
+                            &workspace.platforms,
+                            &default_subdirs,
+                        )
                     })
                 })
                 .filter_map(|subdir| {
@@ -218,7 +230,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
             .iter()
             .filter(|platform| {
                 self.features()
-                    .all(|feature| feature.supports_platform(Some(platform)))
+                    .all(|feature| self.feature_supports_platform(feature, Some(platform)))
             })
             .filter(|platform| {
                 exact_names.contains(platform.name()) || !exact_subdirs.contains(&platform.subdir())
@@ -239,14 +251,27 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
             return true;
         };
         let workspace = &self.workspace_manifest().workspace;
+        let default_platforms = if workspace.workspace_platforms.is_empty() {
+            &workspace.platforms
+        } else {
+            &workspace.workspace_platforms
+        };
         if workspace.use_platform_composition {
+            let default_subdirs: HashSet<Platform> =
+                default_platforms.iter().map(PixiPlatform::subdir).collect();
             crate::platform_composition::feature_supports_platform(
                 feature,
                 platform,
                 &workspace.platforms,
+                &default_subdirs,
             )
         } else {
-            feature.supports_platform(Some(platform))
+            match &feature.platforms {
+                Some(platforms) => platforms
+                    .iter()
+                    .any(|name| platform.matches_reference(name)),
+                None => default_platforms.iter().any(|p| p == platform),
+            }
         }
     }
 

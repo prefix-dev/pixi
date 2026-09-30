@@ -85,17 +85,28 @@ impl WorkspaceManifest {
             return Ok(());
         }
         let declared = self.workspace.platforms.clone();
+        let default_platforms = if self.workspace.workspace_platforms.is_empty() {
+            &self.workspace.platforms
+        } else {
+            &self.workspace.workspace_platforms
+        };
+        let default_subdirs: HashSet<Platform> =
+            default_platforms.iter().map(PixiPlatform::subdir).collect();
         let mut composed: IndexSet<PixiPlatform> = IndexSet::new();
         for environment in self.environments.iter() {
             let features = self.environment_features(environment);
             composed.extend(crate::platform_composition::combined_platforms(
-                &features, &declared,
+                &features,
+                &declared,
+                &default_subdirs,
             )?);
         }
         for solve_group in self.solve_groups.iter() {
             let features = self.solve_group_features(solve_group);
             composed.extend(crate::platform_composition::combined_platforms(
-                &features, &declared,
+                &features,
+                &declared,
+                &default_subdirs,
             )?);
         }
         self.workspace.platforms.extend(composed);
@@ -951,6 +962,10 @@ impl WorkspaceManifestMut<'_> {
             .workspace
             .platforms
             .extend(new_platforms.iter().cloned());
+        self.workspace
+            .workspace
+            .workspace_platforms
+            .extend(new_platforms.iter().cloned());
 
         // Capture this before `commit_if_needed` clears the flag: a committing
         // migration rewrites every entry's shape, so the stale on-disk array
@@ -1128,6 +1143,22 @@ impl WorkspaceManifestMut<'_> {
             .workspace
             .platforms
             .shift_insert(index, updated.clone());
+        if let Some(wp_index) = self
+            .workspace
+            .workspace
+            .workspace_platforms
+            .iter()
+            .position(|p| p.name() == name)
+        {
+            self.workspace
+                .workspace
+                .workspace_platforms
+                .shift_remove_index(wp_index);
+            self.workspace
+                .workspace
+                .workspace_platforms
+                .shift_insert(wp_index, updated.clone());
+        }
 
         if &new_name != name {
             self.rename_feature_platform_references(name, &new_name)?;
@@ -1345,6 +1376,10 @@ impl WorkspaceManifestMut<'_> {
         self.workspace
             .workspace
             .platforms
+            .retain(|existing| !platforms.contains(existing.name()));
+        self.workspace
+            .workspace
+            .workspace_platforms
             .retain(|existing| !platforms.contains(existing.name()));
 
         // Update TOML document platforms. Retain-and-filter (rather than

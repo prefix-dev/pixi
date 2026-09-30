@@ -653,6 +653,14 @@ fn migrate_system_requirements_to_platforms(
     // platforms by subdir; custom rich platforms are matched by name.
     workspace.use_platform_composition = all_simple_subdir;
 
+    let default_platforms = if workspace.workspace_platforms.is_empty() {
+        &workspace.platforms
+    } else {
+        &workspace.workspace_platforms
+    };
+    let default_subdirs: HashSet<Platform> =
+        default_platforms.iter().map(PixiPlatform::subdir).collect();
+
     if all_simple_subdir {
         extend_originals_with_referenced_subdirs(&mut workspace.platforms, features)?;
     }
@@ -685,7 +693,7 @@ fn migrate_system_requirements_to_platforms(
             ))));
         }
         let sysreqs = sysreqs.expect("checked just above");
-        synthesise_for_feature(&originals, feature, sysreqs, &mut workspace.platforms)?;
+        synthesise_for_feature(feature, sysreqs, &mut workspace.platforms, &default_subdirs)?;
     }
 
     append_uncovered_subdirs(&originals, &mut workspace.platforms);
@@ -791,10 +799,10 @@ fn register_referenced_originals(
 /// `workspace.platforms`, and rewrite the feature's platforms list to those
 /// synthetic names (the default feature included).
 fn synthesise_for_feature(
-    originals: &IndexSet<PixiPlatform>,
     feature: &mut Feature,
     sysreqs: &SystemRequirements,
     target: &mut IndexSet<PixiPlatform>,
+    default_subdirs: &HashSet<Platform>,
 ) -> Result<(), TomlError> {
     let subdirs: Vec<Platform> = match feature.platforms.as_ref() {
         Some(names) => names
@@ -809,7 +817,7 @@ fn synthesise_for_feature(
                 })
             })
             .collect::<Result<_, _>>()?,
-        None => originals.iter().map(PixiPlatform::subdir).collect(),
+        None => default_subdirs.iter().copied().collect(),
     };
 
     let candidates = sysreqs.to_declared_virtual_packages();
