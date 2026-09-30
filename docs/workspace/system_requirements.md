@@ -120,9 +120,13 @@ When you write a bare-string entry like `"linux-64"`, Pixi uses these defaults
 === "macOS (x86_64)"
     `__osx = "13.0"`
 === "macOS (arm64)"
-    `__osx = "13.0"`
+    `__osx = "14.0"`
 
 Override them by switching to an inline-table entry with the relevant keys.
+
+A lock file solved against a lower default than the current one stays valid:
+when Pixi raises a default, existing locks keep their recorded value until the
+next re-solve (for example `pixi update`).
 
 ## Environment-variable overrides
 

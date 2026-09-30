@@ -148,7 +148,9 @@ pub fn verify_environment_satisfiability(
             .iter()
             .filter(|raw| {
                 pixi_manifest::platform::parse_locked_virtual_package(raw)
-                    .map(|gvp| !pixi_manifest::platform::is_subdir_default(&gvp, workspace_subdir))
+                    .map(|gvp| {
+                        !pixi_manifest::platform::is_locked_subdir_default(&gvp, workspace_platform)
+                    })
                     .unwrap_or(true)
             })
             .cloned()

@@ -73,7 +73,6 @@ fn compute_renames(lock_file: &LockFile, manifest: &WorkspaceManifest) -> HashMa
 
     for locked in lock_file.platforms() {
         let locked_name = locked.name().to_string();
-        let locked_identity = locked_customisations(&locked);
 
         // Already named what some manifest platform asks for? Leave it alone:
         // a different manifest entry might match by identity, but renaming it
@@ -82,20 +81,30 @@ fn compute_renames(lock_file: &LockFile, manifest: &WorkspaceManifest) -> HashMa
             .iter()
             .any(|wp| wp.name().as_str() == locked_name);
 
-        let mut matching = workspace_platforms.iter().filter(|wp| {
-            wp.subdir() == locked.subdir() && workspace_customisations(wp) == locked_identity
-        });
-        let first = matching.next();
-        let second = matching.next();
-        let Some(target) = first else {
+        // Prefer an exact identity match. Only when there is none, accept a
+        // row that recorded a since-raised default (see
+        // `is_locked_subdir_default`); applying that leniency up front would
+        // also match e.g. a `__glibc=2.17` row to the bare subdir platform.
+        let matching: Vec<&&PixiPlatform> = [MatchMode::Exact, MatchMode::LowerDefaults]
+            .into_iter()
+            .map(|mode| {
+                workspace_platforms
+                    .iter()
+                    .filter(|wp| {
+                        wp.subdir() == locked.subdir()
+                            && workspace_customisations(wp)
+                                == locked_customisations(&locked, wp, mode)
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .find(|matching| !matching.is_empty())
+            .unwrap_or_default();
+        let [target] = matching.as_slice() else {
+            // No match, or an ambiguous one: two manifest platforms have the
+            // same identity (rare, but possible if a user manually constructs
+            // them). Don't pick one arbitrarily.
             continue;
         };
-        if second.is_some() {
-            // Ambiguous match: two manifest platforms have the same identity
-            // (rare, but possible if a user manually constructs them). Don't
-            // pick one arbitrarily.
-            continue;
-        }
         let target_name = target.name().as_str();
         if target_name == locked_name {
             continue;
@@ -116,6 +125,14 @@ fn compute_renames(lock_file: &LockFile, manifest: &WorkspaceManifest) -> HashMa
     renames
 }
 
+#[derive(Clone, Copy)]
+enum MatchMode {
+    /// Only the current subdir defaults are ignored.
+    Exact,
+    /// Also ignore defaults recorded at a lower value than today's.
+    LowerDefaults,
+}
+
 /// Identity-matching VPs for a manifest platform: drop the materialised
 /// subdir defaults so only user-set customisations participate in the match.
 fn workspace_customisations(platform: &PixiPlatform) -> Vec<GenericVirtualPackage> {
@@ -130,18 +147,24 @@ fn workspace_customisations(platform: &PixiPlatform) -> Vec<GenericVirtualPackag
     customised
 }
 
-/// Identity-matching VPs for a locked platform: parse the lockfile's
-/// `__name=version[=build]` strings back into [`GenericVirtualPackage`]s, drop
-/// the entries that match the subdir's defaults, and sort by name. Strings
-/// that don't parse are dropped -- the workspace side can't have a
-/// corresponding entry anyway.
-fn locked_customisations(locked: &rattler_lock::Platform<'_>) -> Vec<GenericVirtualPackage> {
-    let subdir = locked.subdir();
+/// Identity-matching VPs for a locked platform, relative to the manifest
+/// platform `candidate`: parse the lockfile's `__name=version[=build]` strings
+/// back into [`GenericVirtualPackage`]s, drop the entries that count as
+/// `candidate`'s defaults under `mode`, and sort by name. Strings that don't parse are
+/// dropped -- the workspace side can't have a corresponding entry anyway.
+fn locked_customisations(
+    locked: &rattler_lock::Platform<'_>,
+    candidate: &PixiPlatform,
+    mode: MatchMode,
+) -> Vec<GenericVirtualPackage> {
     let mut customised: Vec<GenericVirtualPackage> = locked
         .virtual_packages()
         .iter()
         .filter_map(|raw| platform::parse_locked_virtual_package(raw))
-        .filter(|gvp| !platform::is_subdir_default(gvp, subdir))
+        .filter(|gvp| match mode {
+            MatchMode::Exact => !platform::is_subdir_default(gvp, candidate.subdir()),
+            MatchMode::LowerDefaults => !platform::is_locked_subdir_default(gvp, candidate),
+        })
         .collect();
     customised.sort_by(|a, b| a.name.as_normalized().cmp(b.name.as_normalized()));
     customised

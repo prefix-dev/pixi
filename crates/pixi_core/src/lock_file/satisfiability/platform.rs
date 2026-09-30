@@ -99,13 +99,23 @@ pub fn resolve_lock_platform_for<'lock>(
         return Some(found);
     }
     let candidate = lock_file.platform(platform.subdir().as_str())?;
-    let declared: Vec<String> = platform
-        .declared_virtual_packages()
-        .iter()
-        .map(|gvp| gvp.to_string())
-        .collect();
     let locked: &[String] = candidate.virtual_packages();
-    let matches = locked.is_empty() || declared.iter().all(|d| locked.iter().any(|l| l == d));
+    let locked_parsed: Vec<GenericVirtualPackage> = locked
+        .iter()
+        .filter_map(|raw| pixi_manifest::platform::parse_locked_virtual_package(raw))
+        .collect();
+    // A default the lock recorded at a lower value still covers the declared
+    // one, see `is_locked_subdir_default`.
+    let covers = |declared: &GenericVirtualPackage| {
+        let declared_str = declared.to_string();
+        locked.iter().any(|l| *l == declared_str)
+            || (pixi_manifest::platform::is_subdir_default(declared, platform.subdir())
+                && locked_parsed.iter().any(|l| {
+                    l.name == declared.name
+                        && pixi_manifest::platform::is_locked_subdir_default(l, platform)
+                }))
+    };
+    let matches = locked.is_empty() || platform.declared_virtual_packages().iter().all(covers);
     matches.then_some(candidate)
 }
 

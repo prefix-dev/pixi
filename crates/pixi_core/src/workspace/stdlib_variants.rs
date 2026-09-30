@@ -239,7 +239,7 @@ mod tests {
     }
 
     /// Bare subdir platforms carry pixi's portable defaults (`__glibc=2.28`,
-    /// `__osx=13.0`), so derivation works off them too -- no rich platform
+    /// `__osx=14.0` on osx-arm64), so derivation works off them too -- no rich platform
     /// required.
     #[test]
     fn bare_subdir_derives_from_defaults() {
@@ -260,7 +260,7 @@ mod tests {
         ));
         assert_eq!(
             osx.get("c_stdlib_version"),
-            Some(&VariantValue::String("13.0".to_string()))
+            Some(&VariantValue::String("14.0".to_string()))
         );
     }
 
