@@ -376,6 +376,11 @@ pub enum PlatformUnsat {
     #[error("the requirement '{0}' could not be satisfied (required by '{1}')")]
     UnsatisfiableMatchSpec(Box<MatchSpec>, String),
 
+    #[error(
+        "the locked package '{0}' does not declare the extra '{1}', so the dependencies of that extra are missing"
+    )]
+    CondaExtraNotDeclared(String, String),
+
     #[error("no package named '{0}' exists (required by '{1}')")]
     SourcePackageMissing(String, String),
 

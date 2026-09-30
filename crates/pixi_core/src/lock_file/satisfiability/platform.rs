@@ -1064,12 +1064,25 @@ async fn verify_package_platform_satisfiability(
                 {
                     let followed = conda_extras_followed.entry(idx).or_default();
                     for extra in &extras {
-                        if followed.insert(extra.clone())
-                            && let Some(extra_depends) =
-                                record.package_record().extra_depends.get(extra)
-                        {
-                            depends_to_walk.extend(extra_depends.iter());
+                        if !followed.insert(extra.clone()) {
+                            continue;
                         }
+                        // `extra_depends` is what a record declares it provides,
+                        // so a record without the requested extra cannot satisfy
+                        // the spec that asked for it. Matching rejects that
+                        // already, so reaching this is a sign the lock file was
+                        // written by a version that did not check. Say so instead
+                        // of dropping the extra's dependencies on the floor.
+                        let Some(extra_depends) = record.package_record().extra_depends.get(extra)
+                        else {
+                            return Err(CommandDispatcherError::Failed(Box::new(
+                                PlatformUnsat::CondaExtraNotDeclared(
+                                    record.name().as_source().to_string(),
+                                    extra.clone(),
+                                ),
+                            )));
+                        };
+                        depends_to_walk.extend(extra_depends.iter());
                     }
                 }
 
