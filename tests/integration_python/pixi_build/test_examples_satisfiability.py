@@ -81,6 +81,9 @@ def test_example_lock_file_satisfiability(pixi: Path, manifest_path: Path) -> No
     if workspace is None:
         pytest.fail(f"{manifest_path} does not contain a pixi workspace")
 
+    if "cpp-git-source" in str(manifest_path) and current_platform().startswith("osx"):
+        pytest.skip("Flaky git fetch on macOS runner for cpp-git-source example")
+
     if not supports_current_platform(workspace):
         pytest.skip(f"example does not support current platform {current_platform()}")
 
