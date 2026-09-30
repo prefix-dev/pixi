@@ -984,6 +984,9 @@ impl From<Task> for Item {
                 if let Some(description) = &process.description {
                     table.insert("description", description.into());
                 }
+                if process.clean_env {
+                    table.insert("clean-env", true.into());
+                }
                 Item::Value(Value::InlineTable(table))
             }
             Task::Alias(alias) => {
