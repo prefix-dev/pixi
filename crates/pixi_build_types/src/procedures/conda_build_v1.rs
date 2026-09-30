@@ -8,7 +8,7 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
 use rattler_conda_types::{
-    ChannelUrl, MatchSpec, PackageName, Platform, RepoDataRecord, VersionWithSource,
+    ChannelUrl, MatchSpec, PackageName, RepoDataRecord, Subdir, VersionWithSource,
     compression_level::CompressionLevel, package::CondaArchiveType,
 };
 use serde::{Deserialize, Serialize};
@@ -208,7 +208,7 @@ pub struct CondaBuildV1Prefix {
     pub prefix: PathBuf,
 
     /// The platform for which the packages were installed.
-    pub platform: Platform,
+    pub platform: Subdir,
 
     /// The specs that were used to solve the packages in the prefix.
     #[serde(default)]
@@ -252,7 +252,7 @@ pub struct CondaBuildV1Output {
     pub build: Option<String>,
 
     /// The subdirectory of the package, e.g. `linux-64`, `osx-64`, etc.
-    pub subdir: Platform,
+    pub subdir: Subdir,
 
     /// The variant configuration for the package.
     pub variant: BTreeMap<String, VariantValue>,
@@ -293,7 +293,7 @@ pub struct CondaBuildV1Result {
     pub build: String,
 
     /// The subdirectory of the package.
-    pub subdir: Platform,
+    pub subdir: Subdir,
 }
 
 #[cfg(test)]
@@ -355,7 +355,7 @@ mod tests {
                 name: "pkg".parse().unwrap(),
                 version: None,
                 build: None,
-                subdir: rattler_conda_types::Platform::NoArch,
+                subdir: rattler_conda_types::Subdir::NoArch,
                 variant: Default::default(),
             },
             work_directory: std::path::PathBuf::from("."),

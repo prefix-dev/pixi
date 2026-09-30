@@ -20,7 +20,7 @@ use rattler_build_recipe::stage0::{
     ConditionalList, Item, PythonBuild, Script, SerializableMatchSpec, Value,
 };
 use rattler_conda_types::{
-    ChannelUrl, NoArchType, PackageName, Platform, Version, package::EntryPoint,
+    ChannelUrl, NoArchType, PackageName, Subdir, Version, package::EntryPoint,
 };
 use std::collections::HashSet;
 use std::{
@@ -215,7 +215,7 @@ impl GenerateRecipe for PythonGenerator {
         model: &pixi_build_types::ProjectModel,
         config: &Self::Config,
         manifest_path: PathBuf,
-        host_platform: Platform,
+        host_platform: Subdir,
         python_params: Option<PythonParams>,
         variants: &HashSet<NormalizedKey>,
         channels: Vec<ChannelUrl>,
@@ -349,7 +349,7 @@ impl GenerateRecipe for PythonGenerator {
 
         // Use NoArch platform for mapping if this is a noarch package
         let mapping_platform = if is_noarch {
-            Platform::NoArch
+            Subdir::NoArch
         } else {
             host_platform
         };
@@ -412,7 +412,7 @@ impl GenerateRecipe for PythonGenerator {
             variants,
         );
 
-        let build_platform = Platform::current();
+        let build_platform = Subdir::current().unwrap_or(Subdir::NoArch);
 
         let editable = effective_editable(params.editable);
 
@@ -577,7 +577,7 @@ impl GenerateRecipe for PythonGenerator {
 
     fn default_variants(
         &self,
-        host_platform: Platform,
+        host_platform: Subdir,
     ) -> miette::Result<BTreeMap<NormalizedKey, Vec<Variable>>> {
         Ok(default_compiler_variants(host_platform))
     }
@@ -695,7 +695,7 @@ version = "0.1.0"
         let result = intermediate_conda_outputs::<PythonGenerator>(
             Some(project_model),
             Some(temp_dir.path().to_path_buf()),
-            Platform::Linux64,
+            Subdir::Linux64,
             Some(variant_configuration),
             None,
         )
@@ -762,7 +762,7 @@ version = "0.1.0"
         let result = intermediate_conda_outputs::<PythonGenerator>(
             Some(project_model),
             Some(temp_dir.path().to_path_buf()),
-            Platform::Linux64,
+            Subdir::Linux64,
             None,
             Some(vec![variant_file]),
         )
@@ -800,7 +800,7 @@ version = "0.1.0"
                 &project_model,
                 &PythonBackendConfig::default_with_ignore_pyproject_manifest(),
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -867,7 +867,7 @@ version = "0.1.0"
                 &project_model,
                 &PythonBackendConfig::default_with_ignore_pyproject_manifest(),
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -921,7 +921,7 @@ version = "0.1.0"
                     ..Default::default()
                 },
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -998,7 +998,7 @@ version = "0.1.0"
                     &project_model,
                     &config,
                     PathBuf::from("."),
-                    Platform::Linux64,
+                    Subdir::Linux64,
                     None,
                     &HashSet::new(),
                     vec![],
@@ -1096,7 +1096,7 @@ version = "0.1.0"
                     ..Default::default()
                 },
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -1170,7 +1170,7 @@ version = "0.1.0"
                     ..Default::default()
                 },
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -1223,7 +1223,7 @@ version = "0.1.0"
                 &minimal_project(),
                 config,
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &std::collections::HashSet::<pixi_build_backend::variants::NormalizedKey>::new(),
                 vec![],
@@ -1420,7 +1420,7 @@ build-backend = "hatchling.build"
                 &project_model,
                 &config,
                 temp_dir.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![ChannelUrl::from(
@@ -1505,7 +1505,7 @@ build-backend = "setuptools.build_meta"
                 &project_model,
                 &config,
                 temp_dir.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -1666,7 +1666,7 @@ build-backend = "setuptools.build_meta"
                 &project_model,
                 &config,
                 temp_dir.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],

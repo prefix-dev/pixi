@@ -11,7 +11,7 @@ use itertools::Itertools;
 use miette::{Context, IntoDiagnostic, miette};
 use pixi_consts::consts;
 use rattler_conda_types::{
-    ChannelConfig, NamedChannelOrUrl, Platform, Version, VersionBumpType, VersionSpec,
+    ChannelConfig, NamedChannelOrUrl, Subdir, Version, VersionBumpType, VersionSpec,
     version_spec::{EqualityOperator, LogicalOperator, RangeOperator},
 };
 use rattler_config::config::{CommonConfig, ConfigBase};
@@ -860,7 +860,7 @@ pub struct PyPIConfig {
 // `S3Options` and the `S3OptionsMap` newtype now live in `rattler_config`.
 // Re-exported so external crates that referenced `pixi_config::S3Options`
 // keep compiling.
-pub use rattler_config::config::s3::{S3Options, S3OptionsMap};
+pub use rattler_config::config::s3::{S3AddressingStyle, S3Options, S3OptionsMap};
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(untagged)]
@@ -1282,7 +1282,7 @@ pub struct Config {
     /// these types of tools.
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_platform: Option<Platform>,
+    pub tool_platform: Option<Subdir>,
 
     /// Per-cache directory configuration. Lets users redirect specific
     /// caches (conda packages, repodata, pypi mapping, etc.) to different
@@ -1623,8 +1623,8 @@ impl Config {
         // HACK: Use win-64 as the default tool platform if currently running on
         // win-arm64. This is a workaround for the fact that we don't have a
         // good win-arm64 toolchain yet.
-        if Platform::current() == Platform::WinArm64 {
-            config.tool_platform = Some(Platform::Win64);
+        if Subdir::current() == Some(Subdir::WinArm64) {
+            config.tool_platform = Some(Subdir::Win64);
         }
 
         config
@@ -2007,7 +2007,7 @@ impl Config {
             "s3-options",
             "s3-options.<bucket>",
             "s3-options.<bucket>.endpoint-url",
-            "s3-options.<bucket>.force-path-style",
+            "s3-options.<bucket>.addressing-style",
             "s3-options.<bucket>.region",
             "shell",
             "shell.change-ps1",
@@ -2197,8 +2197,10 @@ impl Config {
     }
 
     /// The platform to use to install tools.
-    pub fn tool_platform(&self) -> Platform {
-        self.tool_platform.unwrap_or(Platform::current())
+    pub fn tool_platform(&self) -> Subdir {
+        self.tool_platform
+            .or(Subdir::current())
+            .unwrap_or(Subdir::NoArch)
     }
 
     pub fn get_proxies(&self) -> reqwest::Result<Vec<Proxy>> {
@@ -2312,7 +2314,7 @@ impl Config {
             "tool-platform" => {
                 self.tool_platform = value
                     .as_deref()
-                    .map(Platform::from_str)
+                    .map(Subdir::from_str)
                     .transpose()
                     .into_diagnostic()?;
             }
@@ -2457,13 +2459,14 @@ impl Config {
                                     ));
                                 }
                             }
-                            "force-path-style" => {
+                            "addressing-style" => {
                                 if let Some(value) = value {
-                                    bucket_config.force_path_style =
-                                        value.parse().into_diagnostic()?;
+                                    bucket_config.addressing_style =
+                                        S3AddressingStyle::deserialize(value.into_deserializer())
+                                            .map_err(|e: serde::de::value::Error| miette!(e))?;
                                 } else {
                                     return Err(miette!(
-                                        "s3-options.{}.force-path-style requires a value",
+                                        "s3-options.{}.addressing-style requires a value",
                                         bucket
                                     ));
                                 }
@@ -2711,7 +2714,13 @@ impl Config {
                     s3_middleware::S3Config::Custom {
                         endpoint_url: v.endpoint_url.clone(),
                         region: v.region.clone(),
-                        force_path_style: v.force_path_style,
+                        addressing_style: match v.addressing_style {
+                            S3AddressingStyle::VirtualHost => {
+                                s3_middleware::S3AddressingStyle::VirtualHost
+                            }
+                            S3AddressingStyle::Path => s3_middleware::S3AddressingStyle::Path,
+                        },
+                        credentials_provider: None,
                     },
                 )
             })
@@ -3149,7 +3158,7 @@ UNUSED = "unused"
             [s3-options.bucket1]
             endpoint-url = "https://my-s3-host"
             region = "us-east-1"
-            force-path-style = false
+            addressing-style = "path"
         "#;
         let (config, _) = Config::from_toml(toml, None).unwrap();
         let s3_options = config.s3_options.0;
@@ -3158,7 +3167,10 @@ UNUSED = "unused"
             Url::parse("https://my-s3-host").unwrap()
         );
         assert_eq!(s3_options["bucket1"].region, "us-east-1");
-        assert!(!s3_options["bucket1"].force_path_style);
+        assert_eq!(
+            s3_options["bucket1"].addressing_style,
+            S3AddressingStyle::Path
+        );
     }
 
     #[test]
@@ -3166,8 +3178,7 @@ UNUSED = "unused"
         let toml = r#"
             [s3-options.bucket1]
             endpoint-url = "https://my-s3-host"
-            region = "us-east-1"
-            # force-path-style = false
+            # region = "us-east-1"
         "#;
         let result = Config::from_toml(toml, None);
         assert!(result.is_err());
@@ -3176,7 +3187,7 @@ UNUSED = "unused"
                 .err()
                 .unwrap()
                 .to_string()
-                .contains("missing field `force-path-style`")
+                .contains("missing field `region`")
         );
     }
 
@@ -3232,7 +3243,7 @@ UNUSED = "unused"
                 S3Options {
                     endpoint_url: Url::parse("https://my-s3-host").unwrap(),
                     region: "us-east-1".to_string(),
-                    force_path_style: false,
+                    addressing_style: S3AddressingStyle::VirtualHost,
                 },
             )])),
             repodata_config: RepodataConfig {
@@ -3480,7 +3491,7 @@ UNUSED = "unused"
                     S3Options {
                         endpoint_url: Url::parse("https://my-s3-host").unwrap(),
                         region: "us-east-1".to_string(),
-                        force_path_style: false,
+                        addressing_style: S3AddressingStyle::VirtualHost,
                     },
                 ),
                 (
@@ -3488,7 +3499,7 @@ UNUSED = "unused"
                     S3Options {
                         endpoint_url: Url::parse("https://my-s3-host").unwrap(),
                         region: "us-east-1".to_string(),
-                        force_path_style: false,
+                        addressing_style: S3AddressingStyle::VirtualHost,
                     },
                 ),
             ])),
@@ -3518,7 +3529,7 @@ UNUSED = "unused"
                 S3Options {
                     endpoint_url: Url::parse("https://my-new-s3-host").unwrap(),
                     region: "us-east-1".to_string(),
-                    force_path_style: false,
+                    addressing_style: S3AddressingStyle::VirtualHost,
                 },
             )])),
             ..Default::default()
@@ -3736,7 +3747,7 @@ UNUSED = "unused"
 
         assert_eq!(config.max_concurrent_downloads(), 1);
 
-        config.set("s3-options.my-bucket", Some(r#"{"endpoint-url": "http://localhost:9000", "force-path-style": true, "region": "auto"}"#.to_string())).unwrap();
+        config.set("s3-options.my-bucket", Some(r#"{"endpoint-url": "http://localhost:9000", "addressing-style": "path", "region": "auto"}"#.to_string())).unwrap();
         let s3_options = config.s3_options.0.get("my-bucket").unwrap();
         assert!(
             s3_options
@@ -3744,14 +3755,14 @@ UNUSED = "unused"
                 .to_string()
                 .contains("http://localhost:9000")
         );
-        assert!(s3_options.force_path_style);
+        assert_eq!(s3_options.addressing_style, S3AddressingStyle::Path);
         assert_eq!(s3_options.region, "auto");
 
         // Test tool-platform
         config
             .set("tool-platform", Some("linux-64".to_string()))
             .unwrap();
-        assert_eq!(config.tool_platform, Some(Platform::Linux64));
+        assert_eq!(config.tool_platform, Some(Subdir::Linux64));
 
         // Test run-post-link-scripts
         config
@@ -3874,8 +3885,8 @@ UNUSED = "unused"
             .unwrap();
         config
             .set(
-                "s3-options.test-bucket.force-path-style",
-                Some("false".to_string()),
+                "s3-options.test-bucket.addressing-style",
+                Some("virtual-host".to_string()),
             )
             .unwrap();
 

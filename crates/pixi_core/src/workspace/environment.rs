@@ -12,7 +12,7 @@ use pixi_manifest::{
     self as manifest, EnvironmentName, Feature, FeatureName, FeaturesExt, HasFeaturesIter,
     HasWorkspaceManifest, PixiPlatform, PixiPlatformName, Task, TaskName, WorkspaceManifest,
 };
-use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Platform};
+use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Subdir};
 
 use super::{
     SolveGroup,
@@ -300,7 +300,7 @@ impl<'p> Environment<'p> {
             return;
         }
 
-        let current = Platform::current();
+        let current = Subdir::current().unwrap_or(Subdir::NoArch);
         let Some(best) = self.best_declared_platform().map(|p| p.subdir()) else {
             return;
         };
@@ -310,7 +310,7 @@ impl<'p> Environment<'p> {
 
         static WARN_ONCE: Once = Once::new();
 
-        if current.is_osx() && best == Platform::Osx64 {
+        if current.is_osx() && best == Subdir::Osx64 {
             WARN_ONCE.call_once(|| {
                 let warn_folder = self.workspace.pixi_dir().join(consts::ONE_TIME_MESSAGES_DIR);
                 let emulation_warn = warn_folder.join("macos-emulation-warn");
@@ -323,7 +323,7 @@ impl<'p> Environment<'p> {
                         .ok();
                 }
             });
-        } else if current.is_windows() && best == Platform::Win64 {
+        } else if current.is_windows() && best == Subdir::Win64 {
             WARN_ONCE.call_once(|| {
                 let warn_folder = self.workspace.pixi_dir().join(consts::ONE_TIME_MESSAGES_DIR);
                 let emulation_warn = warn_folder.join("windows-emulation-warn");
@@ -336,7 +336,7 @@ impl<'p> Environment<'p> {
                         .ok();
                 }
             });
-        } else if current == Platform::Win64 && best == Platform::Win32 {
+        } else if current == Subdir::Win64 && best == Subdir::Win32 {
             WARN_ONCE.call_once(|| {
                 let warn_folder = self.workspace.pixi_dir().join(consts::ONE_TIME_MESSAGES_DIR);
                 let emulation_warn = warn_folder.join("windows-32-emulation-warn");
@@ -582,8 +582,8 @@ mod tests {
         assert_eq!(
             channels,
             HashSet::from_iter([
-                pixi_manifest::PixiPlatformName::from(Platform::Linux64),
-                pixi_manifest::PixiPlatformName::from(Platform::Osx64),
+                pixi_manifest::PixiPlatformName::from(Subdir::Linux64),
+                pixi_manifest::PixiPlatformName::from(Subdir::Osx64),
             ])
         );
     }
@@ -621,14 +621,14 @@ mod tests {
 
         // Resolve declared names to subdirs; both features restrict the
         // environment to linux-64, so that is the only subdir it must support.
-        let subdirs: HashSet<Platform> = env
+        let subdirs: HashSet<Subdir> = env
             .platforms()
             .iter()
             .filter_map(|name| manifest.workspace.value.workspace.platform_by_name(name))
             .map(|platform| platform.subdir())
             .collect();
 
-        assert_eq!(subdirs, HashSet::from_iter([Platform::Linux64]));
+        assert_eq!(subdirs, HashSet::from_iter([Subdir::Linux64]));
     }
 
     /// Two features each declaring `[system-requirements]` on the same subdir
@@ -667,7 +667,7 @@ mod tests {
             .platforms()
             .iter()
             .filter_map(|name| manifest.workspace.value.workspace.platform_by_name(name))
-            .filter(|platform| platform.subdir() == Platform::Linux64)
+            .filter(|platform| platform.subdir() == Subdir::Linux64)
             .collect();
 
         assert_eq!(
@@ -722,7 +722,7 @@ mod tests {
         let cpu = manifest.environment("cpu").unwrap();
         assert_eq!(
             cpu.platforms(),
-            HashSet::from_iter([pixi_manifest::PixiPlatformName::from(Platform::Linux64)]),
+            HashSet::from_iter([pixi_manifest::PixiPlatformName::from(Subdir::Linux64)]),
             "cpu environment pinned to bare `linux-64` must not gain the cuda variant"
         );
 
@@ -765,7 +765,7 @@ mod tests {
 
         assert_eq!(task, "echo default");
 
-        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
+        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Subdir::Linux64);
         let task_osx = manifest
             .default_environment()
             .task(&"foo".into(), Some(&linux64))
@@ -779,7 +779,7 @@ mod tests {
 
         assert_eq!(task_osx, "echo linux");
 
-        let osx64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Osx64);
+        let osx64 = pixi_manifest::PixiPlatform::from_subdir(Subdir::Osx64);
         assert!(manifest.default_environment().tasks(Some(&osx64)).is_err())
     }
     #[test]
@@ -881,7 +881,7 @@ mod tests {
             foo_env.activation_scripts(None),
             vec!["foo.bat".to_string(), "default.bat".to_string()]
         );
-        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
+        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Subdir::Linux64);
         assert_eq!(
             foo_env.activation_scripts(Some(&linux64)),
             vec!["foo.bat".to_string(), "linux.bat".to_string()]
@@ -922,7 +922,7 @@ mod tests {
                 "DEFAULT_VAR".to_string() => "1".to_string(),
             }
         );
-        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
+        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Subdir::Linux64);
         assert_eq!(
             default_env.activation_env(Some(&linux64)),
             indexmap! {
@@ -1570,7 +1570,7 @@ mod tests {
         .unwrap();
         let env = manifest.default_environment();
         // This should also work on OsxArm64
-        let osx64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Osx64);
+        let osx64 = pixi_manifest::PixiPlatform::from_subdir(Subdir::Osx64);
         assert!(env.validate_platform_support(Some(&osx64)).is_ok());
 
         let manifest = Workspace::from_str(
@@ -1584,7 +1584,7 @@ mod tests {
         )
         .unwrap();
         let env = manifest.default_environment();
-        let emscripten = pixi_manifest::PixiPlatform::from_subdir(Platform::EmscriptenWasm32);
+        let emscripten = pixi_manifest::PixiPlatform::from_subdir(Subdir::EmscriptenWasm32);
         assert!(env.validate_platform_support(Some(&emscripten)).is_ok());
     }
 
@@ -1606,7 +1606,7 @@ mod tests {
         let best = temp_env::with_var(consts::PIXI_OVERRIDE_PLATFORM, Some("win-64"), || {
             env.best_declared_platform().map(|p| p.subdir())
         });
-        assert_eq!(best, Some(Platform::Win32));
+        assert_eq!(best, Some(Subdir::Win32));
     }
 
     #[test]
@@ -1805,7 +1805,7 @@ mod tests {
                 // No declared platforms → None even with a valid override.
                 assert!(env.best_declared_platform().is_none());
                 // The host_platform helper honours the override.
-                assert_eq!(host_subdir(), Platform::LinuxAarch64,);
+                assert_eq!(host_subdir(), Subdir::LinuxAarch64,);
             },
         );
     }
@@ -1828,9 +1828,9 @@ mod tests {
                 let env = workspace.default_environment();
                 // No declared platforms → None regardless of the (invalid) override.
                 assert!(env.best_declared_platform().is_none());
-                // The host_platform helper still falls back to Platform::current()
+                // The host_platform helper still falls back to Subdir::current()
                 // on invalid values.
-                assert_eq!(host_subdir(), Platform::current(),);
+                assert_eq!(host_subdir(), Subdir::current().unwrap_or(Subdir::NoArch),);
             },
         );
     }

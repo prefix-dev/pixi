@@ -19,7 +19,7 @@ use pixi_spec::{
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     InvalidPackageNameError, MatchSpec, NamedChannelOrUrl, NamelessMatchSpec, PackageName,
-    ParseMatchSpecOptions, Platform, RepodataRevision, VersionSpec,
+    ParseMatchSpecOptions, RepodataRevision, Subdir, VersionSpec,
 };
 use rattler_repodata_gateway::{Gateway, RunExportExtractorError, RunExportsReporter};
 use serde::Serialize;
@@ -242,7 +242,7 @@ impl Dependencies {
         mut self,
         mut host_run_exports: Vec<(PackageName, PixiRunExports)>,
         mut build_run_exports: Vec<(PackageName, PixiRunExports)>,
-        target_platform: Platform,
+        target_platform: Subdir,
     ) -> Self {
         macro_rules! extend_with_run_exports {
             ($target:expr, $export_type:ident, Build) => {
@@ -282,7 +282,7 @@ impl Dependencies {
             };
         }
 
-        if target_platform == Platform::NoArch {
+        if target_platform == Subdir::NoArch {
             extend_with_run_exports!(self.dependencies, noarch, Host);
         } else {
             extend_with_run_exports!(self.dependencies, strong, Host);

@@ -130,7 +130,7 @@ mod tests {
     use std::str::FromStr;
 
     use pixi_manifest::{PixiPlatform, PixiPlatformName};
-    use rattler_conda_types::{GenericVirtualPackage, Platform, Version};
+    use rattler_conda_types::{GenericVirtualPackage, Subdir, Version};
     use url::Url;
 
     use super::*;
@@ -144,7 +144,7 @@ mod tests {
     }
 
     /// Build a rich (named) platform declaring exactly `packages`.
-    fn rich(name: &str, subdir: Platform, packages: Vec<GenericVirtualPackage>) -> PixiPlatform {
+    fn rich(name: &str, subdir: Subdir, packages: Vec<GenericVirtualPackage>) -> PixiPlatform {
         PixiPlatform::new(PixiPlatformName::from_str(name).unwrap(), subdir, packages).unwrap()
     }
 
@@ -164,7 +164,7 @@ mod tests {
 
     #[test]
     fn osx_derives_macosx_deployment_target() {
-        let platform = rich("mac", Platform::OsxArm64, vec![vp("__osx", "13.5")]);
+        let platform = rich("mac", Subdir::OsxArm64, vec![vp("__osx", "13.5")]);
         let variants = into_map(derive_stdlib_variants(
             &platform,
             &conda_forge(),
@@ -185,7 +185,7 @@ mod tests {
 
     #[test]
     fn linux_derives_sysroot_from_glibc() {
-        let platform = rich("lin", Platform::Linux64, vec![vp("__glibc", "2.28")]);
+        let platform = rich("lin", Subdir::Linux64, vec![vp("__glibc", "2.28")]);
         let variants = into_map(derive_stdlib_variants(
             &platform,
             &conda_forge(),
@@ -207,7 +207,7 @@ mod tests {
     /// host version like `15.7.1` that the exact pin could never resolve.
     #[test]
     fn atmost_bounds_full_version() {
-        let platform = rich("mac", Platform::OsxArm64, vec![vp("__osx", "15.7.1")]);
+        let platform = rich("mac", Subdir::OsxArm64, vec![vp("__osx", "15.7.1")]);
         let variants = into_map(derive_stdlib_variants(
             &platform,
             &conda_forge(),
@@ -222,7 +222,7 @@ mod tests {
 
     #[test]
     fn windows_skips() {
-        let platform = rich("windows-rich", Platform::Win64, vec![vp("__win", "10.0")]);
+        let platform = rich("windows-rich", Subdir::Win64, vec![vp("__win", "10.0")]);
         assert!(
             derive_stdlib_variants(&platform, &conda_forge(), StdlibVersionPin::Exact).is_empty()
         );
@@ -232,7 +232,7 @@ mod tests {
     /// produces nothing rather than inventing a version.
     #[test]
     fn linux_without_glibc_skips() {
-        let platform = rich("lin-cuda", Platform::Linux64, vec![vp("__cuda", "12.0")]);
+        let platform = rich("lin-cuda", Subdir::Linux64, vec![vp("__cuda", "12.0")]);
         assert!(
             derive_stdlib_variants(&platform, &conda_forge(), StdlibVersionPin::Exact).is_empty()
         );
@@ -244,7 +244,7 @@ mod tests {
     #[test]
     fn bare_subdir_derives_from_defaults() {
         let linux = into_map(derive_stdlib_variants(
-            &PixiPlatform::from_subdir(Platform::Linux64),
+            &PixiPlatform::from_subdir(Subdir::Linux64),
             &conda_forge(),
             StdlibVersionPin::Exact,
         ));
@@ -254,7 +254,7 @@ mod tests {
         );
 
         let osx = into_map(derive_stdlib_variants(
-            &PixiPlatform::from_subdir(Platform::OsxArm64),
+            &PixiPlatform::from_subdir(Subdir::OsxArm64),
             &conda_forge(),
             StdlibVersionPin::Exact,
         ));
@@ -267,7 +267,7 @@ mod tests {
     /// conda-forge referenced by full URL still gates the derivation on.
     #[test]
     fn conda_forge_by_url_derives() {
-        let platform = rich("mac", Platform::OsxArm64, vec![vp("__osx", "13.5")]);
+        let platform = rich("mac", Subdir::OsxArm64, vec![vp("__osx", "13.5")]);
         let variants = into_map(derive_stdlib_variants(
             &platform,
             &channel("https://prefix.dev/conda-forge"),
@@ -285,7 +285,7 @@ mod tests {
     /// against conda-forge derives nothing.
     #[test]
     fn non_conda_forge_channel_skips() {
-        let platform = rich("mac", Platform::OsxArm64, vec![vp("__osx", "13.5")]);
+        let platform = rich("mac", Subdir::OsxArm64, vec![vp("__osx", "13.5")]);
         assert!(
             derive_stdlib_variants(
                 &platform,
@@ -298,7 +298,7 @@ mod tests {
 
     #[test]
     fn no_channels_skips() {
-        let platform = rich("mac", Platform::OsxArm64, vec![vp("__osx", "13.5")]);
+        let platform = rich("mac", Subdir::OsxArm64, vec![vp("__osx", "13.5")]);
         assert!(derive_stdlib_variants(&platform, &[], StdlibVersionPin::Exact).is_empty());
     }
 }
