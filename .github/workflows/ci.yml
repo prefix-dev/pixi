@@ -420,6 +420,10 @@ jobs:
           --profile $env:CARGO_BUILD_PROFILE
           --features pixi/self_update
           --workspace
+      - name: Verify Windows application manifest
+        working-directory: ${{ env.PIXI_WORKSPACE }}
+        shell: pwsh
+        run: ./scripts/check-windows-manifest.ps1 target/${{ env.CARGO_BUILD_PROFILE }}/pixi.exe
       - name: "Upload binary"
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -458,6 +462,10 @@ jobs:
           --target aarch64-pc-windows-msvc
           --profile $env:CARGO_BUILD_PROFILE
           --features pixi/self_update
+      - name: Verify Windows application manifest
+        working-directory: ${{ env.PIXI_WORKSPACE }}
+        shell: pwsh
+        run: ./scripts/check-windows-manifest.ps1 target/aarch64-pc-windows-msvc/${{ env.CARGO_BUILD_PROFILE }}/pixi.exe
       - name: "Upload binary"
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
