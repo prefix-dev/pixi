@@ -994,6 +994,47 @@ def test_config_describe(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: 
     assert parsed[0]["default"] == "false"
     assert parsed[0]["value"] is True
 
+    # Per-bucket keys can be described by a concrete bucket name or by the
+    # placeholder shown in the listing.
+    verify_cli_command(
+        [
+            pixi,
+            "config",
+            "set",
+            "--manifest-path",
+            manifest_path,
+            "--local",
+            "s3-options",
+            '{"my-bucket": {"endpoint-url": "https://s3.example.com", "region": "eu-west-1", "force-path-style": false}}',
+        ]
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "config",
+            "list",
+            "--describe",
+            "--no-config",
+            "s3-options.my-bucket.region",
+            "--manifest-path",
+            manifest_path,
+        ],
+        stdout_contains=["# Region for the S3 bucket", 's3-options.my-bucket.region = "eu-west-1"'],
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "config",
+            "list",
+            "--describe",
+            "--no-config",
+            "s3-options.<bucket>.region",
+            "--manifest-path",
+            manifest_path,
+        ],
+        stdout_contains=["# s3-options.<bucket>.region = (unset)"],
+    )
+
     verify_cli_command(
         [
             pixi,

@@ -713,37 +713,77 @@ fn render_describe(
     json: bool,
 ) -> miette::Result<String> {
     let descriptions = config.describe_keys();
+    let as_listed = |opt: &'static pixi_config::ConfigOptionDescription| {
+        // Keys with a placeholder segment have no single value to show.
+        let path =
+            (!opt.key.contains('<')).then(|| opt.key.split('.').map(str::to_string).collect());
+        (opt, opt.key.to_string(), path)
+    };
 
-    let selected: Vec<&pixi_config::ConfigOptionDescription> = if let Some(k) = key_filter {
-        let matches: Vec<_> = descriptions.iter().filter(|o| o.key == k).collect();
-        if matches.is_empty() {
-            return Err(miette::miette!(
-                "Unknown configuration key '{}'. Run `pixi config list --describe` to list every available key.",
-                k
-            ));
+    // Each selected option is paired with the name to display and the path to
+    // look its value up at. A filter like `s3-options.my-bucket.region` matches
+    // the `s3-options.<bucket>.region` option, like `pixi config list <key>`.
+    let selected: Vec<(
+        &pixi_config::ConfigOptionDescription,
+        String,
+        Option<Vec<String>>,
+    )> = if let Some(k) = key_filter {
+        if let Some(opt) = descriptions.iter().find(|opt| opt.key == k) {
+            // Keys copied from the listing, placeholders included, match as-is.
+            vec![as_listed(opt)]
+        } else {
+            let key_path = KeyPath::parse(k)?;
+            let segments: Vec<&str> = key_path
+                .parents()
+                .into_iter()
+                .chain([key_path.target()])
+                .collect();
+            let matches: Vec<_> = descriptions
+                .iter()
+                .filter(|opt| is_known_key(&[opt.key], &segments))
+                .map(|opt| {
+                    let path = segments.iter().map(|s| s.to_string()).collect();
+                    (opt, k.to_string(), Some(path))
+                })
+                .collect();
+            if matches.is_empty() {
+                return Err(miette::miette!(
+                    "Unknown configuration key '{}'. Run `pixi config list --describe` to list every available key.",
+                    k
+                ));
+            }
+            matches
         }
-        matches
     } else {
-        descriptions.iter().collect()
+        descriptions.iter().map(as_listed).collect()
     };
 
     let doc = toml_edit::ser::to_string_pretty(config)
         .into_diagnostic()
         .and_then(|s| s.parse::<toml_edit::DocumentMut>().into_diagnostic())?;
+    let lookup = |path: &Option<Vec<String>>| {
+        path.as_ref()
+            .and_then(|path| lookup_path(doc.as_table(), path))
+    };
 
     if json {
+        // Go through TOML like `partial_config` does, so unset fields are
+        // dropped instead of showing up as nulls.
+        let json_doc: serde_json::Value =
+            toml_edit::de::from_str(&doc.to_string()).into_diagnostic()?;
         let arr: Vec<serde_json::Value> = selected
             .iter()
-            .map(|opt| {
-                let value = if opt.key.contains("<bucket>") {
-                    serde_json::Value::Null
-                } else {
-                    lookup_dotted(doc.as_table(), opt.key)
-                        .map(toml_item_to_json)
-                        .unwrap_or(serde_json::Value::Null)
-                };
+            .map(|(opt, name, path)| {
+                let value = path
+                    .as_ref()
+                    .and_then(|path| {
+                        path.iter()
+                            .try_fold(&json_doc, |value, segment| value.get(segment))
+                    })
+                    .cloned()
+                    .unwrap_or(serde_json::Value::Null);
                 serde_json::json!({
-                    "key": opt.key,
+                    "key": name,
                     "description": opt.description,
                     "type": opt.value_type,
                     "default": opt.default,
@@ -755,7 +795,7 @@ fn render_describe(
     }
 
     let mut out = String::new();
-    for (i, opt) in selected.iter().enumerate() {
+    for (i, (opt, name, path)) in selected.iter().enumerate() {
         if i > 0 {
             out.push('\n');
         }
@@ -769,22 +809,16 @@ fn render_describe(
         out.push_str(opt.default);
         out.push('\n');
 
-        let current = if opt.key.contains("<bucket>") {
-            None
-        } else {
-            lookup_dotted(doc.as_table(), opt.key).map(format_toml_value)
-        };
-
-        match current {
+        match lookup(path).map(format_toml_value) {
             Some(value) => {
-                out.push_str(opt.key);
+                out.push_str(name);
                 out.push_str(" = ");
                 out.push_str(&value);
                 out.push('\n');
             }
             None => {
                 out.push_str("# ");
-                out.push_str(opt.key);
+                out.push_str(name);
                 out.push_str(" = ");
                 out.push_str(opt.default);
                 out.push('\n');
@@ -794,12 +828,11 @@ fn render_describe(
     Ok(out)
 }
 
-fn lookup_dotted<'a>(table: &'a toml_edit::Table, key: &str) -> Option<&'a toml_edit::Item> {
-    let mut parts = key.split('.');
-    let first = parts.next()?;
+fn lookup_path<'a>(table: &'a toml_edit::Table, path: &[String]) -> Option<&'a toml_edit::Item> {
+    let (first, rest) = path.split_first()?;
     let mut item = table.get(first)?;
-    for part in parts {
-        item = item.as_table().and_then(|t| t.get(part))?;
+    for part in rest {
+        item = item.as_table_like().and_then(|t| t.get(part))?;
     }
     Some(item)
 }
@@ -841,53 +874,6 @@ fn item_to_value(item: &toml_edit::Item) -> Option<toml_edit::Value> {
             Some(toml_edit::Value::Array(out))
         }
         toml_edit::Item::None => None,
-    }
-}
-
-fn toml_item_to_json(item: &toml_edit::Item) -> serde_json::Value {
-    match item {
-        toml_edit::Item::Value(v) => toml_value_to_json(v),
-        toml_edit::Item::Table(t) => {
-            let mut map = serde_json::Map::new();
-            for (k, v) in t.iter() {
-                map.insert(k.to_string(), toml_item_to_json(v));
-            }
-            serde_json::Value::Object(map)
-        }
-        toml_edit::Item::ArrayOfTables(arr) => serde_json::Value::Array(
-            arr.iter()
-                .map(|t| {
-                    let mut map = serde_json::Map::new();
-                    for (k, v) in t.iter() {
-                        map.insert(k.to_string(), toml_item_to_json(v));
-                    }
-                    serde_json::Value::Object(map)
-                })
-                .collect(),
-        ),
-        toml_edit::Item::None => serde_json::Value::Null,
-    }
-}
-
-fn toml_value_to_json(v: &toml_edit::Value) -> serde_json::Value {
-    match v {
-        toml_edit::Value::String(s) => serde_json::Value::String(s.value().to_string()),
-        toml_edit::Value::Integer(i) => serde_json::Value::Number((*i.value()).into()),
-        toml_edit::Value::Float(f) => serde_json::Number::from_f64(*f.value())
-            .map(serde_json::Value::Number)
-            .unwrap_or(serde_json::Value::Null),
-        toml_edit::Value::Boolean(b) => serde_json::Value::Bool(*b.value()),
-        toml_edit::Value::Datetime(d) => serde_json::Value::String(d.to_string()),
-        toml_edit::Value::Array(arr) => {
-            serde_json::Value::Array(arr.iter().map(toml_value_to_json).collect())
-        }
-        toml_edit::Value::InlineTable(t) => {
-            let mut map = serde_json::Map::new();
-            for (k, v) in t.iter() {
-                map.insert(k.to_string(), toml_value_to_json(v));
-            }
-            serde_json::Value::Object(map)
-        }
     }
 }
 
