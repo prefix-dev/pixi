@@ -13,3 +13,5 @@ license.workspace = true
 parking_lot = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
+[dev-dependencies]
+tokio = { workspace = true, features = ['rt', 'macros', 'time'] }

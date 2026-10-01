@@ -85,3 +85,28 @@ impl<T> BarrierCell<T> {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[tokio::test]
+    async fn test_set_already_set() {
+        let cell = BarrierCell::new();
+        let value1 = std::sync::Arc::new(1);
+        let value2 = std::sync::Arc::new(2);
+
+        assert!(cell.set(value1).is_ok());
+        let err = cell.set(value2);
+        assert!(matches!(err, Err(SetError::AlreadySet)));
+    }
+
+    #[test]
+    fn test_into_inner() {
+        let cell = BarrierCell::<i32>::new();
+        assert!(cell.into_inner().is_none());
+
+        let cell = BarrierCell::new();
+        cell.set(std::sync::Arc::new(10)).unwrap();
+        assert_eq!(*cell.into_inner().unwrap(), 10);
+    }
+}
