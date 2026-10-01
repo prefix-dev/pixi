@@ -115,6 +115,7 @@ pub fn compute_artifact_cache_key(
     project_model_overrides: &crate::ProjectModelOverrides,
     package_format: Option<pixi_build_types::procedures::conda_build_v1::CondaPackageFormat>,
     inline_content_hash: Option<InlineContentHash>,
+    editable: bool,
 ) -> ArtifactCacheKey {
     let mut hasher = Xxh3::new();
     record.name().as_normalized().hash(&mut hasher);
@@ -133,6 +134,8 @@ pub fn compute_artifact_cache_key(
     project_model_overrides.hash(&mut hasher);
     // Distinguish artifacts by output format.
     package_format.hash(&mut hasher);
+    // Distinguish editable development builds from release builds.
+    editable.hash(&mut hasher);
 
     // Bucket-tagged streams: the same (url, sha256) behaves differently
     // when installed into the build prefix vs. the host prefix because
@@ -2296,6 +2299,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            false,
         )
         .to_string()
     }
@@ -2366,6 +2370,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            false,
         )
         .to_string();
         let k2 = compute_artifact_cache_key(
@@ -2378,6 +2383,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            false,
         )
         .to_string();
         assert_ne!(k1, k2);
@@ -2396,6 +2402,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            false,
         )
         .to_string();
         let k2 = compute_artifact_cache_key(
@@ -2408,6 +2415,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            false,
         )
         .to_string();
         assert_ne!(k1, k2);
@@ -2490,6 +2498,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            false,
         )
         .to_string();
         let k2 = compute_artifact_cache_key(
@@ -2502,6 +2511,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            false,
         )
         .to_string();
         assert_ne!(k1, k2);
@@ -2524,6 +2534,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            false,
         )
         .to_string();
         let host_only = compute_artifact_cache_key(
@@ -2536,6 +2547,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            false,
         )
         .to_string();
         assert_ne!(build_only, host_only);
@@ -2600,6 +2612,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            false,
         );
         let osx_arm = compute_artifact_cache_key(
             &r,
@@ -2611,6 +2624,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            false,
         );
         assert_ne!(linux, osx_arm);
     }
@@ -2628,6 +2642,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            false,
         );
         let prefixed = compute_artifact_cache_key(
             &r,
@@ -2642,6 +2657,7 @@ mod cache_key_tests {
             },
             None,
             None,
+            false,
         );
         assert_ne!(bare, prefixed);
     }
@@ -2659,6 +2675,7 @@ mod cache_key_tests {
             &Default::default(),
             None,
             None,
+            false,
         );
         let numbered = compute_artifact_cache_key(
             &r,
@@ -2673,8 +2690,39 @@ mod cache_key_tests {
             },
             None,
             None,
+            false,
         );
         assert_ne!(bare, numbered);
+    }
+
+    #[test]
+    fn editable_matters() {
+        let r = record("foo");
+        let bare = compute_artifact_cache_key(
+            &r,
+            Platform::Linux64,
+            Platform::Linux64,
+            "b",
+            &[],
+            &[],
+            &Default::default(),
+            None,
+            None,
+            false,
+        );
+        let editable = compute_artifact_cache_key(
+            &r,
+            Platform::Linux64,
+            Platform::Linux64,
+            "b",
+            &[],
+            &[],
+            &Default::default(),
+            None,
+            None,
+            true,
+        );
+        assert_ne!(bare, editable);
     }
 
     #[test]
@@ -2695,6 +2743,7 @@ mod cache_key_tests {
                 compression_level: Default::default(),
             }),
             None,
+            false,
         );
         let tar_bz2 = compute_artifact_cache_key(
             &r,
@@ -2709,6 +2758,7 @@ mod cache_key_tests {
                 compression_level: Default::default(),
             }),
             None,
+            false,
         );
         assert_ne!(conda, tar_bz2);
     }
@@ -2735,6 +2785,7 @@ mod cache_key_tests {
                 &Default::default(),
                 Some(pf(level)),
                 None,
+                false,
             )
         };
         let default_level = key(CondaCompressionLevel::Named(NamedCompressionLevel::Default));

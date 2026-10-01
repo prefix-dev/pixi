@@ -1598,9 +1598,9 @@ dependencies = [
 
 [[package]]
 name = "clap_complete"
-version = "4.6.11"
+version = "4.6.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "037e2a1a92236d0aff7e845093f64661d6df4c02c9fcc61a60e9e1d736fa392f"
+checksum = "78ab9a1a7094014a0d0813f8e7c5a0058ad8fe6cf7475b9151364259f5a35d0f"
 dependencies = [
  "clap",
 ]
@@ -7178,6 +7178,7 @@ dependencies = [
  "chrono",
  "dirs 7.0.0",
  "file_url",
+ "fs-err",
  "hex",
  "humantime",
  "insta",
@@ -7198,6 +7199,7 @@ dependencies = [
  "serde-untagged",
  "serde_json",
  "serde_with",
+ "tempfile",
  "thiserror 2.0.20",
  "toml-span",
  "toml_edit",
@@ -7863,9 +7865,9 @@ dependencies = [
 
 [[package]]
 name = "quinn-proto"
-version = "0.11.15"
+version = "0.11.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fcb935c5bec503c2f0e306bdd3e58bb9029dcb14fa8d9ac76e3a5256ac0763e"
+checksum = "434b42fec591c96ef50e21e886936e66d3cc3f737104fdb9b737c40ffb94c098"
 dependencies = [
  "aws-lc-rs",
  "bytes",
