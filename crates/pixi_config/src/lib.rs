@@ -307,16 +307,16 @@ static CONFIG_OPTION_DESCRIPTIONS: &[ConfigOptionDescription] = &[
         default: "(empty)",
     },
     ConfigOptionDescription {
+        key: "s3-options.<bucket>.addressing-style",
+        description: "How to address the S3 bucket `<bucket>`: as a virtual host or through the path.",
+        value_type: "one of `virtual-host`, `path`",
+        default: "\"virtual-host\"",
+    },
+    ConfigOptionDescription {
         key: "s3-options.<bucket>.endpoint-url",
         description: "Endpoint URL for the S3 bucket `<bucket>`.",
         value_type: "URL",
         default: "(unset)",
-    },
-    ConfigOptionDescription {
-        key: "s3-options.<bucket>.force-path-style",
-        description: "Use path-style addressing for the S3 bucket `<bucket>`.",
-        value_type: "bool",
-        default: "false",
     },
     ConfigOptionDescription {
         key: "s3-options.<bucket>.region",

@@ -1005,7 +1005,7 @@ def test_config_describe(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: 
             manifest_path,
             "--local",
             "s3-options",
-            '{"my-bucket": {"endpoint-url": "https://s3.example.com", "region": "eu-west-1", "force-path-style": false}}',
+            '{"my-bucket": {"endpoint-url": "https://s3.example.com", "region": "eu-west-1", "addressing-style": "path"}}',
         ]
     )
     verify_cli_command(
