@@ -872,11 +872,18 @@ def test_pixi_lock(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -
     dot_pixi = tmp_pixi_workspace / ".pixi"
     shutil.rmtree(dot_pixi)
 
-    # Run pixi lock to recreate the lock file and validate the return code with --check is 1
+    # Run pixi lock --check. It should fail and NOT create the lock file.
     verify_cli_command(
         [pixi, "lock", "--manifest-path", manifest_path, "--check"],
         expected_exit_code=ExitCode.FAILURE,
         stderr_contains=["+", "dummy-a"],
+    )
+
+    assert not lock_file_path.exists()
+
+    # Run pixi lock to actually recreate the lock file
+    verify_cli_command(
+        [pixi, "lock", "--manifest-path", manifest_path],
     )
 
     # Run pixi lock again to validate that the return code with --check is 0

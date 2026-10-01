@@ -42,7 +42,11 @@ pub struct Args {
     pub dry_run: bool,
 }
 
-pub async fn execute(args: Args) -> miette::Result<()> {
+pub async fn execute(mut args: Args) -> miette::Result<()> {
+    if args.check {
+        args.dry_run = true;
+    }
+
     let conda_script = match args.workspace_config.script.as_deref() {
         Some(path) => crate::conda_script::detect_with_fallback(path, false)?,
         None => None,
