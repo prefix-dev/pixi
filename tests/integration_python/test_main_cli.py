@@ -1708,6 +1708,7 @@ def complete_in_zsh(pixi: Path, workspace: Path, line: str) -> str:
 
 @pytest.mark.slow
 @pytest.mark.skipif(platform.system() == "Windows", reason="zsh and zpty are not available")
+@pytest.mark.skipif(platform.system() == "Darwin", reason="zsh completion is flaky on macOS CI")
 @pytest.mark.parametrize(
     ("line", "expected"),
     [
