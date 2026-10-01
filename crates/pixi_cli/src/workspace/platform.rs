@@ -62,10 +62,10 @@ pub struct VirtualPackageArgs {
     #[clap(long)]
     pub amdgpu: bool,
 
-    /// Declare a `__amdgpu_arch` virtual package (AMDGPU ISA version) as
-    /// `major.minor.stepping`, e.g. `9.0.10` for `gfx90a`. Also declares
-    /// `__amdgpu`. Serialized as `amdgpu = { arch }`.
-    #[clap(long, value_name = "ISA")]
+    /// Declare a `__amdgpu_arch` virtual package from an AMDGPU target name,
+    /// e.g. `gfx90a`. Also declares `__amdgpu`. Serialized as
+    /// `amdgpu = "<target>"`.
+    #[clap(long, value_name = "TARGET")]
     pub amdgpu_arch: Option<String>,
 
     /// Declare a `__archspec` virtual package with the given microarchitecture
@@ -155,9 +155,8 @@ impl VirtualPackageArgs {
             )?;
         }
         if let Some(value) = self.amdgpu_arch {
-            pixi_manifest::platform::validate_amdgpu_arch(&value)
+            let version = pixi_manifest::platform::amdgpu_arch_from_target_name(&value)
                 .map_err(|message| miette::miette!("--amdgpu-arch: {message}"))?;
-            let version = parse_virtual_package_version("--amdgpu-arch", &value)?;
             push_unique(
                 &mut specs,
                 &mut seen_names,
@@ -1368,7 +1367,7 @@ mod tests {
     #[test]
     fn into_specs_amdgpu_arch_implies_amdgpu() {
         let args = VirtualPackageArgs {
-            amdgpu_arch: Some("9.0.10".into()),
+            amdgpu_arch: Some("gfx90a".into()),
             ..Default::default()
         };
         let specs = args.into_specs(Subdir::Linux64, &[]).unwrap();
@@ -1383,7 +1382,7 @@ mod tests {
         );
 
         let invalid = VirtualPackageArgs {
-            amdgpu_arch: Some("gfx90a".into()),
+            amdgpu_arch: Some("9.0.10".into()),
             ..Default::default()
         };
         assert!(invalid.into_specs(Subdir::Linux64, &[]).is_err());

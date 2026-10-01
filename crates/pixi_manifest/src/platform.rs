@@ -1018,10 +1018,48 @@ fn validate_amdgpu_presence(version: &str) -> Result<(), String> {
 
 /// Validate an AMDGPU ISA version (`major.minor.stepping`, e.g. `9.0.10` for
 /// `gfx90a`) as declared for `__amdgpu_arch`.
-pub fn validate_amdgpu_arch(version: &str) -> Result<(), String> {
+fn validate_amdgpu_arch(version: &str) -> Result<(), String> {
     AmdGpuArchInfo::from_str(version)
         .map(drop)
         .map_err(|error| error.to_string())
+}
+
+/// Parse an AMDGPU target name (`gfx90a`, `gfx1100`) into the `__amdgpu_arch`
+/// ISA version it stands for (`9.0.10`, `11.0.0`).
+///
+/// Target features (`gfx90a:xnack-`) are rejected: `__amdgpu_arch` has no way
+/// to express them, so accepting them would silently drop part of the input.
+pub fn amdgpu_arch_from_target_name(name: &str) -> Result<Version, String> {
+    if !name.contains(':')
+        && let Some(arch_info) = AmdGpuArchInfo::from_target_id(name)
+    {
+        return Ok(arch_info.to_version());
+    }
+    match AmdGpuArchInfo::from_str(name)
+        .ok()
+        .and_then(|arch_info| amdgpu_target_name(&arch_info.to_string()))
+    {
+        Some(target_name) => Err(format!(
+            "'{name}' is not an AMDGPU target name, write it as '{target_name}'"
+        )),
+        None => Err(format!(
+            "'{name}' is not an AMDGPU target name, expected something like 'gfx90a' or 'gfx1100'"
+        )),
+    }
+}
+
+/// The AMDGPU target name (`gfx90a`) for an `__amdgpu_arch` ISA version
+/// (`9.0.10`). `None` when `isa_version` is not an ISA version, or when its
+/// minor or stepping is too large for the single hex digit a target name
+/// spends on each.
+pub fn amdgpu_target_name(isa_version: &str) -> Option<String> {
+    let arch_info = AmdGpuArchInfo::from_str(isa_version).ok()?;
+    (arch_info.minor < 16 && arch_info.stepping < 16).then(|| {
+        format!(
+            "gfx{}{:x}{:x}",
+            arch_info.major, arch_info.minor, arch_info.stepping
+        )
+    })
 }
 
 /// The best did-you-mean candidate for an unknown microarchitecture name: the

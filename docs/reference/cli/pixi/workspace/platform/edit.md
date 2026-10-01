@@ -30,8 +30,8 @@ pixi workspace platform edit [OPTIONS] <NAME> [__NAME[=VERSION[=BUILD]]]...
 :  Declare a `__cuda_arch` virtual package (GPU compute capability) at the given version, e.g. `8.6`. Requires `--cuda` (or an existing `__cuda`), matching the conda CEP coupling. Serialized as `cuda = { driver, arch }`
 - <a id="arg---amdgpu" href="#arg---amdgpu">`--amdgpu`</a>
 :  Declare a `__amdgpu` virtual package, stating that an AMD GPU is present. Valid on any subdir. Serialized as `amdgpu = true`
-- <a id="arg---amdgpu-arch" href="#arg---amdgpu-arch">`--amdgpu-arch <ISA>`</a>
-:  Declare a `__amdgpu_arch` virtual package (AMDGPU ISA version) as `major.minor.stepping`, e.g. `9.0.10` for `gfx90a`. Also declares `__amdgpu`. Serialized as `amdgpu = { arch }`
+- <a id="arg---amdgpu-arch" href="#arg---amdgpu-arch">`--amdgpu-arch <TARGET>`</a>
+:  Declare a `__amdgpu_arch` virtual package from an AMDGPU target name, e.g. `gfx90a`. Also declares `__amdgpu`. Serialized as `amdgpu = "<target>"`
 - <a id="arg---archspec" href="#arg---archspec">`--archspec <ARCH>`</a>
 :  Declare a `__archspec` virtual package with the given microarchitecture string, e.g. `x86_64_v3`. Valid on any subdir
 - <a id="arg---glibc" href="#arg---glibc">`--glibc <VERSION>`</a>

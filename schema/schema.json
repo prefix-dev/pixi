@@ -333,24 +333,6 @@
         }
       }
     },
-    "AmdGpuTable": {
-      "title": "AmdGpuTable",
-      "description": "The grouped AMD GPU virtual-package table: `amdgpu = { arch }`.\n\nDeclares `__amdgpu` together with `__amdgpu_arch` (AMDGPU ISA version).",
-      "type": "object",
-      "required": [
-        "arch"
-      ],
-      "additionalProperties": false,
-      "properties": {
-        "arch": {
-          "title": "Arch",
-          "description": "The `__amdgpu_arch` AMDGPU ISA version as `major.minor.stepping`, e.g. `9.0.10` for `gfx90a`.",
-          "type": "string",
-          "minLength": 1,
-          "pattern": "^\\d+\\.\\d+\\.\\d+$"
-        }
-      }
-    },
     "Build": {
       "title": "Build",
       "type": "object",
@@ -3999,14 +3981,15 @@
       "properties": {
         "amdgpu": {
           "title": "Amdgpu",
-          "description": "Declare the presence-only `__amdgpu` virtual package with `true`, or an `{ arch }` table to also declare `__amdgpu_arch` (AMDGPU ISA version).",
+          "description": "Declare the presence-only `__amdgpu` virtual package with `true`, or an AMDGPU target name (e.g. `gfx90a`) to also declare its `__amdgpu_arch`.",
           "anyOf": [
             {
               "type": "boolean",
               "const": true
             },
             {
-              "$ref": "#/$defs/AmdGpuTable"
+              "type": "string",
+              "pattern": "^gfx[0-9]+[0-9a-fA-F]{2}$"
             }
           ]
         },
