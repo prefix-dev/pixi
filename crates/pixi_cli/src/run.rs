@@ -805,8 +805,12 @@ fn disambiguate_task_interactive<'p>(
         ..ColorfulTheme::default()
     };
 
-    dialoguer::Select::with_theme(&theme)
-        .with_prompt(format!(
+    // A solve may be drawing progress bars on stderr while this prompt is
+    // shown. Without suspending them the bars are redrawn over the prompt,
+    // which leaves the user picking from a list they cannot read.
+    global_multi_progress().suspend(|| {
+        dialoguer::Select::with_theme(&theme)
+            .with_prompt(format!(
             "The task '{}' {}can be run in multiple environments.\n\nPlease select an environment to run the task in:",
             problem.task_name.fancy_display(),
             if let Some(dependency) = &problem.depended_on_by {
@@ -814,13 +818,14 @@ fn disambiguate_task_interactive<'p>(
             } else {
                 String::new()
             }
-        ))
-        .report(false)
-        .items(&environment_names)
-        .default(0)
-        .interact_opt()
-        .map_or(None, identity)
-        .map(|idx| problem.environments[idx].clone())
+            ))
+            .report(false)
+            .items(&environment_names)
+            .default(0)
+            .interact_opt()
+            .map_or(None, identity)
+            .map(|idx| problem.environments[idx].clone())
+    })
 }
 
 /// `dialoguer` doesn't clean up your term if it's aborted via e.g. `SIGINT` or
