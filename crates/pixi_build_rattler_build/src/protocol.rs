@@ -41,7 +41,7 @@ use rattler_build_recipe::{stage1::Source as RecipeSource, variant_render::Rende
 use rattler_build_variant_config::VariantConfig;
 use rattler_conda_types::NoArchType;
 use rattler_conda_types::{
-    Platform, RepodataRevision, compression_level::CompressionLevel, package::CondaArchiveType,
+    RepodataRevision, Subdir, compression_level::CompressionLevel, package::CondaArchiveType,
 };
 use tracing::warn;
 pub struct RattlerBuildBackendInstantiator {
@@ -127,7 +127,7 @@ impl Protocol for RattlerBuildBackend {
                 let effective_target_platform = if recipe.build().noarch.is_none() {
                     params.host_platform
                 } else {
-                    Platform::NoArch
+                    Subdir::NoArch
                 };
                 let build_string = recipe
                     .build()
@@ -144,6 +144,7 @@ impl Protocol for RattlerBuildBackend {
                     used_vars: variant,
                     recipe,
                     hash: rendered.hash_info.expect("hash should be set"),
+                    pin_subpackages: rendered.pin_subpackages,
                 }
             })
             .collect();
@@ -352,14 +353,14 @@ impl Protocol for RattlerBuildBackend {
         &self,
         params: CondaBuildV1Params,
     ) -> miette::Result<CondaBuildV1Result> {
-        let host_platform = params
-            .host_prefix
-            .as_ref()
-            .map_or_else(Platform::current, |prefix| prefix.platform);
-        let build_platform = params
-            .build_prefix
-            .as_ref()
-            .map_or_else(Platform::current, |prefix| prefix.platform);
+        let host_platform = params.host_prefix.as_ref().map_or_else(
+            || Subdir::current().unwrap_or(Subdir::NoArch),
+            |prefix| prefix.platform,
+        );
+        let build_platform = params.build_prefix.as_ref().map_or_else(
+            || Subdir::current().unwrap_or(Subdir::NoArch),
+            |prefix| prefix.platform,
+        );
 
         // Construct a `VariantConfig` based on the input parameters. We only
         // have a single variant here so we can just use the variant from the
@@ -429,7 +430,7 @@ impl Protocol for RattlerBuildBackend {
                 let effective_target_platform = if recipe.build().noarch.is_none() {
                     host_platform
                 } else {
-                    Platform::NoArch
+                    Subdir::NoArch
                 };
                 let build_string = recipe
                     .build()
@@ -446,6 +447,7 @@ impl Protocol for RattlerBuildBackend {
                     used_vars: variant,
                     recipe,
                     hash: rendered.hash_info.expect("hash should be set"),
+                    pin_subpackages: rendered.pin_subpackages,
                 }
             })
             .collect();
@@ -817,8 +819,8 @@ mod tests {
                     .0
                     .conda_outputs(CondaOutputsParams {
                         channels: vec![],
-                        host_platform: Platform::Linux64,
-                        build_platform: Platform::Linux64,
+                        host_platform: Subdir::Linux64,
+                        build_platform: Subdir::Linux64,
                         variant_configuration: None,
                         variant_files: None,
                         work_directory: current_dir,
@@ -882,8 +884,8 @@ mod tests {
             .0
             .conda_outputs(CondaOutputsParams {
                 channels: vec![],
-                host_platform: Platform::Linux64,
-                build_platform: Platform::Linux64,
+                host_platform: Subdir::Linux64,
+                build_platform: Subdir::Linux64,
                 variant_configuration: None,
                 variant_files: Some(vec![variant_file.clone()]),
                 work_directory: temp_dir.path().to_path_buf(),
@@ -930,8 +932,8 @@ mod tests {
             .0
             .conda_outputs(CondaOutputsParams {
                 channels: vec![],
-                host_platform: Platform::Linux64,
-                build_platform: Platform::Linux64,
+                host_platform: Subdir::Linux64,
+                build_platform: Subdir::Linux64,
                 variant_configuration: Some(variant_configuration),
                 variant_files: None,
                 work_directory: temp_dir.path().to_path_buf(),
@@ -997,8 +999,8 @@ numpy:
             .0
             .conda_outputs(CondaOutputsParams {
                 channels: vec![],
-                host_platform: Platform::Linux64,
-                build_platform: Platform::Linux64,
+                host_platform: Subdir::Linux64,
+                build_platform: Subdir::Linux64,
                 variant_configuration: Some(variant_configuration),
                 variant_files: Some(vec![variant_file.clone()]),
                 work_directory: temp_dir.path().to_path_buf(),
@@ -1072,8 +1074,8 @@ numpy:
             .0
             .conda_outputs(CondaOutputsParams {
                 channels: vec![],
-                host_platform: Platform::Linux64,
-                build_platform: Platform::Linux64,
+                host_platform: Subdir::Linux64,
+                build_platform: Subdir::Linux64,
                 variant_configuration: None,
                 variant_files: Some(vec![variant_file.clone()]),
                 work_directory: temp_dir.path().to_path_buf(),

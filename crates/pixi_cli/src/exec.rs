@@ -20,7 +20,7 @@ use rattler::{
     install::{IndicatifReporter, Installer},
     package_cache::PackageCache,
 };
-use rattler_conda_types::{GenericVirtualPackage, MatchSpec, PackageName, Platform};
+use rattler_conda_types::{GenericVirtualPackage, MatchSpec, PackageName, Subdir};
 use rattler_solve::{SolverImpl, SolverTask, resolvo::Solver};
 use reqwest_middleware::ClientWithMiddleware;
 use uv_configuration::initialize_rayon_once;
@@ -186,7 +186,7 @@ pub async fn execute(args: Args) -> miette::Result<ExitCode> {
 /// Creates a prefix for the `pixi exec` command.
 pub async fn create_exec_prefix(
     args: &Args,
-    platform: Platform,
+    platform: Subdir,
     specs: &[MatchSpec],
     cache_dir: &Path,
     config: &Config,
@@ -249,7 +249,7 @@ pub async fn create_exec_prefix(
     // Get the repodata for the specs
     let query_output = await_in_progress("fetching repodata for environment", |_| async {
         gateway
-            .query(channels, [platform, Platform::NoArch], specs.clone())
+            .query(channels, [platform, Subdir::NoArch], specs.clone())
             .recursive(true)
             .channel_notices(true)
             .execute()

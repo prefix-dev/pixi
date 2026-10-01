@@ -56,7 +56,7 @@ use pixi_utils::{
 };
 use rattler_conda_types::{
     ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, ParseChannelError,
-    Platform, PrefixRecord, menuinst::MenuMode, package::CondaArchiveIdentifier,
+    PrefixRecord, Subdir, menuinst::MenuMode, package::CondaArchiveIdentifier,
 };
 use rattler_networking::LazyClient;
 use rattler_repodata_gateway::Gateway;
@@ -174,7 +174,7 @@ impl Debug for Project {
 #[derive(Debug)]
 struct ExposedData {
     env_name: EnvironmentName,
-    platform: Option<Platform>,
+    platform: Option<Subdir>,
     channels: Vec<PrioritizedChannel>,
     package: PackageName,
     exposed: ExposedName,
@@ -267,9 +267,9 @@ fn determine_env_path(executable_path: &Path, env_root: &Path) -> miette::Result
 fn convert_record_to_metadata(
     prefix_record: &PrefixRecord,
     channel_config: &ChannelConfig,
-) -> miette::Result<(Option<Platform>, PrioritizedChannel, PackageName)> {
-    let platform = match Platform::from_str(&prefix_record.repodata_record.package_record.subdir) {
-        Ok(Platform::NoArch) => None,
+) -> miette::Result<(Option<Subdir>, PrioritizedChannel, PackageName)> {
+    let platform = match Subdir::from_str(&prefix_record.repodata_record.package_record.subdir) {
+        Ok(Subdir::NoArch) => None,
         Ok(platform) if platform == host_subdir() => None,
         Err(_) => None,
         Ok(p) => Some(p),
@@ -300,7 +300,7 @@ async fn package_from_conda_meta(
     executable: &str,
     prefix: &Prefix,
     channel_config: &ChannelConfig,
-) -> miette::Result<(Option<Platform>, PrioritizedChannel, PackageName)> {
+) -> miette::Result<(Option<Subdir>, PrioritizedChannel, PackageName)> {
     let records = find_package_records(conda_meta).await?;
 
     for prefix_record in records {
@@ -601,7 +601,7 @@ impl Project {
     /// so the solve respects run constraints on virtual packages. For any other
     /// platform the machine can't be inspected, so the list is empty.
     fn virtual_packages_for(
-        platform: &Platform,
+        platform: &Subdir,
     ) -> Result<Vec<GenericVirtualPackage>, HostDetectionError> {
         let host = host_subdir();
         if platform
@@ -629,7 +629,7 @@ impl Project {
     /// against. (The workspace flow keeps an exact pin to preserve build hashes
     /// and lock-file stability; that constraint doesn't apply here.)
     fn build_variants(
-        platform: Platform,
+        platform: Subdir,
         virtual_packages: &[GenericVirtualPackage],
         channels: &[ChannelUrl],
     ) -> VariantConfig {
@@ -697,7 +697,7 @@ impl Project {
 
         // Source dependencies are built on this machine, so they can only
         // target the platform we are running on.
-        if platform != Platform::current()
+        if platform != Subdir::current().unwrap_or(Subdir::NoArch)
             && let Some(source_package) = environment
                 .dependencies
                 .specs
@@ -712,7 +712,7 @@ impl Project {
                 "environment {} requests platform '{platform}', but '{}' is a source dependency that has to be built on the current machine ('{}'); cross-platform source builds are not supported",
                 env_name.fancy_display(),
                 source_package.as_normalized(),
-                Platform::current(),
+                Subdir::current().unwrap_or(Subdir::NoArch),
             ));
         }
 
@@ -879,7 +879,7 @@ impl Project {
         &self,
         env_name: &EnvironmentName,
         prefix: &Prefix,
-        platform: Platform,
+        platform: Subdir,
         resolved_virtual_packages: Vec<GenericVirtualPackage>,
         resolved_depends: &[String],
         source_fingerprints: BTreeMap<String, u64>,
@@ -1247,7 +1247,7 @@ impl Project {
                     continue;
                 }
 
-                if exclude_newer.is_excluded(&package.name, channel, package.timestamp.as_ref()) {
+                if exclude_newer.is_excluded(&record.repodata_record) {
                     tracing::debug!(
                         "Environment {} out of sync because {} is newer than the exclude-newer cutoff",
                         env_name.fancy_display(),
@@ -1571,7 +1571,10 @@ impl Project {
             rattler_menuinst::install_menuitems_for_record(
                 prefix.root(),
                 &record,
-                environment.platform.unwrap_or_else(Platform::current),
+                environment
+                    .platform
+                    .or(Subdir::current())
+                    .unwrap_or(Subdir::NoArch),
                 MenuMode::User,
             )
             .into_diagnostic()?;
@@ -1971,7 +1974,7 @@ mod tests {
     use itertools::Itertools;
     use pixi_utils::variants::VariantValue;
     use rattler_conda_types::{
-        NamedChannelOrUrl, PackageRecord, Platform, RepoDataRecord, VersionWithSource,
+        NamedChannelOrUrl, PackageRecord, RepoDataRecord, Subdir, VersionWithSource,
         package::DistArchiveIdentifier,
     };
     use tempfile::tempdir;
@@ -2213,7 +2216,7 @@ mod tests {
         );
 
         // Set platform to something different than current
-        package_record.subdir = Platform::LinuxRiscv32.to_string();
+        package_record.subdir = Subdir::LinuxRiscv32.to_string();
 
         let repodata_record = RepoDataRecord {
             package_record: package_record.clone(),
@@ -2236,7 +2239,7 @@ mod tests {
             NamedChannelOrUrl::from_str("test-channel").unwrap().into()
         );
         assert_eq!(package, "python".parse().unwrap());
-        assert_eq!(platform, Some(Platform::LinuxRiscv32));
+        assert_eq!(platform, Some(Subdir::LinuxRiscv32));
 
         // Test with different from default channel alias
         let repodata_record = RepoDataRecord {
@@ -2279,7 +2282,7 @@ mod tests {
         )];
         let device = vec![gvp("__osx", "15.7.1")];
         let variants =
-            Project::build_variants(Platform::OsxArm64, &device, &channels).variant_configuration;
+            Project::build_variants(Subdir::OsxArm64, &device, &channels).variant_configuration;
 
         assert_eq!(
             variants.get("c_stdlib"),
@@ -2302,7 +2305,7 @@ mod tests {
         )];
         let device = vec![gvp("__osx", "15.0")];
         assert!(
-            Project::build_variants(Platform::OsxArm64, &device, &channels)
+            Project::build_variants(Subdir::OsxArm64, &device, &channels)
                 .variant_configuration
                 .is_empty()
         );
@@ -2313,10 +2316,10 @@ mod tests {
     /// machine's detected packages.
     #[test]
     fn test_virtual_packages_for_non_current_platform_is_empty() {
-        let other = if Platform::current().only_platform() == Some("win") {
-            Platform::Linux64
+        let other = if Subdir::current().unwrap_or(Subdir::NoArch).only_platform() == Some("win") {
+            Subdir::Linux64
         } else {
-            Platform::Win64
+            Subdir::Win64
         };
         assert!(Project::virtual_packages_for(&other).unwrap().is_empty());
     }

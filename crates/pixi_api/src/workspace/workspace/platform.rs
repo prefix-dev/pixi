@@ -347,7 +347,7 @@ pub async fn remove<I: Interface>(
 mod tests {
     use pixi_core::{Workspace, environment::LockFileUsage};
     use pixi_manifest::{FeatureName, PixiPlatform};
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::Subdir;
 
     use super::*;
 
@@ -376,7 +376,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_remove_host_platform_without_no_install() {
-        let current_platform = Platform::current();
+        let current_platform = Subdir::current().unwrap_or(Subdir::NoArch);
         let host = current_platform.as_str();
         let (_tmp, workspace) = workspace_from(&format!(
             r#"
@@ -414,7 +414,7 @@ channels = []
 platforms = ["win-64"]
 "#,
         );
-        let platform = PixiPlatform::from_subdir(Platform::Win64);
+        let platform = PixiPlatform::from_subdir(Subdir::Win64);
         let result = remove(
             &MockInterface,
             workspace.modify().unwrap(),
@@ -442,7 +442,7 @@ channels = []
 platforms = ["linux-64"]
 "#,
         );
-        let platform = PixiPlatform::from_subdir(Platform::Win64);
+        let platform = PixiPlatform::from_subdir(Subdir::Win64);
         let result = add(
             &MockInterface,
             workspace.modify().unwrap(),

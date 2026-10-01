@@ -457,12 +457,12 @@ pub fn direct_dependencies(
 mod tests {
     use super::*;
     use pixi_core::Workspace;
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::Subdir;
     use rattler_lock::LockFile;
 
     /// Render the PyPI subset of an example workspace through the production
     /// printer into a buffer for snapshot comparison.
-    fn render_pypi_tree(manifest: &std::path::Path, platform: Platform) -> String {
+    fn render_pypi_tree(manifest: &std::path::Path, platform: Subdir) -> String {
         console::set_colors_enabled(false);
 
         let workspace = Workspace::from_path(manifest).unwrap();
@@ -503,7 +503,7 @@ mod tests {
             concat!(env!("CARGO_WORKSPACE_DIR"), "/examples"),
             "{editable-with-extras,pypi}/pixi.toml",
             |manifest| {
-                insta::assert_snapshot!(render_pypi_tree(manifest, Platform::Linux64));
+                insta::assert_snapshot!(render_pypi_tree(manifest, Subdir::Linux64));
             }
         );
     }

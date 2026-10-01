@@ -59,7 +59,7 @@ use pixi_utils::{
 };
 use pypi_mapping::PurlDerivationMode;
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, Platform,
+    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, Subdir,
 };
 use rattler_lock::LockFile;
 use thiserror::Error;
@@ -220,7 +220,7 @@ pub enum ScriptWorkspaceError {
         "a script without `platforms` is resolved for this machine. Declare the platforms in the script metadata to resolve it for a fixed target instead."
     ))]
     HostDetection {
-        subdir: Platform,
+        subdir: Subdir,
         #[source]
         source: pixi_manifest::platform::host::HostDetectionError,
     },
@@ -289,7 +289,7 @@ fn implicit_script_platforms(
     // nothing to reject and no re-solve to trigger on every run.
     let host_is_baseline = host.customised_virtual_packages().is_empty();
 
-    let mut foreign_subdirs: IndexSet<Platform> = IndexSet::new();
+    let mut foreign_subdirs: IndexSet<Subdir> = IndexSet::new();
     let mut rejected_baseline = false;
     let mut rejected_unrunnable = false;
     let mut locked: IndexSet<PixiPlatform> = IndexSet::new();
@@ -441,7 +441,12 @@ impl Workspace {
                     s3_middleware::S3Config::Custom {
                         endpoint_url: value.endpoint_url.clone(),
                         region: value.region.clone(),
-                        force_path_style: value.force_path_style,
+                        addressing_style: if value.force_path_style {
+                            s3_middleware::S3AddressingStyle::Path
+                        } else {
+                            s3_middleware::S3AddressingStyle::VirtualHost
+                        },
+                        credentials_provider: None,
                     },
                 )
             })
@@ -1043,7 +1048,7 @@ impl Workspace {
     /// `[system-requirements]` shape. A subdir the workspace does not declare
     /// (cross-building for `osx-arm64` from a linux-only workspace, say) falls
     /// back to the subdir baseline.
-    pub fn pixi_platform_for_subdir(&self, subdir: Platform) -> PixiPlatform {
+    pub fn pixi_platform_for_subdir(&self, subdir: Subdir) -> PixiPlatform {
         let candidates: Vec<&PixiPlatform> = self
             .workspace
             .value
@@ -1529,9 +1534,7 @@ mod tests {
     use pixi_config::{CacheConfig, Config, DetachedEnvironments};
     use pixi_manifest::{FeatureName, FeaturesExt, HasWorkspaceManifest, script::ScriptManifest};
     use pypi_mapping::{MappingMode, ProjectDefinedChannelMapping, ProjectDefinedMappingLocation};
-    use rattler_conda_types::{
-        Channel, GenericVirtualPackage, NamedChannelOrUrl, Platform, Version,
-    };
+    use rattler_conda_types::{Channel, GenericVirtualPackage, NamedChannelOrUrl, Subdir, Version};
     use url::Url;
     use xxhash_rust::xxh3::xxh3_64;
 
@@ -1719,7 +1722,7 @@ packages: []
         )
         .unwrap();
 
-        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
+        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Subdir::Linux64);
         assert_snapshot!(format_dependencies(
             workspace
                 .default_environment()
@@ -1760,7 +1763,7 @@ packages: []
         )
         .unwrap();
 
-        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
+        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Subdir::Linux64);
         assert_snapshot!(format_dependencies(
             workspace
                 .default_environment()
@@ -1795,7 +1798,7 @@ packages: []
         )
         .unwrap();
 
-        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
+        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Subdir::Linux64);
         assert_snapshot!(format_dependencies(
             workspace
                 .default_environment()
@@ -1827,9 +1830,9 @@ packages: []
         )
         .unwrap();
 
-        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
-        let win64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Win64);
-        let osx_arm64 = pixi_manifest::PixiPlatform::from_subdir(Platform::OsxArm64);
+        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Subdir::Linux64);
+        let win64 = pixi_manifest::PixiPlatform::from_subdir(Subdir::Win64);
+        let osx_arm64 = pixi_manifest::PixiPlatform::from_subdir(Subdir::OsxArm64);
         assert_snapshot!(format!(
             "= Linux64\n{}\n\n= Win64\n{}\n\n= OsxArm64\n{}",
             fmt_activation_scripts(
@@ -1870,9 +1873,9 @@ packages: []
         )
         .unwrap();
 
-        let osx64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Osx64);
-        let win64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Win64);
-        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
+        let osx64 = pixi_manifest::PixiPlatform::from_subdir(Subdir::Osx64);
+        let win64 = pixi_manifest::PixiPlatform::from_subdir(Subdir::Win64);
+        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Subdir::Linux64);
         assert_debug_snapshot!(
             workspace
                 .workspace
@@ -1912,7 +1915,7 @@ packages: []
 
         let platform = pixi_manifest::PixiPlatform::new(
             pixi_manifest::PixiPlatformName::from_str("mac").unwrap(),
-            Platform::OsxArm64,
+            Subdir::OsxArm64,
             vec![GenericVirtualPackage {
                 name: "__osx".parse().unwrap(),
                 version: Version::from_str("13.5").unwrap(),
@@ -1954,7 +1957,7 @@ packages: []
 
         let platform = pixi_manifest::PixiPlatform::new(
             pixi_manifest::PixiPlatformName::from_str("my-mac").unwrap(),
-            Platform::OsxArm64,
+            Subdir::OsxArm64,
             vec![GenericVirtualPackage {
                 name: "__osx".parse().unwrap(),
                 version: Version::from_str("15.1.1").unwrap(),
@@ -1986,7 +1989,7 @@ packages: []
 
         let platform = pixi_manifest::PixiPlatform::new(
             pixi_manifest::PixiPlatformName::from_str("my-linux").unwrap(),
-            Platform::Linux64,
+            Subdir::Linux64,
             vec![GenericVirtualPackage {
                 name: "__glibc".parse().unwrap(),
                 version: Version::from_str("2.28.1").unwrap(),
@@ -2019,7 +2022,7 @@ packages: []
             "#;
         let workspace = Workspace::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
-        let platform = workspace.pixi_platform_for_subdir(Platform::Linux64);
+        let platform = workspace.pixi_platform_for_subdir(Subdir::Linux64);
         assert_eq!(
             platform
                 .declared_virtual_packages()
@@ -2048,17 +2051,17 @@ packages: []
             "#;
         let workspace = Workspace::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
-        let declared = workspace.pixi_platform_for_subdir(Platform::Linux64);
+        let declared = workspace.pixi_platform_for_subdir(Subdir::Linux64);
         assert_eq!(
             declared.declared_virtual_packages(),
-            PixiPlatform::from_subdir(Platform::Linux64).declared_virtual_packages()
+            PixiPlatform::from_subdir(Subdir::Linux64).declared_virtual_packages()
         );
 
-        let undeclared = workspace.pixi_platform_for_subdir(Platform::OsxArm64);
+        let undeclared = workspace.pixi_platform_for_subdir(Subdir::OsxArm64);
         assert_eq!(undeclared.name().as_str(), "osx-arm64");
         assert_eq!(
             undeclared.declared_virtual_packages(),
-            PixiPlatform::from_subdir(Platform::OsxArm64).declared_virtual_packages()
+            PixiPlatform::from_subdir(Subdir::OsxArm64).declared_virtual_packages()
         );
     }
 
@@ -2433,7 +2436,7 @@ print("hello")
                 .iter()
                 .map(PixiPlatform::subdir)
                 .collect::<Vec<_>>(),
-            [Platform::current()]
+            [Subdir::current().unwrap_or(Subdir::NoArch)]
         );
     }
 
@@ -2520,9 +2523,9 @@ print("hello")
         // A subdir this machine cannot run. A lock file can hold one when the
         // script declared `platforms` and had the line removed since.
         let foreign = if host.is_windows() {
-            Platform::Linux64
+            Subdir::Linux64
         } else {
-            Platform::Win64
+            Subdir::Win64
         };
         let lock_file = LockFile::builder()
             .with_platforms(
@@ -2667,7 +2670,7 @@ packages: []
         );
     }
 
-    fn baseline_lock_source(subdir: Platform) -> String {
+    fn baseline_lock_source(subdir: Subdir) -> String {
         format!(
             r#"version: 7
 platforms:

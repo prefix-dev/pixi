@@ -7,7 +7,7 @@ use pypi_modifiers::pypi_tags::{PyPITagError, get_tags_from_machine, is_python_r
 use rattler_conda_types::ParseMatchSpecError;
 use rattler_conda_types::ParseStrictness::Lenient;
 use rattler_conda_types::{
-    GenericVirtualPackage, MatchSpec, Matches, Platform, Version, VersionSpec,
+    GenericVirtualPackage, MatchSpec, Matches, Subdir, Version, VersionSpec,
 };
 use rattler_lock::{CondaPackageData, ConversionError, LockFile, PypiPackageData};
 use rattler_virtual_packages::{
@@ -37,7 +37,7 @@ impl VirtualPackageNotFoundError {
     pub fn new(
         required_package: &MatchSpec,
         system_virtual_packages: &[GenericVirtualPackage],
-        target: Platform,
+        target: Subdir,
     ) -> Self {
         let help = spec_override_hint(required_package, target).map(|hint| {
             format!(
@@ -142,14 +142,14 @@ pub(crate) fn compute_required_virtual_package_specs(
     lock_file: &LockFile,
     environment_name: &EnvironmentName,
     declared_platforms: &[&PixiPlatform],
-) -> HashMap<Platform, Vec<MatchSpec>> {
+) -> HashMap<Subdir, Vec<MatchSpec>> {
     let Some(environment) = lock_file.environment(environment_name.as_str()) else {
         return HashMap::new();
     };
 
     // subdir -> all `depends` strings of its resolved conda packages, across the
     // declared platforms that share a subdir.
-    let mut depends_by_subdir: HashMap<Platform, Vec<String>> = HashMap::new();
+    let mut depends_by_subdir: HashMap<Subdir, Vec<String>> = HashMap::new();
 
     for platform in declared_platforms {
         let lock_platform = super::resolve_lock_platform_for(environment.lock_file(), platform);
@@ -339,7 +339,7 @@ mod test {
     use insta::assert_snapshot;
     use pixi_test_utils::format_diagnostic;
     use rattler_conda_types::package::DistArchiveIdentifier;
-    use rattler_conda_types::{PackageName, PackageRecord, ParseStrictness, Platform};
+    use rattler_conda_types::{PackageName, PackageRecord, ParseStrictness, Subdir};
     use rattler_lock::{CondaBinaryData, PlatformData, PlatformName, UrlOrPath};
     use rattler_virtual_packages::Override;
     use std::path::Path;
@@ -351,7 +351,7 @@ mod test {
         let lock_file_path =
             root_dir.join("../../tests/data/lock_files/cuda_virtual_dependency.lock");
         let lock_file = LockFile::from_path(&lock_file_path).unwrap();
-        let platform = Platform::Linux64;
+        let platform = Subdir::Linux64;
         let env = lock_file.default_environment().unwrap();
         let lock_platform = lock_file.platform(&platform.to_string()).unwrap();
         let conda_packages = env
@@ -393,7 +393,7 @@ mod test {
         let lock_file_path =
             root_dir.join("../../tests/data/lock_files/cuda_virtual_dependency.lock");
         let lock_file = LockFile::from_path(&lock_file_path).unwrap();
-        let declared = PixiPlatform::from_subdir(Platform::Linux64);
+        let declared = PixiPlatform::from_subdir(Subdir::Linux64);
 
         let required = compute_required_virtual_package_specs(
             &lock_file,
@@ -402,7 +402,7 @@ mod test {
         );
 
         let specs = required
-            .get(&Platform::Linux64)
+            .get(&Subdir::Linux64)
             .expect("linux-64 requirements");
         // Only depended-on virtual packages are present; subdir defaults are
         // not padded in (`__archspec` is a linux-64 default but never appears
@@ -431,7 +431,7 @@ packages:
   - __cuda
 "#;
         let lock_file = LockFile::from_str_with_base_directory(lock_source, None).unwrap();
-        let declared = PixiPlatform::from_subdir(Platform::Linux64);
+        let declared = PixiPlatform::from_subdir(Subdir::Linux64);
 
         let required = compute_required_virtual_package_specs(
             &lock_file,
@@ -440,7 +440,7 @@ packages:
         );
 
         let specs = required
-            .get(&Platform::Linux64)
+            .get(&Subdir::Linux64)
             .expect("linux-64 requirements");
         assert_eq!(
             specs.iter().map(ToString::to_string).collect_vec(),
@@ -557,7 +557,7 @@ packages:
         let lock_file_path =
             root_dir.join("../../tests/data/lock_files/cuda_virtual_dependency.lock");
         let lock_file = LockFile::from_path(&lock_file_path).unwrap();
-        let platform = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
+        let platform = pixi_manifest::PixiPlatform::from_subdir(Subdir::Linux64);
 
         // Override the virtual package to a version that is not available on the system
         let mut overrides = VirtualPackageOverrides::default();
@@ -605,7 +605,7 @@ packages:
         let mut builder = LockFile::builder()
             .with_platforms(vec![PlatformData {
                 name: PlatformName::try_from("linux-64").unwrap(),
-                subdir: Platform::Linux64,
+                subdir: Subdir::Linux64,
                 virtual_packages: vec![],
             }])
             .unwrap();
@@ -624,7 +624,7 @@ packages:
     #[test]
     fn musl_requirement_is_verified_not_skipped() {
         let lock_file = lock_requiring("__musl >=1.2");
-        let platform = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
+        let platform = pixi_manifest::PixiPlatform::from_subdir(Subdir::Linux64);
         let mut overrides = VirtualPackageOverrides::default();
         overrides.libc = Some(Override::String("2.28".to_string()));
 
@@ -648,7 +648,8 @@ packages:
         let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
         let lock_file_path = root_dir.join("../../tests/data/lock_files/pypi-numpy.lock");
         let lock_file = LockFile::from_path(&lock_file_path).unwrap();
-        let platform = pixi_manifest::PixiPlatform::from_subdir(Platform::current());
+        let platform =
+            pixi_manifest::PixiPlatform::from_subdir(Subdir::current().unwrap_or(Subdir::NoArch));
 
         // To high version for the wheel, which is fine as we assume backwards compatibility
         let mut overrides = VirtualPackageOverrides::default();
@@ -674,7 +675,7 @@ packages:
             &EnvironmentName::default(),
             Some(overrides),
         );
-        if Platform::current().is_unix() {
+        if Subdir::current().unwrap_or(Subdir::NoArch).is_unix() {
             assert!(
                 matches!(result, Err(MachineValidationError::WheelTagsMismatch(_, _))),
                 "{result:?}"
@@ -709,12 +710,12 @@ packages:
         let system_virtual_packages = vec![libc, cuda, osx];
 
         let error1 =
-            VirtualPackageNotFoundError::new(&spec, &system_virtual_packages, Platform::Linux64);
+            VirtualPackageNotFoundError::new(&spec, &system_virtual_packages, Subdir::Linux64);
 
         // Create a test MatchSpec for unix which doesn't have an override
         let spec = MatchSpec::from_str("__unix >= 1.2.3", ParseStrictness::Strict).unwrap();
         let error2 =
-            VirtualPackageNotFoundError::new(&spec, &system_virtual_packages, Platform::Linux64);
+            VirtualPackageNotFoundError::new(&spec, &system_virtual_packages, Subdir::Linux64);
 
         assert_snapshot!(format!(
             "With override:\n{}\nWithout override:\n{}",
@@ -728,17 +729,17 @@ packages:
         let overrides = vec![
             (
                 "__glibc >= 2.17",
-                Platform::Linux64,
+                Subdir::Linux64,
                 "`CONDA_OVERRIDE_GLIBC=2.17`",
             ),
             (
                 "__cuda >= 12.0",
-                Platform::Linux64,
+                Subdir::Linux64,
                 "`CONDA_OVERRIDE_CUDA=12.0`",
             ),
             (
                 "__osx >= 10.15",
-                Platform::Osx64,
+                Subdir::Osx64,
                 "`CONDA_OVERRIDE_OSX=10.15`",
             ),
         ];
@@ -759,7 +760,7 @@ packages:
         let error = VirtualPackageNotFoundError::new(
             &MatchSpec::from_str("__osx >= 10.15", ParseStrictness::Strict).unwrap(),
             &system_virtual_packages,
-            Platform::Linux64,
+            Subdir::Linux64,
         );
         assert!(error.help.is_none(), "{:?}", error.help);
     }
@@ -769,7 +770,7 @@ packages:
         let root_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
         let lock_file_path = root_dir.join("../../tests/data/lock_files/archspec.lock");
         let lock_file = LockFile::from_path(&lock_file_path).unwrap();
-        let platform = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
+        let platform = pixi_manifest::PixiPlatform::from_subdir(Subdir::Linux64);
 
         let mut overrides = VirtualPackageOverrides::default();
         overrides.libc = Some(Override::String("2.17".to_string()));
@@ -790,7 +791,7 @@ packages:
         let lock_file_path =
             root_dir.join("../../tests/data/lock_files/ignored_virtual_packages.lock");
         let lock_file = LockFile::from_path(&lock_file_path).unwrap();
-        let platform = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
+        let platform = pixi_manifest::PixiPlatform::from_subdir(Subdir::Linux64);
 
         let mut overrides = VirtualPackageOverrides::default();
         overrides.libc = Some(Override::String("2.17".to_string()));

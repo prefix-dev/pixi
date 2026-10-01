@@ -121,7 +121,7 @@ impl HasWorkspaceEnvRegistry for DataStore {
 
 #[cfg(test)]
 mod tests {
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::Subdir;
     use rattler_solve::ChannelPriority;
 
     use pixi_utils::variants::VariantConfig;
@@ -133,9 +133,9 @@ mod tests {
         EnvironmentSpec {
             channels: Vec::new(),
             build_environment: BuildEnvironment {
-                host_platform: Platform::Linux64,
+                host_platform: Subdir::Linux64,
                 host_virtual_packages: Vec::new(),
-                build_platform: Platform::Linux64,
+                build_platform: Subdir::Linux64,
                 build_virtual_packages: Vec::new(),
             },
             variants: VariantConfig::default(),
@@ -147,7 +147,7 @@ mod tests {
     #[test]
     fn allocate_deduplicates_equal_requests() {
         let reg = WorkspaceEnvRegistry::new();
-        let platform = Platform::Linux64;
+        let platform = Subdir::Linux64;
 
         let a = reg.allocate("default".to_string(), platform.to_string(), empty_spec());
         let b = reg.allocate("default".to_string(), platform.to_string(), empty_spec());
@@ -159,7 +159,7 @@ mod tests {
     #[test]
     fn allocate_keeps_distinct_labels_separate() {
         let reg = WorkspaceEnvRegistry::new();
-        let platform = Platform::Linux64;
+        let platform = Subdir::Linux64;
 
         let a = reg.allocate("default".to_string(), platform.to_string(), empty_spec());
         let b = reg.allocate("other".to_string(), platform.to_string(), empty_spec());
@@ -181,12 +181,12 @@ mod tests {
         )];
         let ws_a = reg.allocate(
             "default".to_string(),
-            Platform::Linux64.to_string(),
+            Subdir::Linux64.to_string(),
             spec_a.clone(),
         );
         let ws_b = reg.allocate(
             "default".to_string(),
-            Platform::Linux64.to_string(),
+            Subdir::Linux64.to_string(),
             empty_spec(),
         );
 

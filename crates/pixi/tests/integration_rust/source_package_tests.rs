@@ -2,7 +2,7 @@ use fs_err as fs;
 use pixi_build_backend_passthrough::{BackendEvent, ObservableBackend, PassthroughBackend};
 use pixi_build_frontend::BackendOverride;
 use pixi_consts::consts;
-use rattler_conda_types::{Platform, PrefixRecord, package::RunExportsJson};
+use rattler_conda_types::{PrefixRecord, Subdir, package::RunExportsJson};
 use rattler_lock::{LockFile, PackageBuildSource};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -61,7 +61,7 @@ preview = ["pixi-build"]
 [dependencies]
 {source_dependencies}
 "#,
-        Platform::current()
+        Subdir::current().unwrap_or(Subdir::NoArch)
     );
     fs::write(path, manifest_content).unwrap();
 }
@@ -147,7 +147,7 @@ preview = ["pixi-build"]
             .display()
             .to_string()
             .replace('\\', "\\\\"),
-        Platform::current()
+        Subdir::current().unwrap_or(Subdir::NoArch)
     );
 
     // Write the manifest
@@ -244,7 +244,7 @@ preview = ["pixi-build"]
             .display()
             .to_string()
             .replace('\\', "\\\\"),
-        Platform::current()
+        Subdir::current().unwrap_or(Subdir::NoArch)
     );
 
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
@@ -315,7 +315,7 @@ preview = ["pixi-build"]
             .display()
             .to_string()
             .replace('\\', "\\\\"),
-        Platform::current()
+        Subdir::current().unwrap_or(Subdir::NoArch)
     );
 
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
@@ -384,7 +384,7 @@ preview = ["pixi-build"]
 # This will use the PassthroughBackend instead of a real backend
 my-package = {{ path = "./my-package" }}
 "#,
-        Platform::current()
+        Subdir::current().unwrap_or(Subdir::NoArch)
     );
 
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
@@ -393,7 +393,7 @@ my-package = {{ path = "./my-package" }}
     let lock_file = pixi.update_lock_file().await.unwrap();
     assert!(lock_file.contains_conda_package(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         "my-package",
     ));
 }
@@ -442,7 +442,7 @@ preview = ["pixi-build"]
 my-package = {{ path = "./my-package", extras = ["test"] }}
 "#,
         channel = channel.url(),
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
     );
     fs::write(pixi.manifest_path(), manifest).unwrap();
 
@@ -451,7 +451,7 @@ my-package = {{ path = "./my-package", extras = ["test"] }}
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "my-package",
         ),
         "the source package itself must be locked"
@@ -459,7 +459,7 @@ my-package = {{ path = "./my-package", extras = ["test"] }}
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "extra-pkg",
         ),
         "selecting the `test` extra must pull its dependency into the lock file"
@@ -508,7 +508,7 @@ preview = ["pixi-build"]
 my-package = {{ path = "./my-package" }}
 "#,
         channel = channel.url(),
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
     );
     fs::write(pixi.manifest_path(), manifest).unwrap();
 
@@ -517,7 +517,7 @@ my-package = {{ path = "./my-package" }}
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "my-package",
         ),
         "the source package itself must be locked"
@@ -525,7 +525,7 @@ my-package = {{ path = "./my-package" }}
     assert!(
         !lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "extra-pkg",
         ),
         "without selecting the `test` extra its dependency must not be locked"
@@ -574,7 +574,7 @@ preview = ["pixi-build"]
 my-package = {{ path = "./my-package", extras = ["nonexistent"] }}
 "#,
         channel = channel.url(),
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
     );
     fs::write(pixi.manifest_path(), manifest).unwrap();
 
@@ -583,7 +583,7 @@ my-package = {{ path = "./my-package", extras = ["nonexistent"] }}
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "my-package",
         ),
         "the source package itself must still be locked despite the unknown extra"
@@ -662,7 +662,7 @@ preview = ["pixi-build"]
 example-rust = {{ path = "./example-rust" }}
 "#,
         channel = channel.url(),
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
     );
     fs::write(pixi.manifest_path(), manifest).unwrap();
 
@@ -672,7 +672,7 @@ example-rust = {{ path = "./example-rust" }}
         assert!(
             lock_file.contains_conda_package(
                 consts::DEFAULT_ENVIRONMENT_NAME,
-                Platform::current(),
+                Subdir::current().unwrap_or(Subdir::NoArch),
                 pkg,
             ),
             "{pkg} should be locked"
@@ -741,7 +741,7 @@ preview = ["pixi-build"]
 example-rust = {{ path = "./example-rust", extras = ["recipe"] }}
 "#,
         channel = channel.url(),
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
     );
     fs::write(pixi.manifest_path(), manifest).unwrap();
 
@@ -751,7 +751,7 @@ example-rust = {{ path = "./example-rust", extras = ["recipe"] }}
         assert!(
             lock_file.contains_conda_package(
                 consts::DEFAULT_ENVIRONMENT_NAME,
-                Platform::current(),
+                Subdir::current().unwrap_or(Subdir::NoArch),
                 pkg,
             ),
             "{pkg} should be locked (pulled in through the `recipe` extra)"
@@ -817,7 +817,7 @@ source.path = "src"
 [dependencies]
 test-build-source = {{ path = "." }}
 "#,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
     );
 
     // Write the manifest
@@ -843,7 +843,7 @@ test-build-source = {{ path = "." }}
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "test-build-source",
         ),
         "Built package should be in the lock file"
@@ -911,7 +911,7 @@ preview = ["pixi-build"]
 my-package = {{ path = "./my-package" }}
 "#,
         channel = channel.url(),
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
     );
     pixi.update_manifest(&manifest_without_cutoff).unwrap();
     pixi.update_lock_file()
@@ -930,7 +930,7 @@ exclude-newer = "2025-01-01T00:00:00Z"
 my-package = {{ path = "./my-package" }}
 "#,
         channel = channel.url(),
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
     );
     pixi.update_manifest(&manifest_with_cutoff).unwrap();
 
@@ -946,7 +946,7 @@ my-package = {{ path = "./my-package" }}
     assert!(rendered.contains("foo"), "{rendered}");
 }
 
-fn variant_fail_fast_manifest(channel: &str, platform: Platform) -> String {
+fn variant_fail_fast_manifest(channel: &str, platform: Subdir) -> String {
     format!(
         r#"
 [workspace]
@@ -986,7 +986,7 @@ async fn test_publish_fails_before_build_or_upload_when_one_variant_is_unsatisfi
         ObservableBackend::instantiator(PassthroughBackend::instantiator());
     let pixi = PixiControl::from_manifest(&variant_fail_fast_manifest(
         channel.url().as_ref(),
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
     ))
     .unwrap();
 
@@ -996,8 +996,8 @@ async fn test_publish_fails_before_build_or_upload_when_one_variant_is_unsatisfi
         backend_override: Some(BackendOverride::from_memory(instantiator)),
         config_cli: Default::default(),
         config_source: isolated_config_source(),
-        target_platform: Platform::current(),
-        build_platform: Platform::current(),
+        target_platform: Subdir::current().unwrap_or(Subdir::NoArch),
+        build_platform: Subdir::current().unwrap_or(Subdir::NoArch),
         build_string_prefix: None,
         build_number: None,
         build_dir: None,
@@ -1102,7 +1102,7 @@ my-package = {{ path = "./my-package" }}
 foo = "{override_cutoff}"
 "#,
         channel = channel.url(),
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
         cutoff = cutoff,
         override_cutoff = override_cutoff,
     );
@@ -1136,7 +1136,7 @@ foo = "{override_cutoff}"
 bar = "{override_cutoff}"
 "#,
         channel = channel.url(),
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
         cutoff = cutoff,
         override_cutoff = override_cutoff,
     );
@@ -1239,7 +1239,7 @@ sdl2-32 = {{ features = ["sdl2-32"] }}
 my-package = {{ path = "./my-package" }}
 "#,
         channel.url(),
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
     );
 
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
@@ -1311,7 +1311,7 @@ async fn test_source_package_lock_file_up_to_date() {
     let mut package = pixi_test_utils::Package::build("test-source-pkg", "1.2.3")
         .with_build("test_build_0")
         .with_build_number(0)
-        .with_subdir(Platform::NoArch)
+        .with_subdir(Subdir::NoArch)
         .with_dependency("some-dependency >=1.0")
         .with_run_exports(run_exports)
         .finish();
@@ -1365,7 +1365,7 @@ preview = ["pixi-build"]
 [dependencies]
 test-source-pkg = {{ path = "./source-package" }}
 "#,
-        Platform::current()
+        Subdir::current().unwrap_or(Subdir::NoArch)
     );
 
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
@@ -1385,7 +1385,7 @@ test-source-pkg = {{ path = "./source-package" }}
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "test-source-pkg",
         ),
         "Lock file should contain the source package"
@@ -1395,7 +1395,7 @@ test-source-pkg = {{ path = "./source-package" }}
     assert!(
         lock_file.contains_match_spec(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "test-source-pkg"
         ),
         "Lock file should contain test-source-pkg"
@@ -1471,7 +1471,7 @@ preview = ["pixi-build"]
 my-package = {{ path = "./my-package" }}
 "#,
         channel = channel.url(),
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
     );
     fs::write(pixi.manifest_path(), manifest).unwrap();
 
@@ -1561,7 +1561,7 @@ preview = ["pixi-build"]
 my-package = {{ path = "./my-package" }}
 "#,
         channel = channel.url(),
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
     );
     fs::write(pixi.manifest_path(), manifest).unwrap();
 
@@ -1675,7 +1675,7 @@ preview = ["pixi-build"]
 my-package = {{ path = "./my-package" }}
 "#,
         channel = channel.url(),
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
     );
     fs::write(pixi.manifest_path(), manifest).unwrap();
 
@@ -1761,7 +1761,7 @@ preview = ["pixi-build"]
 [dependencies]
 my-package = {{ path = "./my-package" }}
 "#,
-        Platform::current()
+        Subdir::current().unwrap_or(Subdir::NoArch)
     );
 
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
@@ -1788,7 +1788,7 @@ my-package = {{ path = "./my-package" }}
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "my-package",
         ),
         "Lock file should contain my-package"
@@ -1985,7 +1985,7 @@ preview = ["pixi-build"]
 [dependencies]
 my-package = {{ path = "./my-package" }}
 "#,
-        Platform::current()
+        Subdir::current().unwrap_or(Subdir::NoArch)
     );
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
 
@@ -2024,7 +2024,7 @@ preview = ["pixi-build"]
 [dependencies]
 renamed-package = {{ path = "./my-package" }}
 "#,
-        Platform::current()
+        Subdir::current().unwrap_or(Subdir::NoArch)
     );
     fs::write(pixi.manifest_path(), updated_manifest).unwrap();
 
@@ -2099,7 +2099,7 @@ preview = ["pixi-build"]
 [dependencies]
 my-package = {{ path = "./my-package" }}
 "#,
-        Platform::current()
+        Subdir::current().unwrap_or(Subdir::NoArch)
     );
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
 
@@ -2117,7 +2117,7 @@ my-package = {{ path = "./my-package" }}
         .environment(consts::DEFAULT_ENVIRONMENT_NAME)
         .expect("default environment should exist");
     let platform = lock_file
-        .platform(&Platform::current().to_string())
+        .platform(&Subdir::current().unwrap_or(Subdir::NoArch).to_string())
         .expect("current platform should exist");
 
     let source_packages: Vec<_> = env
@@ -2169,7 +2169,7 @@ my-package = {{ path = "./my-package" }}
         .environment(consts::DEFAULT_ENVIRONMENT_NAME)
         .unwrap();
     let platform_2 = lock_file_2
-        .platform(&Platform::current().to_string())
+        .platform(&Subdir::current().unwrap_or(Subdir::NoArch).to_string())
         .unwrap();
 
     let source_packages_2: Vec<_> = env_2
@@ -2283,7 +2283,7 @@ preview = ["pixi-build"]
 my-package = {{ path = "./my-package" }}
 "#,
         channel = channel.url(),
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
     );
     pixi.update_manifest(&workspace_manifest).unwrap();
 
@@ -2516,7 +2516,7 @@ my-package = {{ path = "./my-package" }}
 sdl2 = "*"
 "#,
         channel = channel_url,
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
     );
     pixi.update_manifest(&workspace_manifest).unwrap();
 
@@ -2530,7 +2530,7 @@ sdl2 = "*"
     assert!(
         lock_v1.contains_match_spec(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "sdl2 ==2.26.5",
         ),
         "first lock must pin top-level sdl2 to 2.26.5"
@@ -2559,7 +2559,7 @@ sdl2 = "*"
     assert!(
         lock_v2.contains_match_spec(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "sdl2 ==2.32.0",
         ),
         "top-level sdl2 must be updated to 2.32.0"
@@ -2655,7 +2655,7 @@ git = "{git_url}"
 subdirectory = "."
 {kind} = "{value}"
 "#,
-            platform = Platform::current(),
+            platform = Subdir::current().unwrap_or(Subdir::NoArch),
         );
         fs::write(&manifest_path, manifest).unwrap();
     };
@@ -2757,7 +2757,7 @@ git = "{git_url}"
 subdirectory = "."
 rev = "{short_rev}"
 "#,
-            platform = Platform::current(),
+            platform = Subdir::current().unwrap_or(Subdir::NoArch),
             git_url = &fixture.base_url,
         ),
     )
@@ -2836,7 +2836,7 @@ version = "0.1.0"
 [package.build]
 backend = {{ name = "in-memory", version = "0.1.0" }}
 "#,
-            platform = Platform::current(),
+            platform = Subdir::current().unwrap_or(Subdir::NoArch),
         ),
     )
     .unwrap();
@@ -3053,7 +3053,11 @@ inner-pkg = { path = "./inner" }
     let lock = pixi.lock_file().await.unwrap();
     for pkg in ["outer-pkg", "inner-pkg"] {
         assert!(
-            lock.contains_conda_package(consts::DEFAULT_ENVIRONMENT_NAME, Platform::current(), pkg),
+            lock.contains_conda_package(
+                consts::DEFAULT_ENVIRONMENT_NAME,
+                Subdir::current().unwrap_or(Subdir::NoArch),
+                pkg
+            ),
             "{pkg} must be locked"
         );
     }
@@ -3112,7 +3116,7 @@ shared-pkg = {{ path = "./pkg-b" }}
 env-a = ["a"]
 env-b = ["b"]
 "#,
-            platform = Platform::current(),
+            platform = Subdir::current().unwrap_or(Subdir::NoArch),
         ),
     )
     .unwrap();
@@ -3192,7 +3196,7 @@ preview = ["pixi-build"]
 [dependencies]
 my-package = {{ path = "./my-package" }}
 "#,
-            Platform::current()
+            Subdir::current().unwrap_or(Subdir::NoArch)
         ),
     )
     .unwrap();
@@ -3271,7 +3275,7 @@ preview = ["pixi-build"]
 [dependencies]
 boost-check = {{ git = "{url}", subdirectory = "boost-check" }}
 "#,
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
         url = fixture.base_url,
     ))
     .unwrap()
@@ -3362,7 +3366,7 @@ preview = ["pixi-build"]
 [dependencies]
 my-package = {{ path = "./my-package" }}
 "#,
-            Platform::current()
+            Subdir::current().unwrap_or(Subdir::NoArch)
         ),
     )
     .unwrap();
@@ -3404,7 +3408,7 @@ my-package = {{ path = "./my-package" }}
     );
 }
 
-fn simple_package_manifest(platform: Platform) -> String {
+fn simple_package_manifest(platform: Subdir) -> String {
     format!(
         r#"
 [workspace]
@@ -3430,14 +3434,17 @@ async fn test_publish_without_target_builds_but_does_not_upload() {
 
     let (instantiator, mut observer) =
         ObservableBackend::instantiator(PassthroughBackend::instantiator());
-    let pixi = PixiControl::from_manifest(&simple_package_manifest(Platform::current())).unwrap();
+    let pixi = PixiControl::from_manifest(&simple_package_manifest(
+        Subdir::current().unwrap_or(Subdir::NoArch),
+    ))
+    .unwrap();
 
     publish::execute(publish::Args {
         backend_override: Some(BackendOverride::from_memory(instantiator)),
         config_cli: Default::default(),
         config_source: isolated_config_source(),
-        target_platform: Platform::current(),
-        build_platform: Platform::current(),
+        target_platform: Subdir::current().unwrap_or(Subdir::NoArch),
+        build_platform: Subdir::current().unwrap_or(Subdir::NoArch),
         build_string_prefix: None,
         build_number: None,
         build_dir: None,
@@ -3491,8 +3498,8 @@ fn publish_args_for_test(
         backend_override,
         config_cli: Default::default(),
         config_source: isolated_config_source(),
-        target_platform: Platform::current(),
-        build_platform: Platform::current(),
+        target_platform: Subdir::current().unwrap_or(Subdir::NoArch),
+        build_platform: Subdir::current().unwrap_or(Subdir::NoArch),
         build_string_prefix: None,
         build_number: None,
         build_dir: None,
@@ -3551,7 +3558,7 @@ fn write_three_package_workspace(
     cpp_publish: Option<bool>,
     core_publish: Option<bool>,
 ) {
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
     fs::write(
         root.join("pixi.toml"),
         format!(
@@ -3824,7 +3831,7 @@ async fn test_publish_with_path_allows_host_source_dependencies() {
     setup_tracing();
 
     let pixi = PixiControl::new().unwrap();
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
     fs::write(
         pixi.manifest_path(),
         format!(
@@ -3920,7 +3927,7 @@ async fn test_publish_without_opt_in_falls_back_to_current_directory() {
     setup_tracing();
 
     let pixi = PixiControl::new().unwrap();
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
     fs::write(
         pixi.manifest_path(),
         format!(
@@ -3974,7 +3981,7 @@ channels = []
 platforms = ["{}"]
 preview = ["pixi-build"]
 "#,
-            Platform::current()
+            Subdir::current().unwrap_or(Subdir::NoArch)
         ),
     )
     .unwrap();
@@ -4022,7 +4029,7 @@ description = "Test package for .gitignore creation during publish"
 backend.name = "nonexistent-backend"
 backend.version = "0.1.0"
 "#,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
     );
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
 
@@ -4036,8 +4043,8 @@ backend.version = "0.1.0"
         backend_override: None,
         config_cli: Default::default(),
         config_source: isolated_config_source(),
-        target_platform: Platform::current(),
-        build_platform: Platform::current(),
+        target_platform: Subdir::current().unwrap_or(Subdir::NoArch),
+        build_platform: Subdir::current().unwrap_or(Subdir::NoArch),
         build_string_prefix: None,
         build_number: None,
         build_dir: None,
@@ -4099,14 +4106,14 @@ async fn test_build_propagates_host_run_exports_into_index_json() {
     let mut package_database = MockRepoData::default();
     package_database.add_package(
         Package::build("host-lib", "2.5.0")
-            .with_subdir(Platform::current())
+            .with_subdir(Subdir::current().unwrap_or(Subdir::NoArch))
             .with_materialize(true)
             .with_run_exports(run_exports.clone())
             .finish(),
     );
     package_database.add_package(
         Package::build("runtime-lib", "1.0.0")
-            .with_subdir(Platform::current())
+            .with_subdir(Subdir::current().unwrap_or(Subdir::NoArch))
             .with_materialize(true)
             .finish(),
     );
@@ -4149,7 +4156,7 @@ noarch = false
 host-lib = "*"
 "#,
         channel = channel.url(),
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
     );
     pixi.update_manifest(&manifest_content).unwrap();
 
@@ -4162,8 +4169,8 @@ host-lib = "*"
         )),
         config_cli: Default::default(),
         config_source: isolated_config_source(),
-        target_platform: Platform::current(),
-        build_platform: Platform::current(),
+        target_platform: Subdir::current().unwrap_or(Subdir::NoArch),
+        build_platform: Subdir::current().unwrap_or(Subdir::NoArch),
         build_string_prefix: None,
         build_number: None,
         build_dir: None,
@@ -4279,7 +4286,7 @@ env-foo = {{ features = ["foo"], solve-group = "shared" }}
 env-bar = {{ features = ["bar"], solve-group = "shared" }}
 "#,
         channel = channel.url(),
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
     );
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
 
@@ -4288,7 +4295,7 @@ env-bar = {{ features = ["bar"], solve-group = "shared" }}
         .await
         .expect("lock file generation should succeed for a package with extras");
 
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
 
     // Both environments must be present in the lock file.
     assert!(
@@ -4376,7 +4383,7 @@ env-foo = {{ features = ["foo"], solve-group = "shared" }}
 env-bar = {{ features = ["bar"], solve-group = "shared" }}
 "#,
         channel = channel.url(),
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
     );
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
 
@@ -4504,7 +4511,7 @@ preview = ["pixi-build"]
 my-package = {{ path = "./my-package" }}
 "#,
         channel = channel.url(),
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
     ))
     .unwrap();
     pixi.lock().await.unwrap();

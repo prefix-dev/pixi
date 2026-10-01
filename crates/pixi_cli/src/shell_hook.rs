@@ -212,7 +212,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::Subdir;
     #[cfg(target_family = "windows")]
     use rattler_shell::shell::CmdExe;
     #[cfg(not(target_family = "windows"))]
@@ -225,7 +225,7 @@ mod tests {
     #[tokio::test]
     async fn test_shell_hook_unix() {
         let default_shell = rattler_shell::shell::ShellEnum::default();
-        let path_var_name = default_shell.path_var(&Platform::current());
+        let path_var_name = default_shell.path_var(&Subdir::current().unwrap_or(Subdir::NoArch));
         let project = WorkspaceLocator::default().locate().unwrap();
         let environment = project.default_environment();
 
@@ -282,7 +282,7 @@ mod tests {
     #[tokio::test]
     async fn test_shell_hook_windows() {
         let default_shell = rattler_shell::shell::ShellEnum::default();
-        let path_var_name = default_shell.path_var(&Platform::current());
+        let path_var_name = default_shell.path_var(&Subdir::current().unwrap_or(Subdir::NoArch));
         let project = WorkspaceLocator::default().locate().unwrap();
         let environment = project.default_environment();
 

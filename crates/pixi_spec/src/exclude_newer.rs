@@ -107,7 +107,11 @@ impl From<ResolvedExcludeNewer> for rattler_solve::ExcludeNewer {
     fn from(value: ResolvedExcludeNewer) -> Self {
         let mut config =
             rattler_solve::ExcludeNewer::from_datetime(to_saturating_jiff_timestamp(value.cutoff))
-                .with_include_unknown_timestamp(value.include_unknown_timestamp);
+                .with_timestamp_policy(if value.include_unknown_timestamp {
+                    rattler_solve::TimestampPolicy::AllowMissing
+                } else {
+                    rattler_solve::TimestampPolicy::RequireTimestamp
+                });
 
         for (channel, cutoff) in value.channel_cutoffs {
             config = config
@@ -352,7 +356,10 @@ mod test {
             ),
             to_saturating_jiff_timestamp(package_cutoff)
         );
-        assert!(config.include_unknown_timestamp());
+        assert_eq!(
+            config.timestamp_policy(),
+            rattler_solve::TimestampPolicy::AllowMissing
+        );
     }
 
     #[test]

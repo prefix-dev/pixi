@@ -8,7 +8,7 @@ use pixi_pypi_spec::PypiPackageName;
 use pixi_spec::{ExcludeNewer, TomlSpec};
 use pixi_toml::TomlEnum;
 use rattler_conda_types::{
-    Arch, GenericVirtualPackage, NamedChannelOrUrl, PackageName, Platform, Version, VersionSpec,
+    Arch, GenericVirtualPackage, NamedChannelOrUrl, PackageName, Subdir, Version, VersionSpec,
 };
 use serde::Deserialize;
 use toml_span::{DeserError, Value};
@@ -140,7 +140,7 @@ impl Workspace {
 
     /// Returns the [`TargetSelector`] used to key the target table for a
     /// platform name, matching how the platform is declared in the workspace
-    /// (`Subdir` for bare subdir platforms, `Platform` for richer ones).
+    /// (`Subdir` for bare subdir platforms, `Subdir` for richer ones).
     pub fn target_selector_for_platform(&self, name: &PixiPlatformName) -> TargetSelector {
         self.platform_by_name(name)
             .map(PixiPlatform::as_target_selector)
@@ -159,7 +159,7 @@ impl Workspace {
     /// platform is dropped on a system that does not provide CUDA.
     pub fn possible_pixi_platforms(
         &self,
-        current: Platform,
+        current: Subdir,
         system_virtual_packages: &[GenericVirtualPackage],
     ) -> Vec<&PixiPlatform> {
         let candidate_subdirs = candidate_subdirs(current);
@@ -208,7 +208,7 @@ impl Workspace {
     /// caller can tell the user which VPs to mock via `CONDA_OVERRIDE_*`.
     pub fn unsatisfied_platform_requirements(
         &self,
-        current: Platform,
+        current: Subdir,
         system_virtual_packages: &[GenericVirtualPackage],
         env_platforms: &HashSet<PixiPlatformName>,
     ) -> Vec<GenericVirtualPackage> {
@@ -239,7 +239,7 @@ impl Workspace {
     /// Platforms are returned in workspace declaration order.
     pub fn platform_match_diagnostics(
         &self,
-        current: Platform,
+        current: Subdir,
         system_virtual_packages: &[GenericVirtualPackage],
         env_platforms: &HashSet<PixiPlatformName>,
     ) -> Vec<PlatformMatchDiagnosis> {
@@ -275,7 +275,7 @@ pub struct PlatformMatchDiagnosis {
     pub name: PixiPlatformName,
 
     /// The conda subdir the platform targets.
-    pub subdir: Platform,
+    pub subdir: Subdir,
 
     /// Whether `subdir` is one the current host can run (its own subdir or an
     /// architecture fallback such as `win-64` → `win-32`).

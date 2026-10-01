@@ -1099,7 +1099,7 @@ impl From<Task> for Item {
 #[cfg(test)]
 mod tests {
     use insta::assert_snapshot;
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::Subdir;
 
     use crate::PixiPlatform;
     use crate::task::{Alias, Dependency, DependencyArg, Task};
@@ -1143,7 +1143,8 @@ mod tests {
     fn test_template_string_pixi_vars_always_available() {
         // pixi variables should always be available, even without typed args
         let t = TemplateString::from("echo {{ pixi.platform }}");
-        let current_platform = PixiPlatform::from_subdir(Platform::current());
+        let current_platform =
+            PixiPlatform::from_subdir(Subdir::current().unwrap_or(Subdir::NoArch));
 
         // No args -> pixi.platform still works
         let context = TaskRenderContext {
@@ -1153,7 +1154,10 @@ mod tests {
         let rendered = t
             .render(&context)
             .expect("pixi.platform should be available without args");
-        assert_eq!(rendered, format!("echo {}", Platform::current()));
+        assert_eq!(
+            rendered,
+            format!("echo {}", Subdir::current().unwrap_or(Subdir::NoArch))
+        );
 
         // Free-form args -> pixi.platform still works
         let free_args = ArgValues::FreeFormArgs(vec!["bar".into()]);
@@ -1165,7 +1169,10 @@ mod tests {
         let rendered = t
             .render(&context)
             .expect("pixi.platform should be available with free-form args");
-        assert_eq!(rendered, format!("echo {}", Platform::current()));
+        assert_eq!(
+            rendered,
+            format!("echo {}", Subdir::current().unwrap_or(Subdir::NoArch))
+        );
     }
 
     #[test]
@@ -1190,7 +1197,7 @@ mod tests {
             args: vec![],
             extra: vec![],
         };
-        let linux64_platform = PixiPlatform::from_subdir(Platform::Linux64);
+        let linux64_platform = PixiPlatform::from_subdir(Subdir::Linux64);
 
         let context = TaskRenderContext {
             platform: Some(&linux64_platform),
@@ -1250,7 +1257,7 @@ mod tests {
             args: vec![],
             extra: vec![],
         };
-        let linux64_platform = PixiPlatform::from_subdir(Platform::Linux64);
+        let linux64_platform = PixiPlatform::from_subdir(Subdir::Linux64);
         let context = TaskRenderContext {
             platform: Some(&linux64_platform),
             args: Some(&args),
@@ -1271,7 +1278,7 @@ mod tests {
             }],
             extra: vec![],
         };
-        let linux64_platform = PixiPlatform::from_subdir(Platform::Linux64);
+        let linux64_platform = PixiPlatform::from_subdir(Subdir::Linux64);
         let context = TaskRenderContext {
             platform: Some(&linux64_platform),
             args: Some(&args),
@@ -1307,14 +1314,14 @@ mod tests {
 mod jinja_rendering_tests {
     use std::str::FromStr;
 
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::Subdir;
 
     use super::{ArgValues, TaskRenderContext, TemplateString, TypedArg};
     use crate::{EnvironmentName, PixiPlatform};
 
     fn render(template: &str) -> String {
         let env_name = EnvironmentName::from_str("test-env").unwrap();
-        let platform = PixiPlatform::from_subdir(Platform::Linux64);
+        let platform = PixiPlatform::from_subdir(Subdir::Linux64);
         let context = TaskRenderContext {
             platform: Some(&platform),
             environment_name: &env_name,
@@ -1379,7 +1386,7 @@ mod jinja_rendering_tests {
     #[test]
     fn typed_args_are_strings_not_booleans() {
         let env_name = EnvironmentName::from_str("test-env").unwrap();
-        let platform = PixiPlatform::from_subdir(Platform::Linux64);
+        let platform = PixiPlatform::from_subdir(Subdir::Linux64);
         let args = ArgValues::TypedArgs {
             args: vec![TypedArg {
                 name: "flag".into(),

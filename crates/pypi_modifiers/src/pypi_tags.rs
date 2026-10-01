@@ -2,7 +2,7 @@ use miette::Diagnostic;
 use pixi_manifest::PixiPlatform;
 use rattler_conda_types::MatchSpec;
 use rattler_conda_types::{
-    Arch, GenericVirtualPackage, PackageName, PackageRecord, Platform, Version,
+    Arch, GenericVirtualPackage, PackageName, PackageRecord, Subdir, Version,
 };
 use rattler_virtual_packages::VirtualPackage;
 use rattler_virtual_packages::defaults::{default_glibc_version, default_mac_os_version};
@@ -17,7 +17,7 @@ pub enum PyPITagError {
     FailedToDetermineWheelTags(#[from] uv_platform_tags::TagsError),
 
     #[error("failed to determine pypi tag for platform: {0}")]
-    FailedToDeterminePlatformTags(Platform),
+    FailedToDeterminePlatformTags(Subdir),
 
     #[error("failed to determine pypi arch tags for arch: {0}")]
     FailedToDetermineArchTags(Arch),
@@ -413,7 +413,7 @@ mod tests {
         let vpkgs = vec![VirtualPackage::Osx(Osx {
             version: "15.1.0".parse().unwrap(),
         })];
-        let platform = Platform::OsxArm64;
+        let platform = Subdir::OsxArm64;
         let res =
             get_pypi_platform_from_virtual_packages(&vpkgs, &PixiPlatform::from_subdir(platform));
         let platform = res.unwrap();
@@ -429,7 +429,7 @@ mod tests {
         let vpkgs = vec![VirtualPackage::Osx(Osx {
             version: "12.1.0".parse().unwrap(),
         })];
-        let platform = Platform::Osx64;
+        let platform = Subdir::Osx64;
         let res =
             get_pypi_platform_from_virtual_packages(&vpkgs, &PixiPlatform::from_subdir(platform));
         let platform = res.unwrap();
@@ -452,7 +452,7 @@ mod tests {
         })];
         let res = get_pypi_platform_from_virtual_packages(
             &vpkgs,
-            &PixiPlatform::from_subdir(Platform::OsxArm64),
+            &PixiPlatform::from_subdir(Subdir::OsxArm64),
         );
         assert_eq!(
             res.unwrap().os(),
@@ -468,7 +468,7 @@ mod tests {
         // A declared `__osx` (from `[system-requirements] macos`) wins.
         let platform = PixiPlatform::from_detection(
             None,
-            Platform::OsxArm64,
+            Subdir::OsxArm64,
             vec![GenericVirtualPackage {
                 name: "__osx".parse().unwrap(),
                 version: "12.0".parse().unwrap(),
@@ -481,7 +481,7 @@ mod tests {
         // A single-segment declaration gets a `.0` minor.
         let platform = PixiPlatform::from_detection(
             None,
-            Platform::OsxArm64,
+            Subdir::OsxArm64,
             vec![GenericVirtualPackage {
                 name: "__osx".parse().unwrap(),
                 version: "15".parse().unwrap(),
@@ -493,17 +493,17 @@ mod tests {
 
         // No declaration falls back to the subdir default.
         assert_eq!(
-            macos_deployment_target(&PixiPlatform::from_subdir(Platform::OsxArm64)),
+            macos_deployment_target(&PixiPlatform::from_subdir(Subdir::OsxArm64)),
             Some("13.0".to_string())
         );
 
         // Non-macOS targets get nothing.
         assert_eq!(
-            macos_deployment_target(&PixiPlatform::from_subdir(Platform::Linux64)),
+            macos_deployment_target(&PixiPlatform::from_subdir(Subdir::Linux64)),
             None
         );
         assert_eq!(
-            macos_deployment_target(&PixiPlatform::from_subdir(Platform::Win64)),
+            macos_deployment_target(&PixiPlatform::from_subdir(Subdir::Win64)),
             None
         );
     }
@@ -514,7 +514,7 @@ mod tests {
             family: "glibc".to_string(),
             version: "2.33".parse().unwrap(),
         })];
-        let platform = Platform::Linux64;
+        let platform = Subdir::Linux64;
         let res =
             get_pypi_platform_from_virtual_packages(&vpkgs, &PixiPlatform::from_subdir(platform));
         let platform = res.unwrap();
@@ -531,7 +531,7 @@ mod tests {
             family: "musl".to_string(),
             version: "1.2".parse().unwrap(),
         })];
-        let platform = Platform::Linux64;
+        let platform = Subdir::Linux64;
         let res =
             get_pypi_platform_from_virtual_packages(&vpkgs, &PixiPlatform::from_subdir(platform));
         let platform = res.unwrap();
@@ -541,7 +541,7 @@ mod tests {
         );
         assert_eq!(platform.arch(), UvArch::X86_64);
 
-        let platform = Platform::LinuxAarch64;
+        let platform = Subdir::LinuxAarch64;
         let res =
             get_pypi_platform_from_virtual_packages(&vpkgs, &PixiPlatform::from_subdir(platform));
         let platform = res.unwrap();
@@ -555,7 +555,7 @@ mod tests {
             family: "musl".to_string(),
             version: "1.2".parse().unwrap(),
         })];
-        let platform = Platform::LinuxPpc64le;
+        let platform = Subdir::LinuxPpc64le;
         let res =
             get_pypi_platform_from_virtual_packages(&vpkgs, &PixiPlatform::from_subdir(platform));
         let platform = res.unwrap();
@@ -569,14 +569,14 @@ mod tests {
     #[test]
     fn test_get_platform_from_vpkgs_windows() {
         let vpkgs = vec![];
-        let platform = Platform::Win64;
+        let platform = Subdir::Win64;
         let res =
             get_pypi_platform_from_virtual_packages(&vpkgs, &PixiPlatform::from_subdir(platform));
         let platform = res.unwrap();
         assert_eq!(platform.os(), &uv_platform_tags::Os::Windows);
         assert_eq!(platform.arch(), UvArch::X86_64);
 
-        let platform = Platform::WinArm64;
+        let platform = Subdir::WinArm64;
         let res =
             get_pypi_platform_from_virtual_packages(&vpkgs, &PixiPlatform::from_subdir(platform));
         let platform = res.unwrap();
@@ -588,7 +588,7 @@ mod tests {
     fn test_get_platform_from_vpkgs_error() {
         // No virtual packages gives an error
         let vpkgs = vec![];
-        let platform = Platform::Linux64;
+        let platform = Subdir::Linux64;
         let res =
             get_pypi_platform_from_virtual_packages(&vpkgs, &PixiPlatform::from_subdir(platform));
         assert!(res.is_err());
@@ -598,7 +598,7 @@ mod tests {
             family: "unknown".to_string(),
             version: "1.2".parse().unwrap(),
         })];
-        let platform = Platform::Linux64;
+        let platform = Subdir::Linux64;
         let res =
             get_pypi_platform_from_virtual_packages(&vpkgs, &PixiPlatform::from_subdir(platform));
         assert!(res.is_err());
@@ -615,7 +615,7 @@ mod tests {
             family: "glibc".to_string(),
             version: "2.33".parse().unwrap(),
         })];
-        let platform = Platform::Linux64;
+        let platform = Subdir::Linux64;
         let python_record = PackageRecord::new(
             "python".parse().unwrap(),
             VersionWithSource::from_str("3.13.3").unwrap(),
@@ -643,7 +643,7 @@ mod tests {
         let vpkgs = vec![VirtualPackage::Osx(Osx {
             version: "15.1.0".parse().unwrap(),
         })];
-        let platform = Platform::OsxArm64;
+        let platform = Subdir::OsxArm64;
         let python_record = PackageRecord::new(
             "python".parse().unwrap(),
             VersionWithSource::from_str("3.13.3").unwrap(),
@@ -669,7 +669,7 @@ mod tests {
     #[test]
     fn test_tags_from_windows_machine() {
         let vpkgs = vec![];
-        let platform = Platform::Win64;
+        let platform = Subdir::Win64;
         let python_record = PackageRecord::new(
             "python".parse().unwrap(),
             VersionWithSource::from_str("3.13.3").unwrap(),
@@ -692,7 +692,7 @@ mod tests {
 
     fn rich_platform(
         name: &str,
-        subdir: Platform,
+        subdir: Subdir,
         declared: Vec<GenericVirtualPackage>,
     ) -> PixiPlatform {
         PixiPlatform::new(
@@ -717,7 +717,7 @@ mod tests {
     fn linux_tag_reads_musl_from_platform() {
         let platform = rich_platform(
             "alpine",
-            Platform::LinuxAarch64,
+            Subdir::LinuxAarch64,
             vec![declared("__musl", "1.2.4")],
         );
         let res = get_linux_platform_tags(&platform).unwrap();
@@ -733,7 +733,7 @@ mod tests {
     fn linux_tag_reads_glibc_from_platform() {
         let platform = rich_platform(
             "modern-linux",
-            Platform::Linux64,
+            Subdir::Linux64,
             vec![declared("__glibc", "2.36")],
         );
         let res = get_linux_platform_tags(&platform).unwrap();
@@ -750,9 +750,9 @@ mod tests {
     /// default glibc version.
     #[test]
     fn linux_tag_falls_back_to_default_glibc() {
-        let platform = PixiPlatform::from_subdir(Platform::Linux64);
+        let platform = PixiPlatform::from_subdir(Subdir::Linux64);
         let res = get_linux_platform_tags(&platform).unwrap();
-        let (default_major, default_minor) = default_glibc_version(Platform::Linux64)
+        let (default_major, default_minor) = default_glibc_version(Subdir::Linux64)
             .as_major_minor()
             .expect("default glibc has major/minor");
         assert_eq!(
@@ -770,7 +770,7 @@ mod tests {
     fn macos_tag_reads_osx_from_platform() {
         let platform = rich_platform(
             "modern-mac",
-            Platform::OsxArm64,
+            Subdir::OsxArm64,
             vec![declared("__osx", "14.0")],
         );
         let res = get_macos_platform_tags(&platform).unwrap();
@@ -787,11 +787,7 @@ mod tests {
     /// minor defaulting to 0, instead of failing the pypi-tag build.
     #[test]
     fn macos_tag_accepts_major_only_version() {
-        let platform = rich_platform(
-            "macos-15",
-            Platform::OsxArm64,
-            vec![declared("__osx", "15")],
-        );
+        let platform = rich_platform("macos-15", Subdir::OsxArm64, vec![declared("__osx", "15")]);
         let res = get_macos_platform_tags(&platform).unwrap();
         assert_eq!(
             res.os(),

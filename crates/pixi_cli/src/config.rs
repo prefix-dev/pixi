@@ -1443,7 +1443,7 @@ disable-shared = true
             r#"
 [s3-options.bucket]
 endpoint-url = "https://my-s3-compatible-host.com"
-force-path-style = true
+addressing-style = "path"
 region = "us-east-1"
 "#,
         ));
@@ -1511,7 +1511,7 @@ extra-index-urls = ["https://extra.example.com/simple"]
 [s3-options."my.bucket"]
 endpoint-url = "https://s3.example.com"
 region = "eu-west-1"
-force-path-style = true
+addressing-style = "path"
 "#;
         insta::assert_snapshot!(partial_toml(config, "pypi-config.index-url"), @r#"
         [pypi-config]
