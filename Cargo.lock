@@ -6642,7 +6642,7 @@ dependencies = [
  "insta",
  "itertools 0.15.0",
  "miette 7.6.0",
- "nix 0.29.0",
+ "nix 0.31.3",
  "pixi_consts",
  "rattler",
  "rattler_conda_types",
@@ -7055,7 +7055,7 @@ name = "pixi_pty"
 version = "0.1.0"
 dependencies = [
  "libc",
- "nix 0.29.0",
+ "nix 0.31.3",
  "signal-hook 0.3.18",
 ]
 
@@ -7163,7 +7163,7 @@ dependencies = [
  "fs-err",
  "insta",
  "miette 7.6.0",
- "nix 0.29.0",
+ "nix 0.31.3",
  "pixi_test_utils",
  "tempfile",
  "thiserror 2.0.20",
