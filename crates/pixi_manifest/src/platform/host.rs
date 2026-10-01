@@ -15,8 +15,8 @@
 
 use rattler_conda_types::{GenericVirtualPackage, Subdir, Version};
 use rattler_virtual_packages::{
-    Archspec, Cuda, CudaArch, DetectVirtualPackageError, EnvOverride, LibC, Linux, Osx, Override,
-    VirtualPackageOverrides, VirtualPackages, Windows,
+    AmdGpu, AmdGpuArch, Archspec, Cuda, CudaArch, DetectVirtualPackageError, EnvOverride, LibC,
+    Linux, Osx, Override, VirtualPackageOverrides, VirtualPackages, Windows,
 };
 
 use super::{
@@ -136,6 +136,9 @@ pub fn apply_conda_overrides(packages: &mut Vec<GenericVirtualPackage>, subdir: 
     let linux = version_override::<Linux>(|linux| linux.version);
     let osx = version_override::<Osx>(|osx| osx.version);
     let cuda_arch = version_override::<CudaArch>(|arch| arch.version);
+    // `__amdgpu` is presence-only, so a set override always pins version 0.
+    let amdgpu = version_override::<AmdGpu>(|AmdGpu| Version::major(0));
+    let amdgpu_arch = version_override::<AmdGpuArch>(|arch| arch.version);
     // `Windows::parse_version` always fills the version in, so the fallback
     // only covers the unreachable `None` arm of rattler's optional field.
     let win = version_override::<Windows>(|win| win.version.unwrap_or_else(|| Version::major(0)));
@@ -144,6 +147,8 @@ pub fn apply_conda_overrides(packages: &mut Vec<GenericVirtualPackage>, subdir: 
         let outcome = match package.name.as_normalized() {
             "__cuda" => cuda.clone(),
             "__cuda_arch" => cuda_arch.clone(),
+            "__amdgpu" => amdgpu.clone(),
+            "__amdgpu_arch" => amdgpu_arch.clone(),
             "__linux" => linux.clone(),
             "__osx" => osx.clone(),
             "__win" => win.clone(),
@@ -182,14 +187,19 @@ pub fn apply_conda_overrides(packages: &mut Vec<GenericVirtualPackage>, subdir: 
 
     add_missing("__cuda", cuda.pinned());
     add_missing("__cuda_arch", cuda_arch.pinned());
+    add_missing("__amdgpu", amdgpu.pinned());
+    add_missing("__amdgpu_arch", amdgpu_arch.pinned());
     add_missing("__osx", osx.pinned());
     add_missing("__linux", linux.pinned());
     add_missing("__win", win.pinned());
 
-    // CEP couples the two CUDA slots: `__cuda_arch` is meaningless without a
-    // driver, and rattler drops it the same way in `VirtualPackages::detect`.
-    if !packages.iter().any(|p| p.name.as_normalized() == "__cuda") {
-        packages.retain(|p| p.name.as_normalized() != "__cuda_arch");
+    // CEP couples each GPU architecture to its device: `__cuda_arch` is
+    // meaningless without a driver and `__amdgpu_arch` without an AMD GPU, and
+    // rattler drops them the same way in `VirtualPackages::detect`.
+    for (device, arch) in [("__cuda", "__cuda_arch"), ("__amdgpu", "__amdgpu_arch")] {
+        if !packages.iter().any(|p| p.name.as_normalized() == device) {
+            packages.retain(|p| p.name.as_normalized() != arch);
+        }
     }
 
     apply_glibc_override(packages, subdir);

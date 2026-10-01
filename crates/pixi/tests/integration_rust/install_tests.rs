@@ -26,8 +26,6 @@ use pixi_core::{
 use pixi_manifest::{FeatureName, FeaturesExt};
 use pixi_record::PixiRecord;
 use rattler_conda_types::{RepoDataRecord, Subdir};
-// Only used by the linux-gated `cuda_arch_selects_matching_build` test below.
-#[cfg(target_os = "linux")]
 use rattler_lock::LockedPackage;
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use tempfile::{TempDir, tempdir};
@@ -2218,6 +2216,60 @@ cuda-arch = "*"
         assert!(
             build.starts_with(expected_build),
             "{platform_name} resolved cuda-arch build {build}, expected {expected_build}"
+        );
+    }
+}
+
+/// A declared `__amdgpu_arch` must reach the solver and select the build for
+/// exactly that AMDGPU ISA version. The local `virtual_packages` channel ships
+/// two noarch `amdgpu-arch` builds requiring `__amdgpu` plus an exact
+/// `__amdgpu_arch` (`gfx90a` ==9.0.10, `gfx1100` ==11.0.0). Both spellings are
+/// covered -- the raw `__amdgpu`/`__amdgpu_arch` keys and the friendly
+/// `amdgpu = { arch }` table.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn amdgpu_arch_selects_matching_build() {
+    let channel_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/data/channels/channels/virtual_packages");
+    let channel_path = fs_err::canonicalize(channel_path).expect("canonicalize channel path");
+    let channel_url = Url::from_directory_path(&channel_path).expect("valid file url");
+
+    let manifest = format!(
+        r#"
+[workspace]
+name = "amdgpu-arch-routing"
+channels = ["{channel_url}"]
+platforms = [
+    {{ name = "mi250", platform = "linux-64", __amdgpu = "0", __amdgpu_arch = "9.0.10" }},
+    {{ name = "rdna3", platform = "linux-64", amdgpu = {{ arch = "11.0.0" }} }},
+]
+
+[dependencies]
+amdgpu-arch = "*"
+"#
+    );
+
+    let pixi = PixiControl::from_manifest(&manifest).unwrap();
+    let lock_file = pixi.update_lock_file().await.unwrap();
+    let env = lock_file
+        .environment("default")
+        .expect("default environment should be locked");
+
+    for (platform_name, expected_build) in [("mi250", "gfx90a"), ("rdna3", "gfx1100")] {
+        let platform = lock_file
+            .platform(platform_name)
+            .unwrap_or_else(|| panic!("platform {platform_name} should be in the lock file"));
+        let build = env
+            .packages(platform)
+            .into_iter()
+            .flatten()
+            .filter_map(LockedPackage::as_conda)
+            .find(|package| package.name().as_normalized() == "amdgpu-arch")
+            .and_then(|package| package.record())
+            .map(|record| record.build.clone())
+            .unwrap_or_else(|| panic!("amdgpu-arch should be locked for {platform_name}"));
+        assert!(
+            build.starts_with(expected_build),
+            "{platform_name} resolved amdgpu-arch build {build}, expected {expected_build}"
         );
     }
 }

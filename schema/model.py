@@ -128,12 +128,26 @@ class CudaTable(BaseModel):
     )
 
 
+class AmdGpuTable(BaseModel):
+    """The grouped AMD GPU virtual-package table: `amdgpu = { arch }`.
+
+    Declares `__amdgpu` together with `__amdgpu_arch` (AMDGPU ISA version).
+    """
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid")
+
+    arch: NonEmptyStr = Field(
+        pattern=r"^\d+\.\d+\.\d+$",
+        description="The `__amdgpu_arch` AMDGPU ISA version as `major.minor.stepping`, e.g. `9.0.10` for `gfx90a`.",
+    )
+
+
 class WorkspacePlatform(BaseModel):
     """A workspace platform: a conda subdir plus declared virtual-package
     guarantees, identified by a workspace-scoped name."""
 
     # extra="allow" because workspace platforms accept top-level virtual-package
-    # shortcut keys (`cuda`, `archspec`, `glibc`, `linux`, `macos`/`osx`,
+    # shortcut keys (`cuda`, `amdgpu`, `archspec`, `glibc`, `linux`, `macos`/`osx`,
     # `windows`) and forward-compatible raw `__name` keys whose value is
     # `version` or `version=build_string`. Listing the fixed slots explicitly is
     # enough for documentation; the open shape is preserved here.
@@ -165,6 +179,10 @@ class WorkspacePlatform(BaseModel):
     cuda: NonEmptyStr | CudaTable | None = Field(
         None,
         description="Declare a `__cuda` virtual package at the given version (e.g. `12.0`), or a `{ driver, arch }` table to also declare `__cuda_arch` (GPU compute capability).",
+    )
+    amdgpu: Literal[True] | AmdGpuTable | None = Field(
+        None,
+        description="Declare the presence-only `__amdgpu` virtual package with `true`, or an `{ arch }` table to also declare `__amdgpu_arch` (AMDGPU ISA version).",
     )
     archspec: NonEmptyStr | None = Field(
         None,

@@ -5,10 +5,13 @@ use std::str::FromStr;
 
 use archspec::cpu::Microarchitecture;
 use rattler_conda_types::{GenericVirtualPackage, PackageName, Subdir, Version};
+use rattler_virtual_packages::amdgpu::AmdGpuArchInfo;
 use rattler_virtual_packages::defaults::{
     default_glibc_version, default_linux_version, default_mac_os_version, default_windows_version,
 };
-use rattler_virtual_packages::{Archspec, Cuda, CudaArch, LibC, Linux, Osx, VirtualPackage};
+use rattler_virtual_packages::{
+    AmdGpu, AmdGpuArch, Archspec, Cuda, CudaArch, LibC, Linux, Osx, VirtualPackage,
+};
 
 use crate::TargetSelector;
 
@@ -273,6 +276,8 @@ pub enum PixiPlatformError {
     IsSubdirPlatform,
     #[error("`__cuda_arch` requires `__cuda` to be declared as well")]
     CudaArchRequiresCuda,
+    #[error("`__amdgpu_arch` requires `__amdgpu` to be declared as well")]
+    AmdGpuArchRequiresAmdGpu,
     #[error(transparent)]
     Name(#[from] PixiPlatformNameError),
 }
@@ -295,12 +300,19 @@ fn synthesized_name(
     Ok(PixiPlatformName::try_from(name.as_str())?)
 }
 
-/// `true` when the declared set names `__cuda_arch` but not `__cuda`. Conda's
-/// CEP couples the two: a compute capability is meaningless without a CUDA
-/// driver, so this combination is rejected wherever a platform is built.
-fn declares_cuda_arch_without_cuda(declared: &[GenericVirtualPackage]) -> bool {
+/// Reject a declared set that names a GPU architecture without the GPU it
+/// belongs to. Conda's CEPs couple `__cuda_arch` to `__cuda` and
+/// `__amdgpu_arch` to `__amdgpu`: an architecture is meaningless without the
+/// device, so these combinations are rejected wherever a platform is built.
+fn check_gpu_arch_coupling(declared: &[GenericVirtualPackage]) -> Result<(), PixiPlatformError> {
     let has = |name: &str| declared.iter().any(|gvp| gvp.name.as_normalized() == name);
-    has("__cuda_arch") && !has("__cuda")
+    if has("__cuda_arch") && !has("__cuda") {
+        return Err(PixiPlatformError::CudaArchRequiresCuda);
+    }
+    if has("__amdgpu_arch") && !has("__amdgpu") {
+        return Err(PixiPlatformError::AmdGpuArchRequiresAmdGpu);
+    }
+    Ok(())
 }
 
 /// A platform declared by the workspace.
@@ -426,9 +438,7 @@ impl PixiPlatform {
         {
             return Err(PixiPlatformError::IsSubdirPlatform);
         }
-        if declares_cuda_arch_without_cuda(&declared_virtual_packages) {
-            return Err(PixiPlatformError::CudaArchRequiresCuda);
-        }
+        check_gpu_arch_coupling(&declared_virtual_packages)?;
         Ok(Self {
             name,
             subdir,
@@ -650,9 +660,7 @@ impl PixiPlatform {
         // default rather than left absent.
         merge_subdir_defaults(&mut self.declared_virtual_packages, self.subdir);
 
-        if declares_cuda_arch_without_cuda(&self.declared_virtual_packages) {
-            return Err(PixiPlatformError::CudaArchRequiresCuda);
-        }
+        check_gpu_arch_coupling(&self.declared_virtual_packages)?;
 
         if was_auto {
             // Recompute the synthesised name from the new subdir + VPs.
@@ -822,6 +830,10 @@ fn generic_to_virtual_package(gvp: &GenericVirtualPackage) -> Option<VirtualPack
         "__cuda_arch" => Some(VirtualPackage::CudaArch(CudaArch {
             version: gvp.version.clone(),
         })),
+        "__amdgpu" => Some(VirtualPackage::AmdGpu(AmdGpu)),
+        "__amdgpu_arch" => Some(VirtualPackage::AmdGpuArch(AmdGpuArch {
+            version: gvp.version.clone(),
+        })),
         "__archspec" => Some(VirtualPackage::Archspec(archspec_from_build_string(
             &gvp.build_string,
         ))),
@@ -967,20 +979,49 @@ pub fn validate_archspec_name(name: &str) -> Result<(), String> {
     }
 }
 
-/// Validate the build string of a raw `__name = "version[=build]"` entry.
-/// Every user-facing parser routes through this, so the CLI and the manifest
-/// accept exactly the same values. Only `__archspec` constrains its build
-/// string today.
-pub fn validate_virtual_package_build_string(
+/// Validate the value of a raw `__name = "version[=build]"` entry. Every
+/// user-facing parser routes through this, so the CLI and the manifest accept
+/// exactly the same values. `version` is the version as the user wrote it.
+///
+/// Only the virtual packages whose value has a fixed shape are constrained:
+/// `__archspec` must name a known microarchitecture, `__amdgpu` is
+/// presence-only (version `0`), and `__amdgpu_arch` is an AMDGPU ISA version
+/// (`major.minor.stepping`).
+pub fn validate_virtual_package(
     name: &PackageName,
+    version: &str,
     build_string: &str,
 ) -> Result<(), String> {
-    if name.as_normalized() == "__archspec"
-        && let Some(microarchitecture) = archspec_microarchitecture(build_string)
-    {
-        validate_archspec_name(microarchitecture)?;
+    match name.as_normalized() {
+        "__archspec" => {
+            if let Some(microarchitecture) = archspec_microarchitecture(build_string) {
+                validate_archspec_name(microarchitecture)?;
+            }
+        }
+        "__amdgpu" => validate_amdgpu_presence(version)?,
+        "__amdgpu_arch" => validate_amdgpu_arch(version)?,
+        _ => {}
     }
     Ok(())
+}
+
+/// `__amdgpu` only says that an AMD GPU is present; its version is always `0`.
+fn validate_amdgpu_presence(version: &str) -> Result<(), String> {
+    if version == "0" {
+        Ok(())
+    } else {
+        Err(format!(
+            "'{version}' is not a valid `__amdgpu` version: `__amdgpu` only declares that an AMD GPU is present, so its version is always '0'"
+        ))
+    }
+}
+
+/// Validate an AMDGPU ISA version (`major.minor.stepping`, e.g. `9.0.10` for
+/// `gfx90a`) as declared for `__amdgpu_arch`.
+pub fn validate_amdgpu_arch(version: &str) -> Result<(), String> {
+    AmdGpuArchInfo::from_str(version)
+        .map(drop)
+        .map_err(|error| error.to_string())
 }
 
 /// The best did-you-mean candidate for an unknown microarchitecture name: the
@@ -1230,25 +1271,29 @@ mod tests {
     }
 
     #[test]
-    fn validate_virtual_package_build_string_only_constrains_archspec() {
+    fn validate_virtual_package_constrains_fixed_shape_values() {
         let archspec = PackageName::try_from("__archspec").unwrap();
         let other = PackageName::try_from("__cuda").unwrap();
         // An unknown-microarchitecture build string is accepted in both of
-        // its encodings, and only `__archspec` is checked at all.
-        assert_eq!(
-            validate_virtual_package_build_string(&archspec, "skylake"),
-            Ok(())
-        );
-        assert_eq!(validate_virtual_package_build_string(&archspec, ""), Ok(()));
-        assert_eq!(
-            validate_virtual_package_build_string(&archspec, "0"),
-            Ok(())
-        );
-        assert!(validate_virtual_package_build_string(&archspec, "nonsense").is_err());
-        assert_eq!(
-            validate_virtual_package_build_string(&other, "nonsense"),
-            Ok(())
-        );
+        // its encodings, and only `__archspec` checks its build string at all.
+        assert_eq!(validate_virtual_package(&archspec, "0", "skylake"), Ok(()));
+        assert_eq!(validate_virtual_package(&archspec, "0", ""), Ok(()));
+        assert_eq!(validate_virtual_package(&archspec, "0", "0"), Ok(()));
+        assert!(validate_virtual_package(&archspec, "0", "nonsense").is_err());
+        assert_eq!(validate_virtual_package(&other, "12", "nonsense"), Ok(()));
+
+        // `__amdgpu` is presence-only and `__amdgpu_arch` is an ISA version.
+        let amdgpu = PackageName::try_from("__amdgpu").unwrap();
+        let amdgpu_arch = PackageName::try_from("__amdgpu_arch").unwrap();
+        assert_eq!(validate_virtual_package(&amdgpu, "0", ""), Ok(()));
+        assert!(validate_virtual_package(&amdgpu, "1", "").is_err());
+        assert_eq!(validate_virtual_package(&amdgpu_arch, "9.0.10", ""), Ok(()));
+        for invalid in ["9.0", "gfx90a", "9.0.10.0"] {
+            assert!(
+                validate_virtual_package(&amdgpu_arch, invalid, "").is_err(),
+                "{invalid}"
+            );
+        }
     }
 
     #[test]
