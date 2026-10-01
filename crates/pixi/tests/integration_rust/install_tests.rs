@@ -2225,7 +2225,7 @@ cuda-arch = "*"
 /// two noarch `amdgpu-arch` builds requiring `__amdgpu` plus an exact
 /// `__amdgpu_arch` (`gfx90a` ==9.0.10, `gfx1100` ==11.0.0). Both spellings are
 /// covered -- the raw `__amdgpu`/`__amdgpu_arch` keys and the friendly
-/// `amdgpu = { arch }` table.
+/// `amdgpu = "<target>"` key.
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn amdgpu_arch_selects_matching_build() {
     let channel_path = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -2240,7 +2240,7 @@ name = "amdgpu-arch-routing"
 channels = ["{channel_url}"]
 platforms = [
     {{ name = "mi250", platform = "linux-64", __amdgpu = "0", __amdgpu_arch = "9.0.10" }},
-    {{ name = "rdna3", platform = "linux-64", amdgpu = {{ arch = "11.0.0" }} }},
+    {{ name = "rdna3", platform = "linux-64", amdgpu = "gfx1100" }},
 ]
 
 [dependencies]

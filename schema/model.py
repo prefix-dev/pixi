@@ -128,18 +128,8 @@ class CudaTable(BaseModel):
     )
 
 
-class AmdGpuTable(BaseModel):
-    """The grouped AMD GPU virtual-package table: `amdgpu = { arch }`.
-
-    Declares `__amdgpu` together with `__amdgpu_arch` (AMDGPU ISA version).
-    """
-
-    model_config: ClassVar[ConfigDict] = ConfigDict(extra="forbid")
-
-    arch: NonEmptyStr = Field(
-        pattern=r"^\d+\.\d+\.\d+$",
-        description="The `__amdgpu_arch` AMDGPU ISA version as `major.minor.stepping`, e.g. `9.0.10` for `gfx90a`.",
-    )
+# AMDGPU target names: decimal major, then one hex digit each for minor and stepping.
+AmdGpuTargetName = Annotated[str, StringConstraints(pattern=r"^gfx[0-9]+[0-9a-fA-F]{2}$")]
 
 
 class WorkspacePlatform(BaseModel):
@@ -180,9 +170,9 @@ class WorkspacePlatform(BaseModel):
         None,
         description="Declare a `__cuda` virtual package at the given version (e.g. `12.0`), or a `{ driver, arch }` table to also declare `__cuda_arch` (GPU compute capability).",
     )
-    amdgpu: Literal[True] | AmdGpuTable | None = Field(
+    amdgpu: Literal[True] | AmdGpuTargetName | None = Field(
         None,
-        description="Declare the presence-only `__amdgpu` virtual package with `true`, or an `{ arch }` table to also declare `__amdgpu_arch` (AMDGPU ISA version).",
+        description="Declare the presence-only `__amdgpu` virtual package with `true`, or an AMDGPU target name (e.g. `gfx90a`) to also declare its `__amdgpu_arch`.",
     )
     archspec: NonEmptyStr | None = Field(
         None,

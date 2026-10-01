@@ -117,19 +117,19 @@ Each inline-table entry has:
   `driver`; declaring `arch` (or a raw `__cuda_arch`) alone is rejected.
 
 - `amdgpu = true` declares `__amdgpu`, which only states that an AMD GPU is
-  present. An `{ arch }` table additionally declares the GPU architecture
-  (`__amdgpu_arch`) as its AMDGPU ISA version `major.minor.stepping`, e.g.
-  `9.0.10` for `gfx90a` or `11.0.0` for `gfx1100`:
+  present. An AMDGPU target name (`gfx90a`, `gfx1100`, ...) additionally
+  declares the GPU architecture as `__amdgpu_arch`, which conda stores as an
+  ISA version (`gfx90a` is `9.0.10`):
 
   ```toml title="pixi.toml"
   platforms = [
     { name = "rocm", platform = "linux-64", amdgpu = true },
-    { name = "mi250", platform = "linux-64", amdgpu = { arch = "9.0.10" } },
+    { name = "mi250", platform = "linux-64", amdgpu = "gfx90a" },
   ]
   ```
 
-  The table implies `__amdgpu`, so there is no separate field for it. A raw
-  `__amdgpu_arch` without `__amdgpu` is rejected.
+  A raw `__amdgpu_arch` takes the ISA version and is rejected without
+  `__amdgpu`.
 
 - For virtual packages without a friendly key, a raw `__name = "version"` entry is also accepted as an escape hatch. Only the virtual packages pixi knows how to override (`__win`, `__osx`, `__linux`, `__cuda`, `__amdgpu`, `__archspec`, and the libc family `__glibc`/`__musl`/`__eglibc`) take effect at detection; any other raw `__name` is stored but ignored when checking host compatibility.
 
@@ -189,11 +189,11 @@ Adding a platform whose definition already exists under a *different* name is re
 
 [`pixi workspace platform`](../reference/cli/pixi/workspace/platform/index.md) is the CLI surface for these entries:
 
-- `pixi workspace platform add <PLATFORM> [--cuda 12.0] [--cuda-arch 8.6] [--amdgpu] [--amdgpu-arch 9.0.10] [--glibc 2.28] ...`
+- `pixi workspace platform add <PLATFORM> [--cuda 12.0] [--cuda-arch 8.6] [--amdgpu] [--amdgpu-arch gfx90a] [--glibc 2.28] ...`
   appends bare subdirs or rich platforms (or the current machine via
   `--auto-detect`, see above). `--cuda-arch` requires `--cuda` (or
   an existing `__cuda`) and serializes as `cuda = { driver, arch }`.
-  `--amdgpu-arch` also declares `__amdgpu` and serializes as `amdgpu = { arch }`.
+  `--amdgpu-arch` also declares `__amdgpu` and serializes as `amdgpu = "gfx90a"`.
 - `pixi workspace platform edit <NAME> [--cuda 12.1] [--remove-virtual-package __glibc]` mutates a custom platform's declared virtual packages.
 - `pixi workspace platform move <NAME> --to-top | --to-bottom | --before <NAME> | --after <NAME>` reorders an entry; since order is selection priority, this is how you promote or demote a platform.
 - `pixi workspace platform list` inspects what is declared.
