@@ -574,7 +574,7 @@ mod tests {
 
     use pixi_manifest::PixiPlatformName;
     use rattler_conda_types::{
-        PackageName, PackageRecord, Platform, Version, package::DistArchiveIdentifier,
+        PackageName, PackageRecord, Subdir, Version, package::DistArchiveIdentifier,
     };
     use rattler_lock::{
         CondaBinaryData, CondaPackageData, LockFile, PlatformData, PlatformName, UrlOrPath,
@@ -602,7 +602,7 @@ mod tests {
             // the mismatch that used to panic the diff.
             .with_platforms(vec![PlatformData {
                 name: PlatformName::try_from("linux").unwrap(),
-                subdir: Platform::Linux64,
+                subdir: Subdir::Linux64,
                 virtual_packages: vec![],
             }])
             .unwrap();

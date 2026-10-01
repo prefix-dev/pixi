@@ -13,7 +13,7 @@ use pixi_build_types::{
     procedures::conda_build_v1::{CondaBuildV1Output, CondaBuildV1Params},
 };
 use rattler_build_core::console_utils::LoggingOutputHandler;
-use rattler_conda_types::{ChannelUrl, PackageName, Platform};
+use rattler_conda_types::{ChannelUrl, PackageName, Subdir};
 use serde_json::json;
 use tempfile::TempDir;
 use url::Url;
@@ -65,7 +65,7 @@ mod imp {
             model: &pixi_build_types::ProjectModel,
             _config: &Self::Config,
             _manifest_path: PathBuf,
-            _host_platform: rattler_conda_types::Platform,
+            _host_platform: rattler_conda_types::Subdir,
             _python_params: Option<PythonParams>,
             _variants: &HashSet<pixi_build_backend::variants::NormalizedKey>,
             _channels: Vec<ChannelUrl>,
@@ -121,7 +121,7 @@ async fn test_conda_build_v1() {
             name: "minimal-package".parse().unwrap(),
             version: None,
             build: None,
-            subdir: Platform::current(),
+            subdir: Subdir::current().unwrap_or(Subdir::NoArch),
             variant: Default::default(),
         },
         work_directory: build_dir.clone(),
@@ -175,7 +175,7 @@ async fn test_conda_outputs_exposes_downprioritize_track_features() {
     let result = intermediate_conda_outputs::<TestGenerateRecipe>(
         Some(model),
         None,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         None,
         None,
     )
@@ -196,7 +196,7 @@ async fn test_conda_outputs_build_string_prefix() {
     let result_no_prefix = intermediate_conda_outputs::<TestGenerateRecipe>(
         Some(model_no_prefix),
         None,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         None,
         None,
     )
@@ -223,7 +223,7 @@ async fn test_conda_outputs_build_string_prefix() {
     let result_with_prefix = intermediate_conda_outputs::<TestGenerateRecipe>(
         Some(model_with_prefix),
         None,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         None,
         None,
     )
@@ -311,7 +311,7 @@ async fn test_conda_outputs_extra_dependencies() {
     let result = intermediate_conda_outputs::<TestGenerateRecipe>(
         Some(model),
         None,
-        Platform::Win64,
+        Subdir::Win64,
         None,
         None,
     )
@@ -352,7 +352,7 @@ async fn test_conda_outputs_build_number() {
     let result_default = intermediate_conda_outputs::<TestGenerateRecipe>(
         Some(model_default),
         None,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         None,
         None,
     )
@@ -370,7 +370,7 @@ async fn test_conda_outputs_build_number() {
     let result_with_bn = intermediate_conda_outputs::<TestGenerateRecipe>(
         Some(model_with_bn),
         None,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         None,
         None,
     )

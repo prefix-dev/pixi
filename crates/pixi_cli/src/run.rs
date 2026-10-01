@@ -36,7 +36,7 @@ use pixi_task::{
     AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
     PreferExecutable, SearchEnvironments, TaskAndEnvironment, TaskGraph, get_task_env,
 };
-use rattler_conda_types::Platform;
+use rattler_conda_types::Subdir;
 use thiserror::Error;
 use tokio_util::sync::CancellationToken;
 use tracing::Level;
@@ -723,8 +723,8 @@ fn command_not_found<'p>(workspace: &'p Workspace, explicit_environment: Option<
     }) {
         pixi_progress::println!(
             "\nHelp: This platform ({}) is not supported. Please run the following command to add this platform to the workspace:\n\n\tpixi workspace platform add {}",
-            Platform::current(),
-            Platform::current()
+            Subdir::current().unwrap_or(Subdir::NoArch),
+            Subdir::current().unwrap_or(Subdir::NoArch)
         );
     }
 }
