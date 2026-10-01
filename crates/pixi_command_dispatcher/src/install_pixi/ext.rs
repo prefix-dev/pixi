@@ -229,8 +229,8 @@ async fn install_inner(
         binary_records.push(record);
     }
 
-    // Fingerprint of what will land in the prefix; sha256s on each
-    // record are enough, no file I/O.
+    // Fingerprint of what will land in the prefix, using each record's
+    // checksum or package identity without file I/O.
     let installed_fingerprint =
         pixi_utils::EnvironmentFingerprint::compute(binary_records.iter().map(|arc| arc.as_ref()));
 
