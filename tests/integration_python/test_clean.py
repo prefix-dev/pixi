@@ -1,5 +1,5 @@
 from pathlib import Path
-from common import verify_cli_command
+from .common import verify_cli_command
 
 
 def test_pixi_clean_workspace(pixi: Path, tmp_pixi_workspace: Path) -> None:
