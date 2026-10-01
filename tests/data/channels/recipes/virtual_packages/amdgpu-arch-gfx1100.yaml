@@ -1,0 +1,11 @@
+package:
+  name: amdgpu-arch
+  version: 0.1.0
+build:
+  number: 0
+  string: gfx1100_0
+  noarch: generic
+requirements:
+  run:
+    - __amdgpu
+    - __amdgpu_arch ==11.0.0
