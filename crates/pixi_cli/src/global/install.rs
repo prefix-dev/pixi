@@ -5,7 +5,7 @@ use indexmap::IndexMap;
 use clap::Parser;
 use itertools::Itertools;
 use miette::Report;
-use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, Platform};
+use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, Subdir};
 
 use crate::global::{
     EnvironmentAction, eventual_environment_channels, global_specs::GlobalSpecs,
@@ -48,7 +48,7 @@ pub struct Args {
     /// This is useful when you want to install packages for a different platform than the one you are currently on.
     /// This is very often used when you want to install `osx-64` packages on `osx-arm64`.
     #[clap(short, long)]
-    platform: Option<Platform>,
+    platform: Option<Subdir>,
 
     /// Ensures that all packages will be installed in the same environment
     #[clap(short, long)]

@@ -420,7 +420,7 @@ mod tests {
     use pixi_pypi_spec::PypiPackageName;
     use pixi_spec::PixiSpec;
     use pixi_test_utils::format_diagnostic;
-    use rattler_conda_types::{PackageName, Platform};
+    use rattler_conda_types::{PackageName, Subdir};
 
     use super::super::Entrypoint;
     use super::*;
@@ -688,13 +688,13 @@ mod tests {
         );
         assert!(feature.targets.default().constraints.is_some());
         let vc = PackageName::new_unchecked("vc");
-        let has_vc = |platform: Platform| {
+        let has_vc = |platform: Subdir| {
             feature
                 .run_dependencies(Some(&PixiPlatform::from(platform)))
                 .is_some_and(|dependencies| dependencies.contains_key(&vc))
         };
-        assert!(has_vc(Platform::Win64));
-        assert!(!has_vc(Platform::Linux64));
+        assert!(has_vc(Subdir::Win64));
+        assert!(!has_vc(Subdir::Linux64));
     }
 
     #[test]

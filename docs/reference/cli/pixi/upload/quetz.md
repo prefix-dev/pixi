@@ -25,5 +25,7 @@ pixi upload quetz [OPTIONS] --url <URL> --channel <CHANNELS>
 - <a id="arg---api-key" href="#arg---api-key">`--api-key (-a) <API_KEY>`</a>
 :  The Quetz API key, if none is provided, the token is read from the keychain / auth-file
 <br>**env**: `QUETZ_API_KEY`
+- <a id="arg---force" href="#arg---force">`--force`</a>
+:  Force overwrite existing packages
 
 --8<-- "docs/reference/cli/pixi/upload/quetz_extender:example"

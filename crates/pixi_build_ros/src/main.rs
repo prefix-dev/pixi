@@ -20,7 +20,7 @@ use pixi_build_backend::tools::BackendIdentifier;
 use rattler_build_jinja::{JinjaTemplate, Variable};
 use rattler_build_recipe::stage0::{Item, Script, SerializableMatchSpec, Value};
 use rattler_build_types::NormalizedKey;
-use rattler_conda_types::{ChannelUrl, Platform};
+use rattler_conda_types::{ChannelUrl, Subdir};
 
 use crate::build_script::render_build_script;
 use crate::config::{PackageMappingSource, extract_distro_from_channels_list};
@@ -51,7 +51,7 @@ impl GenerateRecipe for RosGenerator {
         model: &pixi_build_types::ProjectModel,
         config: &Self::Config,
         manifest_path: PathBuf,
-        host_platform: Platform,
+        host_platform: Subdir,
         _python_params: Option<PythonParams>,
         _variants: &HashSet<NormalizedKey>,
         channels: Vec<ChannelUrl>,
@@ -368,7 +368,7 @@ impl GenerateRecipe for RosGenerator {
 
     fn default_variants(
         &self,
-        host_platform: Platform,
+        host_platform: Subdir,
     ) -> miette::Result<BTreeMap<NormalizedKey, Vec<Variable>>> {
         Ok(default_compiler_variants(host_platform))
     }
@@ -395,7 +395,7 @@ mod tests {
     use std::path::PathBuf;
 
     use pixi_build_types::ProjectModel;
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::Subdir;
 
     use super::*;
 
@@ -435,13 +435,9 @@ mod tests {
         let distro = jazzy_distro();
         let package_map = default_package_map();
 
-        let requirements = package_xml_to_conda_requirements(
-            &package_xml,
-            &distro,
-            Platform::Linux64,
-            &package_map,
-        )
-        .unwrap();
+        let requirements =
+            package_xml_to_conda_requirements(&package_xml, &distro, Subdir::Linux64, &package_map)
+                .unwrap();
 
         insta::assert_yaml_snapshot!(requirements.build, @r###"
         - ros-jazzy-ament-cmake
@@ -492,13 +488,9 @@ mod tests {
         let distro = jazzy_distro();
         let package_map = default_package_map();
 
-        let requirements = package_xml_to_conda_requirements(
-            &package_xml,
-            &distro,
-            Platform::Linux64,
-            &package_map,
-        )
-        .unwrap();
+        let requirements =
+            package_xml_to_conda_requirements(&package_xml, &distro, Subdir::Linux64, &package_map)
+                .unwrap();
 
         insta::assert_yaml_snapshot!(requirements.build, @r###"
         - ros-jazzy-ament-cmake
@@ -534,7 +526,7 @@ mod tests {
                 &model,
                 &config,
                 temp_path.to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -664,7 +656,7 @@ mod tests {
                 model,
                 &config,
                 temp_path.to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -755,7 +747,7 @@ mod tests {
                 &model,
                 &config,
                 temp_path.to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -976,7 +968,7 @@ mod tests {
                 &model,
                 &config,
                 dest.clone(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -1013,7 +1005,7 @@ mod tests {
                 &model,
                 &config,
                 temp_path.to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![ChannelUrl::from(
@@ -1061,7 +1053,7 @@ mod tests {
                 &model,
                 &config,
                 temp_path.to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![ChannelUrl::from(
@@ -1106,7 +1098,7 @@ mod tests {
                 &model,
                 &config,
                 temp_path.to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![ChannelUrl::from(
@@ -1147,7 +1139,7 @@ mod tests {
                 &model,
                 &config,
                 temp_path.to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -1337,7 +1329,7 @@ mod tests {
                 &model,
                 &config,
                 pkg_a_manifest.clone(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -1384,7 +1376,7 @@ mod tests {
                 &model,
                 &config,
                 workspace_root.join("pkg_a"),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -1433,7 +1425,7 @@ mod tests {
                 &model,
                 &config,
                 workspace_root.join("pkg_a"),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -1479,7 +1471,7 @@ mod tests {
                 &model,
                 &config,
                 workspace_root.join("src").join("pkg_a"),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -1542,7 +1534,7 @@ mod tests {
                 &model,
                 &config,
                 workspace_root.join("pkg_a"),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -1579,7 +1571,7 @@ mod tests {
                 &model,
                 &config,
                 workspace_root.join("pkg_a"),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],

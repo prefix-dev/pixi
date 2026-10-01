@@ -85,7 +85,7 @@ impl Key for ExcludeNewerOf {
 #[cfg(test)]
 mod tests {
     use pixi_compute_engine::ComputeEngine;
-    use rattler_conda_types::{ChannelUrl, PackageName, Platform};
+    use rattler_conda_types::{ChannelUrl, PackageName, Subdir};
     use rattler_solve::ChannelPriority;
 
     use super::*;
@@ -102,9 +102,9 @@ mod tests {
         EnvironmentSpec {
             channels,
             build_environment: BuildEnvironment {
-                host_platform: Platform::Linux64,
+                host_platform: Subdir::Linux64,
                 host_virtual_packages: Vec::new(),
-                build_platform: Platform::Linux64,
+                build_platform: Subdir::Linux64,
                 build_virtual_packages: Vec::new(),
             },
             variants: VariantConfig::default(),
@@ -128,7 +128,7 @@ mod tests {
         let (engine, registry) = engine_with_registry(Arc::new(WorkspaceEnvRegistry::new()));
         let ws = registry.allocate(
             "default".to_string(),
-            Platform::Linux64.to_string(),
+            Subdir::Linux64.to_string(),
             spec_with_channels(vec![channel("https://example.com/conda-forge/")]),
         );
 
@@ -148,12 +148,12 @@ mod tests {
         let (engine, registry) = engine_with_registry(Arc::new(WorkspaceEnvRegistry::new()));
         let ws_a = registry.allocate(
             "a".to_string(),
-            Platform::Linux64.to_string(),
+            Subdir::Linux64.to_string(),
             spec_with_channels(vec![channel("https://example.com/a/")]),
         );
         let ws_b = registry.allocate(
             "b".to_string(),
-            Platform::Linux64.to_string(),
+            Subdir::Linux64.to_string(),
             spec_with_channels(vec![channel("https://example.com/b/")]),
         );
 
@@ -175,7 +175,7 @@ mod tests {
         let (engine, registry) = engine_with_registry(Arc::new(WorkspaceEnvRegistry::new()));
         let parent = registry.allocate(
             "default".to_string(),
-            Platform::Linux64.to_string(),
+            Subdir::Linux64.to_string(),
             spec_with_channels(vec![channel("https://example.com/parent/")]),
         );
 
@@ -193,16 +193,16 @@ mod tests {
     async fn build_env_of_derived_build_applies_build_from_build_transform() {
         let (engine, registry) = engine_with_registry(Arc::new(WorkspaceEnvRegistry::new()));
         let parent_build_env = BuildEnvironment {
-            host_platform: Platform::Linux64,
+            host_platform: Subdir::Linux64,
             host_virtual_packages: Vec::new(),
-            build_platform: Platform::OsxArm64,
+            build_platform: Subdir::OsxArm64,
             build_virtual_packages: Vec::new(),
         };
         let mut spec = spec_with_channels(vec![]);
         spec.build_environment = parent_build_env.clone();
         let parent = EnvironmentRef::Workspace(registry.allocate(
             "default".to_string(),
-            Platform::Linux64.to_string(),
+            Subdir::Linux64.to_string(),
             spec,
         ));
 

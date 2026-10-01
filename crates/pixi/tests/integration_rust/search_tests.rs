@@ -1,7 +1,7 @@
 use chrono::{TimeZone, Utc};
 use insta::assert_snapshot;
 use pixi_cli::search;
-use rattler_conda_types::Platform;
+use rattler_conda_types::Subdir;
 use serde_json::Value;
 use tempfile::TempDir;
 use url::Url;
@@ -45,14 +45,14 @@ async fn search_return_latest_across_everything() {
 
     package_database.add_package(
         Package::build("foo", "3")
-            .with_subdir(Platform::current())
+            .with_subdir(Subdir::current().unwrap_or(Subdir::NoArch))
             .finish(),
     );
 
     let mut latest_package_database = MockRepoData::default();
     latest_package_database.add_package(
         Package::build("foo", "4")
-            .with_subdir(Platform::current())
+            .with_subdir(Subdir::current().unwrap_or(Subdir::NoArch))
             .finish(),
     );
 
@@ -74,7 +74,7 @@ async fn search_return_latest_across_everything() {
     let channel_latest = Url::from_file_path(latest_channel_dir).unwrap();
     let channel_not_latest = Url::from_file_path(not_latest_channel_dir).unwrap();
 
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
     let pixi = PixiControl::from_manifest(&format!(
         r#"
     [project]
@@ -103,23 +103,23 @@ async fn search_falls_back_to_fuzzy_match() {
     // contains it in the middle (mirroring `ros-jazzy-turtlesim`).
     package_database.add_package(
         Package::build("turtlefsi", "2.4.0")
-            .with_subdir(Platform::NoArch)
+            .with_subdir(Subdir::NoArch)
             .finish(),
     );
     package_database.add_package(
         Package::build("turtle-language-server", "3.5.0")
-            .with_subdir(Platform::NoArch)
+            .with_subdir(Subdir::NoArch)
             .finish(),
     );
     package_database.add_package(
         Package::build("ros-jazzy-turtlesim", "1.0.0")
-            .with_subdir(Platform::NoArch)
+            .with_subdir(Subdir::NoArch)
             .finish(),
     );
     // An unrelated package that should not show up in the fallback.
     package_database.add_package(
         Package::build("python", "3.12.0")
-            .with_subdir(Platform::NoArch)
+            .with_subdir(Subdir::NoArch)
             .finish(),
     );
 
@@ -127,7 +127,7 @@ async fn search_falls_back_to_fuzzy_match() {
     let channel_dir = temp_dir.path().join("channel");
     package_database.write_repodata(&channel_dir).await.unwrap();
     let channel = Url::from_file_path(channel_dir).unwrap();
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
     let pixi = PixiControl::from_manifest(&format!(
         r#"
     [project]
@@ -209,7 +209,7 @@ async fn search_using_match_spec() {
     let channel_dir = temp_dir.path().join("channel");
     package_database.write_repodata(&channel_dir).await.unwrap();
     let channel = Url::from_file_path(channel_dir).unwrap();
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
     let pixi = PixiControl::from_manifest(&format!(
         r#"
     [project]
@@ -258,28 +258,28 @@ async fn test_search_multiple_versions() {
         Package::build("foo", "0.1.0")
             .with_build("h60d57d3_0")
             .with_build_number(0)
-            .with_subdir(Platform::NoArch)
+            .with_subdir(Subdir::NoArch)
             .finish(),
     );
     package_database.add_package(
         Package::build("foo", "0.1.0")
             .with_build("h60d57d3_1")
             .with_build_number(1)
-            .with_subdir(Platform::NoArch)
+            .with_subdir(Subdir::NoArch)
             .finish(),
     );
     package_database.add_package(
         Package::build("foo", "0.2.0")
             .with_build("h60d57d3_0")
             .with_build_number(0)
-            .with_subdir(Platform::NoArch)
+            .with_subdir(Subdir::NoArch)
             .finish(),
     );
     let mut latest_package = Package::build("foo", "0.2.0")
         .with_build("h60d57d3_1")
         .with_build_number(1)
         .with_timestamp(timestamp)
-        .with_subdir(Platform::NoArch)
+        .with_subdir(Subdir::NoArch)
         .finish();
     latest_package.package_record.size = Some(30 * 1024);
     package_database.add_package(latest_package);
@@ -287,7 +287,7 @@ async fn test_search_multiple_versions() {
     let channel_dir = temp_dir.path().join("channel");
     package_database.write_repodata(&channel_dir).await.unwrap();
     let channel = Url::from_file_path(channel_dir).unwrap();
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
     let pixi = PixiControl::from_manifest(&format!(
         r#"
     [project]
@@ -327,25 +327,25 @@ async fn test_search_multiple_packages_compact_view() {
     package_database.add_package(
         Package::build("alpha", "1.0.0")
             .with_build("h1_0")
-            .with_subdir(Platform::NoArch)
+            .with_subdir(Subdir::NoArch)
             .finish(),
     );
     package_database.add_package(
         Package::build("alpha", "2.0.0")
             .with_build("h1_0")
-            .with_subdir(Platform::NoArch)
+            .with_subdir(Subdir::NoArch)
             .finish(),
     );
     package_database.add_package(
         Package::build("alpha", "3.0.0")
             .with_build("h1_0")
-            .with_subdir(Platform::NoArch)
+            .with_subdir(Subdir::NoArch)
             .finish(),
     );
     package_database.add_package(
         Package::build("beta", "0.5.0")
             .with_build("h2_0")
-            .with_subdir(Platform::NoArch)
+            .with_subdir(Subdir::NoArch)
             .finish(),
     );
 
@@ -353,7 +353,7 @@ async fn test_search_multiple_packages_compact_view() {
     let channel_dir = temp_dir.path().join("channel");
     package_database.write_repodata(&channel_dir).await.unwrap();
     let channel = Url::from_file_path(channel_dir).unwrap();
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
     let pixi = PixiControl::from_manifest(&format!(
         r#"
     [project]
@@ -396,22 +396,22 @@ async fn test_search_limit_zero_names_only() {
 
     package_database.add_package(
         Package::build("cargo-edit", "1.0.0")
-            .with_subdir(Platform::NoArch)
+            .with_subdir(Subdir::NoArch)
             .finish(),
     );
     package_database.add_package(
         Package::build("cargo-edit", "2.0.0")
-            .with_subdir(Platform::NoArch)
+            .with_subdir(Subdir::NoArch)
             .finish(),
     );
     package_database.add_package(
         Package::build("cargo-audit", "0.5.0")
-            .with_subdir(Platform::NoArch)
+            .with_subdir(Subdir::NoArch)
             .finish(),
     );
     package_database.add_package(
         Package::build("cargo-watch", "3.0.0")
-            .with_subdir(Platform::NoArch)
+            .with_subdir(Subdir::NoArch)
             .finish(),
     );
 
@@ -419,7 +419,7 @@ async fn test_search_limit_zero_names_only() {
     let channel_dir = temp_dir.path().join("channel");
     package_database.write_repodata(&channel_dir).await.unwrap();
     let channel = Url::from_file_path(channel_dir).unwrap();
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
     let pixi = PixiControl::from_manifest(&format!(
         r#"
     [project]
@@ -458,14 +458,14 @@ async fn test_search_json_output() {
     package_database.add_package(
         Package::build("foo", "1.0.0")
             .with_build("h1_0")
-            .with_subdir(Platform::NoArch)
+            .with_subdir(Subdir::NoArch)
             .with_dependency("bar >=1.0")
             .finish(),
     );
     package_database.add_package(
         Package::build("foo", "2.0.0")
             .with_build("h2_0")
-            .with_subdir(Platform::current())
+            .with_subdir(Subdir::current().unwrap_or(Subdir::NoArch))
             .finish(),
     );
 
@@ -473,7 +473,7 @@ async fn test_search_json_output() {
     let channel_dir = temp_dir.path().join("channel");
     package_database.write_repodata(&channel_dir).await.unwrap();
     let channel = Url::from_file_path(channel_dir).unwrap();
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
     let pixi = PixiControl::from_manifest(&format!(
         r#"
     [project]

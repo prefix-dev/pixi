@@ -733,7 +733,7 @@ mod test {
     use assert_matches::assert_matches;
     use pixi_core::Workspace;
     use pixi_manifest::EnvironmentName;
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::Subdir;
 
     use crate::{
         task_environment::SearchEnvironments,
@@ -765,7 +765,7 @@ mod test {
             }
         }
 
-        fn platform(mut self, platform: Platform) -> Self {
+        fn platform(mut self, platform: Subdir) -> Self {
             self.platform = Some(pixi_manifest::PixiPlatform::from_subdir(platform));
             self
         }
@@ -906,7 +906,7 @@ mod test {
         mac-only = "echo mac"
     "#;
         let err = TaskGraphTest::new(workspace_str, &["mac-only"])
-            .platform(Platform::Linux64)
+            .platform(Subdir::Linux64)
             .expect_error();
         assert_matches!(err, TaskGraphError::UnrunnableTask(err) => {
             assert_eq!(err.task_name.as_str(), "mac-only");
@@ -983,7 +983,7 @@ mod test {
 
         // Linux should give hello linux
         let commands = TaskGraphTest::new(workspace_str, run_args)
-            .platform(Platform::Linux64)
+            .platform(Subdir::Linux64)
             .commands_in_order();
         assert_eq!(
             commands,
@@ -992,7 +992,7 @@ mod test {
 
         // On other platforms we should get echo root
         let commands = TaskGraphTest::new(workspace_str, run_args)
-            .platform(Platform::OsxArm64)
+            .platform(Subdir::OsxArm64)
             .commands_in_order();
         assert_eq!(
             commands,
@@ -1519,7 +1519,7 @@ mod test {
     /// (https://github.com/prefix-dev/pixi/issues/6773).
     #[test]
     fn test_platform_template_renders_pinned_custom_platform() {
-        let current = Platform::current();
+        let current = Subdir::current().unwrap_or(Subdir::NoArch);
         let workspace_str = format!(
             r#"
         [workspace]
