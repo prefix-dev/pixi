@@ -12,7 +12,7 @@ use pixi_manifest::{
 };
 use pixi_pypi_spec::PixiPypiSource;
 use pypi_modifiers::Tags;
-use rattler_conda_types::{ChannelUrl, NamedChannelOrUrl, Platform};
+use rattler_conda_types::{ChannelUrl, NamedChannelOrUrl, Subdir};
 use rattler_lock::{LockedPackage, PypiIndexes, UrlOrPath};
 use url::Url;
 use uv_distribution_filename::{DistExtension, ExtensionError, SourceDistExtension, WheelFilename};
@@ -81,7 +81,7 @@ pub fn verify_environment_satisfiability(
     // covered by some env platform is treated as the same target -- this is
     // the case for old lockfiles whose bare-subdir names no longer appear in
     // workspace.platforms after the `[system-requirements]` migration.
-    let env_subdirs: HashSet<rattler_conda_types::Platform> = platforms
+    let env_subdirs: HashSet<rattler_conda_types::Subdir> = platforms
         .iter()
         .filter_map(|name| {
             environment
@@ -258,7 +258,7 @@ pub fn verify_environment_satisfiability(
 }
 
 struct PypiWheelTagsCheck {
-    platform_wheel_tags: HashMap<Platform, Tags>,
+    platform_wheel_tags: HashMap<Subdir, Tags>,
 }
 
 impl PypiWheelTagsCheck {
@@ -315,7 +315,7 @@ impl PypiWheelTagsCheck {
 
     pub fn check(
         &self,
-        platform: Platform,
+        platform: Subdir,
         package_data: &UnresolvedPypiRecord,
     ) -> Result<(), EnvironmentUnsat> {
         let package_data = package_data.as_package_data();

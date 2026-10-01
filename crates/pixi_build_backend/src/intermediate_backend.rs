@@ -34,7 +34,7 @@ use rattler_build_types::NormalizedKey;
 use rattler_build_variant_config::VariantConfig;
 use rattler_conda_types::NoArchType;
 use rattler_conda_types::{
-    Platform, RepodataRevision, compression_level::CompressionLevel, package::CondaArchiveType,
+    RepodataRevision, Subdir, compression_level::CompressionLevel, package::CondaArchiveType,
 };
 
 use serde::Deserialize;
@@ -361,7 +361,7 @@ where
                 let effective_target_platform = if recipe.build().noarch.is_none() {
                     params.host_platform
                 } else {
-                    Platform::NoArch
+                    Subdir::NoArch
                 };
                 let build_string = recipe
                     .build()
@@ -378,6 +378,7 @@ where
                     used_vars: variant,
                     recipe,
                     hash: rendered.hash_info.expect("hash should be set"),
+                    pin_subpackages: rendered.pin_subpackages,
                 }
             })
             .collect();
@@ -643,14 +644,14 @@ where
         &self,
         params: CondaBuildV1Params,
     ) -> miette::Result<CondaBuildV1Result> {
-        let host_platform = params
-            .host_prefix
-            .as_ref()
-            .map_or_else(Platform::current, |prefix| prefix.platform);
-        let build_platform = params
-            .build_prefix
-            .as_ref()
-            .map_or_else(Platform::current, |prefix| prefix.platform);
+        let host_platform = params.host_prefix.as_ref().map_or_else(
+            || Subdir::current().unwrap_or(Subdir::NoArch),
+            |prefix| prefix.platform,
+        );
+        let build_platform = params.build_prefix.as_ref().map_or_else(
+            || Subdir::current().unwrap_or(Subdir::NoArch),
+            |prefix| prefix.platform,
+        );
 
         let config = self
             .target_config
@@ -759,7 +760,7 @@ where
                 let effective_target_platform = if r.build().noarch.is_none() {
                     host_platform
                 } else {
-                    Platform::NoArch
+                    Subdir::NoArch
                 };
                 let build_string = r
                     .build()
@@ -776,6 +777,7 @@ where
                     used_vars: variant,
                     recipe: r,
                     hash: rendered.hash_info.expect("hash should be set"),
+                    pin_subpackages: rendered.pin_subpackages,
                 }
             })
             .collect();

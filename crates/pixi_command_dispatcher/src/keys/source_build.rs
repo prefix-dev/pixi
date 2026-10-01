@@ -18,8 +18,8 @@ use pixi_record::{PixiRecord, UnresolvedPixiRecord, UnresolvedSourceRecord, Vari
 use pixi_spec::{ResolvedExcludeNewer, SourceAnchor, SourceSpec};
 use pixi_variant::VariantSelector;
 use rattler_conda_types::{
-    ChannelUrl, PackageName, PackageRecord, Platform, RepoDataRecord,
-    package::DistArchiveIdentifier, prefix::Prefix,
+    ChannelUrl, PackageName, PackageRecord, RepoDataRecord, Subdir, package::DistArchiveIdentifier,
+    prefix::Prefix,
 };
 use rattler_digest::Sha256Hash;
 use tracing::instrument;
@@ -798,12 +798,12 @@ fn verify_record_matches_platform(
     source_package: &PackageName,
     record: &RepoDataRecord,
     origin: PrefixRecordOrigin,
-    platform: Platform,
+    platform: Subdir,
 ) -> Result<(), PrefixPlatformMismatchError> {
-    let Ok(subdir) = record.package_record.subdir.parse::<Platform>() else {
+    let Ok(subdir) = record.package_record.subdir.parse::<Subdir>() else {
         return Ok(());
     };
-    if subdir != Platform::NoArch && subdir != platform {
+    if subdir != Subdir::NoArch && subdir != platform {
         return Err(PrefixPlatformMismatchError {
             kind,
             source_package: source_package.clone(),
@@ -881,7 +881,7 @@ struct Directories {
 }
 
 impl Directories {
-    fn new(work_directory: &std::path::Path, host_platform: rattler_conda_types::Platform) -> Self {
+    fn new(work_directory: &std::path::Path, host_platform: rattler_conda_types::Subdir) -> Self {
         const BUILD_DIR: &str = "bld";
         const HOST_ENV_DIR: &str = "host";
         const PLACEHOLDER_TEMPLATE_STR: &str = "_placehold";
@@ -944,7 +944,7 @@ mod tests {
         record: &RepoDataRecord,
         origin: PrefixRecordOrigin,
     ) -> Result<(), PrefixPlatformMismatchError> {
-        verify_record_matches_platform(kind, &package_b(), record, origin, Platform::Linux64)
+        verify_record_matches_platform(kind, &package_b(), record, origin, Subdir::Linux64)
     }
 
     fn help(err: &PrefixPlatformMismatchError) -> String {
@@ -975,7 +975,7 @@ mod tests {
         assert_eq!(err.package.as_normalized(), "python");
         assert_eq!(err.origin, PrefixRecordOrigin::Solved);
         assert_eq!(err.subdir, "osx-arm64");
-        assert_eq!(err.expected, Platform::Linux64);
+        assert_eq!(err.expected, Subdir::Linux64);
         assert_eq!(
             err.to_string(),
             "cannot install 'python' (osx-arm64) into the build environment of 'package_b', which \

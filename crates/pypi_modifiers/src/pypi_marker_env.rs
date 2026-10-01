@@ -1,6 +1,6 @@
 use miette::IntoDiagnostic;
 use pixi_manifest::PixiPlatform;
-use rattler_conda_types::{PackageRecord, Platform};
+use rattler_conda_types::{PackageRecord, Subdir};
 use uv_pep508::{MarkerEnvironment, MarkerEnvironmentBuilder};
 
 /// Determine the available env markers based on the platform and python package.
@@ -35,21 +35,21 @@ pub fn determine_marker_environment(
         };
 
     let platform_machine = match subdir {
-        Platform::Linux32 => "i386",
-        Platform::Linux64 => "x86_64",
-        Platform::LinuxAarch64 => "aarch64",
-        Platform::LinuxArmV6l => "armv6l",
-        Platform::LinuxArmV7l => "armv7l",
-        Platform::LinuxPpc64le => "ppc64le",
-        Platform::LinuxPpc64 => "ppc64",
-        Platform::LinuxS390X => "s390x",
-        Platform::LinuxRiscv32 => "riscv32",
-        Platform::LinuxRiscv64 => "riscv64",
-        Platform::Osx64 => "x86_64",
-        Platform::OsxArm64 => "arm64",
-        Platform::Win32 => "x86",
-        Platform::Win64 => "AMD64",
-        Platform::WinArm64 => "ARM64",
+        Subdir::Linux32 => "i386",
+        Subdir::Linux64 => "x86_64",
+        Subdir::LinuxAarch64 => "aarch64",
+        Subdir::LinuxArmV6l => "armv6l",
+        Subdir::LinuxArmV7l => "armv7l",
+        Subdir::LinuxPpc64le => "ppc64le",
+        Subdir::LinuxPpc64 => "ppc64",
+        Subdir::LinuxS390X => "s390x",
+        Subdir::LinuxRiscv32 => "riscv32",
+        Subdir::LinuxRiscv64 => "riscv64",
+        Subdir::Osx64 => "x86_64",
+        Subdir::OsxArm64 => "arm64",
+        Subdir::Win32 => "x86",
+        Subdir::Win64 => "AMD64",
+        Subdir::WinArm64 => "ARM64",
         _ => "",
     };
 

@@ -9,7 +9,7 @@ use pixi_config::ConfigCli;
 use pixi_core::{WorkspaceLocator, lock_file::UpdateLockFileOptions};
 use pixi_manifest::PixiPlatformName;
 use rattler_conda_types::{
-    ExplicitEnvironmentEntry, ExplicitEnvironmentSpec, PackageRecord, Platform, RepoDataRecord,
+    ExplicitEnvironmentEntry, ExplicitEnvironmentSpec, PackageRecord, RepoDataRecord, Subdir,
 };
 use rattler_lock::{
     CondaPackageData, Environment, LockedPackage, Platform as LockedPlatform, PlatformName,
@@ -61,7 +61,7 @@ pub struct Args {
 }
 
 fn build_explicit_spec<'a>(
-    platform: &Platform,
+    platform: &Subdir,
     conda_packages: impl IntoIterator<Item = &'a RepoDataRecord>,
 ) -> miette::Result<ExplicitEnvironmentSpec> {
     let mut packages = Vec::new();

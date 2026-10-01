@@ -21,6 +21,41 @@ from .common import (
 )
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="clean-env is not supported on Windows")
+@pytest.mark.parametrize("description", [None, "An isolated task"])
+def test_task_add_clean_env(pixi: Path, tmp_pixi_workspace: Path, description: str | None) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest.write_text(
+        EMPTY_BOILERPLATE_PROJECT
+        + "\n[tasks]\ninherited = 'echo \"probe:$PIXI_ISOLATION_PROBE\"'\n"
+    )
+    command: list[Path | str] = [
+        pixi,
+        "task",
+        "add",
+        "--manifest-path",
+        manifest,
+        "--clean-env",
+    ]
+    if description is not None:
+        command.extend(["--description", description])
+    command.extend(["isolated", 'echo "probe:$PIXI_ISOLATION_PROBE"'])
+    verify_cli_command(command)
+
+    env = {"PIXI_ISOLATION_PROBE": "from-parent-shell"}
+    control = verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "inherited"],
+        env=env,
+    )
+    assert control.stdout.strip() == "probe:from-parent-shell"
+
+    output = verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "isolated"],
+        env=env,
+    )
+    assert output.stdout.strip() == "probe:"
+
+
 def test_run_in_shell_environment(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = f"""

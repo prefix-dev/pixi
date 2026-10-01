@@ -14,8 +14,7 @@ use pixi_core::{WorkspaceLocator, workspace::WorkspaceLocatorError};
 use pixi_manifest::{FeaturesExt, HasWorkspaceManifest, PixiPlatformName};
 use pixi_progress::await_in_progress;
 use rattler_conda_types::{
-    MatchSpec, PackageName, ParseStrictness, ParseStrictnessWithNameMatcher, Platform,
-    RepoDataRecord,
+    MatchSpec, PackageName, ParseStrictness, ParseStrictnessWithNameMatcher, RepoDataRecord, Subdir,
 };
 use tracing::{debug, error};
 use url::Url;
@@ -131,22 +130,22 @@ pub async fn execute_impl<W: Write>(
             .into_iter()
             .next()
             .expect("resolve_platforms preserves length");
-        vec![resolved.subdir(), Platform::NoArch]
+        vec![resolved.subdir(), Subdir::NoArch]
     } else if let Some(ref workspace) = workspace {
         let workspace_platforms = &workspace.workspace_manifest().workspace.platforms;
-        let mut platforms: Vec<Platform> = workspace
+        let mut platforms: Vec<Subdir> = workspace
             .default_environment()
             .platforms()
             .into_iter()
             .filter_map(|name| workspace_platforms.iter().find(|p| p.name() == &name))
             .map(|p| p.subdir())
             .collect();
-        if !platforms.contains(&Platform::NoArch) {
-            platforms.push(Platform::NoArch);
+        if !platforms.contains(&Subdir::NoArch) {
+            platforms.push(Subdir::NoArch);
         }
         platforms
     } else {
-        Platform::all().collect()
+        Subdir::all().collect()
     };
 
     let matchspec = MatchSpec::from_str(

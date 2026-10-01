@@ -4,7 +4,7 @@ use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::{Diagnostic, LabeledSpan};
 use pixi_manifest::{EnvironmentName, PixiPlatformName, PlatformMatchDiagnosis, TaskName};
-use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Platform, Version};
+use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Subdir, Version};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
@@ -20,7 +20,7 @@ pub struct UnsupportedPlatformError {
     pub environment: EnvironmentName,
 
     /// The platform that was requested
-    pub platform: Platform,
+    pub platform: Subdir,
 
     /// Declared virtual packages from workspace platforms that match the
     /// host subdir but are not provided by this machine. Empty when the
@@ -219,7 +219,7 @@ pub(crate) fn format_specs(specs: &[MatchSpec]) -> String {
 
 /// `CONDA_OVERRIDE_*` hint for an unmet requirement, `None` when the spec names
 /// no single virtual package or that package has no override `target` honors.
-pub(crate) fn spec_override_hint(spec: &MatchSpec, target: Platform) -> Option<String> {
+pub(crate) fn spec_override_hint(spec: &MatchSpec, target: Subdir) -> Option<String> {
     conda_override_hint(
         spec.name.as_exact()?.as_normalized(),
         spec.version.as_ref().and_then(spec_version),
@@ -229,7 +229,7 @@ pub(crate) fn spec_override_hint(spec: &MatchSpec, target: Platform) -> Option<S
 
 /// `CONDA_OVERRIDE_*` hints for a set of unmet requirements, deduplicated and
 /// in the order the requirements appear.
-pub(crate) fn spec_override_hints(specs: &[MatchSpec], target: Platform) -> Vec<String> {
+pub(crate) fn spec_override_hints(specs: &[MatchSpec], target: Subdir) -> Vec<String> {
     specs
         .iter()
         .filter_map(|spec| spec_override_hint(spec, target))
@@ -239,7 +239,7 @@ pub(crate) fn spec_override_hints(specs: &[MatchSpec], target: Platform) -> Vec<
 
 /// Whether setting `CONDA_OVERRIDE_*` for `name` has any effect when the target
 /// platform is `target` (as defined in CEP-30).
-fn override_applies_to(name: &str, target: Platform) -> bool {
+fn override_applies_to(name: &str, target: Subdir) -> bool {
     match name {
         "__glibc" | "__linux" => target.is_linux(),
         "__osx" => target.is_osx(),
@@ -256,7 +256,7 @@ fn override_applies_to(name: &str, target: Platform) -> bool {
 pub(crate) fn conda_override_hint(
     name: &str,
     version: Option<&Version>,
-    target: Platform,
+    target: Subdir,
 ) -> Option<String> {
     let env_var = match name {
         "__glibc" => "CONDA_OVERRIDE_GLIBC",
@@ -335,7 +335,7 @@ mod tests {
         UnsupportedPlatformError {
             environments_platforms: vec![],
             environment: EnvironmentName::Default,
-            platform: Platform::Linux64,
+            platform: Subdir::Linux64,
             unsatisfied_requirements: unsatisfied,
             unmet_requirements: vec![],
             platform_diagnostics: vec![],
@@ -421,7 +421,7 @@ mod tests {
 
     fn diagnosis(
         name: &str,
-        subdir: Platform,
+        subdir: Subdir,
         subdir_matches_host: bool,
         unsatisfied: Vec<GenericVirtualPackage>,
     ) -> PlatformMatchDiagnosis {
@@ -439,7 +439,7 @@ mod tests {
         e.environment = EnvironmentName::Named("gpu".into());
         e.platform_diagnostics = vec![diagnosis(
             "gpu-linux",
-            Platform::Linux64,
+            Subdir::Linux64,
             true,
             vec![vp("__cuda", "12.0")],
         )];
@@ -458,7 +458,7 @@ mod tests {
     fn breakdown_reports_unrunnable_subdir() {
         let mut e = err(vec![]);
         e.environment = EnvironmentName::Named("mac".into());
-        e.platform_diagnostics = vec![diagnosis("osx-arm64", Platform::OsxArm64, false, vec![])];
+        e.platform_diagnostics = vec![diagnosis("osx-arm64", Subdir::OsxArm64, false, vec![])];
         let display = e.to_string();
         assert!(
             display
@@ -474,10 +474,10 @@ mod tests {
         let mut e = err(vec![]);
         e.environment = EnvironmentName::Named("gpu".into());
         e.platform_diagnostics = vec![
-            diagnosis("linux-64", Platform::Linux64, true, vec![]),
+            diagnosis("linux-64", Subdir::Linux64, true, vec![]),
             diagnosis(
                 "gpu-linux",
-                Platform::Linux64,
+                Subdir::Linux64,
                 true,
                 vec![vp("__cuda", "12.0")],
             ),
@@ -493,7 +493,7 @@ mod tests {
     #[test]
     fn breakdown_keeps_platform_add_hint_for_default_environment() {
         let mut e = err(vec![]);
-        e.platform_diagnostics = vec![diagnosis("win-64", Platform::Win64, false, vec![])];
+        e.platform_diagnostics = vec![diagnosis("win-64", Subdir::Win64, false, vec![])];
         let display = e.to_string();
         assert!(
             display.contains("Add it with 'pixi workspace platform add linux-64'."),

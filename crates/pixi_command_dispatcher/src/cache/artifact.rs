@@ -41,7 +41,7 @@ use pixi_compute_engine::ComputeCtx;
 use pixi_manifest::InlineContentHash;
 use pixi_path::{AbsPath, AbsPathBuf};
 use pixi_record::{UnresolvedPixiRecord, UnresolvedSourceRecord};
-use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
+use rattler_conda_types::{PackageName, RepoDataRecord, Subdir};
 use rattler_digest::Sha256Hash;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -107,8 +107,8 @@ impl std::fmt::Display for ArtifactCacheKey {
 #[allow(clippy::too_many_arguments)]
 pub fn compute_artifact_cache_key(
     record: &UnresolvedSourceRecord,
-    build_platform: Platform,
-    host_platform: Platform,
+    build_platform: Subdir,
+    host_platform: Subdir,
     backend_identifier: &str,
     build_source_dep_sha256s: &[Sha256Hash],
     host_source_dep_sha256s: &[Sha256Hash],
@@ -2222,7 +2222,7 @@ mod cache_key_tests {
         FullSourceRecordData, PinnedPathSpec, PinnedSourceSpec, SourceRecordData,
         UnresolvedPixiRecord, UnresolvedSourceRecord,
     };
-    use rattler_conda_types::{PackageName, PackageRecord, Platform, RepoDataRecord};
+    use rattler_conda_types::{PackageName, PackageRecord, RepoDataRecord, Subdir};
     use rattler_digest::{Sha256Hash, parse_digest_from_hex};
     use typed_path::Utf8TypedPathBuf;
 
@@ -2288,8 +2288,8 @@ mod cache_key_tests {
     ) -> String {
         compute_artifact_cache_key(
             r,
-            Platform::Linux64,
-            Platform::Linux64,
+            Subdir::Linux64,
+            Subdir::Linux64,
             backend_id,
             extra_build_sha,
             &[],
@@ -2358,8 +2358,8 @@ mod cache_key_tests {
         let r = record("foo");
         let k1 = compute_artifact_cache_key(
             &r,
-            Platform::Linux64,
-            Platform::Linux64,
+            Subdir::Linux64,
+            Subdir::Linux64,
             "b",
             &[],
             &[],
@@ -2370,8 +2370,8 @@ mod cache_key_tests {
         .to_string();
         let k2 = compute_artifact_cache_key(
             &r,
-            Platform::OsxArm64,
-            Platform::Linux64,
+            Subdir::OsxArm64,
+            Subdir::Linux64,
             "b",
             &[],
             &[],
@@ -2388,8 +2388,8 @@ mod cache_key_tests {
         let r = record("foo");
         let k1 = compute_artifact_cache_key(
             &r,
-            Platform::Linux64,
-            Platform::Linux64,
+            Subdir::Linux64,
+            Subdir::Linux64,
             "b",
             &[],
             &[],
@@ -2400,8 +2400,8 @@ mod cache_key_tests {
         .to_string();
         let k2 = compute_artifact_cache_key(
             &r,
-            Platform::Linux64,
-            Platform::OsxArm64,
+            Subdir::Linux64,
+            Subdir::OsxArm64,
             "b",
             &[],
             &[],
@@ -2482,8 +2482,8 @@ mod cache_key_tests {
         let r = record("foo");
         let k1 = compute_artifact_cache_key(
             &r,
-            Platform::Linux64,
-            Platform::Linux64,
+            Subdir::Linux64,
+            Subdir::Linux64,
             "b",
             &[],
             &[sha(0xaa)],
@@ -2494,8 +2494,8 @@ mod cache_key_tests {
         .to_string();
         let k2 = compute_artifact_cache_key(
             &r,
-            Platform::Linux64,
-            Platform::Linux64,
+            Subdir::Linux64,
+            Subdir::Linux64,
             "b",
             &[],
             &[sha(0xbb)],
@@ -2516,8 +2516,8 @@ mod cache_key_tests {
         let r = record("foo");
         let build_only = compute_artifact_cache_key(
             &r,
-            Platform::Linux64,
-            Platform::Linux64,
+            Subdir::Linux64,
+            Subdir::Linux64,
             "b",
             &[sha(0xaa)],
             &[],
@@ -2528,8 +2528,8 @@ mod cache_key_tests {
         .to_string();
         let host_only = compute_artifact_cache_key(
             &r,
-            Platform::Linux64,
-            Platform::Linux64,
+            Subdir::Linux64,
+            Subdir::Linux64,
             "b",
             &[],
             &[sha(0xaa)],
@@ -2592,8 +2592,8 @@ mod cache_key_tests {
         let r = record("foo");
         let linux = compute_artifact_cache_key(
             &r,
-            Platform::Linux64,
-            Platform::Linux64,
+            Subdir::Linux64,
+            Subdir::Linux64,
             "b",
             &[],
             &[],
@@ -2603,8 +2603,8 @@ mod cache_key_tests {
         );
         let osx_arm = compute_artifact_cache_key(
             &r,
-            Platform::Linux64,
-            Platform::OsxArm64,
+            Subdir::Linux64,
+            Subdir::OsxArm64,
             "b",
             &[],
             &[],
@@ -2620,8 +2620,8 @@ mod cache_key_tests {
         let r = record("foo");
         let bare = compute_artifact_cache_key(
             &r,
-            Platform::Linux64,
-            Platform::Linux64,
+            Subdir::Linux64,
+            Subdir::Linux64,
             "b",
             &[],
             &[],
@@ -2631,8 +2631,8 @@ mod cache_key_tests {
         );
         let prefixed = compute_artifact_cache_key(
             &r,
-            Platform::Linux64,
-            Platform::Linux64,
+            Subdir::Linux64,
+            Subdir::Linux64,
             "b",
             &[],
             &[],
@@ -2651,8 +2651,8 @@ mod cache_key_tests {
         let r = record("foo");
         let bare = compute_artifact_cache_key(
             &r,
-            Platform::Linux64,
-            Platform::Linux64,
+            Subdir::Linux64,
+            Subdir::Linux64,
             "b",
             &[],
             &[],
@@ -2662,8 +2662,8 @@ mod cache_key_tests {
         );
         let numbered = compute_artifact_cache_key(
             &r,
-            Platform::Linux64,
-            Platform::Linux64,
+            Subdir::Linux64,
+            Subdir::Linux64,
             "b",
             &[],
             &[],
@@ -2684,8 +2684,8 @@ mod cache_key_tests {
         let r = record("foo");
         let conda = compute_artifact_cache_key(
             &r,
-            Platform::Linux64,
-            Platform::Linux64,
+            Subdir::Linux64,
+            Subdir::Linux64,
             "b",
             &[],
             &[],
@@ -2698,8 +2698,8 @@ mod cache_key_tests {
         );
         let tar_bz2 = compute_artifact_cache_key(
             &r,
-            Platform::Linux64,
-            Platform::Linux64,
+            Subdir::Linux64,
+            Subdir::Linux64,
             "b",
             &[],
             &[],
@@ -2727,8 +2727,8 @@ mod cache_key_tests {
         let key = |level: CondaCompressionLevel| {
             compute_artifact_cache_key(
                 &r,
-                Platform::Linux64,
-                Platform::Linux64,
+                Subdir::Linux64,
+                Subdir::Linux64,
                 "b",
                 &[],
                 &[],

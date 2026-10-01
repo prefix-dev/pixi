@@ -212,13 +212,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             child.wait().into_diagnostic()?;
         }
         Subcommand::List(args) => {
-            let mut config = load_config(&args.common, &args.config_source.source())?;
+            let config = load_config(&args.common, &args.config_source.source())?;
 
-            if let Some(key) = args.key {
-                partial_config(&mut config, &key)?;
-            }
-
-            let out = if args.json {
+            let out = if let Some(key) = args.key {
+                let partial = partial_config(&config, &key)?;
+                if args.json {
+                    serde_json::to_string_pretty(&partial).into_diagnostic()?
+                } else {
+                    toml_edit::ser::to_string_pretty(&partial).into_diagnostic()?
+                }
+            } else if args.json {
                 serde_json::to_string_pretty(&config).into_diagnostic()?
             } else {
                 toml_edit::ser::to_string_pretty(&config).into_diagnostic()?
@@ -693,48 +696,52 @@ fn resolve_parent_keys(doc: &TomlDocument, parents: &[&str]) -> Vec<String> {
     resolved
 }
 
-// Trick to show only relevant field of the Config
-fn partial_config(config: &mut Config, key: &str) -> miette::Result<()> {
-    let mut new = Config::default();
+/// Extract only the value at the (possibly nested) `key` from the config,
+/// wrapped in its parent tables so it serializes like the full config would.
+fn partial_config(config: &Config, key: &str) -> miette::Result<serde_json::Value> {
+    let key_path = KeyPath::parse(key)?;
+    let segments: Vec<&str> = key_path
+        .parents()
+        .into_iter()
+        .chain([key_path.target()])
+        .collect();
 
-    match key {
-        "default-channels" => new.default_channels = config.default_channels.clone(),
-        "shell" => new.shell = config.shell.clone(),
-        "tls-no-verify" => new.tls_no_verify = config.tls_no_verify,
-        "offline" => new.offline = config.offline,
-        "authentication-override-file" => {
-            new.authentication_override_file = config.authentication_override_file.clone()
-        }
-        "mirrors" => new.mirrors = config.mirrors.clone(),
-        "repodata-config" => new.repodata_config = config.repodata_config.clone(),
-        "index-config" => new.index_config = config.index_config.clone(),
-        "pypi-config" => new.pypi_config = config.pypi_config.clone(),
-        "proxy-config" => new.proxy_config = config.proxy_config.clone(),
-        "allow-symbolic-links" => new.allow_symbolic_links = config.allow_symbolic_links,
-        "allow-hard-links" => new.allow_hard_links = config.allow_hard_links,
-        "allow-ref-links" => new.allow_ref_links = config.allow_ref_links,
-        _ => {
-            let keys = [
-                "default-channels",
-                "tls-no-verify",
-                "offline",
-                "authentication-override-file",
-                "mirrors",
-                "repodata-config",
-                "index-config",
-                "pypi-config",
-                "proxy-config",
-                "allow-symbolic-links",
-                "allow-hard-links",
-                "allow-ref-links",
-            ];
-            return Err(miette::miette!("key must be one of: {}", keys.join(", ")));
+    if !is_known_key(config.get_keys(), &segments) {
+        return Err(miette::miette!(
+            "Unknown key: {}\nSupported keys:\n\t{}",
+            console::style(key).red(),
+            config.get_keys().join(",\n\t")
+        ));
+    }
+
+    // Go through TOML rather than `serde_json::to_value`: TOML has no null, so
+    // unset fields are dropped instead of showing up as nulls.
+    let mut value: serde_json::Value =
+        toml_edit::de::from_str(&toml_edit::ser::to_string(config).into_diagnostic()?)
+            .into_diagnostic()?;
+    for segment in &segments {
+        match value.get_mut(*segment) {
+            Some(child) => value = child.take(),
+            None => return Ok(serde_json::Value::Object(Default::default())),
         }
     }
 
-    *config = new;
+    Ok(segments.iter().rev().fold(value, |value, segment| {
+        serde_json::Value::Object([(segment.to_string(), value)].into_iter().collect())
+    }))
+}
 
-    Ok(())
+/// Whether `segments` matches one of the supported keys, where a `<...>`
+/// placeholder (e.g. `s3-options.<bucket>`) matches any single segment.
+fn is_known_key(known_keys: &[&str], segments: &[&str]) -> bool {
+    known_keys.iter().any(|known| {
+        let known: Vec<&str> = known.split('.').collect();
+        known.len() == segments.len()
+            && known
+                .iter()
+                .zip(segments)
+                .all(|(known, segment)| known.starts_with('<') || known == segment)
+    })
 }
 
 #[cfg(test)]
@@ -1436,7 +1443,7 @@ disable-shared = true
             r#"
 [s3-options.bucket]
 endpoint-url = "https://my-s3-compatible-host.com"
-force-path-style = true
+addressing-style = "path"
 region = "us-east-1"
 "#,
         ));
@@ -1456,5 +1463,72 @@ region = "us-east-1"
                 .contains("would leave the config file invalid")
                 || err.to_string().contains("missing field `region`")
         );
+    }
+
+    fn partial_toml(config_toml: &str, key: &str) -> String {
+        let (config, _) = Config::from_toml(config_toml, None).unwrap();
+        let partial = partial_config(&config, key).unwrap();
+        toml_edit::ser::to_string_pretty(&partial).unwrap()
+    }
+
+    #[tokio::test]
+    async fn list_accepts_every_supported_key() {
+        let test_context = TestContext::setup(None);
+
+        let mut rejected = Vec::new();
+        for key in Config::default().get_keys() {
+            let key = key.replace("<bucket>", "my-bucket");
+            let result = execute(Args {
+                subcommand: Subcommand::List(ListArgs {
+                    key: Some(key.clone()),
+                    json: false,
+                    common: test_context.common_args.clone(),
+                    config_source: pixi_config::ConfigSourceCli {
+                        no_config: true,
+                        ..Default::default()
+                    },
+                }),
+            })
+            .await;
+            if result.is_err() {
+                rejected.push(key);
+            }
+        }
+
+        assert!(
+            rejected.is_empty(),
+            "`pixi config list <key>` rejects supported keys: {rejected:?}"
+        );
+    }
+
+    #[test]
+    fn test_partial_config_nested_keys() {
+        let config = r#"
+[pypi-config]
+index-url = "https://pypi.example.com/simple"
+extra-index-urls = ["https://extra.example.com/simple"]
+
+[s3-options."my.bucket"]
+endpoint-url = "https://s3.example.com"
+region = "eu-west-1"
+addressing-style = "path"
+"#;
+        insta::assert_snapshot!(partial_toml(config, "pypi-config.index-url"), @r#"
+        [pypi-config]
+        index-url = "https://pypi.example.com/simple"
+        "#);
+        insta::assert_snapshot!(partial_toml(config, r#"s3-options."my.bucket".region"#), @r#"
+        [s3-options."my.bucket"]
+        region = "eu-west-1"
+        "#);
+    }
+
+    #[test]
+    fn test_partial_config_unset_and_unknown_keys() {
+        assert_eq!(partial_toml("", "detached-environments"), "");
+
+        let err = partial_config(&Config::default(), "not-a-key").unwrap_err();
+        assert!(err.to_string().contains("Unknown key"));
+        assert!(partial_config(&Config::default(), "offline.nested").is_err());
     }
 }

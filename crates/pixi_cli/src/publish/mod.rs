@@ -34,7 +34,7 @@ use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
 use pixi_reporters::TopLevelProgress;
 use pixi_spec::SourceLocationSpec;
 use pixi_utils::variants::{VariantConfig, VariantValue};
-use rattler_conda_types::{GenericVirtualPackage, Platform};
+use rattler_conda_types::{GenericVirtualPackage, Subdir};
 use rattler_networking::{AuthenticationStorage, s3_middleware};
 use rattler_package_streaming::seek::read_package_file;
 
@@ -84,12 +84,12 @@ pub struct Args {
     pub allow_source_dependencies: bool,
 
     /// The target platform to build for (defaults to the current platform)
-    #[clap(long, short, default_value_t = Platform::current())]
-    pub target_platform: Platform,
+    #[clap(long, short, default_value_t = Subdir::current().unwrap_or(Subdir::NoArch))]
+    pub target_platform: Subdir,
 
     /// The build platform to use for building (defaults to the current platform)
-    #[clap(long, default_value_t = Platform::current())]
-    pub build_platform: Platform,
+    #[clap(long, default_value_t = Subdir::current().unwrap_or(Subdir::NoArch))]
+    pub build_platform: Subdir,
 
     /// An optional prefix prepended to the auto-generated build string.
     #[clap(long)]
@@ -421,7 +421,12 @@ fn merge_s3_options(
             s3_middleware::S3Config::Custom {
                 endpoint_url: opts.endpoint_url.clone(),
                 region: opts.region.clone(),
-                force_path_style: opts.force_path_style,
+                addressing_style: if opts.force_path_style {
+                    s3_middleware::S3AddressingStyle::Path
+                } else {
+                    s3_middleware::S3AddressingStyle::VirtualHost
+                },
+                credentials_provider: None,
             },
         );
     }
@@ -1447,7 +1452,7 @@ async fn upload_to_quetz(
     package_paths: &[PathBuf],
     ctx: &PublishContext,
 ) -> miette::Result<()> {
-    use rattler_upload::upload::opt::QuetzData;
+    use rattler_upload::upload::opt::{ForceOverwrite, QuetzData};
     use rattler_upload::upload::upload_package_to_quetz;
 
     tracing::info!("Uploading packages to Quetz: {}", url);
@@ -1461,7 +1466,7 @@ async fn upload_to_quetz(
     let mut server_url = rewrite_scheme_to_https(url, "quetz")?;
     server_url.set_path("");
 
-    let quetz_data = QuetzData::new(server_url, channel, None);
+    let quetz_data = QuetzData::new(server_url, channel, None, ForceOverwrite(ctx.force));
 
     upload_package_to_quetz(&ctx.auth_storage, &package_paths.to_vec(), quetz_data).await
 }
@@ -1521,11 +1526,12 @@ async fn upload_to_s3(
 
     let bucket_config = url.host_str().and_then(|bucket| ctx.s3_options.get(bucket));
 
-    let resolved_credentials = match bucket_config {
+    let credentials = match bucket_config {
         Some(s3_middleware::S3Config::Custom {
             endpoint_url,
             region,
-            force_path_style,
+            addressing_style,
+            ..
         }) => {
             // The workspace manifest or a config file pinned this bucket to a
             // specific endpoint; honor it and pull the access keys from the
@@ -1533,32 +1539,29 @@ async fn upload_to_s3(
             let s3_creds = rattler_s3::S3Credentials {
                 endpoint_url: endpoint_url.clone(),
                 region: region.clone(),
-                addressing_style: if *force_path_style {
-                    rattler_s3::S3AddressingStyle::Path
-                } else {
-                    rattler_s3::S3AddressingStyle::VirtualHost
-                },
+                addressing_style: *addressing_style,
                 access_key_id: None,
                 secret_access_key: None,
                 session_token: None,
             };
-            s3_creds.resolve(url, &ctx.auth_storage).ok_or_else(|| {
-                let bucket = url.host_str().unwrap_or("<unknown>");
-                miette::miette!(
-                    "Bucket '{bucket}' is configured in `s3-options` but no \
+            s3_creds
+                .resolve(url, &ctx.auth_storage)
+                .ok_or_else(|| {
+                    let bucket = url.host_str().unwrap_or("<unknown>");
+                    miette::miette!(
+                        "Bucket '{bucket}' is configured in `s3-options` but no \
                          credentials were found in the auth store. Run \
                          `pixi auth login s3://{bucket}` to store credentials."
-                )
-            })?
+                    )
+                })?
+                .into()
         }
-        Some(s3_middleware::S3Config::FromAWS) | None => {
-            rattler_s3::ResolvedS3Credentials::from_sdk()
-                .await
-                .map_err(|e| miette::miette!("Failed to resolve S3 credentials: {}", e))?
-        }
+        Some(s3_middleware::S3Config::FromAWS) | None => rattler_s3::S3CredentialSource::from_sdk()
+            .await
+            .map_err(|e| miette::miette!("Failed to resolve S3 credentials: {}", e))?,
     };
 
-    ensure_channel_initialized_s3(url, &resolved_credentials)
+    ensure_channel_initialized_s3(url, &credentials)
         .await
         .map_err(|e| miette::miette!("Failed to initialize S3 channel: {}", e))?;
 
@@ -1568,13 +1571,7 @@ async fn upload_to_s3(
         subdirs.insert(subdir);
     }
 
-    upload_package_to_s3(
-        url.clone(),
-        resolved_credentials.clone(),
-        package_paths,
-        ctx.force,
-    )
-    .await?;
+    upload_package_to_s3(url.clone(), credentials.clone(), package_paths, ctx.force).await?;
 
     tracing::info!("Successfully uploaded packages to S3, running indexing...");
 
@@ -1582,12 +1579,12 @@ async fn upload_to_s3(
 
     for subdir in subdirs {
         let target_platform = subdir
-            .parse::<Platform>()
+            .parse::<Subdir>()
             .map_err(|e| miette::miette!("Invalid platform subdir '{}': {}", subdir, e))?;
 
         let index_config = IndexS3Config {
             channel: url.clone(),
-            credentials: resolved_credentials.clone(),
+            credentials: credentials.clone(),
             target_platform: Some(target_platform),
             repodata_patch: None,
             write_zst: options.write_zst.unwrap_or(true),
@@ -1667,7 +1664,7 @@ async fn upload_to_local_filesystem_channel(
 
     for subdir in subdirs {
         let target_platform = subdir
-            .parse::<Platform>()
+            .parse::<Subdir>()
             .map_err(|e| miette::miette!("Invalid platform subdir '{}': {}", subdir, e))?;
 
         let index_config = IndexFsConfig {
@@ -1926,7 +1923,8 @@ mod tests {
             s3_middleware::S3Config::Custom {
                 endpoint_url: Url::parse("https://from-config.example/").unwrap(),
                 region: "us-east-1".to_string(),
-                force_path_style: false,
+                addressing_style: s3_middleware::S3AddressingStyle::VirtualHost,
+                credentials_provider: None,
             },
         );
 
@@ -1957,14 +1955,15 @@ mod tests {
         let s3_middleware::S3Config::Custom {
             endpoint_url,
             region,
-            force_path_style,
+            addressing_style,
+            ..
         } = merged.get("bucket-b").unwrap()
         else {
             panic!("bucket-b should resolve to a Custom config from the manifest");
         };
         assert_eq!(endpoint_url.as_str(), "https://from-manifest.example/");
         assert_eq!(region, "eu-central-1");
-        assert!(force_path_style);
+        assert_eq!(*addressing_style, s3_middleware::S3AddressingStyle::Path);
         assert!(merged.contains_key("bucket-c"));
     }
 

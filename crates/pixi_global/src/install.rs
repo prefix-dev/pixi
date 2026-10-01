@@ -11,8 +11,7 @@ use pixi_utils::{
     prefix::{Executable, Prefix},
 };
 use rattler_conda_types::{
-    MatchSpec, Matches, PackageName, PackageRecord, ParseMatchSpecOptions, Platform,
-    RepodataRevision,
+    MatchSpec, Matches, PackageName, PackageRecord, ParseMatchSpecOptions, RepodataRevision, Subdir,
 };
 use rattler_shell::activation::prefix_path_entries;
 use std::collections::{HashMap, HashSet};
@@ -218,7 +217,8 @@ fn path_diff(path_before: &str, path_after: &str, prefix: &Prefix) -> miette::Re
     let paths_before: Vec<PathBuf> = std::env::split_paths(&path_before).collect();
     let paths_after: Vec<PathBuf> = std::env::split_paths(path_after).collect();
 
-    let prefix_path_entries = prefix_path_entries(prefix.root(), &Platform::current());
+    let prefix_path_entries =
+        prefix_path_entries(prefix.root(), &Subdir::current().unwrap_or(Subdir::NoArch));
 
     // Calculate the PATH diff
     let path_diff = paths_after
@@ -240,7 +240,7 @@ pub(crate) fn local_environment_matches_spec(
     prefix_records: Vec<PackageRecord>,
     binary_specs: &IndexSet<MatchSpec>,
     source_package_names: &HashSet<PackageName>,
-    platform: Option<Platform>,
+    platform: Option<Subdir>,
 ) -> bool {
     // Check whether all specs in the manifest are present in the installed
     // environment
@@ -265,12 +265,12 @@ pub(crate) fn local_environment_matches_spec(
     // platform
     if let Some(platform) = platform {
         let platform_specs_match_env = prefix_records.iter().all(|record| {
-            let Ok(package_platform) = Platform::from_str(&record.subdir) else {
+            let Ok(package_platform) = Subdir::from_str(&record.subdir) else {
                 return true;
             };
 
             match package_platform {
-                Platform::NoArch => true,
+                Subdir::NoArch => true,
                 p if p == platform => true,
                 _ => false,
             }
@@ -371,7 +371,7 @@ pub async fn find_binary_by_name(
 
 #[cfg(test)]
 mod tests {
-    use rattler_conda_types::{MatchSpec, ParseStrictness, Platform};
+    use rattler_conda_types::{MatchSpec, ParseStrictness, Subdir};
     use rattler_lock::LockFile;
     use rstest::{fixture, rstest};
 
@@ -391,7 +391,7 @@ mod tests {
             None,
         )
         .unwrap();
-        let p = lock.platform(&Platform::Linux64.to_string()).unwrap();
+        let p = lock.platform(&Subdir::Linux64.to_string()).unwrap();
         lock.default_environment()
             .unwrap()
             .conda_repodata_records(p)
@@ -417,7 +417,7 @@ mod tests {
             None,
         )
         .unwrap();
-        let p = lock.platform(&Platform::Linux64.to_string()).unwrap();
+        let p = lock.platform(&Subdir::Linux64.to_string()).unwrap();
         lock.default_environment()
             .unwrap()
             .conda_repodata_records(p)
@@ -494,7 +494,7 @@ mod tests {
                 ripgrep_records,
                 &ripgrep_specs,
                 &HashSet::new(),
-                Some(Platform::Linux64)
+                Some(Subdir::Linux64)
             ),
             "The records contains only linux-64 entries"
         );
@@ -510,7 +510,7 @@ mod tests {
                 ripgrep_records,
                 &ripgrep_specs,
                 &HashSet::new(),
-                Some(Platform::Win64)
+                Some(Subdir::Win64)
             ),
             "The record contains linux-64 entries, so the function should always return `false`"
         );

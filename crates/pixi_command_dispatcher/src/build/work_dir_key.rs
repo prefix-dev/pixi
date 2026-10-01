@@ -7,7 +7,7 @@ use std::{
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_record::PinnedSourceSpec;
-use rattler_conda_types::{PackageName, Platform};
+use rattler_conda_types::{PackageName, Subdir};
 use xxhash_rust::xxh3::Xxh3;
 
 use crate::SourceCheckout;
@@ -42,7 +42,7 @@ pub struct WorkDirKey {
     pub source: SourceRecordOrCheckout,
 
     /// The platform the dependency will run on
-    pub host_platform: Platform,
+    pub host_platform: Subdir,
 
     /// The build backend name
     /// TODO: Maybe we should also include the version?

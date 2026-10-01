@@ -13,7 +13,7 @@ use pixi_manifest::{
 };
 use pixi_spec::{ExcludeNewer, PixiSpec};
 use pixi_toml::{TomlFromStr, TomlIndexMap, TomlIndexSet, TomlWith};
-use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
+use rattler_conda_types::{NamedChannelOrUrl, PackageName, Subdir};
 use serde::{Serialize, Serializer, ser::SerializeMap};
 use serde_derive::Deserialize;
 use thiserror::Error;
@@ -473,8 +473,8 @@ where
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct ParsedEnvironment {
     pub channels: IndexSet<PrioritizedChannel>,
-    /// Platform used by the environment.
-    pub platform: Option<Platform>,
+    /// Subdir used by the environment.
+    pub platform: Option<Subdir>,
     pub dependencies: UniquePackageMap,
     /// Inline package definitions attached to source dependencies. Keyed by
     /// dependency name; the matching source spec lives in
@@ -493,7 +493,7 @@ pub struct ParsedEnvironment {
 /// as context.
 struct TomlParsedEnvironment {
     channels: IndexSet<PrioritizedChannel>,
-    platform: Option<Platform>,
+    platform: Option<Subdir>,
     dependencies: DependencyTable,
     exposed: IndexSet<Mapping>,
     shortcuts: Option<IndexSet<PackageName>>,
@@ -507,7 +507,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlParsedEnvironment {
             .optional::<TomlIndexSet<PrioritizedChannel>>("channels")
             .map(TomlIndexSet::into_inner)
             .unwrap_or_default();
-        let platform = th.optional::<TomlPlatform>("platform").map(Platform::from);
+        let platform = th.optional::<TomlPlatform>("platform").map(Subdir::from);
         let dependencies = th.optional("dependencies").unwrap_or_default();
         let exposed = th
             .optional::<TomlMapping>("exposed")

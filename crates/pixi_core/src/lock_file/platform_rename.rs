@@ -236,7 +236,7 @@ mod tests {
     use std::path::Path;
 
     use pixi_manifest::WorkspaceManifest;
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::Subdir;
     use rattler_lock::{LockFile, PlatformData, PlatformName};
 
     use super::align_platform_names;
@@ -248,7 +248,7 @@ mod tests {
     /// Build a lockfile with one platform `name` (subdir `subdir`,
     /// virtual packages `vps`) and one empty default environment that has
     /// been "solved" for it. Enough to exercise the rename pass.
-    fn lockfile_with(name: &str, subdir: Platform, vps: Vec<String>) -> LockFile {
+    fn lockfile_with(name: &str, subdir: Subdir, vps: Vec<String>) -> LockFile {
         let builder = LockFile::builder()
             .with_platforms(vec![PlatformData {
                 name: PlatformName::try_from(name).unwrap(),
@@ -285,17 +285,17 @@ mod tests {
             .with_platforms(vec![
                 PlatformData {
                     name: PlatformName::try_from("p1").unwrap(),
-                    subdir: Platform::OsxArm64,
+                    subdir: Subdir::OsxArm64,
                     virtual_packages: vec!["__osx=13.5".to_string()],
                 },
                 PlatformData {
                     name: PlatformName::try_from("linux-64").unwrap(),
-                    subdir: Platform::Linux64,
+                    subdir: Subdir::Linux64,
                     virtual_packages: vec![],
                 },
                 PlatformData {
                     name: PlatformName::try_from("p2").unwrap(),
-                    subdir: Platform::Linux64,
+                    subdir: Subdir::Linux64,
                     virtual_packages: vec!["__cuda=12.0".to_string()],
                 },
             ])
@@ -329,7 +329,7 @@ mod tests {
         );
         let lock = lockfile_with(
             "linux-64-cuda",
-            Platform::Linux64,
+            Subdir::Linux64,
             vec!["__cuda=12.0".to_string()],
         );
 
@@ -359,11 +359,7 @@ mod tests {
             platforms = ["linux-64"]
             "#,
         );
-        let lock = lockfile_with(
-            "leftover",
-            Platform::Linux64,
-            vec!["__cuda=12.0".to_string()],
-        );
+        let lock = lockfile_with("leftover", Subdir::Linux64, vec!["__cuda=12.0".to_string()]);
 
         let (aligned, renamed) = align_platform_names(lock, &manifest, Path::new("/"));
 
@@ -398,12 +394,12 @@ mod tests {
             .with_platforms(vec![
                 PlatformData {
                     name: PlatformName::try_from("gpu-linux").unwrap(),
-                    subdir: Platform::Linux64,
+                    subdir: Subdir::Linux64,
                     virtual_packages: vec!["__cuda=11.0".to_string()],
                 },
                 PlatformData {
                     name: PlatformName::try_from("linux-64-cuda").unwrap(),
-                    subdir: Platform::Linux64,
+                    subdir: Subdir::Linux64,
                     virtual_packages: vec!["__cuda=12.0".to_string()],
                 },
             ])
@@ -440,7 +436,7 @@ mod tests {
         // identity-equal to the manifest's `gpu-linux`.
         let lock = lockfile_with(
             "linux-64-cuda",
-            Platform::Linux64,
+            Subdir::Linux64,
             vec![
                 "__cuda=12.0".to_string(),
                 "__linux=4.18".to_string(),
