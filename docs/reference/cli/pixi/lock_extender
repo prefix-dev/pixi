@@ -1,3 +1,11 @@
+---8<--- [start:description]
+
+`pixi lock --check` implies `--dry-run`: it reports the changes that would be made
+without creating or modifying `pixi.lock` or installing environments. It exits
+with a non-zero code if the lock file is missing or out of date.
+
+--8<-- [end:description]
+
 ---8<--- [start:example]
 
 ## Examples
