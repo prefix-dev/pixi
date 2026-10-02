@@ -208,8 +208,11 @@ impl InMemoryBackend for PassthroughBackend {
                 create_conda_package_on_the_fly(&modified_index_json, &output_path).map_err(
                     |err| {
                         Box::new(
-                            BackendError::new(format!("failed to create conda package: {}", err))
-                                .into(),
+                            Box::new(BackendError::new(format!(
+                                "failed to create conda package: {}",
+                                err
+                            )))
+                            .into(),
                         )
                     },
                 )?;
@@ -1060,9 +1063,9 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
         let project_model = match params.project_model {
             Some(project_model) => project_model,
             None => {
-                return Err(Box::new(CommunicationError::BackendError(
+                return Err(Box::new(CommunicationError::BackendError(Box::new(
                     BackendError::new("Passthrough backend requires a project model"),
-                )));
+                ))));
             }
         };
 
@@ -1080,11 +1083,11 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
                     match rattler_package_streaming::seek::read_package_file(&path) {
                         Err(err) => {
                             return Err(Box::new(
-                                BackendError::new(format!(
+                                Box::new(BackendError::new(format!(
                                     "failed to read index.json from '{}': {}",
                                     path.display(),
                                     err
-                                ))
+                                )))
                                 .into(),
                             ));
                         }

@@ -521,6 +521,9 @@ pub async fn resolve_dev_dependencies(
 }
 
 /// Resolves all dependencies of a single dev dependency
+// The unboxed `PlatformUnsat` error is boxed by the caller when the
+// per-dependency futures are collected.
+#[allow(clippy::result_large_err)]
 async fn resolve_single_dev_dependency(
     package_name: PackageName,
     source_spec: SourceLocationSpec,
