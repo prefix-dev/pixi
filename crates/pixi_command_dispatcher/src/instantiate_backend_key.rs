@@ -6,7 +6,12 @@
 //! instantiator, a system command, or a solved ephemeral build env. Keyed
 //! on (source path, manifest anchor, build source dir, exclude_newer).
 
-use std::{fmt, hash::Hash, path::PathBuf, sync::Arc};
+use std::{
+    fmt,
+    hash::{Hash, Hasher},
+    path::PathBuf,
+    sync::Arc,
+};
 
 use miette::Diagnostic;
 use pixi_build_discovery::{
@@ -36,6 +41,7 @@ use rattler_shell::{
 };
 use thiserror::Error;
 use tokio::sync::Mutex;
+use xxhash_rust::xxh3::Xxh3;
 
 use crate::InlinePackage;
 use crate::compute_data::HasInstantiateBackendReporter;
@@ -537,7 +543,6 @@ pub async fn resolve_backend_identifier(
         .backend_spec
         .clone()
         .resolve(manifest_source_anchor);
-
     let resolved_command = ctx
         .compute(&ResolvedBackendCommandKey::new(resolved_spec.clone()))
         .await;
@@ -565,6 +570,52 @@ pub async fn resolve_backend_identifier(
             Ok(format!("{cmd}@{version}"))
         }
     }
+}
+
+/// Resolve an immutable-cache backend identity. Unlike the legacy artifact
+/// identifier, this fingerprints the complete solved environment because an
+/// additional backend dependency changing can change build behavior even when
+/// the primary backend package version stays fixed. Unsupported system and
+/// in-memory commands return `None` so callers fall back to checkout/discovery.
+pub(crate) async fn resolve_immutable_backend_identifier_from_spec(
+    ctx: &mut ComputeCtx,
+    resolved_spec: JsonRpcBackendSpec,
+    exclude_newer: Option<ResolvedExcludeNewer>,
+) -> Result<Option<String>, Arc<InstantiateBackendError>> {
+    let resolved_command = ctx
+        .compute(&ResolvedBackendCommandKey::new(resolved_spec.clone()))
+        .await;
+    let ResolvedBackendCommand::Spec(CommandSpec::EnvironmentSpec(env_spec)) =
+        resolved_command.as_ref()
+    else {
+        return Ok(None);
+    };
+
+    let installed = ctx
+        .compute(&EphemeralEnvKey::new(ephemeral_env_spec_for(
+            env_spec,
+            exclude_newer,
+        )))
+        .await
+        .map_err(InstantiateBackendError::EphemeralEnv)
+        .map_err(Arc::new)?;
+    if installed
+        .records
+        .iter()
+        .any(|record| matches!(record, PixiRecord::Source(_)))
+    {
+        return Ok(None);
+    }
+    let mut records = installed.records.iter().collect::<Vec<_>>();
+    records.sort_by(|left, right| left.name().cmp(right.name()));
+    let mut hasher = Xxh3::new();
+    env_spec
+        .command
+        .as_deref()
+        .unwrap_or(&resolved_spec.name)
+        .hash(&mut hasher);
+    records.hash(&mut hasher);
+    Ok(Some(format!("env@{:016x}", hasher.finish())))
 }
 
 /// Build a [`Tool::System`] that runs the backend's executable directly
