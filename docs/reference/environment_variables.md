@@ -75,10 +75,10 @@ Pixi can also be configured via environment variables.
 
 The following environment variables are set by Pixi, when using the `pixi run`, `pixi shell`, or `pixi shell-hook` command:
 
-- `PIXI_PROJECT_ROOT`: The root directory of the project.
-- `PIXI_PROJECT_NAME`: The name of the project.
-- `PIXI_PROJECT_MANIFEST`: The path to the manifest file (`pixi.toml`).
-- `PIXI_PROJECT_VERSION`: The version of the project.
+- `PIXI_WORKSPACE_ROOT`: The root directory of the workspace. (Legacy alias: `PIXI_PROJECT_ROOT`.)
+- `PIXI_WORKSPACE_NAME`: The name of the workspace. (Legacy alias: `PIXI_PROJECT_NAME`.)
+- `PIXI_WORKSPACE_MANIFEST`: The path to the manifest file (`pixi.toml`). (Legacy alias: `PIXI_PROJECT_MANIFEST`.)
+- `PIXI_WORKSPACE_VERSION`: The version of the workspace. (Legacy alias: `PIXI_PROJECT_VERSION`.)
 - `PIXI_PROMPT`: The prompt to use in the shell, also used by `pixi shell` itself.
 - `PIXI_ENVIRONMENT_NAME`: The name of the environment, defaults to `default`.
 - `PIXI_ENVIRONMENT_PLATFORMS`: Comma separated list of platforms supported by the project.
@@ -88,7 +88,10 @@ The following environment variables are set by Pixi, when using the `pixi run`, 
 - `INIT_CWD`: ONLY IN `pixi run`: The directory where the command was run from.
 
 !!! note
-    Even though the variables are environment variables these cannot be overridden. E.g. you can not change the root of the project by setting `PIXI_PROJECT_ROOT` in the environment.
+    Even though the variables are environment variables these cannot be overridden. E.g. you can not change the root of the workspace by setting `PIXI_WORKSPACE_ROOT` in the environment.
+
+!!! note
+    The `PIXI_PROJECT_*` variables are kept as legacy aliases of their `PIXI_WORKSPACE_*` counterparts and are set to the same values. Prefer the `PIXI_WORKSPACE_*` names. Where pixi reads these variables as input (`PIXI_WORKSPACE_MANIFEST`/`PIXI_PROJECT_MANIFEST` and `PIXI_WORKSPACE_ROOT`/`PIXI_PROJECT_ROOT`), the `PIXI_WORKSPACE_*` variant takes precedence if both are set to different values.
 
 ## Environment Variable Priority
 

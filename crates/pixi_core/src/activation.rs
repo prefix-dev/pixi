@@ -19,7 +19,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-// Setting a base prefix for the pixi package
+// Setting base prefixes for the pixi package. The `WORKSPACE` variants are the
+// current names; the `PROJECT` variants are kept as legacy aliases.
+const WORKSPACE_PREFIX: &str = "PIXI_WORKSPACE_";
 const PROJECT_PREFIX: &str = "PIXI_PROJECT_";
 
 pub enum CurrentEnvVarBehavior {
@@ -49,36 +51,34 @@ struct ActivationCache {
 impl Workspace {
     /// Returns environment variables and their values that should be injected when running a command.
     pub(crate) fn get_metadata_env(&self) -> HashMap<String, String> {
-        let mut map = HashMap::from_iter([
-            (
-                format!("{PROJECT_PREFIX}ROOT"),
-                self.root().to_string_lossy().into_owned(),
-            ),
-            (
-                format!("{PROJECT_PREFIX}NAME"),
-                self.display_name().to_string(),
-            ),
-            (
-                format!("{PROJECT_PREFIX}MANIFEST"),
-                self.workspace
-                    .provenance
-                    .path
-                    .to_string_lossy()
-                    .into_owned(),
-            ),
-            (
-                format!("{PROJECT_PREFIX}VERSION"),
-                self.workspace
-                    .value
-                    .workspace
-                    .version
-                    .as_ref()
-                    .map_or("NO_VERSION_SPECIFIED".to_string(), |version| {
-                        version.to_string()
-                    }),
-            ),
-            (String::from("PIXI_IN_SHELL"), String::from("1")),
-        ]);
+        let root = self.root().to_string_lossy().into_owned();
+        let name = self.display_name().to_string();
+        let manifest = self
+            .workspace
+            .provenance
+            .path
+            .to_string_lossy()
+            .into_owned();
+        let version = self
+            .workspace
+            .value
+            .workspace
+            .version
+            .as_ref()
+            .map_or("NO_VERSION_SPECIFIED".to_string(), |version| {
+                version.to_string()
+            });
+
+        // Set each value under both the current `WORKSPACE` prefix and the
+        // legacy `PROJECT` prefix.
+        let mut map = HashMap::new();
+        for prefix in [WORKSPACE_PREFIX, PROJECT_PREFIX] {
+            map.insert(format!("{prefix}ROOT"), root.clone());
+            map.insert(format!("{prefix}NAME"), name.clone());
+            map.insert(format!("{prefix}MANIFEST"), manifest.clone());
+            map.insert(format!("{prefix}VERSION"), version.clone());
+        }
+        map.insert(String::from("PIXI_IN_SHELL"), String::from("1"));
 
         if let Ok(exe_path) = std::env::current_exe() {
             map.insert(
@@ -631,6 +631,14 @@ mod tests {
                 .unwrap()
                 .to_string()
         );
+
+        // The `WORKSPACE` variants mirror the legacy `PROJECT` variants.
+        for suffix in ["NAME", "ROOT", "MANIFEST", "VERSION"] {
+            assert_eq!(
+                env.get(&format!("PIXI_WORKSPACE_{suffix}")),
+                env.get(&format!("PIXI_PROJECT_{suffix}")),
+            );
+        }
     }
 
     #[test]
