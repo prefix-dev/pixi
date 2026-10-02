@@ -149,6 +149,9 @@ impl std::fmt::Display for ArtifactCacheKey {
 }
 
 /// Compute the build input hash used as the artifact cache key for a source build.
+///
+/// Source *files* are not hashed here: the sidecar captures their mtimes
+/// separately so a content change still invalidates the entry on lookup.
 #[allow(clippy::too_many_arguments)]
 pub fn compute_artifact_cache_key(
     record: &UnresolvedSourceRecord,
@@ -1387,11 +1390,11 @@ mod tests {
             .await
             .unwrap();
 
-        // FILE_SHARE_NONE: what a second pixi, a virus scanner or a backup
-        // agent does to the sidecar while it is being read.
         let sidecar = f.cache.sidecar_path(&pkg("foo"), &key("immutable-key"));
         let exclusive = OpenOptions::new()
             .read(true)
+            // FILE_SHARE_NONE: what a second pixi, a virus scanner or a backup
+            // agent does to the sidecar while it is being read.
             .share_mode(0)
             .open(&sidecar)
             .unwrap();
