@@ -36,11 +36,6 @@ tombi = "0d"
 # Shared feature that exposes the build dependencies of the pixi package,
 # including compilers, in the environment.
 #
-# Use cmake to build aws-lc-sys, because conda's CFLAGS inject -O2 which
-# overrides the -O0 required by jitterentropy-base.c, causing a build failure.
-[feature.compilers.activation.env]
-AWS_LC_SYS_CMAKE_BUILDER = "1"
-
 [feature.compilers.dev]
 pixi = { path = "." }
 
@@ -664,11 +659,8 @@ channels = [
 name = "pixi-build-rust"
 version = "*"
 
-# Use cmake to build aws-lc-sys, because conda's CFLAGS inject -O2 which
-# overrides the -O0 required by jitterentropy-base.c, causing a build failure.
 [package.build.config]
 compilers = ["rust", "c"]
-env = { AWS_LC_SYS_CMAKE_BUILDER = "1" }
 
 [package.build-dependencies]
 cmake = ">=4,<5"
