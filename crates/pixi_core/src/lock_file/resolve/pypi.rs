@@ -81,7 +81,6 @@ use crate::{
 use pixi_command_dispatcher::CommandDispatcher;
 use pixi_manifest::platform::host::host_baseline;
 use pixi_uv_context::UvResolutionContext;
-use rattler_conda_types::GenericVirtualPackage;
 
 #[derive(Debug, thiserror::Error)]
 #[error("Invalid hash: {0} type: {1}")]
@@ -599,10 +598,7 @@ pub async fn resolve_pypi(
             CondaPrefixUpdater::builder(
                 group,
                 prefix_platform.clone(),
-                virtual_packages
-                    .into_iter()
-                    .map(GenericVirtualPackage::from)
-                    .collect(),
+                virtual_packages,
                 command_dispatcher,
             )
             .finish()

@@ -70,11 +70,8 @@ pub(crate) fn build_platform_setup(
         .map(|c| c.into_base_url(&channel_config))
         .collect::<Result<Vec<_>, _>>()?;
     let variant_config = environment.workspace().variants(platform)?;
-    let virtual_packages: Vec<GenericVirtualPackage> = environment
-        .virtual_packages(platform)
-        .into_iter()
-        .map(GenericVirtualPackage::from)
-        .collect();
+    let virtual_packages: Vec<GenericVirtualPackage> =
+        pixi_manifest::platform::solver_generic_virtual_packages(platform);
     let build_environment = BuildEnvironment {
         host_platform: subdir,
         build_platform: subdir,

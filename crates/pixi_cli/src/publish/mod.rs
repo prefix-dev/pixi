@@ -34,7 +34,7 @@ use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
 use pixi_reporters::TopLevelProgress;
 use pixi_spec::SourceLocationSpec;
 use pixi_utils::variants::{VariantConfig, VariantValue};
-use rattler_conda_types::{GenericVirtualPackage, Subdir};
+use rattler_conda_types::Subdir;
 use rattler_networking::{AuthenticationStorage, s3_middleware};
 use rattler_package_streaming::seek::read_package_file;
 
@@ -658,20 +658,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         variant_files.extend(resolve_variant_config_paths(&args.variant_config, &cwd));
     }
 
-    let mut build_virtual_packages: Vec<GenericVirtualPackage> = workspace
+    let mut build_virtual_packages = workspace
         .default_environment()
-        .virtual_packages(&build_pixi_platform)
-        .into_iter()
-        .map(GenericVirtualPackage::from)
-        .collect();
+        .virtual_packages(&build_pixi_platform);
     apply_conda_overrides(&mut build_virtual_packages, build_pixi_platform.subdir());
 
-    let mut host_virtual_packages: Vec<GenericVirtualPackage> = workspace
+    let mut host_virtual_packages = workspace
         .default_environment()
-        .virtual_packages(&target_pixi_platform)
-        .into_iter()
-        .map(GenericVirtualPackage::from)
-        .collect();
+        .virtual_packages(&target_pixi_platform);
     apply_conda_overrides(&mut host_virtual_packages, target_pixi_platform.subdir());
 
     let build_environment = BuildEnvironment {
