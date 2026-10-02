@@ -490,7 +490,7 @@ mod test {
     use std::path::Path;
 
     use pixi_config::CacheConfig;
-    use rattler_conda_types::{NamedChannelOrUrl, Platform};
+    use rattler_conda_types::{NamedChannelOrUrl, Subdir};
     use temp_env;
     use tempfile::tempdir;
 
@@ -583,7 +583,7 @@ mod test {
                 .iter()
                 .map(pixi_manifest::PixiPlatform::subdir)
                 .collect::<Vec<_>>(),
-            [Platform::current()]
+            [Subdir::current().unwrap_or(Subdir::NoArch)]
         );
     }
 

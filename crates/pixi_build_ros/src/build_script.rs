@@ -3,7 +3,7 @@
 use std::path::Path;
 
 use miette::Diagnostic;
-use rattler_conda_types::Platform;
+use rattler_conda_types::Subdir;
 use thiserror::Error;
 
 /// Errors that can occur during build script generation.
@@ -25,7 +25,7 @@ pub fn render_build_script(
 ) -> Result<String, BuildScriptError> {
     // Use the current (build) platform, not the host/target platform.
     // The build script runs on the build machine.
-    let is_windows = Platform::current().is_windows();
+    let is_windows = Subdir::current().unwrap_or(Subdir::NoArch).is_windows();
     let template = select_template(build_type, is_windows)?;
 
     let src_dir_str = source_dir.display().to_string();

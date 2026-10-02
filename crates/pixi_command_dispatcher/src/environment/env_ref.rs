@@ -305,7 +305,7 @@ impl fmt::Display for DerivedParent {
 mod tests {
     use std::sync::Arc;
 
-    use rattler_conda_types::{GenericVirtualPackage, Platform};
+    use rattler_conda_types::{GenericVirtualPackage, Subdir};
     use rattler_solve::ChannelPriority;
 
     use pixi_utils::variants::VariantConfig;
@@ -325,9 +325,9 @@ mod tests {
     /// virtual packages, so a swapped transform is observable.
     fn cross_parent() -> (EnvironmentRef, BuildEnvironment) {
         let build_environment = BuildEnvironment {
-            host_platform: Platform::OsxArm64,
+            host_platform: Subdir::OsxArm64,
             host_virtual_packages: vec![virtual_package("__osx")],
-            build_platform: Platform::Linux64,
+            build_platform: Subdir::Linux64,
             build_virtual_packages: vec![virtual_package("__glibc")],
         };
         let env_ref = EnvironmentRef::Ephemeral(EphemeralEnv::new(
@@ -444,7 +444,7 @@ mod tests {
         let registry = WorkspaceEnvRegistry::new();
         let workspace = EnvironmentRef::Workspace(registry.allocate(
             "default".to_string(),
-            Platform::OsxArm64.to_string(),
+            Subdir::OsxArm64.to_string(),
             EnvironmentSpec {
                 channels: vec![],
                 build_environment,
@@ -473,7 +473,7 @@ mod tests {
             "test",
             EnvironmentSpec {
                 channels: vec![],
-                build_environment: BuildEnvironment::simple(Platform::Linux64, vec![]),
+                build_environment: BuildEnvironment::simple(Subdir::Linux64, vec![]),
                 variants: VariantConfig::default(),
                 exclude_newer: None,
                 channel_priority: ChannelPriority::Strict,

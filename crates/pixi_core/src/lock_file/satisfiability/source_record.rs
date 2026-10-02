@@ -906,6 +906,8 @@ fn build_full_source_record_from_output(
         sha256: None,
         md5: None,
         timestamp: None,
+        indexed_timestamp: None,
+        attestations_sha256: None,
         platform: output
             .metadata
             .subdir
@@ -993,8 +995,8 @@ mod tests {
     };
     use pixi_spec::{SourceAnchor, SourceSpec};
     use rattler_conda_types::{
-        ChannelConfig, NoArchType, PackageName, PackageRecord, Platform, RepoDataRecord,
-        VersionSpec, VersionWithSource,
+        ChannelConfig, NoArchType, PackageName, PackageRecord, RepoDataRecord, Subdir, VersionSpec,
+        VersionWithSource,
         package::{DistArchiveIdentifier, RunExportsJson},
     };
     use std::{
@@ -1105,7 +1107,7 @@ mod tests {
                     .into(),
                 build: "h0_0".to_string(),
                 build_number: 0,
-                subdir: Platform::Linux64,
+                subdir: Subdir::Linux64,
                 license: None,
                 license_family: None,
                 flags: Default::default(),

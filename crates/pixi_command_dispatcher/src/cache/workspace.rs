@@ -16,6 +16,9 @@
 //! bake fixed prefix paths into their own incremental state, so a dep swap
 //! under the same prefix is invisible to the build tool and must be treated
 //! as a fresh workspace.
+//! The project model with overrides and backend configuration also select the
+//! backend build directory. This avoids outdated build directory contents when
+//! a backend skips configuration in an existing build directory.
 //!
 //! The cost is that a dep update blows away incremental state for packages
 //! downstream of it. The mitigation is the artifact cache: when the same
@@ -30,7 +33,7 @@ use std::{
 use async_fd_lock::{LockWrite, RwLockWriteGuard};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_record::UnresolvedSourceRecord;
-use rattler_conda_types::{PackageName, Platform};
+use rattler_conda_types::{PackageName, Subdir};
 use xxhash_rust::xxh3::Xxh3;
 
 /// Opaque handle identifying one workspace cache entry.
@@ -47,21 +50,24 @@ impl std::fmt::Display for WorkspaceKey {
     }
 }
 
-/// Compute the workspace cache key for a source build.
+/// Compute the build input hash used to select a backend build directory.
 ///
 /// Inputs that go into the hash:
 /// - package name, pinned manifest source, pinned build source, variants
 /// - build + host platform
 /// - backend identifier
+/// - project model with overrides and general + target-specific backend configuration
 /// - the full `build_packages` and `host_packages` lists (not content-
 ///   addressed like the artifact cache; structural identity is what matters
 ///   here, so the workspace is stable across runs that produce identical
 ///   dep sets)
 pub fn compute_workspace_key(
     record: &UnresolvedSourceRecord,
-    build_platform: Platform,
-    host_platform: Platform,
+    build_platform: Subdir,
+    host_platform: Subdir,
     backend_identifier: &str,
+    project_model_with_overrides_hash: Option<crate::input_hash::ProjectModelHash>,
+    configuration_hash: crate::input_hash::ConfigurationHash,
 ) -> WorkspaceKey {
     let mut hasher = Xxh3::new();
     record.name().as_normalized().hash(&mut hasher);
@@ -71,6 +77,8 @@ pub fn compute_workspace_key(
     build_platform.hash(&mut hasher);
     host_platform.hash(&mut hasher);
     backend_identifier.hash(&mut hasher);
+    project_model_with_overrides_hash.hash(&mut hasher);
+    configuration_hash.hash(&mut hasher);
     record.build_packages.hash(&mut hasher);
     record.host_packages.hash(&mut hasher);
     // `host_platform` is already folded into `hasher`, so the key
@@ -197,6 +205,57 @@ mod tests {
 
     use super::*;
 
+    fn compute_workspace_key(
+        record: &UnresolvedSourceRecord,
+        build_platform: Subdir,
+        host_platform: Subdir,
+        backend_identifier: &str,
+    ) -> WorkspaceKey {
+        super::compute_workspace_key(
+            record,
+            build_platform,
+            host_platform,
+            backend_identifier,
+            None,
+            Default::default(),
+        )
+    }
+
+    #[test]
+    fn package_and_build_settings_select_backend_build_directories() {
+        let record = make_record("foo");
+        let model = pixi_build_types::ProjectModel {
+            version: Some("0.2.0".parse().unwrap()),
+            ..Default::default()
+        };
+        let config = serde_json::json!({"env": {"REPRO_VALUE": "after"}});
+        let key = |model_hash, config_hash| {
+            super::compute_workspace_key(
+                &record,
+                Subdir::Linux64,
+                Subdir::Linux64,
+                "cmake@1.0",
+                model_hash,
+                config_hash,
+            )
+        };
+        let base = key(None, Default::default());
+        assert_ne!(
+            base,
+            key(
+                Some(crate::input_hash::ProjectModelHash::from(&model)),
+                Default::default()
+            )
+        );
+        assert_ne!(
+            base,
+            key(
+                None,
+                crate::input_hash::ConfigurationHash::compute(Some(&config), None)
+            )
+        );
+    }
+
     fn make_record(name: &str) -> UnresolvedSourceRecord {
         let mut pkg = PackageRecord::new(
             PackageName::from_str(name).unwrap(),
@@ -255,8 +314,8 @@ mod tests {
     fn same_inputs_produce_same_key() {
         let a = make_record("foo");
         let b = make_record("foo");
-        let ka = compute_workspace_key(&a, Platform::Linux64, Platform::Linux64, "backend-v1");
-        let kb = compute_workspace_key(&b, Platform::Linux64, Platform::Linux64, "backend-v1");
+        let ka = compute_workspace_key(&a, Subdir::Linux64, Subdir::Linux64, "backend-v1");
+        let kb = compute_workspace_key(&b, Subdir::Linux64, Subdir::Linux64, "backend-v1");
         assert_eq!(ka, kb);
     }
 
@@ -267,21 +326,16 @@ mod tests {
             make_record("foo"),
             binary_dep("bar", "https://example.com/bar.conda"),
         );
-        let ka = compute_workspace_key(&base, Platform::Linux64, Platform::Linux64, "backend-v1");
-        let kb = compute_workspace_key(
-            &with_dep,
-            Platform::Linux64,
-            Platform::Linux64,
-            "backend-v1",
-        );
+        let ka = compute_workspace_key(&base, Subdir::Linux64, Subdir::Linux64, "backend-v1");
+        let kb = compute_workspace_key(&with_dep, Subdir::Linux64, Subdir::Linux64, "backend-v1");
         assert_ne!(ka, kb);
     }
 
     #[test]
     fn different_backend_identifier_changes_key() {
         let r = make_record("foo");
-        let ka = compute_workspace_key(&r, Platform::Linux64, Platform::Linux64, "backend-v1");
-        let kb = compute_workspace_key(&r, Platform::Linux64, Platform::Linux64, "backend-v2");
+        let ka = compute_workspace_key(&r, Subdir::Linux64, Subdir::Linux64, "backend-v1");
+        let kb = compute_workspace_key(&r, Subdir::Linux64, Subdir::Linux64, "backend-v2");
         assert_ne!(ka, kb);
     }
 
@@ -291,9 +345,8 @@ mod tests {
         // the key (short-path policy). Two keys that differ only by
         // host platform must therefore be distinct.
         let r = make_record("foo");
-        let linux = compute_workspace_key(&r, Platform::Linux64, Platform::Linux64, "backend-v1");
-        let osx_arm =
-            compute_workspace_key(&r, Platform::Linux64, Platform::OsxArm64, "backend-v1");
+        let linux = compute_workspace_key(&r, Subdir::Linux64, Subdir::Linux64, "backend-v1");
+        let osx_arm = compute_workspace_key(&r, Subdir::Linux64, Subdir::OsxArm64, "backend-v1");
         assert_ne!(linux, osx_arm);
     }
 
@@ -302,8 +355,8 @@ mod tests {
         let a = make_record("foo");
         let b = make_record("bar");
         assert_ne!(
-            compute_workspace_key(&a, Platform::Linux64, Platform::Linux64, "b"),
-            compute_workspace_key(&b, Platform::Linux64, Platform::Linux64, "b"),
+            compute_workspace_key(&a, Subdir::Linux64, Subdir::Linux64, "b"),
+            compute_workspace_key(&b, Subdir::Linux64, Subdir::Linux64, "b"),
         );
     }
 
@@ -315,8 +368,8 @@ mod tests {
             path: Utf8TypedPathBuf::from("./somewhere-else"),
         });
         assert_ne!(
-            compute_workspace_key(&a, Platform::Linux64, Platform::Linux64, "b"),
-            compute_workspace_key(&b, Platform::Linux64, Platform::Linux64, "b"),
+            compute_workspace_key(&a, Subdir::Linux64, Subdir::Linux64, "b"),
+            compute_workspace_key(&b, Subdir::Linux64, Subdir::Linux64, "b"),
         );
     }
 
@@ -329,8 +382,8 @@ mod tests {
             pixi_record::VariantValue::from("3.12".to_string()),
         );
         assert_ne!(
-            compute_workspace_key(&a, Platform::Linux64, Platform::Linux64, "b"),
-            compute_workspace_key(&b, Platform::Linux64, Platform::Linux64, "b"),
+            compute_workspace_key(&a, Subdir::Linux64, Subdir::Linux64, "b"),
+            compute_workspace_key(&b, Subdir::Linux64, Subdir::Linux64, "b"),
         );
     }
 
@@ -338,8 +391,8 @@ mod tests {
     fn build_platform_changes_key() {
         let r = make_record("foo");
         assert_ne!(
-            compute_workspace_key(&r, Platform::Linux64, Platform::Linux64, "b"),
-            compute_workspace_key(&r, Platform::OsxArm64, Platform::Linux64, "b"),
+            compute_workspace_key(&r, Subdir::Linux64, Subdir::Linux64, "b"),
+            compute_workspace_key(&r, Subdir::OsxArm64, Subdir::Linux64, "b"),
         );
     }
 
@@ -354,8 +407,8 @@ mod tests {
             .host_packages
             .push(binary_dep("zlib", "https://example.com/zlib.conda"));
         assert_ne!(
-            compute_workspace_key(&base, Platform::Linux64, Platform::Linux64, "b"),
-            compute_workspace_key(&with_host_dep, Platform::Linux64, Platform::Linux64, "b"),
+            compute_workspace_key(&base, Subdir::Linux64, Subdir::Linux64, "b"),
+            compute_workspace_key(&with_host_dep, Subdir::Linux64, Subdir::Linux64, "b"),
         );
     }
 
@@ -377,8 +430,8 @@ mod tests {
             .push(binary_dep("numpy", "https://example.com/numpy.conda"));
 
         assert_ne!(
-            compute_workspace_key(&a, Platform::Linux64, Platform::Linux64, "b"),
-            compute_workspace_key(&b, Platform::Linux64, Platform::Linux64, "b"),
+            compute_workspace_key(&a, Subdir::Linux64, Subdir::Linux64, "b"),
+            compute_workspace_key(&b, Subdir::Linux64, Subdir::Linux64, "b"),
         );
     }
 
