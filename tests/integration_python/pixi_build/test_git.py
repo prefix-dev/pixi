@@ -415,6 +415,7 @@ simple-app = {{ git = "{git_url}" }}
     # Take the source away: both the checkout and the origin it came from.
     shutil.rmtree(workspace / ".pixi" / "envs")
     rmtree_force(git_checkouts)
+    assert not git_checkouts.exists()
     rmtree_force(repo_path)
     assert not repo_path.exists()
 

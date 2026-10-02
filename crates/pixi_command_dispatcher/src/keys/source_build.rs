@@ -300,6 +300,8 @@ async fn compute_inner(
             )
         });
 
+    // this is the checkout-free path: we have a cache hit for the immutable artifact,
+    // so we return early before checking out the repo
     if let Some(key) = immutable_cache_key.as_ref()
         && let Some(backend) = artifact_cache
             .immutable_backend(spec.record.name(), key)

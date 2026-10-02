@@ -95,7 +95,7 @@ pub struct ArtifactCacheKey(String);
 /// write `pixi.toml`, which grants arbitrary channels *and* code execution at
 /// build time. Do not move this cache anywhere less trusted without
 /// revisiting it -- and note that constraining the channels to the
-/// workspace's own is not the fix, since `[package.build] channels` routinely
+/// workspace's own is not the fix, since `package.build.channels` routinely
 /// and legitimately names a backend channel the workspace does not list.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub(crate) struct ImmutableBackend {
