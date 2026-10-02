@@ -56,7 +56,7 @@ enum LockfileUnsat {
     #[error(
         "environment '{0}' does not satisfy the requirements of the project for platform '{1}'"
     )]
-    PlatformUnsat(String, PixiPlatformName, #[source] PlatformUnsat),
+    PlatformUnsat(String, PixiPlatformName, #[source] Box<PlatformUnsat>),
 
     #[error(
         "solve group '{0}' does not satisfy the requirements of the project for platform '{1}'"
@@ -156,7 +156,7 @@ async fn verify_lock_file_satisfiability(
                 .await
                 .map_err(|e| match e {
                     CommandDispatcherError::Failed(e) => {
-                        LockfileUnsat::PlatformUnsat(env.name().to_string(), platform.clone(), *e)
+                        LockfileUnsat::PlatformUnsat(env.name().to_string(), platform.clone(), e)
                     }
                     CommandDispatcherError::Cancelled => {
                         panic!("operation was cancelled which should never happen here")
@@ -187,7 +187,9 @@ async fn verify_lock_file_satisfiability(
                     PlatformUnsat::CondaPackageShouldBePypi { name }
                 }
             })
-            .map_err(|e| LockfileUnsat::PlatformUnsat(env_name.to_string(), platform, e))?;
+            .map_err(|e| {
+                LockfileUnsat::PlatformUnsat(env_name.to_string(), platform, Box::new(e))
+            })?;
     }
 
     Ok(())

@@ -742,7 +742,7 @@ enum TaskExecutionError {
     InvalidWorkingDirectory(#[from] InvalidWorkingDirectory),
 
     #[error(transparent)]
-    UnsupportedPlatformError(#[from] UnsupportedPlatformError),
+    UnsupportedPlatformError(#[from] Box<UnsupportedPlatformError>),
 }
 
 /// Called to execute a single command.
