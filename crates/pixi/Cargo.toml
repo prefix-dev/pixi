@@ -75,6 +75,9 @@ uv-normalize = { workspace = true }
 uv-python = { workspace = true }
 zip = { workspace = true }
 
+[build-dependencies]
+embed-manifest = { workspace = true }
+
 [features]
 default = ["rustls"]
 native-tls = ["pixi_cli/native-tls"]
