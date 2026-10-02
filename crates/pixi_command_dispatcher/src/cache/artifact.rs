@@ -2254,6 +2254,9 @@ mod cache_key_tests {
     fn key_with_package_and_build_settings(
         project_model_with_overrides: Option<&pixi_build_types::ProjectModel>,
         config: Option<&serde_json::Value>,
+        target_config: Option<
+            &ordermap::OrderMap<pixi_build_types::TargetSelector, serde_json::Value>,
+        >,
     ) -> super::ArtifactCacheKey {
         super::compute_artifact_cache_key(
             &record("foo"),
@@ -2261,7 +2264,7 @@ mod cache_key_tests {
             Subdir::Linux64,
             "cmake@1.0",
             project_model_with_overrides.map(crate::input_hash::ProjectModelHash::from),
-            crate::input_hash::ConfigurationHash::compute(config, None),
+            crate::input_hash::ConfigurationHash::compute(config, target_config),
             &[],
             &[],
             None,
@@ -2275,11 +2278,12 @@ mod cache_key_tests {
             version: Some("0.1.0".parse().unwrap()),
             ..Default::default()
         };
-        let old = key_with_package_and_build_settings(Some(&project_model_with_overrides), None);
+        let old =
+            key_with_package_and_build_settings(Some(&project_model_with_overrides), None, None);
         project_model_with_overrides.version = Some("0.2.0".parse().unwrap());
         assert_ne!(
             old,
-            key_with_package_and_build_settings(Some(&project_model_with_overrides), None)
+            key_with_package_and_build_settings(Some(&project_model_with_overrides), None, None)
         );
     }
 
@@ -2288,8 +2292,8 @@ mod cache_key_tests {
         let debug = serde_json::json!({"cmake": {"build_type": "Debug"}});
         let release = serde_json::json!({"cmake": {"build_type": "Release"}});
         assert_ne!(
-            key_with_package_and_build_settings(None, Some(&debug)),
-            key_with_package_and_build_settings(None, Some(&release)),
+            key_with_package_and_build_settings(None, Some(&debug), None),
+            key_with_package_and_build_settings(None, Some(&release), None),
         );
     }
 
@@ -2302,18 +2306,7 @@ mod cache_key_tests {
             )]
             .into_iter()
             .collect();
-            super::compute_artifact_cache_key(
-                &record("foo"),
-                Subdir::Linux64,
-                Subdir::Linux64,
-                "cmake@1.0",
-                None,
-                crate::input_hash::ConfigurationHash::compute(None, Some(&targets)),
-                &[],
-                &[],
-                None,
-                None,
-            )
+            key_with_package_and_build_settings(None, None, Some(&targets))
         };
         assert_ne!(key("Debug"), key("Release"));
     }
@@ -2323,8 +2316,8 @@ mod cache_key_tests {
         let a = serde_json::json!({"build_type": "Release", "generator": "Ninja"});
         let b = serde_json::json!({"generator": "Ninja", "build_type": "Release"});
         assert_eq!(
-            key_with_package_and_build_settings(None, Some(&a)),
-            key_with_package_and_build_settings(None, Some(&b)),
+            key_with_package_and_build_settings(None, Some(&a), None),
+            key_with_package_and_build_settings(None, Some(&b), None),
         );
     }
 
@@ -2671,8 +2664,8 @@ mod cache_key_tests {
             ..Default::default()
         };
         assert_ne!(
-            key_with_package_and_build_settings(Some(&bare), None),
-            key_with_package_and_build_settings(Some(&prefixed), None),
+            key_with_package_and_build_settings(Some(&bare), None, None),
+            key_with_package_and_build_settings(Some(&prefixed), None, None),
         );
     }
 
@@ -2684,8 +2677,8 @@ mod cache_key_tests {
             ..Default::default()
         };
         assert_ne!(
-            key_with_package_and_build_settings(Some(&bare), None),
-            key_with_package_and_build_settings(Some(&numbered), None),
+            key_with_package_and_build_settings(Some(&bare), None, None),
+            key_with_package_and_build_settings(Some(&numbered), None, None),
         );
     }
 
