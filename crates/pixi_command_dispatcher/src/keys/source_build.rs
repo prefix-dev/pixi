@@ -131,6 +131,9 @@ fn immutable_backend_identifier(
     // Virtual packages are absent from `compute_artifact_cache_key`, but a
     // backend may select variants on them (`__cuda`, `__glibc`), so an
     // artifact built against one set must not be reused for another.
+    // This is an extra defensive check, as differently selected variants
+    // should already be captured by
+    // `compute_artifact_cache_key`’s `build_packages`/`host_packages`.
     spec.build_environment
         .build_virtual_packages
         .hash(&mut hasher);
