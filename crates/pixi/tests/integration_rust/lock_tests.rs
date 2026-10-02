@@ -152,7 +152,7 @@ async fn test_lock_check_does_not_create_missing_lock_file() {
     let mut package_database = MockRepoData::default();
     package_database.add_package(
         Package::build("python", "3.11.0")
-            .with_subdir(Platform::current())
+            .with_subdir(Subdir::current().unwrap_or(Subdir::NoArch))
             .finish(),
     );
 
