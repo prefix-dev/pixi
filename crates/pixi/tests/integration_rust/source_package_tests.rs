@@ -2758,7 +2758,7 @@ subdirectory = "."
 rev = "{short_rev}"
 "#,
             platform = Subdir::current().unwrap_or(Subdir::NoArch),
-            git_url = &fixture.base_url,
+            git_url = fixture.base_url,
         ),
     )
     .unwrap();

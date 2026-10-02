@@ -389,6 +389,7 @@ impl CommandDispatcher {
     /// installs all required packages into the target prefix. It handles
     /// both binary packages (from conda repositories) and source packages
     /// (built from source code).
+    #[allow(clippy::result_large_err)] // matches install_inner's unboxed error contract
     pub async fn install_pixi_environment(
         &self,
         spec: InstallPixiEnvironmentSpec,

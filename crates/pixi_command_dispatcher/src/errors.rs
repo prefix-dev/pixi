@@ -355,7 +355,7 @@ pub enum SolvePixiEnvironmentError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    MissingChannel(MissingChannelError),
+    MissingChannel(Box<MissingChannelError>),
 
     #[error(transparent)]
     #[diagnostic(transparent)]

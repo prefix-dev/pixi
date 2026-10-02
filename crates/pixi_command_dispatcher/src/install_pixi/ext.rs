@@ -94,6 +94,7 @@ struct SharedBuildParams {
     variant_files: Option<Vec<std::path::PathBuf>>,
 }
 
+#[allow(clippy::result_large_err)] // InstallPixiEnvironmentError is threaded unboxed through the install pipeline
 async fn install_inner(
     ctx: &mut ComputeCtx,
     mut spec: InstallPixiEnvironmentSpec,
