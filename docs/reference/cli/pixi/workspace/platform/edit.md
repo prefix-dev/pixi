@@ -10,15 +10,15 @@ Edit an existing workspace platform's subdir and/or virtual packages
 
 ## Usage
 ```
-pixi workspace platform edit [OPTIONS] <NAME> [__NAME[=VERSION[=BUILD]]]...
+pixi workspace platform edit [OPTIONS] <NAME> [NAME=VERSION[=BUILD]]...
 ```
 
 ## Arguments
 - <a id="arg-NAME" href="#arg-NAME">`<NAME>`</a>
 :  Name of the platform to edit
 <br>**required**: `true`
-- <a id="arg-__NAME[=VERSION[=BUILD]]" href="#arg-__NAME[=VERSION[=BUILD]]">`<__NAME[=VERSION[=BUILD]]>`</a>
-:  Raw virtual-package specs (`__name[=version[=build_string]]`) to declare or update on this platform. Use the friendly flags (`--cuda`, `--archspec`, ...) for virtual packages that have one; this trailing positional list is the escape hatch for everything else, mirroring the `__name = "..."` raw keys accepted in pixi.toml
+- <a id="arg-NAME=VERSION[=BUILD]" href="#arg-NAME=VERSION[=BUILD]">`<NAME=VERSION[=BUILD]>`</a>
+:  Arbitrary virtual-package specs (`name=version[=build_string]`) to declare or update on this platform. Pixi adds the canonical `__` prefix. Use the built-in flags (`--cuda`, `--archspec`, ...) for their specialized validation and syntax
 <br>May be provided more than once.
 
 ## Options
@@ -40,7 +40,7 @@ pixi workspace platform edit [OPTIONS] <NAME> [__NAME[=VERSION[=BUILD]]]...
 - <a id="arg---windows" href="#arg---windows">`--windows <VERSION>`</a>
 :  Declare a `__win` virtual package at the given Windows version, e.g. `10`. Only valid on win subdirs
 - <a id="arg---remove-virtual-package" href="#arg---remove-virtual-package">`--remove-virtual-package <NAME>`</a>
-:  Remove the named virtual package from this platform. Can be repeated
+:  Remove an unprefixed virtual-package name from this platform. Can be repeated
 <br>May be provided more than once.
 - <a id="arg---clear-virtual-packages" href="#arg---clear-virtual-packages">`--clear-virtual-packages`</a>
 :  Clear all virtual packages before applying any add/upsert operations

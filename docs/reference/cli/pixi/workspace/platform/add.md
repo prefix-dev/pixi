@@ -10,15 +10,18 @@ Adds a platform(s) to the workspace file and updates the lock file
 
 ## Usage
 ```
-pixi workspace platform add [OPTIONS] [PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]]...
+pixi workspace platform add [OPTIONS] [PLATFORM|NAME=PLATFORM|VP=VERSION[=BUILD]]...
 ```
 
 ## Arguments
-- <a id="arg-PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]" href="#arg-PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]">`<PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]>`</a>
-:  Platforms to add, optionally followed by raw virtual-package specs
+- <a id="arg-PLATFORM|NAME=PLATFORM|VP=VERSION[=BUILD]" href="#arg-PLATFORM|NAME=PLATFORM|VP=VERSION[=BUILD]">`<PLATFORM|NAME=PLATFORM|VP=VERSION[=BUILD]>`</a>
+:  Platforms to add, optionally followed by arbitrary virtual-package specs
 <br>May be provided more than once.
 
 ## Options
+- <a id="arg---virtual-package" href="#arg---virtual-package">`--virtual-package <NAME=VERSION[=BUILD]>`</a>
+:  Declare an arbitrary virtual package explicitly. Use this when its version is also a conda subdir name, which would otherwise parse as a `<name>=<subdir>` platform entry
+<br>May be provided more than once.
 - <a id="arg---auto-detect" href="#arg---auto-detect">`--auto-detect`</a>
 :  Detect this machine's platform (subdir and virtual packages) instead of naming a subdir. Optionally pass a single `<name>` to name it; any virtual-package flags override the detected values. The detected platform is placed at the top of the list
 <br>**aliases**: auto-detected, current

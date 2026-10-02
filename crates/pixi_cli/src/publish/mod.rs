@@ -567,9 +567,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_global_config_source(args.config_source.source())
         .with_search_start(workspace_locator.clone())
         .with_closest_package(true)
+        .with_cli_config(args.config_cli)
         .locate()
-        .await?
-        .with_cli_config(args.config_cli);
+        .await?;
     if let Some(backend_override) = args.backend_override.clone() {
         workspace = workspace.with_backend_override(backend_override);
     }

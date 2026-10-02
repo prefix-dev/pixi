@@ -34,7 +34,7 @@ use pixi_core::environment::{
     EnvironmentFile, LockedEnvironmentHash, PlatformData, RequiredPlatform, write_environment_file,
 };
 use pixi_core::host::{
-    DetectorConsent, HostDetection, HostDetector, HostUndetected, NonInteractiveConsent,
+    DetectorConsent, HostDetection, HostDetector, HostUndetected, cli_detector_consent,
 };
 use pixi_core::lock_file::virtual_packages::required_virtual_package_specs;
 use pixi_core::repodata::Repodata;
@@ -349,7 +349,7 @@ impl Project {
             top_level_progress: OnceCell::new(),
             backend_override: None,
             host: OnceCell::new(),
-            detector_consent: Arc::new(NonInteractiveConsent::default()),
+            detector_consent: cli_detector_consent(None),
         }
     }
 
