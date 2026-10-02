@@ -2116,7 +2116,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
- "spdx 0.13.5",
+ "spdx",
  "strum",
  "thiserror 2.0.20",
  "time",
@@ -6043,7 +6043,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "spdx 0.10.9",
+ "spdx",
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
@@ -7001,7 +7001,7 @@ dependencies = [
  "serde",
  "serde-value",
  "serde_json",
- "spdx 0.10.9",
+ "spdx",
  "strsim",
  "strum",
  "temp-env",
@@ -8206,7 +8206,7 @@ dependencies = [
  "serde_with",
  "serde_yaml",
  "sha1 0.11.0",
- "spdx 0.13.5",
+ "spdx",
  "thiserror 2.0.20",
  "url",
 ]
@@ -10614,15 +10614,6 @@ dependencies = [
 
 [[package]]
 name = "spdx"
-version = "0.10.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3e17e880bafaeb362a7b751ec46bdc5b61445a188f80e0606e68167cd540fa3"
-dependencies = [
- "smallvec",
-]
-
-[[package]]
-name = "spdx"
 version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "081670c233dfbed55690cc0cd38424e0e24ac1b2673d0b408b3f7b684738dfa9"
@@ -11743,7 +11734,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
- "spdx 0.13.5",
+ "spdx",
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
