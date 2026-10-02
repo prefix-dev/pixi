@@ -11,7 +11,7 @@ use pixi_manifest::{
         ScriptManifest, ScriptManifestError,
         conda::{CondaScriptError, CondaScriptManifest},
     },
-    utils::WithSourceCode,
+    utils::{WithSourceCode, workspace_or_project_env},
 };
 use thiserror::Error;
 
@@ -447,9 +447,9 @@ impl WorkspaceLocator {
         discovered_workspace: Option<Manifests>,
         emit_warnings: bool,
     ) -> Result<Option<WithWarnings<Manifests, WarningWithSource>>, WorkspaceLocatorError> {
-        let env_manifest_path = std::env::var("PIXI_PROJECT_MANIFEST")
-            .map(PathBuf::from)
-            .ok();
+        let env_manifest_path =
+            workspace_or_project_env("PIXI_WORKSPACE_MANIFEST", "PIXI_PROJECT_MANIFEST")
+                .map(PathBuf::from);
 
         // Warn the user if they are currently in a shell of another workspace.
         if let Some(workspace_manifests) = &discovered_workspace {
@@ -461,7 +461,7 @@ impl WorkspaceLocator {
                 && emit_warnings
             {
                 tracing::warn!(
-                    "Using local manifest {} rather than {} from environment variable `PIXI_PROJECT_MANIFEST`",
+                    "Using local manifest {} rather than {} from environment variable `PIXI_WORKSPACE_MANIFEST` (or legacy `PIXI_PROJECT_MANIFEST`)",
                     discovered_manifest_path.display(),
                     env_manifest_path.display(),
                 );
