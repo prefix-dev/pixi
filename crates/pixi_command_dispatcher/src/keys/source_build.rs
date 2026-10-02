@@ -319,6 +319,12 @@ async fn compute_inner(
             .lookup_immutable(spec.record.name(), key, &backend, &identifier)
             .await
     {
+        tracing::debug!(
+            package = %spec.record.name().as_source(),
+            key = %key,
+            artifact = %hit.artifact.display(),
+            "checkout-free artifact cache hit",
+        );
         return Ok(SourceBuildResult {
             artifact: hit.artifact,
             artifact_sha256: hit.sha256,
