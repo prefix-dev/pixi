@@ -85,13 +85,13 @@ impl std::fmt::Display for ArtifactCacheKey {
     }
 }
 
-/// Compute the artifact cache key for a source build.
+/// Compute the build input hash used as the artifact cache key for a source build.
 ///
 /// Inputs that go into the hash:
 /// - package name, pinned manifest source, pinned build source, variants
 /// - build + host platform
 /// - backend identifier (version + name of the build backend)
-/// - effective project model (after overrides) and backend configuration,
+/// - project model with overrides and backend configuration,
 ///   including target-specific configuration
 /// - url + sha256 of every binary dep in `build_packages` / `host_packages`,
 ///   tagged by bucket so a dep moving build ↔ host invalidates
@@ -108,7 +108,7 @@ pub fn compute_artifact_cache_key(
     build_platform: Subdir,
     host_platform: Subdir,
     backend_identifier: &str,
-    project_model_hash: Option<crate::input_hash::ProjectModelHash>,
+    project_model_with_overrides_hash: Option<crate::input_hash::ProjectModelHash>,
     configuration_hash: crate::input_hash::ConfigurationHash,
     build_source_dep_sha256s: &[Sha256Hash],
     host_source_dep_sha256s: &[Sha256Hash],
@@ -129,7 +129,7 @@ pub fn compute_artifact_cache_key(
     build_platform.hash(&mut hasher);
     host_platform.hash(&mut hasher);
     backend_identifier.hash(&mut hasher);
-    project_model_hash.hash(&mut hasher);
+    project_model_with_overrides_hash.hash(&mut hasher);
     configuration_hash.hash(&mut hasher);
     // Distinguish artifacts by output format.
     package_format.hash(&mut hasher);
@@ -2237,7 +2237,7 @@ mod cache_key_tests {
         project_model_overrides: &crate::ProjectModelOverrides,
         package_format: Option<pixi_build_types::procedures::conda_build_v1::CondaPackageFormat>,
     ) -> super::ArtifactCacheKey {
-        let model = project_model_overrides
+        let project_model_with_overrides = project_model_overrides
             .apply(Some(pixi_build_types::ProjectModel::default()))
             .unwrap();
         super::compute_artifact_cache_key(
@@ -2245,7 +2245,9 @@ mod cache_key_tests {
             build_platform,
             host_platform,
             backend_identifier,
-            Some(crate::input_hash::ProjectModelHash::from(&model)),
+            Some(crate::input_hash::ProjectModelHash::from(
+                &project_model_with_overrides,
+            )),
             Default::default(),
             build_source_dep_sha256s,
             host_source_dep_sha256s,
@@ -2253,8 +2255,8 @@ mod cache_key_tests {
         )
     }
 
-    fn key_with_backend_inputs(
-        model: Option<&pixi_build_types::ProjectModel>,
+    fn key_with_package_and_build_settings(
+        project_model_with_overrides: Option<&pixi_build_types::ProjectModel>,
         config: Option<&serde_json::Value>,
     ) -> super::ArtifactCacheKey {
         super::compute_artifact_cache_key(
@@ -2262,7 +2264,7 @@ mod cache_key_tests {
             Platform::Linux64,
             Platform::Linux64,
             "cmake@1.0",
-            model.map(crate::input_hash::ProjectModelHash::from),
+            project_model_with_overrides.map(crate::input_hash::ProjectModelHash::from),
             crate::input_hash::ConfigurationHash::compute(config, None),
             &[],
             &[],
@@ -2271,14 +2273,17 @@ mod cache_key_tests {
     }
 
     #[test]
-    fn effective_project_version_changes_artifact_key() {
-        let mut model = pixi_build_types::ProjectModel {
+    fn project_model_with_overrides_version_changes_artifact_key() {
+        let mut project_model_with_overrides = pixi_build_types::ProjectModel {
             version: Some("0.1.0".parse().unwrap()),
             ..Default::default()
         };
-        let old = key_with_backend_inputs(Some(&model), None);
-        model.version = Some("0.2.0".parse().unwrap());
-        assert_ne!(old, key_with_backend_inputs(Some(&model), None));
+        let old = key_with_package_and_build_settings(Some(&project_model_with_overrides), None);
+        project_model_with_overrides.version = Some("0.2.0".parse().unwrap());
+        assert_ne!(
+            old,
+            key_with_package_and_build_settings(Some(&project_model_with_overrides), None)
+        );
     }
 
     #[test]
@@ -2286,8 +2291,8 @@ mod cache_key_tests {
         let debug = serde_json::json!({"cmake": {"build_type": "Debug"}});
         let release = serde_json::json!({"cmake": {"build_type": "Release"}});
         assert_ne!(
-            key_with_backend_inputs(None, Some(&debug)),
-            key_with_backend_inputs(None, Some(&release)),
+            key_with_package_and_build_settings(None, Some(&debug)),
+            key_with_package_and_build_settings(None, Some(&release)),
         );
     }
 
@@ -2316,7 +2321,7 @@ mod cache_key_tests {
     }
 
     #[test]
-    fn equivalent_backend_inputs_produce_equal_artifact_keys() {
+    fn equivalent_package_and_build_settings_produce_equal_artifact_keys() {
         let model = pixi_build_types::ProjectModel {
             version: Some("0.2.0".parse().unwrap()),
             ..Default::default()
@@ -2324,8 +2329,8 @@ mod cache_key_tests {
         let a = serde_json::json!({"build_type": "Release", "generator": "Ninja"});
         let b = serde_json::json!({"generator": "Ninja", "build_type": "Release"});
         assert_eq!(
-            key_with_backend_inputs(Some(&model), Some(&a)),
-            key_with_backend_inputs(Some(&model.clone()), Some(&b)),
+            key_with_package_and_build_settings(Some(&model), Some(&a)),
+            key_with_package_and_build_settings(Some(&model.clone()), Some(&b)),
         );
     }
 
@@ -2343,8 +2348,8 @@ mod cache_key_tests {
         .apply(Some(pixi_build_types::ProjectModel::default()))
         .unwrap();
         assert_eq!(
-            key_with_backend_inputs(Some(&model), None),
-            key_with_backend_inputs(Some(&overridden), None),
+            key_with_package_and_build_settings(Some(&model), None),
+            key_with_package_and_build_settings(Some(&overridden), None),
         );
     }
 

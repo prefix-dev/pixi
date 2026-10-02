@@ -213,8 +213,9 @@ async fn compute_inner(
         .map_err(|err| {
             SourceBuildError::Initialize(crate::InstantiateBackendError::Discovery(err))
         })?;
-    let project_model = project_model_overrides.apply(discovered.init_params.project_model.clone());
-    let project_model_hash = project_model
+    let project_model_with_overrides =
+        project_model_overrides.apply(discovered.init_params.project_model.clone());
+    let project_model_with_overrides_hash = project_model_with_overrides
         .as_ref()
         .map(crate::input_hash::ProjectModelHash::from);
     let configuration_hash = crate::input_hash::ConfigurationHash::compute(
@@ -226,7 +227,7 @@ async fn compute_inner(
         spec.build_environment.build_platform,
         spec.build_environment.host_platform,
         &backend_identifier,
-        project_model_hash,
+        project_model_with_overrides_hash,
         configuration_hash,
         &build_source_dep_sha256s,
         &host_source_dep_sha256s,
@@ -302,8 +303,8 @@ async fn compute_inner(
             SourceBuildError::Initialize((*err).clone())
         })?;
 
-    // Workspace dir is the backend's build root; state persists across
-    // runs that share the same source, deps, variants, backend, model and config.
+    // The backend build directory is reused when the source, dependencies,
+    // variants, backend, and package and build settings match.
     // `package_format` is intentionally not included: differently-encoded
     // outputs of the same build can share the same workdir.
     let workspace_key = compute_workspace_key(
@@ -311,7 +312,7 @@ async fn compute_inner(
         spec.build_environment.build_platform,
         spec.build_environment.host_platform,
         &backend_identifier,
-        project_model_hash,
+        project_model_with_overrides_hash,
         configuration_hash,
     );
     let workspaces_dir = ctx.cache_dir::<SourceBuildWorkspacesDir>().await;

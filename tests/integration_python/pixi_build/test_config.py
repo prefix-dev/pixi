@@ -18,7 +18,7 @@ from .common import (
 
 @pytest.mark.slow
 @pytest.mark.parametrize("changed_input", ["version", "configuration", "target_configuration"])
-def test_artifact_cache_tracks_backend_inputs(
+def test_artifact_cache_tracks_package_and_build_settings(
     pixi: Path, tmp_pixi_workspace: Path, build_data: Path, changed_input: str
 ) -> None:
     copytree_with_local_backend(
@@ -27,29 +27,29 @@ def test_artifact_cache_tracks_backend_inputs(
     manifest = get_manifest(tmp_pixi_workspace)
     command = [pixi, "install", "--manifest-path", manifest]
     prefix = default_env_path(tmp_pixi_workspace)
-    payload = prefix / "share/artifact-key-repro/repro-value.txt"
+    marker_file = prefix / "share/artifact-key-repro/repro-value.txt"
 
     def assert_installed(version: str, value: str) -> None:
         records = list((prefix / "conda-meta").glob("artifact-key-repro-*.json"))
         assert len(records) == 1
         assert json.loads(records[0].read_text())["version"] == version
-        assert payload.read_text().strip() == value
+        assert marker_file.read_text().strip() == value
 
     verify_cli_command(command)
     assert_installed("0.1.0", "before")
 
-    model = tomllib.loads(manifest.read_text())
+    manifest_data = tomllib.loads(manifest.read_text())
     expected_version, expected_value = "0.1.0", "before"
     if changed_input == "version":
-        model["package"]["version"] = expected_version = "0.2.0"
+        manifest_data["package"]["version"] = expected_version = "0.2.0"
     elif changed_input == "configuration":
-        model["package"]["build"]["config"]["env"]["REPRO_VALUE"] = expected_value = "after"
+        manifest_data["package"]["build"]["config"]["env"]["REPRO_VALUE"] = expected_value = "after"
     else:
-        model["package"]["build"]["target"] = {
+        manifest_data["package"]["build"]["target"] = {
             CURRENT_PLATFORM: {"config": {"env": {"REPRO_VALUE": "after"}}}
         }
         expected_value = "after"
-    manifest.write_text(tomli_w.dumps(model))
+    manifest.write_text(tomli_w.dumps(manifest_data))
 
     # Leave the artifact cache and installed environment intact.
     verify_cli_command(command)

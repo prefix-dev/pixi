@@ -16,8 +16,9 @@
 //! bake fixed prefix paths into their own incremental state, so a dep swap
 //! under the same prefix is invisible to the build tool and must be treated
 //! as a fresh workspace.
-//! The effective project model and backend configuration also select a fresh
-//! workspace, since backends may skip configuration in an existing build tree.
+//! The project model with overrides and backend configuration also select the
+//! backend build directory. This avoids outdated build directory contents when
+//! a backend skips configuration in an existing build directory.
 //!
 //! The cost is that a dep update blows away incremental state for packages
 //! downstream of it. The mitigation is the artifact cache: when the same
@@ -49,13 +50,13 @@ impl std::fmt::Display for WorkspaceKey {
     }
 }
 
-/// Compute the workspace cache key for a source build.
+/// Compute the build input hash used to select a backend build directory.
 ///
 /// Inputs that go into the hash:
 /// - package name, pinned manifest source, pinned build source, variants
 /// - build + host platform
 /// - backend identifier
-/// - effective project model and general + target-specific backend configuration
+/// - project model with overrides and general + target-specific backend configuration
 /// - the full `build_packages` and `host_packages` lists (not content-
 ///   addressed like the artifact cache; structural identity is what matters
 ///   here, so the workspace is stable across runs that produce identical
@@ -65,7 +66,7 @@ pub fn compute_workspace_key(
     build_platform: Subdir,
     host_platform: Subdir,
     backend_identifier: &str,
-    project_model_hash: Option<crate::input_hash::ProjectModelHash>,
+    project_model_with_overrides_hash: Option<crate::input_hash::ProjectModelHash>,
     configuration_hash: crate::input_hash::ConfigurationHash,
 ) -> WorkspaceKey {
     let mut hasher = Xxh3::new();
@@ -76,7 +77,7 @@ pub fn compute_workspace_key(
     build_platform.hash(&mut hasher);
     host_platform.hash(&mut hasher);
     backend_identifier.hash(&mut hasher);
-    project_model_hash.hash(&mut hasher);
+    project_model_with_overrides_hash.hash(&mut hasher);
     configuration_hash.hash(&mut hasher);
     record.build_packages.hash(&mut hasher);
     record.host_packages.hash(&mut hasher);
@@ -221,7 +222,7 @@ mod tests {
     }
 
     #[test]
-    fn backend_inputs_select_fresh_workspaces() {
+    fn package_and_build_settings_select_backend_build_directories() {
         let record = make_record("foo");
         let model = pixi_build_types::ProjectModel {
             version: Some("0.2.0".parse().unwrap()),
