@@ -1,6 +1,5 @@
 use std::{
     collections::{HashMap, HashSet, hash_map::Entry},
-    convert::identity,
     ffi::OsString,
     io::Read,
     process::ExitCode,
@@ -819,7 +818,7 @@ fn disambiguate_task_interactive<'p>(
         .items(&environment_names)
         .default(0)
         .interact_opt()
-        .map_or(None, identity)
+        .unwrap_or(None)
         .map(|idx| problem.environments[idx].clone())
 }
 
