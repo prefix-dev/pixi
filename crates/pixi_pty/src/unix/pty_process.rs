@@ -2,21 +2,18 @@ pub use nix::sys::{signal, wait};
 use nix::{
     self,
     fcntl::{OFlag, open},
-    libc::{STDERR_FILENO, STDIN_FILENO, STDOUT_FILENO},
+    libc::STDERR_FILENO,
     pty::{PtyMaster, Winsize, grantpt, posix_openpt, unlockpt},
     sys::termios::{InputFlags, Termios},
     sys::{stat, termios},
-    unistd::{ForkResult, Pid, close, dup, dup2, fork, setsid},
+    unistd::{ForkResult, Pid, close, dup, dup2_stderr, dup2_stdin, dup2_stdout, fork, setsid},
 };
 use std::os::fd::AsFd;
 use std::{
     self,
     fs::File,
     io,
-    os::unix::{
-        io::{AsRawFd, FromRawFd},
-        process::CommandExt,
-    },
+    os::unix::{io::AsRawFd, process::CommandExt},
     process::Command,
     thread, time,
 };
@@ -97,12 +94,12 @@ impl PtyProcess {
                 )?;
 
                 // assign stdin, stdout, stderr to the tty, just like a terminal does
-                dup2(slave_fd, STDIN_FILENO)?;
-                dup2(slave_fd, STDOUT_FILENO)?;
-                dup2(slave_fd, STDERR_FILENO)?;
+                dup2_stdin(&slave_fd)?;
+                dup2_stdout(&slave_fd)?;
+                dup2_stderr(&slave_fd)?;
 
                 // Avoid leaking slave fd
-                if slave_fd > STDERR_FILENO {
+                if slave_fd.as_raw_fd() > STDERR_FILENO {
                     close(slave_fd)?;
                 }
 
@@ -124,8 +121,8 @@ impl PtyProcess {
     /// Get handle to pty fork for reading/writing
     pub fn get_file_handle(&self) -> nix::Result<File> {
         // needed because otherwise fd is closed both by dropping process and reader/writer
-        let fd = dup(self.pty.as_raw_fd())?;
-        unsafe { Ok(File::from_raw_fd(fd)) }
+        let fd = dup(&self.pty)?;
+        Ok(File::from(fd))
     }
 
     /// Get status of child process, non-blocking.
