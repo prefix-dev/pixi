@@ -142,6 +142,7 @@ pub(crate) mod conversions;
 pub(crate) mod hash_verification;
 pub(crate) mod install_wheel;
 pub(crate) mod plan;
+pub mod uninstall;
 pub(crate) mod utils;
 
 use cache_scoped_build_context::CacheScopedBuildContext;
@@ -162,6 +163,7 @@ pub enum ContinuePyPIPrefixUpdate<'a> {
 /// resolve and validate the paths recorded in each wheel's `RECORD`. The
 /// caller builds it from the old [`PythonInfo`] plus the env prefix.
 async fn uninstall_outdated_site_packages(
+    prefix: &Prefix,
     layout: &uv_install_wheel::Layout,
     site_packages: &Path,
 ) -> miette::Result<()> {
@@ -207,8 +209,9 @@ async fn uninstall_outdated_site_packages(
         })
         .collect::<Vec<_>>();
 
+    let clobber_registry = PypiCondaClobberRegistry::from_prefix(prefix);
     for dist_info in installed {
-        uv_installer::uninstall(&dist_info, layout)
+        uninstall::uninstall(&dist_info, layout, prefix.root(), &clobber_registry)
             .await
             .expect("uninstallation of old site-packages failed");
     }
@@ -250,7 +253,7 @@ pub async fn on_python_interpreter_change<'a>(
             let site_packages_path = prefix.root().join(&old.site_packages_path);
             if site_packages_path.exists() {
                 let layout = layout_from_python_info(prefix, old);
-                uninstall_outdated_site_packages(&layout, &site_packages_path).await?;
+                uninstall_outdated_site_packages(prefix, &layout, &site_packages_path).await?;
             }
             Ok(ContinuePyPIPrefixUpdate::Skip)
         }
@@ -259,7 +262,7 @@ pub async fn on_python_interpreter_change<'a>(
                 let site_packages_path = prefix.root().join(&old.site_packages_path);
                 if site_packages_path.exists() {
                     let layout = layout_from_python_info(prefix, old);
-                    uninstall_outdated_site_packages(&layout, &site_packages_path).await?;
+                    uninstall_outdated_site_packages(prefix, &layout, &site_packages_path).await?;
                 }
             }
             Ok(ContinuePyPIPrefixUpdate::Continue(new))
@@ -269,7 +272,7 @@ pub async fn on_python_interpreter_change<'a>(
                 let site_packages_path = prefix.root().join(&info.site_packages_path);
                 if site_packages_path.exists() {
                     let layout = layout_from_python_info(prefix, info);
-                    uninstall_outdated_site_packages(&layout, &site_packages_path).await?;
+                    uninstall_outdated_site_packages(prefix, &layout, &site_packages_path).await?;
                 }
                 return Ok(ContinuePyPIPrefixUpdate::Skip);
             }
@@ -1107,8 +1110,17 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         }
         let start = std::time::Instant::now();
         let layout = setup.venv.interpreter().layout();
+        let clobber_registry = PypiCondaClobberRegistry::from_prefix(self.config.prefix);
+        let prefix_root = self.config.prefix.root();
         for dist_info in extraneous.iter().chain(reinstalls.iter().map(|(d, _)| d)) {
-            let summary = match uv_installer::uninstall(dist_info, &layout).await {
+            let summary = match uninstall::uninstall(
+                dist_info,
+                &layout,
+                prefix_root,
+                &clobber_registry,
+            )
+            .await
+            {
                 Ok(sum) => sum,
                 // Get error types from uv_installer
                 Err(UninstallError::Uninstall(e))

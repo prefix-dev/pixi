@@ -5,6 +5,7 @@ use std::{
 };
 
 use pixi_path::normalize_std;
+use pixi_utils::prefix::Prefix;
 use rattler_conda_types::PrefixRecord;
 use uv_distribution_types::{CachedDist, Name};
 use uv_python::PythonEnvironment;
@@ -62,7 +63,7 @@ impl fmt::Display for ClobberReport {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub(crate) struct PypiCondaClobberRegistry {
     /// A registry of the paths of the installed conda paths and the package names
     paths_registry: AHashMap<CondaPrefixPath, rattler_conda_types::PackageName>,
@@ -176,7 +177,7 @@ impl CondaPrefixPath {
     /// check is best-effort.
     fn from_conda_record(path: PathBuf) -> Option<Self> {
         if path.is_relative() {
-            Some(Self(path))
+            Some(Self(normalize_std(&path)))
         } else {
             tracing::debug!(
                 "ignoring non-relative conda paths.json entry `{}` in the clobber registry",
@@ -184,6 +185,24 @@ impl CondaPrefixPath {
             );
             None
         }
+    }
+
+    /// From a path relative to the prefix root.
+    pub(crate) fn from_prefix_relative(path: impl AsRef<Path>) -> Option<Self> {
+        let path = path.as_ref();
+        if path.is_relative() {
+            Some(Self(normalize_std(path)))
+        } else {
+            None
+        }
+    }
+
+    /// From a path that may be inside the prefix root, stripping the prefix root.
+    pub(crate) fn from_path_in_prefix(path: &Path, prefix_root: &Path) -> Option<Self> {
+        let normalized = normalize_std(path);
+        let prefix_root_norm = normalize_std(prefix_root);
+        let prefix_relative = normalized.strip_prefix(&prefix_root_norm).ok()?;
+        Self::from_prefix_relative(prefix_relative)
     }
 
     /// Convert a wheel RECORD entry to the prefix-relative form, or `None`
@@ -213,6 +232,20 @@ impl CondaPrefixPath {
 }
 
 impl PypiCondaClobberRegistry {
+    /// Construct a registry from an environment prefix by scanning its installed packages.
+    pub(crate) fn from_prefix(prefix: &Prefix) -> Self {
+        match prefix.find_installed_packages() {
+            Ok(packages) => Self::with_conda_packages(&packages),
+            Err(err) => {
+                tracing::debug!(
+                    "failed to determine installed conda packages in {}: {err}",
+                    prefix.root().display()
+                );
+                Self::default()
+            }
+        }
+    }
+
     /// Register the paths of the installed conda packages
     /// to later check if they are going to be clobbered by the installation of the wheels
     pub(crate) fn with_conda_packages(conda_packages: &[PrefixRecord]) -> Self {
@@ -225,10 +258,37 @@ impl PypiCondaClobberRegistry {
                 };
                 registry.insert(path, record.repodata_record.package_record.name.clone());
             }
+            for path in &record.files {
+                let Some(path) = CondaPrefixPath::from_conda_record(path.clone()) else {
+                    continue;
+                };
+                registry.insert(path, record.repodata_record.package_record.name.clone());
+            }
         }
         Self {
             paths_registry: registry,
         }
+    }
+
+    /// Check if a path in the prefix is claimed by an installed conda package.
+    pub(crate) fn is_claimed_by_conda(
+        &self,
+        path: &Path,
+        prefix_root: &Path,
+    ) -> Option<&rattler_conda_types::PackageName> {
+        let conda_path = CondaPrefixPath::from_path_in_prefix(path, prefix_root)?;
+        self.paths_registry.get(&conda_path)
+    }
+
+    /// Check if any file under `dir_path` in the prefix is claimed by an installed conda package.
+    pub(crate) fn has_claimed_paths_under(&self, dir_path: &Path, prefix_root: &Path) -> bool {
+        let Some(conda_dir) = CondaPrefixPath::from_path_in_prefix(dir_path, prefix_root) else {
+            return false;
+        };
+        let dir = conda_dir.as_path();
+        self.paths_registry
+            .keys()
+            .any(|p| p.as_path().starts_with(dir))
     }
 
     /// Check if the installation of the wheels is going to clobber any installed conda package
@@ -505,6 +565,125 @@ mod tests {
         assert_eq!(
             report.to_string(),
             "PyPI package files will overwrite files installed by conda packages:\n  - PyPI package 'prek' overwrites conda package 'prek':\n    - bin/prek-1\n    - bin/prek-2\n    - bin/prek-3\n    - bin/prek-4\n    - bin/prek-5\n    - ... 2 other files\n"
+        );
+    }
+
+    #[test]
+    fn test_is_claimed_by_conda() {
+        use rattler_conda_types::{PackageName, PrefixRecord};
+        use std::path::Path;
+        use std::str::FromStr;
+
+        let pkg_name = PackageName::from_str("pystac").unwrap();
+        let prefix_record_json = r#"{
+          "name": "pystac",
+          "version": "1.14.3",
+          "build": "0",
+          "build_number": 0,
+          "subdir": "noarch",
+          "fn": "pystac-1.14.3-0.conda",
+          "url": "https://conda.anaconda.org/conda-forge/noarch/pystac-1.14.3-0.conda",
+          "channel": "https://conda.anaconda.org/conda-forge",
+          "extracted_package_dir": "",
+          "files": [
+            "lib/python3.12/site-packages/pystac/core.py"
+          ],
+          "paths_data": {
+            "paths_version": 1,
+            "paths": [
+              {
+                "_path": "lib/python3.12/site-packages/pystac/__init__.py",
+                "path_type": "hardlink"
+              }
+            ]
+          }
+        }"#;
+        let prefix_record: PrefixRecord = serde_json::from_str(prefix_record_json).unwrap();
+        let registry = super::PypiCondaClobberRegistry::with_conda_packages(&[prefix_record]);
+        let prefix_root = Path::new("/tmp/test-prefix");
+
+        let claimed1 =
+            Path::new("/tmp/test-prefix/lib/python3.12/site-packages/pystac/__init__.py");
+        let claimed2 = Path::new("/tmp/test-prefix/lib/python3.12/site-packages/pystac/core.py");
+        let unclaimed = Path::new(
+            "/tmp/test-prefix/lib/python3.12/site-packages/pystac_core-1.15.2.dist-info/RECORD",
+        );
+
+        assert_eq!(
+            registry.is_claimed_by_conda(claimed1, prefix_root),
+            Some(&pkg_name)
+        );
+        assert_eq!(
+            registry.is_claimed_by_conda(claimed2, prefix_root),
+            Some(&pkg_name)
+        );
+        assert_eq!(registry.is_claimed_by_conda(unclaimed, prefix_root), None);
+
+        let pystac_dir = Path::new("/tmp/test-prefix/lib/python3.12/site-packages/pystac");
+        let other_dir = Path::new("/tmp/test-prefix/lib/python3.12/site-packages/other");
+        assert!(registry.has_claimed_paths_under(pystac_dir, prefix_root));
+        assert!(!registry.has_claimed_paths_under(other_dir, prefix_root));
+    }
+
+    #[test]
+    fn test_from_prefix() {
+        use pixi_utils::prefix::Prefix;
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let prefix = Prefix::new(temp_dir.path());
+        let conda_meta = temp_dir.path().join("conda-meta");
+        fs_err::create_dir_all(&conda_meta).unwrap();
+
+        let prefix_record_json = r#"{
+          "name": "pystac",
+          "version": "1.14.3",
+          "build": "0",
+          "build_number": 0,
+          "subdir": "noarch",
+          "fn": "pystac-1.14.3-0.conda",
+          "url": "https://conda.anaconda.org/conda-forge/noarch/pystac-1.14.3-0.conda",
+          "channel": "https://conda.anaconda.org/conda-forge",
+          "extracted_package_dir": "",
+          "files": [
+            "lib/python3.12/site-packages/pystac/core.py"
+          ],
+          "paths_data": {
+            "paths_version": 1,
+            "paths": [
+              {
+                "_path": "lib/python3.12/site-packages/pystac/__init__.py",
+                "path_type": "hardlink"
+              }
+            ]
+          }
+        }"#;
+        fs_err::write(conda_meta.join("pystac-1.14.3-0.json"), prefix_record_json).unwrap();
+
+        let registry = super::PypiCondaClobberRegistry::from_prefix(&prefix);
+        let claimed1 = temp_dir
+            .path()
+            .join("lib/python3.12/site-packages/pystac/__init__.py");
+        let claimed2 = temp_dir
+            .path()
+            .join("lib/python3.12/site-packages/pystac/core.py");
+        let unclaimed = temp_dir
+            .path()
+            .join("lib/python3.12/site-packages/unrelated.py");
+
+        assert!(
+            registry
+                .is_claimed_by_conda(&claimed1, prefix.root())
+                .is_some()
+        );
+        assert!(
+            registry
+                .is_claimed_by_conda(&claimed2, prefix.root())
+                .is_some()
+        );
+        assert!(
+            registry
+                .is_claimed_by_conda(&unclaimed, prefix.root())
+                .is_none()
         );
     }
 }
