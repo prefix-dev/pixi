@@ -8,12 +8,13 @@ use pixi_audit::{
 };
 use pixi_core::{WorkspaceLocator, lock_file::UpdateLockFileOptions};
 use pixi_manifest::HasWorkspaceManifest;
-use pixi_utils::reqwest::build_reqwest_clients;
 use rattler_conda_types::PackageRecord;
 use rattler_lock::{LockFile, LockedPackage};
 use url::Url;
 
 use crate::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
+
+mod client;
 
 /// Sentinel used when a package's version cannot be determined, e.g. a
 /// conda `Source` package whose metadata has not been resolved yet.
@@ -34,6 +35,9 @@ pub struct Args {
     pub workspace_config: WorkspaceConfig,
 
     #[clap(flatten)]
+    pub config: pixi_config::ConfigCli,
+
+    #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
 
     #[clap(flatten)]
@@ -48,6 +52,11 @@ pub struct Args {
     #[arg(long = "platform")]
     pub platforms: Vec<String>,
 
+    /// Explicitly obtain a prefix.dev audience token before auditing (optional).
+    /// Never opens a login flow in CI, noninteractive, or offline mode.
+    #[arg(long)]
+    pub login: bool,
+
     /// Whether to output in json format.
     #[arg(long)]
     pub json: bool,
@@ -57,7 +66,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
-        .locate()?;
+        .locate()?
+        .with_cli_config(args.config);
 
     let lock_file = workspace
         .update_lock_file(
@@ -90,7 +100,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .wrap_err_with(|| format!("Invalid URL in {BASE_URL_ENV_VAR}"))?,
         Err(_) => Url::parse(DEFAULT_BASE_URL).expect("default base URL is valid"),
     };
-    let (_, client) = build_reqwest_clients(Some(workspace.config()), None)?;
+    let client = client::build(workspace.config(), &base_url, args.login).await?;
     let client = BasiliskClient::new(client, base_url);
 
     eprintln!("Auditing {} packages...", packages.len());
@@ -307,10 +317,18 @@ mod tests {
     use pixi_audit::{
         AuditReport, AuditSummary, Finding, PackageEcosystem, SeverityBand, UncheckedPackage,
     };
-    use rattler_conda_types::{PackageName, Platform};
+    use rattler_conda_types::{PackageName, Subdir};
     use rattler_lock::{CondaPackageData, CondaSourceData, PlatformData, PlatformName, UrlOrPath};
 
     use super::*;
+
+    #[test]
+    fn login_is_opt_in_and_accepts_offline_configuration() {
+        assert!(!Args::try_parse_from(["audit"]).unwrap().login);
+        let args = Args::try_parse_from(["audit", "--login", "--offline", "--frozen"]).unwrap();
+        assert!(args.login);
+        assert_eq!(args.config.offline, Some(true));
+    }
 
     #[test]
     fn classify_channels() {
@@ -356,7 +374,7 @@ mod tests {
         let mut builder = LockFile::builder()
             .with_platforms(vec![PlatformData {
                 name: PlatformName::try_from("linux-64").unwrap(),
-                subdir: Platform::Linux64,
+                subdir: Subdir::Linux64,
                 virtual_packages: vec![],
             }])
             .unwrap();

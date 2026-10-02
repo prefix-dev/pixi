@@ -1,0 +1,7 @@
+[workspace]
+name = "audit-example"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[workspace.audit]
+ignore = ["CVE-2026-0001", "GHSA-xxxx-yyyy-zzzz"]

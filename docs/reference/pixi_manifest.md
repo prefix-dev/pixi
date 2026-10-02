@@ -358,6 +358,15 @@ solve-strategy = "lowest"
     combined = ["two", "one"] # <- The solve strategy from feature `two` is used
     ```
 
+### `audit` (optional)
+
+Configure [vulnerability auditing](../workspace/audit.md) of locked dependencies. `ignore` lists advisory IDs or aliases to suppress:
+
+```toml
+[workspace.audit]
+ignore = ["CVE-2026-0001", "GHSA-xxxx-yyyy-zzzz"]
+```
+
 ### `requires-pixi` (optional)
 
 The required version spec for `pixi` itself to resolve and build the workspace. If unset (**Default**),

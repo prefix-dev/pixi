@@ -333,6 +333,22 @@
         }
       }
     },
+    "AuditOptions": {
+      "title": "AuditOptions",
+      "description": "Options for vulnerability auditing of the lock file.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ignore": {
+          "title": "Ignore",
+          "description": "Vulnerability IDs or aliases to ignore (for example CVE or GHSA IDs).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
     "Build": {
       "title": "Build",
       "type": "object",
@@ -3665,6 +3681,10 @@
       ],
       "additionalProperties": false,
       "properties": {
+        "audit": {
+          "$ref": "#/$defs/AuditOptions",
+          "description": "Options for pixi audit"
+        },
         "authors": {
           "title": "Authors",
           "description": "The authors of the project",

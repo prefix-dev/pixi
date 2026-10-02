@@ -57,6 +57,11 @@ Pixi can also be configured via environment variables.
       <td>Not set.</td>
     </tr>
     <tr>
+      <td><code>PIXI_AUDIT_BASE_URL</code></td>
+      <td>Overrides the vulnerability API used by <code>pixi audit</code>. Custom origins are queried anonymously; production Basilisk audience credentials are never forwarded to them. See <a href="../../workspace/audit/">audit documentation</a>.</td>
+      <td><code>https://api.basilisk.prefix.dev</code></td>
+    </tr>
+    <tr>
       <td><code>RATTLER_AUTH_FILE</code></td>
       <td>Overrides the default location of the credentials file. When set, this is the only source of authentication data used by pixi. See <a href="../../deployment/authentication/#override-the-authentication-storage">authentication docs</a> for the file format.</td>
       <td>

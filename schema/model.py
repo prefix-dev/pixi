@@ -269,6 +269,15 @@ KnownPreviewFeature = PixiBuildFeature
 #     PixiBuild: Annotated[str, Field(description="Enables building of source records")] = "pixi-build"
 
 
+class AuditOptions(StrictBaseModel):
+    """Options for vulnerability auditing of the lock file."""
+
+    ignore: list[str] = Field(
+        default_factory=list,
+        description="Vulnerability IDs or aliases to ignore (for example CVE or GHSA IDs).",
+    )
+
+
 class Workspace(StrictBaseModel):
     """The project's metadata information."""
 
@@ -350,6 +359,7 @@ class Workspace(StrictBaseModel):
     s3_options: dict[str, S3Options] | None = Field(
         None, description="Options related to S3 for this project"
     )
+    audit: AuditOptions | None = Field(None, description="Options for pixi audit")
     preview: list[KnownPreviewFeature | str] | bool | None = Field(
         None, description="Defines the enabling of preview features of the project"
     )

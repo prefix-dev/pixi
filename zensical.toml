@@ -54,6 +54,7 @@ nav = [
       { "Multi Platform" = "workspace/multi_platform_configuration.md" },
       { "Multi Environment" = "workspace/multi_environment.md" },
       { "Lock File" = "workspace/lock_file.md" },
+      { "Audit" = "workspace/audit.md" },
       { "System Requirements" = "workspace/system_requirements.md" },
       { "Package Specifications" = "concepts/package_specifications.md" },
       { "Conda & PyPI" = "concepts/conda_pypi.md" },
@@ -169,6 +170,7 @@ nav = [
         "CLI" = [
           "reference/cli/pixi/index.md",
           { "add" = "reference/cli/pixi/add.md" },
+          { "audit" = "reference/cli/pixi/audit.md" },
           {
             "auth" = [
               "reference/cli/pixi/auth/index.md",

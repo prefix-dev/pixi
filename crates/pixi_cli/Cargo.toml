@@ -84,6 +84,7 @@ rattler_virtual_packages = { workspace = true }
 regex = { workspace = true }
 reqwest = { workspace = true, features = ["http2", "system-proxy"] }
 reqwest-middleware = { workspace = true }
+reqwest-retry = { workspace = true }
 self-replace = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -110,6 +111,9 @@ which = { workspace = true }
 zip = { workspace = true, features = ["deflate", "time"] }
 
 [dev-dependencies]
+async-trait = { workspace = true }
+axum = { workspace = true, features = ["form", "json"] }
+http = { workspace = true }
 insta = { workspace = true, features = ["filters", "glob"] }
 pixi_test_utils = { workspace = true }
 rattler_repodata_gateway = { workspace = true }

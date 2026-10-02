@@ -15,6 +15,7 @@ pixi [OPTIONS] [COMMAND]
 | Command | Description |
 |---------|-------------|
 | [`add`](add.md) | Adds dependencies to the workspace |
+| [`audit`](audit.md) | Audit the workspace's locked packages for known vulnerabilities |
 | [`auth`](auth/index.md) | Login to prefix.dev or anaconda.org servers to access private channels |
 | [`clean`](clean/index.md) | Cleanup the environments |
 | [`completion`](completion.md) | Generates a completion script for a shell |
