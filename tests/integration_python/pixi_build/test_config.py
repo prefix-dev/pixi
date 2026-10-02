@@ -28,7 +28,9 @@ def test_artifact_cache_tracks_package_and_build_settings(
     manifest = get_manifest(tmp_pixi_workspace)
     command = [pixi, "install", "--manifest-path", manifest]
     prefix = default_env_path(tmp_pixi_workspace)
-    marker_file = prefix / "share/artifact-key-repro/repro-value.txt"
+    # On Windows, conda/CMake install files under the `Library` subdir of the prefix.
+    share_root = prefix / "Library" if platform.system() == "Windows" else prefix
+    marker_file = share_root / "share/artifact-key-repro/repro-value.txt"
 
     def assert_installed(version: str, value: str) -> None:
         records = list((prefix / "conda-meta").glob("artifact-key-repro-*.json"))
