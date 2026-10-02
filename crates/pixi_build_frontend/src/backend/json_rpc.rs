@@ -68,7 +68,7 @@ pub enum CommunicationError {
     BackendError(
         #[from]
         #[diagnostic_source]
-        BackendError,
+        Box<BackendError>,
     ),
     #[error("the build backend ({0}) does not implement the method '{1}'")]
     #[diagnostic(help(
@@ -105,7 +105,7 @@ impl CommunicationError {
     ) -> Self {
         match err {
             Error::Call(err) if err.code() > -32001 => {
-                Self::BackendError(BackendError::from_json_rpc(err, root_dir))
+                Self::BackendError(Box::new(BackendError::from_json_rpc(err, root_dir)))
             }
             Error::Call(err) if err.code() == ErrorCode::MethodNotFound.code() => {
                 Self::MethodNotImplemented(backend_identifier, method.to_string())

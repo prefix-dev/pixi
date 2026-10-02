@@ -92,7 +92,7 @@ async fn prefix_location_changed(
         .report(false)
         .default(true)
         .interact_opt()
-        .map_or(None, std::convert::identity);
+        .unwrap_or(None);
     if user_value == Some(true) {
         await_in_progress("removing old environment", |_| {
             tokio::fs::remove_dir_all(environment_dir)

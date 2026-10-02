@@ -212,7 +212,7 @@ impl UrlSource {
             Some(expected) => {
                 if sha256 != expected {
                     return Err(UrlError::Sha256Mismatch {
-                        url,
+                        url: Box::new(url),
                         expected: hex::encode(expected),
                         actual: hex::encode(sha256),
                     });
@@ -226,7 +226,7 @@ impl UrlSource {
             && md5 != expected
         {
             return Err(UrlError::Md5Mismatch {
-                url,
+                url: Box::new(url),
                 expected: hex::encode(expected),
                 actual: hex::encode(md5),
             });
