@@ -207,8 +207,8 @@ mod tests {
 
     fn compute_workspace_key(
         record: &UnresolvedSourceRecord,
-        build_platform: Platform,
-        host_platform: Platform,
+        build_platform: Subdir,
+        host_platform: Subdir,
         backend_identifier: &str,
     ) -> WorkspaceKey {
         super::compute_workspace_key(
@@ -232,8 +232,8 @@ mod tests {
         let key = |model_hash, config_hash| {
             super::compute_workspace_key(
                 &record,
-                Platform::Linux64,
-                Platform::Linux64,
+                Subdir::Linux64,
+                Subdir::Linux64,
                 "cmake@1.0",
                 model_hash,
                 config_hash,

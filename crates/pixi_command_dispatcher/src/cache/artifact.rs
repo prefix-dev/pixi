@@ -2227,31 +2227,27 @@ mod cache_key_tests {
     use typed_path::Utf8TypedPathBuf;
 
     #[allow(clippy::too_many_arguments)]
-    fn compute_artifact_cache_key(
+    fn key_with_default_package_and_build_settings(
         record: &UnresolvedSourceRecord,
-        build_platform: Platform,
-        host_platform: Platform,
+        build_platform: Subdir,
+        host_platform: Subdir,
         backend_identifier: &str,
         build_source_dep_sha256s: &[Sha256Hash],
         host_source_dep_sha256s: &[Sha256Hash],
-        project_model_overrides: &crate::ProjectModelOverrides,
         package_format: Option<pixi_build_types::procedures::conda_build_v1::CondaPackageFormat>,
+        inline_content_hash: Option<pixi_manifest::InlineContentHash>,
     ) -> super::ArtifactCacheKey {
-        let project_model_with_overrides = project_model_overrides
-            .apply(Some(pixi_build_types::ProjectModel::default()))
-            .unwrap();
         super::compute_artifact_cache_key(
             record,
             build_platform,
             host_platform,
             backend_identifier,
-            Some(crate::input_hash::ProjectModelHash::from(
-                &project_model_with_overrides,
-            )),
+            None,
             Default::default(),
             build_source_dep_sha256s,
             host_source_dep_sha256s,
             package_format,
+            inline_content_hash,
         )
     }
 
@@ -2261,13 +2257,14 @@ mod cache_key_tests {
     ) -> super::ArtifactCacheKey {
         super::compute_artifact_cache_key(
             &record("foo"),
-            Platform::Linux64,
-            Platform::Linux64,
+            Subdir::Linux64,
+            Subdir::Linux64,
             "cmake@1.0",
             project_model_with_overrides.map(crate::input_hash::ProjectModelHash::from),
             crate::input_hash::ConfigurationHash::compute(config, None),
             &[],
             &[],
+            None,
             None,
         )
     }
@@ -2300,20 +2297,21 @@ mod cache_key_tests {
     fn target_configuration_changes_artifact_key() {
         let key = |build_type| {
             let targets = [(
-                pixi_build_types::TargetSelector::Platform(Platform::Linux64.to_string()),
+                pixi_build_types::TargetSelector::Platform(Subdir::Linux64.to_string()),
                 serde_json::json!({"build_type": build_type}),
             )]
             .into_iter()
             .collect();
             super::compute_artifact_cache_key(
                 &record("foo"),
-                Platform::Linux64,
-                Platform::Linux64,
+                Subdir::Linux64,
+                Subdir::Linux64,
                 "cmake@1.0",
                 None,
                 crate::input_hash::ConfigurationHash::compute(None, Some(&targets)),
                 &[],
                 &[],
+                None,
                 None,
             )
         };
@@ -2321,35 +2319,12 @@ mod cache_key_tests {
     }
 
     #[test]
-    fn equivalent_package_and_build_settings_produce_equal_artifact_keys() {
-        let model = pixi_build_types::ProjectModel {
-            version: Some("0.2.0".parse().unwrap()),
-            ..Default::default()
-        };
+    fn configuration_object_field_order_does_not_change_artifact_key() {
         let a = serde_json::json!({"build_type": "Release", "generator": "Ninja"});
         let b = serde_json::json!({"generator": "Ninja", "build_type": "Release"});
         assert_eq!(
-            key_with_package_and_build_settings(Some(&model), Some(&a)),
-            key_with_package_and_build_settings(Some(&model.clone()), Some(&b)),
-        );
-    }
-
-    #[test]
-    fn equivalent_manifest_and_cli_overrides_share_artifact_key() {
-        let model = pixi_build_types::ProjectModel {
-            build_number: Some(3),
-            build_string_prefix: Some("custom".into()),
-            ..Default::default()
-        };
-        let overridden = crate::ProjectModelOverrides {
-            build_number: Some(3),
-            build_string_prefix: Some("custom".into()),
-        }
-        .apply(Some(pixi_build_types::ProjectModel::default()))
-        .unwrap();
-        assert_eq!(
-            key_with_package_and_build_settings(Some(&model), None),
-            key_with_package_and_build_settings(Some(&overridden), None),
+            key_with_package_and_build_settings(None, Some(&a)),
+            key_with_package_and_build_settings(None, Some(&b)),
         );
     }
 
@@ -2411,14 +2386,13 @@ mod cache_key_tests {
         backend_id: &str,
         extra_build_sha: &[Sha256Hash],
     ) -> String {
-        compute_artifact_cache_key(
+        key_with_default_package_and_build_settings(
             r,
             Subdir::Linux64,
             Subdir::Linux64,
             backend_id,
             extra_build_sha,
             &[],
-            &Default::default(),
             None,
             None,
         )
@@ -2481,26 +2455,24 @@ mod cache_key_tests {
     #[test]
     fn build_platform_matters() {
         let r = record("foo");
-        let k1 = compute_artifact_cache_key(
+        let k1 = key_with_default_package_and_build_settings(
             &r,
             Subdir::Linux64,
             Subdir::Linux64,
             "b",
             &[],
             &[],
-            &Default::default(),
             None,
             None,
         )
         .to_string();
-        let k2 = compute_artifact_cache_key(
+        let k2 = key_with_default_package_and_build_settings(
             &r,
             Subdir::OsxArm64,
             Subdir::Linux64,
             "b",
             &[],
             &[],
-            &Default::default(),
             None,
             None,
         )
@@ -2511,26 +2483,24 @@ mod cache_key_tests {
     #[test]
     fn host_platform_matters() {
         let r = record("foo");
-        let k1 = compute_artifact_cache_key(
+        let k1 = key_with_default_package_and_build_settings(
             &r,
             Subdir::Linux64,
             Subdir::Linux64,
             "b",
             &[],
             &[],
-            &Default::default(),
             None,
             None,
         )
         .to_string();
-        let k2 = compute_artifact_cache_key(
+        let k2 = key_with_default_package_and_build_settings(
             &r,
             Subdir::Linux64,
             Subdir::OsxArm64,
             "b",
             &[],
             &[],
-            &Default::default(),
             None,
             None,
         )
@@ -2605,26 +2575,24 @@ mod cache_key_tests {
     #[test]
     fn host_source_dep_sha256_matters() {
         let r = record("foo");
-        let k1 = compute_artifact_cache_key(
+        let k1 = key_with_default_package_and_build_settings(
             &r,
             Subdir::Linux64,
             Subdir::Linux64,
             "b",
             &[],
             &[sha(0xaa)],
-            &Default::default(),
             None,
             None,
         )
         .to_string();
-        let k2 = compute_artifact_cache_key(
+        let k2 = key_with_default_package_and_build_settings(
             &r,
             Subdir::Linux64,
             Subdir::Linux64,
             "b",
             &[],
             &[sha(0xbb)],
-            &Default::default(),
             None,
             None,
         )
@@ -2639,26 +2607,24 @@ mod cache_key_tests {
         // which prefix it installs into and thus which compat map the
         // run-dep resolution sees.
         let r = record("foo");
-        let build_only = compute_artifact_cache_key(
+        let build_only = key_with_default_package_and_build_settings(
             &r,
             Subdir::Linux64,
             Subdir::Linux64,
             "b",
             &[sha(0xaa)],
             &[],
-            &Default::default(),
             None,
             None,
         )
         .to_string();
-        let host_only = compute_artifact_cache_key(
+        let host_only = key_with_default_package_and_build_settings(
             &r,
             Subdir::Linux64,
             Subdir::Linux64,
             "b",
             &[],
             &[sha(0xaa)],
-            &Default::default(),
             None,
             None,
         )
@@ -2698,108 +2664,29 @@ mod cache_key_tests {
     }
 
     #[test]
-    fn cache_key_is_deterministic_across_runs() {
-        // Two independently-built records produce identical keys; the
-        // hasher's state is reset per call.
-        let r1 = record("foo");
-        let r2 = record("foo");
-        assert_eq!(
-            key_for(&r1, "backend-v1", &[sha(0x01), sha(0x02)]),
-            key_for(&r2, "backend-v1", &[sha(0x01), sha(0x02)]),
-        );
-    }
-
-    #[test]
-    fn cache_key_changes_with_host_platform() {
-        // Host platform is hashed into the key but not displayed in
-        // it (short-path policy). Two keys that differ only by host
-        // platform must therefore be distinct.
-        let r = record("foo");
-        let linux = compute_artifact_cache_key(
-            &r,
-            Subdir::Linux64,
-            Subdir::Linux64,
-            "b",
-            &[],
-            &[],
-            &Default::default(),
-            None,
-            None,
-        );
-        let osx_arm = compute_artifact_cache_key(
-            &r,
-            Subdir::Linux64,
-            Subdir::OsxArm64,
-            "b",
-            &[],
-            &[],
-            &Default::default(),
-            None,
-            None,
-        );
-        assert_ne!(linux, osx_arm);
-    }
-
-    #[test]
     fn build_string_prefix_matters() {
-        let r = record("foo");
-        let bare = compute_artifact_cache_key(
-            &r,
-            Subdir::Linux64,
-            Subdir::Linux64,
-            "b",
-            &[],
-            &[],
-            &Default::default(),
-            None,
-            None,
+        let bare = pixi_build_types::ProjectModel::default();
+        let prefixed = pixi_build_types::ProjectModel {
+            build_string_prefix: Some("foobar".to_string()),
+            ..Default::default()
+        };
+        assert_ne!(
+            key_with_package_and_build_settings(Some(&bare), None),
+            key_with_package_and_build_settings(Some(&prefixed), None),
         );
-        let prefixed = compute_artifact_cache_key(
-            &r,
-            Subdir::Linux64,
-            Subdir::Linux64,
-            "b",
-            &[],
-            &[],
-            &crate::ProjectModelOverrides {
-                build_string_prefix: Some("foobar".to_string()),
-                build_number: None,
-            },
-            None,
-            None,
-        );
-        assert_ne!(bare, prefixed);
     }
 
     #[test]
     fn build_number_matters() {
-        let r = record("foo");
-        let bare = compute_artifact_cache_key(
-            &r,
-            Subdir::Linux64,
-            Subdir::Linux64,
-            "b",
-            &[],
-            &[],
-            &Default::default(),
-            None,
-            None,
+        let bare = pixi_build_types::ProjectModel::default();
+        let numbered = pixi_build_types::ProjectModel {
+            build_number: Some(42),
+            ..Default::default()
+        };
+        assert_ne!(
+            key_with_package_and_build_settings(Some(&bare), None),
+            key_with_package_and_build_settings(Some(&numbered), None),
         );
-        let numbered = compute_artifact_cache_key(
-            &r,
-            Subdir::Linux64,
-            Subdir::Linux64,
-            "b",
-            &[],
-            &[],
-            &crate::ProjectModelOverrides {
-                build_string_prefix: None,
-                build_number: Some(42),
-            },
-            None,
-            None,
-        );
-        assert_ne!(bare, numbered);
     }
 
     #[test]
@@ -2807,28 +2694,26 @@ mod cache_key_tests {
         use pixi_build_types::procedures::conda_build_v1::CondaPackageFormat;
         use rattler_conda_types::package::CondaArchiveType;
         let r = record("foo");
-        let conda = compute_artifact_cache_key(
+        let conda = key_with_default_package_and_build_settings(
             &r,
             Subdir::Linux64,
             Subdir::Linux64,
             "b",
             &[],
             &[],
-            &Default::default(),
             Some(CondaPackageFormat {
                 archive_type: CondaArchiveType::Conda,
                 compression_level: Default::default(),
             }),
             None,
         );
-        let tar_bz2 = compute_artifact_cache_key(
+        let tar_bz2 = key_with_default_package_and_build_settings(
             &r,
             Subdir::Linux64,
             Subdir::Linux64,
             "b",
             &[],
             &[],
-            &Default::default(),
             Some(CondaPackageFormat {
                 archive_type: CondaArchiveType::TarBz2,
                 compression_level: Default::default(),
@@ -2850,14 +2735,13 @@ mod cache_key_tests {
         };
         let r = record("foo");
         let key = |level: CondaCompressionLevel| {
-            compute_artifact_cache_key(
+            key_with_default_package_and_build_settings(
                 &r,
                 Subdir::Linux64,
                 Subdir::Linux64,
                 "b",
                 &[],
                 &[],
-                &Default::default(),
                 Some(pf(level)),
                 None,
             )

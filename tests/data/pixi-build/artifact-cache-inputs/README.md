@@ -29,7 +29,8 @@ The automated regression is
 `test_artifact_cache_tracks_package_and_build_settings` in
 `tests/integration_python/pixi_build/test_config.py`. It tests version, general
 configuration, and target-specific configuration changes independently, then
-checks an unchanged invocation:
+removes only the installed environment and checks that an unchanged invocation
+reinstalls from the retained artifact cache without rebuilding:
 
 ```sh
 pixi run test-specific-test-debug artifact_cache_tracks_package_and_build_settings

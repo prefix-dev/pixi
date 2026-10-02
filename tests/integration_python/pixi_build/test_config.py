@@ -1,5 +1,6 @@
 import json
 import platform
+import shutil
 import tomllib
 from pathlib import Path
 
@@ -55,7 +56,9 @@ def test_artifact_cache_tracks_package_and_build_settings(
     verify_cli_command(command)
     assert_installed(expected_version, expected_value)
 
-    # The updated artifact must remain reusable on an unchanged invocation.
+    # Recreate the environment without clearing the artifact or backend build
+    # directory caches, so this cannot pass as an already-installed no-op.
+    shutil.rmtree(prefix)
     verify_cli_command(command, stderr_excludes="Running build for recipe:")
     assert_installed(expected_version, expected_value)
 

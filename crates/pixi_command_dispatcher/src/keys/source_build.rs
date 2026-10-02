@@ -205,14 +205,13 @@ async fn compute_inner(
         build_string_prefix: spec.build_string_prefix.clone(),
         build_number: spec.build_number,
     };
-    let discovered = ctx
-        .compute(&crate::DiscoveredBackendKey::new(
-            manifest_checkout.path.as_std_path(),
-        ))
-        .await
-        .map_err(|err| {
-            SourceBuildError::Initialize(crate::InstantiateBackendError::Discovery(err))
-        })?;
+    let discovered = crate::inline_package::discover_backend(
+        ctx,
+        manifest_checkout.path.as_std_path(),
+        spec.inline.as_ref(),
+    )
+    .await
+    .map_err(|err| SourceBuildError::Initialize(crate::InstantiateBackendError::Discovery(err)))?;
     let project_model_with_overrides =
         project_model_overrides.apply(discovered.init_params.project_model.clone());
     let project_model_with_overrides_hash = project_model_with_overrides
