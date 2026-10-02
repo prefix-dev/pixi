@@ -73,6 +73,7 @@ requirements:
     - numpy
     - pip
     - pkg-config
+    - setuptools
   run:
     - rich >=10.0
     - ros-noetic-ros-package <=2.0.0

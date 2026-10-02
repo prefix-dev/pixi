@@ -56,6 +56,7 @@ requirements:
     - numpy
     - pip
     - pkg-config
+    - setuptools
     - ros-distro-mutex
   run:
     - rich >=10.0

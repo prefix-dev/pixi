@@ -72,6 +72,7 @@ requirements:
     - numpy
     - pip
     - pkg-config
+    - setuptools
     - ros-distro-mutex
   run:
     - "asio >=9.0,<10.0.0"
