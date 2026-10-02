@@ -16,6 +16,8 @@
 //! bake fixed prefix paths into their own incremental state, so a dep swap
 //! under the same prefix is invisible to the build tool and must be treated
 //! as a fresh workspace.
+//! The effective project model and backend configuration also select a fresh
+//! workspace, since backends may skip configuration in an existing build tree.
 //!
 //! The cost is that a dep update blows away incremental state for packages
 //! downstream of it. The mitigation is the artifact cache: when the same
@@ -53,6 +55,7 @@ impl std::fmt::Display for WorkspaceKey {
 /// - package name, pinned manifest source, pinned build source, variants
 /// - build + host platform
 /// - backend identifier
+/// - effective project model and general + target-specific backend configuration
 /// - the full `build_packages` and `host_packages` lists (not content-
 ///   addressed like the artifact cache; structural identity is what matters
 ///   here, so the workspace is stable across runs that produce identical
@@ -62,6 +65,8 @@ pub fn compute_workspace_key(
     build_platform: Subdir,
     host_platform: Subdir,
     backend_identifier: &str,
+    project_model_hash: Option<crate::input_hash::ProjectModelHash>,
+    configuration_hash: crate::input_hash::ConfigurationHash,
 ) -> WorkspaceKey {
     let mut hasher = Xxh3::new();
     record.name().as_normalized().hash(&mut hasher);
@@ -71,6 +76,8 @@ pub fn compute_workspace_key(
     build_platform.hash(&mut hasher);
     host_platform.hash(&mut hasher);
     backend_identifier.hash(&mut hasher);
+    project_model_hash.hash(&mut hasher);
+    configuration_hash.hash(&mut hasher);
     record.build_packages.hash(&mut hasher);
     record.host_packages.hash(&mut hasher);
     // `host_platform` is already folded into `hasher`, so the key
@@ -196,6 +203,57 @@ mod tests {
     use typed_path::Utf8TypedPathBuf;
 
     use super::*;
+
+    fn compute_workspace_key(
+        record: &UnresolvedSourceRecord,
+        build_platform: Platform,
+        host_platform: Platform,
+        backend_identifier: &str,
+    ) -> WorkspaceKey {
+        super::compute_workspace_key(
+            record,
+            build_platform,
+            host_platform,
+            backend_identifier,
+            None,
+            Default::default(),
+        )
+    }
+
+    #[test]
+    fn backend_inputs_select_fresh_workspaces() {
+        let record = make_record("foo");
+        let model = pixi_build_types::ProjectModel {
+            version: Some("0.2.0".parse().unwrap()),
+            ..Default::default()
+        };
+        let config = serde_json::json!({"env": {"REPRO_VALUE": "after"}});
+        let key = |model_hash, config_hash| {
+            super::compute_workspace_key(
+                &record,
+                Platform::Linux64,
+                Platform::Linux64,
+                "cmake@1.0",
+                model_hash,
+                config_hash,
+            )
+        };
+        let base = key(None, Default::default());
+        assert_ne!(
+            base,
+            key(
+                Some(crate::input_hash::ProjectModelHash::from(&model)),
+                Default::default()
+            )
+        );
+        assert_ne!(
+            base,
+            key(
+                None,
+                crate::input_hash::ConfigurationHash::compute(Some(&config), None)
+            )
+        );
+    }
 
     fn make_record(name: &str) -> UnresolvedSourceRecord {
         let mut pkg = PackageRecord::new(

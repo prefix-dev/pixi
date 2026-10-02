@@ -205,14 +205,31 @@ async fn compute_inner(
         build_string_prefix: spec.build_string_prefix.clone(),
         build_number: spec.build_number,
     };
+    let discovered = ctx
+        .compute(&crate::DiscoveredBackendKey::new(
+            manifest_checkout.path.as_std_path(),
+        ))
+        .await
+        .map_err(|err| {
+            SourceBuildError::Initialize(crate::InstantiateBackendError::Discovery(err))
+        })?;
+    let project_model = project_model_overrides.apply(discovered.init_params.project_model.clone());
+    let project_model_hash = project_model
+        .as_ref()
+        .map(crate::input_hash::ProjectModelHash::from);
+    let configuration_hash = crate::input_hash::ConfigurationHash::compute(
+        discovered.init_params.configuration.as_ref(),
+        discovered.init_params.target_configuration.as_ref(),
+    );
     let cache_key = compute_artifact_cache_key(
         &spec.record,
         spec.build_environment.build_platform,
         spec.build_environment.host_platform,
         &backend_identifier,
+        project_model_hash,
+        configuration_hash,
         &build_source_dep_sha256s,
         &host_source_dep_sha256s,
-        &project_model_overrides,
         spec.package_format,
         spec.inline.as_ref().map(|inline| inline.content_hash),
     );
@@ -286,7 +303,7 @@ async fn compute_inner(
         })?;
 
     // Workspace dir is the backend's build root; state persists across
-    // runs that share the same (source, deps, variants, backend).
+    // runs that share the same source, deps, variants, backend, model and config.
     // `package_format` is intentionally not included: differently-encoded
     // outputs of the same build can share the same workdir.
     let workspace_key = compute_workspace_key(
@@ -294,6 +311,8 @@ async fn compute_inner(
         spec.build_environment.build_platform,
         spec.build_environment.host_platform,
         &backend_identifier,
+        project_model_hash,
+        configuration_hash,
     );
     let workspaces_dir = ctx.cache_dir::<SourceBuildWorkspacesDir>().await;
     let workspace_cache = WorkspaceCache::new(workspaces_dir.as_std_path());

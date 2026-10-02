@@ -91,13 +91,11 @@ impl std::fmt::Display for ArtifactCacheKey {
 /// - package name, pinned manifest source, pinned build source, variants
 /// - build + host platform
 /// - backend identifier (version + name of the build backend)
+/// - effective project model (after overrides) and backend configuration,
+///   including target-specific configuration
 /// - url + sha256 of every binary dep in `build_packages` / `host_packages`,
 ///   tagged by bucket so a dep moving build ↔ host invalidates
 /// - sha256 of every source dep artifact, also tagged by bucket
-/// - any user-supplied project-model overrides (build_string_prefix,
-///   build_number) -- these flow into the resulting `.conda`'s build
-///   string and number, so different overrides must not share a cache
-///   entry
 ///
 /// Source *files* are not hashed here: the sidecar captures their mtimes
 /// separately so a content change still invalidates the entry on lookup.
@@ -110,9 +108,10 @@ pub fn compute_artifact_cache_key(
     build_platform: Subdir,
     host_platform: Subdir,
     backend_identifier: &str,
+    project_model_hash: Option<crate::input_hash::ProjectModelHash>,
+    configuration_hash: crate::input_hash::ConfigurationHash,
     build_source_dep_sha256s: &[Sha256Hash],
     host_source_dep_sha256s: &[Sha256Hash],
-    project_model_overrides: &crate::ProjectModelOverrides,
     package_format: Option<pixi_build_types::procedures::conda_build_v1::CondaPackageFormat>,
     inline_content_hash: Option<InlineContentHash>,
 ) -> ArtifactCacheKey {
@@ -130,7 +129,8 @@ pub fn compute_artifact_cache_key(
     build_platform.hash(&mut hasher);
     host_platform.hash(&mut hasher);
     backend_identifier.hash(&mut hasher);
-    project_model_overrides.hash(&mut hasher);
+    project_model_hash.hash(&mut hasher);
+    configuration_hash.hash(&mut hasher);
     // Distinguish artifacts by output format.
     package_format.hash(&mut hasher);
 
@@ -2226,7 +2226,125 @@ mod cache_key_tests {
     use rattler_digest::{Sha256Hash, parse_digest_from_hex};
     use typed_path::Utf8TypedPathBuf;
 
-    use super::compute_artifact_cache_key;
+    #[allow(clippy::too_many_arguments)]
+    fn compute_artifact_cache_key(
+        record: &UnresolvedSourceRecord,
+        build_platform: Platform,
+        host_platform: Platform,
+        backend_identifier: &str,
+        build_source_dep_sha256s: &[Sha256Hash],
+        host_source_dep_sha256s: &[Sha256Hash],
+        project_model_overrides: &crate::ProjectModelOverrides,
+        package_format: Option<pixi_build_types::procedures::conda_build_v1::CondaPackageFormat>,
+    ) -> super::ArtifactCacheKey {
+        let model = project_model_overrides
+            .apply(Some(pixi_build_types::ProjectModel::default()))
+            .unwrap();
+        super::compute_artifact_cache_key(
+            record,
+            build_platform,
+            host_platform,
+            backend_identifier,
+            Some(crate::input_hash::ProjectModelHash::from(&model)),
+            Default::default(),
+            build_source_dep_sha256s,
+            host_source_dep_sha256s,
+            package_format,
+        )
+    }
+
+    fn key_with_backend_inputs(
+        model: Option<&pixi_build_types::ProjectModel>,
+        config: Option<&serde_json::Value>,
+    ) -> super::ArtifactCacheKey {
+        super::compute_artifact_cache_key(
+            &record("foo"),
+            Platform::Linux64,
+            Platform::Linux64,
+            "cmake@1.0",
+            model.map(crate::input_hash::ProjectModelHash::from),
+            crate::input_hash::ConfigurationHash::compute(config, None),
+            &[],
+            &[],
+            None,
+        )
+    }
+
+    #[test]
+    fn effective_project_version_changes_artifact_key() {
+        let mut model = pixi_build_types::ProjectModel::default();
+        model.version = Some("0.1.0".parse().unwrap());
+        let old = key_with_backend_inputs(Some(&model), None);
+        model.version = Some("0.2.0".parse().unwrap());
+        assert_ne!(old, key_with_backend_inputs(Some(&model), None));
+    }
+
+    #[test]
+    fn backend_configuration_changes_artifact_key() {
+        let debug = serde_json::json!({"cmake": {"build_type": "Debug"}});
+        let release = serde_json::json!({"cmake": {"build_type": "Release"}});
+        assert_ne!(
+            key_with_backend_inputs(None, Some(&debug)),
+            key_with_backend_inputs(None, Some(&release)),
+        );
+    }
+
+    #[test]
+    fn target_configuration_changes_artifact_key() {
+        let key = |build_type| {
+            let targets = [(
+                pixi_build_types::TargetSelector::Platform(Platform::Linux64.to_string()),
+                serde_json::json!({"build_type": build_type}),
+            )]
+            .into_iter()
+            .collect();
+            super::compute_artifact_cache_key(
+                &record("foo"),
+                Platform::Linux64,
+                Platform::Linux64,
+                "cmake@1.0",
+                None,
+                crate::input_hash::ConfigurationHash::compute(None, Some(&targets)),
+                &[],
+                &[],
+                None,
+            )
+        };
+        assert_ne!(key("Debug"), key("Release"));
+    }
+
+    #[test]
+    fn equivalent_backend_inputs_produce_equal_artifact_keys() {
+        let model = pixi_build_types::ProjectModel {
+            version: Some("0.2.0".parse().unwrap()),
+            ..Default::default()
+        };
+        let a = serde_json::json!({"build_type": "Release", "generator": "Ninja"});
+        let b = serde_json::json!({"generator": "Ninja", "build_type": "Release"});
+        assert_eq!(
+            key_with_backend_inputs(Some(&model), Some(&a)),
+            key_with_backend_inputs(Some(&model.clone()), Some(&b)),
+        );
+    }
+
+    #[test]
+    fn equivalent_manifest_and_cli_overrides_share_artifact_key() {
+        let model = pixi_build_types::ProjectModel {
+            build_number: Some(3),
+            build_string_prefix: Some("custom".into()),
+            ..Default::default()
+        };
+        let overridden = crate::ProjectModelOverrides {
+            build_number: Some(3),
+            build_string_prefix: Some("custom".into()),
+        }
+        .apply(Some(pixi_build_types::ProjectModel::default()))
+        .unwrap();
+        assert_eq!(
+            key_with_backend_inputs(Some(&model), None),
+            key_with_backend_inputs(Some(&overridden), None),
+        );
+    }
 
     fn record(name: &str) -> UnresolvedSourceRecord {
         let mut pr = PackageRecord::new(

@@ -1,9 +1,63 @@
+import json
 import platform
+import tomllib
 from pathlib import Path
 
 import pytest
+import tomli_w
 
-from .common import ExitCode, copytree_with_local_backend, get_manifest, verify_cli_command
+from .common import (
+    CURRENT_PLATFORM,
+    ExitCode,
+    copytree_with_local_backend,
+    default_env_path,
+    get_manifest,
+    verify_cli_command,
+)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("changed_input", ["version", "configuration", "target_configuration"])
+def test_artifact_cache_tracks_backend_inputs(
+    pixi: Path, tmp_pixi_workspace: Path, build_data: Path, changed_input: str
+) -> None:
+    copytree_with_local_backend(
+        build_data / "artifact-cache-inputs", tmp_pixi_workspace, dirs_exist_ok=True
+    )
+    manifest = get_manifest(tmp_pixi_workspace)
+    command = [pixi, "install", "--manifest-path", manifest]
+    prefix = default_env_path(tmp_pixi_workspace)
+    payload = prefix / "share/artifact-key-repro/repro-value.txt"
+
+    def assert_installed(version: str, value: str) -> None:
+        records = list((prefix / "conda-meta").glob("artifact-key-repro-*.json"))
+        assert len(records) == 1
+        assert json.loads(records[0].read_text())["version"] == version
+        assert payload.read_text().strip() == value
+
+    verify_cli_command(command)
+    assert_installed("0.1.0", "before")
+
+    model = tomllib.loads(manifest.read_text())
+    expected_version, expected_value = "0.1.0", "before"
+    if changed_input == "version":
+        model["package"]["version"] = expected_version = "0.2.0"
+    elif changed_input == "configuration":
+        model["package"]["build"]["config"]["env"]["REPRO_VALUE"] = expected_value = "after"
+    else:
+        model["package"]["build"]["target"] = {
+            CURRENT_PLATFORM: {"config": {"env": {"REPRO_VALUE": "after"}}}
+        }
+        expected_value = "after"
+    manifest.write_text(tomli_w.dumps(model))
+
+    # Leave the artifact cache and installed environment intact.
+    verify_cli_command(command)
+    assert_installed(expected_version, expected_value)
+
+    # The updated artifact must remain reusable on an unchanged invocation.
+    verify_cli_command(command, stderr_excludes="Running build for recipe:")
+    assert_installed(expected_version, expected_value)
 
 
 @pytest.mark.slow

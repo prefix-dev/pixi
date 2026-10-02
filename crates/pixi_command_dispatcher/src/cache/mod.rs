@@ -17,6 +17,7 @@ pub mod common;
 pub mod markers;
 pub mod workspace;
 
+pub use crate::input_hash::{ConfigurationHash, ProjectModelHash};
 pub use artifact::{
     ArtifactCache, ArtifactCacheError, ArtifactCacheKey, ArtifactSidecar, CacheLookup,
     CacheMissReason, CachedArtifact, SourceMutability, compute_artifact_cache_key,
