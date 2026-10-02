@@ -38,7 +38,7 @@ use thiserror::Error;
 use tokio::sync::Mutex;
 
 use crate::InlinePackage;
-use crate::compute_data::HasInstantiateBackendReporter;
+use crate::compute_data::{HasBuildExecutionPermit, HasInstantiateBackendReporter};
 use crate::ephemeral_env::{EphemeralEnvError, EphemeralEnvKey, EphemeralEnvSpec};
 use crate::injected_config::ToolBuildEnvironmentKey;
 use crate::inline_package::discover_backend;
@@ -180,6 +180,10 @@ pub enum InstantiateBackendError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     InMemory(Arc<CommunicationError>),
+
+    #[error("refusing to invoke a build backend")]
+    #[diagnostic(help("drop --no-build to resolve source dependencies"))]
+    BuildExecutionDenied,
 
     #[error("failed to run activation for the backend tool")]
     Activation(Arc<ActivationError>),
@@ -323,6 +327,7 @@ impl InstantiateBackendKey {
         let (tool, api_version) = match resolved_command.as_ref() {
             ResolvedBackendCommand::InMemory(in_mem) => {
                 return self.instantiate_in_memory(
+                    ctx,
                     in_mem,
                     &source_dir,
                     &discovered.init_params,
@@ -363,6 +368,7 @@ impl InstantiateBackendKey {
             api_version,
             cache_dir_root,
             workspace_scratch_directory,
+            ctx.global_data().build_execution_permit().is_allowed(),
         )
         .await
     }
@@ -381,6 +387,7 @@ impl InstantiateBackendKey {
     /// per-request init params and wrap the resulting [`Backend`].
     fn instantiate_in_memory(
         &self,
+        ctx: &ComputeCtx,
         in_mem: &BoxedInMemoryBackend,
         source_dir: &std::path::Path,
         init_params: &BackendInitializationParams,
@@ -391,17 +398,20 @@ impl InstantiateBackendKey {
             .project_model_overrides
             .apply(init_params.project_model.clone());
         let memory = in_mem
-            .initialize(InitializeParams {
-                manifest_path: init_params.manifest_path.clone(),
-                source_directory: Some(source_dir.to_path_buf()),
-                workspace_directory: Some(init_params.workspace_root.clone()),
-                checkout_root: self.checkout_root.clone(),
-                cache_directory: Some(cache_dir_root),
-                workspace_scratch_directory,
-                project_model,
-                configuration: init_params.configuration.clone(),
-                target_configuration: init_params.target_configuration.clone(),
-            })
+            .initialize(
+                InitializeParams {
+                    manifest_path: init_params.manifest_path.clone(),
+                    source_directory: Some(source_dir.to_path_buf()),
+                    workspace_directory: Some(init_params.workspace_root.clone()),
+                    checkout_root: self.checkout_root.clone(),
+                    cache_directory: Some(cache_dir_root),
+                    workspace_scratch_directory,
+                    project_model,
+                    configuration: init_params.configuration.clone(),
+                    target_configuration: init_params.target_configuration.clone(),
+                },
+                ctx.global_data().build_execution_permit().is_allowed(),
+            )
             .map_err(|e| Arc::new(InstantiateBackendError::InMemory(Arc::new(*e))))?;
         Ok(Arc::new(Mutex::new(Backend::new(
             memory.into(),
@@ -419,6 +429,10 @@ impl InstantiateBackendKey {
         resolved_spec: &JsonRpcBackendSpec,
         env_spec: &EnvironmentSpec,
     ) -> Result<(Tool, PixiBuildApiVersion), Arc<InstantiateBackendError>> {
+        ctx.global_data()
+            .build_execution_permit()
+            .check()
+            .map_err(|_| Arc::new(InstantiateBackendError::BuildExecutionDenied))?;
         let ephemeral_spec = self.ephemeral_env_spec_for(env_spec);
         let installed = ctx
             .compute(&EphemeralEnvKey::new(ephemeral_spec))
@@ -549,6 +563,10 @@ pub async fn resolve_backend_identifier(
             .clone()
             .unwrap_or_else(|| resolved_spec.name.clone())),
         ResolvedBackendCommand::Spec(CommandSpec::EnvironmentSpec(env_spec)) => {
+            ctx.global_data()
+                .build_execution_permit()
+                .check()
+                .map_err(|_| Arc::new(InstantiateBackendError::BuildExecutionDenied))?;
             let ephemeral_spec = ephemeral_env_spec_for(env_spec, exclude_newer);
             let installed = ctx
                 .compute(&EphemeralEnvKey::new(ephemeral_spec))
@@ -634,6 +652,7 @@ async fn spawn_json_rpc(
     api_version: PixiBuildApiVersion,
     cache_dir_root: PathBuf,
     workspace_scratch_directory: Option<PathBuf>,
+    allow_build_execution: bool,
 ) -> Result<BackendHandle, Arc<InstantiateBackendError>> {
     let project_model = project_model_overrides.apply(init_params.project_model.clone());
     let backend = JsonRpcBackend::setup(
@@ -647,6 +666,7 @@ async fn spawn_json_rpc(
         Some(cache_dir_root),
         workspace_scratch_directory,
         tool,
+        allow_build_execution,
     )
     .await
     .map_err(|e| Arc::new(InstantiateBackendError::JsonRpc(Arc::new(e))))?;

@@ -31,6 +31,7 @@ use crate::workspace::{Environment, grouped_environment::GroupedEnvironment};
 pub fn verify_environment_satisfiability(
     environment: &Environment<'_>,
     locked_environment: rattler_lock::Environment<'_>,
+    force_no_build: bool,
 ) -> Result<(), EnvironmentUnsat> {
     let grouped_env = GroupedEnvironment::from(environment.clone());
 
@@ -189,7 +190,11 @@ pub fn verify_environment_satisfiability(
         // Check if the indexes in the lock file match our current configuration.
         verify_pypi_indexes(locked_environment, indexes)?;
 
-        let no_build_check = PypiNoBuildCheck::new(group_pypi_options.no_build.as_ref());
+        let no_build_check = if force_no_build {
+            PypiNoBuildCheck::new(Some(&NoBuild::All))
+        } else {
+            PypiNoBuildCheck::new(group_pypi_options.no_build.as_ref())
+        };
         let pypi_wheel_tags_check = PypiWheelTagsCheck::new(environment, &locked_environment);
 
         // Actually check all pypi packages in one iteration

@@ -193,6 +193,9 @@ pub enum GitError {
     #[error("failed to fetch {0}: {1}")]
     Fetch(String, String),
 
+    #[error("refusing to invoke a build backend")]
+    BuildExecutionDenied,
+
     #[error(
         "fetching git repository `{repository}` requires network access, but pixi is in offline mode and the requested revision is not available in the local cache"
     )]

@@ -55,6 +55,7 @@ impl GitResolver {
     ///
     /// `lfs` overrides the LFS preference when `Some`; `None` keeps the
     /// environment-derived default of [`GitSource`].
+    #[allow(clippy::too_many_arguments)]
     pub async fn fetch(
         &self,
         url: GitUrl,
@@ -63,6 +64,7 @@ impl GitResolver {
         offline: bool,
         lfs: Option<bool>,
         reporter: Option<Arc<dyn Reporter>>,
+        allow_build_execution: bool,
     ) -> Result<Fetch, GitError> {
         debug!("Fetching source distribution from Git: {url}");
 
@@ -90,7 +92,9 @@ impl GitResolver {
         write_guard.begin().await?;
 
         // Fetch the Git repository.
-        let source = GitSource::new(url.clone(), client, cache).with_offline(offline);
+        let source = GitSource::new(url.clone(), client, cache)
+            .with_offline(offline)
+            .with_allow_build_execution(allow_build_execution);
         let source = if lfs.is_some() {
             source.with_lfs(lfs)
         } else {

@@ -439,9 +439,16 @@ pub async fn resolve_pypi(
     let index_locations =
         pypi_options_to_index_locations(pypi_options, project_root).into_diagnostic()?;
 
-    // Create build options
+    // Create build options. `--no-build` forces every package to be a wheel
+    // for this solve only; it does not edit the manifest.
+    let manifest_no_build = pypi_options.no_build.clone().unwrap_or_default();
+    let no_build = if command_dispatcher.build_execution_permit().is_allowed() {
+        manifest_no_build
+    } else {
+        manifest_no_build.union(&pixi_manifest::pypi::pypi_options::NoBuild::All)
+    };
     let build_options = pypi_options_to_build_options(
-        &pypi_options.no_build.clone().unwrap_or_default(),
+        &no_build,
         &pypi_options.no_binary.clone().unwrap_or_default(),
     )
     .into_diagnostic()?;
@@ -576,6 +583,7 @@ pub async fn resolve_pypi(
     let lazy_build_dispatch_deps = &build_cache.lazy_build_dispatch_deps;
 
     let last_error = Arc::new(Mutex::new(None));
+    let refuse_source_builds = !command_dispatcher.build_execution_permit().is_allowed();
 
     // Use cached conda_prefix_updater if available, otherwise create new
     let conda_prefix_updater = build_cache
@@ -603,7 +611,7 @@ pub async fn resolve_pypi(
                     .into_iter()
                     .map(GenericVirtualPackage::from)
                     .collect(),
-                command_dispatcher,
+                command_dispatcher.clone(),
             )
             .finish()
         })?
@@ -621,6 +629,7 @@ pub async fn resolve_pypi(
         deployment_target,
         disallow_install_conda_prefix,
         Arc::clone(&last_error),
+        refuse_source_builds,
     );
 
     // Constrain the conda packages to the specific python packages

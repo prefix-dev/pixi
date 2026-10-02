@@ -17,7 +17,7 @@ use pixi_manifest::{EnvironmentName, PixiPlatformName};
 use pixi_record::{LockFileResolver, LockedGitUrl, PinnedSourceSpec, UnresolvedPixiRecord};
 use rattler_lock::{LockFile, LockedPackage};
 
-use crate::cli_config::ScriptWorkspaceConfig;
+use crate::cli_config::{NoBuildConfig, ScriptWorkspaceConfig};
 
 /// Updates dependencies to newer compatible versions.
 ///
@@ -36,8 +36,11 @@ pub struct Args {
 
     /// Don't install the (solve) environments needed for pypi-dependencies
     /// solving.
-    #[arg(long, env = "PIXI_NO_INSTALL")]
+    #[arg(long, env = "PIXI_NO_INSTALL", help_heading = consts::CLAP_UPDATE_OPTIONS)]
     pub no_install: bool,
+
+    #[clap(flatten)]
+    pub no_build_config: NoBuildConfig,
 
     /// Don't write the updated resolution or update any environment.
     #[clap(short = 'n', long)]
@@ -170,15 +173,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Update the packages in the lock file.
     let progress = pixi_reporters::TopLevelProgress::from_global();
-    let dispatcher = workspace
-        .command_dispatcher_builder(Some(&progress))?
-        .finish();
+    let mut dispatcher_builder = workspace.command_dispatcher_builder(Some(&progress))?;
+    if args.no_build_config.no_build {
+        dispatcher_builder = dispatcher_builder.refuse_build_execution();
+    }
+    let dispatcher = dispatcher_builder.finish();
     // Scoped so the bars are cleared before the diff or the JSON is printed.
     let updated_lock_file = {
         let _clear_progress = pixi_reporters::TopLevelProgress::clear_when_done(Some(&progress));
         UpdateContext::builder(&workspace, dispatcher)?
             .with_lock_file(relaxed_lock_file.clone())
             .with_no_install(args.no_install)
+            .with_no_build(args.no_build_config.no_build)
             .with_update_targets(specs.packages.clone())
             .finish()
             .await?

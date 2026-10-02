@@ -24,13 +24,19 @@ use uv_types::{BuildArena, BuildContext, BuildStack, ResolvedRequirements};
 pub(crate) struct CacheScopedBuildContext<'a> {
     inner: BuildDispatch<'a>,
     cache_config_settings: ConfigSettings,
+    refuse_source_builds: bool,
 }
 
 impl<'a> CacheScopedBuildContext<'a> {
-    pub(crate) fn new(inner: BuildDispatch<'a>, cache_config_settings: ConfigSettings) -> Self {
+    pub(crate) fn new(
+        inner: BuildDispatch<'a>,
+        cache_config_settings: ConfigSettings,
+        refuse_source_builds: bool,
+    ) -> Self {
         Self {
             inner,
             cache_config_settings,
+            refuse_source_builds,
         }
     }
 }
@@ -107,6 +113,9 @@ impl<'ctx> BuildContext for CacheScopedBuildContext<'ctx> {
         build_output: BuildOutput,
         build_stack: BuildStack,
     ) -> Result<Self::SourceDistBuilder, impl IsBuildBackendError> {
+        if self.refuse_source_builds {
+            return Err(BuildRefused::Refused);
+        }
         self.inner
             .setup_build(
                 source,
@@ -120,6 +129,7 @@ impl<'ctx> BuildContext for CacheScopedBuildContext<'ctx> {
                 build_stack,
             )
             .await
+            .map_err(BuildRefused::Inner)
     }
 
     async fn direct_build<'a>(
@@ -131,6 +141,9 @@ impl<'ctx> BuildContext for CacheScopedBuildContext<'ctx> {
         build_kind: BuildKind,
         version_id: Option<&'a str>,
     ) -> Result<Option<DistFilename>, impl IsBuildBackendError> {
+        if self.refuse_source_builds {
+            return Err(BuildRefused::Refused);
+        }
         self.inner
             .direct_build(
                 source,
@@ -141,6 +154,7 @@ impl<'ctx> BuildContext for CacheScopedBuildContext<'ctx> {
                 version_id,
             )
             .await
+            .map_err(BuildRefused::Inner)
     }
 
     fn workspace_cache(&self) -> &uv_workspace::WorkspaceCache {
@@ -165,5 +179,38 @@ impl<'ctx> BuildContext for CacheScopedBuildContext<'ctx> {
 
     fn extra_build_variables(&self) -> &uv_distribution_types::ExtraBuildVariables {
         self.inner.extra_build_variables()
+    }
+}
+
+#[derive(Debug)]
+enum BuildRefused<E> {
+    Refused,
+    Inner(E),
+}
+
+impl<E: std::fmt::Display> std::fmt::Display for BuildRefused<E> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Refused => write!(f, "refusing to invoke a build backend"),
+            Self::Inner(err) => write!(f, "{err}"),
+        }
+    }
+}
+
+impl<E: std::error::Error + Send + Sync + 'static> std::error::Error for BuildRefused<E> {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Refused => None,
+            Self::Inner(err) => Some(err),
+        }
+    }
+}
+
+impl<E: IsBuildBackendError> IsBuildBackendError for BuildRefused<E> {
+    fn is_build_backend_error(&self) -> bool {
+        match self {
+            Self::Refused => false,
+            Self::Inner(err) => err.is_build_backend_error(),
+        }
     }
 }

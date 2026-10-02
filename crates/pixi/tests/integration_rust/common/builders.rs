@@ -651,6 +651,11 @@ impl UpdateBuilder {
         self.args.no_install = no_install;
         self
     }
+
+    pub fn with_no_build(mut self, no_build: bool) -> Self {
+        self.args.no_build_config.no_build = no_build;
+        self
+    }
 }
 
 impl IntoFuture for UpdateBuilder {
@@ -674,6 +679,11 @@ impl LockBuilder {
     }
     pub fn with_check(mut self, check: bool) -> Self {
         self.args.check = check;
+        self
+    }
+
+    pub fn with_no_build(mut self, no_build: bool) -> Self {
+        self.args.no_build_config.no_build = no_build;
         self
     }
 }

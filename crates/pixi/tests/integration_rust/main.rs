@@ -10,6 +10,8 @@ mod install_filter_tests;
 mod install_tests;
 mod lock_tests;
 mod lock_v6_platform_tests;
+mod no_build_spawn_allowlist;
+mod no_build_tests;
 mod offline_tests;
 mod project_tests;
 mod pypi_tests;

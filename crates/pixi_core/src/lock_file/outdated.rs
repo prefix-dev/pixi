@@ -288,7 +288,10 @@ async fn find_unsatisfiable_targets<'p>(
         };
 
         // The locked environment exists, but does it match our project environment?
-        if let Err(unsat) = verify_environment_satisfiability(&environment, locked_environment) {
+        let force_no_build = !command_dispatcher.build_execution_permit().is_allowed();
+        if let Err(unsat) =
+            verify_environment_satisfiability(&environment, locked_environment, force_no_build)
+        {
             tracing::info!(
                 "environment '{0}' is out of date because {unsat}",
                 environment.name().fancy_display()

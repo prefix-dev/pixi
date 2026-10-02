@@ -679,7 +679,7 @@ no-build-isolation = true
 
 ### No Build
 
-When enabled, resolving will not run arbitrary Python code. The cached wheels of already-built source distributions will be reused, but operations that require building distributions will exit with an error.
+When enabled, resolving will not run arbitrary Python code. The cached wheels of already-built source distributions will be reused, but operations that require building distributions will exit with an error. This is a manifest setting for PyPI sdists only. It is not [`pixi lock --no-build`](../workspace/lock_file.md), which refuses every build backend a lockfile update would invoke.
 
 Can be either set per package or globally.
 ```toml

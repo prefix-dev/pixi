@@ -10,7 +10,7 @@
 
 use std::sync::Arc;
 
-use pixi_compute_engine::DataStore;
+use pixi_compute_engine::{BuildExecutionPermit, DataStore};
 use rattler::package_cache::PackageCache;
 use rattler_repodata_gateway::Gateway;
 use tokio::sync::Semaphore;
@@ -153,6 +153,30 @@ impl HasPackageCache for DataStore {
     fn package_cache(&self) -> &PackageCache {
         self.get::<PackageCache>()
     }
+}
+
+/// Access the build-execution permit shared by spawn helpers.
+///
+/// A missing permit is deny. Callers that may spawn must insert
+/// [`BuildExecutionPermit::allow`] explicitly.
+pub trait HasBuildExecutionPermit {
+    fn build_execution_permit(&self) -> &BuildExecutionPermit;
+}
+
+impl HasBuildExecutionPermit for DataStore {
+    fn build_execution_permit(&self) -> &BuildExecutionPermit {
+        if let Some(permit) = self.try_get::<BuildExecutionPermit>() {
+            permit
+        } else {
+            missing_permit_denies()
+        }
+    }
+}
+
+fn missing_permit_denies() -> &'static BuildExecutionPermit {
+    use std::sync::LazyLock;
+    static DENY: LazyLock<BuildExecutionPermit> = LazyLock::new(BuildExecutionPermit::deny);
+    &DENY
 }
 
 /// Newtype around the `execute_link_scripts` bool so it can be stored

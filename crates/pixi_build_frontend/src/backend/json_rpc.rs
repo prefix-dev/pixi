@@ -77,10 +77,17 @@ pub enum CommunicationError {
     MethodNotImplemented(String, String),
     #[error("pipe of stderr stopped earlier than expected")]
     StdErrPipeStopped,
+    #[error("refusing to invoke a build backend")]
+    #[diagnostic(help("drop --no-build to resolve source dependencies"))]
+    BuildExecutionDenied,
 }
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum InitializeError {
+    #[error("refusing to invoke a build backend")]
+    #[diagnostic(help("drop --no-build to resolve source dependencies"))]
+    BuildExecutionDenied,
+
     #[error("failed to setup communication with the build-backend")]
     #[diagnostic(help(
         "This is often caused by a broken build-backend. Try upgrading or downgrading the build backend."
@@ -153,11 +160,15 @@ impl JsonRpcBackend {
         cache_dir: Option<PathBuf>,
         workspace_scratch_directory: Option<PathBuf>,
         tool: Tool,
+        allow_build_execution: bool,
     ) -> Result<Self, InitializeError> {
         debug_assert!(source_dir.is_absolute());
         debug_assert!(manifest_path.is_absolute());
         debug_assert!(workspace_root.is_absolute());
         debug_assert!(checkout_root.as_ref().is_none_or(|p| p.is_absolute()));
+        if !allow_build_execution {
+            return Err(InitializeError::BuildExecutionDenied);
+        }
         // Spawn the tool and capture stdin/stdout.
         let command = tool.command();
         let program_name = command.get_program().to_string_lossy().into_owned();
@@ -407,5 +418,34 @@ impl JsonRpcBackend {
     /// Returns the advertised capabilities of the backend.
     pub fn capabilities(&self) -> &BackendCapabilities {
         &self.backend_capabilities
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{InitializeError, JsonRpcBackend};
+    use crate::tool::{SystemTool, Tool};
+
+    #[test]
+    fn denied_permit_refuses_before_spawn() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let root = std::env::temp_dir();
+        let err = runtime.block_on(JsonRpcBackend::setup(
+            root.clone(),
+            root.join("pixi.toml"),
+            root.clone(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Tool::from(SystemTool::new("definitely-not-a-pixi-build-backend")),
+            false,
+        ));
+        assert!(matches!(err, Err(InitializeError::BuildExecutionDenied)));
     }
 }
