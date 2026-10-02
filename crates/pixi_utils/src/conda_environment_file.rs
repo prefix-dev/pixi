@@ -380,6 +380,91 @@ mod tests {
         );
     }
 
+    /// Write `yaml` as environment.yml in `dir` and return its parsed pip deps.
+    fn parse_pip_from_yaml(dir: &Path, yaml: &str) -> miette::Result<Vec<pep508_rs::Requirement>> {
+        let path = dir.join("environment.yml");
+        fs_err::write(&path, yaml).unwrap();
+        let env = CondaEnvFile::from_path(&path).unwrap();
+        let (_conda, pip, _ch) = parse_dependencies(env.dependencies().clone(), &env.source_path)?;
+        Ok(pip)
+    }
+
+    #[test]
+    fn test_pip_requirements_file_long_flag_and_mixed_entries() {
+        // `--requirement` long form, resolved relative to the yaml, with entries
+        // before and after the file reference keeping their order.
+        let dir = tempfile::tempdir().unwrap();
+        fs_err::write(
+            dir.path().join("reqs.txt"),
+            "numpy\n# comment\n\nflask==2.0\n",
+        )
+        .unwrap();
+        let pip = parse_pip_from_yaml(
+            dir.path(),
+            "name: e\ndependencies:\n  - pip:\n    - requests\n    - --requirement reqs.txt\n    - torch\n",
+        )
+        .unwrap();
+        assert_eq!(
+            pip,
+            vec![
+                pep508_rs::Requirement::from_str("requests").unwrap(),
+                pep508_rs::Requirement::from_str("numpy").unwrap(),
+                pep508_rs::Requirement::from_str("flask==2.0").unwrap(),
+                pep508_rs::Requirement::from_str("torch").unwrap(),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_pip_requirements_file_absolute_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let abs = dir.path().join("abs_reqs.txt");
+        fs_err::write(&abs, "scipy\n").unwrap();
+        let pip = parse_pip_from_yaml(
+            dir.path(),
+            &format!(
+                "name: e\ndependencies:\n  - pip:\n    - -r {}\n",
+                abs.display()
+            ),
+        )
+        .unwrap();
+        assert_eq!(
+            pip,
+            vec![pep508_rs::Requirement::from_str("scipy").unwrap()]
+        );
+    }
+
+    #[test]
+    fn test_pip_requirements_file_missing_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let res = parse_pip_from_yaml(
+            dir.path(),
+            "name: e\ndependencies:\n  - pip:\n    - -r does_not_exist.txt\n",
+        );
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_pip_requirements_file_nested_options_skipped() {
+        // Unsupported options inside the requirements file (including nested `-r`)
+        // are skipped with a warning rather than failing the parse.
+        let dir = tempfile::tempdir().unwrap();
+        fs_err::write(
+            dir.path().join("reqs.txt"),
+            "--extra-index-url https://example.com\n-r other.txt\nrequests\n",
+        )
+        .unwrap();
+        let pip = parse_pip_from_yaml(
+            dir.path(),
+            "name: e\ndependencies:\n  - pip:\n    - -r reqs.txt\n",
+        )
+        .unwrap();
+        assert_eq!(
+            pip,
+            vec![pep508_rs::Requirement::from_str("requests").unwrap()]
+        );
+    }
+
     #[test]
     fn test_import_from_env_yamls() {
         let test_files_path = Path::new(&env!("CARGO_MANIFEST_DIR"))
