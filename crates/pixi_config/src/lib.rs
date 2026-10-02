@@ -2662,6 +2662,7 @@ impl Config {
                 self.cache.expand_paths()?;
                 self.cache.validate()?;
             }
+            _ if value.is_none() => {}
             _ => return Err(err),
         }
 
@@ -3733,6 +3734,10 @@ UNUSED = "unused"
             .set("concurrency.solves", Some("10".to_string()))
             .unwrap();
         assert_eq!(config.max_concurrent_solves(), 10);
+
+        // Test unsetting an unknown key returns Ok(())
+        config.set("unknown-key", None).unwrap();
+
         config
             .set("concurrency.solves", Some("1".to_string()))
             .unwrap();
@@ -3978,7 +3983,7 @@ UNUSED = "unused"
             .unwrap();
         assert_eq!(config.pinning_strategy, Some(PinningStrategy::Semver));
 
-        config.set("unknown-key", None).unwrap_err();
+        config.set("unknown-key", None).unwrap();
     }
 
     #[rstest]
