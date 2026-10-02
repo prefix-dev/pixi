@@ -2272,8 +2272,10 @@ mod cache_key_tests {
 
     #[test]
     fn effective_project_version_changes_artifact_key() {
-        let mut model = pixi_build_types::ProjectModel::default();
-        model.version = Some("0.1.0".parse().unwrap());
+        let mut model = pixi_build_types::ProjectModel {
+            version: Some("0.1.0".parse().unwrap()),
+            ..Default::default()
+        };
         let old = key_with_backend_inputs(Some(&model), None);
         model.version = Some("0.2.0".parse().unwrap());
         assert_ne!(old, key_with_backend_inputs(Some(&model), None));
