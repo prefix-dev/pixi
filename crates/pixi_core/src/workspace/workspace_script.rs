@@ -367,6 +367,7 @@ mod tests {
                 },
                 ..Default::default()
             },
+            crate::host::HostDetection::builtin(),
         )
         .unwrap()
         .value

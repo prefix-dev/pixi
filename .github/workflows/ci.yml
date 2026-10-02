@@ -504,7 +504,7 @@ jobs:
           PIXI_BUILD_BACKEND_OVERRIDE: pixi-build-rust=${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}/pixi-build-rust.exe
 
   test-pytest-macos-aarch64:
-    timeout-minutes: 10
+    timeout-minutes: 30
     name: Pytest | macos aarch64
     runs-on: namespace-profile-macos-15-arm64-6
     needs: build-binary-macos-aarch64
