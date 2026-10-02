@@ -3149,3 +3149,19 @@ def test_exclude_newer_update_respects_cutoff(
         strip_ansi=True,
     )
     assert not (tmp_path / "bin" / exec_extension("package0.2.0")).exists()
+
+
+@pytest.mark.skipif(
+    platform.system() != "Linux", reason="GNU binutils nesting is specific to linux"
+)
+@pytest.mark.slow
+def test_global_expose_multiple_nested_executables(pixi: Path, tmp_path: Path) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    verify_cli_command(
+        [pixi, "global", "install", "-e", "cxx", "--expose", "gcc", "c-compiler", "cxx-compiler"],
+        env=env,
+    )
+    verify_cli_command(
+        [pixi, "global", "expose", "add", "-e", "cxx", "objdump"],
+        env=env,
+    )

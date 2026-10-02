@@ -48,15 +48,18 @@ pub(crate) fn script_exec_mapping<'a>(
 
     let target_executable_opt = if executable_count > 1 {
         // keep only the first executable in a known binary folder
-        matching_executables.iter().find(|executable| {
-            if let Some(parent) = executable.path.parent() {
-                is_binary_folder(parent)
-            } else {
-                false
-            }
-        })
+        matching_executables
+            .iter()
+            .copied()
+            .find(|executable| executable.path.parent().is_some_and(is_binary_folder))
+            .or_else(|| {
+                matching_executables
+                    .iter()
+                    .copied()
+                    .min_by_key(|executable| executable.path.as_os_str().len())
+            })
     } else {
-        matching_executables.first()
+        matching_executables.first().copied()
     };
 
     match target_executable_opt {
