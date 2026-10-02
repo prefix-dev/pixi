@@ -22,7 +22,9 @@ impl RayonPrimer {
         OperationId(self.next_id.fetch_add(1, Ordering::Relaxed))
     }
 
-    fn prime() {
+    /// Lets uv claim the global rayon pool now, before rattler's `Installer`
+    /// would build one of its own and make uv's later claim panic.
+    pub fn prime() {
         initialize_rayon_once();
     }
 }

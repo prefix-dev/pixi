@@ -18,10 +18,11 @@ use rattler_virtual_packages::{
     AmdGpu, AmdGpuArch, Archspec, Cuda, CudaArch, DetectVirtualPackageError, EnvOverride, LibC,
     Linux, Osx, Override, VirtualPackageOverrides, VirtualPackages, Windows,
 };
+use xxhash_rust::xxh3::xxh3_128;
 
 use super::{
-    PixiPlatform, PixiPlatformError, candidate_subdirs, is_subdir_default,
-    subdir_default_virtual_packages,
+    PixiPlatform, PixiPlatformError, PixiPlatformName, PixiPlatformNameError, candidate_subdirs,
+    is_subdir_default, subdir_default_virtual_packages,
 };
 
 /// A host platform could not be determined.
@@ -408,7 +409,15 @@ pub fn platform_from_detected(
         .filter(|gvp| !is_subdir_default(gvp, subdir))
         .cloned()
         .collect();
-    let name = crate::platform::synthesized_name(subdir, &customised)?;
+    let synthesized = crate::toml::platform::synthesize_name_string(subdir, &customised);
+    let name = match PixiPlatformName::try_from(synthesized.as_str()) {
+        Ok(name) => name,
+        // Detected facts are not bounded by a manifest identifier's length.
+        Err(PixiPlatformNameError::TooLong { .. }) => PixiPlatformName::try_from(
+            format!("{subdir}-host-{:032x}", xxh3_128(synthesized.as_bytes())).as_str(),
+        )?,
+        Err(error) => return Err(error.into()),
+    };
 
     // The name is synthesized from the customised packages alone, so a machine
     // that only *drops* a default (an empty `CONDA_OVERRIDE_*`) and matches the
@@ -522,7 +531,6 @@ mod tests {
 
     use super::*;
     use crate::platform::MAX_PLATFORM_NAME_BYTES;
-    use crate::{PixiPlatformName, PixiPlatformNameError};
 
     /// A virtual package in the shape rattler hands back from detection: a
     /// `"0"` build string on everything that carries a version.
@@ -748,34 +756,25 @@ mod tests {
         assert!(platform.has_derived_name(), "got {name}");
     }
 
-    /// Detected packages are not always pixi's own: a lock file's platform row
-    /// carries whatever was written into it, and a long enough package name
-    /// spells out past the limit. That platform has no name, which is an error
-    /// the caller can drop the row over - never a panic.
     #[test]
-    fn a_platform_that_cannot_be_named_is_an_error() {
-        // Long enough that no plausible cap fits it, derived so the test
-        // keeps biting when the cap moves.
-        let unnameable = format!("__{}", "a".repeat(MAX_PLATFORM_NAME_BYTES + 40));
-        let error = platform_from_detected(
-            Subdir::Linux64,
-            vec![
-                detected("__unix", "0"),
-                detected("__linux", "7.1.8"),
-                detected("__glibc", "2.42"),
-                detected_archspec("zen2"),
-                detected(&unnameable, "1"),
-            ],
-        )
-        .expect_err("an oversized virtual package cannot fit in a platform name");
-
-        assert!(
-            matches!(
-                error,
-                PixiPlatformError::Name(PixiPlatformNameError::TooLong { .. })
-            ),
-            "got {error:?}"
-        );
+    fn a_long_detected_platform_preserves_its_capabilities() {
+        let long_name = format!("__{}", "a".repeat(MAX_PLATFORM_NAME_BYTES + 40));
+        let packages = vec![
+            detected("__unix", "0"),
+            detected("__linux", "7.1.8"),
+            detected("__glibc", "2.42"),
+            detected_archspec("zen2"),
+            detected(&long_name, "1"),
+        ];
+        let platform = platform_from_detected(Subdir::Linux64, packages.clone()).unwrap();
+        assert!(platform.name().as_str().len() <= MAX_PLATFORM_NAME_BYTES);
+        assert!(platform.declared_virtual_packages().iter().any(|package| {
+            package.name.as_normalized() == long_name && package.version == Version::major(1)
+        }));
+        let mut reordered = packages;
+        reordered.reverse();
+        let reordered = platform_from_detected(Subdir::Linux64, reordered).unwrap();
+        assert_eq!(platform.name(), reordered.name());
     }
 
     /// A machine that reports exactly the subdir baseline is the subdir

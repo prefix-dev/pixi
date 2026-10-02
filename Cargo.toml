@@ -242,6 +242,7 @@ rattler_conda_types = { version = "0.55", default-features = false, features = [
 ] }
 rattler_config = { version = "0.8", default-features = false }
 rattler_digest = { version = "2.0", default-features = false }
+rattler_environment_digest = { version = "0.1", default-features = false }
 rattler_index = { version = "0.32", default-features = false, features = [
   "s3",
 ] }
@@ -261,6 +262,7 @@ rattler_upload = { version = "0.12", default-features = false, features = [
   "s3",
   "sigstore-sign",
 ] }
+rattler_virtual_package_detectors = { version = "0.1", default-features = false }
 rattler_virtual_packages = { version = "8.0", default-features = false }
 simple_spawn_blocking = { version = "1.1.0", default-features = false }
 
@@ -283,6 +285,7 @@ rattler_conda_types = { git = "https://github.com/conda/rattler", rev = "05995ba
 rattler_conda_version = { git = "https://github.com/conda/rattler", rev = "05995ba952d71220b5a900059e29d08e8b41c269" }
 rattler_config = { git = "https://github.com/conda/rattler", rev = "05995ba952d71220b5a900059e29d08e8b41c269" }
 rattler_digest = { git = "https://github.com/conda/rattler", rev = "05995ba952d71220b5a900059e29d08e8b41c269" }
+rattler_environment_digest = { git = "https://github.com/conda/rattler", rev = "05995ba952d71220b5a900059e29d08e8b41c269" }
 rattler_git = { git = "https://github.com/conda/rattler", rev = "05995ba952d71220b5a900059e29d08e8b41c269" }
 rattler_index = { git = "https://github.com/conda/rattler", rev = "05995ba952d71220b5a900059e29d08e8b41c269" }
 rattler_lock = { git = "https://github.com/conda/rattler", rev = "05995ba952d71220b5a900059e29d08e8b41c269" }
@@ -299,6 +302,7 @@ rattler_shell = { git = "https://github.com/conda/rattler", rev = "05995ba952d71
 rattler_sigstore = { git = "https://github.com/conda/rattler", rev = "05995ba952d71220b5a900059e29d08e8b41c269" }
 rattler_solve = { git = "https://github.com/conda/rattler", rev = "05995ba952d71220b5a900059e29d08e8b41c269" }
 rattler_upload = { git = "https://github.com/conda/rattler", rev = "05995ba952d71220b5a900059e29d08e8b41c269" }
+rattler_virtual_package_detectors = { git = "https://github.com/conda/rattler", rev = "05995ba952d71220b5a900059e29d08e8b41c269" }
 rattler_virtual_packages = { git = "https://github.com/conda/rattler", rev = "05995ba952d71220b5a900059e29d08e8b41c269" }
 simple_spawn_blocking = { git = "https://github.com/conda/rattler", rev = "05995ba952d71220b5a900059e29d08e8b41c269" }
 

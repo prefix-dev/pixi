@@ -134,6 +134,12 @@ impl WorkspaceManifest {
     ///
     /// This is the feature that is added implicitly by the tables at the root
     /// of the project manifest.
+    /// Every feature of the workspace, the default feature included, in
+    /// manifest order.
+    pub fn features(&self) -> &IndexMap<FeatureName, Feature> {
+        &self.features
+    }
+
     pub fn default_feature(&self) -> &Feature {
         self.features
             .get(&FeatureName::Default)

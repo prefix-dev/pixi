@@ -170,6 +170,38 @@ Adding a platform whose definition already exists under a *different* name is re
     Auto-detection captures your machine exactly, which is usually more specific than your packages actually need.
     After installing, `pixi info` reports each environment's **Minimum platform** (the virtual-package requirements some resolved dependency really places on the machine), so you can see which ones are safe to drop with `pixi workspace platform edit`.
 
+### Virtual package detectors
+
+Pixi's built-in detection only knows the virtual packages listed above.
+A channel can register **virtual package detectors** in its repodata: small packages whose executable reports further virtual packages, such as the version of an MPI runtime or a driver installed outside of the environment.
+Each registration names the detector package and the virtual packages it reports.
+
+Pixi runs a detector only when a workspace platform declares one of the names it reports beyond the subdir's baseline, as a raw `__name = "version"` entry or through a friendly key such as `cuda`, and only for the machine it runs on.
+A detector registered for a built-in name replaces Pixi's own detection of that name.
+The detector is installed into an environment of its own, cached under the [`virtual-package-detectors` cache](../reference/pixi_configuration.md#cache), and run with the configured timeout.
+Its results extend the built-in detection, so a workspace that declares `__conda_forge_openmpi = "5.0"` is usable on a machine where the detector reports that version or newer, and skipped otherwise.
+A detector that fails, times out, or reports something malformed contributes nothing and is reported as a warning.
+Other detectors' valid results and explicit overrides remain available when one detector fails.
+
+Workspace detection uses the union of workspace and feature channels, sorted by descending explicit priority, with manifest order breaking ties.
+Channel relations then determine the resolved order.
+A higher-priority accepted registration reserves its names even if its detector is denied or skipped; a lower-priority detector cannot take over those names.
+
+Running a detector executes code from the channel.
+The first time one is needed, Pixi shows what running it installs and asks whether to run it.
+The answer, allow or deny, is stored in the [`virtual-package-detectors` configuration](../reference/pixi_configuration.md#virtual-package-detectors): by default in the configuration shared with other rattler-based tools, or in Pixi's own user configuration.
+Without a terminal, a detector without a stored decision is skipped with a warning that names the configuration key to set.
+A stored `deny` skips it silently.
+
+`pixi info` lists every detector the channels register, whether it ran, and what it reported.
+Its virtual-package list contains the effective merged values: a detector replaces the built-in record for a name, and an absent result removes it.
+Commands that capture this machine, such as `pixi workspace platform add --auto-detect` and `pixi workspace platform list`, run every allowed detector, whether or not a platform declares its names.
+`pixi clean cache --virtual-package-detectors` removes the detector environments and their cached reports.
+
+Workspace lock-file solves use the virtual packages a platform *declares*; detection establishes whether this machine provides them.
+Global environments, `pixi exec`, and scripts without explicit platforms use detected host capabilities when solving, including when locking a conda script.
+Detector-provided names can still be overridden with `CONDA_OVERRIDE_<NAME>`, like the [built-in ones](./system_requirements.md#environment-variable-overrides): an empty value declares the virtual package absent, and a detector whose names are all overridden does not run.
+
 ### Managing platforms from the CLI
 
 [`pixi workspace platform`](../reference/cli/pixi/workspace/platform/index.md) is the CLI surface for these entries:

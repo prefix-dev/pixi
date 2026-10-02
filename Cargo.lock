@@ -6424,6 +6424,7 @@ dependencies = [
  "rattler_shell",
  "rattler_solve",
  "rattler_upload",
+ "rattler_virtual_package_detectors",
  "rattler_virtual_packages",
  "regex",
  "reqwest",
@@ -6658,6 +6659,7 @@ name = "pixi_core"
 version = "0.1.0"
 dependencies = [
  "async-once-cell",
+ "async-trait",
  "barrier_cell",
  "console",
  "dashmap",
@@ -6711,11 +6713,13 @@ dependencies = [
  "rattler",
  "rattler_conda_types",
  "rattler_digest",
+ "rattler_environment_digest",
  "rattler_lock",
  "rattler_networking",
  "rattler_repodata_gateway",
  "rattler_shell",
  "rattler_solve",
+ "rattler_virtual_package_detectors",
  "rattler_virtual_packages",
  "rstest",
  "serde",
@@ -8458,6 +8462,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rattler_environment_digest"
+version = "0.1.0"
+source = "git+https://github.com/conda/rattler?rev=05995ba952d71220b5a900059e29d08e8b41c269#05995ba952d71220b5a900059e29d08e8b41c269"
+dependencies = [
+ "hex",
+ "rattler_conda_types",
+ "rattler_digest",
+]
+
+[[package]]
 name = "rattler_git"
 version = "0.3.7"
 source = "git+https://github.com/conda/rattler?rev=05995ba952d71220b5a900059e29d08e8b41c269#05995ba952d71220b5a900059e29d08e8b41c269"
@@ -8883,6 +8897,37 @@ dependencies = [
  "thiserror 2.0.20",
  "tokio",
  "tokio-util 0.7.19",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "rattler_virtual_package_detectors"
+version = "0.1.0"
+source = "git+https://github.com/conda/rattler?rev=05995ba952d71220b5a900059e29d08e8b41c269#05995ba952d71220b5a900059e29d08e8b41c269"
+dependencies = [
+ "async-trait",
+ "fs-err",
+ "futures",
+ "hex",
+ "indexmap 2.14.2",
+ "rattler",
+ "rattler_boot_id",
+ "rattler_cache",
+ "rattler_conda_types",
+ "rattler_config",
+ "rattler_digest",
+ "rattler_environment_digest",
+ "rattler_networking",
+ "rattler_prefix_guard",
+ "rattler_repodata_gateway",
+ "rattler_shell",
+ "rattler_solve",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.20",
+ "tokio",
  "tracing",
  "url",
 ]

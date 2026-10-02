@@ -17,7 +17,9 @@ use indicatif::ProgressDrawTarget;
 use itertools::Itertools;
 use miette::{Diagnostic, IntoDiagnostic};
 use pixi_config::{ConfigCli, ConfigCliActivation};
-use pixi_core::host::HostDetection;
+use pixi_core::host::{probe_conda_script, probe_pep723_script};
+
+use crate::detector_consent::detector_consent;
 use pixi_core::{
     Workspace, WorkspaceLocator,
     environment::sanity_check_workspace,
@@ -204,13 +206,15 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
                 RemoteScriptManifest::Pep723(manifest) => manifest,
                 RemoteScriptManifest::CondaScript(manifest) => {
                     let entrypoint = manifest.metadata().entrypoint.clone();
+                    let host =
+                        probe_conda_script(&manifest, &root, &config, detector_consent()).await?;
                     let workspace = Workspace::from_transient_conda_script(
                         manifest,
                         config,
                         root,
                         &prepared.cache_name,
                         &cache_key,
-                        HostDetection::detect().await,
+                        host,
                     )?;
                     if not_hidden {
                         global_multi_progress()
@@ -223,6 +227,7 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
                 }
             };
             let script_path = manifest.path().to_owned();
+            let host = probe_pep723_script(&manifest, &root, &config, detector_consent()).await?;
             let WithWarnings {
                 value: workspace,
                 warnings,
@@ -233,7 +238,7 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
                 script_path,
                 &prepared.cache_name,
                 &cache_key,
-                HostDetection::detect().await,
+                host,
             )?;
             for warning in warnings {
                 tracing::warn!("{warning}");
@@ -253,6 +258,8 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
             let prepared = prepare_stdin_script(contents, &root)?;
             let cache_key =
                 transient_script_cache_key(b"stdin", prepared.manifest.metadata().as_bytes());
+            let host =
+                probe_pep723_script(&prepared.manifest, &root, &config, detector_consent()).await?;
             let WithWarnings {
                 value: workspace,
                 warnings,
@@ -263,7 +270,7 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
                 "<stdin>".into(),
                 "stdin",
                 &cache_key,
-                HostDetection::detect().await,
+                host,
             )?;
             for warning in warnings {
                 tracing::warn!("{warning}");
@@ -294,8 +301,9 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
                     global_multi_progress().set_draw_target(ProgressDrawTarget::stderr_with_hz(20));
                 }
                 let entrypoint = manifest.metadata().entrypoint.clone();
-                let workspace =
-                    Workspace::from_conda_script(manifest, config, HostDetection::detect().await)?;
+                let host =
+                    probe_conda_script(&manifest, &root, &config, detector_consent()).await?;
+                let workspace = Workspace::from_conda_script(manifest, config, host)?;
                 let code = crate::conda_script::execute_run(workspace, entrypoint, args).await?;
                 return Ok(process_exit::exit_code_from_code(code));
             }
