@@ -39,8 +39,8 @@ pub struct Args {
 /// in a clap struct so the rules (parsing, validation, conversion to
 /// `GenericVirtualPackage`) live in one place.
 ///
-/// Mirrors the TOML's per-virtual-package keys (`cuda`, `archspec`, `glibc`,
-/// `linux`, `macos`, `windows`). Virtual packages without a friendly flag are
+/// Mirrors the TOML's per-virtual-package keys (`cuda`, `amdgpu`, `archspec`,
+/// `glibc`, `linux`, `macos`, `windows`). Virtual packages without a friendly flag are
 /// declared as trailing `__name[=version[=build_string]]` positionals on the
 /// surrounding `add` / `edit` command, matching the `__name` raw-key escape
 /// hatch in the TOML layer.
@@ -56,6 +56,17 @@ pub struct VirtualPackageArgs {
     /// matching the conda CEP coupling. Serialized as `cuda = { driver, arch }`.
     #[clap(long, value_name = "VERSION")]
     pub cuda_arch: Option<String>,
+
+    /// Declare a `__amdgpu` virtual package, stating that an AMD GPU is
+    /// present. Valid on any subdir. Serialized as `amdgpu = true`.
+    #[clap(long)]
+    pub amdgpu: bool,
+
+    /// Declare a `__amdgpu_arch` virtual package from an AMDGPU target name,
+    /// e.g. `gfx90a`. Also declares `__amdgpu`. Serialized as
+    /// `amdgpu = "<target>"`.
+    #[clap(long, value_name = "TARGET")]
+    pub amdgpu_arch: Option<String>,
 
     /// Declare a `__archspec` virtual package with the given microarchitecture
     /// string, e.g. `x86_64_v3`. Valid on any subdir.
@@ -88,6 +99,8 @@ impl VirtualPackageArgs {
     pub fn is_empty(&self) -> bool {
         self.cuda.is_none()
             && self.cuda_arch.is_none()
+            && !self.amdgpu
+            && self.amdgpu_arch.is_none()
             && self.archspec.is_none()
             && self.glibc.is_none()
             && self.linux.is_none()
@@ -126,6 +139,28 @@ impl VirtualPackageArgs {
                 &mut specs,
                 &mut seen_names,
                 "__cuda_arch",
+                version,
+                String::new(),
+            )?;
+        }
+        if self.amdgpu || self.amdgpu_arch.is_some() {
+            // `__amdgpu` is presence-only, and an architecture implies the
+            // GPU it belongs to, so `--amdgpu-arch` declares both.
+            push_unique(
+                &mut specs,
+                &mut seen_names,
+                "__amdgpu",
+                zero_version(),
+                String::new(),
+            )?;
+        }
+        if let Some(value) = self.amdgpu_arch {
+            let version = pixi_manifest::platform::amdgpu_arch_from_target_name(&value)
+                .map_err(|message| miette::miette!("--amdgpu-arch: {message}"))?;
+            push_unique(
+                &mut specs,
+                &mut seen_names,
+                "__amdgpu_arch",
                 version,
                 String::new(),
             )?;
@@ -258,17 +293,14 @@ fn parse_raw_virtual_package(spec: &str) -> miette::Result<GenericVirtualPackage
     let name = PackageName::try_from(name_str)
         .into_diagnostic()
         .map_err(|e| miette::miette!("'{name_str}' is not a valid virtual package name: {e}"))?;
-    let version = parts
-        .next()
-        .map(|v| {
-            Version::from_str(v)
-                .into_diagnostic()
-                .map_err(|e| miette::miette!("'{v}' is not a valid virtual package version: {e}"))
-        })
-        .transpose()?
-        .unwrap_or_else(zero_version);
+    let version_str = parts.next().unwrap_or("0");
+    let version = Version::from_str(version_str)
+        .into_diagnostic()
+        .map_err(|e| {
+            miette::miette!("'{version_str}' is not a valid virtual package version: {e}")
+        })?;
     let build_string = parts.next().unwrap_or("").to_string();
-    pixi_manifest::platform::validate_virtual_package_build_string(&name, &build_string)
+    pixi_manifest::platform::validate_virtual_package(&name, version_str, &build_string)
         .map_err(|message| miette::miette!("{message}"))?;
     Ok(GenericVirtualPackage {
         name,
@@ -1329,6 +1361,31 @@ mod tests {
             .collect();
         assert_eq!(by_name.get("__cuda").map(String::as_str), Some("12.0"));
         assert_eq!(by_name.get("__cuda_arch").map(String::as_str), Some("8.6"));
+    }
+
+    /// `__amdgpu` carries no value, so `--amdgpu-arch` alone declares it too.
+    #[test]
+    fn into_specs_amdgpu_arch_implies_amdgpu() {
+        let args = VirtualPackageArgs {
+            amdgpu_arch: Some("gfx90a".into()),
+            ..Default::default()
+        };
+        let specs = args.into_specs(Subdir::Linux64, &[]).unwrap();
+        let by_name: std::collections::HashMap<_, _> = specs
+            .iter()
+            .map(|s| (s.name.as_normalized(), s.version.to_string()))
+            .collect();
+        assert_eq!(by_name.get("__amdgpu").map(String::as_str), Some("0"));
+        assert_eq!(
+            by_name.get("__amdgpu_arch").map(String::as_str),
+            Some("9.0.10")
+        );
+
+        let invalid = VirtualPackageArgs {
+            amdgpu_arch: Some("9.0.10".into()),
+            ..Default::default()
+        };
+        assert!(invalid.into_specs(Subdir::Linux64, &[]).is_err());
     }
 
     #[test]

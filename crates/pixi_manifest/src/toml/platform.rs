@@ -108,6 +108,9 @@ enum VirtualPackageValueKind {
     /// `version` is forced to `0`. This is the shape upstream rattler expects
     /// for `__archspec`.
     Microarch,
+    /// The package is presence-only: `version` is always `0` and
+    /// `build_string` is left empty. This is the shape of `__amdgpu`.
+    Presence,
 }
 
 /// A friendly TOML/CLI shortcut for a virtual package.
@@ -131,6 +134,12 @@ const FRIENDLY_VIRTUAL_PACKAGES: &[FriendlyVirtualPackage] = &[
         aliases: &[],
         conda_name: "__cuda",
         kind: VirtualPackageValueKind::Version,
+    },
+    FriendlyVirtualPackage {
+        key: "amdgpu",
+        aliases: &[],
+        conda_name: "__amdgpu",
+        kind: VirtualPackageValueKind::Presence,
     },
     FriendlyVirtualPackage {
         key: "archspec",
@@ -177,6 +186,7 @@ const FRIENDLY_VIRTUAL_PACKAGES: &[FriendlyVirtualPackage] = &[
 ///   { platform = "linux-64", cuda = "12.0", glibc = "2.28" },
 ///   { name = "gpu", platform = "linux-64", cuda = { driver = "12.0", arch = "8.6" } },
 ///   { name = "jetson", platform = "linux-aarch64", cuda = "12.8", archspec = "armv8.2a" },
+///   { name = "rocm", platform = "linux-64", amdgpu = "gfx90a" },
 /// ]
 /// ```
 ///
@@ -188,11 +198,14 @@ const FRIENDLY_VIRTUAL_PACKAGES: &[FriendlyVirtualPackage] = &[
 ///   the entry by. It's optional; when omitted, it's auto-derived from
 ///   `platform` and the declared virtual packages so the entry still has a
 ///   stable identifier.
-/// * Each remaining key is a virtual-package shortcut: `cuda`, `archspec`,
-///   `glibc`, `linux`, `macos` (alias `osx`), `windows`. Their values are conda
-///   version strings (or, for `archspec`, a microarchitecture string). `cuda`
-///   also accepts a `{ driver, arch }` table that declares `__cuda` plus the
-///   coupled `__cuda_arch` (GPU compute capability); `arch` requires `driver`.
+/// * Each remaining key is a virtual-package shortcut: `cuda`, `amdgpu`,
+///   `archspec`, `glibc`, `linux`, `macos` (alias `osx`), `windows`. Their
+///   values are conda version strings (or, for `archspec`, a microarchitecture
+///   string). `cuda` also accepts a `{ driver, arch }` table that declares
+///   `__cuda` plus the coupled `__cuda_arch` (GPU compute capability); `arch`
+///   requires `driver`. `amdgpu` is either `true`, declaring the
+///   presence-only `__amdgpu`, or an AMDGPU target name like `"gfx90a"` that
+///   declares `__amdgpu` plus the coupled `__amdgpu_arch` (AMDGPU ISA version).
 ///   Any key starting with `__` is taken as a raw `GenericVirtualPackage` so
 ///   rattler can grow new virtual packages without the TOML layer needing to
 ///   learn about them.
@@ -223,10 +236,12 @@ impl<'de> Deserialize<'de> for TomlPixiPlatform {
                 let platform_value: Option<Spanned<String>> = th.optional("platform");
 
                 let mut declared: Vec<GenericVirtualPackage> = Vec::new();
-                // `cuda` is the one friendly key with a nested-table form, so it
-                // is parsed before the generic scalar-only loop (which then
-                // skips it -- the key has already been consumed).
+                // `cuda` and `amdgpu` are the friendly keys with non-version
+                // forms, so they are parsed before the generic scalar-only
+                // loop (which then skips them -- the keys have already been
+                // consumed).
                 declared.extend(take_cuda_entry(&mut th)?);
+                declared.extend(take_amdgpu_entry(&mut th)?);
                 for entry in FRIENDLY_VIRTUAL_PACKAGES {
                     if let Some(raw) = take_friendly_value(&mut th, entry)? {
                         declared.push(build_friendly_virtual_package(
@@ -356,6 +371,14 @@ impl Serialize for TomlPixiPlatform {
                         },
                     )?;
                 }
+                InlinePlatformEntry::AmdGpu { target_name: None } => {
+                    map.serialize_entry("amdgpu", &true)?;
+                }
+                InlinePlatformEntry::AmdGpu {
+                    target_name: Some(target_name),
+                } => {
+                    map.serialize_entry("amdgpu", target_name)?;
+                }
             }
         }
         map.end()
@@ -431,11 +454,25 @@ fn build_friendly_virtual_package(
                 build_string: raw.value.clone(),
             })
         }
+        VirtualPackageValueKind::Presence => {
+            crate::platform::validate_virtual_package(&package_name, &raw.value, "").map_err(
+                |message| Error {
+                    kind: ErrorKind::Custom(message.into()),
+                    span: raw.span,
+                    line_info: None,
+                },
+            )?;
+            Ok(GenericVirtualPackage {
+                name: package_name,
+                version: Version::major(0),
+                build_string: String::new(),
+            })
+        }
     }
 }
 
-/// Parse the optional `cuda` key, which is the one friendly key that accepts a
-/// nested table. Either a bare version string (`cuda = "12.0"` -> `__cuda`) or
+/// Parse the optional `cuda` key. Either a bare version string
+/// (`cuda = "12.0"` -> `__cuda`) or
 /// a `{ driver, arch }` table (`driver` -> `__cuda`, optional `arch` ->
 /// `__cuda_arch`). Returns the CUDA virtual packages in canonical order
 /// (driver before arch).
@@ -506,6 +543,59 @@ fn take_cuda_entry<'de>(
     }
 }
 
+/// Parse the optional `amdgpu` key. Either `amdgpu = true` (-> the
+/// presence-only `__amdgpu`) or an AMDGPU target name like
+/// `amdgpu = "gfx90a"` (-> `__amdgpu` plus `__amdgpu_arch`, the ISA version
+/// the target name stands for). Returns the AMD GPU virtual packages in
+/// canonical order (presence before arch).
+///
+/// `__amdgpu` carries no information beyond presence, so a target name implies
+/// it. `amdgpu = false` declares nothing and is rejected.
+fn take_amdgpu_entry<'de>(
+    th: &mut TableHelper<'de>,
+) -> Result<Vec<GenericVirtualPackage>, DeserError> {
+    let Some((_key, mut value)) = th.table.remove_entry("amdgpu") else {
+        return Ok(Vec::new());
+    };
+    let span = value.span;
+    let presence = GenericVirtualPackage {
+        name: PackageName::try_from("__amdgpu").expect("static virtual-package name is valid"),
+        version: Version::major(0),
+        build_string: String::new(),
+    };
+    match value.take() {
+        ValueInner::Boolean(true) => Ok(vec![presence]),
+        ValueInner::Boolean(false) => Err(Error {
+            kind: ErrorKind::Custom(
+                "`amdgpu = false` declares nothing; remove the key to declare a platform without an AMD GPU".into(),
+            ),
+            span,
+            line_info: None,
+        }
+        .into()),
+        ValueInner::String(target_name) => {
+            let version =
+                crate::platform::amdgpu_arch_from_target_name(&target_name).map_err(|message| {
+                    Error {
+                        kind: ErrorKind::Custom(message.into()),
+                        span,
+                        line_info: None,
+                    }
+                })?;
+            Ok(vec![
+                presence,
+                GenericVirtualPackage {
+                    name: PackageName::try_from("__amdgpu_arch")
+                        .expect("static virtual-package name is valid"),
+                    version,
+                    build_string: String::new(),
+                },
+            ])
+        }
+        other => Err(expected("`true` or an AMDGPU target name like \"gfx90a\"", other, span).into()),
+    }
+}
+
 /// Parse a `__name = "version[=build_string]"` entry as a
 /// [`GenericVirtualPackage`]. Used for keys that don't have a friendly
 /// shortcut so the TOML layer stays forward-compatible.
@@ -543,7 +633,7 @@ fn parse_raw_virtual_package(
         line_info: None,
     })?;
     let build_string = parts.next().unwrap_or("").to_string();
-    crate::platform::validate_virtual_package_build_string(&name, &build_string).map_err(
+    crate::platform::validate_virtual_package(&name, version_str, &build_string).map_err(
         |message| Error {
             kind: ErrorKind::Custom(message.into()),
             span: value_span,
@@ -646,13 +736,16 @@ fn synthesize_name(
 #[derive(Debug, Clone)]
 pub struct InlineVirtualPackage {
     /// The conda virtual package(s) the entry represents. Usually one, but the
-    /// grouped `cuda = { driver, arch }` entry carries both `__cuda` and
-    /// `__cuda_arch` so callers can satisfaction-check each.
+    /// grouped `cuda = { driver, arch }` and `amdgpu = "gfx.."` entries carry
+    /// both the device and its architecture package so callers can
+    /// satisfaction-check each.
     pub packages: Vec<GenericVirtualPackage>,
-    /// On-line rendering. Friendly keys (`cuda`, `archspec`, `glibc`, `linux`,
-    /// `macos`, `windows`) are used when the entry fits one; the coupled CUDA
-    /// packages render as the inline table `cuda = { driver = "..", arch = ".." }`;
-    /// otherwise the raw `__name=value` form is used.
+    /// On-line rendering. Friendly keys (`cuda`, `amdgpu`, `archspec`,
+    /// `glibc`, `linux`, `macos`, `windows`) are used when the entry fits one;
+    /// the coupled CUDA packages render as the inline table
+    /// `cuda = { driver = "..", arch = ".." }` and the coupled AMD GPU
+    /// packages as `amdgpu=gfx..`; otherwise the raw `__name=value` form is
+    /// used.
     pub rendered: String,
 }
 
@@ -691,6 +784,16 @@ pub fn inline_virtual_package_specs(
             InlinePlatformEntry::CudaTable { driver, arch } => InlineVirtualPackage {
                 packages: vec![lookup("__cuda"), lookup("__cuda_arch")],
                 rendered: render_cuda_table(&driver, &arch),
+            },
+            InlinePlatformEntry::AmdGpu { target_name: None } => InlineVirtualPackage {
+                packages: vec![lookup("__amdgpu")],
+                rendered: "amdgpu".to_string(),
+            },
+            InlinePlatformEntry::AmdGpu {
+                target_name: Some(target_name),
+            } => InlineVirtualPackage {
+                packages: vec![lookup("__amdgpu"), lookup("__amdgpu_arch")],
+                rendered: render_key_value("amdgpu", &target_name),
             },
         })
         .collect()
@@ -811,13 +914,19 @@ fn classify_virtual_packages(
             VirtualPackageValueKind::Microarch => {
                 package.version == Version::major(0) && !package.build_string.is_empty()
             }
+            VirtualPackageValueKind::Presence => {
+                package.version == Version::major(0)
+                    && (package.build_string.is_empty() || package.build_string == "0")
+            }
         };
         if !fits {
             // Odd shape: don't take the friendly slot; fall through to raw.
             continue;
         }
         let value = match entry.kind {
-            VirtualPackageValueKind::Version => package.version.to_string(),
+            VirtualPackageValueKind::Version | VirtualPackageValueKind::Presence => {
+                package.version.to_string()
+            }
             VirtualPackageValueKind::Microarch => package.build_string.clone(),
         };
         consumed.insert(entry.conda_name);
@@ -848,10 +957,10 @@ fn classify_virtual_packages(
 }
 
 /// A declared virtual package in its friendly on-disk/on-line form, after the
-/// coupled CUDA packages are grouped. Every renderer (TOML serialize, the
+/// coupled GPU packages are grouped. Every renderer (TOML serialize, the
 /// document editor, the `key=value` list/`info` display) goes through
-/// [`platform_inline_entries`] so the `cuda` grouping lives in exactly one
-/// place.
+/// [`platform_inline_entries`] so the `cuda` and `amdgpu` grouping lives in
+/// exactly one place.
 enum InlinePlatformEntry {
     /// A flat entry: a friendly key (`cuda`, `glibc`, ...) or a raw `__name`.
     /// `conda_name` is the single virtual package it represents; `value` is the
@@ -864,6 +973,10 @@ enum InlinePlatformEntry {
     /// The grouped CUDA table `cuda = { driver, arch }`. Only emitted when both
     /// `__cuda` and `__cuda_arch` are present.
     CudaTable { driver: String, arch: String },
+    /// `__amdgpu`, written as `amdgpu = true` without an architecture and as
+    /// its target name `amdgpu = "gfx90a"` when `__amdgpu_arch` is present
+    /// too.
+    AmdGpu { target_name: Option<String> },
 }
 
 /// Serde shape for the nested `cuda = { driver, arch }` table.
@@ -874,36 +987,51 @@ struct CudaTableRepr<'a> {
 }
 
 /// Classify `declared` into ordered friendly entries, grouping `__cuda` +
-/// `__cuda_arch` into a single [`InlinePlatformEntry::CudaTable`].
+/// `__cuda_arch` into a single [`InlinePlatformEntry::CudaTable`] and
+/// `__amdgpu` (+ `__amdgpu_arch`) into a single
+/// [`InlinePlatformEntry::AmdGpu`].
 ///
 /// Wraps [`classify_virtual_packages`] (whose flat output still drives name
 /// synthesis) and only reshapes the rendering, so the auto-derived platform
-/// name stays independent of the `cuda` table grouping. A lone `__cuda_arch`
-/// (rejected for declared platforms, but reachable when rendering detected
-/// host packages) falls through to a raw `__cuda_arch` scalar.
+/// name stays independent of the grouping. A lone `__cuda_arch` or
+/// `__amdgpu_arch` (rejected for declared platforms, but reachable when
+/// rendering detected host packages) falls through to a raw scalar, as does
+/// an `__amdgpu_arch` that has no target-name spelling.
 fn platform_inline_entries(
     declared: &[GenericVirtualPackage],
     baseline: Option<&[GenericVirtualPackage]>,
 ) -> Vec<InlinePlatformEntry> {
     let (friendly, raw) = classify_virtual_packages(declared, baseline);
-    // The arch value lives in the raw bucket (no friendly key maps to
-    // `__cuda_arch`); pull it out so a `cuda` friendly entry can absorb it.
-    let arch_value = raw
-        .iter()
-        .find(|(conda_name, _)| conda_name == "__cuda_arch")
-        .map(|(_, value)| value.clone());
+    // The arch values live in the raw bucket (no friendly key maps to an
+    // architecture package); pull them out so the friendly `cuda` and
+    // `amdgpu` entries can absorb them.
+    let raw_value = |conda_name: &str| {
+        raw.iter()
+            .find(|(name, _)| name == conda_name)
+            .map(|(_, value)| value.clone())
+    };
+    let cuda_arch = raw_value("__cuda_arch");
+    let amdgpu_target_name =
+        raw_value("__amdgpu_arch").and_then(|isa| crate::platform::amdgpu_target_name(&isa));
 
     let mut entries = Vec::with_capacity(friendly.len() + raw.len());
-    let mut cuda_grouped = false;
+    let mut folded: Vec<&str> = Vec::new();
     for (key, value) in friendly {
         if key == "cuda"
-            && let Some(arch) = arch_value.clone()
+            && let Some(arch) = cuda_arch.clone()
         {
             entries.push(InlinePlatformEntry::CudaTable {
                 driver: value,
                 arch,
             });
-            cuda_grouped = true;
+            folded.push("__cuda_arch");
+        } else if key == "amdgpu" {
+            if amdgpu_target_name.is_some() {
+                folded.push("__amdgpu_arch");
+            }
+            entries.push(InlinePlatformEntry::AmdGpu {
+                target_name: amdgpu_target_name.clone(),
+            });
         } else {
             let conda_name = FRIENDLY_VIRTUAL_PACKAGES
                 .iter()
@@ -918,8 +1046,8 @@ fn platform_inline_entries(
         }
     }
     for (conda_name, value) in raw {
-        // The arch entry was folded into the `cuda` table above.
-        if conda_name == "__cuda_arch" && cuda_grouped {
+        // Arch entries folded into a `cuda` or `amdgpu` entry above.
+        if folded.contains(&conda_name.as_str()) {
             continue;
         }
         entries.push(InlinePlatformEntry::Scalar {
@@ -970,6 +1098,10 @@ fn suggested_platform_entry(candidates: &[GenericVirtualPackage], subdir: Subdir
         .map(|entry| match entry {
             InlinePlatformEntry::Scalar { key, value, .. } => format!("{key} = \"{value}\""),
             InlinePlatformEntry::CudaTable { driver, arch } => render_cuda_table(driver, arch),
+            InlinePlatformEntry::AmdGpu { target_name: None } => "amdgpu = true".to_string(),
+            InlinePlatformEntry::AmdGpu {
+                target_name: Some(target_name),
+            } => format!("amdgpu = \"{target_name}\""),
         })
         .format(", ");
     // Without an explicit name, a requirement equal to the subdir default
@@ -1010,6 +1142,14 @@ pub(crate) fn pixi_platform_to_toml_value(platform: &PixiPlatform) -> toml_edit:
                 inner.insert("driver", driver.into());
                 inner.insert("arch", arch.into());
                 table.insert("cuda", toml_edit::Value::InlineTable(inner));
+            }
+            InlinePlatformEntry::AmdGpu { target_name: None } => {
+                table.insert("amdgpu", true.into());
+            }
+            InlinePlatformEntry::AmdGpu {
+                target_name: Some(target_name),
+            } => {
+                table.insert("amdgpu", target_name.into());
             }
         }
     }
@@ -1652,6 +1792,146 @@ mod test {
         let parsed = TopLevel::from_toml_str(r#"platform = "linux-64""#).unwrap();
         let json = serde_json::to_value(TomlPixiPlatform(parsed.platform)).unwrap();
         assert_eq!(json, serde_json::Value::String("linux-64".into()));
+    }
+
+    #[test]
+    fn test_workspace_platform_amdgpu_target_name_parses() {
+        // A target name expands to `__amdgpu` + the `__amdgpu_arch` ISA
+        // version it stands for, and is identical to declaring them via raw
+        // keys, auto-name included.
+        let parsed =
+            TopLevel::from_toml_str(r#"platform = { platform = "linux-64", amdgpu = "gfx90a" }"#)
+                .unwrap();
+        assert_eq!(
+            virtual_package_specs(&parsed.platform),
+            vec![
+                "__amdgpu=0".to_string(),
+                "__amdgpu_arch=9.0.10".to_string(),
+                "__unix=0".to_string(),
+                "__linux=4.18".to_string(),
+                "__glibc=2.28".to_string(),
+                "__archspec=0=x86_64".to_string(),
+            ]
+        );
+        assert_eq!(
+            parsed.platform.name().as_str(),
+            "linux-64-amdgpu-0-amdgpu-arch-9-0-10"
+        );
+
+        let raw = TopLevel::from_toml_str(
+            r#"platform = { platform = "linux-64", __amdgpu = "0", __amdgpu_arch = "9.0.10" }"#,
+        )
+        .unwrap();
+        assert_eq!(raw.platform.name(), parsed.platform.name());
+        assert_eq!(
+            virtual_package_specs(&raw.platform),
+            virtual_package_specs(&parsed.platform),
+        );
+    }
+
+    #[test]
+    fn test_workspace_platform_amdgpu_true_parses() {
+        let parsed =
+            TopLevel::from_toml_str(r#"platform = { platform = "linux-64", amdgpu = true }"#)
+                .unwrap();
+        assert_eq!(
+            virtual_package_specs(&parsed.platform)[0],
+            "__amdgpu=0".to_string()
+        );
+        assert!(
+            !virtual_package_specs(&parsed.platform)
+                .iter()
+                .any(|spec| spec.starts_with("__amdgpu_arch"))
+        );
+        assert_eq!(parsed.platform.name().as_str(), "linux-64-amdgpu-0");
+    }
+
+    #[test]
+    fn test_workspace_platform_amdgpu_isa_version_suggests_target_name() {
+        let input = r#"platform = { platform = "linux-64", amdgpu = "9.0.10" }"#;
+        let error = TopLevel::from_toml_str(input).unwrap_err();
+        assert_snapshot!(format_parse_error(input, error), @r#"
+         × '9.0.10' is not an AMDGPU target name, write it as 'gfx90a'
+          ╭─[pixi.toml:1:47]
+        1 │ platform = { platform = "linux-64", amdgpu = "9.0.10" }
+          ·                                               ──────
+          ╰────
+        "#);
+    }
+
+    /// Inputs that declare nothing, or break the CEP shape of the AMD GPU
+    /// packages, are rejected.
+    #[test]
+    fn test_workspace_platform_amdgpu_invalid_shapes_rejected() {
+        for (input, expected) in [
+            (
+                r#"platform = { platform = "linux-64", amdgpu = false }"#,
+                "`amdgpu = false` declares nothing",
+            ),
+            (
+                r#"platform = { platform = "linux-64", amdgpu = "gfx90a:xnack-" }"#,
+                "'gfx90a:xnack-' is not an AMDGPU target name",
+            ),
+            (
+                r#"platform = { platform = "linux-64", amdgpu = "mi250" }"#,
+                "expected something like 'gfx90a' or 'gfx1100'",
+            ),
+            (
+                r#"platform = { platform = "linux-64", amdgpu = { arch = "gfx90a" } }"#,
+                "expected `true` or an AMDGPU target name",
+            ),
+            (
+                r#"platform = { name = "gpu", platform = "linux-64", __amdgpu_arch = "9.0.10" }"#,
+                "`__amdgpu_arch` requires `__amdgpu`",
+            ),
+            (
+                r#"platform = { name = "gpu", platform = "linux-64", __amdgpu = "1" }"#,
+                "its version is always '0'",
+            ),
+            (
+                r#"platform = { platform = "linux-64", amdgpu = true, __amdgpu = "0" }"#,
+                "is declared more than once",
+            ),
+        ] {
+            let error = TopLevel::from_toml_str(input).unwrap_err();
+            let rendered = format_parse_error(input, error);
+            assert!(
+                rendered.contains(expected),
+                "{input}: expected '{expected}', got: {rendered}",
+            );
+        }
+    }
+
+    /// Both `amdgpu` forms survive the serde writer and the document editor.
+    /// An `__amdgpu_arch` without a target-name spelling stays a raw key.
+    #[test]
+    fn test_roundtrip_amdgpu() {
+        for (original, expected_json) in [
+            (
+                r#"platform = { platform = "linux-64", amdgpu = true }"#,
+                serde_json::json!({ "platform": "linux-64", "amdgpu": true }),
+            ),
+            (
+                r#"platform = { platform = "linux-64", amdgpu = "gfx1100" }"#,
+                serde_json::json!({ "platform": "linux-64", "amdgpu": "gfx1100" }),
+            ),
+            (
+                r#"platform = { platform = "linux-64", amdgpu = true, __amdgpu_arch = "9.0.16" }"#,
+                serde_json::json!({
+                    "platform": "linux-64",
+                    "amdgpu": true,
+                    "__amdgpu_arch": "9.0.16",
+                }),
+            ),
+        ] {
+            let parsed = TopLevel::from_toml_str(original).unwrap();
+            assert_eq!(
+                pixi_platform_to_toml_value(&parsed.platform).to_string(),
+                original.trim_start_matches("platform = "),
+            );
+            let json = serde_json::to_value(TomlPixiPlatform(parsed.platform)).unwrap();
+            assert_eq!(json, expected_json);
+        }
     }
 
     #[test]
