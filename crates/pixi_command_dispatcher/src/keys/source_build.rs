@@ -24,8 +24,8 @@ use pixi_record::{PixiRecord, UnresolvedPixiRecord, UnresolvedSourceRecord, Vari
 use pixi_spec::{ResolvedExcludeNewer, SourceAnchor, SourceSpec};
 use pixi_variant::VariantSelector;
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, PackageName, PackageRecord, RepoDataRecord, Subdir, package::DistArchiveIdentifier,
-    prefix::Prefix,
+    ChannelConfig, ChannelUrl, PackageName, PackageRecord, RepoDataRecord, Subdir,
+    package::DistArchiveIdentifier, prefix::Prefix,
 };
 use rattler_digest::Sha256Hash;
 use tracing::instrument;
@@ -96,6 +96,14 @@ fn immutable_variant_file_hashes(spec: &SourceBuildSpec) -> Option<Vec<u64>> {
 /// spec carries values that are *not* stable across processes, and folding
 /// one of those in silently turns every lookup into a miss.
 ///
+/// The user-supplied project-model overrides (build string prefix and build
+/// number) are hashed here rather than in [`compute_artifact_cache_key`]:
+/// that function now folds in the *discovered* project model and
+/// configuration, both of which require a checkout to obtain. On the
+/// checkout-free path the pinned (content-addressed) manifest source already
+/// pins the project model and configuration via the record, so only the
+/// overrides remain to be captured here.
+///
 /// Deliberately **not** hashed:
 ///
 /// - `exclude_newer`, whose `ResolvedExcludeNewer::cutoff` is derived from
@@ -104,17 +112,19 @@ fn immutable_variant_file_hashes(spec: &SourceBuildSpec) -> Option<Vec<u64>> {
 ///   that is already validated on lookup by re-solving the recorded backend
 ///   and comparing its `env@…` identifier.
 /// - Anything [`compute_artifact_cache_key`] already folds in itself: the
-///   record, both platforms, the project-model overrides, the package
-///   format, and the inline content hash. (`InlinePackage` hashes as just
-///   its `content_hash`, so `spec.inline` would be redundant.)
+///   record, both platforms, the package format, and the inline content
+///   hash. (`InlinePackage` hashes as just its `content_hash`, so
+///   `spec.inline` would be redundant.)
 fn immutable_backend_identifier(
     spec: &SourceBuildSpec,
     variant_file_hashes: &[u64],
     enabled_protocols: &EnabledProtocols,
     channel_config: &ChannelConfig,
+    project_model_overrides: &ProjectModelOverrides,
 ) -> String {
     let mut hasher = Xxh3::new();
-    "immutable-artifact-v4".hash(&mut hasher);
+    "immutable-artifact-v5".hash(&mut hasher);
+    project_model_overrides.hash(&mut hasher);
     spec.channels.hash(&mut hasher);
     spec.build_profile.hash(&mut hasher);
     spec.variant_configuration.hash(&mut hasher);
@@ -268,15 +278,23 @@ async fn compute_inner(
                 &variant_file_hashes,
                 &enabled_protocols,
                 &channel_config,
+                &project_model_overrides,
             );
+            // The discovered project model and configuration require a
+            // checkout, which this path deliberately avoids. For an immutable
+            // (content-addressed) source both are pinned by the record, and
+            // the user overrides are folded into `immutable_identifier`, so a
+            // `None` model hash and the default configuration hash are safe
+            // here.
             compute_artifact_cache_key(
                 &spec.record,
                 spec.build_environment.build_platform,
                 spec.build_environment.host_platform,
                 &immutable_identifier,
+                None,
+                crate::input_hash::ConfigurationHash::default(),
                 &build_source_dep_sha256s,
                 &host_source_dep_sha256s,
-                &project_model_overrides,
                 spec.package_format,
                 spec.inline.as_ref().map(|inline| inline.content_hash),
             )
@@ -397,7 +415,6 @@ async fn compute_inner(
             configuration_hash,
             &build_source_dep_sha256s,
             &host_source_dep_sha256s,
-            &project_model_overrides,
             spec.package_format,
             spec.inline.as_ref().map(|inline| inline.content_hash),
         )
@@ -1124,7 +1141,7 @@ mod immutable_identifier_tests {
     use pixi_record::{
         FullSourceRecordData, PinnedGitCheckout, PinnedGitSpec, PinnedSourceSpec, SourceRecordData,
     };
-    use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform};
+    use rattler_conda_types::{GenericVirtualPackage, PackageName, Subdir};
 
     use super::*;
 
@@ -1167,9 +1184,9 @@ mod immutable_identifier_tests {
             )],
             exclude_newer: None,
             build_environment: BuildEnvironment {
-                host_platform: Platform::Linux64,
+                host_platform: Subdir::Linux64,
                 host_virtual_packages: Vec::new(),
-                build_platform: Platform::Linux64,
+                build_platform: Subdir::Linux64,
                 build_virtual_packages: Vec::new(),
             },
             build_profile: BuildProfile::Development,
@@ -1200,6 +1217,10 @@ mod immutable_identifier_tests {
             variant_file_hashes,
             &EnabledProtocols::default(),
             channel_config,
+            &ProjectModelOverrides {
+                build_string_prefix: spec.build_string_prefix.clone(),
+                build_number: spec.build_number,
+            },
         )
     }
 
@@ -1236,6 +1257,7 @@ mod immutable_identifier_tests {
         );
     }
 
+    #[test]
     fn identifier_is_deterministic() {
         assert_eq!(identifier(&spec()), identifier(&spec()));
     }
@@ -1311,6 +1333,7 @@ mod immutable_identifier_tests {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use miette::Diagnostic;
     use rattler_conda_types::VersionWithSource;
