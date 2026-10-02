@@ -170,7 +170,7 @@ impl FromStr for TargetSelector {
             "macos" | "osx" => Ok(TargetSelector::MacOs),
             other => {
                 let other = other.to_string();
-                if rattler_conda_types::Platform::from_str(&other).is_ok() {
+                if rattler_conda_types::Subdir::from_str(&other).is_ok() {
                     Ok(TargetSelector::Subdir(other))
                 } else {
                     Ok(TargetSelector::Platform(s.to_string()))

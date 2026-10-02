@@ -9,7 +9,7 @@ use pixi_config::ConfigCli;
 use pixi_core::{WorkspaceLocator, lock_file::UpdateLockFileOptions};
 use pixi_manifest::PixiPlatformName;
 use rattler_conda_types::{
-    ExplicitEnvironmentEntry, ExplicitEnvironmentSpec, PackageRecord, Platform, RepoDataRecord,
+    ExplicitEnvironmentEntry, ExplicitEnvironmentSpec, PackageRecord, RepoDataRecord, Subdir,
 };
 use rattler_lock::{
     CondaPackageData, Environment, LockedPackage, Platform as LockedPlatform, PlatformName,
@@ -61,7 +61,7 @@ pub struct Args {
 }
 
 fn build_explicit_spec<'a>(
-    platform: &Platform,
+    platform: &Subdir,
     conda_packages: impl IntoIterator<Item = &'a RepoDataRecord>,
 ) -> miette::Result<ExplicitEnvironmentSpec> {
     let mut packages = Vec::new();
@@ -209,9 +209,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         args.workspace_config.script.is_some(),
         workspace.lock_file_path().is_file(),
     )?;
+    // Scoped so the bars are cleared before the output is printed.
+    let progress = pixi_reporters::TopLevelProgress::from_global();
+    let clear_progress = pixi_reporters::TopLevelProgress::clear_when_done(Some(&progress));
     let lock_file = workspace
         .update_lock_file(
-            Some(pixi_reporters::TopLevelProgress::from_global()),
+            Some(progress.clone()),
             UpdateLockFileOptions {
                 lock_file_usage,
                 no_install: args.no_install_config.no_install,
@@ -222,6 +225,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?
         .0
         .into_lock_file();
+    drop(clear_progress);
 
     let mut environments = Vec::new();
     if let Some(env_names) = args.environment {

@@ -14,7 +14,7 @@ use pixi_build_backend::{
     variants::NormalizedKey,
 };
 use rattler_build_recipe::stage0::{Item, Script, SerializableMatchSpec, Value};
-use rattler_conda_types::{ChannelUrl, Platform};
+use rattler_conda_types::{ChannelUrl, Subdir};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -67,7 +67,7 @@ impl GenerateRecipe for RGenerator {
         model: &pixi_build_types::ProjectModel,
         config: &Self::Config,
         manifest_path: PathBuf,
-        _host_platform: Platform,
+        _host_platform: Subdir,
         _python_params: Option<PythonParams>,
         variants: &HashSet<NormalizedKey>,
         _channels: Vec<ChannelUrl>,
@@ -182,7 +182,7 @@ impl GenerateRecipe for RGenerator {
         // Generate build script
         let has_native_code = !compilers.is_empty();
         let build_script = BuildScriptContext {
-            build_platform: if Platform::current().is_windows() {
+            build_platform: if Subdir::current().unwrap_or(Subdir::NoArch).is_windows() {
                 BuildPlatform::Windows
             } else {
                 BuildPlatform::Unix
@@ -266,7 +266,7 @@ impl GenerateRecipe for RGenerator {
 
     fn default_variants(
         &self,
-        _host_platform: Platform,
+        _host_platform: Subdir,
     ) -> miette::Result<BTreeMap<NormalizedKey, Vec<Variable>>> {
         // R packages don't typically need special default variants
         // Compiler variants are handled by rattler-build defaults
@@ -339,7 +339,7 @@ LinkingTo: Rcpp
                 &project_model,
                 &RBackendConfig::default(),
                 temp_dir.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -419,7 +419,7 @@ LinkingTo: Rcpp
                 &project_model,
                 &RBackendConfig::default(),
                 temp_dir.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -476,7 +476,7 @@ LinkingTo: Rcpp
                 &project_model,
                 &RBackendConfig::default(),
                 temp_dir.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -574,7 +574,7 @@ Imports:
                 &project_model,
                 &RBackendConfig::default(),
                 temp_dir.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -678,7 +678,7 @@ Imports:
                 &project_model,
                 &RBackendConfig::default(),
                 temp_dir.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -729,7 +729,7 @@ Imports:
                 &project_model,
                 &config,
                 temp_dir.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],

@@ -113,6 +113,8 @@ When you write a bare-string entry like `"linux-64"`, Pixi uses these defaults
 
 === "Linux"
     `__linux = "4.18"`, `__glibc = "2.28"`
+=== "Linux (riscv64)"
+    `__linux = "4.18"`, `__glibc = "2.39"`
 === "Windows"
     No defaults.
 === "macOS (x86_64)"

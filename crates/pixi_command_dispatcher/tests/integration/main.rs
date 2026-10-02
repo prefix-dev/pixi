@@ -29,9 +29,7 @@ use pixi_spec::{
 use pixi_spec_containers::DependencyMap;
 use pixi_test_utils::format_diagnostic;
 use pixi_utils::variants::VariantConfig;
-use rattler_conda_types::{
-    ChannelUrl, GenericVirtualPackage, PackageName, Platform, prefix::Prefix,
-};
+use rattler_conda_types::{ChannelUrl, GenericVirtualPackage, PackageName, Subdir, prefix::Prefix};
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use url::Url;
 
@@ -147,9 +145,9 @@ fn default_cache_dirs() -> CacheDirs {
 /// Specifically, it normalizes `WinArm64` to `Win64` to increase compatibility.
 /// TODO: Once conda-forge supports `WinArm64`, we can remove this
 /// normalization.
-fn tool_platform() -> (Platform, Vec<GenericVirtualPackage>) {
-    let platform = match Platform::current() {
-        Platform::WinArm64 => Platform::Win64,
+fn tool_platform() -> (Subdir, Vec<GenericVirtualPackage>) {
+    let platform = match Subdir::current().unwrap_or(Subdir::NoArch) {
+        Subdir::WinArm64 => Subdir::Win64,
         platform => platform,
     };
     let virtual_packages = VirtualPackages::detect(&VirtualPackageOverrides::default(), None)
@@ -603,7 +601,7 @@ pub async fn test_cycle() {
                 }
                 .into(),
             )]),
-            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
             ..empty_pixi_env_spec()
         },
     )
@@ -654,7 +652,7 @@ pub async fn test_cycle_three_packages() {
                 }
                 .into(),
             )]),
-            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
             ..empty_pixi_env_spec()
         },
     )
@@ -698,7 +696,7 @@ pub async fn test_unsolvable_build_environment_names_package() {
                 }
                 .into(),
             )]),
-            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
             ..empty_pixi_env_spec()
         },
     )
@@ -744,7 +742,7 @@ pub async fn test_unsolvable_backend_names_package() {
                 }
                 .into(),
             )]),
-            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
             ..empty_pixi_env_spec()
         },
     )
@@ -783,8 +781,9 @@ pub async fn test_run_export_on_source_host_dependency() {
 
     // `noarch` exports because the passthrough backend produces NoArch
     // outputs and only noarch run-exports propagate to a NoArch consumer.
+    // Use reverse order to verify canonical sorting.
     let run_exports = RunExportsJson {
-        noarch: vec!["package_b 0.1.0".to_string(), "package_c 0.1.0".to_string()],
+        noarch: vec!["package_c 0.1.0".to_string(), "package_b 0.1.0".to_string()],
         ..Default::default()
     };
     let dispatcher = CommandDispatcher::builder()
@@ -807,7 +806,7 @@ pub async fn test_run_export_on_source_host_dependency() {
                 }
                 .into(),
             )]),
-            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
             ..empty_pixi_env_spec()
         },
     )
@@ -835,6 +834,15 @@ pub async fn test_run_export_on_source_host_dependency() {
             "{dep} must be part of the solution as a source record"
         );
     }
+    assert!(
+        package_a.package_record().depends.is_sorted(),
+        "package_a depends must be canonically sorted, got {:?}",
+        package_a.package_record().depends
+    );
+    assert_eq!(
+        package_a.package_record().depends,
+        vec!["package_b ==0.1.0", "package_c ==0.1.0"]
+    );
 }
 
 /// Manifest-declared `[package.run-exports.noarch]` propagates end to end:
@@ -868,7 +876,7 @@ pub async fn test_manifest_noarch_run_export_propagates_to_noarch_consumer() {
                 }
                 .into(),
             )]),
-            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
             ..empty_pixi_env_spec()
         },
     )
@@ -935,7 +943,7 @@ pub async fn test_manifest_weak_run_export_propagates_from_host_dependency() {
                 }
                 .into(),
             )]),
-            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
             ..empty_pixi_env_spec()
         },
     )
@@ -1007,7 +1015,7 @@ pub async fn test_manifest_pin_compatible_resolves_against_host_env() {
                 }
                 .into(),
             )]),
-            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
             ..empty_pixi_env_spec()
         },
     )
@@ -1069,7 +1077,7 @@ pub async fn test_manifest_pin_subpackage_run_export_pins_exporter() {
                 }
                 .into(),
             )]),
-            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
             ..empty_pixi_env_spec()
         },
     )
@@ -1124,7 +1132,7 @@ pub async fn test_manifest_strong_run_export_propagates_from_build_dependency() 
                 }
                 .into(),
             )]),
-            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
             ..empty_pixi_env_spec()
         },
     )
@@ -1160,6 +1168,191 @@ pub async fn test_manifest_strong_run_export_propagates_from_build_dependency() 
         "the weak run-export of a build dependency must not reach the consumer, got {:?}",
         package_a.package_record().depends
     );
+}
+
+/// Regression test for <https://github.com/prefix-dev/pixi/issues/6846>.
+///
+/// `package_a` has the source package `package_b` as a build *and* a host
+/// dependency, the shape the ROS backend produces for every `package.xml`
+/// dependency. When cross-compiling, the build-dependency copy of
+/// `package_b` runs on the build platform, so its own host environment must
+/// be solved for the build platform too, while the host-dependency copy
+/// targets the host platform. The nested derivation used to lose the build
+/// platform, labelling the build copy with the build platform but solving
+/// its host environment for the target.
+#[tokio::test]
+pub async fn test_cross_compile_build_dependency_is_solved_for_build_platform() {
+    let tempdir = test_tempdir();
+    let dispatcher = cross_build_dependency_dispatcher(&tempdir);
+    let records = solve_cross_build_dependency(&dispatcher, vec![]).await;
+    assert_package_b_copies_are_on_their_platforms(&records);
+}
+
+/// Re-solving with the previous solution as the installed hint, the way a
+/// re-lock does, must keep both copies of `package_b` on their platforms.
+/// Installed-record hints are keyed by package name and source location
+/// only, so both copies share one hint and one of the two nested solves is
+/// seeded with the other copy's host packages. Those must not be locked in.
+#[tokio::test]
+pub async fn test_cross_compile_build_dependency_survives_a_resolve_with_hints() {
+    let tempdir = test_tempdir();
+    let dispatcher = cross_build_dependency_dispatcher(&tempdir);
+    let first = solve_cross_build_dependency(&dispatcher, vec![]).await;
+    let second =
+        solve_cross_build_dependency(&dispatcher, first.into_iter().map(to_unresolved).collect())
+            .await;
+    assert_package_b_copies_are_on_their_platforms(&second);
+}
+
+/// A dispatcher rooted in the `cross-build-dependency` workspace.
+fn cross_build_dependency_dispatcher(tempdir: &tempfile::TempDir) -> CommandDispatcher {
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    let root_dir = workspaces_dir().join("cross-build-dependency");
+    CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish()
+}
+
+/// Solve `package_a` of the `cross-build-dependency` workspace for osx-arm64
+/// from linux-64, seeded with `installed` and the hints derived from it.
+/// Both platforms are pinned so the test does not depend on the machine it
+/// runs on.
+async fn solve_cross_build_dependency(
+    dispatcher: &CommandDispatcher,
+    installed: Vec<pixi_record::UnresolvedPixiRecord>,
+) -> Vec<pixi_record::PixiRecord> {
+    let channel_dir = cargo_workspace_dir().join("tests/data/channels/channels/dummy_channel_1");
+    let channel: ChannelUrl = Url::from_directory_path(&channel_dir).unwrap().into();
+    let build_environment = BuildEnvironment {
+        host_platform: Subdir::OsxArm64,
+        host_virtual_packages: vec![],
+        build_platform: Subdir::Linux64,
+        build_virtual_packages: vec![],
+    };
+    let (installed, installed_source_hints) = installed_with_hints(installed);
+    run_pixi_solve(
+        dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package_a".parse().unwrap(),
+                PathSpec::new("package_a").into(),
+            )]),
+            installed,
+            installed_source_hints,
+            env_ref: env_ref_of(vec![channel], build_environment),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .map_err(|e| format_diagnostic(&e))
+    .expect("the cross-compiling solve should succeed")
+}
+
+/// The build copy of `package_b` and everything in its host environment is
+/// on linux-64; the host copy and its host environment target osx-arm64.
+fn assert_package_b_copies_are_on_their_platforms(records: &[pixi_record::PixiRecord]) {
+    let package_a = records
+        .iter()
+        .find_map(|r| {
+            r.as_source()
+                .filter(|s| s.package_record().name.as_normalized() == "package_a")
+        })
+        .expect("package_a source record is in the solution");
+    assert_eq!(package_a.package_record().subdir, "osx-arm64");
+
+    // The build copy of package_b runs on the build platform, and so does
+    // everything in its host environment.
+    let package_b_for_build = source_dependency(&package_a.build_packages, "package_b");
+    assert_eq!(
+        package_b_for_build.package_record().unwrap().subdir,
+        "linux-64"
+    );
+    let package_b_for_build_source = package_b_for_build.as_source().unwrap();
+    assert_eq!(
+        package_b_for_build_source.variants()["target_platform"].to_string(),
+        "linux-64"
+    );
+    assert_eq!(
+        subdirs(&package_b_for_build_source.host_packages),
+        vec!["linux-64"],
+        "the host environment of a build dependency must be solved for the build platform"
+    );
+    assert_eq!(
+        build_string(&package_b_for_build_source.host_packages, "dummy-b"),
+        "hb0f4dca_0",
+        "the linux-64 build of dummy-b"
+    );
+
+    // The host copy of package_b targets the host platform.
+    let package_b_for_host = source_dependency(&package_a.host_packages, "package_b");
+    assert_eq!(
+        package_b_for_host.package_record().unwrap().subdir,
+        "osx-arm64"
+    );
+    let package_b_for_host_source = package_b_for_host.as_source().unwrap();
+    assert_eq!(
+        package_b_for_host_source.variants()["target_platform"].to_string(),
+        "osx-arm64"
+    );
+    assert_eq!(
+        subdirs(&package_b_for_host_source.host_packages),
+        vec!["osx-arm64"]
+    );
+    assert_eq!(
+        build_string(&package_b_for_host_source.host_packages, "dummy-b"),
+        "h60d57d3_0",
+        "the osx-arm64 build of dummy-b"
+    );
+}
+
+/// The source dependency called `name` among `packages`.
+fn source_dependency<'a>(
+    packages: &'a [pixi_record::UnresolvedPixiRecord],
+    name: &str,
+) -> &'a pixi_record::UnresolvedPixiRecord {
+    packages
+        .iter()
+        .find(|r| {
+            r.as_source()
+                .is_some_and(|s| s.name().as_normalized() == name)
+        })
+        .unwrap_or_else(|| panic!("{name} should be a source dependency"))
+}
+
+/// The distinct subdirs of `packages`, in sorted order.
+fn subdirs(packages: &[pixi_record::UnresolvedPixiRecord]) -> Vec<String> {
+    let mut subdirs: Vec<String> = packages
+        .iter()
+        .map(|r| {
+            r.package_record()
+                .expect("build/host packages are fully resolved")
+                .subdir
+                .clone()
+        })
+        .collect();
+    subdirs.sort();
+    subdirs.dedup();
+    subdirs
+}
+
+/// The build string of the binary package `name` among `packages`.
+fn build_string(packages: &[pixi_record::UnresolvedPixiRecord], name: &str) -> String {
+    packages
+        .iter()
+        .find_map(|r| {
+            r.as_binary()
+                .filter(|b| b.package_record.name.as_normalized() == name)
+        })
+        .unwrap_or_else(|| panic!("{name} should be a binary dependency"))
+        .package_record
+        .build
+        .clone()
 }
 
 /// A package can receive the same source dependency through two channels at
@@ -1209,7 +1402,7 @@ pub async fn test_run_export_implied_source_yields_to_explicit_spelling() {
                 }
                 .into(),
             )]),
-            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
             ..empty_pixi_env_spec()
         },
     )
@@ -3352,6 +3545,143 @@ pub async fn test_source_build_key_dedups_across_parallel_installs() {
         "two parallel installs of the same source package should trigger \
          exactly one backend build; SourceBuildKey did not dedup"
     );
+}
+
+/// A record of another platform in the build or host environment of a
+/// source package is rejected before anything is installed into the
+/// prefix, with a diagnostic that names the record, the prefix and the
+/// package being built. Install `package-b` for a foreign platform with a
+/// record of this machine's platform smuggled into its host environment,
+/// the shape an upstream platform-tracking bug produces.
+#[tokio::test]
+pub async fn test_prefix_platform_mismatch_is_reported_before_installing() {
+    use pixi_command_dispatcher::{
+        InstallPixiEnvironmentError, PrefixRecordOrigin, SourceBuildError, SourceBuildPrefixKind,
+    };
+    use pixi_record::UnresolvedPixiRecord;
+    use rattler_conda_types::{
+        PackageRecord, RepoDataRecord, VersionWithSource, package::DistArchiveIdentifier,
+    };
+
+    let root_dir = workspaces_dir().join("host-dependency");
+    let tempdir = test_tempdir();
+    let (tool_platform, tool_virtual_packages) = tool_platform();
+    // Cross-install so the generic "retry without --platform" hint would
+    // apply; the specific error must stand on its own.
+    let target_platform = match tool_platform {
+        Subdir::OsxArm64 => Subdir::Linux64,
+        _ => Subdir::OsxArm64,
+    };
+    let build_env = BuildEnvironment::simple(target_platform, vec![]);
+
+    let dispatcher = CommandDispatcher::builder()
+        .with_root_dir(to_abs_dir(root_dir.clone()))
+        .with_cache_dirs(default_cache_dirs().with_workspace(to_abs_dir(tempdir.path())))
+        .with_executor(Executor::Serial)
+        .with_tool_platform(tool_platform, tool_virtual_packages)
+        .with_backend_overrides(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ))
+        .finish();
+
+    let records = run_pixi_solve(
+        &dispatcher,
+        SolvePixiEnvironmentSpec {
+            dependencies: DependencyMap::from_iter([(
+                "package-b".parse().unwrap(),
+                PathSpec::new("package-b").into(),
+            )]),
+            env_ref: env_ref_of(vec![], build_env.clone()),
+            ..empty_pixi_env_spec()
+        },
+    )
+    .await
+    .map_err(|e| format_diagnostic(&e))
+    .expect("solve should succeed");
+
+    let mut smuggled = PackageRecord::new(
+        PackageName::new_unchecked("libfoo"),
+        "1.0.0".parse::<VersionWithSource>().unwrap(),
+        "h0".into(),
+    );
+    smuggled.subdir = tool_platform.to_string();
+    let smuggled = RepoDataRecord {
+        package_record: smuggled,
+        identifier: DistArchiveIdentifier::try_from_filename("libfoo-1.0.0-h0.conda").unwrap(),
+        url: Url::parse(&format!(
+            "https://example.com/{tool_platform}/libfoo-1.0.0-h0.conda"
+        ))
+        .unwrap(),
+        channel: None,
+    };
+    let records: Vec<UnresolvedPixiRecord> = records
+        .into_iter()
+        .map(|record| match to_unresolved(record) {
+            UnresolvedPixiRecord::Source(source)
+                if source.name().as_normalized() == "package-b" =>
+            {
+                let mut source = (*source).clone();
+                source
+                    .host_packages
+                    .push(UnresolvedPixiRecord::Binary(Arc::new(smuggled.clone())));
+                UnresolvedPixiRecord::Source(Arc::new(source))
+            }
+            other => other,
+        })
+        .collect();
+
+    let prefix = Prefix::create(tempdir.path().join("prefix")).unwrap();
+    let Err(err) = dispatcher
+        .install_pixi_environment(InstallPixiEnvironmentSpec {
+            build_environment: build_env,
+            ..InstallPixiEnvironmentSpec::new(records, prefix)
+        })
+        .await
+    else {
+        panic!("a record of another platform must not be installed");
+    };
+
+    let CommandDispatcherError::Failed(InstallPixiEnvironmentError::BuildUnresolvedSourceError(
+        built,
+        _,
+        SourceBuildError::PrefixPlatformMismatch(mismatch),
+        generic_help,
+    )) = &err
+    else {
+        panic!("unexpected error: {}", format_diagnostic(&err));
+    };
+    assert_eq!(built.as_normalized(), "package-b");
+    assert_eq!(mismatch.kind, SourceBuildPrefixKind::Host);
+    assert_eq!(mismatch.source_package.as_normalized(), "package-b");
+    assert_eq!(mismatch.package.as_normalized(), "libfoo");
+    assert_eq!(mismatch.origin, PrefixRecordOrigin::Solved);
+    assert_eq!(mismatch.subdir, tool_platform.to_string());
+    assert_eq!(mismatch.expected, target_platform);
+    assert_eq!(
+        mismatch.to_string(),
+        format!(
+            "cannot install 'libfoo' ({tool_platform}) into the host environment of 'package-b', \
+             which is for '{target_platform}'"
+        )
+    );
+    assert!(
+        generic_help.is_none(),
+        "the generic cross-build hint must not be added on top of the specific error"
+    );
+
+    // What the user sees. The specific help lives on the inner error and
+    // reaches the report through the wrapping install error; rendering
+    // wraps long lines, so compare with whitespace collapsed.
+    let rendered = format_diagnostic(&err);
+    let flat = rendered.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(flat.contains(&mismatch.to_string()), "{rendered}");
+    assert!(
+        flat.contains(
+            "this is a bug in pixi's cross-compilation platform tracking, please report it"
+        ),
+        "{rendered}"
+    );
+    assert!(!flat.contains("Retry without '--platform'"), "{rendered}");
 }
 
 /// Two parallel `InstantiateBackendKey` computes for the same backend

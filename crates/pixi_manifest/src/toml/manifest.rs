@@ -11,7 +11,7 @@ use miette::LabeledSpan;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::ExcludeNewer;
 use pixi_toml::{Same, TomlFromStr, TomlHashMap, TomlIndexMap, TomlWith};
-use rattler_conda_types::{PackageName, Platform, Version};
+use rattler_conda_types::{PackageName, Subdir, Version};
 use toml_span::{
     DeserError, Spanned, Value,
     de_helpers::{TableHelper, expected},
@@ -267,7 +267,7 @@ impl TomlManifest {
         if let Some(system_requirements) = &self.system_requirements
             && !system_requirements.value.is_empty()
         {
-            let subdirs: Vec<Platform> = workspace
+            let subdirs: Vec<Subdir> = workspace
                 .value
                 .platforms
                 .value
@@ -708,7 +708,7 @@ fn extend_originals_with_referenced_subdirs(
             if originals.iter().any(|p| p.name() == name) {
                 continue;
             }
-            let subdir = Platform::from_str(name.as_str()).map_err(|e| {
+            let subdir = Subdir::from_str(name.as_str()).map_err(|e| {
                 TomlError::from(GenericError::new(format!(
                     "{} references platform '{}' which is neither declared in the workspace nor a valid conda subdir: {e}",
                     feature.name.user_facing(), name,
@@ -796,11 +796,11 @@ fn synthesise_for_feature(
     sysreqs: &SystemRequirements,
     target: &mut IndexSet<PixiPlatform>,
 ) -> Result<(), TomlError> {
-    let subdirs: Vec<Platform> = match feature.platforms.as_ref() {
+    let subdirs: Vec<Subdir> = match feature.platforms.as_ref() {
         Some(names) => names
             .iter()
             .map(|name| {
-                Platform::from_str(name.as_str()).map_err(|e| {
+                Subdir::from_str(name.as_str()).map_err(|e| {
                     TomlError::from(GenericError::new(format!(
                         "{} references platform '{}' which is not a conda subdir: {e}",
                         feature.name.user_facing(),
@@ -858,7 +858,7 @@ fn append_uncovered_subdirs(
     originals: &IndexSet<PixiPlatform>,
     target: &mut IndexSet<PixiPlatform>,
 ) {
-    let covered: HashSet<Platform> = target.iter().map(PixiPlatform::subdir).collect();
+    let covered: HashSet<Subdir> = target.iter().map(PixiPlatform::subdir).collect();
     for original in originals {
         if !covered.contains(&original.subdir()) {
             target.insert(original.clone());
@@ -1057,7 +1057,7 @@ mod test {
     use insta::assert_snapshot;
     use pixi_spec::PixiSpec;
     use pixi_test_utils::format_parse_error;
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::Subdir;
 
     use super::*;
     use crate::{
@@ -1195,7 +1195,7 @@ mod test {
     /// lock-file rename passes cannot distinguish from the bare platform.
     #[test]
     fn test_system_requirements_migration_default_matching_sysreq_uses_bare_subdir() {
-        let glibc = pixi_default_versions::default_glibc_version();
+        let glibc = rattler_virtual_packages::defaults::default_glibc_version(Subdir::Linux64);
         let workspace_manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             format!(
                 r#"
@@ -1239,8 +1239,9 @@ mod test {
     /// the same way.
     #[test]
     fn test_system_requirements_migration_linux_and_macos_defaults_use_bare_subdir() {
-        let linux = pixi_default_versions::default_linux_version();
-        let macos = pixi_default_versions::default_mac_os_version(Platform::OsxArm64);
+        let linux = rattler_virtual_packages::defaults::default_linux_version();
+        let macos = rattler_virtual_packages::defaults::default_mac_os_version(Subdir::OsxArm64)
+            .expect("osx-arm64 has a default macos version");
         for (subdir, requirement) in [
             ("linux-64", format!("linux = \"{linux}\"")),
             ("osx-arm64", format!("macos = \"{macos}\"")),
@@ -1933,7 +1934,7 @@ mod test {
     fn inline_host_dependency(
         ws: &WorkspaceManifest,
         feature: &FeatureName,
-        platform: Platform,
+        platform: Subdir,
         package: &str,
         dependency: &str,
     ) -> PixiSpec {
@@ -2018,7 +2019,7 @@ mod test {
         let spec = inline_host_dependency(
             &ws,
             &FeatureName::default(),
-            Platform::Linux64,
+            Subdir::Linux64,
             "numpy",
             "python",
         );
@@ -2089,7 +2090,7 @@ mod test {
         let spec = inline_host_dependency(
             &ws,
             &FeatureName::from("dev"),
-            Platform::Linux64,
+            Subdir::Linux64,
             "numpy",
             "python",
         );
@@ -2120,7 +2121,7 @@ mod test {
         let spec = inline_host_dependency(
             &ws,
             &FeatureName::default(),
-            Platform::Linux64,
+            Subdir::Linux64,
             "numpy",
             "python",
         );
@@ -2153,7 +2154,7 @@ mod test {
         let spec = inline_host_dependency(
             &ws,
             &FeatureName::default(),
-            Platform::Linux64,
+            Subdir::Linux64,
             "numpy",
             "mylib",
         );
@@ -2256,7 +2257,7 @@ mod test {
     fn feature_run_dependency(
         ws: &WorkspaceManifest,
         feature: &FeatureName,
-        platform: Platform,
+        platform: Subdir,
         dependency: &str,
     ) -> pixi_spec::PixiSpec {
         let platform = PixiPlatform::from_subdir(platform);
@@ -2289,7 +2290,7 @@ mod test {
             numpy = { workspace = true }
             "#,
         );
-        let spec = feature_run_dependency(&ws, &FeatureName::default(), Platform::Linux64, "numpy");
+        let spec = feature_run_dependency(&ws, &FeatureName::default(), Subdir::Linux64, "numpy");
         assert_eq!(spec.as_version_spec().unwrap().to_string(), "1.*");
     }
 
@@ -2312,8 +2313,7 @@ mod test {
             dev = ["dev"]
             "#,
         );
-        let spec =
-            feature_run_dependency(&ws, &FeatureName::from("dev"), Platform::Linux64, "numpy");
+        let spec = feature_run_dependency(&ws, &FeatureName::from("dev"), Subdir::Linux64, "numpy");
         assert_eq!(spec.as_version_spec().unwrap().to_string(), "1.*");
     }
 
@@ -2332,7 +2332,7 @@ mod test {
             numpy = { workspace = true }
             "#,
         );
-        let spec = feature_run_dependency(&ws, &FeatureName::default(), Platform::Linux64, "numpy");
+        let spec = feature_run_dependency(&ws, &FeatureName::default(), Subdir::Linux64, "numpy");
         assert_eq!(spec.as_version_spec().unwrap().to_string(), "1.*");
     }
 
@@ -2352,7 +2352,7 @@ mod test {
             numpy = { workspace = true, build = "py311*" }
             "#,
         );
-        let spec = feature_run_dependency(&ws, &FeatureName::default(), Platform::Linux64, "numpy");
+        let spec = feature_run_dependency(&ws, &FeatureName::default(), Subdir::Linux64, "numpy");
         match spec {
             pixi_spec::PixiSpec::DetailedVersion(detailed) => {
                 assert_eq!(detailed.version.as_ref().unwrap().to_string(), "1.*");
@@ -3429,7 +3429,7 @@ mod test {
         )
         .unwrap();
 
-        let linux64 = PixiPlatform::from_subdir(Platform::Linux64);
+        let linux64 = PixiPlatform::from_subdir(Subdir::Linux64);
         let linux_deps = manifest
             .default_feature()
             .dev_dependencies(Some(&linux64))
@@ -3438,7 +3438,7 @@ mod test {
         assert_eq!(linux_deps.iter().count(), 1);
         assert!(linux_deps.contains_key("linux-pkg"));
 
-        let win64 = PixiPlatform::from_subdir(Platform::Win64);
+        let win64 = PixiPlatform::from_subdir(Subdir::Win64);
         let windows_deps = manifest
             .default_feature()
             .dev_dependencies(Some(&win64))

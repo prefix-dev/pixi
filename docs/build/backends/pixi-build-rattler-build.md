@@ -31,8 +31,8 @@ To use the rattler-build backend in your `pixi.toml`, specify it in your build s
 name = "rattler_build_package"
 version = "0.1.0"
 
-[package.build]
-backend = { name = "pixi-build-rattler-build", version = "*" }
+[package.build.backend]
+name = "pixi-build-rattler-build"
 channels = ["https://prefix.dev/conda-forge"]
 ```
 

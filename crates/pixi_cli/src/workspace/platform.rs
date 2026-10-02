@@ -15,9 +15,12 @@ use pixi_manifest::{
         subdir_default_virtual_packages,
     },
 };
-use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform, Version};
+use rattler_conda_types::{GenericVirtualPackage, PackageName, Subdir, Version};
 
-use crate::{cli_config::ScriptWorkspaceConfig, cli_interface::CliInterface};
+use crate::{
+    cli_config::{ScriptWorkspaceConfig, script_lock_file_usage},
+    cli_interface::{CliInterface, cli_context},
+};
 
 /// Commands to manage workspace platforms.
 #[derive(Parser, Debug)]
@@ -97,7 +100,7 @@ impl VirtualPackageArgs {
     /// used to reject nonsensical combinations (e.g. `--glibc` on win-64).
     pub fn into_specs(
         self,
-        subdir: Platform,
+        subdir: Subdir,
         raw_specs: &[String],
     ) -> miette::Result<Vec<GenericVirtualPackage>> {
         let mut specs = Vec::new();
@@ -142,7 +145,7 @@ impl VirtualPackageArgs {
             )?;
         }
         if let Some(value) = self.glibc {
-            require_subdir_family(subdir, Platform::is_linux, "--glibc", "linux")?;
+            require_subdir_family(subdir, Subdir::is_linux, "--glibc", "linux")?;
             let version = parse_virtual_package_version("--glibc", &value)?;
             push_unique(
                 &mut specs,
@@ -153,7 +156,7 @@ impl VirtualPackageArgs {
             )?;
         }
         if let Some(value) = self.linux {
-            require_subdir_family(subdir, Platform::is_linux, "--linux", "linux")?;
+            require_subdir_family(subdir, Subdir::is_linux, "--linux", "linux")?;
             let version = parse_virtual_package_version("--linux", &value)?;
             push_unique(
                 &mut specs,
@@ -164,12 +167,12 @@ impl VirtualPackageArgs {
             )?;
         }
         if let Some(value) = self.macos {
-            require_subdir_family(subdir, Platform::is_osx, "--macos", "osx")?;
+            require_subdir_family(subdir, Subdir::is_osx, "--macos", "osx")?;
             let version = parse_virtual_package_version("--macos", &value)?;
             push_unique(&mut specs, &mut seen_names, "__osx", version, String::new())?;
         }
         if let Some(value) = self.windows {
-            require_subdir_family(subdir, Platform::is_windows, "--windows", "win")?;
+            require_subdir_family(subdir, Subdir::is_windows, "--windows", "win")?;
             let version = parse_virtual_package_version("--windows", &value)?;
             push_unique(&mut specs, &mut seen_names, "__win", version, String::new())?;
         }
@@ -214,8 +217,8 @@ fn push_unique(
 }
 
 fn require_subdir_family(
-    subdir: Platform,
-    predicate: impl Fn(Platform) -> bool,
+    subdir: Subdir,
+    predicate: impl Fn(Subdir) -> bool,
     flag: &str,
     family: &str,
 ) -> miette::Result<()> {
@@ -276,17 +279,17 @@ fn parse_raw_virtual_package(spec: &str) -> miette::Result<GenericVirtualPackage
 
 /// Parse a positional add argument. Accepts either a bare subdir
 /// (`linux-64`) or `<name>=<subdir>` (`gpu-linux=linux-64`).
-fn parse_add_positional(input: &str) -> miette::Result<(PixiPlatformName, Platform)> {
+fn parse_add_positional(input: &str) -> miette::Result<(PixiPlatformName, Subdir)> {
     if let Some((name, subdir)) = input.split_once('=') {
         let name = PixiPlatformName::try_from(name)
             .into_diagnostic()
             .map_err(|e| miette::miette!("invalid platform name '{name}': {e}"))?;
-        let subdir = Platform::from_str(subdir)
+        let subdir = Subdir::from_str(subdir)
             .into_diagnostic()
             .map_err(|e| miette::miette!("'{subdir}' is not a valid conda subdir: {e}"))?;
         Ok((name, subdir))
     } else {
-        let subdir = Platform::from_str(input)
+        let subdir = Subdir::from_str(input)
             .into_diagnostic()
             .map_err(|e| miette::miette!("'{input}' is not a valid conda subdir: {e}"))?;
         Ok((subdir.into(), subdir))
@@ -359,7 +362,7 @@ pub struct EditArgs {
 
     /// Set a new conda subdir for this platform.
     #[clap(long, value_name = "SUBDIR")]
-    pub subdir: Option<Platform>,
+    pub subdir: Option<Subdir>,
 
     #[clap(flatten)]
     pub virtual_packages: VirtualPackageArgs,
@@ -500,11 +503,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
 
-    let lock_file_usage = platform_lock_file_usage(
+    let lock_file_usage = script_lock_file_usage(
+        LockFileUsage::Update,
         args.workspace_config.script.is_some(),
         workspace.lock_file_path().is_file(),
-    );
-    let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
+    )?;
+    let workspace_ctx = cli_context(workspace.clone());
 
     match args.command {
         Command::Add(args) => execute_add(&workspace_ctx, args, lock_file_usage).await,
@@ -514,14 +518,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Command::Remove(args) => {
             execute_remove(&workspace, &workspace_ctx, args, lock_file_usage).await
         }
-    }
-}
-
-fn platform_lock_file_usage(is_script: bool, lock_file_exists: bool) -> LockFileUsage {
-    if is_script && !lock_file_exists {
-        LockFileUsage::Frozen
-    } else {
-        LockFileUsage::Update
     }
 }
 
@@ -581,7 +577,7 @@ async fn execute_add(
         );
     }
 
-    let parsed: Vec<(PixiPlatformName, Platform)> = platform_entries
+    let parsed: Vec<(PixiPlatformName, Subdir)> = platform_entries
         .iter()
         .map(|raw| parse_add_positional(raw))
         .collect::<miette::Result<_>>()?;
@@ -765,12 +761,7 @@ async fn execute_list(
             .map(|p| p.name().as_str())
             .collect::<Vec<_>>()
             .join(" ");
-        writeln!(std::io::stdout(), "{names}")
-            .inspect_err(|e| {
-                if e.kind() == std::io::ErrorKind::BrokenPipe {
-                    std::process::exit(0);
-                }
-            })
+        pixi_utils::io::ignore_broken_pipe(writeln!(std::io::stdout(), "{names}"))
             .into_diagnostic()?;
         return Ok(());
     }
@@ -784,7 +775,7 @@ async fn execute_list(
         platforms.push(autodetected_to_json(&machine));
         // Probe each distinct subdir once. Detecting per row repeats the work,
         // and repeats the warning when a `CONDA_OVERRIDE_*` value is unusable.
-        let mut probed: HashMap<Platform, Vec<GenericVirtualPackage>> = HashMap::new();
+        let mut probed: HashMap<Subdir, Vec<GenericVirtualPackage>> = HashMap::new();
         for p in &workspace_platforms {
             probed
                 .entry(p.subdir())
@@ -937,8 +928,8 @@ struct PlatformUsers {
 /// the subdir we target, which subdirs we can run packages from (that one plus
 /// arch fallbacks) and which virtual packages rattler detected on the host.
 struct HostMachine {
-    subdir: Platform,
-    candidate_subdirs: Vec<Platform>,
+    subdir: Subdir,
+    candidate_subdirs: Vec<Subdir>,
     detected: Vec<GenericVirtualPackage>,
 }
 
@@ -957,7 +948,7 @@ impl HostMachine {
     /// `true` when a platform with this subdir can actually run on the
     /// current host -- includes architecture fallbacks (`Win64` → `Win32`,
     /// `Osx*` → `Osx64`).
-    fn covers_subdir(&self, subdir: Platform) -> bool {
+    fn covers_subdir(&self, subdir: Subdir) -> bool {
         self.candidate_subdirs.contains(&subdir)
     }
 
@@ -1143,7 +1134,7 @@ fn format_user_names(names: &[String], unreachable: &HashSet<String>) -> String 
 /// host-detection header. The header is informational, so the body is
 /// emitted verbatim without the match-aware dimming the workspace rows
 /// use.
-fn inline_entry_body(subdir: Platform, declared: &[GenericVirtualPackage]) -> String {
+fn inline_entry_body(subdir: Subdir, declared: &[GenericVirtualPackage]) -> String {
     let mut parts = vec![format!("platform={}", subdir.as_str())];
     parts.extend(render_friendly(
         declared,
@@ -1243,8 +1234,8 @@ mod tests {
     /// A host that runs linux-64 with no customised virtual packages.
     fn linux_machine() -> HostMachine {
         HostMachine {
-            subdir: Platform::Linux64,
-            candidate_subdirs: vec![Platform::Linux64],
+            subdir: Subdir::Linux64,
+            candidate_subdirs: vec![Subdir::Linux64],
             detected: Vec::new(),
         }
     }
@@ -1290,7 +1281,7 @@ mod tests {
             glibc: Some("2.28".into()),
             ..Default::default()
         };
-        let err = args.into_specs(Platform::Win64, &[]).unwrap_err();
+        let err = args.into_specs(Subdir::Win64, &[]).unwrap_err();
         assert!(
             err.to_string()
                 .contains("--glibc only applies to linux subdirs"),
@@ -1304,7 +1295,7 @@ mod tests {
             macos: Some("14.0".into()),
             ..Default::default()
         };
-        let err = args.into_specs(Platform::Linux64, &[]).unwrap_err();
+        let err = args.into_specs(Subdir::Linux64, &[]).unwrap_err();
         assert!(
             err.to_string()
                 .contains("--macos only applies to osx subdirs"),
@@ -1318,7 +1309,7 @@ mod tests {
             glibc: Some("2.28".into()),
             ..Default::default()
         };
-        let specs = args.into_specs(Platform::Linux64, &[]).unwrap();
+        let specs = args.into_specs(Subdir::Linux64, &[]).unwrap();
         assert_eq!(specs.len(), 1);
         assert_eq!(specs[0].name.as_normalized(), "__glibc");
         assert_eq!(specs[0].version.to_string(), "2.28");
@@ -1331,7 +1322,7 @@ mod tests {
             cuda_arch: Some("8.6".into()),
             ..Default::default()
         };
-        let specs = args.into_specs(Platform::Linux64, &[]).unwrap();
+        let specs = args.into_specs(Subdir::Linux64, &[]).unwrap();
         let by_name: std::collections::HashMap<_, _> = specs
             .iter()
             .map(|s| (s.name.as_normalized(), s.version.to_string()))
@@ -1354,7 +1345,7 @@ mod tests {
             archspec: Some("x86-64-v3".into()),
             ..Default::default()
         };
-        let error = args.into_specs(Platform::Linux64, &[]).unwrap_err();
+        let error = args.into_specs(Subdir::Linux64, &[]).unwrap_err();
         assert!(
             error.to_string().contains("did you mean 'x86_64_v3'"),
             "{error}"
@@ -1375,7 +1366,7 @@ mod tests {
             ..Default::default()
         };
         let err = args
-            .into_specs(Platform::Linux64, &["__cuda=11.0".to_string()])
+            .into_specs(Subdir::Linux64, &["__cuda=11.0".to_string()])
             .unwrap_err();
         assert!(err.to_string().contains("more than once"), "{err}");
     }

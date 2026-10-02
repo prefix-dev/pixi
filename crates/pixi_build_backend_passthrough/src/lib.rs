@@ -31,7 +31,7 @@ use pixi_build_types::{
     },
 };
 use rattler_conda_types::{
-    PackageName, Platform, Version, VersionSpec,
+    PackageName, Subdir, Version, VersionSpec,
     package::{IndexJson, PathType, PathsEntry, PathsJson, RunExportsJson},
 };
 use serde::Deserialize;
@@ -139,7 +139,7 @@ impl InMemoryBackend for PassthroughBackend {
                 if self.config.noarch == Some(false) {
                     params.output.subdir
                 } else {
-                    Platform::NoArch
+                    Subdir::NoArch
                 }
             });
 
@@ -538,7 +538,7 @@ fn create_output(
             if config.noarch == Some(false) {
                 params.host_platform
             } else {
-                Platform::NoArch
+                Subdir::NoArch
             }
         });
 

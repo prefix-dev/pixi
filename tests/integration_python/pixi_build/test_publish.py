@@ -12,16 +12,15 @@ real packages and download backends from prefix.dev, so they are all marked
 from __future__ import annotations
 
 import shutil
-import tomli
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
+import tomli
 import tomli_w
 import yaml
 
 from .common import CURRENT_PLATFORM, ExitCode, git_test_repo, verify_cli_command
-
 
 BACKEND_CHANNELS = [
     "https://prefix.dev/pixi-build-backends",

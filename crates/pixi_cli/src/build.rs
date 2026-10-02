@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use clap::Parser;
 use pixi_build_frontend::BackendOverride;
 use pixi_config::ConfigCli;
-use rattler_conda_types::Platform;
+use rattler_conda_types::Subdir;
 
 use crate::cli_config::LockAndInstallConfig;
 use crate::publish;
@@ -27,13 +27,13 @@ pub struct Args {
     pub lock_and_install_config: LockAndInstallConfig,
 
     /// The target platform to build for (defaults to the current platform)
-    #[clap(long, short, default_value_t = Platform::current())]
-    pub target_platform: Platform,
+    #[clap(long, short, default_value_t = Subdir::current().unwrap_or(Subdir::NoArch))]
+    pub target_platform: Subdir,
 
     /// The build platform to use for building (defaults to the current
     /// platform)
-    #[clap(long, default_value_t = Platform::current())]
-    pub build_platform: Platform,
+    #[clap(long, default_value_t = Subdir::current().unwrap_or(Subdir::NoArch))]
+    pub build_platform: Subdir,
 
     /// The output directory to place the built artifacts
     #[clap(long, short, default_value = ".")]
@@ -68,10 +68,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let mut cmd_parts = vec!["pixi publish".to_string()];
 
-    if args.target_platform != Platform::current() {
+    if args.target_platform != Subdir::current().unwrap_or(Subdir::NoArch) {
         cmd_parts.push(format!("--target-platform {}", args.target_platform));
     }
-    if args.build_platform != Platform::current() {
+    if args.build_platform != Subdir::current().unwrap_or(Subdir::NoArch) {
         cmd_parts.push(format!("--build-platform {}", args.build_platform));
     }
     if let Some(ref build_dir) = args.build_dir {

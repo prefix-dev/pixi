@@ -40,7 +40,7 @@ Within a Pixi manifest, you can manage a workspace and/or describe a package.
 In the case of `python_rich` we choose to do both, so the only thing we have to add `cpp_math` as a [run dependency](../reference/pixi_manifest.md#run-dependencies) of `python_rich`.
 
 ```py title="pixi.toml"
---8<-- "docs/source_files/pixi_workspaces/pixi_build/workspace/pixi.toml:run-dependencies"
+--8 < --"docs/source_files/pixi_workspaces/pixi_build/workspace/pixi.toml:run-dependencies"
 ```
 
 We only want to use the `workspace` table of the top-level manifest.
@@ -78,7 +78,7 @@ Luckily `cpp_math` exposes a function `add` which allows us to do exactly that.
 
 
 ```py title="src/python_rich/__init__.py"
---8<-- "docs/source_files/pixi_workspaces/pixi_build/workspace/src/python_rich/__init__.py"
+--8 < --"docs/source_files/pixi_workspaces/pixi_build/workspace/src/python_rich/__init__.py"
 ```
 
 If you run `pixi run start`, the age of each person should now be accurate:

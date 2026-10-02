@@ -1,6 +1,6 @@
 [package]
 name = "pixi"
-version = "0.77.1"
+version = "0.81.0"
 authors.workspace = true
 edition.workspace = true
 description = "A package management and workflow tool"
@@ -33,6 +33,7 @@ insta = { workspace = true, features = [
   "redactions",
   "yaml",
 ] }
+pathdiff = { workspace = true }
 pep508_rs = { workspace = true }
 percent-encoding = { workspace = true }
 pixi_build_backend_passthrough = { workspace = true }

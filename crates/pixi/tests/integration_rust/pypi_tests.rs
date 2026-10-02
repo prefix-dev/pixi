@@ -9,7 +9,7 @@ use std::{
 
 use pep508_rs::Requirement;
 use pixi_core::{UpdateLockFileOptions, environment::LockFileUsage};
-use rattler_conda_types::Platform;
+use rattler_conda_types::Subdir;
 use tempfile::tempdir;
 use typed_path::Utf8TypedPath;
 
@@ -32,7 +32,7 @@ async fn pyproject_optional_dependencies_resolve_recursively() {
         .into_simple_index()
         .unwrap();
 
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
     let platform_str = platform.to_string();
 
     let mut package_db = MockRepoData::default();
@@ -133,7 +133,7 @@ async fn pyproject_relative_path_dependencies() {
         .into_simple_index()
         .unwrap();
 
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
     let platform_str = platform.to_string();
 
     let index_url = simple.index_url();
@@ -212,7 +212,7 @@ index-url = "{index_url}"
 async fn pyproject_dynamic_version_source_dependency() {
     setup_tracing();
 
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
     let platform_str = platform.to_string();
 
     let pyproject = format!(
@@ -533,8 +533,8 @@ async fn pyproject_environment_markers_resolved() {
         .unwrap();
 
     // Create a TOML with two platforms
-    let platform1 = Platform::Linux64;
-    let platform2 = Platform::OsxArm64;
+    let platform1 = Subdir::Linux64;
+    let platform2 = Subdir::OsxArm64;
     let platform_str = format!("\"{}\", \"{}\"", platform1, platform2);
 
     let mut package_db = MockRepoData::default();
@@ -599,7 +599,7 @@ index-url = "{index_url}"
 async fn test_flat_links_based_index_returns_path() {
     setup_tracing();
 
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
 
     // Create local conda channel with Python
     let mut package_db = MockRepoData::default();
@@ -658,7 +658,7 @@ async fn test_flat_links_based_index_returns_path() {
 async fn test_file_based_index_returns_path() {
     setup_tracing();
 
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
 
     // Create local conda channel with Python
     let mut package_db = MockRepoData::default();
@@ -715,7 +715,7 @@ async fn test_file_based_index_returns_path() {
 async fn test_index_strategy() {
     setup_tracing();
 
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
 
     // Create local conda channel with Python
     let mut package_db = MockRepoData::default();
@@ -816,7 +816,7 @@ async fn test_index_strategy() {
 async fn test_pinning_index() {
     setup_tracing();
 
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
 
     // Create local conda channel with Python
     let mut package_db = MockRepoData::default();
@@ -870,7 +870,7 @@ async fn test_pinning_index() {
 async fn test_exclude_newer_per_package_pypi_index_override() {
     setup_tracing();
 
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
 
     let mut package_db = MockRepoData::default();
     package_db.add_package(
@@ -981,7 +981,7 @@ async fn test_exclude_newer_per_package_pypi_index_override() {
 async fn test_exclude_newer_dependency_override_pypi_index_override() {
     setup_tracing();
 
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
 
     let mut package_db = MockRepoData::default();
     package_db.add_package(
@@ -1096,9 +1096,9 @@ async fn pin_torch() {
     setup_tracing();
 
     // Do some platform magic, as the index does not contain wheels for each platform.
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
     let platforms = match platform {
-        Platform::Linux64 => "\"linux-64\"".to_string(),
+        Subdir::Linux64 => "\"linux-64\"".to_string(),
         _ => format!("\"{platform}\", \"linux-64\""),
     };
 
@@ -1106,10 +1106,10 @@ async fn pin_torch() {
     let mut package_db = MockRepoData::default();
     package_db.add_package(
         Package::build("python", "3.12.0")
-            .with_subdir(Platform::Linux64)
+            .with_subdir(Subdir::Linux64)
             .finish(),
     );
-    if platform != Platform::Linux64 {
+    if platform != Subdir::Linux64 {
         package_db.add_package(
             Package::build("python", "3.12.0")
                 .with_subdir(platform)
@@ -1143,7 +1143,7 @@ async fn pin_torch() {
     // 2. We manually check if it is taken from the whl/cu124 index instead.
     assert!(
         lock_file
-            .get_pypi_package_url("default", Platform::Linux64, "torch")
+            .get_pypi_package_url("default", Subdir::Linux64, "torch")
             .unwrap()
             .as_url()
             .unwrap()
@@ -1156,7 +1156,7 @@ async fn pin_torch() {
 async fn test_exclude_newer_relative_pypi_rejects_unknown_timestamps() {
     setup_tracing();
 
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
 
     let mut package_db = MockRepoData::default();
     package_db.add_package(
@@ -1242,7 +1242,7 @@ async fn test_exclude_newer_relative_pypi_rejects_unknown_timestamps() {
 async fn test_allow_insecure_host() {
     setup_tracing();
 
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
 
     // Create local conda channel with Python
     let mut package_db = MockRepoData::default();
@@ -1308,7 +1308,7 @@ async fn test_allow_insecure_host() {
 async fn test_tls_no_verify_with_pypi_dependencies() {
     setup_tracing();
 
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
 
     // Create local conda channel with Python
     let mut package_db = MockRepoData::default();
@@ -1393,7 +1393,7 @@ async fn test_tls_no_verify_with_pypi_dependencies() {
 async fn test_tls_verify_still_fails_without_config() {
     setup_tracing();
 
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
 
     // Create local conda channel with Python
     let mut package_db = MockRepoData::default();
@@ -1504,7 +1504,7 @@ async fn test_indexes_are_passed_when_solving_build_pypi_dependencies() {
         [tool.pixi.pypi-dependencies]
         pypi-build-index = {{ path = ".", editable = true }}
         "#,
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
         index_url = simple.index_url(),
     ))
     .unwrap()
@@ -1624,7 +1624,7 @@ async fn test_index_strategy_respected_for_build_dependencies() {
         [tool.pixi.pypi-dependencies]
         index-strategy-build = {{ path = ".", editable = true }}
         "#,
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
         first_extra_index = first_extra_index.index_url(),
         second_extra_index = second_extra_index.index_url(),
     ))
@@ -1644,10 +1644,10 @@ async fn test_cross_platform_resolve_with_no_build() {
     setup_tracing();
 
     // non-current platform
-    let resolve_platform = if Platform::current().is_osx() {
-        Platform::Linux64
+    let resolve_platform = if Subdir::current().unwrap_or(Subdir::NoArch).is_osx() {
+        Subdir::Linux64
     } else {
-        Platform::OsxArm64
+        Subdir::OsxArm64
     };
 
     // Create local conda channel with Python for the resolve platform
@@ -1707,19 +1707,19 @@ async fn test_pinned_help_message() {
     setup_tracing();
 
     // Construct a minimal local conda channel with python and pandas==1.0.0
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::Subdir;
 
     let mut conda_db = MockRepoData::default();
     // Python runtime
     conda_db.add_package(
         Package::build("python", "3.12.0")
-            .with_subdir(Platform::current())
+            .with_subdir(Subdir::current().unwrap_or(Subdir::NoArch))
             .finish(),
     );
     // pandas 1.0.0 (marked as PyPI package via purl)
     conda_db.add_package(
         Package::build("pandas", "1.0.0")
-            .with_subdir(Platform::current())
+            .with_subdir(Subdir::current().unwrap_or(Subdir::NoArch))
             .with_dependency("python >=3.12")
             .with_pypi_purl("pandas")
             .finish(),
@@ -1757,7 +1757,7 @@ async fn test_pinned_help_message() {
         index-url = "{idx}"
         "#,
         channel = conda_channel.url(),
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
         idx = pypi_index.index_url(),
     ));
 
@@ -1776,7 +1776,7 @@ See https://pixi.sh/latest/concepts/conda_pypi/#pinned-package-conflicts for mor
 async fn test_uv_index_correctly_parsed() {
     setup_tracing();
 
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
 
     // Create local conda channel with Python
     let mut package_db = MockRepoData::default();
@@ -1842,7 +1842,11 @@ async fn test_uv_index_correctly_parsed() {
     let lock_file = pixi.update_lock_file().await.unwrap();
     assert!(
         lock_file
-            .get_pypi_package_url("default", Platform::current(), "foo")
+            .get_pypi_package_url(
+                "default",
+                Subdir::current().unwrap_or(Subdir::NoArch),
+                "foo"
+            )
             .unwrap()
             .as_path()
             .unwrap()
@@ -1864,7 +1868,7 @@ async fn test_prerelease_mode_allow() {
         .into_simple_index()
         .expect("failed to create local simple index");
 
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
 
     let mut package_db = MockRepoData::default();
     package_db.add_package(
@@ -1926,7 +1930,7 @@ async fn test_prerelease_mode_disallow() {
         .into_simple_index()
         .expect("failed to create local simple index");
 
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
 
     let mut package_db = MockRepoData::default();
     package_db.add_package(
@@ -1985,7 +1989,7 @@ async fn test_prerelease_mode_disallow() {
 async fn test_pypi_sdist_static_metadata_extraction() {
     setup_tracing();
 
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
 
     // Create a pyproject.toml with all static metadata (hatchling build backend)
     let pyproject = format!(
@@ -2060,7 +2064,7 @@ test-static-pkg = {{ path = ".", editable = true }}
 async fn self_referential_extras_lock_file_roundtrip() {
     setup_tracing();
 
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
 
     let pyproject = format!(
         r#"
@@ -2166,7 +2170,7 @@ fn find_sdist_cache_dirs(cache_dir: &Path) -> Vec<PathBuf> {
 async fn test_pypi_sdist_cache_reuse() {
     setup_tracing();
 
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
 
     let pyproject = format!(
         r#"
@@ -2268,7 +2272,7 @@ test-cache-pkg = {{ path = "." }}
 async fn test_python_patch_version_requires_python() {
     setup_tracing();
 
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
 
     // Test with different requires-python formats to ensure robustness
     let test_cases = vec![("==3.10.6", true), (">=3.11", false), ("==3.7.2", true)];
@@ -2347,7 +2351,7 @@ test-project = {{ path = "." }}
 async fn test_index_url_in_lock_file() {
     setup_tracing();
 
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
 
     // Create local conda channel with Python
     let mut package_db = MockRepoData::default();
@@ -2442,9 +2446,9 @@ async fn test_index_url_omitted_for_default_pypi() {
     setup_tracing();
 
     // pytorch only has wheels for linux-64, so target that platform.
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
     let platforms = match platform {
-        Platform::Linux64 => "\"linux-64\"".to_string(),
+        Subdir::Linux64 => "\"linux-64\"".to_string(),
         _ => format!("\"{platform}\", \"linux-64\""),
     };
 
@@ -2452,10 +2456,10 @@ async fn test_index_url_omitted_for_default_pypi() {
     let mut package_db = MockRepoData::default();
     package_db.add_package(
         Package::build("python", "3.12.0")
-            .with_subdir(Platform::Linux64)
+            .with_subdir(Subdir::Linux64)
             .finish(),
     );
-    if platform != Platform::Linux64 {
+    if platform != Subdir::Linux64 {
         package_db.add_package(
             Package::build("python", "3.12.0")
                 .with_subdir(platform)
@@ -2556,7 +2560,7 @@ async fn test_index_url_omitted_for_default_pypi() {
 /// Serves a local HTTP registry with `foo == 1.0.0` and sha256 fragments.
 /// Returns a workspace (python from conda-forge) whose only PyPI index is that registry.
 async fn sha256_registry_fixture(workspace_name: &str) -> (HttpIndex, PixiControl) {
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
 
     let index = PyPIDatabase::new()
         .with(PyPIPackage::new("foo", "1.0.0"))
@@ -2664,7 +2668,7 @@ async fn test_install_rejects_tampered_lock_file_hash() {
 async fn test_lock_file_pins_sha256_and_install_verifies_it() {
     setup_tracing();
 
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
     let (index, pixi) = sha256_registry_fixture("lock-file-pins-sha256").await;
     let wheel_sha256 = index.wheel_sha256("foo", "1.0.0").to_string();
 
@@ -2717,4 +2721,85 @@ async fn test_lock_file_pins_sha256_and_install_verifies_it() {
         },
     )
     .await;
+}
+
+/// Test that a PyPI dependency declared in both `[project].dependencies` (PEP 621)
+/// and `[tool.pixi.pypi-dependencies]` with a custom per-package index satisfies
+/// lock-file satisfiability and does not perpetually mark the lock file as out-of-date.
+/// Regression test for <https://github.com/prefix-dev/pixi/issues/6834>.
+#[tokio::test]
+async fn test_pyproject_pypi_custom_index_satisfies_lock() {
+    setup_tracing();
+
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
+
+    // Create local conda channel with Python
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+
+    // Custom index with "torch"
+    let custom_index = PyPIDatabase::new()
+        .with(PyPIPackage::new("torch", "2.0.0"))
+        .into_simple_index()
+        .unwrap();
+
+    let pyproject = format!(
+        r#"
+        [project]
+        name = "test-repro-6834"
+        version = "0.1.0"
+        dependencies = ["torch>=2.0.0"]
+
+        [tool.pixi.workspace]
+        channels = ["{channel_url}"]
+        platforms = ["{platform}"]
+        conda-pypi-map = false
+
+        [tool.pixi.dependencies]
+        python = "==3.12.0"
+
+        [tool.pixi.pypi-dependencies]
+        torch = {{ version = "==2.0.0", index = "{custom_index_url}" }}
+        "#,
+        channel_url = channel.url(),
+        platform = platform,
+        custom_index_url = custom_index.index_url(),
+    );
+
+    let pixi = PixiControl::from_pyproject_manifest(&pyproject).unwrap();
+
+    // Initial lock resolution must succeed
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
+    // Verify torch is locked to the custom index
+    let p = lock_file
+        .platform(&platform.to_string())
+        .expect("platform should exist");
+    let env = lock_file
+        .environment("default")
+        .expect("default environment should exist");
+    let torch = env
+        .pypi_packages(p)
+        .expect("should have pypi packages")
+        .find(|data| data.name().as_ref() == "torch")
+        .expect("torch should be in pypi packages");
+    let torch_wheel = torch.as_wheel().expect("torch should be a wheel package");
+    assert_eq!(
+        torch_wheel.index_url.as_ref().map(|u| u.as_str()),
+        Some(custom_index.index_url().as_str()),
+        "torch should have index_url set to the custom index"
+    );
+
+    // Prior to the fix for #6834, pixi lock --check would fail because the
+    // unindexed requirement from [project].dependencies was rejected with
+    // LockedPyPIIndexMismatch against the locked package from the custom index.
+    pixi.lock()
+        .with_check(true)
+        .await
+        .expect("lock file should satisfy manifest without being outdated");
 }

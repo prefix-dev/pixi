@@ -6,6 +6,7 @@ mod discovery;
 mod environment;
 mod environments;
 mod error;
+mod exclude_newer;
 mod feature;
 mod features_ext;
 mod has_features_iter;
@@ -39,7 +40,8 @@ pub use discovery::{
     PixiVersionMismatchError, WorkspaceDiscoverer, WorkspaceDiscoveryError,
 };
 pub use environment::{Environment, EnvironmentName, NewEnvironment};
-pub use error::{DependencyError, TomlError};
+pub use error::{DependencyError, GenericError, TomlError};
+pub use exclude_newer::resolve_exclude_newer;
 pub use feature::{Feature, FeatureName};
 pub use features_ext::FeaturesExt;
 pub use has_features_iter::HasFeaturesIter;

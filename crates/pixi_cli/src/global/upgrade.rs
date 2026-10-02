@@ -1,5 +1,5 @@
 use clap::Parser;
-use rattler_conda_types::Platform;
+use rattler_conda_types::Subdir;
 
 use crate::{cli_config::ChannelsConfig, has_specs::HasSpecs};
 
@@ -14,8 +14,8 @@ pub struct Args {
     channels: ChannelsConfig,
 
     /// The platform to install the package for.
-    #[clap(long, default_value_t = Platform::current())]
-    platform: Platform,
+    #[clap(long, default_value_t = Subdir::current().unwrap_or(Subdir::NoArch))]
+    platform: Subdir,
 }
 
 impl HasSpecs for Args {

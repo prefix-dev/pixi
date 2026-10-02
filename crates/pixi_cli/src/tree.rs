@@ -92,9 +92,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         args.workspace_config.script.is_some(),
         workspace.lock_file_path().is_file(),
     )?;
+    // Scoped so the bars are cleared before the output is printed.
+    let progress = pixi_reporters::TopLevelProgress::from_global();
+    let clear_progress = pixi_reporters::TopLevelProgress::clear_when_done(Some(&progress));
     let lock_file = workspace
         .update_lock_file(
-            Some(pixi_reporters::TopLevelProgress::from_global()),
+            Some(progress.clone()),
             UpdateLockFileOptions {
                 lock_file_usage,
                 no_install: args.no_install_config.no_install,
@@ -106,6 +109,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .wrap_err("Failed to update lock file")?
         .0
         .into_lock_file();
+    drop(clear_progress);
 
     let workspace_platforms = (&workspace)
         .workspace_manifest()
@@ -453,12 +457,12 @@ pub fn direct_dependencies(
 mod tests {
     use super::*;
     use pixi_core::Workspace;
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::Subdir;
     use rattler_lock::LockFile;
 
     /// Render the PyPI subset of an example workspace through the production
     /// printer into a buffer for snapshot comparison.
-    fn render_pypi_tree(manifest: &std::path::Path, platform: Platform) -> String {
+    fn render_pypi_tree(manifest: &std::path::Path, platform: Subdir) -> String {
         console::set_colors_enabled(false);
 
         let workspace = Workspace::from_path(manifest).unwrap();
@@ -499,7 +503,7 @@ mod tests {
             concat!(env!("CARGO_WORKSPACE_DIR"), "/examples"),
             "{editable-with-extras,pypi}/pixi.toml",
             |manifest| {
-                insta::assert_snapshot!(render_pypi_tree(manifest, Platform::Linux64));
+                insta::assert_snapshot!(render_pypi_tree(manifest, Subdir::Linux64));
             }
         );
     }

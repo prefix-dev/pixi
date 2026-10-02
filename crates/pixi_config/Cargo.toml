@@ -36,6 +36,7 @@ url = { workspace = true }
 insta = { workspace = true, features = ["yaml"] }
 rstest = { workspace = true }
 temp-env = { workspace = true }
+tempfile = { workspace = true }
 
 [target."cfg(unix)".dependencies]
 nix = { workspace = true, features = ["fs"] }

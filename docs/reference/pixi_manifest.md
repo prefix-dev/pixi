@@ -1487,11 +1487,12 @@ The build system is a table that can contain the following fields:
   - `git`: a string representing URL to the source repository.
   - `rev`: a string representing SHA revision to checkout.
   - `subdirectory`: a string representing path to subdirectory to use.
-- `channels`: specifies the channels to get the build backend from.
 - `flags`: package variant flags recorded in the produced package metadata.
 - `backend`: specifies the build backend to use. This is a table that can contain the following fields:
   - `name`: the name of the build backend to use. This will also be the executable name.
   - `version`: the version of the build backend to use. Optional; when omitted it defaults to `*` (any version).
+  - `channels`: the channels to get the build backend from. When omitted the workspace channels are used.
+  - `additional-dependencies`: extra packages to install alongside the build backend.
 - `config`: a table that contains the configuration options for the build backend.
 - `target`: a table that can contain target specific build configuration.
   - Each target can have its own `config` table to override or extend the base configuration for specific platforms.

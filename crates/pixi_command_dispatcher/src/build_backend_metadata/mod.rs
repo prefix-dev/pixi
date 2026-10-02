@@ -1271,7 +1271,7 @@ mod tests {
         CondaOutput, CondaOutputDependencies, CondaOutputIgnoreRunExports, CondaOutputMetadata,
         CondaOutputRunExports,
     };
-    use rattler_conda_types::{NoArchType, PackageName, Platform, Version};
+    use rattler_conda_types::{NoArchType, PackageName, Subdir, Version};
     use std::collections::BTreeMap;
 
     fn create_test_output(name: &str, variant: BTreeMap<String, VariantValue>) -> CondaOutput {
@@ -1281,7 +1281,7 @@ mod tests {
                 version: Version::major(1).into(),
                 build: "0".to_string(),
                 build_number: 0,
-                subdir: Platform::NoArch,
+                subdir: Subdir::NoArch,
                 license: None,
                 license_family: None,
                 flags: Default::default(),

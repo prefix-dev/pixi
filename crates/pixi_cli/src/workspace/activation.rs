@@ -8,7 +8,7 @@ use pixi_manifest::{EnvironmentName, FeatureName, HasWorkspaceManifest, TargetSe
 
 use crate::{
     cli_config::{WorkspaceConfig, feature_from_flags},
-    cli_interface::CliInterface,
+    cli_interface::{CliInterface, cli_context},
 };
 
 /// Commands to manage the activation of environments: the scripts that run
@@ -209,7 +209,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
 
-    let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace);
+    let workspace_ctx = cli_context(workspace);
 
     match args.command {
         Command::Script(script_args) => match script_args.command {
@@ -383,11 +383,7 @@ async fn list(
         output.push_str(&format!("No {what} found {scope}.\n"));
     }
 
-    let _ = write!(std::io::stdout(), "{output}").inspect_err(|e| {
-        if e.kind() == std::io::ErrorKind::BrokenPipe {
-            std::process::exit(0);
-        }
-    });
+    let _ = pixi_utils::io::ignore_broken_pipe(write!(std::io::stdout(), "{output}"));
 
     Ok(())
 }

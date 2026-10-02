@@ -7,22 +7,21 @@ use clap::Parser;
 use indexmap::IndexMap;
 use indexmap::IndexSet;
 use miette::{IntoDiagnostic, Report};
+use pixi_api::DefaultContext;
 use pixi_api::workspace::platforms::resolve_platforms;
-use pixi_api::{DefaultContext, WorkspaceContext};
 use pixi_config::default_channel_config;
 use pixi_core::{WorkspaceLocator, workspace::WorkspaceLocatorError};
 use pixi_manifest::{FeaturesExt, HasWorkspaceManifest, PixiPlatformName};
 use pixi_progress::await_in_progress;
 use rattler_conda_types::{
-    MatchSpec, PackageName, ParseStrictness, ParseStrictnessWithNameMatcher, Platform,
-    RepoDataRecord,
+    MatchSpec, PackageName, ParseStrictness, ParseStrictnessWithNameMatcher, RepoDataRecord, Subdir,
 };
 use tracing::{debug, error};
 use url::Url;
 
 use crate::{
     cli_config::{ChannelsConfig, WorkspaceConfig},
-    cli_interface::CliInterface,
+    cli_interface::{CliInterface, cli_context},
 };
 
 /// Search a conda package
@@ -131,22 +130,22 @@ pub async fn execute_impl<W: Write>(
             .into_iter()
             .next()
             .expect("resolve_platforms preserves length");
-        vec![resolved.subdir(), Platform::NoArch]
+        vec![resolved.subdir(), Subdir::NoArch]
     } else if let Some(ref workspace) = workspace {
         let workspace_platforms = &workspace.workspace_manifest().workspace.platforms;
-        let mut platforms: Vec<Platform> = workspace
+        let mut platforms: Vec<Subdir> = workspace
             .default_environment()
             .platforms()
             .into_iter()
             .filter_map(|name| workspace_platforms.iter().find(|p| p.name() == &name))
             .map(|p| p.subdir())
             .collect();
-        if !platforms.contains(&Platform::NoArch) {
-            platforms.push(Platform::NoArch);
+        if !platforms.contains(&Subdir::NoArch) {
+            platforms.push(Subdir::NoArch);
         }
         platforms
     } else {
-        Platform::all().collect()
+        Subdir::all().collect()
     };
 
     let matchspec = MatchSpec::from_str(
@@ -168,7 +167,7 @@ pub async fn execute_impl<W: Write>(
 
     let result = if let Some(workspace) = workspace {
         await_in_progress("searching packages...", |_| async {
-            WorkspaceContext::new(CliInterface {}, workspace)
+            cli_context(workspace)
                 .search(matchspec, channels, platforms, fuzzy_limit)
                 .await
         })

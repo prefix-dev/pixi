@@ -124,6 +124,17 @@ impl TopLevelProgress {
             .with_gateway_reporter(self.clone())
     }
 
+    /// Clears this reporter's bars when the returned guard is dropped,
+    /// including when the work ends in an error.
+    ///
+    /// A reporter that outlives the work it reports on -- one held for the
+    /// duration of a command rather than a single call -- leaves finished bars
+    /// rendered on stderr, and whatever the caller prints next is written over
+    /// them. Hold this guard across the work to avoid that.
+    pub fn clear_when_done(progress: Option<&Arc<Self>>) -> ClearWhenDone {
+        ClearWhenDone(progress.cloned())
+    }
+
     /// Clear the current progress bars without tearing down the reporter.
     pub fn on_clear(&self) {
         self.conda_solve_reporter.clear();
@@ -265,6 +276,19 @@ impl BuildBackendMetadataReporter for TopLevelProgress {
     fn on_finished(&self, id: OperationId, _failed: bool) {
         if let Some(bar) = self.backend_metadata_bars.lock().remove(&id) {
             self.conda_solve_reporter.finish(bar);
+        }
+    }
+}
+
+/// Clears the progress bars of the reporter it was created from once it goes
+/// out of scope. See [`TopLevelProgress::clear_when_done`].
+#[must_use = "the bars are cleared when this guard drops, so it must be bound"]
+pub struct ClearWhenDone(Option<Arc<TopLevelProgress>>);
+
+impl Drop for ClearWhenDone {
+    fn drop(&mut self) {
+        if let Some(progress) = &self.0 {
+            progress.on_clear();
         }
     }
 }

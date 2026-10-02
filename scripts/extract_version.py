@@ -12,8 +12,9 @@ Usage:
 """
 
 import sys
-import tomli
 from pathlib import Path
+
+import tomli
 
 ROOT = Path(__file__).resolve().parent.parent
 CARGO_TOML = ROOT / "crates" / "pixi" / "Cargo.toml"

@@ -1,4 +1,4 @@
-use rattler_conda_types::Platform;
+use rattler_conda_types::Subdir;
 use tempfile::TempDir;
 use url::Url;
 
@@ -33,7 +33,7 @@ async fn conda_solve_group_functionality() {
         .unwrap();
 
     let channel = Url::from_file_path(channel_dir.path()).unwrap();
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
     let pixi = PixiControl::from_manifest(&format!(
         r#"
     [project]
@@ -94,19 +94,19 @@ async fn conda_solve_group_heterogeneous_platforms() {
     // Add `foo` available on both linux-64 and win-64
     package_database.add_package(
         Package::build("foo", "1")
-            .with_subdir(Platform::Linux64)
+            .with_subdir(Subdir::Linux64)
             .finish(),
     );
     package_database.add_package(
         Package::build("foo", "1")
-            .with_subdir(Platform::Win64)
+            .with_subdir(Subdir::Win64)
             .finish(),
     );
 
     // Add `bar` available only on linux-64
     package_database.add_package(
         Package::build("bar", "1")
-            .with_subdir(Platform::Linux64)
+            .with_subdir(Subdir::Linux64)
             .finish(),
     );
 
@@ -148,29 +148,29 @@ async fn conda_solve_group_heterogeneous_platforms() {
 
     // `full` environment: has `foo` on both platforms, no `bar`
     assert!(
-        lock_file.contains_match_spec("full", Platform::Linux64, "foo ==1"),
+        lock_file.contains_match_spec("full", Subdir::Linux64, "foo ==1"),
         "full/linux-64 should have foo"
     );
     assert!(
-        lock_file.contains_match_spec("full", Platform::Win64, "foo ==1"),
+        lock_file.contains_match_spec("full", Subdir::Win64, "foo ==1"),
         "full/win-64 should have foo"
     );
     assert!(
-        !lock_file.contains_conda_package("full", Platform::Win64, "bar"),
+        !lock_file.contains_conda_package("full", Subdir::Win64, "bar"),
         "full/win-64 should not have bar"
     );
     assert!(
-        !lock_file.contains_conda_package("full", Platform::Linux64, "bar"),
+        !lock_file.contains_conda_package("full", Subdir::Linux64, "bar"),
         "full/linux-64 should not have bar"
     );
 
     // `restricted` environment: only supports linux-64, should have both foo and bar
     assert!(
-        lock_file.contains_match_spec("restricted", Platform::Linux64, "foo ==1"),
+        lock_file.contains_match_spec("restricted", Subdir::Linux64, "foo ==1"),
         "restricted/linux-64 should have foo"
     );
     assert!(
-        lock_file.contains_match_spec("restricted", Platform::Linux64, "bar ==1"),
+        lock_file.contains_match_spec("restricted", Subdir::Linux64, "bar ==1"),
         "restricted/linux-64 should have bar"
     );
 }
@@ -201,7 +201,7 @@ async fn test_solve_group_per_environment_editability() {
         .unwrap();
 
     let channel = Url::from_file_path(channel_dir.path()).unwrap();
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
 
     let pixi = PixiControl::from_manifest(&format!(
         r#"
@@ -286,7 +286,7 @@ async fn test_transitive_uv_sources_editable_consistency() {
         .unwrap();
 
     let channel = Url::from_file_path(channel_dir.path()).unwrap();
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
 
     let pixi = PixiControl::from_manifest(&format!(
         r#"

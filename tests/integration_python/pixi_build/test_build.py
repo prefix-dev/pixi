@@ -1,8 +1,8 @@
 from pathlib import Path
 
 import pytest
-import tomli_w
 import tomli
+import tomli_w
 
 from .common import (
     CURRENT_PLATFORM,
@@ -12,7 +12,6 @@ from .common import (
     copytree_with_local_backend,
     verify_cli_command,
 )
-
 
 BUILD_RUNNING_STRING = "Running build for recipe:"
 
@@ -192,7 +191,7 @@ def test_project_model_change_trigger_rebuild(pixi: Path, simple_workspace: Work
 
     # modify extra-input-globs
     simple_workspace.package_manifest["package"]["build"].setdefault(
-        "configuration", dict()
+        "configuration", {}
     ).setdefault("extra-input-globs", ["*.md"])
     simple_workspace.write_files()
     verify_cli_command(
