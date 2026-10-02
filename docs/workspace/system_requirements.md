@@ -2,7 +2,7 @@
     Declare these constraints directly on `[workspace].platforms` instead --
     see [Declaring virtual packages per platform](./multi_platform_configuration.md#declaring-virtual-packages-per-platform)
     for the inline-table syntax and the matching
-    [`pixi workspace platform`](../reference/cli/pixi/workspace/platform.md) CLI.
+    [`pixi workspace platform`](../reference/cli/pixi/workspace/platform/index.md) CLI.
     Existing `[system-requirements]` tables are still parsed and migrated
     transparently, so older manifests keep working, but new manifests should
     use the per-platform form.
@@ -26,7 +26,7 @@ Putting the constraints on the platform makes the data flow obvious:
 - Features bind to a rich platform by *name* rather than by replaying the same
   set of virtual packages. Two features that pick the same platform can never
   declare conflicting versions of `__cuda`.
-- The CLI ([`pixi workspace platform`](../reference/cli/pixi/workspace/platform.md))
+- The CLI ([`pixi workspace platform`](../reference/cli/pixi/workspace/platform/index.md))
   has a single surface for declaring, editing, and removing these constraints.
 
 ## Equivalent forms
@@ -113,6 +113,8 @@ When you write a bare-string entry like `"linux-64"`, Pixi uses these defaults
 
 === "Linux"
     `__linux = "4.18"`, `__glibc = "2.28"`
+=== "Linux (riscv64)"
+    `__linux = "4.18"`, `__glibc = "2.39"`
 === "Windows"
     No defaults.
 === "macOS (x86_64)"

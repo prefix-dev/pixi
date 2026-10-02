@@ -1,13 +1,13 @@
 [package]
-authors.workspace = true
-description = "Engine-tracked cache-directory lookup for pixi"
-edition.workspace = true
-homepage.workspace = true
-license.workspace = true
 name = "pixi_compute_cache_dirs"
-readme.workspace = true
-repository.workspace = true
 version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+description = "Engine-tracked cache-directory lookup for pixi"
+readme.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
 
 [dependencies]
 pixi_compute_engine = { workspace = true }

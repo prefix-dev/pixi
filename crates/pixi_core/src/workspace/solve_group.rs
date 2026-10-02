@@ -86,7 +86,7 @@ mod tests {
 
     use itertools::Itertools;
     use pixi_manifest::FeaturesExt;
-    use rattler_conda_types::{PackageName, Platform};
+    use rattler_conda_types::{PackageName, Subdir};
 
     use crate::Workspace;
 
@@ -217,7 +217,7 @@ mod tests {
 
         // For win-64, only 'a' should be present because 'b' belongs to a
         // feature that restricts to linux-64/osx-arm64.
-        let win64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Win64);
+        let win64 = pixi_manifest::PixiPlatform::from_subdir(Subdir::Win64);
         let win64_deps: HashSet<_> = solve_group
             .combined_dependencies(Some(&win64))
             .names()
@@ -233,7 +233,7 @@ mod tests {
         );
 
         // For linux-64, both 'a' and 'b' should be present.
-        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
+        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Subdir::Linux64);
         let linux64_deps: HashSet<_> = solve_group
             .combined_dependencies(Some(&linux64))
             .names()

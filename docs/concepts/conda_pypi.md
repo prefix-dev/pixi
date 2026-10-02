@@ -230,14 +230,16 @@ Error:   × failed to solve the pypi requirements of environment 'default' for p
         typing-extensions==4.15.0
 ```
 
-A solution in this case would be to add to the conda dependencies `typing-extensions < 4.15`,
+A solution in this case would be to add to the conda constraints `typing-extensions < 4.15`,
 that is, the same constraint imposed by the PyPI package(s):
 
 ```toml title="pixi.toml"
 [dependencies]
 some-conda-package = "*"  #  depends on any typing-extensions
-typing_extensions = "<4.15"
+
+[constraints]
+typing_extensions = "<4.15"  # bring some-pypi-package pypi constraint to conda
 
 [pypi-dependencies]
-some-pypi-package = "==0.1.0"  # depends on typing-extensions<4.14
+some-pypi-package = "==0.1.0"  # depends on typing-extensions<4.15
 ```

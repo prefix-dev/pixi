@@ -58,7 +58,7 @@ fn dir_uses_lfs(dir: &Path) -> bool {
 }
 
 /// True if `git lfs version` succeeds.
-fn git_lfs_available() -> bool {
+pub fn git_lfs_available() -> bool {
     std::process::Command::new("git")
         .args(["lfs", "version"])
         .output()

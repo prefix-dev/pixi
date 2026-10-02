@@ -1,8 +1,10 @@
+import json
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
+import tomli
 import tomli_w
-import tomllib
 
 from .common import (
     CURRENT_PLATFORM,
@@ -46,7 +48,7 @@ def test_install_path_dependency(
 
     # Ensure that path is relative to the manifest directory
     manifest_path = pixi_home.joinpath("manifests", "pixi-global.toml")
-    manifest = tomllib.loads(manifest_path.read_text())
+    manifest = tomli.loads(manifest_path.read_text())
     source_from_manifest = Path(
         manifest["envs"]["simple-package"]["dependencies"]["simple-package"]["path"]
     )
@@ -338,7 +340,7 @@ def test_install_inline_package(
     # The manifest records the inline package definition under the `package`
     # key of the dependency.
     manifest_path = pixi_home.joinpath("manifests", "pixi-global.toml")
-    manifest = tomllib.loads(manifest_path.read_text())
+    manifest = tomli.loads(manifest_path.read_text())
     dependency = manifest["envs"]["simple-package"]["dependencies"]["simple-package"]
     assert dependency["package"]["build"]["backend"]["name"] == "pixi-build-rattler-build"
 
@@ -474,3 +476,53 @@ def test_install_recursive_source_build_dependencies(
     # Check that package_a is exposed and works
     package_a = pixi_home / "bin" / exec_extension("package-a")
     verify_cli_command([package_a], env=env, stdout_contains=["5 + 3 = 8"])
+
+
+@pytest.mark.slow
+def test_exclude_newer_keeps_source_packages_in_sync(
+    pixi: Path, tmp_path: Path, build_data: Path
+) -> None:
+    """Source-built packages carry their build time as timestamp, which must
+    not count against the cutoff when checking whether the environment is in
+    sync."""
+    pixi_home = tmp_path / "pixi_home"
+    env = {"PIXI_HOME": str(pixi_home)}
+    manifest_path = pixi_home.joinpath("manifests", "pixi-global.toml")
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+
+    manifest_content = {
+        "global": {"exclude-newer": "1d"},
+        "envs": {
+            "simple-package": {
+                "channels": ["conda-forge"],
+                "dependencies": {
+                    "simple-package": {"path": str(build_data.joinpath("simple-package"))}
+                },
+                "exposed": {"simple-package": "simple-package"},
+            }
+        },
+    }
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    verify_cli_command([pixi, "global", "sync"], env=env)
+    verify_cli_command([pixi, "global", "list"], env=env, stderr_excludes="not in sync")
+    verify_cli_command([pixi, "global", "sync"], env=env, stderr_excludes="simple-package")
+
+    # Pin the cutoff to an hour before the recorded build time, so the
+    # exemption is what keeps the environment in sync rather than a build that
+    # happens to predate a relative cutoff.
+    records = list(
+        pixi_home.joinpath("envs", "simple-package", "conda-meta").glob("simple-package-*.json")
+    )
+    assert len(records) == 1, records
+    record = json.loads(records[0].read_text())
+    assert record.get("channel") is None, record
+    built_at = datetime.fromtimestamp(record["timestamp"] / 1000, tz=UTC)
+
+    manifest_content["global"]["exclude-newer"] = (built_at - timedelta(hours=1)).strftime(
+        "%Y-%m-%dT%H:%M:%SZ"
+    )
+    manifest_path.write_text(tomli_w.dumps(manifest_content))
+
+    verify_cli_command([pixi, "global", "list"], env=env, stderr_excludes="not in sync")
+    verify_cli_command([pixi, "global", "sync"], env=env, stderr_excludes="simple-package")

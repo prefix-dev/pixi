@@ -19,7 +19,7 @@ use itertools::{Either, Itertools};
 pub use manifest::{ExposedType, Manifest, Mapping};
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use once_cell::sync::OnceCell;
-pub use parsed_manifest::{ExposedName, ParsedEnvironment, ParsedManifest};
+pub use parsed_manifest::{ExposedName, ParsedEnvironment, ParsedGlobal, ParsedManifest};
 use pixi_build_discovery::DiscoveryError;
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
@@ -31,14 +31,22 @@ use pixi_command_dispatcher::{
 use pixi_config::{Config, RunPostLinkScripts, default_channel_config, pixi_home};
 use pixi_consts::consts::{self};
 use pixi_core::environment::{
-    EnvironmentFile, LockedEnvironmentHash, PlatformData, write_environment_file,
+    EnvironmentFile, LockedEnvironmentHash, PlatformData, RequiredPlatform, write_environment_file,
 };
-use pixi_core::lock_file::virtual_packages::minimal_required_virtual_packages;
+use pixi_core::lock_file::virtual_packages::required_virtual_package_specs;
 use pixi_core::repodata::Repodata;
-use pixi_manifest::{InlinePackageManifest, PrioritizedChannel, WorkspaceManifest};
+use pixi_core::workspace::stdlib_variants::{StdlibVersionPin, derive_stdlib_variants};
+use pixi_manifest::platform::host::{
+    HostDetectionError, detect_host, host_subdir, platform_from_detected,
+};
+use pixi_manifest::platform::solver_generic_virtual_packages;
+use pixi_manifest::{
+    InlinePackageManifest, PixiPlatform, PrioritizedChannel, WorkspaceManifest,
+    resolve_exclude_newer,
+};
 use pixi_path::AbsPathBuf;
 use pixi_reporters::TopLevelProgress;
-use pixi_spec::{BinarySpec, PathBinarySpec};
+use pixi_spec::{BinarySpec, PathBinarySpec, ResolvedExcludeNewer};
 use pixi_spec_containers::DependencyMap;
 use pixi_utils::variants::VariantConfig;
 use pixi_utils::{
@@ -47,14 +55,11 @@ use pixi_utils::{
     rlimit::try_increase_rlimit_to_sensible,
 };
 use rattler_conda_types::{
-    ChannelConfig, GenericVirtualPackage, MatchSpec, NamedChannelOrUrl, PackageName, Platform,
-    PrefixRecord, menuinst::MenuMode, package::CondaArchiveIdentifier,
+    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, ParseChannelError,
+    PrefixRecord, Subdir, menuinst::MenuMode, package::CondaArchiveIdentifier,
 };
 use rattler_networking::LazyClient;
 use rattler_repodata_gateway::Gateway;
-use rattler_virtual_packages::{
-    DetectVirtualPackageError, VirtualPackage, VirtualPackageOverrides,
-};
 use tokio::sync::Semaphore;
 use toml_edit::DocumentMut;
 use xxhash_rust::xxh3::Xxh3;
@@ -105,6 +110,8 @@ pub enum InferPackageNameError {
     CommandDispatcher(#[from] CommandDispatcherError),
     #[error("failed to get build backend metadata for package name inference")]
     BuildBackendMetadata(#[source] Box<dyn Diagnostic + Send + Sync>),
+    #[error("failed to resolve the channel for the exclude-newer configuration")]
+    ExcludeNewer(#[from] ParseChannelError),
     #[error("no package outputs found in the specified path/repository")]
     NoPackageOutputs,
     #[error("multiple package outputs found: {}", .package_names.join(", "))]
@@ -167,7 +174,7 @@ impl Debug for Project {
 #[derive(Debug)]
 struct ExposedData {
     env_name: EnvironmentName,
-    platform: Option<Platform>,
+    platform: Option<Subdir>,
     channels: Vec<PrioritizedChannel>,
     package: PackageName,
     exposed: ExposedName,
@@ -260,10 +267,10 @@ fn determine_env_path(executable_path: &Path, env_root: &Path) -> miette::Result
 fn convert_record_to_metadata(
     prefix_record: &PrefixRecord,
     channel_config: &ChannelConfig,
-) -> miette::Result<(Option<Platform>, PrioritizedChannel, PackageName)> {
-    let platform = match Platform::from_str(&prefix_record.repodata_record.package_record.subdir) {
-        Ok(Platform::NoArch) => None,
-        Ok(platform) if platform == Platform::current() => None,
+) -> miette::Result<(Option<Subdir>, PrioritizedChannel, PackageName)> {
+    let platform = match Subdir::from_str(&prefix_record.repodata_record.package_record.subdir) {
+        Ok(Subdir::NoArch) => None,
+        Ok(platform) if platform == host_subdir() => None,
         Err(_) => None,
         Ok(p) => Some(p),
     };
@@ -293,7 +300,7 @@ async fn package_from_conda_meta(
     executable: &str,
     prefix: &Prefix,
     channel_config: &ChannelConfig,
-) -> miette::Result<(Option<Platform>, PrioritizedChannel, PackageName)> {
+) -> miette::Result<(Option<Subdir>, PrioritizedChannel, PackageName)> {
     let records = find_package_records(conda_meta).await?;
 
     for prefix_record in records {
@@ -567,28 +574,75 @@ impl Project {
         self.config.global_channel_config()
     }
 
-    /// The virtual packages to solve an environment against. For the current
-    /// platform these are detected from the machine, honoring any
-    /// `CONDA_OVERRIDE_*` variables (e.g. `CONDA_OVERRIDE_CUDA=12.0`) so the
-    /// solve respects run constraints on virtual packages. For any other
+    /// Resolves the manifest's `exclude-newer` cutoff together with the
+    /// overrides of the given channels and of individual packages into
+    /// absolute cutoffs.
+    fn resolved_exclude_newer<'a>(
+        &'a self,
+        channels: impl IntoIterator<Item = &'a PrioritizedChannel>,
+    ) -> Result<Option<ResolvedExcludeNewer>, ParseChannelError> {
+        resolve_exclude_newer(
+            self.manifest.parsed.global.exclude_newer,
+            channels,
+            |channel| {
+                channel
+                    .channel
+                    .clone()
+                    .into_base_url(self.global_channel_config())
+            },
+            &self.manifest.parsed.exclude_newer_package_overrides,
+        )
+    }
+
+    /// The virtual packages to solve an environment against.
+    ///
+    /// For the platform this machine targets these are detected from the
+    /// machine, honoring `CONDA_OVERRIDE_*` (e.g. `CONDA_OVERRIDE_CUDA=12.0`)
+    /// so the solve respects run constraints on virtual packages. For any other
     /// platform the machine can't be inspected, so the list is empty.
     fn virtual_packages_for(
-        platform: &Platform,
-    ) -> Result<Vec<GenericVirtualPackage>, DetectVirtualPackageError> {
+        platform: &Subdir,
+    ) -> Result<Vec<GenericVirtualPackage>, HostDetectionError> {
+        let host = host_subdir();
         if platform
             .only_platform()
-            .map(|p| p == Platform::current().only_platform().unwrap_or(""))
+            .map(|p| p == host.only_platform().unwrap_or(""))
             .unwrap_or(false)
         {
-            Ok(
-                VirtualPackage::detect(&VirtualPackageOverrides::from_env())?
-                    .iter()
-                    .cloned()
-                    .map(GenericVirtualPackage::from)
-                    .collect(),
-            )
+            Ok(solver_generic_virtual_packages(&detect_host(host)?))
         } else {
             Ok(vec![])
+        }
+    }
+
+    /// The build variants to build source packages with for `platform`.
+    ///
+    /// A workspace derives `c_stdlib`/`c_stdlib_version` build variants from
+    /// its system requirements so that `stdlib('c')` recipes pin a
+    /// minimum OS/libc target (e.g. `macosx_deployment_target 13.*`).
+    /// `pixi global` has no system-requirements table, so we derive the same
+    /// pair from the device's detected virtual packages (`virtual_packages`,
+    /// e.g. the host's `__osx`/`__glibc`). Unlike the workspace flow, we pass
+    /// [`StdlibVersionPin::AtMost`]: a global install is local to this machine,
+    /// so the target is bound with `<=` the device's exact version and the
+    /// solve picks the highest published provider candidate it can build
+    /// against. (The workspace flow keeps an exact pin to preserve build hashes
+    /// and lock-file stability; that constraint doesn't apply here.)
+    fn build_variants(
+        platform: Subdir,
+        virtual_packages: &[GenericVirtualPackage],
+        channels: &[ChannelUrl],
+    ) -> VariantConfig {
+        let device_platform = platform_from_detected(platform, virtual_packages.to_vec())
+            .unwrap_or_else(|_| PixiPlatform::from_subdir(platform));
+        let variant_configuration =
+            derive_stdlib_variants(&device_platform, channels, StdlibVersionPin::AtMost)
+                .into_iter()
+                .map(|(key, value)| (key, vec![value]))
+                .collect();
+        VariantConfig {
+            variant_configuration,
+            variant_files: Vec::new(),
         }
     }
 
@@ -607,13 +661,11 @@ impl Project {
     fn inline_package_for_channels(
         &self,
         inline: &InlinePackageManifest,
-        channels: impl IntoIterator<Item = NamedChannelOrUrl>,
+        channels: impl IntoIterator<Item = PrioritizedChannel>,
     ) -> InlinePackage {
         InlinePackage {
             manifest: Arc::new(inline.manifest.clone()),
-            workspace: Arc::new(workspace_manifest_with_channels(
-                channels.into_iter().map(PrioritizedChannel::from),
-            )),
+            workspace: Arc::new(workspace_manifest_with_channels(channels)),
             content_hash: inline.content_hash,
         }
     }
@@ -637,11 +689,15 @@ impl Project {
             .collect::<Result<Vec<_>, _>>()
             .into_diagnostic()?;
 
-        let platform = environment.platform.unwrap_or_else(Platform::current);
+        let exclude_newer = self
+            .resolved_exclude_newer(&environment.channels)
+            .into_diagnostic()?;
+
+        let platform = environment.platform.unwrap_or_else(host_subdir);
 
         // Source dependencies are built on this machine, so they can only
         // target the platform we are running on.
-        if platform != Platform::current()
+        if platform != Subdir::current().unwrap_or(Subdir::NoArch)
             && let Some(source_package) = environment
                 .dependencies
                 .specs
@@ -656,7 +712,7 @@ impl Project {
                 "environment {} requests platform '{platform}', but '{}' is a source dependency that has to be built on the current machine ('{}'); cross-platform source builds are not supported",
                 env_name.fancy_display(),
                 source_package.as_normalized(),
-                Platform::current(),
+                Subdir::current().unwrap_or(Subdir::NoArch),
             ));
         }
 
@@ -680,6 +736,11 @@ impl Project {
 
         let build_environment = BuildEnvironment::simple(platform, solve_virtual_packages.clone());
 
+        // Derive the `c_stdlib` build variants for source builds, mirroring what
+        // a workspace does, so `stdlib('c')` recipes pin a deployment target that
+        // matches the device this install targets (see `build_variants`).
+        let variant_config = Self::build_variants(platform, &solve_virtual_packages, &channels);
+
         // Inline package definitions from the manifest, threaded into the
         // solve and install so backend discovery uses them instead of reading
         // a manifest from the source checkout.
@@ -699,8 +760,8 @@ impl Project {
                 EnvironmentSpec {
                     channels: channels.clone(),
                     build_environment: build_environment.clone(),
-                    variants: VariantConfig::default(),
-                    exclude_newer: None,
+                    variants: variant_config.clone(),
+                    exclude_newer: exclude_newer.clone(),
                     channel_priority: Default::default(),
                 },
             )),
@@ -787,13 +848,13 @@ impl Project {
                 prefix: rattler_conda_types::prefix::Prefix::create(prefix.root())
                     .into_diagnostic()?,
                 build_environment,
-                exclude_newer: None,
+                exclude_newer,
                 channels,
                 installed: None,
                 ignore_packages: None,
                 force_reinstall: force_reinstall_packages,
-                variant_configuration: None,
-                variant_files: None,
+                variant_configuration: Some(variant_config.variant_configuration),
+                variant_files: Some(variant_config.variant_files),
                 inline_packages: inline_packages.into_iter().collect(),
             })
             .await?;
@@ -811,18 +872,14 @@ impl Project {
         Ok(EnvironmentUpdate::new(install_changes, dependencies_names))
     }
 
-    /// Record the resolved and minimum-supported platforms in the environment's
-    /// `conda-meta/pixi` marker file, mirroring what non-global environments
-    /// write. The resolved platform is the subdir plus the virtual packages the
-    /// solve ran against (machine detection honoring `CONDA_OVERRIDE_*`); the
-    /// minimum-supported platform keeps only the virtual packages some installed
-    /// record actually depends on. `source_fingerprints` records the source
-    /// dependency specifications so `pixi global sync` can detect edits.
+    /// Record the resolved platform and the installed packages' requirements in
+    /// the environment's `conda-meta/pixi` marker file, mirroring what non-global
+    /// environments write.
     fn write_environment_file(
         &self,
         env_name: &EnvironmentName,
         prefix: &Prefix,
-        platform: Platform,
+        platform: Subdir,
         resolved_virtual_packages: Vec<GenericVirtualPackage>,
         resolved_depends: &[String],
         source_fingerprints: BTreeMap<String, u64>,
@@ -830,7 +887,7 @@ impl Project {
         let resolved_platform = PlatformData::new(platform, resolved_virtual_packages);
         let depends: Vec<&str> = resolved_depends.iter().map(String::as_str).collect();
         let minimum_supported_platform =
-            PlatformData::new(platform, minimal_required_virtual_packages(&depends));
+            RequiredPlatform::new(platform, required_virtual_package_specs(&depends));
 
         write_environment_file(
             prefix.root(),
@@ -1166,6 +1223,41 @@ impl Project {
 
         let prefix = self.environment_prefix(env_name).await?;
         let prefix_records = prefix.find_installed_packages()?;
+
+        // Installed packages that the current cutoff would exclude mark the
+        // environment out of sync, so tightening `exclude-newer` triggers a
+        // re-solve on the next sync.
+        if let Some(exclude_newer) = self
+            .resolved_exclude_newer(&environment.channels)
+            .into_diagnostic()?
+        {
+            let exclude_newer = rattler_solve::ExcludeNewer::from(exclude_newer);
+            for record in &prefix_records {
+                let package = &record.repodata_record.package_record;
+                let channel = record.repodata_record.channel.as_deref();
+
+                // A package built on this machine records its build time as
+                // timestamp, while the solve only ever sees metadata that
+                // carries none and therefore never excludes it. Such a record
+                // has no channel, and so does a binary package pinned by url,
+                // which the solve does apply the cutoff to. Only an
+                // environment without source dependencies rules the first case
+                // out.
+                if channel.is_none() && !source_package_names.is_empty() {
+                    continue;
+                }
+
+                if exclude_newer.is_excluded(&record.repodata_record) {
+                    tracing::debug!(
+                        "Environment {} out of sync because {} is newer than the exclude-newer cutoff",
+                        env_name.fancy_display(),
+                        package.name.as_source()
+                    );
+                    return Ok(false);
+                }
+            }
+        }
+
         let specs_in_sync = environment_specs_in_sync(
             &prefix_records,
             &specs,
@@ -1326,6 +1418,18 @@ impl Project {
                 env_name.fancy_display()
             );
         } else {
+            // Creating an environment reads as an install rather than an
+            // update, whether it was `install` or a `sync` acting on a manifest
+            // entry whose prefix is missing.
+            if !self
+                .env_root
+                .path()
+                .join(env_name.as_str())
+                .join(consts::CONDA_META_DIR)
+                .exists()
+            {
+                state_changes.insert_change(env_name, StateChange::AddedEnvironment);
+            }
             tracing::debug!(
                 "Environment {} specs not up to date with global manifest",
                 env_name.fancy_display()
@@ -1467,7 +1571,10 @@ impl Project {
             rattler_menuinst::install_menuitems_for_record(
                 prefix.root(),
                 &record,
-                environment.platform.unwrap_or(Platform::current()),
+                environment
+                    .platform
+                    .or(Subdir::current())
+                    .unwrap_or(Subdir::NoArch),
                 MenuMode::User,
             )
             .into_diagnostic()?;
@@ -1610,12 +1717,19 @@ impl Project {
 
         self.command_dispatcher.get_or_try_init(|| {
             let cache_dir_path = pixi_config::get_cache_dir()
-                .map(|cache_dir| cache_dir.join(BUILD_DIR))
                 .map_err(|e| CommandDispatcherError::CacheDirectory(e.into()))?;
             let cache_dir = AbsPathBuf::new(cache_dir_path)
                 .expect("cache dir is not absolute")
                 .into_assume_dir();
-            let cache_dirs = pixi_command_dispatcher::CacheDirs::new(cache_dir);
+            // Root the dispatcher at the shared cache directory, so global
+            // environments use the same package and build-backend caches as
+            // every other command; a package cached by a workspace install
+            // counts as locally available for an offline global solve. The
+            // workspace-scoped caches (source builds and their metadata) have
+            // no workspace to live in here and stay under `bld`.
+            let build_dir = cache_dir.join(BUILD_DIR).into_assume_dir();
+            let cache_dirs =
+                pixi_command_dispatcher::CacheDirs::new(cache_dir).with_workspace(build_dir);
 
             let root_dir = AbsPathBuf::new(self.root.clone())
                 .expect("root dir is not absolute")
@@ -1670,13 +1784,15 @@ impl Project {
     /// definition instead of reading a manifest from the checkout.
     /// `channels` are the channels of the environment the package is
     /// destined for; the backend and its dependencies are solved against
-    /// them.
+    /// them, subject to the manifest's `exclude-newer` cutoff and the
+    /// channel overrides.
     async fn infer_package_name_from_source_spec(
         &self,
         source_spec: pixi_spec::SourceSpec,
         inline: Option<InlinePackage>,
-        channels: &[NamedChannelOrUrl],
+        channels: &[PrioritizedChannel],
     ) -> Result<PackageName, InferPackageNameError> {
+        let exclude_newer = self.resolved_exclude_newer(channels)?;
         let command_dispatcher = self.command_dispatcher()?;
         let checkout = command_dispatcher
             .engine()
@@ -1690,7 +1806,12 @@ impl Project {
         // Create the metadata spec
         let channels = channels
             .iter()
-            .filter_map(|c| c.clone().into_base_url(self.global_channel_config()).ok())
+            .filter_map(|c| {
+                c.channel
+                    .clone()
+                    .into_base_url(self.global_channel_config())
+                    .ok()
+            })
             .collect();
         let metadata_spec = BuildBackendMetadataSpec {
             manifest_source: pinned_source_spec.clone(),
@@ -1701,7 +1822,7 @@ impl Project {
                     channels,
                     build_environment: pixi_command_dispatcher::BuildEnvironment::default(),
                     variants: VariantConfig::default(),
-                    exclude_newer: None,
+                    exclude_newer,
                     channel_priority: Default::default(),
                 },
             )),
@@ -1741,7 +1862,7 @@ impl Project {
         &self,
         pixi_spec: &pixi_spec::PixiSpec,
         inline: Option<&InlinePackageManifest>,
-        channels: &[NamedChannelOrUrl],
+        channels: &[PrioritizedChannel],
     ) -> Result<PackageName, InferPackageNameError> {
         match pixi_spec.clone().into_source_or_binary() {
             Either::Left(source_spec) => {
@@ -1851,8 +1972,9 @@ mod tests {
     use std::{collections::HashMap, io::Write};
 
     use itertools::Itertools;
+    use pixi_utils::variants::VariantValue;
     use rattler_conda_types::{
-        NamedChannelOrUrl, PackageRecord, Platform, RepoDataRecord, VersionWithSource,
+        NamedChannelOrUrl, PackageRecord, RepoDataRecord, Subdir, VersionWithSource,
         package::DistArchiveIdentifier,
     };
     use tempfile::tempdir;
@@ -2094,7 +2216,7 @@ mod tests {
         );
 
         // Set platform to something different than current
-        package_record.subdir = Platform::LinuxRiscv32.to_string();
+        package_record.subdir = Subdir::LinuxRiscv32.to_string();
 
         let repodata_record = RepoDataRecord {
             package_record: package_record.clone(),
@@ -2117,7 +2239,7 @@ mod tests {
             NamedChannelOrUrl::from_str("test-channel").unwrap().into()
         );
         assert_eq!(package, "python".parse().unwrap());
-        assert_eq!(platform, Some(Platform::LinuxRiscv32));
+        assert_eq!(platform, Some(Subdir::LinuxRiscv32));
 
         // Test with different from default channel alias
         let repodata_record = RepoDataRecord {
@@ -2140,15 +2262,64 @@ mod tests {
         assert_eq!(package, "python".parse().unwrap());
     }
 
+    fn gvp(name: &str, version: &str) -> GenericVirtualPackage {
+        GenericVirtualPackage {
+            name: name.parse().unwrap(),
+            version: version.parse().unwrap(),
+            build_string: "0".to_string(),
+        }
+    }
+
+    /// Source builds derive their `c_stdlib` variant from the device's detected
+    /// virtual packages, emitted as a `<=` bound: a host reporting
+    /// `__osx = 15.7.1` targets `macosx_deployment_target <=15.7.1`, so the
+    /// solve picks the highest published deployment target the device can build
+    /// against rather than pinning the exact -- and unpublished -- host version.
+    #[test]
+    fn test_build_variants_use_device_virtual_packages() {
+        let channels = vec![ChannelUrl::from(
+            Url::parse("https://conda.anaconda.org/conda-forge").unwrap(),
+        )];
+        let device = vec![gvp("__osx", "15.7.1")];
+        let variants =
+            Project::build_variants(Subdir::OsxArm64, &device, &channels).variant_configuration;
+
+        assert_eq!(
+            variants.get("c_stdlib"),
+            Some(&vec![VariantValue::String(
+                "macosx_deployment_target".to_string()
+            )])
+        );
+        assert_eq!(
+            variants.get("c_stdlib_version"),
+            Some(&vec![VariantValue::String("<=15.7.1".to_string())])
+        );
+    }
+
+    /// The derived providers are conda-forge packages, so an environment that
+    /// doesn't build against conda-forge contributes no variants.
+    #[test]
+    fn test_build_variants_empty_without_conda_forge() {
+        let channels = vec![ChannelUrl::from(
+            Url::parse("https://prefix.dev/my-channel").unwrap(),
+        )];
+        let device = vec![gvp("__osx", "15.0")];
+        assert!(
+            Project::build_variants(Subdir::OsxArm64, &device, &channels)
+                .variant_configuration
+                .is_empty()
+        );
+    }
+
     /// A platform on a different OS than the local machine can't be inspected
     /// for virtual packages, so the solve gets an empty list rather than this
     /// machine's detected packages.
     #[test]
     fn test_virtual_packages_for_non_current_platform_is_empty() {
-        let other = if Platform::current().only_platform() == Some("win") {
-            Platform::Linux64
+        let other = if Subdir::current().unwrap_or(Subdir::NoArch).only_platform() == Some("win") {
+            Subdir::Linux64
         } else {
-            Platform::Win64
+            Subdir::Win64
         };
         assert!(Project::virtual_packages_for(&other).unwrap().is_empty());
     }

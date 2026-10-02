@@ -3,15 +3,17 @@ use std::sync::Arc;
 use pixi_command_dispatcher::{
     CommandDispatcherError,
     build::{
-        Dependencies, PixiRunExports, convert_extra_dependencies, dependencies::filter_match_specs,
+        Dependencies, PixiRunExports, convert_extra_dependencies,
+        dependencies::{filter_match_specs, filter_match_specs_with_sources},
         pin_compatible::PinCompatibilityMap,
     },
 };
-use pixi_record::{
-    PinnedBuildSourceSpec, PinnedSourceSpec, PixiRecord, SourceMismatchError, SourceRecordData,
+use pixi_record::{PinnedBuildSourceSpec, PixiRecord, SourceRecordData};
+use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceLocationSpec, SpecConversionError};
+use pixi_spec_containers::DependencyMap;
+use rattler_conda_types::{
+    MatchSpec, Matches, NamelessMatchSpec, PackageName, package::RunExportsJson,
 };
-use pixi_spec::{SourceAnchor, SourceLocationSpec, SpecConversionError};
-use rattler_conda_types::{MatchSpec, Matches, NamelessMatchSpec, PackageName};
 use std::collections::HashSet;
 
 use super::errors::{BuildOrHostEnv, PlatformUnsat, SourceRunDepKind};
@@ -19,79 +21,13 @@ use super::platform::{
     VerifySatisfiabilityContext, failed_to_parse_match_spec_unsat,
     spec_conversion_to_match_spec_error,
 };
-use crate::{
-    lock_file::PixiRecordsByName,
-    workspace::{Environment, HasWorkspaceRef},
-};
 
-/// Verify that the current package's build.source in the manifest
-/// matches the lock file's `package_build_source` (if applicable).
-/// Path-based sources are not represented in the lock file's
-/// `package_build_source` and are skipped.
-pub(super) fn verify_build_source_matches_manifest(
-    environment: &Environment<'_>,
-    locked_pixi_records: &PixiRecordsByName,
-) -> Result<(), Box<PlatformUnsat>> {
-    let Some(pkg_manifest) = environment.workspace().package.as_ref() else {
-        return Ok(());
-    };
-    let Some(pkg_name) = &pkg_manifest.value.package.name else {
-        return Ok(());
-    };
-    let package_name = PackageName::new_unchecked(pkg_name);
-    let manifest_source_location = pkg_manifest.value.build.source.clone();
-
-    // Find the source record for the current package in locked conda packages.
-    let Some(record) = locked_pixi_records.by_name(&package_name) else {
-        return Ok(());
-    };
-
-    let PixiRecord::Source(src_record) = record else {
-        return Ok(());
-    };
-
-    let lock_file_source_location = src_record.build_source.clone();
-
-    let ok = Ok(());
-    let error = Err(Box::new(PlatformUnsat::PackageBuildSourceMismatch(
-        src_record.name().as_source().to_string(),
-        SourceMismatchError::SourceTypeMismatch,
-    )));
-    let sat_err = |e| {
-        Box::new(PlatformUnsat::PackageBuildSourceMismatch(
-            src_record.name().as_source().to_string(),
-            e,
-        ))
-    };
-
-    match (
-        manifest_source_location,
-        lock_file_source_location.map(PinnedBuildSourceSpec::into_pinned),
-    ) {
-        (None, None) => ok,
-        (Some(SourceLocationSpec::Url(murl_spec)), Some(PinnedSourceSpec::Url(lurl_spec))) => {
-            lurl_spec.satisfies(&murl_spec).map_err(sat_err)
-        }
-        (
-            Some(SourceLocationSpec::Git(mut mgit_spec)),
-            Some(PinnedSourceSpec::Git(mut lgit_spec)),
-        ) => {
-            // Ignore subdirectory for comparison, they should not
-            // trigger lock file invalidation.
-            mgit_spec.subdirectory = Default::default();
-            lgit_spec.source.subdirectory = Default::default();
-
-            // Ensure that we always compare references.
-            if mgit_spec.rev.is_none() {
-                mgit_spec.rev = Some(pixi_spec::GitReference::DefaultBranch);
-            }
-            lgit_spec.satisfies(&mgit_spec).map_err(sat_err)
-        }
-        (Some(SourceLocationSpec::Path(mpath_spec)), Some(PinnedSourceSpec::Path(lpath_spec))) => {
-            lpath_spec.satisfies(&mpath_spec).map_err(sat_err)
-        }
-        // If they not equal kind we error-out
-        (_, _) => error,
+/// Render a build source for a diagnostic. Without one, a package builds the
+/// checkout its manifest lives in.
+fn describe_build_source(build_source: Option<&PinnedBuildSourceSpec>) -> String {
+    match build_source {
+        Some(build_source) => format!("'{build_source}'"),
+        None => String::from("the source the manifest itself lives in"),
     }
 }
 
@@ -176,6 +112,30 @@ pub(super) async fn verify_partial_source_record_against_backend(
                 ),
             )),
         })?;
+
+    // The query above read `[package.build.source]` from the manifest at this
+    // record's own `manifest_source`, and resolved where it points. It only
+    // honors the pin we passed in while that pin still matches what the
+    // manifest asks for, so a different result means the manifest now points
+    // at other source code than the lock was built from. Note that the
+    // manifest itself did not have to move for that: editing its
+    // `[package.build.source]` is enough. A branch that only moved upstream
+    // keeps its reference, so the pin is reused and the lock stays valid.
+    let resolved_build_source = backend_metadata.source.build_source();
+    let unchanged = match (resolved_build_source, record.build_source.as_ref()) {
+        (None, None) => true,
+        (Some(resolved), Some(locked)) => resolved.matches_locked(locked),
+        _ => false,
+    };
+    if !unchanged {
+        return Err(CommandDispatcherError::Failed(Box::new(
+            PlatformUnsat::PackageBuildSourceChanged {
+                package: pkg_name.as_source().to_string(),
+                locked: describe_build_source(record.build_source.as_ref()),
+                resolved: describe_build_source(resolved_build_source),
+            },
+        )));
+    }
 
     // Pick the matching output by (name, variants). Variants are
     // compared after normalizing both sides through `pixi_variant`'s
@@ -274,10 +234,10 @@ fn verify_locked_run_deps_against_backend(
     channel_config: &rattler_conda_types::ChannelConfig,
 ) -> Result<(), Box<PlatformUnsat>> {
     // Resolve build/host package slices into PixiRecords for the pin
-    // compatibility map and the run-export collection. Partial source
-    // records get dropped: pin_compatible against a record whose
-    // version isn't yet materialised would just fail downstream, and
-    // their run_exports are necessarily absent.
+    // compatibility map. Partial source records get dropped from the
+    // map: pin_compatible against a record whose version isn't yet
+    // materialised would just fail downstream. Their run-exports still
+    // contribute below, read directly off the partial data.
     let resolved_build = resolved_records(&record.build_packages);
     let resolved_host = resolved_records(&record.host_packages);
 
@@ -408,6 +368,82 @@ fn verify_locked_run_deps_against_backend(
         })?;
     }
 
+    // Verify the record's own declared run-exports still match what the
+    // backend re-derives. They are stored in the lock file and consumed by
+    // dependents' run-dep reconstruction, so a manifest edit to
+    // `[package.run-exports]` must surface as drift even though it never
+    // perturbs this record's own build/host/run environments.
+    let expected_run_exports =
+        PixiRunExports::try_from_protocol(&matching_output.run_exports, &compat_map).map_err(
+            |err| {
+                Box::new(PlatformUnsat::SourcePackageMetadataChanged(
+                    record.name().as_source().to_string(),
+                    err.to_string(),
+                ))
+            },
+        )?;
+    let stringify_pixi_specs =
+        |specs: DependencyMap<PackageName, PixiSpec>| -> Result<Vec<String>, Box<PlatformUnsat>> {
+            specs
+                .into_specs()
+                .map(|(name, spec)| {
+                    spec.to_match_spec(&name, channel_config)
+                        .map(|m| m.to_string())
+                        .map_err(|err| spec_unsat(&name, &err))
+                })
+                .collect()
+        };
+    let stringify_binary_specs =
+        |specs: DependencyMap<PackageName, BinarySpec>| -> Result<Vec<String>, Box<PlatformUnsat>> {
+            specs
+                .into_specs()
+                .map(|(name, spec)| {
+                    spec.to_match_spec(&name, channel_config)
+                        .map(|m| m.to_string())
+                        .map_err(|err| spec_unsat(&name, &err))
+                })
+                .collect()
+        };
+    let empty_run_exports = RunExportsJson::default();
+    let locked_run_exports = record.run_exports().unwrap_or(&empty_run_exports);
+    let buckets: [(&'static str, &[String], Vec<String>); 5] = [
+        (
+            "noarch",
+            &locked_run_exports.noarch,
+            stringify_pixi_specs(expected_run_exports.noarch)?,
+        ),
+        (
+            "strong",
+            &locked_run_exports.strong,
+            stringify_pixi_specs(expected_run_exports.strong)?,
+        ),
+        (
+            "weak",
+            &locked_run_exports.weak,
+            stringify_pixi_specs(expected_run_exports.weak)?,
+        ),
+        (
+            "strong-constraints",
+            &locked_run_exports.strong_constrains,
+            stringify_binary_specs(expected_run_exports.strong_constrains)?,
+        ),
+        (
+            "weak-constraints",
+            &locked_run_exports.weak_constrains,
+            stringify_binary_specs(expected_run_exports.weak_constrains)?,
+        ),
+    ];
+    for (bucket, locked, expected) in buckets {
+        diff_dep_sequences(locked, &expected).map_err(|diff| {
+            Box::new(PlatformUnsat::SourceRunExportsChanged {
+                package: record.name().as_source().to_string(),
+                bucket,
+                added: diff.added,
+                removed: diff.removed,
+            })
+        })?;
+    }
+
     Ok(())
 }
 
@@ -434,7 +470,9 @@ fn resolved_records(unresolved: &[pixi_record::UnresolvedPixiRecord]) -> Vec<Pix
 /// anything in `ignore_run_exports.from_package`, and turn each
 /// surviving record's `RunExportsJson` into the typed
 /// [`PixiRunExports`] flavour the dispatcher's run-export merger
-/// expects.
+/// expects. Mirrors the solve path's `extract_run_exports`: an export
+/// naming a source-built package becomes a source spec (which
+/// stringifies without a version selector), not a binary matchspec.
 fn collect_direct_run_exports(
     direct: Option<&pixi_build_types::procedures::conda_outputs::CondaOutputDependencies>,
     locked: &[pixi_record::UnresolvedPixiRecord],
@@ -448,25 +486,59 @@ fn collect_direct_run_exports(
                 .filter_map(|named| PackageName::try_from(named.name.as_str()).ok())
         })
         .collect();
+
+    // Map every source-built package in the locked env slice to its pinned
+    // location, so their run-export entries stay source-shaped like on the
+    // solve path.
+    let source_locations: std::collections::BTreeMap<PackageName, SourceLocationSpec> = locked
+        .iter()
+        .filter_map(|record| {
+            record.as_source().map(|source| {
+                (
+                    source.name().clone(),
+                    SourceLocationSpec::from(source.manifest_source.clone()),
+                )
+            })
+        })
+        .collect();
+
     let mut out = Vec::new();
     for record in locked {
         let name = record.name();
         if !direct_names.contains(name) || ignore.from_package.contains(name) {
             continue;
         }
-        // Read run-exports off both binary and (full) source records,
-        // mirroring the solve path's `extract_run_exports`; partial source
-        // records have no package record and thus contribute nothing.
-        let Some(re_json) = record
-            .package_record()
-            .and_then(|pr| pr.run_exports.as_ref())
-        else {
+        // Read run-exports off binary, full source, and partial source
+        // records alike; partial records store them next to `depends`
+        // because their full package record is not available at check time.
+        let Some(re_json) = record.run_exports() else {
             continue;
         };
+        // The exporting record's own `sources` map takes precedence over the
+        // env-wide locations, mirroring `extract_run_exports`. Its entries
+        // are relative to the exporting record's manifest, so anchor them
+        // before use.
+        let (own_sources, own_anchor) = match record.as_source() {
+            Some(source) => (
+                Some(source.sources()),
+                Some(SourceAnchor::from(SourceLocationSpec::from(
+                    source.manifest_source.clone(),
+                ))),
+            ),
+            None => (None, None),
+        };
+        let source_location = |name: &PackageName| -> Option<SourceLocationSpec> {
+            if let (Some(sources), Some(anchor)) = (own_sources, &own_anchor)
+                && let Some(location) = sources.get(name.as_normalized())
+            {
+                return Some(anchor.resolve_location(location.clone()));
+            }
+            source_locations.get(name).cloned()
+        };
         let pixi_re = PixiRunExports {
-            noarch: filter_match_specs(&re_json.noarch, ignore),
-            strong: filter_match_specs(&re_json.strong, ignore),
-            weak: filter_match_specs(&re_json.weak, ignore),
+            noarch: filter_match_specs_with_sources(&re_json.noarch, ignore, &source_location),
+            strong: filter_match_specs_with_sources(&re_json.strong, ignore, &source_location),
+            weak: filter_match_specs_with_sources(&re_json.weak, ignore, &source_location),
             strong_constrains: filter_match_specs(&re_json.strong_constrains, ignore),
             weak_constrains: filter_match_specs(&re_json.weak_constrains, ignore),
         };
@@ -762,6 +834,15 @@ fn verify_locked_against_backend_specs(
                     return Err(unsat(format!("{match_spec} (pin_compatible)")));
                 }
             }
+            PackageSpec::PinSubpackage(_) => {
+                // Backends resolve `pin-subpackage` against their own output
+                // before returning dependencies; an unresolved pin here means
+                // the lock cannot be verified against it.
+                return Err(unsat(format!(
+                    "{} (pin_subpackage: unexpectedly unresolved)",
+                    dep_name.as_source()
+                )));
+            }
         }
     }
 
@@ -812,21 +893,21 @@ fn build_full_source_record_from_output(
     use pixi_record::{FullSourceRecordData, SourceRecord as FullRecord};
     use rattler_conda_types::PackageRecord;
 
-    // Reuse the locked record's resolved depends/constrains when
-    // available. For a partial-only record the lock file carried
-    // `depends` but not `constrains`, so default constrains to empty.
+    // Reuse the locked record's resolved depends/constrains when available.
     let (depends, constrains): (Vec<String>, Vec<String>) = match &record.data {
         SourceRecordData::Full(full) => (
             full.package_record.depends.clone(),
             full.package_record.constrains.clone(),
         ),
-        SourceRecordData::Partial(partial) => (partial.depends.clone(), Vec::new()),
+        SourceRecordData::Partial(partial) => (partial.depends.clone(), partial.constrains.clone()),
     };
     let package_record = PackageRecord {
         size: None,
         sha256: None,
         md5: None,
         timestamp: None,
+        indexed_timestamp: None,
+        attestations_sha256: None,
         platform: output
             .metadata
             .subdir
@@ -848,7 +929,10 @@ fn build_full_source_record_from_output(
         noarch: output.metadata.noarch,
         constrains,
         depends,
-        run_exports: None,
+        // The locked run-exports were just verified against the backend's
+        // fresh output, so carrying them over mirrors how `depends` /
+        // `constrains` are taken from the lock above.
+        run_exports: record.run_exports().cloned(),
         purls: output
             .metadata
             .purls
@@ -856,7 +940,7 @@ fn build_full_source_record_from_output(
             .map(|purls| purls.iter().cloned().collect()),
         python_site_packages_path: output.metadata.python_site_packages_path.clone(),
         features: None,
-        track_features: vec![],
+        track_features: output.metadata.track_features.clone(),
         legacy_bz2_md5: None,
         legacy_bz2_size: None,
         // Reuse the locked record's already-resolved extras, mirroring how
@@ -911,8 +995,8 @@ mod tests {
     };
     use pixi_spec::{SourceAnchor, SourceSpec};
     use rattler_conda_types::{
-        ChannelConfig, NoArchType, PackageName, PackageRecord, Platform, RepoDataRecord,
-        VersionSpec, VersionWithSource,
+        ChannelConfig, NoArchType, PackageName, PackageRecord, RepoDataRecord, Subdir, VersionSpec,
+        VersionWithSource,
         package::{DistArchiveIdentifier, RunExportsJson},
     };
     use std::{
@@ -1023,10 +1107,11 @@ mod tests {
                     .into(),
                 build: "h0_0".to_string(),
                 build_number: 0,
-                subdir: Platform::Linux64,
+                subdir: Subdir::Linux64,
                 license: None,
                 license_family: None,
                 flags: Default::default(),
+                track_features: Default::default(),
                 noarch: NoArchType::none(),
                 purls: None,
                 python_site_packages_path: None,
@@ -1532,13 +1617,13 @@ mod tests {
     ) -> NamedSpec<pixi_build_types::ConstraintSpec> {
         NamedSpec {
             name: SourcePackageName::from(PackageName::from_str(name).unwrap()),
-            spec: pixi_build_types::ConstraintSpec::Binary(BinaryPackageSpec {
+            spec: pixi_build_types::ConstraintSpec::Binary(Box::new(BinaryPackageSpec {
                 version: Some(
                     VersionSpec::from_str(spec_str, rattler_conda_types::ParseStrictness::Lenient)
                         .unwrap(),
                 ),
                 ..Default::default()
-            }),
+            })),
         }
     }
 
@@ -1705,6 +1790,86 @@ mod tests {
             }
             other => panic!("expected RunDepends drift, got: {other}"),
         }
+    }
+
+    /// A host dependency that is itself a mutable source package carries
+    /// its run-exports on the partial record. They must feed the run-dep
+    /// reconstruction, otherwise a fresh `pixi lock` followed by
+    /// `pixi lock --check` reports drift for the injected dependency on
+    /// every invocation.
+    #[test]
+    fn verify_locked_run_deps_reads_run_exports_from_partial_records() {
+        let mut record = make_full_source_record("pkg", vec!["libfoo >=1".to_string()], Vec::new());
+        let mut exporter =
+            make_partial_source_record("exporter", "exporter/", Vec::new(), Vec::new());
+        match &mut exporter.data {
+            SourceRecordData::Partial(partial) => {
+                partial.run_exports = Some(RunExportsJson {
+                    weak: vec!["libfoo >=1".to_string()],
+                    ..Default::default()
+                });
+            }
+            SourceRecordData::Full(_) => unreachable!(),
+        }
+        record.host_packages = vec![UnresolvedPixiRecord::Source(Arc::new(exporter))];
+
+        let mut output = make_conda_output("pkg", Vec::new());
+        output.host_dependencies = Some(CondaOutputDependencies {
+            depends: vec![binary_dep("exporter", "")],
+            constraints: Vec::new(),
+        });
+
+        let result = verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG);
+        assert!(result.is_ok(), "expected no drift: {result:?}");
+    }
+
+    /// A `[package.run-exports]` edit changes neither the record's own
+    /// build/host/run envs nor its `depends`, so only an explicit
+    /// comparison of the declared run-exports catches it. Without one,
+    /// the manifest edit is silently absorbed by the existing lock and
+    /// consumers never receive the new export.
+    #[test]
+    fn verify_locked_run_deps_detects_run_export_drift() {
+        let record = make_full_source_record("pkg", Vec::new(), Vec::new());
+        let mut output = make_conda_output("pkg", Vec::new());
+        output.run_exports.weak = vec![binary_dep("libfoo", ">=1")];
+
+        let err = verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG)
+            .expect_err("a freshly declared run-export must surface as drift");
+        match *err {
+            super::super::PlatformUnsat::SourceRunExportsChanged {
+                bucket,
+                added,
+                removed,
+                ..
+            } => {
+                assert_eq!(bucket, "weak");
+                assert_eq!(added, vec!["libfoo >=1".to_string()]);
+                assert!(removed.is_empty());
+            }
+            other => panic!("expected run-export drift, got: {other}"),
+        }
+    }
+
+    /// The inverse of the drift test: a locked record whose run-exports
+    /// match what the backend re-derives must verify clean.
+    #[test]
+    fn verify_locked_run_deps_passes_when_run_exports_match() {
+        let mut record = make_full_source_record("pkg", Vec::new(), Vec::new());
+        match &mut record.data {
+            SourceRecordData::Full(full) => {
+                full.package_record.run_exports = Some(RunExportsJson {
+                    weak: vec!["libfoo >=1".to_string()],
+                    ..Default::default()
+                });
+            }
+            SourceRecordData::Partial(_) => unreachable!(),
+        }
+        let mut output = make_conda_output("pkg", Vec::new());
+        output.run_exports.weak = vec![binary_dep("libfoo", ">=1")];
+
+        let result = verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG);
+        assert!(result.is_ok(), "expected no drift: {result:?}");
     }
 
     /// Build an `extra_dependencies` map carrying a single group.

@@ -24,7 +24,10 @@ use pixi_core::{
     workspace::{Environment, virtual_packages::EnvironmentRunnability},
 };
 
-use crate::{cli_config::WorkspaceConfig, cli_interface::CliInterface};
+use crate::{
+    cli_config::WorkspaceConfig,
+    cli_interface::{CliInterface, cli_context},
+};
 
 #[derive(Parser, Debug)]
 pub enum Operation {
@@ -77,7 +80,7 @@ pub struct AddArgs {
     pub commands: Vec<String>,
 
     /// Depends on these other commands.
-    #[clap(long)]
+    #[clap(long, value_name = "TASK")]
     #[clap(num_args = 1..)]
     pub depends_on: Option<Vec<Dependency>>,
 
@@ -105,7 +108,7 @@ pub struct AddArgs {
     pub env: Vec<(String, String)>,
 
     /// Add a default environment for the task.
-    #[arg(long)]
+    #[arg(long, value_name = "ENVIRONMENT")]
     pub default_environment: Option<EnvironmentName>,
 
     /// A description of the task to be added.
@@ -214,6 +217,7 @@ impl From<AddArgs> for Task {
             && value.default_environment.is_none()
             && description.is_none()
             && value.args.is_none()
+            && !value.clean_env
         {
             Self::Plain(cmd_args.into())
         } else {
@@ -278,16 +282,35 @@ fn print_heading(value: &str) {
 }
 
 /// How a task's environment runs on this machine, rendered as a dim suffix
-/// after the task name: by design (the resolved platform's requirements are
-/// met), by accident (only the resolved packages' minimum requirements are),
-/// or not at all (only reachable via an explicit `--environment`).
+/// after the task name: no dependency (nothing to constrain the platform), by
+/// design (the resolved platform's requirements are met), by accident (only
+/// the resolved packages' minimum requirements are), or not at all.
 fn runnability_suffix(runnability: EnvironmentRunnability) -> console::StyledObject<&'static str> {
     console::style(match runnability {
+        EnvironmentRunnability::NoDependencies => "(no dependency)",
         EnvironmentRunnability::ByDesign => "(by design)",
         EnvironmentRunnability::ByAccident => "(by accident)",
         EnvironmentRunnability::Unsupported => "(not runnable here)",
     })
     .dim()
+}
+
+/// Orders runnability from worst to best so a task reachable in several
+/// environments keeps the most favourable verdict.
+fn runnability_rank(runnability: EnvironmentRunnability) -> u8 {
+    match runnability {
+        EnvironmentRunnability::Unsupported => 0,
+        EnvironmentRunnability::ByAccident => 1,
+        EnvironmentRunnability::ByDesign => 2,
+        EnvironmentRunnability::NoDependencies => 3,
+    }
+}
+
+/// Collapses whitespace so a description always occupies exactly one table
+/// row: an embedded newline would add a line the row colouring can't account
+/// for, and an embedded tab would open a spurious column.
+fn single_line(value: &str) -> String {
+    value.split_whitespace().join(" ")
 }
 
 /// Create a human-readable representation of a list of tasks.
@@ -314,62 +337,60 @@ fn print_tasks(
         return Ok(());
     }
 
-    let mut all_tasks: BTreeMap<TaskName, EnvironmentRunnability> = BTreeMap::new();
-    let mut formatted_descriptions: BTreeMap<TaskName, String> = BTreeMap::new();
-
-    task_map.values().for_each(|(runnability, tasks)| {
-        tasks.iter().for_each(|(taskname, task)| {
-            // A task defined in several environments gets the best verdict:
-            // running picks a compatible environment when one exists.
-            all_tasks
-                .entry(taskname.clone())
-                .and_modify(|existing| {
-                    if *runnability == EnvironmentRunnability::ByDesign {
-                        *existing = EnvironmentRunnability::ByDesign;
-                    }
-                })
-                .or_insert(*runnability);
-            if let Some(description) = task.description() {
-                formatted_descriptions.insert(
-                    taskname.clone(),
-                    format!("{}", console::style(description).italic()),
-                );
+    // One row per task, deduplicated across environments, keeping the best
+    // verdict and the first description seen.
+    let mut rows: BTreeMap<TaskName, (EnvironmentRunnability, Option<String>)> = BTreeMap::new();
+    for (runnability, tasks) in task_map.values() {
+        for (taskname, task) in tasks {
+            let entry = rows.entry(taskname.clone()).or_insert((*runnability, None));
+            if runnability_rank(*runnability) > runnability_rank(entry.0) {
+                entry.0 = *runnability;
             }
-        });
-    });
-
-    print_heading("Tasks that can run on this machine:");
-    let formatted_tasks: String = all_tasks
-        .iter()
-        .map(|(name, runnability)| {
-            format!(
-                "{} {}",
-                name.fancy_display(),
-                runnability_suffix(*runnability)
-            )
-        })
-        .join(", ");
-    eprintln!("{formatted_tasks}");
-
-    let mut writer = tabwriter::TabWriter::new(std::io::stdout());
-    let header_style = console::Style::new().bold().cyan();
-    let header = format!(
-        "{}\t{}",
-        header_style.apply_to("Task"),
-        header_style.apply_to("Description"),
-    );
-    writeln!(writer, "{}", header)?;
-    for (taskname, row) in formatted_descriptions {
-        writeln!(writer, "{}\t{}", taskname.fancy_display(), row)?;
+            if entry.1.is_none()
+                && let Some(description) = task.description()
+            {
+                entry.1 = Some(single_line(description));
+            }
+        }
     }
 
-    writer.flush().inspect_err(|e| {
-        if e.kind() == std::io::ErrorKind::BrokenPipe {
-            std::process::exit(0);
-        }
-    })?;
+    // Align the columns on plain text, then colour whole lines afterwards so
+    // the ANSI styling never throws off the tab stops.
+    let mut writer = tabwriter::TabWriter::new(Vec::new());
+    writeln!(writer, "Task\tDescription")?;
+    for (taskname, (_, description)) in &rows {
+        writeln!(
+            writer,
+            "{}\t{}",
+            taskname.as_str(),
+            description.as_deref().unwrap_or(""),
+        )?;
+    }
+    writer.flush()?;
+    let table = String::from_utf8(writer.into_inner().expect("tab-aligned table is buffered"))
+        .expect("tab-aligned table is valid utf-8");
 
-    Ok(())
+    let header_style = console::Style::new().bold().cyan();
+    let mut output = String::new();
+    let mut lines = table.lines();
+    if let Some(header) = lines.next() {
+        output.push_str(&format!("{}\n", header_style.apply_to(header)));
+    }
+    for ((_, (runnability, _)), line) in rows.iter().zip(lines) {
+        match runnability {
+            EnvironmentRunnability::Unsupported => {
+                output.push_str(&format!("{}\n", console::style(line).dim()));
+            }
+            _ => output.push_str(&format!("{line}\n")),
+        }
+    }
+
+    let mut stdout = std::io::stdout();
+    pixi_utils::io::ignore_broken_pipe(
+        stdout
+            .write_all(output.as_bytes())
+            .and_then(|()| stdout.flush()),
+    )
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -378,7 +399,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
 
-    let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
+    let workspace_ctx = cli_context(workspace.clone());
 
     match args.operation {
         Operation::Add(args) => add_task(workspace_ctx, args).await,
@@ -416,12 +437,7 @@ async fn list_tasks(
             .dedup()
             .map(|name| name.as_str())
             .join(" ");
-        writeln!(std::io::stdout(), "{unformatted}")
-            .inspect_err(|e| {
-                if e.kind() == std::io::ErrorKind::BrokenPipe {
-                    std::process::exit(0);
-                }
-            })
+        pixi_utils::io::ignore_broken_pipe(writeln!(std::io::stdout(), "{unformatted}"))
             .into_diagnostic()?;
 
         return Ok(());
@@ -485,12 +501,7 @@ fn print_tasks_json(project: &Workspace) -> miette::Result<()> {
 
     let json_string =
         serde_json::to_string_pretty(&env_feature_task_map).expect("Failed to serialize tasks");
-    writeln!(std::io::stdout(), "{json_string}")
-        .inspect_err(|e| {
-            if e.kind() == std::io::ErrorKind::BrokenPipe {
-                std::process::exit(0);
-            }
-        })
+    pixi_utils::io::ignore_broken_pipe(writeln!(std::io::stdout(), "{json_string}"))
         .into_diagnostic()?;
 
     Ok(())

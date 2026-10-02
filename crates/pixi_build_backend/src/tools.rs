@@ -18,7 +18,7 @@ use rattler_build_recipe::{
 use rattler_build_variant_config::{VariantConfig, VariantConfigError};
 use rattler_conda_types::compression_level::CompressionLevel;
 use rattler_conda_types::{
-    GenericVirtualPackage, NoArchType, Platform, RepodataRevision, package::CondaArchiveType,
+    GenericVirtualPackage, NoArchType, RepodataRevision, Subdir, package::CondaArchiveType,
 };
 use rattler_virtual_packages::VirtualPackageOverrides;
 use url::Url;
@@ -57,11 +57,11 @@ pub struct RattlerBuild {
     /// The source of the recipe
     pub recipe_source: Source,
     /// The target platform for the build.
-    pub target_platform: Platform,
+    pub target_platform: Subdir,
     /// The host platform for the build.
-    pub host_platform: Platform,
+    pub host_platform: Subdir,
     /// The build platform for the build.
-    pub build_platform: Platform,
+    pub build_platform: Subdir,
     /// Whether experimental features are enabled.
     pub experimental: bool,
     /// The directory where the build should happen.
@@ -107,7 +107,7 @@ impl LoadedVariantConfig {
     pub fn from_recipe_path<'a>(
         source_dir: &Path,
         recipe_path: &Path,
-        target_platform: Platform,
+        target_platform: Subdir,
         additional_variant_files: impl Iterator<Item = &'a Path>,
     ) -> Result<Self, VariantConfigError> {
         let mut variant_files = Vec::new();
@@ -176,9 +176,9 @@ impl RattlerBuild {
     pub fn new(
         backend: BackendIdentifier,
         source: Source,
-        target_platform: Platform,
-        host_platform: Platform,
-        build_platform: Platform,
+        target_platform: Subdir,
+        host_platform: Subdir,
+        build_platform: Subdir,
         experimental: bool,
         work_directory: PathBuf,
     ) -> Self {
@@ -269,7 +269,7 @@ impl RattlerBuild {
             let effective_target_platform = if recipe.build().noarch.is_none() {
                 self.target_platform
             } else {
-                Platform::NoArch
+                Subdir::NoArch
             };
 
             let build_string = recipe
@@ -290,6 +290,7 @@ impl RattlerBuild {
                 hash: rendered
                     .hash_info
                     .expect("hash should be set after evaluation"),
+                pin_subpackages: rendered.pin_subpackages,
             });
         }
 
@@ -303,8 +304,8 @@ impl RattlerBuild {
         channels: Vec<Url>,
         build_vpkgs: Vec<GenericVirtualPackage>,
         host_vpkgs: Vec<GenericVirtualPackage>,
-        host_platform: Platform,
-        build_platform: Platform,
+        host_platform: Subdir,
+        build_platform: Subdir,
     ) -> miette::Result<Vec<Output>> {
         let mut outputs = Vec::new();
         let repodata_revision = if recipe_source_uses_v3(&self.recipe_source.code) {
@@ -390,6 +391,7 @@ impl RattlerBuild {
                     ),
                     store_recipe: false,
                     force_colors: true,
+                    experimental: self.experimental,
                     sandbox_config: None,
                     exclude_newer: None,
                     env_isolation: Default::default(),
@@ -479,7 +481,7 @@ pub fn output_directory(
 #[cfg(test)]
 mod tests {
     use fs_err as fs;
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::Subdir;
     use tempfile::tempdir;
 
     use super::{LoadedVariantConfig, VARIANTS_CONFIG_FILE};
@@ -502,7 +504,7 @@ mod tests {
         let loaded = LoadedVariantConfig::from_recipe_path(
             source_dir,
             &recipe_path,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             std::iter::empty(),
         )
         .unwrap();
@@ -531,7 +533,7 @@ mod tests {
         let loaded = LoadedVariantConfig::from_recipe_path(
             source_dir,
             &recipe_path,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             std::iter::empty(),
         )
         .unwrap();
@@ -563,7 +565,7 @@ mod tests {
         let loaded = LoadedVariantConfig::from_recipe_path(
             source_dir,
             &recipe_path,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             std::iter::empty(),
         )
         .unwrap();

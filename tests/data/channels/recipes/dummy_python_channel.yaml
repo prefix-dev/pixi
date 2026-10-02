@@ -1,0 +1,9 @@
+# A stand-in for `python` so tests only needing a solvable interpreter can use
+# a local channel instead of conda-forge. The package is empty: it can be
+# depended on and installed, but there is no interpreter to run.
+package:
+  name: python
+  version: 3.13.0
+
+build:
+  number: 0

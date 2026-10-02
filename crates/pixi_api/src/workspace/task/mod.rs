@@ -91,12 +91,10 @@ pub async fn list_tasks(
             workspace
                 .environments()
                 .iter()
-                .filter_map(
-                    |env| match classify_environment_runnability(env, lock_file.as_ref()) {
-                        EnvironmentRunnability::Unsupported => None,
-                        runnability => Some((env.clone(), (runnability, env.get_filtered_tasks()))),
-                    },
-                )
+                .map(|env| {
+                    let runnability = classify_environment_runnability(env, lock_file.as_ref());
+                    (env.clone(), (runnability, env.get_filtered_tasks()))
+                })
                 .collect()
         };
 

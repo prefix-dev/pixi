@@ -1,13 +1,13 @@
 [package]
-authors.workspace = true
-description = "Operation-id reporting context shared by pixi reporter implementations"
-edition.workspace = true
-homepage.workspace = true
-license.workspace = true
 name = "pixi_compute_reporters"
-readme.workspace = true
-repository.workspace = true
 version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+description = "Operation-id reporting context shared by pixi reporter implementations"
+readme.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
 
 [dependencies]
 dashmap = { workspace = true }

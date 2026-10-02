@@ -3,7 +3,7 @@
 The `pixi-build-r` backend is designed for building R packages using `R CMD INSTALL`. It automatically parses the `DESCRIPTION` file to extract metadata and dependencies, and detects whether native code compilation is needed.
 
 !!! warning
-    `pixi-build` is a preview feature, and will change until it is stabilized.
+    `pixi-build` is a preview flag, and will change until it is stabilized.
     This is why we require users to opt in to that feature by adding "pixi-build" to `workspace.preview`.
 
     ```toml
@@ -35,8 +35,8 @@ preview = ["pixi-build"]
 name = "r-mypackage"
 version = "1.0.0"
 
-[package.build]
-backend = { name = "pixi-build-r", version = "*" }
+[package.build.backend]
+name = "pixi-build-r"
 channels = ["https://prefix.dev/conda-forge"]
 ```
 
@@ -106,7 +106,7 @@ Environment variables to set during the build process. These variables are avail
 
 ```toml
 [package.build.config]
-env = { R_LIBS_USER = "$PREFIX/lib/R/library" }
+env = { R_KEEP_PKG_SOURCE = "yes" }
 ```
 
 For target-specific configuration, platform environment variables are merged with base variables:
@@ -119,6 +119,8 @@ env = { COMMON_VAR = "base" }
 env = { COMMON_VAR = "windows", WIN_SPECIFIC = "value" }
 # Result for win-64: { COMMON_VAR = "windows", WIN_SPECIFIC = "value" }
 ```
+
+--8<-- "docs/partials/build-config-env-expansion.md"
 
 ### `extra-input-globs`
 

@@ -1,12 +1,12 @@
-from collections.abc import Callable, Iterator
-from pathlib import Path
-from typing import Any
 import os
-import stat
 import shutil
+import stat
 import sys
 import tempfile
 import time
+from collections.abc import Callable, Iterator
+from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -210,6 +210,11 @@ def channels(test_data: Path) -> Path:
 
 
 @pytest.fixture
+def backend_channel_1(channels: Path) -> str:
+    return channels.joinpath("backend_channel_1").as_uri()
+
+
+@pytest.fixture
 def dummy_channel_1(channels: Path) -> str:
     return channels.joinpath("dummy_channel_1").as_uri()
 
@@ -217,6 +222,13 @@ def dummy_channel_1(channels: Path) -> str:
 @pytest.fixture
 def dummy_channel_2(channels: Path) -> str:
     return channels.joinpath("dummy_channel_2").as_uri()
+
+
+@pytest.fixture
+def dummy_python_channel(channels: Path) -> str:
+    """A channel holding an empty `python` package, for tests that need a
+    solvable interpreter but never run one."""
+    return channels.joinpath("dummy_python_channel").as_uri()
 
 
 @pytest.fixture

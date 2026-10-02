@@ -71,6 +71,18 @@ expression: snapshot
     git: "https://github.com/conda-forge/21cmfast-feedstock"
     branch: main
 - input:
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
+    lfs: true
+  result:
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
+    lfs: true
+- input:
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
+    lfs: false
+  result:
+    git: "https://github.com/conda-forge/21cmfast-feedstock"
+    lfs: false
+- input:
     path: "../mypkg"
     version: 1.2.3
   result:
@@ -156,6 +168,11 @@ expression: snapshot
     tag: v1
   result:
     error: "ERROR: only one of `branch`, `rev`, or `tag` can be specified"
+- input:
+    version: 1.2.3
+    lfs: true
+  result:
+    error: "ERROR: `branch`, `rev`, `tag`, and `lfs` are only valid when `git` is specified"
 - input:
     git: "https://github.com/conda-forge/21cmfast-feedstock"
     sha256: 315f5bdb76d078c43b8ac0064e4a0164612b1fce77c869345bfc94c75894edd3

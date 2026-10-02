@@ -227,6 +227,10 @@ impl PixiRecordsByName {
         HashMap<uv_normalize::PackageName, (PypiPackageIdentifier, usize, &PixiRecord)>,
         ConversionError,
     > {
+        PypiPackageIdentifier::trace_legacy_purl_fallbacks(
+            self.records.iter().filter_map(PixiRecord::as_binary),
+        );
+
         self.records
             .iter()
             .enumerate()

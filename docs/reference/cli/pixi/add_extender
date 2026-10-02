@@ -34,6 +34,13 @@ pixi add --git https://github.com/mahmoud/boltons.git boltons --branch main --py
 pixi add --git https://github.com/mahmoud/boltons.git boltons --rev e50d4a1 --pypi # (25)!
 pixi add --git https://github.com/mahmoud/boltons.git boltons --tag v0.1.0 --pypi # (26)!
 pixi add --git https://github.com/mahmoud/boltons.git boltons --tag v0.1.0 --pypi --subdirectory boltons # (27)!
+
+# Add local path dependencies
+pixi add my-package --path ../my-package # (29)!
+pixi add my-package --path /absolute/path/to/my-package # (30)!
+pixi add recipe-package --path ../recipe/recipe.yaml # (31)!
+pixi add --pypi python-package --path ../python-package # (32)!
+pixi add --pypi python-package --path ../python-package --editable # (33)!
 ```
 
 1. This will add the `numpy` package to the project with the latest available for the solved environment.
@@ -64,6 +71,11 @@ pixi add --git https://github.com/mahmoud/boltons.git boltons --tag v0.1.0 --pyp
 26. This will add the `boltons` package with the given `git` url and `v0.1.0` tag as `pypi` dependency.
 27. This will add the `boltons` package with the given `git` url, `v0.1.0` tag and the `boltons` folder in the repository as `pypi` dependency.
 28. This will add the `numpy` package to the dependencies defined inline on the environment `dev`, creating the environment if it does not exist.
+29. This will add a local pixi-build package from a directory. Conda path dependencies require the `pixi-build` preview feature.
+30. This will add a local pixi-build package by pointing directly at its directory. Absolute input paths are stored relative to the workspace manifest.
+31. This will add a local conda source package by pointing directly at its `recipe.yaml`. Direct `recipe.yml` and `package.xml` paths are also supported.
+32. This will add a Python project directory as a PyPI path dependency. The directory must contain a `pyproject.toml`.
+33. This will add a Python project directory and install it in editable mode.
 
 !!! tip "Need to specify build strings or hardware-specific packages?"
     For advanced package specifications including build strings, see the [Package Specifications](../../../concepts/package_specifications.md) guide.

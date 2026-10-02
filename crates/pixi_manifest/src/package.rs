@@ -35,6 +35,10 @@ pub struct Package {
 
     /// URL of the project documentation
     pub documentation: Option<Url>,
+
+    /// Whether a workspace-wide `pixi publish` publishes this package.
+    /// Packages that do not opt in are left out of the publish set.
+    pub publish: bool,
 }
 
 impl Package {
@@ -51,6 +55,7 @@ impl Package {
             homepage: None,
             repository: None,
             documentation: None,
+            publish: false,
         }
     }
 }

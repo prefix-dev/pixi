@@ -70,7 +70,7 @@ name = "cpp_math"
 version = "0.1.0"
 
 [package.build]
-backend = { name = "pixi-build-cmake", version = "*" }
+backend = { name = "pixi-build-cmake" }
 ```
 
 If the source is on your machine, you can install it like this:

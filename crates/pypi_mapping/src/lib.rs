@@ -30,7 +30,7 @@ use http_cache_reqwest::{CACacheManager, Cache, CacheMode, HttpCache, HttpCacheO
 use itertools::Itertools;
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use rattler_networking::LazyClient;
-use reqwest_middleware::ClientBuilder;
+use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, Middleware, Next};
 use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
 use thiserror::Error;
 use tokio::sync::Semaphore;
@@ -158,6 +158,29 @@ impl From<reqwest_middleware::Error> for MappingError {
     }
 }
 
+/// Terminal middleware that hands the request to the caller's client,
+/// middleware stack included.
+///
+/// The mapping cache has to sit *outside* that stack: pixi's clients put the
+/// offline middleware first, so appending the cache with
+/// [`ClientBuilder::from_client`] would reject every offline request before
+/// the cache could serve it. With the delegate, a cache hit never reaches the
+/// caller's stack, while a miss goes through all of it - auth and mirrors
+/// online, the offline rejection (and its explanation) offline.
+struct DelegateToClient(ClientWithMiddleware);
+
+#[async_trait::async_trait]
+impl Middleware for DelegateToClient {
+    async fn handle(
+        &self,
+        req: reqwest::Request,
+        extensions: &mut http::Extensions,
+        _next: Next<'_>,
+    ) -> reqwest_middleware::Result<reqwest::Response> {
+        self.0.execute_with_extensions(req, extensions).await
+    }
+}
+
 impl PurlDerivationClient {
     /// Construct a new `PurlDerivationClientBuilder` with the provided `Client` and
     /// the resolved on-disk `cache_path` for the conda-pypi mapping cache.
@@ -166,12 +189,25 @@ impl PurlDerivationClient {
     /// `pixi_config::Config::cache_dir_for`) so that workspace-level
     /// `[cache.pypi-mapping]` overrides are respected; this crate stays
     /// agnostic about which config layer wins.
-    pub fn builder(client: LazyClient, cache_path: PathBuf) -> PurlDerivationClientBuilder {
-        // Construct a client with a retry policy and local caching
+    pub fn builder(
+        client: LazyClient,
+        cache_path: PathBuf,
+        offline: bool,
+    ) -> PurlDerivationClientBuilder {
+        // Construct a client with a retry policy and local caching. In
+        // offline mode a cached mapping is served regardless of freshness:
+        // revalidating a stale entry is a network request, which the offline
+        // middleware would reject even though a perfectly usable copy is on
+        // disk. A genuine cache miss still reaches the middleware and fails
+        // with the offline explanation.
         let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
         let retry_strategy = RetryTransientMiddleware::new_with_policy(retry_policy);
         let cache_strategy = Cache(HttpCache {
-            mode: CacheMode::Default,
+            mode: if offline {
+                CacheMode::ForceCache
+            } else {
+                CacheMode::Default
+            },
             manager: CACacheManager {
                 path: cache_path.clone(),
                 remove_opts: Default::default(),
@@ -181,9 +217,10 @@ impl PurlDerivationClient {
 
         let wrapped_client = LazyClient::new(move || {
             let client = client.client().clone();
-            ClientBuilder::from_client(client)
+            ClientBuilder::new(reqwest::Client::new())
                 .with(retry_strategy)
                 .with(cache_strategy)
+                .with(DelegateToClient(client))
                 .build()
         });
 

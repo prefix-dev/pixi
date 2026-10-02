@@ -198,7 +198,7 @@ impl UvResolutionContext {
         // uv crates read a global `PREVIEW` static (`uv_preview::get` /
         // `uv_preview::is_enabled`) from feature-flag-gated code paths, and
         // panic if it has not been initialized. Pixi never opts in to any
-        // preview features but must still register the value so those reads
+        // preview flags but must still register the value so those reads
         // don't crash while, for instance, building a local source dist.
         let _ = uv_preview::set(preview);
 
@@ -211,7 +211,7 @@ impl UvResolutionContext {
             capabilities: IndexCapabilities::default(),
             allow_insecure_host,
             shared_state: SharedState::default(),
-            extra_middleware: ExtraMiddleware(uv_middlewares(config, client.clone())),
+            extra_middleware: ExtraMiddleware(uv_middlewares(config, client.clone())?),
             proxies: config.get_proxies().into_diagnostic()?,
             tls_no_verify: config.tls_no_verify(),
             client: client.into_client(),

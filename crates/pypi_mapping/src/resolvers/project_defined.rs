@@ -37,10 +37,11 @@ impl ProjectDefinedMapping {
     /// from later sources override entries from earlier ones.
     ///
     /// Remote fetches go through the `http-cache` middleware that wraps
-    /// `client` (`CacheMode::Default`): a fresh copy is served from disk, a
-    /// stale one is revalidated, and — unless the response is `no-store` or
-    /// `must-revalidate` — a stale copy is served when a refresh fails so
-    /// solves keep working offline.
+    /// `client`. Online (`CacheMode::Default`) a fresh copy is served from
+    /// disk and a stale one is revalidated. Offline (`CacheMode::ForceCache`)
+    /// any cached copy is served regardless of freshness, and only a genuine
+    /// cache miss reaches the network stack, where the offline middleware
+    /// rejects it with an explanation.
     pub async fn fetch_project_defined(
         &self,
         client: &LazyClient,

@@ -984,6 +984,9 @@ impl From<Task> for Item {
                 if let Some(description) = &process.description {
                     table.insert("description", description.into());
                 }
+                if process.clean_env {
+                    table.insert("clean-env", true.into());
+                }
                 Item::Value(Value::InlineTable(table))
             }
             Task::Alias(alias) => {
@@ -1096,7 +1099,7 @@ impl From<Task> for Item {
 #[cfg(test)]
 mod tests {
     use insta::assert_snapshot;
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::Subdir;
 
     use crate::PixiPlatform;
     use crate::task::{Alias, Dependency, DependencyArg, Task};
@@ -1140,7 +1143,8 @@ mod tests {
     fn test_template_string_pixi_vars_always_available() {
         // pixi variables should always be available, even without typed args
         let t = TemplateString::from("echo {{ pixi.platform }}");
-        let current_platform = PixiPlatform::from_subdir(Platform::current());
+        let current_platform =
+            PixiPlatform::from_subdir(Subdir::current().unwrap_or(Subdir::NoArch));
 
         // No args -> pixi.platform still works
         let context = TaskRenderContext {
@@ -1150,7 +1154,10 @@ mod tests {
         let rendered = t
             .render(&context)
             .expect("pixi.platform should be available without args");
-        assert_eq!(rendered, format!("echo {}", Platform::current()));
+        assert_eq!(
+            rendered,
+            format!("echo {}", Subdir::current().unwrap_or(Subdir::NoArch))
+        );
 
         // Free-form args -> pixi.platform still works
         let free_args = ArgValues::FreeFormArgs(vec!["bar".into()]);
@@ -1162,7 +1169,10 @@ mod tests {
         let rendered = t
             .render(&context)
             .expect("pixi.platform should be available with free-form args");
-        assert_eq!(rendered, format!("echo {}", Platform::current()));
+        assert_eq!(
+            rendered,
+            format!("echo {}", Subdir::current().unwrap_or(Subdir::NoArch))
+        );
     }
 
     #[test]
@@ -1187,7 +1197,7 @@ mod tests {
             args: vec![],
             extra: vec![],
         };
-        let linux64_platform = PixiPlatform::from_subdir(Platform::Linux64);
+        let linux64_platform = PixiPlatform::from_subdir(Subdir::Linux64);
 
         let context = TaskRenderContext {
             platform: Some(&linux64_platform),
@@ -1203,11 +1213,11 @@ mod tests {
 
         // Test is_linux
         let t = TemplateString::from("{{ pixi.is_linux }}");
-        assert_eq!(t.render(&context).unwrap(), "true");
+        assert_eq!(t.render(&context).unwrap(), "True");
 
         // Test is_win
         let t = TemplateString::from("{{ pixi.is_win }}");
-        assert_eq!(t.render(&context).unwrap(), "false");
+        assert_eq!(t.render(&context).unwrap(), "False");
 
         // Test environment
         let t = TemplateString::from("{{ pixi.environment.name }}");
@@ -1247,7 +1257,7 @@ mod tests {
             args: vec![],
             extra: vec![],
         };
-        let linux64_platform = PixiPlatform::from_subdir(Platform::Linux64);
+        let linux64_platform = PixiPlatform::from_subdir(Subdir::Linux64);
         let context = TaskRenderContext {
             platform: Some(&linux64_platform),
             args: Some(&args),
@@ -1268,7 +1278,7 @@ mod tests {
             }],
             extra: vec![],
         };
-        let linux64_platform = PixiPlatform::from_subdir(Platform::Linux64);
+        let linux64_platform = PixiPlatform::from_subdir(Subdir::Linux64);
         let context = TaskRenderContext {
             platform: Some(&linux64_platform),
             args: Some(&args),
@@ -1291,5 +1301,111 @@ mod tests {
         };
         let rendered = t.render(&context).expect("should render init_cwd");
         assert_eq!(rendered, format!("{}/test", cwd.display()));
+    }
+}
+
+/// Pins how MiniJinja renders booleans and `none` in task templates.
+///
+/// Since MiniJinja 2.22 these render the way Jinja2 does, as `True`, `False`
+/// and `None`, on every path that turns a value into text. These tests exist
+/// so that stays uniform: a partial fix that changes one path and not the
+/// others is worse than either spelling.
+#[cfg(test)]
+mod jinja_rendering_tests {
+    use std::str::FromStr;
+
+    use rattler_conda_types::Subdir;
+
+    use super::{ArgValues, TaskRenderContext, TemplateString, TypedArg};
+    use crate::{EnvironmentName, PixiPlatform};
+
+    fn render(template: &str) -> String {
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        let platform = PixiPlatform::from_subdir(Subdir::Linux64);
+        let context = TaskRenderContext {
+            platform: Some(&platform),
+            environment_name: &env_name,
+            manifest_path: None,
+            args: None,
+            init_cwd: None,
+        };
+        TemplateString::from(template)
+            .render(&context)
+            .expect("template should render")
+    }
+
+    #[test]
+    fn booleans_render_the_same_on_every_path() {
+        assert_eq!(render("{{ pixi.is_linux }}"), "True");
+        assert_eq!(render("{{ pixi.is_win }}"), "False");
+        assert_eq!(render("{{ pixi.is_linux | string }}"), "True");
+        assert_eq!(render(r#"{{ "x=" ~ pixi.is_win }}"#), "x=False");
+        assert_eq!(render("{{ [pixi.is_linux] }}"), "[True]");
+        assert_eq!(render("{{ {'w': pixi.is_win} }}"), "{\"w\": False}");
+        assert_eq!(render("{{ true }}"), "True");
+        assert_eq!(render("{{ false }}"), "False");
+    }
+
+    #[test]
+    fn none_renders_the_same_on_every_path() {
+        assert_eq!(render("{{ none }}"), "None");
+        assert_eq!(render("{{ none | string }}"), "None");
+        assert_eq!(render(r#"{{ "x=" ~ none }}"#), "x=None");
+    }
+
+    /// The documented way to get the lowercase spelling a shell expects.
+    #[test]
+    fn lower_filter_gives_the_shell_spelling() {
+        assert_eq!(render("{{ pixi.is_linux | lower }}"), "true");
+        assert_eq!(render("{{ pixi.is_win | lower }}"), "false");
+        assert_eq!(render(r#"{{ ("x=" ~ pixi.is_win) | lower }}"#), "x=false");
+    }
+
+    /// `tojson` is JSON, so it stays lowercase regardless of display spelling.
+    #[test]
+    fn tojson_stays_json() {
+        assert_eq!(render("{{ pixi.is_linux | tojson }}"), "true");
+        assert_eq!(render("{{ pixi.is_win | tojson }}"), "false");
+    }
+
+    /// Branching on a boolean is unaffected, and is the recommended form.
+    #[test]
+    fn if_guards_still_branch_correctly() {
+        assert_eq!(
+            render("{% if pixi.is_linux %}yes{% else %}no{% endif %}"),
+            "yes"
+        );
+        assert_eq!(
+            render("{% if pixi.is_win %}yes{% else %}no{% endif %}"),
+            "no"
+        );
+    }
+
+    /// Task args are always strings, so a `--flag true` arg is unaffected by
+    /// the display spelling. Recorded so a future typed-arg change is caught.
+    #[test]
+    fn typed_args_are_strings_not_booleans() {
+        let env_name = EnvironmentName::from_str("test-env").unwrap();
+        let platform = PixiPlatform::from_subdir(Subdir::Linux64);
+        let args = ArgValues::TypedArgs {
+            args: vec![TypedArg {
+                name: "flag".into(),
+                value: "true".into(),
+            }],
+            extra: vec![],
+        };
+        let context = TaskRenderContext {
+            platform: Some(&platform),
+            environment_name: &env_name,
+            manifest_path: None,
+            args: Some(&args),
+            init_cwd: None,
+        };
+        assert_eq!(
+            TemplateString::from("{{ flag }}|{{ flag | string }}")
+                .render(&context)
+                .unwrap(),
+            "true|true"
+        );
     }
 }

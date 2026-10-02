@@ -2,8 +2,9 @@
 // project. https://github.com/rust-lang/rust/issues/64402
 #[cfg(feature = "pixi_allocator")]
 extern crate pixi_allocator;
+use std::process::ExitCode;
 
-pub fn main() -> miette::Result<()> {
+pub fn main() -> miette::Result<ExitCode> {
     // We often run out of stack space when running the CLI. This is especially an
     // issue for debug builds.
     //

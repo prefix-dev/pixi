@@ -18,7 +18,7 @@
 //! needed.
 use std::cell::Cell;
 use std::collections::HashSet;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::{collections::HashMap, path::Path};
 
 use crate::environment::{CondaPrefixUpdated, CondaPrefixUpdater};
@@ -235,7 +235,7 @@ pub struct LazyBuildDispatch<'a> {
 
     /// Shared error holder for storing initialization errors that can be retrieved
     /// after the LazyBuildDispatch is consumed (e.g., in catch_unwind scenarios)
-    pub last_error: Arc<OnceCell<LazyBuildDispatchError>>,
+    pub last_error: Arc<Mutex<Option<LazyBuildDispatchError>>>,
 }
 
 /// These are resources for the [`BuildDispatch`] that need to be lazily
@@ -310,7 +310,7 @@ impl<'a> LazyBuildDispatch<'a> {
         ignore_packages: Option<HashSet<rattler_conda_types::PackageName>>,
         macos_deployment_target: Option<String>,
         disallow_install_conda_prefix: bool,
-        last_error: Arc<OnceCell<LazyBuildDispatchError>>,
+        last_error: Arc<Mutex<Option<LazyBuildDispatchError>>>,
     ) -> Self {
         Self {
             params,
@@ -366,6 +366,7 @@ impl<'a> LazyBuildDispatch<'a> {
                 let mut env_vars = get_activated_environment_variables(
                     &self.project_env_vars,
                     &self.environment,
+                    &self.environment.activation_platform(),
                     CurrentEnvVarBehavior::Exclude,
                     None,
                     false,
@@ -473,7 +474,10 @@ impl BuildContext for LazyBuildDispatch<'_> {
             Ok(dispatch) => dispatch.interpreter().await,
             Err(e) => {
                 // Store the error for later retrieval
-                let _ = self.last_error.set(e);
+                let mut g = self.last_error.lock().unwrap_or_else(|e| e.into_inner());
+                if g.is_none() {
+                    *g = Some(e);
+                }
                 panic!("could not initialize build dispatch correctly")
             }
         }

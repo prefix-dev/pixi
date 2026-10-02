@@ -5,11 +5,10 @@ use fancy_display::FancyDisplay;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
-use pixi_api::WorkspaceContext;
 use pixi_core::WorkspaceLocator;
 use pixi_manifest::{Feature, FeatureName};
 
-use crate::{cli_config::WorkspaceConfig, cli_interface::CliInterface};
+use crate::{cli_config::WorkspaceConfig, cli_interface::cli_context};
 
 /// Commands to manage workspace features.
 #[derive(Parser, Debug)]
@@ -32,10 +31,18 @@ pub struct RemoveArgs {
 }
 
 #[derive(Parser, Debug)]
+pub struct ListArgs {
+    /// Output the feature names in machine readable format (space delimited).
+    /// This output is used for autocomplete.
+    #[arg(long, hide(true))]
+    pub machine_readable: bool,
+}
+
+#[derive(Parser, Debug)]
 pub enum Command {
     /// List the features in the manifest file.
     #[clap(visible_alias = "ls")]
-    List,
+    List(ListArgs),
     /// Remove a feature from the manifest file.
     #[clap(visible_alias = "rm")]
     Remove(RemoveArgs),
@@ -47,17 +54,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?;
 
-    let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace);
+    let workspace_ctx = cli_context(workspace);
 
     match args.command {
-        Command::List => {
+        Command::List(list_args) => {
             let features = workspace_ctx.list_features().await;
-            writeln!(std::io::stdout(), "{}", format_feature_list(&features))
-                .inspect_err(|e| {
-                    if e.kind() == std::io::ErrorKind::BrokenPipe {
-                        std::process::exit(0);
-                    }
-                })
+            let output = if list_args.machine_readable {
+                features.keys().map(FeatureName::as_str).join(" ")
+            } else {
+                format_feature_list(&features)
+            };
+            pixi_utils::io::ignore_broken_pipe(writeln!(std::io::stdout(), "{output}"))
                 .into_diagnostic()?;
         }
         Command::Remove(args) => {
@@ -117,7 +124,7 @@ mod tests {
             "#,
         )
         .unwrap();
-        let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace);
+        let workspace_ctx = cli_context(workspace);
 
         let features = workspace_ctx.list_features().await;
 

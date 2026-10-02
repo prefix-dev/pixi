@@ -1,10 +1,13 @@
-[project]
-dependencies = ["rich", "cpp_math"]                  # (1)!
-name = "python_rich"
-requires-python = ">= 3.11"
-scripts = { rich-example-main = "python_rich:main" } # (2)!
-version = "0.1.0"
+#:tombi toml-version = "v1.0.0"
+# The Python packaging ecosystem parses this file with TOML 1.0 parsers
 
-[build-system] # (3)!
-build-backend = "hatchling.build"
+[project]
+name = "python_rich"
+version = "0.1.0"
+requires-python = ">= 3.11"
+scripts = { rich-example-main = "python_rich:main" }  # (2)!
+dependencies = ["cpp_math", "rich"]  # (1)!
+
+[build-system]  # (3)!
 requires = ["hatchling"]
+build-backend = "hatchling.build"

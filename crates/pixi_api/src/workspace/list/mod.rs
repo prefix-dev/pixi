@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use itertools::Itertools;
 use miette::IntoDiagnostic;
@@ -22,6 +23,7 @@ mod package;
 use package::PackageExt;
 pub use package::{Package, PackageKind};
 
+#[expect(clippy::too_many_arguments)]
 pub async fn list(
     workspace: &Workspace,
     regex: Option<String>,
@@ -30,12 +32,17 @@ pub async fn list(
     explicit: bool,
     no_install: bool,
     lock_file_usage: LockFileUsage,
+    progress: Option<&Arc<pixi_reporters::TopLevelProgress>>,
 ) -> miette::Result<Vec<Package>> {
     let environment = workspace.environment_from_name_or_env_var(environment)?;
 
+    // Held across the solve so the package table is not written over bars that
+    // have finished but are still rendered.
+    let _clear_progress = pixi_reporters::TopLevelProgress::clear_when_done(progress);
+
     let lock_file = workspace
         .update_lock_file(
-            None,
+            progress.cloned(),
             UpdateLockFileOptions {
                 lock_file_usage,
                 no_install,

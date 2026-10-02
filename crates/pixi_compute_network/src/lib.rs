@@ -23,7 +23,8 @@ impl HasDownloadClient for DataStore {
 
 /// Whether pixi runs in offline mode. Stored in the engine's global data so
 /// Keys that access the network through means other than the shared HTTP
-/// client (e.g. git subprocesses) can refuse to do so.
+/// client (e.g. git subprocesses) can refuse to do so, and so solves can
+/// restrict themselves to candidates that are available locally.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Offline(pub bool);
 

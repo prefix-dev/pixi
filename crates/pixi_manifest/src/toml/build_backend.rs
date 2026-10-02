@@ -262,16 +262,31 @@ static BOTH_ADDITIONAL_DEPS_WARNING: Once = Once::new();
 fn spec_from_spanned_toml_location(
     spanned_toml: Spanned<TomlLocationSpec>,
 ) -> Result<SourceLocationSpec, DeserError> {
+    let span = spanned_toml.span;
     let source_location_spec = spanned_toml
         .value
         .into_source_location_spec()
         .map_err(|err| {
             DeserError::from(Error {
                 kind: toml_span::ErrorKind::Custom(Cow::Owned(err.to_string())),
-                span: spanned_toml.span,
+                span,
                 line_info: None,
             })
         })?;
+
+    // The lock file cannot record an LFS preference for build sources, so a
+    // fresh solve and an install from the lock file would behave differently.
+    if let SourceLocationSpec::Git(git) = &source_location_spec
+        && git.lfs.is_some()
+    {
+        return Err(DeserError::from(Error {
+            kind: toml_span::ErrorKind::Custom(Cow::Borrowed(
+                "`lfs` is not supported for build sources",
+            )),
+            span,
+            line_info: None,
+        }));
+    }
 
     Ok(source_location_spec)
 }

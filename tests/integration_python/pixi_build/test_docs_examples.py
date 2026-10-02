@@ -2,6 +2,7 @@ import json
 import shutil
 import sys
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 from inline_snapshot import snapshot
@@ -23,14 +24,12 @@ pytestmark = pytest.mark.skipif(
 class TestPixiBuild:
     pixi_projects_dir: Path = repo_root().joinpath("docs/source_files/pixi_workspaces/pixi_build")
     # Workspaces that are deliberately not run here
-    excluded_projects: set[str] = {
+    excluded_projects: ClassVar[set[str]] = {
         # Requires a ROS setup that is too heavy for this test
         "ros_ws",
-        # Covered by test_build.py::test_workspace_variants_separate_work_directories
-        "workspace_variants",
     }
     # Expected stdout of the 'start' task per workspace directory name
-    expected_outputs: dict[str, str] = {
+    expected_outputs: ClassVar[dict[str, str]] = {
         "advanced_cpp": snapshot("3\n"),
         "cpp": snapshot("3\n"),
         "dev": snapshot("Hello, from dev-package!\n"),
@@ -53,6 +52,15 @@ class TestPixiBuild:
 └──────────────┴─────┴─────────────┘
 """),
         "workspace": snapshot("""\
+┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
+┃ name         ┃ age ┃ city        ┃
+┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
+│ John Doe     │ 31  │ New York    │
+│ Jane Smith   │ 26  │ Los Angeles │
+│ Tim de Jager │ 36  │ Utrecht     │
+└──────────────┴─────┴─────────────┘
+"""),
+        "workspace_variants": snapshot("""\
 ┏━━━━━━━━━━━━━━┳━━━━━┳━━━━━━━━━━━━━┓
 ┃ name         ┃ age ┃ city        ┃
 ┡━━━━━━━━━━━━━━╇━━━━━╇━━━━━━━━━━━━━┩
@@ -99,7 +107,7 @@ class TestPixiBuild:
         assert output.stdout == self.expected_outputs[project_name]
 
 
-@pytest.mark.extra_slow
+@pytest.mark.slow
 @pytest.mark.parametrize(
     "pixi_project",
     [
@@ -134,7 +142,7 @@ def test_doc_pixi_workspaces_introduction(
     "manifest",
     [
         pytest.param(manifest, id=manifest.stem)
-        for manifest in repo_root().joinpath("docs/source_files/").glob("**/pytorch-*.toml")
+        for manifest in repo_root().joinpath("docs/source_files/pixi_tomls").glob("pytorch-*.toml")
     ],
 )
 def test_pytorch_documentation_examples(
@@ -144,13 +152,12 @@ def test_pytorch_documentation_examples(
 ) -> None:
     # Copy the manifest to the tmp workspace
     toml = manifest.read_text()
-    toml_name = "pyproject.toml" if "pyproject_tomls" in str(manifest) else "pixi.toml"
-    manifest = tmp_pixi_workspace.joinpath(toml_name)
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     manifest.write_text(toml)
 
     # These examples declare rich platforms (e.g. `linux-64-cuda-12-0`) whose
-    # subdir is the base platform. Only install when the host subdir is among
-    # the declared platforms; CUDA-only examples can't install on e.g. macOS.
+    # subdir is the base platform. Only solve when the host subdir is among
+    # the declared platforms; CUDA-only examples can't be solved on e.g. macOS.
     platform_ls = json.loads(
         verify_cli_command(
             [pixi, "project", "platform", "ls", "--json", "--manifest-path", manifest],
@@ -160,8 +167,10 @@ def test_pytorch_documentation_examples(
         entry["subdir"] for entry in platform_ls["platforms"] if not entry.get("is_autodetected")
     }
     if current_platform() in supported_subdirs:
+        # Solving is what these docs pages are about; installing the resolved
+        # pytorch environment is expensive and covered by other tests.
         verify_cli_command(
-            [pixi, "install", "--manifest-path", manifest],
+            [pixi, "lock", "--manifest-path", manifest],
             env={"CONDA_OVERRIDE_CUDA": "12.0"},
         )
 

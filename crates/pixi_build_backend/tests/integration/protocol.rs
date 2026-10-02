@@ -13,7 +13,7 @@ use pixi_build_types::{
     procedures::conda_build_v1::{CondaBuildV1Output, CondaBuildV1Params},
 };
 use rattler_build_core::console_utils::LoggingOutputHandler;
-use rattler_conda_types::{ChannelUrl, PackageName, Platform};
+use rattler_conda_types::{ChannelUrl, PackageName, Subdir};
 use serde_json::json;
 use tempfile::TempDir;
 use url::Url;
@@ -24,6 +24,7 @@ mod imp {
     use pixi_build_backend::generated_recipe::{
         BackendConfig, DefaultMetadataProvider, GenerateRecipe, GeneratedRecipe, PythonParams,
     };
+    use rattler_build_recipe::stage0::Value;
     use rattler_conda_types::ChannelUrl;
     use serde::{Deserialize, Serialize};
     use std::{
@@ -64,7 +65,7 @@ mod imp {
             model: &pixi_build_types::ProjectModel,
             _config: &Self::Config,
             _manifest_path: PathBuf,
-            _host_platform: rattler_conda_types::Platform,
+            _host_platform: rattler_conda_types::Subdir,
             _python_params: Option<PythonParams>,
             _variants: &HashSet<pixi_build_backend::variants::NormalizedKey>,
             _channels: Vec<ChannelUrl>,
@@ -73,8 +74,14 @@ mod imp {
             _workspace_directory: Option<PathBuf>,
             _checkout_root: Option<PathBuf>,
         ) -> miette::Result<GeneratedRecipe> {
-            GeneratedRecipe::from_model(model.clone(), &mut DefaultMetadataProvider)
-                .into_diagnostic()
+            let mut generated =
+                GeneratedRecipe::from_model(model.clone(), &mut DefaultMetadataProvider)
+                    .into_diagnostic()?;
+            if model.name.as_deref() == Some("downprioritized") {
+                generated.recipe.build.variant.down_prioritize_variant =
+                    Some(Value::new_concrete(2, None));
+            }
+            Ok(generated)
         }
     }
 }
@@ -114,7 +121,7 @@ async fn test_conda_build_v1() {
             name: "minimal-package".parse().unwrap(),
             version: None,
             build: None,
-            subdir: Platform::current(),
+            subdir: Subdir::current().unwrap_or(Subdir::NoArch),
             variant: Default::default(),
         },
         work_directory: build_dir.clone(),
@@ -160,6 +167,27 @@ async fn test_conda_build_v1() {
 }
 
 #[tokio::test]
+async fn test_conda_outputs_exposes_downprioritize_track_features() {
+    let original_model = load_project_model_from_json("minimal_project_model_for_build.json");
+    let mut model = convert_test_model_to_project_model_v1(original_model);
+    model.name = Some("downprioritized".to_string());
+
+    let result = intermediate_conda_outputs::<TestGenerateRecipe>(
+        Some(model),
+        None,
+        Subdir::current().unwrap_or(Subdir::NoArch),
+        None,
+        None,
+    )
+    .await;
+
+    assert_eq!(
+        result.outputs[0].metadata.track_features,
+        ["downprioritized-p-0", "downprioritized-p-1"]
+    );
+}
+
+#[tokio::test]
 async fn test_conda_outputs_build_string_prefix() {
     let original_model = load_project_model_from_json("minimal_project_model_for_build.json");
 
@@ -168,7 +196,7 @@ async fn test_conda_outputs_build_string_prefix() {
     let result_no_prefix = intermediate_conda_outputs::<TestGenerateRecipe>(
         Some(model_no_prefix),
         None,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         None,
         None,
     )
@@ -195,7 +223,7 @@ async fn test_conda_outputs_build_string_prefix() {
     let result_with_prefix = intermediate_conda_outputs::<TestGenerateRecipe>(
         Some(model_with_prefix),
         None,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         None,
         None,
     )
@@ -283,7 +311,7 @@ async fn test_conda_outputs_extra_dependencies() {
     let result = intermediate_conda_outputs::<TestGenerateRecipe>(
         Some(model),
         None,
-        Platform::Win64,
+        Subdir::Win64,
         None,
         None,
     )
@@ -324,7 +352,7 @@ async fn test_conda_outputs_build_number() {
     let result_default = intermediate_conda_outputs::<TestGenerateRecipe>(
         Some(model_default),
         None,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         None,
         None,
     )
@@ -342,7 +370,7 @@ async fn test_conda_outputs_build_number() {
     let result_with_bn = intermediate_conda_outputs::<TestGenerateRecipe>(
         Some(model_with_bn),
         None,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         None,
         None,
     )

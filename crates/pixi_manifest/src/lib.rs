@@ -6,18 +6,21 @@ mod discovery;
 mod environment;
 mod environments;
 mod error;
+mod exclude_newer;
 mod feature;
 mod features_ext;
 mod has_features_iter;
 mod has_manifest_ref;
 mod manifests;
 mod package;
+mod package_dependency_spec;
 pub mod platform;
 mod platform_composition;
 mod preview;
 pub mod pypi;
 pub mod pyproject;
 mod s3;
+pub mod script;
 mod solve_group;
 mod spec_type;
 mod system_requirements;
@@ -37,32 +40,34 @@ pub use discovery::{
     PixiVersionMismatchError, WorkspaceDiscoverer, WorkspaceDiscoveryError,
 };
 pub use environment::{Environment, EnvironmentName, NewEnvironment};
-pub use error::{DependencyError, TomlError};
+pub use error::{DependencyError, GenericError, TomlError};
+pub use exclude_newer::resolve_exclude_newer;
 pub use feature::{Feature, FeatureName};
 pub use features_ext::FeaturesExt;
 pub use has_features_iter::HasFeaturesIter;
 pub use has_manifest_ref::HasWorkspaceManifest;
 use itertools::Itertools;
 pub use manifests::{
-    AssociateProvenance, ManifestKind, ManifestProvenance, ManifestSource, MissingTargetError,
-    PackageManifest, ProvenanceError, RemoveDependencyError, WithProvenance, WorkspaceManifest,
-    WorkspaceManifestMut,
+    ActivationScriptsChange, AssociateProvenance, ManifestKind, ManifestProvenance, ManifestSource,
+    MissingTargetError, PackageManifest, ProvenanceError, RemoveDependencyError, WithProvenance,
+    WorkspaceManifest, WorkspaceManifestMut,
 };
 use miette::Diagnostic;
 pub use package::Package;
+pub use package_dependency_spec::{PackageConstraintSpec, PackageDependencySpec};
 pub use platform::{
     PixiPlatform, PixiPlatformError, PixiPlatformName, PixiPlatformNameError, PlatformEdit,
-    PlatformGlob, PlatformGlobError, PlatformMove,
+    PlatformGlob, PlatformGlobError, PlatformMove, candidate_subdirs,
 };
-pub use preview::{KnownPreviewFeature, Preview};
+pub use preview::{KnownPreviewFlag, Preview};
 pub use s3::S3Options;
 pub use spec_type::SpecType;
 pub use system_requirements::{
     GLIBC_FAMILY, LibCFamilyAndVersion, LibCSystemRequirement, MUSL_FAMILY, SystemRequirements,
 };
 pub use target::{
-    InlineContentHash, InlinePackageManifest, PackageTarget, TargetSelector, Targets,
-    WorkspaceTarget,
+    InlineContentHash, InlinePackageManifest, PackageRunExports, PackageTarget, TargetSelector,
+    Targets, WorkspaceTarget,
 };
 pub use task::{Task, TaskName};
 use thiserror::Error;

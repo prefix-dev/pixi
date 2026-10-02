@@ -48,7 +48,7 @@ pub enum ConvertDependencyError {
     #[error("could not parse version spec for variant key {0}: {1}")]
     VariantSpecParseError(String, rattler_conda_types::ParseMatchSpecError),
 
-    #[error("could not apply pin. The following subpackage is not available: {0:?}")]
+    #[error("could not apply pin. The following subpackage is not available: {}", .0.as_source())]
     SubpackageNotFound(PackageName),
 
     #[error("could not apply pin: {0}")]
@@ -269,7 +269,7 @@ fn convert_constraint_dependency(
             // Apply a variant if it is applicable.
             if let Some(NamedSpec { spec, name }) = apply_variant_and_convert(&spec, variant)? {
                 return Ok(NamedSpec {
-                    spec: pbt::ConstraintSpec::Binary(spec),
+                    spec: pbt::ConstraintSpec::Binary(Box::new(spec)),
                     name,
                 });
             }
@@ -284,13 +284,27 @@ fn convert_constraint_dependency(
                 .apply(&subpackage.version, &subpackage.build_string)
                 .map_err(ConvertDependencyError::PinApplyError)?
         }
-        _ => todo!("Handle other dependency types"),
+        Dependency::PinCompatible(pin) => {
+            // A pin against the previous environment cannot be resolved by
+            // the backend; it is passed through for pixi to resolve against
+            // the solved records.
+            let pin = &pin.pin_compatible;
+            return Ok(pbt::NamedSpec {
+                name: pbt::SourcePackageName::from(pin.name.clone()),
+                spec: pbt::ConstraintSpec::PinCompatible(pbt::PinCompatibleSpec {
+                    lower_bound: pin.args.lower_bound.clone().map(convert_pin_bound),
+                    upper_bound: pin.args.upper_bound.clone().map(convert_pin_bound),
+                    exact: pin.args.exact,
+                    build: pin.args.build.clone(),
+                }),
+            });
+        }
     };
 
     // Apply a variant if it is applicable.
     if let Some(NamedSpec { spec, name }) = apply_variant_and_convert(&match_spec, variant)? {
         return Ok(NamedSpec {
-            spec: pbt::ConstraintSpec::Binary(spec),
+            spec: pbt::ConstraintSpec::Binary(Box::new(spec)),
             name,
         });
     }
@@ -302,7 +316,7 @@ fn convert_constraint_dependency(
 
     Ok(pbt::NamedSpec {
         name: pbt::SourcePackageName::from(name.clone()),
-        spec: pbt::ConstraintSpec::Binary(convert_nameless_matchspec(spec)),
+        spec: pbt::ConstraintSpec::Binary(Box::new(convert_nameless_matchspec(spec))),
     })
 }
 
@@ -405,4 +419,37 @@ pub fn apply_variant(
             }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use rattler_build_recipe::stage1::PinSubpackage;
+    use rattler_build_types::{Pin, PinArgs};
+
+    use super::*;
+
+    #[test]
+    fn subpackage_not_found_error_prints_the_package_name() {
+        let dependency = Dependency::PinSubpackage(PinSubpackage {
+            pin_subpackage: Pin {
+                name: PackageName::from_str("wusel").unwrap(),
+                args: PinArgs::default(),
+            },
+        });
+
+        let error = convert_dependency(
+            dependency,
+            &BTreeMap::new(),
+            &HashMap::new(),
+            &HashMap::new(),
+        )
+        .unwrap_err();
+
+        insta::assert_snapshot!(
+            error,
+            @"could not apply pin. The following subpackage is not available: wusel"
+        );
+    }
 }

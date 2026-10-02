@@ -3,14 +3,16 @@
 import os
 import shutil
 import subprocess
+import tempfile
+from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from collections.abc import Generator
 from typing import Any
 
 import tomli_w
 import yaml
+from rattler.package_streaming import extract
 
 # Re-export from parent common module
 from ..common import (
@@ -33,29 +35,28 @@ from ..common import (
 )
 
 __all__ = [
-    # Re-exports
     "ALL_PLATFORMS",
     "CONDA_FORGE_CHANNEL",
     "CURRENT_PLATFORM",
     "EMPTY_BOILERPLATE_PROJECT",
     "ExitCode",
     "Output",
+    "Workspace",
     "bat_extension",
+    "copy_manifest",
+    "copytree_with_local_backend",
     "current_platform",
+    "cwd",
     "default_env_path",
     "exec_extension",
     "get_manifest",
+    "git_test_repo",
     "is_binary",
+    "package_files",
     "pixi_dir",
     "repo_root",
     "skip_if_current_platform_unsupported",
     "verify_cli_command",
-    # Build-specific
-    "Workspace",
-    "copy_manifest",
-    "copytree_with_local_backend",
-    "cwd",
-    "git_test_repo",
 ]
 
 
@@ -122,8 +123,20 @@ def copytree_with_local_backend(
     )
 
 
+def package_files(archive: Path) -> set[str]:
+    """Return the paths a `.conda` archive contains, excluding its `info/` metadata."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+        extracted = Path(temp_dir)
+        extract(archive, extracted)
+        return {
+            path.relative_to(extracted).as_posix()
+            for path in extracted.rglob("*")
+            if path.is_file() and not path.is_relative_to(extracted.joinpath("info"))
+        }
+
+
 @contextmanager
-def cwd(path: str | Path) -> Generator[None, None, None]:
+def cwd(path: str | Path) -> Generator[None]:
     """Context manager to temporarily change the current working directory."""
     oldpwd = os.getcwd()
     os.chdir(path)

@@ -36,7 +36,7 @@ use pixi_glob::GlobHashCache;
 use pixi_path::{AbsPathBuf, AbsPresumedDirPathBuf};
 use pixi_url::resolver::UrlResolver;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Platform};
+use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Subdir};
 use rattler_networking::LazyClient;
 use rattler_repodata_gateway::{
     ChannelConfig as RepodataChannelConfig, Gateway, MaxConcurrency, SourceConfig,
@@ -57,7 +57,7 @@ pub struct CommandDispatcherBuilder {
     max_download_concurrency: MaxConcurrency,
     limits: Limits,
     executor: Executor,
-    tool_platform: Option<(Platform, Vec<GenericVirtualPackage>)>,
+    tool_platform: Option<(Subdir, Vec<GenericVirtualPackage>)>,
     execute_link_scripts: bool,
     offline: bool,
     channel_config: Option<ChannelConfig>,
@@ -278,7 +278,7 @@ impl CommandDispatcherBuilder {
     /// current platform.
     pub fn with_tool_platform(
         self,
-        platform: Platform,
+        platform: Subdir,
         virtual_packages: Vec<GenericVirtualPackage>,
     ) -> Self {
         Self {
@@ -391,6 +391,7 @@ impl CommandDispatcherBuilder {
                 builder = builder.with_channel_config(RepodataChannelConfig {
                     default: SourceConfig {
                         cache_action: CacheAction::ForceCacheOnly,
+                        missing_shards_are_empty: true,
                         ..SourceConfig::default()
                     },
                     per_channel: HashMap::default(),
@@ -409,9 +410,10 @@ impl CommandDispatcherBuilder {
         let url_resolver = self.url_resolver.unwrap_or_default();
 
         let tool_platform = self.tool_platform.unwrap_or_else(|| {
-            let platform = Platform::current();
+            let platform = Subdir::current().unwrap_or(Subdir::NoArch);
             let virtual_packages =
-                VirtualPackages::detect(&VirtualPackageOverrides::default()).unwrap_or_default();
+                VirtualPackages::detect(&VirtualPackageOverrides::default(), None)
+                    .unwrap_or_default();
             (
                 platform,
                 virtual_packages.into_generic_virtual_packages().collect(),

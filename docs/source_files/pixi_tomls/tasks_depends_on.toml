@@ -6,12 +6,6 @@ name = "tasks-depends-on"
 [tasks]
 test = "python --version"
 
-[environments.py311.dependencies]
-python = "3.11.*"
-
-[environments.py312.dependencies]
-python = "3.12.*"
-
 # Task that depends on other tasks in different environments
 [tasks.test-all]
 depends-on = [
@@ -19,3 +13,9 @@ depends-on = [
   { task = "test", environment = "py312" },
 ]
 # --8<-- [end:tasks]
+
+[environments.py311.dependencies]
+python = "3.11.*"
+
+[environments.py312.dependencies]
+python = "3.12.*"

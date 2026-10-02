@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use clap::{Parser, ValueEnum};
+use clap::{Parser, ValueEnum, ValueHint};
 use indexmap::IndexSet;
 use pixi_api::workspace::platforms::resolve_platforms;
 use pixi_config::ConfigCli;
@@ -54,12 +54,12 @@ pub struct Args {
 
     /// A name for the created environment. Without `--feature` the imported
     /// content is written inline on the environment.
-    #[clap(long, short)]
+    #[clap(long, short, value_name = "NEW_ENVIRONMENT", value_hint = ValueHint::Other)]
     pub environment: Option<String>,
 
     /// A name for the created feature. The feature is added to the
     /// environment of the same name unless `--environment` is given.
-    #[clap(long, short)]
+    #[clap(long, short, value_name = "NEW_FEATURE", value_hint = ValueHint::Other)]
     pub feature: Option<FeatureName>,
 
     #[clap(flatten)]

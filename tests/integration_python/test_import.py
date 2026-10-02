@@ -1,12 +1,12 @@
 import os
-import tomllib
-
-from pathlib import Path
 from collections.abc import Iterable
+from pathlib import Path
+from typing import ClassVar
 
+import tomli
+import yaml
 from dirty_equals import IsPartialDict
 from inline_snapshot import snapshot
-import yaml
 
 from .common import (
     ExitCode,
@@ -15,7 +15,7 @@ from .common import (
 
 
 class TestImport:
-    simple_env_yaml: dict[str, Iterable[str]] = {
+    simple_env_yaml: ClassVar[dict[str, Iterable[str]]] = {
         "name": "simple-env",
         "channels": ["conda-forge"],
         "dependencies": ["python"],
@@ -47,36 +47,36 @@ class TestImport:
 
 
 class TestCondaEnv:
-    simple_env_yaml: dict[str, Iterable[str]] = {
+    simple_env_yaml: ClassVar[dict[str, Iterable[str]]] = {
         "name": "simple-env",
         "channels": ["conda-forge"],
         "dependencies": ["python"],
     }
 
-    cowpy_env_yaml: dict[str, Iterable[str]] = {
+    cowpy_env_yaml: ClassVar[dict[str, Iterable[str]]] = {
         "name": "cowpy",
         "channels": ["conda-forge"],
         "dependencies": ["cowpy"],
     }
 
-    noname_env_yaml: dict[str, Iterable[str]] = {
+    noname_env_yaml: ClassVar[dict[str, Iterable[str]]] = {
         "channels": ["conda-forge"],
         "dependencies": ["python"],
     }
 
-    xpx_env_yaml: dict[str, Iterable[str]] = {
+    xpx_env_yaml: ClassVar[dict[str, Iterable[str]]] = {
         "name": "array-api-extra",
         "channels": ["conda-forge"],
         "dependencies": ["array-api-extra"],
     }
 
-    complex_env_yaml: dict[str, Iterable[str]] = {
+    complex_env_yaml: ClassVar[dict[str, Iterable[str]]] = {
         "name": "complex-env",
         "channels": ["conda-forge", "bioconda"],
         "dependencies": ["cowpy=1.1.4", "libblas=*=*openblas", "snakemake-minimal"],
     }
 
-    url_channel_dep_env_yaml: dict[str, Iterable[str]] = {
+    url_channel_dep_env_yaml: ClassVar[dict[str, Iterable[str]]] = {
         "name": "url-channel-dep-env",
         "channels": ["conda-forge"],
         "dependencies": [
@@ -109,7 +109,7 @@ class TestCondaEnv:
         # check that no environments are installed
         assert not os.path.isdir(tmp_pixi_workspace / ".pixi/envs")
 
-        parsed_manifest = tomllib.loads(manifest_path.read_text())
+        parsed_manifest = tomli.loads(manifest_path.read_text())
         assert "python" in parsed_manifest["environments"]["simple-env"]["dependencies"]
         assert parsed_manifest == snapshot(
             {
@@ -149,7 +149,7 @@ class TestCondaEnv:
             ],
         )
 
-        parsed_manifest = tomllib.loads(manifest_path.read_text())
+        parsed_manifest = tomli.loads(manifest_path.read_text())
         assert "python" in parsed_manifest["environments"]["simple-env"]["dependencies"]
         assert parsed_manifest == snapshot(
             {
@@ -225,7 +225,7 @@ class TestCondaEnv:
             ],
         )
 
-        parsed_manifest = tomllib.loads(manifest_path.read_text())
+        parsed_manifest = tomli.loads(manifest_path.read_text())
         assert (
             "python"
             in parsed_manifest["environments"]["simple-env"]["target"]["linux-64"]["dependencies"]
@@ -269,7 +269,7 @@ class TestCondaEnv:
                 import_file_path,
             ],
         )
-        parsed_manifest = tomllib.loads(manifest_path.read_text())
+        parsed_manifest = tomli.loads(manifest_path.read_text())
         assert "python" in parsed_manifest["environments"]["simple-env"]["dependencies"]
         assert parsed_manifest["environments"]["simple-env"]["no-default-feature"] is True
         assert parsed_manifest == snapshot(
@@ -304,7 +304,7 @@ class TestCondaEnv:
                 "--feature=simple-env",
             ],
         )
-        parsed_manifest = tomllib.loads(manifest_path.read_text())
+        parsed_manifest = tomli.loads(manifest_path.read_text())
         assert "cowpy" in parsed_manifest["feature"]["simple-env"]["dependencies"]
         assert "cowpy" not in parsed_manifest["environments"]
         assert parsed_manifest == snapshot(
@@ -346,7 +346,7 @@ class TestCondaEnv:
                 "--feature=array-api-extra",
             ],
         )
-        parsed_manifest = tomllib.loads(manifest_path.read_text())
+        parsed_manifest = tomli.loads(manifest_path.read_text())
         assert "array-api-extra" in parsed_manifest["feature"]["array-api-extra"]["dependencies"]
         assert "array-api-extra" in parsed_manifest["environments"]["simple-env"]["features"]
         # no new environment should be created
@@ -390,7 +390,7 @@ class TestCondaEnv:
                 "--feature=farm",
             ],
         )
-        parsed_manifest = tomllib.loads(manifest_path.read_text())
+        parsed_manifest = tomli.loads(manifest_path.read_text())
         assert "farm" in parsed_manifest["environments"]["farm"]["features"]
         assert parsed_manifest == snapshot(
             {
@@ -433,7 +433,7 @@ class TestCondaEnv:
                 "--environment=data",
             ],
         )
-        parsed_manifest = tomllib.loads(manifest_path.read_text())
+        parsed_manifest = tomli.loads(manifest_path.read_text())
         assert "array-api-extra" in parsed_manifest["environments"]["data"]["dependencies"]
         assert parsed_manifest == snapshot(
             {
@@ -489,7 +489,7 @@ class TestCondaEnv:
                 import_file_path,
             ],
         )
-        parsed_manifest = tomllib.loads(manifest_path.read_text())
+        parsed_manifest = tomli.loads(manifest_path.read_text())
         assert parsed_manifest == snapshot(
             {
                 # these keys are irrelevant and some are machine-dependent
@@ -536,7 +536,7 @@ class TestCondaEnv:
             ],
         )
 
-        parsed_manifest = tomllib.loads(manifest_path.read_text())
+        parsed_manifest = tomli.loads(manifest_path.read_text())
         assert (
             "https://someartifactory.com/artifactory/api/conda/chaos-conda-dev"
             in parsed_manifest["environments"]["url-channel-dep-env"]["channels"]
@@ -601,7 +601,7 @@ cowpy==1.1.4
         # check that no environments are installed
         assert not os.path.isdir(tmp_pixi_workspace / ".pixi/envs")
 
-        parsed_manifest = tomllib.loads(manifest_path.read_text())
+        parsed_manifest = tomli.loads(manifest_path.read_text())
         assert "cowpy" in parsed_manifest["feature"]["simple-env"]["pypi-dependencies"]
         assert parsed_manifest == snapshot(
             {
@@ -675,7 +675,7 @@ cowpy==1.1.4
             ],
         )
 
-        parsed_manifest = tomllib.loads(manifest_path.read_text())
+        parsed_manifest = tomli.loads(manifest_path.read_text())
         assert (
             "cowpy"
             in parsed_manifest["feature"]["simple-env"]["target"]["linux-64"]["pypi-dependencies"]
@@ -722,7 +722,7 @@ cowpy==1.1.4
                 "--feature=simple-env",
             ],
         )
-        parsed_manifest = tomllib.loads(manifest_path.read_text())
+        parsed_manifest = tomli.loads(manifest_path.read_text())
         assert "simple-env" in parsed_manifest["environments"]["simple-env"]["features"]
         assert parsed_manifest["environments"]["simple-env"]["no-default-feature"] is True
         assert parsed_manifest == snapshot(
@@ -754,7 +754,7 @@ cowpy==1.1.4
                 "--feature=simple-env",
             ],
         )
-        parsed_manifest = tomllib.loads(manifest_path.read_text())
+        parsed_manifest = tomli.loads(manifest_path.read_text())
         assert "array-api-extra" in parsed_manifest["feature"]["simple-env"]["pypi-dependencies"]
         assert parsed_manifest == snapshot(
             {
@@ -788,7 +788,7 @@ cowpy==1.1.4
                 "--feature=numpy",
             ],
         )
-        parsed_manifest = tomllib.loads(manifest_path.read_text())
+        parsed_manifest = tomli.loads(manifest_path.read_text())
         assert "numpy" in parsed_manifest["feature"]["numpy"]["pypi-dependencies"]
         assert "numpy" in parsed_manifest["environments"]["simple-env"]["features"]
         # no new environment should be created
@@ -821,7 +821,7 @@ cowpy==1.1.4
                 "--environment=data",
             ],
         )
-        parsed_manifest = tomllib.loads(manifest_path.read_text())
+        parsed_manifest = tomli.loads(manifest_path.read_text())
         assert "array-api-extra" in parsed_manifest["environments"]["data"]["pypi-dependencies"]
         assert parsed_manifest == snapshot(
             {
@@ -875,7 +875,7 @@ cowpy==1.1.4
             # `-c` constraints should be warned about and ignored
             stderr_contains=["Constraints detected"],
         )
-        parsed_manifest = tomllib.loads(manifest_path.read_text())
+        parsed_manifest = tomli.loads(manifest_path.read_text())
         assert parsed_manifest == snapshot(
             {
                 # these keys are irrelevant and some are machine-dependent

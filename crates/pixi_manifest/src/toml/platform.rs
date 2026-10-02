@@ -1,7 +1,10 @@
 use std::{collections::HashSet, str::FromStr};
 
+use indexmap::IndexSet;
+use itertools::Itertools;
+
 use pixi_toml::TomlEnum;
-use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform, Version};
+use rattler_conda_types::{GenericVirtualPackage, PackageName, Subdir, Version};
 use serde::{Serialize, ser::SerializeMap};
 use toml_span::{
     DeserError, Deserialize, Error, ErrorKind, Span, Spanned, Value,
@@ -9,10 +12,14 @@ use toml_span::{
     value::ValueInner,
 };
 
-use crate::{PixiPlatform, PixiPlatformName, platform::subdir_default_virtual_packages};
+use crate::{
+    PixiPlatform, PixiPlatformName,
+    platform::subdir_default_virtual_packages,
+    system_requirements::{SystemRequirements, virtual_packages_for_subdir},
+};
 
 /// This type is used to represent the platform in the manifest file. The
-/// [`Platform`] type from rattler contains more platforms than we actually
+/// [`Subdir`] type from rattler contains more platforms than we actually
 /// support like `noarch`. And this type allows us to alias some common
 /// misspellings.
 #[derive(
@@ -53,27 +60,27 @@ pub enum TomlPlatform {
     ZosZ,
 }
 
-impl From<TomlPlatform> for Platform {
+impl From<TomlPlatform> for Subdir {
     fn from(value: TomlPlatform) -> Self {
         match value {
-            TomlPlatform::Linux32 => Platform::Linux32,
-            TomlPlatform::Linux64 => Platform::Linux64,
-            TomlPlatform::LinuxAarch64 => Platform::LinuxAarch64,
-            TomlPlatform::LinuxArmv6l => Platform::LinuxArmV6l,
-            TomlPlatform::LinuxArmv7l => Platform::LinuxArmV7l,
-            TomlPlatform::LinuxPpc64le => Platform::LinuxPpc64le,
-            TomlPlatform::LinuxPpc64 => Platform::LinuxPpc64,
-            TomlPlatform::LinuxS390X => Platform::LinuxS390X,
-            TomlPlatform::LinuxRiscv32 => Platform::LinuxRiscv32,
-            TomlPlatform::LinuxRiscv64 => Platform::LinuxRiscv64,
-            TomlPlatform::Osx64 => Platform::Osx64,
-            TomlPlatform::OsxArm64 => Platform::OsxArm64,
-            TomlPlatform::Win32 => Platform::Win32,
-            TomlPlatform::Win64 => Platform::Win64,
-            TomlPlatform::WinArm64 => Platform::WinArm64,
-            TomlPlatform::EmscriptenWasm32 => Platform::EmscriptenWasm32,
-            TomlPlatform::WasiWasm32 => Platform::WasiWasm32,
-            TomlPlatform::ZosZ => Platform::ZosZ,
+            TomlPlatform::Linux32 => Subdir::Linux32,
+            TomlPlatform::Linux64 => Subdir::Linux64,
+            TomlPlatform::LinuxAarch64 => Subdir::LinuxAarch64,
+            TomlPlatform::LinuxArmv6l => Subdir::LinuxArmV6l,
+            TomlPlatform::LinuxArmv7l => Subdir::LinuxArmV7l,
+            TomlPlatform::LinuxPpc64le => Subdir::LinuxPpc64le,
+            TomlPlatform::LinuxPpc64 => Subdir::LinuxPpc64,
+            TomlPlatform::LinuxS390X => Subdir::LinuxS390X,
+            TomlPlatform::LinuxRiscv32 => Subdir::LinuxRiscv32,
+            TomlPlatform::LinuxRiscv64 => Subdir::LinuxRiscv64,
+            TomlPlatform::Osx64 => Subdir::Osx64,
+            TomlPlatform::OsxArm64 => Subdir::OsxArm64,
+            TomlPlatform::Win32 => Subdir::Win32,
+            TomlPlatform::Win64 => Subdir::Win64,
+            TomlPlatform::WinArm64 => Subdir::WinArm64,
+            TomlPlatform::EmscriptenWasm32 => Subdir::EmscriptenWasm32,
+            TomlPlatform::WasiWasm32 => Subdir::WasiWasm32,
+            TomlPlatform::ZosZ => Subdir::ZosZ,
         }
     }
 }
@@ -84,9 +91,9 @@ impl<'de> Deserialize<'de> for TomlPlatform {
     }
 }
 
-impl<'de> pixi_toml::DeserializeAs<'de, Platform> for TomlPlatform {
-    fn deserialize_as(value: &mut Value<'de>) -> Result<Platform, DeserError> {
-        TomlPlatform::deserialize(value).map(Platform::from)
+impl<'de> pixi_toml::DeserializeAs<'de, Subdir> for TomlPlatform {
+    fn deserialize_as(value: &mut Value<'de>) -> Result<Subdir, DeserError> {
+        TomlPlatform::deserialize(value).map(Subdir::from)
     }
 }
 
@@ -169,7 +176,7 @@ const FRIENDLY_VIRTUAL_PACKAGES: &[FriendlyVirtualPackage] = &[
 /// platforms = [
 ///   { platform = "linux-64", cuda = "12.0", glibc = "2.28" },
 ///   { name = "gpu", platform = "linux-64", cuda = { driver = "12.0", arch = "8.6" } },
-///   { name = "jetson-nano", platform = "linux-aarch64", cuda = "12.8", archspec = "armv8-a" },
+///   { name = "jetson", platform = "linux-aarch64", cuda = "12.8", archspec = "armv8.2a" },
 /// ]
 /// ```
 ///
@@ -201,7 +208,7 @@ impl<'de> Deserialize<'de> for TomlPixiPlatform {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         match value.take() {
             ValueInner::String(s) => {
-                let subdir = Platform::from_str(&s).map_err(|e| Error {
+                let subdir = Subdir::from_str(&s).map_err(|e| Error {
                     kind: ErrorKind::Custom(e.to_string().into()),
                     span: value.span,
                     line_info: None,
@@ -327,8 +334,7 @@ impl Serialize for TomlPixiPlatform {
             return serializer.serialize_str(name);
         }
 
-        let auto_name = synthesize_name_string(platform.subdir(), declared);
-        let emit_name = name != auto_name;
+        let emit_name = !platform.has_derived_name();
 
         let count = 1 + usize::from(emit_name) + entries.len();
         let mut map = serializer.serialize_map(Some(count))?;
@@ -414,6 +420,11 @@ fn build_friendly_virtual_package(
                     line_info: None,
                 });
             }
+            crate::platform::validate_archspec_name(&raw.value).map_err(|message| Error {
+                kind: ErrorKind::Custom(message.into()),
+                span: raw.span,
+                line_info: None,
+            })?;
             Ok(GenericVirtualPackage {
                 name: package_name,
                 version: Version::major(0),
@@ -532,6 +543,13 @@ fn parse_raw_virtual_package(
         line_info: None,
     })?;
     let build_string = parts.next().unwrap_or("").to_string();
+    crate::platform::validate_virtual_package_build_string(&name, &build_string).map_err(
+        |message| Error {
+            kind: ErrorKind::Custom(message.into()),
+            span: value_span,
+            line_info: None,
+        },
+    )?;
     Ok(GenericVirtualPackage {
         name,
         version,
@@ -543,9 +561,9 @@ fn resolve_subdir(
     platform_value: Option<&Spanned<String>>,
     name_value: Option<&Spanned<String>>,
     table_span: Span,
-) -> Result<Platform, DeserError> {
+) -> Result<Subdir, DeserError> {
     if let Some(p) = platform_value {
-        return Platform::from_str(&p.value).map_err(|e| {
+        return Subdir::from_str(&p.value).map_err(|e| {
             Error {
                 kind: ErrorKind::Custom(e.to_string().into()),
                 span: p.span,
@@ -555,7 +573,7 @@ fn resolve_subdir(
         });
     }
     if let Some(n) = name_value {
-        return Platform::from_str(&n.value).map_err(|_| {
+        return Subdir::from_str(&n.value).map_err(|_| {
             Error {
                 kind: ErrorKind::Custom(
                     format!(
@@ -598,7 +616,7 @@ fn parse_pixi_platform_name(name: &Spanned<String>) -> Result<PixiPlatformName, 
 }
 
 fn synthesize_name(
-    subdir: Platform,
+    subdir: Subdir,
     declared: &[GenericVirtualPackage],
     span: Span,
 ) -> Result<PixiPlatformName, DeserError> {
@@ -702,10 +720,7 @@ fn render_key_value(key: &str, value: &str) -> String {
 /// result still passes [`PixiPlatformName::try_from`] (non-alphanumeric
 /// characters collapse to a single `-` and leading/trailing dashes are
 /// stripped).
-pub(crate) fn synthesize_name_string(
-    subdir: Platform,
-    declared: &[GenericVirtualPackage],
-) -> String {
+pub(crate) fn synthesize_name_string(subdir: Subdir, declared: &[GenericVirtualPackage]) -> String {
     let (friendly, raw) =
         classify_virtual_packages(declared, Some(&subdir_default_virtual_packages(subdir)));
     let mut parts: Vec<String> = vec![subdir.as_str().to_string()];
@@ -916,6 +931,53 @@ fn platform_inline_entries(
     entries
 }
 
+/// Render the `platforms` array that replaces a legacy `[system-requirements]`
+/// table: one entry per subdir, each carrying only the requirements that apply
+/// there.
+///
+/// A requirement equal to the subdir's default is still written out, where the
+/// serializer would drop it. `subdirs` may be empty, which falls back to a
+/// single `linux-64` entry.
+pub(crate) fn system_requirements_as_platforms(
+    sysreqs: &SystemRequirements,
+    subdirs: &[Subdir],
+) -> String {
+    // Two platforms can share a subdir; emitting it twice would give two
+    // entries the same `my-` name.
+    let unique: IndexSet<Subdir> = if subdirs.is_empty() {
+        IndexSet::from([Subdir::Linux64])
+    } else {
+        subdirs.iter().copied().collect()
+    };
+
+    let candidates = sysreqs.to_declared_virtual_packages();
+    let rendered = unique
+        .iter()
+        .map(|&subdir| suggested_platform_entry(&candidates, subdir))
+        .format(", ");
+    format!("platforms = [{rendered}]")
+}
+
+/// One suggested `platforms` entry for `subdir`.
+fn suggested_platform_entry(candidates: &[GenericVirtualPackage], subdir: Subdir) -> String {
+    let declared = virtual_packages_for_subdir(candidates, subdir);
+    let entries = platform_inline_entries(&declared, None);
+    if entries.is_empty() {
+        return format!("\"{subdir}\"");
+    }
+    let pairs = entries
+        .iter()
+        .map(|entry| match entry {
+            InlinePlatformEntry::Scalar { key, value, .. } => format!("{key} = \"{value}\""),
+            InlinePlatformEntry::CudaTable { driver, arch } => render_cuda_table(driver, arch),
+        })
+        .format(", ");
+    // Without an explicit name, a requirement equal to the subdir default
+    // collapses the name back to the bare subdir, which is then rejected as
+    // `IsSubdirPlatform`.
+    format!("{{ name = \"my-{subdir}\", platform = \"{subdir}\", {pairs} }}")
+}
+
 /// Render a [`PixiPlatform`] as a [`toml_edit::Value`] using the same
 /// bare-string vs inline-table shape as the serde `Serialize` impl above.
 /// This lets the document-editor rewrite the `platforms` array without
@@ -933,10 +995,8 @@ pub(crate) fn pixi_platform_to_toml_value(platform: &PixiPlatform) -> toml_edit:
         return toml_edit::Value::from(name);
     }
 
-    let auto_name = synthesize_name_string(platform.subdir(), declared);
-
     let mut table = toml_edit::InlineTable::new();
-    if name != auto_name {
+    if !platform.has_derived_name() {
         table.insert("name", name.into());
     }
     table.insert("platform", subdir_str.into());
@@ -1011,11 +1071,11 @@ mod test {
         // defaults materialised.
         let parsed = TopLevel::from_toml_str(r#"platform = "linux-64""#).unwrap();
         assert_eq!(parsed.platform.name().as_str(), "linux-64");
-        assert_eq!(parsed.platform.subdir(), Platform::Linux64);
+        assert_eq!(parsed.platform.subdir(), Subdir::Linux64);
         assert!(parsed.platform.is_subdir_platform());
         assert_eq!(
             parsed.platform.declared_virtual_packages(),
-            crate::PixiPlatform::from_subdir(Platform::Linux64).declared_virtual_packages(),
+            crate::PixiPlatform::from_subdir(Subdir::Linux64).declared_virtual_packages(),
         );
     }
 
@@ -1025,11 +1085,11 @@ mod test {
     fn test_workspace_platform_name_only_is_subdir() {
         let parsed = TopLevel::from_toml_str(r#"platform = { name = "osx-arm64" }"#).unwrap();
         assert_eq!(parsed.platform.name().as_str(), "osx-arm64");
-        assert_eq!(parsed.platform.subdir(), Platform::OsxArm64);
+        assert_eq!(parsed.platform.subdir(), Subdir::OsxArm64);
         assert!(parsed.platform.is_subdir_platform());
         assert_eq!(
             parsed.platform.declared_virtual_packages(),
-            crate::PixiPlatform::from_subdir(Platform::OsxArm64).declared_virtual_packages(),
+            crate::PixiPlatform::from_subdir(Subdir::OsxArm64).declared_virtual_packages(),
         );
     }
 
@@ -1039,7 +1099,7 @@ mod test {
     fn test_workspace_platform_only_platform_key() {
         let parsed = TopLevel::from_toml_str(r#"platform = { platform = "linux-64" }"#).unwrap();
         assert_eq!(parsed.platform.name().as_str(), "linux-64");
-        assert_eq!(parsed.platform.subdir(), Platform::Linux64);
+        assert_eq!(parsed.platform.subdir(), Subdir::Linux64);
         assert!(parsed.platform.is_subdir_platform());
     }
 
@@ -1049,7 +1109,7 @@ mod test {
             r#"platform = { platform = "linux-64", cuda = "12.0", glibc = "2.28" }"#,
         )
         .unwrap();
-        assert_eq!(parsed.platform.subdir(), Platform::Linux64);
+        assert_eq!(parsed.platform.subdir(), Subdir::Linux64);
         assert_eq!(
             virtual_package_specs(&parsed.platform),
             vec![
@@ -1068,16 +1128,42 @@ mod test {
     #[test]
     fn test_workspace_platform_archspec_goes_to_build_string() {
         let parsed = TopLevel::from_toml_str(
-            r#"platform = { platform = "linux-64", archspec = "x86-64-v3" }"#,
+            r#"platform = { platform = "linux-64", archspec = "x86_64_v3" }"#,
         )
         .unwrap();
         let package = &parsed.platform.declared_virtual_packages()[0];
         assert_eq!(package.name.as_normalized(), "__archspec");
         assert_eq!(package.version, Version::major(0));
-        assert_eq!(package.build_string, "x86-64-v3");
+        assert_eq!(package.build_string, "x86_64_v3");
+        // The synthesised name sanitises the underscores into dashes.
         assert_eq!(
             parsed.platform.name().as_str(),
             "linux-64-archspec-x86-64-v3"
+        );
+    }
+
+    #[test]
+    fn test_workspace_platform_archspec_rejects_unknown_names() {
+        // The dashed spelling of a known microarchitecture gets a hint.
+        let input = r#"platform = { platform = "linux-64", archspec = "x86-64-v3" }"#;
+        let rendered = format_parse_error(input, TopLevel::from_toml_str(input).unwrap_err());
+        assert!(
+            rendered.contains("did you mean 'x86_64_v3'"),
+            "expected a did-you-mean hint, got: {rendered}",
+        );
+        // A name the archspec database does not know is rejected through the
+        // friendly key and the raw `__archspec` form alike.
+        let input = r#"platform = { platform = "linux-aarch64", archspec = "armv8-a" }"#;
+        let rendered = format_parse_error(input, TopLevel::from_toml_str(input).unwrap_err());
+        assert!(
+            rendered.contains("'armv8-a' is not a known archspec microarchitecture"),
+            "expected an unknown-name error, got: {rendered}",
+        );
+        let input = r#"platform = { platform = "linux-64", __archspec = "0=nonsense" }"#;
+        let rendered = format_parse_error(input, TopLevel::from_toml_str(input).unwrap_err());
+        assert!(
+            rendered.contains("'nonsense' is not a known archspec microarchitecture"),
+            "expected an unknown-name error, got: {rendered}",
         );
     }
 
@@ -1107,7 +1193,7 @@ mod test {
         )
         .unwrap();
         assert_eq!(parsed.platform.name().as_str(), "jetson-nano");
-        assert_eq!(parsed.platform.subdir(), Platform::LinuxAarch64);
+        assert_eq!(parsed.platform.subdir(), Subdir::LinuxAarch64);
         assert_eq!(
             virtual_package_specs(&parsed.platform),
             vec![
@@ -1184,7 +1270,7 @@ mod test {
             r#"platform = { platform = "linux-64", cuda = { driver = "12.0", arch = "8.6" } }"#,
         )
         .unwrap();
-        assert_eq!(parsed.platform.subdir(), Platform::Linux64);
+        assert_eq!(parsed.platform.subdir(), Subdir::Linux64);
         assert_eq!(
             virtual_package_specs(&parsed.platform),
             vec![
@@ -1366,7 +1452,7 @@ mod test {
 
     fn platform_with_packages(
         name: &str,
-        subdir: Platform,
+        subdir: Subdir,
         declared: Vec<GenericVirtualPackage>,
     ) -> PixiPlatform {
         // A subdir-named entry with no user declarations is the
@@ -1401,7 +1487,7 @@ mod test {
 
     #[test]
     fn test_serialize_bare_string() {
-        let platform = platform_with_packages("linux-64", Platform::Linux64, Vec::new());
+        let platform = platform_with_packages("linux-64", Subdir::Linux64, Vec::new());
         let json = serde_json::to_value(TomlPixiPlatform(platform)).unwrap();
         assert_eq!(json, serde_json::Value::String("linux-64".into()));
     }
@@ -1410,7 +1496,7 @@ mod test {
     fn test_serialize_auto_named_omits_name() {
         let platform = platform_with_packages(
             "linux-64-cuda-12-0",
-            Platform::Linux64,
+            Subdir::Linux64,
             vec![version_virtual_package("__cuda", "12.0")],
         );
         let json = serde_json::to_value(TomlPixiPlatform(platform)).unwrap();
@@ -1427,7 +1513,7 @@ mod test {
     fn test_serialize_explicit_name_emitted() {
         let platform = platform_with_packages(
             "jetson-nano",
-            Platform::LinuxAarch64,
+            Subdir::LinuxAarch64,
             vec![version_virtual_package("__cuda", "12.8")],
         );
         let json = serde_json::to_value(TomlPixiPlatform(platform)).unwrap();
@@ -1445,15 +1531,15 @@ mod test {
     fn test_serialize_archspec_uses_build_string() {
         let platform = platform_with_packages(
             "linux-64-archspec-x86-64-v3",
-            Platform::Linux64,
-            vec![archspec_virtual_package("x86-64-v3")],
+            Subdir::Linux64,
+            vec![archspec_virtual_package("x86_64_v3")],
         );
         let json = serde_json::to_value(TomlPixiPlatform(platform)).unwrap();
         assert_eq!(
             json,
             serde_json::json!({
                 "platform": "linux-64",
-                "archspec": "x86-64-v3",
+                "archspec": "x86_64_v3",
             }),
         );
     }
@@ -1466,7 +1552,7 @@ mod test {
         let mut odd = version_virtual_package("__cuda", "12.0");
         odd.build_string = "weird".to_string();
         let platform =
-            platform_with_packages("linux-64-cuda-12-0-weird", Platform::Linux64, vec![odd]);
+            platform_with_packages("linux-64-cuda-12-0-weird", Subdir::Linux64, vec![odd]);
         let json = serde_json::to_value(TomlPixiPlatform(platform)).unwrap();
         assert_eq!(
             json,
@@ -1482,7 +1568,7 @@ mod test {
     fn test_serialize_cuda_table() {
         let platform = platform_with_packages(
             "linux-64-cuda-12-0-cuda-arch-8-6",
-            Platform::Linux64,
+            Subdir::Linux64,
             vec![
                 version_virtual_package("__cuda", "12.0"),
                 version_virtual_package("__cuda_arch", "8.6"),
@@ -1503,7 +1589,7 @@ mod test {
     fn test_serialize_cuda_driver_only_stays_scalar() {
         let platform = platform_with_packages(
             "linux-64-cuda-12-0",
-            Platform::Linux64,
+            Subdir::Linux64,
             vec![version_virtual_package("__cuda", "12.0")],
         );
         let json = serde_json::to_value(TomlPixiPlatform(platform)).unwrap();

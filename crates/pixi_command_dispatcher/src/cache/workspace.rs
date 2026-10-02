@@ -30,7 +30,7 @@ use std::{
 use async_fd_lock::{LockWrite, RwLockWriteGuard};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_record::UnresolvedSourceRecord;
-use rattler_conda_types::{PackageName, Platform};
+use rattler_conda_types::{PackageName, Subdir};
 use xxhash_rust::xxh3::Xxh3;
 
 /// Opaque handle identifying one workspace cache entry.
@@ -59,8 +59,8 @@ impl std::fmt::Display for WorkspaceKey {
 ///   dep sets)
 pub fn compute_workspace_key(
     record: &UnresolvedSourceRecord,
-    build_platform: Platform,
-    host_platform: Platform,
+    build_platform: Subdir,
+    host_platform: Subdir,
     backend_identifier: &str,
 ) -> WorkspaceKey {
     let mut hasher = Xxh3::new();
@@ -255,8 +255,8 @@ mod tests {
     fn same_inputs_produce_same_key() {
         let a = make_record("foo");
         let b = make_record("foo");
-        let ka = compute_workspace_key(&a, Platform::Linux64, Platform::Linux64, "backend-v1");
-        let kb = compute_workspace_key(&b, Platform::Linux64, Platform::Linux64, "backend-v1");
+        let ka = compute_workspace_key(&a, Subdir::Linux64, Subdir::Linux64, "backend-v1");
+        let kb = compute_workspace_key(&b, Subdir::Linux64, Subdir::Linux64, "backend-v1");
         assert_eq!(ka, kb);
     }
 
@@ -267,21 +267,16 @@ mod tests {
             make_record("foo"),
             binary_dep("bar", "https://example.com/bar.conda"),
         );
-        let ka = compute_workspace_key(&base, Platform::Linux64, Platform::Linux64, "backend-v1");
-        let kb = compute_workspace_key(
-            &with_dep,
-            Platform::Linux64,
-            Platform::Linux64,
-            "backend-v1",
-        );
+        let ka = compute_workspace_key(&base, Subdir::Linux64, Subdir::Linux64, "backend-v1");
+        let kb = compute_workspace_key(&with_dep, Subdir::Linux64, Subdir::Linux64, "backend-v1");
         assert_ne!(ka, kb);
     }
 
     #[test]
     fn different_backend_identifier_changes_key() {
         let r = make_record("foo");
-        let ka = compute_workspace_key(&r, Platform::Linux64, Platform::Linux64, "backend-v1");
-        let kb = compute_workspace_key(&r, Platform::Linux64, Platform::Linux64, "backend-v2");
+        let ka = compute_workspace_key(&r, Subdir::Linux64, Subdir::Linux64, "backend-v1");
+        let kb = compute_workspace_key(&r, Subdir::Linux64, Subdir::Linux64, "backend-v2");
         assert_ne!(ka, kb);
     }
 
@@ -291,9 +286,8 @@ mod tests {
         // the key (short-path policy). Two keys that differ only by
         // host platform must therefore be distinct.
         let r = make_record("foo");
-        let linux = compute_workspace_key(&r, Platform::Linux64, Platform::Linux64, "backend-v1");
-        let osx_arm =
-            compute_workspace_key(&r, Platform::Linux64, Platform::OsxArm64, "backend-v1");
+        let linux = compute_workspace_key(&r, Subdir::Linux64, Subdir::Linux64, "backend-v1");
+        let osx_arm = compute_workspace_key(&r, Subdir::Linux64, Subdir::OsxArm64, "backend-v1");
         assert_ne!(linux, osx_arm);
     }
 
@@ -302,8 +296,8 @@ mod tests {
         let a = make_record("foo");
         let b = make_record("bar");
         assert_ne!(
-            compute_workspace_key(&a, Platform::Linux64, Platform::Linux64, "b"),
-            compute_workspace_key(&b, Platform::Linux64, Platform::Linux64, "b"),
+            compute_workspace_key(&a, Subdir::Linux64, Subdir::Linux64, "b"),
+            compute_workspace_key(&b, Subdir::Linux64, Subdir::Linux64, "b"),
         );
     }
 
@@ -315,8 +309,8 @@ mod tests {
             path: Utf8TypedPathBuf::from("./somewhere-else"),
         });
         assert_ne!(
-            compute_workspace_key(&a, Platform::Linux64, Platform::Linux64, "b"),
-            compute_workspace_key(&b, Platform::Linux64, Platform::Linux64, "b"),
+            compute_workspace_key(&a, Subdir::Linux64, Subdir::Linux64, "b"),
+            compute_workspace_key(&b, Subdir::Linux64, Subdir::Linux64, "b"),
         );
     }
 
@@ -329,8 +323,8 @@ mod tests {
             pixi_record::VariantValue::from("3.12".to_string()),
         );
         assert_ne!(
-            compute_workspace_key(&a, Platform::Linux64, Platform::Linux64, "b"),
-            compute_workspace_key(&b, Platform::Linux64, Platform::Linux64, "b"),
+            compute_workspace_key(&a, Subdir::Linux64, Subdir::Linux64, "b"),
+            compute_workspace_key(&b, Subdir::Linux64, Subdir::Linux64, "b"),
         );
     }
 
@@ -338,8 +332,8 @@ mod tests {
     fn build_platform_changes_key() {
         let r = make_record("foo");
         assert_ne!(
-            compute_workspace_key(&r, Platform::Linux64, Platform::Linux64, "b"),
-            compute_workspace_key(&r, Platform::OsxArm64, Platform::Linux64, "b"),
+            compute_workspace_key(&r, Subdir::Linux64, Subdir::Linux64, "b"),
+            compute_workspace_key(&r, Subdir::OsxArm64, Subdir::Linux64, "b"),
         );
     }
 
@@ -354,8 +348,8 @@ mod tests {
             .host_packages
             .push(binary_dep("zlib", "https://example.com/zlib.conda"));
         assert_ne!(
-            compute_workspace_key(&base, Platform::Linux64, Platform::Linux64, "b"),
-            compute_workspace_key(&with_host_dep, Platform::Linux64, Platform::Linux64, "b"),
+            compute_workspace_key(&base, Subdir::Linux64, Subdir::Linux64, "b"),
+            compute_workspace_key(&with_host_dep, Subdir::Linux64, Subdir::Linux64, "b"),
         );
     }
 
@@ -377,8 +371,8 @@ mod tests {
             .push(binary_dep("numpy", "https://example.com/numpy.conda"));
 
         assert_ne!(
-            compute_workspace_key(&a, Platform::Linux64, Platform::Linux64, "b"),
-            compute_workspace_key(&b, Platform::Linux64, Platform::Linux64, "b"),
+            compute_workspace_key(&a, Subdir::Linux64, Subdir::Linux64, "b"),
+            compute_workspace_key(&b, Subdir::Linux64, Subdir::Linux64, "b"),
         );
     }
 

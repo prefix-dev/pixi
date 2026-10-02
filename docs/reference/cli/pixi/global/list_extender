@@ -2,50 +2,56 @@
 
 ## Examples
 
-We'll only show the dependencies and exposed binaries of the environment if they differ from the environment name.
-Here is an example of a few installed packages:
+Every environment gets a block: its name, the version of the package it is named
+after, and a row per part of the manifest that has something to show.
+Environments holding more than one package list them under `dependencies`
+instead of in the header.
 
 ```
 pixi global list
 ```
 Results in:
 ```
-Global environments at /home/user/.pixi:
-├── gh: 2.57.0
-├── pixi-pack: 0.1.8
-├── python: 3.11.0
-│   └─ exposes: 2to3, 2to3-3.11, idle3, idle3.11, pydoc, pydoc3, pydoc3.11, python, python3, python3-config, python3.1, python3.11, python3.11-config
-├── rattler-build: 0.22.0
-├── ripgrep: 14.1.0
-│   └─ exposes: rg
-├── vim: 9.1.0611
-│   └─ exposes: ex, rview, rvim, view, vim, vimdiff, vimtutor, xxd
-└── zoxide: 0.9.6
+bat 0.26.1
+└── exposed       bat
+
+demo
+├── dependencies  bat 0.26.1, ripgrep 15.2.0
+└── exposed       demo-cli -> bat
+
+python 3.14.6
+└── exposed       idle3
+                  idle3.14
+                  pydoc
+                  pydoc3
+                  pydoc3.14
+                  python
+                  python3
+                  python3-config
+                  python3.1
+                  python3.14
+                  python3.14-config
 ```
 
-Here is an example of list of a single environment:
+Here is an example of list of a single environment, which adds the channels, the
+size the environment takes up on disk, and the full package table:
 ```
-pixi g list -e pixi-pack
+pixi global list --environment demo
 ```
 Results in:
 ```
-The 'pixi-pack' environment has 8 packages:
-Package          Version    Build        Size
-_libgcc_mutex    0.1        conda_forge  2.5 KiB
-_openmp_mutex    4.5        2_gnu        23.1 KiB
-ca-certificates  2024.8.30  hbcca054_0   155.3 KiB
-libgcc           14.1.0     h77fa898_1   826.5 KiB
-libgcc-ng        14.1.0     h69a702a_1   50.9 KiB
-libgomp          14.1.0     h77fa898_1   449.4 KiB
-openssl          3.3.2      hb9d3cd8_0   2.8 MiB
-pixi-pack        0.1.8      hc762bcd_0   4.3 MiB
-Package          Version    Build        Size
+demo
+├── dependencies  bat 0.26.1, ripgrep 15.2.0
+├── exposed       demo-cli -> bat
+├── channels      conda-forge
+└── size          6.2 MiB
 
-Exposes:
-pixi-pack
-Channels:
-conda-forge
-Platform: linux-64
+Package        Version  Build       Size
+_openmp_mutex  4.5      20_gnu      28.3 KiB
+bat            0.26.1   hdab8a38_0  2.8 MiB
+libgcc         16.1.0   ha9f2e26_1  1 MiB
+libgomp        16.1.0   he0feb66_1  625.4 KiB
+ripgrep        15.2.0   hf19af3b_1  1.8 MiB
 ```
 
 

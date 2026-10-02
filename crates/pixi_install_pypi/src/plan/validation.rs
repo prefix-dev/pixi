@@ -7,6 +7,7 @@ use rattler_lock::UrlOrPath;
 use url::Url;
 use uv_cache_info::CacheInfoError;
 use uv_distribution_types::{Dist, InstalledDist, InstalledDistKind};
+use uv_git_types::GitLfs;
 use uv_pypi_types::{ParsedGitUrl, ParsedUrlError};
 
 use crate::utils::{check_url_freshness, is_direct_url, strip_direct_scheme};
@@ -311,6 +312,22 @@ pub(crate) fn need_reinstall(
                                     NeedReinstall::GitRevMismatch {
                                         installed_rev: installed_commit,
                                         locked_rev: locked_commit.to_string(),
+                                    },
+                                ));
+                            }
+
+                            // The same commit checked out with and without LFS
+                            // yields different content. The installed state
+                            // comes from `direct_url.json`, where an absent
+                            // flag means LFS was disabled.
+                            let installed_lfs =
+                                vcs_info.git_lfs.map(GitLfs::from).unwrap_or_default();
+                            let locked_lfs = locked_git_url.url.lfs();
+                            if installed_lfs != locked_lfs {
+                                return Ok(ValidateCurrentInstall::Reinstall(
+                                    NeedReinstall::GitLfsMismatch {
+                                        installed_lfs: installed_lfs.enabled(),
+                                        locked_lfs: locked_lfs.enabled(),
                                     },
                                 ));
                             }

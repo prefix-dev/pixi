@@ -75,6 +75,9 @@ pub struct InitializeParams {
     /// here. Concurrent backend instances may run simultaneously
     /// against the same path, so writes should be atomic
     /// (write-tempfile-then-rename style).
+    // TODO: No backend in this repository consumes this, though out-of-tree
+    // backends may. Remove it along with the next breaking change to the build
+    // API, so the removal rides a version bump that is already being paid for.
     pub workspace_scratch_directory: Option<PathBuf>,
 
     /// Project model that the backend should use even though it is an option

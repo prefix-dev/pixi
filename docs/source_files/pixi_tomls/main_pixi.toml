@@ -29,7 +29,6 @@ license = "MIT"
 # readme = "README.md"
 # --8<-- [end:project_readme]
 
-
 # --8<-- [start:project_homepage]
 homepage = "https://pixi.sh"
 # --8<-- [end:project_homepage]

@@ -1,3 +1,6 @@
+#:tombi toml-version = "v1.0.0"
+# git-cliff cannot parse TOML 1.1
+
 # git-cliff ~ default configuration file
 # https://git-cliff.org/docs/configuration
 #
@@ -76,6 +79,7 @@ trim = true
 postprocessors = [
   # { pattern = '<REPO>', replace = "https://github.com/orhun/git-cliff" }, # replace repository URL
 ]
+
 [git]
 # parse the commits based on https://www.conventionalcommits.org
 conventional_commits = true

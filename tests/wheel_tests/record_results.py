@@ -1,11 +1,10 @@
-import tomllib
-import tomli_w
-
 from dataclasses import dataclass, field
-from filelock import FileLock
 from pathlib import Path
 from typing import Any
 
+import tomli
+import tomli_w
+from filelock import FileLock
 
 # Path to the results file, containing test outcomes
 RESULTS_FILE = Path(__file__).parent / ".wheel_test_results.toml"
@@ -34,7 +33,7 @@ def record_result(test_id: str, name: str, outcome: str, duration: float, detail
         # Get the existing results
         if RESULTS_FILE.exists():
             with RESULTS_FILE.open("rb") as f:
-                data = tomllib.load(f)
+                data = tomli.load(f)
                 # If this doesn't hold, don't use the recorded data
                 if "id" in data and data["id"] == test_id:
                     test = Test(id=data["id"], results=data["results"])

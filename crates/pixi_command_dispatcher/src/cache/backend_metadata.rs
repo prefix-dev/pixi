@@ -16,6 +16,7 @@ use crate::build::CanonicalSourceCodeLocation;
 use crate::input_hash::{
     BackendBinaryFingerprint, BackendSpecHash, ConfigurationHash, ProjectModelHash,
 };
+use crate::input_snapshot::InputSnapshot;
 use rattler_conda_types::PackageName;
 
 use crate::BuildEnvironment;
@@ -219,7 +220,14 @@ pub struct BuildBackendMetadataCacheEntry {
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub input_files: BTreeSet<pixi_path::AbsPathBuf>,
 
-    /// The timestamp of when the metadata was computed.
+    /// Validation state for the input and variant files. Size and mtime are
+    /// compared first; contents are hashed only when the mtime moved.
+    #[serde(default, skip_serializing_if = "InputSnapshot::is_empty")]
+    pub(crate) input_file_states: InputSnapshot,
+
+    /// The timestamp of when the metadata was computed. Files without a
+    /// recorded state (entries written before fingerprints existed) count as
+    /// unchanged while their mtime stays at or before this.
     pub timestamp: std::time::SystemTime,
 
     /// The outputs as reported by the build backend.
@@ -235,10 +243,6 @@ impl MetadataCacheEntry<BuildBackendMetadataCache> for BuildBackendMetadataCache
 impl VersionedCacheEntry<BuildBackendMetadataCache> for BuildBackendMetadataCacheEntry {
     fn cache_version(&self) -> u64 {
         self.cache_version
-    }
-
-    fn set_cache_version(&mut self, version: u64) {
-        self.cache_version = version;
     }
 }
 

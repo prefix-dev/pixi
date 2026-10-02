@@ -31,9 +31,24 @@ impl TomlDocument {
         self.0.as_table_mut()
     }
 
-    /// Returns the manifest as a mutable table
+    /// Returns the manifest as a table
     pub fn as_table(&self) -> &Table {
         self.0.as_table()
+    }
+
+    /// Returns the underlying editable TOML document.
+    pub fn as_document(&self) -> &toml_edit::DocumentMut {
+        &self.0
+    }
+
+    /// Returns the manifest as a mutable item
+    pub fn as_item_mut(&mut self) -> &mut Item {
+        self.0.as_item_mut()
+    }
+
+    /// Returns the manifest as an item
+    pub fn as_item(&self) -> &Item {
+        self.0.as_item()
     }
 
     /// Get or insert a top-level item

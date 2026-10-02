@@ -9,7 +9,7 @@
 use pixi_cli::offline::attach_offline_hint;
 use pixi_consts::consts;
 use pixi_test_utils::{MockRepoData, Package, format_diagnostic};
-use rattler_conda_types::Platform;
+use rattler_conda_types::Subdir;
 use tempfile::TempDir;
 
 use crate::common::{LockFileExt, PixiControl};
@@ -62,7 +62,7 @@ async fn offline_add_from_local_channel_succeeds() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         "foo==1"
     ));
 }
@@ -91,7 +91,7 @@ async fn offline_search_without_cached_repodata_fails_with_hint() {
     let err = result.expect_err("searching a remote channel offline without a cache must fail");
     insta::with_settings!({filters => offline_snapshot_filters()}, {
         insta::assert_snapshot!(render_offline_report(err), @"
-        × the sharded index cache for https://prefix.dev/conda-forge/<subdir>/ is not available
+        × no usable repodata cache for https://prefix.dev/conda-forge/<subdir>/
         help: pixi is running in offline mode and only uses locally cached data.
               Retry with network access: remove the `--offline` flag, unset the `PIXI_OFFLINE` environment variable, or disable the `offline` option in your pixi configuration.
         ");
@@ -121,7 +121,7 @@ async fn offline_solve_without_cached_repodata_fails_with_hint() {
     insta::with_settings!({filters => offline_snapshot_filters()}, {
         insta::assert_snapshot!(render_offline_report(err), @"
         × failed to solve requirements of environment 'default' for platform '<subdir>'
-        ╰─▶   × the sharded index cache for https://prefix.dev/conda-forge/<subdir>/ is not available
+        ╰─▶   × no usable repodata cache for https://prefix.dev/conda-forge/<subdir>/
 
         help: pixi is running in offline mode and only uses locally cached data.
               Retry with network access: remove the `--offline` flag, unset the `PIXI_OFFLINE` environment variable, or disable the `offline` option in your pixi configuration.

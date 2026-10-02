@@ -1,7 +1,10 @@
+#:tombi toml-version = "v1.0.0"
+# The Python packaging ecosystem parses this file with TOML 1.0 parsers
+
 [project]
-description = "override a ReadTheDocs build with pixi"
 name = "readthedocs-override"
 version = "0.0.0"
+description = "override a ReadTheDocs build with pixi"
 
 [tool.pixi.project]
 channels = ["conda-forge"]

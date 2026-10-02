@@ -11,12 +11,12 @@ preview = ["pixi-build"]
 # the C++ code and install the executable in an environment ready to be used.
 sdl_example = { path = "." }
 
+[tasks]
+test = "sdl_example -h"
+
 [tasks.start]
 cmd = "sdl_example"
 description = "A tasks to run the executable that is build by the package section."
-
-[tasks]
-test = "sdl_example -h"
 
 [package]
 authors = ["Bas Zalmstra <bas@prefix.dev>"]
@@ -31,7 +31,6 @@ channels = [
 ]
 name = "pixi-build-cmake"
 version = "*"
-
 
 [package.host-dependencies]
 # This ensures that SDL2 is available at build time.

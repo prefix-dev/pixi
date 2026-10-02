@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://pixi.sh/v0.73.0/schema/manifest/pyproject/schema.json",
+  "$id": "https://pixi.sh/v0.81.0/schema/manifest/pyproject/schema.json",
   "title": "`pyproject.toml` manifest file for `pixi`",
   "description": "A `pyproject.toml` with `[tool.pixi]`.",
   "type": "object",
@@ -62,7 +62,8 @@
       "properties": {
         "additional-dependencies": {
           "title": "Additional-Dependencies",
-          "description": "Additional dependencies to install alongside the build backend",
+          "deprecated": true,
+          "description": "Additional dependencies to install alongside the build backend. Deprecated in favor of `backend.additional-dependencies`",
           "type": "object",
           "additionalProperties": {
             "anyOf": [
@@ -97,7 +98,8 @@
         },
         "channels": {
           "title": "Channels",
-          "description": "The `conda` channels that are used to fetch the build backend from",
+          "deprecated": true,
+          "description": "The `conda` channels that are used to fetch the build backend from. Deprecated in favor of `backend.channels`",
           "type": "array",
           "items": {
             "anyOf": [
@@ -397,6 +399,7 @@
       "type": "string",
       "enum": [
         "disabled",
+        "flexible",
         "strict"
       ]
     },
@@ -554,9 +557,10 @@
         },
         "channel-priority": {
           "$ref": "#/$defs/ChannelPriority",
-          "description": "The type of channel priority that is used in the solve.\n- 'strict': only take the package from the channel it exist in first.\n- 'disabled': group all dependencies together as if there is no channel difference.",
+          "description": "The type of channel priority that is used in the solve.\n- 'strict': only take the package from the channel it exist in first.\n- 'flexible': exhaust the candidates of higher-priority channels before falling back to the next channel, regardless of the version.\n- 'disabled': group all dependencies together as if there is no channel difference.",
           "examples": [
             "strict",
+            "flexible",
             "disabled"
           ]
         },
@@ -796,9 +800,10 @@
         },
         "channel-priority": {
           "$ref": "#/$defs/ChannelPriority",
-          "description": "The type of channel priority that is used in the solve.\n- 'strict': only take the package from the channel it exist in first.\n- 'disabled': group all dependencies together as if there is no channel difference.",
+          "description": "The type of channel priority that is used in the solve.\n- 'strict': only take the package from the channel it exist in first.\n- 'flexible': exhaust the candidates of higher-priority channels before falling back to the next channel, regardless of the version.\n- 'disabled': group all dependencies together as if there is no channel difference.",
           "examples": [
             "strict",
+            "flexible",
             "disabled"
           ]
         },
@@ -1113,6 +1118,11 @@
           "type": "string",
           "minLength": 1
         },
+        "lfs": {
+          "title": "Lfs",
+          "description": "If `true` Git LFS objects are fetched during the checkout",
+          "type": "boolean"
+        },
         "license": {
           "title": "License",
           "description": "The license of the package",
@@ -1322,6 +1332,11 @@
           "description": "The git URL to the repo",
           "type": "string",
           "minLength": 1
+        },
+        "lfs": {
+          "title": "Lfs",
+          "description": "If `true` Git LFS objects are fetched during the checkout",
+          "type": "boolean"
         },
         "license": {
           "title": "License",
@@ -1609,6 +1624,9 @@
                 "$ref": "#/$defs/InheritableMatchspecTable"
               },
               {
+                "$ref": "#/$defs/PinCompatibleSpec"
+              },
+              {
                 "type": "object",
                 "additionalProperties": {
                   "anyOf": [
@@ -1618,6 +1636,9 @@
                     },
                     {
                       "$ref": "#/$defs/InheritableMatchspecTable"
+                    },
+                    {
+                      "$ref": "#/$defs/PinCompatibleSpec"
                     }
                   ]
                 },
@@ -1674,6 +1695,11 @@
               "$ref": "#/$defs/WorkspaceInheritance"
             }
           ]
+        },
+        "publish": {
+          "title": "Publish",
+          "description": "Whether a workspace-wide `pixi publish` publishes this package. Packages that do not opt in with `publish = true` are left out of the publish set.",
+          "type": "boolean"
         },
         "readme": {
           "title": "Readme",
@@ -1752,6 +1778,9 @@
                 "$ref": "#/$defs/InheritableMatchspecTable"
               },
               {
+                "$ref": "#/$defs/PinCompatibleSpec"
+              },
+              {
                 "type": "object",
                 "additionalProperties": {
                   "anyOf": [
@@ -1761,6 +1790,9 @@
                     },
                     {
                       "$ref": "#/$defs/InheritableMatchspecTable"
+                    },
+                    {
+                      "$ref": "#/$defs/PinCompatibleSpec"
                     }
                   ]
                 },
@@ -1773,6 +1805,17 @@
           "propertyNames": {
             "minLength": 1
           }
+        },
+        "run-exports": {
+          "$ref": "#/$defs/RunExports",
+          "description": "The run-exports this package declares for its consumers, mirroring the conda run-exports mechanism. See https://pixi.sh/latest/build/dependency_types/ for more information.",
+          "examples": [
+            {
+              "weak": {
+                "libfoo": ">=1,<2"
+              }
+            }
+          ]
         },
         "version": {
           "title": "Version",
@@ -1791,6 +1834,93 @@
             {
               "workspace": true
             }
+          ]
+        }
+      }
+    },
+    "PinCompatibleSpec": {
+      "title": "PinCompatibleSpec",
+      "description": "Pin to a version compatible with the one resolved in the previous environment.\n\nMirrors rattler-build's `pin_compatible()`: a `pin-compatible` entry in\n`run-dependencies` resolves against the host environment, one in\n`host-dependencies` against the build environment.",
+      "type": "object",
+      "required": [
+        "pin-compatible"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "pin-compatible": {
+          "title": "Pin-Compatible",
+          "description": "`true` uses the default bounds; a table configures them.",
+          "anyOf": [
+            {
+              "type": "boolean",
+              "const": true
+            },
+            {
+              "$ref": "#/$defs/PinTable"
+            }
+          ]
+        }
+      }
+    },
+    "PinSubpackageSpec": {
+      "title": "PinSubpackageSpec",
+      "description": "Pin the package itself for its consumers.\n\nMirrors rattler-build's `pin_subpackage()`. Only valid in the\n`run-exports` tables, on an entry named after the package itself.",
+      "type": "object",
+      "required": [
+        "pin-subpackage"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "pin-subpackage": {
+          "title": "Pin-Subpackage",
+          "description": "`true` uses the default bounds; a table configures them.",
+          "anyOf": [
+            {
+              "type": "boolean",
+              "const": true
+            },
+            {
+              "$ref": "#/$defs/PinTable"
+            }
+          ]
+        }
+      }
+    },
+    "PinTable": {
+      "title": "PinTable",
+      "description": "The arguments of a pin, mirroring rattler-build's `pin_compatible`/`pin_subpackage`.\n\nBounds that are not given fall back to the defaults: `lower-bound = \"x.x.x.x.x.x\"`\n(pin to the exact resolved version) and `upper-bound = \"x\"` (next-major exclusive).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "build": {
+          "title": "Build",
+          "description": "A build-string matcher to add to the pin, e.g. `mpi_mpich_*`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "exact": {
+          "title": "Exact",
+          "description": "Pin the exact version and build string. Cannot be combined with the bounds or `build`.",
+          "type": "boolean"
+        },
+        "lower-bound": {
+          "title": "Lower-Bound",
+          "description": "Lower bound of the pinned range: a pin expression like `x.x` (number of version segments to keep) or a literal version.",
+          "type": "string",
+          "minLength": 1,
+          "examples": [
+            "x.x",
+            "1.2.3"
+          ]
+        },
+        "upper-bound": {
+          "title": "Upper-Bound",
+          "description": "Upper bound of the pinned range: a pin expression like `x` (the segment to bump, exclusive) or a literal version.",
+          "type": "string",
+          "minLength": 1,
+          "examples": [
+            "x",
+            "9.9"
           ]
         }
       }
@@ -1848,6 +1978,11 @@
           "type": "string",
           "minLength": 1
         },
+        "lfs": {
+          "title": "Lfs",
+          "description": "If `true` Git LFS objects are fetched during the checkout",
+          "type": "boolean"
+        },
         "subdirectory": {
           "title": "Subdirectory",
           "description": "The subdirectory in the repo, a path from the root of the repo.",
@@ -1875,6 +2010,11 @@
           "description": "The `git` URL to the repo e.g https://github.com/prefix-dev/pixi",
           "type": "string",
           "minLength": 1
+        },
+        "lfs": {
+          "title": "Lfs",
+          "description": "If `true` Git LFS objects are fetched during the checkout",
+          "type": "boolean"
         },
         "rev": {
           "title": "Rev",
@@ -1909,6 +2049,11 @@
           "description": "The `git` URL to the repo e.g https://github.com/prefix-dev/pixi",
           "type": "string",
           "minLength": 1
+        },
+        "lfs": {
+          "title": "Lfs",
+          "description": "If `true` Git LFS objects are fetched during the checkout",
+          "type": "boolean"
         },
         "subdirectory": {
           "title": "Subdirectory",
@@ -2006,19 +2151,11 @@
         "index-strategy": {
           "title": "Index-Strategy",
           "description": "The strategy to use when resolving packages from multiple indexes",
-          "anyOf": [
-            {
-              "type": "string",
-              "const": "first-index"
-            },
-            {
-              "type": "string",
-              "const": "unsafe-first-match"
-            },
-            {
-              "type": "string",
-              "const": "unsafe-best-match"
-            }
+          "type": "string",
+          "enum": [
+            "first-index",
+            "unsafe-first-match",
+            "unsafe-best-match"
           ],
           "examples": [
             "first-index",
@@ -2100,27 +2237,13 @@
         "prerelease-mode": {
           "title": "Prerelease-Mode",
           "description": "The strategy to use when considering pre-release versions",
-          "anyOf": [
-            {
-              "type": "string",
-              "const": "disallow"
-            },
-            {
-              "type": "string",
-              "const": "allow"
-            },
-            {
-              "type": "string",
-              "const": "if-necessary"
-            },
-            {
-              "type": "string",
-              "const": "explicit"
-            },
-            {
-              "type": "string",
-              "const": "if-necessary-or-explicit"
-            }
+          "type": "string",
+          "enum": [
+            "disallow",
+            "allow",
+            "if-necessary",
+            "explicit",
+            "if-necessary-or-explicit"
           ],
           "examples": [
             "disallow",
@@ -2516,6 +2639,254 @@
         "pixi": {
           "$ref": "#/$defs/PyProjectPixiTool",
           "description": "`pixi` configuration"
+        }
+      }
+    },
+    "RunExports": {
+      "title": "RunExports",
+      "description": "The run-exports the package declares for its downstream consumers.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "noarch": {
+          "title": "Noarch",
+          "description": "The only run-export bucket applied when the consuming output is `noarch`: added to the run dependencies of noarch consumers that depend on this package in `host-dependencies`.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/InheritableMatchspecTable"
+              },
+              {
+                "$ref": "#/$defs/PinCompatibleSpec"
+              },
+              {
+                "$ref": "#/$defs/PinSubpackageSpec"
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "$ref": "#/$defs/InheritableMatchspecTable"
+                    },
+                    {
+                      "$ref": "#/$defs/PinCompatibleSpec"
+                    },
+                    {
+                      "$ref": "#/$defs/PinSubpackageSpec"
+                    }
+                  ]
+                },
+                "propertyNames": {
+                  "minLength": 1
+                }
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
+        "strong": {
+          "title": "Strong",
+          "description": "Added to the run dependencies of consumers that depend on this package in `build-dependencies` or `host-dependencies`.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/InheritableMatchspecTable"
+              },
+              {
+                "$ref": "#/$defs/PinCompatibleSpec"
+              },
+              {
+                "$ref": "#/$defs/PinSubpackageSpec"
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "$ref": "#/$defs/InheritableMatchspecTable"
+                    },
+                    {
+                      "$ref": "#/$defs/PinCompatibleSpec"
+                    },
+                    {
+                      "$ref": "#/$defs/PinSubpackageSpec"
+                    }
+                  ]
+                },
+                "propertyNames": {
+                  "minLength": 1
+                }
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
+        "strong-constraints": {
+          "title": "Strong-Constraints",
+          "description": "Added to the run constraints of consumers that depend on this package in `build-dependencies` or `host-dependencies`. Constraints only restrict versions and cannot be source specs.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/InheritableMatchspecTable"
+              },
+              {
+                "$ref": "#/$defs/PinCompatibleSpec"
+              },
+              {
+                "$ref": "#/$defs/PinSubpackageSpec"
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "$ref": "#/$defs/InheritableMatchspecTable"
+                    },
+                    {
+                      "$ref": "#/$defs/PinCompatibleSpec"
+                    },
+                    {
+                      "$ref": "#/$defs/PinSubpackageSpec"
+                    }
+                  ]
+                },
+                "propertyNames": {
+                  "minLength": 1
+                }
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
+        "weak": {
+          "title": "Weak",
+          "description": "Added to the run dependencies of consumers that depend on this package in `host-dependencies`.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/InheritableMatchspecTable"
+              },
+              {
+                "$ref": "#/$defs/PinCompatibleSpec"
+              },
+              {
+                "$ref": "#/$defs/PinSubpackageSpec"
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "$ref": "#/$defs/InheritableMatchspecTable"
+                    },
+                    {
+                      "$ref": "#/$defs/PinCompatibleSpec"
+                    },
+                    {
+                      "$ref": "#/$defs/PinSubpackageSpec"
+                    }
+                  ]
+                },
+                "propertyNames": {
+                  "minLength": 1
+                }
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
+        "weak-constraints": {
+          "title": "Weak-Constraints",
+          "description": "Added to the run constraints of consumers that depend on this package in `host-dependencies`. Constraints only restrict versions and cannot be source specs.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/InheritableMatchspecTable"
+              },
+              {
+                "$ref": "#/$defs/PinCompatibleSpec"
+              },
+              {
+                "$ref": "#/$defs/PinSubpackageSpec"
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "$ref": "#/$defs/InheritableMatchspecTable"
+                    },
+                    {
+                      "$ref": "#/$defs/PinCompatibleSpec"
+                    },
+                    {
+                      "$ref": "#/$defs/PinSubpackageSpec"
+                    }
+                  ]
+                },
+                "propertyNames": {
+                  "minLength": 1
+                }
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
         }
       }
     },
@@ -3345,9 +3716,10 @@
         },
         "channel-priority": {
           "$ref": "#/$defs/ChannelPriority",
-          "description": "The type of channel priority that is used in the solve.\n- 'strict': only take the package from the channel it exist in first.\n- 'disabled': group all dependencies together as if there is no channel difference.",
+          "description": "The type of channel priority that is used in the solve.\n- 'strict': only take the package from the channel it exist in first.\n- 'flexible': exhaust the candidates of higher-priority channels before falling back to the next channel, regardless of the version.\n- 'disabled': group all dependencies together as if there is no channel difference.",
           "examples": [
             "strict",
+            "flexible",
             "disabled"
           ]
         },
@@ -3623,7 +3995,7 @@
       "properties": {
         "archspec": {
           "title": "Archspec",
-          "description": "Declare a `__archspec` virtual package with the given microarchitecture, e.g. `x86-64-v3`.",
+          "description": "Declare a `__archspec` virtual package with the given microarchitecture, e.g. `x86_64_v3`.",
           "type": "string",
           "minLength": 1
         },

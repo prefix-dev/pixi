@@ -1,7 +1,7 @@
 use crate::{is_binary_folder, strip_executable_extension};
 use itertools::Itertools;
 use miette::{Context, Diagnostic, IntoDiagnostic};
-use rattler_conda_types::{PackageName, Platform, PrefixRecord};
+use rattler_conda_types::{PackageName, PrefixRecord, Subdir};
 use rattler_shell::{
     activation::{ActivationVariables, Activator},
     shell::ShellEnum,
@@ -49,10 +49,13 @@ impl Prefix {
     /// Runs the activation scripts of the prefix and returns the environment
     /// variables that were modified as part of this process.
     pub async fn run_activation(&self) -> miette::Result<HashMap<String, String>> {
-        let activator =
-            Activator::from_path(self.root(), ShellEnum::default(), Platform::current())
-                .into_diagnostic()
-                .context("failed to constructor environment activator")?;
+        let activator = Activator::from_path(
+            self.root(),
+            ShellEnum::default(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
+        )
+        .into_diagnostic()
+        .context("failed to constructor environment activator")?;
 
         activator
             .run_activation(ActivationVariables::from_env().unwrap_or_default(), None)

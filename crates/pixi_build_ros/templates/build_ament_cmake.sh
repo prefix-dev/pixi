@@ -78,3 +78,7 @@ if [ ! -f "build.ninja" ]; then
 fi
 
 cmake --build . --config $BUILD_TYPE --target install
+
+# `cmake --build` only copies files, it never removes them, so a prefix reused
+# by an incremental build still holds the files of the previous build.
+cat install_manifest.txt >>"$RATTLER_BUILD_PACKAGE_FILES"

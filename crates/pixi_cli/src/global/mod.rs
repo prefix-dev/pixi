@@ -1,10 +1,10 @@
 use clap::Parser;
-use fancy_display::FancyDisplay;
 use miette::{IntoDiagnostic, Report, WrapErr};
+use pixi_manifest::PrioritizedChannel;
 use rattler_conda_types::NamedChannelOrUrl;
 use tokio::fs as tokio_fs;
 
-use pixi_global::EnvironmentName;
+use pixi_global::{EnvironmentName, report::EnvReport};
 
 mod add;
 mod edit;
@@ -86,7 +86,8 @@ pub async fn execute(cmd: Args) -> miette::Result<()> {
 enum EnvironmentAction {
     Sync,
     Install,
-    Remove,
+    Uninstall,
+    Update,
 }
 
 impl std::fmt::Display for EnvironmentAction {
@@ -94,15 +95,23 @@ impl std::fmt::Display for EnvironmentAction {
         let verb = match self {
             EnvironmentAction::Sync => "sync",
             EnvironmentAction::Install => "install",
-            EnvironmentAction::Remove => "remove",
+            EnvironmentAction::Uninstall => "uninstall",
+            EnvironmentAction::Update => "update",
         };
         write!(f, "{verb}")
     }
 }
 
-/// Warns about each failed environment with its full error, then returns a
-/// single error naming every environment the operation failed for. Returns
-/// `Ok(())` if there are no errors.
+/// Mark an environment as failed in place, so it keeps its position among the
+/// environments around it. Only the header line: the reason lands at the end of
+/// the run, with the other failures.
+fn report_failed_environment(env_name: &EnvironmentName) {
+    pixi_global::report::print(&EnvReport::failed(env_name.as_str()));
+}
+
+/// Print why each environment failed, then return a single error counting them.
+/// Collecting the reasons at the end of the run keeps them readable together,
+/// each attributed to its environment. Returns `Ok(())` if there are no errors.
 fn report_failed_environments(
     action: EnvironmentAction,
     errors: Vec<(EnvironmentName, Report)>,
@@ -110,19 +119,16 @@ fn report_failed_environments(
     if errors.is_empty() {
         return Ok(());
     }
+
+    let count = errors.len();
+    pixi_global::report::print_failure_heading(&action.to_string(), count);
     for (env_name, err) in &errors {
-        tracing::warn!(
-            "Couldn't {action} environment {}\n{err:?}",
-            env_name.fancy_display()
-        );
+        pixi_global::report::print(&EnvReport::reason(env_name.as_str(), format!("{err:?}")));
     }
-    let failed_envs = errors
-        .iter()
-        .map(|(env_name, _)| env_name.fancy_display().to_string())
-        .collect::<Vec<_>>()
-        .join(", ");
+
+    let plural = if count == 1 { "" } else { "s" };
     Err(miette::miette!(
-        "Couldn't {action} the following environments: {failed_envs}"
+        "couldn't {action} {count} environment{plural}"
     ))
 }
 
@@ -137,17 +143,18 @@ fn eventual_environment_channels(
     environment: Option<&EnvironmentName>,
     cli_channels: &[NamedChannelOrUrl],
     force_reinstall: bool,
-) -> Vec<NamedChannelOrUrl> {
+) -> Vec<PrioritizedChannel> {
     if !force_reinstall
         && let Some(environment) = environment.and_then(|name| project.environment(name))
     {
-        return environment.channels().into_iter().cloned().collect();
+        return environment.prioritized_channels().cloned().collect();
     }
-    if cli_channels.is_empty() {
+    let channels = if cli_channels.is_empty() {
         project.config().default_channels()
     } else {
         cli_channels.to_vec()
-    }
+    };
+    channels.into_iter().map(PrioritizedChannel::from).collect()
 }
 
 /// Reverts the changes made to the project for a specific environment after an error occurred.
@@ -211,7 +218,12 @@ mod tests {
             .add_environment(&existing, Some(vec![env_channel.clone()]))
             .unwrap();
 
-        let defaults = project.config().default_channels();
+        let defaults = project
+            .config()
+            .default_channels()
+            .into_iter()
+            .map(PrioritizedChannel::from)
+            .collect::<Vec<_>>();
 
         // No target environment: --channel arguments or the defaults.
         assert_eq!(
@@ -225,7 +237,7 @@ mod tests {
                 std::slice::from_ref(&cli_channel),
                 false
             ),
-            vec![cli_channel.clone()]
+            vec![PrioritizedChannel::from(cli_channel.clone())]
         );
 
         // A named environment that does not exist yet behaves the same.
@@ -236,7 +248,7 @@ mod tests {
                 std::slice::from_ref(&cli_channel),
                 false
             ),
-            vec![cli_channel.clone()]
+            vec![PrioritizedChannel::from(cli_channel.clone())]
         );
 
         // An existing environment keeps its manifest channels; --channel
@@ -248,7 +260,7 @@ mod tests {
                 std::slice::from_ref(&cli_channel),
                 false
             ),
-            vec![env_channel]
+            vec![PrioritizedChannel::from(env_channel)]
         );
 
         // --force-reinstall recreates the environment, so the manifest
@@ -260,7 +272,7 @@ mod tests {
                 std::slice::from_ref(&cli_channel),
                 true
             ),
-            vec![cli_channel]
+            vec![PrioritizedChannel::from(cli_channel)]
         );
     }
 }
