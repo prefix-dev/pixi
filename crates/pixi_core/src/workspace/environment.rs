@@ -80,6 +80,11 @@ impl<'p> Environment<'p> {
         self.environment.no_default_feature
     }
 
+    /// Returns the description of this environment, if any.
+    pub fn description(&self) -> Option<&'p str> {
+        self.environment.description.as_deref()
+    }
+
     /// Returns the name of this environment.
     pub fn name(&self) -> &'p EnvironmentName {
         &self.environment.name

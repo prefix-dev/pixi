@@ -26,6 +26,8 @@ pub struct TomlEnvironment {
     pub features: Option<Spanned<Vec<Spanned<String>>>>,
     pub solve_group: Option<String>,
     pub no_default_feature: bool,
+    /// An optional human-readable description of the environment.
+    pub description: Option<String>,
     /// Feature content defined directly on the environment. This is turned into
     /// an implicit feature that is prepended to the environment's features.
     pub inline: TomlEnvironmentInline,
@@ -158,6 +160,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlEnvironment {
         let features = th.optional_s("features");
         let solve_group = th.optional("solve-group");
         let no_default_feature = th.optional("no-default-feature");
+        let description = th.optional("description");
 
         // Inline feature content. `host-dependencies`, `build-dependencies` and
         // `system-requirements` are intentionally not accepted here and are
@@ -227,6 +230,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlEnvironment {
             features,
             solve_group,
             no_default_feature: no_default_feature.unwrap_or_default(),
+            description,
             inline,
         })
     }
@@ -354,5 +358,43 @@ mod test {
 
         let top_level = TopLevel::from_toml_str(input).unwrap();
         assert_matches!(top_level.env, TomlEnvironmentList::Map(_));
+    }
+
+    #[test]
+    pub fn test_parse_environment_description() {
+        let input = r#"
+            env = { features = ["foo"], description = "environment for integration tests" }
+        "#;
+
+        let toplevel = TopLevel::from_toml_str(input).unwrap();
+        assert_matches!(
+            toplevel.env,
+            TomlEnvironmentList::Map(map) if
+                map.description.as_deref() == Some("environment for integration tests"));
+    }
+
+    #[test]
+    pub fn test_parse_environment_without_description() {
+        let input = r#"
+            env = { features = ["foo"] }
+        "#;
+
+        let toplevel = TopLevel::from_toml_str(input).unwrap();
+        assert_matches!(
+            toplevel.env,
+            TomlEnvironmentList::Map(map) if map.description.is_none());
+    }
+
+    #[test]
+    pub fn test_parse_environment_description_wrong_type() {
+        let input = r#"
+            env = { features = ["foo"], description = 42 }
+        "#;
+
+        let err = format_parse_error(input, TopLevel::from_toml_str(input).unwrap_err());
+        assert!(
+            err.contains("expected a string, found integer"),
+            "unexpected error: {err}"
+        );
     }
 }

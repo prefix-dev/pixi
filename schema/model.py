@@ -906,6 +906,10 @@ class Environment(StrictBaseModel):
         False,
         description="Whether to add the default feature to this environment",
     )
+    description: NonEmptyStr | None = Field(
+        None,
+        description="A short description of the environment",
+    )
     # Inline feature content. Defining any of these synthesizes an implicit
     # feature that is prepended to the environment's features. `host-dependencies`,
     # `build-dependencies` and `system-requirements` are intentionally not allowed

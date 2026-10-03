@@ -709,6 +709,7 @@ impl WorkspaceManifestMut<'_> {
                 .collect(),
             solve_group: None,
             no_default_feature,
+            description: None,
         });
 
         if let Some(solve_group) = solve_group {
@@ -746,6 +747,7 @@ impl WorkspaceManifestMut<'_> {
             .solve_group
             .map(|idx| self.workspace.solve_groups[idx].name.clone());
         let no_default_feature = environment.no_default_feature;
+        let description = environment.description.clone();
 
         self.document.update_environment_features(
             name.as_str(),
@@ -761,6 +763,7 @@ impl WorkspaceManifestMut<'_> {
             features,
             solve_group: None,
             no_default_feature,
+            description,
         });
 
         if let Some(solve_group) = solve_group {
@@ -859,6 +862,7 @@ impl WorkspaceManifestMut<'_> {
                 features: updated_features,
                 solve_group: None,
                 no_default_feature: env.no_default_feature,
+                description: env.description.clone(),
             });
 
             if let Some(solve_group) = solve_group {
@@ -1436,6 +1440,7 @@ impl WorkspaceManifestMut<'_> {
                     features: vec![feature_name.clone()],
                     solve_group: None,
                     no_default_feature: false,
+                    description: None,
                 });
             }
             Some(environment) if !environment.features.contains(feature_name) => {

@@ -215,6 +215,10 @@ pub struct Environment {
 
     /// Whether to include the default feature in that environment
     pub no_default_feature: bool,
+
+    /// An optional human-readable description of the environment.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
 }
 
 #[cfg(test)]

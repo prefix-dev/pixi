@@ -125,6 +125,8 @@ fn format_platform(info: &PlatformInfo) -> String {
 #[derive(Serialize)]
 pub struct EnvironmentInfo {
     name: EnvironmentName,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    description: Option<String>,
     features: Vec<FeatureName>,
     solve_group: Option<String>,
     environment_size: Option<String>,
@@ -147,6 +149,14 @@ impl Display for EnvironmentInfo {
             bold.apply_to("Environment"),
             self.name.fancy_display().bold()
         )?;
+        if let Some(description) = &self.description {
+            writeln!(
+                f,
+                "{:>WIDTH$}: {}",
+                bold.apply_to("Description"),
+                description
+            )?;
+        }
         writeln!(
             f,
             "{:>WIDTH$}: {}",
@@ -514,6 +524,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
                     EnvironmentInfo {
                         name: env.name().clone(),
+                        description: env.description().map(str::to_string),
                         features: env
                             .features()
                             .map(|feature| feature.name.clone())
