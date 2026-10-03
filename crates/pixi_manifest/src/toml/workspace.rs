@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     sync::LazyLock,
 };
@@ -13,8 +13,8 @@ use toml_span::{DeserError, Span, Spanned, Value, de_helpers::TableHelper, value
 use url::Url;
 
 use crate::{
-    KnownPreviewFlag, PixiPlatform, PrioritizedChannel, S3Options, TargetSelector, Targets,
-    TomlError, WithWarnings, Workspace,
+    KnownPreviewFlag, PixiPlatform, PixiPlatformName, PrioritizedChannel, S3Options,
+    TargetSelector, Targets, TomlError, WithWarnings, Workspace,
     error::GenericError,
     pypi::pypi_options::PypiOptions,
     toml::{
@@ -105,6 +105,7 @@ pub struct TomlWorkspace {
     pub channel_priority: Option<ChannelPriority>,
     pub solve_strategy: Option<SolveStrategy>,
     pub platforms: Spanned<IndexSet<PixiPlatform>>,
+    pub platform_spans: IndexMap<PixiPlatformName, Span>,
     pub license: Option<Spanned<String>>,
     pub license_file: Option<Spanned<PathBuf>>,
     pub readme: Option<Spanned<PathBuf>>,
@@ -188,6 +189,52 @@ impl TomlWorkspace {
         } = self.preview.into_preview();
 
         let mut warnings = preview_warnings;
+
+        // Warn if a higher-priority platform shadows a lower-priority platform on the same subdir.
+        let mut shadowed = HashSet::new();
+        for (i, platform_a) in self.platforms.value.iter().enumerate() {
+            for platform_b in self.platforms.value.iter().skip(i + 1) {
+                if platform_a.shadows(platform_b) {
+                    if !shadowed.insert(platform_b.name().clone()) {
+                        continue;
+                    }
+                    let is_equivalent = platform_b.shadows(platform_a);
+                    let help = if is_equivalent {
+                        "Consider removing one of the duplicate platform definitions.".to_string()
+                    } else {
+                        format!(
+                            "Consider placing '{b}' before '{a}' in the 'platforms' array so the more specific platform is preferred when its requirements are met.",
+                            b = platform_b.name(),
+                            a = platform_a.name(),
+                        )
+                    };
+                    let b_span = self.platform_spans.get(platform_b.name()).copied();
+                    let a_span = self.platform_spans.get(platform_a.name()).copied();
+                    let primary_span = b_span.unwrap_or(self.platforms.span);
+
+                    let mut error = GenericError::new(format!(
+                        "Platform '{b}' is shadowed by higher-priority platform '{a}' and will never be automatically selected.",
+                        b = platform_b.name(),
+                        a = platform_a.name(),
+                    ))
+                    .with_span(primary_span.into())
+                    .with_span_label(format!("shadowed by '{a}'", a = platform_a.name()))
+                    .with_help(help);
+
+                    if let Some(a_span) = a_span {
+                        error = error.with_opt_label(
+                            format!(
+                                "higher-priority platform '{a}' declared here",
+                                a = platform_a.name()
+                            ),
+                            Some(a_span.into()),
+                        );
+                    }
+
+                    warnings.push(error.into());
+                }
+            }
+        }
 
         // An empty `conda-pypi-map = {}` is soft-deprecated. It preserves the
         // legacy no-network behavior while keeping the conda-forge same-name
@@ -336,7 +383,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             .optional::<TomlWith<_, TomlFromStr<_>>>("solve-strategy")
             .map(TomlWith::into_inner);
         // Reject repeated names: `PixiPlatform`'s `Eq`/`Hash` are by name only,
-        // so duplicates would otherwise silently collapse to the first entry.
+        let mut platform_spans = IndexMap::new();
         let platforms = match th.optional::<Spanned<Vec<Spanned<TomlPixiPlatform>>>>("platforms") {
             None => None,
             Some(spanned) => {
@@ -359,6 +406,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
                         .into());
                     }
                     seen.insert(name, entry_span);
+                    platform_spans.insert(platform.name().clone(), entry_span);
                     value.insert(platform);
                 }
                 Some(Spanned { span, value })
@@ -413,6 +461,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             channel_priority,
             solve_strategy,
             platforms: platforms.unwrap_or_default(),
+            platform_spans,
             license,
             license_file,
             readme,
@@ -721,5 +770,110 @@ mod test {
         5 │
           ╰────
         "#);
+    }
+
+    #[test]
+    fn test_workspace_platforms_shadowed_warns() {
+        let input = r#"
+        channels = []
+        platforms = [
+          "linux-64",
+          { name = "gpu-linux-64", platform = "linux-64", cuda = "12.0" },
+        ]
+        "#;
+        let with_warnings = TomlWorkspace::from_toml_str(input)
+            .unwrap()
+            .into_workspace(ExternalWorkspaceProperties::default(), Path::new(""))
+            .unwrap();
+
+        assert_eq!(with_warnings.warnings.len(), 1);
+        let warning = &with_warnings.warnings[0];
+        assert_eq!(
+            warning.to_string(),
+            "Platform 'gpu-linux-64' is shadowed by higher-priority platform 'linux-64' and will never be automatically selected."
+        );
+        let help = miette::Diagnostic::help(warning).unwrap().to_string();
+        assert_eq!(
+            help,
+            "Consider placing 'gpu-linux-64' before 'linux-64' in the 'platforms' array so the more specific platform is preferred when its requirements are met."
+        );
+        let labels: Vec<_> = miette::Diagnostic::labels(warning).unwrap().collect();
+        assert_eq!(labels.len(), 2);
+        assert_eq!(labels[0].label(), Some("shadowed by 'linux-64'"));
+        assert_eq!(
+            labels[1].label(),
+            Some("higher-priority platform 'linux-64' declared here")
+        );
+    }
+
+    #[test]
+    fn test_workspace_platforms_correct_order_no_warning() {
+        let input = r#"
+        channels = []
+        platforms = [
+          { name = "gpu-linux-64", platform = "linux-64", cuda = "12.0" },
+          "linux-64",
+        ]
+        "#;
+        let with_warnings = TomlWorkspace::from_toml_str(input)
+            .unwrap()
+            .into_workspace(ExternalWorkspaceProperties::default(), Path::new(""))
+            .unwrap();
+
+        assert!(with_warnings.warnings.is_empty());
+    }
+
+    #[test]
+    fn test_workspace_platforms_duplicate_definition_warns() {
+        let input = r#"
+        channels = []
+        platforms = [
+          "linux-64",
+          { name = "my-linux-64", platform = "linux-64" },
+        ]
+        "#;
+        let with_warnings = TomlWorkspace::from_toml_str(input)
+            .unwrap()
+            .into_workspace(ExternalWorkspaceProperties::default(), Path::new(""))
+            .unwrap();
+
+        assert_eq!(with_warnings.warnings.len(), 1);
+        let warning = &with_warnings.warnings[0];
+        assert_eq!(
+            warning.to_string(),
+            "Platform 'my-linux-64' is shadowed by higher-priority platform 'linux-64' and will never be automatically selected."
+        );
+        let help = miette::Diagnostic::help(warning).unwrap().to_string();
+        assert_eq!(
+            help,
+            "Consider removing one of the duplicate platform definitions."
+        );
+    }
+
+    #[test]
+    fn test_workspace_platforms_multiple_shadowed_only_one_warning_per_platform() {
+        let input = r#"
+        channels = []
+        platforms = [
+          "linux-64",
+          { name = "cuda-11", platform = "linux-64", cuda = "11.0" },
+          { name = "cuda-12", platform = "linux-64", cuda = "12.0" },
+        ]
+        "#;
+        let with_warnings = TomlWorkspace::from_toml_str(input)
+            .unwrap()
+            .into_workspace(ExternalWorkspaceProperties::default(), Path::new(""))
+            .unwrap();
+
+        // Exactly 2 warnings: cuda-11 shadowed by linux-64, and cuda-12 shadowed by linux-64.
+        assert_eq!(with_warnings.warnings.len(), 2);
+        assert_eq!(
+            with_warnings.warnings[0].to_string(),
+            "Platform 'cuda-11' is shadowed by higher-priority platform 'linux-64' and will never be automatically selected."
+        );
+        assert_eq!(
+            with_warnings.warnings[1].to_string(),
+            "Platform 'cuda-12' is shadowed by higher-priority platform 'linux-64' and will never be automatically selected."
+        );
     }
 }
