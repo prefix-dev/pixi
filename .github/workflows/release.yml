@@ -210,6 +210,10 @@ jobs:
     name: Tag release
     needs: [prepare, build]
     if: needs.prepare.outputs.publishing == 'true' && github.ref == 'refs/heads/main'
+    # The protected environment requires approval from a second maintainer
+    # before any tag is created or release is published.
+    environment:
+      name: release
     runs-on: ubuntu-latest
     permissions:
       contents: write
