@@ -128,6 +128,10 @@ pub struct SolvePixiEnvironmentSpec {
     /// instead of discovering one on disk. Their content hashes are part of the
     /// key identity.
     pub inline_packages: Arc<BTreeMap<PackageName, InlinePackage>>,
+    /// Source dependencies declared across the workspace. When a nested
+    /// build/host solve encounters a required package whose name matches an entry
+    /// here, it resolves it from source rather than searching remote conda channels.
+    pub workspace_sources: Arc<BTreeMap<PackageName, SourceLocationSpec>>,
 }
 
 impl Hash for SolvePixiEnvironmentSpec {
@@ -145,6 +149,7 @@ impl Hash for SolvePixiEnvironmentSpec {
             preferred_build_source,
             env_ref,
             inline_packages,
+            workspace_sources,
         } = self;
         dependencies.hash(state);
         constraints.hash(state);
@@ -155,6 +160,7 @@ impl Hash for SolvePixiEnvironmentSpec {
         preferred_build_source.hash(state);
         env_ref.hash(state);
         inline_packages.hash(state);
+        workspace_sources.hash(state);
     }
 }
 
@@ -170,6 +176,7 @@ impl PartialEq for SolvePixiEnvironmentSpec {
             && self.preferred_build_source == other.preferred_build_source
             && self.env_ref == other.env_ref
             && self.inline_packages == other.inline_packages
+            && self.workspace_sources == other.workspace_sources
     }
 }
 
@@ -342,6 +349,19 @@ async fn compute_inner(
         )
         .collect();
 
+    let workspace_sources = if spec.workspace_sources.is_empty() {
+        let mut map = BTreeMap::new();
+        for (name, spec) in source_specs.iter_specs() {
+            map.insert(name.clone(), spec.location.clone());
+        }
+        for (name, dev_spec) in spec.dev_sources.iter() {
+            map.insert(name.clone(), dev_spec.source.clone());
+        }
+        Arc::new(map)
+    } else {
+        Arc::clone(&spec.workspace_sources)
+    };
+
     // Source-record hints for this solve. Keyed on
     // `(PackageName, SourceLocationSpec)`; the same `Arc` flows
     // through every nested solve so a given source package gets the
@@ -355,6 +375,7 @@ async fn compute_inner(
         &spec.env_ref,
         &spec.preferred_build_source,
         &spec.installed_source_hints,
+        &workspace_sources,
     )
     .await?;
     tracing::debug!(
@@ -485,6 +506,7 @@ async fn walk_and_resolve(
     env_ref: &EnvironmentRef,
     preferred_build_source: &Arc<BTreeMap<PackageName, PinnedSourceSpec>>,
     installed_source_hints: &PtrArc<InstalledSourceHints>,
+    workspace_sources: &Arc<BTreeMap<PackageName, SourceLocationSpec>>,
 ) -> Result<Vec<Arc<pixi_record::SourceRecord>>, SolvePixiEnvironmentError> {
     let mut all_records: Vec<Arc<pixi_record::SourceRecord>> = Vec::new();
     let mut seen_sources: HashSet<(PackageName, SourceLocationSpec)> = HashSet::new();
@@ -522,6 +544,7 @@ async fn walk_and_resolve(
             env_ref: env_ref.clone(),
             inline,
             installed_source_hints: installed_source_hints.clone(),
+            workspace_sources: Arc::clone(workspace_sources),
         });
         pending.push(p.compute(async move |sub_ctx: &mut ComputeCtx| {
             // Per-push cycle guard. `sub_ctx` has a branch-local
@@ -621,8 +644,18 @@ async fn walk_and_resolve(
                 let PackageNameMatcher::Exact(child_name) = name_matcher else {
                     continue;
                 };
-                if let Some(source_location) = record.sources().get(child_name.as_normalized()) {
-                    let resolved_location = anchor.resolve_location(source_location.clone());
+                let maybe_location = record
+                    .sources()
+                    .get(child_name.as_normalized())
+                    .map(|source_location| anchor.resolve_location(source_location.clone()))
+                    .or_else(|| {
+                        if child_name != parent_pkg {
+                            workspace_sources.get(&child_name).cloned()
+                        } else {
+                            None
+                        }
+                    });
+                if let Some(resolved_location) = maybe_location {
                     push(
                         &mut p,
                         &mut pending,

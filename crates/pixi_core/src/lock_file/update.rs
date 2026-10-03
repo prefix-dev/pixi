@@ -3125,6 +3125,25 @@ async fn spawn_solve_conda_environment_task(
     let installed_source_hints = pixi_command_dispatcher::PtrArc::from_value(
         pixi_command_dispatcher::InstalledSourceHints::from_records(&installed),
     );
+
+    let mut workspace_sources_map = BTreeMap::new();
+    for env in group.workspace().environments() {
+        for (name, spec) in env.combined_dependencies(Some(pixi_platform)).into_specs() {
+            if let Either::Left(source) = spec.into_source_or_binary() {
+                workspace_sources_map.insert(name, source.location);
+            }
+        }
+    }
+    for (name, spec) in dependencies.iter_specs() {
+        if let Either::Left(source) = spec.clone().into_source_or_binary() {
+            workspace_sources_map.insert(name.clone(), source.location);
+        }
+    }
+    for (name, dev_spec) in &dev_sources {
+        workspace_sources_map.insert(name.clone(), dev_spec.source.clone());
+    }
+    let workspace_sources = Arc::new(workspace_sources_map);
+
     let records_arc = command_dispatcher
         .engine()
         .compute(&SolvePixiEnvironmentKey::new(SolvePixiEnvironmentSpec {
@@ -3137,6 +3156,7 @@ async fn spawn_solve_conda_environment_task(
             preferred_build_source: Arc::new(pin_overrides),
             env_ref,
             inline_packages,
+            workspace_sources,
         }))
         .await
         .map_err_into_dispatcher(|source| SolveCondaEnvironmentError::SolveFailed {

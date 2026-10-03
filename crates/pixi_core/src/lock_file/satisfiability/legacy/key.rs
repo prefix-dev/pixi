@@ -179,6 +179,7 @@ impl Key for LegacySourceEnvKey {
                 env_ref: self.env_ref.clone(),
                 inline: None,
                 installed_source_hints: self.installed_source_hints.clone(),
+                workspace_sources: Default::default(),
             }))
             .await?;
 
