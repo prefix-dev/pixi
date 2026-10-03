@@ -685,6 +685,58 @@ mod test {
         );
     }
 
+    #[test]
+    fn test_possible_pixi_platforms_prefers_specific_platform_matching_host() {
+        use rattler_conda_types::{GenericVirtualPackage, Platform};
+
+        let input = r#"
+        channels = []
+        platforms = [
+          "linux-64",
+          { platform = "linux-64", cuda = "12.6" },
+          { name = "cuda-arch-linux", platform = "linux-64", cuda = "12.6", archspec = "x86_64_v3" },
+        ]
+        "#;
+        let workspace = TomlWorkspace::from_toml_str(input)
+            .unwrap()
+            .into_workspace(ExternalWorkspaceProperties::default(), Path::new(""))
+            .unwrap()
+            .value;
+
+        let host_cuda = GenericVirtualPackage {
+            name: "__cuda".parse().unwrap(),
+            version: "12.6".parse().unwrap(),
+            build_string: "0".to_string(),
+        };
+        let host_archspec = GenericVirtualPackage {
+            name: "__archspec".parse().unwrap(),
+            version: "1".parse().unwrap(),
+            build_string: "x86_64_v3".to_string(),
+        };
+
+        // On a host with both CUDA and archspec, platforms are ordered by specificity:
+        // 2 custom VPs > 1 custom VP > bare platform (0 custom VPs).
+        let candidates_all = workspace
+            .possible_pixi_platforms(Platform::Linux64, &[host_cuda.clone(), host_archspec]);
+        let names: Vec<&str> = candidates_all.iter().map(|p| p.name().as_str()).collect();
+        assert_eq!(
+            names,
+            vec!["cuda-arch-linux", "linux-64-cuda-12-6", "linux-64"]
+        );
+
+        // On a host with only CUDA, the archspec platform is filtered out,
+        // and the CUDA platform is preferred over the bare platform even though
+        // the bare platform was declared first.
+        let candidates_cuda = workspace.possible_pixi_platforms(Platform::Linux64, &[host_cuda]);
+        let names_cuda: Vec<&str> = candidates_cuda.iter().map(|p| p.name().as_str()).collect();
+        assert_eq!(names_cuda, vec!["linux-64-cuda-12-6", "linux-64"]);
+
+        // On a host without CUDA, specialized platforms are dropped and only the bare platform matches.
+        let candidates_bare = workspace.possible_pixi_platforms(Platform::Linux64, &[]);
+        let names_bare: Vec<&str> = candidates_bare.iter().map(|p| p.name().as_str()).collect();
+        assert_eq!(names_bare, vec!["linux-64"]);
+    }
+
     /// Two platform entries that resolve to the same name must be rejected,
     /// not silently collapsed to the first (`PixiPlatform` is keyed by name).
     #[test]
