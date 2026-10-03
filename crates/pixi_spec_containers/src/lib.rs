@@ -299,3 +299,58 @@ impl<N: Hash + Eq + Clone + Serialize, D: Hash + Eq + Clone + Serialize> Seriali
         seq.end()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_dependency_map_insert_and_get() {
+        let mut map = DependencyMap::default();
+        map.insert("foo", "1.0");
+        map.insert("foo", "2.0");
+        map.insert("bar", "3.0");
+
+        assert_eq!(map.get("foo").unwrap().len(), 2);
+        assert_eq!(map.get("bar").unwrap().len(), 1);
+        assert!(map.get("baz").is_none());
+    }
+
+    #[test]
+    fn test_dependency_map_overwrite() {
+        let mut map1 = DependencyMap::default();
+        map1.insert("foo", "1.0");
+        map1.insert("bar", "2.0");
+
+        let mut map2 = DependencyMap::default();
+        map2.insert("foo", "3.0");
+        map2.insert("baz", "4.0");
+
+        let combined = map1.overwrite(&map2);
+
+        assert_eq!(combined.get("foo").unwrap().len(), 1);
+        assert_eq!(combined.get_single("foo").unwrap(), Some(&"3.0"));
+        assert_eq!(combined.get_single("bar").unwrap(), Some(&"2.0"));
+        assert_eq!(combined.get_single("baz").unwrap(), Some(&"4.0"));
+    }
+
+    #[test]
+    fn test_dependency_map_merge_all() {
+        let mut map1 = DependencyMap::default();
+        map1.insert("foo", "1.0");
+        map1.insert("bar", "2.0");
+
+        let mut map2 = DependencyMap::default();
+        map2.insert("foo", "1.5");
+        map2.insert("baz", "3.0");
+
+        let mut map3 = DependencyMap::default();
+        map3.insert("foo", "2.0");
+
+        let merged = DependencyMap::merge_all([&map1, &map2, &map3]);
+
+        assert_eq!(merged.get("foo").unwrap().len(), 3);
+        assert_eq!(merged.get("bar").unwrap().len(), 1);
+        assert_eq!(merged.get("baz").unwrap().len(), 1);
+    }
+}
