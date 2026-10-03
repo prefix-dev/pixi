@@ -69,6 +69,10 @@ pub fn oci_middleware(client: LazyReqwestClient, config: &Config) -> miette::Res
 static DEFAULT_REQWEST_USER_AGENT: LazyLock<String> =
     LazyLock::new(|| format!("pixi/{}", consts::PIXI_VERSION));
 static DEFAULT_REQWEST_TIMEOUT_SEC: Duration = Duration::from_secs(5 * 60);
+/// Bounds only establishing the TCP connection, not the transfer, so it can be
+/// far shorter than the read timeout. Without it the OS default applies and
+/// differs per platform: roughly two minutes on Linux and five on macOS.
+static DEFAULT_REQWEST_CONNECT_TIMEOUT_SEC: Duration = Duration::from_secs(30);
 static DEFAULT_REQWEST_IDLE_PER_HOST: usize = 20;
 
 /// The default `TlsRootCerts` mode for the active TLS backend.
@@ -135,7 +139,8 @@ pub fn reqwest_client_builder(config: Option<&Config>) -> miette::Result<reqwest
     let mut builder = Client::builder()
         .pool_max_idle_per_host(DEFAULT_REQWEST_IDLE_PER_HOST)
         .user_agent(DEFAULT_REQWEST_USER_AGENT.as_str())
-        .read_timeout(DEFAULT_REQWEST_TIMEOUT_SEC);
+        .read_timeout(DEFAULT_REQWEST_TIMEOUT_SEC)
+        .connect_timeout(DEFAULT_REQWEST_CONNECT_TIMEOUT_SEC);
 
     #[cfg_attr(
         not(any(feature = "native-tls", feature = "rustls")),
@@ -372,6 +377,14 @@ mod tests {
     use url::Url;
 
     use super::*;
+
+    #[test]
+    fn connect_timeout_is_shorter_than_the_read_timeout() {
+        // A connect timeout at or above the read timeout would never fire first,
+        // leaving the platform default in charge and the bug in place.
+        assert!(!DEFAULT_REQWEST_CONNECT_TIMEOUT_SEC.is_zero());
+        assert!(DEFAULT_REQWEST_CONNECT_TIMEOUT_SEC < DEFAULT_REQWEST_TIMEOUT_SEC);
+    }
 
     #[test]
     fn test_uv_middlewares_includes_auth_with_mirrors() {
