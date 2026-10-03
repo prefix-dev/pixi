@@ -4,6 +4,8 @@ extend-exclude = [
   ".pixi/",
   ".claude/",
   "**/*.snap",
+  "**/*.crt",
+  "crates/pixi_utils/tests/*",
   "tests/data/mapping_files/*",
   "examples/**/**.ipynb",
   "robostack.yaml",

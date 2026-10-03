@@ -31,7 +31,8 @@ const EXPERIMENTAL: &str = "experimental";
 /// Note: This setting only has an effect when pixi is built with the `rustls` feature.
 /// When built with `native-tls`, system certificates are always used regardless of this setting.
 ///
-/// `SSL_CERT_FILE` / `SSL_CERT_DIR` (when set and valid) always take precedence over this setting.
+/// If `SSL_CERT_FILE` or `SSL_CERT_DIR` is set and valid, certificates from those locations
+/// are merged with the configured root certificates.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub enum TlsRootCerts {
     /// Use bundled Mozilla root certificates (portable, works everywhere).
