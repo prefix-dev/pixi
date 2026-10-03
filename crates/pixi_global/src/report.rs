@@ -43,12 +43,14 @@ const GAP: usize = 2;
 const ITEMS_PER_LINE: usize = 4;
 
 /// How much of the report to show.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Verbosity {
     /// Print nothing but failures.
     Quiet,
     /// Print the whole report.
     Normal,
+    /// Print the report with verbose details (such as completions).
+    Verbose,
 }
 
 static VERBOSITY: AtomicU8 = AtomicU8::new(Verbosity::Normal as u8);
@@ -66,6 +68,7 @@ pub fn set_verbosity(verbosity: Verbosity) {
 pub fn verbosity() -> Verbosity {
     match VERBOSITY.load(Ordering::Relaxed) {
         value if value == Verbosity::Quiet as u8 => Verbosity::Quiet,
+        value if value == Verbosity::Verbose as u8 => Verbosity::Verbose,
         _ => Verbosity::Normal,
     }
 }
@@ -216,6 +219,11 @@ impl Item {
             name: name.into(),
             detail: None,
         }
+    }
+
+    pub fn with_detail(mut self, detail: Option<String>) -> Self {
+        self.detail = detail;
+        self
     }
 
     pub fn summary(name: impl Into<String>) -> Self {
@@ -1050,5 +1058,56 @@ mod tests {
         assert!(EnvReport::failed("broken").is_failure());
         assert!(EnvReport::reason("broken", "× no such package").is_failure());
         assert!(!installed().is_failure());
+    }
+
+    #[test]
+    fn renders_completions_with_shells() {
+        let report = EnvReport::new(
+            "rattler",
+            Some("0.1.5".to_string()),
+            Some(EnvStatus::Installed),
+        )
+        .with_rows(vec![
+            Row::new(
+                Label::Exposed,
+                vec![Item::exposed(Marker::Added, "rattler", None)],
+            ),
+            Row::new(
+                Label::Completions,
+                vec![
+                    Item::plain(Marker::Added, "rattler")
+                        .with_detail(Some("(bash, zsh, fish)".to_string())),
+                ],
+            ),
+        ]);
+
+        insta::assert_snapshot!(render(&report, &options()), @r"
+        (installed) rattler 0.1.5
+        ├── exposed       + rattler
+        └── completions   + rattler (bash, zsh, fish)
+        ");
+    }
+
+    #[test]
+    fn renders_completions_removal() {
+        let report = EnvReport::new("rattler", None, Some(EnvStatus::Removed)).with_rows(vec![
+            Row::new(
+                Label::Exposed,
+                vec![Item::exposed(Marker::Removed, "rattler", None)],
+            ),
+            Row::new(
+                Label::Completions,
+                vec![
+                    Item::plain(Marker::Removed, "rattler")
+                        .with_detail(Some("(bash, zsh, fish)".to_string())),
+                ],
+            ),
+        ]);
+
+        insta::assert_snapshot!(render(&report, &options()), @r"
+        (removed)   rattler
+        ├── exposed       - rattler
+        └── completions   - rattler (bash, zsh, fish)
+        ");
     }
 }

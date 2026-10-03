@@ -159,6 +159,8 @@ impl GlobalOptions {
     fn report_verbosity(&self) -> pixi_global::report::Verbosity {
         if self.quiet > 0 {
             pixi_global::report::Verbosity::Quiet
+        } else if self.verbose > 0 {
+            pixi_global::report::Verbosity::Verbose
         } else {
             pixi_global::report::Verbosity::Normal
         }
