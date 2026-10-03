@@ -9,6 +9,10 @@ pub use file_hashes::{FileHashes, FileHashesError};
 pub use pixi_manifest::{Task, TaskName};
 pub use task_hash::{ComputationHash, InputHashes, TaskHash};
 
+pub use error::{
+    AmbiguousTaskError, InvalidArgValueError, MissingArgError, MissingTaskError,
+    UnknownEnvironmentError, UnrunnableTaskError,
+};
 pub use executable_task::{
     CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory, RunOutput,
     TaskExecutionError, get_task_env,

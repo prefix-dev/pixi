@@ -22,7 +22,7 @@ use crate::{
     TaskDisambiguation,
     error::{
         AmbiguousTaskError, InvalidArgValueError, MissingArgError, MissingTaskError,
-        UnrunnableTaskError,
+        UnknownEnvironmentError, UnrunnableTaskError,
     },
     task_environment::{
         FindTaskError, FindTaskSource, SearchEnvironments, environments_defining_task,
@@ -472,10 +472,24 @@ impl<'p> TaskGraph<'p> {
                     Cow::Owned(_) => unreachable!("only named tasks can have dependencies"),
                 };
 
-                let task_specific_environment = dependency
-                    .environment
-                    .clone()
-                    .and_then(|environment| project.environment(&environment));
+                let task_specific_environment = match &dependency.environment {
+                    Some(env_name) => {
+                        let env = project.environment(env_name).ok_or_else(|| {
+                            TaskGraphError::UnknownEnvironment(UnknownEnvironmentError {
+                                task: node_name.clone(),
+                                dependency: dependency.task_name.clone(),
+                                environment: env_name.clone(),
+                                available_environments: project
+                                    .environments()
+                                    .into_iter()
+                                    .map(|e| e.name().clone())
+                                    .collect(),
+                            })
+                        })?;
+                        Some(env)
+                    }
+                    None => None,
+                };
 
                 let (task_env, task_dependency) = match search_environments.find_task(
                     dependency.task_name.clone(),
@@ -483,6 +497,16 @@ impl<'p> TaskGraph<'p> {
                     task_specific_environment,
                 ) {
                     Err(FindTaskError::MissingTask(err)) => {
+                        let environments =
+                            environments_defining_task(project, &dependency.task_name);
+                        if !environments.is_empty() {
+                            return Err(TaskGraphError::UnrunnableTask(UnrunnableTaskError {
+                                task_name: dependency.task_name,
+                                environments,
+                                explicit_environment: dependency.environment,
+                                platform: search_environments.platform.map(|p| p.name().clone()),
+                            }));
+                        }
                         return Err(TaskGraphError::MissingTask(err));
                     }
                     Err(FindTaskError::AmbiguousTask(err)) => {
@@ -724,6 +748,10 @@ pub enum TaskGraphError {
 
     #[error(transparent)]
     InvalidArgValue(#[from] InvalidArgValueError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    UnknownEnvironment(#[from] UnknownEnvironmentError),
 }
 
 #[cfg(test)]
@@ -1548,5 +1576,75 @@ mod test {
             .build_graph()
             .unwrap();
         assert_eq!(commands, vec!["echo generic"]);
+    }
+
+    #[test]
+    fn test_task_dependency_unknown_environment() {
+        let workspace_str = r#"
+        [workspace]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
+
+        [tasks]
+        task0 = "echo 0"
+        task1 = "echo 1"
+        task_alias = [{ task = "task0", environment = "doesnt-exist" }]
+        task_exec = { cmd = "echo 2", depends-on = [{ task = "task1", environment = "nonexistent" }] }
+        "#;
+
+        // For alias task
+        let err = TaskGraphTest::new(workspace_str, &["task_alias"]).expect_error();
+        assert_matches!(err, TaskGraphError::UnknownEnvironment(err) => {
+            assert_eq!(err.task.as_str(), "task_alias");
+            assert_eq!(err.dependency.as_str(), "task0");
+            assert_eq!(err.environment.as_str(), "doesnt-exist");
+            assert_eq!(
+                err.available_environments.iter().map(|e| e.as_str()).collect::<Vec<_>>(),
+                vec!["default"]
+            );
+            assert_eq!(
+                err.to_string(),
+                "environment 'doesnt-exist' specified for dependency 'task0' of task 'task_alias' does not exist"
+            );
+        });
+
+        // For execute task with depends-on
+        let err = TaskGraphTest::new(workspace_str, &["task_exec"]).expect_error();
+        assert_matches!(err, TaskGraphError::UnknownEnvironment(err) => {
+            assert_eq!(err.task.as_str(), "task_exec");
+            assert_eq!(err.dependency.as_str(), "task1");
+            assert_eq!(err.environment.as_str(), "nonexistent");
+        });
+    }
+
+    #[test]
+    fn test_task_dependency_task_not_in_specified_environment() {
+        let workspace_str = r#"
+        [workspace]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
+
+        [feature.test.tasks]
+        test_task = "echo test"
+
+        [tasks]
+        runner = [{ task = "test_task", environment = "prod" }]
+
+        [environments]
+        test = ["test"]
+        prod = []
+        "#;
+
+        let err = TaskGraphTest::new(workspace_str, &["runner"]).expect_error();
+        assert_matches!(err, TaskGraphError::UnrunnableTask(err) => {
+            assert_eq!(err.task_name.as_str(), "test_task");
+            assert_eq!(err.explicit_environment.as_ref().map(|e| e.as_str()), Some("prod"));
+            assert_eq!(
+                err.environments.iter().map(|e| e.as_str()).collect::<Vec<_>>(),
+                vec!["test"]
+            );
+        });
     }
 }
