@@ -285,6 +285,13 @@ pub async fn execute() -> miette::Result<ExitCode> {
     setup_logging(&args, use_colors)?;
     pixi_global::report::set_verbosity(args.global_options.report_verbosity());
 
+    // Raised here rather than only on the install paths. Solving opens many
+    // repodata shards at once, so `pixi update` and `pixi lock` run out of
+    // descriptors before any install code runs (gh-6424). It sits after
+    // `setup_logging` so the helper's own diagnostic is not swallowed, and it
+    // is guarded by a `Once`, so the existing calls further down are unaffected.
+    pixi_utils::rlimit::try_increase_rlimit_to_sensible();
+
     let (Some(command), global_options) = (args.command, args.global_options) else {
         return Ok(ExitCode::from(2));
     };
