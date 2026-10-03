@@ -221,6 +221,10 @@ impl AddBuilder {
         self
     }
 
+    pub fn with_editable(self, editable: bool) -> Self {
+        self.set_editable(editable)
+    }
+
     pub fn set_pypi(mut self, pypi: bool) -> Self {
         self.args.dependency_config.pypi = pypi;
         self
