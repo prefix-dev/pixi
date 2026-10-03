@@ -6,6 +6,9 @@ pub struct BuildScriptContext {
     pub build_platform: BuildPlatform,
     pub source_dir: String,
     pub extra_args: Vec<String>,
+    /// Directory the build tree is configured in, relative to the work
+    /// directory the script runs in.
+    pub build_dir: &'static str,
 }
 
 #[derive(Copy, Clone, Serialize)]
@@ -32,6 +35,7 @@ mod test {
     use rstest::*;
 
     use super::*;
+    use crate::inputs;
 
     #[rstest]
     fn test_build_script(
@@ -42,6 +46,7 @@ mod test {
             build_platform,
             source_dir: String::from("my-prefix-dir"),
             extra_args: extra_args.clone(),
+            build_dir: inputs::NINJA_BUILD_DIR,
         };
         let script = context.render();
 
@@ -66,6 +71,7 @@ mod test {
             build_platform,
             source_dir: String::from("/src/demo"),
             extra_args: vec![],
+            build_dir: inputs::NINJA_BUILD_DIR,
         }
         .render()
     }
