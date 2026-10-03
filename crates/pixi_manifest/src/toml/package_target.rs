@@ -104,6 +104,7 @@ impl TomlPackageTarget {
         // reserved for the run-export buckets.
         let mut dependencies = HashMap::new();
         if let Some(resolved) = resolve(self.run_dependencies)? {
+            reject_channel(&resolved, "[package.run-dependencies]")?;
             let specs =
                 resolved.into_dependency_specs("[package.run-dependencies]", package_name)?;
             dependencies.insert(SpecType::Run, specs.into_iter().collect());
@@ -127,6 +128,7 @@ impl TomlPackageTarget {
             );
         }
         if let Some(resolved) = resolve(self.run_constraints)? {
+            reject_channel(&resolved, "[package.run-constraints]")?;
             let specs = resolved.into_pixi_specs(
                 "[package.run-constraints]",
                 "Pins are supported in `[package.run-dependencies]`, `[package.host-dependencies]`, and the `[package.run-exports]` tables",
@@ -155,6 +157,7 @@ impl TomlPackageTarget {
                 let resolved = dependencies
                     .value
                     .resolve(workspace_dependencies, pixi_build_enabled)?;
+                reject_channel(&resolved, "[package.extra-dependencies]")?;
                 let dep_map = resolved
                     .into_pixi_specs(
                         "[package.extra-dependencies]",
@@ -239,6 +242,7 @@ fn resolve_run_export_bucket(
                 .value
                 .resolve(workspace_dependencies, pixi_build_enabled)?;
             reject_url_run_exports(&resolved)?;
+            reject_channel(&resolved, "[package.run-exports]")?;
             Ok::<_, TomlError>(resolved)
         })
         .transpose()
@@ -270,6 +274,29 @@ fn reject_url_run_exports(map: &ResolvedPackageMap) -> Result<(), TomlError> {
                 .into());
             }
             _ => {}
+        }
+    }
+    Ok(())
+}
+
+/// Rejects `channel` specifications in package runtime dependency tables.
+/// A built package's runtime dependencies cannot specify channels for consumers;
+/// channels must be configured at the workspace or environment level.
+fn reject_channel(map: &ResolvedPackageMap, section: &str) -> Result<(), TomlError> {
+    for (name, spec) in &map.specs {
+        if let Some(pixi_spec) = spec.as_spec()
+            && let Some(detailed) = pixi_spec.as_detailed()
+            && detailed.channel.is_some()
+        {
+            return Err(GenericError::new(format!(
+                "`channel` is not supported in `{section}`"
+            ))
+            .with_opt_span(map.value_spans.get(name).cloned())
+            .with_span_label("`channel` specified here")
+            .with_help(
+                "A built package cannot specify channels for its dependencies; configure channels in the workspace or environment instead",
+            )
+            .into());
         }
     }
     Ok(())
@@ -365,5 +392,107 @@ mod test {
             message.contains("extra") && message.contains("invalid character"),
             "unexpected error: {message}"
         );
+    }
+
+    #[test]
+    fn test_channel_in_run_dependencies_is_rejected() {
+        let input = r#"
+        [run-dependencies]
+        python = { version = ">=3.12", channel = "conda-forge" }
+        "#;
+        let err = TomlPackageTarget::from_toml_str(input)
+            .unwrap()
+            .into_package_target(
+                &Preview::default(),
+                &IndexMap::new(),
+                Some(&PackageName::from_str("mypkg").unwrap()),
+            )
+            .unwrap_err();
+        assert_snapshot!(format_parse_error(input, err), @r#"
+           × `channel` is not supported in `[package.run-dependencies]`
+            ╭─[pixi.toml:3:18]
+          2 │         [run-dependencies]
+          3 │         python = { version = ">=3.12", channel = "conda-forge" }
+            ·                  ───────────────────────┬───────────────────────
+            ·                                         ╰── `channel` specified here
+          4 │
+            ╰────
+           help: A built package cannot specify channels for its dependencies; configure channels in the workspace or environment instead
+        "#);
+    }
+
+    #[test]
+    fn test_channel_in_run_constraints_is_rejected() {
+        let input = r#"
+        [run-constraints]
+        python = { version = ">=3.12", channel = "conda-forge" }
+        "#;
+        let err = TomlPackageTarget::from_toml_str(input)
+            .unwrap()
+            .into_package_target(
+                &Preview::default(),
+                &IndexMap::new(),
+                Some(&PackageName::from_str("mypkg").unwrap()),
+            )
+            .unwrap_err();
+        assert_snapshot!(format_parse_error(input, err), @r#"
+           × `channel` is not supported in `[package.run-constraints]`
+            ╭─[pixi.toml:3:18]
+          2 │         [run-constraints]
+          3 │         python = { version = ">=3.12", channel = "conda-forge" }
+            ·                  ───────────────────────┬───────────────────────
+            ·                                         ╰── `channel` specified here
+          4 │
+            ╰────
+           help: A built package cannot specify channels for its dependencies; configure channels in the workspace or environment instead
+        "#);
+    }
+
+    #[test]
+    fn test_channel_in_extra_dependencies_is_rejected() {
+        let input = r#"
+        [extra-dependencies.test]
+        pytest = { version = "*", channel = "conda-forge" }
+        "#;
+        let err = TomlPackageTarget::from_toml_str(input)
+            .unwrap()
+            .into_package_target(
+                &Preview::default(),
+                &IndexMap::new(),
+                Some(&PackageName::from_str("mypkg").unwrap()),
+            )
+            .unwrap_err();
+        assert_snapshot!(format_parse_error(input, err), @r#"
+           × `channel` is not supported in `[package.extra-dependencies]`
+            ╭─[pixi.toml:3:18]
+          2 │         [extra-dependencies.test]
+          3 │         pytest = { version = "*", channel = "conda-forge" }
+            ·                  ─────────────────────┬────────────────────
+            ·                                       ╰── `channel` specified here
+          4 │
+            ╰────
+           help: A built package cannot specify channels for its dependencies; configure channels in the workspace or environment instead
+        "#);
+    }
+
+    #[test]
+    fn test_channel_in_host_and_build_dependencies_is_allowed() {
+        let input = r#"
+        [host-dependencies]
+        python = { version = ">=3.12", channel = "conda-forge" }
+
+        [build-dependencies]
+        cmake = { version = "*", channel = "conda-forge" }
+        "#;
+        let target = TomlPackageTarget::from_toml_str(input)
+            .unwrap()
+            .into_package_target(
+                &Preview::default(),
+                &IndexMap::new(),
+                Some(&PackageName::from_str("mypkg").unwrap()),
+            )
+            .unwrap();
+        assert!(target.dependencies.contains_key(&SpecType::Host));
+        assert!(target.dependencies.contains_key(&SpecType::Build));
     }
 }
