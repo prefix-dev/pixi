@@ -1033,4 +1033,73 @@ requires-python = ">=3.13"
             "Run requirements should include 'python >=3.13', found: {run_requirements:?}"
         );
     }
+
+    #[tokio::test]
+    async fn test_generated_recipe_contains_gui_scripts() {
+        use rattler_build_recipe::stage0::Item;
+        use rattler_conda_types::package::EntryPoint;
+
+        let pyproject_toml_content = r#"
+[project]
+name = "mre"
+version = "0.1.0"
+scripts = { app-debug = "mre:main" }
+gui-scripts = { app = "mre:main" }
+"#;
+
+        let temp_dir = create_temp_pyproject_project(pyproject_toml_content);
+
+        let project_model = project_fixture!({
+            "name": "mre",
+            "targets": {
+                "defaultTarget": {},
+            }
+        });
+
+        let generated_recipe = PythonGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &PythonBackendConfig::default(),
+                temp_dir.path().to_path_buf(),
+                Platform::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let entry_points: Vec<EntryPoint> = generated_recipe
+            .recipe
+            .build
+            .python
+            .entry_points
+            .into_vec()
+            .into_iter()
+            .filter_map(|item| match item {
+                Item::Value(v) => v.into_concrete(),
+                _ => None,
+            })
+            .collect();
+
+        assert_eq!(
+            entry_points,
+            vec![
+                EntryPoint {
+                    command: "app-debug".to_string(),
+                    module: "mre".to_string(),
+                    function: "main".to_string(),
+                },
+                EntryPoint {
+                    command: "app".to_string(),
+                    module: "mre".to_string(),
+                    function: "main".to_string(),
+                },
+            ]
+        );
+    }
 }
