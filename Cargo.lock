@@ -236,7 +236,7 @@ dependencies = [
  "arborium-sysroot",
  "cc",
  "regex",
- "regex-syntax 0.8.11",
+ "regex-syntax",
  "streaming-iterator",
  "tree-sitter-language",
 ]
@@ -1300,7 +1300,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "63044e1ae8e69f3b5a92c736ca6269b8d12fa7efe39bf34ddb06d102cf0e2cab"
 dependencies = [
  "memchr",
- "regex-automata 0.4.18",
+ "regex-automata",
  "serde",
 ]
 
@@ -2116,7 +2116,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
- "spdx 0.13.5",
+ "spdx",
  "strum",
  "thiserror 2.0.20",
  "time",
@@ -2800,8 +2800,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e1e1dacd0d2082dfcf1351c4bdd566bbe89a2b263235a2b50058f1e130a47277"
 dependencies = [
  "bit-set",
- "regex-automata 0.4.18",
- "regex-syntax 0.8.11",
+ "regex-automata",
+ "regex-syntax",
 ]
 
 [[package]]
@@ -2902,7 +2902,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "193f9e0d733b59a9db196a6443d654c0ced3986faf000da429538998f2eecb7a"
 dependencies = [
  "memchr",
- "nu-ansi-term 0.50.3",
+ "nu-ansi-term",
  "strsim",
  "thiserror 2.0.20",
 ]
@@ -3193,8 +3193,8 @@ dependencies = [
  "aho-corasick",
  "bstr",
  "log",
- "regex-automata 0.4.18",
- "regex-syntax 0.8.11",
+ "regex-automata",
+ "regex-syntax",
 ]
 
 [[package]]
@@ -3809,12 +3809,12 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "system-configuration",
  "tokio",
  "tower-service",
  "tracing",
- "windows-registry 0.5.3",
+ "windows-registry 0.6.1",
 ]
 
 [[package]]
@@ -3966,7 +3966,7 @@ dependencies = [
  "globset",
  "log",
  "memchr",
- "regex-automata 0.4.18",
+ "regex-automata",
  "same-file",
  "walkdir",
  "winapi-util",
@@ -4781,11 +4781,11 @@ dependencies = [
 
 [[package]]
 name = "matchers"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8263075bb86c5a1b1427b5ae862e8889656f126e9f77c484496e8b47cf5c5558"
+checksum = "d1525a2a28c7f4fa0fc98bb91ae755d1e2d1505079e05539e35bc876b5d65ae9"
 dependencies = [
- "regex-automata 0.1.10",
+ "regex-automata",
 ]
 
 [[package]]
@@ -5143,16 +5143,6 @@ dependencies = [
 
 [[package]]
 name = "nu-ansi-term"
-version = "0.46.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77a8165726e8236064dbb45459242600304b42a5ea24ee2948e18e023bf7ba84"
-dependencies = [
- "overload",
- "winapi",
-]
-
-[[package]]
-name = "nu-ansi-term"
 version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
@@ -5272,7 +5262,7 @@ version = "5.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51e219e79014df21a225b1860a479e2dcd7cbd9130f4defd4bd0e191ea31d67d"
 dependencies = [
- "base64 0.21.7",
+ "base64 0.22.1",
  "chrono",
  "getrandom 0.2.17",
  "http 1.5.0",
@@ -5632,12 +5622,6 @@ name = "outref"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1a80800c0488c3a21695ea981a54918fbb37abf04f4d0720c453632255e2ff0e"
-
-[[package]]
-name = "overload"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
 
 [[package]]
 name = "owo-colors"
@@ -6059,7 +6043,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "spdx 0.10.9",
+ "spdx",
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
@@ -6642,7 +6626,7 @@ dependencies = [
  "insta",
  "itertools 0.15.0",
  "miette 7.6.0",
- "nix 0.29.0",
+ "nix 0.31.3",
  "pixi_consts",
  "rattler",
  "rattler_conda_types",
@@ -7017,7 +7001,7 @@ dependencies = [
  "serde",
  "serde-value",
  "serde_json",
- "spdx 0.10.9",
+ "spdx",
  "strsim",
  "strum",
  "temp-env",
@@ -7055,8 +7039,8 @@ name = "pixi_pty"
 version = "0.1.0"
 dependencies = [
  "libc",
- "nix 0.29.0",
- "signal-hook 0.3.18",
+ "nix 0.31.3",
+ "signal-hook",
 ]
 
 [[package]]
@@ -7163,7 +7147,7 @@ dependencies = [
  "fs-err",
  "insta",
  "miette 7.6.0",
- "nix 0.29.0",
+ "nix 0.31.3",
  "pixi_test_utils",
  "tempfile",
  "thiserror 2.0.20",
@@ -7687,7 +7671,7 @@ dependencies = [
  "rand 0.9.4",
  "rand_chacha 0.9.0",
  "rand_xorshift",
- "regex-syntax 0.8.11",
+ "regex-syntax",
  "rusty-fork",
  "tempfile",
  "unarray",
@@ -7854,7 +7838,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash",
  "rustls",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "thiserror 2.0.20",
  "tokio",
  "tracing",
@@ -7892,7 +7876,7 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.5.10",
+ "socket2 0.6.3",
  "tracing",
  "windows-sys 0.59.0",
 ]
@@ -8222,7 +8206,7 @@ dependencies = [
  "serde_with",
  "serde_yaml",
  "sha1 0.11.0",
- "spdx 0.13.5",
+ "spdx",
  "thiserror 2.0.20",
  "url",
 ]
@@ -8709,7 +8693,7 @@ checksum = "53efc181fcb3296f0752e385fa8d33d94a830ba134edd2e5355a195b864bff9e"
 dependencies = [
  "libc",
  "nix 0.31.3",
- "signal-hook 0.4.4",
+ "signal-hook",
  "tokio",
 ]
 
@@ -9036,17 +9020,8 @@ checksum = "f020237b6c8eed93db2e2cb53c00c60a8e1bc73da7d073199a1180401450218d"
 dependencies = [
  "aho-corasick",
  "memchr",
- "regex-automata 0.4.18",
- "regex-syntax 0.8.11",
-]
-
-[[package]]
-name = "regex-automata"
-version = "0.1.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c230d73fb8d8c1b9c0b3135c5142a8acee3a0558fb8db5cf1cb65f8d7862132"
-dependencies = [
- "regex-syntax 0.6.29",
+ "regex-automata",
+ "regex-syntax",
 ]
 
 [[package]]
@@ -9057,7 +9032,7 @@ checksum = "ad8553b9b26413251cbf30e620595c7a41b3887f03da04579c0e6b0d6a06b4b2"
 dependencies = [
  "aho-corasick",
  "memchr",
- "regex-syntax 0.8.11",
+ "regex-syntax",
 ]
 
 [[package]]
@@ -9065,12 +9040,6 @@ name = "regex-lite"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cab834c73d247e67f4fae452806d17d3c7501756d98c8808d7c9c7aa7d18f973"
-
-[[package]]
-name = "regex-syntax"
-version = "0.6.29"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f162c6dd7b008981e4d40210aca20b4bd0f9b60ca9271061b07f78537722f2e1"
 
 [[package]]
 name = "regex-syntax"
@@ -10227,16 +10196,6 @@ checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
 
 [[package]]
 name = "signal-hook"
-version = "0.3.18"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d881a16cf4426aa584979d30bd82cb33429027e42122b169753d6ef1085ed6e2"
-dependencies = [
- "libc",
- "signal-hook-registry",
-]
-
-[[package]]
-name = "signal-hook"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b2a0c28ca5908dbdbcd52e6fdaa00358ab88637f8ab33e1f188dd510eb44b53d"
@@ -10641,15 +10600,6 @@ dependencies = [
  "log",
  "rand 0.8.6",
  "sha1 0.10.6",
-]
-
-[[package]]
-name = "spdx"
-version = "0.10.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3e17e880bafaeb362a7b751ec46bdc5b61445a188f80e0606e68167cd540fa3"
-dependencies = [
- "smallvec",
 ]
 
 [[package]]
@@ -11489,14 +11439,14 @@ dependencies = [
 
 [[package]]
 name = "tracing-subscriber"
-version = "0.3.19"
+version = "0.3.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8189decb5ac0fa7bc8b96b7cb9b2701d60d48805aca84a238004d665fcc4008"
+checksum = "2054a14f5307d601f88daf0553e1cbf472acc4f2c51afab632431cdcd72124d5"
 dependencies = [
  "matchers",
- "nu-ansi-term 0.46.0",
+ "nu-ansi-term",
  "once_cell",
- "regex",
+ "regex-automata",
  "serde",
  "serde_json",
  "sharded-slab",
@@ -11774,7 +11724,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
- "spdx 0.13.5",
+ "spdx",
  "tempfile",
  "thiserror 2.0.20",
  "tokio",
@@ -12271,7 +12221,7 @@ dependencies = [
  "globset",
  "owo-colors",
  "regex",
- "regex-automata 0.4.18",
+ "regex-automata",
  "thiserror 2.0.20",
  "tracing",
  "walkdir",

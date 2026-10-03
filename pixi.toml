@@ -15,7 +15,7 @@ preview = ["pixi-build"]
 requires-pixi = ">=0.74"
 
 [workspace.build-variants]
-rust_compiler_version = [">=1.95,<1.96"]
+rust_compiler_version = [">=1.98,<1.99"]
 
 [workspace.target.linux-64.build-variants]
 c_stdlib_version = ["2.17"]
@@ -28,19 +28,17 @@ c_compiler = ["vs"]
 c_compiler_version = ["2026"]
 
 [exclude-newer]
-pixi-build-rust = "0d"
-# tombi arrived on conda-forge inside the workspace exclude-newer window
 tombi = "0d"
+rust_osx-arm64 = "0d"
+rust_osx-64 = "0d"
+rust_win-64 = "0d"
+rust_linux-64 = "0d"
+rust_linux-aarch64 = "0d"
 
 #
 # Shared feature that exposes the build dependencies of the pixi package,
 # including compilers, in the environment.
 #
-# Use cmake to build aws-lc-sys, because conda's CFLAGS inject -O2 which
-# overrides the -O0 required by jitterentropy-base.c, causing a build failure.
-[feature.compilers.activation.env]
-AWS_LC_SYS_CMAKE_BUILDER = "1"
-
 [feature.compilers.dev]
 pixi = { path = "." }
 
@@ -54,7 +52,7 @@ python = ">=3.14.7,<3.15"
 # Shared feature for Rust toolchain
 #
 [feature.rust.dependencies]
-rust-src = ">=1.95,<1.96"
+rust-src = ">=1.98,<1.99"
 
 # The target dir is anchored to the workspace root so that cargo invocations
 # from subdirectories don't create stray target folders at the invocation site.
@@ -664,16 +662,13 @@ channels = [
 name = "pixi-build-rust"
 version = "*"
 
-# Use cmake to build aws-lc-sys, because conda's CFLAGS inject -O2 which
-# overrides the -O0 required by jitterentropy-base.c, causing a build failure.
 [package.build.config]
 compilers = ["rust", "c"]
-env = { AWS_LC_SYS_CMAKE_BUILDER = "1" }
 
 [package.build-dependencies]
 cmake = ">=4,<5"
 pkg-config = ">=0.29.2,<0.30"
-rust = "==1.95.0"
+rust = "==1.98.1"
 
 [package.build-dependencies."if(linux)"]
 clang = ">=22.1.3,<23"

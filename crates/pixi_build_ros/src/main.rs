@@ -270,7 +270,7 @@ impl GenerateRecipe for RosGenerator {
         build_items.push(Item::Value(Value::new_template(cxx_compiler, None)));
 
         // Add host dependencies
-        let host_dep_names = ["python", "numpy", "pip", "pkg-config"];
+        let host_dep_names = ["python", "numpy", "pip", "pkg-config", "setuptools"];
         for dep in &host_dep_names {
             host_items.push(Item::Value(Value::new_concrete(
                 SerializableMatchSpec::from(*dep),
@@ -614,6 +614,7 @@ mod tests {
           - numpy
           - pip
           - pkg-config
+          - setuptools
           - ros2-distro-mutex
         run:
           - ros-jazzy-example-interfaces
