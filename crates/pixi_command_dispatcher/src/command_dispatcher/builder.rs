@@ -7,6 +7,7 @@ use crate::cache::{
 };
 use crate::compute_data::{
     AllowExecuteLinkScripts, AllowLinkOptions, BackendSourceBuildSemaphore, CondaSolveSemaphore,
+    IoConcurrencySemaphore,
 };
 use crate::environment::WorkspaceEnvRegistry;
 use crate::injected_config::{
@@ -35,9 +36,12 @@ use pixi_glob::GlobHashCache;
 use pixi_path::{AbsPathBuf, AbsPresumedDirPathBuf};
 use pixi_url::resolver::UrlResolver;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Platform};
+use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Subdir};
 use rattler_networking::LazyClient;
-use rattler_repodata_gateway::{Gateway, MaxConcurrency};
+use rattler_repodata_gateway::{
+    ChannelConfig as RepodataChannelConfig, Gateway, MaxConcurrency, SourceConfig,
+    fetch::CacheAction,
+};
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use tokio::sync::Semaphore;
 
@@ -53,8 +57,9 @@ pub struct CommandDispatcherBuilder {
     max_download_concurrency: MaxConcurrency,
     limits: Limits,
     executor: Executor,
-    tool_platform: Option<(Platform, Vec<GenericVirtualPackage>)>,
+    tool_platform: Option<(Subdir, Vec<GenericVirtualPackage>)>,
     execute_link_scripts: bool,
+    offline: bool,
     channel_config: Option<ChannelConfig>,
     enabled_protocols: Option<EnabledProtocols>,
     /// Allow symbolic links during package installation.
@@ -273,7 +278,7 @@ impl CommandDispatcherBuilder {
     /// current platform.
     pub fn with_tool_platform(
         self,
-        platform: Platform,
+        platform: Subdir,
         virtual_packages: Vec<GenericVirtualPackage>,
     ) -> Self {
         Self {
@@ -298,6 +303,13 @@ impl CommandDispatcherBuilder {
             execute_link_scripts: execute,
             ..self
         }
+    }
+
+    /// Sets whether the dispatcher runs in offline mode. In offline mode
+    /// operations that require network access outside of the (already
+    /// offline-guarded) download client, like git fetches, are refused.
+    pub fn with_offline(self, offline: bool) -> Self {
+        Self { offline, ..self }
     }
 
     /// Sets the channel configuration used to resolve channel names.
@@ -364,13 +376,28 @@ impl CommandDispatcherBuilder {
         let download_client = self.download_client.unwrap_or_default();
         let package_cache =
             PackageCache::new(cache_dirs.resolve_with_env::<PackagesDir>(&env_snapshot));
+        let offline = self.offline;
         let gateway = self.gateway.unwrap_or_else(|| {
-            Gateway::builder()
+            let mut builder = Gateway::builder()
                 .with_client(download_client.clone())
                 .with_cache_dir(cache_dirs.root().to_owned().into_std_path_buf())
                 .with_package_cache(package_cache.clone())
-                .with_max_concurrent_requests(self.max_download_concurrency)
-                .finish()
+                .with_max_concurrent_requests(self.max_download_concurrency);
+            if offline {
+                // A caller that does not supply an offline-aware gateway still
+                // gets cache-only repodata, so a usable (even stale) cache is
+                // served instead of failing on a revalidation the download
+                // client would block anyway.
+                builder = builder.with_channel_config(RepodataChannelConfig {
+                    default: SourceConfig {
+                        cache_action: CacheAction::ForceCacheOnly,
+                        missing_shards_are_empty: true,
+                        ..SourceConfig::default()
+                    },
+                    per_channel: HashMap::default(),
+                });
+            }
+            builder.finish()
         });
 
         let git_resolver = self.git_resolver.unwrap_or_default();
@@ -383,9 +410,10 @@ impl CommandDispatcherBuilder {
         let url_resolver = self.url_resolver.unwrap_or_default();
 
         let tool_platform = self.tool_platform.unwrap_or_else(|| {
-            let platform = Platform::current();
+            let platform = Subdir::current().unwrap_or(Subdir::NoArch);
             let virtual_packages =
-                VirtualPackages::detect(&VirtualPackageOverrides::default()).unwrap_or_default();
+                VirtualPackages::detect(&VirtualPackageOverrides::default(), None)
+                    .unwrap_or_default();
             (
                 platform,
                 virtual_packages.into_generic_virtual_packages().collect(),
@@ -404,6 +432,9 @@ impl CommandDispatcherBuilder {
             .map(|n| Arc::new(Semaphore::new(n)));
         let backend_source_build_semaphore = limits
             .max_concurrent_builds
+            .map(|n| Arc::new(Semaphore::new(n)));
+        let io_concurrency_semaphore = limits
+            .max_io_concurrency
             .map(|n| Arc::new(Semaphore::new(n)));
 
         let channel_config = self.channel_config.unwrap_or_else(|| {
@@ -434,6 +465,7 @@ impl CommandDispatcherBuilder {
             url_checkout_semaphore,
             conda_solve_semaphore,
             backend_source_build_semaphore,
+            io_concurrency_semaphore,
             workspace_env_registry,
         });
 
@@ -462,6 +494,7 @@ impl CommandDispatcherBuilder {
                 allow_ref_links: data.allow_ref_links,
             })
             .with_data(RootDir(root_dir))
+            .with_data(pixi_compute_network::Offline(self.offline))
             .with_spawn_hook(Arc::new(pixi_compute_reporters::OperationIdSpawnHook));
         // Register each per-key reporter the caller supplied; a missing
         // reporter is treated as "no progress UI for this kind of work."
@@ -509,6 +542,9 @@ impl CommandDispatcherBuilder {
         }
         if let Some(sem) = data.backend_source_build_semaphore.clone() {
             engine_builder = engine_builder.with_data(BackendSourceBuildSemaphore(sem));
+        }
+        if let Some(sem) = data.io_concurrency_semaphore.clone() {
+            engine_builder = engine_builder.with_data(IoConcurrencySemaphore(sem));
         }
         let engine = engine_builder.build();
 

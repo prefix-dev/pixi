@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, path::PathBuf, str::FromStr};
+use std::{path::PathBuf, str::FromStr};
 
 use cargo_toml::{
     AbstractFilesystem, Error as CargoTomlError, Filesystem, Inheritable, Manifest, Package,
@@ -19,6 +19,13 @@ pub enum MetadataError {
     IoError(#[from] std::io::Error),
     #[error("missing inherited value from workspace {0}")]
     MissingInheritedValue(String),
+    // The suggestion is part of the message rather than a `#[diagnostic(help)]`
+    // because the frontend receives this error as a nested cause, and only the
+    // top-level diagnostic's help survives the JSON-RPC transport.
+    #[error(
+        "the Cargo.toml at `{path}` is a virtual workspace manifest: it has a `[workspace]` table but no `[package]`, so no package name or version could be determined; point the dependency at a member crate with `subdirectory`, e.g. `subdirectory = \"{example}\"`"
+    )]
+    VirtualWorkspace { path: String, example: String },
 }
 
 /// An implementation of [`MetadataProvider`] that reads metadata from a
@@ -50,6 +57,39 @@ impl CargoMetadataProvider {
     /// Ensures that the manifest is loaded and returns the package metadata.
     fn ensure_manifest_package(&self) -> Result<Option<&Package>, MetadataError> {
         Ok(self.ensure_manifest()?.package.as_ref())
+    }
+
+    /// Errors with [`MetadataError::VirtualWorkspace`] when the loaded manifest
+    /// is a virtual workspace (a `[workspace]` table but no `[package]`). Such a
+    /// manifest carries no package name or version, so building it directly is
+    /// impossible; the user has to point at a member crate instead. Any other
+    /// shape passes the check.
+    fn reject_virtual_workspace(&self) -> Result<(), MetadataError> {
+        let manifest = self.ensure_manifest()?;
+        if manifest.package.is_some() {
+            return Ok(());
+        }
+        let Some(workspace) = manifest.workspace.as_ref() else {
+            return Ok(());
+        };
+
+        // Prefer `default-members`, falling back to `members`, to suggest a
+        // concrete crate to point at.
+        let candidates = if !workspace.default_members.is_empty() {
+            &workspace.default_members
+        } else {
+            &workspace.members
+        };
+        let example = candidates
+            .iter()
+            .find(|member| !member.contains('*'))
+            .cloned()
+            .unwrap_or_else(|| String::from("crates/<member>"));
+
+        Err(MetadataError::VirtualWorkspace {
+            path: self.manifest_root.join("Cargo.toml").display().to_string(),
+            example,
+        })
     }
 
     /// Ensures that the manifest is loaded
@@ -90,19 +130,19 @@ impl CargoMetadataProvider {
     ///
     /// # Returns
     ///
-    /// A `BTreeSet` of glob patterns as strings. Common patterns include:
+    /// A `Vec` of glob patterns as strings. Common patterns include:
     /// - `"Cargo.toml"` - The package's manifest file
     /// - `"../../**/Cargo.toml"` - Workspace manifest files (when workspace
     ///   inheritance is used)
-    pub fn input_globs(&self) -> BTreeSet<String> {
-        let mut input_globs = BTreeSet::new();
+    pub fn input_globs(&self) -> Vec<String> {
+        let mut input_globs = Vec::new();
 
         let Some(_) = self.cargo_manifest.get() else {
             return input_globs;
         };
 
         // Add the Cargo.toml manifest file itself.
-        input_globs.insert(String::from("Cargo.toml"));
+        input_globs.push(String::from("Cargo.toml"));
 
         // If the manifest has workspace inheritance, include that as well.
         if let Some((_, workspace_path)) = self.workspace_manifest.get() {
@@ -121,7 +161,7 @@ impl CargoMetadataProvider {
                 &self.manifest_root,
             ) {
                 if workspace_selected {
-                    input_globs.insert(format!(
+                    input_globs.push(format!(
                         "{}/Cargo.toml",
                         path.display().to_string().replace("\\", "/")
                     ));
@@ -152,7 +192,13 @@ impl MetadataProvider for CargoMetadataProvider {
         if self.ignore_cargo_manifest {
             return Ok(None);
         }
-        Ok(self.ensure_manifest_package()?.map(|pkg| pkg.name.clone()))
+        match self.ensure_manifest_package()? {
+            Some(pkg) => Ok(Some(pkg.name.clone())),
+            None => {
+                self.reject_virtual_workspace()?;
+                Ok(None)
+            }
+        }
     }
 
     /// Returns the package version from the Cargo.toml manifest.
@@ -166,6 +212,7 @@ impl MetadataProvider for CargoMetadataProvider {
             return Ok(None);
         }
         let Some(value) = self.ensure_manifest_package()?.map(|pkg| &pkg.version) else {
+            self.reject_virtual_workspace()?;
             return Ok(None);
         };
         let version = match value {
@@ -178,7 +225,8 @@ impl MetadataProvider for CargoMetadataProvider {
                 })?,
         };
         Ok(Some(
-            Version::from_str(version).map_err(MetadataError::ParseVersionError)?,
+            // conversion via string for now, ref. https://github.com/conda/rattler/issues/2629
+            Version::from_str(&version.to_string()).map_err(MetadataError::ParseVersionError)?,
         ))
     }
 
@@ -659,7 +707,7 @@ version.workspace = true
         let _ = provider.version().unwrap();
 
         let globs = provider.input_globs();
-        assert!(globs.contains("Cargo.toml"));
+        assert!(globs.iter().any(|g| g == "Cargo.toml"));
         // When workspace is in the same file, no additional glob is needed
         assert_eq!(
             globs.len(),
@@ -709,7 +757,7 @@ description.workspace = true
         assert_eq!(version_result.unwrap().unwrap().to_string(), "2.0.0");
 
         let globs = provider.input_globs();
-        assert!(globs.contains("Cargo.toml"));
+        assert!(globs.iter().any(|g| g == "Cargo.toml"));
         // Should include workspace glob since workspace inheritance from separate file
         // is detected
         assert!(
@@ -747,7 +795,7 @@ version = "1.0.0"
             1,
             "Expected exactly 1 glob when no workspace is present, got: {globs:?}"
         );
-        assert!(globs.contains("Cargo.toml"));
+        assert!(globs.iter().any(|g| g == "Cargo.toml"));
 
         // Verify no workspace-related globs are present
         let has_workspace_glob = globs
@@ -793,7 +841,7 @@ description = "Direct package values"
             1,
             "Expected exactly 1 glob when workspace exists but no inheritance is used, got: {globs:?}"
         );
-        assert!(globs.contains("Cargo.toml"));
+        assert!(globs.iter().any(|g| g == "Cargo.toml"));
     }
 
     #[test]
@@ -840,10 +888,44 @@ version = "not.a.valid.version.at.all"
                 // flexible
                 assert!(!version.to_string().is_empty());
             }
-            Err(MetadataError::ParseVersionError(_)) => {
-                // This is the expected error case
+            Err(MetadataError::ParseVersionError(_) | MetadataError::CargoTomlError(_)) => {
+                // This is the expected error case. cargo_toml 1.x validates package versions
+                // while parsing the manifest, before we convert them to conda versions.
             }
             other => panic!("Unexpected result: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_virtual_workspace_reports_helpful_error() {
+        // A virtual workspace manifest (a `[workspace]` table but no `[package]`)
+        // has no name or version to build. Both `name()` and `version()` must
+        // surface a diagnostic that points the user at a member crate rather
+        // than the bare "no name/version defined for the recipe" (see #6633).
+        let cargo_toml_content = r#"
+[workspace]
+resolver = "2"
+members = ["crates/*"]
+default-members = ["crates/app-cli"]
+"#;
+
+        let temp_dir = create_temp_cargo_project(cargo_toml_content);
+        let mut provider = create_metadata_provider(temp_dir.path());
+
+        for result in [provider.name().map(|_| ()), provider.version().map(|_| ())] {
+            match result {
+                Err(err @ MetadataError::VirtualWorkspace { .. }) => {
+                    // The suggestion must be part of the message itself: the
+                    // frontend flattens nested causes to their message, so a
+                    // `help` attached to this error would never reach the user.
+                    let message = err.to_string();
+                    assert!(
+                        message.contains("subdirectory") && message.contains("crates/app-cli"),
+                        "message should suggest a member subdirectory, got: {message}"
+                    );
+                }
+                other => panic!("Expected VirtualWorkspace error, got: {other:?}"),
+            }
         }
     }
 

@@ -1,8 +1,8 @@
 #
-# This lock-file should not satisfy the accompanying pixi.toml file.
+# This lock file should not satisfy the accompanying pixi.toml file.
 #
 # The user added an explicit `index = "https://custom..."` to the
-# `my-dep` requirement, but the lock-file has `my-dep` resolved from
+# `my-dep` requirement, but the lock file has `my-dep` resolved from
 # the default PyPI index. The satisfiability check should detect this
 # drift and force a re-resolve.
 

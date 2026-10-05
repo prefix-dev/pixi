@@ -21,6 +21,41 @@ from .common import (
 )
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="clean-env is not supported on Windows")
+@pytest.mark.parametrize("description", [None, "An isolated task"])
+def test_task_add_clean_env(pixi: Path, tmp_pixi_workspace: Path, description: str | None) -> None:
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest.write_text(
+        EMPTY_BOILERPLATE_PROJECT
+        + "\n[tasks]\ninherited = 'echo \"probe:$PIXI_ISOLATION_PROBE\"'\n"
+    )
+    command: list[Path | str] = [
+        pixi,
+        "task",
+        "add",
+        "--manifest-path",
+        manifest,
+        "--clean-env",
+    ]
+    if description is not None:
+        command.extend(["--description", description])
+    command.extend(["isolated", 'echo "probe:$PIXI_ISOLATION_PROBE"'])
+    verify_cli_command(command)
+
+    env = {"PIXI_ISOLATION_PROBE": "from-parent-shell"}
+    control = verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "inherited"],
+        env=env,
+    )
+    assert control.stdout.strip() == "probe:from-parent-shell"
+
+    output = verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "isolated"],
+        env=env,
+    )
+    assert output.stdout.strip() == "probe:"
+
+
 def test_run_in_shell_environment(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = f"""
@@ -67,6 +102,67 @@ def test_run_in_shell_environment(pixi: Path, tmp_pixi_workspace: Path) -> None:
         [pixi, "run", "--manifest-path", manifest, "task"],
         stdout_contains=["a", "a1"],
         env=env,
+    )
+
+
+def test_run_platform_not_in_environment_errors(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """A `--platform` the environment doesn't declare is rejected up front --
+    before any solve or emulation warning -- with a clear membership error."""
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest.write_text(
+        f"""
+    {EMPTY_BOILERPLATE_PROJECT}
+    [tasks]
+    task = "echo hi"
+    """
+    )
+
+    # A conda subdir that is never a CI host and is not declared above.
+    foreign = "linux-ppc64le" if CURRENT_PLATFORM != "linux-ppc64le" else "linux-s390x"
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "--platform", foreign, "task"],
+        ExitCode.FAILURE,
+        stderr_contains=[f"platform '{foreign}' is not part of environment", "default"],
+    )
+
+
+def test_run_wildcard_target_selector_resolves_per_platform(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """A `[target."<glob>".tasks]` block applies to every workspace platform
+    whose name matches the glob, and not to the others. Two platforms share
+    the host subdir -- one named `gpu-<host>` (matched by `gpu-*`) and the bare
+    `<host>` (not matched) -- so both are runnable on this machine and the
+    resolved task body differs by `--platform`."""
+    rich = f"gpu-{CURRENT_PLATFORM}"
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest.write_text(
+        f"""
+[workspace]
+name = "glob-target-test"
+channels = []
+platforms = ["{CURRENT_PLATFORM}", {{ name = "{rich}", platform = "{CURRENT_PLATFORM}" }}]
+
+[tasks]
+hello = "echo default-task"
+
+[target."gpu-*".tasks]
+hello = "echo glob-task"
+"""
+    )
+
+    # The glob matches `gpu-<host>` -> the wildcard target's body wins.
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "--platform", rich, "hello"],
+        stdout_contains="glob-task",
+        stdout_excludes="default-task",
+    )
+
+    # The bare `<host>` name is not matched by `gpu-*` -> only the default body.
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "--platform", CURRENT_PLATFORM, "hello"],
+        stdout_contains="default-task",
+        stdout_excludes="glob-task",
     )
 
 
@@ -294,6 +390,7 @@ def test_detached_environments_run(pixi: Path, tmp_path: Path, dummy_channel_1: 
     )
 
 
+@pytest.mark.slow
 def test_run_help(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     manifest.write_text(EMPTY_BOILERPLATE_PROJECT)
@@ -1472,6 +1569,7 @@ multiple-depends = {{ cmd = "echo hello from depends", depends-on = [{{ task = "
     )
 
 
+@pytest.mark.slow
 def test_caching_multiple_tasks_with_depends_on_args(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """Test ``depends-on`` with the same inputs, outputs, but different args, are cached independently.
 

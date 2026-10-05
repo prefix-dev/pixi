@@ -2,7 +2,7 @@ use fs_err as fs;
 use pixi_build_backend_passthrough::PassthroughBackend;
 use pixi_build_frontend::BackendOverride;
 use pixi_consts::consts;
-use rattler_conda_types::Platform;
+use rattler_conda_types::Subdir;
 
 use crate::{
     common::{LockFileExt, PixiControl},
@@ -57,7 +57,7 @@ backend = {{ name = "in-memory", version = "0.1.0" }}
     package_dir
 }
 
-/// Test that dev dependencies are correctly expanded and included in the lock-file
+/// Test that dev dependencies are correctly expanded and included in the lock file
 #[tokio::test]
 async fn test_dev_dependencies_basic() {
     setup_tracing();
@@ -103,50 +103,50 @@ preview = ["pixi-build"]
 my-package = {{ path = "./my-package" }}
 "#,
         channel.url(),
-        Platform::current()
+        Subdir::current().unwrap_or(Subdir::NoArch)
     );
 
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
 
-    // Update the lock-file
+    // Update the lock file
     let lock_file = pixi.update_lock_file().await.unwrap();
 
-    // Verify that the dependencies of my-package are in the lock-file
+    // Verify that the dependencies of my-package are in the lock file
     // but my-package itself is NOT built/installed
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "cmake",
         ),
-        "cmake should be in the lock-file (build dependency of dev package)"
+        "cmake should be in the lock file (build dependency of dev package)"
     );
 
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "openssl",
         ),
-        "openssl should be in the lock-file (host dependency of dev package)"
+        "openssl should be in the lock file (host dependency of dev package)"
     );
 
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "python",
         ),
-        "python should be in the lock-file (run dependency of dev package)"
+        "python should be in the lock file (run dependency of dev package)"
     );
 
     assert!(
         !lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "my-package",
         ),
-        "my-package itself should NOT be in the lock-file (it's a dev dependency)"
+        "my-package itself should NOT be in the lock file (it's a dev dependency)"
     );
 }
 
@@ -206,31 +206,31 @@ preview = ["pixi-build"]
 package-a = {{ path = "./package-a" }}
 "#,
         channel.url(),
-        Platform::current()
+        Subdir::current().unwrap_or(Subdir::NoArch)
     );
 
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
 
-    // Update the lock-file - this should correctly resolve the relative path from package-a to package-b
+    // Update the lock file - this should correctly resolve the relative path from package-a to package-b
     let lock_file = pixi.update_lock_file().await.unwrap();
 
     // Verify that package-a's dependencies are resolved correctly
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "gcc",
         ),
-        "gcc should be in the lock-file (build dependency of package-a)"
+        "gcc should be in the lock file (build dependency of package-a)"
     );
 
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "requests",
         ),
-        "requests should be in the lock-file (run dependency of package-a)"
+        "requests should be in the lock file (run dependency of package-a)"
     );
 
     // Verify that package-b's dependencies are also resolved
@@ -238,32 +238,32 @@ package-a = {{ path = "./package-a" }}
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "numpy",
         ),
-        "numpy should be in the lock-file (run dependency of package-b, which is a source dependency of package-a)"
+        "numpy should be in the lock file (run dependency of package-b, which is a source dependency of package-a)"
     );
 
     // Verify that package-a is NOT built (it's a dev dependency)
     assert!(
         !lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "package-a",
         ),
-        "package-a should NOT be in the lock-file (it's a dev dependency)"
+        "package-a should NOT be in the lock file (it's a dev dependency)"
     );
 
-    // Note: package-b WILL be in the lock-file because it's a source dependency
+    // Note: package-b WILL be in the lock file because it's a source dependency
     // of package-a. Source dependencies need to be built to extract their dependencies.
     // This is expected behavior - only the direct dev dependencies are not built.
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "package-b",
         ),
-        "package-b SHOULD be in the lock-file (it's a source dependency that needs to be built)"
+        "package-b SHOULD be in the lock file (it's a source dependency that needs to be built)"
     );
 }
 
@@ -322,53 +322,53 @@ package-x = {{ path = "./package-x" }}
 package-y = {{ path = "{}" }}
 "#,
         channel.url(),
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         package_y_path.to_string_lossy().replace('\\', "\\\\")
     );
 
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
 
-    // Update the lock-file
+    // Update the lock file
     let lock_file = pixi.update_lock_file().await.unwrap();
 
     // Verify that the dependencies are present
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "cmake",
         ),
-        "cmake should be in the lock-file (build dependency of package-x)"
+        "cmake should be in the lock file (build dependency of package-x)"
     );
 
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "openssl",
         ),
-        "openssl should be in the lock-file (host dependency of package-y)"
+        "openssl should be in the lock file (host dependency of package-y)"
     );
 
-    // Verify that neither package-x nor package-y are in the lock-file
+    // Verify that neither package-x nor package-y are in the lock file
     // This is the key test: package-y is referenced by package-x, but since both are
     // dev dependencies, package-y should be filtered out from package-x's dependencies
     assert!(
         !lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "package-x",
         ),
-        "package-x should NOT be in the lock-file (it's a dev dependency)"
+        "package-x should NOT be in the lock file (it's a dev dependency)"
     );
 
     assert!(
         !lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "package-y",
         ),
-        "package-y should NOT be in the lock-file (it's a dev dependency)"
+        "package-y should NOT be in the lock file (it's a dev dependency)"
     );
 }
 
@@ -412,24 +412,28 @@ test = ["test-feature"]
 feature-package = {{ path = "./feature-package" }}
 "#,
         channel.url(),
-        Platform::current()
+        Subdir::current().unwrap_or(Subdir::NoArch)
     );
 
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
 
-    // Update the lock-file
+    // Update the lock file
     let lock_file = pixi.update_lock_file().await.unwrap();
 
     // Verify that zlib is in the "test" environment but not in the default environment
     assert!(
-        lock_file.contains_conda_package("test", Platform::current(), "zlib",),
-        "zlib should be in the test environment lock-file (run dependency of feature-package)"
+        lock_file.contains_conda_package(
+            "test",
+            Subdir::current().unwrap_or(Subdir::NoArch),
+            "zlib",
+        ),
+        "zlib should be in the test environment lock file (run dependency of feature-package)"
     );
 
     assert!(
         !lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "zlib",
         ),
         "zlib should NOT be in the default environment (feature-package is only in test-feature)"
@@ -437,8 +441,12 @@ feature-package = {{ path = "./feature-package" }}
 
     // Verify that feature-package itself is not built
     assert!(
-        !lock_file.contains_conda_package("test", Platform::current(), "feature-package",),
-        "feature-package should NOT be in the lock-file (it's a dev dependency)"
+        !lock_file.contains_conda_package(
+            "test",
+            Subdir::current().unwrap_or(Subdir::NoArch),
+            "feature-package",
+        ),
+        "feature-package should NOT be in the lock file (it's a dev dependency)"
     );
 }
 
@@ -502,46 +510,46 @@ dependent-package = {{ path = "./dependent-package" }}
 shared-package = {{ path = "{}" }}
 "#,
         channel.url(),
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         shared_package_path.to_string_lossy().replace('\\', "\\\\")
     );
 
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
 
-    // Update the lock-file - this should work without conflicts
+    // Update the lock file - this should work without conflicts
     let lock_file = pixi.update_lock_file().await.unwrap();
 
-    // Verify that python is in the lock-file (from shared-package's dependencies)
+    // Verify that python is in the lock file (from shared-package's dependencies)
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "python",
         ),
-        "python should be in the lock-file (run dependency of shared-package)"
+        "python should be in the lock file (run dependency of shared-package)"
     );
 
-    // Verify that numpy is in the lock-file (from dependent-package's dependencies)
+    // Verify that numpy is in the lock file (from dependent-package's dependencies)
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "numpy",
         ),
-        "numpy should be in the lock-file (run dependency of dependent-package)"
+        "numpy should be in the lock file (run dependency of dependent-package)"
     );
 
-    // Verify that dependent-package IS in the lock-file (it's a regular source dependency)
+    // Verify that dependent-package IS in the lock file (it's a regular source dependency)
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "dependent-package",
         ),
-        "dependent-package SHOULD be in the lock-file (it's a regular source dependency)"
+        "dependent-package SHOULD be in the lock file (it's a regular source dependency)"
     );
 
-    // Key assertion: shared-package WILL appear in the lock-file as a built package
+    // Key assertion: shared-package WILL appear in the lock file as a built package
     // because it's a source dependency of dependent-package.
     // The fact that it's also in [dev] doesn't prevent it from being built when
     // it's needed as a dependency of another package.
@@ -550,10 +558,10 @@ shared-package = {{ path = "{}" }}
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "shared-package",
         ),
-        "shared-package SHOULD be in the lock-file (it's built as a source dependency of dependent-package)"
+        "shared-package SHOULD be in the lock file (it's built as a source dependency of dependent-package)"
     );
 }
 
@@ -594,33 +602,33 @@ preview = ["pixi-build"]
 platform-package = {{ path = "./platform-package" }}
 "#,
         channel.url(),
-        Platform::current(),
-        Platform::current()
+        Subdir::current().unwrap_or(Subdir::NoArch),
+        Subdir::current().unwrap_or(Subdir::NoArch)
     );
 
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
 
-    // Update the lock-file
+    // Update the lock file
     let lock_file = pixi.update_lock_file().await.unwrap();
 
-    // Verify that make is in the lock-file for the current platform
+    // Verify that make is in the lock file for the current platform
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "make",
         ),
-        "make should be in the lock-file (run dependency of platform-package)"
+        "make should be in the lock file (run dependency of platform-package)"
     );
 
     // Verify that platform-package itself is not built
     assert!(
         !lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "platform-package",
         ),
-        "platform-package should NOT be in the lock-file (it's a dev dependency)"
+        "platform-package should NOT be in the lock file (it's a dev dependency)"
     );
 }
 
@@ -667,19 +675,19 @@ variant-python-package = {{ path = "./variant-python-package" }}
 python = ["3.10", "3.12"]
 "#,
         channel.url(),
-        Platform::current()
+        Subdir::current().unwrap_or(Subdir::NoArch)
     );
 
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
 
-    // Update the lock-file
+    // Update the lock file
     let lock_file = pixi.update_lock_file().await.unwrap();
 
-    // Verify that python 3.12 is in the lock-file (highest variant)
+    // Verify that python 3.12 is in the lock file (highest variant)
     assert!(
         lock_file.contains_match_spec(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "python ==3.12.0",
         ),
         "Should select python 3.12 (highest available variant), not 3.13"
@@ -730,19 +738,19 @@ variant-python-package = {{ path = "./variant-python-package" }}
 python = ["3.10", "3.12"]
 "#,
         channel.url(),
-        Platform::current()
+        Subdir::current().unwrap_or(Subdir::NoArch)
     );
 
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
 
-    // Update the lock-file
+    // Update the lock file
     let lock_file = pixi.update_lock_file().await.unwrap();
 
-    // Verify that python 3.10 is in the lock-file (constrained by dependency)
+    // Verify that python 3.10 is in the lock file (constrained by dependency)
     assert!(
         lock_file.contains_match_spec(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "python ==3.10.0",
         ),
         "Should select python 3.10 (constrained by dependency <3.12), not 3.12"
@@ -804,49 +812,77 @@ prod = {{ solve-group = "main" }}
 dev = {{ features = ["dev-feature"], solve-group = "main" }}
 "#,
         channel.url(),
-        Platform::current()
+        Subdir::current().unwrap_or(Subdir::NoArch)
     );
 
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
 
-    // Update the lock-file
+    // Update the lock file
     let lock_file = pixi.update_lock_file().await.unwrap();
 
     // Both environments should have python (shared dependency)
     assert!(
-        lock_file.contains_conda_package("prod", Platform::current(), "python"),
+        lock_file.contains_conda_package(
+            "prod",
+            Subdir::current().unwrap_or(Subdir::NoArch),
+            "python"
+        ),
         "prod environment should have python"
     );
     assert!(
-        lock_file.contains_conda_package("dev", Platform::current(), "python"),
+        lock_file.contains_conda_package(
+            "dev",
+            Subdir::current().unwrap_or(Subdir::NoArch),
+            "python"
+        ),
         "dev environment should have python"
     );
 
     // The dev environment should have the dependencies brought in by dev-tools
     // (cmake and make are run-dependencies of dev-tools)
     assert!(
-        lock_file.contains_conda_package("dev", Platform::current(), "cmake"),
+        lock_file.contains_conda_package(
+            "dev",
+            Subdir::current().unwrap_or(Subdir::NoArch),
+            "cmake"
+        ),
         "dev environment should have cmake (run-dependency of dev-tools)"
     );
     assert!(
-        lock_file.contains_conda_package("dev", Platform::current(), "make"),
+        lock_file.contains_conda_package(
+            "dev",
+            Subdir::current().unwrap_or(Subdir::NoArch),
+            "make"
+        ),
         "dev environment should have make (run-dependency of dev-tools)"
     );
 
     // The prod environment should NOT have cmake and make
     // (they are only brought in by dev-tools which is only in the dev environment)
     assert!(
-        !lock_file.contains_conda_package("prod", Platform::current(), "cmake"),
+        !lock_file.contains_conda_package(
+            "prod",
+            Subdir::current().unwrap_or(Subdir::NoArch),
+            "cmake"
+        ),
         "prod environment should NOT have cmake"
     );
     assert!(
-        !lock_file.contains_conda_package("prod", Platform::current(), "make"),
+        !lock_file.contains_conda_package(
+            "prod",
+            Subdir::current().unwrap_or(Subdir::NoArch),
+            "make"
+        ),
         "prod environment should NOT have make"
     );
 
     // dev-tools itself should NOT be built (it's a dev dependency)
     assert!(
-        !lock_file.contains_conda_package("dev", Platform::current(), "dev-tools"),
-        "dev-tools should NOT be in the lock-file (it's a dev dependency)"
+        !lock_file.contains_conda_package(
+            "dev",
+            Subdir::current().unwrap_or(Subdir::NoArch),
+            "dev-tools"
+        ),
+        "dev-tools should NOT be in the lock file (it's a dev dependency)"
     );
 }

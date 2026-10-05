@@ -5,22 +5,23 @@ use std::{
 
 use clap::Parser;
 use indexmap::IndexMap;
+use indexmap::IndexSet;
 use miette::{IntoDiagnostic, Report};
-use pixi_api::{DefaultContext, WorkspaceContext};
+use pixi_api::DefaultContext;
+use pixi_api::workspace::platforms::resolve_platforms;
 use pixi_config::default_channel_config;
 use pixi_core::{WorkspaceLocator, workspace::WorkspaceLocatorError};
-use pixi_manifest::FeaturesExt;
+use pixi_manifest::{FeaturesExt, HasWorkspaceManifest, PixiPlatformName};
 use pixi_progress::await_in_progress;
 use rattler_conda_types::{
-    MatchSpec, PackageName, ParseStrictness, ParseStrictnessWithNameMatcher, Platform,
-    RepoDataRecord,
+    MatchSpec, PackageName, ParseStrictness, ParseStrictnessWithNameMatcher, RepoDataRecord, Subdir,
 };
 use tracing::{debug, error};
 use url::Url;
 
 use crate::{
     cli_config::{ChannelsConfig, WorkspaceConfig},
-    cli_interface::CliInterface,
+    cli_interface::{CliInterface, cli_context},
 };
 
 /// Search a conda package
@@ -37,13 +38,20 @@ pub struct Args {
     pub channels: ChannelsConfig,
 
     #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
+    #[clap(flatten)]
     pub project_config: WorkspaceConfig,
 
-    /// The platform(s) to search for.
+    #[clap(flatten)]
+    pub config: pixi_config::ConfigCli,
+
+    /// The platform to search packages for.
     /// By default, searches all platforms from the manifest (or all known
-    /// platforms if no manifest is found).
+    /// platforms if no manifest is found). Accepts a workspace platform
+    /// name; a bare conda subdir (e.g. `linux-64`) is also accepted.
     #[arg(short, long)]
-    pub platform: Option<Platform>,
+    pub platform: Option<PixiPlatformName>,
 
     /// Limit the number of versions shown per package, -1 for no limit
     #[clap(short, long, default_value = "5", allow_hyphen_values = true)]
@@ -80,10 +88,11 @@ pub async fn execute_impl<W: Write>(
     out: &mut W,
 ) -> miette::Result<Vec<RepoDataRecord>> {
     let workspace = match WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()
     {
-        Ok(project) => Some(project),
+        Ok(project) => Some(project.with_cli_config(args.config.clone())),
         Err(WorkspaceLocatorError::WorkspaceNotFound(_)) => {
             debug!("No project file found, continuing without project configuration.",);
             None
@@ -108,21 +117,35 @@ pub async fn execute_impl<W: Write>(
             .join(", ")
     );
 
-    // Resolve platforms
-    let platforms = if let Some(platform) = args.platform {
-        vec![platform, Platform::NoArch]
+    // Resolve platforms. With a workspace in scope, look the name up
+    // against the declared platforms first and fall back to a subdir
+    // parse; without a workspace, only the subdir parse runs (an empty
+    // workspace-platform set forces the fallback branch).
+    let platforms = if let Some(name) = args.platform {
+        let workspace_platforms = workspace
+            .as_ref()
+            .map(|w| w.workspace_manifest().workspace.platforms.clone())
+            .unwrap_or_else(IndexSet::default);
+        let resolved = resolve_platforms(&workspace_platforms, std::slice::from_ref(&name))?
+            .into_iter()
+            .next()
+            .expect("resolve_platforms preserves length");
+        vec![resolved.subdir(), Subdir::NoArch]
     } else if let Some(ref workspace) = workspace {
-        let mut platforms: Vec<Platform> = workspace
+        let workspace_platforms = &workspace.workspace_manifest().workspace.platforms;
+        let mut platforms: Vec<Subdir> = workspace
             .default_environment()
             .platforms()
             .into_iter()
+            .filter_map(|name| workspace_platforms.iter().find(|p| p.name() == &name))
+            .map(|p| p.subdir())
             .collect();
-        if !platforms.contains(&Platform::NoArch) {
-            platforms.push(Platform::NoArch);
+        if !platforms.contains(&Subdir::NoArch) {
+            platforms.push(Subdir::NoArch);
         }
         platforms
     } else {
-        Platform::all().collect()
+        Subdir::all().collect()
     };
 
     let matchspec = MatchSpec::from_str(
@@ -134,21 +157,38 @@ pub async fn execute_impl<W: Write>(
     )
     .into_diagnostic()?;
 
-    let packages = if let Some(workspace) = workspace {
+    // Only fetch records for the packages that will be shown; the total
+    // fuzzy match count comes back separately for the "... and N more" hint.
+    let fuzzy_limit = if args.json || args.limit_packages < 0 {
+        None
+    } else {
+        Some(args.limit_packages as usize)
+    };
+
+    let result = if let Some(workspace) = workspace {
         await_in_progress("searching packages...", |_| async {
-            WorkspaceContext::new(CliInterface {}, workspace)
-                .search(matchspec, channels, platforms)
+            cli_context(workspace)
+                .search(matchspec, channels, platforms, fuzzy_limit)
                 .await
         })
         .await?
     } else {
+        let config = pixi_config::Config::load_global_with(&args.config_source.source())
+            .merge_config(args.config.clone().into());
         await_in_progress("searching packages...", |_| async {
             DefaultContext::new(CliInterface {})
-                .search(matchspec, channels, platforms)
+                .search(config, matchspec, channels, platforms, fuzzy_limit)
                 .await
         })
         .await?
     };
+    // Keep machine-readable output quiet, matching conda's JSON behavior.
+    if !args.json {
+        for notice in &result.notices {
+            pixi_reporters::queue_channel_notice(notice);
+        }
+    }
+    let packages = result.packages;
 
     if args.json {
         let json_output = build_json_output(&packages);
@@ -171,8 +211,13 @@ pub async fn execute_impl<W: Write>(
         };
 
         // Print search results with detailed info for first N packages
-        if let Err(e) = print_search_results(&packages, out, limit_packages, limit_versions)
-            && e.kind() != std::io::ErrorKind::BrokenPipe
+        if let Err(e) = print_search_results(
+            &packages,
+            out,
+            limit_packages,
+            limit_versions,
+            result.fuzzy_matches,
+        ) && e.kind() != std::io::ErrorKind::BrokenPipe
         {
             return Err(e).into_diagnostic();
         }
@@ -192,6 +237,7 @@ fn print_search_results<W: Write>(
     out: &mut W,
     limit_packages: Option<usize>,
     limit_versions: Option<usize>,
+    fuzzy_matches: Option<usize>,
 ) -> io::Result<()> {
     // Group packages by name
     let mut by_name: IndexMap<&PackageName, Vec<&RepoDataRecord>> = IndexMap::new();
@@ -202,10 +248,14 @@ fn print_search_results<W: Write>(
             .push(pkg);
     }
 
+    // The fuzzy fallback only fetches records for the packages that are
+    // shown; it reports the total match count for the hint below.
+    let total_packages = fuzzy_matches.unwrap_or(by_name.len());
+
     let channel_config = default_channel_config();
 
     // Single package name => show detailed view
-    if by_name.len() == 1 {
+    if by_name.len() == 1 && total_packages <= 1 {
         let (name, records) = by_name.iter().next().expect("by_name has exactly 1 entry");
         // When limit is 0, only print the package name
         if limit_versions == Some(0) {
@@ -289,7 +339,7 @@ fn print_search_results<W: Write>(
         }
     }
 
-    let remaining_packages = by_name.len().saturating_sub(n_packages);
+    let remaining_packages = total_packages.saturating_sub(by_name.len().min(n_packages));
     if remaining_packages > 0 {
         let label = if remaining_packages == 1 {
             "package"
@@ -394,8 +444,8 @@ fn print_package_info<W: Write>(
             console::style("Timestamp"),
             console::style(
                 timestamp
-                    .datetime()
-                    .format("%Y-%m-%d %H:%M:%S UTC")
+                    .jiff_timestamp()
+                    .strftime("%Y-%m-%d %H:%M:%S UTC")
                     .to_string()
             )
         )?;
@@ -432,13 +482,13 @@ fn print_package_info<W: Write>(
     )?;
 
     let md5 = match package.package_record.md5 {
-        Some(md5) => format!("{md5:x}"),
+        Some(md5) => hex::encode(md5),
         None => "Not available".to_string(),
     };
     writeln!(out, "{:19} {}", console::style("MD5"), console::style(md5))?;
 
     let sha256 = match package.package_record.sha256 {
-        Some(sha256) => format!("{sha256:x}"),
+        Some(sha256) => hex::encode(sha256),
         None => "Not available".to_string(),
     };
     writeln!(

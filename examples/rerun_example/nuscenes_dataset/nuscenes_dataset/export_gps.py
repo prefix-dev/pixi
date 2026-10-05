@@ -40,7 +40,7 @@ def get_coordinate(
     tuple[float, float]
         A tuple of latitude and longitude.
 
-    """  # noqa: D205
+    """
     lat, lon = math.radians(ref_lat), math.radians(ref_lon)
     angular_distance = dist / EARTH_RADIUS_METERS
 
@@ -76,7 +76,7 @@ def derive_latlon(location: str, pose: dict[str, Sequence[float]]) -> tuple[floa
     Latitude and longitude coordinates in degrees.
 
     """
-    assert location in REFERENCE_COORDINATES.keys(), (
+    assert location in REFERENCE_COORDINATES, (
         f"Error: The given location: {location}, has no available reference."
     )
 

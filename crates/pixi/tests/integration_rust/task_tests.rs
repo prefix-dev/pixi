@@ -1,13 +1,13 @@
 use std::path::PathBuf;
 
-use pixi_cli::cli_config::WorkspaceConfig;
+use pixi_cli::cli_config::ScriptWorkspaceConfig;
 use pixi_cli::run::Args;
 use pixi_manifest::{
     FeatureName, Task,
     task::{CmdArgs, TemplateString},
 };
 use pixi_task::TaskName;
-use rattler_conda_types::Platform;
+use rattler_conda_types::Subdir;
 
 use crate::common::PixiControl;
 use crate::setup_tracing;
@@ -139,10 +139,7 @@ async fn test_alias() {
     let result = pixi
         .run(Args {
             task: vec!["helloworld".to_string()],
-            workspace_config: WorkspaceConfig {
-                manifest_path: None,
-                ..Default::default()
-            },
+            workspace_config: ScriptWorkspaceConfig::default(),
             ..Default::default()
         })
         .await
@@ -163,16 +160,17 @@ pub async fn add_remove_target_specific_task() {
 
     // Simple task
     pixi.tasks()
-        .add("test".into(), Some(Platform::Win64), FeatureName::default())
+        .add("test".into(), Some(Subdir::Win64), FeatureName::default())
         .with_commands(["echo only_on_windows"])
         .execute()
         .await
         .unwrap();
 
     let project = pixi.workspace().unwrap();
+    let win64 = pixi_manifest::PixiPlatform::from_subdir(Subdir::Win64);
     let task = *project
         .default_environment()
-        .tasks(Some(Platform::Win64))
+        .tasks(Some(&win64))
         .unwrap()
         .get(&<TaskName>::from("test"))
         .unwrap();
@@ -188,17 +186,98 @@ pub async fn add_remove_target_specific_task() {
 
     // Remove the task
     pixi.tasks()
-        .remove("test".into(), Some(Platform::Win64), None)
+        .remove("test".into(), Some(Subdir::Win64), None)
         .await
         .unwrap();
     assert_eq!(
         project
             .default_environment()
-            .tasks(Some(Platform::Win64))
+            .tasks(Some(&win64))
             .unwrap()
             .len(),
         // The default task is still there
         1
+    );
+}
+
+/// `pixi task add --platform <subdir>` on a workspace that hasn't yet
+/// declared the subdir must auto-declare it (matching the dependency-add
+/// flow) and store the task under that platform.
+#[tokio::test]
+pub async fn add_task_auto_declares_subdir_platform() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    pixi.init_with_platforms(vec!["linux-64".to_string()])
+        .await
+        .unwrap();
+
+    // The workspace starts with only `linux-64` declared; ask for a task
+    // pinned to `osx-arm64`, which doesn't exist yet.
+    pixi.tasks()
+        .add(
+            "test".into(),
+            Some(Subdir::OsxArm64),
+            FeatureName::default(),
+        )
+        .with_commands(["echo only_on_osx_arm64"])
+        .execute()
+        .await
+        .unwrap();
+
+    let project = pixi.workspace().unwrap();
+    // `osx-arm64` should now be in `[workspace].platforms` -- the
+    // resolver auto-declared it the same way `pixi add --platform
+    // <subdir>` does.
+    let names: Vec<_> = project
+        .workspace
+        .value
+        .workspace
+        .platforms
+        .iter()
+        .map(|p| p.name().as_str().to_string())
+        .collect();
+    assert!(names.contains(&"osx-arm64".to_string()), "{names:?}");
+
+    // And the task is scoped to it.
+    let osx = pixi_manifest::PixiPlatform::from_subdir(Subdir::OsxArm64);
+    let tasks = project.default_environment().tasks(Some(&osx)).unwrap();
+    assert!(tasks.contains_key(&<TaskName>::from("test")));
+}
+
+/// `pixi task remove --platform <subdir>` accepts a subdir fallback but
+/// must not auto-declare it. A name that's neither a workspace platform
+/// nor a known task surfaces the "task does not exist" diagnostic and
+/// leaves the manifest untouched.
+#[tokio::test]
+pub async fn remove_task_does_not_auto_declare_subdir_platform() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    pixi.init_with_platforms(vec!["linux-64".to_string()])
+        .await
+        .unwrap();
+
+    // No task on `osx-arm64`, no `osx-arm64` in workspace.platforms. The
+    // remove silently no-ops (after printing a "task does not exist"
+    // diagnostic) and the manifest is left alone.
+    pixi.tasks()
+        .remove("ghost".into(), Some(Subdir::OsxArm64), None)
+        .await
+        .unwrap();
+
+    let project = pixi.workspace().unwrap();
+    let names: Vec<_> = project
+        .workspace
+        .value
+        .workspace
+        .platforms
+        .iter()
+        .map(|p| p.name().as_str().to_string())
+        .collect();
+    assert!(
+        !names.contains(&"osx-arm64".to_string()),
+        "remove must not auto-declare; got platforms {names:?}",
     );
 }
 
@@ -223,10 +302,7 @@ async fn test_cwd() {
     let result = pixi
         .run(Args {
             task: vec!["pwd-test".to_string()],
-            workspace_config: WorkspaceConfig {
-                manifest_path: None,
-                ..Default::default()
-            },
+            workspace_config: ScriptWorkspaceConfig::default(),
             ..Default::default()
         })
         .await
@@ -247,10 +323,7 @@ async fn test_cwd() {
     assert!(
         pixi.run(Args {
             task: vec!["unknown-cwd".to_string()],
-            workspace_config: WorkspaceConfig {
-                manifest_path: None,
-                ..Default::default()
-            },
+            workspace_config: ScriptWorkspaceConfig::default(),
             ..Default::default()
         })
         .await
@@ -279,10 +352,7 @@ async fn test_task_with_env() {
     let result = pixi
         .run(Args {
             task: vec!["env-test".to_string()],
-            workspace_config: WorkspaceConfig {
-                manifest_path: None,
-                ..Default::default()
-            },
+            workspace_config: ScriptWorkspaceConfig::default(),
             ..Default::default()
         })
         .await
@@ -314,10 +384,7 @@ async fn test_clean_env() {
 
     let run = pixi.run(Args {
         task: vec!["env-test".to_string()],
-        workspace_config: WorkspaceConfig {
-            manifest_path: None,
-            ..Default::default()
-        },
+        workspace_config: ScriptWorkspaceConfig::default(),
         clean_env: true,
         ..Default::default()
     });
@@ -334,10 +401,7 @@ async fn test_clean_env() {
     let result = pixi
         .run(Args {
             task: vec!["env-test".to_string()],
-            workspace_config: WorkspaceConfig {
-                manifest_path: None,
-                ..Default::default()
-            },
+            workspace_config: ScriptWorkspaceConfig::default(),
             clean_env: false,
             ..Default::default()
         })

@@ -11,8 +11,14 @@ use ordermap::OrderMap;
 // different types
 use pixi_build_types::{self as pbt};
 
-use pixi_manifest::{PackageManifest, PackageTarget, TargetSelector, Targets};
-use pixi_spec::{GitReference, PixiSpec, SourceSpec, SpecConversionError};
+use pixi_manifest::{
+    PackageConstraintSpec, PackageDependencySpec, PackageManifest, PackageRunExports,
+    PackageTarget, TargetSelector,
+};
+use pixi_spec::{
+    BinarySpec, GitReference, MatchspecFields, PixiSpec, SourceLocationSpec, SpecConversionError,
+};
+use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{ChannelConfig, NamelessMatchSpec, PackageName};
 
 /// Conversion from a `PixiSpec` to a `pbt::PixiSpecV1`.
@@ -25,33 +31,26 @@ fn to_pixi_spec_v1(
     // Convert into correct type for pixi
     let pbt_spec = match source_or_binary {
         itertools::Either::Left(source) => {
-            let SourceSpec {
-                location,
+            let MatchspecFields {
                 version,
                 build,
                 build_number,
-                extras: None,
-                flags: None,
+                extras,
+                flags,
                 subdir,
-                namespace: None,
                 license,
-                license_family: None,
-                condition: None,
-                track_features: None,
-            } = source
-            else {
-                unimplemented!(
-                    "a particular field is not implemented in the pixi to pbt conversion"
-                );
-            };
-            let location = match location {
-                pixi_spec::SourceLocationSpec::Url(url_source_spec) => {
-                    let pixi_spec::UrlSourceSpec {
+                condition,
+                // `track_features` is a deprecated matchspec field and is not propagated.
+                track_features: _,
+            } = source.matchspec.clone();
+            let location = match source.location {
+                SourceLocationSpec::Url(url_spec) => {
+                    let pixi_spec::UrlSpec {
                         url,
                         md5,
                         sha256,
                         subdirectory,
-                    } = url_source_spec;
+                    } = url_spec;
                     pbt::SourcePackageLocationSpec::Url(pbt::UrlSpec {
                         url,
                         md5,
@@ -59,11 +58,12 @@ fn to_pixi_spec_v1(
                         subdirectory: subdirectory.to_option_string(),
                     })
                 }
-                pixi_spec::SourceLocationSpec::Git(git_spec) => {
-                    let pixi_spec::GitSpec {
+                SourceLocationSpec::Git(git_spec) => {
+                    let pixi_spec::GitLocationSpec {
                         git,
                         rev,
                         subdirectory,
+                        lfs,
                     } = git_spec;
                     pbt::SourcePackageLocationSpec::Git(pbt::GitSpec {
                         git,
@@ -74,11 +74,12 @@ fn to_pixi_spec_v1(
                             GitReference::DefaultBranch => pbt::GitReference::DefaultBranch,
                         }),
                         subdirectory: subdirectory.to_option_string(),
+                        lfs,
                     })
                 }
-                pixi_spec::SourceLocationSpec::Path(path_source_spec) => {
+                SourceLocationSpec::Path(path_spec) => {
                     pbt::SourcePackageLocationSpec::Path(pbt::PathSpec {
-                        path: path_source_spec.path.to_string(),
+                        path: path_spec.path.to_string(),
                     })
                 }
             };
@@ -87,46 +88,60 @@ fn to_pixi_spec_v1(
                 version,
                 build,
                 build_number,
+                extras,
+                flags,
                 subdir,
                 license,
+                condition,
             })
         }
         itertools::Either::Right(binary) => {
-            let NamelessMatchSpec {
-                version,
-                build,
-                build_number,
-                file_name,
-                channel,
-                subdir,
-                md5,
-                sha256,
-                url,
-                license,
-                // These are currently explicitly ignored in the conversion
-                namespace: _,
-                extras: _,
-                condition,
-                track_features: _,
-                flags: _,
-                license_family: _,
-            } = binary.try_into_nameless_match_spec(channel_config)?;
-            pbt::PackageSpec::Binary(pbt::BinaryPackageSpec {
-                version,
-                build,
-                build_number,
-                file_name,
-                channel: channel.map(|c| c.base_url.url().clone().into()),
-                subdir,
-                md5,
-                sha256,
-                url,
-                license,
-                condition,
-            })
+            to_binary_package_spec_v1(binary, channel_config)?.into()
         }
     };
     Ok(pbt_spec)
+}
+
+/// Converts a [`BinarySpec`] to a [`pbt::BinaryPackageSpec`].
+fn to_binary_package_spec_v1(
+    binary: BinarySpec,
+    channel_config: &ChannelConfig,
+) -> Result<pbt::BinaryPackageSpec, SpecConversionError> {
+    let NamelessMatchSpec {
+        version,
+        build,
+        build_number,
+        file_name,
+        extras,
+        flags,
+        channel,
+        subdir,
+        md5,
+        sha256,
+        url,
+        license,
+        condition,
+        // `license_family` and `track_features` are deprecated matchspec
+        // fields and `namespace` is unused, so they are not propagated.
+        license_family: _,
+        track_features: _,
+        namespace: _,
+    } = binary.try_into_nameless_match_spec(channel_config)?;
+    Ok(pbt::BinaryPackageSpec {
+        version,
+        build,
+        build_number,
+        file_name,
+        extras,
+        flags,
+        channel: channel.map(|c| c.base_url.url().clone().into()),
+        subdir,
+        md5,
+        sha256,
+        url,
+        license,
+        condition,
+    })
 }
 
 /// Converts an iterator of `PackageName` and `PixiSpec` to a `IndexMap<String,
@@ -142,6 +157,94 @@ fn to_pbt_dependencies<'a>(
     .collect()
 }
 
+/// Converts a [`PackageDependencySpec`] into its wire form: regular specs go
+/// through [`to_pixi_spec_v1`], pin entries become the matching wire pin
+/// variant.
+fn to_package_dependency_spec_v1(
+    spec: &PackageDependencySpec,
+    channel_config: &ChannelConfig,
+) -> Result<pbt::PackageSpec, SpecConversionError> {
+    Ok(match spec {
+        PackageDependencySpec::Spec(spec) => to_pixi_spec_v1(spec, channel_config)?,
+        PackageDependencySpec::PinSubpackage(pin) => pbt::PackageSpec::PinSubpackage(pin.into()),
+        PackageDependencySpec::PinCompatible(pin) => pbt::PackageSpec::PinCompatible(pin.into()),
+    })
+}
+
+/// Converts an iterator of `PackageName` and [`PackageDependencySpec`] to the
+/// wire dependency map.
+fn to_pbt_package_dependencies<'a>(
+    iter: impl Iterator<Item = (&'a PackageName, &'a PackageDependencySpec)>,
+    channel_config: &ChannelConfig,
+) -> Result<OrderMap<pbt::SourcePackageName, pbt::PackageSpec>, SpecConversionError> {
+    iter.map(|(name, spec)| {
+        let converted = to_package_dependency_spec_v1(spec, channel_config)?;
+        Ok((pbt::SourcePackageName::from(name.clone()), converted))
+    })
+    .collect()
+}
+
+/// Converts the run-export buckets of a [`PackageTarget`] into their wire
+/// form. Returns `None` when every bucket is empty.
+fn to_run_exports_v1(
+    run_exports: &PackageRunExports,
+    channel_config: &ChannelConfig,
+) -> Result<Option<pbt::RunExports>, SpecConversionError> {
+    if run_exports.is_empty() {
+        return Ok(None);
+    }
+
+    Ok(Some(pbt::RunExports {
+        noarch: dependency_bucket_v1(&run_exports.noarch, channel_config)?,
+        strong: dependency_bucket_v1(&run_exports.strong, channel_config)?,
+        weak: dependency_bucket_v1(&run_exports.weak, channel_config)?,
+        strong_constraints: constraints_bucket_v1(&run_exports.strong_constraints, channel_config)?,
+        weak_constraints: constraints_bucket_v1(&run_exports.weak_constraints, channel_config)?,
+    }))
+}
+
+/// Converts a run-export dependency bucket into its wire form. Returns `None`
+/// when the bucket is empty.
+fn dependency_bucket_v1(
+    bucket: &DependencyMap<PackageName, PackageDependencySpec>,
+    channel_config: &ChannelConfig,
+) -> Result<Option<OrderMap<pbt::SourcePackageName, pbt::PackageSpec>>, SpecConversionError> {
+    if bucket.is_empty() {
+        Ok(None)
+    } else {
+        to_pbt_package_dependencies(bucket.iter_specs(), channel_config).map(Some)
+    }
+}
+
+/// Converts a run-export constraints bucket into its wire form. Returns `None`
+/// when the bucket is empty.
+fn constraints_bucket_v1(
+    bucket: &DependencyMap<PackageName, PackageConstraintSpec>,
+    channel_config: &ChannelConfig,
+) -> Result<Option<OrderMap<pbt::SourcePackageName, pbt::ConstraintSpec>>, SpecConversionError> {
+    if bucket.is_empty() {
+        return Ok(None);
+    }
+    bucket
+        .iter_specs()
+        .map(|(name, spec)| {
+            let converted = match spec {
+                PackageConstraintSpec::Binary(binary) => pbt::ConstraintSpec::Binary(Box::new(
+                    to_binary_package_spec_v1(binary.clone(), channel_config)?,
+                )),
+                PackageConstraintSpec::PinSubpackage(pin) => {
+                    pbt::ConstraintSpec::PinSubpackage(pin.into())
+                }
+                PackageConstraintSpec::PinCompatible(pin) => {
+                    pbt::ConstraintSpec::PinCompatible(pin.into())
+                }
+            };
+            Ok((pbt::SourcePackageName::from(name.clone()), converted))
+        })
+        .collect::<Result<OrderMap<_, _>, SpecConversionError>>()
+        .map(Some)
+}
+
 /// Converts a [`PackageTarget`] to a [`pbt::Target`].
 fn to_target_v1(
     target: &PackageTarget,
@@ -149,65 +252,97 @@ fn to_target_v1(
 ) -> Result<pbt::Target, SpecConversionError> {
     // Difference for us is that [`pbt::TargetV1`] has split the host, run and build
     // dependencies into separate fields, so we need to split them up here
+    let extra_dependencies = if target.extra_dependencies.is_empty() {
+        None
+    } else {
+        Some(
+            target
+                .extra_dependencies
+                .iter()
+                .map(|(name, deps)| {
+                    to_pbt_dependencies(deps.iter_specs(), channel_config)
+                        .map(|dependencies| (name.clone(), dependencies))
+                })
+                .collect::<Result<_, _>>()?,
+        )
+    };
     Ok(pbt::Target {
         host_dependencies: Some(
             target
                 .host_dependencies()
-                .map(|deps| to_pbt_dependencies(deps.iter_specs(), channel_config))
+                .map(|deps| to_pbt_package_dependencies(deps.iter_specs(), channel_config))
                 .transpose()?
                 .unwrap_or_default(),
         ),
         build_dependencies: Some(
             target
                 .build_dependencies()
-                .map(|deps| to_pbt_dependencies(deps.iter_specs(), channel_config))
+                .map(|deps| to_pbt_package_dependencies(deps.iter_specs(), channel_config))
                 .transpose()?
                 .unwrap_or_default(),
         ),
         run_dependencies: Some(
             target
                 .run_dependencies()
-                .map(|deps| to_pbt_dependencies(deps.iter_specs(), channel_config))
+                .map(|deps| to_pbt_package_dependencies(deps.iter_specs(), channel_config))
                 .transpose()?
                 .unwrap_or_default(),
         ),
         run_constraints: Some(
             target
                 .run_constraints()
-                .map(|deps| to_pbt_dependencies(deps.iter_specs(), channel_config))
+                .map(|deps| to_pbt_package_dependencies(deps.iter_specs(), channel_config))
                 .transpose()?
                 .unwrap_or_default(),
         ),
+        extra_dependencies,
+        run_exports: to_run_exports_v1(&target.run_exports, channel_config)?,
     })
 }
 
-pub fn to_target_selector_v1(selector: &TargetSelector) -> pbt::TargetSelector {
-    match selector {
+/// Converts a manifest [`TargetSelector`] to its wire form. Only used for the
+/// per-target backend configuration (`[package.build.target.<selector>]`);
+/// dependencies carry conditional expressions instead.
+pub fn to_target_selector_v1(
+    selector: &TargetSelector,
+) -> Result<pbt::TargetSelector, SpecConversionError> {
+    Ok(match selector {
         TargetSelector::Platform(platform) => pbt::TargetSelector::Platform(platform.to_string()),
+        TargetSelector::Subdir(subdir) => pbt::TargetSelector::Subdir(subdir.to_string()),
         TargetSelector::Unix => pbt::TargetSelector::Unix,
         TargetSelector::Linux => pbt::TargetSelector::Linux,
         TargetSelector::Win => pbt::TargetSelector::Win,
         TargetSelector::MacOs => pbt::TargetSelector::MacOs,
-    }
+        // Package targets resolve by subdir through the build-types protocol,
+        // which has no wildcard concept; glob keys are rejected upstream while
+        // parsing the manifest, so this is an unreachable backstop.
+        TargetSelector::PlatformGlob(glob) => {
+            return Err(SpecConversionError::WildcardTargetSelector(
+                glob.as_str().to_string(),
+            ));
+        }
+    })
 }
 
 fn to_targets_v1(
-    targets: &Targets<PackageTarget>,
+    manifest: &PackageManifest,
     channel_config: &ChannelConfig,
 ) -> Result<pbt::Targets, SpecConversionError> {
-    let selected_targets = targets
+    // Conditional `if(...)` dependencies are not platform selectors; they are
+    // carried separately and passed through to rattler-build, which evaluates
+    // the expression. The deprecated `[package.target.*]` tables are already
+    // lowered into conditional dependencies at parse time.
+    let conditional = manifest
+        .conditional_dependencies
         .iter()
-        .filter_map(|(k, v)| {
-            v.map(|selector| {
-                to_target_v1(k, channel_config)
-                    .map(|target| (to_target_selector_v1(selector), target))
-            })
+        .map(|(expression, target)| {
+            to_target_v1(target, channel_config).map(|target| (expression.clone(), target))
         })
-        .collect::<Result<OrderMap<pbt::TargetSelector, pbt::Target>, _>>()?;
+        .collect::<Result<OrderMap<pbt::ConditionalExpression, pbt::Target>, _>>()?;
 
     Ok(pbt::Targets {
-        default_target: Some(to_target_v1(targets.default(), channel_config)?),
-        targets: Some(selected_targets),
+        default_target: Some(to_target_v1(&manifest.dependencies, channel_config)?),
+        conditional: (!conditional.is_empty()).then_some(conditional),
     })
 }
 
@@ -222,6 +357,7 @@ pub fn to_project_model_v1(
         build_number: manifest.build.build_number,
         version: manifest.package.version.clone(),
         description: manifest.package.description.clone(),
+        build_flags: (!manifest.build.flags.is_empty()).then(|| manifest.build.flags.clone()),
         authors: manifest.package.authors.clone(),
         license: manifest.package.license.clone(),
         license_file: manifest.package.license_file.clone(),
@@ -229,7 +365,7 @@ pub fn to_project_model_v1(
         homepage: manifest.package.homepage.clone(),
         repository: manifest.package.repository.clone(),
         documentation: manifest.package.documentation.clone(),
-        targets: Some(to_targets_v1(&manifest.targets, channel_config)?),
+        targets: Some(to_targets_v1(manifest, channel_config)?),
         secrets: manifest.build.secrets.clone(),
     };
     Ok(project)
@@ -239,6 +375,11 @@ pub fn to_project_model_v1(
 mod tests {
     use std::path::PathBuf;
 
+    use pixi_build_types as pbt;
+    use pixi_manifest::toml::{
+        FromTomlStr, PackageDefaults, TomlPackage, WorkspacePackageProperties,
+    };
+    use pixi_manifest::{KnownPreviewFlag, Preview};
     use rattler_conda_types::ChannelConfig;
     use rstest::rstest;
 
@@ -300,6 +441,320 @@ mod tests {
         snapshot_test!(manifest_path);
     }
 
+    #[test]
+    fn test_package_extras_are_converted_to_project_model() {
+        let input = r#"
+        name = "example"
+        version = "0.1.0"
+
+        [build]
+        backend = { name = "pixi-build-rattler-build", version = "0.3.*" }
+
+        [extra-dependencies.test]
+        gtest = "*"
+        "#;
+
+        let manifest = TomlPackage::from_toml_str(input)
+            .unwrap()
+            .into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::default(),
+                std::path::Path::new(""),
+            )
+            .unwrap()
+            .value;
+
+        let project_model = super::to_project_model_v1(&manifest, &some_channel_config()).unwrap();
+        let extras = project_model
+            .targets
+            .expect("targets are forwarded")
+            .default_target
+            .expect("default target is forwarded")
+            .extra_dependencies
+            .expect("extras are forwarded");
+        let test_extra = extras.get("test").expect("test extra exists");
+
+        assert!(test_extra.keys().any(|name| name.as_str() == "gtest"));
+    }
+
+    #[test]
+    fn test_pin_specs_are_converted_to_project_model() {
+        let input = r#"
+        name = "example"
+        version = "0.1.0"
+
+        [build]
+        backend = { name = "pixi-build-python", version = "0.3.*" }
+
+        [host-dependencies]
+        boltons = ">=2,<3"
+
+        [run-dependencies]
+        boltons = { pin-compatible = { lower-bound = "x.x" } }
+
+        [run-exports.weak]
+        example = { pin-subpackage = true }
+
+        [run-exports.strong-constraints]
+        example = { pin-subpackage = { exact = true } }
+        "#;
+
+        let manifest = TomlPackage::from_toml_str(input)
+            .unwrap()
+            .into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::from_iter([KnownPreviewFlag::PixiBuild]),
+                std::path::Path::new(""),
+            )
+            .unwrap()
+            .value;
+
+        let project_model = super::to_project_model_v1(&manifest, &some_channel_config()).unwrap();
+        let targets = project_model.targets.expect("targets are forwarded");
+        let default_target = targets.default_target.expect("default target is forwarded");
+
+        let run_dependencies = default_target
+            .run_dependencies
+            .as_ref()
+            .expect("run dependencies are forwarded");
+        insta::assert_json_snapshot!(run_dependencies, @r#"
+        {
+          "boltons": {
+            "pinCompatible": {
+              "lowerBound": {
+                "expression": "x.x"
+              },
+              "upperBound": {
+                "expression": "x"
+              }
+            }
+          }
+        }
+        "#);
+
+        let run_exports = default_target
+            .run_exports
+            .as_ref()
+            .expect("run-exports are forwarded");
+        insta::assert_json_snapshot!(run_exports, @r#"
+        {
+          "weak": {
+            "example": {
+              "pinSubpackage": {
+                "lowerBound": {
+                  "expression": "x.x.x.x.x.x"
+                },
+                "upperBound": {
+                  "expression": "x"
+                }
+              }
+            }
+          },
+          "strongConstraints": {
+            "example": {
+              "pinSubpackage": {
+                "exact": true
+              }
+            }
+          }
+        }
+        "#);
+    }
+
+    #[test]
+    fn test_package_run_exports_are_converted_to_project_model() {
+        let input = r#"
+        name = "example"
+        version = "0.1.0"
+
+        [build]
+        backend = { name = "pixi-build-rattler-build", version = "0.3.*" }
+
+        [run-exports.weak]
+        example = { path = "." }
+        libfoo = ">=1,<2"
+
+        [run-exports.strong-constraints]
+        libbar = ">=2"
+
+        [run-exports.weak."if(host_platform == 'linux-64')"]
+        libgl = "*"
+        "#;
+
+        let manifest = TomlPackage::from_toml_str(input)
+            .unwrap()
+            .into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::from_iter([KnownPreviewFlag::PixiBuild]),
+                std::path::Path::new(""),
+            )
+            .unwrap()
+            .value;
+
+        let project_model = super::to_project_model_v1(&manifest, &some_channel_config()).unwrap();
+        let targets = project_model.targets.expect("targets are forwarded");
+        let default_run_exports = targets
+            .default_target
+            .expect("default target is forwarded")
+            .run_exports
+            .expect("run-exports are forwarded");
+        insta::assert_json_snapshot!(default_run_exports, @r#"
+        {
+          "weak": {
+            "example": {
+              "source": {
+                "path": {
+                  "path": "."
+                },
+                "version": null,
+                "build": null,
+                "buildNumber": null,
+                "subdir": null,
+                "license": null
+              }
+            },
+            "libfoo": {
+              "binary": {
+                "version": ">=1,<2",
+                "build": null,
+                "buildNumber": null,
+                "fileName": null,
+                "extras": null,
+                "flags": null,
+                "channel": null,
+                "subdir": null,
+                "md5": null,
+                "sha256": null,
+                "url": null,
+                "license": null,
+                "condition": null
+              }
+            }
+          },
+          "strongConstraints": {
+            "libbar": {
+              "binary": {
+                "version": ">=2",
+                "build": null,
+                "buildNumber": null,
+                "fileName": null,
+                "extras": null,
+                "flags": null,
+                "channel": null,
+                "subdir": null,
+                "md5": null,
+                "sha256": null,
+                "url": null,
+                "license": null,
+                "condition": null
+              }
+            }
+          }
+        }
+        "#);
+
+        let conditional = targets.conditional.expect("conditional targets exist");
+        let linux = conditional
+            .get(&pbt::ConditionalExpression::new(
+                "host_platform == 'linux-64'",
+            ))
+            .expect("conditional target is forwarded");
+        let linux_run_exports = linux
+            .run_exports
+            .as_ref()
+            .expect("conditional run-exports are forwarded");
+        assert!(
+            linux_run_exports
+                .weak
+                .as_ref()
+                .is_some_and(|weak| weak.keys().any(|name| name.as_str() == "libgl"))
+        );
+    }
+
+    #[test]
+    fn test_package_build_flags_are_converted_to_project_model() {
+        let input = r#"
+        name = "example"
+        version = "0.1.0"
+
+        [build]
+        backend = { name = "pixi-build-rattler-build", version = "0.3.*" }
+        flags = ["cuda", "blas_openblas"]
+        "#;
+
+        let manifest = TomlPackage::from_toml_str(input)
+            .unwrap()
+            .into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::default(),
+                std::path::Path::new(""),
+            )
+            .unwrap()
+            .value;
+
+        let project_model = super::to_project_model_v1(&manifest, &some_channel_config()).unwrap();
+        let flags = project_model
+            .build_flags
+            .expect("build flags are forwarded");
+        let flags = flags.iter().map(|flag| flag.as_str()).collect::<Vec<_>>();
+
+        assert_eq!(flags, vec!["cuda", "blas_openblas"]);
+    }
+
+    #[test]
+    fn test_source_dependency_matchspec_fields_are_converted_to_project_model() {
+        let input = r#"
+        name = "example"
+        version = "0.1.0"
+
+        [build]
+        backend = { name = "pixi-build-rattler-build", version = "0.3.*" }
+
+        [host-dependencies]
+        python.git = "https://github.com/lucascolley/cpython"
+        python.subdirectory = "Tools/pixi-packages"
+        python.rev = "8b5b0c29797cf88d78ef014916a5e5a5d51bbf95"
+        python.flags = ["asan"]
+        "#;
+
+        let manifest = TomlPackage::from_toml_str(input)
+            .unwrap()
+            .into_manifest(
+                WorkspacePackageProperties::default(),
+                PackageDefaults::default(),
+                &Preview::from_iter([KnownPreviewFlag::PixiBuild]),
+                std::path::Path::new(""),
+            )
+            .unwrap()
+            .value;
+
+        let project_model = super::to_project_model_v1(&manifest, &some_channel_config()).unwrap();
+        let host_dependencies = project_model
+            .targets
+            .expect("targets are forwarded")
+            .default_target
+            .expect("default target is forwarded")
+            .host_dependencies
+            .expect("host dependencies are forwarded");
+        let python = host_dependencies
+            .iter()
+            .find_map(|(name, spec)| (name.as_str() == "python").then_some(spec))
+            .expect("python dependency exists");
+
+        match python {
+            super::pbt::PackageSpec::Source(source) => {
+                let flags = source.flags.as_ref().expect("source flags are forwarded");
+                assert_eq!(flags.len(), 1);
+                assert_eq!(flags[0].to_string(), "asan");
+            }
+            other => panic!("expected Source spec, got {other:?}"),
+        }
+    }
+
     /// Regression test: `to_target_v1` must propagate `[package.run-constraints]`
     /// (the `SpecType::RunConstraints` bucket on `PackageTarget`) into the
     /// `pbt::Target.run_constraints` field. A previous version dropped them
@@ -316,8 +771,7 @@ mod tests {
 
         let mut package_target = PackageTarget::default();
         let constrained = PackageName::from_str("constrained").unwrap();
-        let spec =
-            PixiSpec::Version(VersionSpec::from_str(">=1.0", ParseStrictness::Strict).unwrap());
+        let spec = PixiSpec::from(VersionSpec::from_str(">=1.0", ParseStrictness::Strict).unwrap());
         package_target
             .try_add_dependency(
                 &constrained,

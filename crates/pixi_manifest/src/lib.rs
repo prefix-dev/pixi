@@ -6,16 +6,21 @@ mod discovery;
 mod environment;
 mod environments;
 mod error;
+mod exclude_newer;
 mod feature;
 mod features_ext;
 mod has_features_iter;
 mod has_manifest_ref;
 mod manifests;
 mod package;
+mod package_dependency_spec;
+pub mod platform;
+mod platform_composition;
 mod preview;
 pub mod pypi;
 pub mod pyproject;
 mod s3;
+pub mod script;
 mod solve_group;
 mod spec_type;
 mod system_requirements;
@@ -34,31 +39,43 @@ pub use discovery::{
     DiscoveryStart, ExplicitManifestError, InvalidRequiresPixiError, LoadManifestsError, Manifests,
     PixiVersionMismatchError, WorkspaceDiscoverer, WorkspaceDiscoveryError,
 };
-pub use environment::{Environment, EnvironmentName};
-pub use error::TomlError;
+pub use environment::{Environment, EnvironmentName, NewEnvironment};
+pub use error::{DependencyError, GenericError, TomlError};
+pub use exclude_newer::resolve_exclude_newer;
 pub use feature::{Feature, FeatureName};
 pub use features_ext::FeaturesExt;
 pub use has_features_iter::HasFeaturesIter;
 pub use has_manifest_ref::HasWorkspaceManifest;
 use itertools::Itertools;
 pub use manifests::{
-    AssociateProvenance, ManifestKind, ManifestProvenance, ManifestSource, PackageManifest,
-    ProvenanceError, WithProvenance, WorkspaceManifest, WorkspaceManifestMut,
+    ActivationScriptsChange, AssociateProvenance, ManifestKind, ManifestProvenance, ManifestSource,
+    MissingTargetError, PackageManifest, ProvenanceError, RemoveDependencyError, WithProvenance,
+    WorkspaceManifest, WorkspaceManifestMut,
 };
 use miette::Diagnostic;
 pub use package::Package;
-pub use preview::{KnownPreviewFeature, Preview};
-use rattler_conda_types::Platform;
+pub use package_dependency_spec::{PackageConstraintSpec, PackageDependencySpec};
+pub use platform::{
+    PixiPlatform, PixiPlatformError, PixiPlatformName, PixiPlatformNameError, PlatformEdit,
+    PlatformGlob, PlatformGlobError, PlatformMove, candidate_subdirs,
+};
+pub use preview::{KnownPreviewFlag, Preview};
 pub use s3::S3Options;
 pub use spec_type::SpecType;
 pub use system_requirements::{
     GLIBC_FAMILY, LibCFamilyAndVersion, LibCSystemRequirement, MUSL_FAMILY, SystemRequirements,
 };
-pub use target::{PackageTarget, TargetSelector, Targets, WorkspaceTarget};
+pub use target::{
+    InlineContentHash, InlinePackageManifest, PackageRunExports, PackageTarget, TargetSelector,
+    Targets, WorkspaceTarget,
+};
 pub use task::{Task, TaskName};
 use thiserror::Error;
 pub use warning::{Warning, WarningWithSource, WithWarnings};
-pub use workspace::{BuildVariantSource, ChannelPriority, SolveStrategy, Workspace};
+pub use workspace::{
+    BuildVariantSource, ChannelPriority, CondaPypiMap, CondaPypiMapEntry, CondaPypiMapSpec,
+    CondaPypiMappingMode, PlatformMatchDiagnosis, SolveStrategy, Workspace,
+};
 
 pub use crate::{
     environments::Environments,
@@ -68,7 +85,7 @@ pub use crate::{
 /// Errors that can occur when getting a feature.
 #[derive(Debug, Clone, Error, Diagnostic)]
 pub enum GetFeatureError {
-    #[error("feature `{0}` does not exist")]
+    #[error("{} does not exist", .0.user_facing())]
     FeatureDoesNotExist(FeatureName),
 }
 
@@ -91,6 +108,22 @@ pub enum DependencyOverwriteBehavior {
 
     /// Error on duplicate
     Error,
+}
+
+/// Outcome of adding a conda dependency to the manifest.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum AddDependencyOutcome {
+    /// At least one of the requested target tables was modified.
+    Added,
+
+    /// Nothing was modified; every requested target already declares the
+    /// dependency and the overwrite behavior kept it.
+    AlreadyExists,
+
+    /// Nothing was modified; the entry inherits from
+    /// `[workspace.dependencies]` via `{ workspace = true }` and the new spec
+    /// carried no explicit constraint that would justify replacing the marker.
+    InheritsWorkspace,
 }
 
 /// Internal behavior for handling duplicate dependencies.
@@ -133,18 +166,34 @@ pub enum PypiDependencyLocation {
     DependencyGroups,
 }
 
-/// Converts an array of `Platform`s to a non-empty `Vec` of `Option<Platform>`.
-fn to_options(platforms: &[Platform]) -> Vec<Option<Platform>> {
-    match platforms.is_empty() {
-        true => vec![None],
-        false => platforms.iter().map(|p| Some(*p)).collect_vec(),
-    }
-}
-
 use console::StyledObject;
 use fancy_display::FancyDisplay;
 pub use manifests::ManifestDocument;
 use pixi_consts::consts;
+
+/// Converts a slice of `PixiPlatformName`s to a non-empty `Vec` of
+/// `Option<PixiPlatformName>`. An empty input yields `vec![None]` so callers
+/// always iterate at least once (the `None` arm meaning "no target selector"
+/// i.e. the default target).
+pub(crate) fn to_options(platforms: &[PixiPlatformName]) -> Vec<Option<PixiPlatformName>> {
+    if platforms.is_empty() {
+        vec![None]
+    } else {
+        platforms.iter().cloned().map(Some).collect_vec()
+    }
+}
+
+/// Converts a slice of [`TargetSelector`]s to a non-empty `Vec` of
+/// `Option<TargetSelector>`. An empty input yields `vec![None]` so callers
+/// always iterate at least once (the `None` arm meaning "no target selector"
+/// i.e. the default target).
+pub(crate) fn to_target_options(targets: &[TargetSelector]) -> Vec<Option<TargetSelector>> {
+    if targets.is_empty() {
+        vec![None]
+    } else {
+        targets.iter().cloned().map(Some).collect_vec()
+    }
+}
 
 impl FancyDisplay for EnvironmentName {
     fn fancy_display(&self) -> StyledObject<&str> {

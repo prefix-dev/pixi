@@ -4,7 +4,6 @@ use std::{
 };
 
 use derive_more::Display;
-use rattler_conda_types::Platform;
 
 /// Dense `u32` id allocated by
 /// [`WorkspaceEnvRegistry`](super::WorkspaceEnvRegistry). The id directly
@@ -39,12 +38,25 @@ pub struct WorkspaceEnvRef(Arc<WorkspaceEnvInner>);
 pub(super) struct WorkspaceEnvInner {
     pub(super) id: WorkspaceEnvId,
     pub(super) name: String,
-    pub(super) platform: Platform,
+    pub(super) platform: String,
+    /// The platform the environment builds on, when it is not the
+    /// platform it targets. `None` for the common, native case.
+    pub(super) build_platform: Option<String>,
 }
 
 impl WorkspaceEnvRef {
-    pub(super) fn new(id: WorkspaceEnvId, name: String, platform: Platform) -> Self {
-        Self(Arc::new(WorkspaceEnvInner { id, name, platform }))
+    pub(super) fn new(
+        id: WorkspaceEnvId,
+        name: String,
+        platform: String,
+        build_platform: Option<String>,
+    ) -> Self {
+        Self(Arc::new(WorkspaceEnvInner {
+            id,
+            name,
+            platform,
+            build_platform,
+        }))
     }
 
     #[inline]
@@ -58,8 +70,23 @@ impl WorkspaceEnvRef {
     }
 
     #[inline]
-    pub fn platform(&self) -> Platform {
-        self.0.platform
+    pub fn platform(&self) -> &str {
+        &self.0.platform
+    }
+
+    /// Display label of the platform the environment builds on. The same
+    /// as [`platform`](Self::platform) unless the environment
+    /// cross-compiles.
+    #[inline]
+    pub fn build_platform(&self) -> &str {
+        self.0.build_platform.as_deref().unwrap_or(&self.0.platform)
+    }
+
+    /// Whether the environment builds on a different platform than it
+    /// targets.
+    #[inline]
+    pub fn is_cross_compiling(&self) -> bool {
+        self.0.build_platform.is_some()
     }
 }
 
@@ -81,12 +108,17 @@ impl Eq for WorkspaceEnvRef {}
 mod tests {
     use std::collections::hash_map::DefaultHasher;
 
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::Subdir;
 
     use super::*;
 
-    fn mk(id: u32, name: &str, platform: Platform) -> WorkspaceEnvRef {
-        WorkspaceEnvRef::new(WorkspaceEnvId(id), name.to_string(), platform)
+    fn mk(id: u32, name: &str, platform: Subdir) -> WorkspaceEnvRef {
+        WorkspaceEnvRef::new(
+            WorkspaceEnvId(id),
+            name.to_string(),
+            platform.to_string(),
+            None,
+        )
     }
 
     fn hash_of(ws: &WorkspaceEnvRef) -> u64 {
@@ -97,23 +129,23 @@ mod tests {
 
     #[test]
     fn different_ids_same_labels_are_unequal() {
-        let a = mk(0, "default", Platform::Linux64);
-        let b = mk(1, "default", Platform::Linux64);
+        let a = mk(0, "default", Subdir::Linux64);
+        let b = mk(1, "default", Subdir::Linux64);
         assert_ne!(a, b);
         assert_ne!(hash_of(&a), hash_of(&b));
     }
 
     #[test]
     fn same_id_different_labels_are_equal() {
-        let a = mk(7, "default", Platform::Linux64);
-        let b = mk(7, "other", Platform::OsxArm64);
+        let a = mk(7, "default", Subdir::Linux64);
+        let b = mk(7, "other", Subdir::OsxArm64);
         assert_eq!(a, b);
         assert_eq!(hash_of(&a), hash_of(&b));
     }
 
     #[test]
     fn display_formats_name_at_platform() {
-        let ws = mk(0, "default", Platform::Linux64);
+        let ws = mk(0, "default", Subdir::Linux64);
         assert_eq!(ws.to_string(), "default@linux-64");
     }
 }

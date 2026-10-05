@@ -1,21 +1,26 @@
 use miette::IntoDiagnostic;
-use rattler_conda_types::{PackageRecord, Platform};
+use pixi_manifest::PixiPlatform;
+use rattler_conda_types::{PackageRecord, Subdir};
 use uv_pep508::{MarkerEnvironment, MarkerEnvironmentBuilder};
 
 /// Determine the available env markers based on the platform and python package.
 pub fn determine_marker_environment(
-    platform: Platform,
+    platform: &PixiPlatform,
     python_record: &PackageRecord,
 ) -> miette::Result<MarkerEnvironment> {
+    let subdir = platform.subdir();
     // Determine system specific information
-    let (sys_platform, platform_system, os_name) = if platform.is_linux() {
+    let (sys_platform, platform_system, os_name) = if subdir.is_linux() {
         ("linux", "Linux", "posix")
-    } else if platform.is_osx() {
+    } else if subdir.is_osx() {
         ("darwin", "Darwin", "posix")
-    } else if platform.is_windows() {
+    } else if subdir.is_windows() {
         ("win32", "Windows", "nt")
     } else {
-        miette::bail!("could not determine python environment markers for {platform}")
+        miette::bail!(
+            "could not determine python environment markers for {}",
+            platform
+        )
     };
 
     // Determine implementation name
@@ -29,22 +34,22 @@ pub fn determine_marker_environment(
             )
         };
 
-    let platform_machine = match platform {
-        Platform::Linux32 => "i386",
-        Platform::Linux64 => "x86_64",
-        Platform::LinuxAarch64 => "aarch64",
-        Platform::LinuxArmV6l => "armv6l",
-        Platform::LinuxArmV7l => "armv7l",
-        Platform::LinuxPpc64le => "ppc64le",
-        Platform::LinuxPpc64 => "ppc64",
-        Platform::LinuxS390X => "s390x",
-        Platform::LinuxRiscv32 => "riscv32",
-        Platform::LinuxRiscv64 => "riscv64",
-        Platform::Osx64 => "x86_64",
-        Platform::OsxArm64 => "arm64",
-        Platform::Win32 => "x86",
-        Platform::Win64 => "AMD64",
-        Platform::WinArm64 => "ARM64",
+    let platform_machine = match subdir {
+        Subdir::Linux32 => "i386",
+        Subdir::Linux64 => "x86_64",
+        Subdir::LinuxAarch64 => "aarch64",
+        Subdir::LinuxArmV6l => "armv6l",
+        Subdir::LinuxArmV7l => "armv7l",
+        Subdir::LinuxPpc64le => "ppc64le",
+        Subdir::LinuxPpc64 => "ppc64",
+        Subdir::LinuxS390X => "s390x",
+        Subdir::LinuxRiscv32 => "riscv32",
+        Subdir::LinuxRiscv64 => "riscv64",
+        Subdir::Osx64 => "x86_64",
+        Subdir::OsxArm64 => "arm64",
+        Subdir::Win32 => "x86",
+        Subdir::Win64 => "AMD64",
+        Subdir::WinArm64 => "ARM64",
         _ => "",
     };
 

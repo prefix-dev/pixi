@@ -73,7 +73,9 @@ impl SolveCondaExt for ComputeCtx {
         };
         let _lifecycle = lifecycle.start();
 
-        match spec.solve_on_blocking_pool(channel_config).await {
+        let result = spec.solve_on_blocking_pool(channel_config).await;
+
+        match result {
             Ok(records) => Ok(records),
             Err(SolveCondaBlockingError::Solve(e)) => Err(e),
             Err(SolveCondaBlockingError::Panic(p)) => std::panic::resume_unwind(p),

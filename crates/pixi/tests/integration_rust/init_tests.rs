@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use pixi_manifest::FeaturesExt;
-use rattler_conda_types::{NamedChannelOrUrl, Platform, Version};
+use rattler_conda_types::{NamedChannelOrUrl, Subdir, Version};
 
 use crate::common::PixiControl;
 use crate::setup_tracing;
@@ -94,12 +94,9 @@ async fn init_from_existing_pyproject_toml() {
 
     // Check if the new manifest is readable by pixi and contains the default values
     let workspace = pixi.workspace().unwrap();
-    assert!(
-        workspace
-            .default_environment()
-            .platforms()
-            .contains(&Platform::current())
-    );
+    assert!(workspace.default_environment().platforms().contains(
+        &pixi_manifest::PixiPlatformName::from(Subdir::current().unwrap_or(Subdir::NoArch))
+    ));
 }
 
 // TODO: enable and fix this test when we fix the global config loading

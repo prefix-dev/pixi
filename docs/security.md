@@ -15,7 +15,7 @@ Pixi does not eliminate these risks, and it does not include a vulnerability sca
 These risks fall into two broad categories, each requiring a different response:
 
 - **A newly published package is malicious or broken.** The threat arrives with a future install. Steps like `exclude-newer` (step 2) and lock file review (step 1) help you avoid pulling it in.
-- **A package you already depend on is found to be vulnerable.** The threat is already in your environment. You can detect this by scanning your installed environment on a recurring schedule (step 5) and then respond by constraining or overriding dependencies (step 3). GitHub Dependabot already [supports conda as an ecosystem](https://docs.github.com/en/code-security/reference/supply-chain-security/supported-ecosystems-and-repositories#supported-ecosystems-maintained-by-github), though lockfile-based update support is not yet available.
+- **A package you already depend on is found to be vulnerable.** The threat is already in your environment. You can detect this by scanning your installed environment on a recurring schedule (step 5) and then respond by constraining or overriding dependencies (step 3). GitHub Dependabot already [supports conda as an ecosystem](https://docs.github.com/en/code-security/reference/supply-chain-security/supported-ecosystems-and-repositories#supported-ecosystems-maintained-by-github), though lock file based update support is not yet available.
 
 This is the security model we recommend, step by step:
 
@@ -29,6 +29,16 @@ This is the security model we recommend, step by step:
 ## 1. Make Dependency Resolution Reproducible
 
 Keep `pixi.lock` under version control, review lock file diffs in pull requests, and treat unexpected artifact changes as a security-relevant event. Pixi records the fully resolved environment in `pixi.lock`, including the exact artifacts that were selected, so future installs use those locked artifacts instead of "whatever is newest right now". That reduces the risk of silent dependency drift and gives you a stable review surface: if a dependency changes, the lock file changes too.
+
+Pixi verifies locked package checksums when package artifacts are installed or reused from cache.
+
+- **Conda packages from channels:** Pixi checks the package checksum recorded in `pixi.lock`.
+- **PyPI registry packages:** Pixi checks wheels and sdists against the `sha256` recorded in `pixi.lock`.
+- **Source dependencies:** Conda or PyPI dependencies built from git, direct URLs, or local paths are not covered by locked package checksum verification.
+  Treat the source location and build backend as trusted code.
+
+Already-installed environments are not retroactively re-verified.
+After upgrading to a Pixi version with PyPI checksum enforcement, PyPI wheels cached by older versions carry no recorded checksum and are re-downloaded once.
 
 To review lock file changes between commits in a human-readable way, you can use [`pixi-diff`](integration/extensions/pixi_diff.md) directly or integrate the output into CI with [`pixi-diff-to-markdown`](integration/ci/updates_github_actions.md).
 
@@ -110,6 +120,9 @@ This is a different class of supply-chain risk from "is this version vulnerable?
     We plan to add an option to disable shell activation scripts and allow JSON-style activations only. Track progress in [pixi#4889](https://github.com/prefix-dev/pixi/issues/4889).
 
 This also affects `direnv` integrations. The documented [`direnv` setup](integration/third_party/direnv.md) uses `watch_file pixi.lock`, which means a lock file change causes `direnv` to re-run `pixi shell-hook`. If the new lock file introduces a package with a malicious activation script, switching to that lock file can trigger the same arbitrary code execution without a fresh manual approval.
+
+!!! warning "Resolution itself can execute code"
+    Code execution is not limited to installation and activation. Commands that only resolve dependencies, such as `pixi lock`, `pixi install`, and `pixi update` (even with `--no-install`), can also lead to arbitrary code execution. To resolve a workspace that contains source dependencies, Pixi has to invoke the package's build backend, which is itself arbitrary code that can be malicious. Only run these commands on projects you trust, or inside a sandbox.
 
 !!! tip "`require_allowed` in `direnv`"
     There is an upstream `direnv` pull request, [direnv#1530](https://github.com/direnv/direnv/pull/1530), that adds `require_allowed pixi.toml pixi.lock`. Once released, that can be used to force a fresh `direnv allow` when the manifest or lock file changes.

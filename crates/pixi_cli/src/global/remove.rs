@@ -97,6 +97,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let state_changes = project
             .sync_environment(env_name, Some(removed_dependencies))
             .await?;
+        project.clear_progress();
 
         project.manifest.save().await?;
         Ok(state_changes)
@@ -114,7 +115,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .wrap_err(format!("Couldn't remove packages from {env_name}"))
     {
         Ok(state_changes) => {
-            state_changes.report();
+            state_changes.report(&project).await;
         }
         Err(err) => {
             if let Err(revert_err) =

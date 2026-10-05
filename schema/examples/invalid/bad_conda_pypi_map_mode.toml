@@ -1,0 +1,7 @@
+[project]
+name = "bad-conda-pypi-map-mode"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+# `mapping-mode` only accepts `overlay` or `replace`, and inline mapping
+# values must be a string or `false`.
+conda-pypi-map = { conda-forge = { location = "mapping.json", mapping-mode = "bogus", mapping = { x = true } } }

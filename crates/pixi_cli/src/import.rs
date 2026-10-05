@@ -1,13 +1,17 @@
 use std::path::PathBuf;
 use std::str::FromStr;
 
-use clap::{Parser, ValueEnum};
-use pixi_config::{Config, ConfigCli};
+use clap::{Parser, ValueEnum, ValueHint};
+use indexmap::IndexSet;
+use pixi_api::workspace::platforms::resolve_platforms;
+use pixi_config::ConfigCli;
 use pixi_core::{WorkspaceLocator, environment::sanity_check_workspace};
-use pixi_manifest::{EnvironmentName, FeatureName, HasFeaturesIter, PrioritizedChannel};
+use pixi_manifest::{
+    EnvironmentName, FeatureName, HasFeaturesIter, NewEnvironment, PixiPlatformName,
+    PrioritizedChannel,
+};
 use pixi_utils::conda_environment_file::CondaEnvFile;
 use pixi_uv_conversions::convert_uv_requirements_to_pep508;
-use rattler_conda_types::Platform;
 
 use tracing::warn;
 use uv_requirements_txt::RequirementsTxt;
@@ -41,20 +45,28 @@ pub struct Args {
     #[arg(long, ignore_case = true)]
     pub format: Option<ImportFileFormat>,
 
-    /// The platforms for the imported environment
+    /// The platforms for the imported environment. Accepts a workspace
+    /// platform name; a bare conda subdir (e.g. `linux-64`) is also
+    /// accepted. Names that aren't yet declared get auto-added as subdir
+    /// platforms.
     #[arg(long = "platform", short, value_name = "PLATFORM")]
-    pub platforms: Vec<Platform>,
+    pub platforms: Vec<PixiPlatformName>,
 
-    /// A name for the created environment
-    #[clap(long, short)]
+    /// A name for the created environment. Without `--feature` the imported
+    /// content is written inline on the environment.
+    #[clap(long, short, value_name = "NEW_ENVIRONMENT", value_hint = ValueHint::Other)]
     pub environment: Option<String>,
 
-    /// A name for the created feature
-    #[clap(long, short)]
-    pub feature: Option<String>,
+    /// A name for the created feature. The feature is added to the
+    /// environment of the same name unless `--environment` is given.
+    #[clap(long, short, value_name = "NEW_FEATURE", value_hint = ValueHint::Other)]
+    pub feature: Option<FeatureName>,
 
     #[clap(flatten)]
     pub config: ConfigCli,
+
+    #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -78,26 +90,25 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 struct MissingEnvironmentName;
 
 fn get_feature_and_environment(
-    feature_arg: &Option<String>,
+    feature_arg: &Option<FeatureName>,
     environment_arg: &Option<String>,
     fallback: impl Fn() -> Result<String, MissingEnvironmentName>,
 ) -> Result<(FeatureName, EnvironmentName), miette::Report> {
-    let feature_string = match (feature_arg, environment_arg) {
-        (Some(f), _) => f.clone(),
-        (_, Some(e)) => e.clone(),
-        _ => fallback()?,
-    };
-
     let environment_string = match (environment_arg, feature_arg) {
         (Some(e), _) => e.clone(),
-        (_, Some(f)) => f.clone(),
+        (_, Some(f)) => f.as_str().to_string(),
         _ => fallback()?,
     };
+    let environment_name = EnvironmentName::from_str(&environment_string)?;
 
-    Ok((
-        FeatureName::from(feature_string),
-        EnvironmentName::from_str(&environment_string)?,
-    ))
+    // Without an explicit feature the imported content is written inline on
+    // the environment; a named feature keeps the feature + environment pair.
+    let feature_name = match feature_arg {
+        Some(feature) => feature.clone(),
+        None => FeatureName::environment(&environment_name),
+    };
+
+    Ok((feature_name, environment_name))
 }
 
 fn convert_uv_requirements_txt_to_pep508(
@@ -126,14 +137,15 @@ fn convert_uv_requirements_txt_to_pep508(
 }
 
 async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
+    let source = args.config_source.source();
     let (input_file, platforms, workspace_config) =
         (args.file, args.platforms, args.workspace_config);
-    let config = Config::from(args.config);
 
     let workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(source)
         .with_search_start(workspace_config.workspace_locator_start())
         .locate()?
-        .with_cli_config(config.clone());
+        .with_cli_config(args.config);
 
     sanity_check_workspace(&workspace).await?;
 
@@ -173,11 +185,32 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
         }
     };
 
-    // Add the platforms if they are not already present
-    if !platforms.is_empty() {
+    // An imported file describes a complete environment, so an environment
+    // created for inline content must not include the workspace's default
+    // feature. It is created up front because the manifest edits below would
+    // otherwise create it with the default feature included.
+    if feature_name.is_environment()
+        && workspace
+            .workspace()
+            .environment(&environment_name)
+            .is_none()
+    {
+        workspace.manifest().add_environment(
+            NewEnvironment::new(environment_name.as_str()).with_no_default_feature(true),
+        )?;
+    }
+
+    // Resolve the platform names. Import doesn't have a target workspace
+    // yet (or at least, doesn't read its platforms here), so each name has
+    // to parse as a conda subdir. The user can rename the resulting
+    // entries afterwards via `workspace platform edit`.
+    let pixi_platforms = resolve_platforms(&IndexSet::default(), &platforms)?;
+    let platform_names: Vec<pixi_manifest::PixiPlatformName> =
+        pixi_platforms.iter().map(|p| p.name().clone()).collect();
+    if !pixi_platforms.is_empty() {
         workspace
             .manifest()
-            .add_platforms(platforms.iter(), &feature_name)?;
+            .add_platforms(pixi_platforms.iter(), &feature_name)?;
     }
 
     let (conda_deps, pypi_deps) = match processed_input {
@@ -187,7 +220,8 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
 
             // TODO: Improve this:
             //  - Use .condarc as channel config
-            let (conda_deps, pypi_deps, channels) = env_file.to_manifest(&config.clone())?;
+            let (conda_deps, pypi_deps, channels) =
+                env_file.to_manifest(workspace.workspace().config())?;
             workspace.manifest().add_channels(
                 channels.iter().map(|c| PrioritizedChannel::from(c.clone())),
                 &feature_name,
@@ -206,39 +240,34 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
         }
     };
 
-    workspace.add_specs(conda_deps, pypi_deps, &platforms, &feature_name)?;
+    let targets = workspace.target_selectors_for_platforms(&platform_names);
+    workspace.add_specs(conda_deps, pypi_deps, &targets, &feature_name)?;
 
-    match workspace.workspace().environment(&environment_name) {
-        None => {
-            // add environment if it does not already exist
-            workspace.manifest().add_environment(
-                environment_name.to_string(),
-                Some(vec![feature_name.to_string()]),
-                None,
-                true,
-            )?;
-        }
-        Some(env) => {
-            // otherwise, add feature to environment if it is not already there
-            if !env.features().any(|f| f.name == feature_name) {
-                let env_name = env.name().as_str().to_string();
-                let features = {
+    // Inline content is wired to its environment by the manifest edits above;
+    // only a named feature needs to be registered on the environment.
+    if !feature_name.is_environment() {
+        match workspace.workspace().environment(&environment_name) {
+            None => {
+                // add environment if it does not already exist
+                workspace.manifest().add_environment(
+                    NewEnvironment::new(environment_name.as_str())
+                        .with_features(vec![feature_name.to_string()])
+                        .with_no_default_feature(true),
+                )?;
+            }
+            Some(env) => {
+                // otherwise, add feature to environment if it is not already there
+                if !env.features().any(|f| f.name == feature_name) {
                     let features = env
                         .features()
-                        .map(|f| f.name.as_str().to_string())
-                        .chain(std::iter::once(feature_name.to_string()))
+                        .map(|f| f.name.clone())
+                        .chain(std::iter::once(feature_name.clone()))
                         .collect();
-                    Some(features)
-                };
-                let solve_group = env.solve_group().map(|g| g.name().to_string());
-                let no_default_feature = env.no_default_feature();
 
-                workspace.manifest().add_environment(
-                    env_name,
-                    features,
-                    solve_group,
-                    no_default_feature,
-                )?;
+                    workspace
+                        .manifest()
+                        .update_environment_features(&environment_name, features)?;
+                }
             }
         }
     }

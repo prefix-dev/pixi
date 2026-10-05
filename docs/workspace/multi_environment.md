@@ -21,30 +21,56 @@ There are a few things we wanted to keep in mind in the design:
 4. **Single environment Activation**: The design should allow only one environment to be active at any given time, simplifying the resolution process and preventing conflicts.
 5. **Fixed lock files**: It's crucial to preserve fixed lock files for consistency and predictability. Solutions must ensure reliability not just for authors but also for end-users, particularly at the time of lock file creation.
 
-### Feature & Environment Set Definitions
+### Environment & Feature Definitions
 
-Introduce environment sets into the `pixi.toml` this describes environments based on features. Introduce features into the `pixi.toml` that can describe parts of environments.
-As an environment goes beyond just `dependencies` the `feature` fields can be described by including the following fields:
+Environments are defined in the `pixi.toml` under the `[environments]` table.
+The content of an environment - dependencies, tasks and more - can be defined in two ways:
+
+- **directly on the environment**, for content that belongs to a single environment
+- **through features**, reusable parts that can be shared between environments
+
+When something is only needed in one environment, define it directly on the environment:
+
+```toml title="Environments with their own dependencies"
+[environments.lint.dependencies]
+pre-commit = "*"
+
+[environments.test.dependencies]
+pytest = "*"
+```
+
+When multiple environments share content, put the shared part in a feature and compose the environments from features:
+
+```toml title="Sharing dependencies through a feature"
+[feature.python.dependencies]
+python = "3.13.*"
+
+[environments]
+dev = { features = ["python"] }
+test = { features = ["python"] }
+```
+
+As an environment goes beyond just `dependencies`, both environments and features can be described by including the following fields:
 
 - `dependencies`: The conda package dependencies
 - `pypi-dependencies`: The pypi package dependencies
-- `system-requirements`: The system requirements of the environment
 - `activation`: The activation information for the environment
-- `platforms`: The platforms the environment can be run on.
+- `platforms`: The names of the platforms (declared on `workspace.platforms`) the environment can run on. Use [rich-platform entries](./multi_platform_configuration.md#declaring-virtual-packages-per-platform) on the workspace to pin per-platform virtual packages (CUDA, glibc, macOS, …) the solver should treat as available.
 - `channels`: The channels used to create the environment. Adding the `priority` field to the channels to allow concatenation of channels instead of overwriting.
 - `target`: All the above features but also separated by targets.
 - `tasks`: Feature specific tasks, tasks in one environment are selected as default tasks for the environment.
 
 ```toml title="Default features"
+[workspace]
+# A rich entry declares __glibc 2.33 as available on linux-64.
+platforms = [{ platform = "linux-64", glibc = "2.33" }]
+
 [dependencies] # short for [feature.default.dependencies]
 python = "*"
 numpy = "==2.3"
 
 [pypi-dependencies] # short for [feature.default.pypi-dependencies]
 pandas = "*"
-
-[system-requirements] # short for [feature.default.system-requirements]
-libc = "2.33"
 
 [activation] # short for [feature.default.activation]
 scripts = ["activate.sh"]
@@ -60,12 +86,18 @@ pytest = "*"
 ```
 
 ```toml title="Full set of environment modification in one feature"
+[workspace]
+platforms = [
+  "osx-arm64",
+  { name = "linux-64-cuda", platform = "linux-64", cuda = "12" },
+]
+
 [feature.cuda]
 dependencies = {cuda = "x.y.z", cudnn = "12.0"}
 pypi-dependencies = {torch = "1.9.0"}
-platforms = ["linux-64", "osx-arm64"]
+# Reference the rich workspace platform by name; bare `osx-arm64` is also fine.
+platforms = ["linux-64-cuda", "osx-arm64"]
 activation = {scripts = ["cuda_activation.sh"], env = {CUDA_HOME = "$CONDA_PREFIX"}}
-system-requirements = {cuda = "12"}
 # Channels concatenate using a priority instead of overwrite, so the default channels are still used.
 # Using the priority the concatenation is controlled, default is 0, the default channels are used last.
 # Highest priority comes first.
@@ -75,11 +107,8 @@ target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
 ```
 
 ```toml title="Define tasks as defaults of an environment"
-[feature.test.tasks]
+[environments.test.tasks]
 test = "pytest"
-
-[environments]
-test = ["test"]
 
 # `pixi run test` == `pixi run --environment test test`
 ```
@@ -115,12 +144,10 @@ test_prod = {features = ["py39", "test"], solve-group = "prod"}
 python = "*"
 numpy = "*"
 
-[feature.lint.dependencies]
-pre-commit = "*"
-
-[environments]
-# Create a custom environment which only has the `lint` feature (numpy isn't part of that env).
-lint = {features = ["lint"], no-default-feature = true}
+# Create a custom environment which only has the `pre-commit` dependency (numpy isn't part of that env).
+[environments.lint]
+no-default-feature = true
+dependencies = { pre-commit = "*" }
 ```
 
 ### lock file Structure
@@ -412,7 +439,17 @@ Initial write-up of the proposal: [GitHub Gist by 0xbe7a](https://gist.github.co
     authors = ["Your Name <your.name@gmail.com>"]
     channels = ["conda-forge", "pytorch"]
     # All platforms that are supported by the workspace as the features will take the intersection of the platforms defined there.
-    platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+    # Rich entries pin per-platform virtual packages (CUDA, macOS version, …) the solver should treat as available.
+    platforms = [
+      "win-64",
+      "linux-64",
+      "osx-64",
+      "osx-arm64",
+      { name = "win-64-cuda", platform = "win-64", cuda = "12.1" },
+      { name = "linux-64-cuda", platform = "linux-64", cuda = "12.1" },
+      # MLX is only available on macOS >=13.5 (>14.0 is recommended)
+      { name = "osx-arm64-mlx", platform = "osx-arm64", macos = "13.5" },
+    ]
 
     [tasks]
     train-model = "python train.py"
@@ -426,36 +463,33 @@ Initial write-up of the proposal: [GitHub Gist by 0xbe7a](https://gist.github.co
     matplotlib-base = ">=3.8.2,<3.9"
     ipykernel = ">=6.28.0,<6.29"
 
-    [feature.cuda]
-    platforms = ["win-64", "linux-64"]
+    [environments.cuda]
+    platforms = ["win-64-cuda", "linux-64-cuda"]
     channels = ["nvidia", {channel = "pytorch", priority = -1}]
-    system-requirements = {cuda = "12.1"}
 
-    [feature.cuda.tasks]
+    [environments.cuda.tasks]
     train-model = "python train.py --cuda"
     evaluate-model = "python test.py --cuda"
 
-    [feature.cuda.dependencies]
+    [environments.cuda.dependencies]
     pytorch-cuda = {version = "12.1.*", channel = "pytorch"}
 
-    [feature.mlx]
-    platforms = ["osx-arm64"]
-    # MLX is only available on macOS >=13.5 (>14.0 is recommended)
-    system-requirements = {macos = "13.5"}
+    [environments.mlx]
+    platforms = ["osx-arm64-mlx"]
 
-    [feature.mlx.tasks]
+    [environments.mlx.tasks]
     train-model = "python train.py --mlx"
     evaluate-model = "python test.py --mlx"
 
-    [feature.mlx.dependencies]
+    [environments.mlx.dependencies]
     mlx = ">=0.16.0,<0.17.0"
 
+    # The default environment takes its content from features,
+    # so the cpu variant is defined as a feature.
     [feature.cpu]
     platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
     [environments]
-    cuda = ["cuda"]
-    mlx = ["mlx"]
     default = ["cpu"]
     ```
 

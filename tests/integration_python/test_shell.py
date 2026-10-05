@@ -1,6 +1,6 @@
-from pathlib import Path
 import json
 import platform
+from pathlib import Path
 
 from .common import ALL_PLATFORMS, verify_cli_command
 
@@ -43,7 +43,7 @@ def test_shell_hook_completions(
 
         verify_cli_command(
             [pixi, "shell-hook", "--manifest-path", tmp_pixi_workspace, "--shell", "bash"],
-            stdout_contains=["source", "share/bash-completion/completions"],
+            stdout_contains=["_pixi_f", "share/bash-completion/completions"],
         )
 
         # Zsh completions

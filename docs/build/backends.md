@@ -21,6 +21,18 @@ For the latest backend versions, you can prepend the channel list with the [pref
 
 - [Compilers](./key_concepts/compilers.md) - How pixi-build integrates with conda-forge's compiler infrastructure
 
+### Backends Do Not Inspect Manifest Dependencies
+
+Build backends never base their behavior on the dependencies declared in the Pixi manifest.
+Manifest dependencies are only converted into recipe requirements; backend behavior is controlled by:
+
+- the backend configuration in `[package.build.config]`,
+- project files such as `pyproject.toml`, `Cargo.toml`, or `DESCRIPTION`,
+- the filesystem (e.g. the presence of source files), or
+- runtime probes in the generated build script (e.g. checking whether a python interpreter or openssl headers are present in the host environment).
+
+This keeps conditional `if(...)` dependencies, target-specific dependencies, and plain dependencies on an equal footing: a dependency influences the build environment that rattler-build resolves, never the recipe the backend generates.
+
 ### Installation
 
 Install a certain build backend by adding it to the `package.build` section of the manifest file.:
@@ -29,7 +41,7 @@ Install a certain build backend by adding it to the `package.build` section of t
 --8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:build-system"
 ```
 
-For custom backend channels, you can add the channel to the `channels` section of the manifest file:
+For custom backend channels, you can add the channel to the `channels` field of the `backend` table:
 ```toml
 --8<-- "docs/source_files/pixi_tomls/pixi-build-backend-channel.toml:build"
 ```

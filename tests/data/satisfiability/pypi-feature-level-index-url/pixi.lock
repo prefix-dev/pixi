@@ -1,5 +1,5 @@
 #
-# This lock-file should satisfy the accompanying pixi.toml file.
+# This lock file should satisfy the accompanying pixi.toml file.
 # Regression for #6060: per-package `index` matches the feature-level
 # `index-url` even though the manifest requirement carries no `index`.
 

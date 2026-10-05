@@ -3,15 +3,15 @@ source: crates/pixi_build_python/src/main.rs
 expression: result
 ---
 Ok(
-    {
-        "Pipfile",
-        "Pipfile.lock",
-        "custom/*.py",
-        "poetry.lock",
+    [
+        "setup.py",
+        "setup.cfg",
         "pyproject.toml",
         "requirements*.txt",
-        "setup.cfg",
-        "setup.py",
+        "Pipfile",
+        "Pipfile.lock",
+        "poetry.lock",
         "tox.ini",
-    },
+        "custom/*.py",
+    ],
 )

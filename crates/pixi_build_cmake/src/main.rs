@@ -10,14 +10,11 @@ use pixi_build_backend::{
     generated_recipe::{DefaultMetadataProvider, GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
     tools::BackendIdentifier,
-    traits::ProjectModel,
 };
-use pixi_build_types::SourcePackageName;
 use rattler_build_jinja::Variable;
 use rattler_build_recipe::stage0::{Item, Script, SerializableMatchSpec, Value};
 use rattler_build_types::NormalizedKey;
-use rattler_conda_types::PackageName;
-use rattler_conda_types::{ChannelUrl, Platform};
+use rattler_conda_types::{ChannelUrl, Subdir};
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::{
@@ -54,11 +51,14 @@ impl GenerateRecipe for CMakeGenerator {
         model: &pixi_build_types::ProjectModel,
         config: &Self::Config,
         manifest_path: PathBuf,
-        host_platform: Platform,
+        _host_platform: Subdir,
         _python_params: Option<PythonParams>,
         variants: &HashSet<NormalizedKey>,
         _channels: Vec<ChannelUrl>,
         _cache_dir: Option<PathBuf>,
+        _workspace_scratch_directory: Option<PathBuf>,
+        _workspace_directory: Option<PathBuf>,
+        _checkout_root: Option<PathBuf>,
     ) -> miette::Result<GeneratedRecipe> {
         // Determine the manifest root, because `manifest_path` can be
         // either a direct file path or a directory path.
@@ -84,12 +84,6 @@ impl GenerateRecipe for CMakeGenerator {
 
         let requirements = &mut generated_recipe.recipe.requirements;
 
-        // Get the platform-specific dependencies from the project model.
-        // This properly handles target selectors like [target.linux-64] by using
-        // the ProjectModel trait's platform-aware API instead of trying to evaluate
-        // rattler-build selectors with simple string comparison.
-        let model_dependencies = model.dependencies(Some(host_platform));
-
         // Get the list of compilers from config, defaulting to ["cxx"] if not specified
         let compilers = config
             .compilers
@@ -100,8 +94,6 @@ impl GenerateRecipe for CMakeGenerator {
         pixi_build_backend::compilers::add_compilers_to_requirements(
             &compilers,
             &mut requirements.build,
-            &model_dependencies,
-            &host_platform,
         );
         pixi_build_backend::compilers::add_stdlib_to_requirements(
             &compilers,
@@ -111,37 +103,29 @@ impl GenerateRecipe for CMakeGenerator {
 
         // add necessary build tools
         for tool in ["cmake", "ninja"] {
-            let tool_name = SourcePackageName::from(PackageName::new_unchecked(tool));
-            if !model_dependencies.build.contains_key(&tool_name) {
-                requirements.build.push(Item::Value(Value::new_concrete(
-                    SerializableMatchSpec::from(tool),
-                    None,
-                )));
-            }
+            requirements.build.push(Item::Value(Value::new_concrete(
+                SerializableMatchSpec::from(tool),
+                None,
+            )));
         }
 
-        // Check if the host platform has a host python dependency
-        // This is used to determine if we need to the cmake argument for the python
-        // executable
-        let has_host_python = model_dependencies
-            .host
-            .contains_key(&SourcePackageName::from(PackageName::new_unchecked(
-                "python",
-            )));
-
         let build_script = BuildScriptContext {
-            build_platform: if Platform::current().is_windows() {
+            build_platform: if Subdir::current().unwrap_or(Subdir::NoArch).is_windows() {
                 BuildPlatform::Windows
             } else {
                 BuildPlatform::Unix
             },
             source_dir: manifest_root.display().to_string(),
             extra_args: config.extra_args.clone(),
-            has_host_python,
         }
         .render();
 
-        generated_recipe.recipe.build.script = Script::from_content(build_script)
+        *generated_recipe
+            .recipe
+            .build
+            .plan
+            .script_mut()
+            .expect("generated recipes use script mode") = Script::from_content(build_script)
             .with_env(
                 config
                     .env
@@ -159,7 +143,7 @@ impl GenerateRecipe for CMakeGenerator {
         config: &Self::Config,
         workdir: impl AsRef<Path>,
         _editable: bool,
-    ) -> miette::Result<BTreeSet<String>> {
+    ) -> miette::Result<Vec<String>> {
         let workdir = workdir.as_ref();
         let mut globs = match inputs::exact_inputs_from_ninja(workdir) {
             Ok(set) => set,
@@ -172,12 +156,12 @@ impl GenerateRecipe for CMakeGenerator {
             }
         };
         globs.extend(config.extra_input_globs.iter().cloned());
-        Ok(globs)
+        Ok(globs.into_iter().collect())
     }
 
     fn default_variants(
         &self,
-        host_platform: Platform,
+        host_platform: Subdir,
     ) -> miette::Result<BTreeMap<NormalizedKey, Vec<Variable>>> {
         Ok(default_compiler_variants(host_platform))
     }
@@ -262,10 +246,13 @@ mod tests {
                 &project_model,
                 &CMakeBackendConfig::default(),
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -305,36 +292,31 @@ mod tests {
                     ..Default::default()
                 },
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
             .expect("Failed to generate recipe");
 
-        insta::assert_yaml_snapshot!(generated_recipe.recipe.build.script,
+        insta::assert_yaml_snapshot!(generated_recipe.recipe.build.plan.script().unwrap(),
         {
             ".content" => "[ ... script ... ]",
         });
     }
 
     #[tokio::test]
-    async fn test_has_python_is_set_in_build_script() {
+    async fn test_python_probe_is_in_build_script() {
         let project_model = project_fixture!({
             "name": "foobar",
             "version": "0.1.0",
             "targets": {
-                "defaultTarget": {
-                    "hostDependencies": {
-                        "python": {
-                            "binary": {
-                                "version": "*"
-                            }
-                        }
-                    }
-                },
+                "defaultTarget": {},
             }
         });
 
@@ -343,10 +325,13 @@ mod tests {
                 &project_model,
                 &CMakeBackendConfig::default(),
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -371,7 +356,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_cxx_is_not_added_if_gcc_is_already_present() {
+    async fn test_cxx_is_added_even_if_gcc_is_already_present() {
         let project_model = project_fixture!({
             "name": "foobar",
             "version": "0.1.0",
@@ -393,19 +378,35 @@ mod tests {
                 &project_model,
                 &CMakeBackendConfig::default(),
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
             .expect("Failed to generate recipe");
 
-        insta::assert_yaml_snapshot!(generated_recipe.recipe, {
-        ".source[0].path" => "[ ... path ... ]",
-        ".build.script" => "[ ... script ... ]",
-        });
+        // The compiler template is emitted regardless of the manifest
+        // dependencies; a user-pinned compiler package coexists with it.
+        let has_cxx_compiler = generated_recipe
+            .recipe
+            .requirements
+            .build
+            .iter()
+            .any(|item| match item {
+                Item::Value(value) => value
+                    .as_template()
+                    .is_some_and(|t| t.to_string() == "${{ compiler('cxx') }}"),
+                _ => false,
+            });
+        assert!(
+            has_cxx_compiler,
+            "cxx compiler template should be added even when gxx is a build dependency"
+        );
     }
 
     #[tokio::test]
@@ -422,12 +423,14 @@ mod tests {
         )
         .initialize(InitializeParams {
             workspace_directory: None,
+            checkout_root: None,
             source_directory: None,
             manifest_path: PathBuf::from("pixi.toml"),
             project_model: Some(project_model),
             configuration: None,
             target_configuration: None,
             cache_directory: None,
+            workspace_scratch_directory: None,
         })
         .await
         .unwrap();
@@ -437,8 +440,8 @@ mod tests {
             .0
             .conda_outputs(CondaOutputsParams {
                 channels: vec![],
-                host_platform: Platform::Win64,
-                build_platform: Platform::Win64,
+                host_platform: Subdir::Win64,
+                build_platform: Subdir::Win64,
                 variant_configuration: None,
                 variant_files: None,
                 work_directory: current_dir,
@@ -460,7 +463,7 @@ mod tests {
             "version": "0.1.0",
         });
 
-        for platform in [Platform::Linux64, Platform::Win64] {
+        for platform in [Subdir::Linux64, Subdir::Win64] {
             let factory = IntermediateBackendInstantiator::<CMakeGenerator>::new(
                 BackendIdentifier::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")),
                 LoggingOutputHandler::default(),
@@ -468,12 +471,14 @@ mod tests {
             )
             .initialize(InitializeParams {
                 workspace_directory: None,
+                checkout_root: None,
                 source_directory: None,
                 manifest_path: PathBuf::from("pixi.toml"),
                 project_model: Some(project_model.clone()),
                 configuration: Some(serde_json::json!({ "compilers": ["cuda"] })),
                 target_configuration: None,
                 cache_directory: None,
+                workspace_scratch_directory: None,
             })
             .await
             .unwrap();
@@ -528,7 +533,7 @@ mod tests {
         let result = intermediate_conda_outputs::<CMakeGenerator>(
             Some(project_model),
             Some(temp_dir.path().to_path_buf()),
-            Platform::Linux64,
+            Subdir::Linux64,
             Some(variant_configuration),
             None,
         )
@@ -580,7 +585,7 @@ mod tests {
         let result = intermediate_conda_outputs::<CMakeGenerator>(
             Some(project_model),
             Some(temp_dir.path().to_path_buf()),
-            Platform::Linux64,
+            Subdir::Linux64,
             None,
             Some(vec![variant_file]),
         )
@@ -614,10 +619,13 @@ mod tests {
                     ..Default::default()
                 },
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -673,10 +681,13 @@ mod tests {
                     ..Default::default()
                 },
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::default(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -722,10 +733,13 @@ mod tests {
                     ..Default::default()
                 },
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::from_iter([NormalizedKey("c_stdlib".into())]),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await

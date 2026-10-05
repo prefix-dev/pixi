@@ -19,7 +19,7 @@ use pixi_git::resolver::GitResolver;
 use pixi_glob::GlobHashCache;
 use pixi_url::UrlResolver;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{GenericVirtualPackage, Platform};
+use rattler_conda_types::{GenericVirtualPackage, Subdir};
 use rattler_networking::LazyClient;
 use rattler_repodata_gateway::Gateway;
 use tokio::sync::Semaphore;
@@ -124,7 +124,7 @@ pub(crate) struct CommandDispatcherData {
     /// The platform (and virtual packages) to use for tools that should run on
     /// the current system. Usually this is the current platform, but it can
     /// be a different platform.
-    pub tool_platform: (Platform, Vec<GenericVirtualPackage>),
+    pub tool_platform: (Subdir, Vec<GenericVirtualPackage>),
 
     /// True if execution of link scripts is enabled.
     pub execute_link_scripts: bool,
@@ -156,6 +156,12 @@ pub(crate) struct CommandDispatcherData {
     /// Semaphore that bounds concurrent backend source builds driven
     /// through the compute engine. `None` means unbounded.
     pub backend_source_build_semaphore: Option<Arc<Semaphore>>,
+
+    /// Semaphore that bounds concurrent filesystem operations while linking
+    /// packages into prefixes. Shared across all installs so concurrent
+    /// environment installs cannot exhaust the file descriptor limit. `None`
+    /// means unbounded.
+    pub io_concurrency_semaphore: Option<Arc<Semaphore>>,
 
     /// Registry of workspace environment specs reachable by id. Callers
     /// allocate refs via [`CommandDispatcher::workspace_env_registry`]
@@ -314,7 +320,7 @@ impl CommandDispatcher {
     }
 
     /// Returns the platform and virtual packages used for tool environments.
-    pub fn tool_platform(&self) -> (Platform, &[GenericVirtualPackage]) {
+    pub fn tool_platform(&self) -> (Subdir, &[GenericVirtualPackage]) {
         (self.data.tool_platform.0, &self.data.tool_platform.1)
     }
 
@@ -383,6 +389,7 @@ impl CommandDispatcher {
     /// installs all required packages into the target prefix. It handles
     /// both binary packages (from conda repositories) and source packages
     /// (built from source code).
+    #[allow(clippy::result_large_err)] // matches install_inner's unboxed error contract
     pub async fn install_pixi_environment(
         &self,
         spec: InstallPixiEnvironmentSpec,

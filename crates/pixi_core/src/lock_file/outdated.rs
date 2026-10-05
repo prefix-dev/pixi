@@ -28,10 +28,9 @@ use once_cell::sync::OnceCell;
 use pixi_command_dispatcher::executor::CancellationAwareFutures;
 use pixi_command_dispatcher::{CommandDispatcher, CommandDispatcherError};
 use pixi_consts::consts;
-use pixi_manifest::{EnvironmentName, FeaturesExt};
+use pixi_manifest::{EnvironmentName, FeaturesExt, PixiPlatformName};
 use pixi_record::LockFileResolver;
 use pixi_uv_context::UvResolutionContext;
-use rattler_conda_types::Platform;
 use rattler_lock::{LockFile, LockedPackage};
 
 /// Cache for build-related resources that can be shared between
@@ -48,11 +47,11 @@ pub struct PypiEnvironmentBuildCache {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BuildCacheKey {
     pub environment: EnvironmentName,
-    pub platform: Platform,
+    pub platform: PixiPlatformName,
 }
 
 impl BuildCacheKey {
-    pub fn new(environment: EnvironmentName, platform: Platform) -> Self {
+    pub fn new(environment: EnvironmentName, platform: PixiPlatformName) -> Self {
         Self {
             environment,
             platform,
@@ -63,21 +62,26 @@ impl BuildCacheKey {
 /// A struct that contains information about specific outdated environments.
 ///
 /// Use [`OutdatedEnvironments::from_workspace_and_lock_file`] to create an
-/// instance of this struct by examining the project and lock-file and finding
+/// instance of this struct by examining the project and lock file and finding
 /// any mismatches.
 pub struct OutdatedEnvironments<'p> {
     /// The conda environments that are considered out of date with the
-    /// lock-file.
-    pub conda: HashMap<Environment<'p>, HashSet<Platform>>,
+    /// lock file.
+    pub conda: HashMap<Environment<'p>, HashSet<PixiPlatformName>>,
 
     /// The pypi environments that are considered out of date with the
-    /// lock-file.
-    pub pypi: HashMap<Environment<'p>, HashSet<Platform>>,
+    /// lock file.
+    pub pypi: HashMap<Environment<'p>, HashSet<PixiPlatformName>>,
 
-    /// Records the environments for which the lock-file content should also be
+    /// Records the environments for which the lock file content should also be
     /// discarded. This is the case for instance when the order of the
     /// channels changed.
     pub disregard_locked_content: DisregardLockedContent<'p>,
+
+    /// The names of environments that are present in the lock-file but no
+    /// longer exist in the workspace manifest. These environments should be
+    /// removed from the lock-file.
+    pub removed_environments: HashSet<String>,
 
     /// Lazily initialized UV context for building dynamic metadata.
     /// This is shared between satisfiability checking and pypi resolution.
@@ -93,7 +97,7 @@ pub struct OutdatedEnvironments<'p> {
 
     /// Locked pypi records with metadata, resolved during the satisfiability
     /// check. Forwarded to the update path to avoid re-reading source trees.
-    pub locked_pypi_records: HashMap<(Environment<'p>, Platform), LockedPypiRecordsByName>,
+    pub locked_pypi_records: HashMap<(Environment<'p>, PixiPlatformName), LockedPypiRecordsByName>,
 }
 
 /// A struct that stores whether the locked content of certain environments
@@ -120,14 +124,14 @@ impl<'p> DisregardLockedContent<'p> {
 
 impl<'p> OutdatedEnvironments<'p> {
     /// Constructs a new instance of this struct by examining the project and
-    /// lock-file and finding any mismatches.
+    /// lock file and finding any mismatches.
     pub(crate) async fn from_workspace_and_lock_file(
         workspace: &'p Workspace,
         command_dispatcher: CommandDispatcher,
         lock_file: &LockFile,
         resolver: &LockFileResolver,
     ) -> Self {
-        // Find all targets that are not satisfied by the lock-file
+        // Find all targets that are not satisfied by the lock file
         let (
             UnsatisfiableTargets {
                 mut outdated_conda,
@@ -162,7 +166,7 @@ impl<'p> OutdatedEnvironments<'p> {
                     platforms
                         .iter()
                         .filter(|p| env_platforms.contains(p))
-                        .copied(),
+                        .cloned(),
                 );
             }
         }
@@ -174,7 +178,7 @@ impl<'p> OutdatedEnvironments<'p> {
                     platforms
                         .iter()
                         .filter(|p| env_platforms.contains(p))
-                        .copied(),
+                        .cloned(),
                 );
             }
         }
@@ -185,13 +189,27 @@ impl<'p> OutdatedEnvironments<'p> {
             outdated_pypi
                 .entry(environment.clone())
                 .or_default()
-                .extend(platforms.iter().copied());
+                .extend(platforms.iter().cloned());
         }
+
+        // Find environments that are present in the lock-file but no longer exist in
+        // the workspace manifest. These have to be removed from the lock-file.
+        let removed_environments = lock_file
+            .environments()
+            .map(|(name, _)| name.to_string())
+            .filter(|name| workspace.environment(name.as_str()).is_none())
+            .inspect(|name| {
+                tracing::info!(
+                    "environment '{name}' is out of date because it no longer exists in the manifest but is still present in the lock-file.",
+                );
+            })
+            .collect();
 
         Self {
             conda: outdated_conda,
             pypi: outdated_pypi,
             disregard_locked_content,
+            removed_environments,
             uv_context,
             build_caches,
             static_metadata_cache,
@@ -199,17 +217,17 @@ impl<'p> OutdatedEnvironments<'p> {
         }
     }
 
-    /// Returns true if the lock-file is up-to-date with the project (e.g. there
+    /// Returns true if the lock file is up-to-date with the project (e.g. there
     /// are no outdated targets).
     pub(crate) fn is_empty(&self) -> bool {
-        self.conda.is_empty() && self.pypi.is_empty()
+        self.conda.is_empty() && self.pypi.is_empty() && self.removed_environments.is_empty()
     }
 }
 
 #[derive(Debug, Default)]
 struct UnsatisfiableTargets<'p> {
-    outdated_conda: HashMap<Environment<'p>, HashSet<Platform>>,
-    outdated_pypi: HashMap<Environment<'p>, HashSet<Platform>>,
+    outdated_conda: HashMap<Environment<'p>, HashSet<PixiPlatformName>>,
+    outdated_pypi: HashMap<Environment<'p>, HashSet<PixiPlatformName>>,
     disregard_locked_content: DisregardLockedContent<'p>,
 }
 
@@ -229,7 +247,7 @@ async fn find_unsatisfiable_targets<'p>(
     OnceCell<UvResolutionContext>,
     HashMap<BuildCacheKey, Arc<PypiEnvironmentBuildCache>>,
     HashMap<PathBuf, pypi_metadata::LocalPackageMetadata>,
-    HashMap<(Environment<'p>, Platform), LockedPypiRecordsByName>,
+    HashMap<(Environment<'p>, PixiPlatformName), LockedPypiRecordsByName>,
 ) {
     let mut verified_environments = HashMap::new();
     let mut locked_pypi_by_env_platform = HashMap::new();
@@ -247,13 +265,16 @@ async fn find_unsatisfiable_targets<'p>(
 
     let project_config = project.config();
 
+    // First pass: cheap synchronous environment-level checks. Collect the
+    // environments whose platforms still need verifying.
+    let mut environments_to_verify = Vec::new();
     for environment in project.environments() {
         let platforms = environment.platforms();
 
         // Get the locked environment from the environment
         let Some(locked_environment) = lock_file.environment(environment.name().as_str()) else {
             tracing::info!(
-                "environment '{0}' is out of date because it does not exist in the lock-file.",
+                "environment '{0}' is out of date because it does not exist in the lock file.",
                 environment.name().fancy_display()
             );
 
@@ -261,7 +282,7 @@ async fn find_unsatisfiable_targets<'p>(
                 .outdated_conda
                 .entry(environment.clone())
                 .or_default()
-                .extend(platforms.iter().copied());
+                .extend(platforms.iter().cloned());
 
             continue;
         };
@@ -277,7 +298,7 @@ async fn find_unsatisfiable_targets<'p>(
                 .outdated_conda
                 .entry(environment.clone())
                 .or_default()
-                .extend(platforms.iter().copied());
+                .extend(platforms.iter().cloned());
 
             match unsat {
                 EnvironmentUnsat::AdditionalPlatformsInLockFile(platforms) => {
@@ -302,8 +323,12 @@ async fn find_unsatisfiable_targets<'p>(
                 | EnvironmentUnsat::InvalidChannel(_)
                 | EnvironmentUnsat::ChannelPriorityMismatch { .. }
                 | EnvironmentUnsat::SolveStrategyMismatch { .. }
-                | EnvironmentUnsat::ExcludeNewerMismatch(..) => {
+                | EnvironmentUnsat::ExcludeNewerMismatch(..)
+                | EnvironmentUnsat::PlatformDefinitionChanged(_) => {
                     // We cannot trust any of the locked contents.
+                    // For PlatformDefinitionChanged: the records under the
+                    // affected platform were solved under different subdir/VP
+                    // assumptions and must be re-derived from scratch.
                     unsatisfiable_targets
                         .disregard_locked_content
                         .conda
@@ -337,13 +362,19 @@ async fn find_unsatisfiable_targets<'p>(
             }
         }
 
-        // Verify each individual platform in parallel
-        let mut platform_futures = CancellationAwareFutures::new(command_dispatcher.executor());
+        environments_to_verify.push((environment, locked_environment, platforms));
+    }
+
+    // Second pass: verify every (environment, platform) pair concurrently.
+    // Each pair is independent and IO-bound, and the shared caches are
+    // `DashMap`s, so a single batch is safe and overlaps across environments.
+    let mut platform_futures = CancellationAwareFutures::new(command_dispatcher.executor());
+    for (environment, locked_environment, platforms) in &environments_to_verify {
         for platform in platforms {
             let ctx = VerifySatisfiabilityContext {
-                environment: &environment,
+                environment,
                 command_dispatcher: command_dispatcher.clone(),
-                platform,
+                platform: platform.clone(),
                 project_root: project.root(),
                 uv_context: &uv_context,
                 config: project_config,
@@ -352,67 +383,75 @@ async fn find_unsatisfiable_targets<'p>(
                 static_metadata_cache: &static_metadata_cache,
                 resolver,
             };
+            let locked_environment = *locked_environment;
             platform_futures.push(async move {
                 let result = verify_platform_satisfiability(&ctx, locked_environment).await;
-                Ok::<_, CommandDispatcherError<std::convert::Infallible>>((platform, result))
+                Ok::<_, CommandDispatcherError<std::convert::Infallible>>((
+                    environment,
+                    platform.clone(),
+                    result,
+                ))
             });
         }
+    }
 
-        // Collect all platform results
-        while let Some(result) = platform_futures.next().await {
-            match result {
-                Ok((platform, outcome)) => {
-                    match outcome {
-                        Ok((verified_env, locked_pypi)) => {
-                            verified_environments
-                                .insert((environment.clone(), platform), verified_env);
-                            locked_pypi_by_env_platform
-                                .insert((environment.clone(), platform), locked_pypi);
-                        }
-                        Err(CommandDispatcherError::Cancelled) => {
-                            // Cancellation is handled by CancellationAwareFutures;
-                            // remaining platforms will be skipped automatically.
-                        }
-                        Err(CommandDispatcherError::Failed(unsat)) if unsat.is_pypi_only() => {
-                            tracing::info!(
-                                "the pypi dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
-                                environment.name().fancy_display()
-                            );
+    // Collect all platform results
+    while let Some(result) = platform_futures.next().await {
+        match result {
+            Ok((environment, platform, outcome)) => {
+                match outcome {
+                    Ok((verified_env, locked_pypi)) => {
+                        verified_environments
+                            .insert((environment.clone(), platform.clone()), verified_env);
+                        locked_pypi_by_env_platform
+                            .insert((environment.clone(), platform), locked_pypi);
+                    }
+                    Err(CommandDispatcherError::Cancelled) => {
+                        // Cancellation is handled by CancellationAwareFutures;
+                        // remaining platforms will be skipped automatically.
+                    }
+                    Err(CommandDispatcherError::Failed(unsat)) if unsat.is_pypi_only() => {
+                        tracing::info!(
+                            "the pypi dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
+                            environment.name().fancy_display()
+                        );
 
-                            unsatisfiable_targets
-                                .outdated_pypi
-                                .entry(environment.clone())
-                                .or_default()
-                                .insert(platform);
-                        }
-                        Err(CommandDispatcherError::Failed(unsat)) => {
-                            tracing::info!(
-                                "the dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
-                                environment.name().fancy_display()
-                            );
+                        unsatisfiable_targets
+                            .outdated_pypi
+                            .entry(environment.clone())
+                            .or_default()
+                            .insert(platform);
+                    }
+                    Err(CommandDispatcherError::Failed(unsat)) => {
+                        tracing::info!(
+                            "the dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
+                            environment.name().fancy_display()
+                        );
 
-                            unsatisfiable_targets
-                                .outdated_conda
-                                .entry(environment.clone())
-                                .or_default()
-                                .insert(platform);
-                        }
+                        unsatisfiable_targets
+                            .outdated_conda
+                            .entry(environment.clone())
+                            .or_default()
+                            .insert(platform);
                     }
                 }
-                Err(CommandDispatcherError::Cancelled) => {
-                    unreachable!("platform task cannot cancel")
-                }
-                Err(CommandDispatcherError::Failed(_)) => unreachable!("platform task cannot fail"),
             }
+            Err(CommandDispatcherError::Cancelled) => {
+                unreachable!("platform task cannot cancel")
+            }
+            Err(CommandDispatcherError::Failed(_)) => unreachable!("platform task cannot fail"),
         }
     }
+
+    // Release the futures' borrows on the shared caches before moving them out.
+    drop(platform_futures);
 
     // Verify grouped environments
     for solve_group in project.solve_groups() {
         'platform: for platform in solve_group.platforms() {
             let mut envs = Vec::with_capacity(solve_group.environments().len());
             for env in solve_group.environments() {
-                if let Some(verified_env) = verified_environments.remove(&(env, platform)) {
+                if let Some(verified_env) = verified_environments.remove(&(env, platform.clone())) {
                     envs.push(verified_env);
                 } else {
                     // If the environment is not verified, the solve group will already be outdated.
@@ -434,7 +473,7 @@ async fn find_unsatisfiable_targets<'p>(
                     .outdated_conda
                     .entry(env.clone())
                     .or_default()
-                    .insert(platform);
+                    .insert(platform.clone());
             }
         }
     }
@@ -470,14 +509,14 @@ async fn find_unsatisfiable_targets<'p>(
 /// groups that are out of date.
 ///
 /// If one of the environments in a solve-group is no longer satisfied by the
-/// lock-file all the environments in the same solve-group have to be
+/// lock file all the environments in the same solve-group have to be
 /// recomputed.
 fn map_outdated_targets_to_solve_groups<'p>(
-    outdated_conda: &HashMap<Environment<'p>, HashSet<Platform>>,
-    outdated_pypi: &HashMap<Environment<'p>, HashSet<Platform>>,
+    outdated_conda: &HashMap<Environment<'p>, HashSet<PixiPlatformName>>,
+    outdated_pypi: &HashMap<Environment<'p>, HashSet<PixiPlatformName>>,
 ) -> (
-    HashMap<SolveGroup<'p>, HashSet<Platform>>,
-    HashMap<SolveGroup<'p>, HashSet<Platform>>,
+    HashMap<SolveGroup<'p>, HashSet<PixiPlatformName>>,
+    HashMap<SolveGroup<'p>, HashSet<PixiPlatformName>>,
 ) {
     let mut conda_solve_groups_out_of_date = HashMap::new();
     let mut pypi_solve_groups_out_of_date = HashMap::new();
@@ -490,7 +529,7 @@ fn map_outdated_targets_to_solve_groups<'p>(
         conda_solve_groups_out_of_date
             .entry(solve_group)
             .or_insert_with(HashSet::new)
-            .extend(platforms.iter().copied());
+            .extend(platforms.iter().cloned());
     }
 
     // For each environment that is out of date, add it to the solve group.
@@ -501,7 +540,7 @@ fn map_outdated_targets_to_solve_groups<'p>(
         pypi_solve_groups_out_of_date
             .entry(solve_group)
             .or_insert_with(HashSet::new)
-            .extend(platforms.iter().copied());
+            .extend(platforms.iter().cloned());
     }
 
     (
@@ -520,9 +559,9 @@ fn map_outdated_targets_to_solve_groups<'p>(
 fn find_inconsistent_solve_groups<'p>(
     project: &'p Workspace,
     lock_file: &LockFile,
-    outdated_conda: &HashMap<Environment<'p>, HashSet<Platform>>,
-    conda_solve_groups_out_of_date: &mut HashMap<SolveGroup<'p>, HashSet<Platform>>,
-    pypi_solve_groups_out_of_date: &mut HashMap<SolveGroup<'p>, HashSet<Platform>>,
+    outdated_conda: &HashMap<Environment<'p>, HashSet<PixiPlatformName>>,
+    conda_solve_groups_out_of_date: &mut HashMap<SolveGroup<'p>, HashSet<PixiPlatformName>>,
+    pypi_solve_groups_out_of_date: &mut HashMap<SolveGroup<'p>, HashSet<PixiPlatformName>>,
 ) {
     let solve_groups = project.solve_groups();
     let solve_groups_and_platforms = solve_groups.iter().flat_map(|solve_group| {
@@ -610,19 +649,19 @@ fn find_inconsistent_solve_groups<'p>(
             tracing::info!(
                 "the locked conda packages in solve group {} are not consistent for all environments for platform {}",
                 consts::SOLVE_GROUP_STYLE.apply_to(solve_group.name()),
-                consts::PLATFORM_STYLE.apply_to(platform)
+                consts::PLATFORM_STYLE.apply_to(&platform)
             );
             conda_solve_groups_out_of_date
                 .entry(solve_group.clone())
                 .or_default()
-                .insert(platform);
+                .insert(platform.clone());
         }
 
         if pypi_package_mismatch && !conda_package_mismatch {
             tracing::info!(
                 "the locked pypi packages in solve group {} are not consistent for all environments for platform {}",
                 consts::SOLVE_GROUP_STYLE.apply_to(solve_group.name()),
-                consts::PLATFORM_STYLE.apply_to(platform)
+                consts::PLATFORM_STYLE.apply_to(&platform)
             );
             pypi_solve_groups_out_of_date
                 .entry(solve_group.clone())

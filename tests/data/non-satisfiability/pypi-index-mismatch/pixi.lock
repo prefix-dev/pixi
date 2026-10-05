@@ -1,8 +1,8 @@
 #
-# This lock-file should not satisfy the accompanying pixi.toml file.
+# This lock file should not satisfy the accompanying pixi.toml file.
 #
 # my-dep is requested from index https://custom.example.com/simple but the
-# lock-file stores a different index (https://other.example.com/simple).
+# lock file stores a different index (https://other.example.com/simple).
 # The satisfiability check should detect this mismatch and fail.
 
 version: 7

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 use xxhash_rust::xxh3::Xxh3;
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(transparent)]
 pub struct ProjectModelHash(u64);
 
@@ -37,12 +37,30 @@ impl From<&'_ BackendSpec> for BackendSpecHash {
     }
 }
 
+/// An xxh3 fingerprint of a backend executable's contents. Used so that
+/// system / path-based backends (which bypass the package-based version
+/// pin) still produce a stable cache key as long as the binary on disk
+/// has not changed.
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(transparent)]
+pub struct BackendBinaryFingerprint(u64);
+
+impl BackendBinaryFingerprint {
+    pub fn new(value: u64) -> Self {
+        Self(value)
+    }
+
+    pub fn as_u64(self) -> u64 {
+        self.0
+    }
+}
+
 /// A hash of the build configuration (from `[package.build.config]` and
 /// `[package.build.target.<selector>.config]`).
 ///
 /// This is used to detect when the build configuration changes, which should
 /// invalidate the metadata cache even if the project model hasn't changed.
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(transparent)]
 pub struct ConfigurationHash(u64);
 

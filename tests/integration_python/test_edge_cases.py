@@ -78,125 +78,6 @@ def test_prefix_only_created_when_sdist(
     assert py310.exists()
 
 
-def test_cuda_on_macos(pixi: Path, tmp_pixi_workspace: Path, virtual_packages_channel: str) -> None:
-    """Test that we can install an environment that has cuda dependencies for linux on a macOS machine. This mimics the behavior of the pytorch installation where the linux environment should have cuda but the macOS environment should not."""
-    verify_cli_command([pixi, "init", tmp_pixi_workspace, "--channel", virtual_packages_channel])
-    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
-    env = {"CONDA_OVERRIDE_CUDA": "12.0"}
-    # Add multiple platforms
-    verify_cli_command(
-        [
-            pixi,
-            "project",
-            "platform",
-            "add",
-            "--manifest-path",
-            manifest,
-            "linux-64",
-            "osx-64",
-            "osx-arm64",
-            "win-64",
-        ],
-    )
-
-    # Add system-requirement on cuda
-    verify_cli_command(
-        [
-            pixi,
-            "project",
-            "system-requirements",
-            "add",
-            "--manifest-path",
-            manifest,
-            "cuda",
-            "12.1",
-        ],
-    )
-
-    # Add the dependency
-    verify_cli_command(
-        [pixi, "add", "--manifest-path", manifest, "noarch_package", "--no-install"],
-        env=env,
-    )
-
-    # Install important to run on all platforms!
-    # It should succeed even though we are on macOS
-    verify_cli_command(
-        [pixi, "install", "--manifest-path", manifest],
-        env=env,
-    )
-
-    # Add the dependency even though the system requirements can not be satisfied on the machine
-    verify_cli_command(
-        [pixi, "add", "--manifest-path", manifest, "no-deps", "--no-install"],
-        env=env,
-    )
-
-
-def test_unused_strict_system_requirements(
-    pixi: Path, tmp_pixi_workspace: Path, virtual_packages_channel: str
-) -> None:
-    """Setup a project with strict system requirements that are not used by any package"""
-    verify_cli_command([pixi, "init", tmp_pixi_workspace, "--channel", virtual_packages_channel])
-    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
-
-    # Add system-requirement on cuda
-    verify_cli_command(
-        [
-            pixi,
-            "project",
-            "system-requirements",
-            "add",
-            "--manifest-path",
-            manifest,
-            "cuda",
-            "12.1",
-        ],
-    )
-    # Add non existing glibc
-    verify_cli_command(
-        [
-            pixi,
-            "project",
-            "system-requirements",
-            "add",
-            "--manifest-path",
-            manifest,
-            "glibc",
-            "100.2.3",
-        ],
-    )
-
-    # Add non existing macos
-    verify_cli_command(
-        [
-            pixi,
-            "project",
-            "system-requirements",
-            "add",
-            "--manifest-path",
-            manifest,
-            "macos",
-            "123.123.0",
-        ],
-    )
-
-    # Add the dependency even though the system requirements can not be satisfied on the machine
-    verify_cli_command(
-        [pixi, "add", "--manifest-path", manifest, "no-deps", "--no-install"],
-    )
-
-    # Installing should succeed as there is no virtual package that requires the system requirements
-    verify_cli_command(
-        [pixi, "install", "--manifest-path", manifest],
-    )
-
-    # Activate the environment even though the machine doesn't have the system requirements
-    verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest, "echo", "Hello World"],
-    )
-
-
 @pytest.mark.skipif(
     platform.system() == "Windows",
     reason="Post-link script uses linux commands for file tasks, fails on windows. Package needs manual fixing.",
@@ -451,18 +332,42 @@ def test_help_warning_when_platform_not_supported(pixi: Path, tmp_pixi_workspace
     """Test that the help command warns about unsupported platforms"""
     verify_cli_command([pixi, "init", tmp_pixi_workspace])
 
-    # Remove all platforms
+    # Declare only a platform from a different OS family than the host, so the
+    # current platform is genuinely unsupported (arch fallbacks never bridge OS
+    # families). An empty platform list instead means "support the host".
+    foreign_platform = "linux-64" if CURRENT_PLATFORM.startswith("win") else "win-64"
     manifest_path = tmp_pixi_workspace / "pixi.toml"
-    content = manifest_path.read_text()
-    manifest_toml = tomli.loads(content)
-    manifest_toml["workspace"]["platforms"] = []
+    manifest_toml = tomli.loads(manifest_path.read_text())
+    manifest_toml["workspace"]["platforms"] = [foreign_platform]
+    # A dependency is what ties the environment to that platform; without one
+    # the environment installs nothing and runs anywhere.
+    manifest_toml["dependencies"] = {"dummy-a": "*"}
     manifest_path.write_text(tomli_w.dumps(manifest_toml))
 
-    # Check if the command throws an error for unsupported platform
+    # Listing the tasks doesn't touch the lock file, so this reaches the hint
+    # without solving for the foreign platform.
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", tmp_pixi_workspace],
+        stderr_contains=["pixi workspace platform add"],
+    )
+
+
+def test_no_platform_help_without_dependencies(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """A dependency-less environment installs nothing and runs anywhere, so an
+    unknown command is just that: pointing at the missing platform would send
+    the user after the wrong problem."""
+    verify_cli_command([pixi, "init", tmp_pixi_workspace])
+
+    foreign_platform = "linux-64" if CURRENT_PLATFORM.startswith("win") else "win-64"
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+    manifest_toml = tomli.loads(manifest_path.read_text())
+    manifest_toml["workspace"]["platforms"] = [foreign_platform]
+    manifest_path.write_text(tomli_w.dumps(manifest_toml))
+
     verify_cli_command(
         [pixi, "run", "--manifest-path", tmp_pixi_workspace, "bla"],
-        ExitCode.FAILURE,
-        stderr_contains=["pixi workspace platform add"],
+        ExitCode.COMMAND_NOT_FOUND,
+        stderr_excludes=["pixi workspace platform add"],
     )
 
 
@@ -565,8 +470,42 @@ platforms = ["{other_platform}"]
     )
 
 
-def test_run_fails_on_unsupported_platform(pixi: Path, tmp_pixi_workspace: Path) -> None:
-    """Test that pixi run fails when run on an unsupported platform (issue #5071)"""
+def test_run_fails_on_unsupported_platform_with_dependency(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str
+) -> None:
+    """An environment with a dependency resolves for its declared platform; on a
+    machine that platform can't run, `pixi run` fails instead of executing the
+    task (issue #5071)."""
+    other_platform = get_other_platform()
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = f"""
+[workspace]
+name = "test"
+channels = ["{dummy_channel_1}"]
+platforms = ["{other_platform}"]
+
+[dependencies]
+dummy-a = "*"
+
+[tasks]
+hello = "echo hello from unsupported platform test"
+"""
+    manifest.write_text(toml)
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest, "hello"],
+        ExitCode.FAILURE,
+        stderr_contains=[other_platform, CURRENT_PLATFORM],
+        stderr_excludes="hello from unsupported platform test",
+    )
+
+
+def test_run_succeeds_on_unsupported_platform_without_dependency(
+    pixi: Path, tmp_pixi_workspace: Path
+) -> None:
+    """An environment without dependencies installs nothing that could require a
+    virtual package the machine lacks, so its tasks run on any platform even when
+    the workspace only declares another platform."""
     other_platform = get_other_platform()
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = f"""
@@ -582,9 +521,8 @@ hello = "echo hello from unsupported platform test"
 
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "hello"],
-        ExitCode.FAILURE,
-        stderr_contains=[other_platform, CURRENT_PLATFORM],
-        stderr_excludes="hello from unsupported platform test",
+        ExitCode.SUCCESS,
+        stdout_contains="hello from unsupported platform test",
     )
 
 

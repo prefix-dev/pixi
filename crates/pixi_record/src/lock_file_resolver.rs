@@ -2,7 +2,7 @@
 //! [`LockFile`].
 //!
 //! Building a source record requires access to its `build_packages` and
-//! `host_packages` as [`UnresolvedPixiRecord`] values. The lockfile stores
+//! `host_packages` as [`UnresolvedPixiRecord`] values. The lock file stores
 //! those as index sets; this resolver walks the full package table once in
 //! topological order and produces an `UnresolvedPixiRecord` per entry with
 //! `build_packages` / `host_packages` populated from already-built
@@ -23,11 +23,11 @@ use crate::{ParseLockFileError, UnresolvedPixiRecord};
 #[derive(Debug)]
 pub struct LockFileResolver {
     records: Vec<Option<UnresolvedPixiRecord>>,
-    /// Start address of the source lockfile's `packages()` slice, stored as
+    /// Start address of the source lock file's `packages()` slice, stored as
     /// a `usize` so the struct stays `Send + Sync`. Used to map an incoming
     /// `&LockedPackage` back to its index via pointer-offset arithmetic —
     /// same fragility as any pointer-identity scheme: callers must pass
-    /// references into the same, still-alive lockfile.
+    /// references into the same, still-alive lock file.
     packages_start_addr: usize,
     packages_len: usize,
 }
@@ -78,9 +78,9 @@ impl LockFileResolver {
                     match state[next] {
                         State::Done => {}
                         State::Visiting => {
-                            return Err(LockFileResolverError::Cycle(format_cycle(
-                                &stack, next, packages,
-                            )));
+                            let cycle = format_cycle(&stack, next, packages);
+                            tracing::debug!(cycle = %cycle, "LockFileResolver: cycle detected");
+                            return Err(LockFileResolverError::Cycle(cycle));
                         }
                         State::Unvisited => {
                             state[next] = State::Visiting;
@@ -104,8 +104,8 @@ impl LockFileResolver {
     }
 
     /// Returns the resolver's record for a package. The reference must point
-    /// into the same lockfile that built the resolver — references from
-    /// clones or other lockfiles yield `None`.
+    /// into the same lock file that built the resolver — references from
+    /// clones or other lock files yield `None`.
     pub fn get_for_package(&self, package: &LockedPackage) -> Option<UnresolvedPixiRecord> {
         let addr = package as *const LockedPackage as usize;
         let offset = addr.checked_sub(self.packages_start_addr)?;
@@ -203,7 +203,7 @@ pub enum LockFileResolverError {
     #[error(transparent)]
     Parse(#[from] ParseLockFileError),
 
-    #[error("the lockfile's build/host package graph contains a cycle: {0}")]
+    #[error("the lock file's build/host package graph contains a cycle: {0}")]
     Cycle(String),
 }
 
@@ -248,7 +248,7 @@ packages:
 
         let lock_file =
             LockFile::from_str_with_base_directory(lock_source, Some(Path::new("/workspace")))
-                .expect("cyclic lockfile should still parse");
+                .expect("cyclic lock file should still parse");
 
         let err = LockFileResolver::build(&lock_file, Path::new("/workspace"))
             .expect_err("resolver should reject a cyclic build graph");

@@ -5,7 +5,7 @@ use chrono::{DateTime, Utc};
 use miette::IntoDiagnostic;
 use rattler_conda_types::package::ArchiveIdentifier;
 use rattler_conda_types::{
-    ChannelInfo, PackageName, PackageRecord, PackageUrl, Platform, RepoData, VersionWithSource,
+    ChannelInfo, PackageName, PackageRecord, PackageUrl, RepoData, Subdir, VersionWithSource,
     package::{
         CondaArchiveType, DistArchiveIdentifier, IndexJson, PathType, PathsEntry, PathsJson,
         RunExportsJson,
@@ -53,13 +53,12 @@ impl MockRepoData {
         let mut platforms = self.platforms();
 
         // Make sure NoArch is always included
-        if !platforms.contains(&Platform::NoArch) {
-            platforms.insert(Platform::NoArch);
+        if !platforms.contains(&Subdir::NoArch) {
+            platforms.insert(Subdir::NoArch);
         }
 
         // Make sure the current platform is included
-        let current_platform = Platform::current();
-        if !platforms.contains(&current_platform) {
+        if let Some(current_platform) = Subdir::current() {
             platforms.insert(current_platform);
         }
 
@@ -109,13 +108,13 @@ impl MockRepoData {
                     subdir: Some(platform.to_string()),
                     base_url: None,
                     channel_relations: None,
-                    repodata_revisions: vec![],
+                    repodata_revisions: Default::default(),
                 }),
                 packages: tar_bz2_packages.into_iter().collect(),
                 conda_packages: conda_packages.into_iter().collect(),
+                v3: Default::default(),
                 removed: Default::default(),
                 version: Some(1),
-                experimental_v3: Default::default(),
             };
             let repodata_str = serde_json::to_string_pretty(&repodata).into_diagnostic()?;
 
@@ -135,17 +134,14 @@ impl MockRepoData {
     }
 
     /// Returns all packages for the specified platform.
-    pub fn packages_by_platform(
-        &self,
-        platform: Platform,
-    ) -> impl Iterator<Item = &'_ Package> + '_ {
+    pub fn packages_by_platform(&self, platform: Subdir) -> impl Iterator<Item = &'_ Package> + '_ {
         self.packages
             .iter()
             .filter(move |pkg| pkg.subdir == platform)
     }
 
     /// Returns all the platforms that this database has packages for
-    pub fn platforms(&self) -> HashSet<Platform> {
+    pub fn platforms(&self) -> HashSet<Subdir> {
         self.packages.iter().map(|pkg| pkg.subdir).collect()
     }
 }
@@ -154,7 +150,7 @@ impl MockRepoData {
 #[derive(Clone, Debug)]
 pub struct Package {
     pub package_record: PackageRecord,
-    subdir: Platform,
+    subdir: Subdir,
     archive_type: CondaArchiveType,
     /// If true, a materialized .conda file will be created for this package
     materialize: bool,
@@ -175,7 +171,7 @@ pub struct PackageBuilder {
     build: Option<String>,
     build_number: Option<u64>,
     depends: Vec<String>,
-    subdir: Option<Platform>,
+    subdir: Option<Subdir>,
     archive_type: CondaArchiveType,
     timestamp: Option<DateTime<Utc>>,
     md5: Option<String>,
@@ -246,7 +242,7 @@ impl PackageBuilder {
     }
 
     /// Explicitly set the platform of this package
-    pub fn with_subdir(mut self, subdir: Platform) -> Self {
+    pub fn with_subdir(mut self, subdir: Subdir) -> Self {
         self.subdir = Some(subdir);
         self
     }
@@ -304,7 +300,7 @@ impl PackageBuilder {
 
     /// Finish construction of the package
     pub fn finish(self) -> Package {
-        let subdir = self.subdir.unwrap_or(Platform::NoArch);
+        let subdir = self.subdir.unwrap_or(Subdir::NoArch);
         let build_number = self.build_number.unwrap_or(0);
         let build = self.build.unwrap_or_else(|| format!("{build_number}"));
         let (sha256, md5) = match (self.sha256, self.md5) {
@@ -341,6 +337,8 @@ impl PackageBuilder {
                 depends: self.depends,
                 features: None,
                 legacy_bz2_md5: None,
+                attestations_sha256: None,
+                indexed_timestamp: None,
                 legacy_bz2_size: None,
                 license: None,
                 license_family: None,
@@ -351,13 +349,18 @@ impl PackageBuilder {
                 sha256,
                 size: None,
                 subdir: subdir.to_string(),
-                timestamp: self.timestamp.map(Into::into),
+                timestamp: self.timestamp.map(|t| {
+                    rattler_conda_types::utils::TimestampMs::from_timestamp_millis(
+                        jiff::Timestamp::from_millisecond(t.timestamp_millis())
+                            .expect("timestamp out of range"),
+                    )
+                }),
                 track_features: vec![],
                 version: self.version,
                 purls: self.purls,
                 run_exports: self.run_exports.clone(),
                 python_site_packages_path: None,
-                experimental_extra_depends: Default::default(),
+                extra_depends: Default::default(),
                 flags: vec![],
             },
             subdir,
@@ -392,7 +395,7 @@ pub fn create_conda_package(
         build_number: package.package_record.build_number,
         constrains: package.package_record.constrains.clone(),
         depends: package.package_record.depends.clone(),
-        experimental_extra_depends: package.package_record.experimental_extra_depends.clone(),
+        extra_depends: package.package_record.extra_depends.clone(),
         features: package.package_record.features.clone(),
         license: package.package_record.license.clone(),
         license_family: package.package_record.license_family.clone(),

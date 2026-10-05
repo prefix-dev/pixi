@@ -23,6 +23,13 @@ pub struct Limits {
     /// The maximum number of concurrent URL archive fetches. Same
     /// rationale as `max_concurrent_git_checkouts`.
     pub max_concurrent_url_checkouts: Limit,
+
+    /// The maximum number of concurrent filesystem operations performed while
+    /// linking packages into prefixes. This bounds the file descriptors held
+    /// during installation: the rattler installer opens many files at once,
+    /// and installing several environments concurrently multiplies that, so a
+    /// shared limit keeps the total from exhausting the file descriptor limit.
+    pub max_io_concurrency: Limit,
 }
 
 /// Defines the type of limit to apply.
@@ -58,6 +65,9 @@ pub(crate) struct ResolvedLimits {
 
     /// The maximum number of concurrent URL archive fetches.
     pub max_concurrent_url_checkouts: Option<usize>,
+
+    /// The maximum number of concurrent filesystem operations during install.
+    pub max_io_concurrency: Option<usize>,
 }
 
 impl From<Limits> for ResolvedLimits {
@@ -93,11 +103,22 @@ impl From<Limits> for ResolvedLimits {
             Limit::Default => Some(8),
         };
 
+        // Default to 100 concurrent filesystem operations: this matches the
+        // rattler installer's own default, but as a single semaphore shared
+        // across all concurrent installs it no longer multiplies with the
+        // number of environments being installed at once.
+        let max_io_concurrency = match value.max_io_concurrency {
+            Limit::None => None,
+            Limit::Max(max) => Some(max.get()),
+            Limit::Default => Some(100),
+        };
+
         Self {
             max_concurrent_solves,
             max_concurrent_builds,
             max_concurrent_git_checkouts,
             max_concurrent_url_checkouts,
+            max_io_concurrency,
         }
     }
 }

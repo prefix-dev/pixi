@@ -7,18 +7,26 @@ use clap::Parser;
 use miette::{Context, IntoDiagnostic};
 use pixi_config::ConfigCli;
 use pixi_core::{WorkspaceLocator, lock_file::UpdateLockFileOptions};
+use pixi_manifest::PixiPlatformName;
 use rattler_conda_types::{
-    ExplicitEnvironmentEntry, ExplicitEnvironmentSpec, PackageRecord, Platform, RepoDataRecord,
+    ExplicitEnvironmentEntry, ExplicitEnvironmentSpec, PackageRecord, RepoDataRecord, Subdir,
 };
-use rattler_lock::{CondaPackageData, Environment, LockedPackage};
+use rattler_lock::{
+    CondaPackageData, Environment, LockedPackage, Platform as LockedPlatform, PlatformName,
+};
 
-use crate::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
+use crate::cli_config::{
+    LockFileUpdateConfig, NoInstallConfig, ScriptWorkspaceConfig, script_lock_file_usage,
+};
 
 #[derive(Debug, Parser)]
 #[clap(arg_required_else_help = false)]
 pub struct Args {
     #[clap(flatten)]
-    pub workspace_config: WorkspaceConfig,
+    pub config_source: pixi_config::ConfigSourceCli,
+
+    #[clap(flatten)]
+    pub workspace_config: ScriptWorkspaceConfig,
 
     /// Output directory for rendered explicit environment spec files
     pub output_dir: PathBuf,
@@ -28,9 +36,11 @@ pub struct Args {
     pub environment: Option<Vec<String>>,
 
     /// The platform to render. Can be repeated for multiple platforms.
+    /// Accepts a workspace platform name; a bare conda subdir (e.g.
+    /// `linux-64`) selects every workspace platform built for that subdir.
     /// Defaults to all platforms available for selected environments.
     #[arg(short, long)]
-    pub platform: Option<Vec<Platform>>,
+    pub platform: Option<Vec<PixiPlatformName>>,
 
     /// PyPI dependencies are not supported in the conda explicit spec file.
     #[arg(long, default_value = "false")]
@@ -51,7 +61,7 @@ pub struct Args {
 }
 
 fn build_explicit_spec<'a>(
-    platform: &Platform,
+    platform: &Subdir,
     conda_packages: impl IntoIterator<Item = &'a RepoDataRecord>,
 ) -> miette::Result<ExplicitEnvironmentSpec> {
     let mut packages = Vec::new();
@@ -64,7 +74,7 @@ fn build_explicit_spec<'a>(
         ))?;
 
         let mut url = cp.url.clone();
-        url.set_fragment(Some(&format!("{hash:x}")));
+        url.set_fragment(Some(&hex::encode(hash)));
 
         packages.push(ExplicitEnvironmentEntry {
             url: url.to_owned(),
@@ -98,37 +108,47 @@ fn render_explicit_spec(
     Ok(())
 }
 
+/// Returns true if a `--platform` request selects `platform`.
+///
+/// A request matches the workspace platform name first (e.g. `x86-cuda13`) and
+/// falls back to the conda subdir, so a bare `linux-64` selects *every*
+/// workspace platform that builds for `linux-64`.
+fn platform_matches(platform: &LockedPlatform<'_>, requested: &PixiPlatformName) -> bool {
+    platform.name().as_str() == requested.as_str()
+        || platform.subdir().as_str() == requested.as_str()
+}
+
 fn render_env_platform(
     output_dir: &Path,
     env_name: &str,
     env: &Environment,
-    platform: &Platform,
+    platform: LockedPlatform<'_>,
     ignore_pypi_errors: bool,
 ) -> miette::Result<()> {
-    let lock_platform = env
-        .lock_file()
-        .platform(&platform.to_string())
-        .ok_or(miette::miette!(
-            "platform '{platform}' not found for env {}",
-            env_name,
-        ))?;
-    let packages = env.packages(lock_platform).ok_or(miette::miette!(
-        "platform '{platform}' not found for env {}",
+    // Rich platforms (platforms carrying system-requirements) are named
+    // independently of their conda subdir, and several of them can share one
+    // subdir. Each is rendered to its own file keyed by platform name, while
+    // the spec itself records the conda subdir it installs into.
+    let platform_name: &PlatformName = platform.name();
+    let subdir = platform.subdir();
+
+    let packages = env.packages(platform).ok_or(miette::miette!(
+        "platform '{platform_name}' not found for env {}",
         env_name,
     ))?;
 
-    let mut conda_packages_from_lockfile: Vec<_> = Vec::new();
+    let mut conda_packages_from_lock_file: Vec<_> = Vec::new();
 
     for package in packages {
         match package {
             LockedPackage::Conda(CondaPackageData::Binary(p)) => {
-                conda_packages_from_lockfile.push(p.clone())
+                conda_packages_from_lock_file.push(p.clone())
             }
             LockedPackage::Conda(CondaPackageData::Source(_)) => {
                 miette::bail!(
                     "Conda source packages are not supported in a conda explicit spec. \
                         Specify `--ignore-source-errors` to ignore this error and create \
-                        a spec file containing only the binary conda dependencies from the lockfile."
+                        a spec file containing only the binary conda dependencies from the lock file."
                 );
             }
             LockedPackage::Pypi(pypi) => {
@@ -141,7 +161,7 @@ fn render_env_platform(
                     miette::bail!(
                         "PyPI packages are not supported in a conda explicit spec. \
                         Specify `--ignore-pypi-errors` to ignore this error and create \
-                        a spec file containing only the conda dependencies from the lockfile."
+                        a spec file containing only the conda dependencies from the lock file."
                     );
                 }
             }
@@ -149,7 +169,7 @@ fn render_env_platform(
     }
 
     // Topologically sort packages
-    let repodata = conda_packages_from_lockfile
+    let repodata = conda_packages_from_lock_file
         .into_iter()
         .map(|p| RepoDataRecord::try_from(*p))
         .collect::<Result<Vec<_>, _>>()
@@ -158,11 +178,11 @@ fn render_env_platform(
 
     let repodata = PackageRecord::sort_topologically(repodata);
 
-    let ees = build_explicit_spec(platform, &repodata)?;
+    let ees = build_explicit_spec(&subdir, &repodata)?;
 
-    tracing::info!("Creating conda explicit spec for env: {env_name} platform: {platform}");
+    tracing::info!("Creating conda explicit spec for env: {env_name} platform: {platform_name}");
     let target = output_dir
-        .join(format!("{env_name}_{platform}_conda_spec.txt"))
+        .join(format!("{env_name}_{platform_name}_conda_spec.txt"))
         .into_os_string();
 
     render_explicit_spec(target, &ees)?;
@@ -171,16 +191,32 @@ fn render_env_platform(
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
+    if args.workspace_config.script.is_some() && args.environment.is_some() {
+        return Err(miette::miette!(
+            help = "A PEP 723 script has one implicit default run environment.",
+            "`pixi workspace export conda-explicit-spec --script` does not support --environment"
+        ));
+    }
+
     let workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .locate()?
         .with_cli_config(args.config.clone());
 
-    let lockfile = workspace
+    let lock_file_usage = script_lock_file_usage(
+        args.lock_file_update_config.lock_file_usage()?,
+        args.workspace_config.script.is_some(),
+        workspace.lock_file_path().is_file(),
+    )?;
+    // Scoped so the bars are cleared before the output is printed.
+    let progress = pixi_reporters::TopLevelProgress::from_global();
+    let clear_progress = pixi_reporters::TopLevelProgress::clear_when_done(Some(&progress));
+    let lock_file = workspace
         .update_lock_file(
-            Some(pixi_reporters::TopLevelProgress::from_global()),
+            Some(progress.clone()),
             UpdateLockFileOptions {
-                lock_file_usage: args.lock_file_update_config.lock_file_usage()?,
+                lock_file_usage,
                 no_install: args.no_install_config.no_install,
                 max_concurrent_solves: workspace.config().max_concurrent_solves(),
                 ..Default::default()
@@ -189,19 +225,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?
         .0
         .into_lock_file();
+    drop(clear_progress);
 
     let mut environments = Vec::new();
     if let Some(env_names) = args.environment {
         for env_name in &env_names {
             environments.push((
                 env_name.to_string(),
-                lockfile
+                lock_file
                     .environment(env_name)
                     .ok_or(miette::miette!("unknown environment {}", env_name))?,
             ));
         }
     } else {
-        for (env_name, env) in lockfile.environments() {
+        for (env_name, env) in lock_file.environments() {
             environments.push((env_name.to_string(), env));
         }
     };
@@ -209,24 +246,36 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut env_platform = Vec::new();
 
     for (env_name, env) in environments {
-        let available_platforms: HashSet<Platform> = env.platforms().map(|p| p.subdir()).collect();
+        let Some(ref requested_platforms) = args.platform else {
+            env_platform.extend(env.platforms().map(|plat| (env_name.clone(), env, plat)));
+            continue;
+        };
 
-        if let Some(ref platforms) = args.platform {
-            for plat in platforms {
-                if available_platforms.contains(plat) {
-                    env_platform.push((env_name.clone(), env, *plat));
-                } else {
-                    tracing::warn!(
-                        "Platform {} not available for environment {}. Skipping...",
-                        plat,
-                        env_name,
-                    );
-                }
+        // A request can match more than one platform, and different requests
+        // can match the same one (e.g. `linux-64` and `x86-cuda13`), so
+        // deduplicate to render each platform exactly once.
+        let mut selected = HashSet::new();
+        for requested in requested_platforms {
+            let matches = env
+                .platforms()
+                .filter(|plat| platform_matches(plat, requested))
+                .collect::<Vec<_>>();
+
+            if matches.is_empty() {
+                tracing::warn!(
+                    "Platform {} not available for environment {}. Skipping...",
+                    requested,
+                    env_name,
+                );
+                continue;
             }
-        } else {
-            for plat in available_platforms {
-                env_platform.push((env_name.clone(), env, plat));
-            }
+
+            env_platform.extend(
+                matches
+                    .into_iter()
+                    .filter(|plat| selected.insert(*plat))
+                    .map(|plat| (env_name.clone(), env, plat)),
+            );
         }
     }
 
@@ -237,7 +286,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             &args.output_dir,
             &env_name,
             &env,
-            &plat,
+            plat,
             args.ignore_pypi_errors,
         )?;
     }
@@ -258,29 +307,104 @@ mod tests {
     fn test_render_conda_explicit_spec() {
         let path = Path::new(env!("CARGO_WORKSPACE_DIR"))
             .join("tests/data/mock-projects/test-project-export/pixi.lock");
-        let lockfile = LockFile::from_path(&path).unwrap();
+        let lock_file = LockFile::from_path(&path).unwrap();
 
         let output_dir = tempdir().unwrap();
 
-        for (env_name, env) in lockfile.environments() {
-            for lock_platform in env.platforms() {
-                let platform = lock_platform.subdir();
+        for (env_name, env) in lock_file.environments() {
+            for platform in env.platforms() {
+                let platform_name = platform.name();
                 // example contains pypi dependencies so should fail if `ignore_pypi_errors` is
                 // false.
                 assert!(
-                    render_env_platform(output_dir.path(), env_name, &env, &platform, false)
+                    render_env_platform(output_dir.path(), env_name, &env, platform, false)
                         .is_err()
                 );
-                render_env_platform(output_dir.path(), env_name, &env, &platform, true).unwrap();
+                render_env_platform(output_dir.path(), env_name, &env, platform, true).unwrap();
 
                 let file_path = output_dir
                     .path()
-                    .join(format!("{env_name}_{platform}_conda_spec.txt"));
+                    .join(format!("{env_name}_{platform_name}_conda_spec.txt"));
                 insta::assert_snapshot!(
-                    format!("test_render_conda_explicit_spec_{}_{}", env_name, platform),
+                    format!("test_render_conda_explicit_spec_{env_name}_{platform_name}"),
                     fs_err::read_to_string(file_path).unwrap()
                 );
             }
         }
+    }
+
+    /// Loads the rich-platform fixture, which declares five platforms across
+    /// three subdirs, two of which (`osx-arm64` and `linux-64`) are covered by
+    /// more than one platform.
+    fn rich_platforms_lock_file() -> LockFile {
+        let path = Path::new(env!("CARGO_WORKSPACE_DIR"))
+            .join("tests/data/mock-projects/test-project-export/pixi-rich-platforms.lock");
+        LockFile::from_path(&path).unwrap()
+    }
+
+    #[test]
+    fn test_render_conda_explicit_spec_rich_platforms() {
+        let lock_file = rich_platforms_lock_file();
+
+        let output_dir = tempdir().unwrap();
+
+        for (env_name, env) in lock_file.environments() {
+            for platform in env.platforms() {
+                let platform_name = platform.name();
+                render_env_platform(output_dir.path(), env_name, &env, platform, true).unwrap();
+
+                let file_path = output_dir
+                    .path()
+                    .join(format!("{env_name}_{platform_name}_conda_spec.txt"));
+                insta::assert_snapshot!(
+                    format!("test_render_conda_explicit_spec_rich_{env_name}_{platform_name}"),
+                    fs_err::read_to_string(file_path).unwrap()
+                );
+            }
+        }
+    }
+
+    /// Names of the platforms a `--platform <requested>` selects, sorted so the
+    /// assertions don't depend on the lock file's platform ordering.
+    fn select_platforms(env: &Environment<'_>, requested: &str) -> Vec<String> {
+        let requested = PixiPlatformName::try_from(requested).unwrap();
+        let mut names: Vec<String> = env
+            .platforms()
+            .filter(|plat| platform_matches(plat, &requested))
+            .map(|plat| plat.name().to_string())
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn test_platform_selection_by_subdir_matches_every_rich_platform() {
+        let lock_file = rich_platforms_lock_file();
+        let (_, env) = lock_file.environments().next().unwrap();
+
+        // A bare conda subdir selects every platform built for that subdir,
+        // not just the first one or the one literally named after the subdir.
+        assert_eq!(
+            select_platforms(&env, "osx-arm64"),
+            vec!["osx-arm64-cuda", "osx-arm64-macos-14-0"]
+        );
+        assert_eq!(
+            select_platforms(&env, "linux-64"),
+            vec!["linux-64", "x86-cuda13"]
+        );
+        assert_eq!(select_platforms(&env, "win-64"), vec!["win-64"]);
+    }
+
+    #[test]
+    fn test_platform_selection_by_name_matches_a_single_platform() {
+        let lock_file = rich_platforms_lock_file();
+        let (_, env) = lock_file.environments().next().unwrap();
+
+        assert_eq!(select_platforms(&env, "x86-cuda13"), vec!["x86-cuda13"]);
+        assert_eq!(
+            select_platforms(&env, "osx-arm64-cuda"),
+            vec!["osx-arm64-cuda"]
+        );
+        assert!(select_platforms(&env, "does-not-exist").is_empty());
     }
 }

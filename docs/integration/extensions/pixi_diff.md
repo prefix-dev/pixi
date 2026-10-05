@@ -1,8 +1,8 @@
 ![pixi-diff demo](https://raw.githubusercontent.com/pavelzw/pixi-diff/refs/heads/main/.github/assets/demo/demo-light.gif#only-light)
 ![pixi-diff demo](https://raw.githubusercontent.com/pavelzw/pixi-diff/refs/heads/main/.github/assets/demo/demo-dark.gif#only-dark)
 
-It can happen that you want to know what changed in your lockfile after repeatedly adding and removing dependencies within a pull request.
-For this, you can use [pavelzw/pixi-diff](https://github.com/pavelzw/pixi-diff) to calculate the differences between two lockfiles.
+It can happen that you want to know what changed in your lock file after repeatedly adding and removing dependencies within a pull request.
+For this, you can use [pavelzw/pixi-diff](https://github.com/pavelzw/pixi-diff) to calculate the differences between two lock files.
 This can be leveraged in combination with [pavelzw/pixi-diff-to-markdown](https://github.com/pavelzw/pixi-diff-to-markdown) to generate a markdown file that shows the diff in a human-readable format.
 With [charmbracelet/glow](https://github.com/charmbracelet/glow), you can even render the markdown file in the terminal.
 
@@ -13,7 +13,7 @@ With [charmbracelet/glow](https://github.com/charmbracelet/glow), you can even r
     pixi global install pixi-diff pixi-diff-to-markdown glow-md
     ```
 
-`pixi diff --before pixi.lock.old --after pixi.lock.new` will output a JSON object that contains the differences between the two lockfiles similar to [`pixi update --json`](../../reference/cli/pixi/update.md).
+`pixi diff --before pixi.lock.old --after pixi.lock.new` will output a JSON object that contains the differences between the two lock files similar to [`pixi update --json`](../../reference/cli/pixi/update.md).
 
 ```bash
 $ pixi diff --before pixi.lock.old --after pixi.lock.new
@@ -42,7 +42,7 @@ $ pixi diff --before pixi.lock.old --after pixi.lock.new
 // ...
 ```
 
-Named pipes can be handy for comparing lockfiles from different states in your git history:
+Named pipes can be handy for comparing lock files from different states in your git history:
 
 ```bash
 # bash / zsh
@@ -52,7 +52,7 @@ pixi diff --before <(git show HEAD~20:pixi.lock) --after pixi.lock
 pixi diff --before (git show HEAD~20:pixi.lock | psub) --after pixi.lock
 ```
 
-Or specify either the "before" or "after" lockfile via stdin:
+Or specify either the "before" or "after" lock file via stdin:
 
 ```bash
 git show HEAD~20:pixi.lock | pixi diff --before - --after pixi.lock
@@ -65,7 +65,7 @@ pixi diff <(git show HEAD~20:pixi.lock) pixi.lock | pixi diff-to-markdown > diff
 ```
 
 !!!tip "pixi-diff-to-markdown in GitHub Actions updates"
-    For other usages of [`pixi-diff-to-markdown`](https://github.com/pavelzw/pixi-diff-to-markdown), see also our page about [updating lockfiles using GitHub Actions](../ci/updates_github_actions.md).
+    For other usages of [`pixi-diff-to-markdown`](https://github.com/pavelzw/pixi-diff-to-markdown), see also our page about [updating lock files using GitHub Actions](../ci/updates_github_actions.md).
 
 You can view this generated markdown file in your terminal using [`glow`](https://github.com/charmbracelet/glow).
 

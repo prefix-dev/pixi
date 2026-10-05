@@ -1,0 +1,6 @@
+"$schema" = "./../../schema.json"
+
+[workspace]
+channels = ["conda-forge"]
+name = "badname"
+platforms = [{ name = "bad name with spaces", platform = "linux-64" }]

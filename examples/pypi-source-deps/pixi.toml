@@ -23,7 +23,10 @@ rich = "~=13.7"
 
 # With https
 flask = { git = "https://github.com/pallets/flask" }
-httpx = { git = "https://github.com/encode/httpx.git", rev = "c7c13f18a5af4c64c649881b2fe8dbd72a519c32" }
+httpx = {
+  git = "https://github.com/encode/httpx.git",
+  rev = "c7c13f18a5af4c64c649881b2fe8dbd72a519c32",
+}
 
 # TODO: will support later -> or use branch = '' or tag = '' to specify a branch or tag
 

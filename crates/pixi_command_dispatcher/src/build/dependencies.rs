@@ -2,24 +2,28 @@ use std::{fmt::Display, hash::Hash, str::FromStr, sync::Arc};
 
 use super::conversion;
 use crate::build::pin_compatible::{
-    PinCompatibilityMap, PinCompatibleError, resolve_pin_compatible,
+    PinCompatibilityMap, PinCompatibleError, resolve_pin_compatible, resolve_pin_compatible_binary,
 };
 use pixi_build_types as pbt;
 use pixi_build_types::{
-    NamedSpec, PackageSpec,
+    ExtraGroupName, NamedSpec, PackageSpec,
     procedures::conda_outputs::{
         CondaOutputDependencies, CondaOutputIgnoreRunExports, CondaOutputRunExports,
     },
 };
 use pixi_record::PixiRecord;
-use pixi_spec::{BinarySpec, DetailedSpec, PixiSpec, SourceAnchor, UrlBinarySpec};
+use pixi_spec::{
+    BinarySpec, DetailedSpec, MatchspecFields, PixiSpec, SourceAnchor, SourceLocationSpec,
+    SourceSpec, UrlBinarySpec,
+};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     InvalidPackageNameError, MatchSpec, NamedChannelOrUrl, NamelessMatchSpec, PackageName,
-    ParseMatchSpecOptions, Platform, RepodataRevision, VersionSpec,
+    ParseMatchSpecOptions, RepodataRevision, Subdir, VersionSpec,
 };
 use rattler_repodata_gateway::{Gateway, RunExportExtractorError, RunExportsReporter};
 use serde::Serialize;
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum DependenciesError {
@@ -28,6 +32,15 @@ pub enum DependenciesError {
 
     #[error(transparent)]
     PinCompatibleError(#[from] PinCompatibleError),
+
+    /// Backends resolve `pin-subpackage` against their own output before
+    /// returning dependencies, so an unresolved pin reaching pixi is a
+    /// protocol violation.
+    #[error(
+        "the build backend returned an unresolved `pin-subpackage` spec for '{}'",
+        .0.as_normalized()
+    )]
+    UnresolvedPinSubpackage(rattler_conda_types::PackageName),
 }
 
 impl From<InvalidPackageNameError> for DependenciesError {
@@ -93,6 +106,63 @@ impl<T> WithSource<T> {
     }
 }
 
+/// Convert a single protocol [`PackageSpec`] into a [`PixiSpec`], resolving
+/// source specs against `source_anchor` and pin-compatible specs against
+/// `compatibility_map`.
+fn package_spec_to_pixi_spec(
+    name: &PackageName,
+    spec: &PackageSpec,
+    source_anchor: Option<&SourceAnchor>,
+    compatibility_map: &PinCompatibilityMap<'_>,
+) -> Result<PixiSpec, DependenciesError> {
+    match spec {
+        pbt::PackageSpec::Binary(binary) => Ok(PixiSpec::from(conversion::from_binary_spec_v1(
+            (**binary).clone(),
+        ))),
+        pbt::PackageSpec::Source(source) => {
+            let spec = conversion::from_source_spec_v1(source.clone());
+            Ok(PixiSpec::from(match source_anchor {
+                Some(anchor) => spec.resolve(anchor),
+                None => spec,
+            }))
+        }
+        pbt::PackageSpec::PinCompatible(pin) => {
+            Ok(resolve_pin_compatible(name, pin, compatibility_map)?)
+        }
+        pbt::PackageSpec::PinSubpackage(_) => {
+            Err(DependenciesError::UnresolvedPinSubpackage(name.clone()))
+        }
+    }
+}
+
+/// Resolve the extra groups from a backend output into
+/// per-group [`DependencyMap`]s, applying the same source/pin resolution as the
+/// regular run dependencies. Resolving source specs against `source_anchor`
+/// lets them be registered as source dependencies of the produced record, so
+/// extras can pull in source packages just like `run-dependencies`.
+pub fn convert_extra_dependencies(
+    extra_dependencies: &BTreeMap<ExtraGroupName, Vec<NamedSpec<PackageSpec>>>,
+    source_anchor: Option<SourceAnchor>,
+    compatibility_map: &PinCompatibilityMap<'_>,
+) -> Result<BTreeMap<ExtraGroupName, DependencyMap<PackageName, PixiSpec>>, DependenciesError> {
+    let mut groups = BTreeMap::new();
+    for (group, specs) in extra_dependencies {
+        let mut deps = DependencyMap::default();
+        for named in specs {
+            let name = PackageName::from_str(named.name.as_str())?;
+            let spec = package_spec_to_pixi_spec(
+                &name,
+                &named.spec,
+                source_anchor.as_ref(),
+                compatibility_map,
+            )?;
+            deps.insert(name, spec);
+        }
+        groups.insert(group.clone(), deps);
+    }
+    Ok(groups)
+}
+
 impl Dependencies {
     pub fn new<'a>(
         output: &CondaOutputDependencies,
@@ -104,38 +174,31 @@ impl Dependencies {
 
         for depend in &output.depends {
             let name = rattler_conda_types::PackageName::from_str(depend.name.as_str())?;
-
-            // Match directly on PackageSpec
-            match &depend.spec {
-                pbt::PackageSpec::Binary(binary) => {
-                    let spec = conversion::from_binary_spec_v1(binary.clone());
-                    dependencies.insert(name, PixiSpec::from(spec).into());
-                }
-                pbt::PackageSpec::Source(source) => {
-                    let spec = conversion::from_source_spec_v1(source.clone());
-                    let resolved = if let Some(anchor) = &source_anchor {
-                        spec.resolve(anchor)
-                    } else {
-                        spec
-                    };
-                    dependencies.insert(name, PixiSpec::from(resolved).into());
-                }
-                pbt::PackageSpec::PinCompatible(pin) => {
-                    // Resolve immediately with O(1) HashMap lookup
-                    let resolved = resolve_pin_compatible(&name, pin, compatibility_map)?;
-                    dependencies.insert(name, resolved.into());
-                }
-            }
+            let spec = package_spec_to_pixi_spec(
+                &name,
+                &depend.spec,
+                source_anchor.as_ref(),
+                compatibility_map,
+            )?;
+            dependencies.insert(name, spec.into());
         }
 
         for constraint in &output.constraints {
             let name = rattler_conda_types::PackageName::from_str(constraint.name.as_str())?;
 
-            // Match on ConstraintSpec enum
             match &constraint.spec {
                 pbt::ConstraintSpec::Binary(binary) => {
-                    constraints
-                        .insert(name, conversion::from_binary_spec_v1(binary.clone()).into());
+                    constraints.insert(
+                        name,
+                        conversion::from_binary_spec_v1((**binary).clone()).into(),
+                    );
+                }
+                pbt::ConstraintSpec::PinCompatible(pin) => {
+                    let spec = resolve_pin_compatible_binary(&name, pin, compatibility_map)?;
+                    constraints.insert(name, spec.into());
+                }
+                pbt::ConstraintSpec::PinSubpackage(_) => {
+                    return Err(DependenciesError::UnresolvedPinSubpackage(name));
                 }
             }
         }
@@ -179,7 +242,7 @@ impl Dependencies {
         mut self,
         mut host_run_exports: Vec<(PackageName, PixiRunExports)>,
         mut build_run_exports: Vec<(PackageName, PixiRunExports)>,
-        target_platform: Platform,
+        target_platform: Subdir,
     ) -> Self {
         macro_rules! extend_with_run_exports {
             ($target:expr, $export_type:ident, Build) => {
@@ -219,7 +282,7 @@ impl Dependencies {
             };
         }
 
-        if target_platform == Platform::NoArch {
+        if target_platform == Subdir::NoArch {
             extend_with_run_exports!(self.dependencies, noarch, Host);
         } else {
             extend_with_run_exports!(self.dependencies, strong, Host);
@@ -233,6 +296,16 @@ impl Dependencies {
         self
     }
 
+    /// Whether `name` was declared as a dependency directly, rather than
+    /// only merged in from another package's run-exports.
+    fn is_declared_dependency(&self, name: &PackageName) -> bool {
+        self.dependencies.get(name).is_some_and(|specs| {
+            specs
+                .iter()
+                .any(|spec| !matches!(spec.source, Some(DependencySource::RunExport { .. })))
+        })
+    }
+
     /// Extract run exports from the solved environments.
     pub async fn extract_run_exports(
         &self,
@@ -243,11 +316,30 @@ impl Dependencies {
     ) -> Result<Vec<(PackageName, PixiRunExports)>, RunExportExtractorError> {
         let mut combined_run_exports = Vec::new();
 
+        // Map every source-built package in the solved environment to its
+        // pinned source location. A run-export naming one of these packages
+        // must stay a source dependency on the assembled record; converted to
+        // a plain binary matchspec, the consuming environment would look for
+        // a channel package that doesn't exist.
+        let source_locations: BTreeMap<PackageName, SourceLocationSpec> = records
+            .iter()
+            .filter_map(|record| match record {
+                PixiRecord::Source(source) => Some((
+                    source.package_record().name.clone(),
+                    SourceLocationSpec::from(source.manifest_source().clone()),
+                )),
+                PixiRecord::Binary(_) => None,
+            })
+            .collect();
+
         // Find all the records that are relevant for run exports.
         let mut relevant_records = records
             .iter_mut()
             // Only record run exports for packages that are direct dependencies.
-            .filter(|r| self.dependencies.contains_key(&r.package_record().name))
+            // Entries that were merged in from another package's run-exports do
+            // not count as direct: per conda-build semantics (and rattler-build's
+            // implementation) they don't contribute their own run-exports.
+            .filter(|r| self.is_declared_dependency(&r.package_record().name))
             // Filter based on whether we want to ignore run exports for a particular
             // package.
             .filter(|r| !ignore.from_package.contains(&r.package_record().name))
@@ -267,10 +359,7 @@ impl Dependencies {
 
         for record in relevant_records {
             // Only record run exports for packages that are direct dependencies.
-            if !self
-                .dependencies
-                .contains_key(&record.package_record().name)
-            {
+            if !self.is_declared_dependency(&record.package_record().name) {
                 continue;
             }
 
@@ -286,10 +375,42 @@ impl Dependencies {
                 continue;
             };
 
+            // The exporting record's own `sources` map takes precedence: it
+            // covers exported packages that are not themselves part of this
+            // solved environment, e.g. a sibling output of the same recipe
+            // (`python` weak-exporting `python_abi`). Its entries are
+            // relative to the exporting record's manifest, so anchor them
+            // before use.
+            let (own_sources, own_anchor) = match &*record {
+                PixiRecord::Source(source) => (
+                    Some(source.sources()),
+                    Some(SourceAnchor::from(SourceLocationSpec::from(
+                        source.manifest_source().clone(),
+                    ))),
+                ),
+                PixiRecord::Binary(_) => (None, None),
+            };
+            let source_location = |name: &PackageName| -> Option<SourceLocationSpec> {
+                if let (Some(sources), Some(anchor)) = (own_sources, &own_anchor)
+                    && let Some(location) = sources.get(name.as_normalized())
+                {
+                    return Some(anchor.resolve_location(location.clone()));
+                }
+                source_locations.get(name).cloned()
+            };
+
             let filtered_run_exports = PixiRunExports {
-                noarch: filter_match_specs(&run_exports.noarch, ignore),
-                strong: filter_match_specs(&run_exports.strong, ignore),
-                weak: filter_match_specs(&run_exports.weak, ignore),
+                noarch: filter_match_specs_with_sources(
+                    &run_exports.noarch,
+                    ignore,
+                    &source_location,
+                ),
+                strong: filter_match_specs_with_sources(
+                    &run_exports.strong,
+                    ignore,
+                    &source_location,
+                ),
+                weak: filter_match_specs_with_sources(&run_exports.weak, ignore, &source_location),
                 strong_constrains: filter_match_specs(&run_exports.strong_constrains, ignore),
                 weak_constrains: filter_match_specs(&run_exports.weak_constrains, ignore),
             };
@@ -308,84 +429,121 @@ pub fn filter_match_specs<T: From<BinarySpec> + Clone + Hash + Eq + PartialEq>(
     specs
         .iter()
         .filter_map(move |spec| {
-            let (name_matcher, spec) = MatchSpec::from_str(
-                spec,
-                ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
-            )
-            .ok()?
-            .into_nameless();
-            let name = name_matcher.as_exact().cloned()?;
-            if ignore.by_name.contains(&name) {
-                return None;
-            }
-
-            let binary_spec = match spec {
-                NamelessMatchSpec {
-                    url: Some(url),
-                    sha256,
-                    md5,
-                    ..
-                } => BinarySpec::Url(UrlBinarySpec { url, sha256, md5 }),
-                NamelessMatchSpec {
-                    version,
-                    build: None,
-                    build_number: None,
-                    file_name: None,
-                    extras: None,
-                    condition: None,
-                    channel: None,
-                    subdir: None,
-                    namespace: None,
-                    md5: None,
-                    sha256: None,
-                    url: _,
-                    license: None,
-                    track_features: None,
-                    flags: None,
-                    license_family: None,
-                } => BinarySpec::Version(version.unwrap_or(VersionSpec::Any)),
-                NamelessMatchSpec {
-                    version,
-                    build,
-                    build_number,
-                    file_name,
-                    extras,
-                    flags,
-                    channel,
-                    subdir,
-                    md5,
-                    sha256,
-                    license,
-                    license_family,
-                    condition,
-                    track_features,
-
-                    // Caught in the above case
-                    url: _,
-
-                    // Explicitly ignored
-                    namespace: _,
-                } => BinarySpec::DetailedVersion(Box::new(DetailedSpec {
-                    version,
-                    build,
-                    build_number,
-                    file_name,
-                    extras,
-                    flags,
-                    channel: channel.map(|c| NamedChannelOrUrl::Url(c.base_url.clone().into())),
-                    subdir,
-                    md5,
-                    sha256,
-                    license,
-                    license_family,
-                    condition,
-                    track_features,
-                })),
-            };
-
-            Some((name, binary_spec.into()))
+            let (name, spec) = parse_run_export_spec(spec, ignore)?;
+            Some((name, binary_spec_from_nameless(spec).into()))
         })
         .collect()
+}
+
+/// Like [`filter_match_specs`], but run-export specs whose package name has a
+/// known source location (per `source_location`) become source specs carrying
+/// that location (the matchspec selectors are preserved). Specs with an
+/// explicit URL stay binary: they pin a concrete artifact.
+pub fn filter_match_specs_with_sources(
+    specs: &[String],
+    ignore: &CondaOutputIgnoreRunExports,
+    source_location: &dyn Fn(&PackageName) -> Option<SourceLocationSpec>,
+) -> DependencyMap<PackageName, PixiSpec> {
+    specs
+        .iter()
+        .filter_map(move |spec| {
+            let (name, spec) = parse_run_export_spec(spec, ignore)?;
+            let pixi_spec = match source_location(&name) {
+                Some(location) if spec.url.is_none() => SourceSpec {
+                    location,
+                    matchspec: MatchspecFields::from_nameless_match_spec(&spec),
+                }
+                .into(),
+                _ => PixiSpec::from(binary_spec_from_nameless(spec)),
+            };
+            Some((name, pixi_spec))
+        })
+        .collect()
+}
+
+/// Parse a run-export matchspec string, dropping unparsable specs, non-exact
+/// names, and names listed in `ignore.by_name`.
+fn parse_run_export_spec(
+    spec: &str,
+    ignore: &CondaOutputIgnoreRunExports,
+) -> Option<(PackageName, NamelessMatchSpec)> {
+    let (name_matcher, spec) = MatchSpec::from_str(
+        spec,
+        ParseMatchSpecOptions::lenient().with_repodata_revision(RepodataRevision::V3),
+    )
+    .ok()?
+    .into_nameless();
+    let name = name_matcher.as_exact().cloned()?;
+    if ignore.by_name.contains(&name) {
+        return None;
+    }
+    Some((name, spec))
+}
+
+fn binary_spec_from_nameless(spec: NamelessMatchSpec) -> BinarySpec {
+    match spec {
+        NamelessMatchSpec {
+            url: Some(url),
+            sha256,
+            md5,
+            ..
+        } => BinarySpec::Url(UrlBinarySpec { url, sha256, md5 }),
+        NamelessMatchSpec {
+            version,
+            build: None,
+            build_number: None,
+            file_name: None,
+            extras: None,
+            flags: None,
+            channel: None,
+            subdir: None,
+            namespace: None,
+            md5: None,
+            sha256: None,
+            url: _,
+            license: None,
+            license_family: None,
+            condition: None,
+            track_features: None,
+        } => BinarySpec::Version(version.unwrap_or(VersionSpec::Any)),
+        NamelessMatchSpec {
+            version,
+            build,
+            build_number,
+            file_name,
+            extras,
+            flags,
+            channel,
+            subdir,
+            md5,
+            sha256,
+            license,
+            license_family,
+            condition,
+            track_features,
+
+            // Caught in the above case
+            url: _,
+
+            // Explicitly ignored
+            namespace: _,
+        } => BinarySpec::DetailedVersion(Box::new(DetailedSpec {
+            version,
+            build,
+            build_number,
+            file_name,
+            extras,
+            flags,
+            channel: channel.map(|c| NamedChannelOrUrl::Url(c.base_url.clone().into())),
+            subdir,
+            md5,
+            sha256,
+            license,
+            license_family,
+            condition,
+            track_features,
+        })),
+    }
 }
 
 /// A variant of [`rattler_conda_types::package::RunExportsJson`] but with pixi
@@ -418,13 +576,16 @@ impl PixiRunExports {
 
                     let spec = match named_spec.spec {
                         pbt::PackageSpec::Binary(binary) => {
-                            conversion::from_binary_spec_v1(binary).into()
+                            conversion::from_binary_spec_v1(*binary).into()
                         }
                         pbt::PackageSpec::Source(source) => {
                             conversion::from_source_spec_v1(source).into()
                         }
                         pbt::PackageSpec::PinCompatible(pin) => {
                             resolve_pin_compatible(&name, &pin, compatibility_map)?
+                        }
+                        pbt::PackageSpec::PinSubpackage(_) => {
+                            return Err(DependenciesError::UnresolvedPinSubpackage(name));
                         }
                     };
 
@@ -433,8 +594,9 @@ impl PixiRunExports {
                 .collect()
         }
 
-        fn convert_constraint_spec(
+        fn convert_constraint_spec<'a>(
             specs: &[NamedSpec<pbt::ConstraintSpec>],
+            compatibility_map: &PinCompatibilityMap<'a>,
         ) -> Result<DependencyMap<PackageName, BinarySpec>, DependenciesError> {
             specs
                 .iter()
@@ -442,10 +604,15 @@ impl PixiRunExports {
                 .map(|named_spec| {
                     let name = PackageName::from_str(named_spec.name.as_str())?;
 
-                    // Match on ConstraintSpec enum
                     let spec = match named_spec.spec {
                         pbt::ConstraintSpec::Binary(binary) => {
-                            conversion::from_binary_spec_v1(binary)
+                            conversion::from_binary_spec_v1(*binary)
+                        }
+                        pbt::ConstraintSpec::PinCompatible(pin) => {
+                            resolve_pin_compatible_binary(&name, &pin, compatibility_map)?
+                        }
+                        pbt::ConstraintSpec::PinSubpackage(_) => {
+                            return Err(DependenciesError::UnresolvedPinSubpackage(name));
                         }
                     };
 
@@ -458,8 +625,140 @@ impl PixiRunExports {
             weak: convert_package_spec(&output.weak, compatibility_map)?,
             strong: convert_package_spec(&output.strong, compatibility_map)?,
             noarch: convert_package_spec(&output.noarch, compatibility_map)?,
-            weak_constrains: convert_constraint_spec(&output.weak_constrains)?,
-            strong_constrains: convert_constraint_spec(&output.strong_constrains)?,
+            weak_constrains: convert_constraint_spec(&output.weak_constrains, compatibility_map)?,
+            strong_constrains: convert_constraint_spec(
+                &output.strong_constrains,
+                compatibility_map,
+            )?,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        collections::{BTreeMap, HashMap},
+        str::FromStr,
+        sync::Arc,
+    };
+
+    use pixi_build_types::{
+        ExtraGroupName, NamedSpec, PackageSpec, PathSpec, SourcePackageName,
+        procedures::conda_outputs::CondaOutputIgnoreRunExports,
+    };
+    use rattler_conda_types::{
+        PackageName, PackageRecord, RepoDataRecord, VersionWithSource,
+        package::{DistArchiveIdentifier, RunExportsJson},
+    };
+    use rattler_repodata_gateway::Gateway;
+    use url::Url;
+
+    use super::{Dependencies, PixiRunExports, convert_extra_dependencies, filter_match_specs};
+    use pixi_record::PixiRecord;
+
+    fn binary_record(name: &str, version: &str, run_exports: RunExportsJson) -> PixiRecord {
+        let mut pr = PackageRecord::new(
+            PackageName::from_str(name).unwrap(),
+            VersionWithSource::from_str(version).unwrap(),
+            "h0".into(),
+        );
+        pr.subdir = "linux-64".into();
+        pr.run_exports = Some(run_exports);
+        let file_name = format!("{name}-{version}-h0.conda");
+        PixiRecord::Binary(Arc::new(RepoDataRecord {
+            package_record: pr,
+            identifier: DistArchiveIdentifier::from_str(&file_name).unwrap(),
+            url: Url::parse(&format!(
+                "https://example.com/conda-forge/linux-64/{file_name}"
+            ))
+            .unwrap(),
+            channel: None,
+        }))
+    }
+
+    /// A package that is only in the environment because another package's
+    /// run-export injected it must not contribute its own run-exports.
+    /// rattler-build treats run-export entries as not direct, so a chain
+    /// like gxx -> libstdcxx-ng -> libstdcxx stops after the first hop.
+    #[tokio::test]
+    async fn run_export_injected_dependencies_do_not_contribute_run_exports() {
+        let ignore = CondaOutputIgnoreRunExports::default();
+        let build_run_exports = vec![(
+            PackageName::from_str("gxx_linux-64").unwrap(),
+            PixiRunExports {
+                strong: filter_match_specs(&["libstdcxx-ng >=12".to_string()], &ignore),
+                ..Default::default()
+            },
+        )];
+        // Host env without backend-declared deps; libstdcxx-ng only enters
+        // through the build dep's strong run-export.
+        let host_dependencies =
+            Dependencies::default().extend_with_run_exports_from_build(&build_run_exports);
+
+        let mut host_records = vec![binary_record(
+            "libstdcxx-ng",
+            "15.2.0",
+            RunExportsJson {
+                strong: vec!["libstdcxx".to_string()],
+                ..Default::default()
+            },
+        )];
+
+        let host_run_exports = host_dependencies
+            .extract_run_exports(
+                &mut host_records,
+                &ignore,
+                &Gateway::builder().finish(),
+                None,
+            )
+            .await
+            .unwrap();
+
+        assert!(
+            host_run_exports.is_empty(),
+            "run-export-injected libstdcxx-ng must not contribute run-exports, got: {:?}",
+            host_run_exports
+                .iter()
+                .map(|(name, _)| name.as_normalized())
+                .collect::<Vec<_>>()
+        );
+    }
+
+    /// A source dependency inside an extra group must be resolved as a source
+    /// spec rather than stringified into a meaningless binary match spec, so
+    /// that source packages can be pulled in through extras. Regression guard
+    /// for extras dropping source dependencies.
+    #[test]
+    fn source_dependency_in_extra_group_is_preserved_as_source() {
+        let dep_name = SourcePackageName::from(PackageName::new_unchecked("mydep"));
+        let source_spec = PackageSpec::Source(
+            PathSpec {
+                path: "./mydep".to_string(),
+            }
+            .into(),
+        );
+
+        let mut extras = BTreeMap::new();
+        extras.insert(
+            ExtraGroupName::new("test").unwrap(),
+            vec![NamedSpec {
+                name: dep_name,
+                spec: source_spec,
+            }],
+        );
+
+        let resolved = convert_extra_dependencies(&extras, None, &HashMap::new()).unwrap();
+        let group = resolved
+            .get(&ExtraGroupName::new("test").unwrap())
+            .expect("test group is present");
+        let (name, spec) = group
+            .iter_specs()
+            .next()
+            .expect("the group has one dependency");
+        assert_eq!(name.as_normalized(), "mydep");
+        assert!(
+            spec.is_source(),
+            "a source dependency in an extra group must stay a source spec, got {spec:?}"
+        );
     }
 }

@@ -1,6 +1,5 @@
 ---
 source: crates/pixi_build_rattler_build/src/protocol.rs
-assertion_line: 723
 expression: conda_outputs_snapshot(result)
 input_file: tests/recipe/variants/recipe.yaml
 ---
@@ -101,7 +100,7 @@ input_file: tests/recipe/variants/recipe.yaml
     }
   ],
   "inputGlobs": [
-    "recipe.yaml",
-    "variants.yaml"
+    "variants.yaml",
+    "recipe.yaml"
   ]
 }

@@ -3,7 +3,7 @@
 Thank you for your interest in contributing to Pixi! We value the contributions from our community and look forward to collaborating with you.
 
 ## Code of Conduct
-Before contributing, please read our [Code of Conduct](https://github.com/prefix-dev/pixi/blob/main/CODE_OF_CONDUCT.md). We expect all our contributors to follow it to ensure a welcoming and inclusive environment.
+Before contributing, please read our [Code of Conduct](https://github.com/prefix-dev/pixi/blob/main/.github/CODE_OF_CONDUCT.md). We expect all our contributors to follow it to ensure a welcoming and inclusive environment.
 
 ## Getting Started
 **Familiarize yourself with Pixi:** Understand its functionality and codebase.

@@ -2,9 +2,10 @@ use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use pixi_core::{
     InstallFilter, UpdateLockFileOptions, Workspace,
-    environment::{LockFileUsage, get_update_lock_file_and_prefixes},
+    environment::{LockFileSource, LockFileUsage, get_lock_file_and_prefixes},
     lock_file::{ReinstallEnvironment, UpdateMode},
 };
+use std::sync::Arc;
 
 use crate::interface::Interface;
 
@@ -17,6 +18,7 @@ pub async fn reinstall<I: Interface>(
     workspace: &Workspace,
     options: ReinstallOptions,
     lock_file_usage: LockFileUsage,
+    progress: Option<&Arc<pixi_reporters::TopLevelProgress>>,
 ) -> miette::Result<()> {
     // Install either:
     //
@@ -41,16 +43,17 @@ pub async fn reinstall<I: Interface>(
         .collect::<Result<Vec<_>, _>>()?;
 
     // Update the prefixes by reinstalling `options.reinstall_packages`
-    get_update_lock_file_and_prefixes(
+    get_lock_file_and_prefixes(
         &environments,
-        Some(pixi_reporters::TopLevelProgress::from_global()),
+        options.target_platform.as_ref(),
+        progress.cloned(),
         UpdateMode::Revalidate,
-        UpdateLockFileOptions {
+        LockFileSource::Update(UpdateLockFileOptions {
             lock_file_usage,
             no_install: false,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
             ..Default::default()
-        },
+        }),
         options.reinstall_packages,
         &InstallFilter::default(),
     )
@@ -60,7 +63,7 @@ pub async fn reinstall<I: Interface>(
 
     // Message what's installed
     let detached_envs_message =
-        if let Ok(Some(path)) = workspace.config().detached_environments().path() {
+        if let Ok(Some(path)) = workspace.config().detached_environments_dir() {
             format!(" in '{}'", console::style(path.display()).bold())
         } else {
             "".to_string()

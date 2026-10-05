@@ -163,7 +163,7 @@ input_file: tests/recipe/pin-subpackage-variants/recipe.yaml
     }
   ],
   "inputGlobs": [
-    "recipe.yaml",
-    "variants.yaml"
+    "variants.yaml",
+    "recipe.yaml"
   ]
 }

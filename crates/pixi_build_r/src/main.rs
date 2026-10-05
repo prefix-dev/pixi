@@ -11,13 +11,10 @@ use pixi_build_backend::{
     generated_recipe::{GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
     tools::BackendIdentifier,
-    traits::ProjectModel,
     variants::NormalizedKey,
 };
-use pixi_build_types::SourcePackageName;
 use rattler_build_recipe::stage0::{Item, Script, SerializableMatchSpec, Value};
-use rattler_conda_types::PackageName;
-use rattler_conda_types::{ChannelUrl, Platform};
+use rattler_conda_types::{ChannelUrl, Subdir};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -70,11 +67,14 @@ impl GenerateRecipe for RGenerator {
         model: &pixi_build_types::ProjectModel,
         config: &Self::Config,
         manifest_path: PathBuf,
-        host_platform: Platform,
+        _host_platform: Subdir,
         _python_params: Option<PythonParams>,
         variants: &HashSet<NormalizedKey>,
         _channels: Vec<ChannelUrl>,
         _cache_dir: Option<PathBuf>,
+        _workspace_scratch_directory: Option<PathBuf>,
+        _workspace_directory: Option<PathBuf>,
+        _checkout_root: Option<PathBuf>,
     ) -> miette::Result<GeneratedRecipe> {
         // Determine the manifest root
         let manifest_root = if manifest_path.is_file() {
@@ -94,7 +94,6 @@ impl GenerateRecipe for RGenerator {
             GeneratedRecipe::from_model(model.clone(), &mut metadata_provider).into_diagnostic()?;
 
         let requirements = &mut generated_recipe.recipe.requirements;
-        let model_dependencies = model.dependencies(Some(host_platform));
 
         // Auto-detect or use configured compilers
         let compilers = match &config.compilers {
@@ -106,8 +105,6 @@ impl GenerateRecipe for RGenerator {
         pixi_build_backend::compilers::add_compilers_to_requirements(
             &compilers,
             &mut requirements.build,
-            &model_dependencies,
-            &host_platform,
         );
         pixi_build_backend::compilers::add_stdlib_to_requirements(
             &compilers,
@@ -115,20 +112,15 @@ impl GenerateRecipe for RGenerator {
             variants,
         );
 
-        // Add R runtime to host requirements
-        let r_pkg = SourcePackageName::from(PackageName::new_unchecked("r-base"));
-        if !model_dependencies.host.contains_key(&r_pkg) {
-            requirements
-                .host
-                .push(matchspec_item("r-base").into_diagnostic()?);
-        }
-
-        // Add R runtime to run requirements
-        if !model_dependencies.run.contains_key(&r_pkg) {
-            requirements
-                .run
-                .push(matchspec_item("r-base").into_diagnostic()?);
-        }
+        // Add the R runtime to host and run requirements. A user-provided
+        // r-base spec intersects with this one in the solver, so duplicates
+        // are harmless.
+        requirements
+            .host
+            .push(matchspec_item("r-base").into_diagnostic()?);
+        requirements
+            .run
+            .push(matchspec_item("r-base").into_diagnostic()?);
 
         // Add R package dependencies from DESCRIPTION (Imports + Depends)
         let r_dependencies = metadata_provider.runtime_dependencies().into_diagnostic()?;
@@ -190,7 +182,7 @@ impl GenerateRecipe for RGenerator {
         // Generate build script
         let has_native_code = !compilers.is_empty();
         let build_script = BuildScriptContext {
-            build_platform: if Platform::current().is_windows() {
+            build_platform: if Subdir::current().unwrap_or(Subdir::NoArch).is_windows() {
                 BuildPlatform::Windows
             } else {
                 BuildPlatform::Unix
@@ -201,7 +193,12 @@ impl GenerateRecipe for RGenerator {
         }
         .render();
 
-        generated_recipe.recipe.build.script = Script::from_content(build_script)
+        *generated_recipe
+            .recipe
+            .build
+            .plan
+            .script_mut()
+            .expect("generated recipes use script mode") = Script::from_content(build_script)
             .with_env(
                 config
                     .env
@@ -224,7 +221,7 @@ impl GenerateRecipe for RGenerator {
         config: &Self::Config,
         _workdir: impl AsRef<Path>,
         _editable: bool,
-    ) -> miette::Result<BTreeSet<String>> {
+    ) -> miette::Result<Vec<String>> {
         let mut globs = BTreeSet::from(
             [
                 // R package structure files
@@ -264,12 +261,12 @@ impl GenerateRecipe for RGenerator {
         // Add extra globs from config
         globs.extend(config.extra_input_globs.clone());
 
-        Ok(globs)
+        Ok(globs.into_iter().collect())
     }
 
     fn default_variants(
         &self,
-        _host_platform: Platform,
+        _host_platform: Subdir,
     ) -> miette::Result<BTreeMap<NormalizedKey, Vec<Variable>>> {
         // R packages don't typically need special default variants
         // Compiler variants are handled by rattler-build defaults
@@ -342,10 +339,13 @@ LinkingTo: Rcpp
                 &project_model,
                 &RBackendConfig::default(),
                 temp_dir.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -381,6 +381,78 @@ LinkingTo: Rcpp
     }
 
     #[tokio::test]
+    async fn test_r_base_is_added_even_if_already_present() {
+        let temp_dir = TempDir::new().unwrap();
+
+        fs::write(
+            temp_dir.path().join("DESCRIPTION"),
+            "Package: testpkg\nVersion: 1.0.0\nTitle: Test Package\n",
+        )
+        .await
+        .unwrap();
+
+        let project_model = project_fixture!({
+            "name": "r-testpkg",
+            "version": "1.0.0",
+            "targets": {
+                "defaultTarget": {
+                    "hostDependencies": {
+                        "r-base": {
+                            "binary": {
+                                "version": ">=4"
+                            }
+                        }
+                    },
+                    "runDependencies": {
+                        "r-base": {
+                            "binary": {
+                                "version": ">=4"
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        let generated_recipe = RGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &RBackendConfig::default(),
+                temp_dir.path().to_path_buf(),
+                Subdir::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        // The user spec and the backend-added spec both land in the recipe
+        // and intersect in the solver.
+        let host_count = generated_recipe
+            .recipe
+            .requirements
+            .host
+            .iter()
+            .filter(|req| req.to_string().starts_with("r-base"))
+            .count();
+        assert_eq!(host_count, 2, "expected user and backend r-base in host");
+
+        let run_count = generated_recipe
+            .recipe
+            .requirements
+            .run
+            .iter()
+            .filter(|req| req.to_string().starts_with("r-base"))
+            .count();
+        assert_eq!(run_count, 2, "expected user and backend r-base in run");
+    }
+
+    #[tokio::test]
     async fn test_pure_r_package_no_compilers() {
         let temp_dir = TempDir::new().unwrap();
 
@@ -404,10 +476,13 @@ LinkingTo: Rcpp
                 &project_model,
                 &RBackendConfig::default(),
                 temp_dir.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -441,11 +516,12 @@ LinkingTo: Rcpp
             .extract_input_globs_from_build(&config, PathBuf::new(), false)
             .unwrap();
 
-        assert!(globs.contains("DESCRIPTION"));
-        assert!(globs.contains("NAMESPACE"));
-        assert!(globs.contains("**/*.R"));
-        assert!(globs.contains("**/*.c"));
-        assert!(globs.contains("**/*.cpp"));
+        let contains = |needle: &str| globs.iter().any(|g| g == needle);
+        assert!(contains("DESCRIPTION"));
+        assert!(contains("NAMESPACE"));
+        assert!(contains("**/*.R"));
+        assert!(contains("**/*.c"));
+        assert!(contains("**/*.cpp"));
     }
 
     #[test]
@@ -460,7 +536,7 @@ LinkingTo: Rcpp
             .extract_input_globs_from_build(&config, PathBuf::new(), false)
             .unwrap();
 
-        assert!(globs.contains("inst/**/*"));
+        assert!(globs.iter().any(|g| g == "inst/**/*"));
     }
 
     #[tokio::test]
@@ -498,10 +574,13 @@ Imports:
                 &project_model,
                 &RBackendConfig::default(),
                 temp_dir.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -573,6 +652,51 @@ Imports:
     }
 
     #[tokio::test]
+    async fn test_package_name_derived_from_description_is_r_prefixed() {
+        // When the model carries no name (the inline source-dependency flow),
+        // the recipe name comes from the DESCRIPTION via the metadata provider.
+        // It must be r-prefixed and lowercased so that a dependent's `Imports`
+        // (which maps through r_package_to_conda) resolves against it.
+        let temp_dir = TempDir::new().unwrap();
+
+        fs::write(
+            temp_dir.path().join("DESCRIPTION"),
+            "Package: Rhdf5lib\nVersion: 1.0.0\nTitle: Test Package\n",
+        )
+        .await
+        .unwrap();
+
+        let project_model = project_fixture!({
+            "version": "1.0.0",
+            "targets": {
+                "defaultTarget": {}
+            }
+        });
+
+        let generated_recipe = RGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &RBackendConfig::default(),
+                temp_dir.path().to_path_buf(),
+                Subdir::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        assert_eq!(
+            generated_recipe.recipe.package.name.to_string(),
+            "r-rhdf5lib"
+        );
+    }
+
+    #[tokio::test]
     async fn test_explicit_compilers_override() {
         let temp_dir = TempDir::new().unwrap();
 
@@ -605,10 +729,13 @@ Imports:
                 &project_model,
                 &config,
                 temp_dir.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await

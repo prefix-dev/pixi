@@ -81,7 +81,7 @@ impl UrlSource {
 
     /// Checkout directory for a specific sha256 hash.
     fn checkout_path(&self, sha: &Sha256Hash) -> PathBuf {
-        self.checkouts_dir().join(format!("{sha:x}"))
+        self.checkouts_dir().join(hex::encode(sha))
     }
 
     /// Returns an existing checkout if it already satisfies the requested hashes.
@@ -212,9 +212,9 @@ impl UrlSource {
             Some(expected) => {
                 if sha256 != expected {
                     return Err(UrlError::Sha256Mismatch {
-                        url,
-                        expected,
-                        actual: sha256,
+                        url: Box::new(url),
+                        expected: hex::encode(expected),
+                        actual: hex::encode(sha256),
                     });
                 }
                 expected
@@ -226,9 +226,9 @@ impl UrlSource {
             && md5 != expected
         {
             return Err(UrlError::Md5Mismatch {
-                url,
-                expected,
-                actual: md5,
+                url: Box::new(url),
+                expected: hex::encode(expected),
+                actual: hex::encode(md5),
             });
         }
 
@@ -379,7 +379,7 @@ impl UrlSource {
             async_fs::create_dir_all(parent).await?;
         }
         async_fs::write(marker, b"ready").await?;
-        async_fs::write(checkout.join(CHECKOUT_MD5), format!("{md5:x}")).await?;
+        async_fs::write(checkout.join(CHECKOUT_MD5), hex::encode(md5)).await?;
         Ok(())
     }
 
@@ -431,7 +431,7 @@ impl UrlSource {
         if let Some(parent) = path.parent() {
             async_fs::create_dir_all(parent).await?;
         }
-        let contents = format!("{sha256:x}\n{md5:x}");
+        let contents = format!("{}\n{}", hex::encode(sha256), hex::encode(md5));
         async_fs::write(path, contents).await?;
         Ok(())
     }

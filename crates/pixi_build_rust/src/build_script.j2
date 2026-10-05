@@ -15,8 +15,15 @@ SET "{{ key }}={{ value }}"
   {%- set bin_path=env("BUILD_PREFIX") ~ "\\Library\\bin\\" -%}
 {%- endif -%}
 
-{% if has_openssl -%}
-{{ export("OPENSSL_DIR", env("PREFIX")) }}
+{# Point openssl-sys at the prefix when openssl is present in the host
+   environment. The probe has to test the filesystem because the backend
+   does not inspect the manifest dependencies. -#}
+{% if is_bash -%}
+if [ -d "$PREFIX/include/openssl" ]; then
+    {{ export("OPENSSL_DIR", env("PREFIX")) }}
+fi
+{%- else -%}
+if exist "%PREFIX%\Library\include\openssl" {{ export("OPENSSL_DIR", env("PREFIX")) }}
 {%- endif %}
 
 {% if has_sccache -%}

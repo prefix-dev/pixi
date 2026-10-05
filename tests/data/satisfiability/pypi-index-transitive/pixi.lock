@@ -1,5 +1,5 @@
 #
-# This lock-file should satisfy the accompanying pixi.toml file.
+# This lock file should satisfy the accompanying pixi.toml file.
 #
 # Regression test for a false-positive index mismatch on transitive
 # dependencies. The manifest declares both `foo` and `bar` as direct

@@ -9,6 +9,8 @@
 
 use std::path::{Component, Path, PathBuf};
 
+use pixi_path::normalize_std as normalize_relative;
+
 /// Simple handler to work with our globs
 /// basically splits up negation
 #[derive(Clone, Debug)]
@@ -257,33 +259,6 @@ pub fn split_path_and_glob(input: &str) -> (&str, &str) {
     // foo/bar.txt, because we will need to add a current directory `./` separator as we are using ignore and gitignore style
     // glob rules
     ("", input)
-}
-
-/// Normalize paths like `../.././` into paths like `../../`
-/// Also resolves components with parent dir like `recipe/..` into an empty path
-pub fn normalize_relative(path: &Path) -> PathBuf {
-    let mut out = Vec::new();
-    for comp in path.components() {
-        match comp {
-            Component::CurDir => {}
-            Component::ParentDir => {
-                // Pop the last normal component if present, drop if at root, otherwise keep the ParentDir
-                match out.last() {
-                    Some(Component::Normal(_)) => {
-                        out.pop();
-                    }
-                    Some(Component::RootDir) => {
-                        // Can't go above root directory - ignore this ParentDir
-                    }
-                    _ => {
-                        out.push(comp);
-                    }
-                }
-            }
-            _ => out.push(comp),
-        }
-    }
-    out.iter().collect()
 }
 
 #[cfg(test)]

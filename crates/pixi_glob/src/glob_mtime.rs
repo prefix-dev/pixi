@@ -59,15 +59,9 @@ impl GlobModificationTime {
 
         for entry in entries {
             let matched_path = entry.path().to_path_buf();
-            let md = match entry.metadata() {
-                Ok(md) => md,
-                Err(e) => {
-                    return Err(GlobModificationTimeError::CalculateMTime(
-                        matched_path,
-                        std::io::Error::other(e.to_string()),
-                    ));
-                }
-            };
+            let md = entry
+                .metadata()
+                .map_err(|e| GlobModificationTimeError::CalculateMTime(matched_path.clone(), e))?;
             let modified = md
                 .modified()
                 .map_err(|e| GlobModificationTimeError::CalculateMTime(matched_path.clone(), e))?;

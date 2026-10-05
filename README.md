@@ -30,6 +30,7 @@
 `pixi` is a cross-platform, multi-language package manager and workflow tool built on the foundation of the conda ecosystem. It provides developers with an exceptional experience similar to popular package managers like [`cargo`](https://doc.rust-lang.org/cargo/) or [`npm`](https://docs.npmjs.com), but for any language.
 
 Developed with ❤️ at [prefix.dev](https://prefix.dev).
+
 [![Real-time pixi_demo](https://github.com/prefix-dev/pixi/assets/12893423/0fc8f8c8-ac13-4c14-891b-dc613f25475b)](https://asciinema.org/a/636482)
 
 ## Highlights
@@ -278,10 +279,10 @@ Commands:
   info        Information about the system, workspace and environments for the current machine
   init        Creates a new workspace
   import      Imports a file into an environment in an existing workspace.
-  install     Install an environment, both updating the lockfile and installing the environment [aliases: i]
+  install     Install an environment, both updating the lock file and installing the environment [aliases: i]
   list        List the packages of the current workspace [aliases: ls]
   lock        Solve environment and update the lock file without installing the environments
-  reinstall   Re-install an environment, both updating the lockfile and re-installing the environment
+  reinstall   Re-install an environment, both updating the lock file and re-installing the environment
   remove      Removes dependencies from the workspace [aliases: rm]
   run         Runs task in the pixi environment [aliases: r]
   search      Search a conda package
@@ -291,7 +292,7 @@ Commands:
   tree        Show a tree of workspace dependencies [aliases: t]
   update      The `update` command checks if there are newer versions of the dependencies and updates the `pixi.lock`
               file and environments accordingly
-  upgrade     Checks if there are newer versions of the dependencies and upgrades them in the lockfile and manifest
+  upgrade     Checks if there are newer versions of the dependencies and upgrades them in the lock file and manifest
               file
   upload      Upload a conda package
   workspace   Modify the workspace configuration file through the command line

@@ -7,12 +7,12 @@ use std::collections::HashMap;
 
 use miette::Diagnostic;
 use rattler_build_recipe::stage0::{ConditionalList, Item, SerializableMatchSpec, Value};
-use rattler_conda_types::Platform;
+use rattler_conda_types::{MatchSpec, ParseStrictness, Subdir};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::config::PackageMappingSource;
-use crate::distro::Distro;
+use crate::distro::{Distro, RosVersion};
 use crate::package_xml::{Dependency, PackageXml};
 
 /// Errors that can occur during package mapping resolution.
@@ -64,6 +64,15 @@ pub enum PackageMapError {
 
     #[error("cannot merge version specifiers: '{spec1}' or '{spec2}' contains spaces")]
     MergeSpecsWithSpaces { spec1: String, spec2: String },
+
+    #[error("rosdep '{dep_name}' resolved to an invalid conda package spec '{spec}'")]
+    #[diagnostic(help("Map '{dep_name}' to a valid conda package via `extra-package-mappings`."))]
+    InvalidCondaPackageSpec {
+        dep_name: String,
+        spec: String,
+        #[source]
+        source: rattler_conda_types::ParseMatchSpecError,
+    },
 }
 
 /// A single entry in a package mapping file.
@@ -80,7 +89,7 @@ pub enum PlatformMapping {
     List(Vec<String>),
     /// A single string: `"pkg-a"`
     SingleString(String),
-    /// Platform-specific mapping: `{"linux": ["pkg"], "osx": []}`
+    /// Subdir-specific mapping: `{"linux": ["pkg"], "osx": []}`
     PlatformSpecific(HashMap<String, Vec<String>>),
 }
 
@@ -121,10 +130,38 @@ pub fn load_package_map_data(sources: &[PackageMappingSource]) -> HashMap<String
 }
 
 /// Convert a ROS dependency to conda package spec(s).
+///
+/// Each resolved spec is validated as a strict conda [`MatchSpec`]; an invalid
+/// name (e.g. `crypto++`) errors here instead of panicking downstream.
 pub fn rosdep_to_conda_package_spec(
     dep: &Dependency,
     distro: &Distro,
-    host_platform: Platform,
+    host_platform: Subdir,
+    package_map_data: &HashMap<String, PackageMapEntry>,
+) -> Result<Vec<String>, PackageMapError> {
+    let specs = resolve_rosdep_to_conda_package_spec(dep, distro, host_platform, package_map_data)?;
+
+    for spec in &specs {
+        if spec.trim().is_empty() {
+            continue;
+        }
+        MatchSpec::from_str(spec, ParseStrictness::Strict).map_err(|source| {
+            PackageMapError::InvalidCondaPackageSpec {
+                dep_name: dep.name.clone(),
+                spec: spec.clone(),
+                source,
+            }
+        })?;
+    }
+
+    Ok(specs)
+}
+
+/// Resolve a ROS dependency to conda package spec(s) without validation.
+fn resolve_rosdep_to_conda_package_spec(
+    dep: &Dependency,
+    distro: &Distro,
+    host_platform: Subdir,
     package_map_data: &HashMap<String, PackageMapEntry>,
 ) -> Result<Vec<String>, PackageMapError> {
     let target_platform = if host_platform.is_linux() {
@@ -310,7 +347,7 @@ pub fn rosdep_nameless_matchspec(dep: &Dependency) -> Result<Option<String>, Pac
 pub fn package_xml_to_conda_requirements(
     pkg: &PackageXml,
     distro: &Distro,
-    host_platform: Platform,
+    host_platform: Subdir,
     package_map_data: &HashMap<String, PackageMapEntry>,
 ) -> Result<ConditionalRequirements, PackageMapError> {
     // Build deps
@@ -349,7 +386,7 @@ pub fn package_xml_to_conda_requirements(
 
     // Add ros_workspace for ROS2
     let ros_workspace_dep;
-    if !distro.is_ros1 {
+    if distro.version == RosVersion::Ros2 {
         ros_workspace_dep = Dependency::from("ros_workspace");
         build_deps.push(&ros_workspace_dep);
     }
@@ -437,7 +474,7 @@ pub struct ConditionalRequirements {
 }
 
 /// Extract a package name from an Item, if it's a concrete spec.
-fn item_package_name(item: &Item<SerializableMatchSpec>) -> Option<String> {
+pub(crate) fn item_package_name(item: &Item<SerializableMatchSpec>) -> Option<String> {
     match item {
         Item::Value(v) => v
             .as_concrete()
@@ -591,7 +628,7 @@ mod tests {
     }
 
     fn jazzy_distro() -> Distro {
-        Distro::builder("jazzy").build()
+        Distro::new("jazzy")
     }
 
     #[test]
@@ -626,7 +663,7 @@ mod tests {
         let dep = Dependency::from("acl");
 
         let result =
-            rosdep_to_conda_package_spec(&dep, &distro, Platform::Linux64, &package_map).unwrap();
+            rosdep_to_conda_package_spec(&dep, &distro, Subdir::Linux64, &package_map).unwrap();
         assert_eq!(result, vec!["libacl"]);
     }
 
@@ -638,7 +675,7 @@ mod tests {
         let dep = Dependency::from("acl");
 
         let result =
-            rosdep_to_conda_package_spec(&dep, &distro, Platform::Osx64, &package_map).unwrap();
+            rosdep_to_conda_package_spec(&dep, &distro, Subdir::Osx64, &package_map).unwrap();
         assert_eq!(result, Vec::<String>::new());
     }
 
@@ -650,7 +687,7 @@ mod tests {
         let dep = Dependency::from("binutils");
 
         let result =
-            rosdep_to_conda_package_spec(&dep, &distro, Platform::Win64, &package_map).unwrap();
+            rosdep_to_conda_package_spec(&dep, &distro, Subdir::Win64, &package_map).unwrap();
         assert_eq!(result, Vec::<String>::new());
     }
 
@@ -663,11 +700,9 @@ mod tests {
         let dep = Dependency::from("libudev-dev");
 
         let linux =
-            rosdep_to_conda_package_spec(&dep, &distro, Platform::Linux64, &package_map).unwrap();
-        let osx =
-            rosdep_to_conda_package_spec(&dep, &distro, Platform::Osx64, &package_map).unwrap();
-        let win =
-            rosdep_to_conda_package_spec(&dep, &distro, Platform::Win64, &package_map).unwrap();
+            rosdep_to_conda_package_spec(&dep, &distro, Subdir::Linux64, &package_map).unwrap();
+        let osx = rosdep_to_conda_package_spec(&dep, &distro, Subdir::Osx64, &package_map).unwrap();
+        let win = rosdep_to_conda_package_spec(&dep, &distro, Subdir::Win64, &package_map).unwrap();
 
         assert_eq!(linux, vec!["libusb", "libudev"]);
         assert_eq!(osx, vec!["libusb"]);
@@ -677,11 +712,9 @@ mod tests {
         let dep = Dependency::from("libomp-dev");
 
         let linux =
-            rosdep_to_conda_package_spec(&dep, &distro, Platform::Linux64, &package_map).unwrap();
-        let osx =
-            rosdep_to_conda_package_spec(&dep, &distro, Platform::Osx64, &package_map).unwrap();
-        let win =
-            rosdep_to_conda_package_spec(&dep, &distro, Platform::Win64, &package_map).unwrap();
+            rosdep_to_conda_package_spec(&dep, &distro, Subdir::Linux64, &package_map).unwrap();
+        let osx = rosdep_to_conda_package_spec(&dep, &distro, Subdir::Osx64, &package_map).unwrap();
+        let win = rosdep_to_conda_package_spec(&dep, &distro, Subdir::Win64, &package_map).unwrap();
 
         assert_eq!(linux, vec!["libgomp"]);
         assert_eq!(osx, vec!["llvm-openmp"]);
@@ -696,11 +729,9 @@ mod tests {
         let dep = Dependency::from("opengl");
 
         let linux =
-            rosdep_to_conda_package_spec(&dep, &distro, Platform::Linux64, &package_map).unwrap();
-        let osx =
-            rosdep_to_conda_package_spec(&dep, &distro, Platform::Osx64, &package_map).unwrap();
-        let win =
-            rosdep_to_conda_package_spec(&dep, &distro, Platform::Win64, &package_map).unwrap();
+            rosdep_to_conda_package_spec(&dep, &distro, Subdir::Linux64, &package_map).unwrap();
+        let osx = rosdep_to_conda_package_spec(&dep, &distro, Subdir::Osx64, &package_map).unwrap();
+        let win = rosdep_to_conda_package_spec(&dep, &distro, Subdir::Win64, &package_map).unwrap();
 
         assert!(linux.contains(&"libgl-devel".to_string()));
         assert!(linux.contains(&"libopengl-devel".to_string()));
@@ -724,8 +755,7 @@ mod tests {
         };
 
         let result =
-            rosdep_to_conda_package_spec(&dep, &distro, Platform::Linux64, &HashMap::new())
-                .unwrap();
+            rosdep_to_conda_package_spec(&dep, &distro, Subdir::Linux64, &HashMap::new()).unwrap();
         assert_eq!(result, vec!["ros-jazzy-ament-cmake==1.2.3"]);
     }
 
@@ -740,8 +770,7 @@ mod tests {
         };
 
         let result =
-            rosdep_to_conda_package_spec(&dep, &distro, Platform::Linux64, &HashMap::new())
-                .unwrap();
+            rosdep_to_conda_package_spec(&dep, &distro, Subdir::Linux64, &HashMap::new()).unwrap();
         assert_eq!(result, vec!["ros-jazzy-rclcpp >=18.0.0,<20.0.0"]);
     }
 
@@ -762,7 +791,7 @@ mod tests {
         };
 
         let result =
-            rosdep_to_conda_package_spec(&dep, &distro, Platform::Linux64, &package_map).unwrap();
+            rosdep_to_conda_package_spec(&dep, &distro, Subdir::Linux64, &package_map).unwrap();
         assert_eq!(result, vec!["ros-jazzy-foo-util >=3.1"]);
     }
 
@@ -776,7 +805,12 @@ mod tests {
             ..Dependency::from("xtensor")
         };
 
-        let result = rosdep_to_conda_package_spec(&dep, &distro, Platform::current(), &package_map);
+        let result = rosdep_to_conda_package_spec(
+            &dep,
+            &distro,
+            Subdir::current().unwrap_or(Subdir::NoArch),
+            &package_map,
+        );
         assert!(matches!(
             result,
             Err(PackageMapError::VersionSpecConflict { .. })
@@ -793,7 +827,12 @@ mod tests {
             ..Dependency::from("boost")
         };
 
-        let result = rosdep_to_conda_package_spec(&dep, &distro, Platform::current(), &package_map);
+        let result = rosdep_to_conda_package_spec(
+            &dep,
+            &distro,
+            Subdir::current().unwrap_or(Subdir::NoArch),
+            &package_map,
+        );
         assert!(matches!(
             result,
             Err(PackageMapError::VersionSpecMultiplePackages { .. })
@@ -988,8 +1027,50 @@ mod tests {
         };
 
         let result =
-            rosdep_to_conda_package_spec(&dep, &distro, Platform::Linux64, &HashMap::new())
-                .unwrap();
+            rosdep_to_conda_package_spec(&dep, &distro, Subdir::Linux64, &HashMap::new()).unwrap();
         assert_eq!(result, vec!["ros-jazzy-customlib >1.0.0"]);
+    }
+
+    #[test]
+    fn test_lttng_resolves_per_platform() {
+        // Regression for prefix-dev/pixi#6288: `lttng-ust` on linux, nothing
+        // elsewhere (was a leaked `${{` selector).
+        let distro = jazzy_distro();
+        let package_map = robostack_data();
+        let dep = Dependency::from("liblttng-ust-dev");
+
+        let linux =
+            rosdep_to_conda_package_spec(&dep, &distro, Subdir::Linux64, &package_map).unwrap();
+        assert_eq!(linux, vec!["lttng-ust"]);
+
+        let osx = rosdep_to_conda_package_spec(&dep, &distro, Subdir::Osx64, &package_map).unwrap();
+        assert_eq!(osx, Vec::<String>::new());
+
+        let win = rosdep_to_conda_package_spec(&dep, &distro, Subdir::Win64, &package_map).unwrap();
+        assert_eq!(win, Vec::<String>::new());
+    }
+
+    #[test]
+    fn test_crypto_pp_maps_to_cryptopp() {
+        let distro = jazzy_distro();
+        let package_map = robostack_data();
+        let dep = Dependency::from("crypto++");
+
+        let result =
+            rosdep_to_conda_package_spec(&dep, &distro, Subdir::Linux64, &package_map).unwrap();
+        assert_eq!(result, vec!["cryptopp"]);
+    }
+
+    #[test]
+    fn test_unmapped_invalid_conda_name_errors() {
+        // Unmapped rosdep with an invalid conda name must error, not panic.
+        let distro = jazzy_distro();
+        let dep = Dependency::from("crypto++");
+
+        let result = rosdep_to_conda_package_spec(&dep, &distro, Subdir::Linux64, &HashMap::new());
+        assert!(matches!(
+            result,
+            Err(PackageMapError::InvalidCondaPackageSpec { .. })
+        ));
     }
 }

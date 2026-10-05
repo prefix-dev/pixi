@@ -8,7 +8,7 @@ use pixi_record::{PixiRecord, SourceRecord};
 use pixi_spec::{BinarySpec, ResolvedExcludeNewer, SourceSpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
-    ChannelUrl, GenericVirtualPackage, MatchSpec, Platform, RepoDataRecord, Version,
+    ChannelUrl, GenericVirtualPackage, MatchSpec, RepoDataRecord, Subdir, Version,
     package::{ArchiveIdentifier, CondaArchiveType, DistArchiveIdentifier},
 };
 use rattler_repodata_gateway::RepoData;
@@ -63,7 +63,7 @@ pub struct SolveCondaEnvironmentSpec {
     pub installed: Vec<PixiRecord>,
 
     /// The platform to solve for
-    pub platform: Platform,
+    pub platform: Subdir,
 
     /// The channels to use for solving
     pub channels: Vec<ChannelUrl>,
@@ -83,6 +83,12 @@ pub struct SolveCondaEnvironmentSpec {
     /// Exclude packages newer than the configured default and per-channel cutoffs.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exclude_newer: Option<ResolvedExcludeNewer>,
+
+    /// Records the solver may not select, mapped to the reason why. Populated
+    /// in offline mode with everything that is not available without network
+    /// access. See [`crate::offline`].
+    #[serde(skip)]
+    pub excluded_candidates: HashMap<Url, Arc<str>>,
 }
 
 impl Default for SolveCondaEnvironmentSpec {
@@ -96,12 +102,13 @@ impl Default for SolveCondaEnvironmentSpec {
             source_repodata: vec![],
             binary_repodata: vec![],
             installed: vec![],
-            platform: Platform::current(),
+            platform: Subdir::current().unwrap_or(Subdir::NoArch),
             channels: vec![],
             virtual_packages: vec![],
             strategy: SolveStrategy::default(),
             channel_priority: ChannelPriority::default(),
             exclude_newer: None,
+            excluded_candidates: HashMap::new(),
         }
     }
 }
@@ -304,6 +311,7 @@ impl SolveCondaEnvironmentSpec {
                 exclude_newer,
                 strategy: self.strategy,
                 constraints: constrains_match_specs,
+                excluded_candidates: self.excluded_candidates,
                 ..rattler_solve::SolverTask::from_iter(solvable_records)
             };
 

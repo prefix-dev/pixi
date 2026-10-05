@@ -2,11 +2,15 @@ use indexmap::IndexMap;
 use miette::IntoDiagnostic;
 use pixi_core::{
     environment::sanity_check_workspace,
-    workspace::{PypiDeps, UpdateDeps, WorkspaceMut},
+    workspace::{PypiDeps, SkippedPackage, UpdateDeps, WorkspaceMut},
 };
-use pixi_manifest::{FeatureName, KnownPreviewFeature, SpecType};
-use pixi_spec::{GitSpec, SourceLocationSpec, Subdirectory};
+use pixi_manifest::{
+    DependencyOverwriteBehavior, FeatureName, HasWorkspaceManifest, KnownPreviewFlag, SpecType,
+};
+use pixi_spec::{GitSpec, PathSourceSpec, SourceSpec, Subdirectory};
 use rattler_conda_types::{MatchSpec, PackageName};
+
+use crate::workspace::platforms::resolve_platforms;
 
 mod options;
 
@@ -18,13 +22,21 @@ pub async fn add_conda_dep(
     spec_type: SpecType,
     dep_options: DependencyOptions,
     git_options: GitOptions,
-) -> miette::Result<Option<UpdateDeps>> {
+) -> miette::Result<(Option<UpdateDeps>, Vec<SkippedPackage>)> {
     sanity_check_workspace(workspace.workspace()).await?;
 
-    // Add the platform if it is not already present
+    // Resolve the requested platforms, accepting bare subdirs as subdir
+    // platforms, and add any that the workspace does not yet declare.
+    let workspace_platforms = workspace
+        .workspace()
+        .workspace_manifest()
+        .workspace
+        .platforms
+        .clone();
+    let pixi_platforms = resolve_platforms(&workspace_platforms, &dep_options.platforms)?;
     workspace
         .manifest()
-        .add_platforms(dep_options.platforms.iter(), &FeatureName::DEFAULT)?;
+        .add_platforms(pixi_platforms.iter(), &FeatureName::Default)?;
 
     let mut match_specs = IndexMap::default();
     let mut source_specs = IndexMap::default();
@@ -36,43 +48,47 @@ pub async fn add_conda_dep(
         .map(|(name, spec)| (name, (spec, spec_type)))
         .collect();
 
-    if let Some(git) = &git_options.git {
+    if git_options.git.is_some() || git_options.path.is_some() {
         if !workspace
             .manifest()
             .workspace
             .preview()
-            .is_enabled(KnownPreviewFeature::PixiBuild)
+            .is_enabled(KnownPreviewFlag::PixiBuild)
         {
             return Err(miette::miette!(
-                help = format!(
-                    "Add `preview = [\"pixi-build\"]` to the `workspace` or `project` table of your manifest ({})",
-                    workspace.workspace().workspace.provenance.path.display()
-                ),
-                "conda source dependencies are not allowed without enabling the 'pixi-build' preview feature"
+                help = "Run `pixi workspace preview add pixi-build` to enable the preview flag",
+                "conda source dependencies are not allowed without enabling the 'pixi-build' preview flag"
             ));
         }
 
-        let subdirectory = git_options
-            .subdir
-            .clone()
-            .map(Subdirectory::try_from)
-            .transpose()
-            .into_diagnostic()?
-            .unwrap_or_default();
-        source_specs = passed_specs
-            .iter()
-            .map(|(name, (_spec, spec_type))| {
-                let git_spec = GitSpec {
-                    git: git.clone(),
-                    rev: Some(git_options.reference.clone()),
-                    subdirectory: subdirectory.clone(),
-                };
-                (
-                    name.clone(),
-                    (SourceLocationSpec::Git(git_spec).into(), *spec_type),
-                )
-            })
-            .collect();
+        if let Some(git) = &git_options.git {
+            let subdirectory = git_options
+                .subdir
+                .clone()
+                .map(Subdirectory::try_from)
+                .transpose()
+                .into_diagnostic()?
+                .unwrap_or_default();
+            source_specs = passed_specs
+                .iter()
+                .map(|(name, (_spec, spec_type))| {
+                    let git_spec = GitSpec::new(
+                        git.clone(),
+                        Some(git_options.reference.clone()),
+                        subdirectory.clone(),
+                    );
+                    (name.clone(), (SourceSpec::from(git_spec), *spec_type))
+                })
+                .collect();
+        } else if let Some(path) = &git_options.path {
+            source_specs = passed_specs
+                .iter()
+                .map(|(name, (_spec, spec_type))| {
+                    let path_spec = PathSourceSpec::new(manifest_path_string(path));
+                    (name.clone(), (SourceSpec::from(path_spec), *spec_type))
+                })
+                .collect();
+        }
     } else {
         match_specs = passed_specs;
     }
@@ -80,23 +96,25 @@ pub async fn add_conda_dep(
     // TODO: add dry_run logic to add
     let dry_run = false;
 
-    let update_deps = match Box::pin(workspace.update_dependencies(
+    let targets = workspace.target_selectors_for_platforms(&dep_options.platforms);
+    let (update_deps, skipped) = match Box::pin(workspace.update_dependencies(
         match_specs,
         IndexMap::default(),
         source_specs,
         dep_options.no_install,
         &dep_options.lock_file_usage,
         &dep_options.feature,
-        &dep_options.platforms,
+        &targets,
         false,
         dry_run,
+        DependencyOverwriteBehavior::OverwriteIfExplicit,
     ))
     .await
     {
-        Ok(update_deps) => {
+        Ok(result) => {
             // Write the updated manifest
             workspace.save().await.into_diagnostic()?;
-            update_deps
+            result
         }
         Err(e) => {
             workspace.revert().await.into_diagnostic()?;
@@ -104,7 +122,11 @@ pub async fn add_conda_dep(
         }
     };
 
-    Ok(update_deps)
+    Ok((update_deps, skipped))
+}
+
+fn manifest_path_string(path: &std::path::Path) -> String {
+    path.to_string_lossy().replace('\\', "/")
 }
 
 pub async fn add_pypi_dep(
@@ -112,34 +134,44 @@ pub async fn add_pypi_dep(
     pypi_deps: PypiDeps,
     editable: bool,
     options: DependencyOptions,
-) -> miette::Result<Option<UpdateDeps>> {
+) -> miette::Result<(Option<UpdateDeps>, Vec<SkippedPackage>)> {
     sanity_check_workspace(workspace.workspace()).await?;
 
-    // Add the platform if it is not already present
+    // Resolve the requested platforms, accepting bare subdirs as subdir
+    // platforms, and add any that the workspace does not yet declare.
+    let workspace_platforms = workspace
+        .workspace()
+        .workspace_manifest()
+        .workspace
+        .platforms
+        .clone();
+    let pixi_platforms = resolve_platforms(&workspace_platforms, &options.platforms)?;
     workspace
         .manifest()
-        .add_platforms(options.platforms.iter(), &FeatureName::DEFAULT)?;
+        .add_platforms(pixi_platforms.iter(), &FeatureName::Default)?;
 
     // TODO: add dry_run logic to add
     let dry_run = false;
 
-    let update_deps = match Box::pin(workspace.update_dependencies(
+    let targets = workspace.target_selectors_for_platforms(&options.platforms);
+    let (update_deps, skipped) = match Box::pin(workspace.update_dependencies(
         IndexMap::default(),
         pypi_deps,
         IndexMap::default(),
         options.no_install,
         &options.lock_file_usage,
         &options.feature,
-        &options.platforms,
+        &targets,
         editable,
         dry_run,
+        DependencyOverwriteBehavior::OverwriteIfExplicit,
     ))
     .await
     {
-        Ok(update_deps) => {
+        Ok(result) => {
             // Write the updated manifest
             workspace.save().await.into_diagnostic()?;
-            update_deps
+            result
         }
         Err(e) => {
             workspace.revert().await.into_diagnostic()?;
@@ -147,5 +179,5 @@ pub async fn add_pypi_dep(
         }
     };
 
-    Ok(update_deps)
+    Ok((update_deps, skipped))
 }

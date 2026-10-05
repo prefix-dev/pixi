@@ -100,3 +100,14 @@ The list of dependencies defined for this environment.
 ### Target platforms
 
 The platforms the workspace has defined.
+
+### Resolved platform
+
+The platform the environment was resolved for the last time it was installed, shown as the conda subdir plus the virtual packages it was resolved with.
+Only present once the environment has been installed.
+
+### Minimum platform
+
+What the installed packages actually require: the same subdir with only the virtual-package requirements that some installed package depends on, shown as match specs the way the packages spell them (`__glibc >=2.17`).
+This can be weaker than the resolved platform and tells you how portable the installed environment is.
+Only present once the environment has been installed.

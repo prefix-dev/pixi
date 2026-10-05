@@ -1,6 +1,6 @@
 use pixi_core::{InstallFilter, UpdateLockFileOptions, lock_file::PackageFilterNames};
 use pixi_utils::prefix::Prefix as CondaPrefix;
-use rattler_conda_types::{PackageName, Platform};
+use rattler_conda_types::{PackageName, Subdir};
 
 use crate::common::PixiControl;
 use pixi_test_utils::{LocalChannel, MockRepoData, Package};
@@ -37,7 +37,7 @@ async fn setup_simple_graph_project() -> (PixiControl, LocalChannel) {
 
     let channel = db.into_channel().await.unwrap();
 
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
     let manifest = format!(
         r#"
         [project]
@@ -62,7 +62,7 @@ async fn setup_simple_graph_project() -> (PixiControl, LocalChannel) {
 async fn install_filter_skip_direct_soft_exclusion() {
     let (pixi, _channel) = setup_simple_graph_project().await;
 
-    // Ensure lockfile exists
+    // Ensure lock file exists
     pixi.update_lock_file().await.unwrap();
 
     // Build derived data and workspace env
@@ -78,7 +78,8 @@ async fn install_filter_skip_direct_soft_exclusion() {
     let skipped = PackageFilterNames::new(
         &filter,
         derived.lock_file.environment(env.name().as_str()).unwrap(),
-        env.best_platform(),
+        env.best_declared_platform()
+            .expect("no best platform for env"),
     )
     .unwrap()
     .ignored;
@@ -105,7 +106,8 @@ async fn install_filter_skip_with_deps_hard_exclusion() {
     let skipped = PackageFilterNames::new(
         &filter,
         derived.lock_file.environment(env.name().as_str()).unwrap(),
-        env.best_platform(),
+        env.best_declared_platform()
+            .expect("no best platform for env"),
     )
     .unwrap()
     .ignored;
@@ -139,7 +141,8 @@ async fn install_filter_target_package_zoom_in() {
     let skipped = PackageFilterNames::new(
         &filter,
         derived.lock_file.environment(env.name().as_str()).unwrap(),
-        env.best_platform(),
+        env.best_declared_platform()
+            .expect("no best platform for env"),
     )
     .unwrap()
     .ignored;
@@ -165,7 +168,8 @@ async fn install_filter_target_with_skip_with_deps_stop() {
     let skipped = PackageFilterNames::new(
         &filter,
         derived.lock_file.environment(env.name().as_str()).unwrap(),
-        env.best_platform(),
+        env.best_declared_platform()
+            .expect("no best platform for env"),
     )
     .unwrap()
     .ignored;
@@ -180,7 +184,7 @@ async fn install_subset_e2e_skip_with_deps() {
     use url::Url;
 
     // manifest with dependent packages: dummy-g depends on dummy-b
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
     let channel_path: PathBuf = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/data/channels/channels/dummy_channel_1");
     let channel_path = fs_err::canonicalize(channel_path).expect("canonicalize channel path");

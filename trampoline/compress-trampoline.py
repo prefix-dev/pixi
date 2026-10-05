@@ -1,6 +1,6 @@
+import argparse
 import subprocess
 from pathlib import Path
-import argparse
 
 
 def get_default_target() -> str:

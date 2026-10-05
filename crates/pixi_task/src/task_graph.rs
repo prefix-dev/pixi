@@ -10,7 +10,7 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_core::{Workspace, workspace::Environment};
 use pixi_manifest::{
-    EnvironmentName, Task, TaskName,
+    EnvironmentName, PixiPlatform, Task, TaskName,
     task::{
         ArgValues, CmdArgs, Custom, TaskArg, TemplateStringError, TypedArg, TypedDependency,
         TypedDependencyArg,
@@ -20,8 +20,13 @@ use thiserror::Error;
 
 use crate::{
     TaskDisambiguation,
-    error::{AmbiguousTaskError, InvalidArgValueError, MissingArgError, MissingTaskError},
-    task_environment::{FindTaskError, FindTaskSource, SearchEnvironments},
+    error::{
+        AmbiguousTaskError, InvalidArgValueError, MissingArgError, MissingTaskError,
+        UnrunnableTaskError,
+    },
+    task_environment::{
+        FindTaskError, FindTaskSource, SearchEnvironments, environments_defining_task,
+    },
 };
 
 /// Joins command-line arguments into a single shell command string.
@@ -33,7 +38,7 @@ use crate::{
 /// Single quotes within arguments are handled by ending the single-quoted
 /// section, adding a double-quoted single quote, and continuing:
 /// `it's` becomes `'it'"'"'s'`
-fn join_args_with_single_quotes<'a>(args: impl IntoIterator<Item = &'a str>) -> String {
+pub(crate) fn join_args_with_single_quotes<'a>(args: impl IntoIterator<Item = &'a str>) -> String {
     args.into_iter()
         .map(|arg| {
             // Use single quotes, replacing any ' with '"'"'
@@ -178,6 +183,9 @@ pub struct TaskGraph<'p> {
 
     /// The tasks in the graph
     nodes: Vec<TaskNode<'p>>,
+
+    /// The platform the search was pinned to by `pixi run --platform`, if any.
+    platform: Option<&'p PixiPlatform>,
 }
 impl fmt::Display for TaskGraph<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -201,6 +209,11 @@ impl<'p> Index<TaskId> for TaskGraph<'p> {
 impl<'p> TaskGraph<'p> {
     pub(crate) fn project(&self) -> &'p Workspace {
         self.project
+    }
+
+    /// The platform the search was pinned to by `pixi run --platform`, if any.
+    pub fn platform(&self) -> Option<&'p PixiPlatform> {
+        self.platform
     }
 
     /// Constructs a new [`TaskGraph`] from a list of command line arguments.
@@ -234,9 +247,24 @@ impl<'p> TaskGraph<'p> {
         if prefer_executable == PreferExecutable::TaskFirst
             && let Some(name) = args.first()
         {
-            match search_envs.find_task(TaskName::from(name.clone()), FindTaskSource::CmdArgs, None)
-            {
-                Err(FindTaskError::MissingTask(_)) => {}
+            let task_name = TaskName::from(name.clone());
+            match search_envs.find_task(task_name.clone(), FindTaskSource::CmdArgs, None) {
+                Err(FindTaskError::MissingTask(_)) => {
+                    // The name may still be a task elsewhere (another env or
+                    // platform); a shell fallback would say "command not found".
+                    let environments = environments_defining_task(project, &task_name);
+                    if !environments.is_empty() {
+                        return Err(TaskGraphError::UnrunnableTask(UnrunnableTaskError {
+                            task_name,
+                            environments,
+                            explicit_environment: search_envs
+                                .explicit_environment
+                                .as_ref()
+                                .map(|env| env.name().clone()),
+                            platform: search_envs.platform.map(|p| p.name().clone()),
+                        }));
+                    }
+                }
                 Err(FindTaskError::AmbiguousTask(err)) => {
                     return Err(TaskGraphError::AmbiguousTask(err));
                 }
@@ -307,6 +335,7 @@ impl<'p> TaskGraph<'p> {
                     if skip_deps {
                         return Ok(Self {
                             project,
+                            platform: search_envs.platform,
                             nodes: vec![TaskNode {
                                 name: Some(task_name.into()),
                                 task: Cow::Borrowed(task),
@@ -412,10 +441,11 @@ impl<'p> TaskGraph<'p> {
             let mut deps_to_process: Vec<(TypedDependency, Environment<'p>, &Task)> = Vec::new();
 
             // Iterate over all the dependencies of the node and add them to the graph.
+            let node_platform = search_environments.search_platform_for(&node.run_environment);
             let mut node_dependencies = Vec::with_capacity(dependencies.len());
             for dependency in dependencies {
                 let context = pixi_manifest::task::TaskRenderContext {
-                    platform: node.run_environment.best_platform(),
+                    platform: node_platform,
                     environment_name: node.run_environment.name(),
                     manifest_path: None,
                     args: node.args.as_ref(),
@@ -496,7 +526,11 @@ impl<'p> TaskGraph<'p> {
             next_node_to_visit += 1;
         }
 
-        Ok(Self { project, nodes })
+        Ok(Self {
+            project,
+            nodes,
+            platform: search_environments.platform,
+        })
     }
 
     fn merge_args(
@@ -662,6 +696,10 @@ pub enum TaskGraphError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
+    UnrunnableTask(#[from] UnrunnableTaskError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
     AmbiguousTask(AmbiguousTaskError),
 
     #[error("could not split task, assuming non valid task")]
@@ -695,7 +733,7 @@ mod test {
     use assert_matches::assert_matches;
     use pixi_core::Workspace;
     use pixi_manifest::EnvironmentName;
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::Subdir;
 
     use crate::{
         task_environment::SearchEnvironments,
@@ -705,7 +743,8 @@ mod test {
     struct TaskGraphTest<'a> {
         workspace_str: &'a str,
         run_args: Vec<&'a str>,
-        platform: Option<Platform>,
+        platform: Option<pixi_manifest::PixiPlatform>,
+        platform_name: Option<String>,
         environment_name: Option<EnvironmentName>,
         skip_deps: bool,
         prefer_executable: PreferExecutable,
@@ -718,6 +757,7 @@ mod test {
                 workspace_str,
                 run_args: run_args.to_vec(),
                 platform: None,
+                platform_name: None,
                 environment_name: None,
                 skip_deps: false,
                 prefer_executable: PreferExecutable::TaskFirst,
@@ -725,8 +765,15 @@ mod test {
             }
         }
 
-        fn platform(mut self, platform: Platform) -> Self {
-            self.platform = Some(platform);
+        fn platform(mut self, platform: Subdir) -> Self {
+            self.platform = Some(pixi_manifest::PixiPlatform::from_subdir(platform));
+            self
+        }
+
+        /// Pin the search to a declared workspace platform by name, like
+        /// `pixi run --platform <name>` does.
+        fn named_platform(mut self, name: &str) -> Self {
+            self.platform_name = Some(name.to_string());
             self
         }
 
@@ -758,8 +805,20 @@ mod test {
                 .environment_name
                 .as_ref()
                 .map(|name| project.environment(name).unwrap());
-            let search_envs =
-                SearchEnvironments::from_opt_env(&project, environment, self.platform);
+            let named_platform = self.platform_name.as_deref().map(|name| {
+                let name = pixi_manifest::PixiPlatformName::try_from(name).unwrap();
+                project
+                    .workspace
+                    .value
+                    .workspace
+                    .platform_by_name(&name)
+                    .expect("test workspace must declare the named platform")
+            });
+            let search_envs = SearchEnvironments::from_opt_env(
+                &project,
+                environment,
+                named_platform.or(self.platform.as_ref()),
+            );
 
             let graph = TaskGraph::from_cmd_args(
                 &project,
@@ -776,7 +835,7 @@ mod test {
                 .map(|task_id| &graph[task_id])
                 .filter_map(|task| {
                     let context = pixi_manifest::task::TaskRenderContext {
-                        platform: task.run_environment.best_platform(),
+                        platform: search_envs.search_platform_for(&task.run_environment),
                         environment_name: task.run_environment.name(),
                         manifest_path: Some(&project.workspace.provenance.path),
                         args: task.args.as_ref(),
@@ -796,6 +855,67 @@ mod test {
         fn expect_error(&self) -> TaskGraphError {
             self.build_graph().unwrap_err()
         }
+    }
+
+    /// A name that matches a task defined in *another* environment must not
+    /// fall through to "execute as a shell command" (which reports a
+    /// confusing "command not found") -- it errors, pointing at the
+    /// environments that define the task.
+    #[test]
+    fn test_task_in_other_environment_is_not_treated_as_executable() {
+        let workspace_str = r#"
+        [workspace]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64", "osx-64", "win-64", "osx-arm64"]
+
+        [feature.test.tasks]
+        test = "pytest"
+
+        [feature.prod.tasks]
+        run = "python start.py"
+
+        [environments]
+        test = ["test"]
+        prod = ["prod"]
+    "#;
+        let err = TaskGraphTest::new(workspace_str, &["test"])
+            .environment("prod")
+            .expect_error();
+        assert_matches!(err, TaskGraphError::UnrunnableTask(err) => {
+            assert_eq!(err.task_name.as_str(), "test");
+            assert_eq!(
+                err.environments.iter().map(|e| e.as_str()).collect::<Vec<_>>(),
+                vec!["test"]
+            );
+        });
+    }
+
+    /// The platform axis of the same guard: a task defined only for another
+    /// *platform* must also surface as an `UnrunnableTask` carrying the pinned
+    /// platform, rather than falling through to a shell command.
+    #[test]
+    fn test_task_on_other_platform_reports_pinned_platform() {
+        let workspace_str = r#"
+        [workspace]
+        name = "pixi"
+        channels = []
+        platforms = ["linux-64", "osx-64"]
+
+        [target.osx-64.tasks]
+        mac-only = "echo mac"
+    "#;
+        let err = TaskGraphTest::new(workspace_str, &["mac-only"])
+            .platform(Subdir::Linux64)
+            .expect_error();
+        assert_matches!(err, TaskGraphError::UnrunnableTask(err) => {
+            assert_eq!(err.task_name.as_str(), "mac-only");
+            assert_eq!(err.platform.as_ref().map(|p| p.as_str()), Some("linux-64"));
+            assert_eq!(
+                err.environments.iter().map(|e| e.as_str()).collect::<Vec<_>>(),
+                vec!["default"]
+            );
+        });
     }
 
     #[test]
@@ -863,7 +983,7 @@ mod test {
 
         // Linux should give hello linux
         let commands = TaskGraphTest::new(workspace_str, run_args)
-            .platform(Platform::Linux64)
+            .platform(Subdir::Linux64)
             .commands_in_order();
         assert_eq!(
             commands,
@@ -872,7 +992,7 @@ mod test {
 
         // On other platforms we should get echo root
         let commands = TaskGraphTest::new(workspace_str, run_args)
-            .platform(Platform::OsxArm64)
+            .platform(Subdir::OsxArm64)
             .commands_in_order();
         assert_eq!(
             commands,
@@ -1093,7 +1213,7 @@ mod test {
         assert_eq!(order.len(), 1);
         let task = &graph[order[0]];
         let context = pixi_manifest::task::TaskRenderContext {
-            platform: task.run_environment.best_platform(),
+            platform: search_envs.search_platform_for(&task.run_environment),
             environment_name: task.run_environment.name(),
             manifest_path: Some(&project.workspace.provenance.path),
             args: task.args.as_ref(),
@@ -1140,7 +1260,7 @@ mod test {
         let order = graph.topological_order();
         let task = &graph[order[0]];
         let context = pixi_manifest::task::TaskRenderContext {
-            platform: task.run_environment.best_platform(),
+            platform: search_envs.search_platform_for(&task.run_environment),
             environment_name: task.run_environment.name(),
             manifest_path: Some(&project.workspace.provenance.path),
             args: task.args.as_ref(),
@@ -1393,5 +1513,40 @@ mod test {
         let run_args = &["mytask", "--verbose"];
         let commands = TaskGraphTest::new(workspace_str, run_args).commands_in_order();
         assert_eq!(commands, vec!["echo '--verbose'"]);
+    }
+
+    /// `{{ pixi.platform }}` renders the platform the search was pinned to
+    /// (https://github.com/prefix-dev/pixi/issues/6773).
+    #[test]
+    fn test_platform_template_renders_pinned_custom_platform() {
+        let current = Subdir::current().unwrap_or(Subdir::NoArch);
+        let workspace_str = format!(
+            r#"
+        [workspace]
+        name = "pixi"
+        channels = []
+        platforms = [
+            {{ name = "generic", platform = "{current}" }},
+            {{ name = "local", platform = "{current}", cuda = "12" }},
+        ]
+
+        [tasks]
+        which-platform = "echo {{{{ pixi.platform }}}}"
+        "#
+        );
+
+        // Pinned to `local`, like `pixi run --platform local`.
+        let (_project, commands) = TaskGraphTest::new(&workspace_str, &["which-platform"])
+            .named_platform("local")
+            .build_graph()
+            .unwrap();
+        assert_eq!(commands, vec!["echo local"]);
+
+        // Unpinned: the host's best declared platform is `generic` (declared
+        // first, no extra virtual packages), so that is what renders.
+        let (_project, commands) = TaskGraphTest::new(&workspace_str, &["which-platform"])
+            .build_graph()
+            .unwrap();
+        assert_eq!(commands, vec!["echo generic"]);
     }
 }

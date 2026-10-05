@@ -7,9 +7,10 @@ use rattler_lock::UrlOrPath;
 use url::Url;
 use uv_cache_info::CacheInfoError;
 use uv_distribution_types::{Dist, InstalledDist, InstalledDistKind};
+use uv_git_types::GitLfs;
 use uv_pypi_types::{ParsedGitUrl, ParsedUrlError};
 
-use crate::utils::{check_url_freshness, strip_direct_scheme};
+use crate::utils::{check_url_freshness, is_direct_url, strip_direct_scheme};
 
 use super::{NeedReinstall, models::ValidateCurrentInstall};
 use pixi_uv_conversions::ConversionError;
@@ -29,6 +30,12 @@ pub enum NeedsReinstallError {
 }
 
 /// Check if a package needs to be reinstalled
+///
+/// Locked digests are deliberately not compared here.
+/// An installed dist is unpacked, so the original archive digest is not recoverable.
+/// Like uv and pip, hash verification applies when an artifact is materialized
+/// (cache reuse or download, see `crate::hash_verification`).
+/// It does not apply retroactively to already-installed packages.
 pub(crate) fn need_reinstall(
     installed_dist: &InstalledDist,
     required_pkg: &crate::InstallablePypiRecord,
@@ -38,13 +45,28 @@ pub(crate) fn need_reinstall(
     // Check if the installed version is the same as the required version
     match &installed_dist.kind {
         InstalledDistKind::Registry(reg) => {
-            if !matches!(required_pkg.location, UrlOrPath::Url(_)) {
-                return Ok(ValidateCurrentInstall::Reinstall(
-                    NeedReinstall::SourceMismatch {
-                        locked_location: required_pkg.location.to_string(),
-                        installed_location: "registry".to_string(),
-                    },
-                ));
+            // The package on disk came from a registry. Anything other than a
+            // registry URL in the lock file (a path, a git URL, a `direct+` URL)
+            // is a source mismatch and must be reinstalled — even when the
+            // version numbers happen to coincide. See prefix-dev/pixi#2677.
+            match &required_pkg.location {
+                UrlOrPath::Path(_) => {
+                    return Ok(ValidateCurrentInstall::Reinstall(
+                        NeedReinstall::SourceMismatch {
+                            locked_location: required_pkg.location.to_string(),
+                            installed_location: "registry".to_string(),
+                        },
+                    ));
+                }
+                UrlOrPath::Url(url) if is_direct_url(url.scheme()) => {
+                    return Ok(ValidateCurrentInstall::Reinstall(
+                        NeedReinstall::SourceMismatch {
+                            locked_location: required_pkg.location.to_string(),
+                            installed_location: "registry".to_string(),
+                        },
+                    ));
+                }
+                UrlOrPath::Url(_) => {}
             }
 
             let specifier = to_uv_version(&required_pkg.version)?;
@@ -290,6 +312,22 @@ pub(crate) fn need_reinstall(
                                     NeedReinstall::GitRevMismatch {
                                         installed_rev: installed_commit,
                                         locked_rev: locked_commit.to_string(),
+                                    },
+                                ));
+                            }
+
+                            // The same commit checked out with and without LFS
+                            // yields different content. The installed state
+                            // comes from `direct_url.json`, where an absent
+                            // flag means LFS was disabled.
+                            let installed_lfs =
+                                vcs_info.git_lfs.map(GitLfs::from).unwrap_or_default();
+                            let locked_lfs = locked_git_url.url.lfs();
+                            if installed_lfs != locked_lfs {
+                                return Ok(ValidateCurrentInstall::Reinstall(
+                                    NeedReinstall::GitLfsMismatch {
+                                        installed_lfs: installed_lfs.enabled(),
+                                        locked_lfs: locked_lfs.enabled(),
                                     },
                                 ));
                             }

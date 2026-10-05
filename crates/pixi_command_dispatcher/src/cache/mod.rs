@@ -18,8 +18,8 @@ pub mod markers;
 pub mod workspace;
 
 pub use artifact::{
-    ArtifactCache, ArtifactCacheError, ArtifactCacheKey, ArtifactSidecar, CachedArtifact,
-    compute_artifact_cache_key,
+    ArtifactCache, ArtifactCacheError, ArtifactCacheKey, ArtifactSidecar, CacheLookup,
+    CacheMissReason, CachedArtifact, SourceMutability, compute_artifact_cache_key,
 };
 pub use backend_metadata::{
     BuildBackendMetadataCache, BuildBackendMetadataCacheEntry, BuildBackendMetadataCacheError,
@@ -27,7 +27,7 @@ pub use backend_metadata::{
 };
 pub use common::{
     CacheEntry, CacheError, CacheKey, CacheKeyString, CacheRevision, MetadataCache,
-    MetadataCacheEntry, MetadataCacheKey, VersionedCacheEntry, WriteResult,
+    MetadataCacheEntry, MetadataCacheKey, RefreshResult, VersionedCacheEntry, WriteResult,
 };
 pub use pixi_compute_cache_dirs::CacheDirs;
 pub use workspace::{WorkspaceCache, WorkspaceGuard, WorkspaceKey, compute_workspace_key};

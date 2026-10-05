@@ -1,0 +1,12 @@
+[package]
+name = "package_a"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "in-memory", version = "*" }
+
+# The redundant "./" prefix is deliberate: the test checks that this
+# spelling coexists with the differently-spelled pinned location that
+# package_b's self run-export introduces.
+[package.host-dependencies]
+package_b = { path = "./../package_b" }

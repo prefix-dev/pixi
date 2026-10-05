@@ -61,6 +61,130 @@ Running `pixi install` on a platform that is not configured will warn the user t
  WARN Not installing dependency for (default) on current platform: (osx-arm64) as it is not part of this project's supported platforms.
 ```
 
+## Declaring virtual packages per platform
+
+A bare-string entry like `"linux-64"` is shorthand for "the conda subdir `linux-64` with Pixi's [default declared virtual packages](./system_requirements.md#default-declared-virtual-packages)".
+You can also describe a platform as an inline table to pin the [virtual packages](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html) the solver should treat as available.
+You can for example add a CUDA toolkit version or a glibc minimum version as a virtual package.
+
+
+!!! info "Replaces `[system-requirements]`"
+    These inline-table entries are the recommended way to declare CUDA, glibc, macOS, archspec, and similar constraints. The older `[system-requirements]` table still parses but is deprecated; see [Migrating from `[system-requirements]`](./system_requirements.md) for the equivalent forms.
+
+```toml title="pixi.toml"
+[workspace]
+platforms = [
+  "osx-arm64",
+  { platform = "linux-64", cuda = "12.0", glibc = "2.28" },
+  { name = "jetson-nano", platform = "linux-aarch64", cuda = "12.8" },
+]
+```
+
+Each inline-table entry has:
+
+- `platform`: the conda subdir the entry targets (e.g. `linux-64`, `osx-arm64`). Required.
+- `name`: optional workspace-scoped identifier the platform is referenced by elsewhere (in `feature.<name>.platforms`, in lockfile rows, in CLI commands).
+  When omitted, Pixi synthesizes a name from `platform` plus the declared virtual packages, so two entries that declare the same set in different key order share the same identifier.
+- Friendly keys for the common virtual packages: `cuda`, `archspec`, `glibc`, `linux`, `macos` (alias `osx`), `windows`.
+  Each maps onto the matching `__name` conda virtual package (`cuda` -> `__cuda`, `glibc` -> `__glibc`, `macos` -> `__osx`, etc.).
+- `archspec` names a CPU microarchitecture (`x86_64_v3`, `skylake`, `m1`,
+  `armv8.2a`, ...) rather than a version. The name must be one the bundled
+  [archspec](https://github.com/archspec/archspec) database knows, and Pixi
+  rejects anything else with a suggestion: a name no host can ever report would
+  otherwise silently produce a platform that never matches. Conda build strings
+  cannot contain `-`, so the spelling uses underscores and dots (`x86_64_v3`,
+  not `x86-64-v3`). A CPU newer than the bundled database can't be named until
+  Pixi ships an updated archspec; set `archspec = "0"` to declare the
+  microarchitecture explicitly unknown.
+  Unlike every other virtual package, a machine does not satisfy `archspec` by
+  carrying a high enough version.
+  It satisfies it by being that microarchitecture or one the archspec database
+  says is a strict superset of it, so a `zen2` host covers a platform declaring
+  `x86_64_v3` but a `haswell` host does not cover one declaring `zen2`.
+  A machine whose own microarchitecture is unknown is accepted, since Pixi can
+  neither prove nor disprove that it covers the requirement.
+- `cuda` also accepts a `{ driver, arch }` table that declares the CUDA driver
+  version (`__cuda`) together with the GPU compute capability (`__cuda_arch`):
+
+  ```toml title="pixi.toml"
+  platforms = [
+    { name = "gpu", platform = "linux-64", cuda = { driver = "12.0", arch = "8.6" } },
+  ]
+  ```
+
+  `driver` is exactly equivalent to the bare `cuda = "12.0"` form. Per the
+  conda CEP, `__cuda_arch` is meaningless without `__cuda`, so `arch` requires
+  `driver`; declaring `arch` (or a raw `__cuda_arch`) alone is rejected.
+
+- For virtual packages without a friendly key, a raw `__name = "version"` entry is also accepted as an escape hatch. Only the virtual packages pixi knows how to override (`__win`, `__osx`, `__linux`, `__cuda`, `__archspec`, and the libc family `__glibc`/`__musl`/`__eglibc`) take effect at detection; any other raw `__name` is stored but ignored when checking host compatibility.
+
+A feature's `platforms` array is a list of names that must each resolve to a workspace platform (or be a bare conda subdir, which Pixi treats as an alias for that subdir).
+This is how you bind a feature to the rich variant:
+
+```toml title="pixi.toml"
+[workspace]
+platforms = [
+  "osx-arm64",
+  { platform = "linux-64", cuda = "12.0" },
+]
+
+[feature.gpu]
+platforms = ["linux-64-cuda-12-0"]  # the synthesized name for the entry above
+```
+
+!!! note "Platform names in `pixi.lock`"
+    Platforms are written to `pixi.lock` under the same name the manifest
+    uses (explicit or synthesized), so tools that consume the lock file can
+    look up a platform by its manifest name. Renaming a platform in
+    `pixi.toml` never requires a re-solve: Pixi matches the locked entries to
+    the manifest by their contents (subdir plus declared virtual packages)
+    when the lock file is read, and the next `pixi lock` rewrites just the
+    names. Lock files from older Pixi versions that used short aliases
+    (`p1`, `p2`, ...) are matched the same way and updated on their next
+    write.
+
+### Adding the current machine
+
+To get binaries optimized for the machine you are on, let Pixi detect it for you instead of writing the inline table by hand:
+
+```shell
+pixi workspace platform add --auto-detect
+```
+
+With `--auto-detect`, Pixi resolves the current subdir and the virtual packages it detects on the host (macOS version, glibc, archspec, CUDA, ...) into a concrete platform entry.
+It inserts this platform **first** in `platforms`, so it wins [platform selection](#platform-definition) on this machine.
+Because it writes a normal entry to `pixi.toml`, the result is checked in and shared with everyone using the workspace.
+
+```shell
+# Give the detected platform a custom name instead of the synthesized one.
+pixi workspace platform add my-laptop --auto-detect
+
+# Override individual virtual packages on top of what was detected.
+pixi workspace platform add --auto-detect --cuda 12.4
+```
+
+Pixi deduplicates by definition (subdir plus declared virtual packages), not by name: if an entry with the same definition already exists it is reused and moved to the front rather than duplicated.
+Adding a platform whose definition already exists under a *different* name is rejected: two names for one definition would only produce a redundant duplicate solve.
+
+!!! tip "Trim it for portability"
+    Auto-detection captures your machine exactly, which is usually more specific than your packages actually need.
+    After installing, `pixi info` reports each environment's **Minimum platform** (the virtual-package requirements some resolved dependency really places on the machine), so you can see which ones are safe to drop with `pixi workspace platform edit`.
+
+### Managing platforms from the CLI
+
+[`pixi workspace platform`](../reference/cli/pixi/workspace/platform/index.md) is the CLI surface for these entries:
+
+- `pixi workspace platform add <PLATFORM> [--cuda 12.0] [--cuda-arch 8.6] [--glibc 2.28] ...`
+  appends bare subdirs or rich platforms (or the current machine via
+  `--auto-detect`, see above). `--cuda-arch` requires `--cuda` (or
+  an existing `__cuda`) and serializes as `cuda = { driver, arch }`.
+- `pixi workspace platform edit <NAME> [--cuda 12.1] [--remove-virtual-package __glibc]` mutates a custom platform's declared virtual packages.
+- `pixi workspace platform move <NAME> --to-top | --to-bottom | --before <NAME> | --after <NAME>` reorders an entry; since order is selection priority, this is how you promote or demote a platform.
+- `pixi workspace platform list` inspects what is declared.
+- `pixi workspace platform remove <NAME>` drops an entry.
+
+The mutating subcommands keep `pixi.lock` in sync.
+
 ## Target specifier
 
 With the target specifier, you can overwrite the original configuration specifically for a single platform.
@@ -84,7 +208,7 @@ We also specifically want `python` on `3.8` when installing on Windows.
 This will overwrite the dependencies from the generic set of dependencies.
 This will not touch any of the other platforms.
 
-You can use pixi's cli to add these dependencies to the manifest file.
+You can use pixi's CLI to add these dependencies to the manifest file.
 
 ```shell
 pixi add --platform win-64 posix
@@ -122,3 +246,30 @@ scripts = ["setup.sh", "local_setup.bash"]
 scripts = ["setup.bat", "local_setup.bat"]
 ```
 When this workspace is used on `win-64` it will only execute the target scripts not the scripts specified in the default `activation.scripts`
+
+### Wildcard platform selectors
+
+When several [workspace platforms](#declaring-virtual-packages-per-platform) share configuration, you can match them with a `*` wildcard in the target selector instead of repeating each block.
+The pattern is matched against the platform *name*, so it is most useful together with custom platform names:
+
+```toml title="pixi.toml"
+[workspace]
+platforms = [
+  { name = "cuda-win-64", platform = "win-64", cuda = "12" },
+  { name = "cuda-linux-64", platform = "linux-64", cuda = "12" },
+  "win-64",
+  "linux-64",
+]
+
+[target."cuda-*".tasks]
+test = "python test.py --cuda"
+train = "python train.py --cuda"
+```
+
+Here both `cuda-win-64` and `cuda-linux-64` pick up the `test` and `train` tasks, while the bare `win-64` and `linux-64` platforms do not.
+
+A few details:
+
+- `*` is the only metacharacter and matches any run of characters. Patterns are matched in full and are case-sensitive (`cuda-*`, `*-64`, `*cuda*`).
+- When more than one selector matches a platform, the one defined **later** in the manifest wins, the same way `[target.linux]` and `[target.linux-64]` already combine. Place a specific `[target.cuda-win-64]` override *after* the `[target."cuda-*"]` block.
+- Wildcards are only allowed on workspace and feature targets. They are rejected in `[package.target]` and `[package.build.target]`, which resolve by subdir.

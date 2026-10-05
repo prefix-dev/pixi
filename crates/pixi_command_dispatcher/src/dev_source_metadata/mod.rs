@@ -7,7 +7,7 @@ use miette::Diagnostic;
 use pixi_build_types::{ConstraintSpec, PackageSpec};
 use pixi_compute_engine::{ComputeCtx, Key};
 use pixi_record::{DevSourceRecord, PinnedSourceSpec};
-use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceLocationSpec};
+use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceSpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::PackageName;
 use thiserror::Error;
@@ -57,6 +57,17 @@ pub enum DevSourceMetadataError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     PackageNotProvided(#[from] PackageNotProvidedError),
+}
+
+impl DevSourceMetadataError {
+    /// Returns the backend discovery failure this error ultimately stems
+    /// from, if any.
+    pub fn discovery_error(&self) -> Option<&pixi_build_discovery::DiscoveryError> {
+        match self {
+            DevSourceMetadataError::BuildBackendMetadata(err) => err.discovery_error(),
+            _ => None,
+        }
+    }
 }
 
 /// Error for when a package is not provided by the source.
@@ -156,7 +167,7 @@ impl Key for DevSourceMetadataKey {
             .map_err(|e| DevSourceMetadataError::BuildBackendMetadata(Box::new(e)))?;
 
         // Create a SourceAnchor for resolving relative paths in dependencies.
-        let source_anchor = SourceAnchor::from(SourceLocationSpec::from(
+        let source_anchor = SourceAnchor::from(SourceSpec::from(
             build_backend_metadata.source.manifest_source().clone(),
         ));
 
@@ -225,8 +236,9 @@ impl DevSourceMetadataSpec {
                         // Match directly on PackageSpec
                         let resolved_spec = match &depend.spec {
                             PackageSpec::Binary(binary) => {
-                                let spec =
-                                    crate::build::conversion::from_binary_spec_v1(binary.clone());
+                                let spec = crate::build::conversion::from_binary_spec_v1(
+                                    (**binary).clone(),
+                                );
                                 PixiSpec::from(spec)
                             }
                             PackageSpec::Source(source) => {
@@ -234,10 +246,10 @@ impl DevSourceMetadataSpec {
                                     crate::build::conversion::from_source_spec_v1(source.clone());
                                 PixiSpec::from(spec.resolve(source_anchor))
                             }
-                            PackageSpec::PinCompatible(_) => {
-                                // Just ignore the pin compatible dependency. Since we are also adding
-                                // the dependencies for build and host directly the pin_compatible
-                                // wouldnt have any effect anyway.
+                            PackageSpec::PinCompatible(_) | PackageSpec::PinSubpackage(_) => {
+                                // Ignore pin dependencies. Since the build and
+                                // host dependencies are also added directly, a
+                                // pin would not have any effect anyway.
                                 continue;
                             }
                         };
@@ -248,10 +260,13 @@ impl DevSourceMetadataSpec {
                     for constraint in &deps.constraints {
                         let name = PackageName::new_unchecked(constraint.name.as_str());
 
-                        // Match on ConstraintSpec enum
                         let spec = match &constraint.spec {
                             ConstraintSpec::Binary(binary) => {
-                                conversion::from_binary_spec_v1(binary.clone())
+                                conversion::from_binary_spec_v1((**binary).clone())
+                            }
+                            ConstraintSpec::PinCompatible(_) | ConstraintSpec::PinSubpackage(_) => {
+                                // Same as above: pins have no effect here.
+                                continue;
                             }
                         };
 

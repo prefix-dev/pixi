@@ -208,19 +208,46 @@ impl<T: Tracker> State<T> {
             .iter()
             .max_by(|a, b| a.tracker.cmp(&b.tracker));
         let wide_msg = match (first, running_items.len()) {
-            (None, _) => String::new(),
             (Some(first), 1) => first.tracker.name().to_string(),
             (Some(first), _) => {
-                format!("{} (+{})", first.tracker.name(), running_items.len() - 1,)
+                format!("{} (+{})", first.tracker.name(), running_items.len() - 1)
+            }
+            (None, _) => {
+                // Nothing actively running, but if there are still
+                // queued items, surface one so the bar isn't visually
+                // dead while the dispatcher is waiting on a slot.
+                let mut seen_queued = HashSet::new();
+                let queued_items = tracker
+                    .values()
+                    .filter(|item| item.started.is_none() && item.finished.is_none())
+                    .filter(|item| seen_queued.insert(item.tracker.name()))
+                    .collect::<Vec<_>>();
+                let first_queued = queued_items.iter().max_by(|a, b| a.tracker.cmp(&b.tracker));
+                match (first_queued, queued_items.len()) {
+                    (Some(first), 1) => format!("queued: {}", first.tracker.name()),
+                    (Some(first), _) => {
+                        format!(
+                            "queued: {} (+{})",
+                            first.tracker.name(),
+                            queued_items.len() - 1
+                        )
+                    }
+                    (None, _) => String::new(),
+                }
             }
         };
 
+        // Treat anything that hasn't finished yet (queued OR running) as
+        // pending so the spinner animates while we're waiting on a slot
+        // and only goes dim when there's truly nothing in flight.
+        let has_pending = tracker.values().any(|item| item.finished.is_none());
+
         // Set the style of the progress bar.
-        let active = !running_items.is_empty();
+        let active = has_pending;
         self.pb.set_style(
             ProgressStyle::with_template(
                 &format!("{{spinner:.{spinner}}} {{prefix:20!}} [{{bar:20!.bright.yellow/dim.white}}] {{pos_count:>2.dim}}{slash}{{len_count:2.dim}} {{wide_msg:.dim}}",
-                         spinner = if running_items.is_empty() { "dim" } else { "green" },
+                         spinner = if has_pending { "green" } else { "dim" },
                          slash = console::style("/").dim(),
                 ))
                 .expect("failed to create progress bar style")

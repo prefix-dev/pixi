@@ -6,14 +6,16 @@ import sys
 from collections.abc import Sequence
 from enum import IntEnum
 from pathlib import Path
-from typing import override
+from typing import Any, override
 
+import pytest
+import tomli
 from rattler import Platform
 
 # Regex pattern to match ANSI escape sequences
 ANSI_ESCAPE_PATTERN = re.compile(r"\x1b\[[0-9;]*m")
 
-PIXI_VERSION = "0.69.0"
+PIXI_VERSION = "0.81.0"
 
 
 ALL_PLATFORMS = '["linux-64", "osx-64", "osx-arm64", "win-64", "linux-ppc64le", "linux-aarch64"]'
@@ -65,6 +67,7 @@ def verify_cli_command(
     cwd: str | Path | None = None,
     reset_env: bool = False,
     strip_ansi: bool = False,
+    stdin: str | bytes | None = None,
 ) -> Output:
     if reset_env:
         base_env = {}
@@ -85,6 +88,8 @@ def verify_cli_command(
         capture_output=True,
         env=complete_env,
         cwd=cwd,
+        input=stdin.encode() if isinstance(stdin, str) else stdin,
+        check=False,
     )
     # Decode stdout and stderr explicitly using UTF-8
     stdout = process.stdout.decode("utf-8", errors="replace")
@@ -184,6 +189,26 @@ def get_manifest(directory: Path) -> Path:
         raise ValueError("Neither pixi.toml nor pyproject.toml found")
 
 
+def workspace_platforms(manifest: Path) -> list[str]:
+    """Return the platforms declared in a pixi manifest's workspace table."""
+    data: dict[str, Any] = tomli.loads(manifest.read_text())
+    if manifest.name == "pyproject.toml":
+        tool: dict[str, Any] = data.get("tool", {})
+        pixi_table: dict[str, Any] = tool.get("pixi", {})
+    else:
+        pixi_table = data
+    workspace: dict[str, Any] = pixi_table.get("workspace") or pixi_table.get("project") or {}
+    platforms: list[str] = workspace.get("platforms", [])
+    return platforms
+
+
+def skip_if_current_platform_unsupported(manifest: Path) -> None:
+    """Skip the test when the workspace does not declare the current platform."""
+    platforms = workspace_platforms(manifest)
+    if platforms and current_platform() not in platforms:
+        pytest.skip(f"{current_platform()} is not in the workspace platforms {platforms}")
+
+
 def run_and_get_env(pixi: Path, *args: str, env_var: str) -> tuple[str | None, Output]:
     if sys.platform.startswith("win"):
         cmd = [str(pixi), "exec", *args, "--", "cmd", "/c", f"echo %{env_var}%"]
@@ -192,11 +217,7 @@ def run_and_get_env(pixi: Path, *args: str, env_var: str) -> tuple[str | None, O
 
     try:
         result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
+            cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False
         )
 
         value = result.stdout.strip()
@@ -240,7 +261,12 @@ def discover_pixi_commands() -> set[str]:
 
         # Convert file path to command format
         # e.g., "workspace/channel/add.md" -> "pixi workspace channel add"
-        command_parts = ["pixi"] + list(relative_path.parts[:-1]) + [relative_path.stem]
+        # Commands with subcommands are documented as the index page of their
+        # directory, e.g. "workspace/channel/index.md" -> "pixi workspace channel"
+        if relative_path.stem == "index":
+            command_parts = ["pixi"] + list(relative_path.parts[:-1])
+        else:
+            command_parts = ["pixi"] + list(relative_path.parts[:-1]) + [relative_path.stem]
         command = " ".join(command_parts)
         commands.add(command)
 
@@ -264,9 +290,12 @@ def check_command_supports_flags(command_parts: list[str], *flag_names: str) -> 
         check_command_supports_flags(["shell"], "--frozen", "--locked", "--no-install")
         # Returns: (False, True, True) if only --locked and --no-install are supported
     """
-    # Build the documentation file path
+    # Build the documentation file path. Commands with subcommands are
+    # documented as the index page of their directory.
     docs_path = repo_root() / "docs" / "reference" / "cli" / "pixi"
     doc_file = docs_path / Path(*command_parts).with_suffix(".md")
+    if not doc_file.exists():
+        doc_file = docs_path / Path(*command_parts) / "index.md"
 
     if not doc_file.exists():
         return tuple(False for _ in flag_names)
@@ -281,7 +310,7 @@ def check_command_supports_flags(command_parts: list[str], *flag_names: str) -> 
 
         return tuple(results)
 
-    except (OSError, IOError):
+    except OSError:
         return tuple(False for _ in flag_names)
 
 

@@ -1,24 +1,18 @@
 [package]
-edition.workspace = true
-license.workspace = true
 name = "pixi_build_backend"
 version = "0.1.7"
-
-[features]
-default = ["rustls"]
-# Use rustls for TLS (pure Rust implementation)
-rustls = ["rattler_build_core/rustls"]
-# Use native-tls/OpenSSL for TLS
-native-tls = ["rattler_build_core/native-tls"]
+edition.workspace = true
+license.workspace = true
 
 [dependencies]
 async-trait = { workspace = true }
-chrono = { workspace = true }
 clap = { workspace = true, features = ["derive", "env"] }
 clap-verbosity-flag = { workspace = true }
 fs-err = { workspace = true }
+hex = { workspace = true }
 indexmap = { workspace = true }
 itertools = { workspace = true }
+jiff = { workspace = true }
 miette = { workspace = true }
 minijinja = { workspace = true }
 ordermap = { workspace = true }
@@ -47,7 +41,13 @@ jsonrpc-core = { workspace = true }
 jsonrpc-http-server = { workspace = true }
 jsonrpc-stdio-server = { workspace = true }
 
-
 [dev-dependencies]
-insta = { version = "1.42.1", features = ["yaml", "redactions", "filters"] }
+insta = { version = "1.42.1", features = ["filters", "redactions", "yaml"] }
 toml = { version = "1.0.0" }
+
+[features]
+default = ["rustls"]
+# Use native-tls/OpenSSL for TLS
+native-tls = ["rattler_build_core/native-tls"]
+# Use rustls for TLS (pure Rust implementation)
+rustls = ["rattler_build_core/rustls"]

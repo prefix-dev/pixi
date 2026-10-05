@@ -15,18 +15,72 @@ use pixi_manifest::pypi::{
         PypiOptions,
     },
 };
-use pixi_record::{LockedGitUrl, PinnedGitCheckout, PinnedGitSpec};
+use pixi_record::{
+    CondaEnvironmentFingerprint, LockedGitUrl, PinnedGitCheckout, PinnedGitSpec, PixiRecord,
+};
 use pixi_spec::GitReference as PixiReference;
 use std::{collections::HashSet, fmt::Write};
 use uv_configuration::BuildOptions;
 use uv_configuration::TrustedHost;
-use uv_distribution_types::{GitSourceDist, Index, IndexLocations, IndexUrl};
+use uv_distribution_types::{
+    ConfigSettingEntry, ConfigSettings, GitSourceDist, Index, IndexLocations, IndexUrl,
+};
 use uv_normalize::{InvalidNameError, PackageName};
 use uv_pep508::{VerbatimUrl, VerbatimUrlError};
 use uv_python::PythonEnvironment;
 use uv_redacted::DisplaySafeUrl;
 
-use crate::{ConversionError, VersionError};
+use crate::{ConversionError, VersionError, WorkspaceAnchor};
+
+/// `config_settings` key carrying the conda-environment fingerprint.
+const CONDA_ENVIRONMENT_CONFIG_SETTING: &str = "pixi-conda-environment";
+
+/// Cache-only key for pixi's implicit `MACOSX_DEPLOYMENT_TARGET`.
+const MACOS_DEPLOYMENT_TARGET_CONFIG_SETTING: &str = "pixi-macos-deployment-target";
+
+/// Builds the [`ConfigSettings`] used to scope the PyPI source-build cache to the
+/// conda environment: a wheel built against one set of conda dependencies is not
+/// reused in an environment that resolves different ones (issue #6226).
+///
+/// The result is `config_settings` (the settings handed to the PEP 517 backend)
+/// with the conda-environment fingerprint layered on top, so the cache key always
+/// reflects the real backend settings as well; should those stop being empty, the
+/// scoping keeps working.
+///
+/// uv folds `config_settings` into the built-wheel cache key, so this is applied
+/// globally. It must only be used as the build context's *cache* settings, never
+/// handed to the build dispatch that invokes the PEP 517 backend, since strict
+/// backends like meson-python reject unknown keys (issue #6271).
+pub fn pypi_cache_config_settings(
+    config_settings: &ConfigSettings,
+    conda_records: &[PixiRecord],
+) -> ConfigSettings {
+    let fingerprint = CondaEnvironmentFingerprint::new(conda_records);
+    let entry =
+        ConfigSettingEntry::from_str(&format!("{CONDA_ENVIRONMENT_CONFIG_SETTING}={fingerprint}"))
+            .expect("the fingerprint is always a valid `KEY=VALUE` config setting");
+    let fingerprint_settings: ConfigSettings = std::iter::once(entry).collect();
+    config_settings.clone().merge(fingerprint_settings)
+}
+
+/// Add pixi's implicit `MACOSX_DEPLOYMENT_TARGET` to uv's source-build cache
+/// key. The variable affects wheel tags, but third-party sdists may not declare
+/// it in `[tool.uv].cache-keys`.
+pub fn pypi_cache_config_settings_with_macos_deployment_target(
+    config_settings: &ConfigSettings,
+    macos_deployment_target: Option<&str>,
+) -> ConfigSettings {
+    let Some(target) = macos_deployment_target else {
+        return config_settings.clone();
+    };
+
+    let entry = ConfigSettingEntry::from_str(&format!(
+        "{MACOS_DEPLOYMENT_TARGET_CONFIG_SETTING}={target}"
+    ))
+    .expect("the macOS deployment target is always a valid `KEY=VALUE` config setting");
+    let target_settings: ConfigSettings = std::iter::once(entry).collect();
+    config_settings.clone().merge(target_settings)
+}
 
 #[derive(thiserror::Error, Debug)]
 pub enum ConvertFlatIndexLocationError {
@@ -308,7 +362,7 @@ pub fn into_pixi_reference(git_reference: uv_git_types::GitReference) -> PixiRef
 /// If no original reference is provided, which happens for git deps that
 /// aren't top-level workspace deps (e.g. transitive deps coming in through an
 /// editable self-package's `requires_dist`, issue #5661), fall back to
-/// whatever reference uv resolved. That keeps the lock-file
+/// whatever reference uv resolved. That keeps the lock file
 /// `?branch=/?tag=/?rev=` in sync with what the manifest's PEP 508 string
 /// actually says, so the satisfiability check matches without relying on the
 /// no-ref fallback.
@@ -335,7 +389,10 @@ pub fn into_pinned_git_spec(
             .and_then(|sd| pixi_spec::Subdirectory::try_from(sd.to_path_buf()).ok())
             .unwrap_or_default(),
         reference,
-    );
+    )
+    // Record only an enabled LFS preference: disabled is uv's default and
+    // recording it would churn lock files of projects that never use LFS.
+    .with_lfs(dist.git.lfs().enabled().then_some(true));
 
     // `url()` is the original URL; `repository()` is the canonical
     // (lowercased + `.git`-stripped) form that would corrupt the lockfile
@@ -373,7 +430,7 @@ pub fn to_parsed_git_url(
             },
             into_uv_git_reference(git_source.reference.into()),
             Some(into_uv_git_sha(git_source.commit)),
-            uv_git_types::GitLfs::Disabled,
+            to_uv_git_lfs(git_source.lfs),
         )
         .into_diagnostic()?,
         if git_source.subdirectory.is_empty() {
@@ -392,6 +449,16 @@ pub fn to_parsed_git_url(
     Ok(parsed_git_url)
 }
 
+/// Converts a manifest LFS preference into the uv equivalent. uv only knows
+/// on/off, so `None` (no opinion) maps to `Disabled`, uv's default.
+pub fn to_uv_git_lfs(lfs: Option<bool>) -> uv_git_types::GitLfs {
+    if lfs == Some(true) {
+        uv_git_types::GitLfs::Enabled
+    } else {
+        uv_git_types::GitLfs::Disabled
+    }
+}
+
 /// Converts from the open-source variant to the uv-specific variant,
 /// these are incompatible types
 pub fn to_uv_specifiers(
@@ -402,6 +469,21 @@ pub fn to_uv_specifiers(
 
 pub fn to_requirements<'req>(
     requirements: impl Iterator<Item = &'req uv_distribution_types::Requirement>,
+) -> Result<Vec<pep508_rs::Requirement>, crate::ConversionError> {
+    to_requirements_relative_to(requirements, None)
+}
+
+/// Same as [`to_requirements`], but re-anchors the `given` on file-URL path/directory
+/// requirements to the workspace root carried by `anchor`.
+///
+/// uv may emit a `given` relative to a nested package's `[tool.uv.sources]`
+/// (e.g. `../pkg-b` inside `workspace/pkg-a`). The pixi lockfile resolves relative paths against
+/// itself (== workspace root), so that `given` mislocates the dep after a round-trip
+/// (#4573). Passing `Some(anchor)` re-anchors the `given` to the workspace root;
+/// passing `None` keeps it as-is.
+pub fn to_requirements_relative_to<'req>(
+    requirements: impl Iterator<Item = &'req uv_distribution_types::Requirement>,
+    anchor: Option<&WorkspaceAnchor<'_>>,
 ) -> Result<Vec<pep508_rs::Requirement>, crate::ConversionError> {
     let requirements: Result<Vec<pep508_rs::Requirement>, ConversionError> = requirements
         .map(|requirement| {
@@ -463,7 +545,10 @@ pub fn to_requirements<'req>(
                 }
                 uv_distribution_types::RequirementSource::Path { url, .. }
                 | uv_distribution_types::RequirementSource::Directory { url, .. } => {
-                    verbatim_url = url.given().map(|g| {
+                    let given = anchor
+                        .and_then(|a| a.relative_given_for_file_url(url))
+                        .or_else(|| url.given().map(str::to_owned));
+                    verbatim_url = given.map(|g| {
                         pep508_rs::VersionOrUrl::Url(
                             pep508_rs::VerbatimUrl::from_url((*url.to_url()).clone()).with_given(g),
                         )
@@ -567,6 +652,29 @@ pub fn to_uv_version(
         uv_pep440::Version::from_str(version.to_string().as_str())
             .map_err(VersionError::UvError)?,
     )
+}
+
+/// Converts the locked [`rattler_lock::PackageHashes`] into the uv
+/// [`uv_pypi_types::HashDigest`] representation.
+pub fn to_uv_hash_digests(hash: &rattler_lock::PackageHashes) -> Vec<uv_pypi_types::HashDigest> {
+    use uv_pypi_types::{HashAlgorithm, HashDigest};
+
+    let md5_digest = |md5: &rattler_digest::Md5Hash| HashDigest {
+        algorithm: HashAlgorithm::Md5,
+        digest: hex::encode(md5).into(),
+    };
+    let sha256_digest = |sha256: &rattler_digest::Sha256Hash| HashDigest {
+        algorithm: HashAlgorithm::Sha256,
+        digest: hex::encode(sha256).into(),
+    };
+
+    match hash {
+        rattler_lock::PackageHashes::Md5(md5) => vec![md5_digest(md5)],
+        rattler_lock::PackageHashes::Sha256(sha256) => vec![sha256_digest(sha256)],
+        rattler_lock::PackageHashes::Md5Sha256(md5, sha256) => {
+            vec![md5_digest(md5), sha256_digest(sha256)]
+        }
+    }
 }
 
 /// Converts `pep508_rs::MarkerTree` to `uv_pep508::MarkerTree`
@@ -681,16 +789,7 @@ pub fn configure_insecure_hosts_for_tls_bypass(
 fn to_exclude_newer_timestamp(
     exclude_newer: chrono::DateTime<chrono::Utc>,
 ) -> uv_resolver::ExcludeNewerValue {
-    let seconds_since_epoch = exclude_newer.timestamp();
-    let nanoseconds = exclude_newer.timestamp_subsec_nanos();
-    let timestamp = jiff::Timestamp::new(seconds_since_epoch, nanoseconds as _).unwrap_or(
-        if seconds_since_epoch < 0 {
-            jiff::Timestamp::MIN
-        } else {
-            jiff::Timestamp::MAX
-        },
-    );
-    timestamp.into()
+    pixi_spec::to_saturating_jiff_timestamp(exclude_newer).into()
 }
 
 /// Converts a resolved PyPI exclude-newer configuration to `uv_resolver::ExcludeNewer`.
@@ -875,7 +974,149 @@ mod tests {
         assert_eq!(converted[0].to_string(), "isaaclab");
     }
 
-    /// #6185: lockfile URL must keep original casing and `.git` suffix.
+    /// Regression test for <https://github.com/prefix-dev/pixi/issues/4573>:
+    /// a requirement that bubbles up out of a nested package's `[tool.uv.sources]`
+    /// (e.g. `../pkg-b` inside `workspace/pkg-a`) carries a `given` relative to that nested
+    /// package, not the workspace. The lockfile resolves relative paths against itself, so the
+    /// writer must re-anchor against the workspace root or the dep is mislocated on load.
+    #[test]
+    fn to_requirements_re_anchors_nested_tool_uv_sources_given() {
+        use uv_distribution_types::{Requirement as UvRequirement, RequirementSource};
+        use uv_pep508::MarkerTree;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let workspace_root = tmp.path();
+        let pkg_a = workspace_root.join("pkg-a");
+        let pkg_b = workspace_root.join("pkg-b");
+        fs_err::create_dir_all(&pkg_a).unwrap();
+        fs_err::create_dir_all(&pkg_b).unwrap();
+
+        // Mirror what uv produces when lowering pkg-a's [tool.uv.sources]:
+        // url resolved against pkg-a (absolute), given still `../pkg-b`.
+        let pkg_b_url = uv_pep508::VerbatimUrl::from_path("../pkg-b", &pkg_a)
+            .unwrap()
+            .with_given("../pkg-b");
+        assert_eq!(pkg_b_url.given(), Some("../pkg-b"));
+
+        let uv_req = UvRequirement {
+            name: uv_normalize::PackageName::from_str("pkg-b").unwrap(),
+            extras: Box::new([]),
+            groups: Box::new([]),
+            marker: MarkerTree::TRUE,
+            source: RequirementSource::Directory {
+                install_path: pkg_b.clone().into_boxed_path(),
+                editable: None,
+                r#virtual: Some(false),
+                url: pkg_b_url,
+            },
+            origin: None,
+        };
+
+        // Without `workspace_root`, the wrongly-anchored `given` is preserved.
+        let preserved = to_requirements(std::iter::once(&uv_req)).unwrap();
+        let Some(pep508_rs::VersionOrUrl::Url(url)) = &preserved[0].version_or_url else {
+            panic!("expected URL requirement");
+        };
+        assert_eq!(url.given(), Some("../pkg-b"));
+
+        // With `workspace_root`, the `given` is re-anchored to `./pkg-b`,
+        // which the lockfile will resolve back to the same absolute path.
+        let anchor = WorkspaceAnchor::new(workspace_root);
+        let reanchored =
+            to_requirements_relative_to(std::iter::once(&uv_req), Some(&anchor)).unwrap();
+        let Some(pep508_rs::VersionOrUrl::Url(url)) = &reanchored[0].version_or_url else {
+            panic!("expected URL requirement");
+        };
+        assert_eq!(url.given(), Some("./pkg-b"));
+    }
+
+    /// Absolute `given` (bare `/abs/path`, not `file://`) must survive re-anchoring
+    /// for users who explicitly pin an absolute path.
+    #[test]
+    fn to_requirements_preserves_absolute_given() {
+        use uv_distribution_types::{Requirement as UvRequirement, RequirementSource};
+        use uv_pep508::MarkerTree;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let workspace_root = tmp.path();
+        let pkg_b = tmp.path().join("other").join("pkg-b");
+        fs_err::create_dir_all(&pkg_b).unwrap();
+
+        // Simulate a user writing `pkg-b = { path = "/abs/.../pkg-b" }`
+        // uv stores an absolute bare path as the `given`, not a `file://` URL
+        let pkg_b_url = uv_pep508::VerbatimUrl::from_absolute_path(&pkg_b)
+            .unwrap()
+            .with_given(pkg_b.to_str().unwrap());
+        assert!(
+            pkg_b_url
+                .given()
+                .is_some_and(|g| std::path::Path::new(g).is_absolute())
+        );
+        let abs_given = pkg_b_url.given().unwrap().to_owned();
+
+        let uv_req = UvRequirement {
+            name: uv_normalize::PackageName::from_str("pkg-b").unwrap(),
+            extras: Box::new([]),
+            groups: Box::new([]),
+            marker: MarkerTree::TRUE,
+            source: RequirementSource::Directory {
+                install_path: pkg_b.clone().into_boxed_path(),
+                editable: None,
+                r#virtual: Some(false),
+                url: pkg_b_url,
+            },
+            origin: None,
+        };
+
+        let anchor = WorkspaceAnchor::new(workspace_root);
+        let reanchored =
+            to_requirements_relative_to(std::iter::once(&uv_req), Some(&anchor)).unwrap();
+        let Some(pep508_rs::VersionOrUrl::Url(url)) = &reanchored[0].version_or_url else {
+            panic!("expected URL requirement");
+        };
+        assert_eq!(url.given(), Some(abs_given.as_str()));
+    }
+
+    /// Re-anchoring is a no-op when the `given` already resolves against the workspace root.
+    #[test]
+    fn to_requirements_leaves_workspace_relative_given_alone() {
+        use uv_distribution_types::{Requirement as UvRequirement, RequirementSource};
+        use uv_pep508::MarkerTree;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let workspace_root = tmp.path();
+        let pkg_b = workspace_root.join("pkg-b");
+        fs_err::create_dir_all(&pkg_b).unwrap();
+
+        let pkg_b_url = uv_pep508::VerbatimUrl::from_path("./pkg-b", workspace_root)
+            .unwrap()
+            .with_given("./pkg-b");
+        assert_eq!(pkg_b_url.given(), Some("./pkg-b"));
+
+        let uv_req = UvRequirement {
+            name: uv_normalize::PackageName::from_str("pkg-b").unwrap(),
+            extras: Box::new([]),
+            groups: Box::new([]),
+            marker: MarkerTree::TRUE,
+            source: RequirementSource::Directory {
+                install_path: pkg_b.clone().into_boxed_path(),
+                editable: None,
+                r#virtual: Some(false),
+                url: pkg_b_url,
+            },
+            origin: None,
+        };
+
+        let anchor = WorkspaceAnchor::new(workspace_root);
+        let reanchored =
+            to_requirements_relative_to(std::iter::once(&uv_req), Some(&anchor)).unwrap();
+        let Some(pep508_rs::VersionOrUrl::Url(url)) = &reanchored[0].version_or_url else {
+            panic!("expected URL requirement");
+        };
+        assert_eq!(url.given(), Some("./pkg-b"));
+    }
+
+    /// #6185: lock file URL must keep original casing and `.git` suffix.
     #[test]
     fn into_pinned_git_spec_preserves_original_url() {
         use uv_distribution_types::GitSourceDist;
@@ -905,5 +1146,46 @@ mod tests {
         let pinned = into_pinned_git_spec(dist, None);
 
         assert_eq!(pinned.git.as_str(), original);
+    }
+
+    /// #6271/#6226: the cache settings carry the conda-environment fingerprint on
+    /// top of the given backend settings, so the cache key reflects both.
+    #[test]
+    fn pypi_cache_config_settings_layers_fingerprint_on_base() {
+        use pixi_record::CondaEnvironmentFingerprint;
+
+        let base: ConfigSettings =
+            std::iter::once(ConfigSettingEntry::from_str("backend-key=backend-value").unwrap())
+                .collect();
+        let settings = pypi_cache_config_settings(&base, &[]);
+
+        let rendered = settings.escape_for_python();
+        // The fingerprint of the (here empty) conda environment is present...
+        let expected = CondaEnvironmentFingerprint::new(&[]).to_string();
+        assert!(rendered.contains(CONDA_ENVIRONMENT_CONFIG_SETTING));
+        assert!(rendered.contains(&expected));
+        // ...and the base backend settings are preserved.
+        assert!(rendered.contains("backend-key"));
+        assert!(rendered.contains("backend-value"));
+    }
+
+    #[test]
+    fn pypi_cache_config_settings_with_macos_deployment_target_layers_on_base() {
+        let base: ConfigSettings =
+            std::iter::once(ConfigSettingEntry::from_str("backend-key=backend-value").unwrap())
+                .collect();
+        let settings = pypi_cache_config_settings_with_macos_deployment_target(&base, Some("12.0"));
+
+        let rendered = settings.escape_for_python();
+        assert!(rendered.contains(MACOS_DEPLOYMENT_TARGET_CONFIG_SETTING));
+        assert!(rendered.contains("12.0"));
+        assert!(rendered.contains("backend-key"));
+        assert!(rendered.contains("backend-value"));
+
+        let without_target = pypi_cache_config_settings_with_macos_deployment_target(&base, None);
+        let rendered = without_target.escape_for_python();
+        assert!(!rendered.contains(MACOS_DEPLOYMENT_TARGET_CONFIG_SETTING));
+        assert!(rendered.contains("backend-key"));
+        assert!(rendered.contains("backend-value"));
     }
 }

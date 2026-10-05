@@ -19,8 +19,8 @@ use pixi_build_frontend::{
     json_rpc::CommunicationError,
 };
 use pixi_build_types::{
-    BackendCapabilities, BinaryPackageSpec, ConstraintSpec, NamedSpec, PackageSpec, ProjectModel,
-    SourcePackageName, Target, TargetSelector, Targets, VariantValue,
+    BackendCapabilities, BinaryPackageSpec, ConstraintSpec, ExtraGroupName, NamedSpec, PackageSpec,
+    ProjectModel, SourcePackageName, SourcePackageSpec, Target, Targets, VariantValue,
     procedures::{
         conda_build_v1::{CondaBuildV1Params, CondaBuildV1Result},
         conda_outputs::{
@@ -31,7 +31,7 @@ use pixi_build_types::{
     },
 };
 use rattler_conda_types::{
-    PackageName, Platform, Version, VersionSpec,
+    PackageName, Subdir, Version, VersionSpec,
     package::{IndexJson, PathType, PathsEntry, PathsJson, RunExportsJson},
 };
 use serde::Deserialize;
@@ -101,6 +101,7 @@ impl InMemoryBackend for PassthroughBackend {
         Ok(CondaOutputsResult {
             outputs,
             input_globs: Default::default(),
+            input_glob_sets: None,
         })
     }
 
@@ -138,7 +139,7 @@ impl InMemoryBackend for PassthroughBackend {
                 if self.config.noarch == Some(false) {
                     params.output.subdir
                 } else {
-                    Platform::NoArch
+                    Subdir::NoArch
                 }
             });
 
@@ -190,11 +191,28 @@ impl InMemoryBackend for PassthroughBackend {
                         .collect();
                 }
 
+                // Reflect the extra dependency groups into the package's
+                // `experimental_extra_depends` so consumers inspecting the built
+                // `.conda` see the expected extra groups.
+                modified_index_json.extra_depends = params
+                    .extra_dependencies
+                    .iter()
+                    .map(|(group, deps)| {
+                        (
+                            group.as_str().to_string(),
+                            deps.iter().map(|dep| dep.spec.to_string()).collect(),
+                        )
+                    })
+                    .collect();
+
                 create_conda_package_on_the_fly(&modified_index_json, &output_path).map_err(
                     |err| {
                         Box::new(
-                            BackendError::new(format!("failed to create conda package: {}", err))
-                                .into(),
+                            Box::new(BackendError::new(format!(
+                                "failed to create conda package: {}",
+                                err
+                            )))
+                            .into(),
                         )
                     },
                 )?;
@@ -205,6 +223,7 @@ impl InMemoryBackend for PassthroughBackend {
         Ok(CondaBuildV1Result {
             output_file,
             input_globs: self.config.build_globs.clone().unwrap_or_default(),
+            input_glob_sets: None,
             name: self.index_json.name.as_normalized().to_owned(),
             version: self.index_json.version.clone(),
             build: build_string,
@@ -294,6 +313,8 @@ fn generate_variant_outputs(
     package_run_exports: Option<&RunExportsJson>,
     config: &PassthroughBackendConfig,
 ) -> Vec<CondaOutput> {
+    reject_conditional_targets(project_model);
+
     // Check if we have variant configurations and dependencies with "*"
     let variant_keys = find_variant_keys(project_model, params);
 
@@ -384,22 +405,12 @@ fn find_variant_keys(project_model: &ProjectModel, params: &CondaOutputsParams) 
         }
     };
 
-    // Check default target
+    // Check default target. Conditional targets are rejected by
+    // `reject_conditional_targets` before this point.
     if let Some(default_target) = &targets.default_target {
         check_deps(default_target.build_dependencies.as_ref());
         check_deps(default_target.host_dependencies.as_ref());
         check_deps(default_target.run_dependencies.as_ref());
-    }
-
-    // Check platform-specific targets
-    if let Some(targets_map) = &targets.targets {
-        for (selector, target) in targets_map {
-            if matches_target_selector(selector, params.host_platform) {
-                check_deps(target.build_dependencies.as_ref());
-                check_deps(target.host_dependencies.as_ref());
-                check_deps(target.run_dependencies.as_ref());
-            }
-        }
     }
 
     variant_keys.into_iter().collect()
@@ -411,12 +422,14 @@ fn is_star_requirement(spec: &PackageSpec) -> bool {
         return false;
     };
 
-    match boxed {
+    match boxed.as_ref() {
         BinaryPackageSpec {
             version,
             build: None,
             build_number: None,
             file_name: None,
+            extras: None,
+            flags: None,
             channel: None,
             subdir: None,
             md5: None,
@@ -528,9 +541,15 @@ fn create_output(
             if config.noarch == Some(false) {
                 params.host_platform
             } else {
-                Platform::NoArch
+                Subdir::NoArch
             }
         });
+
+    let name = project_model
+        .name
+        .as_ref()
+        .map(|name| PackageName::try_from(name.as_str()).unwrap())
+        .unwrap_or_else(|| index_json.name.clone());
 
     // Track if there were actual variants before we add target_platform.
     // We only compute a build hash when there are real variants (not just target_platform).
@@ -548,7 +567,6 @@ fn create_output(
     let mut run_dependencies = extract_dependencies(
         &project_model.targets,
         |t| t.run_dependencies.as_ref(),
-        params.host_platform,
         &variant,
     );
 
@@ -556,7 +574,6 @@ fn create_output(
     let host_deps = extract_dependencies(
         &project_model.targets,
         |t| t.host_dependencies.as_ref(),
-        params.host_platform,
         &variant,
     );
 
@@ -575,95 +592,85 @@ fn create_output(
         }
     }
 
+    // Extra groups come from the project model, and -
+    // when the backend was handed a pre-built package - from its index.json.
+    let mut extra_dependencies = convert_extra_depends(&index_json.extra_depends);
+    for (group, specs) in extract_extra_dependencies(&project_model.targets, &variant) {
+        extra_dependencies.entry(group).or_default().extend(specs);
+    }
+
+    let output_version = project_model
+        .version
+        .as_ref()
+        .or_else(|| Some(index_json.version.version()))
+        .cloned()
+        .unwrap_or_else(|| Version::major(0));
+    let output_build = compute_build_string(&index_json.build, &variant, has_real_variants);
+
     CondaOutput {
         build_dependencies: Some(extract_dependencies(
             &project_model.targets,
             |t| t.build_dependencies.as_ref(),
-            params.host_platform,
             &variant,
         )),
         host_dependencies: Some(host_deps),
         run_dependencies,
+        extra_dependencies,
         metadata: CondaOutputMetadata {
-            name: project_model
-                .name
-                .as_ref()
-                .map(|name| PackageName::try_from(name.as_str()).unwrap())
-                .unwrap_or_else(|| index_json.name.clone()),
-            version: project_model
-                .version
-                .as_ref()
-                .or_else(|| Some(index_json.version.version()))
-                .cloned()
-                .unwrap_or_else(|| Version::major(0))
-                .into(),
-            build: compute_build_string(&index_json.build, &variant, has_real_variants),
+            name: name.clone(),
+            version: output_version.clone().into(),
+            build: output_build.clone(),
             build_number: index_json.build_number,
             subdir,
             license: project_model.license.clone(),
             license_family: None,
+            flags: index_json.flags.clone(),
+            track_features: index_json.track_features.clone(),
             noarch: index_json.noarch,
             purls: None,
             python_site_packages_path: None,
             variant,
         },
         ignore_run_exports: Default::default(),
-        run_exports: package_run_exports
-            .map(convert_run_exports_json)
-            .unwrap_or_default(),
+        // The output's own run-exports: the buckets declared in the project
+        // model, extended with those read from a pre-built package or - when
+        // no package was given - an instantiator-configured entry under this
+        // package's own name. Exported names the project model declares as
+        // source dependencies are emitted as source specs, mirroring real
+        // backends' `local_source_packages` mapping.
+        run_exports: {
+            let mut run_exports =
+                model_run_exports(&project_model.targets, &output_version, &output_build);
+            if let Some(extra) = package_run_exports
+                .or_else(|| run_exports_config.get(name.as_source()))
+                .map(|re| convert_run_exports_json(re, &model_source_specs(&project_model.targets)))
+            {
+                run_exports.weak.extend(extra.weak);
+                run_exports.strong.extend(extra.strong);
+                run_exports.noarch.extend(extra.noarch);
+                run_exports.weak_constrains.extend(extra.weak_constrains);
+                run_exports
+                    .strong_constrains
+                    .extend(extra.strong_constrains);
+            }
+            run_exports
+        },
         input_globs: None,
+        input_glob_sets: None,
     }
 }
 
 fn extract_dependencies<F: Fn(&Target) -> Option<&OrderMap<SourcePackageName, PackageSpec>>>(
     targets: &Option<Targets>,
     extract: F,
-    platform: Platform,
     variant: &BTreeMap<String, VariantValue>,
 ) -> CondaOutputDependencies {
-    let depends = targets
-        .iter()
-        .flat_map(|targets| {
-            targets
-                .default_target
-                .iter()
-                .chain(
-                    targets
-                        .targets
-                        .iter()
-                        .flatten()
-                        .flat_map(|(selector, target)| {
-                            matches_target_selector(selector, platform).then_some(target)
-                        }),
-                )
-                .flat_map(|target| extract(target).into_iter().flat_map(OrderMap::iter))
-                .map(|(name, spec)| {
-                    // If this is a star dependency and we have a variant for it, replace the spec
-                    let resolved_spec = if is_star_requirement(spec) {
-                        if let Some(variant_value) = variant.get(name.as_str()) {
-                            // Replace with a version spec using the variant value
-                            PackageSpec::Binary(BinaryPackageSpec {
-                                version: Some(
-                                    rattler_conda_types::VersionSpec::from_str(
-                                        variant_value.to_string().as_str(),
-                                        rattler_conda_types::ParseStrictness::Lenient,
-                                    )
-                                    .unwrap(),
-                                ),
-                                ..Default::default()
-                            })
-                        } else {
-                            spec.clone()
-                        }
-                    } else {
-                        spec.clone()
-                    };
-
-                    NamedSpec {
-                        name: name.clone(),
-                        spec: resolved_spec,
-                    }
-                })
+    let depends = applicable_targets(targets)
+        .into_iter()
+        .flat_map(|target| extract(target).into_iter().flat_map(OrderMap::iter))
+        .map(|(name, spec)| NamedSpec {
+            name: name.clone(),
+            spec: resolve_dependency_spec(name, spec, variant),
         })
         .collect();
 
@@ -671,6 +678,65 @@ fn extract_dependencies<F: Fn(&Target) -> Option<&OrderMap<SourcePackageName, Pa
         depends,
         constraints: Vec::new(),
     }
+}
+
+/// Returns the default target. Conditional targets are rejected by
+/// `reject_conditional_targets` before this point.
+fn applicable_targets(targets: &Option<Targets>) -> Vec<&Target> {
+    targets
+        .iter()
+        .flat_map(|targets| targets.default_target.iter())
+        .collect()
+}
+
+/// Resolves a single dependency spec, substituting the variant value when the
+/// spec is a bare star requirement and a matching variant exists.
+fn resolve_dependency_spec(
+    name: &SourcePackageName,
+    spec: &PackageSpec,
+    variant: &BTreeMap<String, VariantValue>,
+) -> PackageSpec {
+    if is_star_requirement(spec)
+        && let Some(variant_value) = variant.get(name.as_str())
+    {
+        return BinaryPackageSpec {
+            version: Some(
+                rattler_conda_types::VersionSpec::from_str(
+                    variant_value.to_string().as_str(),
+                    rattler_conda_types::ParseStrictness::Lenient,
+                )
+                .unwrap(),
+            ),
+            ..Default::default()
+        }
+        .into();
+    }
+
+    spec.clone()
+}
+
+/// Extracts the extra groups declared by the project
+/// model, mirroring how `extract_dependencies` walks targets.
+fn extract_extra_dependencies(
+    targets: &Option<Targets>,
+    variant: &BTreeMap<String, VariantValue>,
+) -> BTreeMap<ExtraGroupName, Vec<NamedSpec<PackageSpec>>> {
+    let mut result: BTreeMap<ExtraGroupName, Vec<NamedSpec<PackageSpec>>> = BTreeMap::new();
+    for target in applicable_targets(targets) {
+        let Some(extras) = target.extra_dependencies.as_ref() else {
+            continue;
+        };
+        for (group, deps) in extras {
+            let entry = result.entry(group.clone()).or_default();
+            for (name, spec) in deps {
+                entry.push(NamedSpec {
+                    name: name.clone(),
+                    spec: resolve_dependency_spec(name, spec, variant),
+                });
+            }
+        }
+    }
+    result
 }
 
 /// Resolves a run_export spec string (like "sdl2 *") by substituting variant values.
@@ -714,18 +780,175 @@ fn resolve_run_export_spec(
 
     Some(NamedSpec {
         name: SourcePackageName::from(pkg_name),
-        spec: PackageSpec::Binary(BinaryPackageSpec {
+        spec: BinaryPackageSpec {
             version: version_spec,
+            extras: match_spec.extras.clone(),
+            flags: match_spec.flags.clone(),
+            condition: match_spec.condition.clone(),
             ..Default::default()
-        }),
+        }
+        .into(),
     })
+}
+
+/// Converts a finished package's `experimental_extra_depends` (group name to a
+/// list of match-spec strings) into the typed representation used by
+/// `CondaOutput`. Because the data comes from already-built repodata, groups
+/// with an invalid name and specs that fail to parse are skipped.
+fn convert_extra_depends(
+    extra_depends: &BTreeMap<String, Vec<String>>,
+) -> BTreeMap<ExtraGroupName, Vec<NamedSpec<PackageSpec>>> {
+    extra_depends
+        .iter()
+        .filter_map(|(group, specs)| {
+            let group = ExtraGroupName::new(group.clone()).ok()?;
+            let specs = specs
+                .iter()
+                .filter_map(|spec_str| {
+                    let match_spec = rattler_conda_types::MatchSpec::from_str(
+                        spec_str,
+                        rattler_conda_types::ParseStrictness::Lenient,
+                    )
+                    .ok()?;
+                    let pkg_name = match_spec.name.as_exact()?.clone();
+                    Some(NamedSpec {
+                        name: SourcePackageName::from(pkg_name),
+                        spec: BinaryPackageSpec {
+                            version: match_spec.version.clone(),
+                            extras: match_spec.extras.clone(),
+                            flags: match_spec.flags.clone(),
+                            condition: match_spec.condition.clone(),
+                            ..Default::default()
+                        }
+                        .into(),
+                    })
+                })
+                .collect();
+            Some((group, specs))
+        })
+        .collect()
+}
+
+/// Collects the names the project model declares as source dependencies
+/// (build/host/run), so run-exports referencing them can be emitted as source
+/// specs, mirroring real backends' `local_source_packages` mapping.
+fn model_source_specs(targets: &Option<Targets>) -> BTreeMap<String, SourcePackageSpec> {
+    let mut map = BTreeMap::new();
+    for target in applicable_targets(targets) {
+        for deps in [
+            target.build_dependencies.as_ref(),
+            target.host_dependencies.as_ref(),
+            target.run_dependencies.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            for (name, spec) in deps {
+                if let PackageSpec::Source(source) = spec {
+                    map.insert(name.as_str().to_string(), source.clone());
+                }
+            }
+        }
+    }
+    map
+}
+
+/// Converts the run-exports declared in the project model into the output's
+/// run-exports. Conditional targets are rejected before this point, so only
+/// the default target contributes.
+fn model_run_exports(
+    targets: &Option<Targets>,
+    output_version: &Version,
+    output_build: &str,
+) -> pixi_build_types::procedures::conda_outputs::CondaOutputRunExports {
+    let mut out = pixi_build_types::procedures::conda_outputs::CondaOutputRunExports::default();
+    for target in applicable_targets(targets) {
+        let Some(run_exports) = &target.run_exports else {
+            continue;
+        };
+        let named = |bucket: &Option<OrderMap<SourcePackageName, PackageSpec>>| {
+            bucket
+                .iter()
+                .flatten()
+                .map(|(name, spec)| NamedSpec {
+                    name: name.clone(),
+                    spec: match spec {
+                        PackageSpec::PinSubpackage(pin) => {
+                            resolve_pin_subpackage(pin, output_version, output_build)
+                        }
+                        other => other.clone(),
+                    },
+                })
+                .collect::<Vec<_>>()
+        };
+        let named_constraints = |bucket: &Option<OrderMap<SourcePackageName, ConstraintSpec>>| {
+            bucket
+                .iter()
+                .flatten()
+                .map(|(name, spec)| NamedSpec {
+                    name: name.clone(),
+                    spec: match spec {
+                        ConstraintSpec::PinSubpackage(pin) => {
+                            let PackageSpec::Binary(binary) =
+                                resolve_pin_subpackage(pin, output_version, output_build)
+                            else {
+                                unreachable!("pin-subpackage always resolves to a binary spec");
+                            };
+                            ConstraintSpec::Binary(binary)
+                        }
+                        other => other.clone(),
+                    },
+                })
+                .collect::<Vec<_>>()
+        };
+        out.noarch.extend(named(&run_exports.noarch));
+        out.strong.extend(named(&run_exports.strong));
+        out.weak.extend(named(&run_exports.weak));
+        out.strong_constrains
+            .extend(named_constraints(&run_exports.strong_constraints));
+        out.weak_constrains
+            .extend(named_constraints(&run_exports.weak_constraints));
+    }
+    out
+}
+
+/// Resolves a `pin-subpackage` run-export against the output's own version
+/// and build string, like real backends do before the run-exports leave the
+/// backend; `pin-compatible` is passed through for pixi to resolve instead.
+fn resolve_pin_subpackage(
+    pin: &pixi_build_types::PinSubpackageSpec,
+    output_version: &Version,
+    output_build: &str,
+) -> PackageSpec {
+    let pin = pixi_spec::Pin::try_from(pin.clone()).expect("valid pin spec");
+    let resolved = pin
+        .resolve(output_version, output_build)
+        .expect("pin resolution must succeed");
+    match resolved {
+        pixi_spec::PixiSpec::Version(version) => PackageSpec::Binary(Box::new(BinaryPackageSpec {
+            version: Some(version),
+            ..Default::default()
+        })),
+        pixi_spec::PixiSpec::DetailedVersion(detailed) => {
+            PackageSpec::Binary(Box::new(BinaryPackageSpec {
+                version: detailed.version.clone(),
+                build: detailed.build.clone(),
+                ..Default::default()
+            }))
+        }
+        other => unreachable!("pin resolution produced a non-version spec: {other:?}"),
+    }
 }
 
 /// Converts a `RunExportsJson` (from a conda package) to `CondaOutputRunExports`.
 fn convert_run_exports_json(
     run_exports: &RunExportsJson,
+    source_specs: &BTreeMap<String, SourcePackageSpec>,
 ) -> pixi_build_types::procedures::conda_outputs::CondaOutputRunExports {
-    fn convert_specs(specs: &[String]) -> Vec<NamedSpec<PackageSpec>> {
+    fn convert_specs(
+        specs: &[String],
+        source_specs: &BTreeMap<String, SourcePackageSpec>,
+    ) -> Vec<NamedSpec<PackageSpec>> {
         specs
             .iter()
             .filter_map(|spec_str| {
@@ -737,12 +960,26 @@ fn convert_run_exports_json(
 
                 let pkg_name = match_spec.name.as_exact()?.clone();
 
+                if let Some(source) = source_specs.get(pkg_name.as_source()) {
+                    let mut source = source.clone();
+                    source.version = match_spec.version.clone().or(source.version);
+                    source.build = match_spec.build.clone().or(source.build);
+                    return Some(NamedSpec {
+                        name: SourcePackageName::from(pkg_name),
+                        spec: PackageSpec::Source(source),
+                    });
+                }
+
                 Some(NamedSpec {
                     name: SourcePackageName::from(pkg_name),
-                    spec: PackageSpec::Binary(BinaryPackageSpec {
+                    spec: BinaryPackageSpec {
                         version: match_spec.version.clone(),
+                        extras: match_spec.extras.clone(),
+                        flags: match_spec.flags.clone(),
+                        condition: match_spec.condition.clone(),
                         ..Default::default()
-                    }),
+                    }
+                    .into(),
                 })
             })
             .collect()
@@ -762,33 +999,36 @@ fn convert_run_exports_json(
 
                 Some(NamedSpec {
                     name: SourcePackageName::from(pkg_name),
-                    spec: ConstraintSpec::Binary(BinaryPackageSpec {
+                    spec: ConstraintSpec::Binary(Box::new(BinaryPackageSpec {
                         version: match_spec.version.clone(),
+                        extras: match_spec.extras.clone(),
+                        flags: match_spec.flags.clone(),
+                        condition: match_spec.condition.clone(),
                         ..Default::default()
-                    }),
+                    })),
                 })
             })
             .collect()
     }
 
     pixi_build_types::procedures::conda_outputs::CondaOutputRunExports {
-        weak: convert_specs(&run_exports.weak),
-        strong: convert_specs(&run_exports.strong),
-        noarch: convert_specs(&run_exports.noarch),
+        weak: convert_specs(&run_exports.weak, source_specs),
+        strong: convert_specs(&run_exports.strong, source_specs),
+        noarch: convert_specs(&run_exports.noarch, source_specs),
         weak_constrains: convert_constraint_specs(&run_exports.weak_constrains),
         strong_constrains: convert_constraint_specs(&run_exports.strong_constrains),
     }
 }
 
-/// Returns true if the given [`TargetSelector`] matches the specified
-/// `platform`.
-fn matches_target_selector(selector: &TargetSelector, platform: Platform) -> bool {
-    match selector {
-        TargetSelector::Unix => platform.is_unix(),
-        TargetSelector::Linux => platform.is_linux(),
-        TargetSelector::Win => platform.is_windows(),
-        TargetSelector::MacOs => platform.is_osx(),
-        TargetSelector::Platform(target_platform) => target_platform == platform.as_str(),
+/// The passthrough backend has no jinja evaluator and therefore cannot decide
+/// whether an `if(...)` conditional applies. Panic rather than silently dropping
+/// the conditional dependencies; a real backend evaluates these via
+/// rattler-build.
+fn reject_conditional_targets(project_model: &ProjectModel) {
+    if let Some(targets) = &project_model.targets
+        && targets.conditional.as_ref().is_some_and(|c| !c.is_empty())
+    {
+        unimplemented!("passthrough backend cannot evaluate if(...) conditional dependencies")
     }
 }
 
@@ -823,9 +1063,9 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
         let project_model = match params.project_model {
             Some(project_model) => project_model,
             None => {
-                return Err(Box::new(CommunicationError::BackendError(
+                return Err(Box::new(CommunicationError::BackendError(Box::new(
                     BackendError::new("Passthrough backend requires a project model"),
-                )));
+                ))));
             }
         };
 
@@ -843,11 +1083,11 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
                     match rattler_package_streaming::seek::read_package_file(&path) {
                         Err(err) => {
                             return Err(Box::new(
-                                BackendError::new(format!(
+                                Box::new(BackendError::new(format!(
                                     "failed to read index.json from '{}': {}",
                                     path.display(),
                                     err
-                                ))
+                                )))
                                 .into(),
                             ));
                         }
@@ -866,7 +1106,7 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
                     build_number: 0,
                     constrains: vec![],
                     depends: vec![],
-                    experimental_extra_depends: Default::default(),
+                    extra_depends: Default::default(),
                     features: None,
                     license: project_model.license.clone(),
                     license_family: None,
@@ -919,7 +1159,7 @@ pub struct PassthroughBackendConfig {
     pub noarch: Option<bool>,
 
     /// Build globs
-    pub build_globs: Option<BTreeSet<String>>,
+    pub build_globs: Option<Vec<String>>,
 }
 
 /// Observer that allows collecting backend events from an ObservableBackend.
@@ -1085,36 +1325,59 @@ where
 
 #[cfg(test)]
 mod tests {
-    use pixi_build_types::{BinaryPackageSpec, PackageSpec};
+    use pixi_build_types::{BinaryPackageSpec, ConditionalExpression, PackageSpec};
     use rattler_conda_types::{ParseStrictness, VersionSpec};
 
     use super::*;
 
     #[test]
     fn test_is_star_requirement_with_star() {
-        let spec = PackageSpec::Binary(BinaryPackageSpec {
+        let spec: PackageSpec = BinaryPackageSpec {
             version: Some(VersionSpec::from_str("*", ParseStrictness::Lenient).unwrap()),
             ..Default::default()
-        });
+        }
+        .into();
 
         assert!(is_star_requirement(&spec));
     }
 
     #[test]
     fn test_is_star_requirement_with_version() {
-        let spec = PackageSpec::Binary(BinaryPackageSpec {
+        let spec: PackageSpec = BinaryPackageSpec {
             version: Some(VersionSpec::from_str(">=1.0", ParseStrictness::Lenient).unwrap()),
             ..Default::default()
-        });
+        }
+        .into();
 
         assert!(!is_star_requirement(&spec));
     }
 
     #[test]
     fn test_is_star_requirement_with_no_version() {
-        let spec = PackageSpec::Binary(BinaryPackageSpec::default());
+        let spec: PackageSpec = BinaryPackageSpec::default().into();
 
         assert!(is_star_requirement(&spec));
+    }
+
+    #[test]
+    #[should_panic(expected = "passthrough backend cannot evaluate if(")]
+    fn test_passthrough_rejects_conditional_dependencies() {
+        // The passthrough backend has no jinja evaluator, so conditional
+        // `if(...)` dependencies must fail loudly rather than being silently
+        // dropped.
+        let mut conditional = OrderMap::new();
+        conditional.insert(
+            ConditionalExpression::new("host_platform != build_platform"),
+            Target::default(),
+        );
+        let project_model = ProjectModel {
+            targets: Some(Targets {
+                conditional: Some(conditional),
+                ..Targets::default()
+            }),
+            ..ProjectModel::default()
+        };
+        reject_conditional_targets(&project_model);
     }
 
     #[test]

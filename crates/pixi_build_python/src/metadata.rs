@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::BTreeSet, path::PathBuf, str::FromStr};
+use std::{cell::RefCell, path::PathBuf, str::FromStr};
 
 use miette::Diagnostic;
 use once_cell::unsync::OnceCell;
@@ -99,17 +99,17 @@ impl PyprojectMetadataProvider {
     ///
     /// # Returns
     ///
-    /// A `BTreeSet` of glob patterns as strings. Common patterns include:
+    /// A `Vec` of glob patterns as strings. Common patterns include:
     /// - `"pyproject.toml"` - The package's manifest file
-    pub fn input_globs(&self) -> BTreeSet<String> {
-        let mut input_globs = BTreeSet::new();
+    pub fn input_globs(&self) -> Vec<String> {
+        let mut input_globs = Vec::new();
 
         let Some(_) = self.pyproject_manifest.get() else {
             return input_globs;
         };
 
         // Add the pyproject.toml manifest file itself.
-        input_globs.insert(String::from("pyproject.toml"));
+        input_globs.push(String::from("pyproject.toml"));
 
         input_globs
     }
@@ -373,7 +373,7 @@ mod tests {
 
     use fs_err as fs;
     use pixi_build_backend::generated_recipe::{GenerateRecipe, MetadataProvider};
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::Subdir;
     use tempfile::TempDir;
 
     use crate::{PythonGenerator, config::PythonBackendConfig, project_fixture};
@@ -651,7 +651,7 @@ requires = ["setuptools", "wheel"]
 
         let globs = provider.input_globs();
         assert_eq!(globs.len(), 1);
-        assert!(globs.contains("pyproject.toml"));
+        assert!(globs.iter().any(|g| g == "pyproject.toml"));
     }
 
     #[test]
@@ -950,10 +950,13 @@ Documentation = "https://docs.example.com"
                 // when using the default here we should read values from the pyproject.toml
                 &PythonBackendConfig::default(),
                 temp_dir.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -998,10 +1001,13 @@ requires-python = ">=3.13"
                 // when using the default here we should read values from the pyproject.toml
                 &PythonBackendConfig::default(),
                 temp_dir.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await

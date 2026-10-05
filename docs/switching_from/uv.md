@@ -9,7 +9,7 @@ uv is a fast Python package manager, but it's limited to the PyPI ecosystem. Pix
 - **Multi-language support.** A single Pixi workspace can manage Python, R, C/C++, Rust, Node.js, and more, while uv only handles Python.
 - **Binary-first distribution.** Conda packages are pre-compiled, so you rarely need a build toolchain on your machine. No waiting for source builds or debugging missing C headers.
 - **Complete environment modeling.** Conda environments contain everything (interpreters, libraries, headers, compilers, CLI tools), all managed by the solver. With uv, your Python environment depends on whatever your system happens to provide.
-- **True cross-platform lockfiles.** Pixi solves for all target platforms in a single lockfile, even platforms you're not currently running on.
+- **True cross-platform lock files.** Pixi solves for all target platforms in a single lock file, even platforms you're not currently running on.
 - **Built-in task runner.** Define and run tasks directly in your manifest, no need for `Makefile`, `just`, or shell scripts.
 
 !!! tip "You can still use PyPI packages"
@@ -26,7 +26,7 @@ uv is a fast Python package manager, but it's limited to the PyPI ecosystem. Pix
 | Removing a dependency     | `uv remove numpy`                 | `pixi remove numpy` (conda) or `pixi remove --pypi numpy` (PyPI)                         |
 | Installing/syncing        | `uv sync`                         | `pixi install`                                                                            |
 | Running a command         | `uv run python main.py`           | `pixi run python main.py`                                                                 |
-| Running a standalone script | `uv run script.py` (PEP 723)   | `pixi exec` via [shebang](../advanced/shebang.md)                                        |
+| Running a standalone script | `uv run script.py` (PEP 723)   | `pixi run --script script.py` ([PEP 723 scripts](../python/scripts.md))                   |
 | Running a task            | _(no built-in task runner)_       | `pixi run my_task`                                                                        |
 | Locking dependencies      | `uv lock`                         | `pixi lock` (also runs automatically on `pixi add` / `pixi install`)                     |
 | Installing Python         | `uv python install 3.12`          | `pixi add python=3.12` (managed as a regular dependency)                                  |
@@ -34,7 +34,7 @@ uv is a fast Python package manager, but it's limited to the PyPI ecosystem. Pix
 | Global tool install       | `uv tool install ruff`            | `pixi global install ruff`                                                                |
 | Building a package        | `uv build`                        | Supported via [pixi-build backends](../build/getting_started.md)                          |
 | Publishing a package      | `uv publish`                      | Upload to a [prefix.dev channel](../deployment/prefix.md)                                 |
-| Exporting a lockfile      | `uv export`                       | `pixi workspace export conda-environment`                                                 |
+| Exporting a lock file     | `uv export`                       | `pixi workspace export conda-environment`                                                 |
 | Virtual environments      | `.venv/` (automatic)              | `.pixi/envs/` (automatic, supports multiple environments)                                 |
 | Cache management          | `uv cache clean`                  | `pixi clean cache`                                                                        |
 | Updating dependencies     | `uv lock --upgrade`               | `pixi update`                                                                             |
@@ -73,11 +73,8 @@ uv uses `pyproject.toml` for project configuration and `uv.toml` for tool-level 
     numpy = ">=1.26"
     pandas = ">=2.0"
 
-    [feature.test.dependencies]
+    [environments.test.dependencies]
     pytest = ">=8.0"
-
-    [environments]
-    test = ["test"]
     ```
 
 === "Pixi (pyproject.toml)"
@@ -115,7 +112,7 @@ uv manages Python installations separately with `uv python install`. In Pixi, Py
 pixi add python=3.12    # add Python as a conda dependency
 ```
 
-Python gets version-locked in your lockfile alongside everything else, so there's no separate `.python-version` file to manage.
+Python gets version-locked in your lock file alongside everything else, so there's no separate `.python-version` file to manage.
 
 ### Virtual environments
 
@@ -131,22 +128,22 @@ cuda = ["cuda"]
 
 Each environment can have completely different (even conflicting) dependencies, and Pixi keeps them all installed side by side. For example, you can have one environment with `numpy 1.x` and another with `numpy 2.x`, both ready to use without reinstalling anything.
 
-uv can resolve conflicting dependency groups separately in the lockfile via `tool.uv.conflicts`, but it still uses a single `.venv/` that you swap between with `uv sync --group <name>`. Pixi environments are independent directories, so switching is instant.
+uv can resolve conflicting dependency groups separately in the lock file via `tool.uv.conflicts`, but it still uses a single `.venv/` that you swap between with `uv sync --group <name>`. Pixi environments are independent directories, so switching is instant.
 
 See [Multi Environment](../workspace/multi_environment.md).
 
 ### Dependency groups and extras
 
-uv uses [PEP 735 dependency groups](https://peps.python.org/pep-0735/) and optional dependencies (extras) to organize dependencies. Pixi uses **features**, composable sets of dependencies that map to environments:
+uv uses [PEP 735 dependency groups](https://peps.python.org/pep-0735/) and optional dependencies (extras) to organize dependencies. Pixi uses **environments**, which define their dependencies directly, and **features**, composable sets of dependencies that can be shared between environments:
 
 | uv                           | Pixi                                                                |
 |------------------------------|---------------------------------------------------------------------|
-| `[dependency-groups]`        | `[feature.<name>.dependencies]`                                     |
+| `[dependency-groups]`        | `[environments.<name>.dependencies]`                                |
 | `[project.optional-dependencies]` | `[feature.<name>.dependencies]` mapped to environments          |
 | `uv sync --group dev`       | `pixi install -e dev`                                               |
 | `uv sync --all-groups`      | `pixi install --all`                                                |
 
-Features are more flexible than dependency groups: they can include conda dependencies, platform-specific packages, system requirements, and activation scripts.
+Environments and features are more flexible than dependency groups: they can include conda dependencies, platform-specific packages, tasks, and activation scripts.
 
 ### Workspaces
 
@@ -157,7 +154,7 @@ Both tools support multi-package workspaces. uv defines workspace members with a
 members = ["packages/*"]
 ```
 
-Pixi takes a different approach: you reference local packages as path dependencies directly in the workspace manifest. Any subdirectory with its own `pixi.toml` (containing a `[package]` section) can be pulled in this way:
+Pixi's environments work similarly: you reference local packages as path dependencies directly in the workspace manifest. Any subdirectory with its own `pixi.toml` (containing a `[package]` section) can be pulled in this way:
 
 ```toml title="pixi.toml"
 [workspace]
@@ -168,7 +165,15 @@ platforms = ["linux-64", "osx-arm64", "win-64"]
 my_lib = { path = "packages/my_lib" }
 ```
 
-Both tools share a single lockfile across the workspace. See [Building Multiple Packages](../build/workspace.md).
+For publishing, each package opts in individually: a workspace-wide `pixi publish` builds and uploads every package that sets `publish = true` in its `[package]` section:
+
+```toml title="packages/my_lib/pixi.toml"
+[package]
+name = "my_lib"
+publish = true
+```
+
+Both tools share a single lock file across the workspace. See [Building Multiple Packages](../build/workspace.md).
 
 ### Standalone scripts
 
@@ -180,18 +185,26 @@ uv supports [PEP 723 inline script metadata](https://peps.python.org/pep-0723/) 
 # dependencies = ["requests"]
 # ///
 import requests
+
 print(requests.get("https://example.com").status_code)
 ```
 
-Pixi has a similar capability via [shebang scripts](../advanced/shebang.md) using `pixi exec`, which creates a temporary environment with the specified dependencies:
+Pixi reads the same portable metadata and can extend it with Conda packages,
+channels, platforms, and an optional adjacent lock file:
 
-```python title="pixi shebang script"
-#!/usr/bin/env -S pixi exec --spec requests --spec python=3.12 -- python
-import requests
-print(requests.get("https://example.com").status_code)
+```console
+$ pixi init --script script.py
+$ pixi add --script script.py --pypi requests
+$ pixi add --script script.py openssl
+$ pixi run --script script.py
+$ pixi update --script script.py
 ```
 
-This works on Linux and macOS. A more complete scripting feature is under discussion in [#3751](https://github.com/prefix-dev/pixi/issues/3751).
+PyPI dependencies that fit standard PEP 723 remain portable between uv and
+Pixi. Pixi-specific metadata lives under `tool.pixi`, so uv ignores the Conda
+dependency while preserving it. See [Standalone Python
+scripts](../python/scripts.md) for resolution updates, locking, channel and
+platform management, dependency trees, and export.
 
 ### Tasks
 
@@ -378,7 +391,7 @@ Unlike uv, Pixi can also override `exclude-newer` on a per-channel level:
 
 ### Lockfiles
 
-Both tools generate lockfiles for reproducibility.
+Both tools generate lock files for reproducibility.
 
 | Aspect             | uv (`uv.lock`)         | Pixi (`pixi.lock`)                                   |
 |--------------------|------------------------|-------------------------------------------------------|
@@ -388,7 +401,7 @@ Both tools generate lockfiles for reproducibility.
 | Package types      | PyPI only              | Conda + PyPI                                          |
 | Generate/update    | `uv lock`              | `pixi lock` (also automatic on `pixi add` / `pixi install`) |
 
-See [Lock File](../workspace/lockfile.md).
+See [Lock File](../workspace/lock_file.md).
 
 ### Building and publishing
 
@@ -419,7 +432,7 @@ pixi run pip install <some-package>
 ```
 
 !!! warning "Prefer `pixi add --pypi`"
-    Using `pip` inside a Pixi environment bypasses the solver and lockfile.
+    Using `pip` inside a Pixi environment bypasses the solver and lock file.
     Always prefer `pixi add --pypi <package>` to keep dependencies tracked and reproducible.
 
 ## Why the conda ecosystem matters
@@ -445,11 +458,11 @@ pixi add pytorch-gpu
 
 ### No Docker needed for environment isolation
 
-A common pattern with uv is using Docker to get a reproducible environment with the right system dependencies. Pixi environments achieve the same isolation without containers: no root privileges required, dramatically smaller than container images, instant creation, and the same reproducibility guarantees via the lockfile.
+A common pattern with uv is using Docker to get a reproducible environment with the right system dependencies. Pixi environments achieve the same isolation without containers: no root privileges required, dramatically smaller than container images, instant creation, and the same reproducibility guarantees via the lock file.
 
 ### Forward-compatible
 
-Conda packages compile against the oldest supported system baseline, so they work on newer OS versions too. Your lockfile from today will still install correctly on next year's OS release.
+Conda packages compile against the oldest supported system baseline, so they work on newer OS versions too. Your lock file from today will still install correctly on next year's OS release.
 
 For a deeper dive into the differences between the conda and PyPI ecosystems, see the [Conda != PyPI](https://conda.org/blog/conda-is-not-pypi) blog post series.
 

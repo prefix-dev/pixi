@@ -1,6 +1,8 @@
-use crate::global::revert_environment_after_error;
+use crate::global::{
+    EnvironmentAction, report_failed_environment, report_failed_environments,
+    revert_environment_after_error,
+};
 use clap::Parser;
-use fancy_display::FancyDisplay;
 use miette::Report;
 use pixi_config::{Config, ConfigCli};
 use pixi_global::StateChanges;
@@ -43,7 +45,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let mut project = last_updated_project.clone();
         match apply_changes(env_name, &mut project).await {
             Ok(state_changes) => {
-                state_changes.report();
+                state_changes.report(&project).await;
                 // Only advance the project when successful
                 last_updated_project = project;
             }
@@ -55,17 +57,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     tracing::warn!("Reverting of the operation failed");
                     tracing::info!("Reversion error: {:?}", revert_err);
                 }
+                report_failed_environment(env_name);
                 errors.push((env_name.clone(), err));
             }
         }
     }
 
-    if errors.is_empty() {
-        Ok(())
-    } else {
-        for (env_name, err) in errors {
-            tracing::warn!("Couldn't remove {}\n{err:?}", env_name.fancy_display());
-        }
-        Err(miette::miette!("Some environments couldn't be removed."))
-    }
+    report_failed_environments(EnvironmentAction::Uninstall, errors)
 }

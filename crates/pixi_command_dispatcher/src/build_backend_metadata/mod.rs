@@ -1,9 +1,7 @@
 use futures::{SinkExt, channel::mpsc::UnboundedSender};
 use miette::Diagnostic;
 use once_cell::sync::Lazy;
-use pixi_build_discovery::CommandSpec;
 use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
-use pixi_glob::GlobSet;
 use pixi_record::{CanonicalSourceLocation, PinnedBuildSourceSpec, PinnedSourceSpec, VariantValue};
 use pixi_spec::{ResolvedExcludeNewer, SourceAnchor, SourceLocationSpec};
 use rattler_conda_types::ChannelUrl;
@@ -15,24 +13,31 @@ use std::{
     sync::{Arc, Mutex},
 };
 use thiserror::Error;
+use tracing::instrument;
 
 use crate::build::CanonicalSourceCodeLocation;
 use crate::cache::markers::BackendMetadataDir;
 use crate::cache::{
     BuildBackendMetadataCache, BuildBackendMetadataCacheEntry, BuildBackendMetadataCacheError,
     BuildBackendMetadataCacheKey, CacheEntry, CacheKey, CacheKeyString, CacheRevision,
-    MetadataCache, MetadataCacheKey, WriteResult,
+    MetadataCache, MetadataCacheKey, RefreshResult, WriteResult,
 };
-use crate::compute_data::{HasBuildBackendMetadataCache, HasBuildBackendMetadataReporter};
+use crate::compute_data::{
+    HasBuildBackendMetadataCache, HasBuildBackendMetadataReporter, HasIoConcurrencySemaphore,
+};
 use crate::injected_config::{BackendOverrideKey, EnabledProtocolsKey};
-use crate::input_hash::{BackendSpecHash, ConfigurationHash, ProjectModelHash};
+use crate::input_hash::{
+    BackendBinaryFingerprint, BackendSpecHash, ConfigurationHash, ProjectModelHash,
+};
+use crate::input_snapshot::{InputSnapshot, SnapshotFreshness};
+use crate::keys::BackendBinaryFingerprintKey;
 use crate::{
-    BackendHandle, BuildEnvironment, EnvironmentRef, InstantiateBackendError,
+    BackendHandle, BuildEnvironment, EnvironmentRef, InlinePackage, InstantiateBackendError,
     InstantiateBackendKey, ProjectModelOverrides, SourceCheckout, SourceCheckoutError,
     SourceCheckoutExt,
     build::{PinnedSourceCodeLocation, SourceRecordOrCheckout, WorkDirKey},
 };
-use pixi_build_discovery::BackendSpec;
+use pixi_build_discovery::{BackendSpec, CommandSpec, SystemCommandSpec};
 use pixi_build_frontend::BackendOverride;
 use pixi_compute_cache_dirs::CacheDirsExt;
 use pixi_compute_engine::{ComputeCtx, Key};
@@ -44,9 +49,33 @@ fn warn_once_per_backend(backend_name: &str) {
     let mut warned = WARNED_BACKENDS.lock().unwrap();
     if warned.insert(backend_name.to_string()) {
         tracing::warn!(
-            "metadata cache disabled for build backend '{}' (system/path-based backends always regenerate metadata)",
+            "metadata cache disabled for build backend '{}' (mutable environment backend)",
             backend_name
         );
+    }
+}
+
+/// Variant files come from user configuration and may be relative; anchor
+/// them to the working directory once so the recorded paths are stable.
+fn absolute_variant_file(path: &std::path::Path) -> Option<pixi_path::AbsPathBuf> {
+    let absolute = std::path::absolute(path).ok()?;
+    pixi_path::AbsPathBuf::new(absolute).ok()
+}
+
+/// Return the checkout root sent to the backend as `checkout_root`,
+/// or `None` for local-path sources.  Git and url checkouts have a
+/// well-defined unpack root that may differ from the manifest's own
+/// directory when a `subdirectory` is configured; path sources have
+/// no separate root concept and use `workspace_directory` as their
+/// cross-package discovery anchor instead.
+pub(crate) fn checkout_root_for(
+    checkout: &pixi_compute_sources::SourceCheckout,
+) -> Option<&std::path::Path> {
+    match &checkout.pinned {
+        pixi_record::PinnedSourceSpec::Path(_) => None,
+        pixi_record::PinnedSourceSpec::Git(_) | pixi_record::PinnedSourceSpec::Url(_) => {
+            Some(checkout.root_dir.as_std_path())
+        }
     }
 }
 
@@ -85,6 +114,15 @@ pub struct BuildBackendMetadataSpec {
     /// model. Overrides any value declared in the manifest.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub build_number: Option<u64>,
+
+    /// Inline package definition for this source. When set, the
+    /// backend is built from this manifest instead of discovering one on disk.
+    /// Part of the key identity via its content hash.
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "crate::inline_package::serialize_optional_content_hash"
+    )]
+    pub inline: Option<InlinePackage>,
 }
 
 /// Compute-engine [`Key`] for the public-facing backend-metadata
@@ -133,6 +171,7 @@ impl Key for BuildBackendMetadataKey {
             exclude_newer: (*exclude_newer).clone(),
             build_string_prefix: self.0.build_string_prefix.clone(),
             build_number: self.0.build_number,
+            inline: self.0.inline.clone(),
         };
 
         ctx.compute(&BuildBackendMetadataInnerKey::new(inner)).await
@@ -184,6 +223,15 @@ pub struct BuildBackendMetadataInner {
     /// model when set. Part of the cache key.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub build_number: Option<u64>,
+
+    /// Inline package definition for this source. Distinguishes
+    /// two inline definitions that resolve to the same source location and
+    /// invalidates when the inline table is edited (via its content hash).
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "crate::inline_package::serialize_optional_content_hash"
+    )]
+    pub inline: Option<InlinePackage>,
 }
 
 /// The metadata of a source checkout.
@@ -205,83 +253,84 @@ pub struct BuildBackendMetadata {
     pub skip_cache: bool,
 }
 
+/// What the metadata cache needs to do for a given backend.
+#[derive(Debug, Clone)]
+enum BackendCacheStrategy {
+    /// Backend is package-resolved; spec hash alone identifies it.
+    PackageResolved,
+    /// System / path-based backend; fingerprint the binary on disk so
+    /// the cache invalidates on rebuild.
+    Fingerprint(PathBuf),
+    /// Caching disabled (mutable env-based backend, or a system binary
+    /// we couldn't locate).
+    Skip { reason: &'static str },
+}
+
 impl BuildBackendMetadataInner {
-    /// Checks if we should skip the metadata cache for this backend.
-    /// Returns true if:
-    /// 1. There's a System backend override (either for this specific backend or all backends)
-    /// 2. OR the original backend spec is System or mutable (path-based non-binary)
-    fn should_skip_metadata_cache(
+    /// Decide how the metadata cache should treat this backend.
+    fn cache_strategy(
         backend_spec: &BackendSpec,
         backend_override: &BackendOverride,
-    ) -> bool {
+    ) -> BackendCacheStrategy {
         let BackendSpec::JsonRpc(json_rpc_spec) = backend_spec;
 
-        // Check if there's a System backend override for this backend
-        // In-memory overrides are deterministic and can use cached metadata
-        let has_system_override = match backend_override {
-            BackendOverride::System(overridden_backends) => overridden_backends
-                .named_backend_override(&json_rpc_spec.name)
-                .is_some(),
-            BackendOverride::InMemory(_) => false,
-        };
-
-        let (command_kind, command_requires_skip) = match &json_rpc_spec.command {
-            CommandSpec::System(_) => ("system", true),
-            CommandSpec::EnvironmentSpec(env_spec) => {
-                let mutable = env_spec.requirement.1.is_mutable();
-                (
-                    if mutable {
-                        "mutable-environment"
-                    } else {
-                        "environment"
-                    },
-                    mutable,
-                )
-            }
-        };
-
-        let skip_cache = has_system_override || command_requires_skip;
-
-        if skip_cache {
-            let reason = if has_system_override {
-                "override"
-            } else {
-                command_kind
+        // A `BackendOverride::System` for this backend points at an
+        // executable that supersedes whatever the manifest declares.
+        // In-memory overrides are deterministic and don't need a
+        // fingerprint.
+        if let BackendOverride::System(overridden) = backend_override
+            && let Some(CommandSpec::System(SystemCommandSpec { command: Some(cmd) })) =
+                overridden.named_backend_override(&json_rpc_spec.name)
+        {
+            return match which::which(&cmd).ok() {
+                Some(path) => BackendCacheStrategy::Fingerprint(path),
+                None => BackendCacheStrategy::Skip {
+                    reason: "override-unresolved",
+                },
             };
-            tracing::debug!(
-                backend = %json_rpc_spec.name,
-                reason,
-                command_kind,
-                "metadata cache disabled for backend",
-            );
         }
 
-        skip_cache
+        match &json_rpc_spec.command {
+            CommandSpec::System(SystemCommandSpec { command: Some(cmd) }) => {
+                match which::which(cmd).ok() {
+                    Some(path) => BackendCacheStrategy::Fingerprint(path),
+                    None => BackendCacheStrategy::Skip {
+                        reason: "system-unresolved",
+                    },
+                }
+            }
+            CommandSpec::System(SystemCommandSpec { command: None }) => {
+                BackendCacheStrategy::Skip {
+                    reason: "system-no-command",
+                }
+            }
+            CommandSpec::EnvironmentSpec(env_spec) if env_spec.requirement.1.is_mutable() => {
+                BackendCacheStrategy::Skip {
+                    reason: "mutable-environment",
+                }
+            }
+            CommandSpec::EnvironmentSpec(_) => BackendCacheStrategy::PackageResolved,
+        }
     }
 
     /// Verifies if the cached metadata is still fresh.
     ///
-    /// Returns:
-    /// - `Ok(Ok(metadata))` if the cache is fresh and can be used as-is.
-    /// - `Ok(Err(Some(metadata)))` if the cache is stale but the metadata is
-    ///   returned for comparison (e.g. to reuse the ID if outputs match).
-    /// - `Ok(Err(None))` if no cache entry exists.
+    /// Returns whether the cache is fresh or stale. A stale entry is retained
+    /// for comparison so its revision can be reused when the backend returns
+    /// identical outputs.
+    #[allow(clippy::too_many_arguments)]
     async fn verify_cache_freshness(
+        ctx: &mut ComputeCtx,
         cache_entry: Option<CacheEntry<BuildBackendMetadataCache>>,
         build_source_checkout: &SourceCheckout,
         project_model_hash: Option<ProjectModelHash>,
         configuration_hash: ConfigurationHash,
         backend_spec_hash: BackendSpecHash,
+        backend_binary_fingerprint: Option<BackendBinaryFingerprint>,
         requested_variants: &BTreeMap<String, Vec<VariantValue>>,
-    ) -> Result<
-        Result<
-            CacheEntry<BuildBackendMetadataCache>,
-            Option<CacheEntry<BuildBackendMetadataCache>>,
-        >,
-        BuildBackendMetadataError,
-    > {
-        let Some(cache_entry) = cache_entry else {
-            return Ok(Err(None));
+    ) -> Result<CacheFreshness, BuildBackendMetadataError> {
+        let Some(mut cache_entry) = cache_entry else {
+            return Ok(CacheFreshness::Stale(None));
         };
 
         // Check the project model
@@ -289,7 +338,7 @@ impl BuildBackendMetadataInner {
             tracing::info!(
                 "found cached outputs with different project model, invalidating cache."
             );
-            return Ok(Err(Some(cache_entry)));
+            return Ok(CacheFreshness::Stale(Some(cache_entry)));
         }
 
         // Check the build configuration
@@ -297,7 +346,7 @@ impl BuildBackendMetadataInner {
             tracing::info!(
                 "found cached outputs with different build configuration, invalidating cache."
             );
-            return Ok(Err(Some(cache_entry)));
+            return Ok(CacheFreshness::Stale(Some(cache_entry)));
         }
 
         // Check the backend spec. Entries written before this field existed
@@ -307,73 +356,104 @@ impl BuildBackendMetadataInner {
             tracing::info!(
                 "found cached outputs with different backend specification, invalidating cache."
             );
-            return Ok(Err(Some(cache_entry)));
+            return Ok(CacheFreshness::Stale(Some(cache_entry)));
+        }
+
+        // Check the backend binary fingerprint. Both sides are `None` for
+        // package-resolved backends (where the spec hash already captures
+        // identity); `Some` for system / path-based backends, where the
+        // binary on disk can change without any spec change.
+        if cache_entry.backend_binary_fingerprint != backend_binary_fingerprint {
+            tracing::info!(
+                "found cached outputs with different backend binary fingerprint, invalidating cache."
+            );
+            return Ok(CacheFreshness::Stale(Some(cache_entry)));
         }
 
         // Check if the build variants match
         if &cache_entry.build_variants != requested_variants {
             tracing::info!("found cached outputs with different variants, invalidating cache.");
-            return Ok(Err(Some(cache_entry)));
+            return Ok(CacheFreshness::Stale(Some(cache_entry)));
         }
 
         // If the build source is immutable, we don't check the contents of the files.
         if build_source_checkout.is_immutable() {
-            return Ok(Ok(cache_entry));
+            return Ok(CacheFreshness::Fresh(cache_entry));
         }
 
         let build_source_dir = build_source_checkout.path.as_dir_or_file_parent();
-
-        // Check the files that were explicitly mentioned.
-        for source_file_path in cache_entry
+        let files = cache_entry
             .input_files
             .iter()
-            .map(|path| build_source_dir.join(path).into_std_path_buf())
-            .chain(cache_entry.build_variant_files.iter().cloned())
-        {
-            match source_file_path.metadata().and_then(|m| m.modified()) {
-                Ok(modified_date) => {
-                    if modified_date > cache_entry.timestamp {
-                        tracing::info!(
-                            "found cached outputs but '{}' has been modified, invalidating cache.",
-                            source_file_path.display()
-                        );
-                        return Ok(Err(Some(cache_entry)));
-                    }
-                }
-                Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-                    tracing::info!(
-                        "found cached outputs but '{}' has been deleted, invalidating cache.",
-                        source_file_path.display()
-                    );
-                    return Ok(Err(Some(cache_entry)));
-                }
-                Err(err) => {
-                    tracing::info!(
-                        "found cached outputs but requested metadata for '{}' failed with: {}",
-                        source_file_path.display(),
-                        err
-                    );
-                    return Ok(Err(Some(cache_entry)));
-                }
-            };
-        }
+            .cloned()
+            .chain(
+                cache_entry
+                    .build_variant_files
+                    .iter()
+                    .filter_map(|path| absolute_variant_file(path)),
+            )
+            .collect::<Vec<_>>();
 
-        let glob_set = GlobSet::create(cache_entry.input_globs.iter().map(String::as_str));
-        for matching_file in glob_set
-            .collect_matching(build_source_dir.as_std_path())
-            .map_err(BuildBackendMetadataError::from)?
-        {
-            let path = matching_file.into_path();
-            if cache_entry.input_files.contains(&path) {
+        // Only entries written before fingerprints existed validate their
+        // files against the entry timestamp. In a current entry a file
+        // without a state vanished during capture, and a hash-less
+        // reappearance cannot be trusted.
+        let fallback_cutoff = cache_entry
+            .input_file_states
+            .is_empty()
+            .then_some(cache_entry.timestamp);
+
+        // The snapshot check and the glob walk inspect independent aspects of
+        // the source tree, so they run concurrently. The walk catches files
+        // that were added since the entry was written; the recorded files
+        // themselves are verified through the snapshot.
+        let io_semaphore = ctx.global_data().io_concurrency_semaphore().cloned();
+        let verify_future =
+            cache_entry
+                .input_file_states
+                .verify(files, fallback_cutoff, io_semaphore);
+        let glob_future = crate::input_globs::collect_input_files(
+            ctx,
+            &cache_entry.input_glob_sets,
+            build_source_dir,
+        );
+        let (freshness, new_file_candidates) = tokio::join!(verify_future, glob_future);
+
+        let refreshed = match freshness {
+            SnapshotFreshness::Fresh => false,
+            SnapshotFreshness::Refreshed(refreshed) => {
+                cache_entry.input_file_states.apply_refresh(refreshed);
+                true
+            }
+            SnapshotFreshness::Stale(stale) => {
+                tracing::info!(
+                    "found cached outputs but '{}' has changed, invalidating cache.",
+                    stale.path
+                );
+                return Ok(CacheFreshness::Stale(Some(cache_entry)));
+            }
+        };
+
+        // Both the walk and the stored `input_files` are absolute, so they
+        // compare directly. The structured `input_glob_sets` can express the
+        // marker-driven workspace walk for ROS-style backends.
+        let new_file_candidates =
+            new_file_candidates.map_err(BuildBackendMetadataError::GlobSet)?;
+        for abs_path in new_file_candidates {
+            if !cache_entry.input_files.contains(&abs_path) {
                 tracing::info!(
                     "found cached outputs but a new matching file at '{}' has been detected, invalidating cache.",
-                    path.display()
+                    abs_path.as_std_path().display()
                 );
-                return Ok(Err(Some(cache_entry)));
+                return Ok(CacheFreshness::Stale(Some(cache_entry)));
             }
         }
 
-        Ok(Ok(cache_entry))
+        Ok(if refreshed {
+            CacheFreshness::Refreshed(cache_entry)
+        } else {
+            CacheFreshness::Fresh(cache_entry)
+        })
     }
 
     /// Validates that outputs with the same name have unique variants.
@@ -425,6 +505,7 @@ impl BuildBackendMetadataInner {
     /// checkout.
     async fn call_conda_outputs(
         &self,
+        ctx: &mut ComputeCtx,
         metadata_dir: &pixi_path::AbsPresumedDirPath,
         build_source_checkout: &SourceCheckout,
         source_unique_key: &str,
@@ -472,13 +553,24 @@ impl BuildBackendMetadataInner {
                 )
                 .into_std_path_buf(),
         };
+        let backend_call_started = std::time::Instant::now();
+        // Taken before the backend runs: a file modified while it reads the
+        // sources may not match its outputs, so it must land past this
+        // cutoff and stay unconfirmed.
+        let timestamp = SystemTime::now();
         let outputs = backend_guard
             .conda_outputs(params, move |line| {
                 let _err = futures::executor::block_on(log_sink.send(line));
             })
             .await
             .map_err(|e| BuildBackendMetadataError::Communication(Arc::new(e)))?;
-        let timestamp = SystemTime::now();
+        let backend_call_elapsed_ms = backend_call_started.elapsed().as_millis() as u64;
+        tracing::debug!(
+            backend = %backend_identifier,
+            outputs = outputs.outputs.len(),
+            backend_call_elapsed_ms,
+            "conda_outputs RPC returned"
+        );
 
         // If the backend supports unique variants, validate that outputs with the same name
         // have unique variants
@@ -497,26 +589,21 @@ impl BuildBackendMetadataInner {
             );
         }
 
-        // Determine the files that match the input globs.
+        // Normalize the backend's flat + structured globs into a single list,
+        // then determine the (absolute) files that match them.
+        let input_glob_sets =
+            crate::input_globs::fold_input_globs(outputs.input_globs, outputs.input_glob_sets);
         let globs_root = build_source_checkout.path.as_dir_or_file_parent();
-        let input_glob_set = GlobSet::create(outputs.input_globs.iter().map(String::as_str));
-        let globs_root_path = globs_root.as_std_path();
-        let input_glob_files = input_glob_set
-            .collect_matching(globs_root_path)
-            .map_err(BuildBackendMetadataError::from)?
-            .into_iter()
-            .map(|entry| {
-                let path = entry.into_path();
-                path.strip_prefix(globs_root_path)
-                    .ok()
-                    .unwrap_or(&path)
-                    .to_path_buf()
-            })
-            .collect();
+        let input_glob_files =
+            crate::input_globs::collect_input_files(ctx, &input_glob_sets, globs_root)
+                .await
+                .map_err(BuildBackendMetadataError::GlobSet)?
+                .into_iter()
+                .collect();
 
         Ok(RawCondaOutputs {
             outputs: outputs.outputs,
-            input_globs: outputs.input_globs.into_iter().collect(),
+            input_glob_sets,
             input_files: input_glob_files,
             timestamp,
         })
@@ -543,6 +630,14 @@ impl BuildBackendMetadataInnerKey {
 impl Key for BuildBackendMetadataInnerKey {
     type Value = Result<Arc<BuildBackendMetadata>, BuildBackendMetadataError>;
 
+    #[instrument(
+        skip_all,
+        name = "build-backend-metadata",
+        fields(
+            source = %self.0.manifest_source,
+            host_platform = %self.0.build_environment.host_platform,
+        )
+    )]
     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
         // Reporter lifecycle: queue up-front so the reporter can count
         // us before any real work starts. The `on_started` event carries
@@ -602,6 +697,16 @@ impl ResolvedCheckouts {
     }
 }
 
+/// Result of validating an entry read from the metadata cache.
+enum CacheFreshness {
+    /// The entry is valid as stored.
+    Fresh(CacheEntry<BuildBackendMetadataCache>),
+    /// The entry is valid and verification updated its input file states;
+    /// persisting them (best-effort) avoids rehashing on the next probe.
+    Refreshed(CacheEntry<BuildBackendMetadataCache>),
+    Stale(Option<CacheEntry<BuildBackendMetadataCache>>),
+}
+
 /// Outcome of probing the on-disk metadata cache.
 enum CacheProbe {
     /// Cache contained a fresh entry; the caller can return it
@@ -617,6 +722,7 @@ enum CacheProbe {
         project_model_hash: Option<ProjectModelHash>,
         configuration_hash: ConfigurationHash,
         backend_spec_hash: BackendSpecHash,
+        backend_binary_fingerprint: Option<BackendBinaryFingerprint>,
         skip_cache: bool,
     },
 }
@@ -643,12 +749,19 @@ impl BuildBackendMetadataInner {
             .checkout_pinned_source(self.manifest_source.clone())
             .await?;
 
-        let discovered_backend = ctx
-            .compute(&crate::DiscoveredBackendKey::new(
-                manifest_source_checkout.path.as_std_path(),
-            ))
-            .await
-            .map_err(BuildBackendMetadataError::Discovery)?;
+        // An inline package definition provides its manifest from
+        // the consuming workspace rather than from the checkout. When one is
+        // carried on this request, the backend is built from it directly,
+        // skipping on-disk discovery. The synthetic provenance is anchored at
+        // the checked-out source so the backend builds the code that was checked
+        // out; the inline manifest carries no `build.source` of its own.
+        let discovered_backend = crate::inline_package::discover_backend(
+            ctx,
+            manifest_source_checkout.path.as_std_path(),
+            self.inline.as_ref(),
+        )
+        .await
+        .map_err(BuildBackendMetadataError::Discovery)?;
 
         let manifest_source_anchor =
             SourceAnchor::from(SourceLocationSpec::from(self.manifest_source.clone()));
@@ -665,7 +778,8 @@ impl BuildBackendMetadataInner {
                     None
                 };
 
-                let resolved_location = manifest_source_anchor.resolve(build_source.clone());
+                let resolved_location =
+                    manifest_source_anchor.resolve_location(build_source.clone());
 
                 let checkout = match &self.preferred_build_source {
                     Some(pinned) if pinned.matches_source_spec(&resolved_location) => {
@@ -711,21 +825,57 @@ impl BuildBackendMetadataInner {
     ) -> Result<CacheProbe, BuildBackendMetadataError> {
         let enabled_protocols = ctx.compute(&EnabledProtocolsKey).await;
         let backend_override = ctx.compute(&BackendOverrideKey).await;
-        let skip_cache = Self::should_skip_metadata_cache(
+        let strategy = Self::cache_strategy(
             &checkouts.discovered_backend.backend_spec,
             &backend_override,
         );
 
+        // Resolve the strategy into `(skip_cache, fingerprint)`. The
+        // `Fingerprint` arm goes through the compute engine so the
+        // binary is hashed at most once per process per path; a failure
+        // there falls back to skipping the cache rather than erroring
+        // the whole solve.
+        let (skip_cache, backend_binary_fingerprint) = match strategy {
+            BackendCacheStrategy::PackageResolved => (false, None),
+            BackendCacheStrategy::Fingerprint(path) => {
+                match ctx
+                    .compute(&BackendBinaryFingerprintKey::new(path.clone()))
+                    .await
+                {
+                    Ok(fp) => (false, Some(fp)),
+                    Err(err) => {
+                        tracing::warn!(
+                            path = %path.display(),
+                            error = %err,
+                            "failed to fingerprint backend binary, disabling metadata cache"
+                        );
+                        (true, None)
+                    }
+                }
+            }
+            BackendCacheStrategy::Skip { reason } => {
+                let BackendSpec::JsonRpc(spec) = &checkouts.discovered_backend.backend_spec;
+                tracing::debug!(
+                    backend = %spec.name,
+                    reason,
+                    "metadata cache disabled for backend",
+                );
+                (true, None)
+            }
+        };
+
         let manifest_source_location = checkouts.manifest_source_location();
-        let cache = ctx.global_data().build_backend_metadata_cache();
         let cache_key: CacheKey<BuildBackendMetadataCache> = BuildBackendMetadataCacheKey {
             channel_urls: self.channels.clone(),
             build_environment: self.build_environment.clone(),
             exclude_newer: self.exclude_newer.clone(),
             enabled_protocols: enabled_protocols.as_ref().clone(),
             source: manifest_source_location.clone().into(),
+            inline_content_hash: self.inline.as_ref().map(|inline| inline.content_hash),
         };
-        let cache_read_result = cache
+        let cache_read_result = ctx
+            .global_data()
+            .build_backend_metadata_cache()
             .read(&cache_key)
             .await
             .map_err(BuildBackendMetadataError::Cache)?;
@@ -766,21 +916,24 @@ impl BuildBackendMetadataInner {
                 project_model_hash,
                 configuration_hash,
                 backend_spec_hash,
+                backend_binary_fingerprint,
                 skip_cache,
             });
         }
 
         match Self::verify_cache_freshness(
+            ctx,
             cache_read_result,
             &checkouts.build_source_checkout,
             project_model_hash,
             configuration_hash,
             backend_spec_hash,
+            backend_binary_fingerprint,
             &self.variant_configuration,
         )
         .await?
         {
-            Ok(fresh) => {
+            CacheFreshness::Fresh(fresh) => {
                 tracing::debug!("Using cached build backend metadata");
                 Ok(CacheProbe::Hit(BuildBackendMetadata {
                     source: manifest_source_location,
@@ -789,12 +942,46 @@ impl BuildBackendMetadataInner {
                     skip_cache,
                 }))
             }
-            Err(stale) => Ok(CacheProbe::Miss {
+            CacheFreshness::Refreshed(fresh) => {
+                // Keeps the version unchanged so a concurrent rebuild does
+                // not lose the version CAS to this read path.
+                match ctx
+                    .global_data()
+                    .build_backend_metadata_cache()
+                    .try_refresh(&cache_key, &fresh, fresh.cache_version)
+                    .await
+                {
+                    Ok(RefreshResult::Written) => {
+                        tracing::debug!("Updated cached input fingerprints");
+                    }
+                    Ok(RefreshResult::Skipped(_)) => {
+                        tracing::debug!(
+                            "Metadata cache changed while refreshing input fingerprints; using the verified entry without persisting the refresh"
+                        );
+                    }
+                    Err(err) => {
+                        tracing::debug!(
+                            error = %err,
+                            "Failed to persist refreshed input fingerprints; using the verified entry"
+                        );
+                    }
+                }
+
+                tracing::debug!("Using cached build backend metadata");
+                Ok(CacheProbe::Hit(BuildBackendMetadata {
+                    source: manifest_source_location,
+                    cache_key: cache_key.key(),
+                    metadata: fresh,
+                    skip_cache,
+                }))
+            }
+            CacheFreshness::Stale(stale) => Ok(CacheProbe::Miss {
                 cache_key,
                 stale,
                 project_model_hash,
                 configuration_hash,
                 backend_spec_hash,
+                backend_binary_fingerprint,
                 skip_cache,
             }),
         }
@@ -816,6 +1003,7 @@ impl BuildBackendMetadataInner {
             project_model_hash,
             configuration_hash,
             backend_spec_hash,
+            backend_binary_fingerprint,
             skip_cache,
         ) = match self.probe_cache(ctx, &checkouts).await? {
             CacheProbe::Hit(metadata) => return Ok(metadata),
@@ -825,6 +1013,7 @@ impl BuildBackendMetadataInner {
                 project_model_hash,
                 configuration_hash,
                 backend_spec_hash,
+                backend_binary_fingerprint,
                 skip_cache,
             } => (
                 cache_key,
@@ -832,6 +1021,7 @@ impl BuildBackendMetadataInner {
                 project_model_hash,
                 configuration_hash,
                 backend_spec_hash,
+                backend_binary_fingerprint,
                 skip_cache,
             ),
         };
@@ -842,6 +1032,7 @@ impl BuildBackendMetadataInner {
             .compute(
                 &InstantiateBackendKey::new(
                     checkouts.manifest_source_checkout.path.as_std_path(),
+                    checkout_root_for(&checkouts.manifest_source_checkout),
                     checkouts.manifest_source_anchor.clone(),
                     checkouts
                         .build_source_checkout
@@ -850,7 +1041,8 @@ impl BuildBackendMetadataInner {
                         .to_path_buf(),
                     self.exclude_newer.clone(),
                 )
-                .with_project_model_overrides(self.project_model_overrides()),
+                .with_project_model_overrides(self.project_model_overrides())
+                .with_inline(self.inline.clone()),
             )
             .await
             .map_err(|e: Arc<InstantiateBackendError>| {
@@ -894,6 +1086,7 @@ impl BuildBackendMetadataInner {
 
         let raw = self
             .call_conda_outputs(
+                ctx,
                 &metadata_dir,
                 &checkouts.build_source_checkout,
                 &source_unique_key,
@@ -910,28 +1103,44 @@ impl BuildBackendMetadataInner {
         };
 
         let prev_cache_version = stale.as_ref().map(|cache| cache.cache_version);
+        let input_file_states = if checkouts.build_source_checkout.is_immutable() {
+            InputSnapshot::default()
+        } else {
+            // A file modified after the backend returned may not be
+            // represented by its output; the previous entry's snapshot lets
+            // a stable fingerprint be confirmed on the next build.
+            InputSnapshot::capture(
+                raw.input_files.iter().cloned().chain(
+                    self.variant_files
+                        .iter()
+                        .filter_map(|path| absolute_variant_file(path)),
+                ),
+                Some(raw.timestamp),
+                stale.as_ref().map(|entry| &entry.input_file_states),
+                ctx.global_data().io_concurrency_semaphore().cloned(),
+            )
+            .await
+        };
         let metadata = BuildBackendMetadataCacheEntry {
             revision,
-            cache_version: prev_cache_version.map_or(0, |version| version + 1),
+            cache_version: prev_cache_version.unwrap_or(0) + 1,
             outputs: raw.outputs,
             build_variants: self.variant_configuration.clone(),
             build_variant_files: self.variant_files.iter().cloned().collect(),
-            input_globs: raw.input_globs,
+            input_glob_sets: raw.input_glob_sets,
             input_files: raw.input_files,
+            input_file_states,
             source: canonical_source,
             project_model_hash,
             configuration_hash,
             backend_spec_hash: Some(backend_spec_hash),
+            backend_binary_fingerprint,
             timestamp: raw.timestamp,
         };
 
         let cache = ctx.global_data().build_backend_metadata_cache();
         match cache
-            .try_write(
-                &cache_key,
-                metadata.clone(),
-                prev_cache_version.unwrap_or(0),
-            )
+            .try_write(&cache_key, &metadata, prev_cache_version.unwrap_or(0))
             .await
             .map_err(BuildBackendMetadataError::Cache)?
         {
@@ -960,10 +1169,12 @@ impl BuildBackendMetadataInner {
 struct RawCondaOutputs {
     /// The outputs as reported by the build backend.
     outputs: Vec<pixi_build_types::procedures::conda_outputs::CondaOutput>,
-    /// Globs of files from which the metadata was derived.
-    input_globs: std::collections::BinaryHeap<String>,
-    /// Paths of files that match the input globs.
-    input_files: std::collections::BTreeSet<PathBuf>,
+    /// Structured glob groups of files from which the metadata was derived
+    /// (the backend's flat globs folded in). Order within a group matters:
+    /// pixi's `GlobSet` is gitignore last-match-wins.
+    input_glob_sets: Vec<pixi_build_types::InputGlobSet>,
+    /// Absolute paths of the files that matched the input globs.
+    input_files: std::collections::BTreeSet<pixi_path::AbsPathBuf>,
     /// The timestamp of when the metadata was computed.
     timestamp: SystemTime,
 }
@@ -1010,6 +1221,18 @@ pub enum BuildBackendMetadataError {
     NormalizePath(Arc<pixi_path::NormalizeError>),
 }
 
+impl BuildBackendMetadataError {
+    /// Returns the backend discovery failure this error ultimately stems
+    /// from, if any.
+    pub fn discovery_error(&self) -> Option<&pixi_build_discovery::DiscoveryError> {
+        match self {
+            BuildBackendMetadataError::Discovery(err) => Some(err),
+            BuildBackendMetadataError::Initialize(err) => err.discovery_error(),
+            _ => None,
+        }
+    }
+}
+
 impl From<pixi_build_discovery::DiscoveryError> for BuildBackendMetadataError {
     fn from(err: pixi_build_discovery::DiscoveryError) -> Self {
         Self::Discovery(Arc::new(err))
@@ -1048,7 +1271,7 @@ mod tests {
         CondaOutput, CondaOutputDependencies, CondaOutputIgnoreRunExports, CondaOutputMetadata,
         CondaOutputRunExports,
     };
-    use rattler_conda_types::{NoArchType, PackageName, Platform, Version};
+    use rattler_conda_types::{NoArchType, PackageName, Subdir, Version};
     use std::collections::BTreeMap;
 
     fn create_test_output(name: &str, variant: BTreeMap<String, VariantValue>) -> CondaOutput {
@@ -1058,9 +1281,11 @@ mod tests {
                 version: Version::major(1).into(),
                 build: "0".to_string(),
                 build_number: 0,
-                subdir: Platform::NoArch,
+                subdir: Subdir::NoArch,
                 license: None,
                 license_family: None,
+                flags: Default::default(),
+                track_features: Default::default(),
                 noarch: NoArchType::none(),
                 purls: None,
                 python_site_packages_path: None,
@@ -1072,9 +1297,11 @@ mod tests {
                 depends: vec![],
                 constraints: vec![],
             },
+            extra_dependencies: Default::default(),
             ignore_run_exports: CondaOutputIgnoreRunExports::default(),
             run_exports: CondaOutputRunExports::default(),
             input_globs: None,
+            input_glob_sets: None,
         }
     }
 

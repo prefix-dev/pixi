@@ -1,8 +1,8 @@
 #
-# This lock-file should not satisfy the accompanying pixi.toml file.
+# This lock file should not satisfy the accompanying pixi.toml file.
 #
 # The user removed the explicit `index = "..."` from `my-dep` in the
-# manifest, but the lock-file still records `my-dep` as resolved from
+# manifest, but the lock file still records `my-dep` as resolved from
 # a non-default custom index. The satisfiability check should detect
 # this drift and force a re-resolve.
 

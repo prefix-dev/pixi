@@ -2,13 +2,12 @@
 
 use std::{
     collections::BTreeMap,
-    ffi::OsStr,
     hash::{Hash, Hasher},
 };
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_record::PinnedSourceSpec;
-use rattler_conda_types::{PackageName, Platform};
+use rattler_conda_types::{PackageName, Subdir};
 use xxhash_rust::xxh3::Xxh3;
 
 use crate::SourceCheckout;
@@ -43,7 +42,7 @@ pub struct WorkDirKey {
     pub source: SourceRecordOrCheckout,
 
     /// The platform the dependency will run on
-    pub host_platform: Platform,
+    pub host_platform: Subdir,
 
     /// The build backend name
     /// TODO: Maybe we should also include the version?
@@ -58,15 +57,13 @@ impl WorkDirKey {
         self.build_backend.hash(&mut hasher);
         let unique_key = URL_SAFE_NO_PAD.encode(hasher.finish().to_ne_bytes());
 
-        let name = match &self.source {
+        let name: Option<String> = match &self.source {
             SourceRecordOrCheckout::Record { package_name, .. } => {
-                Some(package_name.as_normalized())
+                Some(package_name.as_normalized().to_string())
             }
-            SourceRecordOrCheckout::Checkout { checkout } => checkout
-                .path
-                .as_std_path()
-                .file_name()
-                .and_then(OsStr::to_str),
+            SourceRecordOrCheckout::Checkout { checkout } => {
+                super::display_name_for_std_path(checkout.path.as_std_path())
+            }
         };
 
         match name {

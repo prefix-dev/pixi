@@ -1,8 +1,8 @@
 #
-# This lock-file should not satisfy the accompanying pixi.toml file.
+# This lock file should not satisfy the accompanying pixi.toml file.
 #
 # boltons is requested as a pypi package. The pypi dependency can also be
-# satisfied by the conda package that is in the lock-file, but since none of the
+# satisfied by the conda package that is in the lock file, but since none of the
 # conda packages reference the boltons conda package, it should be dropped in
 # favor of the pypi package.
 

@@ -26,11 +26,14 @@
 use pixi_cli::{
     add, build,
     cli_config::{
-        DependencyConfig, GitRev, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig,
+        DependencyConfig, GitRev, LockFileUpdateConfig, NoInstallConfig, ScriptWorkspaceConfig,
+        WorkspaceConfig,
     },
     global, init, install, lock, remove, search, task, update, workspace,
 };
 use pixi_core::DependencyType;
+
+use super::isolated_config_source;
 use std::{
     future::{Future, IntoFuture},
     io,
@@ -41,8 +44,8 @@ use std::{
 use typed_path::Utf8NativePathBuf;
 
 use futures::FutureExt;
-use pixi_manifest::{EnvironmentName, FeatureName, SpecType, task::Dependency};
-use rattler_conda_types::{NamedChannelOrUrl, Platform, RepoDataRecord};
+use pixi_manifest::{CondaPypiMap, EnvironmentName, FeatureName, SpecType, task::Dependency};
+use rattler_conda_types::{NamedChannelOrUrl, RepoDataRecord, Subdir};
 use url::Url;
 
 /// Strings from an iterator
@@ -81,8 +84,8 @@ impl InitBuilder {
             .push(NamedChannelOrUrl::Url(
                 Url::from_directory_path(channel).unwrap(),
             ));
-        // Disable the pypi mapping
-        self.args.conda_pypi_map = Some(Vec::new());
+        // Local-channel tests should not try to fetch the remote conda↔PyPI mapping.
+        self.args.conda_pypi_map = Some(CondaPypiMap::Disabled);
         self
     }
 
@@ -97,7 +100,7 @@ impl InitBuilder {
         self
     }
 
-    pub fn with_platforms(mut self, platforms: Vec<Platform>) -> Self {
+    pub fn with_platforms(mut self, platforms: Vec<Subdir>) -> Self {
         self.args.platforms = platforms.into_iter().map(|p| p.to_string()).collect();
         self
     }
@@ -139,7 +142,7 @@ pub trait HasNoInstallConfig: Sized {
 pub trait HasLockFileUpdateConfig: Sized {
     fn lock_file_update_config(&mut self) -> &mut LockFileUpdateConfig;
 
-    /// Set the frozen flag to skip lock-file updates
+    /// Set the frozen flag to skip lock file updates
     fn with_frozen(mut self, frozen: bool) -> Self {
         self.lock_file_update_config().lock_file_usage.frozen = frozen;
         self
@@ -159,8 +162,10 @@ pub trait HasDependencyConfig: Sized {
             pypi: false,
             platforms: Default::default(),
             feature: Default::default(),
+            environment: Default::default(),
             git: Default::default(),
             rev: Default::default(),
+            subdirectory: Default::default(),
             subdir: Default::default(),
         }
     }
@@ -196,8 +201,10 @@ pub trait HasDependencyConfig: Sized {
         self
     }
 
-    fn set_platforms(mut self, platforms: &[Platform]) -> Self {
-        self.dependency_config().platforms.extend(platforms.iter());
+    fn set_platforms(mut self, platforms: &[Subdir]) -> Self {
+        self.dependency_config()
+            .platforms
+            .extend(platforms.iter().copied().map(Into::into));
         self
     }
 }
@@ -224,8 +231,8 @@ impl AddBuilder {
         self
     }
 
-    pub fn with_platform(mut self, platform: Platform) -> Self {
-        self.args.dependency_config.platforms.push(platform);
+    pub fn with_platform(mut self, platform: Subdir) -> Self {
+        self.args.dependency_config.platforms.push(platform.into());
         self
     }
 
@@ -234,20 +241,31 @@ impl AddBuilder {
         self
     }
 
+    pub fn with_path(mut self, path: impl Into<PathBuf>) -> Self {
+        self.args.path = Some(path.into());
+        self
+    }
+
     pub fn with_git_rev(mut self, rev: GitRev) -> Self {
         self.args.dependency_config.rev = Some(rev);
         self
     }
 
-    pub fn with_git_subdir(mut self, subdir: String) -> Self {
+    pub fn with_git_subdirectory(mut self, subdirectory: String) -> Self {
+        self.args.dependency_config.subdirectory = Some(subdirectory);
+        self
+    }
+
+    /// Sets the deprecated `--subdir` alias rather than `--subdirectory`.
+    pub fn with_deprecated_git_subdir(mut self, subdir: String) -> Self {
         self.args.dependency_config.subdir = Some(subdir);
         self
     }
 
     /// Deprecated: Use .with_frozen(true).with_install(false) instead
-    pub fn with_no_lockfile_update(mut self, no_lockfile_update: bool) -> Self {
-        if no_lockfile_update {
-            // Since no_lockfile_update is deprecated, we simulate the behavior by setting frozen=true and no_install=true
+    pub fn with_no_lock_file_update(mut self, no_lock_file_update: bool) -> Self {
+        if no_lock_file_update {
+            // Since no_lock_file_update is deprecated, we simulate the behavior by setting frozen=true and no_install=true
             self.args.lock_file_update_config.lock_file_usage.frozen = true;
             self.args.no_install_config.no_install = true;
         }
@@ -256,6 +274,11 @@ impl AddBuilder {
 
     pub fn with_no_install(mut self, no_install: bool) -> Self {
         self.args.no_install_config.no_install = no_install;
+        self
+    }
+
+    pub fn with_index(mut self, index: Option<Url>) -> Self {
+        self.args.index = index;
         self
     }
 }
@@ -283,7 +306,7 @@ impl IntoFuture for AddBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        add::execute(self.args).boxed_local()
+        async move { add::execute(self.args).await }.boxed_local()
     }
 }
 
@@ -328,7 +351,7 @@ impl IntoFuture for RemoveBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        remove::execute(self.args).boxed_local()
+        async move { remove::execute(self.args).await }.boxed_local()
     }
 }
 pub struct TaskAddBuilder {
@@ -364,6 +387,7 @@ impl TaskAddBuilder {
     /// Execute the CLI command
     pub async fn execute(self) -> miette::Result<()> {
         task::execute(task::Args {
+            config_source: isolated_config_source(),
             operation: task::Operation::Add(self.args),
             workspace_config: WorkspaceConfig {
                 manifest_path: self.manifest_path,
@@ -389,6 +413,7 @@ impl TaskAliasBuilder {
     /// Execute the CLI command
     pub async fn execute(self) -> miette::Result<()> {
         task::execute(task::Args {
+            config_source: isolated_config_source(),
             operation: task::Operation::Alias(self.args),
             workspace_config: WorkspaceConfig {
                 manifest_path: self.manifest_path,
@@ -400,7 +425,7 @@ impl TaskAliasBuilder {
 }
 
 pub struct ProjectChannelAddBuilder {
-    pub workspace_config: WorkspaceConfig,
+    pub workspace_config: ScriptWorkspaceConfig,
     pub args: workspace::channel::AddRemoveArgs,
 }
 
@@ -429,16 +454,20 @@ impl IntoFuture for ProjectChannelAddBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        workspace::channel::execute(workspace::channel::Args {
-            workspace_config: self.workspace_config,
-            command: workspace::channel::Command::Add(self.args),
-        })
+        async move {
+            workspace::channel::execute(workspace::channel::Args {
+                config_source: isolated_config_source(),
+                workspace_config: self.workspace_config,
+                command: workspace::channel::Command::Add(self.args),
+            })
+            .await
+        }
         .boxed_local()
     }
 }
 
 pub struct ProjectChannelRemoveBuilder {
-    pub workspace_config: WorkspaceConfig,
+    pub workspace_config: ScriptWorkspaceConfig,
     pub args: workspace::channel::AddRemoveArgs,
 }
 
@@ -462,10 +491,14 @@ impl IntoFuture for ProjectChannelRemoveBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        workspace::channel::execute(workspace::channel::Args {
-            workspace_config: self.workspace_config,
-            command: workspace::channel::Command::Remove(self.args),
-        })
+        async move {
+            workspace::channel::execute(workspace::channel::Args {
+                config_source: isolated_config_source(),
+                workspace_config: self.workspace_config,
+                command: workspace::channel::Command::Remove(self.args),
+            })
+            .await
+        }
         .boxed_local()
     }
 }
@@ -497,6 +530,10 @@ impl InstallBuilder {
         self.args.only = Some(pkg);
         self
     }
+    pub fn with_platform(mut self, platform: Subdir) -> Self {
+        self.args.platform = Some(platform.into());
+        self
+    }
 
     pub fn with_environment(mut self, env: Vec<String>) -> Self {
         self.args.environment = Some(env);
@@ -513,7 +550,7 @@ impl IntoFuture for InstallBuilder {
     type Output = miette::Result<()>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
     fn into_future(self) -> Self::IntoFuture {
-        install::execute(self.args).boxed_local()
+        async move { install::execute(self.args).await }.boxed_local()
     }
 }
 
@@ -551,13 +588,17 @@ impl IntoFuture for ProjectEnvironmentAddBuilder {
     type Output = miette::Result<()>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
     fn into_future(self) -> Self::IntoFuture {
-        workspace::environment::execute(workspace::environment::Args {
-            workspace_config: WorkspaceConfig {
-                manifest_path: self.manifest_path,
-                ..Default::default()
-            },
-            command: workspace::environment::Command::Add(self.args),
-        })
+        async move {
+            workspace::environment::execute(workspace::environment::Args {
+                config_source: isolated_config_source(),
+                workspace_config: WorkspaceConfig {
+                    manifest_path: self.manifest_path,
+                    ..Default::default()
+                },
+                command: workspace::environment::Command::Add(self.args),
+            })
+            .await
+        }
         .boxed_local()
     }
 }
@@ -587,12 +628,12 @@ impl UpdateBuilder {
         self
     }
 
-    pub fn with_platform(mut self, platform: Platform) -> Self {
+    pub fn with_platform(mut self, platform: Subdir) -> Self {
         self.args
             .specs
             .platforms
             .get_or_insert_with(Vec::new)
-            .push(platform);
+            .push(platform.into());
         self
     }
 
@@ -616,7 +657,7 @@ impl IntoFuture for UpdateBuilder {
     type Output = miette::Result<()>;
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
     fn into_future(self) -> Self::IntoFuture {
-        update::execute(self.args).boxed_local()
+        async move { update::execute(self.args).await }.boxed_local()
     }
 }
 
@@ -642,7 +683,7 @@ impl IntoFuture for LockBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        lock::execute(self.args).boxed_local()
+        async move { lock::execute(self.args).await }.boxed_local()
     }
 }
 
@@ -654,13 +695,13 @@ pub struct BuildBuilder {
 
 impl BuildBuilder {
     /// Set the target platform for the build
-    pub fn with_target_platform(mut self, platform: Platform) -> Self {
+    pub fn with_target_platform(mut self, platform: Subdir) -> Self {
         self.args.target_platform = platform;
         self
     }
 
     /// Set the build platform for the build
-    pub fn with_build_platform(mut self, platform: Platform) -> Self {
+    pub fn with_build_platform(mut self, platform: Subdir) -> Self {
         self.args.build_platform = platform;
         self
     }
@@ -695,7 +736,7 @@ impl IntoFuture for BuildBuilder {
     type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        build::execute(self.args).boxed_local()
+        async move { build::execute(self.args).await }.boxed_local()
     }
 }
 
@@ -711,9 +752,11 @@ impl GlobalInstallBuilder {
     pub fn new(
         tmpdir: PathBuf,
         backend_override: Option<pixi_build_frontend::BackendOverride>,
+        config: pixi_config::ConfigCli,
     ) -> Self {
         let mut args = global::install::Args::default();
         args.backend_override = backend_override;
+        args.config = config;
         Self { args, tmpdir }
     }
 

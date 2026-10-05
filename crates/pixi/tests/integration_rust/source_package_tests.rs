@@ -2,7 +2,7 @@ use fs_err as fs;
 use pixi_build_backend_passthrough::{BackendEvent, ObservableBackend, PassthroughBackend};
 use pixi_build_frontend::BackendOverride;
 use pixi_consts::consts;
-use rattler_conda_types::{Platform, package::RunExportsJson};
+use rattler_conda_types::{PrefixRecord, Subdir, package::RunExportsJson};
 use rattler_lock::{LockFile, PackageBuildSource};
 use std::path::PathBuf;
 use std::time::Duration;
@@ -10,10 +10,11 @@ use tempfile::TempDir;
 use url::Url;
 
 use crate::{
-    common::{LockFileExt, PixiControl},
+    common::{LockFileExt, PixiControl, isolated_config_source, logging::try_init_test_subscriber},
     setup_tracing,
 };
 use pixi_cli::publish;
+use pixi_core::{UpdateLockFileOptions, environment::LockFileUsage};
 use pixi_test_utils::{GitRepoFixture, MockRepoData, Package, format_diagnostic};
 
 fn write_source_package_manifest(path: &std::path::Path, name: &str, version: &str, extra: &str) {
@@ -60,7 +61,7 @@ preview = ["pixi-build"]
 [dependencies]
 {source_dependencies}
 "#,
-        Platform::current()
+        Subdir::current().unwrap_or(Subdir::NoArch)
     );
     fs::write(path, manifest_content).unwrap();
 }
@@ -146,7 +147,7 @@ preview = ["pixi-build"]
             .display()
             .to_string()
             .replace('\\', "\\\\"),
-        Platform::current()
+        Subdir::current().unwrap_or(Subdir::NoArch)
     );
 
     // Write the manifest
@@ -243,7 +244,7 @@ preview = ["pixi-build"]
             .display()
             .to_string()
             .replace('\\', "\\\\"),
-        Platform::current()
+        Subdir::current().unwrap_or(Subdir::NoArch)
     );
 
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
@@ -314,7 +315,7 @@ preview = ["pixi-build"]
             .display()
             .to_string()
             .replace('\\', "\\\\"),
-        Platform::current()
+        Subdir::current().unwrap_or(Subdir::NoArch)
     );
 
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
@@ -383,18 +384,379 @@ preview = ["pixi-build"]
 # This will use the PassthroughBackend instead of a real backend
 my-package = {{ path = "./my-package" }}
 "#,
-        Platform::current()
+        Subdir::current().unwrap_or(Subdir::NoArch)
     );
 
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
 
-    // Build the lock-file and ensure that it contains our package.
+    // Build the lock file and ensure that it contains our package.
     let lock_file = pixi.update_lock_file().await.unwrap();
     assert!(lock_file.contains_conda_package(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         "my-package",
     ));
+}
+
+/// A source package can declare extra groups through
+/// `[package.extra-dependencies.<group>]`. A workspace that depends on the
+/// source package and selects a group via `extras = ["<group>"]` must pull the
+/// group's dependencies into the lock file.
+#[tokio::test]
+async fn test_source_dependency_extras_are_pulled_in() {
+    setup_tracing();
+
+    // Channel providing the package referenced by the optional `test` group.
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("extra-pkg", "1.0.0").finish());
+    let channel = package_database.into_channel().await.unwrap();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+    let source_manifest = r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+
+[package.extra-dependencies.test]
+extra-pkg = ">=1.0"
+"#;
+    fs::write(source_dir.join("pixi.toml"), source_manifest).unwrap();
+
+    let manifest = format!(
+        r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "./my-package", extras = ["test"] }}
+"#,
+        channel = channel.url(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
+    );
+    fs::write(pixi.manifest_path(), manifest).unwrap();
+
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
+    assert!(
+        lock_file.contains_conda_package(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Subdir::current().unwrap_or(Subdir::NoArch),
+            "my-package",
+        ),
+        "the source package itself must be locked"
+    );
+    assert!(
+        lock_file.contains_conda_package(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Subdir::current().unwrap_or(Subdir::NoArch),
+            "extra-pkg",
+        ),
+        "selecting the `test` extra must pull its dependency into the lock file"
+    );
+}
+
+/// Counterpart to [`test_source_dependency_extras_are_pulled_in`]: when the
+/// workspace does not select the optional group, the group's dependencies must
+/// not appear in the lock file.
+#[tokio::test]
+async fn test_source_dependency_unselected_extras_are_absent() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("extra-pkg", "1.0.0").finish());
+    let channel = package_database.into_channel().await.unwrap();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+    let source_manifest = r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+
+[package.extra-dependencies.test]
+extra-pkg = ">=1.0"
+"#;
+    fs::write(source_dir.join("pixi.toml"), source_manifest).unwrap();
+
+    let manifest = format!(
+        r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "./my-package" }}
+"#,
+        channel = channel.url(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
+    );
+    fs::write(pixi.manifest_path(), manifest).unwrap();
+
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
+    assert!(
+        lock_file.contains_conda_package(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Subdir::current().unwrap_or(Subdir::NoArch),
+            "my-package",
+        ),
+        "the source package itself must be locked"
+    );
+    assert!(
+        !lock_file.contains_conda_package(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Subdir::current().unwrap_or(Subdir::NoArch),
+            "extra-pkg",
+        ),
+        "without selecting the `test` extra its dependency must not be locked"
+    );
+}
+
+/// Requesting an extra the source package does not declare must not fail the
+/// solve (the solver drops unknown extras silently, by design), but it should
+/// warn, naming the unknown extra and listing the extras that do exist.
+#[tokio::test]
+async fn test_source_dependency_unknown_extra_warns() {
+    let writer = try_init_test_subscriber();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("extra-pkg", "1.0.0").finish());
+    let channel = package_database.into_channel().await.unwrap();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+    let source_manifest = r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+
+[package.extra-dependencies.test]
+extra-pkg = ">=1.0"
+"#;
+    fs::write(source_dir.join("pixi.toml"), source_manifest).unwrap();
+
+    let manifest = format!(
+        r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "./my-package", extras = ["nonexistent"] }}
+"#,
+        channel = channel.url(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
+    );
+    fs::write(pixi.manifest_path(), manifest).unwrap();
+
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
+    assert!(
+        lock_file.contains_conda_package(
+            consts::DEFAULT_ENVIRONMENT_NAME,
+            Subdir::current().unwrap_or(Subdir::NoArch),
+            "my-package",
+        ),
+        "the source package itself must still be locked despite the unknown extra"
+    );
+
+    let logs = writer.get_output();
+    assert!(
+        logs.contains(
+            "extra 'nonexistent' requested for 'my-package' does not exist (available extras: test)"
+        ),
+        "expected a warning naming the unknown extra and the available extras, got:\n{logs}"
+    );
+}
+
+/// A source package can depend on another source package. This mirrors the
+/// `example-rust` -> `example-rattler-build` shape, with the inner source
+/// declared as a `[package.run-dependencies]` path dependency. Both packages
+/// are built by the passthrough backend, and the inner package's own run
+/// dependency must be resolved transitively into the lock file.
+#[tokio::test]
+async fn test_source_dependency_on_source_run_dependency() {
+    setup_tracing();
+
+    // Channel providing the inner source package's own (binary) dependency.
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("transitive-dep", "1.0.0").finish());
+    let channel = package_database.into_channel().await.unwrap();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    // Inner source package, located next to the outer package's manifest.
+    let recipe_dir = pixi.workspace_path().join("example-rust").join("recipe");
+    fs::create_dir_all(&recipe_dir).unwrap();
+    let inner_manifest = r#"
+[package]
+name = "example-rattler-build"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+
+[package.run-dependencies]
+transitive-dep = ">=1.0"
+"#;
+    fs::write(recipe_dir.join("pixi.toml"), inner_manifest).unwrap();
+
+    // Outer source package depending on the inner one via a path.
+    let outer_manifest = r#"
+[package]
+name = "example-rust"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+
+[package.run-dependencies]
+example-rattler-build = { path = "./recipe" }
+"#;
+    fs::write(
+        pixi.workspace_path().join("example-rust").join("pixi.toml"),
+        outer_manifest,
+    )
+    .unwrap();
+
+    let manifest = format!(
+        r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[dependencies]
+example-rust = {{ path = "./example-rust" }}
+"#,
+        channel = channel.url(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
+    );
+    fs::write(pixi.manifest_path(), manifest).unwrap();
+
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
+    for pkg in ["example-rust", "example-rattler-build", "transitive-dep"] {
+        assert!(
+            lock_file.contains_conda_package(
+                consts::DEFAULT_ENVIRONMENT_NAME,
+                Subdir::current().unwrap_or(Subdir::NoArch),
+                pkg,
+            ),
+            "{pkg} should be locked"
+        );
+    }
+}
+
+/// Same `example-rust` -> `example-rattler-build` source-on-source shape, but
+/// the inner source is declared in a `[package.extra-dependencies.<group>]`
+/// group and pulled in by the workspace selecting `extras = ["recipe"]`. The
+/// inner source package and its transitive dependency must end up in the lock
+/// file just like a run dependency would.
+#[tokio::test]
+async fn test_source_dependency_on_source_extra_dependency() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("transitive-dep", "1.0.0").finish());
+    let channel = package_database.into_channel().await.unwrap();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    let recipe_dir = pixi.workspace_path().join("example-rust").join("recipe");
+    fs::create_dir_all(&recipe_dir).unwrap();
+    let inner_manifest = r#"
+[package]
+name = "example-rattler-build"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+
+[package.run-dependencies]
+transitive-dep = ">=1.0"
+"#;
+    fs::write(recipe_dir.join("pixi.toml"), inner_manifest).unwrap();
+
+    let outer_manifest = r#"
+[package]
+name = "example-rust"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+
+[package.extra-dependencies.recipe]
+example-rattler-build = { path = "./recipe" }
+"#;
+    fs::write(
+        pixi.workspace_path().join("example-rust").join("pixi.toml"),
+        outer_manifest,
+    )
+    .unwrap();
+
+    let manifest = format!(
+        r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[dependencies]
+example-rust = {{ path = "./example-rust", extras = ["recipe"] }}
+"#,
+        channel = channel.url(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
+    );
+    fs::write(pixi.manifest_path(), manifest).unwrap();
+
+    let lock_file = pixi.update_lock_file().await.unwrap();
+
+    for pkg in ["example-rust", "example-rattler-build", "transitive-dep"] {
+        assert!(
+            lock_file.contains_conda_package(
+                consts::DEFAULT_ENVIRONMENT_NAME,
+                Subdir::current().unwrap_or(Subdir::NoArch),
+                pkg,
+            ),
+            "{pkg} should be locked (pulled in through the `recipe` extra)"
+        );
+    }
 }
 
 /// Test that verifies [package.build] source.path is resolved relative to the
@@ -455,7 +817,7 @@ source.path = "src"
 [dependencies]
 test-build-source = {{ path = "." }}
 "#,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
     );
 
     // Write the manifest
@@ -481,7 +843,7 @@ test-build-source = {{ path = "." }}
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "test-build-source",
         ),
         "Built package should be in the lock file"
@@ -489,13 +851,13 @@ test-build-source = {{ path = "." }}
 }
 
 /// Verifies that the workspace exclude-newer cutoff propagates into
-/// the source package's build-dependency solve during lockfile
+/// the source package's build-dependency solve during lock file
 /// update.
 ///
 /// Currently ignored: with the SourceBuildKey migration, nested
 /// build/host solves are expected to happen upstream in the
 /// orchestrator (ResolveSourcePackageKey → SolvePixiEnvironmentKey),
-/// but the PassthroughBackend fixture produces a lockfile where
+/// but the PassthroughBackend fixture produces a lock file where
 /// build_packages stays empty even though the package manifest lists
 /// a build-dependency on `foo`. Re-enable once the orchestrator-side
 /// nested-solve path has been audited end-to-end for exclude_newer
@@ -549,7 +911,7 @@ preview = ["pixi-build"]
 my-package = {{ path = "./my-package" }}
 "#,
         channel = channel.url(),
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
     );
     pixi.update_manifest(&manifest_without_cutoff).unwrap();
     pixi.update_lock_file()
@@ -568,7 +930,7 @@ exclude-newer = "2025-01-01T00:00:00Z"
 my-package = {{ path = "./my-package" }}
 "#,
         channel = channel.url(),
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
     );
     pixi.update_manifest(&manifest_with_cutoff).unwrap();
 
@@ -584,7 +946,7 @@ my-package = {{ path = "./my-package" }}
     assert!(rendered.contains("foo"), "{rendered}");
 }
 
-fn variant_fail_fast_manifest(channel: &str, platform: Platform) -> String {
+fn variant_fail_fast_manifest(channel: &str, platform: Subdir) -> String {
     format!(
         r#"
 [workspace]
@@ -624,7 +986,7 @@ async fn test_publish_fails_before_build_or_upload_when_one_variant_is_unsatisfi
         ObservableBackend::instantiator(PassthroughBackend::instantiator());
     let pixi = PixiControl::from_manifest(&variant_fail_fast_manifest(
         channel.url().as_ref(),
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
     ))
     .unwrap();
 
@@ -633,8 +995,9 @@ async fn test_publish_fails_before_build_or_upload_when_one_variant_is_unsatisfi
     let err = publish::execute(publish::Args {
         backend_override: Some(BackendOverride::from_memory(instantiator)),
         config_cli: Default::default(),
-        target_platform: Platform::current(),
-        build_platform: Platform::current(),
+        config_source: isolated_config_source(),
+        target_platform: Subdir::current().unwrap_or(Subdir::NoArch),
+        build_platform: Subdir::current().unwrap_or(Subdir::NoArch),
         build_string_prefix: None,
         build_number: None,
         build_dir: None,
@@ -643,7 +1006,9 @@ async fn test_publish_fails_before_build_or_upload_when_one_variant_is_unsatisfi
         target_channel: Some(target_url.to_string()),
         target_dir: None,
         force: false,
-        skip_existing: true,
+        no_skip_existing: false,
+        allow_source_dependencies: false,
+        dry_run: false,
         generate_attestation: false,
         variant: Vec::new(),
         variant_config: Vec::new(),
@@ -737,7 +1102,7 @@ my-package = {{ path = "./my-package" }}
 foo = "{override_cutoff}"
 "#,
         channel = channel.url(),
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
         cutoff = cutoff,
         override_cutoff = override_cutoff,
     );
@@ -750,7 +1115,7 @@ foo = "{override_cutoff}"
         .expect_err("host dependency should still be excluded until it is overridden too");
     let rendered = format_diagnostic(err.as_ref());
     assert!(
-        rendered.contains("while trying to solve the host environment"),
+        rendered.contains("failed to solve the host environment for package 'my-package'"),
         "{rendered}"
     );
     assert!(rendered.contains("bar"), "{rendered}");
@@ -771,7 +1136,7 @@ foo = "{override_cutoff}"
 bar = "{override_cutoff}"
 "#,
         channel = channel.url(),
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
         cutoff = cutoff,
         override_cutoff = override_cutoff,
     );
@@ -874,7 +1239,7 @@ sdl2-32 = {{ features = ["sdl2-32"] }}
 my-package = {{ path = "./my-package" }}
 "#,
         channel.url(),
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
     );
 
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
@@ -906,8 +1271,8 @@ my-package = {{ path = "./my-package" }}
     assert_eq!(events.len(), 1, "Expected another build for sdl2-32");
 }
 
-/// Test that verifies when we generate a lock-file with a source package,
-/// a second invocation of generating the lock-file should report it's already up to date.
+/// Test that verifies when we generate a lock file with a source package,
+/// a second invocation of generating the lock file should report it's already up to date.
 ///
 /// This test creates a noarch: generic package with all fields that are compared
 /// in `package_records_are_equal`:
@@ -946,7 +1311,7 @@ async fn test_source_package_lock_file_up_to_date() {
     let mut package = pixi_test_utils::Package::build("test-source-pkg", "1.2.3")
         .with_build("test_build_0")
         .with_build_number(0)
-        .with_subdir(Platform::NoArch)
+        .with_subdir(Subdir::NoArch)
         .with_dependency("some-dependency >=1.0")
         .with_run_exports(run_exports)
         .finish();
@@ -1000,27 +1365,27 @@ preview = ["pixi-build"]
 [dependencies]
 test-source-pkg = {{ path = "./source-package" }}
 "#,
-        Platform::current()
+        Subdir::current().unwrap_or(Subdir::NoArch)
     );
 
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
 
-    // First invocation: Generate the lock-file
+    // First invocation: Generate the lock file
     let workspace = pixi.workspace().unwrap();
     let (lock_file_data, was_updated) = workspace
         .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("First lock file generation should succeed");
 
-    // Verify the lock-file was actually created/updated
-    assert!(was_updated, "First invocation should update the lock-file");
+    // Verify the lock file was actually created/updated
+    assert!(was_updated, "First invocation should update the lock file");
 
-    // Verify the package is in the lock-file
+    // Verify the package is in the lock file
     let lock_file = lock_file_data.into_lock_file();
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "test-source-pkg",
         ),
         "Lock file should contain the source package"
@@ -1030,28 +1395,28 @@ test-source-pkg = {{ path = "./source-package" }}
     assert!(
         lock_file.contains_match_spec(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "test-source-pkg"
         ),
         "Lock file should contain test-source-pkg"
     );
 
-    // Second invocation: Load the workspace again and check if lock-file is up to date
+    // Second invocation: Load the workspace again and check if lock file is up to date
     let workspace = pixi.workspace().unwrap();
     let (_, was_updated_second) = workspace
         .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("Second lock file check should succeed");
 
-    // The second invocation should NOT update the lock-file since it's already up to date
+    // The second invocation should NOT update the lock file since it's already up to date
     assert!(
         !was_updated_second,
-        "Second invocation should report lock-file is already up to date"
+        "Second invocation should report lock file is already up to date"
     );
 }
 
 /// Adding a `[package.run-dependencies]` entry to a path-based source
-/// package must invalidate the lock-file on the next resolve.
+/// package must invalidate the lock file on the next resolve.
 ///
 /// The locked source record's `depends` field is the union of the
 /// manifest's run-dependencies and any run-exports contributed by the
@@ -1059,12 +1424,12 @@ test-source-pkg = {{ path = "./source-package" }}
 /// locked depends" check can't tell which side an entry came from. The
 /// only reliable signal is the backend's `run_dependencies`
 /// declaration: satisfiability must consult the backend and reject the
-/// lock-file when its declarations no longer match what's locked.
+/// lock file when its declarations no longer match what's locked.
 ///
 /// `PassthroughBackend` reads `run-dependencies` straight from the
 /// source manifest, so editing the manifest changes what the backend
 /// declares on the next satisfiability call. The first solve produces
-/// a lock-file with `dep-a` only; after adding `dep-b`, the lock-file
+/// a lock file with `dep-a` only; after adding `dep-b`, the lock file
 /// must be rewritten.
 #[tokio::test]
 async fn test_source_run_dependency_addition_invalidates_lock_file() {
@@ -1106,7 +1471,7 @@ preview = ["pixi-build"]
 my-package = {{ path = "./my-package" }}
 "#,
         channel = channel.url(),
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
     );
     fs::write(pixi.manifest_path(), manifest).unwrap();
 
@@ -1114,8 +1479,8 @@ my-package = {{ path = "./my-package" }}
     let (_, was_updated) = workspace
         .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
-        .expect("initial lock-file generation should succeed");
-    assert!(was_updated, "initial solve must create the lock-file");
+        .expect("initial lock file generation should succeed");
+    assert!(was_updated, "initial solve must create the lock file");
 
     // Add a new run-dependency. The locked record's `depends` does not
     // contain `dep-b`, so satisfiability must detect the mismatch
@@ -1138,15 +1503,15 @@ dep-b = ">=1.0"
     let (_, was_updated_after_add) = workspace
         .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
-        .expect("second lock-file check should succeed");
+        .expect("second lock file check should succeed");
     assert!(
         was_updated_after_add,
-        "adding a run-dependency to a source package must invalidate the lock-file",
+        "adding a run-dependency to a source package must invalidate the lock file",
     );
 }
 
 /// Removing a `[package.run-dependencies]` entry from a path-based
-/// source package must invalidate the lock-file.
+/// source package must invalidate the lock file.
 ///
 /// Counterpart to `test_source_run_dependency_addition_invalidates_lock_file`.
 /// The "every backend-declared dep is satisfied by the locked record"
@@ -1196,7 +1561,7 @@ preview = ["pixi-build"]
 my-package = {{ path = "./my-package" }}
 "#,
         channel = channel.url(),
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
     );
     fs::write(pixi.manifest_path(), manifest).unwrap();
 
@@ -1204,11 +1569,11 @@ my-package = {{ path = "./my-package" }}
     let (_, was_updated) = workspace
         .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
-        .expect("initial lock-file generation should succeed");
-    assert!(was_updated, "initial solve must create the lock-file");
+        .expect("initial lock file generation should succeed");
+    assert!(was_updated, "initial solve must create the lock file");
 
     // Drop `dep-b`. The locked record still carries it in `depends`,
-    // but the backend no longer declares it, and the lock-file must be
+    // but the backend no longer declares it, and the lock file must be
     // rewritten so the resolved environment shrinks accordingly.
     let updated_source_manifest = r#"
 [package]
@@ -1227,15 +1592,15 @@ dep-a = ">=1.0"
     let (_, was_updated_after_remove) = workspace
         .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
-        .expect("second lock-file check should succeed");
+        .expect("second lock file check should succeed");
     assert!(
         was_updated_after_remove,
-        "removing a run-dependency from a source package must invalidate the lock-file",
+        "removing a run-dependency from a source package must invalidate the lock file",
     );
 }
 
 /// Removing a host-dependency that contributes a `weak_constrains`
-/// run-export must invalidate the lock-file, even though pixi's manifest
+/// run-export must invalidate the lock file, even though pixi's manifest
 /// schema doesn't currently expose `[package.run-constraints]` directly.
 ///
 /// The locked source record's `constrains` field is the union of any
@@ -1247,7 +1612,7 @@ dep-a = ">=1.0"
 ///
 /// This is the integration mirror of the unit-level
 /// `verify_locked_run_deps_detects_constrain_removal` test: same shape
-/// of drift, but driven through the real backend / build / lockfile
+/// of drift, but driven through the real backend / build / lock file
 /// pipeline instead of synthesised inputs.
 #[tokio::test]
 async fn test_host_run_export_constraint_removal_invalidates_lock_file() {
@@ -1310,7 +1675,7 @@ preview = ["pixi-build"]
 my-package = {{ path = "./my-package" }}
 "#,
         channel = channel.url(),
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
     );
     fs::write(pixi.manifest_path(), manifest).unwrap();
 
@@ -1318,8 +1683,8 @@ my-package = {{ path = "./my-package" }}
     let (_, was_updated) = workspace
         .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
-        .expect("initial lock-file generation should succeed");
-    assert!(was_updated, "initial solve must create the lock-file");
+        .expect("initial lock file generation should succeed");
+    assert!(was_updated, "initial solve must create the lock file");
 
     // Drop the host-dependency. The backend now declares no host deps,
     // so no run-export contributes to the built record's `constrains`,
@@ -1342,10 +1707,10 @@ noarch = false
     let (_, was_updated_after_drop) = workspace
         .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
-        .expect("second lock-file check should succeed");
+        .expect("second lock file check should succeed");
     assert!(
         was_updated_after_drop,
-        "removing a host-dep that contributed a weak_constrains run-export must invalidate the lock-file",
+        "removing a host-dep that contributed a weak_constrains run-export must invalidate the lock file",
     );
 }
 
@@ -1396,7 +1761,7 @@ preview = ["pixi-build"]
 [dependencies]
 my-package = {{ path = "./my-package" }}
 "#,
-        Platform::current()
+        Subdir::current().unwrap_or(Subdir::NoArch)
     );
 
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
@@ -1409,21 +1774,21 @@ my-package = {{ path = "./my-package" }}
             .count()
     }
 
-    // First invocation: Generate the lock-file (no config section)
+    // First invocation: Generate the lock file (no config section)
     let workspace = pixi.workspace().unwrap();
     let (lock_file_data, was_updated) = workspace
         .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("First lock file generation should succeed");
 
-    assert!(was_updated, "First invocation should create the lock-file");
+    assert!(was_updated, "First invocation should create the lock file");
 
-    // Verify the package is in the lock-file
+    // Verify the package is in the lock file
     let lock_file = lock_file_data.into_lock_file();
     assert!(
         lock_file.contains_conda_package(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "my-package",
         ),
         "Lock file should contain my-package"
@@ -1460,7 +1825,7 @@ backend = { name = "in-memory", version = "0.1.0" }
 
     assert!(
         !was_updated_empty_config,
-        "Adding empty [package.build.config] should NOT update lock-file"
+        "Adding empty [package.build.config] should NOT update lock file"
     );
 
     // Verify no additional conda_outputs calls
@@ -1509,7 +1874,7 @@ noarch = true
 
     assert!(
         !was_updated_no_change,
-        "Fourth invocation without changes should NOT update lock-file"
+        "Fourth invocation without changes should NOT update lock file"
     );
 
     // Verify no additional conda_outputs calls
@@ -1562,7 +1927,7 @@ noarch = false
 
     assert!(
         !was_updated_sixth,
-        "Sixth invocation should NOT update lock-file (cache is now fresh)"
+        "Sixth invocation should NOT update lock file (cache is now fresh)"
     );
 
     // Verify no additional conda_outputs calls
@@ -1576,13 +1941,13 @@ noarch = false
 
 /// Test that demonstrates a bug with unresolvable partial source records.
 ///
-/// When a lock-file contains partial source records (from mutable path sources)
+/// When a lock file contains partial source records (from mutable path sources)
 /// and the source package changes in a way that makes the partial record
 /// unresolvable (e.g., the package is renamed), the update flow should gracefully
 /// re-solve instead of erroring out.
 ///
 /// The bug: `UpdateContext::finish()` tries to resolve ALL partial records from
-/// the lock-file (including from environments already marked as out-of-date).
+/// the lock file (including from environments already marked as out-of-date).
 /// If resolution fails, it produces a hard error instead of proceeding with
 /// the re-solve.
 #[tokio::test]
@@ -1620,21 +1985,21 @@ preview = ["pixi-build"]
 [dependencies]
 my-package = {{ path = "./my-package" }}
 "#,
-        Platform::current()
+        Subdir::current().unwrap_or(Subdir::NoArch)
     );
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
 
-    // First invocation: Generate the lock-file.
-    // This creates a lock-file where path source records are stored as partial
+    // First invocation: Generate the lock file.
+    // This creates a lock file where path source records are stored as partial
     // (mutable sources are downgraded to partial on write).
     let workspace = pixi.workspace().unwrap();
     let (_lock_file_data, was_updated) = workspace
         .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
         .await
         .expect("First lock file generation should succeed");
-    assert!(was_updated, "First invocation should create the lock-file");
+    assert!(was_updated, "First invocation should create the lock file");
 
-    // Now rename the package in the child manifest. The lock-file on disk still
+    // Now rename the package in the child manifest. The lock file on disk still
     // has a partial record for "my-package", but the source now produces
     // metadata for "renamed-package". This makes the old partial record
     // unresolvable (name mismatch).
@@ -1659,20 +2024,20 @@ preview = ["pixi-build"]
 [dependencies]
 renamed-package = {{ path = "./my-package" }}
 "#,
-        Platform::current()
+        Subdir::current().unwrap_or(Subdir::NoArch)
     );
     fs::write(pixi.manifest_path(), updated_manifest).unwrap();
 
-    // Second invocation: Update the lock-file.
+    // Second invocation: Update the lock file.
     //
-    // The satisfiability check correctly identifies the lock-file as out-of-date
+    // The satisfiability check correctly identifies the lock file as out-of-date
     // (the old "my-package" partial record can't be resolved because the source
     // now produces "renamed-package"). However, `UpdateContext::finish()` also
-    // tries to resolve ALL partial records from the old lock-file (including
+    // tries to resolve ALL partial records from the old lock file (including
     // the unresolvable one) and fails with a hard error.
     //
     // This SHOULD succeed — the system should re-solve and produce a new
-    // lock-file with "renamed-package".
+    // lock file with "renamed-package".
     let workspace = pixi.workspace().unwrap();
     let result = workspace
         .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
@@ -1681,25 +2046,25 @@ renamed-package = {{ path = "./my-package" }}
     match result {
         Ok(_) => {
             // This is the expected behavior — the system should gracefully
-            // re-solve and produce a new lock-file with "renamed-package".
+            // re-solve and produce a new lock file with "renamed-package".
         }
         Err(e) => {
             panic!(
-                "Updating the lock-file after renaming a source package should succeed, \
+                "Updating the lock file after renaming a source package should succeed, \
                  but it failed with: {e}"
             );
         }
     }
 }
 
-/// Test that source records (including their metadata) survive a lock-file
+/// Test that source records (including their metadata) survive a lock file
 /// roundtrip through `UnresolvedPixiRecord`.
 ///
 /// On the first lock, the solver produces a full source record. On write, path-
 /// based sources are downgraded to partial. On the second lock, the partial
 /// record is read back as `UnresolvedPixiRecord`, the satisfiability check
-/// re-evaluates it, and the lock-file is written again. The source package
-/// should be present and equivalent in both lock-files.
+/// re-evaluates it, and the lock file is written again. The source package
+/// should be present and equivalent in both lock files.
 #[tokio::test]
 async fn test_source_record_roundtrips_through_lock_file() {
     setup_tracing();
@@ -1734,7 +2099,7 @@ preview = ["pixi-build"]
 [dependencies]
 my-package = {{ path = "./my-package" }}
 "#,
-        Platform::current()
+        Subdir::current().unwrap_or(Subdir::NoArch)
     );
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
 
@@ -1747,12 +2112,12 @@ my-package = {{ path = "./my-package" }}
 
     let lock_file = lock_file_data.into_lock_file();
 
-    // Find the source package in the lock-file.
+    // Find the source package in the lock file.
     let env = lock_file
         .environment(consts::DEFAULT_ENVIRONMENT_NAME)
         .expect("default environment should exist");
     let platform = lock_file
-        .platform(&Platform::current().to_string())
+        .platform(&Subdir::current().unwrap_or(Subdir::NoArch).to_string())
         .expect("current platform should exist");
 
     let source_packages: Vec<_> = env
@@ -1764,7 +2129,7 @@ my-package = {{ path = "./my-package" }}
 
     assert!(
         !source_packages.is_empty(),
-        "Expected at least one source package in the lock-file"
+        "Expected at least one source package in the lock file"
     );
 
     // Verify the source package location and metadata are present
@@ -1796,7 +2161,7 @@ my-package = {{ path = "./my-package" }}
 
     assert!(
         !was_updated,
-        "Second lock invocation should not update the lock-file"
+        "Second lock invocation should not update the lock file"
     );
 
     let lock_file_2 = lock_file_data_2.into_lock_file();
@@ -1804,7 +2169,7 @@ my-package = {{ path = "./my-package" }}
         .environment(consts::DEFAULT_ENVIRONMENT_NAME)
         .unwrap();
     let platform_2 = lock_file_2
-        .platform(&Platform::current().to_string())
+        .platform(&Subdir::current().unwrap_or(Subdir::NoArch).to_string())
         .unwrap();
 
     let source_packages_2: Vec<_> = env_2
@@ -1918,7 +2283,7 @@ preview = ["pixi-build"]
 my-package = {{ path = "./my-package" }}
 "#,
         channel = channel.url(),
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
     );
     pixi.update_manifest(&workspace_manifest).unwrap();
 
@@ -2022,7 +2387,7 @@ fn collect_source_dep_versions(
     use std::path::Path;
 
     let resolver =
-        LockFileResolver::build(lock_file, Path::new("/")).expect("lockfile must resolve cleanly");
+        LockFileResolver::build(lock_file, Path::new("/")).expect("lock file must resolve cleanly");
     let mut out = Vec::new();
     for (_env_name, env) in lock_file.environments() {
         for (_platform, packages) in env.packages_by_platform() {
@@ -2080,10 +2445,10 @@ async fn test_source_timestamp_changes_when_source_metadata_changes() {
 }
 
 /// `pixi update sdl2` must invalidate `sdl2` everywhere it appears in
-/// the lockfile, including inside source records' `host_packages`
+/// the lock file, including inside source records' `host_packages`
 /// arrays. Today only the top-level locked package is relaxed; the
 /// stale copy of `sdl2` inside `my-package.host_packages` survives
-/// the relaxation pass, leaving the lockfile in an inconsistent
+/// the relaxation pass, leaving the lock file in an inconsistent
 /// state.
 ///
 /// Setup: `sdl2` v2.26.5 is the only version in the channel; the
@@ -2151,7 +2516,7 @@ my-package = {{ path = "./my-package" }}
 sdl2 = "*"
 "#,
         channel = channel_url,
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
     );
     pixi.update_manifest(&workspace_manifest).unwrap();
 
@@ -2165,7 +2530,7 @@ sdl2 = "*"
     assert!(
         lock_v1.contains_match_spec(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "sdl2 ==2.26.5",
         ),
         "first lock must pin top-level sdl2 to 2.26.5"
@@ -2194,7 +2559,7 @@ sdl2 = "*"
     assert!(
         lock_v2.contains_match_spec(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "sdl2 ==2.32.0",
         ),
         "top-level sdl2 must be updated to 2.32.0"
@@ -2290,7 +2655,7 @@ git = "{git_url}"
 subdirectory = "."
 {kind} = "{value}"
 "#,
-            platform = Platform::current(),
+            platform = Subdir::current().unwrap_or(Subdir::NoArch),
         );
         fs::write(&manifest_path, manifest).unwrap();
     };
@@ -2350,6 +2715,436 @@ subdirectory = "."
     );
 }
 
+/// A lock file stores the commit a git reference resolved to, not the
+/// reference as written. A manifest pinning an abbreviated `rev` must still
+/// satisfy its own lock, otherwise `--locked` rejects a lock that re-locking
+/// reproduces unchanged.
+#[tokio::test]
+async fn test_abbreviated_git_rev_build_source_keeps_lock_satisfied() {
+    setup_tracing();
+
+    let fixture = GitRepoFixture::new("lock-behaviour-base");
+    let short_rev = fixture.git(&["rev-parse", "--short", "HEAD"]);
+    let full_rev = fixture.git(&["rev-parse", "HEAD"]);
+    assert_ne!(short_rev, full_rev, "expected an abbreviated revision");
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    fs::write(
+        pixi.manifest_path(),
+        format!(
+            r#"
+[workspace]
+channels = []
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "." }}
+
+[package]
+name = "my-package"
+version = "0.1.0"
+
+[package.build]
+backend = {{ name = "passthrough", version = "*" }}
+
+[package.build.source]
+git = "{git_url}"
+subdirectory = "."
+rev = "{short_rev}"
+"#,
+            platform = Subdir::current().unwrap_or(Subdir::NoArch),
+            git_url = fixture.base_url,
+        ),
+    )
+    .unwrap();
+
+    write_lock(&pixi).await;
+
+    // Twice: the first proves the lock is satisfied, the second that the first
+    // did not quietly rewrite it.
+    assert_locked_accepts_unchanged(&pixi, "short rev spelling, first check").await;
+    assert_locked_accepts_unchanged(&pixi, "short rev spelling, second check").await;
+}
+
+/// Regression test for gh-6727: a workspace `[package]` that no environment
+/// includes, next to a dependency of the same name. The included package's
+/// build source comes from its own manifest, so the lock stays satisfied. The
+/// uninvolved `[package]` must not be compared against it.
+#[tokio::test]
+async fn test_unincluded_workspace_package_shares_name_with_dependency() {
+    setup_tracing();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    // The dependency: `my-package` builds from a subdirectory, so the lock
+    // records a build source for it.
+    let dependency_dir = pixi.workspace_path().join("dependency");
+    let dependency_source_dir = dependency_dir.join("src");
+    fs::create_dir_all(&dependency_source_dir).unwrap();
+    fs::write(
+        dependency_dir.join("pixi.toml"),
+        r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+source.path = "src"
+"#,
+    )
+    .unwrap();
+    fs::write(
+        dependency_source_dir.join("pixi.toml"),
+        r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+"#,
+    )
+    .unwrap();
+
+    // The workspace declares its own `my-package` without a build source and
+    // never depends on it.
+    fs::write(
+        pixi.manifest_path(),
+        format!(
+            r#"
+[workspace]
+channels = []
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "./dependency" }}
+
+[package]
+name = "my-package"
+version = "0.1.0"
+
+[package.build]
+backend = {{ name = "in-memory", version = "0.1.0" }}
+"#,
+            platform = Subdir::current().unwrap_or(Subdir::NoArch),
+        ),
+    )
+    .unwrap();
+
+    write_lock(&pixi).await;
+    assert_locked_accepts_unchanged(&pixi, "same-named package outside the environment").await;
+}
+
+/// The raw bytes of the workspace's lock file.
+fn lock_text(pixi: &PixiControl) -> String {
+    fs::read_to_string(pixi.workspace_path().join("pixi.lock")).unwrap()
+}
+
+/// Every path-typed `package_build_source` in the given environment, sorted.
+fn path_build_sources_for_env(lock: &LockFile, env_name: &str) -> Vec<String> {
+    let Some(env) = lock.environment(env_name) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for (_, packages) in env.packages_by_platform() {
+        for pkg in packages {
+            let Some(src) = pkg.as_source_conda() else {
+                continue;
+            };
+            if let Some(PackageBuildSource::Path { path }) = &src.package_build_source {
+                out.push(path.to_string());
+            }
+        }
+    }
+    out.sort();
+    out
+}
+
+/// Resolve and write the lock file without building a prefix.
+async fn write_lock(pixi: &PixiControl) {
+    pixi.workspace()
+        .unwrap()
+        .update_lock_file(
+            None,
+            UpdateLockFileOptions {
+                lock_file_usage: LockFileUsage::Update,
+                no_install: true,
+                ..UpdateLockFileOptions::default()
+            },
+        )
+        .await
+        .expect("locking must succeed");
+}
+
+/// The `--locked` satisfiability check, without building a prefix. These tests
+/// are about what the lock file is allowed to contain, so installing would only
+/// cost time.
+async fn verify_locked(pixi: &PixiControl) -> miette::Result<()> {
+    pixi.workspace()?
+        .update_lock_file(
+            None,
+            UpdateLockFileOptions {
+                lock_file_usage: LockFileUsage::Locked,
+                no_install: true,
+                ..UpdateLockFileOptions::default()
+            },
+        )
+        .await
+        .map(|_| ())
+}
+
+/// `--locked` must succeed without touching the lock file.
+async fn assert_locked_accepts_unchanged(pixi: &PixiControl, what: &str) {
+    let before = lock_text(pixi);
+    if let Err(err) = verify_locked(pixi).await {
+        panic!("`--locked` must accept the lock ({what}), got: {err:?}");
+    }
+    assert_eq!(
+        lock_text(pixi),
+        before,
+        "a successful --locked check must leave the lock byte-identical ({what})"
+    );
+}
+
+/// `--locked` must fail without touching the lock file; re-locking must then
+/// rewrite the pin, after which `--locked` must succeed.
+async fn assert_rejected_then_relock_accepts(pixi: &PixiControl, what: &str) {
+    let before = lock_text(pixi);
+    assert!(
+        verify_locked(pixi).await.is_err(),
+        "`--locked` must reject the stale lock after {what}"
+    );
+    assert_eq!(
+        lock_text(pixi),
+        before,
+        "a failed --locked check must leave the lock byte-identical ({what})"
+    );
+    write_lock(pixi).await;
+    assert_ne!(
+        lock_text(pixi),
+        before,
+        "re-locking after {what} must rewrite the pinned build source"
+    );
+    if let Err(err) = verify_locked(pixi).await {
+        panic!("`--locked` must accept the refreshed lock after {what}, got: {err:?}");
+    }
+}
+
+/// A branch that gained commits upstream is not drift. The requested reference
+/// is unchanged, so the locked pin is reused and `--locked` keeps accepting.
+#[tokio::test]
+async fn locked_accepts_branch_build_source_after_upstream_moves() {
+    setup_tracing();
+
+    let fixture = GitRepoFixture::new("lock-behaviour-base");
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    let dep_dir = pixi.workspace_path().join("dep-package");
+    fs::create_dir_all(&dep_dir).unwrap();
+    write_source_package_manifest(
+        &dep_dir,
+        "dep-package",
+        "1.0.0",
+        &format!(
+            r#"
+[package.build.source]
+git = "{}"
+subdirectory = "."
+branch = "main"
+"#,
+            fixture.base_url,
+        ),
+    );
+    write_source_workspace_manifest(&pixi.manifest_path(), &[], &["dep-package"]);
+
+    write_lock(&pixi).await;
+    assert_locked_accepts_unchanged(&pixi, "branch freshly pinned").await;
+
+    // Advance `main` past the pinned commit.
+    fs::write(fixture.repo_path.join("README.md"), "upstream moved\n").unwrap();
+    fixture.git(&["commit", "-am", "upstream moved"]);
+
+    assert_locked_accepts_unchanged(&pixi, "branch moved upstream, pin must be reused").await;
+}
+
+/// A different `source.path` builds different code, so it must invalidate the
+/// lock.
+#[tokio::test]
+async fn locked_rejects_changed_build_source_subdirectory() {
+    setup_tracing();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    let dep_dir = pixi.workspace_path().join("dep-package");
+    for subdir in ["src", "src2"] {
+        let path = dep_dir.join(subdir);
+        fs::create_dir_all(&path).unwrap();
+        write_source_package_manifest(&path, "dep-package", "1.0.0", "");
+    }
+    write_source_package_manifest(&dep_dir, "dep-package", "1.0.0", r#"source.path = "src""#);
+    write_source_workspace_manifest(&pixi.manifest_path(), &[], &["dep-package"]);
+
+    write_lock(&pixi).await;
+    assert_locked_accepts_unchanged(&pixi, "source.path = src").await;
+
+    write_source_package_manifest(&dep_dir, "dep-package", "1.0.0", r#"source.path = "src2""#);
+    assert_rejected_then_relock_accepts(&pixi, "changing source.path from src to src2").await;
+
+    assert_eq!(
+        path_build_sources_for_env(
+            &pixi.lock_file().await.unwrap(),
+            consts::DEFAULT_ENVIRONMENT_NAME
+        ),
+        vec!["src2".to_string()],
+        "after the re-lock the new subdirectory must be recorded"
+    );
+}
+
+/// Build source drift two hops out, in a source dependency of a source
+/// dependency, must invalidate the lock: the check follows each record's own
+/// manifest, not the workspace's.
+#[tokio::test]
+async fn locked_rejects_drift_in_source_dependency_of_source_dependency() {
+    setup_tracing();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    let outer_dir = pixi.workspace_path().join("outer-pkg");
+    let inner_dir = outer_dir.join("inner");
+    for subdir in ["src", "src2"] {
+        let path = inner_dir.join(subdir);
+        fs::create_dir_all(&path).unwrap();
+        write_source_package_manifest(&path, "inner-pkg", "1.0.0", "");
+    }
+    write_source_package_manifest(&inner_dir, "inner-pkg", "1.0.0", r#"source.path = "src""#);
+    fs::create_dir_all(&outer_dir).unwrap();
+    write_source_package_manifest(
+        &outer_dir,
+        "outer-pkg",
+        "1.0.0",
+        r#"
+[package.run-dependencies]
+inner-pkg = { path = "./inner" }
+"#,
+    );
+    write_source_workspace_manifest(&pixi.manifest_path(), &[], &["outer-pkg"]);
+
+    write_lock(&pixi).await;
+    let lock = pixi.lock_file().await.unwrap();
+    for pkg in ["outer-pkg", "inner-pkg"] {
+        assert!(
+            lock.contains_conda_package(
+                consts::DEFAULT_ENVIRONMENT_NAME,
+                Subdir::current().unwrap_or(Subdir::NoArch),
+                pkg
+            ),
+            "{pkg} must be locked"
+        );
+    }
+    assert_locked_accepts_unchanged(&pixi, "nested source dependency in place").await;
+
+    write_source_package_manifest(&inner_dir, "inner-pkg", "1.0.0", r#"source.path = "src2""#);
+    assert_rejected_then_relock_accepts(
+        &pixi,
+        "changing the build source of a source dependency of a source dependency",
+    )
+    .await;
+}
+
+/// Two packages sharing a name from different locations are tracked
+/// independently. Drifting one invalidates the lock, and the re-lock leaves
+/// the other's pin alone.
+#[tokio::test]
+async fn locked_tracks_same_name_packages_from_different_locations_independently() {
+    setup_tracing();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    let pkg_a_dir = pixi.workspace_path().join("pkg-a");
+    let pkg_b_dir = pixi.workspace_path().join("pkg-b");
+    for path in [
+        pkg_a_dir.join("src"),
+        pkg_b_dir.join("src"),
+        pkg_b_dir.join("src2"),
+    ] {
+        fs::create_dir_all(&path).unwrap();
+        write_source_package_manifest(&path, "shared-pkg", "1.0.0", "");
+    }
+    for dir in [&pkg_a_dir, &pkg_b_dir] {
+        write_source_package_manifest(dir, "shared-pkg", "1.0.0", r#"source.path = "src""#);
+    }
+
+    fs::write(
+        pixi.manifest_path(),
+        format!(
+            r#"
+[workspace]
+channels = []
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[feature.a.dependencies]
+shared-pkg = {{ path = "./pkg-a" }}
+
+[feature.b.dependencies]
+shared-pkg = {{ path = "./pkg-b" }}
+
+[environments]
+env-a = ["a"]
+env-b = ["b"]
+"#,
+            platform = Subdir::current().unwrap_or(Subdir::NoArch),
+        ),
+    )
+    .unwrap();
+
+    write_lock(&pixi).await;
+    assert_locked_accepts_unchanged(&pixi, "two same-name packages in sync").await;
+
+    // Drift only pkg-b's build source.
+    write_source_package_manifest(&pkg_b_dir, "shared-pkg", "1.0.0", r#"source.path = "src2""#);
+    assert_rejected_then_relock_accepts(
+        &pixi,
+        "changing the build source of one of two same-name packages",
+    )
+    .await;
+
+    let lock = pixi.lock_file().await.unwrap();
+    assert_eq!(
+        path_build_sources_for_env(&lock, "env-a"),
+        vec!["src".to_string()],
+        "the untouched package's pin must survive the re-lock"
+    );
+    assert_eq!(
+        path_build_sources_for_env(&lock, "env-b"),
+        vec!["src2".to_string()],
+        "the drifted package's pin must follow its manifest"
+    );
+}
+
 fn count_build_events(events: &[BackendEvent]) -> usize {
     events
         .iter()
@@ -2401,7 +3196,7 @@ preview = ["pixi-build"]
 [dependencies]
 my-package = {{ path = "./my-package" }}
 "#,
-            Platform::current()
+            Subdir::current().unwrap_or(Subdir::NoArch)
         ),
     )
     .unwrap();
@@ -2425,7 +3220,195 @@ my-package = {{ path = "./my-package" }}
     );
 }
 
-fn simple_package_manifest(platform: Platform) -> String {
+/// A CI runner that restores only the workspace's `.pixi` directory must
+/// reuse the built artifact of a git source dependency even though the cache
+/// dir holding the git checkout is gone. The artifact cache used to track
+/// the checkout's files by absolute path + mtime, which a wiped cache dir
+/// (or the fresh clone replacing it) can never satisfy, forcing a rebuild.
+#[tokio::test]
+async fn install_reuses_git_source_artifact_after_cache_dir_removal() {
+    setup_tracing();
+
+    let fixture = GitRepoFixture::new("conda-build-package");
+    // Layer a commit that makes the backend report input globs, so the
+    // artifact sidecar records files of the checkout in the cache dir.
+    // Without them the staleness checks have nothing to trip over and the
+    // test could not distinguish the immutable shortcut from a plain hit.
+    fs::write(
+        fixture.repo_path.join("boost-check").join("pixi.toml"),
+        r#"
+[workspace]
+channels = []
+platforms = ["win-64", "linux-64", "osx-arm64", "osx-64"]
+preview = ["pixi-build"]
+
+[package]
+name = "boost-check"
+version = "0.1.0"
+
+[package.build]
+backend = { name = "in-memory", version = "*" }
+
+[package.build.config]
+build-globs = ["**/*.txt"]
+"#,
+    )
+    .unwrap();
+    fs::write(
+        fixture.repo_path.join("boost-check").join("data.txt"),
+        "payload",
+    )
+    .unwrap();
+    fixture.git(&["add", "."]);
+    fixture.git(&["commit", "-m", "report build globs"]);
+
+    let (instantiator, mut observer) =
+        ObservableBackend::instantiator(PassthroughBackend::instantiator());
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+[workspace]
+name = "cache-dir-removal"
+channels = []
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[dependencies]
+boost-check = {{ git = "{url}", subdirectory = "boost-check" }}
+"#,
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
+        url = fixture.base_url,
+    ))
+    .unwrap()
+    .with_backend_override(BackendOverride::from_memory(instantiator));
+
+    let cache_dir = TempDir::new().unwrap();
+    temp_env::async_with_vars(
+        [("PIXI_CACHE_DIR", Some(cache_dir.path().as_os_str()))],
+        async { pixi.install().await },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        count_build_events(&observer.events()),
+        1,
+        "first install should build the git source package once"
+    );
+
+    // Wipe the global cache (git checkouts, backend state); the workspace
+    // including `.pixi/artifacts-v0` survives.
+    fs::remove_dir_all(cache_dir.path()).unwrap();
+    fs::create_dir_all(cache_dir.path()).unwrap();
+
+    temp_env::async_with_vars(
+        [("PIXI_CACHE_DIR", Some(cache_dir.path().as_os_str()))],
+        async { pixi.install().await },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        count_build_events(&observer.events()),
+        0,
+        "second install must reuse the cached artifact instead of rebuilding"
+    );
+}
+
+/// A changed source package must be rebuilt by quick-validating commands
+/// (`pixi run` / `pixi shell`) when the workspace declares a rich platform
+/// (e.g. one with CUDA virtual packages). The lock file keys such a platform
+/// by its custom name, and the [`UpdateMode::QuickValidate`] guard that
+/// disables the lock-file-hash short-circuit for source packages used to look
+/// the row up by the bare subdir name, silently turning itself off.
+/// Linux-only: the rich platform declares a `__linux` kernel floor.
+#[cfg(target_os = "linux")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn quick_validate_rebuilds_changed_source_package_on_rich_platform() {
+    use pixi_core::{
+        InstallFilter, UpdateLockFileOptions,
+        lock_file::{ReinstallPackages, UpdateMode},
+    };
+
+    setup_tracing();
+
+    let (instantiator, mut observer) =
+        ObservableBackend::instantiator(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(BackendOverride::from_memory(instantiator));
+
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+    fs::write(
+        source_dir.join("pixi.toml"),
+        r#"
+[package]
+name = "my-package"
+version = "0.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+
+[package.build.config]
+build-globs = ["*.cu"]
+"#,
+    )
+    .unwrap();
+    fs::write(source_dir.join("main.cu"), "// v1").unwrap();
+
+    fs::write(
+        pixi.manifest_path(),
+        format!(
+            r#"
+[workspace]
+channels = []
+platforms = [{{ name = "gpu", platform = "{}", linux = "4.18" }}]
+preview = ["pixi-build"]
+
+[dependencies]
+my-package = {{ path = "./my-package" }}
+"#,
+            Subdir::current().unwrap_or(Subdir::NoArch)
+        ),
+    )
+    .unwrap();
+
+    pixi.install().await.unwrap();
+    assert_eq!(
+        count_build_events(&observer.events()),
+        1,
+        "the initial install should build the source package once"
+    );
+
+    // Change a source file matched by the build globs; the lock file (and
+    // thus its hash) stays unchanged.
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    fs::write(source_dir.join("main.cu"), "// v2").unwrap();
+
+    // Drive the quick-validate path the way `pixi run` does.
+    let workspace = pixi.workspace().unwrap();
+    let environment = workspace.default_environment();
+    let lock_file = workspace
+        .update_lock_file(None, UpdateLockFileOptions::default())
+        .await
+        .unwrap()
+        .0;
+    lock_file
+        .prefix(
+            &environment,
+            UpdateMode::QuickValidate,
+            &ReinstallPackages::default(),
+            &InstallFilter::default(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        count_build_events(&observer.events()),
+        1,
+        "quick validation must rebuild the changed source package"
+    );
+}
+
+fn simple_package_manifest(platform: Subdir) -> String {
     format!(
         r#"
 [workspace]
@@ -2451,13 +3434,17 @@ async fn test_publish_without_target_builds_but_does_not_upload() {
 
     let (instantiator, mut observer) =
         ObservableBackend::instantiator(PassthroughBackend::instantiator());
-    let pixi = PixiControl::from_manifest(&simple_package_manifest(Platform::current())).unwrap();
+    let pixi = PixiControl::from_manifest(&simple_package_manifest(
+        Subdir::current().unwrap_or(Subdir::NoArch),
+    ))
+    .unwrap();
 
     publish::execute(publish::Args {
         backend_override: Some(BackendOverride::from_memory(instantiator)),
         config_cli: Default::default(),
-        target_platform: Platform::current(),
-        build_platform: Platform::current(),
+        config_source: isolated_config_source(),
+        target_platform: Subdir::current().unwrap_or(Subdir::NoArch),
+        build_platform: Subdir::current().unwrap_or(Subdir::NoArch),
         build_string_prefix: None,
         build_number: None,
         build_dir: None,
@@ -2466,7 +3453,9 @@ async fn test_publish_without_target_builds_but_does_not_upload() {
         target_channel: None,
         target_dir: None,
         force: false,
-        skip_existing: true,
+        no_skip_existing: false,
+        allow_source_dependencies: false,
+        dry_run: false,
         generate_attestation: false,
         variant: Vec::new(),
         variant_config: Vec::new(),
@@ -2479,6 +3468,536 @@ async fn test_publish_without_target_builds_but_does_not_upload() {
         !observer.build_events().is_empty(),
         "publish without target should still build the package"
     );
+}
+
+/// Serializes tests that must change the process working directory:
+/// workspace-wide publishing (no `--path`) anchors workspace discovery at the
+/// current directory.
+static PUBLISH_CWD_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+/// Run `pixi publish` with the process working directory set to
+/// `workspace_root`, restoring the previous working directory afterwards.
+async fn publish_from_directory(
+    workspace_root: &std::path::Path,
+    args: publish::Args,
+) -> miette::Result<()> {
+    let _guard = PUBLISH_CWD_LOCK.lock().await;
+    let original_cwd = std::env::current_dir().unwrap();
+    std::env::set_current_dir(workspace_root).unwrap();
+    let result = publish::execute(args).await;
+    std::env::set_current_dir(original_cwd).unwrap();
+    result
+}
+
+fn publish_args_for_test(
+    backend_override: Option<BackendOverride>,
+    path: Option<PathBuf>,
+    target_dir: Option<PathBuf>,
+) -> publish::Args {
+    publish::Args {
+        backend_override,
+        config_cli: Default::default(),
+        config_source: isolated_config_source(),
+        target_platform: Subdir::current().unwrap_or(Subdir::NoArch),
+        build_platform: Subdir::current().unwrap_or(Subdir::NoArch),
+        build_string_prefix: None,
+        build_number: None,
+        build_dir: None,
+        clean: false,
+        path,
+        target_channel: None,
+        target_dir,
+        force: false,
+        no_skip_existing: false,
+        allow_source_dependencies: false,
+        dry_run: false,
+        generate_attestation: false,
+        variant: Vec::new(),
+        variant_config: Vec::new(),
+        package_format: None,
+    }
+}
+
+/// The names (without version/build suffix) of the `.conda` artifacts below
+/// `dir`, sorted.
+fn conda_artifact_names(dir: &std::path::Path) -> Vec<String> {
+    let mut found = Vec::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(current) = stack.pop() {
+        for entry in fs::read_dir(&current).unwrap().filter_map(Result::ok) {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().is_some_and(|ext| ext == "conda") {
+                let file_name = path.file_name().unwrap().to_string_lossy();
+                let name = file_name.split('-').next().unwrap_or_default();
+                found.push(name.to_string());
+            }
+        }
+    }
+    found.sort();
+    found
+}
+
+/// Renders the `publish` line of a `[package]` section.
+fn publish_flag(publish: Option<bool>) -> String {
+    match publish {
+        Some(value) => format!("publish = {value}\n"),
+        None => String::new(),
+    }
+}
+
+/// Writes a three-package workspace: the root manifest holds the workspace
+/// and a `kit` package that run-depends on member `cpp`, which in turn
+/// run-depends on member `core`. The `publish` arguments set the `publish`
+/// flag of the respective package, selecting which of them a workspace-wide
+/// publish operates on.
+fn write_three_package_workspace(
+    root: &std::path::Path,
+    kit_publish: Option<bool>,
+    cpp_publish: Option<bool>,
+    core_publish: Option<bool>,
+) {
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
+    fs::write(
+        root.join("pixi.toml"),
+        format!(
+            r#"
+[workspace]
+channels = []
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[package]
+name = "kit"
+version = "1.0.0"
+{kit_flag}
+[package.build]
+backend = {{ name = "in-memory", version = "0.1.0" }}
+
+[package.run-dependencies]
+cpp = {{ path = "./cpp" }}
+"#,
+            kit_flag = publish_flag(kit_publish),
+        ),
+    )
+    .unwrap();
+
+    let member_manifest = |name: &str, publish: Option<bool>, extra: &str| {
+        format!(
+            r#"
+[package]
+name = "{name}"
+version = "1.0.0"
+{flag}
+[package.build]
+backend = {{ name = "in-memory", version = "0.1.0" }}
+{extra}
+"#,
+            flag = publish_flag(publish),
+        )
+    };
+
+    let cpp_dir = root.join("cpp");
+    fs::create_dir_all(&cpp_dir).unwrap();
+    fs::write(
+        cpp_dir.join("pixi.toml"),
+        member_manifest(
+            "cpp",
+            cpp_publish,
+            r#"
+[package.run-dependencies]
+core = { path = "../core" }
+"#,
+        ),
+    )
+    .unwrap();
+
+    let core_dir = root.join("core");
+    fs::create_dir_all(&core_dir).unwrap();
+    fs::write(
+        core_dir.join("pixi.toml"),
+        member_manifest("core", core_publish, ""),
+    )
+    .unwrap();
+}
+
+/// `pixi publish` without `--path` must build every package that opts in
+/// with `publish = true` - including the root package - and upload all of
+/// them in dependency order.
+#[tokio::test]
+async fn test_publish_workspace_publishes_all_opted_in_packages() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    write_three_package_workspace(pixi.workspace_path(), Some(true), Some(true), Some(true));
+
+    let publish_dir = tempfile::tempdir().unwrap();
+    publish_from_directory(
+        pixi.workspace_path(),
+        publish_args_for_test(
+            Some(BackendOverride::from_memory(
+                PassthroughBackend::instantiator(),
+            )),
+            None,
+            Some(publish_dir.path().to_path_buf()),
+        ),
+    )
+    .await
+    .expect("workspace-wide publish should succeed");
+
+    assert_eq!(
+        conda_artifact_names(publish_dir.path()),
+        vec!["core", "cpp", "kit"],
+        "all three opted-in workspace packages should be published"
+    );
+}
+
+/// A published package whose source dependency does not opt into publishing
+/// must fail the publish: uploading it would leave the target with an
+/// unsatisfiable run dependency.
+#[tokio::test]
+async fn test_publish_workspace_rejects_unpublished_source_dependency() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    write_three_package_workspace(pixi.workspace_path(), Some(true), Some(true), None);
+
+    let err = publish_from_directory(
+        pixi.workspace_path(),
+        publish_args_for_test(
+            Some(BackendOverride::from_memory(
+                PassthroughBackend::instantiator(),
+            )),
+            None,
+            None,
+        ),
+    )
+    .await
+    .expect_err("publishing with a source dependency that does not opt in should fail");
+
+    let rendered = format_diagnostic(err.as_ref());
+    assert!(
+        rendered.contains("not part of the publish set") && rendered.contains("core"),
+        "{rendered}"
+    );
+}
+
+/// An explicit `publish = false` behaves exactly like an absent flag: the
+/// package is not part of the publish set, so depending on it fails.
+#[tokio::test]
+async fn test_publish_workspace_rejects_publish_false_source_dependency() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    write_three_package_workspace(pixi.workspace_path(), Some(true), Some(true), Some(false));
+
+    let err = publish_from_directory(
+        pixi.workspace_path(),
+        publish_args_for_test(
+            Some(BackendOverride::from_memory(
+                PassthroughBackend::instantiator(),
+            )),
+            None,
+            None,
+        ),
+    )
+    .await
+    .expect_err("publishing with a `publish = false` source dependency should fail");
+
+    let rendered = format_diagnostic(err.as_ref());
+    assert!(
+        rendered.contains("not part of the publish set") && rendered.contains("core"),
+        "{rendered}"
+    );
+}
+
+/// `pixi publish --path <member>` keeps the single-package behavior for
+/// self-contained packages: only the addressed package is built and
+/// uploaded, whether or not it sets `publish = true`.
+#[tokio::test]
+async fn test_publish_with_path_publishes_a_single_package() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    write_three_package_workspace(pixi.workspace_path(), Some(true), Some(true), None);
+
+    let publish_dir = tempfile::tempdir().unwrap();
+    publish::execute(publish_args_for_test(
+        Some(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        )),
+        Some(pixi.workspace_path().join("core")),
+        Some(publish_dir.path().to_path_buf()),
+    ))
+    .await
+    .expect("single-package publish should succeed");
+
+    assert_eq!(
+        conda_artifact_names(publish_dir.path()),
+        vec!["core"],
+        "only the package addressed with --path should be published"
+    );
+}
+
+/// `pixi publish --path` is a batch of one: a package with source
+/// dependencies cannot be published alone, because nothing in the batch
+/// satisfies them on the target.
+#[tokio::test]
+async fn test_publish_with_path_rejects_source_dependencies() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    write_three_package_workspace(pixi.workspace_path(), Some(true), Some(true), Some(true));
+
+    let err = publish::execute(publish_args_for_test(
+        Some(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        )),
+        Some(pixi.workspace_path().join("cpp")),
+        None,
+    ))
+    .await
+    .expect_err("--path on a package with source dependencies should fail");
+
+    let rendered = format_diagnostic(err.as_ref());
+    assert!(
+        rendered.contains("cannot be published on its own") && rendered.contains("core"),
+        "{rendered}"
+    );
+}
+
+/// `pixi publish --path <workspace root>` addresses the package in the root
+/// manifest. The relative path of that manifest to the workspace root is
+/// empty, so the guard error must name the package by its outputs instead.
+#[tokio::test]
+async fn test_publish_with_workspace_root_path_names_the_package() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    write_three_package_workspace(pixi.workspace_path(), None, None, None);
+
+    let err = publish::execute(publish_args_for_test(
+        Some(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        )),
+        Some(pixi.workspace_path().to_path_buf()),
+        None,
+    ))
+    .await
+    .expect_err("--path on a root package with source dependencies should fail");
+
+    insta::assert_snapshot!(format_diagnostic(err.as_ref()), @"
+    × package 'kit' has source run dependencies (cpp) and cannot be published on its own
+    help: A single-package publish must be self-contained. Set `publish = true` in the `[package]` section of the package and its source dependencies, then run `pixi publish` without `--path` to
+          publish them together.
+    ");
+}
+
+/// `--dry-run` resolves and prints the publish set but must not build or
+/// upload anything.
+#[tokio::test]
+async fn test_publish_dry_run_builds_and_uploads_nothing() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    write_three_package_workspace(pixi.workspace_path(), Some(true), Some(true), Some(true));
+
+    let publish_dir = tempfile::tempdir().unwrap();
+    let mut args = publish_args_for_test(
+        Some(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        )),
+        None,
+        Some(publish_dir.path().to_path_buf()),
+    );
+    args.dry_run = true;
+    publish_from_directory(pixi.workspace_path(), args)
+        .await
+        .expect("a dry run of a valid publish set should succeed");
+
+    assert_eq!(
+        conda_artifact_names(publish_dir.path()),
+        Vec::<String>::new(),
+        "a dry run must not upload any artifacts"
+    );
+}
+
+/// Build and host source dependencies are only consumed while building, so
+/// a `--path` publish of a package that host-depends on a sibling succeeds
+/// and uploads only the addressed package.
+#[tokio::test]
+async fn test_publish_with_path_allows_host_source_dependencies() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
+    fs::write(
+        pixi.manifest_path(),
+        format!(
+            r#"
+[workspace]
+channels = []
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+"#
+        ),
+    )
+    .unwrap();
+    let lib_dir = pixi.workspace_path().join("lib");
+    fs::create_dir_all(&lib_dir).unwrap();
+    fs::write(
+        lib_dir.join("pixi.toml"),
+        r#"
+[package]
+name = "lib"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+"#,
+    )
+    .unwrap();
+    let app_dir = pixi.workspace_path().join("app");
+    fs::create_dir_all(&app_dir).unwrap();
+    fs::write(
+        app_dir.join("pixi.toml"),
+        r#"
+[package]
+name = "app"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+
+[package.host-dependencies]
+lib = { path = "../lib" }
+"#,
+    )
+    .unwrap();
+
+    let publish_dir = tempfile::tempdir().unwrap();
+    publish::execute(publish_args_for_test(
+        Some(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        )),
+        Some(app_dir),
+        Some(publish_dir.path().to_path_buf()),
+    ))
+    .await
+    .expect("a `--path` publish with a host source dependency should succeed");
+
+    assert_eq!(
+        conda_artifact_names(publish_dir.path()),
+        vec!["app"],
+        "only the addressed package may be uploaded"
+    );
+}
+
+/// The deprecated `pixi build` delegation skips the self-contained check:
+/// a package with source run dependencies builds like it always did, and
+/// only its own artifacts are copied to the target directory.
+#[tokio::test]
+async fn test_publish_allow_source_dependencies_keeps_historic_build_behavior() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    write_three_package_workspace(pixi.workspace_path(), Some(true), Some(true), Some(true));
+
+    let publish_dir = tempfile::tempdir().unwrap();
+    let mut args = publish_args_for_test(
+        Some(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        )),
+        Some(pixi.workspace_path().join("cpp")),
+        Some(publish_dir.path().to_path_buf()),
+    );
+    args.allow_source_dependencies = true;
+    publish::execute(args)
+        .await
+        .expect("`pixi build` on a package with source run dependencies should succeed");
+
+    assert_eq!(conda_artifact_names(publish_dir.path()), vec!["cpp"]);
+}
+
+/// A workspace without a single opted-in package falls back to publishing
+/// the package at the current directory, as if `--path .` had been passed.
+#[tokio::test]
+async fn test_publish_without_opt_in_falls_back_to_current_directory() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
+    fs::write(
+        pixi.manifest_path(),
+        format!(
+            r#"
+[workspace]
+channels = []
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+
+[package]
+name = "solo"
+version = "1.0.0"
+
+[package.build]
+backend = {{ name = "in-memory", version = "0.1.0" }}
+"#
+        ),
+    )
+    .unwrap();
+
+    let publish_dir = tempfile::tempdir().unwrap();
+    publish_from_directory(
+        pixi.workspace_path(),
+        publish_args_for_test(
+            Some(BackendOverride::from_memory(
+                PassthroughBackend::instantiator(),
+            )),
+            None,
+            Some(publish_dir.path().to_path_buf()),
+        ),
+    )
+    .await
+    .expect("publishing a workspace without opted-in packages should fall back to `--path .`");
+
+    assert_eq!(conda_artifact_names(publish_dir.path()), vec!["solo"]);
+}
+
+/// The fallback still requires a package: a workspace without any package
+/// must fail.
+#[tokio::test]
+async fn test_publish_workspace_without_packages_fails() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    fs::write(
+        pixi.manifest_path(),
+        format!(
+            r#"
+[workspace]
+channels = []
+platforms = ["{}"]
+preview = ["pixi-build"]
+"#,
+            Subdir::current().unwrap_or(Subdir::NoArch)
+        ),
+    )
+    .unwrap();
+
+    publish_from_directory(
+        pixi.workspace_path(),
+        publish_args_for_test(
+            Some(BackendOverride::from_memory(
+                PassthroughBackend::instantiator(),
+            )),
+            None,
+            None,
+        ),
+    )
+    .await
+    .expect_err("publishing an empty workspace should fail");
 }
 
 /// Regression test for #4761: `.pixi/.gitignore` must be created during
@@ -2510,7 +4029,7 @@ description = "Test package for .gitignore creation during publish"
 backend.name = "nonexistent-backend"
 backend.version = "0.1.0"
 "#,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
     );
     fs::write(pixi.manifest_path(), manifest_content).unwrap();
 
@@ -2523,8 +4042,9 @@ backend.version = "0.1.0"
     let _ = publish::execute(publish::Args {
         backend_override: None,
         config_cli: Default::default(),
-        target_platform: Platform::current(),
-        build_platform: Platform::current(),
+        config_source: isolated_config_source(),
+        target_platform: Subdir::current().unwrap_or(Subdir::NoArch),
+        build_platform: Subdir::current().unwrap_or(Subdir::NoArch),
         build_string_prefix: None,
         build_number: None,
         build_dir: None,
@@ -2533,7 +4053,9 @@ backend.version = "0.1.0"
         target_channel: None,
         target_dir: None,
         force: false,
-        skip_existing: true,
+        no_skip_existing: false,
+        allow_source_dependencies: false,
+        dry_run: false,
         generate_attestation: false,
         variant: Vec::new(),
         variant_config: Vec::new(),
@@ -2555,9 +4077,9 @@ backend.version = "0.1.0"
 ///
 /// In pixi 0.68.0 the `SourceBuildKey` pipeline forwarded only the recipe's
 /// raw `output.run_dependencies` to the build backend, skipping the
-/// `extend_with_run_exports_from_build_and_host` merge step that the lockfile
+/// `extend_with_run_exports_from_build_and_host` merge step that the lock file
 /// resolution path uses. This caused the built package's `depends` to come
-/// back empty even though the lockfile recorded the correct dependencies.
+/// back empty even though the lock file recorded the correct dependencies.
 ///
 /// The test exercises the end-to-end path: it puts a mock host package with
 /// run-exports in a local channel, builds a source package that uses it as a
@@ -2584,14 +4106,14 @@ async fn test_build_propagates_host_run_exports_into_index_json() {
     let mut package_database = MockRepoData::default();
     package_database.add_package(
         Package::build("host-lib", "2.5.0")
-            .with_subdir(Platform::current())
+            .with_subdir(Subdir::current().unwrap_or(Subdir::NoArch))
             .with_materialize(true)
             .with_run_exports(run_exports.clone())
             .finish(),
     );
     package_database.add_package(
         Package::build("runtime-lib", "1.0.0")
-            .with_subdir(Platform::current())
+            .with_subdir(Subdir::current().unwrap_or(Subdir::NoArch))
             .with_materialize(true)
             .finish(),
     );
@@ -2634,7 +4156,7 @@ noarch = false
 host-lib = "*"
 "#,
         channel = channel.url(),
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
     );
     pixi.update_manifest(&manifest_content).unwrap();
 
@@ -2646,8 +4168,9 @@ host-lib = "*"
             PassthroughBackend::instantiator(),
         )),
         config_cli: Default::default(),
-        target_platform: Platform::current(),
-        build_platform: Platform::current(),
+        config_source: isolated_config_source(),
+        target_platform: Subdir::current().unwrap_or(Subdir::NoArch),
+        build_platform: Subdir::current().unwrap_or(Subdir::NoArch),
         build_string_prefix: None,
         build_number: None,
         build_dir: None,
@@ -2656,7 +4179,9 @@ host-lib = "*"
         target_channel: None,
         target_dir: Some(target_dir.path().to_path_buf()),
         force: false,
-        skip_existing: true,
+        no_skip_existing: false,
+        allow_source_dependencies: false,
+        dry_run: false,
         generate_attestation: false,
         variant: Vec::new(),
         variant_config: Vec::new(),
@@ -2705,4 +4230,306 @@ host-lib = "*"
     subdir: "[SUBDIR]"
     version: 0.4.2
     "###);
+}
+
+/// A binary package that declares two extra groups (`foo` and `bar`) must be
+/// solvable from two environments that each select a different extra, even when
+/// those environments share a solve group.
+///
+/// `my-package` advertises `experimental_extra_depends = { foo: [dep-foo],
+/// bar: [dep-bar] }` in its repodata. Environment `env-foo` depends on
+/// `my-package[foo]` and `env-bar` on `my-package[bar]`. Sharing a solve group
+/// keeps the resolved versions consistent across both environments, but
+/// per-environment extraction must still pull in only the dependencies of the
+/// extra each environment actually selected: `env-foo` gets `dep-foo` and not
+/// `dep-bar`, and vice versa.
+#[tokio::test]
+async fn test_package_extras_select_per_environment_in_solve_group() {
+    setup_tracing();
+
+    // `dep-foo` and `dep-bar` are the packages pulled in by the `foo` and `bar`
+    // extras respectively. `my-package` advertises both extra groups through
+    // its `experimental_extra_depends` repodata field. All three live in the
+    // same local channel so the solver can resolve them once an extra selects
+    // them.
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("dep-foo", "1.0.0").finish());
+    package_database.add_package(Package::build("dep-bar", "1.0.0").finish());
+
+    let mut my_package = Package::build("my-package", "1.0.0").finish();
+    my_package.package_record.extra_depends = std::collections::BTreeMap::from([
+        ("foo".to_string(), vec!["dep-foo".to_string()]),
+        ("bar".to_string(), vec!["dep-bar".to_string()]),
+    ]);
+    package_database.add_package(my_package);
+
+    let channel = package_database.into_channel().await.unwrap();
+
+    let pixi = PixiControl::new().unwrap();
+
+    // Two environments, both depending on `my-package` but selecting a
+    // different extra, sharing the `shared` solve group.
+    let manifest_content = format!(
+        r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+
+[feature.foo.dependencies]
+my-package = {{ version = "*", extras = ["foo"] }}
+
+[feature.bar.dependencies]
+my-package = {{ version = "*", extras = ["bar"] }}
+
+[environments]
+env-foo = {{ features = ["foo"], solve-group = "shared" }}
+env-bar = {{ features = ["bar"], solve-group = "shared" }}
+"#,
+        channel = channel.url(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
+    );
+    fs::write(pixi.manifest_path(), manifest_content).unwrap();
+
+    let lock_file = pixi
+        .update_lock_file()
+        .await
+        .expect("lock file generation should succeed for a package with extras");
+
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
+
+    // Both environments must be present in the lock file.
+    assert!(
+        lock_file.environment("env-foo").is_some(),
+        "lock file should contain the env-foo environment"
+    );
+    assert!(
+        lock_file.environment("env-bar").is_some(),
+        "lock file should contain the env-bar environment"
+    );
+
+    // Both environments contain the source package itself.
+    assert!(
+        lock_file.contains_conda_package("env-foo", platform, "my-package"),
+        "env-foo should contain my-package"
+    );
+    assert!(
+        lock_file.contains_conda_package("env-bar", platform, "my-package"),
+        "env-bar should contain my-package"
+    );
+
+    // env-foo selected the `foo` extra: it must contain `dep-foo` only.
+    assert!(
+        lock_file.contains_conda_package("env-foo", platform, "dep-foo"),
+        "env-foo selected extra foo and must contain dep-foo"
+    );
+    assert!(
+        !lock_file.contains_conda_package("env-foo", platform, "dep-bar"),
+        "env-foo did not select extra bar and must not contain dep-bar"
+    );
+
+    // env-bar selected the `bar` extra: it must contain `dep-bar` only.
+    assert!(
+        lock_file.contains_conda_package("env-bar", platform, "dep-bar"),
+        "env-bar selected extra bar and must contain dep-bar"
+    );
+    assert!(
+        !lock_file.contains_conda_package("env-bar", platform, "dep-foo"),
+        "env-bar did not select extra foo and must not contain dep-foo"
+    );
+}
+
+/// A lock file for two solve-group environments that each select a different
+/// extra of the same package must satisfy its manifest.
+///
+/// This exercises the satisfiability check (rather than just the solve): the
+/// reachability walk has to follow each package's `experimental_extra_depends`
+/// for the extra its environment selected. If it does not, `dep-foo` / `dep-bar`
+/// are flagged as unused locked packages and the lock is wrongly considered
+/// out-of-date, re-solving on every invocation. The second
+/// `update_lock_file` therefore must report the lock as already up-to-date.
+#[tokio::test]
+async fn test_package_extras_lock_file_is_satisfiable() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("dep-foo", "1.0.0").finish());
+    package_database.add_package(Package::build("dep-bar", "1.0.0").finish());
+
+    let mut my_package = Package::build("my-package", "1.0.0").finish();
+    my_package.package_record.extra_depends = std::collections::BTreeMap::from([
+        ("foo".to_string(), vec!["dep-foo".to_string()]),
+        ("bar".to_string(), vec!["dep-bar".to_string()]),
+    ]);
+    package_database.add_package(my_package);
+
+    let channel = package_database.into_channel().await.unwrap();
+
+    let pixi = PixiControl::new().unwrap();
+
+    let manifest_content = format!(
+        r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+
+[feature.foo.dependencies]
+my-package = {{ version = "*", extras = ["foo"] }}
+
+[feature.bar.dependencies]
+my-package = {{ version = "*", extras = ["bar"] }}
+
+[environments]
+env-foo = {{ features = ["foo"], solve-group = "shared" }}
+env-bar = {{ features = ["bar"], solve-group = "shared" }}
+"#,
+        channel = channel.url(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
+    );
+    fs::write(pixi.manifest_path(), manifest_content).unwrap();
+
+    // First invocation: generate the lock file.
+    let workspace = pixi.workspace().unwrap();
+    let (_, was_updated) = workspace
+        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
+        .await
+        .expect("first lock file generation should succeed");
+    assert!(was_updated, "first invocation should create the lock file");
+
+    // Second invocation: the existing lock must be found satisfiable so the
+    // lock file is not rewritten.
+    let workspace = pixi.workspace().unwrap();
+    let (_, was_updated_second) = workspace
+        .update_lock_file(None, pixi_core::UpdateLockFileOptions::default())
+        .await
+        .expect("second lock file check should succeed");
+    assert!(
+        !was_updated_second,
+        "a lock file selecting package extras must satisfy its manifest and not be re-solved"
+    );
+}
+
+/// A built source package must record its `experimental_extra_depends` in the
+/// produced repodata, mirroring the source metadata. Regression test: the build
+/// path used to drop the extras (only `flags` survived the `conda_build_v1`
+/// round-trip), so the installed package's repodata reported no extra groups.
+///
+/// The `test` extra's dependency is declared with a `when` condition to check
+/// that the condition is not silently dropped on its way into the built
+/// package's repodata: the resulting spec must still carry its `when=` clause.
+#[tokio::test]
+async fn test_built_source_package_records_extra_depends() {
+    setup_tracing();
+
+    let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(backend_override);
+
+    // Source package declaring an extra group with a conditional dependency.
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+    let extra = r#"
+[package.extra-dependencies.test]
+bat = { version = "*", when = { package = "python", version = ">=3.10" } }
+"#;
+    write_basic_source_package_manifest(&source_dir, "1.0.0", extra);
+
+    // Workspace depends on the source package WITHOUT activating the extra; the
+    // built package must still record all of its extra groups.
+    write_basic_source_workspace_manifest(&pixi.manifest_path(), &[]);
+
+    pixi.install().await.unwrap();
+
+    let prefix = pixi.default_env_path().unwrap();
+    let records: Vec<PrefixRecord> = PrefixRecord::collect_from_prefix(&prefix).unwrap();
+    let my_package = records
+        .iter()
+        .find(|r| r.repodata_record.package_record.name.as_normalized() == "my-package")
+        .expect("my-package should be installed");
+
+    let extras = &my_package.repodata_record.package_record.extra_depends;
+    let test_group = extras
+        .get("test")
+        .expect("built package must record the `test` extra group");
+    assert!(
+        test_group.iter().any(|spec| spec.contains("bat")),
+        "extra group `test` must contain the `bat` dependency, got {test_group:?}"
+    );
+    assert!(
+        test_group.iter().any(|spec| spec.contains("when=")),
+        "conditional extra dependency must preserve its `when=` clause, got {test_group:?}"
+    );
+}
+
+/// Regression test for <https://github.com/prefix-dev/pixi/issues/6445>: a host
+/// dependency change re-solves the lock file without touching the run
+/// environment, so `--check`/`--dry-run` must not rely on `LockFileDiff`.
+#[tokio::test]
+async fn test_lock_check_detects_host_dependency_change() {
+    setup_tracing();
+
+    // Host-only dependency, no run-exports, so its version never reaches the run
+    // environment -- the case the diff is blind to.
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(Package::build("bar", "1").finish());
+    package_database.add_package(Package::build("bar", "2").finish());
+    let channel = package_database.into_channel().await.unwrap();
+
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ));
+
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+    let write_host_dep = |version: &str| {
+        fs::write(
+            source_dir.join("pixi.toml"),
+            format!(
+                r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+[package.build]
+backend = {{ name = "in-memory", version = "0.1.0" }}
+[package.host-dependencies]
+bar = "=={version}"
+"#
+            ),
+        )
+        .unwrap();
+    };
+    write_host_dep("1");
+    pixi.update_manifest(&format!(
+        r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+[dependencies]
+my-package = {{ path = "./my-package" }}
+"#,
+        channel = channel.url(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
+    ))
+    .unwrap();
+    pixi.lock().await.unwrap();
+
+    // Unchanged manifest: check passes (no false positive).
+    pixi.lock()
+        .with_check(true)
+        .with_dry_run(true)
+        .await
+        .unwrap();
+
+    // Bumped host dependency: check must now fail as out-of-date.
+    write_host_dep("2");
+    let err = pixi
+        .lock()
+        .with_check(true)
+        .with_dry_run(true)
+        .await
+        .expect_err("`pixi lock --check --dry-run` must fail when a host dependency changed");
+    assert!(format_diagnostic(err.as_ref()).contains("not up-to-date"));
 }

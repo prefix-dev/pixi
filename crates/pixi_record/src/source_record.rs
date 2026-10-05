@@ -38,6 +38,7 @@ use rattler_lock::{
     SourceMetadata,
 };
 use std::fmt::{Display, Formatter};
+use std::hash::{Hash, Hasher};
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,
@@ -49,6 +50,141 @@ use crate::{
     ParseLockFileError, PinnedGitCheckout, PinnedGitSpec, PinnedPathSpec, PinnedSourceSpec,
     PinnedUrlSpec, VariantValue,
 };
+
+/// Length of the hex-encoded identifier hash that disambiguates source
+/// records at the same `(name, location)`.
+const IDENTIFIER_HASH_LENGTH: usize = 8;
+
+/// Compute the short hex identifier hash for a source record.
+///
+/// The identifier hash is a content-derived discriminator used by the lock
+/// file's `name[hash] @ location` form to distinguish two records that share
+/// a name and source location but differ in variants, build/host
+/// environments, or other configuration. The exact algorithm is an internal
+/// pixi detail and the hash is round-tripped verbatim through the lock file,
+/// but satisfiability recomputes it for immutable source records and compares
+/// it against the stored value: any change to the algorithm or its inputs
+/// therefore invalidates such locked records once, surfacing as a one-time
+/// re-lock (or a hard error under `--locked`) after a pixi upgrade.
+///
+/// Children's identifiers are looked up via their own `identifier_hash`
+/// (source) or location (binary), so callers must compute hashes bottom-up:
+/// every record reachable through `build_packages` / `host_packages` must
+/// already carry its `identifier_hash`.
+pub fn compute_identifier_hash<D: HashIdentifyingData>(
+    manifest_source: &PinnedSourceSpec,
+    build_source: Option<&PinnedBuildSourceSpec>,
+    variants: &BTreeMap<String, VariantValue>,
+    data: &D,
+    build_packages: &[crate::UnresolvedPixiRecord],
+    host_packages: &[crate::UnresolvedPixiRecord],
+    inline_content_hash: Option<u64>,
+) -> String {
+    let mut hasher = xxhash_rust::xxh3::Xxh3::default();
+    manifest_source.hash(&mut hasher);
+    build_source.hash(&mut hasher);
+    variants.hash(&mut hasher);
+    hash_dep_records(&mut hasher, build_packages);
+    hash_dep_records(&mut hasher, host_packages);
+    data.hash_identifying(&mut hasher);
+    // An inline package definition is not represented on disk, so
+    // it must enter the identity explicitly. Editing the inline table changes
+    // this hash, which marks the locked record as outdated and forces a rebuild.
+    inline_content_hash.hash(&mut hasher);
+    format_short_hash(hasher.finish())
+}
+
+/// Hash a sequence of build/host dependency records by the *minimal* identity
+/// we need to tell them apart in a parent's identifier: location for binary,
+/// `name + manifest_source + identifier_hash` for source. The full record
+/// contents are intentionally not visited — each child's `identifier_hash`
+/// already encapsulates them.
+///
+/// The order of the slice is not part of the identity: the lock file
+/// normalizes the order of build/host package references, so the solve-time
+/// order is not reproducible after a round trip. Each record is hashed into
+/// its own digest and the sorted digests are folded in, so the same set of
+/// records always produces the same hash.
+fn hash_dep_records<H: Hasher>(hasher: &mut H, records: &[crate::UnresolvedPixiRecord]) {
+    // Random constants separating the binary and source hash domains, so the
+    // two variants can never produce identical byte streams.
+    const BINARY_RECORD_TAG: u64 = 0x7c48_a5e3_91d6_0bf2;
+    const SOURCE_RECORD_TAG: u64 = 0xe19b_3d70_246c_f58a;
+
+    let mut digests: Vec<u64> = records
+        .iter()
+        .map(|record| {
+            let mut record_hasher = xxhash_rust::xxh3::Xxh3::default();
+            match record {
+                crate::UnresolvedPixiRecord::Binary(binary) => {
+                    BINARY_RECORD_TAG.hash(&mut record_hasher);
+                    binary.url.as_str().hash(&mut record_hasher);
+                }
+                crate::UnresolvedPixiRecord::Source(source) => {
+                    SOURCE_RECORD_TAG.hash(&mut record_hasher);
+                    source.name().as_source().hash(&mut record_hasher);
+                    source.manifest_source.hash(&mut record_hasher);
+                    source.identifier_hash.hash(&mut record_hasher);
+                }
+            }
+            record_hasher.finish()
+        })
+        .collect();
+    digests.sort_unstable();
+    digests.len().hash(hasher);
+    for digest in digests {
+        digest.hash(hasher);
+    }
+}
+
+fn format_short_hash(hash: u64) -> String {
+    let hex = format!("{hash:016x}");
+    hex[..IDENTIFIER_HASH_LENGTH].to_string()
+}
+
+/// The subset of a source record's data fields that contribute to its
+/// identifier hash. Implemented per data variant so [`compute_identifier_hash`]
+/// stays generic over full/partial/unresolved records.
+pub trait HashIdentifyingData {
+    fn hash_identifying<H: Hasher>(&self, hasher: &mut H);
+}
+
+impl HashIdentifyingData for FullSourceRecordData {
+    fn hash_identifying<H: Hasher>(&self, hasher: &mut H) {
+        let pr = &self.package_record;
+        pr.version.hash(hasher);
+        pr.build.hash(hasher);
+        pr.build_number.hash(hasher);
+        pr.subdir.hash(hasher);
+        pr.noarch.hash(hasher);
+        pr.depends.hash(hasher);
+        pr.constrains.hash(hasher);
+        pr.extra_depends.hash(hasher);
+        pr.flags.hash(hasher);
+        pr.purls.hash(hasher);
+        self.sources.hash(hasher);
+    }
+}
+
+impl HashIdentifyingData for PartialSourceRecordData {
+    fn hash_identifying<H: Hasher>(&self, hasher: &mut H) {
+        self.depends.hash(hasher);
+        self.constrains.hash(hasher);
+        self.experimental_extra_depends.hash(hasher);
+        self.flags.hash(hasher);
+        self.purls.hash(hasher);
+        self.sources.hash(hasher);
+    }
+}
+
+impl HashIdentifyingData for SourceRecordData {
+    fn hash_identifying<H: Hasher>(&self, hasher: &mut H) {
+        match self {
+            SourceRecordData::Full(full) => full.hash_identifying(hasher),
+            SourceRecordData::Partial(partial) => partial.hash_identifying(hasher),
+        }
+    }
+}
 
 /// Represents a pinned build source with information about how it was originally specified in the
 /// manifest.
@@ -92,6 +228,17 @@ impl PinnedBuildSourceSpec {
             PinnedBuildSourceSpec::Relative(_, pinned) => pinned,
         }
     }
+
+    /// Whether both build sources are the same as far as a lock file can tell.
+    ///
+    /// Comparing the specs directly is too strict: writing one to the lock
+    /// drops the `lfs` flag and rewrites a git reference into the commit it
+    /// resolved to, so a pin read back never equals the pin it came from.
+    /// Compare in the lock's own representation instead.
+    pub fn matches_locked(&self, other: &Self) -> bool {
+        build_source_to_package_build_source(Some(self.clone()))
+            == build_source_to_package_build_source(Some(other.clone()))
+    }
 }
 
 impl From<PinnedBuildSourceSpec> for PinnedSourceSpec {
@@ -117,13 +264,14 @@ pub struct SourceRecord<D> {
     /// The variants that uniquely identify the way this package was built.
     pub variants: BTreeMap<String, VariantValue>,
 
-    /// The short hash that was originally parsed from the lock file (e.g.
-    /// the `9f3c2a7b` part of `numba-cuda[9f3c2a7b] @ .`).
+    /// The short hash that disambiguates two records at the same `(name,
+    /// location)` — the `9f3c2a7b` part of `numba-cuda[9f3c2a7b] @ .`.
     ///
-    /// It's useful to reuse this identifier to avoid unnecessary lock-file
-    /// updates. If this field is None when serializing to the lock-file, it
-    /// will be regenerated based on the contents of this struct itself.
-    pub identifier_hash: Option<String>,
+    /// Every constructor must fill this. Compute it via
+    /// [`compute_identifier_hash`] (or [`SourceRecord::compute_identifier_hash`])
+    /// after the rest of the record is assembled, after children in
+    /// `build_packages` / `host_packages` already carry their own hashes.
+    pub identifier_hash: String,
 
     /// Packages in the build environment used to build this source package
     /// (compilers, build tools, etc.), as recorded in the lock file.
@@ -155,7 +303,7 @@ pub type FullSourceRecord = SourceRecord<FullSourceRecordData>;
 /// Not used directly outside this crate; see [`UnresolvedSourceRecord`].
 pub type PartialSourceRecord = SourceRecord<PartialSourceRecordData>;
 
-/// A source record that may be either full or partial. This is the lock-file
+/// A source record that may be either full or partial. This is the lock file
 /// boundary type.
 ///
 /// Use [`UnresolvedPixiRecord::try_into_resolved`](crate::UnresolvedPixiRecord::try_into_resolved)
@@ -217,7 +365,7 @@ pub struct FullSourceRecordData {
     pub sources: BTreeMap<String, SourceLocationSpec>,
 }
 
-/// Runtime-checked variant used at the lock-file boundary.
+/// Runtime-checked variant used at the lock file boundary.
 ///
 /// After reading a lock file, source records may be either full (immutable
 /// sources like git) or partial (mutable sources like local paths). This enum
@@ -286,6 +434,91 @@ impl<D> SourceRecord<D> {
                 .build_source()
                 .as_ref()
                 .is_some_and(|bs| bs.pinned().is_mutable())
+    }
+
+    /// Compute this record's identifier hash from its current contents and
+    /// the content hash of the inline package definition that applies to it
+    /// (if any).
+    ///
+    /// Children referenced via `build_packages` / `host_packages` must already
+    /// have their own `identifier_hash` set; see [`compute_identifier_hash`].
+    pub fn compute_identifier_hash(&self, inline_content_hash: Option<u64>) -> String
+    where
+        D: HashIdentifyingData,
+    {
+        compute_identifier_hash(
+            &self.manifest_source,
+            self.build_source.as_ref(),
+            &self.variants,
+            &self.data,
+            &self.build_packages,
+            &self.host_packages,
+            inline_content_hash,
+        )
+    }
+}
+
+impl<D: HashIdentifyingData> SourceRecord<D> {
+    /// Construct a source record and derive its [`identifier_hash`] from the
+    /// supplied fields. Children referenced via `build_packages` /
+    /// `host_packages` must already carry their own identifier hashes — see
+    /// the [`compute_identifier_hash`] free function for details.
+    ///
+    /// Use [`SourceRecord::from_parts_with_hash`] when the hash is already
+    /// known (e.g. round-trip from a serialized form).
+    pub fn new(
+        data: D,
+        manifest_source: PinnedSourceSpec,
+        build_source: Option<PinnedBuildSourceSpec>,
+        variants: BTreeMap<String, VariantValue>,
+        build_packages: Vec<crate::UnresolvedPixiRecord>,
+        host_packages: Vec<crate::UnresolvedPixiRecord>,
+        inline_content_hash: Option<u64>,
+    ) -> Self {
+        let identifier_hash = compute_identifier_hash(
+            &manifest_source,
+            build_source.as_ref(),
+            &variants,
+            &data,
+            &build_packages,
+            &host_packages,
+            inline_content_hash,
+        );
+        Self {
+            data,
+            manifest_source,
+            build_source,
+            variants,
+            identifier_hash,
+            build_packages,
+            host_packages,
+        }
+    }
+}
+
+impl<D> SourceRecord<D> {
+    /// Construct a source record from an explicit hash. Use this when reading
+    /// a record that already carries an identifier (lock file, on-disk cache);
+    /// for fresh records prefer [`SourceRecord::new`] so the hash is derived
+    /// rather than supplied.
+    pub fn from_parts_with_hash(
+        data: D,
+        manifest_source: PinnedSourceSpec,
+        build_source: Option<PinnedBuildSourceSpec>,
+        variants: BTreeMap<String, VariantValue>,
+        identifier_hash: String,
+        build_packages: Vec<crate::UnresolvedPixiRecord>,
+        host_packages: Vec<crate::UnresolvedPixiRecord>,
+    ) -> Self {
+        Self {
+            data,
+            manifest_source,
+            build_source,
+            variants,
+            identifier_hash,
+            build_packages,
+            host_packages,
+        }
     }
 
     /// Transform the data payload while preserving all shared fields.
@@ -366,14 +599,14 @@ impl SourceRecord<FullSourceRecordData> {
         &self.data.sources
     }
 
-    /// Convert into lock-file compatible `CondaSourceData`.
+    /// Convert into lock file compatible `CondaSourceData`.
     ///
     /// If either source (manifest or build) is mutable (path-based), the
     /// record is downgraded to partial metadata. This is intentional: mutable
     /// sources can change between runs, so storing full metadata (version,
     /// build string, hashes) would be misleading because it would appear locked
     /// but could silently become stale. By keeping only name, depends, and
-    /// sources, we force re-evaluation at the next lock-file read.
+    /// sources, we force re-evaluation at the next lock file read.
     pub fn into_conda_source_data(self, workspace_root: &Path) -> CondaSourceData {
         let has_mutable = self.has_mutable_source();
         let mut unresolved = SourceRecord::<SourceRecordData>::from(self);
@@ -386,7 +619,7 @@ impl SourceRecord<FullSourceRecordData> {
                     name: full.package_record.name,
                     depends: full.package_record.depends,
                     constrains: full.package_record.constrains,
-                    experimental_extra_depends: full.package_record.experimental_extra_depends,
+                    experimental_extra_depends: full.package_record.extra_depends,
                     flags: full.package_record.flags,
                     purls: full.package_record.purls,
                     license: full.package_record.license,
@@ -496,6 +729,22 @@ impl SourceRecord<SourceRecordData> {
         }
     }
 
+    /// Extra groups, keyed by group name.
+    pub fn experimental_extra_depends(&self) -> &BTreeMap<String, Vec<String>> {
+        match &self.data {
+            SourceRecordData::Full(full) => &full.package_record.extra_depends,
+            SourceRecordData::Partial(partial) => &partial.experimental_extra_depends,
+        }
+    }
+
+    /// Run-exports declared by the package.
+    pub fn run_exports(&self) -> Option<&RunExportsJson> {
+        match &self.data {
+            SourceRecordData::Full(full) => full.package_record.run_exports.as_ref(),
+            SourceRecordData::Partial(partial) => partial.run_exports.as_ref(),
+        }
+    }
+
     /// Source dependency locations.
     pub fn sources(&self) -> &BTreeMap<String, SourceLocationSpec> {
         match &self.data {
@@ -504,7 +753,7 @@ impl SourceRecord<SourceRecordData> {
         }
     }
 
-    /// Convert into lock-file compatible `CondaSourceData<SourceMetadata>`.
+    /// Convert into lock file compatible `CondaSourceData<SourceMetadata>`.
     ///
     /// If the source is mutable (path-based), full metadata is downgraded to
     /// partial so the lock file does not store stale version/build data.
@@ -525,7 +774,7 @@ impl SourceRecord<SourceRecordData> {
                         name: full.package_record.name,
                         depends: full.package_record.depends,
                         constrains: full.package_record.constrains,
-                        experimental_extra_depends: full.package_record.experimental_extra_depends,
+                        experimental_extra_depends: full.package_record.extra_depends,
                         flags: full.package_record.flags,
                         purls: full.package_record.purls,
                         license: full.package_record.license,
@@ -549,7 +798,7 @@ impl SourceRecord<SourceRecordData> {
                     name: partial.name,
                     depends: partial.depends,
                     constrains: partial.constrains,
-                    experimental_extra_depends: partial.experimental_extra_depends,
+                    extra_depends: partial.experimental_extra_depends,
                     flags: partial.flags,
                     license: partial.license,
                     purls: partial.purls,
@@ -567,14 +816,14 @@ impl SourceRecord<SourceRecordData> {
                 .into_iter()
                 .map(|(k, v)| (k, v.into()))
                 .collect(),
-            identifier_hash: self.identifier_hash,
+            identifier_hash: Some(self.identifier_hash),
             sources: sources.into_iter().map(|(k, v)| (k, v.into())).collect(),
             source_data: SourceData::default(),
             metadata,
         }
     }
 
-    /// Create from lock-file `CondaSourceData<SourceMetadata>`.
+    /// Create from lock file `CondaSourceData<SourceMetadata>`.
     ///
     /// `build_packages` and `host_packages` must be resolved by the caller
     /// from the lock file's package table, since `CondaSourceData` only
@@ -606,7 +855,7 @@ impl SourceRecord<SourceRecordData> {
                     name: partial.name,
                     depends: partial.depends,
                     constrains: partial.constrains,
-                    experimental_extra_depends: partial.experimental_extra_depends,
+                    experimental_extra_depends: partial.extra_depends,
                     flags: partial.flags,
                     purls: partial.purls,
                     license: partial.license,
@@ -615,19 +864,35 @@ impl SourceRecord<SourceRecordData> {
                 })
             }
         };
-        Ok(Self {
-            data: record_data,
+        let variants: BTreeMap<String, VariantValue> = data
+            .variants
+            .into_iter()
+            .map(|(k, v)| (k, VariantValue::from(v)))
+            .collect();
+        // v7 lock files always carry the hash; the fallback is only reached
+        // for older/hand-rolled lock files that omit it. Children are
+        // resolved before parents (see `LockFileResolver`), so their hashes
+        // are already filled when we recompute here.
+        let identifier_hash = data.identifier_hash.unwrap_or_else(|| {
+            compute_identifier_hash(
+                &manifest_source,
+                build_source.as_ref(),
+                &variants,
+                &record_data,
+                &build_packages,
+                &host_packages,
+                None,
+            )
+        });
+        Ok(Self::from_parts_with_hash(
+            record_data,
             manifest_source,
             build_source,
-            variants: data
-                .variants
-                .into_iter()
-                .map(|(k, v)| (k, VariantValue::from(v)))
-                .collect(),
-            identifier_hash: data.identifier_hash,
+            variants,
+            identifier_hash,
             build_packages,
             host_packages,
-        })
+        ))
     }
 }
 
@@ -710,6 +975,9 @@ fn package_build_source_to_build_source(
                             .and_then(|s| pixi_spec::Subdirectory::try_from(s.to_string()).ok())
                             .unwrap_or_default(),
                         reference,
+                        // Rattler's `PackageBuildSource` cannot carry an LFS
+                        // flag, so build sources never request LFS.
+                        lfs: None,
                     },
                 }),
             )))
@@ -754,12 +1022,72 @@ mod tests {
     use super::*;
     use std::{path::Path, str::FromStr};
 
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::{
+        PackageName, PackageRecord, RepoDataRecord, Subdir, VersionWithSource,
+        package::DistArchiveIdentifier,
+    };
     use rattler_lock::{
         Channel, CondaPackageData, DEFAULT_ENVIRONMENT_NAME, LockFile, LockFileBuilder,
     };
 
     type SourceRecord = super::SourceRecord<FullSourceRecordData>;
+
+    #[test]
+    fn identifier_hash_ignores_dep_record_order() {
+        // The lock file normalizes the order of build/host package
+        // references, so the identifier hash must not depend on the order
+        // the solver produced them in.
+        let binary_record = |name: &str| {
+            let package_record = PackageRecord::new(
+                PackageName::from_str(name).expect("valid name"),
+                VersionWithSource::from_str("1.0").expect("valid version"),
+                "h0".into(),
+            );
+            let file_name = format!("{name}-1.0-h0.conda");
+            crate::UnresolvedPixiRecord::Binary(std::sync::Arc::new(RepoDataRecord {
+                package_record,
+                identifier: DistArchiveIdentifier::from_str(&file_name).expect("valid identifier"),
+                url: url::Url::parse(&format!("https://example.com/linux-64/{file_name}"))
+                    .expect("valid url"),
+                channel: None,
+            }))
+        };
+
+        let manifest_source = PinnedSourceSpec::Path(PinnedPathSpec {
+            path: "./pkg".into(),
+        });
+        let data = SourceRecordData::Partial(PartialSourceRecordData {
+            name: PackageName::from_str("pkg").expect("valid name"),
+            depends: Vec::new(),
+            constrains: Vec::new(),
+            experimental_extra_depends: Default::default(),
+            flags: Default::default(),
+            purls: None,
+            license: None,
+            run_exports: None,
+            sources: Default::default(),
+        });
+
+        let hash = |host_packages: Vec<crate::UnresolvedPixiRecord>| {
+            compute_identifier_hash(
+                &manifest_source,
+                None,
+                &BTreeMap::new(),
+                &data,
+                &[],
+                &host_packages,
+                None,
+            )
+        };
+        assert_eq!(
+            hash(vec![binary_record("python"), binary_record("setuptools")]),
+            hash(vec![binary_record("setuptools"), binary_record("python")]),
+        );
+        assert_ne!(
+            hash(vec![binary_record("python")]),
+            hash(vec![binary_record("python"), binary_record("setuptools")]),
+        );
+    }
 
     #[test]
     fn roundtrip_conda_source_data() {
@@ -821,7 +1149,7 @@ mod tests {
 
     /// Round-trip a lock file whose conda source package carries build and
     /// host package handles. Uses [`LockFileResolver`] to rebuild records
-    /// with their build/host packages populated from the lockfile's package
+    /// with their build/host packages populated from the lock file's package
     /// table, then writes them back via [`UnresolvedPixiRecord::into_conda_package_data`]
     /// — the path that should serialize the handles again. A diff against
     /// the fixture fails if the round-trip drops build/host information.
@@ -872,6 +1200,7 @@ mod tests {
             DEFAULT_ENVIRONMENT_NAME,
             [Channel::from("https://conda.anaconda.org/conda-forge/")],
         );
+        let mut writer = crate::LockFileWriter::new(&mut builder);
 
         for (platform, packages) in environment.packages_by_platform() {
             let platform_str = platform.subdir().to_string();
@@ -879,12 +1208,14 @@ mod tests {
                 let Some(record) = resolver.get_for_package(package) else {
                     continue;
                 };
-                let data = record.into_conda_package_data(&mut builder, workspace_root);
-                builder
+                let data = record.into_conda_package_data(&mut writer, workspace_root);
+                writer
+                    .builder
                     .add_conda_package(DEFAULT_ENVIRONMENT_NAME, &platform_str, data)
                     .expect("platform was registered");
             }
         }
+        drop(writer);
 
         let roundtrip_lock = builder
             .finish()
@@ -914,10 +1245,10 @@ mod tests {
     /// Build a lock file string from a set of SourceRecords.
     fn build_lock_from_records(records: &[SourceRecord], workspace_root: &Path) -> String {
         // Collect all unique platforms from the records (using the package_record's subdir).
-        let platforms: std::collections::HashSet<Platform> = records
+        let platforms: std::collections::HashSet<Subdir> = records
             .iter()
             .map(|r| {
-                Platform::from_str(&r.package_record().subdir)
+                Subdir::from_str(&r.package_record().subdir)
                     .expect("failed to parse platform from subdir")
             })
             .collect();
@@ -940,7 +1271,7 @@ mod tests {
         );
 
         for record in records {
-            let platform = Platform::from_str(&record.package_record().subdir)
+            let platform = Subdir::from_str(&record.package_record().subdir)
                 .expect("failed to parse platform from subdir");
             let conda_data =
                 CondaPackageData::from(record.clone().into_conda_source_data(workspace_root));
@@ -953,6 +1284,49 @@ mod tests {
             .finish()
             .render_to_string()
             .expect("failed to render lock file")
+    }
+
+    /// A build source read back from a lock file must still match the pin it
+    /// was written from. A stricter comparison reports a change on every run
+    /// and never converges.
+    #[test]
+    fn build_source_matches_itself_across_a_lock_file() {
+        let commit = "1234567890123456789012345678901234567890";
+        let git_build_source = |reference: GitReference, lfs: Option<bool>| {
+            PinnedBuildSourceSpec::Absolute(PinnedSourceSpec::Git(PinnedGitSpec {
+                git: url::Url::parse("https://example.com/repo.git").expect("valid url"),
+                source: PinnedGitCheckout {
+                    commit: GitSha::from_str(commit).expect("valid sha"),
+                    subdirectory: Default::default(),
+                    reference,
+                    lfs,
+                },
+            }))
+        };
+
+        // What the manifest asked for, freshly resolved.
+        let resolved = git_build_source(GitReference::Rev("1234567".into()), Some(true));
+
+        // The same build source, written to a lock file and read back.
+        let locked = package_build_source_to_build_source(
+            build_source_to_package_build_source(Some(resolved.clone())),
+            &PinnedSourceSpec::Path(PinnedPathSpec {
+                path: "./pkg".into(),
+            }),
+        )
+        .expect("build source round trips")
+        .expect("build source is preserved");
+
+        assert_ne!(
+            resolved, locked,
+            "the round trip is lossy, which is why `matches_locked` exists"
+        );
+        assert!(resolved.matches_locked(&locked));
+        assert!(locked.matches_locked(&resolved));
+
+        // A different commit is a real change and stays visible.
+        let other_commit = git_build_source(GitReference::Branch("main".into()), None);
+        assert!(!other_commit.matches_locked(&locked));
     }
 
     #[test]
@@ -1026,7 +1400,7 @@ mod tests {
                 "python".into(),
                 crate::VariantValue::from("3.12".to_string()),
             )]),
-            identifier_hash: Some("abcd1234".to_string()),
+            identifier_hash: "abcd1234".to_string(),
             build_packages: Vec::new(),
             host_packages: Vec::new(),
         };
@@ -1049,7 +1423,7 @@ mod tests {
             roundtripped.variants.get("python").map(|v| v.to_string()),
             Some("3.12".to_string())
         );
-        assert_eq!(roundtripped.identifier_hash.as_deref(), Some("abcd1234"));
+        assert_eq!(roundtripped.identifier_hash, "abcd1234");
     }
 
     #[test]
@@ -1109,7 +1483,7 @@ mod tests {
                 }),
                 build_source: None,
                 variants: BTreeMap::new(),
-                identifier_hash: None,
+                identifier_hash: String::new(),
                 build_packages: Vec::new(),
                 host_packages: Vec::new(),
             }));
@@ -1144,7 +1518,7 @@ mod tests {
             manifest_source,
             build_source,
             variants,
-            identifier_hash: None,
+            identifier_hash: String::new(),
             build_packages: Vec::new(),
             host_packages: Vec::new(),
         }
@@ -1164,6 +1538,7 @@ mod tests {
                     .unwrap(),
                 subdirectory: Default::default(),
                 reference: pixi_spec::GitReference::DefaultBranch,
+                lfs: None,
             },
         })
     }
@@ -1192,7 +1567,7 @@ mod tests {
     }
 
     #[test]
-    fn path_source_downgrades_to_partial_in_lockfile() {
+    fn path_source_downgrades_to_partial_in_lock_file() {
         let record = make_full_record("my-pkg", path_source("./my-pkg"), None, BTreeMap::new());
         let conda_data = record.into_conda_source_data(Path::new("/workspace"));
         assert!(
@@ -1202,7 +1577,7 @@ mod tests {
     }
 
     #[test]
-    fn git_source_stays_full_in_lockfile() {
+    fn git_source_stays_full_in_lock_file() {
         let record = make_full_record("my-pkg", git_source(), None, BTreeMap::new());
         let conda_data = record.into_conda_source_data(Path::new("/workspace"));
         assert!(

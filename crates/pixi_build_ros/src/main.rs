@@ -4,8 +4,9 @@ mod distro;
 mod metadata;
 pub mod package_map;
 pub mod package_xml;
+pub mod workspace_discovery;
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -19,7 +20,7 @@ use pixi_build_backend::tools::BackendIdentifier;
 use rattler_build_jinja::{JinjaTemplate, Variable};
 use rattler_build_recipe::stage0::{Item, Script, SerializableMatchSpec, Value};
 use rattler_build_types::NormalizedKey;
-use rattler_conda_types::{ChannelUrl, Platform};
+use rattler_conda_types::{ChannelUrl, Subdir};
 
 use crate::build_script::render_build_script;
 use crate::config::{PackageMappingSource, extract_distro_from_channels_list};
@@ -37,16 +38,27 @@ pub struct RosGenerator {}
 impl GenerateRecipe for RosGenerator {
     type Config = RosBackendConfig;
 
+    #[tracing::instrument(
+        name = "ros_generate_recipe",
+        skip_all,
+        fields(
+            manifest_path = %manifest_path.display(),
+            workspace = workspace_directory.as_ref().map(|p| p.display().to_string()).unwrap_or_else(|| "<none>".to_string()),
+        ),
+    )]
     async fn generate_recipe(
         &self,
         model: &pixi_build_types::ProjectModel,
         config: &Self::Config,
         manifest_path: PathBuf,
-        host_platform: Platform,
+        host_platform: Subdir,
         _python_params: Option<PythonParams>,
         _variants: &HashSet<NormalizedKey>,
         channels: Vec<ChannelUrl>,
         _cache_dir: Option<PathBuf>,
+        _workspace_scratch_directory: Option<PathBuf>,
+        workspace_directory: Option<PathBuf>,
+        checkout_root: Option<PathBuf>,
     ) -> miette::Result<GeneratedRecipe> {
         // Determine the manifest root
         let manifest_root = if manifest_path.is_file() {
@@ -77,17 +89,19 @@ impl GenerateRecipe for RosGenerator {
                 )
             })?;
 
-        let distro = Distro::fetch(&distro_name).await?;
+        let distro = Distro::new(distro_name);
 
         // Parse package.xml
         let package_xml_path = manifest_root.join("package.xml");
         let package_xml_content = fs::read_to_string(&package_xml_path).into_diagnostic()?;
 
         // Set up ROS environment for condition evaluation
-        let ros_version_str = if distro.is_ros1 { "1" } else { "2" };
         let mut env_vars: HashMap<String, String> = HashMap::new();
-        env_vars.insert("ROS_DISTRO".to_string(), distro_name.clone());
-        env_vars.insert("ROS_VERSION".to_string(), ros_version_str.to_string());
+        env_vars.insert("ROS_DISTRO".to_string(), distro.name.clone());
+        env_vars.insert(
+            "ROS_VERSION".to_string(),
+            distro.version.as_env_value().to_string(),
+        );
         if let Some(user_env) = &config.env {
             for (k, v) in user_env {
                 env_vars.insert(k.clone(), v.clone());
@@ -107,11 +121,19 @@ impl GenerateRecipe for RosGenerator {
 
         let mut generated_recipe = parse_and_render(
             package_xml.clone(),
-            &distro_name,
+            &distro.name,
             model.clone(),
             extra_input_globs.clone(),
             package_mapping_files,
         )?;
+
+        // `parse_and_render` already populated `metadata_input_globs` with
+        // the provider's anchored package-local patterns (`setup.py`,
+        // `CMakeLists.txt`, ...).  Workspace-discovery globs (the
+        // `../**/package.xml` / `**/COLCON_IGNORE` family and the
+        // `!**/.*/**` hidden-folder exclusion) are no longer emitted on
+        // the flat list: they're carried by `metadata_input_glob_sets`
+        // with marker semantics that the flat form can't express.
 
         // Load package mappings
         let robostack_yaml: &str = include_str!("../robostack.yaml");
@@ -124,12 +146,88 @@ impl GenerateRecipe for RosGenerator {
         let package_map_data = load_package_map_data(&all_mapping_sources);
 
         // Get requirements from package.xml
-        let package_requirements = package_xml_to_conda_requirements(
+        let mut package_requirements = package_xml_to_conda_requirements(
             &package_xml,
             &distro,
             host_platform,
             &package_map_data,
         )?;
+
+        // Discover sibling ROS packages in the workspace and rewrite any
+        // package.xml deps that match a sibling into source dependencies, so
+        // pixi resolves them against the sibling directory instead of looking
+        // them up as a binary through RoboStack.
+        //
+        // Prefer `checkout_root` (set by newer pixi versions) when available
+        // because it correctly resolves to the git/url checkout root for
+        // remote source dependencies — `workspace_directory` for those
+        // cases points at the package's subdirectory and would miss every
+        // sibling.  For path sources the two values agree.  Older pixi
+        // versions don't send `checkout_root`; fall back to
+        // `workspace_directory` so this backend keeps working there.
+        let discovery_root = checkout_root.as_deref().or(workspace_directory.as_deref());
+        if let Some(workspace_root) = discovery_root
+            && !config.ignore_workspace_sources
+        {
+            let discovery = workspace_discovery::discover_ros_packages(workspace_root)?;
+
+            // Emit the structured form.  Pointing `root` at the workspace
+            // lets pixi walk from there directly without ascending via
+            // `../..` patterns; the marker semantics handle pruning at
+            // `COLCON_IGNORE` / `AMENT_IGNORE` / `CATKIN_IGNORE`.
+            let mut structured = discovery.input_glob_set;
+            structured.root = Some(workspace_root.to_path_buf());
+            generated_recipe.metadata_input_glob_sets.push(structured);
+
+            let sibling_specs = workspace_discovery::sibling_source_spec_map(
+                &discovery.packages,
+                &package_xml.name,
+                &manifest_root,
+                &distro.name,
+            );
+
+            // Apply per-class: a manual entry in the model for the same conda
+            // name suppresses discovery's override for that class only.
+            let build_overrides = workspace_discovery::filter_unspecified(
+                &sibling_specs,
+                &generated_recipe.recipe.requirements.build,
+            );
+            let host_overrides = workspace_discovery::filter_unspecified(
+                &sibling_specs,
+                &generated_recipe.recipe.requirements.host,
+            );
+            let run_overrides = workspace_discovery::filter_unspecified(
+                &sibling_specs,
+                &generated_recipe.recipe.requirements.run,
+            );
+
+            package_requirements.build = workspace_discovery::apply_sibling_overrides(
+                package_requirements.build,
+                &build_overrides,
+            );
+            package_requirements.host = workspace_discovery::apply_sibling_overrides(
+                package_requirements.host,
+                &host_overrides,
+            );
+            package_requirements.run = workspace_discovery::apply_sibling_overrides(
+                package_requirements.run,
+                &run_overrides,
+            );
+        }
+
+        // Mirror the provider's package-local literals (`setup.py`,
+        // `CMakeLists.txt`, ...) into the structured list as a second
+        // group rooted at the package manifest (the consumer's default).
+        if !generated_recipe.metadata_input_globs.is_empty() {
+            generated_recipe
+                .metadata_input_glob_sets
+                .push(pixi_build_types::InputGlobSet {
+                    patterns: generated_recipe.metadata_input_globs.clone(),
+                    markers: Vec::new(),
+                    exclude_hidden: true,
+                    root: None,
+                });
+        }
 
         // Add standard build dependencies
         let mut build_deps: Vec<&str> = vec![
@@ -172,7 +270,7 @@ impl GenerateRecipe for RosGenerator {
         build_items.push(Item::Value(Value::new_template(cxx_compiler, None)));
 
         // Add host dependencies
-        let host_dep_names = ["python", "numpy", "pip", "pkg-config"];
+        let host_dep_names = ["python", "numpy", "pip", "pkg-config", "setuptools"];
         for dep in &host_dep_names {
             host_items.push(Item::Value(Value::new_concrete(
                 SerializableMatchSpec::from(*dep),
@@ -181,13 +279,13 @@ impl GenerateRecipe for RosGenerator {
         }
 
         // Add distro mutex to host and run
-        let mutex_name = distro.ros_distro_mutex_name();
+        let mutex_name = distro.version.mutex_package_name();
         host_items.push(Item::Value(Value::new_concrete(
-            SerializableMatchSpec::from(mutex_name.as_str()),
+            SerializableMatchSpec::from(mutex_name),
             None,
         )));
         run_items.push(Item::Value(Value::new_concrete(
-            SerializableMatchSpec::from(mutex_name.as_str()),
+            SerializableMatchSpec::from(mutex_name),
             None,
         )));
 
@@ -199,16 +297,16 @@ impl GenerateRecipe for RosGenerator {
 
         // Generate build script
         let build_type = package_xml.build_type();
-        let build_script_content = render_build_script(&build_type, &distro_name, &manifest_root)?;
+        let build_script_content = render_build_script(&build_type, &distro.name, &manifest_root)?;
 
         let mut script_env: indexmap::IndexMap<String, Value<String>> = indexmap::IndexMap::new();
         script_env.insert(
             "ROS_DISTRO".to_string(),
-            Value::new_concrete(distro_name.clone(), None),
+            Value::new_concrete(distro.name.clone(), None),
         );
         script_env.insert(
             "ROS_VERSION".to_string(),
-            Value::new_concrete(ros_version_str.to_string(), None),
+            Value::new_concrete(distro.version.as_env_value().to_string(), None),
         );
         if let Some(user_env) = &config.env {
             for (k, v) in user_env {
@@ -216,9 +314,15 @@ impl GenerateRecipe for RosGenerator {
             }
         }
 
-        generated_recipe.recipe.build.script = Script::from_content(build_script_content)
-            .with_env(script_env)
-            .with_secrets(model.secrets.iter().cloned().collect());
+        *generated_recipe
+            .recipe
+            .build
+            .plan
+            .script_mut()
+            .expect("generated recipes use script mode") =
+            Script::from_content(build_script_content)
+                .with_env(script_env)
+                .with_secrets(model.secrets.iter().cloned().collect());
 
         Ok(generated_recipe)
     }
@@ -227,15 +331,17 @@ impl GenerateRecipe for RosGenerator {
         &self,
         config: &Self::Config,
         _workdir: impl AsRef<Path>,
-        editable: bool,
-    ) -> miette::Result<BTreeSet<String>> {
-        let mut globs: Vec<&str> = vec![
+        _editable: bool,
+    ) -> miette::Result<Vec<String>> {
+        let globs: Vec<&str> = vec![
             "**/*.c",
             "**/*.cpp",
             "**/*.h",
             "**/*.hpp",
             "**/*.rs",
             "**/*.sh",
+            "**/*.py",
+            "**/*.pyx",
             "package.xml",
             "setup.py",
             "setup.cfg",
@@ -253,22 +359,16 @@ impl GenerateRecipe for RosGenerator {
             "action/**/*.action",
         ];
 
-        if !editable {
-            globs.extend(["**/*.py", "**/*.pyx"]);
-        }
-
-        let mut result: BTreeSet<String> = globs.iter().map(|s| s.to_string()).collect();
+        let mut result: Vec<String> = globs.iter().map(|s| s.to_string()).collect();
         if let Some(extra) = &config.extra_input_globs {
-            for g in extra {
-                result.insert(g.clone());
-            }
+            result.extend(extra.iter().cloned());
         }
         Ok(result)
     }
 
     fn default_variants(
         &self,
-        host_platform: Platform,
+        host_platform: Subdir,
     ) -> miette::Result<BTreeMap<NormalizedKey, Vec<Variable>>> {
         Ok(default_compiler_variants(host_platform))
     }
@@ -295,7 +395,7 @@ mod tests {
     use std::path::PathBuf;
 
     use pixi_build_types::ProjectModel;
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::Subdir;
 
     use super::*;
 
@@ -318,7 +418,7 @@ mod tests {
     }
 
     fn jazzy_distro() -> Distro {
-        Distro::builder("jazzy").build()
+        Distro::new("jazzy")
     }
 
     #[test]
@@ -335,13 +435,9 @@ mod tests {
         let distro = jazzy_distro();
         let package_map = default_package_map();
 
-        let requirements = package_xml_to_conda_requirements(
-            &package_xml,
-            &distro,
-            Platform::Linux64,
-            &package_map,
-        )
-        .unwrap();
+        let requirements =
+            package_xml_to_conda_requirements(&package_xml, &distro, Subdir::Linux64, &package_map)
+                .unwrap();
 
         insta::assert_yaml_snapshot!(requirements.build, @r###"
         - ros-jazzy-ament-cmake
@@ -392,13 +488,9 @@ mod tests {
         let distro = jazzy_distro();
         let package_map = default_package_map();
 
-        let requirements = package_xml_to_conda_requirements(
-            &package_xml,
-            &distro,
-            Platform::Linux64,
-            &package_map,
-        )
-        .unwrap();
+        let requirements =
+            package_xml_to_conda_requirements(&package_xml, &distro, Subdir::Linux64, &package_map)
+                .unwrap();
 
         insta::assert_yaml_snapshot!(requirements.build, @r###"
         - ros-jazzy-ament-cmake
@@ -434,10 +526,13 @@ mod tests {
                 &model,
                 &config,
                 temp_path.to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -519,6 +614,7 @@ mod tests {
           - numpy
           - pip
           - pkg-config
+          - setuptools
           - ros2-distro-mutex
         run:
           - ros-jazzy-example-interfaces
@@ -537,7 +633,6 @@ mod tests {
     }
 
     /// Helper to generate a recipe from a package.xml fixture.
-    /// Uses Distro::fetch which requires network access.
     async fn generate_recipe_for_fixture(
         package_xml_name: &str,
         distro_name: &str,
@@ -562,10 +657,13 @@ mod tests {
                 model,
                 &config,
                 temp_path.to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -573,7 +671,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
     async fn test_recipe_includes_project_run_dependency() {
         let model = project_fixture!({
             "name": "custom_ros",
@@ -651,10 +748,13 @@ mod tests {
                 &model,
                 &config,
                 temp_path.to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -695,7 +795,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
     async fn test_condition_evaluation_ros2_default() {
         let generated = generate_conditional_recipe("jazzy", None).await;
         insta::assert_yaml_snapshot!(filter_conditional_deps(&generated, "jazzy"), @r###"
@@ -708,7 +807,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
     async fn test_condition_evaluation_ros1_default() {
         let generated = generate_conditional_recipe("noetic", None).await;
         insta::assert_yaml_snapshot!(filter_conditional_deps(&generated, "noetic"), @r###"
@@ -721,7 +819,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
     async fn test_condition_evaluation_ros2_override_to_ros1() {
         let env = indexmap::IndexMap::from([
             ("ROS_VERSION".to_string(), "1".to_string()),
@@ -738,7 +835,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
     async fn test_generate_recipe_with_versions() {
         let model = project_fixture!({
             "targets": { "defaultTarget": {} }
@@ -762,7 +858,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
     async fn test_generate_recipe_with_mutex_version() {
         let model = project_fixture!({
             "name": "custom_ros",
@@ -808,7 +903,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
     async fn test_generate_recipe_with_versions_in_model_and_package() {
         let model = project_fixture!({
             "name": "custom_ros",
@@ -848,7 +942,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
     async fn test_generate_recipe_with_explicit_package_xml_path() {
         let model = project_fixture!({
             "targets": { "defaultTarget": {} }
@@ -876,10 +969,13 @@ mod tests {
                 &model,
                 &config,
                 dest.clone(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -892,7 +988,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
     async fn test_config_auto_detects_distro_from_channel() {
         let temp_dir = tempfile::tempdir().unwrap();
         let temp_path = temp_dir.path();
@@ -911,12 +1006,15 @@ mod tests {
                 &model,
                 &config,
                 temp_path.to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![ChannelUrl::from(
                     url::Url::parse("https://prefix.dev/robostack-jazzy").unwrap(),
                 )],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -935,7 +1033,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
     async fn test_config_explicit_distro_overrides_channel() {
         let temp_dir = tempfile::tempdir().unwrap();
         let temp_path = temp_dir.path();
@@ -957,12 +1054,15 @@ mod tests {
                 &model,
                 &config,
                 temp_path.to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![ChannelUrl::from(
                     url::Url::parse("https://prefix.dev/robostack-jazzy").unwrap(),
                 )],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -999,12 +1099,15 @@ mod tests {
                 &model,
                 &config,
                 temp_path.to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![ChannelUrl::from(
                     url::Url::parse("https://prefix.dev/conda-forge").unwrap(),
                 )],
+                None,
+                None,
+                None,
                 None,
             )
             .await;
@@ -1037,10 +1140,13 @@ mod tests {
                 &model,
                 &config,
                 temp_path.to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await;
@@ -1049,7 +1155,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
     async fn test_generate_recipe_with_custom_ros() {
         let model = project_fixture!({
             "targets": { "defaultTarget": {} }
@@ -1110,7 +1215,6 @@ mod tests {
     }
 
     #[tokio::test]
-    #[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
     async fn test_generate_recipe_with_inline_package_mappings() {
         let model = project_fixture!({
             "targets": { "defaultTarget": {} }
@@ -1161,6 +1265,329 @@ mod tests {
         assert!(
             run_deps.iter().any(|d| d == "ros-noetic-ros-custom2-msgs"),
             "Expected ros-noetic-ros-custom2-msgs in run deps: {run_deps:?}"
+        );
+    }
+
+    fn write_minimal_package_xml(dir: &std::path::Path, name: &str, deps: &[&str]) {
+        fs::create_dir_all(dir).unwrap();
+        let depend_tags: String = deps
+            .iter()
+            .map(|d| format!("  <depend>{d}</depend>\n"))
+            .collect();
+        let xml = format!(
+            r#"<?xml version="1.0"?>
+<package format="3">
+  <name>{name}</name>
+  <version>0.0.1</version>
+  <description>test</description>
+  <maintainer email="test@example.com">Tester</maintainer>
+  <license>MIT</license>
+  <buildtool_depend>ament_cmake</buildtool_depend>
+{depend_tags}</package>
+"#
+        );
+        fs::write(dir.join("package.xml"), xml).unwrap();
+    }
+
+    /// Returns the first concrete item whose package name equals `conda_name`.
+    fn find_concrete<'a>(
+        list: &'a rattler_build_recipe::stage0::ConditionalList<SerializableMatchSpec>,
+        conda_name: &str,
+    ) -> Option<&'a SerializableMatchSpec> {
+        list.iter().find_map(|item| match item {
+            Item::Value(v) => v.as_concrete().filter(|s| {
+                s.0.name
+                    .as_exact()
+                    .map(|n| n.as_normalized() == conda_name)
+                    .unwrap_or(false)
+            }),
+            _ => None,
+        })
+    }
+
+    #[tokio::test]
+    async fn test_workspace_discovery_emits_source_dep_for_sibling() {
+        let workspace = tempfile::tempdir().unwrap();
+        let workspace_root = workspace.path();
+
+        write_minimal_package_xml(
+            &workspace_root.join("src").join("pkg_a"),
+            "pkg_a",
+            &["pkg_b"],
+        );
+        write_minimal_package_xml(&workspace_root.join("src").join("pkg_b"), "pkg_b", &[]);
+
+        let pkg_a_manifest = workspace_root.join("src").join("pkg_a");
+
+        let model = project_fixture!({ "targets": { "defaultTarget": {} } });
+        let config = RosBackendConfig {
+            distro: Some("jazzy".to_string()),
+            ..Default::default()
+        };
+
+        let generated = RosGenerator::default()
+            .generate_recipe(
+                &model,
+                &config,
+                pkg_a_manifest.clone(),
+                Subdir::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                Some(workspace_root.to_path_buf()),
+                None,
+            )
+            .await
+            .expect("generate_recipe should succeed");
+
+        let sibling_in_build =
+            find_concrete(&generated.recipe.requirements.build, "ros-jazzy-pkg-b")
+                .expect("sibling should appear in build requirements");
+        assert!(
+            sibling_in_build.0.url.is_some(),
+            "expected ros-jazzy-pkg-b to be a source dep, got: {sibling_in_build}"
+        );
+
+        let sibling_in_run = find_concrete(&generated.recipe.requirements.run, "ros-jazzy-pkg-b")
+            .expect("sibling should also appear in run requirements");
+        assert!(
+            sibling_in_run.0.url.is_some(),
+            "expected ros-jazzy-pkg-b in run to be source, got: {sibling_in_run}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_workspace_discovery_opt_out_falls_back_to_binary() {
+        let workspace = tempfile::tempdir().unwrap();
+        let workspace_root = workspace.path();
+        write_minimal_package_xml(&workspace_root.join("pkg_a"), "pkg_a", &["pkg_b"]);
+        write_minimal_package_xml(&workspace_root.join("pkg_b"), "pkg_b", &[]);
+
+        let model = project_fixture!({ "targets": { "defaultTarget": {} } });
+        let config = RosBackendConfig {
+            distro: Some("jazzy".to_string()),
+            ignore_workspace_sources: true,
+            ..Default::default()
+        };
+
+        let generated = RosGenerator::default()
+            .generate_recipe(
+                &model,
+                &config,
+                workspace_root.join("pkg_a"),
+                Subdir::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                Some(workspace_root.to_path_buf()),
+                None,
+            )
+            .await
+            .expect("generate_recipe should succeed");
+
+        let sibling = find_concrete(&generated.recipe.requirements.build, "ros-jazzy-pkg-b")
+            .expect("sibling should still be present as binary");
+        assert!(
+            sibling.0.url.is_none(),
+            "opt-out should keep binary spec, got source: {sibling}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_workspace_discovery_yields_to_manual_model_entry() {
+        let workspace = tempfile::tempdir().unwrap();
+        let workspace_root = workspace.path();
+        write_minimal_package_xml(&workspace_root.join("pkg_a"), "pkg_a", &["pkg_b"]);
+        write_minimal_package_xml(&workspace_root.join("pkg_b"), "pkg_b", &[]);
+
+        // Model declares ros-jazzy-pkg-b in run only, with an explicit version.
+        // Discovery must not override that entry, but build/host still get the
+        // source dep because the manual entry was per-class.
+        let model = project_fixture!({
+            "targets": {
+                "defaultTarget": {
+                    "runDependencies": {
+                        "ros-jazzy-pkg-b": { "binary": { "version": "==1.2.3" } }
+                    }
+                }
+            }
+        });
+        let config = RosBackendConfig {
+            distro: Some("jazzy".to_string()),
+            ..Default::default()
+        };
+
+        let generated = RosGenerator::default()
+            .generate_recipe(
+                &model,
+                &config,
+                workspace_root.join("pkg_a"),
+                Subdir::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                Some(workspace_root.to_path_buf()),
+                None,
+            )
+            .await
+            .expect("generate_recipe should succeed");
+
+        let in_run = find_concrete(&generated.recipe.requirements.run, "ros-jazzy-pkg-b")
+            .expect("run entry should remain");
+        assert!(
+            in_run.0.url.is_none(),
+            "manual model entry must stay binary, got source: {in_run}"
+        );
+
+        let in_build = find_concrete(&generated.recipe.requirements.build, "ros-jazzy-pkg-b")
+            .expect("build entry should exist");
+        assert!(
+            in_build.0.url.is_some(),
+            "build override should still kick in, got binary: {in_build}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_workspace_discovery_globs_injected_into_metadata() {
+        let workspace = tempfile::tempdir().unwrap();
+        let workspace_root = workspace.path();
+        write_minimal_package_xml(&workspace_root.join("src").join("pkg_a"), "pkg_a", &[]);
+        fs::create_dir_all(workspace_root.join("build")).unwrap();
+        fs::write(workspace_root.join("build").join("COLCON_IGNORE"), b"").unwrap();
+
+        let model = project_fixture!({ "targets": { "defaultTarget": {} } });
+        let config = RosBackendConfig {
+            distro: Some("jazzy".to_string()),
+            ..Default::default()
+        };
+
+        let generated = RosGenerator::default()
+            .generate_recipe(
+                &model,
+                &config,
+                workspace_root.join("src").join("pkg_a"),
+                Subdir::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                Some(workspace_root.to_path_buf()),
+                None,
+            )
+            .await
+            .expect("generate_recipe should succeed");
+
+        // The flat `metadata_input_globs` carries only the provider's
+        // anchored package-local literals.  Workspace discovery patterns
+        // are now expressed structurally via `metadata_input_glob_sets`.
+        let flat: Vec<String> = generated.metadata_input_globs.to_vec();
+        assert!(
+            flat.iter().any(|g| g == "package.xml"),
+            "expected provider glob 'package.xml' in flat list, got: {flat:?}"
+        );
+        assert!(
+            !flat.iter().any(|g| g.contains("COLCON_IGNORE")),
+            "workspace discovery patterns should not appear in flat list, got: {flat:?}"
+        );
+        assert!(
+            !flat
+                .iter()
+                .any(|g| g == "!**/.*/**" || g.ends_with("/!**/.*/**")),
+            "hidden-folder exclusion should not appear in flat list, got: {flat:?}"
+        );
+
+        // The structured list carries the workspace discovery (with markers)
+        // plus a second group for the provider literals.
+        let groups = &generated.metadata_input_glob_sets;
+        assert!(
+            groups
+                .iter()
+                .any(|g| g.markers.iter().any(|m| m == "COLCON_IGNORE")),
+            "expected a structured group with COLCON_IGNORE as a marker, got: {groups:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_workspace_discovery_skips_pkg_under_colcon_ignore() {
+        let workspace = tempfile::tempdir().unwrap();
+        let workspace_root = workspace.path();
+        write_minimal_package_xml(&workspace_root.join("pkg_a"), "pkg_a", &["pkg_b"]);
+        // pkg_b is buried under a COLCON_IGNORE'd directory, so discovery should
+        // skip it and the recipe must fall back to RoboStack (binary).
+        write_minimal_package_xml(&workspace_root.join("vendor").join("pkg_b"), "pkg_b", &[]);
+        fs::write(workspace_root.join("vendor").join("COLCON_IGNORE"), b"").unwrap();
+
+        let model = project_fixture!({ "targets": { "defaultTarget": {} } });
+        let config = RosBackendConfig {
+            distro: Some("jazzy".to_string()),
+            ..Default::default()
+        };
+
+        let generated = RosGenerator::default()
+            .generate_recipe(
+                &model,
+                &config,
+                workspace_root.join("pkg_a"),
+                Subdir::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                Some(workspace_root.to_path_buf()),
+                None,
+            )
+            .await
+            .expect("generate_recipe should succeed");
+
+        let sibling = find_concrete(&generated.recipe.requirements.build, "ros-jazzy-pkg-b")
+            .expect("ignored sibling should still appear via RoboStack fallback");
+        assert!(
+            sibling.0.url.is_none(),
+            "ignored sibling must not be turned into a source dep: {sibling}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_workspace_discovery_does_not_add_self_as_source() {
+        let workspace = tempfile::tempdir().unwrap();
+        let workspace_root = workspace.path();
+        write_minimal_package_xml(&workspace_root.join("pkg_a"), "pkg_a", &[]);
+
+        let model = project_fixture!({ "targets": { "defaultTarget": {} } });
+        let config = RosBackendConfig {
+            distro: Some("jazzy".to_string()),
+            ..Default::default()
+        };
+
+        let generated = RosGenerator::default()
+            .generate_recipe(
+                &model,
+                &config,
+                workspace_root.join("pkg_a"),
+                Subdir::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                Some(workspace_root.to_path_buf()),
+                None,
+            )
+            .await
+            .expect("generate_recipe should succeed");
+
+        let self_in_build = find_concrete(&generated.recipe.requirements.build, "ros-jazzy-pkg-a");
+        assert!(
+            self_in_build.is_none(),
+            "current package must not list itself as a source dep: {self_in_build:?}"
         );
     }
 }

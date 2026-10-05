@@ -1,5 +1,6 @@
 ---
 source: crates/pixi_build_discovery/tests/discovery.rs
+assertion_line: 81
 expression: backend
 input_file: tests/data/discovery/simple/TEST-CASE
 ---
@@ -37,6 +38,5 @@ init-params:
         buildDependencies: {}
         runDependencies: {}
         runConstraints: {}
-      targets: {}
   configuration: ~
   target-configuration: ~

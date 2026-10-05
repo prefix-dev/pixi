@@ -3,7 +3,6 @@ use std::{collections::HashMap, default::Default, path::PathBuf};
 use clap::Parser;
 use miette::IntoDiagnostic;
 use pixi_config::{ConfigCli, ConfigCliActivation, ConfigCliPrompt};
-use rattler_conda_types::Platform;
 use rattler_lock::LockFile;
 use rattler_shell::{
     activation::{ActivationVariables, PathModificationBehavior},
@@ -29,6 +28,9 @@ use crate::cli_config::{LockAndInstallConfig, WorkspaceConfig};
 /// itself.
 #[derive(Parser, Debug)]
 pub struct Args {
+    #[clap(flatten)]
+    pub config_source: pixi_config::ConfigSourceCli,
+
     /// Sets the shell, options: [`bash`,  `zsh`,  `xonsh`,  `cmd`,
     /// `powershell`,  `fish`,  `nushell`]
     #[arg(short, long)]
@@ -77,7 +79,11 @@ async fn generate_activation_script(
             .unwrap_or_else(|| ShellEnum::from_env().unwrap_or_default())
     });
 
-    let activator = get_activator(environment, shell.clone()).into_diagnostic()?;
+    let activator = get_activator(
+        environment,
+        shell.clone(),
+        &environment.activation_platform(),
+    )?;
 
     let path = std::env::var("PATH")
         .ok()
@@ -126,9 +132,12 @@ async fn generate_environment_json(
     force_activate: bool,
     experimental_cache: bool,
 ) -> miette::Result<String> {
+    // Resolve the platform once so the env vars and the reported scripts agree.
+    let platform = environment.activation_platform();
     let environment_variables = get_activated_environment_variables(
         environment.workspace().env_vars(),
         environment,
+        &platform,
         CurrentEnvVarBehavior::Exclude,
         Some(lock_file),
         force_activate,
@@ -136,9 +145,8 @@ async fn generate_environment_json(
     )
     .await?;
 
-    let platform = Platform::current();
     let activation_scripts: Vec<PathBuf> = environment
-        .activation_scripts(Some(platform))
+        .activation_scripts(Some(&platform))
         .into_iter()
         .map(|s| environment.workspace().root().join(s))
         .filter(|p| p.is_file())
@@ -159,6 +167,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .merge_config(args.prompt_config.merge_config(args.config.clone().into()));
 
     let workspace = WorkspaceLocator::for_cli()
+        .with_global_config_source(args.config_source.source())
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()?
         .with_cli_config(config);
@@ -203,7 +212,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::Subdir;
     #[cfg(target_family = "windows")]
     use rattler_shell::shell::CmdExe;
     #[cfg(not(target_family = "windows"))]
@@ -216,7 +225,7 @@ mod tests {
     #[tokio::test]
     async fn test_shell_hook_unix() {
         let default_shell = rattler_shell::shell::ShellEnum::default();
-        let path_var_name = default_shell.path_var(&Platform::current());
+        let path_var_name = default_shell.path_var(&Subdir::current().unwrap_or(Subdir::NoArch));
         let project = WorkspaceLocator::default().locate().unwrap();
         let environment = project.default_environment();
 
@@ -273,7 +282,7 @@ mod tests {
     #[tokio::test]
     async fn test_shell_hook_windows() {
         let default_shell = rattler_shell::shell::ShellEnum::default();
-        let path_var_name = default_shell.path_var(&Platform::current());
+        let path_var_name = default_shell.path_var(&Subdir::current().unwrap_or(Subdir::NoArch));
         let project = WorkspaceLocator::default().locate().unwrap();
         let environment = project.default_environment();
 

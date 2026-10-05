@@ -9,9 +9,11 @@
 
 use pixi_compute_engine::DataStore;
 use rattler::install::{Installer, InstallerError};
-use rattler_conda_types::{Platform, RepoDataRecord, prefix::Prefix};
+use rattler_conda_types::{RepoDataRecord, Subdir, prefix::Prefix};
 
-use crate::compute_data::{HasAllowExecuteLinkScripts, HasAllowLinkOptions, HasPackageCache};
+use crate::compute_data::{
+    HasAllowExecuteLinkScripts, HasAllowLinkOptions, HasIoConcurrencySemaphore, HasPackageCache,
+};
 use crate::install_pixi::reporter::WrappingInstallReporter;
 use pixi_compute_network::HasDownloadClient;
 
@@ -22,6 +24,10 @@ use pixi_compute_network::HasDownloadClient;
 /// assumes the caller has already obtained whatever cross-process lock
 /// it needs on the prefix.
 ///
+/// When `reinstall_all` is set every record is re-linked even if
+/// conda-meta claims it is already present; use this to recover a
+/// prefix left dirty by an interrupted install.
+///
 /// The installer's structured result is not returned because
 /// `InstallationResult` is not exported from the `rattler::install`
 /// module. Callers that need the transaction / link-script details
@@ -31,7 +37,8 @@ pub async fn install_binary_records(
     data: &DataStore,
     prefix: &Prefix,
     records: Vec<RepoDataRecord>,
-    target_platform: Platform,
+    target_platform: Subdir,
+    reinstall_all: bool,
     reporter: Option<Box<dyn rattler::install::Reporter>>,
 ) -> Result<(), InstallerError> {
     let mut installer = Installer::new()
@@ -40,6 +47,19 @@ pub async fn install_binary_records(
         .with_package_cache(data.package_cache().clone())
         .with_execute_link_scripts(data.allow_execute_link_scripts())
         .with_link_options(data.allow_link_options());
+
+    if let Some(io_semaphore) = data.io_concurrency_semaphore() {
+        installer = installer.with_io_concurrency_semaphore(io_semaphore.clone());
+    }
+
+    if reinstall_all {
+        installer = installer.with_reinstall_packages(
+            records
+                .iter()
+                .map(|r| r.package_record.name.clone())
+                .collect(),
+        );
+    }
 
     if let Some(reporter) = reporter {
         installer = installer.with_reporter(WrappingInstallReporter(reporter));

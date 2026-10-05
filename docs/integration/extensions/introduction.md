@@ -41,6 +41,7 @@ pixi global install pixi-pack pixi-diff
 ```
 
 This approach has several advantages:
+
 - **Isolated environments**: Each extension gets its own environment, preventing dependency conflicts
 - **Automatic discovery**: Extensions are automatically found by Pixi without modifying PATH
 - **Easy management**: Use `pixi global list` and `pixi global remove` to manage extensions
@@ -73,9 +74,11 @@ mv pixi-myext ~/.local/bin/
 #!/usr/bin/env python3
 import sys
 
+
 def main():
     name = sys.argv[1] if len(sys.argv) > 1 else "World"
     print(f"Hello, {name}!")
+
 
 if __name__ == "__main__":
     main()
@@ -112,6 +115,5 @@ This works for both built-in commands and any extensions you have installed, mak
 ## See Also
 
 - [Pixi Diff](pixi_diff.md) - Compare lock files and environments
-- [Pixi Inject](pixi_inject.md) - Inject dependencies into existing environments
 - [Pixi Skills](pixi_skills.md) - Manage and install coding agent skills across LLM backends
 - [Global Tools](../../global_tools/introduction.md) - Managing global tool installations

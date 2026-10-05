@@ -7,28 +7,44 @@
 {%- set build_dir = "build" -%}
 {%- set library_prefix =  "%LIBRARY_PREFIX%" if build_platform == "windows" else "$PREFIX" -%}
 
+{# `${PYTHON_ARG:+...}` and `%PYTHON_ARG%` both vanish when the probe below
+   found no interpreter -#}
+{%- set python_arg = "%PYTHON_ARG%" if is_cmd_exe else "${PYTHON_ARG:+\"$PYTHON_ARG\"}" -%}
+
 {# Set up default CMake arguments -#}
 {%- set cmake_args = [
     env("CMAKE_ARGS"),
     "-GNinja",
     "-S \"" ~ source_dir ~ "\"",
     "-DCMAKE_BUILD_TYPE=Release",
-    "-DCMAKE_INSTALL_PREFIX=" ~ library_prefix,
+    "-DCMAKE_INSTALL_PREFIX=\"" ~ library_prefix ~ "\"",
     "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
     "-DBUILD_SHARED_LIBS=ON",
+    python_arg,
 ] + extra_args
 -%}
-
-{# Add Python executable if available -#}
-{%- if has_host_python -%}
-{%- set cmake_args = cmake_args + [
-    "-DPython_EXECUTABLE=" ~ env("PYTHON")
-] -%}
-{% endif -%}
 
 {#- Output version information -#}
 ninja --version
 cmake --version
+
+{# Point CMake at the python interpreter when one is present in the host
+   environment. $PYTHON is set by rattler-build whether or not python is
+   installed, so the probe has to test the filesystem.
+
+   The flag is kept in its own variable rather than appended to CMAKE_ARGS,
+   which is expanded unquoted below: a path holding a space would be split
+   into two arguments there, and quoting it inside the string would not help,
+   as the shell removes no quotes from the result of an expansion. -#}
+{% if is_cmd_exe -%}
+set PYTHON_ARG=
+if exist "%PYTHON%" set PYTHON_ARG=-DPython_EXECUTABLE="%PYTHON%"
+{% else -%}
+PYTHON_ARG=
+if [ -x "$PYTHON" ]; then
+    PYTHON_ARG=-DPython_EXECUTABLE="$PYTHON"
+fi
+{% endif -%}
 
 {# Set up the build directory -#}
 {% if is_cmd_exe -%}

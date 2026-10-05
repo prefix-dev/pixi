@@ -6,22 +6,26 @@ use std::{
 };
 
 use crate::lock_file::SolveCondaEnvironmentError;
+use fancy_display::FancyDisplay;
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::{IntoDiagnostic, NamedSource};
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{Requirement, VersionOrUrl::VersionSpecifier};
-use pixi_command_dispatcher::{MissingChannelError, SolvePixiEnvironmentError::MissingChannel};
+use pixi_command_dispatcher::SolvePixiEnvironmentError::MissingChannel;
 use pixi_config::PinningStrategy;
 use pixi_diff::LockFileDiff;
 use pixi_manifest::{
-    DependencyOverwriteBehavior, FeatureName, FeaturesExt, HasFeaturesIter, LoadManifestsError,
-    ManifestDocument, ManifestKind, PypiDependencyLocation, SpecType, TomlError, WorkspaceManifest,
-    WorkspaceManifestMut, toml::TomlDocument, utils::WithSourceCode,
+    AddDependencyOutcome, DependencyOverwriteBehavior, FeatureName, FeaturesExt, HasFeaturesIter,
+    LoadManifestsError, ManifestDocument, ManifestKind, PixiPlatformName, PypiDependencyLocation,
+    SpecType, TargetSelector, TomlError, WorkspaceManifest, WorkspaceManifestMut,
+    script::{ScriptManifest, conda::CondaScriptManifest},
+    toml::TomlDocument,
+    utils::WithSourceCode,
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName, Platform, Version};
+use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName, Version};
 use rattler_lock::LockFile;
 use toml_edit::DocumentMut;
 
@@ -30,8 +34,8 @@ use crate::{
     environment::LockFileUsage,
     lock_file::{LockFileDerivedData, ReinstallPackages, UpdateContext, UpdateMode},
     workspace::{
-        MatchSpecs, NON_SEMVER_PACKAGES, PypiDeps, SourceSpecs, UpdateDeps,
-        grouped_environment::GroupedEnvironment,
+        MatchSpecs, NON_SEMVER_PACKAGES, PypiDeps, SkippedPackage, SourceSpecs, UpdateDeps,
+        WorkspaceStorage, grouped_environment::GroupedEnvironment, workspace_script::ScriptSource,
     },
 };
 
@@ -78,6 +82,10 @@ pub struct WorkspaceMut {
 
     // The parsed toml document.
     workspace_manifest_document: ManifestDocument,
+
+    // Reports solve, download and install progress to the user. `None` keeps
+    // the work silent, which is what non-terminal consumers want.
+    progress: Option<Arc<pixi_reporters::TopLevelProgress>>,
 }
 
 impl WorkspaceMut {
@@ -89,25 +97,53 @@ impl WorkspaceMut {
         // Read the contents of the file
         let contents = workspace.workspace.provenance.read()?.into_inner();
 
-        // Parse the contents
-        let toml = match DocumentMut::from_str(&contents) {
-            Ok(document) => TomlDocument::new(document),
-            Err(err) => {
-                return Err(Box::new(WithSourceCode {
-                    source: NamedSource::new(
-                        workspace.workspace.provenance.path.to_string_lossy(),
-                        Arc::from(contents),
-                    ),
-                    error: TomlError::from(err),
-                })
-                .into());
+        let workspace_manifest_document = match &workspace.storage {
+            WorkspaceStorage::Script(script) => match script.source() {
+                ScriptSource::Pep723(manifest) => {
+                    ManifestDocument::from_script((**manifest).clone())
+                        .expect("a loaded script must remain valid")
+                }
+                ScriptSource::CondaScript(manifest) => {
+                    match ManifestDocument::from_conda_script((**manifest).clone()) {
+                        Ok(document) => document,
+                        Err(error) => {
+                            return Err(Box::new(WithSourceCode {
+                                error: TomlError::Generic(pixi_manifest::GenericError::new(
+                                    error.to_string(),
+                                )),
+                                source: NamedSource::new(
+                                    manifest.path().to_string_lossy(),
+                                    Arc::from(contents.as_str()),
+                                ),
+                            })
+                            .into());
+                        }
+                    }
+                }
+            },
+            WorkspaceStorage::Project => {
+                let toml = match DocumentMut::from_str(&contents) {
+                    Ok(document) => TomlDocument::new(document),
+                    Err(err) => {
+                        return Err(Box::new(WithSourceCode {
+                            source: NamedSource::new(
+                                workspace.workspace.provenance.path.to_string_lossy(),
+                                Arc::from(contents),
+                            ),
+                            error: TomlError::from(err),
+                        })
+                        .into());
+                    }
+                };
+                match workspace.workspace.provenance.kind {
+                    ManifestKind::Pyproject => ManifestDocument::PyProjectToml(toml),
+                    ManifestKind::Pixi => ManifestDocument::PixiToml(toml),
+                    ManifestKind::MojoProject => ManifestDocument::MojoProjectToml(toml),
+                    ManifestKind::Pep723 | ManifestKind::CondaScript => {
+                        unreachable!("script workspaces use script storage")
+                    }
+                }
             }
-        };
-
-        let workspace_manifest_document = match workspace.workspace.provenance.kind {
-            ManifestKind::Pyproject => ManifestDocument::PyProjectToml(toml),
-            ManifestKind::Pixi => ManifestDocument::PixiToml(toml),
-            ManifestKind::MojoProject => ManifestDocument::MojoProjectToml(toml),
         };
 
         Ok(Self {
@@ -119,6 +155,7 @@ impl WorkspaceMut {
 
             workspace: Some(workspace),
             workspace_manifest_document,
+            progress: None,
         })
     }
 
@@ -147,6 +184,9 @@ impl WorkspaceMut {
             ManifestKind::Pyproject => ManifestDocument::PyProjectToml(toml),
             ManifestKind::Pixi => ManifestDocument::PixiToml(toml),
             ManifestKind::MojoProject => ManifestDocument::MojoProjectToml(toml),
+            ManifestKind::Pep723 | ManifestKind::CondaScript => {
+                unreachable!("templates cannot be scripts")
+            }
         };
 
         Ok(Self {
@@ -155,12 +195,61 @@ impl WorkspaceMut {
 
             workspace: Some(workspace),
             workspace_manifest_document,
+            progress: None,
         })
+    }
+
+    /// Reports the progress of any solve, download or install this instance
+    /// triggers. Without it the work runs silently.
+    pub fn with_progress(mut self, progress: Arc<pixi_reporters::TopLevelProgress>) -> Self {
+        self.progress = Some(progress);
+        self
+    }
+
+    /// The progress reporter attached with [`Self::with_progress`], if any.
+    pub fn progress(&self) -> Option<&Arc<pixi_reporters::TopLevelProgress>> {
+        self.progress.as_ref()
     }
 
     /// Returns the kind of manifest this workspace is derived from.
     fn kind(&self) -> ManifestKind {
         self.workspace_manifest_document.kind()
+    }
+
+    /// Forget the platforms pixi picked for a script that declares none, so an
+    /// edit sees the empty list the script actually has.
+    ///
+    /// A script's `platforms` are injected into the parsed manifest at load
+    /// time, which makes them look declared to every mutation: an add would
+    /// find the platform "already there" and write nothing. Nothing is lost by
+    /// dropping them, since they are recomputed on the next load.
+    pub fn forget_implicit_script_platforms(&mut self) {
+        if !self
+            .workspace
+            .as_ref()
+            .expect("workspace is not available")
+            .script_platforms_are_implicit()
+        {
+            return;
+        }
+        self.workspace
+            .as_mut()
+            .expect("workspace is not available")
+            .workspace
+            .value
+            .workspace
+            .platforms
+            .clear();
+        // `use_platform_composition` was set from the injected platforms. With
+        // none left, an environment resolves its platform by subdir name, which
+        // is what an empty `platforms` parses to.
+        self.workspace
+            .as_mut()
+            .expect("workspace is not available")
+            .workspace
+            .value
+            .workspace
+            .use_platform_composition = true;
     }
 
     /// Returns a [`WorkspaceManifestMut`] which implements methods to modify a
@@ -191,19 +280,63 @@ impl WorkspaceMut {
         &self.workspace_manifest_document
     }
 
+    /// Maps workspace platform names to the [`TargetSelector`]s used to key
+    /// their target tables (e.g. `--platform` arguments of `pixi add`).
+    pub fn target_selectors_for_platforms(
+        &self,
+        platforms: &[PixiPlatformName],
+    ) -> Vec<TargetSelector> {
+        let workspace = &self.workspace().workspace.value.workspace;
+        platforms
+            .iter()
+            .map(|name| workspace.target_selector_for_platform(name))
+            .collect()
+    }
+
     /// An internal method to save the changes to the workspace manifest to disk
     /// without consuming the instance.
     ///
     /// This is useful if an operation needs to save the changes but still needs
     /// to continue the modification.
     async fn save_inner(&mut self) -> Result<(), std::io::Error> {
-        let new_contents = self.workspace_manifest_document.to_string();
-        pixi_utils::atomic_write::atomic_write(
-            &self.workspace().workspace.provenance.path,
-            new_contents,
-        )
-        .await?;
+        let manifest_path = self.workspace().workspace.provenance.path.clone();
+        let new_contents = self
+            .workspace_manifest_document
+            .render()
+            .map_err(std::io::Error::other)?;
+        pixi_utils::atomic_write::atomic_write(&manifest_path, new_contents).await?;
         self.modified = true;
+
+        if let WorkspaceStorage::Script(script) = &mut self
+            .workspace
+            .as_mut()
+            .expect("workspace is not available")
+            .storage
+        {
+            let source = match script.source() {
+                ScriptSource::Pep723(_) => {
+                    let manifest = ScriptManifest::from_path(&manifest_path)
+                        .map_err(std::io::Error::other)?
+                        .ok_or_else(|| {
+                            std::io::Error::other(
+                                "saved script no longer contains a PEP 723 metadata block",
+                            )
+                        })?;
+                    ScriptSource::Pep723(Box::new(manifest))
+                }
+                ScriptSource::CondaScript(_) => {
+                    let manifest = CondaScriptManifest::from_path(&manifest_path)
+                        .map_err(std::io::Error::other)?
+                        .ok_or_else(|| {
+                            std::io::Error::other(
+                                "saved script no longer contains a conda-script block",
+                            )
+                        })?;
+                    ScriptSource::CondaScript(Box::new(manifest))
+                }
+            };
+            script.replace_manifest(source);
+        }
         Ok(())
     }
 
@@ -247,34 +380,44 @@ impl WorkspaceMut {
         no_install: bool,
         lock_file_update_config: &LockFileUsage,
         feature_name: &FeatureName,
-        platforms: &[Platform],
+        targets: &[TargetSelector],
         editable: bool,
         dry_run: bool,
-    ) -> Result<Option<UpdateDeps>, miette::Error> {
+        overwrite_behavior: DependencyOverwriteBehavior,
+    ) -> Result<(Option<UpdateDeps>, Vec<SkippedPackage>), miette::Error> {
         let mut conda_specs_to_add_constraints_for = IndexMap::new();
         let mut pypi_specs_to_add_constraints_for = IndexMap::new();
         let mut conda_packages = HashSet::new();
         let mut pypi_packages = HashSet::new();
+        let mut skipped_packages = Vec::new();
         let channel_config = self.workspace().channel_config();
         for (name, (spec, spec_type)) in match_specs {
             let (_, nameless_spec) = spec.into_nameless();
             let pixi_spec =
                 PixiSpec::from_nameless_matchspec(nameless_spec.clone(), &channel_config);
 
-            let added = self.manifest().add_dependency(
+            let outcome = self.manifest().add_dependency(
                 &name,
                 &pixi_spec,
                 spec_type,
-                platforms,
+                targets,
                 feature_name,
-                DependencyOverwriteBehavior::Overwrite,
+                overwrite_behavior,
             )?;
-            if added {
-                if nameless_spec.version.is_none() {
-                    conda_specs_to_add_constraints_for
-                        .insert(name.clone(), (spec_type, nameless_spec));
+            match outcome {
+                AddDependencyOutcome::Added => {
+                    if nameless_spec.version.is_none() {
+                        conda_specs_to_add_constraints_for
+                            .insert(name.clone(), (spec_type, nameless_spec));
+                    }
+                    conda_packages.insert(name);
                 }
-                conda_packages.insert(name);
+                AddDependencyOutcome::AlreadyExists | AddDependencyOutcome::InheritsWorkspace => {
+                    skipped_packages.push(SkippedPackage {
+                        name: name.as_normalized().to_string(),
+                        inherits_workspace: outcome == AddDependencyOutcome::InheritsWorkspace,
+                    });
+                }
             }
         }
 
@@ -285,19 +428,19 @@ impl WorkspaceMut {
                 &name,
                 &pixi_spec,
                 spec_type,
-                platforms,
+                targets,
                 feature_name,
-                DependencyOverwriteBehavior::Overwrite,
+                overwrite_behavior,
             )?;
         }
 
         for (name, (spec, pixi_spec, location)) in pypi_deps {
             let added = self.manifest().add_pep508_dependency(
                 (&spec, pixi_spec.as_ref()),
-                platforms,
+                targets,
                 feature_name,
                 Some(editable),
-                DependencyOverwriteBehavior::Overwrite,
+                overwrite_behavior,
                 location,
             )?;
             if added {
@@ -306,18 +449,22 @@ impl WorkspaceMut {
                         .insert(name.clone(), (spec, pixi_spec, location));
                 }
                 pypi_packages.insert(name.as_normalized().clone());
+            } else {
+                skipped_packages.push(SkippedPackage {
+                    name: name.as_normalized().to_string(),
+                    inherits_workspace: false,
+                });
             }
         }
 
-        // Only save the project if it is a pyproject.toml
-        // This is required to ensure that the changes are found by tools like `pixi
-        // build` and `uv`
-        if self.kind() == ManifestKind::Pyproject {
+        // Save Python-backed manifests before resolving so tools like `pixi
+        // build` and `uv` observe the changes.
+        if matches!(self.kind(), ManifestKind::Pyproject | ManifestKind::Pep723) {
             self.save_inner().await.into_diagnostic()?;
         }
 
         if *lock_file_update_config != LockFileUsage::Update {
-            return Ok(None);
+            return Ok((None, skipped_packages));
         }
 
         let original_lock_file = self
@@ -350,12 +497,31 @@ impl WorkspaceMut {
                 .format(", ")
                 .to_string()
         );
+        // The edited target tables apply to every workspace platform their
+        // selector matches. `None` means "no selector given" (the default
+        // target), which affects all platforms.
+        let affected_platform_names: Option<HashSet<PixiPlatformName>> = (!targets.is_empty())
+            .then(|| {
+                self.workspace()
+                    .workspace
+                    .value
+                    .workspace
+                    .platforms
+                    .iter()
+                    .filter(|platform| targets.iter().any(|target| target.matches(platform)))
+                    .map(|platform| platform.name().clone())
+                    .collect()
+            });
         let affect_environment_and_platforms = affected_environments
             .into_iter()
             // Create an iterator over all environment and platform combinations
             .flat_map(|e| e.platforms().into_iter().map(move |p| (e.clone(), p)))
             // Filter out any platform that is not affected by the changes.
-            .filter(|(_, platform)| platforms.is_empty() || platforms.contains(platform))
+            .filter(|(_, platform)| {
+                affected_platform_names
+                    .as_ref()
+                    .is_none_or(|names| names.contains(platform))
+            })
             .map(|(e, p)| (e.name().to_string(), p))
             .collect_vec();
         let unlocked_lock_file = self.workspace().unlock_packages(
@@ -364,9 +530,13 @@ impl WorkspaceMut {
             pypi_packages,
             affect_environment_and_platforms
                 .iter()
-                .map(|(e, p)| (e.as_str(), *p))
+                .map(|(e, p)| (e.as_str(), p.clone()))
                 .collect(),
         );
+        // Held across the solve and install so the caller's summary output is
+        // not written over bars that have finished but are still rendered.
+        let _clear_progress = pixi_reporters::TopLevelProgress::clear_when_done(self.progress());
+
         let LockFileDerivedData {
             workspace: _, // We don't need the project here
             lock_file,
@@ -381,7 +551,9 @@ impl WorkspaceMut {
             ..
         } = UpdateContext::builder(
             self.workspace(),
-            self.workspace().command_dispatcher_builder()?.finish(),
+            self.workspace()
+                .command_dispatcher_builder(self.progress.as_ref())?
+                .finish(),
         )?
         .with_lock_file(unlocked_lock_file)
         .with_no_install(no_install || dry_run)
@@ -392,15 +564,12 @@ impl WorkspaceMut {
         .map_err(|mut e| {
             if let Some(SolveCondaEnvironmentError::SolveFailed { source, .. }) =
                 e.downcast_mut::<SolveCondaEnvironmentError>()
-                && let MissingChannel(MissingChannelError {
-                    package: _,
-                    channel,
-                    advice,
-                }) = source.as_mut()
+                && let MissingChannel(missing) = source.as_mut()
             {
-                *advice = Some(format!(
+                missing.advice = Some(format!(
                     "To add the missing channel to a workspace, use:\n\n  {}",
-                    console::style(format!("pixi workspace channel add {channel}")).bold(),
+                    console::style(format!("pixi workspace channel add {}", missing.channel))
+                        .bold(),
                 ));
             }
             e
@@ -413,7 +582,7 @@ impl WorkspaceMut {
                 conda_specs_to_add_constraints_for,
                 affect_environment_and_platforms.clone(),
                 feature_name,
-                platforms,
+                targets,
             )?;
             implicit_constraints.extend(conda_constraints);
         }
@@ -424,16 +593,14 @@ impl WorkspaceMut {
                 pypi_specs_to_add_constraints_for,
                 affect_environment_and_platforms,
                 feature_name,
-                platforms,
+                targets,
                 editable,
             )?;
             implicit_constraints.extend(pypi_constraints);
         }
 
-        // Only save the project if it is a pyproject.toml
-        // This is required to ensure that the changes are found by tools like `pixi
-        // build` and `uv`
-        if self.kind() == ManifestKind::Pyproject {
+        // Save Python-backed manifests again after applying resolved constraints.
+        if matches!(self.kind(), ManifestKind::Pyproject | ManifestKind::Pep723) {
             self.save_inner().await.into_diagnostic()?;
         }
 
@@ -459,23 +626,39 @@ impl WorkspaceMut {
             && self.workspace().environments().len() == 1
             && default_environment_is_affected
         {
-            updated_lock_file
-                .prefix(
-                    &self.workspace().default_environment(),
-                    UpdateMode::Revalidate,
-                    &ReinstallPackages::default(),
-                    &crate::environment::InstallFilter::default(),
-                )
-                .await?;
+            let default_environment = self.workspace().default_environment();
+            // The lock file is solved for every declared platform, but a prefix
+            // can only be materialised for the current system. When none of the
+            // environment's platforms match this machine (e.g. a `__cuda`
+            // platform on a GPU-less host) just skip the install -- the add
+            // still succeeds and the lock file is up to date.
+            if default_environment.best_declared_platform().is_some() {
+                updated_lock_file
+                    .prefix(
+                        &default_environment,
+                        UpdateMode::Revalidate,
+                        &ReinstallPackages::default(),
+                        &crate::environment::InstallFilter::default(),
+                    )
+                    .await?;
+            } else {
+                tracing::info!(
+                    "Skipping prefix installation: no platform supported by environment '{}' matches the current system",
+                    default_environment.name().fancy_display()
+                );
+            }
         }
 
         let lock_file_diff =
             LockFileDiff::from_lock_files(&original_lock_file, &updated_lock_file.into_lock_file());
 
-        Ok(Some(UpdateDeps {
-            implicit_constraints,
-            lock_file_diff,
-        }))
+        Ok((
+            Some(UpdateDeps {
+                implicit_constraints,
+                lock_file_diff,
+            }),
+            skipped_packages,
+        ))
     }
 
     // Take some conda and PyPI deps as Vecs of MatchSpecs and Requirements, and add them
@@ -484,7 +667,7 @@ impl WorkspaceMut {
         &mut self,
         conda_deps: Vec<MatchSpec>,
         pypi_deps: Vec<Requirement>,
-        platforms: &[Platform],
+        targets: &[TargetSelector],
         feature_name: &FeatureName,
     ) -> Result<(), miette::Error> {
         for spec in conda_deps {
@@ -502,7 +685,7 @@ impl WorkspaceMut {
                 &spec,
                 SpecType::Run,
                 // No platforms required as you can't define them in the yaml
-                platforms,
+                targets,
                 feature_name,
                 DependencyOverwriteBehavior::Overwrite,
             )?;
@@ -511,7 +694,7 @@ impl WorkspaceMut {
             self.manifest().add_pep508_dependency(
                 (&requirement, None),
                 // No platforms required as you can't define them in the yaml
-                platforms,
+                targets,
                 feature_name,
                 None,
                 DependencyOverwriteBehavior::Overwrite,
@@ -522,14 +705,14 @@ impl WorkspaceMut {
     }
 
     /// Update the conda specs of newly added packages based on the contents of
-    /// the updated lock-file.
+    /// the updated lock file.
     fn update_conda_specs_from_lock_file(
         &mut self,
         updated_lock_file: &LockFile,
         conda_specs_to_add_constraints_for: IndexMap<PackageName, (SpecType, NamelessMatchSpec)>,
-        affect_environment_and_platforms: Vec<(String, Platform)>,
+        affect_environment_and_platforms: Vec<(String, PixiPlatformName)>,
         feature_name: &FeatureName,
-        platforms: &[Platform],
+        targets: &[TargetSelector],
     ) -> miette::Result<HashMap<String, String>> {
         let mut implicit_constraints = HashMap::new();
 
@@ -585,7 +768,7 @@ impl WorkspaceMut {
                     &name,
                     &pixi_spec,
                     spec_type,
-                    platforms,
+                    targets,
                     feature_name,
                     DependencyOverwriteBehavior::Overwrite,
                 )?;
@@ -596,7 +779,7 @@ impl WorkspaceMut {
     }
 
     /// Update the pypi specs of newly added packages based on the contents of
-    /// the updated lock-file.
+    /// the updated lock file.
     fn update_pypi_specs_from_lock_file(
         &mut self,
         updated_lock_file: &LockFile,
@@ -608,9 +791,9 @@ impl WorkspaceMut {
                 Option<PypiDependencyLocation>,
             ),
         >,
-        affect_environment_and_platforms: Vec<(String, Platform)>,
+        affect_environment_and_platforms: Vec<(String, PixiPlatformName)>,
         feature_name: &FeatureName,
-        platforms: &[Platform],
+        targets: &[TargetSelector],
         editable: bool,
     ) -> miette::Result<HashMap<String, String>> {
         let mut implicit_constraints = HashMap::new();
@@ -618,7 +801,9 @@ impl WorkspaceMut {
         let affect_environment_and_platforms = affect_environment_and_platforms
             .iter()
             .filter_map(|(env, platform)| {
-                updated_lock_file.environment(env).map(|e| (e, *platform))
+                updated_lock_file
+                    .environment(env)
+                    .map(|e| (e, platform.clone()))
             })
             .collect_vec();
 
@@ -639,7 +824,7 @@ impl WorkspaceMut {
             .pinning_strategy
             .unwrap_or_default();
 
-        // Determine the versions of the packages in the lock-file
+        // Determine the versions of the packages in the lock file
         for (name, (req, pixi_req, location)) in pypi_specs_to_add_constraints_for {
             let version_constraint = pinning_strategy.determine_version_constraint(
                 pypi_records
@@ -667,7 +852,7 @@ impl WorkspaceMut {
 
                 self.manifest().add_pep508_dependency(
                     (&req, pixi_req.as_ref()),
-                    platforms,
+                    targets,
                     feature_name,
                     Some(editable),
                     DependencyOverwriteBehavior::Overwrite,

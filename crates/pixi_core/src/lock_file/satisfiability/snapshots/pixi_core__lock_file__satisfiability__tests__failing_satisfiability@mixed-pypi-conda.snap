@@ -1,7 +1,7 @@
 ---
-source: crates/pixi_core/src/lock_file/satisfiability/mod.rs
+source: crates/pixi_core/src/lock_file/satisfiability/tests.rs
 expression: s
 ---
 environment 'default' does not satisfy the requirements of the project for platform 'win-64'
     Diagnostic severity: error
-    Caused by: there are more conda packages in the lock-file than are used by the environment: flask
+    Caused by: there are more conda packages in the lock file than are used by the environment: flask

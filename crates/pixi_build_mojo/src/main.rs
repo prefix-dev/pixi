@@ -10,19 +10,14 @@ use pixi_build_backend::{
     generated_recipe::{GenerateRecipe, GeneratedRecipe, PythonParams},
     intermediate_backend::IntermediateBackendInstantiator,
     tools::BackendIdentifier,
-    traits::ProjectModel,
 };
 use rattler_build_jinja::Variable;
 use rattler_build_recipe::stage0::{Script, Value};
 use rattler_build_types::NormalizedKey;
-use rattler_conda_types::{ChannelUrl, Platform};
+use rattler_conda_types::{ChannelUrl, Subdir};
 use std::collections::HashSet;
 use std::path::PathBuf;
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    path::Path,
-    sync::Arc,
-};
+use std::{collections::BTreeMap, path::Path, sync::Arc};
 
 #[derive(Default, Clone)]
 pub struct MojoGenerator {}
@@ -36,11 +31,14 @@ impl GenerateRecipe for MojoGenerator {
         model: &pixi_build_types::ProjectModel,
         config: &Self::Config,
         manifest_path: PathBuf,
-        host_platform: Platform,
+        _host_platform: Subdir,
         _python_params: Option<PythonParams>,
         variants: &HashSet<NormalizedKey>,
         _channels: Vec<ChannelUrl>,
         _cache_dir: Option<PathBuf>,
+        _workspace_scratch_directory: Option<PathBuf>,
+        _workspace_directory: Option<PathBuf>,
+        _checkout_root: Option<PathBuf>,
     ) -> miette::Result<GeneratedRecipe> {
         // Determine the manifest root, because `manifest_path` can be
         // either a direct file path or a directory path.
@@ -79,19 +77,11 @@ impl GenerateRecipe for MojoGenerator {
         // Add compiler
         let requirements = &mut generated_recipe.recipe.requirements;
 
-        // Get the platform-specific dependencies from the project model.
-        // This properly handles target selectors like [target.linux-64] by using
-        // the ProjectModel trait's platform-aware API instead of trying to evaluate
-        // rattler-build selectors with simple string comparison.
-        let model_dependencies = model.dependencies(Some(host_platform));
-
         let compilers = config.compilers.clone().unwrap_or_default();
 
         pixi_build_backend::compilers::add_compilers_to_requirements(
             &compilers,
             &mut requirements.build,
-            &model_dependencies,
-            &host_platform,
         );
         pixi_build_backend::compilers::add_stdlib_to_requirements(
             &compilers,
@@ -101,7 +91,12 @@ impl GenerateRecipe for MojoGenerator {
 
         let build_script = BuildScriptContext { bins, pkg }.render();
 
-        generated_recipe.recipe.build.script = Script::from_content(build_script)
+        *generated_recipe
+            .recipe
+            .build
+            .plan
+            .script_mut()
+            .expect("generated recipes use script mode") = Script::from_content(build_script)
             .with_env(
                 config
                     .env
@@ -111,7 +106,7 @@ impl GenerateRecipe for MojoGenerator {
             )
             .with_secrets(model.secrets.iter().cloned().collect());
 
-        generated_recipe.build_input_globs = Self::globs().collect::<BTreeSet<_>>();
+        generated_recipe.build_input_globs = Self::globs().collect();
 
         Ok(generated_recipe)
     }
@@ -121,7 +116,7 @@ impl GenerateRecipe for MojoGenerator {
         config: &Self::Config,
         _workdir: impl AsRef<Path>,
         _editable: bool,
-    ) -> miette::Result<BTreeSet<String>> {
+    ) -> miette::Result<Vec<String>> {
         Ok(Self::globs()
             .chain(config.extra_input_globs.clone())
             .collect())
@@ -129,7 +124,7 @@ impl GenerateRecipe for MojoGenerator {
 
     fn default_variants(
         &self,
-        host_platform: Platform,
+        host_platform: Subdir,
     ) -> miette::Result<BTreeMap<NormalizedKey, Vec<Variable>>> {
         Ok(default_compiler_variants(host_platform))
     }
@@ -261,10 +256,13 @@ mod tests {
                     ..Default::default()
                 },
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -311,10 +309,13 @@ mod tests {
                     ..Default::default()
                 },
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -352,16 +353,27 @@ mod tests {
                     ..Default::default()
                 },
                 source_dir.clone(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
             .expect("Failed to generate recipe");
 
-        let content = generated_recipe.recipe.build.script.content.unwrap();
+        let content = generated_recipe
+            .recipe
+            .build
+            .plan
+            .script()
+            .expect("generated recipes use script mode")
+            .content
+            .clone()
+            .unwrap();
         let script = content
             .iter()
             .next()
@@ -416,10 +428,13 @@ mod tests {
                 &project_model,
                 &MojoBackendConfig::default(),
                 temp.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -463,16 +478,19 @@ mod tests {
                     ..Default::default()
                 },
                 temp.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
             .expect("Failed to generate recipe");
 
-        insta::assert_yaml_snapshot!(generated_recipe.recipe.build.script,
+        insta::assert_yaml_snapshot!(generated_recipe.recipe.build.plan.script().unwrap(),
         {
             ".content" => "[ ... script ... ]",
         });
@@ -512,10 +530,13 @@ mod tests {
                 &project_model,
                 &MojoBackendConfig::default(),
                 temp.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -557,10 +578,13 @@ mod tests {
                     ..Default::default()
                 },
                 temp.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -635,10 +659,13 @@ mod tests {
                     ..Default::default()
                 },
                 temp.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await
@@ -697,10 +724,13 @@ mod tests {
                     ..Default::default()
                 },
                 temp.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
+                None,
+                None,
+                None,
                 None,
             )
             .await

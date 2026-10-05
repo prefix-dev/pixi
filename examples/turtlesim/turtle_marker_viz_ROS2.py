@@ -1,11 +1,10 @@
-# pyright: reportUntypedBaseClass=false, reportUnannotatedClassAttribute=false
+from math import cos, sin
 
-from math import sin, cos
 import rclpy
+from builtin_interfaces.msg import Duration
 from rclpy.node import Node
 from turtlesim.msg import Pose
 from visualization_msgs.msg import Marker
-from builtin_interfaces.msg import Duration
 
 
 class TurtleMarkerNode(Node):

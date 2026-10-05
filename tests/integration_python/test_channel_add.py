@@ -9,12 +9,12 @@ def test_channel_add_doesnt_update_packages(
     multiple_versions_channel_1: str,
     dummy_channel_1: str,
 ) -> None:
-    """Test that adding channels does not cause the lockfile to be fully invalidated and packages to be updated.
+    """Test that adding channels does not cause the lock file to be fully invalidated and packages to be updated.
 
     This test verifies the fix for issue #5077.
 
     The fix ensures that if a channel is appended the
-    lockfile does not need to be completely regenerated.
+    lock file does not need to be completely regenerated.
     """
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = f"""
@@ -28,7 +28,7 @@ def test_channel_add_doesnt_update_packages(
     """
     manifest.write_text(toml)
 
-    # Generate the lockfile
+    # Generate the lock file
     verify_cli_command(
         [pixi, "list", "--manifest-path", manifest],
     )

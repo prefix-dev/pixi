@@ -8,12 +8,10 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pixi_command_dispatcher::{DevSourceMetadataError, SourceCheckoutError, SourceRecordError};
-use pixi_manifest::pypi::pypi_options::PrereleaseMode;
+use pixi_manifest::{PixiPlatformName, pypi::pypi_options::PrereleaseMode};
 use pixi_record::{ParseLockFileError, SourceMismatchError};
 use pixi_uv_conversions::AsPep508Error;
-use rattler_conda_types::{
-    MatchSpec, PackageName, ParseChannelError, ParseMatchSpecError, Platform,
-};
+use rattler_conda_types::{MatchSpec, PackageName, ParseChannelError, ParseMatchSpecError};
 use rattler_lock::{PackageHashes, PypiIndexes};
 use thiserror::Error;
 use url::Url;
@@ -25,15 +23,18 @@ use crate::{lock_file::package_identifier::ConversionError, workspace::errors::V
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum EnvironmentUnsat {
-    #[error("the channels in the lock-file do not match the environments channels")]
+    #[error("the channels in the lock file do not match the environments channels")]
     ChannelsMismatch,
 
     #[error("channels were extended with additional lower-priority channels")]
     ChannelsExtended,
 
-    #[error("platform(s) '{platforms}' present in the lock-file but not in the environment", platforms = .0.iter().map(|p| p.as_str()).join(", ")
+    #[error("platform(s) '{platforms}' present in the lock file but not in the environment", platforms = .0.iter().map(|p| p.as_str()).join(", ")
     )]
-    AdditionalPlatformsInLockFile(HashSet<Platform>),
+    AdditionalPlatformsInLockFile(HashSet<PixiPlatformName>),
+
+    #[error(transparent)]
+    PlatformDefinitionChanged(#[from] PlatformDefinitionChanged),
 
     #[error(transparent)]
     IndexesMismatch(#[from] IndexesMismatch),
@@ -45,12 +46,12 @@ pub enum EnvironmentUnsat {
     InvalidDistExtensionInNoBuild(#[from] ExtensionError),
 
     #[error(
-        "the lock-file contains non-binary package: '{0}', but the pypi-option `no-build` is set"
+        "the lock file contains non-binary package: '{0}', but the pypi-option `no-build` is set"
     )]
     NoBuildWithNonBinaryPackages(String),
 
     #[error(
-        "the lock-file was solved with a different strategy ({locked_strategy}) than the one selected ({expected_strategy})",
+        "the lock file was solved with a different strategy ({locked_strategy}) than the one selected ({expected_strategy})",
         locked_strategy = fmt_solve_strategy(*.locked_strategy),
         expected_strategy = fmt_solve_strategy(*.expected_strategy),
     )]
@@ -60,7 +61,7 @@ pub enum EnvironmentUnsat {
     },
 
     #[error(
-        "the lock-file was solved with a different channel priority ({locked_priority}) than the one selected ({expected_priority})",
+        "the lock file was solved with a different channel priority ({locked_priority}) than the one selected ({expected_priority})",
         locked_priority = fmt_channel_priority(*.locked_priority),
         expected_priority = fmt_channel_priority(*.expected_priority),
     )]
@@ -70,14 +71,14 @@ pub enum EnvironmentUnsat {
     },
 
     #[error(
-        "the lock-file was solved with a different PyPI prerelease mode ({locked_mode}) than the one selected ({expected_mode})"
+        "the lock file was solved with a different PyPI prerelease mode ({locked_mode}) than the one selected ({expected_mode})"
     )]
     PypiPrereleaseModeMismatch {
         locked_mode: PrereleaseMode,
         expected_mode: PrereleaseMode,
     },
     #[error(
-        "the lock-file was solved with system requirements incompatible with the tags on wheel ({wheel})"
+        "the lock file was solved with system requirements incompatible with the tags on wheel ({wheel})"
     )]
     PypiWheelTagsMismatch { wheel: String },
 
@@ -88,9 +89,46 @@ pub enum EnvironmentUnsat {
     SourceExcludeNewerMismatch(#[from] SourceExcludeNewerMismatch),
 }
 
+/// The workspace's definition of a platform diverged from what the lockfile
+/// recorded for the same name. Triggered by `pixi workspace platform edit`
+/// changing the subdir or virtual-package set of an already-locked entry --
+/// the locked records were solved under the old assumptions and can no
+/// longer be trusted.
+#[derive(Debug, Error)]
+pub struct PlatformDefinitionChanged {
+    pub(super) name: PixiPlatformName,
+    pub(super) expected_subdir: rattler_conda_types::Subdir,
+    pub(super) found_subdir: rattler_conda_types::Subdir,
+    pub(super) expected_virtual_packages: Vec<String>,
+    pub(super) found_virtual_packages: Vec<String>,
+}
+
+impl Display for PlatformDefinitionChanged {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        if self.expected_subdir != self.found_subdir {
+            write!(
+                f,
+                "the workspace platform '{}' uses subdir '{}' but the lock-file was solved with subdir '{}'",
+                self.name.as_str(),
+                self.expected_subdir.as_str(),
+                self.found_subdir.as_str(),
+            )
+        } else {
+            write!(
+                f,
+                "the workspace platform '{}' declares virtual packages [{}] but the lock-file was solved with [{}]",
+                self.name.as_str(),
+                self.expected_virtual_packages.join(", "),
+                self.found_virtual_packages.join(", "),
+            )
+        }
+    }
+}
+
 fn fmt_channel_priority(priority: rattler_solve::ChannelPriority) -> &'static str {
     match priority {
         rattler_solve::ChannelPriority::Strict => "strict",
+        rattler_solve::ChannelPriority::Flexible => "flexible",
         rattler_solve::ChannelPriority::Disabled => "disabled",
     }
 }
@@ -106,8 +144,8 @@ fn fmt_solve_strategy(strategy: rattler_solve::SolveStrategy) -> &'static str {
 #[derive(Debug, Error)]
 pub struct ExcludeNewerMismatch {
     package: String,
-    timestamp: chrono::DateTime<chrono::Utc>,
-    exclude_newer: chrono::DateTime<chrono::Utc>,
+    timestamp: jiff::Timestamp,
+    exclude_newer: jiff::Timestamp,
 }
 
 impl Display for ExcludeNewerMismatch {
@@ -138,12 +176,14 @@ pub(super) fn verify_exclude_newer(
                 .and_then(|binary| binary.channel.as_ref())
                 .map(ToString::to_string);
 
-            if let Some(timestamp) = record.timestamp.as_ref()
-                && exclude_newer.is_excluded(&record.name, channel.as_deref(), Some(timestamp))
+            // Select the timestamp the same way the solver does: the index
+            // timestamp if present, the build timestamp otherwise.
+            if let Some(timestamp) = record.indexed_timestamp.or(record.timestamp)
+                && timestamp > exclude_newer.cutoff_for_package(&record.name, channel.as_deref())
             {
                 return Err(ExcludeNewerMismatch {
                     package: record.name.as_source().to_string(),
-                    timestamp: (*timestamp).into(),
+                    timestamp: timestamp.into(),
                     exclude_newer: exclude_newer
                         .cutoff_for_package(&record.name, channel.as_deref()),
                 });
@@ -198,12 +238,12 @@ impl Display for SourceTreeHashMismatch {
         let computed_hash = self
             .computed
             .sha256()
-            .map(|hash| format!("{hash:x}"))
-            .or(self.computed.md5().map(|hash| format!("{hash:x}")));
+            .map(hex::encode)
+            .or(self.computed.md5().map(hex::encode));
         let locked_hash = self.locked.as_ref().and_then(|hash| {
             hash.sha256()
-                .map(|hash| format!("{hash:x}"))
-                .or(hash.md5().map(|hash| format!("{hash:x}")))
+                .map(hex::encode)
+                .or(hash.md5().map(hex::encode))
         });
 
         match (computed_hash, locked_hash) {
@@ -211,16 +251,16 @@ impl Display for SourceTreeHashMismatch {
             (Some(computed), None) => {
                 write!(
                     f,
-                    "the computed source tree hash is '{computed}', but the lock-file does not contain a hash"
+                    "the computed source tree hash is '{computed}', but the lock file does not contain a hash"
                 )
             }
             (Some(computed), Some(locked)) => write!(
                 f,
-                "the computed source tree hash is '{computed}', but the lock-file contains '{locked}'"
+                "the computed source tree hash is '{computed}', but the lock file contains '{locked}'"
             ),
             (None, Some(locked)) => write!(
                 f,
-                "could not compute a source tree hash, but the lock-file contains '{locked}'"
+                "could not compute a source tree hash, but the lock file contains '{locked}'"
             ),
         }
     }
@@ -241,11 +281,22 @@ pub enum LocalMetadataMismatch {
         locked: pep440_rs::Version,
         current: pep440_rs::Version,
     },
-    #[error("requires-python changed from {locked:?} to {current:?}")]
+    #[error("requires-python changed from {locked} to {current}",
+        locked = format_requires_python(locked),
+        current = format_requires_python(current))]
     RequiresPython {
         locked: Option<VersionSpecifiers>,
         current: Option<VersionSpecifiers>,
     },
+}
+
+/// Formats an optional requires-python constraint, where the absence of a
+/// constraint means any Python version is allowed.
+fn format_requires_python(specifiers: &Option<VersionSpecifiers>) -> String {
+    match specifiers {
+        Some(specifiers) => format!("'{specifiers}'"),
+        None => "unrestricted".to_string(),
+    }
 }
 
 /// Formats a list of requirements, showing only the first 3 names.
@@ -359,30 +410,30 @@ pub enum PlatformUnsat {
     #[error("the requirement '{0}' failed to parse")]
     FailedToParseMatchSpec(String, #[source] ParseMatchSpecError),
 
-    #[error("there are more conda packages in the lock-file than are used by the environment: {}", .0.iter().map(rattler_conda_types::PackageName::as_source).format(", ")
+    #[error("there are more conda packages in the lock file than are used by the environment: {}", .0.iter().map(rattler_conda_types::PackageName::as_source).format(", ")
     )]
     TooManyCondaPackages(Vec<PackageName>),
 
     #[error("missing purls")]
     MissingPurls,
 
-    #[error("corrupted lock-file entry for '{0}'")]
+    #[error("corrupted lock file entry for '{0}'")]
     CorruptedEntry(String, ParseLockFileError),
 
-    #[error("there are more pypi packages in the lock-file than are used by the environment: {}", .0.iter().format(", ")
+    #[error("there are more pypi packages in the lock file than are used by the environment: {}", .0.iter().format(", ")
     )]
     TooManyPypiPackages(Vec<pep508_rs::PackageName>),
 
-    #[error("there are PyPi dependencies but a python interpreter is missing from the lock-file")]
+    #[error("there are PyPi dependencies but a python interpreter is missing from the lock file")]
     MissingPythonInterpreter,
 
     #[error(
-        "a marker environment could not be derived from the python interpreter in the lock-file"
+        "a marker environment could not be derived from the python interpreter in the lock file"
     )]
     FailedToDetermineMarkerEnvironment(#[source] Box<dyn Diagnostic + Send + Sync>),
 
     #[error(
-        "'{0}' requires python version {1} but the python interpreter in the lock-file has version {2}"
+        "'{0}' requires python version {1} but the python interpreter in the lock file has version {2}"
     )]
     PythonVersionMismatch(
         pep508_rs::PackageName,
@@ -422,7 +473,7 @@ pub enum PlatformUnsat {
     #[error("failed to determine pypi source tree hash for {0}")]
     FailedToDetermineSourceTreeHash(pep508_rs::PackageName, std::io::Error),
 
-    #[error("source tree hash for {0} does not match the hash in the lock-file")]
+    #[error("source tree hash for {0} does not match the hash in the lock file")]
     SourceTreeHashMismatch(pep508_rs::PackageName, #[source] SourceTreeHashMismatch),
 
     #[error("metadata for local package '{0}' has changed: {1}")]
@@ -485,6 +536,13 @@ pub enum PlatformUnsat {
         found_ref: String,
     },
 
+    #[error("'{name}' has mismatching git lfs preference: '{expected_lfs} != {found_lfs}'")]
+    LockedPyPIGitLfsMismatch {
+        name: String,
+        expected_lfs: bool,
+        found_lfs: bool,
+    },
+
     #[error("'{0}' expected a git url but the lock file has: '{1}'")]
     LockedPyPIRequiresGitUrl(String, String),
 
@@ -500,7 +558,7 @@ pub enum PlatformUnsat {
         locked_path: String,
     },
 
-    #[error("'{name}' requires index {expected_index} but the lock-file has {locked_index}")]
+    #[error("'{name}' requires index {expected_index} but the lock file has {locked_index}")]
     LockedPyPIIndexMismatch {
         name: String,
         expected_index: String,
@@ -597,12 +655,56 @@ pub enum PlatformUnsat {
     },
 
     #[error(
-        "the locked package build source for '{0}' does not match the requested build source, {1}"
+        "the declared run-exports ({bucket}) of source package '{package}' no longer match what the backend would re-derive from the manifest{added_msg}{removed_msg}",
+        added_msg = if added.is_empty() { String::new() } else { format!("; added: {}", added.join(", ")) },
+        removed_msg = if removed.is_empty() { String::new() } else { format!("; removed: {}", removed.join(", ")) },
     )]
-    PackageBuildSourceMismatch(String, SourceMismatchError),
+    SourceRunExportsChanged {
+        /// The source package whose declared run-exports drifted.
+        package: String,
+        /// The run-export bucket that drifted (e.g. `weak`, `strong`).
+        bucket: &'static str,
+        /// Specs the backend now declares that the locked record is missing.
+        added: Vec<String>,
+        /// Specs the locked record carries that the backend no longer declares.
+        removed: Vec<String>,
+    },
+
+    #[error(
+        "the resolved extra group '{group}' of source package '{package}' no longer matches what the backend would re-derive from the manifest{added_msg}{removed_msg}",
+        added_msg = if added.is_empty() { String::new() } else { format!("; added: {}", added.join(", ")) },
+        removed_msg = if removed.is_empty() { String::new() } else { format!("; removed: {}", removed.join(", ")) },
+    )]
+    SourceExtraDependenciesChanged {
+        /// The source package whose extra group drifted.
+        package: String,
+        /// The extra group name.
+        group: String,
+        /// Specs the backend now declares that the locked group is missing.
+        added: Vec<String>,
+        /// Specs the locked group carries that the backend no longer declares.
+        removed: Vec<String>,
+    },
+
+    #[error(
+        "the build source of '{package}' is locked as {locked}, but its manifest now resolves to {resolved}"
+    )]
+    PackageBuildSourceChanged {
+        /// The source package whose build source drifted.
+        package: String,
+        /// The build source recorded in the lock file.
+        locked: String,
+        /// The build source its manifest resolves to now.
+        resolved: String,
+    },
 
     #[error("the metadata of source package '{0}' changed: {1}")]
     SourcePackageMetadataChanged(String, String),
+
+    #[error(
+        "the identity of source package '{package}' changed (for example its inline package definition was edited, or the lock file was written by a different pixi version)"
+    )]
+    SourcePackageIdentityChanged { package: String },
 
     #[error("the source location '{0}' changed from '{1}' to '{2}'")]
     SourceBuildLocationChanged(String, String, String),
@@ -696,5 +798,25 @@ impl PlatformUnsat {
                 | PlatformUnsat::LocalPackageMetadataMismatch(_, _)
                 | PlatformUnsat::FailedToReadLocalMetadata(_, _),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use super::*;
+
+    #[test]
+    fn requires_python_mismatch_prints_the_specifiers() {
+        let mismatch = LocalMetadataMismatch::RequiresPython {
+            locked: Some(VersionSpecifiers::from_str(">=3.8,<4").unwrap()),
+            current: None,
+        };
+
+        insta::assert_snapshot!(
+            mismatch,
+            @"requires-python changed from '>=3.8, <4' to unrestricted"
+        );
     }
 }

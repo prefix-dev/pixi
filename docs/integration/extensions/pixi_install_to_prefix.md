@@ -20,7 +20,7 @@ Arguments:
   <PREFIX>  The path to the prefix where you want to install the environment
 
 Options:
-  -l, --lockfile <LOCKFILE>        The path to the pixi lockfile [default: pixi.lock]
+  -l, --lockfile <LOCKFILE>        The path to the pixi lock file [default: pixi.lock]
   -e, --environment <ENVIRONMENT>  The name of the pixi environment to install [default: default]
   -p, --platform <PLATFORM>        The platform you want to install for [default: <your-system-platform>]
   -c, --config <CONFIG>            The path to the pixi config file. By default, no config file is used

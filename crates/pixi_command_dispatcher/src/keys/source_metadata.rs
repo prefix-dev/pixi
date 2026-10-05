@@ -19,13 +19,24 @@ use rattler_conda_types::PackageName;
 use tracing::instrument;
 
 use crate::{
-    BuildBackendMetadataKey, BuildBackendMetadataSpec, EnvironmentRef, PackageNotProvidedError,
-    SourceMetadataError, build::PinnedSourceCodeLocation,
+    BuildBackendMetadataKey, BuildBackendMetadataSpec, EnvironmentRef, InlinePackage,
+    PackageNotProvidedError, SourceMetadataError, build::PinnedSourceCodeLocation,
 };
 use pixi_compute_sources::SourceCheckoutExt;
 
 /// The result of resolving source metadata for all variants of a package.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+///
+/// `Hash`/`Eq` use pointer identity for `records` rather than recursing
+/// into each `SourceRecord`. `SourceRecord` derives `Hash` over its
+/// full `PackageRecord` plus `build_packages` / `host_packages`, which
+/// recurse into more `SourceRecord`s — a single `dyn_hash` on
+/// `SolveCondaSpec::source_repodata` was walking O(metadata × records ×
+/// record_fields) of data on every compute-graph lookup. Producers
+/// already maintain Arc identity: each unique `Arc<SourceRecord>` is
+/// created once inside `assemble_source_record_inner`, cached as the
+/// value of `ResolveSourcePackageKey`, and `Arc::clone`d through every
+/// consumer (including the `walk_and_resolve` push into `source_repodata`).
+#[derive(Clone, Debug)]
 pub struct SourceMetadata {
     /// Manifest and optional build source location for this metadata.
     pub source: PinnedSourceCodeLocation,
@@ -33,6 +44,30 @@ pub struct SourceMetadata {
     /// The metadata that was acquired from the build backend.
     pub records: Vec<Arc<SourceRecord>>,
 }
+
+impl Hash for SourceMetadata {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.source.hash(state);
+        self.records.len().hash(state);
+        for r in &self.records {
+            (Arc::as_ptr(r) as usize).hash(state);
+        }
+    }
+}
+
+impl PartialEq for SourceMetadata {
+    fn eq(&self, other: &Self) -> bool {
+        self.source == other.source
+            && self.records.len() == other.records.len()
+            && self
+                .records
+                .iter()
+                .zip(&other.records)
+                .all(|(a, b)| Arc::ptr_eq(a, b))
+    }
+}
+
+impl Eq for SourceMetadata {}
 
 /// Input to [`SourceMetadataKey`].
 ///
@@ -60,6 +95,9 @@ pub struct SourceMetadataSpec {
     /// Environment context (channels, build env, variants,
     /// exclude_newer, channel_priority).
     pub env_ref: EnvironmentRef,
+    /// Inline package definition for this dependency. When set,
+    /// the backend is built from this manifest instead of on-disk discovery.
+    pub inline: Option<InlinePackage>,
 }
 
 /// What [`SourceMetadataKey`] returns: the pinned source location
@@ -140,6 +178,9 @@ impl Key for SourceMetadataKey {
             env_ref: spec.env_ref.clone(),
             build_string_prefix: None,
             build_number: None,
+            // Carry the inline package definition so backend
+            // discovery uses it instead of reading a manifest from the checkout.
+            inline: spec.inline.clone(),
         };
         let build_backend_metadata = ctx
             .compute(&BuildBackendMetadataKey::new(backend_metadata_spec))

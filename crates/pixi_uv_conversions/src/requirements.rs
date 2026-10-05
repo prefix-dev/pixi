@@ -112,6 +112,8 @@ pub fn as_uv_req(
                     git,
                     rev,
                     subdirectory,
+                    lfs,
+                    matchspec: _,
                 },
         } => {
             let git_url = GitUrlWithPrefix::from(git);
@@ -132,7 +134,7 @@ pub fn as_uv_req(
                         .and_then(|s| s.map(uv_git_types::GitOid::from_str))
                         .transpose()
                         .expect("could not parse sha"),
-                    uv_git_types::GitLfs::Disabled,
+                    crate::to_uv_git_lfs(*lfs),
                 )?,
                 subdirectory: if subdirectory.is_empty() {
                     None
@@ -174,7 +176,7 @@ pub fn as_uv_req(
                 RequirementSource::Directory {
                     install_path: canonicalized.into_boxed_path(),
                     // Editability is applied at install time from the manifest
-                    // (`is_editable_from_manifest`). Leaving it unspecified
+                    // (`editable_from_manifest`). Leaving it unspecified
                     // avoids uv "conflicting URLs" errors across solve-group
                     // environments and transitive `[tool.uv.sources]` (#6121).
                     editable: None,
@@ -357,13 +359,13 @@ mod tests {
     #[test]
     fn test_git_url() {
         let pypi_req = PixiPypiSpec::new(PixiPypiSource::Git {
-            git: GitSpec {
-                git: Url::parse("ssh://git@github.com/user/test.git").unwrap(),
-                rev: Some(GitReference::Rev(
+            git: GitSpec::new(
+                Url::parse("ssh://git@github.com/user/test.git").unwrap(),
+                Some(GitReference::Rev(
                     "d099af3b1028b00c232d8eda28a997984ae5848b".to_string(),
                 )),
-                subdirectory: Default::default(),
-            },
+                Default::default(),
+            ),
         });
         let uv_req = as_uv_req(&pypi_req, "test", Path::new("")).unwrap();
 
@@ -385,13 +387,13 @@ mod tests {
 
         // With git+ prefix
         let pypi_req = PixiPypiSpec::new(PixiPypiSource::Git {
-            git: GitSpec {
-                git: Url::parse("git+https://github.com/user/test.git").unwrap(),
-                rev: Some(GitReference::Rev(
+            git: GitSpec::new(
+                Url::parse("git+https://github.com/user/test.git").unwrap(),
+                Some(GitReference::Rev(
                     "d099af3b1028b00c232d8eda28a997984ae5848b".to_string(),
                 )),
-                subdirectory: Default::default(),
-            },
+                Default::default(),
+            ),
         });
         let uv_req = as_uv_req(&pypi_req, "test", Path::new("")).unwrap();
         let expected_uv_req = RequirementSource::Git {

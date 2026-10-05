@@ -3,7 +3,7 @@
 Some `pixi-build` backends support configurable compiler selection through the `compilers` configuration option. This feature integrates with conda-forge's compiler infrastructure to provide cross-platform, ABI-compatible builds.
 
 !!! warning
-    `pixi-build` is a preview feature, and will change until it is stabilized.
+    `pixi-build` is a preview flag, and will change until it is stabilized.
     This is why we require users to opt in to that feature by adding "pixi-build" to `workspace.preview`.
 
     ```toml
@@ -75,6 +75,10 @@ When you specify `compilers = ["c"]` in your pixi-build configuration, the syste
    If you specified the compiler in the configuration, it will use that.
    If the configuration has this entry `compilers = ["c"]`, the C compiler will be requested.
    If there's no compiler configuration, the [default](./compilers.md#backend-specific-defaults) of the backend will be used.
+
+   The `${{ compiler(...) }}` templates are emitted for every configured compiler, regardless of the dependencies declared in the Pixi manifest.
+   If you want to pin your own compiler package in `build-dependencies` instead, set `compilers = []` in the backend configuration; otherwise the compiler's activation scripts take precedence for variables like `$CC`.
+   To pin a compiler version, prefer the variant configuration (e.g. `c_compiler_version`) over a manual dependency.
 
 2. **For each compiler, determine the variants to take into account**
 

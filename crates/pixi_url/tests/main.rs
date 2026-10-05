@@ -38,7 +38,7 @@ fn file_url(tempdir: &TempDir, name: &str) -> Url {
 }
 
 fn cached_checkout(cache_root: &std::path::Path, sha: Sha256Hash) -> std::path::PathBuf {
-    let checkout = cache_root.join("checkouts").join(format!("{sha:x}"));
+    let checkout = cache_root.join("checkouts").join(hex::encode(sha));
     fs_err::create_dir_all(&checkout).expect("checkout dir");
     fs_err::write(checkout.join("text.txt"), "Hello, World\n").expect("file");
     fs_err::write(checkout.join(".pixi-url-ready"), "ready").unwrap();

@@ -1,24 +1,27 @@
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
+    sync::LazyLock,
 };
 
 use indexmap::{IndexMap, IndexSet};
 use pixi_spec::{ExcludeNewer, TomlSpec, TomlVersionSpecStr};
 use pixi_toml::{TomlFromStr, TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
-use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform, Version, VersionSpec};
+use rattler_conda_types::{PackageName, Version, VersionSpec};
 use std::str::FromStr;
 use toml_span::{DeserError, Span, Spanned, Value, de_helpers::TableHelper, value::ValueInner};
 use url::Url;
 
 use crate::{
-    KnownPreviewFeature, PrioritizedChannel, S3Options, TargetSelector, Targets, TomlError,
-    WithWarnings, Workspace,
+    KnownPreviewFlag, PixiPlatform, PrioritizedChannel, S3Options, TargetSelector, Targets,
+    TomlError, WithWarnings, Workspace,
     error::GenericError,
     pypi::pypi_options::PypiOptions,
-    toml::{manifest::ExternalWorkspaceProperties, platform::TomlPlatform, preview::TomlPreview},
+    toml::{
+        manifest::ExternalWorkspaceProperties, platform::TomlPixiPlatform, preview::TomlPreview,
+    },
     utils::PixiSpanned,
-    workspace::{BuildVariantSource, ChannelPriority, SolveStrategy},
+    workspace::{BuildVariantSource, ChannelPriority, CondaPypiMap, SolveStrategy},
 };
 
 /// Parses `[workspace.dependencies]` into an ordered `(name, TomlSpec)` map.
@@ -89,7 +92,7 @@ pub struct TomlWorkspaceTarget {
 }
 
 /// The TOML representation of the `[[workspace]]` section in a pixi manifest.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct TomlWorkspace {
     // In TOML the workspace name can be empty. It is a required field though, but this is enforced
     // when converting the TOML model to the actual manifest. When using a PyProject we want to use
@@ -101,14 +104,14 @@ pub struct TomlWorkspace {
     pub channels: IndexSet<PrioritizedChannel>,
     pub channel_priority: Option<ChannelPriority>,
     pub solve_strategy: Option<SolveStrategy>,
-    pub platforms: Spanned<IndexSet<Platform>>,
+    pub platforms: Spanned<IndexSet<PixiPlatform>>,
     pub license: Option<Spanned<String>>,
     pub license_file: Option<Spanned<PathBuf>>,
     pub readme: Option<Spanned<PathBuf>>,
     pub homepage: Option<Url>,
     pub repository: Option<Url>,
     pub documentation: Option<Url>,
-    pub conda_pypi_map: Option<HashMap<NamedChannelOrUrl, String>>,
+    pub conda_pypi_map: Option<CondaPypiMap>,
     pub pypi_options: Option<PypiOptions>,
     pub s3_options: Option<HashMap<String, S3Options>>,
     pub preview: TomlPreview,
@@ -125,6 +128,15 @@ pub struct TomlWorkspace {
 }
 
 impl TomlWorkspace {
+    /// The `[workspace.dependencies]` pool that `{ workspace = true }`
+    /// entries resolve against. An absent table acts as an empty pool.
+    pub fn dependency_pool(&self) -> &IndexMap<PackageName, TomlSpec> {
+        static EMPTY: LazyLock<IndexMap<PackageName, TomlSpec>> = LazyLock::new(IndexMap::new);
+        self.dependencies
+            .as_ref()
+            .map_or(&EMPTY, |deps| &deps.value.specs)
+    }
+
     /// Converts the TOML representation of the workspace section to the actual
     /// workspace.
     ///
@@ -175,7 +187,22 @@ impl TomlWorkspace {
             value: preview,
         } = self.preview.into_preview();
 
-        let warnings = preview_warnings;
+        let mut warnings = preview_warnings;
+
+        // An empty `conda-pypi-map = {}` is soft-deprecated. It preserves the
+        // legacy no-network behavior while keeping the conda-forge same-name
+        // heuristic; `conda-pypi-map = false` is now the explicit hard-disable.
+        if let Some(CondaPypiMap::Map(map)) = &self.conda_pypi_map
+            && map.is_empty()
+        {
+            warnings.push(
+                GenericError::new("`conda-pypi-map = {}` is deprecated")
+                    .with_help(
+                        "Use `conda-pypi-map = false` to disable all PyPI name derivation, or `conda-pypi-map = { conda-forge = { mapping-mode = \"replace\" } }` to avoid default mapping lookups while keeping the conda-forge same-name heuristic.",
+                    )
+                    .into(),
+            );
+        }
 
         let build_variant_files_default =
             convert_build_variant_files(self.build_variant_files, root_directory)?;
@@ -183,16 +210,16 @@ impl TomlWorkspace {
         // Source specs gated on pixi-build. Path specs are left
         // workspace-relative; members re-base them at inheritance time.
         let dependencies = if let Some(deps) = self.dependencies {
-            let pixi_build_enabled = preview.is_enabled(KnownPreviewFeature::PixiBuild);
+            let pixi_build_enabled = preview.is_enabled(KnownPreviewFlag::PixiBuild);
             let specs = deps.value.specs;
             if !pixi_build_enabled
                 && let Some((name, _)) = specs.iter().find(|(_, s)| toml_spec_is_source(s))
             {
                 return Err(GenericError::new(
-                    "conda source dependencies are not allowed without enabling the 'pixi-build' preview feature",
+                    "conda source dependencies are not allowed without enabling the 'pixi-build' preview flag",
                 )
                 .with_help(
-                    "Add `preview = [\"pixi-build\"]` to the `workspace` table of your manifest",
+                    "Run `pixi workspace preview add pixi-build` to enable the preview flag",
                 )
                 .with_span_label(format!("source dependency `{}`", name.as_source()))
                 .with_opt_span(deps.span.clone())
@@ -240,6 +267,8 @@ impl TomlWorkspace {
             pypi_exclude_newer_package_overrides: IndexMap::default(),
             dependencies,
             root_directory: root_directory.to_path_buf(),
+            must_migrate: false,
+            use_platform_composition: false,
         })
         .with_warnings(warnings))
     }
@@ -306,9 +335,35 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
         let solve_strategy = th
             .optional::<TomlWith<_, TomlFromStr<_>>>("solve-strategy")
             .map(TomlWith::into_inner);
-        let platforms = th
-            .optional::<TomlWith<_, Spanned<TomlIndexSet<TomlPlatform>>>>("platforms")
-            .map(TomlWith::into_inner);
+        // Reject repeated names: `PixiPlatform`'s `Eq`/`Hash` are by name only,
+        // so duplicates would otherwise silently collapse to the first entry.
+        let platforms = match th.optional::<Spanned<Vec<Spanned<TomlPixiPlatform>>>>("platforms") {
+            None => None,
+            Some(spanned) => {
+                let span = spanned.span;
+                let mut value = IndexSet::new();
+                let mut seen: IndexMap<String, Span> = IndexMap::new();
+                for entry in spanned.value {
+                    let entry_span = entry.span;
+                    let platform = entry.value.into_inner();
+                    let name = platform.name().to_string();
+                    if let Some(first) = seen.get(&name) {
+                        return Err(toml_span::Error {
+                            kind: toml_span::ErrorKind::DuplicateKey {
+                                key: name,
+                                first: *first,
+                            },
+                            span: entry_span,
+                            line_info: None,
+                        }
+                        .into());
+                    }
+                    seen.insert(name, entry_span);
+                    value.insert(platform);
+                }
+                Some(Spanned { span, value })
+            }
+        };
         let license = th.optional("license");
         let license_file = th
             .optional::<TomlWith<_, Spanned<TomlFromStr<_>>>>("license-file")
@@ -325,9 +380,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
         let documentation = th
             .optional::<TomlFromStr<_>>("documentation")
             .map(TomlFromStr::into_inner);
-        let conda_pypi_map = th
-            .optional::<TomlHashMap<_, _>>("conda-pypi-map")
-            .map(TomlHashMap::into_inner);
+        let conda_pypi_map = th.optional("conda-pypi-map");
         let pypi_options = th.optional("pypi-options");
         let s3_options = th
             .optional::<TomlHashMap<_, _>>("s3-options")
@@ -482,6 +535,170 @@ mod test {
         5 │
           ╰────
         "#);
+    }
+
+    #[test]
+    fn test_workspace_platforms_mixed_string_and_table() {
+        let input = r#"
+        channels = []
+        platforms = [
+          "linux-64",
+          { name = "linux-64-cuda", platform = "linux-64", cuda = "12.0" },
+          { name = "osx-arm64" },
+        ]
+        "#;
+        let workspace = TomlWorkspace::from_toml_str(input)
+            .unwrap()
+            .into_workspace(ExternalWorkspaceProperties::default(), Path::new(""))
+            .unwrap()
+            .value;
+
+        let names: Vec<&str> = workspace
+            .platforms
+            .iter()
+            .map(|wp| wp.name().as_str())
+            .collect();
+        assert_eq!(names, vec!["linux-64", "linux-64-cuda", "osx-arm64"]);
+
+        let cuda_name = crate::PixiPlatformName::try_from("linux-64-cuda").unwrap();
+        let cuda = workspace.platform_by_name(&cuda_name).unwrap();
+        assert_eq!(
+            cuda.subdir(),
+            rattler_conda_types::Subdir::Linux64,
+            "custom name should keep linux-64 as its subdir"
+        );
+        let declared: Vec<String> = cuda
+            .declared_virtual_packages()
+            .iter()
+            .map(|vp| vp.to_string())
+            .collect();
+        assert_eq!(
+            declared,
+            vec![
+                "__cuda=12.0".to_string(),
+                "__unix=0=0".to_string(),
+                "__linux=4.18".to_string(),
+                "__glibc=2.28".to_string(),
+                "__archspec=0=x86_64".to_string(),
+            ],
+            "rich platforms materialise the subdir defaults alongside the declared __cuda; \
+             `__unix=0=0` reflects rattler's version=0, build_string=\"0\" shape",
+        );
+
+        // Subdir entries (`linux-64`, `osx-arm64` with name == subdir)
+        // are still recognisable by `is_subdir_platform`. Their declared
+        // virtual-package list is the subdir defaults rather than empty.
+        let subdirs: Vec<_> = workspace
+            .platforms
+            .iter()
+            .filter(|wp| wp.is_subdir_platform())
+            .map(|wp| wp.subdir())
+            .collect();
+        assert_eq!(
+            subdirs,
+            vec![
+                rattler_conda_types::Subdir::Linux64,
+                rattler_conda_types::Subdir::OsxArm64,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_platform_match_diagnostics_and_unsatisfied_requirements() {
+        use std::collections::HashSet;
+
+        use rattler_conda_types::{GenericVirtualPackage, Subdir};
+
+        use crate::PixiPlatformName;
+
+        let input = r#"
+        channels = []
+        platforms = [
+          "linux-64",
+          { name = "gpu-linux", platform = "linux-64", cuda = "12.0" },
+          { name = "mac", platform = "osx-arm64" },
+        ]
+        "#;
+        let workspace = TomlWorkspace::from_toml_str(input)
+            .unwrap()
+            .into_workspace(ExternalWorkspaceProperties::default(), Path::new(""))
+            .unwrap()
+            .value;
+        let env_platforms: HashSet<PixiPlatformName> = ["gpu-linux", "mac"]
+            .into_iter()
+            .map(|name| PixiPlatformName::try_from(name).unwrap())
+            .collect();
+
+        // A cuda-less linux-64 host: `linux-64` is not declared by the
+        // environment and must not appear; `gpu-linux` misses `__cuda` (its
+        // materialised subdir defaults must not count); `mac` needs a subdir
+        // this host can't run.
+        let diagnostics =
+            workspace.platform_match_diagnostics(Subdir::Linux64, &[], &env_platforms);
+        assert_eq!(diagnostics.len(), 2);
+
+        let gpu = &diagnostics[0];
+        assert_eq!(gpu.name.as_str(), "gpu-linux");
+        assert_eq!(gpu.subdir, Subdir::Linux64);
+        assert!(gpu.subdir_matches_host);
+        assert!(!gpu.matches_host());
+        let unsatisfied: Vec<String> = gpu
+            .unsatisfied_virtual_packages
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        assert_eq!(unsatisfied, vec!["__cuda=12.0".to_string()]);
+
+        let mac = &diagnostics[1];
+        assert_eq!(mac.name.as_str(), "mac");
+        assert_eq!(mac.subdir, Subdir::OsxArm64);
+        assert!(!mac.subdir_matches_host);
+        assert!(mac.unsatisfied_virtual_packages.is_empty());
+        assert!(!mac.matches_host());
+
+        // The aggregate requirements only cover host-runnable subdirs, so
+        // `mac` contributes nothing.
+        let requirements: Vec<String> = workspace
+            .unsatisfied_platform_requirements(Subdir::Linux64, &[], &env_platforms)
+            .iter()
+            .map(ToString::to_string)
+            .collect();
+        assert_eq!(requirements, vec!["__cuda=12.0".to_string()]);
+
+        // With a recent-enough host cuda, `gpu-linux` runs and nothing is
+        // unsatisfied.
+        let host_cuda = GenericVirtualPackage {
+            name: "__cuda".parse().unwrap(),
+            version: "12.4".parse().unwrap(),
+            build_string: "0".to_string(),
+        };
+        let diagnostics = workspace.platform_match_diagnostics(
+            Subdir::Linux64,
+            std::slice::from_ref(&host_cuda),
+            &env_platforms,
+        );
+        assert!(diagnostics[0].matches_host());
+        assert!(
+            workspace
+                .unsatisfied_platform_requirements(Subdir::Linux64, &[host_cuda], &env_platforms)
+                .is_empty()
+        );
+    }
+
+    /// Two platform entries that resolve to the same name must be rejected,
+    /// not silently collapsed to the first (`PixiPlatform` is keyed by name).
+    #[test]
+    fn test_duplicate_workspace_platform_name_rejected() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = [
+          { name = "gpu", platform = "linux-64", cuda = "12.0" },
+          { name = "gpu", platform = "linux-64", cuda = "13.0" },
+        ]
+        "#,
+        ));
     }
 
     #[test]

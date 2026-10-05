@@ -1,0 +1,61 @@
+name: Upgrade Pixi dependencies
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Wednesdays at 05:00 UTC.
+    - cron: "0 5 * * 3"
+
+permissions: {}
+
+concurrency:
+  group: upgrade-pixi
+
+jobs:
+  upgrade-pixi:
+    if: github.repository == 'prefix-dev/pixi'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Set up Pixi
+        uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2
+        with:
+          run-install: false
+      - name: Upgrade Pixi dependencies
+        shell: bash
+        run: |
+          # Keep Rust in sync with rust-toolchain through manual upgrades.
+          pixi upgrade --exclude rust --exclude rust-src --json > "$RUNNER_TEMP/pixi-diff.json"
+      - name: Render dependency changes
+        # Avoid parsing the workspace's TOML 1.1 manifest with the converter's TOML 1.0 parser.
+        # TODO: Remove this workaround once Python 3.15 is released and available to the converter.
+        working-directory: ${{ runner.temp }}
+        shell: bash
+        run: pixi exec pixi-diff-to-markdown < pixi-diff.json > pixi-diff.md
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        with:
+          client-id: ${{ vars.PIXI_UPGRADE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.PIXI_UPGRADE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          commit-message: "chore(ci): Upgrade Pixi dependencies"
+          title: "chore(ci): Upgrade Pixi dependencies"
+          body-path: ${{ runner.temp }}/pixi-diff.md
+          branch: upgrade-pixi
+          base: main
+          labels: dependencies
+          delete-branch: true
+          add-paths: |
+            pixi.toml
+            pixi.lock

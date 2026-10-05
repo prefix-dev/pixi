@@ -159,7 +159,7 @@ pub fn expand_self_extras(
                     continue;
                 }
                 // Bare self-reference (no extras) is a no-op — build
-                // backends drop these so the lockfile never contains them.
+                // backends drop these so the lock file never contains them.
                 if req.extras.is_empty() {
                     continue;
                 }

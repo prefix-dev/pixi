@@ -3,7 +3,7 @@
 The `pixi-build-cmake` backend is designed for building C and C++ projects using the [CMake](https://cmake.org/) build system. It provides seamless integration with Pixi's package management workflow while maintaining cross-platform compatibility.
 
 !!! warning
-    `pixi-build` is a preview feature, and will change until it is stabilized.
+    `pixi-build` is a preview flag, and will change until it is stabilized.
     This is why we require users to opt in to that feature by adding "pixi-build" to `workspace.preview`.
 
     ```toml
@@ -30,11 +30,9 @@ To use the CMake backend in your `pixi.toml`, add it to your package's build con
 name = "cmake_package"
 version = "0.1.0"
 
-[package.build]
-backend = { name = "pixi-build-cmake", version = "*" }
-channels = [
-  "https://prefix.dev/conda-forge",
-]
+[package.build.backend]
+name = "pixi-build-cmake"
+channels = ["https://prefix.dev/conda-forge"]
 ```
 
 ### Required Dependencies
@@ -107,6 +105,8 @@ env = { COMMON_VAR = "linux", LINUX_VAR = "value" }
 # Result for linux-64: { CMAKE_VERBOSE_MAKEFILE = "OFF", COMMON_VAR = "linux", LINUX_VAR = "value" }
 ```
 
+--8<-- "docs/partials/build-config-env-expansion.md"
+
 ### `debug-dir`
 
 The backend always writes JSON-RPC request/response logs and the generated intermediate recipe to the `debug` subdirectory inside each work directory (for example `<work_directory>/debug`). The deprecated `debug-dir` configuration option is ignored; if it is present in a manifest a warning is emitted.
@@ -178,7 +178,7 @@ The CMake backend follows this build process:
    - `-DCMAKE_INSTALL_PREFIX=$PREFIX`: Install to conda prefix
    - `-DCMAKE_EXPORT_COMPILE_COMMANDS=ON`: Export compile commands for tooling
    - `-DBUILD_SHARED_LIBS=ON`: Build shared libraries by default
-   - `-DPython_EXECUTABLE=$PYTHON`: Use the conda Python executable if it's part of the host dependencies.
+   - `-DPython_EXECUTABLE=$PYTHON`: Added by a runtime check in the build script when a python interpreter is present in the host environment (e.g. through a `python` host dependency, conditional or not).
 3. **Build**: Executes `cmake --build` to compile the project
 4. **Install**: Installs the built artifacts to the conda package
 

@@ -1,0 +1,13 @@
+---
+source: crates/pixi_manifest/src/toml/conda_pypi_map.rs
+expression: "expect_parse_failure(r#\"\n            [workspace]\n            channels = []\n            platforms = []\n            conda-pypi-map = { conda-forge = {} }\n            \"#)"
+---
+  × expected at least one of `location`, `mapping`, `mapping-mode` or `same-name-heuristic`
+   ╭─[pixi.toml:5:46]
+ 4 │             platforms = []
+ 5 │             conda-pypi-map = { conda-forge = {} }
+   ·                                              ──
+ 6 │
+   ╰────
+  help: An empty table has no effect. Use `<channel> = false` to disable the mapping for this channel, or `<channel> = { mapping-mode = "replace" }` to skip the default mapping data. The same-name
+        heuristic keeps its per-channel default (on for conda-forge, off otherwise) unless you set `same-name-heuristic`.

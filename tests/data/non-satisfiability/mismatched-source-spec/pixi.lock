@@ -7,7 +7,7 @@ environments:
       win-64:
         - conda: child-package
 packages:
-  # This should invalidate the lock-file because the package `child-package` is
+  # This should invalidate the lock file because the package `child-package` is
   # requested as a git package in the pixi.toml.
   - conda: child-package
     name: child-package

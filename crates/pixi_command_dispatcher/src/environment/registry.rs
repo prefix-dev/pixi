@@ -2,7 +2,6 @@ use std::{collections::HashMap, sync::Arc};
 
 use parking_lot::RwLock;
 use pixi_compute_engine::DataStore;
-use rattler_conda_types::Platform;
 
 use super::{EnvironmentSpec, WorkspaceEnvId, WorkspaceEnvRef};
 
@@ -36,7 +35,7 @@ struct WorkspaceEnvRegistryInner {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct WorkspaceEnvRegistryKey {
     name: String,
-    platform: Platform,
+    platform: String,
     spec: EnvironmentSpec,
 }
 
@@ -62,7 +61,7 @@ impl WorkspaceEnvRegistry {
     pub fn allocate(
         &self,
         name: String,
-        platform: Platform,
+        platform: String,
         spec: EnvironmentSpec,
     ) -> WorkspaceEnvRef {
         let mut inner = self.inner.write();
@@ -79,7 +78,11 @@ impl WorkspaceEnvRegistry {
             u32::try_from(inner.entries.len()).expect("too many workspace envs allocated"),
         );
         inner.entries.push(Arc::new(key.spec.clone()));
-        let env_ref = WorkspaceEnvRef::new(id, key.name.clone(), key.platform);
+        let build_environment = &key.spec.build_environment;
+        let build_platform = (build_environment.build_platform != build_environment.host_platform)
+            .then(|| build_environment.build_platform.to_string());
+        let env_ref =
+            WorkspaceEnvRef::new(id, key.name.clone(), key.platform.clone(), build_platform);
         inner.refs_by_key.insert(key, env_ref.clone());
         env_ref
     }
@@ -118,7 +121,7 @@ impl HasWorkspaceEnvRegistry for DataStore {
 
 #[cfg(test)]
 mod tests {
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::Subdir;
     use rattler_solve::ChannelPriority;
 
     use pixi_utils::variants::VariantConfig;
@@ -130,9 +133,9 @@ mod tests {
         EnvironmentSpec {
             channels: Vec::new(),
             build_environment: BuildEnvironment {
-                host_platform: Platform::Linux64,
+                host_platform: Subdir::Linux64,
                 host_virtual_packages: Vec::new(),
-                build_platform: Platform::Linux64,
+                build_platform: Subdir::Linux64,
                 build_virtual_packages: Vec::new(),
             },
             variants: VariantConfig::default(),
@@ -144,10 +147,10 @@ mod tests {
     #[test]
     fn allocate_deduplicates_equal_requests() {
         let reg = WorkspaceEnvRegistry::new();
-        let platform = Platform::Linux64;
+        let platform = Subdir::Linux64;
 
-        let a = reg.allocate("default".to_string(), platform, empty_spec());
-        let b = reg.allocate("default".to_string(), platform, empty_spec());
+        let a = reg.allocate("default".to_string(), platform.to_string(), empty_spec());
+        let b = reg.allocate("default".to_string(), platform.to_string(), empty_spec());
 
         assert_eq!(a.id(), b.id(), "same request must reuse the existing id");
         assert_eq!(a, b, "refs with reused ids compare equal");
@@ -156,10 +159,10 @@ mod tests {
     #[test]
     fn allocate_keeps_distinct_labels_separate() {
         let reg = WorkspaceEnvRegistry::new();
-        let platform = Platform::Linux64;
+        let platform = Subdir::Linux64;
 
-        let a = reg.allocate("default".to_string(), platform, empty_spec());
-        let b = reg.allocate("other".to_string(), platform, empty_spec());
+        let a = reg.allocate("default".to_string(), platform.to_string(), empty_spec());
+        let b = reg.allocate("other".to_string(), platform.to_string(), empty_spec());
 
         assert_ne!(
             a.id(),
@@ -176,8 +179,16 @@ mod tests {
         spec_a.channels = vec![rattler_conda_types::ChannelUrl::from(
             url::Url::parse("https://example.com/conda-forge/").expect("valid url"),
         )];
-        let ws_a = reg.allocate("default".to_string(), Platform::Linux64, spec_a.clone());
-        let ws_b = reg.allocate("default".to_string(), Platform::Linux64, empty_spec());
+        let ws_a = reg.allocate(
+            "default".to_string(),
+            Subdir::Linux64.to_string(),
+            spec_a.clone(),
+        );
+        let ws_b = reg.allocate(
+            "default".to_string(),
+            Subdir::Linux64.to_string(),
+            empty_spec(),
+        );
 
         let got_a = reg.get(ws_a.id());
         assert_eq!(got_a.channels, spec_a.channels);

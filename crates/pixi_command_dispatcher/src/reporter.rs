@@ -61,7 +61,7 @@ pub trait PixiInstallReporter: Send + Sync {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 pub struct PixiSolveEnvironmentSpec {
     pub name: String,
-    pub platform: rattler_conda_types::Platform,
+    pub platform: String,
     /// True if the environment has direct binary URL/path conda deps,
     /// which trigger package-cache validation during the solve.
     pub has_direct_conda_dependency: bool,
@@ -107,6 +107,21 @@ pub struct WrappingGatewayReporter(pub Box<dyn rattler_repodata_gateway::Reporte
 impl rattler_repodata_gateway::Reporter for WrappingGatewayReporter {
     fn download_reporter(&self) -> Option<&dyn rattler_repodata_gateway::DownloadReporter> {
         self.0.download_reporter()
+    }
+
+    fn on_unsupported_repodata_revision(
+        &self,
+        message: &rattler_repodata_gateway::UnsupportedRepodataRevision,
+    ) {
+        self.0.on_unsupported_repodata_revision(message);
+    }
+
+    fn on_gateway_warning(&self, warning: &rattler_repodata_gateway::GatewayWarning) {
+        self.0.on_gateway_warning(warning);
+    }
+
+    fn on_channel_notice(&self, notice: &rattler_repodata_gateway::ChannelNoticeResult) {
+        self.0.on_channel_notice(notice);
     }
 }
 
@@ -171,9 +186,55 @@ pub trait BackendSourceBuildReporter: Send + Sync {
 pub(crate) fn has_direct_conda_dependency(
     dependencies: &pixi_spec_containers::DependencyMap<rattler_conda_types::PackageName, PixiSpec>,
 ) -> bool {
-    dependencies.iter_specs().any(|(_, spec)| match spec {
-        PixiSpec::Url(url) => url.is_binary(),
-        PixiSpec::Path(path) => path.is_binary(),
-        _ => false,
-    })
+    dependencies
+        .iter_specs()
+        .any(|(_, spec)| matches!(spec, PixiSpec::UrlBinary(_) | PixiSpec::PathBinary(_)))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+
+    use rattler_conda_types::{ChannelNotice, ChannelNoticeLevel};
+    use rattler_repodata_gateway::{ChannelNoticeResult, Reporter};
+
+    use super::WrappingGatewayReporter;
+
+    struct NoticeReporter(Arc<AtomicUsize>);
+
+    impl Reporter for NoticeReporter {
+        fn download_reporter(&self) -> Option<&dyn rattler_repodata_gateway::DownloadReporter> {
+            None
+        }
+
+        fn on_channel_notice(&self, _notice: &ChannelNoticeResult) {
+            self.0.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    #[test]
+    fn wrapping_gateway_reporter_forwards_channel_notices() {
+        let count = Arc::new(AtomicUsize::new(0));
+        let reporter = WrappingGatewayReporter(Box::new(NoticeReporter(count.clone())));
+        let notice = ChannelNoticeResult {
+            channel: url::Url::parse("https://example.com/channel")
+                .unwrap()
+                .into(),
+            notice: ChannelNotice {
+                id: "notice-id".to_string(),
+                message: "A channel notice".to_string(),
+                level: ChannelNoticeLevel::Info,
+                created_at: None,
+                expires_at: None,
+                interval: None,
+            },
+        };
+
+        reporter.on_channel_notice(&notice);
+
+        assert_eq!(count.load(Ordering::Relaxed), 1);
+    }
 }

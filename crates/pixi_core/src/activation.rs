@@ -6,12 +6,12 @@ use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_manifest::EnvironmentName;
 use pixi_manifest::FeaturesExt;
-use rattler_conda_types::Platform;
+use pixi_manifest::PixiPlatform;
 use rattler_lock::LockFile;
 use rattler_shell::{
     activation::{
-        ActivationError, ActivationError::FailedToRunActivationScript, ActivationVariables,
-        Activator, PathModificationBehavior,
+        ActivationError::FailedToRunActivationScript, ActivationVariables, Activator,
+        PathModificationBehavior,
     },
     shell::ShellEnum,
 };
@@ -116,12 +116,14 @@ impl Environment<'_> {
 
 /// Get the complete activator for the environment.
 /// This method will create an activator for the environment and add the activation scripts from the project.
-/// The activator will be created for the current platform and the default shell.
+/// `platform` selects which `[target.*]` activation applies, see
+/// [`Environment::activation_platform`] for the default.
 pub fn get_activator<'p>(
     environment: &'p Environment<'p>,
     shell: ShellEnum,
-) -> Result<Activator<ShellEnum>, ActivationError> {
-    let platform = Platform::current();
+    platform: &PixiPlatform,
+) -> miette::Result<Activator<ShellEnum>> {
+    let subdir = platform.subdir();
     let additional_activation_scripts = environment.activation_scripts(Some(platform));
 
     // Make sure the scripts exists
@@ -145,23 +147,23 @@ pub fn get_activator<'p>(
     // Check if the platform and activation script extension match. For Platform::Windows the extension should be .bat and for All other platforms it should be .sh or .bash.
     for script in additional_activation_scripts.iter() {
         let extension = script.extension().unwrap_or_default();
-        if platform.is_windows() && extension != "bat" {
+        if subdir.is_windows() && extension != "bat" {
             tracing::warn!(
                 "The activation script '{}' does not have the correct extension for the platform '{}'. The extension should be '.bat'.",
                 script.display(),
-                platform
+                subdir
             );
-        } else if !platform.is_windows() && extension != "sh" && extension != "bash" {
+        } else if !subdir.is_windows() && extension != "sh" && extension != "bash" {
             tracing::warn!(
                 "The activation script '{}' does not have the correct extension for the platform '{}'. The extension should be '.sh' or '.bash'.",
                 script.display(),
-                platform
+                subdir
             );
         }
     }
 
     let mut activator =
-        Activator::from_path(environment.dir().as_path(), shell, Platform::current())?;
+        Activator::from_path(environment.dir().as_path(), shell, subdir).into_diagnostic()?;
 
     // Add the custom activation scripts from the environment
     activator
@@ -176,7 +178,7 @@ pub fn get_activator<'p>(
     // Add environment variables that should be applied after activation scripts run.
     activator
         .post_activation_env_vars
-        .extend(environment.activation_env(Some(Platform::current())));
+        .extend(environment.activation_env(Some(platform)));
 
     Ok(activator)
 }
@@ -211,6 +213,7 @@ fn get_environment_variable_from_shell_environment(
 /// activation fresh.
 async fn try_get_valid_activation_cache(
     environment: &Environment<'_>,
+    platform: &PixiPlatform,
     cache_file: PathBuf,
 ) -> Option<HashMap<String, String>> {
     // Find cache file
@@ -249,12 +252,12 @@ async fn try_get_valid_activation_cache(
     // can't reuse a cached activation safely, so treat the cache as
     // missing. The fingerprint is written by
     // `LockFileDerivedData::prefix` after a successful install.
-    let installed_fingerprint =
-        pixi_command_dispatcher::EnvironmentFingerprint::read(&environment.dir())?;
+    let installed_fingerprint = pixi_utils::EnvironmentFingerprint::read(&environment.dir())?;
     let hash = EnvironmentHash::for_activation(
         environment,
         &current_input_env_vars,
         &installed_fingerprint,
+        platform,
     );
 
     // Check if the hash matches
@@ -274,33 +277,32 @@ async fn try_get_valid_activation_cache(
 #[allow(clippy::needless_pass_by_value)]
 pub async fn run_activation(
     environment: &Environment<'_>,
+    platform: &PixiPlatform,
     env_var_behavior: &CurrentEnvVarBehavior,
     _lock_file: Option<&LockFile>,
     force_activate: bool,
     experimental: bool,
 ) -> miette::Result<HashMap<String, String>> {
-    // Try the activation cache first. The cache is keyed on the
-    // prefix's install fingerprint
-    // (`InstallPixiEnvironmentResult::installed_fingerprint`), which
-    // changes whenever any package's content changes — so a cache
-    // hit means the activation env-var map is still authoritative.
-    // The inner lookup short-circuits to `None` when no fingerprint
-    // marker exists yet (e.g. before the first install), so this
-    // path is always safe to attempt.
-    //
+    // Try the activation cache first. It is keyed on `platform` and on the
+    // prefix's install fingerprint, which changes whenever any package's
+    // content changes, so a hit means the env-var map is still up to date.
+    // Without a fingerprint the lookup returns `None`, so this is always
+    // safe to attempt.
     if !force_activate && experimental {
         let cache_file = environment
             .workspace()
             .activation_env_cache_folder()
             .join(environment.activation_cache_name());
-        if let Some(env_vars) = try_get_valid_activation_cache(environment, cache_file).await {
+        if let Some(env_vars) =
+            try_get_valid_activation_cache(environment, platform, cache_file).await
+        {
             tracing::debug!("Using activation cache for {:?}", environment.name());
             return Ok(env_vars);
         }
     }
     tracing::debug!("Running activation script for {:?}", environment.name());
 
-    let activator = get_activator(environment, ShellEnum::default()).map_err(|e| {
+    let activator = get_activator(environment, ShellEnum::default(), platform).map_err(|e| {
         miette::miette!(format!(
             "failed to create activator for {:?}\n{}",
             environment.name(),
@@ -386,7 +388,7 @@ pub async fn run_activation(
         // activation will re-run; correctness over a tempting but
         // dead cache.
         let Some(installed_fingerprint) =
-            pixi_command_dispatcher::EnvironmentFingerprint::read(&environment.dir())
+            pixi_utils::EnvironmentFingerprint::read(&environment.dir())
         else {
             return Ok(activator_result);
         };
@@ -395,6 +397,7 @@ pub async fn run_activation(
                 environment,
                 &current_input_env_vars,
                 &installed_fingerprint,
+                platform,
             ),
             environment_variables: activator_result.clone(),
         };
@@ -495,6 +498,7 @@ pub(crate) fn get_clean_environment_variables() -> HashMap<String, String> {
 /// If a lock file is given this will also create/use an activated environment cache when possible.
 pub(crate) async fn initialize_env_variables(
     environment: &Environment<'_>,
+    platform: &PixiPlatform,
     env_var_behavior: CurrentEnvVarBehavior,
     lock_file: Option<&LockFile>,
     force_activate: bool,
@@ -502,6 +506,7 @@ pub(crate) async fn initialize_env_variables(
 ) -> miette::Result<HashMap<String, String>> {
     let activation_env = run_activation(
         environment,
+        platform,
         &env_var_behavior,
         lock_file,
         force_activate,
@@ -532,7 +537,22 @@ pub(crate) async fn initialize_env_variables(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rattler_conda_types::Subdir;
     use std::path::Path;
+
+    /// Write a completed-install fingerprint marker for `env_dir` via
+    /// the install lock, so the activation cache engages. `fp` must be
+    /// 16 hex chars (the on-disk fingerprint width).
+    async fn write_fingerprint(env_dir: &Path, fp: &str) {
+        pixi_utils::EnvironmentLock::acquire(env_dir)
+            .await
+            .unwrap()
+            .finish(&pixi_utils::EnvironmentFingerprint::from_string(
+                fp.to_string(),
+            ))
+            .await
+            .unwrap();
+    }
 
     #[test]
     fn test_metadata_env() {
@@ -561,7 +581,9 @@ mod tests {
 
         let test_env = project.environment("test").unwrap();
         let env = test_env.get_metadata_env();
-        let post_activation_env = test_env.activation_env(Some(Platform::current()));
+        let current =
+            pixi_manifest::PixiPlatform::from_subdir(Subdir::current().unwrap_or(Subdir::NoArch));
+        let post_activation_env = test_env.activation_env(Some(&current));
 
         assert_eq!(env.get("PIXI_ENVIRONMENT_NAME").unwrap(), "test");
         assert!(env.get("PIXI_PROMPT").unwrap().contains("pixi"));
@@ -625,9 +647,11 @@ mod tests {
         ZAB = "123test123"
         "#;
         let workspace = Workspace::from_str(Path::new("pixi.toml"), project).unwrap();
+        let current =
+            pixi_manifest::PixiPlatform::from_subdir(Subdir::current().unwrap_or(Subdir::NoArch));
         let post_activation_env = workspace
             .default_environment()
-            .activation_env(Some(Platform::current()));
+            .activation_env(Some(&current));
 
         // Make sure the user defined environment variables are sorted by input order.
         assert!(
@@ -651,7 +675,7 @@ mod tests {
         );
     }
 
-    /// Test that the activation cache is created and used correctly based on the lockfile.
+    /// Test that the activation cache is created and used correctly based on the lock file.
     ///
     /// Validates that the activation cache:
     /// - is not written without an install fingerprint marker;
@@ -678,6 +702,7 @@ mod tests {
         // even with experimental=true and a lock file present.
         let env = run_activation(
             &default_env,
+            &default_env.activation_platform(),
             &CurrentEnvVarBehavior::Include,
             Some(&LockFile::default()),
             false,
@@ -689,12 +714,11 @@ mod tests {
         assert!(!project.activation_env_cache_folder().exists());
 
         // Write a fingerprint marker so the cache becomes operative.
-        pixi_command_dispatcher::EnvironmentFingerprint::from_string("fp-1".to_string())
-            .write(&default_env.dir())
-            .unwrap();
+        write_fingerprint(&default_env.dir(), "000000000000000a").await;
 
         let _env = run_activation(
             &default_env,
+            &default_env.activation_platform(),
             &CurrentEnvVarBehavior::Include,
             Some(&LockFile::default()),
             false,
@@ -713,6 +737,7 @@ mod tests {
         tokio_fs::write(&cache_file, modified).await.unwrap();
         let env = run_activation(
             &default_env,
+            &default_env.activation_platform(),
             &CurrentEnvVarBehavior::Include,
             Some(&LockFile::default()),
             false,
@@ -725,11 +750,10 @@ mod tests {
         // Bumping the fingerprint mimics a fresh install with
         // different content — the cache key changes, so activation
         // runs again and overwrites the cache file.
-        pixi_command_dispatcher::EnvironmentFingerprint::from_string("fp-2".to_string())
-            .write(&default_env.dir())
-            .unwrap();
+        write_fingerprint(&default_env.dir(), "000000000000000b").await;
         let env = run_activation(
             &default_env,
+            &default_env.activation_platform(),
             &CurrentEnvVarBehavior::Include,
             Some(&LockFile::default()),
             false,
@@ -738,6 +762,60 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(env.get("TEST").unwrap(), "ACTIVATION123");
+    }
+
+    /// The activation cache must not serve one platform's activation env to
+    /// another (https://github.com/prefix-dev/pixi/issues/6773).
+    #[tokio::test]
+    async fn test_run_activation_cache_scoped_to_platform() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let current = Subdir::current().unwrap_or(Subdir::NoArch);
+        let workspace = format!(
+            r#"
+        [workspace]
+        name = "pixi"
+        channels = []
+        platforms = [
+            {{ name = "generic", platform = "{current}" }},
+            {{ name = "local", platform = "{current}", cuda = "12" }},
+        ]
+
+        [target.local.activation.env]
+        WHICH = "local"
+
+        [target.generic.activation.env]
+        WHICH = "generic"
+        "#
+        );
+        let project =
+            Workspace::from_str(temp_dir.path().join("pixi.toml").as_path(), &workspace).unwrap();
+        let default_env = project.default_environment();
+        write_fingerprint(&default_env.dir(), "00000000000000ee").await;
+
+        let activate_for = async |name: &str| {
+            let name = name.parse().unwrap();
+            let platform = default_env
+                .named_or_best_declared_platform(Some(&name))
+                .unwrap();
+            run_activation(
+                &default_env,
+                platform,
+                &CurrentEnvVarBehavior::Include,
+                Some(&LockFile::default()),
+                false,
+                true,
+            )
+            .await
+            .unwrap()
+            .get("WHICH")
+            .cloned()
+        };
+
+        // Prime the cache for `local`, then alternate; each run must get its
+        // own platform's env rather than the previously cached one.
+        assert_eq!(activate_for("local").await.as_deref(), Some("local"));
+        assert_eq!(activate_for("generic").await.as_deref(), Some("generic"));
+        assert_eq!(activate_for("local").await.as_deref(), Some("local"));
     }
 
     /// Activation env vars are part of [`EnvironmentHash::for_activation`]'s
@@ -760,11 +838,10 @@ mod tests {
             Workspace::from_str(temp_dir.path().join("pixi.toml").as_path(), workspace).unwrap();
         let default_env = project.default_environment();
         // A fingerprint marker is required for the cache to engage at all.
-        pixi_command_dispatcher::EnvironmentFingerprint::from_string("fp-stable".to_string())
-            .write(&default_env.dir())
-            .unwrap();
+        write_fingerprint(&default_env.dir(), "00000000000000fb").await;
         let env = run_activation(
             &default_env,
+            &default_env.activation_platform(),
             &CurrentEnvVarBehavior::Include,
             Some(&LockFile::default()),
             false,
@@ -795,11 +872,10 @@ mod tests {
             Workspace::from_str(temp_dir.path().join("pixi.toml").as_path(), workspace).unwrap();
         let default_env = project.default_environment();
         // Marker survives the manifest edit (same prefix dir).
-        pixi_command_dispatcher::EnvironmentFingerprint::from_string("fp-stable".to_string())
-            .write(&default_env.dir())
-            .unwrap();
+        write_fingerprint(&default_env.dir(), "00000000000000fb").await;
         let env = run_activation(
             &default_env,
+            &default_env.activation_platform(),
             &CurrentEnvVarBehavior::Include,
             Some(&LockFile::default()),
             false,

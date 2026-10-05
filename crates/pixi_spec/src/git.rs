@@ -5,9 +5,10 @@ use serde::{Serialize, Serializer};
 use thiserror::Error;
 use url::Url;
 
-use crate::Subdirectory;
+use crate::{MatchspecFields, Subdirectory};
 
-/// A specification of a package from a git repository.
+/// A specification of a package from a git repository, optionally
+/// constrained by match-spec selectors (`version`, `build`, `extras`, …).
 #[derive(Debug, Clone, Hash, Eq, PartialEq, ::serde::Serialize, ::serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct GitSpec {
@@ -21,9 +22,113 @@ pub struct GitSpec {
     /// The git subdirectory of the package
     #[serde(skip_serializing_if = "Subdirectory::is_empty", default)]
     pub subdirectory: Subdirectory,
+
+    /// Whether to fetch Git LFS objects for the checkout. `None` falls
+    /// back to the deprecated `PIXI_GIT_LFS` environment variable and
+    /// otherwise leaves pointer files.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub lfs: Option<bool>,
+
+    /// Match-spec selectors applied to the built output (flattened).
+    #[serde(flatten)]
+    pub matchspec: MatchspecFields,
+}
+
+impl GitSpec {
+    /// Constructs a new [`GitSpec`] with no matchspec selectors.
+    pub fn new(git: Url, rev: Option<GitReference>, subdirectory: Subdirectory) -> Self {
+        Self {
+            git,
+            rev,
+            subdirectory,
+            lfs: None,
+            matchspec: MatchspecFields::default(),
+        }
+    }
+
+    /// Returns the git location without any match-spec selectors.
+    pub fn location(&self) -> GitLocationSpec {
+        GitLocationSpec {
+            git: self.git.clone(),
+            rev: self.rev.clone(),
+            subdirectory: self.subdirectory.clone(),
+            lfs: self.lfs,
+        }
+    }
+
+    /// Splits this spec into its location and its match-spec selectors.
+    pub fn into_location(self) -> GitLocationSpec {
+        GitLocationSpec {
+            git: self.git,
+            rev: self.rev,
+            subdirectory: self.subdirectory,
+            lfs: self.lfs,
+        }
+    }
 }
 
 impl Display for GitSpec {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.location().fmt(f)
+    }
+}
+
+/// A git repository location, without any match-spec selectors.
+///
+/// This is the locating half of a [`GitSpec`]: it is enough to check out
+/// the source, but carries none of the constraints used to pick a built
+/// output.
+#[derive(Debug, Clone, Hash, Eq, PartialEq, ::serde::Serialize, ::serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct GitLocationSpec {
+    /// The git url of the package which can contain git+ prefixes.
+    pub git: Url,
+
+    /// The git revision of the package
+    #[serde(skip_serializing_if = "GitReference::is_default_branch", flatten)]
+    pub rev: Option<GitReference>,
+
+    /// The git subdirectory of the package
+    #[serde(skip_serializing_if = "Subdirectory::is_empty", default)]
+    pub subdirectory: Subdirectory,
+
+    /// Whether to fetch Git LFS objects for the checkout. `None` falls
+    /// back to the deprecated `PIXI_GIT_LFS` environment variable and
+    /// otherwise leaves pointer files.
+    #[serde(skip_serializing_if = "Option::is_none", default)]
+    pub lfs: Option<bool>,
+}
+
+impl GitLocationSpec {
+    /// Constructs a new [`GitLocationSpec`].
+    pub fn new(git: Url, rev: Option<GitReference>, subdirectory: Subdirectory) -> Self {
+        Self {
+            git,
+            rev,
+            subdirectory,
+            lfs: None,
+        }
+    }
+
+    /// Sets the LFS preference of this location.
+    #[must_use]
+    pub fn with_lfs(self, lfs: Option<bool>) -> Self {
+        Self { lfs, ..self }
+    }
+
+    /// Attaches match-spec selectors to this location, producing a [`GitSpec`].
+    pub fn with_matchspec(self, matchspec: MatchspecFields) -> GitSpec {
+        GitSpec {
+            git: self.git,
+            rev: self.rev,
+            subdirectory: self.subdirectory,
+            lfs: self.lfs,
+            matchspec,
+        }
+    }
+}
+
+impl Display for GitLocationSpec {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.git)?;
         if let Some(rev) = &self.rev {

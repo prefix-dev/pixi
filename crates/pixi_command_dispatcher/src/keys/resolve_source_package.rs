@@ -17,8 +17,8 @@ use rattler_conda_types::PackageName;
 use tracing::instrument;
 
 use crate::{
-    BuildBackendMetadataSpec, EnvironmentRef, InstalledSourceHints, PtrArc, SourceMetadataError,
-    SourceMetadataReporterSpec, SourceRecordError,
+    BuildBackendMetadataSpec, EnvironmentRef, InlinePackage, InstalledSourceHints, PtrArc,
+    SourceMetadataError, SourceMetadataReporterSpec, SourceRecordError,
     build::PinnedSourceCodeLocation,
     compute_data::HasSourceMetadataReporter,
     keys::{
@@ -42,6 +42,9 @@ pub struct ResolveSourcePackageSpec {
     pub source_location: SourceLocationSpec,
     pub preferred_build_source: Arc<BTreeMap<PackageName, PinnedSourceSpec>>,
     pub env_ref: EnvironmentRef,
+    /// Inline package definition for this dependency, if it was
+    /// declared with an inline `package` table in the consuming manifest.
+    pub inline: Option<InlinePackage>,
     /// Source-record hints inherited from the enclosing SPEK; forwarded
     /// verbatim into nested build/host solves so every layer of the
     /// recursion agrees on one canonical hint per
@@ -123,6 +126,7 @@ impl Key for ResolveSourcePackageKey {
                 env_ref: spec.env_ref.clone(),
                 build_string_prefix: None,
                 build_number: None,
+                inline: spec.inline.clone(),
             },
             exclude_newer: None,
         };
@@ -162,6 +166,7 @@ async fn resolve_source_package_inner(
             preferred_build_source: own_pin,
             manifest_pin_override,
             env_ref: spec.env_ref.clone(),
+            inline: spec.inline.clone(),
         }))
         .await
         .map_err(map_source_metadata_error)?;
@@ -173,10 +178,21 @@ async fn resolve_source_package_inner(
     let preferred = Arc::clone(&spec.preferred_build_source);
     let env_ref = spec.env_ref.clone();
     let source_hints = spec.installed_source_hints.clone();
+    // Fold the inline definition's content hash into each assembled record's
+    // identifier so editing the inline table changes the lock entry.
+    let inline_content_hash = spec.inline.as_ref().map(|inline| inline.content_hash);
     let mapper = ComputeCtx::declare_join_closure(
         async move |bctx: &mut ComputeCtx, output: CondaOutput| {
-            assemble_source_record(bctx, &source, &output, &preferred, &env_ref, &source_hints)
-                .await
+            assemble_source_record(
+                bctx,
+                &source,
+                &output,
+                &preferred,
+                &env_ref,
+                &source_hints,
+                inline_content_hash,
+            )
+            .await
         },
     );
     let records = ctx

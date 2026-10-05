@@ -41,7 +41,7 @@ input_file: tests/recipe/boltons/recipe.yaml
     }
   ],
   "inputGlobs": [
-    "recipe.yaml",
-    "variants.yaml"
+    "variants.yaml",
+    "recipe.yaml"
   ]
 }

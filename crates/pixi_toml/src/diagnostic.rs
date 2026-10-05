@@ -20,6 +20,21 @@ fn split_custom_error_help(message: &str) -> (&str, Option<&str>) {
         .map_or((message, None), |(message, help)| (message, Some(help)))
 }
 
+/// Construct a custom [`toml_span::Error`] with the given message and span.
+///
+/// Shorthand for the common pattern of returning a hand-written validation
+/// error from a [`toml_span::Deserialize`] implementation.
+pub fn custom_error(
+    message: impl Into<std::borrow::Cow<'static, str>>,
+    span: toml_span::Span,
+) -> toml_span::Error {
+    toml_span::Error {
+        kind: toml_span::ErrorKind::Custom(message.into()),
+        span,
+        line_info: None,
+    }
+}
+
 /// A wrapper around [`toml_span::Error`] that implements the `miette::Diagnostic` trait.
 #[derive(Debug)]
 pub struct TomlDiagnostic(pub toml_span::Error);

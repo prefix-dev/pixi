@@ -13,4 +13,4 @@ pub mod targets;
 
 pub use package_spec::{AnyVersion, BinarySpecExt, PackageSourceSpec, PackageSpec};
 pub use project::ProjectModel;
-pub use targets::{Dependencies, TargetSelector, Targets};
+pub use targets::{TargetSelector, Targets};

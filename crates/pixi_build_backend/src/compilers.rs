@@ -13,7 +13,7 @@ use rattler_build_recipe::stage0::{
     ConditionalList, Item, JinjaTemplate, SerializableMatchSpec, Value,
 };
 use rattler_build_types::NormalizedKey;
-use rattler_conda_types::Platform;
+use rattler_conda_types::Subdir;
 
 pub enum Language<'a> {
     C,
@@ -35,7 +35,7 @@ impl Display for Language<'_> {
     }
 }
 
-pub fn default_compiler(platform: &Platform, language: &str) -> String {
+pub fn default_compiler(platform: &Subdir, language: &str) -> String {
     match language {
         // Platform agnostic compilers
         "fortran" => "gfortran",
@@ -58,7 +58,7 @@ pub fn default_compiler(platform: &Platform, language: &str) -> String {
                     "cxx" => "clangxx",
                     _ => unreachable!(),
                 }
-            } else if matches!(platform, Platform::EmscriptenWasm32) {
+            } else if matches!(platform, Subdir::EmscriptenWasm32) {
                 match language {
                     "c" => "emscripten",
                     "cxx" => "emscripten",
@@ -89,9 +89,7 @@ pub fn default_compiler(platform: &Platform, language: &str) -> String {
 /// * On Linux and Windows, `cuda_compiler` defaults to `cuda-nvcc`, matching
 ///   the `cuda_compiler: cuda-nvcc  # [linux or win]` line in conda-forge's
 ///   pinning. CUDA is not supported on macOS.
-pub fn default_compiler_variants(
-    host_platform: Platform,
-) -> BTreeMap<NormalizedKey, Vec<Variable>> {
+pub fn default_compiler_variants(host_platform: Subdir) -> BTreeMap<NormalizedKey, Vec<Variable>> {
     let mut variants = BTreeMap::new();
 
     if host_platform.is_windows() {
@@ -121,33 +119,23 @@ pub fn compiler_requirement(language: &Language) -> Item<SerializableMatchSpec> 
     template_item(template)
 }
 
-/// Add configured compilers to build requirements if they are not already
-/// present.
+/// Add configured compilers to build requirements.
+///
+/// The templates are emitted unconditionally; the backend does not inspect
+/// the manifest dependencies. Users who pin their own compiler package
+/// disable this by setting `compilers = []` in the backend config.
 ///
 /// # Arguments
 /// * `compilers` - List of compiler names (e.g., ["c", "cxx", "rust", "cuda"])
 /// * `requirements` - Mutable reference to the requirements to modify
-/// * `dependencies` - The Dependencies struct containing build/host/run dependencies
-/// * `host_platform` - The target platform for determining default compiler
-///   names
-pub fn add_compilers_to_requirements<S>(
+pub fn add_compilers_to_requirements(
     compilers: &[String],
     requirements: &mut ConditionalList<SerializableMatchSpec>,
-    dependencies: &crate::traits::targets::Dependencies<S>,
-    host_platform: &Platform,
 ) {
     for compiler_str in compilers {
-        // Check if the specific compiler is already present in build dependencies
-        let language_compiler = default_compiler(host_platform, compiler_str);
-        let source_package_name = pixi_build_types::SourcePackageName::from(
-            rattler_conda_types::PackageName::new_unchecked(language_compiler),
-        );
-
-        if !dependencies.build.contains_key(&source_package_name) {
-            let template = JinjaTemplate::new(format!("${{{{ compiler('{compiler_str}') }}}}"))
-                .expect("valid jinja template");
-            requirements.push(template_item(template));
-        }
+        let template = JinjaTemplate::new(format!("${{{{ compiler('{compiler_str}') }}}}"))
+            .expect("valid jinja template");
+        requirements.push(template_item(template));
     }
 }
 
@@ -224,16 +212,16 @@ mod tests {
 
     #[test]
     fn test_default_compiler_cuda() {
-        assert_eq!(default_compiler(&Platform::Linux64, "cuda"), "cuda-nvcc");
-        assert_eq!(default_compiler(&Platform::Win64, "cuda"), "cuda-nvcc");
+        assert_eq!(default_compiler(&Subdir::Linux64, "cuda"), "cuda-nvcc");
+        assert_eq!(default_compiler(&Subdir::Win64, "cuda"), "cuda-nvcc");
         // CUDA is unsupported on macOS but `default_compiler` is platform
         // agnostic for cuda so it still returns the conda-forge package name.
-        assert_eq!(default_compiler(&Platform::Osx64, "cuda"), "cuda-nvcc");
+        assert_eq!(default_compiler(&Subdir::Osx64, "cuda"), "cuda-nvcc");
     }
 
     #[test]
     fn test_default_compiler_variants_linux() {
-        let variants = default_compiler_variants(Platform::Linux64);
+        let variants = default_compiler_variants(Subdir::Linux64);
         assert_eq!(
             variants.get(&NormalizedKey::from("cuda_compiler")),
             Some(&vec!["cuda-nvcc".into()])
@@ -244,7 +232,7 @@ mod tests {
 
     #[test]
     fn test_default_compiler_variants_windows() {
-        let variants = default_compiler_variants(Platform::Win64);
+        let variants = default_compiler_variants(Subdir::Win64);
         assert_eq!(
             variants.get(&NormalizedKey::from("c_compiler")),
             Some(&vec!["vs2022".into()])
@@ -261,7 +249,7 @@ mod tests {
 
     #[test]
     fn test_default_compiler_variants_macos() {
-        let variants = default_compiler_variants(Platform::Osx64);
+        let variants = default_compiler_variants(Subdir::Osx64);
         assert!(variants.is_empty());
     }
 }

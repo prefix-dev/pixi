@@ -37,6 +37,13 @@ pub struct RosBackendConfig {
     /// Extra package mapping sources.
     #[serde(default)]
     pub extra_package_mappings: Vec<PackageMappingSource>,
+
+    /// When `true`, skip workspace-sibling discovery for this package and
+    /// resolve every dependency as a binary through RoboStack instead. Useful
+    /// for pinning a single package against a stability baseline while
+    /// iterating on the rest of the workspace.
+    #[serde(default)]
+    pub ignore_workspace_sources: bool,
 }
 
 impl RosBackendConfig {
@@ -81,6 +88,8 @@ impl BackendConfig for RosBackendConfig {
             } else {
                 target_config.extra_package_mappings.clone()
             },
+            ignore_workspace_sources: target_config.ignore_workspace_sources
+                || self.ignore_workspace_sources,
         })
     }
 }
