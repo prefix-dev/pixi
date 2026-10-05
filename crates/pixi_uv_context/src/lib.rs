@@ -259,9 +259,6 @@ impl UvResolutionContext {
     ///   `tls_danger_accept_invalid_certs(true)` client for the flagged
     ///   hosts and reqwest 0.13 has no per-host TLS opt-in on a single
     ///   `Client`.
-    ///
-    /// `markers` moved to `RegistryClientBuilder::markers` in uv 0.11.16 and is
-    /// applied by `build_registry_client` / the pixi_core call sites, not here.
     pub fn base_client_builder<'a>(
         &self,
         allow_insecure_hosts: Vec<TrustedHost>,
@@ -313,8 +310,6 @@ impl UvResolutionContext {
                 .index_locations(index_locations.clone())
                 .index_strategy(index_strategy);
 
-        // uv 0.11.16 moved `markers` off the (now `pub(crate)`)
-        // `BaseClientBuilder`; `RegistryClientBuilder::markers` is still public.
         if let Some(markers) = markers {
             uv_client_builder = uv_client_builder.markers(markers);
         }

@@ -415,7 +415,6 @@ pub fn to_parsed_git_url(
     locked_git_url: &LockedGitUrl,
 ) -> miette::Result<uv_pypi_types::ParsedGitDirectoryUrl> {
     let git_source = PinnedGitCheckout::from_locked_url(locked_git_url)?;
-    // Construct manually [`ParsedGitDirectoryUrl`] from locked url.
     let parsed_git_url = uv_pypi_types::ParsedGitDirectoryUrl::from_source(
         uv_git_types::GitUrl::from_fields(
             {
@@ -549,10 +548,8 @@ pub fn to_requirements_relative_to<'req>(
                     install_path,
                     ext: _,
                 } => {
-                    // pixi never produces git archives, but uv split the single Git
-                    // variant into GitDirectory + GitPath in 0.11.16, so this arm keeps
-                    // the match exhaustive. uv reads the archive path from the `path=`
-                    // URL fragment. `url()`, not `repository()`, see #6185.
+                    // uv reads the archive path from the `path=` URL fragment.
+                    // Use `url()`, not `repository()`; see #6185.
                     write!(package_string, " @ git+{}", git.url())?;
                     if let Some(reference) = git.reference().as_str() {
                         write!(package_string, "@{reference}")?;
@@ -823,9 +820,6 @@ pub fn to_exclude_newer(exclude_newer: &ResolvedPypiExcludeNewer) -> uv_resolver
         .map(uv_resolver::ExcludeNewerPackageEntry::from)
         .collect();
 
-    // uv 0.11.16 removed `ExcludeNewer::new`; the struct now has public
-    // `global` / `package` fields (the `package` field collects from
-    // `ExcludeNewerPackageEntry` via `FromIterator`).
     uv_resolver::ExcludeNewer {
         global: exclude_newer.cutoff.map(to_exclude_newer_timestamp),
         package: package_cutoffs,

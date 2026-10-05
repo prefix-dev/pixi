@@ -93,8 +93,7 @@ impl InstalledDistBuilder {
 
         let direct_url = DirectUrl::ArchiveUrl {
             url: url.to_string(),
-            // uv 0.11.16 made `ArchiveInfo`'s fields private with no public
-            // constructor; deserialize an empty (no-hash) value instead.
+            // `ArchiveInfo` has no public constructor.
             archive_info: serde_json::from_str::<ArchiveInfo>("{}").expect("empty archive info"),
             subdirectory: None,
         };
@@ -121,6 +120,7 @@ impl InstalledDistBuilder {
         install_path: PathBuf,
         url: Url,
         git_lfs: Option<bool>,
+        git_path: Option<PathBuf>,
     ) -> (InstalledDist, DirectUrl) {
         let name = uv_normalize::PackageName::from_owned(name.as_ref().to_owned())
             .expect("unable to normalize");
@@ -148,8 +148,7 @@ impl InstalledDistBuilder {
                     .map(ToString::to_string),
                 git_lfs,
             },
-            // uv 0.11.16 added `path` for git-archive sources.
-            path: None,
+            path: git_path,
         };
 
         let installed_direct_url = InstalledDirectUrlDist {
@@ -177,6 +176,7 @@ pub struct InstalledDistOptions {
     metadata_mtime: Option<std::time::SystemTime>,
     cache_info: Option<uv_cache_info::CacheInfo>,
     git_lfs: Option<bool>,
+    git_path: Option<PathBuf>,
 }
 
 impl InstalledDistOptions {
@@ -200,6 +200,13 @@ impl InstalledDistOptions {
     /// Only used for git dists.
     pub fn with_git_lfs(mut self, git_lfs: bool) -> Self {
         self.git_lfs = Some(git_lfs);
+        self
+    }
+
+    /// Record a path within the Git repository in the installed dist's
+    /// `direct_url.json`, making it a Git archive install.
+    pub fn with_git_path(mut self, git_path: impl Into<PathBuf>) -> Self {
+        self.git_path = Some(git_path.into());
         self
     }
 
@@ -357,9 +364,10 @@ impl MockedSitePackages {
         opts: InstalledDistOptions,
     ) -> Self {
         let git_lfs = opts.git_lfs;
+        let git_path = opts.git_path.clone();
         let dist_info = self.create_file_backing(name.as_ref(), version.as_ref(), opts);
         let (installed_dist, direct_url) =
-            InstalledDistBuilder::git(name, version, dist_info.clone(), url, git_lfs);
+            InstalledDistBuilder::git(name, version, dist_info.clone(), url, git_lfs, git_path);
         self.create_direct_url(&dist_info, direct_url);
         self.installed_dist.push(installed_dist);
         self

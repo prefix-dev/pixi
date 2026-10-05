@@ -7,9 +7,6 @@ use uv_pypi_types::DirectUrl;
 
 /// Read the `INSTALLER` file from an installed distribution's `.dist-info`
 /// directory, returning its trimmed contents (e.g. `"uv"`, `"pip"`).
-///
-/// uv 0.11.16 removed `InstalledDist::read_installer`; this replicates it.
-/// `install_path()` is the `.dist-info` directory for wheel installs.
 pub(crate) fn read_installer(dist: &InstalledDist) -> std::io::Result<Option<String>> {
     let path = dist.install_path().join("INSTALLER");
     match fs_err::read_to_string(&path) {
@@ -20,8 +17,6 @@ pub(crate) fn read_installer(dist: &InstalledDist) -> std::io::Result<Option<Str
 }
 
 /// Read the `uv_cache.json` file from a `.dist-info` directory.
-///
-/// uv 0.11.16 made `InstalledDist::read_cache_info` private; this replicates it.
 pub(crate) fn read_cache_info(path: &Path) -> std::io::Result<Option<CacheInfo>> {
     let path = path.join("uv_cache.json");
     let file = match fs_err::File::open(&path) {
@@ -35,8 +30,6 @@ pub(crate) fn read_cache_info(path: &Path) -> std::io::Result<Option<CacheInfo>>
 }
 
 /// Read the `direct_url.json` file from a `.dist-info` directory.
-///
-/// uv 0.11.16 made `InstalledDist::read_direct_url` private; this replicates it.
 pub(crate) fn read_direct_url(path: &Path) -> std::io::Result<Option<DirectUrl>> {
     let path = path.join("direct_url.json");
     let file = match fs_err::File::open(&path) {

@@ -71,9 +71,7 @@ pub struct UvBuildDispatchParams<'a> {
     index_strategy: IndexStrategy,
     constraints: Constraints,
     shared_state: SharedState,
-    // uv 0.11.16 made `SharedState`'s `capabilities` field inaccessible
-    // (no public accessor), so carry the index capabilities explicitly for the
-    // `BuildContext::capabilities` impl.
+    // `SharedState` does not expose its index capabilities.
     capabilities: IndexCapabilities,
     link_mode: uv_install_wheel::LinkMode,
     exclude_newer: Option<ExcludeNewer>,
@@ -301,8 +299,6 @@ pub enum LazyBuildDispatchError {
     PythonMissingError { prefix: String },
 }
 
-// uv 0.11.16 added `uv_errors::Hint` as a supertrait of `IsBuildBackendError`.
-// pixi's error surfaces no extra hints, so the trait's default (no hints) is fine.
 impl uv_errors::Hint for LazyBuildDispatchError {}
 
 impl IsBuildBackendError for LazyBuildDispatchError {
@@ -562,7 +558,6 @@ impl BuildContext for LazyBuildDispatch<'_> {
         source: &'a Path,
         subdirectory: Option<&'a Path>,
         install_path: &'a Path,
-        // uv 0.11.16 added `stop_discovery_at` to `BuildContext::setup_build`.
         stop_discovery_at: Option<&'a Path>,
         version_id: Option<&'a str>,
         dist: Option<&'a SourceDist>,

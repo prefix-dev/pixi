@@ -457,8 +457,6 @@ pub async fn resolve_pypi(
         let base_client_builder =
             context.base_client_builder(allow_insecure_hosts, context.connectivity);
 
-        // uv 0.11.16 moved `markers` off `BaseClientBuilder` onto the (still
-        // public) `RegistryClientBuilder::markers`.
         let mut uv_client_builder =
             RegistryClientBuilder::new(base_client_builder, context.cache.clone())
                 .index_locations(index_locations.clone())
@@ -728,8 +726,7 @@ pub async fn resolve_pypi(
 
     let resolution_future = panic::AssertUnwindSafe(async {
         let lookahead_index = InMemoryIndex::default();
-        // uv 0.11.16 added an `excludes` parameter to `LookaheadResolver::new`
-        // (and `Manifest::new` already takes one). pixi excludes nothing.
+        // Pixi does not exclude any dependencies.
         let excludes = uv_configuration::Excludes::default();
         // uv 0.11.4 changed `LookaheadResolver::resolve` to return both the
         // lookaheads and a hash strategy refined by what it discovered along
@@ -799,7 +796,6 @@ pub async fn resolve_pypi(
         // We need a new in-memory index for the resolver so that it does not conflict
         // with the build dispatch one. As we have noted in the comment above.
         let resolver_in_memory_index = InMemoryIndex::default();
-        // uv 0.11.16 made `Resolver::new_custom_io` infallible (returns `Self`).
         let resolver = Resolver::new_custom_io(
             manifest,
             options,
@@ -1070,8 +1066,6 @@ async fn lock_pypi_packages(
                         )
                     }
 
-                    // uv 0.11.16 added `git` and `reporter` parameters to
-                    // `RegistryClient::wheel_metadata`.
                     let metadata = registry_client
                         .wheel_metadata(dist, pixi_build_dispatch.git(), index_capabilities, None)
                         .await
@@ -1168,9 +1162,7 @@ async fn lock_pypi_packages(
                             .lock(locked_version),
                         )
                     }
-                    // Handle new hash stuff.
-                    // uv 0.11.16 made `SourceDist::file` a private trait method;
-                    // only registry source dists carry a `File`.
+                    // Only registry source distributions carry file hashes.
                     let source_file = match source {
                         SourceDist::Registry(reg) => Some(&reg.file),
                         _ => None,

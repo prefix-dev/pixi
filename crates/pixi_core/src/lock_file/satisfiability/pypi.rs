@@ -677,8 +677,6 @@ async fn read_local_package_metadata(
             .uv_context
             .base_client_builder(allow_insecure_hosts.clone(), ctx.uv_context.connectivity);
 
-        // uv 0.11.16 moved `markers` off `BaseClientBuilder` onto the (still
-        // public) `RegistryClientBuilder::markers`.
         let mut uv_client_builder =
             RegistryClientBuilder::new(base_client_builder, ctx.uv_context.cache.clone())
                 .index_locations(index_locations.clone())

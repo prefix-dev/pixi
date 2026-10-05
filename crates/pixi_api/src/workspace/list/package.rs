@@ -94,8 +94,6 @@ impl Package {
                             .location
                             .file_name()
                             .and_then(|f| WheelFilename::from_str(f).ok());
-                        // uv 0.11.16 made the `IndexEntry` fields private; use
-                        // the public `index()` / `dist()` accessors instead.
                         let entry = registry_index.get(name).find(|entry| {
                             if entry.index().url() != &index {
                                 return false;

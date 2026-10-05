@@ -100,7 +100,6 @@ impl<'ctx> BuildContext for CacheScopedBuildContext<'ctx> {
         source: &'a Path,
         subdirectory: Option<&'a Path>,
         install_path: &'a Path,
-        // uv 0.11.16 added `stop_discovery_at` to `BuildContext::setup_build`.
         stop_discovery_at: Option<&'a Path>,
         version_id: Option<&'a str>,
         dist: Option<&'a SourceDist>,

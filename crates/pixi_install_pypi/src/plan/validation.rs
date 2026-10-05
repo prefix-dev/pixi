@@ -16,9 +16,6 @@ use super::{NeedReinstall, models::ValidateCurrentInstall};
 use pixi_uv_conversions::ConversionError;
 
 /// Whether a resolved [`Dist`] is an editable install.
-///
-/// uv 0.11.16 made `Dist::is_editable` private; only source distributions can
-/// be editable, and `SourceDist::is_editable` is still public.
 fn dist_is_editable(dist: &Dist) -> bool {
     match dist {
         Dist::Source(source) => source.is_editable(),
@@ -245,13 +242,16 @@ pub(crate) fn need_reinstall(
                         ));
                     }
                 }
+                uv_pypi_types::DirectUrl::VcsUrl { path: Some(_), .. } => {
+                    return Ok(ValidateCurrentInstall::Reinstall(
+                        NeedReinstall::GitArchiveIsPath,
+                    ));
+                }
                 uv_pypi_types::DirectUrl::VcsUrl {
                     url,
                     vcs_info,
                     subdirectory: _,
-                    // uv 0.11.16 added `path` for git-archive sources; pixi
-                    // never produces them.
-                    path: _,
+                    path: None,
                 } => {
                     // Check if the installed git url is the same as the locked git url
                     // if this fails, it should be an error, because then installed url is not a git url

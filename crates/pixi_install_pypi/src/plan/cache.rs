@@ -16,7 +16,6 @@ use uv_cache::{CacheBucket, WheelCache};
 use uv_cache_info::{CacheInfo, Timestamp};
 use uv_configuration::BuildOptions;
 use uv_distribution::{BuiltWheelIndex, RegistryWheelIndex};
-// uv 0.11.16 renamed `LocalArchivePointer` to `PathArchivePointer` (same API).
 use uv_distribution::{HttpArchivePointer, PathArchivePointer};
 use uv_distribution_filename::WheelFilename;
 use uv_distribution_types::BuiltDist;
@@ -113,9 +112,6 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
 
         match dist {
             Dist::Built(BuiltDist::Registry(wheel)) => {
-                // uv 0.11.16 made `RegistryWheelIndex::get` and the `IndexEntry`
-                // fields private; `wheel()` is the public replacement with the
-                // same index/build-policy/filename matching.
                 let cached = self.registry.wheel(wheel, no_build, no_binary);
 
                 if let Some(distribution) = cached {
@@ -223,9 +219,7 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
                 }
             }
             Dist::Built(BuiltDist::GitPath(_)) => {
-                // uv split the Git source type into GitDirectory + GitPath in
-                // 0.11.16; pixi never produces git-archive built distributions.
-                // Treat as not cached so it falls through to a normal fetch.
+                // Git archive distributions are unsupported; do not reuse cached artifacts.
                 Ok(None)
             }
             Dist::Source(source_dist) => {
@@ -236,10 +230,6 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
                 }
                 match source_dist {
                     SourceDist::Registry(sdist) => {
-                        // uv 0.11.16 made `RegistryWheelIndex::get` and the
-                        // `IndexEntry` fields private; `source()` is the public
-                        // replacement with the same index/build-policy/name/version
-                        // matching.
                         let cached = self.registry.source(sdist, no_build, no_binary);
 
                         if let Some(distribution) = cached {
@@ -283,8 +273,7 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
                             }),
 
                             SourceDist::GitPath(_) => {
-                                // pixi never produces git-archive source dists
-                                // (uv's 0.11.16 GitDirectory/GitPath split).
+                                // Git archive distributions are unsupported.
                                 None
                             }
                             SourceDist::Registry(_) => {

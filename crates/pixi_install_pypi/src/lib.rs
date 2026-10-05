@@ -999,14 +999,8 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
                 .clone(),
         );
 
-        // Before hitting the network let's make sure the credentials are available to
-        // uv. As of uv 0.9.16, the global credentials cache moved to a per-client
-        // `CredentialsCache` reachable via the `BaseClient` underneath
-        // `RegistryClient`'s `CachedClient`.
-        // uv 0.11.16 made `BaseClient::credentials_cache` `pub(crate)`;
-        // `RegistryClient::credentials_cache` is still public, so go through it.
+        // Make index credentials available before sending network requests.
         for url in setup.index_locations.indexes().map(|index| index.url()) {
-            // uv 0.11.16 made `store_credentials_from_url` fallible.
             match setup
                 .registry_client
                 .credentials_cache()
