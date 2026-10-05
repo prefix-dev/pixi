@@ -211,6 +211,23 @@ try {
     Remove-Item -Path $ZIP_FILE
 }
 
+# Send an anonymous installation ping (best-effort, never fails the install).
+# The binary handles the opt-out (PIXI_NO_TELEMETRY / DO_NOT_TRACK) and prints
+# its notice to stdout, which is only shown if the command succeeded; binaries
+# older than the `__install-ping` command fail silently.
+try {
+    $PingOutput = & (Join-Path $BinDir 'pixi.exe') __install-ping 2>$null
+    if ($LASTEXITCODE -eq 0 -and $PingOutput) {
+        Write-Host $PingOutput
+    }
+} catch {
+    # Ignore telemetry errors
+} finally {
+    # Don't leak the ping's exit code (e.g. from older binaries without the
+    # command) to whoever runs this script.
+    $global:LASTEXITCODE = 0
+}
+
 # Add pixi to PATH if the folder is not already in the PATH variable
 if (!$NoPathUpdate) {
     $PATH = Get-Env 'PATH'

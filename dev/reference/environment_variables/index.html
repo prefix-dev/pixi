@@ -16,7 +16,7 @@
         <link rel="prev" href="../cli/pixi/workspace/requires-pixi/verify/">
       
       
-        <link rel="next" href="../../CHANGELOG/">
+        <link rel="next" href="../telemetry/">
       
       
         
@@ -3578,6 +3578,8 @@
   
     
     
+      
+        
       
         
       
@@ -8454,6 +8456,33 @@
 
                 
               
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../telemetry/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  Telemetry
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
             </ul>
           </nav>
         
@@ -8813,6 +8842,16 @@
         </ul>
       </td>
     </tr>
+    <tr>
+      <td><code>PIXI_NO_TELEMETRY</code></td>
+      <td>If set to a non-empty value, disables the anonymous ping sent by the install scripts and by <code>pixi self-update</code>. See <a href="../../telemetry/">Telemetry</a>.</td>
+      <td>Not set (ping enabled).</td>
+    </tr>
+    <tr>
+      <td><code>DO_NOT_TRACK</code></td>
+      <td>Same effect as <code>PIXI_NO_TELEMETRY</code>; honors the ecosystem-wide <a href="https://consoledonottrack.com"><code>DO_NOT_TRACK</code></a> convention.</td>
+      <td>Not set (ping enabled).</td>
+    </tr>
   </tbody>
 </table>
 
@@ -9013,16 +9052,16 @@ When we run <code>echo Python path: $PYTHON_PATH</code>, it will output:
           
             
             <a
-              href="../../CHANGELOG/"
+              href="../telemetry/"
               class="md-footer__link md-footer__link--next"
-              aria-label="Next: Changelog"
+              aria-label="Next: Telemetry"
             >
               <div class="md-footer__title">
                 <span class="md-footer__direction">
                   Next
                 </span>
                 <div class="md-ellipsis">
-                  Changelog
+                  Telemetry
                 </div>
               </div>
               <div class="md-footer__button md-icon">

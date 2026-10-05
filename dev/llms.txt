@@ -112,6 +112,7 @@ for further details on how to use the software.
 - [Outside environment](https://pixi.prefix.dev/latest/reference/environment_variables/)
 - [The Configuration of Pixi Itself](https://pixi.prefix.dev/latest/reference/pixi_configuration/)
 - [Additive overlay from a file: your entries take priority, and anything not](https://pixi.prefix.dev/latest/reference/pixi_manifest/)
+- [Telemetry](https://pixi.prefix.dev/latest/reference/telemetry/)
 
 ## Miscellaneous documentation
 
