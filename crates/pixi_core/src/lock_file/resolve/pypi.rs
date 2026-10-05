@@ -721,7 +721,6 @@ pub async fn resolve_pypi(
                 &constraints,
                 &overrides,
                 &excludes,
-                &dependency_metadata,
                 &hash_strategy,
                 &lookahead_index,
                 DistributionDatabase::new(
@@ -787,6 +786,7 @@ pub async fn resolve_pypi(
             &index_locations,
             &build_options,
             &context.capabilities,
+            None,
         );
 
         let provider = CondaResolverProvider {
