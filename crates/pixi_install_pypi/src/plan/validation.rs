@@ -10,7 +10,7 @@ use uv_distribution_types::{Dist, InstalledDist, InstalledDistKind};
 use uv_git_types::GitLfs;
 use uv_pypi_types::{ParsedGitDirectoryUrl, ParsedUrlError};
 
-use crate::utils::{check_url_freshness, is_direct_url, strip_direct_scheme};
+use crate::utils::{check_url_freshness, is_direct_url, read_direct_url, strip_direct_scheme};
 
 use super::{NeedReinstall, models::ValidateCurrentInstall};
 use pixi_uv_conversions::ConversionError;
@@ -91,7 +91,7 @@ pub(crate) fn need_reinstall(
 
         // For installed distributions check the direct_url.json to check if a re-install is needed
         InstalledDistKind::Url(direct_url) => {
-            let direct_url_json = match crate::utils::read_direct_url(&direct_url.path) {
+            let direct_url_json = match read_direct_url(&direct_url.path) {
                 Ok(Some(direct_url)) => direct_url,
                 Ok(None) => {
                     return Ok(ValidateCurrentInstall::Reinstall(

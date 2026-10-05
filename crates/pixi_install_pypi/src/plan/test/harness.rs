@@ -94,7 +94,8 @@ impl InstalledDistBuilder {
         let direct_url = DirectUrl::ArchiveUrl {
             url: url.to_string(),
             // `ArchiveInfo` has no public constructor.
-            archive_info: serde_json::from_str::<ArchiveInfo>("{}").expect("empty archive info"),
+            archive_info: serde_json::from_str::<ArchiveInfo>("{}")
+                .expect("a literal empty ArchiveInfo should deserialize"),
             subdirectory: None,
         };
 

@@ -472,6 +472,18 @@ pub fn to_requirements<'req>(
     to_requirements_relative_to(requirements, None)
 }
 
+fn write_git_requirement_source(
+    output: &mut String,
+    git: &uv_git_types::GitUrl,
+) -> std::fmt::Result {
+    // `url()`, not `repository()`, preserves the original URL spelling; see #6185.
+    write!(output, " @ git+{}", git.url())?;
+    if let Some(reference) = git.reference().as_str() {
+        write!(output, "@{reference}")?;
+    }
+    Ok(())
+}
+
 /// Same as [`to_requirements`], but re-anchors the `given` on file-URL path/directory
 /// requirements to the workspace root carried by `anchor`.
 ///
@@ -533,11 +545,7 @@ pub fn to_requirements_relative_to<'req>(
                     git,
                     subdirectory,
                 } => {
-                    // `url()`, not `repository()`, see #6185.
-                    write!(package_string, " @ git+{}", git.url())?;
-                    if let Some(reference) = git.reference().as_str() {
-                        write!(package_string, "@{reference}")?;
-                    }
+                    write_git_requirement_source(&mut package_string, git)?;
                     if let Some(subdirectory) = subdirectory {
                         writeln!(package_string, "#subdirectory={}", subdirectory.display())?;
                     }
@@ -548,12 +556,7 @@ pub fn to_requirements_relative_to<'req>(
                     install_path,
                     ext: _,
                 } => {
-                    // uv reads the archive path from the `path=` URL fragment.
-                    // Use `url()`, not `repository()`; see #6185.
-                    write!(package_string, " @ git+{}", git.url())?;
-                    if let Some(reference) = git.reference().as_str() {
-                        write!(package_string, "@{reference}")?;
-                    }
+                    write_git_requirement_source(&mut package_string, git)?;
                     write!(package_string, "#path={}", install_path.display())?;
                 }
                 uv_distribution_types::RequirementSource::Path { url, .. }
