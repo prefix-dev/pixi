@@ -89,7 +89,8 @@ impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Conte
                 ext: SourceDistExtension::TarGz,
             };
 
-            let prioritized_dist = PrioritizedDist::from_source(
+            let mut prioritized_dist = PrioritizedDist::default();
+            prioritized_dist.insert_source(
                 source_dist,
                 Vec::new(),
                 SourceDistCompatibility::Compatible(HashComparison::Matched),
