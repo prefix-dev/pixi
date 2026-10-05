@@ -11,6 +11,12 @@ extend-exclude = [
 ]
 ignore-hidden = false
 
+[default]
+extend-ignore-re = [
+  # Suppress inline with `// spellchecker:off` ... `// spellchecker:on`.
+  "(?s)(#|//)\\s*spellchecker:off.*?\\n\\s*(#|//)\\s*spellchecker:on",
+]
+
 [default.extend-identifiers]
 _placehold = "_placehold"
 arange = "arange"
