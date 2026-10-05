@@ -738,6 +738,12 @@ mod tests {
         create_or_append_file(&file_path2, "Template Content").unwrap();
         assert_eq!(read_file_content(&file_path2), "data/\nTemplate Content");
 
+        // Scenario 6: File already ends with a newline, no extra blank line is added.
+        let file_path3 = dir.path().join("test_file3.txt");
+        fs_err::write(&file_path3, "data/\n").unwrap();
+        create_or_append_file(&file_path3, "Template Content").unwrap();
+        assert_eq!(read_file_content(&file_path3), "data/\nTemplate Content");
+
         dir.close().unwrap();
     }
 
