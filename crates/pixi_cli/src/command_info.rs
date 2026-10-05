@@ -230,12 +230,14 @@ mod tests {
 
     #[test]
     fn test_common_typos_still_resolve() {
+        // spellchecker:off
         for (typo, expected) in [
             ("isntall", "install"),
             ("remvoe", "remove"),
             ("serch", "search"),
             ("tre", "tree"),
         ] {
+            // spellchecker:on
             let suggestions = find_similar_commands(typo);
             assert!(
                 suggestions.contains(&expected.to_string()),
