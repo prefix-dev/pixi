@@ -222,6 +222,10 @@ try {
     }
 } catch {
     # Ignore telemetry errors
+} finally {
+    # Don't leak the ping's exit code (e.g. from older binaries without the
+    # command) to whoever runs this script.
+    $global:LASTEXITCODE = 0
 }
 
 # Add pixi to PATH if the folder is not already in the PATH variable
