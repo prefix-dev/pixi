@@ -7458,7 +7458,6 @@ dependencies = [
  "chrono",
  "dunce",
  "fs-err",
- "hex",
  "miette 7.6.0",
  "pathdiff",
  "pep440_rs",
