@@ -15,7 +15,7 @@ use futures::FutureExt;
 use indexmap::IndexMap;
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
-use miette::{Context, IntoDiagnostic};
+use miette::{Context, IntoDiagnostic, Report};
 use ordermap::OrderSet;
 use pixi_consts::consts;
 use pixi_install_pypi::{LockedPypiRecord, UnresolvedPypiRecord};
@@ -46,13 +46,13 @@ use rattler_lock::{
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_cache_key::RepositoryUrl;
-use uv_client::{FlatIndexClient, RegistryClient, RegistryClientBuilder};
+use uv_client::{RegistryClient, RegistryClientBuilder};
 use uv_configuration::{Constraints, Overrides};
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
-    BuiltDist, ConfigSettings, DependencyMetadata, Diagnostic, Dist, FileLocation, HashPolicy,
-    IndexCapabilities, IndexUrl, Name, RequirementSource, RequiresPython, Resolution, ResolvedDist,
-    SourceDist, ToUrlError,
+    BuiltDist, ConfigSettings, DependencyMetadata, Diagnostic, Dist, FileLocation,
+    IndexCapabilities, IndexUrl, MetadataHashPolicy, Name, RequirementSource, RequiresPython,
+    Resolution, ResolvedDist, SourceDist, ToUrlError,
 };
 use uv_git::RepositoryReference;
 use uv_install_wheel::LinkMode;
@@ -60,10 +60,10 @@ use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigests, ResolutionMetadata};
 use uv_requirements::LookaheadResolver;
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
-    PreferenceError, Preferences, PythonRequirement, ResolutionMode, ResolveError, Resolver,
-    ResolverEnvironment,
+    PreferenceError, Preferences, Prerelease, PythonRequirement, ResolutionMode, ResolveError,
+    Resolver, ResolverEnvironment,
 };
-use uv_types::{EmptyInstalledPackages, HashStrategy};
+use uv_types::{BuildContext, EmptyInstalledPackages, HashStrategy};
 
 use crate::{
     environment::CondaPrefixUpdated,
@@ -94,12 +94,12 @@ fn parse_hashes_from_hash_vec(hashes: &HashDigests) -> Result<Option<PackageHash
     for hash in hashes.iter() {
         match hash.algorithm() {
             HashAlgorithm::Sha256 => {
-                sha256 = Some(hash.digest.to_string());
+                sha256 = Some(hash.digest().to_string());
             }
             HashAlgorithm::Md5 => {
-                md5 = Some(hash.digest.to_string());
+                md5 = Some(hash.digest().to_string());
             }
-            HashAlgorithm::Sha384 | HashAlgorithm::Sha512 | HashAlgorithm::Blake2b => {
+            HashAlgorithm::Sha384 | HashAlgorithm::Sha512 | HashAlgorithm::Blake2b256 => {
                 // We do not support these algorithms
             }
         }
@@ -320,7 +320,7 @@ pub async fn resolve_pypi(
             specs.iter().filter_map(|spec| {
                 let git_spec = spec.source.as_git()?;
                 let git_url = GitUrlWithPrefix::from(&git_spec.git);
-                let repository_url = RepositoryUrl::new(&git_url.to_display_safe_url());
+                let repository_url = RepositoryUrl::new(git_url.to_display_safe_url());
                 let git_ref = git_spec
                     .rev
                     .as_ref()
@@ -353,7 +353,7 @@ pub async fn resolve_pypi(
                 let display_safe_url =
                     uv_redacted::DisplaySafeUrl::from_url(pinned_git_spec.git.clone());
 
-                let repository_url = RepositoryUrl::new(&display_safe_url);
+                let repository_url = RepositoryUrl::new(display_safe_url);
                 let reference = RepositoryReference {
                     url: repository_url,
                     reference: uv_reference,
@@ -428,7 +428,7 @@ pub async fn resolve_pypi(
     .context("error creating version specifier for python version")?;
 
     let requires_python =
-        RequiresPython::from_specifiers(&uv_pep440::VersionSpecifiers::from(python_specifier));
+        RequiresPython::from_specifiers(uv_pep440::VersionSpecifiers::from(python_specifier));
     tracing::debug!(
         "using requires-python specifier (this may differ from the above): {}",
         requires_python
@@ -454,16 +454,14 @@ pub async fn resolve_pypi(
     );
 
     let registry_client = {
-        let base_client_builder = context.base_client_builder(
-            allow_insecure_hosts,
-            Some(&marker_environment),
-            context.connectivity,
-        );
+        let base_client_builder =
+            context.base_client_builder(allow_insecure_hosts, context.connectivity);
 
         let mut uv_client_builder =
             RegistryClientBuilder::new(base_client_builder, context.cache.clone())
                 .index_locations(index_locations.clone())
-                .index_strategy(index_strategy);
+                .index_strategy(index_strategy)
+                .markers(&marker_environment);
 
         for p in &context.proxies {
             uv_client_builder = uv_client_builder.proxy(p.clone())
@@ -489,29 +487,11 @@ pub async fn resolve_pypi(
                 .collect::<Result<Vec<_>, _>>()
         }).transpose()?.unwrap_or_default();
 
-    let flat_index = {
-        let flat_index_client = FlatIndexClient::new(
-            registry_client.cached_client(),
-            context.connectivity,
-            &context.cache,
-        );
-        let flat_index_urls: Vec<&IndexUrl> = index_locations
-            .flat_indexes()
-            .map(|index| index.url())
-            .collect();
-        let flat_index_entries = flat_index_client
-            .fetch_all(flat_index_urls.into_iter())
-            .await
-            .into_diagnostic()?;
-        // Lock-time resolution creates the lock file; there are no locked
-        // digests to verify against yet.
-        FlatIndex::from_entries(
-            flat_index_entries,
-            Some(&tags),
-            &HashStrategy::None,
-            &build_options,
-        )
-    };
+    // Lock-time resolution creates the lock file; there are no locked
+    // digests to verify against yet.
+    let flat_index = FlatIndex::load(&registry_client, &context.cache, &index_locations)
+        .await
+        .into_diagnostic()?;
 
     let resolution_mode = match solve_strategy {
         SolveStrategy::Highest => ResolutionMode::Highest,
@@ -527,7 +507,10 @@ pub async fn resolve_pypi(
     // panics.
     let options = Options {
         resolution_mode,
-        prerelease_mode,
+        prerelease: Prerelease {
+            global: prerelease_mode,
+            ..Prerelease::default()
+        },
         index_strategy,
         build_options: build_options.clone(),
         exclude_newer: exclude_newer.clone(),
@@ -545,6 +528,7 @@ pub async fn resolve_pypi(
         &config_settings,
         deployment_target.as_deref(),
     );
+    let hash_strategy = HashStrategy::default();
     let build_params = UvBuildDispatchParams::new(
         &registry_client,
         &context.cache,
@@ -553,10 +537,11 @@ pub async fn resolve_pypi(
         &dependency_metadata,
         &config_settings,
         &build_options,
-        &HashStrategy::None,
+        &hash_strategy,
     )
     .with_index_strategy(index_strategy)
     .with_exclude_newer(options.exclude_newer.clone())
+    .with_capabilities(context.capabilities.clone())
     .with_workspace_cache(context.workspace_cache.clone())
     // Create a forked shared state that condains the in-memory index.
     // We need two in-memory indexes, one for the build dispatch and one for the
@@ -646,6 +631,7 @@ pub async fn resolve_pypi(
                 marker: Default::default(),
                 source,
                 groups: Default::default(),
+                scope: Default::default(),
                 origin: None,
             })
         })
@@ -723,6 +709,8 @@ pub async fn resolve_pypi(
 
     let resolution_future = panic::AssertUnwindSafe(async {
         let lookahead_index = InMemoryIndex::default();
+        // Pixi does not exclude any dependencies.
+        let excludes = uv_configuration::Excludes::default();
         // uv 0.11.4 changed `LookaheadResolver::resolve` to return both the
         // lookaheads and a hash strategy refined by what it discovered along
         // the way. We adopt the refined strategy for the downstream resolver
@@ -732,7 +720,8 @@ pub async fn resolve_pypi(
                 &requirements,
                 &constraints,
                 &overrides,
-                &HashStrategy::None,
+                &excludes,
+                &hash_strategy,
                 &lookahead_index,
                 DistributionDatabase::new(
                     &registry_client,
@@ -746,15 +735,34 @@ pub async fn resolve_pypi(
             .resolve(&resolver_env),
         )
         .await
-        .into_diagnostic()
-        .map_err(|e| SolveError::LookAhead(e.into()))?;
+        .map_err(|err| {
+            let unsupported_archive = match &err {
+                uv_requirements::Error::Dist(_, dist, _)
+                    if matches!(
+                        dist.as_ref(),
+                        Dist::Built(BuiltDist::GitPath(_)) | Dist::Source(SourceDist::GitPath(_))
+                    ) =>
+                {
+                    Some(format!(
+                        "git archive dependency '{}' is not supported",
+                        dist.name()
+                    ))
+                }
+                _ => None,
+            };
+            let mut report = Report::from_err(err);
+            if let Some(message) = unsupported_archive {
+                report = report.wrap_err(message);
+            }
+            SolveError::LookAhead(report.into())
+        })?;
 
         // Move manifest and provider setup inside catch_unwind
         let manifest = Manifest::new(
             requirements,
             constraints,
             overrides,
-            uv_configuration::Excludes::default(),
+            excludes.clone(),
             Preferences::from_iter(preferences, &resolver_env),
             None,
             Default::default(),
@@ -778,6 +786,7 @@ pub async fn resolve_pypi(
             &index_locations,
             &build_options,
             &context.capabilities,
+            None,
         );
 
         let provider = CondaResolverProvider {
@@ -808,11 +817,6 @@ pub async fn resolve_pypi(
             provider,
             EmptyInstalledPackages,
         )
-        .into_diagnostic()
-        .context("failed to resolve pypi dependencies")
-        .map_err(|e| SolveError::GeneralPanic {
-            message: format!("Failed to create resolver: {e}"),
-        })?
         .with_reporter(UvReporter::new_arc(
             UvReporterOptions::new().with_existing(pb.clone()),
         ));
@@ -1065,7 +1069,7 @@ async fn lock_pypi_packages(
                     }
 
                     let metadata = registry_client
-                        .wheel_metadata(dist, index_capabilities)
+                        .wheel_metadata(dist, pixi_build_dispatch.git(), index_capabilities, None)
                         .await
                         .into_diagnostic()
                         .wrap_err("cannot get wheel metadata")?;
@@ -1115,6 +1119,12 @@ async fn lock_pypi_packages(
                                 None,
                             )?);
                         }
+                        BuiltDist::GitPath(_) => {
+                            miette::bail!(
+                                "Git archive dependency '{}' is not supported",
+                                dist.name()
+                            )
+                        }
                     }
                 }
                 Dist::Source(source) => {
@@ -1154,9 +1164,12 @@ async fn lock_pypi_packages(
                             .lock(locked_version),
                         )
                     }
-                    // Handle new hash stuff
-                    let hash = source
-                        .file()
+                    // Only registry source distributions carry file hashes.
+                    let source_file = match source {
+                        SourceDist::Registry(reg) => Some(&reg.file),
+                        _ => None,
+                    };
+                    let hash = source_file
                         .and_then(|file| {
                             parse_hashes_from_hash_vec(&file.hashes)
                                 .into_diagnostic()
@@ -1167,7 +1180,7 @@ async fn lock_pypi_packages(
 
                     let metadata_response = Box::pin(database.get_or_build_wheel_metadata(
                         &Dist::Source(source.clone()),
-                        HashPolicy::None,
+                        MetadataHashPolicy::default(),
                     ))
                     .await
                     .into_diagnostic()?;
@@ -1201,7 +1214,7 @@ async fn lock_pypi_packages(
                                 &anchor,
                             )?);
                         }
-                        SourceDist::Git(git) => {
+                        SourceDist::GitDirectory(git) => {
                             // Look up the original git reference from the manifest dependencies
                             // to preserve branch/tag info that uv normalizes away
                             let package_name = git.name.clone();
@@ -1280,6 +1293,12 @@ async fn lock_pypi_packages(
                                 )))
                                 .lock(locked_version),
                             );
+                        }
+                        SourceDist::GitPath(_) => {
+                            miette::bail!(
+                                "Git archive dependency '{}' is not supported",
+                                source.name()
+                            )
                         }
                     };
                 }

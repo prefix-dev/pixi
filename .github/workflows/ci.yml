@@ -32,6 +32,7 @@ env:
   XDG_CACHE_HOME: ${{ github.workspace }}/.cache
   PYTEST_ADDOPTS: "--color=yes"
   PYTHONIOENCODING: utf-8 # necessary to make unicode symbols print correctly on Windows
+  PIXI_NO_TELEMETRY: 1 # keep CI runs of the install scripts out of the install counts
 
   #
   # The cargo profile used to build the binary artifacts. CI uses the `ci`

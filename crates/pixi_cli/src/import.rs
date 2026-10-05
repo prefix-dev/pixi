@@ -231,9 +231,10 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
             (conda_deps, pypi_deps)
         }
         ProcessedInput::PypiTxt => {
-            let reqs_txt = RequirementsTxt::parse(&input_file, workspace.workspace().root())
-                .await
-                .into_diagnostic()?;
+            let reqs_txt =
+                RequirementsTxt::parse(input_file.as_path(), workspace.workspace().root())
+                    .await
+                    .into_diagnostic()?;
             let pypi_deps = convert_uv_requirements_txt_to_pep508(reqs_txt)?;
 
             (vec![], pypi_deps)
