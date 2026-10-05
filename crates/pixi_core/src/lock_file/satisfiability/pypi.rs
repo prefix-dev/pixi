@@ -1556,6 +1556,7 @@ mod tests {
                 index: Some(index),
                 conflict: None,
             },
+            scope: Default::default(),
             origin: None,
         }
     }

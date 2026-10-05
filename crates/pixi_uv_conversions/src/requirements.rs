@@ -228,6 +228,7 @@ pub fn as_uv_req(
             .collect(),
         marker: to_uv_marker_tree(req.env_markers()).expect("marker conversion failed"),
         groups: Default::default(),
+        scope: Default::default(),
         source,
         origin: None,
     })

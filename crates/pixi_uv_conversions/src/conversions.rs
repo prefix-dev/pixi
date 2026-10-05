@@ -510,6 +510,7 @@ pub fn to_requirements_relative_to<'req>(
                 source,
                 marker,
                 groups: _groups,
+                scope: _scope,
                 origin: _origin,
             } = requirement;
 
@@ -968,6 +969,7 @@ mod tests {
             name: uv_normalize::PackageName::from_str("isaaclab").unwrap(),
             extras: Box::new([]),
             groups: Box::new([]),
+            scope: Default::default(),
             marker: MarkerTree::TRUE,
             source: RequirementSource::Registry {
                 specifier: uv_pep440::VersionSpecifiers::empty(),
@@ -1015,6 +1017,7 @@ mod tests {
             name: uv_normalize::PackageName::from_str("pkg-b").unwrap(),
             extras: Box::new([]),
             groups: Box::new([]),
+            scope: Default::default(),
             marker: MarkerTree::TRUE,
             source: RequirementSource::Directory {
                 install_path: pkg_b.clone().into_boxed_path(),
@@ -1071,6 +1074,7 @@ mod tests {
             name: uv_normalize::PackageName::from_str("pkg-b").unwrap(),
             extras: Box::new([]),
             groups: Box::new([]),
+            scope: Default::default(),
             marker: MarkerTree::TRUE,
             source: RequirementSource::Directory {
                 install_path: pkg_b.clone().into_boxed_path(),
@@ -1110,6 +1114,7 @@ mod tests {
             name: uv_normalize::PackageName::from_str("pkg-b").unwrap(),
             extras: Box::new([]),
             groups: Box::new([]),
+            scope: Default::default(),
             marker: MarkerTree::TRUE,
             source: RequirementSource::Directory {
                 install_path: pkg_b.clone().into_boxed_path(),

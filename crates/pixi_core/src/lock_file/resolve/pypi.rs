@@ -631,6 +631,7 @@ pub async fn resolve_pypi(
                 marker: Default::default(),
                 source,
                 groups: Default::default(),
+                scope: Default::default(),
                 origin: None,
             })
         })
