@@ -18,7 +18,6 @@ default-members = ["crates/pixi"]
 [workspace.package]
 authors = ["pixi contributors <hi@prefix.dev>"]
 edition = "2024"
-rust-version = "1.98"
 readme = "README.md"
 homepage = "https://github.com/prefix-dev/pixi"
 repository = "https://github.com/prefix-dev/pixi"
