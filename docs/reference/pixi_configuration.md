@@ -407,6 +407,9 @@ pixi config set concurrency.solves 1
 pixi config set concurrency.downloads 12
 ```
 
+For PyPI operations, `UV_CONCURRENT_CACHE_READS` limits concurrent HTTP cache reads.
+It defaults to `4` and must be a positive integer.
+
 ### `run-post-link-scripts`
 
 Configure whether pixi should execute `post-link` and `pre-unlink` scripts or not.

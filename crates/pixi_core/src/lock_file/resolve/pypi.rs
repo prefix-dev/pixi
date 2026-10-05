@@ -15,7 +15,7 @@ use futures::FutureExt;
 use indexmap::IndexMap;
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
-use miette::{Context, IntoDiagnostic};
+use miette::{Context, IntoDiagnostic, Report};
 use ordermap::OrderSet;
 use pixi_consts::consts;
 use pixi_install_pypi::{LockedPypiRecord, UnresolvedPypiRecord};
@@ -753,8 +753,27 @@ pub async fn resolve_pypi(
             .resolve(&resolver_env),
         )
         .await
-        .into_diagnostic()
-        .map_err(|e| SolveError::LookAhead(e.into()))?;
+        .map_err(|err| {
+            let unsupported_archive = match &err {
+                uv_requirements::Error::Dist(_, dist, _)
+                    if matches!(
+                        dist.as_ref(),
+                        Dist::Built(BuiltDist::GitPath(_)) | Dist::Source(SourceDist::GitPath(_))
+                    ) =>
+                {
+                    Some(format!(
+                        "git archive dependency '{}' is not supported",
+                        dist.name()
+                    ))
+                }
+                _ => None,
+            };
+            let mut report = Report::from_err(err);
+            if let Some(message) = unsupported_archive {
+                report = report.wrap_err(message);
+            }
+            SolveError::LookAhead(report.into())
+        })?;
 
         // Move manifest and provider setup inside catch_unwind
         let manifest = Manifest::new(

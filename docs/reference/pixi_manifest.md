@@ -1054,6 +1054,9 @@ Learn more about installing PyTorch [here](../python/pytorch.md).
 A git repository to install from.
 This support both https:// and ssh:// urls.
 
+Git dependencies must refer to a project directory, optionally selected with `subdirectory`.
+References to wheel or source archives inside a Git repository using `#path=...` are not supported.
+
 Use `git` in combination with `rev`, `subdirectory` or `lfs`:
 
 - `rev`: A specific revision to install. e.g. `rev = "0106aced5faa299e6ede89d1230bd6784f2c3660`
