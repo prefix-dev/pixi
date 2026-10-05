@@ -8819,10 +8819,10 @@
 <h2 id="environment-variables-set-by-pixi">Environment Variables Set By Pixi<a class="headerlink" href="#environment-variables-set-by-pixi" title="Permanent link">#</a></h2>
 <p>The following environment variables are set by Pixi, when using the <code>pixi run</code>, <code>pixi shell</code>, or <code>pixi shell-hook</code> command:</p>
 <ul>
-<li><code>PIXI_PROJECT_ROOT</code>: The root directory of the project.</li>
-<li><code>PIXI_PROJECT_NAME</code>: The name of the project.</li>
-<li><code>PIXI_PROJECT_MANIFEST</code>: The path to the manifest file (<code>pixi.toml</code>).</li>
-<li><code>PIXI_PROJECT_VERSION</code>: The version of the project.</li>
+<li><code>PIXI_WORKSPACE_ROOT</code>: The root directory of the workspace. (Legacy alias: <code>PIXI_PROJECT_ROOT</code>.)</li>
+<li><code>PIXI_WORKSPACE_NAME</code>: The name of the workspace. (Legacy alias: <code>PIXI_PROJECT_NAME</code>.)</li>
+<li><code>PIXI_WORKSPACE_MANIFEST</code>: The path to the manifest file (<code>pixi.toml</code>). (Legacy alias: <code>PIXI_PROJECT_MANIFEST</code>.)</li>
+<li><code>PIXI_WORKSPACE_VERSION</code>: The version of the workspace. (Legacy alias: <code>PIXI_PROJECT_VERSION</code>.)</li>
 <li><code>PIXI_PROMPT</code>: The prompt to use in the shell, also used by <code>pixi shell</code> itself.</li>
 <li><code>PIXI_ENVIRONMENT_NAME</code>: The name of the environment, defaults to <code>default</code>.</li>
 <li><code>PIXI_ENVIRONMENT_PLATFORMS</code>: Comma separated list of platforms supported by the project.</li>
@@ -8833,7 +8833,11 @@
 </ul>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>Even though the variables are environment variables these cannot be overridden. E.g. you can not change the root of the project by setting <code>PIXI_PROJECT_ROOT</code> in the environment.</p>
+<p>Even though the variables are environment variables these cannot be overridden. E.g. you can not change the root of the workspace by setting <code>PIXI_WORKSPACE_ROOT</code> in the environment.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The <code>PIXI_PROJECT_*</code> variables are kept as legacy aliases of their <code>PIXI_WORKSPACE_*</code> counterparts and are set to the same values. Prefer the <code>PIXI_WORKSPACE_*</code> names. Where pixi reads these variables as input (<code>PIXI_WORKSPACE_MANIFEST</code>/<code>PIXI_PROJECT_MANIFEST</code> and <code>PIXI_WORKSPACE_ROOT</code>/<code>PIXI_PROJECT_ROOT</code>), the <code>PIXI_WORKSPACE_*</code> variant takes precedence if both are set to different values.</p>
 </div>
 <h2 id="environment-variable-priority">Environment Variable Priority<a class="headerlink" href="#environment-variable-priority" title="Permanent link">#</a></h2>
 <p>The following priority rule applies for environment variables: <code>task.env</code> &gt; <code>activation.env</code> &gt; <code>activation.scripts</code> &gt; activation scripts of dependencies &gt; outside environment variables.
