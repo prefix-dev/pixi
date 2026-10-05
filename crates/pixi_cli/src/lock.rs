@@ -33,12 +33,12 @@ pub struct Args {
 
     /// Check if any changes have been made to the lock file.
     /// If yes, exit with a non-zero code.
-    /// Implies --dry-run.
+    /// Implies `--dry-run`.
     #[clap(long)]
     pub check: bool,
 
     ///Compute the lock file without writing to disk.
-    /// Implies --no-install
+    /// Implies `--no-install`.
     #[clap(long)]
     pub dry_run: bool,
 }
