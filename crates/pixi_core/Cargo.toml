@@ -102,6 +102,7 @@ uv-redacted = { workspace = true }
 uv-requirements = { workspace = true }
 uv-requirements-txt = { workspace = true }
 uv-resolver = { workspace = true }
+uv-threads = { workspace = true }
 uv-types = { workspace = true }
 uv-workspace = { workspace = true }
 xxhash-rust = { workspace = true }

@@ -83,7 +83,7 @@ fn cached_wheel_if_verified(
     hashes: HashDigests,
     path: Box<std::path::Path>,
 ) -> Option<CachedDist> {
-    if !hasher.get(dist).matches(hashes.as_slice()) {
+    if !hasher.archive_policy(dist).matches(hashes.as_slice()) {
         return None;
     }
     Some(CachedDist::Url(CachedDirectUrlDist {

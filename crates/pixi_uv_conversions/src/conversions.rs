@@ -510,6 +510,7 @@ pub fn to_requirements_relative_to<'req>(
                 source,
                 marker,
                 groups: _groups,
+                scope: _scope,
                 origin: _origin,
             } = requirement;
 
@@ -673,15 +674,12 @@ pub fn to_uv_version(
 /// Converts the locked [`rattler_lock::PackageHashes`] into the uv
 /// [`uv_pypi_types::HashDigest`] representation.
 pub fn to_uv_hash_digests(hash: &rattler_lock::PackageHashes) -> Vec<uv_pypi_types::HashDigest> {
-    use uv_pypi_types::{HashAlgorithm, HashDigest};
+    use uv_pypi_types::{Digest, HashDigest};
 
-    let md5_digest = |md5: &rattler_digest::Md5Hash| HashDigest {
-        algorithm: HashAlgorithm::Md5,
-        digest: hex::encode(md5).into(),
-    };
-    let sha256_digest = |sha256: &rattler_digest::Sha256Hash| HashDigest {
-        algorithm: HashAlgorithm::Sha256,
-        digest: hex::encode(sha256).into(),
+    let md5_digest =
+        |md5: &rattler_digest::Md5Hash| HashDigest::Md5(Digest::from_bytes((*md5).into()));
+    let sha256_digest = |sha256: &rattler_digest::Sha256Hash| {
+        HashDigest::Sha256(Digest::from_bytes((*sha256).into()))
     };
 
     match hash {
@@ -971,6 +969,7 @@ mod tests {
             name: uv_normalize::PackageName::from_str("isaaclab").unwrap(),
             extras: Box::new([]),
             groups: Box::new([]),
+            scope: Default::default(),
             marker: MarkerTree::TRUE,
             source: RequirementSource::Registry {
                 specifier: uv_pep440::VersionSpecifiers::empty(),
@@ -1018,6 +1017,7 @@ mod tests {
             name: uv_normalize::PackageName::from_str("pkg-b").unwrap(),
             extras: Box::new([]),
             groups: Box::new([]),
+            scope: Default::default(),
             marker: MarkerTree::TRUE,
             source: RequirementSource::Directory {
                 install_path: pkg_b.clone().into_boxed_path(),
@@ -1074,6 +1074,7 @@ mod tests {
             name: uv_normalize::PackageName::from_str("pkg-b").unwrap(),
             extras: Box::new([]),
             groups: Box::new([]),
+            scope: Default::default(),
             marker: MarkerTree::TRUE,
             source: RequirementSource::Directory {
                 install_path: pkg_b.clone().into_boxed_path(),
@@ -1113,6 +1114,7 @@ mod tests {
             name: uv_normalize::PackageName::from_str("pkg-b").unwrap(),
             extras: Box::new([]),
             groups: Box::new([]),
+            scope: Default::default(),
             marker: MarkerTree::TRUE,
             source: RequirementSource::Directory {
                 install_path: pkg_b.clone().into_boxed_path(),

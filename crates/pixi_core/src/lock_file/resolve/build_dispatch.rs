@@ -299,11 +299,22 @@ pub enum LazyBuildDispatchError {
     PythonMissingError { prefix: String },
 }
 
-impl uv_errors::Hint for LazyBuildDispatchError {}
+impl uv_errors::Hinted for LazyBuildDispatchError {}
 
 impl IsBuildBackendError for LazyBuildDispatchError {
     fn is_build_backend_error(&self) -> bool {
         false
+    }
+
+    fn is_user_failure(&self) -> bool {
+        match self {
+            Self::InstallationRequiredButDisallowed | Self::PythonMissingError { .. } => true,
+            Self::Uv(err) => err.is_user_failure(),
+            Self::UvFrontend(err) => err.is_user_failure(),
+            Self::InitializationError(_)
+            | Self::ConversionError(_)
+            | Self::QueryInterpreterError(_) => false,
+        }
     }
 }
 

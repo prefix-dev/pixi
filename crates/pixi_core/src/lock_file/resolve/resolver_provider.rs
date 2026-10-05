@@ -58,7 +58,7 @@ impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Conte
             // Don't think this matters much
             // so just fill it up with empty fields
             let file = File {
-                dist_info_metadata: false,
+                dist_info_metadata: None,
                 filename: identifier.name.as_normalized().as_ref().into(),
                 hashes: vec![].into(),
                 requires_python: None,
@@ -74,7 +74,6 @@ impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Conte
                     }
                 },
                 yanked: None,
-                zstd: None,
             };
 
             let source_dist = RegistrySourceDist {
@@ -90,7 +89,8 @@ impl<Context: BuildContext> ResolverProvider for CondaResolverProvider<'_, Conte
                 ext: SourceDistExtension::TarGz,
             };
 
-            let prioritized_dist = PrioritizedDist::from_source(
+            let mut prioritized_dist = PrioritizedDist::default();
+            prioritized_dist.insert_source(
                 source_dist,
                 Vec::new(),
                 SourceDistCompatibility::Compatible(HashComparison::Matched),

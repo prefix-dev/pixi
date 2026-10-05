@@ -46,13 +46,13 @@ use rattler_lock::{
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_cache_key::RepositoryUrl;
-use uv_client::{FlatIndexClient, RegistryClient, RegistryClientBuilder};
+use uv_client::{RegistryClient, RegistryClientBuilder};
 use uv_configuration::{Constraints, Overrides};
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
-    BuiltDist, ConfigSettings, DependencyMetadata, Diagnostic, Dist, FileLocation, HashPolicy,
-    IndexCapabilities, IndexUrl, Name, RequirementSource, RequiresPython, Resolution, ResolvedDist,
-    SourceDist, ToUrlError,
+    BuiltDist, ConfigSettings, DependencyMetadata, Diagnostic, Dist, FileLocation,
+    IndexCapabilities, IndexUrl, MetadataHashPolicy, Name, RequirementSource, RequiresPython,
+    Resolution, ResolvedDist, SourceDist, ToUrlError,
 };
 use uv_git::RepositoryReference;
 use uv_install_wheel::LinkMode;
@@ -94,12 +94,12 @@ fn parse_hashes_from_hash_vec(hashes: &HashDigests) -> Result<Option<PackageHash
     for hash in hashes.iter() {
         match hash.algorithm() {
             HashAlgorithm::Sha256 => {
-                sha256 = Some(hash.digest.to_string());
+                sha256 = Some(hash.digest().to_string());
             }
             HashAlgorithm::Md5 => {
-                md5 = Some(hash.digest.to_string());
+                md5 = Some(hash.digest().to_string());
             }
-            HashAlgorithm::Sha384 | HashAlgorithm::Sha512 | HashAlgorithm::Blake2b => {
+            HashAlgorithm::Sha384 | HashAlgorithm::Sha512 | HashAlgorithm::Blake2b256 => {
                 // We do not support these algorithms
             }
         }
@@ -487,29 +487,11 @@ pub async fn resolve_pypi(
                 .collect::<Result<Vec<_>, _>>()
         }).transpose()?.unwrap_or_default();
 
-    let flat_index = {
-        let flat_index_client = FlatIndexClient::new(
-            registry_client.cached_client(),
-            context.connectivity,
-            &context.cache,
-        );
-        let flat_index_urls: Vec<&IndexUrl> = index_locations
-            .flat_indexes()
-            .map(|index| index.url())
-            .collect();
-        let flat_index_entries = flat_index_client
-            .fetch_all(flat_index_urls.into_iter())
-            .await
-            .into_diagnostic()?;
-        // Lock-time resolution creates the lock file; there are no locked
-        // digests to verify against yet.
-        FlatIndex::from_entries(
-            flat_index_entries,
-            Some(&tags),
-            &HashStrategy::default(),
-            &build_options,
-        )
-    };
+    // Lock-time resolution creates the lock file; there are no locked
+    // digests to verify against yet.
+    let flat_index = FlatIndex::load(&registry_client, &context.cache, &index_locations)
+        .await
+        .into_diagnostic()?;
 
     let resolution_mode = match solve_strategy {
         SolveStrategy::Highest => ResolutionMode::Highest,
@@ -649,6 +631,7 @@ pub async fn resolve_pypi(
                 marker: Default::default(),
                 source,
                 groups: Default::default(),
+                scope: Default::default(),
                 origin: None,
             })
         })
@@ -738,7 +721,6 @@ pub async fn resolve_pypi(
                 &constraints,
                 &overrides,
                 &excludes,
-                &dependency_metadata,
                 &hash_strategy,
                 &lookahead_index,
                 DistributionDatabase::new(
@@ -804,6 +786,7 @@ pub async fn resolve_pypi(
             &index_locations,
             &build_options,
             &context.capabilities,
+            None,
         );
 
         let provider = CondaResolverProvider {
@@ -1197,7 +1180,7 @@ async fn lock_pypi_packages(
 
                     let metadata_response = Box::pin(database.get_or_build_wheel_metadata(
                         &Dist::Source(source.clone()),
-                        HashPolicy::None,
+                        MetadataHashPolicy::default(),
                     ))
                     .await
                     .into_diagnostic()?;
