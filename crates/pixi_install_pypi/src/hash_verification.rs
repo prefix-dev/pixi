@@ -65,13 +65,13 @@ impl LockedDistHashes {
 
     /// Turn the locked digests into the [`HashStrategy`] handed to uv.
     ///
-    /// This uses [`HashStrategy::Verify`] rather than [`HashStrategy::Require`].
+    /// This uses [`HashStrategy::verify`] to validate hashes only when present.
     /// Artifacts with a locked digest must match it.
     /// Artifacts without one install unverified, mirroring what the lock file is able to pin.
     /// The strategy defends against a tampered artifact (registry, mirror, or transport).
     /// It does not defend against a tampered lock file: whoever can edit it can drop the digest.
     pub fn into_verify_strategy(self) -> HashStrategy {
-        HashStrategy::Verify(Arc::new(self.hashes))
+        HashStrategy::verify(Arc::new(self.hashes))
     }
 }
 
@@ -81,7 +81,7 @@ impl LockedDistHashes {
 fn supports_hash_verification(dist: &Dist) -> bool {
     !matches!(
         dist,
-        Dist::Source(SourceDist::Git(_) | SourceDist::Directory(_))
+        Dist::Source(SourceDist::GitDirectory(_) | SourceDist::Directory(_))
     )
 }
 
@@ -241,7 +241,7 @@ mod tests {
 
         let dist = &required.values().next().unwrap().dist;
         assert!(
-            matches!(dist, Dist::Source(SourceDist::Git(_))),
+            matches!(dist, Dist::Source(SourceDist::GitDirectory(_))),
             "fixture should produce a git dist"
         );
         assert!(matches!(strategy.get(dist), HashPolicy::None));

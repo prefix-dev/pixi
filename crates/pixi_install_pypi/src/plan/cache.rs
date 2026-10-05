@@ -16,7 +16,7 @@ use uv_cache::{CacheBucket, WheelCache};
 use uv_cache_info::{CacheInfo, Timestamp};
 use uv_configuration::BuildOptions;
 use uv_distribution::{BuiltWheelIndex, RegistryWheelIndex};
-use uv_distribution::{HttpArchivePointer, LocalArchivePointer};
+use uv_distribution::{HttpArchivePointer, PathArchivePointer};
 use uv_distribution_filename::WheelFilename;
 use uv_distribution_types::BuiltDist;
 use uv_distribution_types::{CachedDirectUrlDist, CachedDist, Dist, Name, SourceDist};
@@ -112,22 +112,7 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
 
         match dist {
             Dist::Built(BuiltDist::Registry(wheel)) => {
-                let cached = self.registry.get(wheel.name()).find_map(|entry| {
-                    if entry.index.url() != &wheel.best_wheel().index {
-                        return None;
-                    }
-                    if entry.built && no_build {
-                        return None;
-                    }
-                    if !entry.built && no_binary {
-                        return None;
-                    }
-                    if entry.dist.filename == wheel.best_wheel().filename {
-                        Some(&entry.dist)
-                    } else {
-                        None
-                    }
-                });
+                let cached = self.registry.wheel(wheel, no_build, no_binary);
 
                 if let Some(distribution) = cached {
                     Ok(Some(CachedDist::Registry(distribution.clone())))
@@ -160,7 +145,7 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
                             self.hasher,
                             wheel.filename.clone(),
                             VerbatimParsedUrl {
-                                parsed_url: wheel.parsed_url(),
+                                parsed_url: wheel.to_parsed_url(),
                                 verbatim: wheel.url.clone(),
                             },
                             cache_info,
@@ -197,7 +182,7 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
                     )
                     .entry(format!("{}.rev", wheel.filename.cache_key()));
 
-                match LocalArchivePointer::read_from(&cache_entry) {
+                match PathArchivePointer::read_from(&cache_entry) {
                     Ok(Some(pointer)) => match Timestamp::from_path(&wheel.install_path) {
                         Ok(timestamp) => {
                             if pointer.is_up_to_date(timestamp) {
@@ -208,7 +193,7 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
                                     self.hasher,
                                     wheel.filename.clone(),
                                     VerbatimParsedUrl {
-                                        parsed_url: wheel.parsed_url(),
+                                        parsed_url: wheel.to_parsed_url(),
                                         verbatim: wheel.url.clone(),
                                     },
                                     cache_info,
@@ -233,6 +218,10 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
                     }
                 }
             }
+            Dist::Built(BuiltDist::GitPath(_)) => {
+                // Git archive distributions are unsupported; do not reuse cached artifacts.
+                Ok(None)
+            }
             Dist::Source(source_dist) => {
                 match source_dist {
                     SourceDist::Path(p) if !p.install_path.exists() => return Ok(None),
@@ -241,25 +230,7 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
                 }
                 match source_dist {
                     SourceDist::Registry(sdist) => {
-                        let cached = self.registry.get(sdist.name()).find_map(|entry| {
-                            if entry.index.url() != &sdist.index {
-                                return None;
-                            }
-                            if entry.dist.filename.name != *sdist.name() {
-                                return None;
-                            }
-                            if entry.built && no_build {
-                                return None;
-                            }
-                            if !entry.built && no_binary {
-                                return None;
-                            }
-                            if entry.dist.filename.version == sdist.version {
-                                Some(&entry.dist)
-                            } else {
-                                None
-                            }
-                        });
+                        let cached = self.registry.source(sdist, no_build, no_binary);
 
                         if let Some(distribution) = cached {
                             Ok(Some(CachedDist::Registry(distribution.clone())))
@@ -269,26 +240,42 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
                     }
                     _ => {
                         let dist = match &source_dist {
-                            SourceDist::Directory(directory_source_dist) => self
-                                .built
-                                .directory(directory_source_dist)?
-                                .map(|dist| dist.into_directory_dist(directory_source_dist)),
+                            SourceDist::Directory(source) => {
+                                self.built.directory(source)?.map(|dist| {
+                                    dist.into_url_dist(VerbatimParsedUrl {
+                                        parsed_url: source.to_parsed_url(),
+                                        verbatim: source.url.clone(),
+                                    })
+                                })
+                            }
 
-                            SourceDist::DirectUrl(direct_url_source_dist) => self
-                                .built
-                                .url(direct_url_source_dist)?
-                                .map(|dist| dist.into_url_dist(direct_url_source_dist)),
+                            SourceDist::DirectUrl(source) => self.built.url(source)?.map(|dist| {
+                                dist.into_url_dist(VerbatimParsedUrl {
+                                    parsed_url: source.to_parsed_url(),
+                                    verbatim: source.url.clone(),
+                                })
+                            }),
 
-                            SourceDist::Git(git_source_dist) => self
-                                .built
-                                .git(git_source_dist)
-                                .map(|dist| dist.into_git_dist(git_source_dist)),
+                            SourceDist::GitDirectory(source) => {
+                                self.built.git_directory(source).map(|dist| {
+                                    dist.into_url_dist(VerbatimParsedUrl {
+                                        parsed_url: source.to_parsed_url(),
+                                        verbatim: source.url.clone(),
+                                    })
+                                })
+                            }
 
-                            SourceDist::Path(path_source_dist) => self
-                                .built
-                                .path(path_source_dist)?
-                                .map(|dist| dist.into_path_dist(path_source_dist)),
+                            SourceDist::Path(source) => self.built.path(source)?.map(|dist| {
+                                dist.into_url_dist(VerbatimParsedUrl {
+                                    parsed_url: source.to_parsed_url(),
+                                    verbatim: source.url.clone(),
+                                })
+                            }),
 
+                            SourceDist::GitPath(_) => {
+                                // Git archive distributions are unsupported.
+                                None
+                            }
                             SourceDist::Registry(_) => {
                                 unreachable!("handled above")
                             }

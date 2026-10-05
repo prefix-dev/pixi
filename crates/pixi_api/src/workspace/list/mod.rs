@@ -114,6 +114,7 @@ pub async fn list(
     let extra_build_requires = ExtraBuildRequires::default();
     let extra_build_variables = ExtraBuildVariables::default();
 
+    let hash_strategy = uv_types::HashStrategy::default();
     let mut registry_index = if let Some(python_record) = python_record {
         if environment.has_pypi_dependencies() {
             uv_context =
@@ -135,7 +136,7 @@ pub async fn list(
                 // Install-time lookups filter against the lock file digests instead
                 // (see `pixi_install_pypi::hash_verification`).
                 // A wheel whose size is listed here may still be re-fetched on install.
-                &uv_types::HashStrategy::None,
+                &hash_strategy,
                 &config_settings,
                 &package_config_settings,
                 &extra_build_requires,

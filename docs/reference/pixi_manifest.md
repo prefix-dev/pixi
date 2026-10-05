@@ -755,9 +755,9 @@ By default, `pixi` will allow pre-release versions when a package only has pre-r
 
 - **"disallow"**: Disallow all pre-release versions.
 - **"allow"**: Allow all pre-release versions.
-- **"if-necessary"**: Allow pre-release versions if all versions of a package are pre-release.
-- **"explicit"**: Allow pre-release versions for first-party packages with explicit pre-release markers in their version requirements.
-- **"if-necessary-or-explicit"** (default): Allow pre-release versions if all versions of a package are pre-release, or if the package has an explicit pre-release marker in its version requirements.
+- **"if-necessary"**: Prefer stable versions, falling back to pre-release versions when necessary to satisfy the requirements.
+- **"explicit"**: Prefer stable versions for first-party packages with explicit pre-release markers in their version requirements, falling back to pre-releases when necessary. Disallow pre-releases for other packages.
+- **"if-necessary-or-explicit"** (default): Alias for `"if-necessary"`, following uv 0.12's pre-release selection policy.
 
 Example:
 ```toml
@@ -1053,6 +1053,9 @@ Learn more about installing PyTorch [here](../python/pytorch.md).
 
 A git repository to install from.
 This support both https:// and ssh:// urls.
+
+Git dependencies must refer to a project directory, optionally selected with `subdirectory`.
+References to wheel or source archives inside a Git repository using `#path=...` are not supported.
 
 Use `git` in combination with `rev`, `subdirectory` or `lfs`:
 
