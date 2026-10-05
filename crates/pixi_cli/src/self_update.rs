@@ -82,6 +82,10 @@ fn user_agent() -> String {
 /// the OS, architecture and target version. It never blocks or fails the
 /// update (short timeout, all errors ignored) and is skipped when
 /// `PIXI_NO_TELEMETRY` or `DO_NOT_TRACK` is set to a non-empty value.
+///
+/// The first time a ping would be sent, only a notice is printed and a marker
+/// is written to the cache directory, so users can opt out before any ping is
+/// sent. If the marker cannot be written, no ping is sent.
 async fn send_update_ping(
     client: &reqwest_middleware::ClientWithMiddleware,
     target_version: Option<&Version>,
@@ -97,12 +101,27 @@ async fn send_update_ping(
         .map(|v| v.to_string())
         .unwrap_or_else(|| "latest".to_string());
 
-    if !is_quiet {
+    let Ok(marker) =
+        pixi_config::get_cache_dir().map(|dir| dir.join(consts::TELEMETRY_NOTICE_MARKER))
+    else {
+        return;
+    };
+    if !marker.exists() {
+        // Without the notice being visible we must not record it as shown.
+        if is_quiet {
+            return;
+        }
         eprintln!(
-            "Sending an anonymous update ping to prefix.dev (version, OS, arch). \
+            "pixi self-update sends an anonymous ping (version, OS, arch) to prefix.dev \
+             after each update, starting with the next one. \
              Set PIXI_NO_TELEMETRY=1 or DO_NOT_TRACK=1 to opt out. \
              See https://pixi.sh/latest/reference/telemetry/"
         );
+        if let Some(parent) = marker.parent() {
+            let _ = fs_err::create_dir_all(parent);
+        }
+        let _ = fs_err::write(&marker, "");
+        return;
     }
 
     // Encode the metadata as a synthetic page URL. Scarf reports on the `Page`

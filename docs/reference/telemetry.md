@@ -5,6 +5,13 @@ Pixi sends a small, anonymous ping in two situations:
 1. **After a successful installation** through the `install.sh` / `install.ps1` scripts.
 2. **After `pixi self-update`** successfully updates the binary.
 
+The install scripts print a notice right before they send the ping. `pixi
+self-update` shows a notice the first time instead of pinging, and only pings on
+later updates, so you can opt out before anything is sent. It records that the
+notice was shown in a `telemetry-notice-shown` file in the [cache
+directory](environment_variables.md); if that file is removed (for example by
+`pixi clean cache`), the notice is shown again on the next update.
+
 That is the *only* telemetry in Pixi. During normal use — resolving, installing,
 building, running tasks — Pixi does not phone home. The ping exists so we can
 estimate how many people install and update Pixi and on which platforms.

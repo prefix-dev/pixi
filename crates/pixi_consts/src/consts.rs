@@ -129,6 +129,9 @@ pub const RELEASES_API_LATEST: &str =
 /// used by the install scripts (`install/install.sh`, `install/install.ps1`).
 pub const INSTALL_PING_URL: &str = "https://installation-ping.prefix.dev/a.png";
 pub const INSTALL_PING_PXID: &str = "21354c5b-2936-42bc-9d4b-9d6253815afd";
+/// Marker file in the cache directory recording that the telemetry notice was
+/// shown, so `pixi self-update` only pings after the user has seen it once.
+pub const TELEMETRY_NOTICE_MARKER: &str = "telemetry-notice-shown";
 
 pub const CLAP_CONFIG_OPTIONS: &str = "Config Options";
 pub const CLAP_GIT_OPTIONS: &str = "Git Options";
