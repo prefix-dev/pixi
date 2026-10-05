@@ -6,7 +6,10 @@ use rattler_conda_types::{MatchSpec, Subdir};
 /// and platform. The executed command is intentionally not part of the hash.
 #[derive(Hash)]
 pub struct EnvironmentHash {
-    pub specs: Vec<MatchSpec>,
+    /// Specs in their string form. `MatchSpec`'s `Hash` impl is not suitable
+    /// for a cache key: the `Version` hash skips zero components, so e.g.
+    /// `==1.0.1` and `==1.1.0` would hash the same.
+    pub specs: Vec<String>,
     pub channels: Vec<String>,
     pub platform: Subdir,
     /// Whether the solve that produced this environment was restricted to
@@ -23,9 +26,9 @@ impl EnvironmentHash {
         platform: Subdir,
         offline: bool,
     ) -> Self {
-        let mut specs = specs;
+        let mut specs: Vec<String> = specs.iter().map(MatchSpec::to_string).collect();
         // Canonical order so spec ordering doesn't change the hash.
-        specs.sort_by_cached_key(MatchSpec::to_string);
+        specs.sort();
         Self {
             specs,
             channels,
@@ -113,6 +116,19 @@ mod tests {
         let a = EnvironmentHash::new(vec![spec("foo")], vec![], Subdir::Linux64, false);
         let b = EnvironmentHash::new(vec![spec("bar")], vec![], Subdir::Linux64, false);
         assert_ne!(a.name(None), b.name(None));
+    }
+
+    // Regression test for https://github.com/prefix-dev/pixi/issues/7165.
+    #[test]
+    fn name_changes_when_version_pin_changes() {
+        for (a, b) in [
+            ("maturin==1.0.1", "maturin==1.1.0"),
+            ("foo==13.0.1", "foo==13.1.0"),
+        ] {
+            let a = EnvironmentHash::new(vec![spec(a)], vec![], Subdir::Linux64, false);
+            let b = EnvironmentHash::new(vec![spec(b)], vec![], Subdir::Linux64, false);
+            assert_ne!(a.name(None), b.name(None));
+        }
     }
 
     #[test]
