@@ -5,12 +5,14 @@ Pixi sends a small, anonymous ping in two situations:
 1. **After a successful installation** through the `install.sh` / `install.ps1` scripts.
 2. **After `pixi self-update`** successfully updates the binary.
 
-The install scripts print a notice right before they send the ping. `pixi
-self-update` shows a notice the first time instead of pinging, and only pings on
-later updates, so you can opt out before anything is sent. It records that the
-notice was shown in a `telemetry-notice-shown` file in the [cache
-directory](environment_variables.md); if that file is removed (for example by
-`pixi clean cache`), the notice is shown again on the next update.
+The install scripts run the freshly installed binary to send the ping, so both
+pings come from Pixi itself. The installer prints a notice when it sends the
+ping. `pixi self-update` only pings once you have seen that notice: if you have
+not (for example because you installed Pixi another way), the first update
+shows the notice instead of pinging, so you can opt out before anything is sent.
+Pixi records that the notice was shown in a `telemetry-notice-shown` file in the
+[cache directory](environment_variables.md); if that file is removed (for
+example by `pixi clean cache`), the notice is shown again on the next update.
 
 That is the *only* telemetry in Pixi. During normal use — resolving, installing,
 building, running tasks — Pixi does not phone home. The ping exists so we can
@@ -33,8 +35,7 @@ As with *any* HTTP request, the receiving server also sees standard request
 metadata that Pixi does not add on purpose but cannot avoid:
 
 - Your **IP address**.
-- The **User-Agent** of the HTTP client: `pixi/<version>` for `pixi self-update`,
-  and the default User-Agent of `curl`, `wget` or PowerShell for the install scripts.
+- The **User-Agent**, which is `pixi/<version>`.
 - The **time** of the request.
 
 Pixi does **not** send your account, project contents, environment or package
@@ -49,9 +50,9 @@ correlate pings into a per-machine profile.
 
 ## Where it is sent
 
-The ping goes to `https://installation-ping.prefix.dev`, a prefix.dev-hosted
-endpoint. Routing through our own domain means the backend can change without
-having to update the install scripts or a released Pixi binary.
+The ping goes to `https://installation-ping.prefix.dev`. Using our own domain
+means we can point it at a different backend without updating the install
+scripts or released Pixi binaries.
 
 Behind that endpoint the request is handled by [Scarf](https://about.scarf.sh),
 which aggregates the pings into install/update counts. Scarf receives the

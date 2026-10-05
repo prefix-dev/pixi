@@ -212,22 +212,16 @@ try {
 }
 
 # Send an anonymous installation ping (best-effort, never fails the install).
-# Opt out by setting PIXI_NO_TELEMETRY or DO_NOT_TRACK.
-if (-not $Env:PIXI_NO_TELEMETRY -and -not $Env:DO_NOT_TRACK) {
-    try {
-        $PingArch = if ($ARCH -like 'aarch64*') { 'aarch64' } elseif ($ARCH -like 'i686*') { 'i686' } else { 'x86_64' }
-        # Metadata is encoded into the `Page` query parameter so it shows up as a
-        # distinct page in Scarf. Invoke-WebRequest URL-encodes the parameter value.
-        # The version is normalized without a leading 'v' to match `pixi self-update`.
-        $PingVersion = $PixiVersion -replace '^v', ''
-        $Page = "https://pixi.sh/ping/install/$PingVersion/windows-$PingArch"
-        $PingBase = 'https://installation-ping.prefix.dev/a.png'
-        $PingUrl = "$PingBase`?x-pxid=21354c5b-2936-42bc-9d4b-9d6253815afd&Page=$([uri]::EscapeDataString($Page))"
-        Write-Host "Sending an anonymous installation ping to prefix.dev (version, OS, arch). Set PIXI_NO_TELEMETRY=1 or DO_NOT_TRACK=1 to opt out. See https://pixi.sh/latest/reference/telemetry/"
-        Invoke-WebRequest -Uri $PingUrl -UseBasicParsing -TimeoutSec 3 | Out-Null
-    } catch {
-        # Ignore telemetry errors
+# The binary handles the opt-out (PIXI_NO_TELEMETRY / DO_NOT_TRACK) and prints
+# its notice to stdout, which is only shown if the command succeeded; binaries
+# older than the `__install-ping` command fail silently.
+try {
+    $PingOutput = & (Join-Path $BinDir 'pixi.exe') __install-ping 2>$null
+    if ($LASTEXITCODE -eq 0 -and $PingOutput) {
+        Write-Host $PingOutput
     }
+} catch {
+    # Ignore telemetry errors
 }
 
 # Add pixi to PATH if the folder is not already in the PATH variable
