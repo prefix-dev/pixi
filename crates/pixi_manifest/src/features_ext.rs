@@ -6,7 +6,7 @@ use miette::Diagnostic;
 use pixi_spec::{ExcludeNewer, ResolvedExcludeNewer};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, NamedChannelOrUrl, ParseChannelError, Platform,
+    ChannelConfig, ChannelUrl, NamedChannelOrUrl, ParseChannelError, Subdir,
 };
 
 use crate::{
@@ -180,7 +180,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
         let workspace = &self.workspace_manifest().workspace;
         if workspace.use_platform_composition {
             let features: Vec<&Feature> = self.features().collect();
-            let subdirs: IndexSet<Platform> = workspace
+            let subdirs: IndexSet<Subdir> = workspace
                 .platforms
                 .iter()
                 .map(PixiPlatform::subdir)
@@ -207,7 +207,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
             .filter_map(|feature| feature.platforms.as_ref())
             .flatten()
             .collect();
-        let exact_subdirs: HashSet<Platform> = workspace
+        let exact_subdirs: HashSet<Subdir> = workspace
             .platforms
             .iter()
             .filter(|platform| exact_names.contains(platform.name()))

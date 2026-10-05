@@ -115,7 +115,7 @@ mod custom_platform_scoping {
     use super::*;
     use pixi_core::activation::get_activator;
     use pixi_manifest::PixiPlatformName;
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::Subdir;
     use rattler_shell::shell::ShellEnum;
     use std::collections::HashMap;
 
@@ -123,7 +123,7 @@ mod custom_platform_scoping {
     /// (declared first, so it is the host's best declared platform) and
     /// `local` (declares `__cuda` like the issue's machine-specific entry).
     fn manifest(targets: &str) -> String {
-        let current = Platform::current();
+        let current = Subdir::current().unwrap_or(Subdir::NoArch);
         format!(
             r#"
             [workspace]
@@ -254,7 +254,7 @@ mod custom_platform_scoping {
     #[tokio::test(flavor = "current_thread")]
     async fn test_target_activation_scripts_scoped_to_requested_platform() {
         setup_tracing();
-        let ext = if Platform::current().is_windows() {
+        let ext = if Subdir::current().unwrap_or(Subdir::NoArch).is_windows() {
             "bat"
         } else {
             "sh"

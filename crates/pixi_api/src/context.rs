@@ -14,7 +14,7 @@ use pixi_manifest::{
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{Channel, MatchSpec, NamedChannelOrUrl, PackageName, Platform};
+use rattler_conda_types::{Channel, MatchSpec, NamedChannelOrUrl, PackageName, Subdir};
 
 use crate::interface::Interface;
 use crate::workspace::add::GitOptions;
@@ -39,7 +39,7 @@ impl<I: Interface> DefaultContext<I> {
         config: pixi_config::Config,
         matchspec: MatchSpec,
         channels: IndexSet<Channel>,
-        platforms: Vec<Platform>,
+        platforms: Vec<Subdir>,
         fuzzy_limit: Option<usize>,
     ) -> miette::Result<crate::workspace::search::SearchResult> {
         crate::workspace::search::search(None, config, matchspec, channels, platforms, fuzzy_limit)
@@ -614,7 +614,7 @@ impl<I: Interface> WorkspaceContext<I> {
         &self,
         matchspec: MatchSpec,
         channels: IndexSet<Channel>,
-        platforms: Vec<Platform>,
+        platforms: Vec<Subdir>,
         fuzzy_limit: Option<usize>,
     ) -> miette::Result<crate::workspace::search::SearchResult> {
         crate::workspace::search::search(

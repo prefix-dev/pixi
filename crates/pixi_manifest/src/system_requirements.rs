@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use miette::Diagnostic;
-use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform, Version};
+use rattler_conda_types::{GenericVirtualPackage, PackageName, Subdir, Version};
 use rattler_virtual_packages::{Cuda, LibC, Linux, Osx, VirtualPackage};
 use serde::Serialize;
 use serde_value::Value;
@@ -181,7 +181,7 @@ fn make_virtual_package(conda_name: &str, version: Version) -> GenericVirtualPac
 ///
 /// macOS has had no CUDA support since 2019, so `__cuda` is dropped on osx
 /// subdirs to keep the migrated platforms minimal.
-pub fn virtual_package_applies_to_subdir(name: &str, subdir: Platform) -> bool {
+pub fn virtual_package_applies_to_subdir(name: &str, subdir: Subdir) -> bool {
     match name {
         "__linux" | "__glibc" | "__musl" | "__eglibc" => subdir.is_linux(),
         "__osx" => subdir.is_osx(),
@@ -194,7 +194,7 @@ pub fn virtual_package_applies_to_subdir(name: &str, subdir: Platform) -> bool {
 /// migration and the deprecation warning that suggests its replacement.
 pub fn virtual_packages_for_subdir(
     candidates: &[GenericVirtualPackage],
-    subdir: Platform,
+    subdir: Subdir,
 ) -> Vec<GenericVirtualPackage> {
     candidates
         .iter()
@@ -627,16 +627,10 @@ mod tests {
     fn cuda_does_not_apply_on_osx_subdirs() {
         assert!(!virtual_package_applies_to_subdir(
             "__cuda",
-            Platform::OsxArm64
+            Subdir::OsxArm64
         ));
-        assert!(!virtual_package_applies_to_subdir(
-            "__cuda",
-            Platform::Osx64
-        ));
-        assert!(virtual_package_applies_to_subdir(
-            "__cuda",
-            Platform::Linux64
-        ));
-        assert!(virtual_package_applies_to_subdir("__cuda", Platform::Win64));
+        assert!(!virtual_package_applies_to_subdir("__cuda", Subdir::Osx64));
+        assert!(virtual_package_applies_to_subdir("__cuda", Subdir::Linux64));
+        assert!(virtual_package_applies_to_subdir("__cuda", Subdir::Win64));
     }
 }

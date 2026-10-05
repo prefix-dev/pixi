@@ -232,6 +232,7 @@ The R backend follows this build process:
 - Requires a standard R `DESCRIPTION` file in the project root
 - The `DESCRIPTION` file must use the DCF (Debian Control File) format
 - `Suggests` and `Enhances` dependencies are not automatically included
+- Bioconductor dependencies are not supported
 - License mapping from CRAN format to SPDX is best-effort
 
 ## See Also

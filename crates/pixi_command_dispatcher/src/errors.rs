@@ -4,8 +4,7 @@ use miette::Diagnostic;
 use pixi_record::VariantValue;
 use pixi_spec::{SourceLocationSpec, SpecConversionError};
 use rattler_conda_types::{
-    ChannelUrl, ConvertSubdirError, InvalidPackageNameError, PackageName, ParseChannelError,
-    Platform,
+    ChannelUrl, ConvertSubdirError, InvalidPackageNameError, PackageName, ParseChannelError, Subdir,
 };
 use rattler_repodata_gateway::RunExportExtractorError;
 use thiserror::Error;
@@ -153,7 +152,7 @@ pub struct PrefixPlatformMismatchError {
     /// The subdir the record was resolved for.
     pub subdir: String,
     /// The platform of the prefix.
-    pub expected: Platform,
+    pub expected: Subdir,
 }
 
 impl Diagnostic for PrefixPlatformMismatchError {
@@ -356,7 +355,7 @@ pub enum SolvePixiEnvironmentError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    MissingChannel(MissingChannelError),
+    MissingChannel(Box<MissingChannelError>),
 
     #[error(transparent)]
     #[diagnostic(transparent)]

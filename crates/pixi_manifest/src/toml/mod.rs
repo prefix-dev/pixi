@@ -39,7 +39,7 @@ pub use target::TomlTarget;
 use toml_span::{DeserError, Span};
 pub use workspace::TomlWorkspace;
 
-use rattler_conda_types::Platform;
+use rattler_conda_types::Subdir;
 
 use crate::PixiPlatform;
 use crate::{FeatureName, TargetSelector, TomlError, error::GenericError, utils::PixiSpanned};
@@ -112,7 +112,7 @@ fn create_unsupported_selector_warning(
         &selector.value,
         TargetSelector::Linux | TargetSelector::Unix | TargetSelector::Win | TargetSelector::MacOs
     ) {
-        for subdir in Platform::all()
+        for subdir in Subdir::all()
             .filter(|p| selector.value.matches(&PixiPlatform::from_subdir(*p)))
             .map(|p| p.to_string())
         {

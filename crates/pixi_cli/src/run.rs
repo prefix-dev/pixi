@@ -1,6 +1,5 @@
 use std::{
     collections::{HashMap, HashSet, hash_map::Entry},
-    convert::identity,
     ffi::OsString,
     io::Read,
     process::ExitCode,
@@ -36,7 +35,7 @@ use pixi_task::{
     AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
     PreferExecutable, SearchEnvironments, TaskAndEnvironment, TaskGraph, get_task_env,
 };
-use rattler_conda_types::Platform;
+use rattler_conda_types::Subdir;
 use thiserror::Error;
 use tokio_util::sync::CancellationToken;
 use tracing::Level;
@@ -723,8 +722,8 @@ fn command_not_found<'p>(workspace: &'p Workspace, explicit_environment: Option<
     }) {
         pixi_progress::println!(
             "\nHelp: This platform ({}) is not supported. Please run the following command to add this platform to the workspace:\n\n\tpixi workspace platform add {}",
-            Platform::current(),
-            Platform::current()
+            Subdir::current().unwrap_or(Subdir::NoArch),
+            Subdir::current().unwrap_or(Subdir::NoArch)
         );
     }
 }
@@ -742,7 +741,7 @@ enum TaskExecutionError {
     InvalidWorkingDirectory(#[from] InvalidWorkingDirectory),
 
     #[error(transparent)]
-    UnsupportedPlatformError(#[from] UnsupportedPlatformError),
+    UnsupportedPlatformError(#[from] Box<UnsupportedPlatformError>),
 }
 
 /// Called to execute a single command.
@@ -819,7 +818,7 @@ fn disambiguate_task_interactive<'p>(
         .items(&environment_names)
         .default(0)
         .interact_opt()
-        .map_or(None, identity)
+        .unwrap_or(None)
         .map(|idx| problem.environments[idx].clone())
 }
 

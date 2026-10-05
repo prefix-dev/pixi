@@ -29,7 +29,7 @@ use rattler_lock::LockFile;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
-use crate::task_graph::{TaskGraph, TaskId};
+use crate::task_graph::{TaskGraph, TaskId, join_args_with_single_quotes};
 use crate::task_hash::{InputHashesError, NameHash, TaskCache, TaskHash};
 
 /// Runs task in project.
@@ -179,16 +179,14 @@ impl<'p> ExecutableTask<'p> {
             let export = get_export_specific_task_env(self.task.as_ref(), &context)
                 .map_err(FailedToParseShellScript::ArgumentReplacement)?;
 
-            // Append the command line arguments verbatim
+            // Preserve command-line arguments as literal shell arguments.
             let extra = self.args.extra_args();
             let cli_args = if extra.is_empty() {
                 String::new()
             } else {
                 format!(
                     " {}",
-                    extra
-                        .iter()
-                        .format_with(" ", |arg, f| f(&format_args!("'{arg}'")))
+                    join_args_with_single_quotes(extra.iter().map(String::as_str))
                 )
             };
 
@@ -872,6 +870,37 @@ mod tests {
         let file_contents = format!("{PROJECT_BOILERPLATE}\n[tasks]\n{task_definition}\n");
         fs_err::write(&manifest, &file_contents).unwrap();
         Workspace::from_str(&manifest, &file_contents).unwrap()
+    }
+
+    #[tokio::test]
+    async fn extra_args_preserve_quotes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let workspace = workspace_at(tmp.path(), r#"say = "echo""#);
+        let arguments = [
+            "O'Reilly",
+            r#"He said "it's fine""#,
+            r"C:\Users\O'Reilly\file.txt",
+            "a'; echo another command; echo 'b",
+            "",
+        ];
+        let extra: Vec<String> = arguments.iter().map(|arg| (*arg).to_owned()).collect();
+        for args in [
+            ArgValues::FreeFormArgs(extra.clone()),
+            ArgValues::TypedArgs {
+                args: vec![],
+                extra,
+            },
+        ] {
+            let mut task = task_from_snippet(&workspace, "say");
+            task.args = args;
+            let output = task
+                .execute_with_pipes(&HashMap::new(), None)
+                .await
+                .unwrap();
+            assert_eq!(output.exit_code, 0);
+            assert_eq!(output.stdout, format!("{}\n", arguments.join(" ")));
+            assert_eq!(output.stderr, "");
+        }
     }
 
     fn workspace_with(file_contents: &str) -> Workspace {
