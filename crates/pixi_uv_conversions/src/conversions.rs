@@ -673,15 +673,12 @@ pub fn to_uv_version(
 /// Converts the locked [`rattler_lock::PackageHashes`] into the uv
 /// [`uv_pypi_types::HashDigest`] representation.
 pub fn to_uv_hash_digests(hash: &rattler_lock::PackageHashes) -> Vec<uv_pypi_types::HashDigest> {
-    use uv_pypi_types::{HashAlgorithm, HashDigest};
+    use uv_pypi_types::{Digest, HashDigest};
 
-    let md5_digest = |md5: &rattler_digest::Md5Hash| HashDigest {
-        algorithm: HashAlgorithm::Md5,
-        digest: hex::encode(md5).into(),
-    };
-    let sha256_digest = |sha256: &rattler_digest::Sha256Hash| HashDigest {
-        algorithm: HashAlgorithm::Sha256,
-        digest: hex::encode(sha256).into(),
+    let md5_digest =
+        |md5: &rattler_digest::Md5Hash| HashDigest::Md5(Digest::from_bytes((*md5).into()));
+    let sha256_digest = |sha256: &rattler_digest::Sha256Hash| {
+        HashDigest::Sha256(Digest::from_bytes((*sha256).into()))
     };
 
     match hash {

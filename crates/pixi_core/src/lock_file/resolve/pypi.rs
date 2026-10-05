@@ -94,12 +94,12 @@ fn parse_hashes_from_hash_vec(hashes: &HashDigests) -> Result<Option<PackageHash
     for hash in hashes.iter() {
         match hash.algorithm() {
             HashAlgorithm::Sha256 => {
-                sha256 = Some(hash.digest.to_string());
+                sha256 = Some(hash.digest().to_string());
             }
             HashAlgorithm::Md5 => {
-                md5 = Some(hash.digest.to_string());
+                md5 = Some(hash.digest().to_string());
             }
-            HashAlgorithm::Sha384 | HashAlgorithm::Sha512 | HashAlgorithm::Blake2b => {
+            HashAlgorithm::Sha384 | HashAlgorithm::Sha512 | HashAlgorithm::Blake2b256 => {
                 // We do not support these algorithms
             }
         }

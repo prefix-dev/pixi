@@ -94,9 +94,9 @@ fn verification_digests(hash: &PackageHashes) -> Vec<HashDigest> {
     let mut digests = to_uv_hash_digests(hash);
     if digests
         .iter()
-        .any(|digest| digest.algorithm == HashAlgorithm::Sha256)
+        .any(|digest| digest.algorithm() == HashAlgorithm::Sha256)
     {
-        digests.retain(|digest| digest.algorithm == HashAlgorithm::Sha256);
+        digests.retain(|digest| digest.algorithm() == HashAlgorithm::Sha256);
     }
     digests
 }
@@ -168,8 +168,8 @@ mod tests {
             panic!("expected the locked registry wheel to be validated");
         };
         assert_eq!(digests.len(), 1);
-        assert_eq!(digests[0].algorithm, HashAlgorithm::Sha256);
-        assert_eq!(digests[0].digest.as_ref(), SHA256_HEX);
+        assert_eq!(digests[0].algorithm(), HashAlgorithm::Sha256);
+        assert_eq!(digests[0].digest(), SHA256_HEX);
 
         // The cache index looks distributions up by name and version.
         let name = uv_normalize::PackageName::from_str("foo").unwrap();
@@ -195,8 +195,8 @@ mod tests {
             panic!("expected the locked registry wheel to be validated");
         };
         assert_eq!(digests.len(), 1);
-        assert_eq!(digests[0].algorithm, HashAlgorithm::Sha256);
-        assert_eq!(digests[0].digest.as_ref(), SHA256_HEX);
+        assert_eq!(digests[0].algorithm(), HashAlgorithm::Sha256);
+        assert_eq!(digests[0].digest(), SHA256_HEX);
     }
 
     #[test]
