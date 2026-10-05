@@ -987,7 +987,8 @@ impl Workspace {
     ///
     /// If no explicit name is provided, this function will try to read the
     /// environment name from the `PIXI_ENVIRONMENT_NAME` environment variable.
-    /// However, if `PIXI_PROJECT_ROOT` is set and differs from this workspace's
+    /// However, if `PIXI_WORKSPACE_ROOT` (or legacy `PIXI_PROJECT_ROOT`) is set
+    /// and differs from this workspace's
     /// root, the environment variable is ignored and the default environment
     /// is returned instead. This handles the case where a pixi task runs
     /// another pixi project via `--manifest-path` - the child process should
@@ -2412,6 +2413,12 @@ print("hello")
             workspace_env["PIXI_PROJECT_MANIFEST"],
             root.path().join("example.py").to_string_lossy()
         );
+        for suffix in ["ROOT", "NAME", "MANIFEST", "VERSION"] {
+            assert_eq!(
+                workspace_env[&format!("PIXI_WORKSPACE_{suffix}")],
+                workspace_env[&format!("PIXI_PROJECT_{suffix}")],
+            );
+        }
 
         let environment_env = workspace.default_environment().get_metadata_env();
         assert_eq!(environment_env["PIXI_ENVIRONMENT_NAME"], "default");

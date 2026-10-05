@@ -26,18 +26,18 @@ use pixi_uv_conversions::{
     pypi_options_to_index_locations, to_index_strategy, to_requirements_relative_to,
 };
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
-use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record, macos_deployment_target};
+use pypi_modifiers::pypi_tags::{is_python_record, macos_deployment_target};
 use rattler_conda_types::GenericVirtualPackage;
 use rattler_lock::UrlOrPath;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
-use uv_client::{FlatIndexClient, RegistryClientBuilder};
-use uv_configuration::initialize_rayon_once;
+use uv_client::RegistryClientBuilder;
 use uv_distribution::DistributionDatabase;
-use uv_distribution_types::{ConfigSettings, DependencyMetadata, IndexUrl, RequirementSource};
+use uv_distribution_types::{ConfigSettings, DependencyMetadata, RequirementSource};
 use uv_git_types::GitReference;
 use uv_pypi_types::PyProjectToml;
 use uv_resolver::FlatIndex;
+use uv_threads::initialize_rayon_once;
 use uv_types::HashStrategy;
 
 use super::errors::PlatformUnsat;
@@ -78,7 +78,8 @@ pub(crate) fn pypi_satisfies_editable(
         RequirementSource::Registry { .. }
         | RequirementSource::Url { .. }
         | RequirementSource::Path { .. }
-        | RequirementSource::Git { .. } => {
+        | RequirementSource::GitDirectory { .. }
+        | RequirementSource::GitPath { .. } => {
             unreachable!(
                 "editable requirement cannot be from registry, url, git or path (non-directory)"
             )
@@ -290,7 +291,7 @@ pub(crate) fn pypi_satisfies_requirement(
             }
             Err(PlatformUnsat::LockedPyPIRequiresDirectUrl(spec.name.to_string()).into())
         }
-        RequirementSource::Git {
+        RequirementSource::GitDirectory {
             git, subdirectory, ..
         } => {
             // Use `git.url()`, not `git.repository()`: uv's `repository()` strips the
@@ -427,6 +428,9 @@ pub(crate) fn pypi_satisfies_requirement(
                 )
                 .into()),
             }
+        }
+        RequirementSource::GitPath { .. } => {
+            Err(PlatformUnsat::UnsupportedGitArchiveDependency(spec.name.clone()).into())
         }
         RequirementSource::Path { install_path, .. }
         | RequirementSource::Directory { install_path, .. } => {
@@ -669,16 +673,15 @@ async fn read_local_package_metadata(
     );
 
     let registry_client = {
-        let base_client_builder = ctx.uv_context.base_client_builder(
-            allow_insecure_hosts.clone(),
-            Some(&marker_environment),
-            ctx.uv_context.connectivity,
-        );
+        let base_client_builder = ctx
+            .uv_context
+            .base_client_builder(allow_insecure_hosts.clone(), ctx.uv_context.connectivity);
 
         let mut uv_client_builder =
             RegistryClientBuilder::new(base_client_builder, ctx.uv_context.cache.clone())
                 .index_locations(index_locations.clone())
-                .index_strategy(index_strategy);
+                .index_strategy(index_strategy)
+                .markers(&marker_environment);
 
         for p in &ctx.uv_context.proxies {
             uv_client_builder = uv_client_builder.proxy(p.clone())
@@ -691,42 +694,16 @@ async fn read_local_package_metadata(
         )
     };
 
-    // Get tags for this platform (needed for FlatIndex)
-    let tags = get_pypi_tags(ctx.platform, python_record.as_ref()).map_err(|e| {
-        PlatformUnsat::FailedToReadLocalMetadata(
-            package_name.clone(),
-            format!("Failed to determine pypi tags: {e}"),
-        )
-    })?;
-
-    let flat_index = {
-        let flat_index_client = FlatIndexClient::new(
-            registry_client.cached_client(),
-            ctx.uv_context.connectivity,
-            &ctx.uv_context.cache,
-        );
-        let flat_index_urls: Vec<&IndexUrl> = index_locations
-            .flat_indexes()
-            .map(|index| index.url())
-            .collect();
-        let flat_index_entries = flat_index_client
-            .fetch_all(flat_index_urls.into_iter())
-            .await
-            .map_err(|e| {
-                PlatformUnsat::FailedToReadLocalMetadata(
-                    package_name.clone(),
-                    format!("Failed to fetch flat index entries: {e}"),
-                )
-            })?;
-        // Satisfiability compares the lock file against the manifest; the
-        // build machinery here has no locked digests to verify against.
-        FlatIndex::from_entries(
-            flat_index_entries,
-            Some(&tags),
-            &HashStrategy::None,
-            &build_options,
-        )
-    };
+    // Satisfiability compares the lock file against the manifest; the
+    // build machinery here has no locked digests to verify against.
+    let flat_index = FlatIndex::load(&registry_client, &ctx.uv_context.cache, &index_locations)
+        .await
+        .map_err(|e| {
+            PlatformUnsat::FailedToReadLocalMetadata(
+                package_name.clone(),
+                format!("Failed to fetch flat index entries: {e}"),
+            )
+        })?;
 
     // Source-build metadata is independent of the conda environment, so do not
     // include the conda fingerprint here. Only include cache discriminators that
@@ -737,6 +714,7 @@ async fn read_local_package_metadata(
         &config_settings,
         deployment_target.as_deref(),
     );
+    let hash_strategy = HashStrategy::default();
     let build_params = UvBuildDispatchParams::new(
         &registry_client,
         &ctx.uv_context.cache,
@@ -745,9 +723,10 @@ async fn read_local_package_metadata(
         &dependency_metadata,
         &config_settings,
         &build_options,
-        &HashStrategy::None,
+        &hash_strategy,
     )
     .with_index_strategy(index_strategy)
+    .with_capabilities(ctx.uv_context.capabilities.clone())
     .with_workspace_cache(ctx.uv_context.workspace_cache.clone())
     .with_shared_state(ctx.uv_context.shared_state.fork())
     .with_no_sources(ctx.uv_context.no_sources.clone())
@@ -911,8 +890,8 @@ mod tests {
     use uv_distribution_types::RequirementSource;
     use uv_redacted::DisplaySafeUrl;
 
-    use super::super::PypiNoBuildCheck;
     use super::super::platform::RequirementOrigin;
+    use super::super::{PlatformUnsat, PypiNoBuildCheck};
     use super::pypi_satisfies_requirement;
     use crate::lock_file::tests::{make_source_package_with, make_wheel_package_with};
 
@@ -1040,6 +1019,42 @@ mod tests {
             &[],
         )
         .unwrap();
+    }
+
+    #[test]
+    fn git_archive_requirement_returns_error_instead_of_panicking() {
+        let spec = pep508_requirement_to_uv_requirement(
+            pep508_rs::Requirement::from_str(
+                "mypkg @ git+https://example.com/repo.git#path=dist/mypkg-0.1.0-py3-none-any.whl",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert!(matches!(spec.source, RequirementSource::GitPath { .. }));
+        let locked = lock_for_test(make_wheel_package_with(
+            "mypkg",
+            "0.1.0",
+            "https://example.com/mypkg-0.1.0-py3-none-any.whl"
+                .parse()
+                .unwrap(),
+            None,
+            None,
+            vec![],
+            None,
+        ));
+        let err = pypi_satisfies_requirement(
+            &spec,
+            &locked,
+            Path::new("/"),
+            RequirementOrigin::RequiresDist,
+            &[],
+            &[],
+        )
+        .unwrap_err();
+        assert!(matches!(
+            *err,
+            PlatformUnsat::UnsupportedGitArchiveDependency(_)
+        ));
     }
 
     /// Reproduces issue #5661: PyPI dependency with full commit hash from a
@@ -1541,6 +1556,7 @@ mod tests {
                 index: Some(index),
                 conflict: None,
             },
+            scope: Default::default(),
             origin: None,
         }
     }

@@ -76,7 +76,7 @@ async fn verify_lock_file_satisfiability(
     // that might trigger implicit rayon initialization (e.g. uv's
     // DistributionDatabase). Without this, concurrent tests can race
     // and trigger a GlobalPoolAlreadyInitialized panic.
-    uv_configuration::initialize_rayon_once();
+    uv_threads::initialize_rayon_once();
 
     // Mirror production's load path (`Workspace::load_lock_file`): align the
     // lockfile's platform names to the manifest by identity, so stale names

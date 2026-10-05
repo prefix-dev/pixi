@@ -23,7 +23,7 @@ use rattler::{
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, PackageName, Subdir};
 use rattler_solve::{SolverImpl, SolverTask, resolvo::Solver};
 use reqwest_middleware::ClientWithMiddleware;
-use uv_configuration::initialize_rayon_once;
+use uv_threads::initialize_rayon_once;
 
 use crate::{cli_config::ChannelsConfig, match_spec_or_path::MatchSpecOrPath, process_exit};
 

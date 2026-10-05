@@ -35,6 +35,7 @@ pub mod import;
 pub mod info;
 pub mod init;
 pub mod install;
+pub mod install_ping;
 pub mod list;
 pub mod lock;
 pub(crate) mod match_spec_or_path;
@@ -186,6 +187,8 @@ pub enum Command {
     Import(import::Args),
     #[clap(visible_alias = "i")]
     Install(install::Args),
+    #[clap(name = "__install-ping", hide = true)]
+    InstallPing(install_ping::Args),
     #[clap(visible_alias = "ls")]
     List(list::Args),
     Lock(lock::Args),
@@ -381,6 +384,7 @@ pub async fn execute_command(
             .into_diagnostic()
             .map(|()| ExitCode::SUCCESS),
         Command::Install(cmd) => install::execute(cmd).await.map(|()| ExitCode::SUCCESS),
+        Command::InstallPing(cmd) => install_ping::execute(cmd).await.map(|()| ExitCode::SUCCESS),
         Command::Reinstall(cmd) => reinstall::execute(cmd).await.map(|()| ExitCode::SUCCESS),
         Command::Shell(cmd) => shell::execute(cmd).await,
         Command::ShellHook(cmd) => shell_hook::execute(cmd).await.map(|()| ExitCode::SUCCESS),

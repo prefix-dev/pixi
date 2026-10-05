@@ -42,8 +42,8 @@ use uv_configuration::{
 use uv_dispatch::{BuildDispatch, BuildDispatchError, SharedState};
 use uv_distribution_filename::DistFilename;
 use uv_distribution_types::{
-    CachedDist, ConfigSettings, DependencyMetadata, ExtraBuildRequires, IndexLocations,
-    IsBuildBackendError, PackageConfigSettings, SourceDist,
+    CachedDist, ConfigSettings, DependencyMetadata, ExtraBuildRequires, IndexCapabilities,
+    IndexLocations, IsBuildBackendError, PackageConfigSettings, SourceDist,
 };
 use uv_distribution_types::{ExtraBuildVariables, Requirement};
 use uv_install_wheel::LinkMode;
@@ -71,6 +71,8 @@ pub struct UvBuildDispatchParams<'a> {
     index_strategy: IndexStrategy,
     constraints: Constraints,
     shared_state: SharedState,
+    // `SharedState` does not expose its index capabilities.
+    capabilities: IndexCapabilities,
     link_mode: uv_install_wheel::LinkMode,
     exclude_newer: Option<ExcludeNewer>,
     sources: NoSources,
@@ -106,6 +108,7 @@ impl<'a> UvBuildDispatchParams<'a> {
             hasher,
             index_strategy: IndexStrategy::default(),
             shared_state: SharedState::default(),
+            capabilities: IndexCapabilities::default(),
             link_mode: LinkMode::default(),
             constraints: Constraints::default(),
             exclude_newer: None,
@@ -125,6 +128,12 @@ impl<'a> UvBuildDispatchParams<'a> {
     /// Set the shared state for the build dispatch
     pub fn with_shared_state(mut self, shared_state: SharedState) -> Self {
         self.shared_state = shared_state;
+        self
+    }
+
+    /// Set the index capabilities exposed via `BuildContext::capabilities`.
+    pub fn with_capabilities(mut self, capabilities: IndexCapabilities) -> Self {
+        self.capabilities = capabilities;
         self
     }
 
@@ -290,9 +299,22 @@ pub enum LazyBuildDispatchError {
     PythonMissingError { prefix: String },
 }
 
+impl uv_errors::Hinted for LazyBuildDispatchError {}
+
 impl IsBuildBackendError for LazyBuildDispatchError {
     fn is_build_backend_error(&self) -> bool {
         false
+    }
+
+    fn is_user_failure(&self) -> bool {
+        match self {
+            Self::InstallationRequiredButDisallowed | Self::PythonMissingError { .. } => true,
+            Self::Uv(err) => err.is_user_failure(),
+            Self::UvFrontend(err) => err.is_user_failure(),
+            Self::InitializationError(_)
+            | Self::ConversionError(_)
+            | Self::QueryInterpreterError(_) => false,
+        }
     }
 }
 
@@ -492,7 +514,7 @@ impl BuildContext for LazyBuildDispatch<'_> {
     }
 
     fn capabilities(&self) -> &uv_distribution_types::IndexCapabilities {
-        self.params.shared_state.capabilities()
+        &self.params.capabilities
     }
 
     fn dependency_metadata(&self) -> &uv_distribution_types::DependencyMetadata {
@@ -547,6 +569,7 @@ impl BuildContext for LazyBuildDispatch<'_> {
         source: &'a Path,
         subdirectory: Option<&'a Path>,
         install_path: &'a Path,
+        stop_discovery_at: Option<&'a Path>,
         version_id: Option<&'a str>,
         dist: Option<&'a SourceDist>,
         sources: &'a NoSources,
@@ -559,6 +582,7 @@ impl BuildContext for LazyBuildDispatch<'_> {
             source,
             subdirectory,
             install_path,
+            stop_discovery_at,
             version_id,
             dist,
             sources,

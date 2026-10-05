@@ -12,7 +12,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use thiserror::Error;
-use uv_configuration::initialize_rayon_once;
+use uv_threads::initialize_rayon_once;
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum PrefixError {
