@@ -96,7 +96,7 @@ def test_run_in_shell_environment(pixi: Path, tmp_pixi_workspace: Path) -> None:
     env = {
         "PIXI_IN_SHELL": "true",
         "PIXI_ENVIRONMENT_NAME": "a",
-        "PIXI_PROJECT_ROOT": str(tmp_pixi_workspace),
+        "PIXI_WORKSPACE_ROOT": str(tmp_pixi_workspace),
     }
     verify_cli_command(
         [pixi, "run", "--manifest-path", manifest, "task"],
@@ -193,7 +193,7 @@ def test_run_in_shell_project(pixi: Path) -> None:
 
         env = {
             "PIXI_IN_SHELL": "true",
-            "PIXI_PROJECT_MANIFEST": str(manifest_2),
+            "PIXI_WORKSPACE_MANIFEST": str(manifest_2),
         }
 
         # Run task with PIXI_PROJECT_MANIFEST set to manifest_2
@@ -211,9 +211,9 @@ def test_run_in_shell_project(pixi: Path) -> None:
             cwd=manifest_1_dir,
         )
 
-        # Run task with PIXI_PROJECT_MANIFEST set to manifest_2 and working directory at manifest_1_dir
+        # Run task with PIXI_WORKSPACE_MANIFEST set to manifest_2 and working directory at manifest_1_dir
         # working directory should win
-        # pixi should warn that it uses the local manifest rather than PIXI_PROJECT_MANIFEST
+        # pixi should warn that it uses the local manifest rather than PIXI_WORKSPACE_MANIFEST
         verify_cli_command(
             [pixi, "run", "task"],
             stdout_contains="manifest_1",
