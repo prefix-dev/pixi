@@ -10677,9 +10677,9 @@ will be used as the setting for the environment.</p>
 <ul>
 <li><strong>"disallow"</strong>: Disallow all pre-release versions.</li>
 <li><strong>"allow"</strong>: Allow all pre-release versions.</li>
-<li><strong>"if-necessary"</strong>: Allow pre-release versions if all versions of a package are pre-release.</li>
-<li><strong>"explicit"</strong>: Allow pre-release versions for first-party packages with explicit pre-release markers in their version requirements.</li>
-<li><strong>"if-necessary-or-explicit"</strong> (default): Allow pre-release versions if all versions of a package are pre-release, or if the package has an explicit pre-release marker in its version requirements.</li>
+<li><strong>"if-necessary"</strong>: Prefer stable versions, falling back to pre-release versions when necessary to satisfy the requirements.</li>
+<li><strong>"explicit"</strong>: Prefer stable versions for first-party packages with explicit pre-release markers in their version requirements, falling back to pre-releases when necessary. Disallow pre-releases for other packages.</li>
+<li><strong>"if-necessary-or-explicit"</strong> (default): Alias for <code>"if-necessary"</code>, following uv 0.12's pre-release selection policy.</li>
 </ul>
 <p>Example:
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-42-1"><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="k">[pypi-options]</span>
@@ -10930,6 +10930,8 @@ Learn more about installing PyTorch <a href="../../python/pytorch/">here</a>.</p
 <h5 id="git"><code>git</code><a class="headerlink" href="#git" title="Permanent link">#</a></h5>
 <p>A git repository to install from.
 This support both https:// and ssh:// urls.</p>
+<p>Git dependencies must refer to a project directory, optionally selected with <code>subdirectory</code>.
+References to wheel or source archives inside a Git repository using <code>#path=...</code> are not supported.</p>
 <p>Use <code>git</code> in combination with <code>rev</code>, <code>subdirectory</code> or <code>lfs</code>:</p>
 <ul>
 <li><code>rev</code>: A specific revision to install. e.g. <code>rev = "0106aced5faa299e6ede89d1230bd6784f2c3660</code></li>

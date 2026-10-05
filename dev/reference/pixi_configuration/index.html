@@ -9880,6 +9880,8 @@ credentials from the Pixi authentication storage, see the <a href="../../deploym
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-19-1"><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>concurrency.solves<span class="w"> </span><span class="m">1</span>
 </span><span id="__span-19-2"><a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>concurrency.downloads<span class="w"> </span><span class="m">12</span>
 </span></code></pre></div>
+<p>For PyPI operations, <code>UV_CONCURRENT_CACHE_READS</code> limits concurrent HTTP cache reads.
+It defaults to <code>4</code> and must be a positive integer.</p>
 <h3 id="run-post-link-scripts"><code>run-post-link-scripts</code><a class="headerlink" href="#run-post-link-scripts" title="Permanent link">#</a></h3>
 <p>Configure whether pixi should execute <code>post-link</code> and <code>pre-unlink</code> scripts or not.</p>
 <p>Some packages contain post-link scripts (<code>bat</code> or <code>sh</code> files) that are executed after a package is installed. We deem
