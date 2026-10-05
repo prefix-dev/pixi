@@ -267,6 +267,7 @@ impl UvResolutionContext {
         let mut builder = BaseClientBuilder::default()
             .keyring(self.keyring_provider)
             .connectivity(connectivity)
+            .cache_read_concurrency(self.concurrency.cache_reads)
             .extra_middleware(self.extra_middleware.clone());
         builder = if allow_insecure_hosts.is_empty() {
             builder
