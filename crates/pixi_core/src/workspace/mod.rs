@@ -997,11 +997,17 @@ impl Workspace {
         &self,
         name: Option<String>,
     ) -> miette::Result<Environment<'_>> {
+        let is_ambient = name.is_none();
         let environment_name =
             EnvironmentName::from_arg_or_env_var(name, self.root()).into_diagnostic()?;
 
-        self.environment(&environment_name)
-            .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))
+        if let Some(env) = self.environment(&environment_name) {
+            Ok(env)
+        } else if is_ambient {
+            Ok(self.default_environment())
+        } else {
+            miette::bail!("unknown environment '{environment_name}'")
+        }
     }
 
     /// Returns all the solve groups in the project.

@@ -1869,3 +1869,21 @@ def test_task_inputs_outputs_missing_no_initial_cache(
         stdout_contains="running; no files are created",
         stderr_excludes="cache hit",
     )
+
+def test_ambient_env_name_fallback_to_default(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    import os
+    manifest = tmp_pixi_workspace / "pixi.toml"
+    manifest.write_text(EMPTY_BOILERPLATE_PROJECT + "\n[tasks]\ntest_task = 'echo hello'\n")
+
+    env = dict(os.environ)
+    env["PIXI_IN_SHELL"] = "1"
+    env["PIXI_ENVIRONMENT_NAME"] = "nonexistent_dev"
+    if "PIXI_PROJECT_ROOT" in env:
+        del env["PIXI_PROJECT_ROOT"]
+
+    verify_cli_command(
+        [pixi, "run", "test_task"],
+        cwd=tmp_pixi_workspace,
+        env=env,
+        stdout_contains="hello",
+    )
