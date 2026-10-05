@@ -461,7 +461,7 @@ impl WorkspaceLocator {
                 && emit_warnings
             {
                 tracing::warn!(
-                    "Using local manifest {} rather than {} from environment variable `PIXI_WORKSPACE_MANIFEST` (or legacy `PIXI_PROJECT_MANIFEST`)",
+                    "Using local manifest {} rather than {} from environment variable `PIXI_WORKSPACE_MANIFEST`",
                     discovered_manifest_path.display(),
                     env_manifest_path.display(),
                 );
