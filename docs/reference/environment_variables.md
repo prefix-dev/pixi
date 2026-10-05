@@ -69,7 +69,7 @@ Pixi can also be configured via environment variables.
     </tr>
     <tr>
       <td><code>PIXI_NO_TELEMETRY</code></td>
-      <td>If set to any value, disables the anonymous ping sent by the install scripts and by <code>pixi self-update</code>. See <a href="../telemetry/">Telemetry</a>.</td>
+      <td>If set to a non-empty value, disables the anonymous ping sent by the install scripts and by <code>pixi self-update</code>. See <a href="../telemetry/">Telemetry</a>.</td>
       <td>Not set (ping enabled).</td>
     </tr>
     <tr>

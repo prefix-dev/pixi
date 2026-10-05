@@ -81,13 +81,15 @@ fn user_agent() -> String {
 /// Send a best-effort anonymous ping after a successful self-update, tagging
 /// the OS, architecture and target version. It never blocks or fails the
 /// update (short timeout, all errors ignored) and is skipped when
-/// `PIXI_NO_TELEMETRY` or `DO_NOT_TRACK` is set.
+/// `PIXI_NO_TELEMETRY` or `DO_NOT_TRACK` is set to a non-empty value.
 async fn send_update_ping(
     client: &reqwest_middleware::ClientWithMiddleware,
     target_version: Option<&Version>,
+    is_quiet: bool,
 ) {
-    if std::env::var_os("PIXI_NO_TELEMETRY").is_some() || std::env::var_os("DO_NOT_TRACK").is_some()
-    {
+    // Empty values count as unset, matching the install scripts.
+    let is_set = |name: &str| std::env::var_os(name).is_some_and(|v| !v.is_empty());
+    if is_set("PIXI_NO_TELEMETRY") || is_set("DO_NOT_TRACK") {
         return;
     }
 
@@ -95,11 +97,13 @@ async fn send_update_ping(
         .map(|v| v.to_string())
         .unwrap_or_else(|| "latest".to_string());
 
-    eprintln!(
-        "Sending an anonymous update ping to prefix.dev (version, OS, arch). \
-         Set PIXI_NO_TELEMETRY=1 or DO_NOT_TRACK=1 to opt out. \
-         See https://pixi.sh/latest/reference/telemetry/"
-    );
+    if !is_quiet {
+        eprintln!(
+            "Sending an anonymous update ping to prefix.dev (version, OS, arch). \
+             Set PIXI_NO_TELEMETRY=1 or DO_NOT_TRACK=1 to opt out. \
+             See https://pixi.sh/latest/reference/telemetry/"
+        );
+    }
 
     // Encode the metadata as a synthetic page URL. Scarf reports on the `Page`
     // dimension (normally inferred from the referrer), so each event/version/
@@ -497,7 +501,7 @@ pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Resu
     }
 
     // Best-effort anonymous ping; must not affect the update result.
-    send_update_ping(&client, target_version.as_ref()).await;
+    send_update_ping(&client, target_version.as_ref(), is_quiet).await;
 
     Ok(())
 }

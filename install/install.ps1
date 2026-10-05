@@ -218,7 +218,9 @@ if (-not $Env:PIXI_NO_TELEMETRY -and -not $Env:DO_NOT_TRACK) {
         $PingArch = if ($ARCH -like 'aarch64*') { 'aarch64' } elseif ($ARCH -like 'i686*') { 'i686' } else { 'x86_64' }
         # Metadata is encoded into the `Page` query parameter so it shows up as a
         # distinct page in Scarf. Invoke-WebRequest URL-encodes the parameter value.
-        $Page = "https://pixi.sh/ping/install/$PixiVersion/windows-$PingArch"
+        # The version is normalized without a leading 'v' to match `pixi self-update`.
+        $PingVersion = $PixiVersion -replace '^v', ''
+        $Page = "https://pixi.sh/ping/install/$PingVersion/windows-$PingArch"
         $PingBase = 'https://installation-ping.prefix.dev/a.png'
         $PingUrl = "$PingBase`?x-pxid=21354c5b-2936-42bc-9d4b-9d6253815afd&Page=$([uri]::EscapeDataString($Page))"
         Write-Host "Sending an anonymous installation ping to prefix.dev (version, OS, arch). Set PIXI_NO_TELEMETRY=1 or DO_NOT_TRACK=1 to opt out. See https://pixi.sh/latest/reference/telemetry/"

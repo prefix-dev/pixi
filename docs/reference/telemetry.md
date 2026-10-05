@@ -26,7 +26,8 @@ As with *any* HTTP request, the receiving server also sees standard request
 metadata that Pixi does not add on purpose but cannot avoid:
 
 - Your **IP address**.
-- The **User-Agent** (which for the ping is just `pixi/<version>`).
+- The **User-Agent** of the HTTP client: `pixi/<version>` for `pixi self-update`,
+  and the default User-Agent of `curl`, `wget` or PowerShell for the install scripts.
 - The **time** of the request.
 
 Pixi does **not** send your account, project contents, environment or package
@@ -54,7 +55,7 @@ own analysis.
 
 ## How to opt out
 
-Set either environment variable before installing or updating. Pixi treats
+Set either environment variable to a non-empty value before installing or updating. Pixi treats
 `PIXI_NO_TELEMETRY` as its own convention and also honors the ecosystem-wide
 [`DO_NOT_TRACK`](https://consoledonottrack.com) convention. Both disable the
 ping in the install scripts **and** in `pixi self-update`.

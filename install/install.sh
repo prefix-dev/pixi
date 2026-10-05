@@ -207,7 +207,8 @@ __wrap__() {
         esac
         # Metadata is encoded into the (pre-encoded) `Page` query parameter so it
         # shows up as a distinct page in Scarf; '%2F' are the path separators.
-        PAGE="https%3A%2F%2Fpixi.sh%2Fping%2Finstall%2F${VERSION}%2F${OS_TAG}-${ARCH}"
+        # The version is normalized without a leading 'v' to match `pixi self-update`.
+        PAGE="https%3A%2F%2Fpixi.sh%2Fping%2Finstall%2F${VERSION#v}%2F${OS_TAG}-${ARCH}"
         PING_URL="https://installation-ping.prefix.dev/a.png?x-pxid=21354c5b-2936-42bc-9d4b-9d6253815afd&Page=${PAGE}"
         echo "Sending an anonymous installation ping to prefix.dev (version, OS, arch). Set PIXI_NO_TELEMETRY=1 or DO_NOT_TRACK=1 to opt out. See https://pixi.sh/latest/reference/telemetry/"
         if hash curl 2>/dev/null; then
