@@ -35,13 +35,13 @@ use pypi_modifiers::{
 use rattler_lock::{PypiDistributionData, PypiIndexes, PypiPackageData, UrlOrPath};
 use rayon::prelude::*;
 use utils::elapsed;
-use uv_client::{FlatIndexClient, RegistryClient};
+use uv_client::RegistryClient;
 use uv_configuration::{BuildOptions, Constraints, IndexStrategy};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::{BuiltWheelIndex, DistributionDatabase, RegistryWheelIndex};
 use uv_distribution_types::{
     CachedDist, ConfigSettings, DependencyMetadata, Dist, ExtraBuildRequires, ExtraBuildVariables,
-    IndexLocations, IndexUrl, InstalledDist, Name, PackageConfigSettings, Resolution,
+    IndexLocations, InstalledDist, Name, PackageConfigSettings, Resolution,
 };
 use uv_install_wheel::LinkMode;
 use uv_installer::{Preparer, SitePackages, UninstallError};
@@ -602,31 +602,15 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         )?;
 
         // Resolve the flat indexes from `--find-links`.
-        let flat_index_client = FlatIndexClient::new(
-            registry_client.cached_client(),
-            self.context_config.uv_context.connectivity,
-            &self.context_config.uv_context.cache,
-        );
-
-        let flat_index_urls: Vec<&IndexUrl> = planner_config
-            .index_locations
-            .flat_indexes()
-            .map(|index| index.url())
-            .collect();
-
-        let flat_index_entries = flat_index_client
-            .fetch_all(flat_index_urls.into_iter())
-            .await
-            .into_diagnostic()?;
-
         // The flat index only feeds the build dispatch, which resolves build dependencies.
         // Those are not locked, so they are deliberately not checked against locked digests.
-        let flat_index = FlatIndex::from_entries(
-            flat_index_entries,
-            Some(&planner_config.tags),
-            &HashStrategy::default(),
-            &planner_config.build_options,
-        );
+        let flat_index = FlatIndex::load(
+            &registry_client,
+            &self.context_config.uv_context.cache,
+            &planner_config.index_locations,
+        )
+        .await
+        .into_diagnostic()?;
 
         let build_isolation = self
             .build_config
