@@ -50,9 +50,9 @@ use uv_client::{FlatIndexClient, RegistryClient, RegistryClientBuilder};
 use uv_configuration::{Constraints, Overrides};
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
-    BuiltDist, ConfigSettings, DependencyMetadata, Diagnostic, Dist, FileLocation, HashPolicy,
-    IndexCapabilities, IndexUrl, Name, RequirementSource, RequiresPython, Resolution, ResolvedDist,
-    SourceDist, ToUrlError,
+    BuiltDist, ConfigSettings, DependencyMetadata, Diagnostic, Dist, FileLocation,
+    IndexCapabilities, IndexUrl, MetadataHashPolicy, Name, RequirementSource, RequiresPython,
+    Resolution, ResolvedDist, SourceDist, ToUrlError,
 };
 use uv_git::RepositoryReference;
 use uv_install_wheel::LinkMode;
@@ -1197,7 +1197,7 @@ async fn lock_pypi_packages(
 
                     let metadata_response = Box::pin(database.get_or_build_wheel_metadata(
                         &Dist::Source(source.clone()),
-                        HashPolicy::None,
+                        MetadataHashPolicy::default(),
                     ))
                     .await
                     .into_diagnostic()?;
