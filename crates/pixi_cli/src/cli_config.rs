@@ -201,6 +201,29 @@ impl LockFileUpdateConfig {
     }
 }
 
+/// Refuse to invoke build backends while updating the lock file.
+///
+/// Exit if a conda source dependency, the workspace package, or a PyPI
+/// sdist, path, git, or url dependency would have to be built. Channel-only
+/// solves and PyPI wheels with static metadata still succeed. Does not change
+/// `[pypi-options] no-build`. Not accepted by `pixi install`.
+#[derive(Parser, Debug, Default, Clone)]
+pub struct NoBuildConfig {
+    /// Refuse to invoke build backends while updating the lock file.
+    ///
+    /// Exit if a conda source dependency, the workspace package, or a PyPI
+    /// sdist, path, git, or url dependency would have to be built. Channel-only
+    /// solves and PyPI wheels with static metadata still succeed. Does not
+    /// change `[pypi-options] no-build`. Not accepted by `pixi install`.
+    #[arg(
+        long,
+        env = "PIXI_NO_BUILD",
+        value_parser = clap::builder::BoolishValueParser::new(),
+        help_heading = consts::CLAP_UPDATE_OPTIONS
+    )]
+    pub no_build: bool,
+}
+
 /// Configuration for skipping installation
 #[derive(Parser, Debug, Default, Clone)]
 pub struct NoInstallConfig {

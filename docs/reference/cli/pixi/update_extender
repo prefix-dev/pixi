@@ -12,6 +12,7 @@ pixi update --platform osx-arm64 mlx # (6)!
 pixi update -p linux-64 -p osx-64 numpy  # (7)!
 pixi update --dry-run numpy # (8)!
 pixi update --no-install boto3 # (9)!
+pixi update --no-build # (10)!
 ```
 
 1. This will update the `numpy` package to the latest version that fits the requirement.
@@ -23,5 +24,6 @@ pixi update --no-install boto3 # (9)!
 7. This will update the `numpy` package in the `linux-64` and `osx-64` platforms.
 8. This will show the packages that would be updated without actually updating them in the lock file
 9. This will update the `boto3` package in the manifest and lock file, without installing it in an environment.
+10. This re-solves without invoking a build backend. A source dependency fails and the lock file is not written.
 
 --8<-- [end:example]

@@ -14,7 +14,7 @@ use std::sync::Arc;
 pub use builder::CommandDispatcherBuilder;
 pub use error::{CommandDispatcherError, CommandDispatcherErrorResultExt, ComputeResultExt};
 use pixi_build_frontend::BackendOverride;
-use pixi_compute_engine::ComputeEngine;
+use pixi_compute_engine::{BuildExecutionPermit, ComputeEngine};
 use pixi_git::resolver::GitResolver;
 use pixi_glob::GlobHashCache;
 use pixi_url::UrlResolver;
@@ -126,6 +126,9 @@ pub(crate) struct CommandDispatcherData {
     /// be a different platform.
     pub tool_platform: (Subdir, Vec<GenericVirtualPackage>),
 
+    /// When denied, build backends and source checkouts must not run.
+    pub build_execution_permit: BuildExecutionPermit,
+
     /// True if execution of link scripts is enabled.
     pub execute_link_scripts: bool,
 
@@ -188,6 +191,11 @@ impl CommandDispatcher {
     /// Constructs a new builder for the command dispatcher.
     pub fn builder() -> CommandDispatcherBuilder {
         CommandDispatcherBuilder::default()
+    }
+
+    /// Whether this dispatcher may spawn a build backend or check out source.
+    pub fn build_execution_permit(&self) -> &BuildExecutionPermit {
+        &self.data.build_execution_permit
     }
 
     /// Returns the executor used by the command dispatcher.

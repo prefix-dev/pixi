@@ -384,6 +384,7 @@ impl WorkspaceMut {
         editable: bool,
         dry_run: bool,
         overwrite_behavior: DependencyOverwriteBehavior,
+        no_build: bool,
     ) -> Result<(Option<UpdateDeps>, Vec<SkippedPackage>), miette::Error> {
         let mut conda_specs_to_add_constraints_for = IndexMap::new();
         let mut pypi_specs_to_add_constraints_for = IndexMap::new();
@@ -549,15 +550,19 @@ impl WorkspaceMut {
             io_concurrency_limit,
             build_caches,
             ..
-        } = UpdateContext::builder(
-            self.workspace(),
-            self.workspace()
-                .command_dispatcher_builder(self.progress.as_ref())?
-                .finish(),
-        )?
-        .with_lock_file(unlocked_lock_file)
-        .with_no_install(no_install || dry_run)
-        .finish()
+        } = {
+            let mut dispatcher_builder = self
+                .workspace()
+                .command_dispatcher_builder(self.progress.as_ref())?;
+            if no_build {
+                dispatcher_builder = dispatcher_builder.refuse_build_execution();
+            }
+            UpdateContext::builder(self.workspace(), dispatcher_builder.finish())?
+                .with_lock_file(unlocked_lock_file)
+                .with_no_install(no_install || dry_run)
+                .with_no_build(no_build)
+                .finish()
+        }
         .await?
         .update()
         .await

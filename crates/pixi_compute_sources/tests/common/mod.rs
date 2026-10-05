@@ -216,6 +216,7 @@ pub fn build_test_engine(config: EngineConfig) -> ComputeEngine {
         .sequential_branches(config.sequential)
         .with_data(pixi_url::UrlResolver::default())
         .with_data(pixi_git::resolver::GitResolver::default())
+        .with_data(pixi_compute_engine::BuildExecutionPermit::allow())
         .with_data(rattler_networking::LazyClient::default())
         .with_spawn_hook(Arc::new(OperationIdSpawnHook));
     if let Some(reporter) = config.url_reporter {
