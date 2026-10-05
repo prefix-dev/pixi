@@ -52,13 +52,12 @@ pub fn locked_data_to_file(
 
     Ok(uv_distribution_types::File {
         filename: filename.into(),
-        dist_info_metadata: false,
+        dist_info_metadata: None,
         hashes: hashes.into(),
         requires_python: uv_requires_python,
         upload_time_utc_ms: None,
         yanked: None,
         size: None,
-        zstd: None,
         url,
     })
 }
