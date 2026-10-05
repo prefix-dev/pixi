@@ -391,6 +391,7 @@ nav = [
       },
       # End of generated CLI nav.
       { "Environment Variables" = "reference/environment_variables.md" },
+      { "Telemetry" = "reference/telemetry.md" },
     ]
   },
   {
