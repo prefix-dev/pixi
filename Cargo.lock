@@ -6027,10 +6027,10 @@ dependencies = [
  "typed-path",
  "url",
  "uv-cache",
- "uv-configuration",
  "uv-installer",
  "uv-normalize",
  "uv-python",
+ "uv-threads",
  "zip",
 ]
 
@@ -6509,10 +6509,10 @@ dependencies = [
  "tracing-subscriber",
  "typed-path",
  "url",
- "uv-configuration",
  "uv-pep508",
  "uv-pypi-types",
  "uv-requirements-txt",
+ "uv-threads",
  "which",
  "zip",
 ]
@@ -6819,6 +6819,7 @@ dependencies = [
  "uv-requirements",
  "uv-requirements-txt",
  "uv-resolver",
+ "uv-threads",
  "uv-types",
  "uv-workspace",
  "xxhash-rust",
@@ -7192,13 +7193,13 @@ dependencies = [
  "tracing",
  "unicode-width 0.2.2",
  "url",
- "uv-configuration",
  "uv-distribution",
  "uv-distribution-types",
  "uv-installer",
  "uv-normalize",
  "uv-redacted",
  "uv-resolver",
+ "uv-threads",
 ]
 
 [[package]]
@@ -7303,7 +7304,7 @@ dependencies = [
  "thiserror 2.0.20",
  "tokio",
  "tracing",
- "uv-configuration",
+ "uv-threads",
  "xxhash-rust",
 ]
 
@@ -7422,7 +7423,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
- "uv-configuration",
+ "uv-threads",
  "webpki-root-certs 1.0.9",
  "xxhash-rust",
 ]

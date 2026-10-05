@@ -33,9 +33,9 @@ use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use tempfile::{TempDir, tempdir};
 use tokio::{fs, task::JoinSet};
 use url::Url;
-use uv_configuration::initialize_rayon_once;
 use uv_normalize::PackageName;
 use uv_python::PythonEnvironment;
+use uv_threads::initialize_rayon_once;
 
 use crate::common::pypi_index::PyPIPackage;
 use crate::common::{

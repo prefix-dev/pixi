@@ -32,12 +32,12 @@ use rattler_lock::UrlOrPath;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_client::{FlatIndexClient, RegistryClientBuilder};
-use uv_configuration::initialize_rayon_once;
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{ConfigSettings, DependencyMetadata, IndexUrl, RequirementSource};
 use uv_git_types::GitReference;
 use uv_pypi_types::PyProjectToml;
 use uv_resolver::FlatIndex;
+use uv_threads::initialize_rayon_once;
 use uv_types::HashStrategy;
 
 use super::errors::PlatformUnsat;
