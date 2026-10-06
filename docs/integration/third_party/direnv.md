@@ -11,28 +11,24 @@ pixi global install direnv
 Then create a `.envrc` file in your Pixi workspace root with the following content:
 
 ```shell title=".envrc"
-require_allowed pixi.toml # (1)!
-layout pixi # (2)!
+layout pixi
 ```
 
-1. Requires a fresh `direnv allow` whenever `pixi.toml` changes. Use `pyproject.toml` instead if your workspace is configured there.
-2. Installs the environment if needed and activates it by running `pixi shell-hook`. It also requires a fresh `direnv allow` whenever `pixi.lock` changes. `direnv` ensures that the environment is deactivated when you leave the directory.
+[`layout pixi`](https://direnv.net/man/direnv-stdlib.1.html#codelayout-pixicode) installs the environment if needed and activates it by running `pixi shell-hook`.
+`direnv` ensures that the environment is deactivated when you leave the directory.
+Additional arguments are passed to `pixi shell-hook`, so you can activate a different environment with `layout pixi -e <env_name>`.
 
-`layout pixi` passes its arguments to `pixi shell-hook`, so you can activate a different environment with `layout pixi -e <env_name>`.
+`layout pixi` must be used in the workspace root and requires a `pixi.lock`. If there is none yet, run `pixi lock` first.
+It guards the manifest (`pixi.toml` or `pyproject.toml`) and `pixi.lock` with:
 
-!!! warning "Require approval for manifest and lock file changes"
-    Activating a Pixi environment can execute arbitrary code, for example through [activation scripts](../../workspace/environment.md#activation) of installed packages.
-    `require_allowed` makes sure that `direnv` does not activate an environment from a changed manifest or lock file (e.g. after `git pull` or switching branches) until you have reviewed the change and run `direnv allow` again.
+- [`require_allowed`](https://direnv.net/man/direnv-stdlib.1.html#coderequireallowed-ltpathgt-ltpathgt-code), which blocks the `.envrc` until you run `direnv allow` again whenever one of these files changes;
+- [`watch_file`](https://direnv.net/man/direnv-stdlib.1.html#codewatchfile-ltpathgt-ltpathgt-code), which makes `direnv` reload the `.envrc` whenever one of these files changes.
+
+!!! warning "Review manifest and lock file changes before running `direnv allow`"
+    Activating a Pixi environment can execute arbitrary code, for example through [activation scripts](../../workspace/environment.md#activation) of installed packages or the `[activation]` section of your manifest.
+    `require_allowed` makes sure that `direnv` does not activate an environment from a changed manifest or lock file (e.g. after `git pull` or switching branches) until you have reviewed the change.
+    If your manifest references activation scripts from your repository, add `require_allowed path/to/script.sh` to your `.envrc` to guard them as well.
     See [Supply Chain Security](../../security.md#4-treat-package-hooks-as-code-execution) for more details.
-
-!!! note "Older `direnv` versions"
-    `layout pixi` and `require_allowed` are available since `direnv` v2.38.1.
-    On older versions you can use the following `.envrc` instead, but be aware that it re-activates the environment after changes to `pixi.lock` without asking for approval:
-
-    ```shell title=".envrc"
-    watch_file pixi.lock
-    eval "$(pixi shell-hook)"
-    ```
 
 ```shell
 $ cd my-project
