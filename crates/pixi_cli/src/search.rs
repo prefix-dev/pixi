@@ -69,6 +69,10 @@ pub struct Args {
     /// Output in JSON format
     #[arg(long, conflicts_with_all = ["limit", "limit_packages"])]
     pub json: bool,
+
+    /// Bypass the local cache and fetch the latest repodata
+    #[arg(long)]
+    pub ignore_cache: bool,
 }
 
 fn build_json_output(packages: &[RepoDataRecord]) -> IndexMap<String, Vec<&RepoDataRecord>> {
@@ -168,7 +172,13 @@ pub async fn execute_impl<W: Write>(
     let result = if let Some(workspace) = workspace {
         await_in_progress("searching packages...", |_| async {
             cli_context(workspace)
-                .search(matchspec, channels, platforms, fuzzy_limit)
+                .search(
+                    matchspec,
+                    channels,
+                    platforms,
+                    fuzzy_limit,
+                    args.ignore_cache,
+                )
                 .await
         })
         .await?
@@ -177,7 +187,14 @@ pub async fn execute_impl<W: Write>(
             .merge_config(args.config.clone().into());
         await_in_progress("searching packages...", |_| async {
             DefaultContext::new(CliInterface {})
-                .search(config, matchspec, channels, platforms, fuzzy_limit)
+                .search(
+                    config,
+                    matchspec,
+                    channels,
+                    platforms,
+                    fuzzy_limit,
+                    args.ignore_cache,
+                )
                 .await
         })
         .await?
