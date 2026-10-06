@@ -335,7 +335,8 @@ mod tests {
                     render_env_platform(output_dir.path(), env_name, &env, platform, false, false)
                         .is_err()
                 );
-                render_env_platform(output_dir.path(), env_name, &env, platform, true, false).unwrap();
+                render_env_platform(output_dir.path(), env_name, &env, platform, true, false)
+                    .unwrap();
 
                 let file_path = output_dir
                     .path()
@@ -366,7 +367,8 @@ mod tests {
         for (env_name, env) in lock_file.environments() {
             for platform in env.platforms() {
                 let platform_name = platform.name();
-                render_env_platform(output_dir.path(), env_name, &env, platform, true, false).unwrap();
+                render_env_platform(output_dir.path(), env_name, &env, platform, true, false)
+                    .unwrap();
 
                 let file_path = output_dir
                     .path()
