@@ -50,6 +50,10 @@ pub struct Args {
     #[arg(long, default_value = "false")]
     pub ignore_source_errors: bool,
 
+    /// Emit sha256 hashes instead of md5.
+    #[arg(long, default_value = "false")]
+    pub sha256: bool,
+
     #[clap(flatten)]
     pub lock_file_update_config: LockFileUpdateConfig,
 
@@ -63,18 +67,27 @@ pub struct Args {
 fn build_explicit_spec<'a>(
     platform: &Subdir,
     conda_packages: impl IntoIterator<Item = &'a RepoDataRecord>,
+    sha256: bool,
 ) -> miette::Result<ExplicitEnvironmentSpec> {
     let mut packages = Vec::new();
 
     for cp in conda_packages {
         let prec = &cp.package_record;
-        let hash = prec.md5.ok_or(miette::miette!(
-            "Package {} does not contain an md5 hash",
-            prec.name.as_normalized()
-        ))?;
-
         let mut url = cp.url.clone();
-        url.set_fragment(Some(&hex::encode(hash)));
+
+        if sha256 {
+            let hash_sha256 = prec.sha256.ok_or(miette::miette!(
+                "Package {} does not contain a sha256 hash",
+                prec.name.as_normalized()
+            ))?;
+            url.set_fragment(Some(&hex::encode(hash_sha256)));
+        } else {
+            let hash_md5 = prec.md5.ok_or(miette::miette!(
+                "Package {} does not contain an md5 hash",
+                prec.name.as_normalized()
+            ))?;
+            url.set_fragment(Some(&hex::encode(hash_md5)));
+        }
 
         packages.push(ExplicitEnvironmentEntry {
             url: url.to_owned(),
@@ -124,6 +137,7 @@ fn render_env_platform(
     env: &Environment,
     platform: LockedPlatform<'_>,
     ignore_pypi_errors: bool,
+    sha256: bool,
 ) -> miette::Result<()> {
     // Rich platforms (platforms carrying system-requirements) are named
     // independently of their conda subdir, and several of them can share one
@@ -178,7 +192,7 @@ fn render_env_platform(
 
     let repodata = PackageRecord::sort_topologically(repodata);
 
-    let ees = build_explicit_spec(&subdir, &repodata)?;
+    let ees = build_explicit_spec(&subdir, &repodata, sha256)?;
 
     tracing::info!("Creating conda explicit spec for env: {env_name} platform: {platform_name}");
     let target = output_dir
@@ -288,6 +302,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             &env,
             plat,
             args.ignore_pypi_errors,
+            args.sha256,
         )?;
     }
 
@@ -317,10 +332,10 @@ mod tests {
                 // example contains pypi dependencies so should fail if `ignore_pypi_errors` is
                 // false.
                 assert!(
-                    render_env_platform(output_dir.path(), env_name, &env, platform, false)
+                    render_env_platform(output_dir.path(), env_name, &env, platform, false, false)
                         .is_err()
                 );
-                render_env_platform(output_dir.path(), env_name, &env, platform, true).unwrap();
+                render_env_platform(output_dir.path(), env_name, &env, platform, true, false).unwrap();
 
                 let file_path = output_dir
                     .path()
@@ -351,7 +366,7 @@ mod tests {
         for (env_name, env) in lock_file.environments() {
             for platform in env.platforms() {
                 let platform_name = platform.name();
-                render_env_platform(output_dir.path(), env_name, &env, platform, true).unwrap();
+                render_env_platform(output_dir.path(), env_name, &env, platform, true, false).unwrap();
 
                 let file_path = output_dir
                     .path()
