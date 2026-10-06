@@ -239,31 +239,31 @@ zstd = { version = "0.14.0", default-features = false }
 file_url = "0.3.0"
 rattler = { version = "0.53", default-features = false }
 rattler_cache = { version = "0.10", default-features = false }
-rattler_conda_types = { version = "0.55", default-features = false, features = [
+rattler_conda_types = { version = "0.56", default-features = false, features = [
   "rayon",
 ] }
-rattler_config = { version = "0.8", default-features = false }
-rattler_digest = { version = "2.0", default-features = false }
-rattler_index = { version = "0.32", default-features = false, features = [
+rattler_config = { version = "0.9", default-features = false }
+rattler_digest = { version = "2.1", default-features = false }
+rattler_index = { version = "0.33", default-features = false, features = [
   "s3",
 ] }
 rattler_lock = { version = "0.34", default-features = false }
 rattler_menuinst = { version = "0.4", default-features = false }
-rattler_networking = { version = "0.31", default-features = false, features = [
+rattler_networking = { version = "0.33", default-features = false, features = [
   "dirs",
   "google-cloud-auth",
 ] }
 rattler_package_streaming = { version = "0.27", default-features = false }
 rattler_redaction = { version = "0.2.2", default-features = false }
-rattler_repodata_gateway = { version = "0.34", default-features = false }
+rattler_repodata_gateway = { version = "0.36", default-features = false }
 rattler_s3 = { version = "0.3", default-features = false }
 rattler_shell = { version = "0.29", default-features = false }
-rattler_solve = { version = "10.0", default-features = false }
-rattler_upload = { version = "0.12", default-features = false, features = [
+rattler_solve = { version = "11.1", default-features = false }
+rattler_upload = { version = "0.13", default-features = false, features = [
   "s3",
   "sigstore-sign",
 ] }
-rattler_virtual_packages = { version = "8.0", default-features = false }
+rattler_virtual_packages = { version = "8.1", default-features = false }
 simple_spawn_blocking = { version = "1.1.0", default-features = false }
 
 # Rattler build crates
@@ -276,6 +276,16 @@ rattler_build_types = { version = "0.1.13" }
 rattler_build_variant_config = { version = "0.1.14" }
 
 [patch.crates-io]
+# TEMPORARY: remove once rattler-build is released with rattler 0.53
+rattler_build_core = { path = "/Users/pavel/projects/prefix-dev/rattler-build/crates/rattler_build_core" }
+rattler_build_jinja = { path = "/Users/pavel/projects/prefix-dev/rattler-build/crates/rattler_build_jinja" }
+rattler_build_networking = { path = "/Users/pavel/projects/prefix-dev/rattler-build/crates/rattler_build_networking" }
+rattler_build_recipe = { path = "/Users/pavel/projects/prefix-dev/rattler-build/crates/rattler_build_recipe" }
+rattler_build_script = { path = "/Users/pavel/projects/prefix-dev/rattler-build/crates/rattler_build_script" }
+rattler_build_source_cache = { path = "/Users/pavel/projects/prefix-dev/rattler-build/crates/rattler_build_source_cache" }
+rattler_build_types = { path = "/Users/pavel/projects/prefix-dev/rattler-build/crates/rattler_build_types" }
+rattler_build_variant_config = { path = "/Users/pavel/projects/prefix-dev/rattler-build/crates/rattler_build_variant_config" }
+rattler_build_yaml_parser = { path = "/Users/pavel/projects/prefix-dev/rattler-build/crates/rattler_build_yaml_parser" }
 version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "d8efd77673c9a90792da9da31b6c0da7ea8a324b" }
 
 # Redirect crates.io's `reqwest-middleware` to a local shim that re-exports
