@@ -237,7 +237,7 @@ zstd = { version = "0.14.0", default-features = false }
 
 # Rattler crates
 file_url = "0.3.0"
-rattler = { version = "0.51", default-features = false }
+rattler = { version = "0.53", default-features = false }
 rattler_cache = { version = "0.10", default-features = false }
 rattler_conda_types = { version = "0.55", default-features = false, features = [
   "rayon",
@@ -309,11 +309,11 @@ strip = "debuginfo"
 
 [profile.profiling]
 inherits = "release"
-opt-level = 1  # less inlining, easier stepping/backtraces
-debug = 2  # full debug info
+opt-level = 1                # less inlining, easier stepping/backtraces
+debug = 2                    # full debug info
 split-debuginfo = "unpacked"
-strip = "none"  # or "debuginfo" to separate
-lto = false  # avoid over-inlining across crates
-panic = "unwind"  # needed for backtraces
+strip = "none"               # or "debuginfo" to separate
+lto = false                  # avoid over-inlining across crates
+panic = "unwind"             # needed for backtraces
 # macOS only:
-codegen-units = 1  # better line info (slower build, clearer profiles)
+codegen-units = 1 # better line info (slower build, clearer profiles)
