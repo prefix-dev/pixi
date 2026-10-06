@@ -294,47 +294,152 @@ fn parse_export(parent: &roxmltree::Node) -> Export {
     }
 }
 
-/// Evaluate a simple condition expression like `$ROS_VERSION == 2`.
+/// Evaluate a condition expression as defined in REP 149, for example
+/// `$ROS_VERSION == 2` or `$ROS_DISTRO != jazzy and $ROS_DISTRO != kilted`.
 ///
-/// Supports operators: `==`, `!=`, `<`, `>`, `<=`, `>=`.
+/// Supports comparison operators `==`, `!=`, `<`, `>`, `<=`, `>=`, combined
+/// with `and` / `or` (where `and` binds tighter) and parentheses.
 /// Variables are substituted from the `env` map using `$VAR` syntax.
 /// Missing variables evaluate to empty string.
+///
+/// A condition that cannot be parsed is logged and evaluates to `true`, so the
+/// dependency is kept rather than silently dropped.
 fn evaluate_condition(condition: &str, env: &HashMap<String, String>) -> bool {
-    let condition = condition.trim();
+    let tokens = tokenize_condition(condition);
+    let mut parser = ConditionParser {
+        tokens: &tokens,
+        pos: 0,
+        env,
+    };
+    match parser.parse_or() {
+        Some(result) if parser.pos == tokens.len() => result,
+        _ => {
+            tracing::warn!(
+                "failed to parse package.xml condition '{condition}', including the dependency"
+            );
+            true
+        }
+    }
+}
 
-    // Find the operator
-    let operators = ["==", "!=", "<=", ">=", "<", ">"];
-    let mut found_op = None;
-    let mut op_pos = 0;
-    let mut op_len = 0;
+#[derive(Debug, PartialEq)]
+enum ConditionToken {
+    LParen,
+    RParen,
+    Comparison(&'static str),
+    And,
+    Or,
+    Term(String),
+}
 
-    for op in &operators {
-        if let Some(pos) = condition.find(op) {
-            // Pick the earliest match; if tie, prefer longer operator
-            if found_op.is_none() || pos < op_pos || (pos == op_pos && op.len() > op_len) {
-                found_op = Some(*op);
-                op_pos = pos;
-                op_len = op.len();
-            }
+/// Split a condition into tokens. Quoted strings are kept as a single term.
+fn tokenize_condition(condition: &str) -> Vec<ConditionToken> {
+    const COMPARISONS: [&str; 6] = ["==", "!=", "<=", ">=", "<", ">"];
+
+    let mut tokens = Vec::new();
+    let mut rest = condition.trim_start();
+    while let Some(c) = rest.chars().next() {
+        if c == '(' {
+            tokens.push(ConditionToken::LParen);
+            rest = &rest[1..];
+        } else if c == ')' {
+            tokens.push(ConditionToken::RParen);
+            rest = &rest[1..];
+        } else if let Some(op) = COMPARISONS.iter().find(|op| rest.starts_with(**op)) {
+            tokens.push(ConditionToken::Comparison(op));
+            rest = &rest[op.len()..];
+        } else if c == '\'' || c == '"' {
+            let end = rest[1..].find(c).map_or(rest.len(), |i| i + 2);
+            tokens.push(ConditionToken::Term(rest[..end].to_string()));
+            rest = &rest[end..];
+        } else {
+            let end = rest
+                .find(|ch: char| ch.is_whitespace() || "()=!<>".contains(ch))
+                .unwrap_or(rest.len())
+                .max(1);
+            let word = &rest[..end];
+            tokens.push(match word {
+                "and" => ConditionToken::And,
+                "or" => ConditionToken::Or,
+                _ => ConditionToken::Term(word.to_string()),
+            });
+            rest = &rest[end..];
+        }
+        rest = rest.trim_start();
+    }
+    tokens
+}
+
+/// Recursive descent parser that evaluates a tokenized condition.
+struct ConditionParser<'a> {
+    tokens: &'a [ConditionToken],
+    pos: usize,
+    env: &'a HashMap<String, String>,
+}
+
+impl ConditionParser<'_> {
+    fn next_if(&mut self, expected: &ConditionToken) -> bool {
+        if self.tokens.get(self.pos) == Some(expected) {
+            self.pos += 1;
+            true
+        } else {
+            false
         }
     }
 
-    let Some(op) = found_op else {
-        // No operator found; treat non-empty as true
-        return !substitute_vars(condition, env).is_empty();
-    };
+    /// `or_expr := and_expr ('or' and_expr)*`
+    fn parse_or(&mut self) -> Option<bool> {
+        let mut result = self.parse_and()?;
+        while self.next_if(&ConditionToken::Or) {
+            // Evaluate the right-hand side unconditionally so parse errors surface.
+            let rhs = self.parse_and()?;
+            result = result || rhs;
+        }
+        Some(result)
+    }
 
-    let lhs = substitute_vars(condition[..op_pos].trim(), env);
-    let rhs = substitute_vars(condition[op_pos + op_len..].trim(), env);
+    /// `and_expr := atom ('and' atom)*`
+    fn parse_and(&mut self) -> Option<bool> {
+        let mut result = self.parse_atom()?;
+        while self.next_if(&ConditionToken::And) {
+            let rhs = self.parse_atom()?;
+            result = result && rhs;
+        }
+        Some(result)
+    }
 
-    match op {
-        "==" => lhs == rhs,
-        "!=" => lhs != rhs,
-        "<" => lhs < rhs,
-        ">" => lhs > rhs,
-        "<=" => lhs <= rhs,
-        ">=" => lhs >= rhs,
-        _ => false,
+    /// `atom := '(' or_expr ')' | term (comparison term)?`
+    fn parse_atom(&mut self) -> Option<bool> {
+        if self.next_if(&ConditionToken::LParen) {
+            let result = self.parse_or()?;
+            return self.next_if(&ConditionToken::RParen).then_some(result);
+        }
+
+        let lhs = self.parse_term()?;
+        let Some(ConditionToken::Comparison(op)) = self.tokens.get(self.pos) else {
+            // No operator; treat non-empty as true
+            return Some(!lhs.is_empty());
+        };
+        self.pos += 1;
+        let rhs = self.parse_term()?;
+
+        Some(match *op {
+            "==" => lhs == rhs,
+            "!=" => lhs != rhs,
+            "<" => lhs < rhs,
+            ">" => lhs > rhs,
+            "<=" => lhs <= rhs,
+            ">=" => lhs >= rhs,
+            _ => unreachable!("tokenizer only produces known comparison operators"),
+        })
+    }
+
+    fn parse_term(&mut self) -> Option<String> {
+        let ConditionToken::Term(term) = self.tokens.get(self.pos)? else {
+            return None;
+        };
+        self.pos += 1;
+        Some(substitute_vars(term, self.env))
     }
 }
 
@@ -519,6 +624,68 @@ mod tests {
         assert!(evaluate_condition("$ROS_VERSION != 1", &env));
         assert!(evaluate_condition("$ROS_DISTRO == jazzy", &env));
         assert!(!evaluate_condition("$ROS_DISTRO != 'jazzy'", &env));
+    }
+
+    #[test]
+    fn test_evaluate_condition_and_or() {
+        let env = HashMap::from([
+            ("ROS_VERSION".to_string(), "2".to_string()),
+            ("ROS_DISTRO".to_string(), "jazzy".to_string()),
+        ]);
+
+        // Regression test for https://github.com/prefix-dev/pixi/issues/7177
+        assert!(!evaluate_condition(
+            "$ROS_DISTRO != jazzy and $ROS_DISTRO != kilted",
+            &env
+        ));
+        assert!(evaluate_condition(
+            "$ROS_DISTRO != humble and $ROS_DISTRO != kilted",
+            &env
+        ));
+        assert!(evaluate_condition(
+            "$ROS_DISTRO == humble or $ROS_DISTRO == jazzy",
+            &env
+        ));
+        assert!(!evaluate_condition(
+            "$ROS_DISTRO == humble or $ROS_DISTRO == kilted",
+            &env
+        ));
+    }
+
+    #[test]
+    fn test_evaluate_condition_precedence_and_parentheses() {
+        let env = HashMap::from([
+            ("ROS_VERSION".to_string(), "2".to_string()),
+            ("ROS_DISTRO".to_string(), "jazzy".to_string()),
+        ]);
+
+        // `and` binds tighter than `or`.
+        assert!(evaluate_condition(
+            "$ROS_VERSION == 1 and $ROS_DISTRO == noetic or $ROS_DISTRO == jazzy",
+            &env
+        ));
+        assert!(!evaluate_condition(
+            "$ROS_VERSION == 1 and ($ROS_DISTRO == noetic or $ROS_DISTRO == jazzy)",
+            &env
+        ));
+        assert!(evaluate_condition(
+            "($ROS_VERSION == 2) and ($ROS_DISTRO == humble or $ROS_DISTRO == jazzy)",
+            &env
+        ));
+    }
+
+    #[test]
+    fn test_evaluate_condition_without_spaces() {
+        let env = HashMap::from([("ROS_VERSION".to_string(), "2".to_string())]);
+        assert!(evaluate_condition("$ROS_VERSION==2", &env));
+        assert!(evaluate_condition("($ROS_VERSION>=2)", &env));
+    }
+
+    #[test]
+    fn test_evaluate_condition_malformed_keeps_dependency() {
+        let env = HashMap::from([("ROS_VERSION".to_string(), "2".to_string())]);
+        assert!(evaluate_condition("$ROS_VERSION == 1 and", &env));
+        assert!(evaluate_condition("($ROS_VERSION == 1", &env));
     }
 
     #[test]
