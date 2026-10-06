@@ -2,10 +2,10 @@ use itertools::Itertools;
 use miette::{Context, Diagnostic, IntoDiagnostic, NamedSource, SourceSpan};
 use pixi_config::Config;
 use rattler_conda_types::{MatchSpec, NamedChannelOrUrl, ParseStrictness::Lenient};
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::{io::BufRead, path::Path, str::FromStr};
+use std::{fmt, io::BufRead, path::Path, str::FromStr};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -59,6 +59,44 @@ pub struct CondaEnvFile {
     dependencies: Vec<CondaEnvDep>,
     #[serde(default)]
     variables: HashMap<String, String>,
+    #[serde(skip)]
+    source_path: PathBuf,
+}
+
+/// Represents a single entry from a conda environment's pip: list.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PipEntry {
+    /// A directly specified pip requirement string.
+    Requirement(String),
+    /// A reference to an external requirements file (`-r requirement.txt`)
+    RequirementsFile(String),
+}
+
+/// Resolves whether a line is a plain requirement or a file reference.
+impl<'de> Deserialize<'de> for PipEntry {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        if let Some(rest) = s
+            .strip_prefix("-r ")
+            .or_else(|| s.strip_prefix("--requirement "))
+        {
+            Ok(PipEntry::RequirementsFile(rest.trim().to_string()))
+        } else {
+            Ok(PipEntry::Requirement(s))
+        }
+    }
+}
+
+impl fmt::Display for PipEntry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PipEntry::Requirement(s) => write!(f, "{s}"),
+            PipEntry::RequirementsFile(s) => write!(f, "-r {s}"),
+        }
+    }
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -67,7 +105,7 @@ pub enum CondaEnvDep {
     Conda(String),
     Pip {
         #[serde(default)]
-        pip: Option<Vec<String>>,
+        pip: Option<Vec<PipEntry>>,
     },
 }
 
@@ -112,7 +150,7 @@ impl CondaEnvFile {
             s.push_str(&line);
             s.push('\n');
         }
-        let env_file: CondaEnvFile = match serde_yaml::from_str(&s) {
+        let mut env_file: CondaEnvFile = match serde_yaml::from_str(&s) {
             Ok(env_file) => env_file,
             Err(e) => {
                 let src = NamedSource::new(path.display().to_string(), s.to_string());
@@ -120,6 +158,7 @@ impl CondaEnvFile {
                 return Err(miette::Report::new(error));
             }
         };
+        env_file.source_path = path.to_path_buf();
         Ok(env_file)
     }
 
@@ -134,7 +173,7 @@ impl CondaEnvFile {
         // TODO: should we be applying `config.channel_config` for parsed channels too?
         let mut channels = parse_channels(self.channels().clone());
         let (conda_deps, pip_deps, extra_channels) =
-            parse_dependencies(self.dependencies().clone())?;
+            parse_dependencies(self.dependencies().clone(), &self.source_path)?;
 
         channels.extend(extra_channels);
         let mut channels: Vec<_> = channels.into_iter().unique().collect();
@@ -146,7 +185,45 @@ impl CondaEnvFile {
     }
 }
 
-fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<ParsedDependencies> {
+/// Simple parser for a requirements.txt file.
+///
+/// TODO: refactor to use convert_uv_requirements_txt_to_pep508. This requires some
+/// restructuring to avoid circular imports.
+fn parse_requirements_file(path: &Path) -> miette::Result<Vec<pep508_rs::Requirement>> {
+    let content = fs_err::read_to_string(path).into_diagnostic()?;
+    let mut requirements = Vec::new();
+
+    for line in content.lines() {
+        let line = line.trim();
+
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if line.starts_with('-') {
+            tracing::warn!(
+                "Skipping unsupported pip option '{}' in requirements file '{}'",
+                line,
+                path.display()
+            );
+            continue;
+        }
+        let requirement = pep508_rs::Requirement::from_str(line)
+            .into_diagnostic()
+            .wrap_err(format!(
+                "Can't parse '{line}' as pypi dependency in {}",
+                path.display()
+            ))?;
+        requirements.push(requirement);
+    }
+
+    Ok(requirements)
+}
+
+/// Parse the `dependencies:` section of a conda environment file
+fn parse_dependencies(
+    deps: Vec<CondaEnvDep>,
+    base_dir: &Path,
+) -> miette::Result<ParsedDependencies> {
     let mut conda_deps = Vec::new();
     let mut pip_deps = Vec::new();
     let mut picked_up_channels = Vec::new();
@@ -168,15 +245,23 @@ fn parse_dependencies(deps: Vec<CondaEnvDep>) -> miette::Result<ParsedDependenci
             }
             CondaEnvDep::Pip { pip } => {
                 let pip = pip.unwrap_or_default();
-                pip_deps.extend(
-                    pip.iter()
-                        .map(|dep| {
-                            pep508_rs::Requirement::from_str(dep)
+                for entry in pip {
+                    match entry {
+                        PipEntry::Requirement(dep) => {
+                            let dep_508 = pep508_rs::Requirement::from_str(&dep)
                                 .into_diagnostic()
-                                .wrap_err(format!("Can't parse '{dep}' as pypi dependency"))
-                        })
-                        .collect::<miette::Result<Vec<_>>>()?,
-                )
+                                .wrap_err(format!("Can't parse '{dep}' as pypi dependency"));
+                            pip_deps.push(dep_508?);
+                        }
+                        PipEntry::RequirementsFile(file) => {
+                            let base_parent_dir =
+                                base_dir.parent().unwrap_or_else(|| Path::new("."));
+                            let req_path = base_parent_dir.join(&file);
+                            let req_pypi_deps = parse_requirements_file(&req_path)?;
+                            pip_deps.extend(req_pypi_deps);
+                        }
+                    }
+                }
             }
         }
     }
@@ -295,6 +380,91 @@ mod tests {
         );
     }
 
+    /// Write `yaml` as environment.yml in `dir` and return its parsed pip deps.
+    fn parse_pip_from_yaml(dir: &Path, yaml: &str) -> miette::Result<Vec<pep508_rs::Requirement>> {
+        let path = dir.join("environment.yml");
+        fs_err::write(&path, yaml).unwrap();
+        let env = CondaEnvFile::from_path(&path).unwrap();
+        let (_conda, pip, _ch) = parse_dependencies(env.dependencies().clone(), &env.source_path)?;
+        Ok(pip)
+    }
+
+    #[test]
+    fn test_pip_requirements_file_long_flag_and_mixed_entries() {
+        // `--requirement` long form, resolved relative to the yaml, with entries
+        // before and after the file reference keeping their order.
+        let dir = tempfile::tempdir().unwrap();
+        fs_err::write(
+            dir.path().join("reqs.txt"),
+            "numpy\n# comment\n\nflask==2.0\n",
+        )
+        .unwrap();
+        let pip = parse_pip_from_yaml(
+            dir.path(),
+            "name: e\ndependencies:\n  - pip:\n    - requests\n    - --requirement reqs.txt\n    - torch\n",
+        )
+        .unwrap();
+        assert_eq!(
+            pip,
+            vec![
+                pep508_rs::Requirement::from_str("requests").unwrap(),
+                pep508_rs::Requirement::from_str("numpy").unwrap(),
+                pep508_rs::Requirement::from_str("flask==2.0").unwrap(),
+                pep508_rs::Requirement::from_str("torch").unwrap(),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_pip_requirements_file_absolute_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let abs = dir.path().join("abs_reqs.txt");
+        fs_err::write(&abs, "scipy\n").unwrap();
+        let pip = parse_pip_from_yaml(
+            dir.path(),
+            &format!(
+                "name: e\ndependencies:\n  - pip:\n    - -r {}\n",
+                abs.display()
+            ),
+        )
+        .unwrap();
+        assert_eq!(
+            pip,
+            vec![pep508_rs::Requirement::from_str("scipy").unwrap()]
+        );
+    }
+
+    #[test]
+    fn test_pip_requirements_file_missing_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let res = parse_pip_from_yaml(
+            dir.path(),
+            "name: e\ndependencies:\n  - pip:\n    - -r does_not_exist.txt\n",
+        );
+        assert!(res.is_err());
+    }
+
+    #[test]
+    fn test_pip_requirements_file_nested_options_skipped() {
+        // Unsupported options inside the requirements file (including nested `-r`)
+        // are skipped with a warning rather than failing the parse.
+        let dir = tempfile::tempdir().unwrap();
+        fs_err::write(
+            dir.path().join("reqs.txt"),
+            "--extra-index-url https://example.com\n-r other.txt\nrequests\n",
+        )
+        .unwrap();
+        let pip = parse_pip_from_yaml(
+            dir.path(),
+            "name: e\ndependencies:\n  - pip:\n    - -r reqs.txt\n",
+        )
+        .unwrap();
+        assert_eq!(
+            pip,
+            vec![pep508_rs::Requirement::from_str("requests").unwrap()]
+        );
+    }
+
     #[test]
     fn test_import_from_env_yamls() {
         let test_files_path = Path::new(&env!("CARGO_MANIFEST_DIR"))
@@ -309,7 +479,12 @@ mod tests {
         let mut paths = Vec::new();
         for entry in entries {
             let entry = entry.expect("Failed to read directory entry");
-            if entry.path().is_file() {
+            if entry.path().is_file()
+                && entry // only check yaml files (skip requirements.txt)
+                    .path()
+                    .extension()
+                    .is_some_and(|ext| ext == "yml" || ext == "yaml")
+            {
                 paths.push(entry.path());
             }
         }
@@ -325,7 +500,8 @@ mod tests {
             insta::assert_debug_snapshot!(
                 snapshot_name,
                 (
-                    parse_dependencies(env_info.dependencies().clone()).unwrap(),
+                    parse_dependencies(env_info.dependencies().clone(), &env_info.source_path)
+                        .unwrap(),
                     parse_channels(env_info.channels().clone()),
                     env_info.name()
                 )
@@ -352,8 +528,11 @@ mod tests {
 
         let conda_env_file_data = CondaEnvFile::from_path(path).unwrap();
         let vars = conda_env_file_data.variables();
-        let (conda_deps, pip_deps, _) =
-            parse_dependencies(conda_env_file_data.dependencies().clone()).unwrap();
+        let (conda_deps, pip_deps, _) = parse_dependencies(
+            conda_env_file_data.dependencies().clone(),
+            &conda_env_file_data.source_path,
+        )
+        .unwrap();
 
         assert_eq!(
             conda_deps,
