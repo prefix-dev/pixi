@@ -84,10 +84,6 @@ cargo-nextest = ">=0.9.146,<0.10"
 git-lfs = ">=3.8.0,<4"
 
 [feature.dev.tasks]
-insta-review = {
-  cmd = "cargo insta review --workspace",
-  description = "Review cargo-insta snapshots",
-}
 pypi-proxy = {
   cmd = "python scripts/pypi-proxy.py",
   description = "Run PyPI proxy server",
@@ -561,9 +557,9 @@ generate-cli-docs = {
   cmd = "cargo run --locked --manifest-path crates/pixi_docs/Cargo.toml",
   description = "Generate CLI documentation",
 }
-insta = {
-  cmd = "cargo insta",
-  description = "Run cargo-insta commands",
+insta-review = {
+  cmd = "cargo insta review --workspace",
+  description = "Review cargo-insta snapshots",
 }
 install = {
   cmd = "cargo install --path crates/pixi --locked",
