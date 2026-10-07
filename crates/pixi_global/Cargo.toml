@@ -15,7 +15,7 @@ console = { workspace = true }
 dirs = { workspace = true }
 dunce = { workspace = true }
 fancy_display = { workspace = true }
-fs-err = { workspace = true }
+fs-err = { workspace = true, features = ["tokio"] }
 futures = { workspace = true }
 human_bytes = { workspace = true }
 indexmap = { workspace = true }
