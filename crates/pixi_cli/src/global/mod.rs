@@ -62,6 +62,9 @@ pub struct Args {
 
 /// Maps global command enum variants to their function handlers.
 pub async fn execute(cmd: Args) -> miette::Result<()> {
+    // Acquire a global manifest lock to prevent concurrent modifications
+    let _lock = pixi_global::project::GlobalManifestLock::lock().await?;
+
     match cmd.command {
         Command::Add(args) => add::execute(args).await?,
         Command::Edit(args) => edit::execute(args).await?,

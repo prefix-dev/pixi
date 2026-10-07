@@ -83,11 +83,13 @@ use crate::{
 
 mod environment;
 mod global_spec;
+mod lock;
 mod manifest;
 mod parsed_manifest;
 pub use global_spec::{
     FromMatchSpecError, GlobalSpec, InlinePackageValue, InlinePackageValueError,
 };
+pub use lock::GlobalManifestLock;
 use pixi_utils::reqwest::{LazyReqwestClient, build_lazy_reqwest_clients};
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
