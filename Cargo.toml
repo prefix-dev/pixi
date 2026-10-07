@@ -267,25 +267,15 @@ rattler_virtual_packages = { version = "8.1", default-features = false }
 simple_spawn_blocking = { version = "1.1.0", default-features = false }
 
 # Rattler build crates
-rattler_build_core = { version = "0.2.13", default-features = false, features = [
+rattler_build_core = { version = "0.2.17", default-features = false, features = [
   "s3",
 ] }
-rattler_build_jinja = { version = "0.1.14" }
-rattler_build_recipe = { version = "0.1.14" }
-rattler_build_types = { version = "0.1.13" }
-rattler_build_variant_config = { version = "0.1.14" }
+rattler_build_jinja = { version = "0.1.18" }
+rattler_build_recipe = { version = "0.1.18" }
+rattler_build_types = { version = "0.1.16" }
+rattler_build_variant_config = { version = "0.1.18" }
 
 [patch.crates-io]
-# TEMPORARY: remove once rattler-build is released with rattler 0.53
-rattler_build_core = { path = "/Users/pavel/projects/prefix-dev/rattler-build/crates/rattler_build_core" }
-rattler_build_jinja = { path = "/Users/pavel/projects/prefix-dev/rattler-build/crates/rattler_build_jinja" }
-rattler_build_networking = { path = "/Users/pavel/projects/prefix-dev/rattler-build/crates/rattler_build_networking" }
-rattler_build_recipe = { path = "/Users/pavel/projects/prefix-dev/rattler-build/crates/rattler_build_recipe" }
-rattler_build_script = { path = "/Users/pavel/projects/prefix-dev/rattler-build/crates/rattler_build_script" }
-rattler_build_source_cache = { path = "/Users/pavel/projects/prefix-dev/rattler-build/crates/rattler_build_source_cache" }
-rattler_build_types = { path = "/Users/pavel/projects/prefix-dev/rattler-build/crates/rattler_build_types" }
-rattler_build_variant_config = { path = "/Users/pavel/projects/prefix-dev/rattler-build/crates/rattler_build_variant_config" }
-rattler_build_yaml_parser = { path = "/Users/pavel/projects/prefix-dev/rattler-build/crates/rattler_build_yaml_parser" }
 version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "d8efd77673c9a90792da9da31b6c0da7ea8a324b" }
 
 # Redirect crates.io's `reqwest-middleware` to a local shim that re-exports
