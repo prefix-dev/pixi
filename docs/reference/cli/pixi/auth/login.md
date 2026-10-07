@@ -24,7 +24,7 @@ pixi auth login [OPTIONS] <HOST>
 
 ## OAuth/OIDC Authentication
 - <a id="arg---oauth" href="#arg---oauth">`--oauth`</a>
-:  Use OAuth/OIDC authentication
+:  Log in interactively with OAuth/OIDC (browser or device code)
 - <a id="arg---oauth-issuer-url" href="#arg---oauth-issuer-url">`--oauth-issuer-url <OAUTH_ISSUER_URL>`</a>
 :  OIDC issuer URL (defaults to <https://{host>})
 - <a id="arg---oauth-client-id" href="#arg---oauth-client-id">`--oauth-client-id <OAUTH_CLIENT_ID>`</a>
@@ -57,5 +57,16 @@ pixi auth login [OPTIONS] <HOST>
 :  The password to use (for basic HTTP authentication)
 - <a id="arg---conda-token" href="#arg---conda-token">`--conda-token <CONDA_TOKEN>`</a>
 :  The token to use on anaconda.org / quetz authentication
+
+## Workload Identity (CI, non-interactive)
+- <a id="arg---workload-identity" href="#arg---workload-identity">`--workload-identity`</a>
+:  Log in non-interactively by exchanging the CI provider's OIDC ID token (GitHub Actions, GitLab CI, ...) for an access token
+- <a id="arg---workload-identity-audience" href="#arg---workload-identity-audience">`--workload-identity-audience <WORKLOAD_IDENTITY_AUDIENCE>`</a>
+:  Audience requested in the OIDC ID token (defaults to the host, or `prefix.dev` for prefix.dev hosts)
+- <a id="arg---workload-identity-exchange" href="#arg---workload-identity-exchange">`--workload-identity-exchange <WORKLOAD_IDENTITY_EXCHANGE>`</a>
+:  How the server exchanges the ID token (defaults to `prefix` for prefix.dev hosts and `token-exchange` otherwise)
+<br>**options**: `token-exchange`, `prefix`
+- <a id="arg---workload-identity-token-endpoint" href="#arg---workload-identity-token-endpoint">`--workload-identity-token-endpoint <WORKLOAD_IDENTITY_TOKEN_ENDPOINT>`</a>
+:  Token endpoint for `--workload-identity-exchange token-exchange`: a URL or a path on the host (defaults to the `token_endpoint` from the host's RFC 8414 metadata, or `/access/api/v1/oidc/token` for *.jfrog.io hosts)
 
 --8<-- "docs/reference/cli/pixi/auth/login_extender:example"
