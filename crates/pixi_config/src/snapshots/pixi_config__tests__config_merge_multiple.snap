@@ -95,6 +95,7 @@ Config {
             base_url: None,
             notices: None,
             channel_relations: None,
+            virtual_package_detectors: None,
         },
         per_channel: {},
     },

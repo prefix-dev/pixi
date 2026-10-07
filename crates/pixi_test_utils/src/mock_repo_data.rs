@@ -109,6 +109,7 @@ impl MockRepoData {
                     base_url: None,
                     channel_relations: None,
                     repodata_revisions: Default::default(),
+                    virtual_package_detectors: None,
                 }),
                 packages: tar_bz2_packages.into_iter().collect(),
                 conda_packages: conda_packages.into_iter().collect(),
