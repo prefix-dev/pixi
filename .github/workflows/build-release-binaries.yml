@@ -112,6 +112,11 @@ jobs:
           # Windows release builds (pixi#6915). Leave the variable alone here;
           # the "Set build options" step below composes the full value.
           rustflags: ""
+          # v2 of this action also sets CARGO_BUILD_WARNINGS=deny, which turns
+          # linker stderr (the `linker_messages` lint, e.g. zig's "ignoring
+          # deprecated linker optimization setting") into hard errors. Compiler
+          # warnings are still denied through RUSTFLAGS="-D warnings".
+          build-warnings: ""
 
       - name: Set build options
         run: pixi run -e release build-options --target ${{ matrix.target }}
