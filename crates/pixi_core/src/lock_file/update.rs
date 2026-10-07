@@ -461,7 +461,12 @@ impl Workspace {
         // If the lock file is out of date, but we're not allowed to update it, we
         // should exit.
         if !options.lock_file_usage.allow_updates() {
-            miette::bail!("lock file not up-to-date with the workspace");
+            let reasons: String = outdated
+                .reasons
+                .iter()
+                .map(|reason| format!("\n  - {reason}"))
+                .collect();
+            miette::bail!("lock file not up-to-date with the workspace{reasons}");
         }
 
         // The environments whose conda dependencies are about to be re-solved.

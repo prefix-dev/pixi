@@ -228,9 +228,14 @@ async fn install_locked_with_config() {
         .await
         .unwrap();
 
+    let err = pixi
+        .install()
+        .with_locked()
+        .await
+        .expect_err("should error when installing with locked but there is a mismatch in the dependencies and the lock file.");
     assert!(
-        pixi.install().with_locked().await.is_err(),
-        "should error when installing with locked but there is a mismatch in the dependencies and the lock file."
+        err.to_string().contains("out of date because"),
+        "the error should explain why the lock file is out of date, got: {err}"
     );
 
     // Check if it didn't accidentally update the lock file
