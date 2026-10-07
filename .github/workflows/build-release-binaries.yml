@@ -1,0 +1,206 @@
+name: Build release binaries
+
+# Reusable workflow that builds and packages the pixi release binaries for every
+# target. Used by release.yml (signed, published to prefix-dev/pixi) and
+# dev-release.yml (unsigned development builds from main).
+
+on:
+  workflow_call:
+    inputs:
+      sign:
+        description: "Codesign the macOS and Windows binaries and the MSI"
+        type: boolean
+        default: false
+      pixi-version:
+        description: "Override the version baked into the binary (PIXI_VERSION); defaults to crates/pixi/Cargo.toml"
+        type: string
+        default: ""
+    secrets:
+      CODESIGN_CERTIFICATE:
+        required: false
+      CODESIGN_CERTIFICATE_PASSWORD:
+        required: false
+      CODESIGN_IDENTITY:
+        required: false
+      APPLEID_USERNAME:
+        required: false
+      APPLEID_PASSWORD:
+        required: false
+      APPLEID_TEAMID:
+        required: false
+      AZURE_CLIENT_ID:
+        required: false
+      AZURE_TENANT_ID:
+        required: false
+
+permissions:
+  contents: read
+
+env:
+  RUST_BACKTRACE: 1
+  CARGO_TERM_COLOR: always
+  # Optimized release binaries, matching the former [profile.dist].
+  CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 1
+  CARGO_PROFILE_RELEASE_LTO: "fat"
+  CARGO_PROFILE_RELEASE_OPT_LEVEL: 3
+  CARGO_PROFILE_RELEASE_STRIP: symbols
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      # Windows Azure Trusted Signing authenticates via OIDC.
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            runner: nscloud-ubuntu-24.04-amd64-16x32
+            pgo: true
+          - target: aarch64-unknown-linux-musl
+            runner: 8core_ubuntu_latest_runner
+            pgo: false
+          - target: riscv64gc-unknown-linux-gnu
+            runner: 8core_ubuntu_latest_runner
+            pgo: false
+          - target: x86_64-apple-darwin
+            runner: namespace-profile-macos-15-arm64-6
+            pgo: false
+          - target: aarch64-apple-darwin
+            runner: nscloud-macos-sequoia-arm64-12x28
+            pgo: true
+          - target: x86_64-pc-windows-msvc
+            runner: namespace-profile-windows-2022-x86-64-8
+            pgo: true
+          - target: aarch64-pc-windows-msvc
+            runner: namespace-profile-windows-2022-x86-64-8
+            pgo: false
+    env:
+      SIGN: ${{ inputs.sign }}
+      # macOS codesigning / notarization.
+      CODESIGN_CERTIFICATE: ${{ secrets.CODESIGN_CERTIFICATE }}
+      CODESIGN_CERTIFICATE_PASSWORD: ${{ secrets.CODESIGN_CERTIFICATE_PASSWORD }}
+      CODESIGN_IDENTITY: ${{ secrets.CODESIGN_IDENTITY }}
+      APPLEID_USERNAME: ${{ secrets.APPLEID_USERNAME }}
+      APPLEID_PASSWORD: ${{ secrets.APPLEID_PASSWORD }}
+      APPLEID_TEAMID: ${{ secrets.APPLEID_TEAMID }}
+    steps:
+      - name: Enable windows longpaths
+        run: git config --global core.longpaths true
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2
+        with:
+          environments: release
+          activate-environment: true
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
+        with:
+          target: ${{ matrix.target }}
+          cache: false
+          # This action defaults to writing RUSTFLAGS=-D warnings into the job
+          # environment. RUSTFLAGS overrides every `[target.*].rustflags` entry
+          # in .cargo/config.toml, which silently dropped `+crt-static` from the
+          # Windows release builds (pixi#6915). Leave the variable alone here;
+          # the "Set build options" step below composes the full value.
+          rustflags: ""
+
+      - name: Set build options
+        run: pixi run -e release build-options --target ${{ matrix.target }}
+
+      # PIXI_VERSION is read at compile time by pixi_consts; only set it when
+      # overriding, so release builds keep the version from Cargo.toml.
+      - name: Set pixi version
+        if: inputs.pixi-version != ''
+        shell: bash
+        run: echo "PIXI_VERSION=${PIXI_VERSION_INPUT}" >> "$GITHUB_ENV"
+        env:
+          PIXI_VERSION_INPUT: ${{ inputs.pixi-version }}
+
+      - name: Install LLVM tools
+        if: matrix.pgo
+        run: rustup component add llvm-tools-preview
+
+      - name: Build
+        shell: bash
+        run: python scripts/build_pgo.py --target ${{ matrix.target }} ${{ matrix.pgo && '--pgo' || '' }}
+
+      - name: Codesign and notarize macOS binary
+        if: contains(matrix.target, 'apple-darwin') && env.SIGN == 'true'
+        run: pixi run -e release sign-macos --binary target/${{ matrix.target }}/release/pixi
+
+      - name: Azure login (OIDC)
+        if: runner.os == 'Windows' && env.SIGN == 'true'
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          allow-no-subscriptions: true
+
+      - name: Stage Windows binary for signing
+        if: runner.os == 'Windows' && env.SIGN == 'true'
+        shell: bash
+        run: |
+          mkdir -p "${RUNNER_TEMP}/to-sign"
+          cp "target/${{ matrix.target }}/release/pixi.exe" "${RUNNER_TEMP}/to-sign/"
+
+      - name: Sign Windows binary
+        if: runner.os == 'Windows' && env.SIGN == 'true'
+        uses: azure/trusted-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2.0.0
+        with:
+          endpoint: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_SIGNING_ACCOUNT_NAME }}
+          certificate-profile-name: ${{ vars.AZURE_CERTIFICATE_PROFILE_NAME }}
+          files-folder: ${{ runner.temp }}/to-sign
+          files-folder-filter: exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          # Two Windows targets sign concurrently on the same runner image and
+          # share one Actions cache scope. The action's dependency cache key has
+          # no architecture component, so the jobs race and one restores a cache
+          # that skips the module install, leaving Invoke-ArtifactSigning
+          # undefined. See azure/trusted-signing-action#146.
+          cache-dependencies: false
+
+      - name: Copy signed Windows binary back
+        if: runner.os == 'Windows' && env.SIGN == 'true'
+        shell: bash
+        run: cp "${RUNNER_TEMP}/to-sign/pixi.exe" "target/${{ matrix.target }}/release/pixi.exe"
+
+      # Build the MSI from the (now signed) exe. Runs unsigned when not signing.
+      - name: Build MSI
+        if: runner.os == 'Windows'
+        run: pixi run -e release build-msi --target ${{ matrix.target }}
+
+      - name: Sign MSI
+        if: runner.os == 'Windows' && env.SIGN == 'true'
+        uses: azure/trusted-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82 # v2.0.0
+        with:
+          endpoint: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.AZURE_SIGNING_ACCOUNT_NAME }}
+          certificate-profile-name: ${{ vars.AZURE_CERTIFICATE_PROFILE_NAME }}
+          files-folder: staging
+          files-folder-filter: msi
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          # See the note on the "Sign Windows binary" step above.
+          cache-dependencies: false
+
+      - name: Package binary
+        run: pixi run -e release package-binary --target ${{ matrix.target }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-artifacts-${{ matrix.target }}
+          path: staging/

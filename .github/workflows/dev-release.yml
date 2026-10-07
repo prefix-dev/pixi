@@ -1,0 +1,111 @@
+name: Dev release
+
+# Builds unsigned release binaries from main and publishes them as a GitHub
+# release in pavelzw/pixi-dev-temp. The cross-repository token is minted by
+# octo-sts using the pixi-dev-release policy in that repository.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  TARGET_REPO: pavelzw/pixi-dev-temp
+
+jobs:
+  prepare:
+    name: Prepare dev release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Full history and tags for git describe.
+          fetch-depth: 0
+          persist-credentials: false
+      # e.g. v0.81.0-65-g619b0a3f6. Only match pixi release tags, not the
+      # pixi-build-* backend tags.
+      - name: Compute version
+        id: version
+        run: |
+          describe="$(git describe --tags --match 'v[0-9]*')"
+          echo "version=${describe#v}" >> "$GITHUB_OUTPUT"
+          echo "tag=${describe}" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build
+    needs: prepare
+    uses: ./.github/workflows/build-release-binaries.yml
+    permissions:
+      contents: read
+      # Requested by the reusable workflow for signing; unused here.
+      id-token: write
+    with:
+      sign: false
+      pixi-version: ${{ needs.prepare.outputs.version }}
+
+  publish:
+    name: Publish dev release
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Exchanged for a pavelzw/pixi-dev-temp token via octo-sts.
+      id-token: write
+    env:
+      TAG: ${{ needs.prepare.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          sparse-checkout: install
+          persist-credentials: false
+
+      - name: Download artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: release-artifacts-*
+          path: staging/
+          merge-multiple: true
+
+      - name: Add installers and checksums
+        working-directory: staging
+        run: |
+          cp ../install/install.sh ../install/install.ps1 .
+          for f in *.tar.gz *.zip *.msi; do
+            [ -e "$f" ] || continue
+            sha256sum "$f" > "$f.sha256"
+          done
+          cat ./*.sha256 > sha256.sum
+          ls -la
+
+      - name: Get token for pixi-dev-temp
+        id: octo-sts
+        uses: octo-sts/action@f603d3be9d8dd9871a265776e625a27b00effe05 # v1.1.1
+        with:
+          scope: ${{ env.TARGET_REPO }}
+          identity: pixi-dev-release
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ steps.octo-sts.outputs.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if gh release view "$TAG" --repo "$TARGET_REPO" > /dev/null 2>&1; then
+            echo "Release $TAG already exists in $TARGET_REPO, skipping."
+            exit 0
+          fi
+          gh release create "$TAG" staging/* \
+            --repo "$TARGET_REPO" \
+            --title "$TAG" \
+            --notes "Development build of ${GITHUB_REPOSITORY}@${GITHUB_SHA} (${GITHUB_REF_NAME}). Built by ${RUN_URL}" \
+            --latest
