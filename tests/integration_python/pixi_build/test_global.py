@@ -258,9 +258,6 @@ def test_install_multi_output_failing(
 
 
 @pytest.mark.slow
-@pytest.mark.xfail(
-    reason="multi output recipes where one package depends on another doesn't work yet with pixi global"
-)
 def test_install_multi_output_single(
     pixi: Path,
     tmp_path: Path,
@@ -275,14 +272,30 @@ def test_install_multi_output_single(
     # Specify the project
     source_project = build_data.joinpath("multi-output", "recipe")
 
-    # Test install and explicitly requesting `foobar`
+    # Test install and explicitly requesting `foobar` as well as `foobar-desktop`
     verify_cli_command(
-        [pixi, "global", "install", "--path", source_project, "foobar-desktop"], env=env
+        [
+            pixi,
+            "global",
+            "install",
+            "--path",
+            source_project,
+            "foobar-desktop",
+            "--expose",
+            "foobar=foobar",
+            "--expose",
+            "foobar-desktop=foobar-desktop",
+        ],
+        env=env,
     )
 
     # Check that the package was installed
-    foobar_desktop = pixi_home / "bin" / exec_extension("foobar")
+    foobar_desktop = pixi_home / "bin" / exec_extension("foobar-desktop")
     verify_cli_command([foobar_desktop], env=env, stdout_contains="Hello from foobar-desktop")
+
+    # Check that the dependee executable was also installed and exposed
+    foobar_desktop = pixi_home / "bin" / exec_extension("foobar")
+    verify_cli_command([foobar_desktop], env=env, stdout_contains="Hello from foobar")
 
 
 @pytest.mark.slow
