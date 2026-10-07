@@ -5,9 +5,8 @@ name: Dev release
 # octo-sts using the pixi-dev-release policy in that repository.
 
 on:
+  # TODO: temporarily runs on every branch for testing; restore `branches: [main]` before merging.
   push:
-    branches:
-      - main
   workflow_dispatch:
 
 concurrency:
