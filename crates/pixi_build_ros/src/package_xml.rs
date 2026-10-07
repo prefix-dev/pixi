@@ -470,8 +470,9 @@ fn substitute_vars(s: &str, env: &HashMap<String, String>) -> String {
 
     // Strip surrounding quotes
     let trimmed = result.trim();
-    if (trimmed.starts_with('\'') && trimmed.ends_with('\''))
-        || (trimmed.starts_with('"') && trimmed.ends_with('"'))
+    if trimmed.len() >= 2
+        && ((trimmed.starts_with('\'') && trimmed.ends_with('\''))
+            || (trimmed.starts_with('"') && trimmed.ends_with('"')))
     {
         trimmed[1..trimmed.len() - 1].to_string()
     } else {
@@ -686,6 +687,8 @@ mod tests {
         let env = HashMap::from([("ROS_VERSION".to_string(), "2".to_string())]);
         assert!(evaluate_condition("$ROS_VERSION == 1 and", &env));
         assert!(evaluate_condition("($ROS_VERSION == 1", &env));
+        // A lone quote must not panic.
+        assert!(!evaluate_condition("$ROS_VERSION == 1 and '", &env));
     }
 
     #[test]
