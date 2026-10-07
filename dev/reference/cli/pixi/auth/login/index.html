@@ -4031,6 +4031,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#workload-identity-ci-non-interactive" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Workload Identity (CI, non-interactive)
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#examples" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -8839,6 +8850,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#workload-identity-ci-non-interactive" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Workload Identity (CI, non-interactive)
+      </span>
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#examples" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -8902,7 +8924,7 @@
 <li>
 <dl>
 <dt><a id="arg---oauth" href="#arg---oauth"><code>--oauth</code></a></dt>
-<dd>Use OAuth/OIDC authentication</dd>
+<dd>Log in interactively with OAuth/OIDC (browser or device code)</dd>
 </dl>
 </li>
 <li>
@@ -8989,6 +9011,34 @@
 <dl>
 <dt><a id="arg---conda-token" href="#arg---conda-token"><code>--conda-token &lt;CONDA_TOKEN&gt;</code></a></dt>
 <dd>The token to use on anaconda.org / quetz authentication</dd>
+</dl>
+</li>
+</ul>
+<h2 id="workload-identity-ci-non-interactive">Workload Identity (CI, non-interactive)<a class="headerlink" href="#workload-identity-ci-non-interactive" title="Permanent link">#</a></h2>
+<ul>
+<li>
+<dl>
+<dt><a id="arg---workload-identity" href="#arg---workload-identity"><code>--workload-identity</code></a></dt>
+<dd>Log in non-interactively by exchanging the CI provider's OIDC ID token (GitHub Actions, GitLab CI, ...) for an access token</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---workload-identity-audience" href="#arg---workload-identity-audience"><code>--workload-identity-audience &lt;WORKLOAD_IDENTITY_AUDIENCE&gt;</code></a></dt>
+<dd>Audience requested in the OIDC ID token (defaults to the host, or <code>prefix.dev</code> for prefix.dev hosts)</dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---workload-identity-exchange" href="#arg---workload-identity-exchange"><code>--workload-identity-exchange &lt;WORKLOAD_IDENTITY_EXCHANGE&gt;</code></a></dt>
+<dd>How the server exchanges the ID token (defaults to <code>prefix</code> for prefix.dev hosts and <code>token-exchange</code> otherwise)
+<br><strong>options</strong>: <code>token-exchange</code>, <code>prefix</code></dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---workload-identity-token-endpoint" href="#arg---workload-identity-token-endpoint"><code>--workload-identity-token-endpoint &lt;WORKLOAD_IDENTITY_TOKEN_ENDPOINT&gt;</code></a></dt>
+<dd>Token endpoint for <code>--workload-identity-exchange token-exchange</code>: a URL or a path on the host (defaults to the <code>token_endpoint</code> from the host's RFC 8414 metadata, or <code>/access/api/v1/oidc/token</code> for *.jfrog.io hosts)</dd>
 </dl>
 </li>
 </ul>
