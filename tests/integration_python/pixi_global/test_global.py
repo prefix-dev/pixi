@@ -239,6 +239,9 @@ exposed = {{ xz = "xz" }}
     # Test migration from existing environments
     original_manifest = manifest.read_text()
     manifest.unlink()
+    lock_file = manifests.joinpath(".pixi-global.toml.lock")
+    if lock_file.exists():
+        lock_file.unlink()
     manifests.rmdir()
     verify_cli_command([pixi, "global", "sync"], env=env)
     migrated_manifest = manifest.read_text()
