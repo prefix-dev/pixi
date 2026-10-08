@@ -85,7 +85,7 @@ Pixi solves the dependencies for all these platforms and puts them in the lock f
 --8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_platforms"
 ```
 
-The available platforms (except `noarch` and `unknown`) are listed [here](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/platform/enum.Platform.html).
+The available (save `noarch`) platforms are listed [here](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/subdir/enum.Subdir.html).
 
 #### Inline-table entries (per-platform virtual packages)
 
@@ -755,9 +755,9 @@ By default, `pixi` will allow pre-release versions when a package only has pre-r
 
 - **"disallow"**: Disallow all pre-release versions.
 - **"allow"**: Allow all pre-release versions.
-- **"if-necessary"**: Allow pre-release versions if all versions of a package are pre-release.
-- **"explicit"**: Allow pre-release versions for first-party packages with explicit pre-release markers in their version requirements.
-- **"if-necessary-or-explicit"** (default): Allow pre-release versions if all versions of a package are pre-release, or if the package has an explicit pre-release marker in its version requirements.
+- **"if-necessary"**: Prefer stable versions, falling back to pre-release versions when necessary to satisfy the requirements.
+- **"explicit"**: Prefer stable versions for first-party packages with explicit pre-release markers in their version requirements, falling back to pre-releases when necessary. Disallow pre-releases for other packages.
+- **"if-necessary-or-explicit"** (default): Alias for `"if-necessary"`, following uv 0.12's pre-release selection policy.
 
 Example:
 ```toml
@@ -1053,6 +1053,9 @@ Learn more about installing PyTorch [here](../python/pytorch.md).
 
 A git repository to install from.
 This support both https:// and ssh:// urls.
+
+Git dependencies must refer to a project directory, optionally selected with `subdirectory`.
+References to wheel or source archives inside a Git repository using `#path=...` are not supported.
 
 Use `git` in combination with `rev`, `subdirectory` or `lfs`:
 
@@ -1487,11 +1490,12 @@ The build system is a table that can contain the following fields:
   - `git`: a string representing URL to the source repository.
   - `rev`: a string representing SHA revision to checkout.
   - `subdirectory`: a string representing path to subdirectory to use.
-- `channels`: specifies the channels to get the build backend from.
 - `flags`: package variant flags recorded in the produced package metadata.
 - `backend`: specifies the build backend to use. This is a table that can contain the following fields:
   - `name`: the name of the build backend to use. This will also be the executable name.
   - `version`: the version of the build backend to use. Optional; when omitted it defaults to `*` (any version).
+  - `channels`: the channels to get the build backend from. When omitted the workspace channels are used.
+  - `additional-dependencies`: extra packages to install alongside the build backend.
 - `config`: a table that contains the configuration options for the build backend.
 - `target`: a table that can contain target specific build configuration.
   - Each target can have its own `config` table to override or extend the base configuration for specific platforms.

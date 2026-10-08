@@ -1,6 +1,6 @@
 #!/bin/sh
 set -eu
-# Version: v0.79.0
+# Version: v0.81.0
 
 __wrap__() {
     # Function to mask username and password in URLs for safe printing
@@ -195,6 +195,14 @@ __wrap__() {
     fi
 
     echo "The 'pixi' binary is installed into '${PIXI_BIN_DIR}'"
+
+    # Send an anonymous installation ping (best-effort, never fails the install).
+    # The binary handles the opt-out (PIXI_NO_TELEMETRY / DO_NOT_TRACK) and prints
+    # its notice to stdout, which is only shown if the command succeeded; binaries
+    # older than the `__install-ping` command fail silently.
+    if PING_OUTPUT=$("$PIXI_BIN_DIR/pixi" __install-ping 2>/dev/null) && [ -n "$PING_OUTPUT" ]; then
+        echo "$PING_OUTPUT"
+    fi
 
     # shell update can be suppressed by `PIXI_NO_PATH_UPDATE` env var
     if [ -n "${PIXI_NO_PATH_UPDATE:-}" ]; then

@@ -1,4 +1,6 @@
-use std::{collections::BTreeSet, collections::HashMap, path::Path, str::FromStr};
+use std::{
+    collections::BTreeSet, collections::HashMap, path::Path, process::ExitCode, str::FromStr,
+};
 
 use clap::{Parser, ValueHint};
 use indexmap::IndexSet;
@@ -18,10 +20,10 @@ use rattler::{
     install::{IndicatifReporter, Installer},
     package_cache::PackageCache,
 };
-use rattler_conda_types::{GenericVirtualPackage, MatchSpec, PackageName, Platform};
+use rattler_conda_types::{GenericVirtualPackage, MatchSpec, PackageName, Subdir};
 use rattler_solve::{SolverImpl, SolverTask, resolvo::Solver};
 use reqwest_middleware::ClientWithMiddleware;
-use uv_configuration::initialize_rayon_once;
+use uv_threads::initialize_rayon_once;
 
 use crate::{cli_config::ChannelsConfig, match_spec_or_path::MatchSpecOrPath, process_exit};
 
@@ -74,7 +76,7 @@ pub struct Args {
 }
 
 /// CLI entry point for `pixi exec`
-pub async fn execute(args: Args) -> miette::Result<()> {
+pub async fn execute(args: Args) -> miette::Result<ExitCode> {
     let config = Config::with_cli_config(&args.config);
     let cache_dir = pixi_config::get_cache_dir().context("failed to determine cache directory")?;
 
@@ -129,10 +131,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Get environment variables from the activation
     let mut activation_env = run_activation(&prefix).await?;
 
-    // `pixi exec` replaces the process below, so flush notices after all pixi
-    // output rather than relying on the top-level command dispatcher.
-    pixi_reporters::display_channel_notices();
-
     // Collect unique package names for environment naming
     let package_names: BTreeSet<String> = display_names.into_iter().collect();
 
@@ -181,15 +179,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_context(|| format!("failed to execute '{}'", command))?;
 
     // Mirror the child's exit (including signal deaths like SIGSEGV) so the
-    // parent shell sees the same outcome it would if the child had run
-    // directly.
-    process_exit::exit_with_status(status);
+    // parent shell sees the same outcome it would if the child had run directly.
+    Ok(process_exit::exit_code_from_status(status))
 }
 
 /// Creates a prefix for the `pixi exec` command.
 pub async fn create_exec_prefix(
     args: &Args,
-    platform: Platform,
+    platform: Subdir,
     specs: &[MatchSpec],
     cache_dir: &Path,
     config: &Config,
@@ -252,7 +249,7 @@ pub async fn create_exec_prefix(
     // Get the repodata for the specs
     let query_output = await_in_progress("fetching repodata for environment", |_| async {
         gateway
-            .query(channels, [platform, Platform::NoArch], specs.clone())
+            .query(channels, [platform, Subdir::NoArch], specs.clone())
             .recursive(true)
             .channel_notices(true)
             .execute()

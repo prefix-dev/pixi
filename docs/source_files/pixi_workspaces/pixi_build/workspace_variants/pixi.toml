@@ -29,7 +29,7 @@ name = "python_rich"
 version = "0.1.0"
 
 [package.build]
-backend = { name = "pixi-build-python", version = "*" }
+backend = { name = "pixi-build-python" }
 
 [package.build.config]
 noarch = false

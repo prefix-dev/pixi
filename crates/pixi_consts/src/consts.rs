@@ -16,7 +16,7 @@ pub const PYPROJECT_MANIFEST: &str = "pyproject.toml";
 pub const CONFIG_FILE: &str = "config.toml";
 pub const PIXI_VERSION: &str = match option_env!("PIXI_VERSION") {
     Some(v) => v,
-    None => "0.79.0",
+    None => "0.81.0",
 };
 pub const PREFIX_FILE_NAME: &str = "pixi_env_prefix";
 pub const ENVIRONMENTS_DIR: &str = "envs";
@@ -124,6 +124,14 @@ pub const RELEASES_URL: &str = "https://github.com/prefix-dev/pixi/releases";
 pub const RELEASES_API_BY_TAG: &str = "https://api.github.com/repos/prefix-dev/pixi/releases/tags";
 pub const RELEASES_API_LATEST: &str =
     "https://api.github.com/repos/prefix-dev/pixi/releases/latest";
+
+/// Endpoint for the anonymous installation/update ping, sent by
+/// `pixi __install-ping` (called from the install scripts) and `pixi self-update`.
+pub const INSTALL_PING_URL: &str = "https://installation-ping.prefix.dev/a.png";
+pub const INSTALL_PING_PXID: &str = "21354c5b-2936-42bc-9d4b-9d6253815afd";
+/// Marker file in the cache directory recording that the telemetry notice was
+/// shown, so `pixi self-update` only pings after the user has seen it.
+pub const TELEMETRY_NOTICE_MARKER: &str = "telemetry-notice-shown";
 
 pub const CLAP_CONFIG_OPTIONS: &str = "Config Options";
 pub const CLAP_GIT_OPTIONS: &str = "Git Options";

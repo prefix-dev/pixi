@@ -10,7 +10,7 @@ use pixi_command_dispatcher::{
     PixiSolveEnvironmentSpec, PixiSolveReporter,
 };
 use pixi_compute_reporters::OperationId;
-use uv_configuration::initialize_rayon_once;
+use uv_threads::initialize_rayon_once;
 
 #[derive(Default)]
 pub struct RayonPrimer {

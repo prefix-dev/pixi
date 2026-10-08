@@ -11,7 +11,7 @@ use itertools::Itertools;
 use miette::{Context, IntoDiagnostic, miette};
 use pixi_consts::consts;
 use rattler_conda_types::{
-    ChannelConfig, NamedChannelOrUrl, Platform, Version, VersionBumpType, VersionSpec,
+    ChannelConfig, NamedChannelOrUrl, Subdir, Version, VersionBumpType, VersionSpec,
     version_spec::{EqualityOperator, LogicalOperator, RangeOperator},
 };
 use rattler_config::config::{CommonConfig, ConfigBase};
@@ -860,7 +860,7 @@ pub struct PyPIConfig {
 // `S3Options` and the `S3OptionsMap` newtype now live in `rattler_config`.
 // Re-exported so external crates that referenced `pixi_config::S3Options`
 // keep compiling.
-pub use rattler_config::config::s3::{S3Options, S3OptionsMap};
+pub use rattler_config::config::s3::{S3AddressingStyle, S3Options, S3OptionsMap};
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(untagged)]
@@ -952,6 +952,13 @@ pub struct ExperimentalConfig {
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub use_environment_activation_cache: Option<bool>,
+
+    /// The option to opt into running `conda-script` files without passing
+    /// `--experimental` on every invocation. The format follows a draft
+    /// proposal and may still change.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub conda_script: Option<bool>,
 }
 
 impl ExperimentalConfig {
@@ -960,14 +967,19 @@ impl ExperimentalConfig {
             use_environment_activation_cache: other
                 .use_environment_activation_cache
                 .or(self.use_environment_activation_cache),
+            conda_script: other.conda_script.or(self.conda_script),
         }
     }
     pub fn use_environment_activation_cache(&self) -> bool {
         self.use_environment_activation_cache.unwrap_or(false)
     }
 
+    pub fn conda_script(&self) -> bool {
+        self.conda_script.unwrap_or(false)
+    }
+
     pub fn is_default(&self) -> bool {
-        self.use_environment_activation_cache.is_none()
+        self.use_environment_activation_cache.is_none() && self.conda_script.is_none()
     }
 }
 
@@ -1270,7 +1282,7 @@ pub struct Config {
     /// these types of tools.
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_platform: Option<Platform>,
+    pub tool_platform: Option<Subdir>,
 
     /// Per-cache directory configuration. Lets users redirect specific
     /// caches (conda packages, repodata, pypi mapping, etc.) to different
@@ -1468,6 +1480,7 @@ impl From<ConfigCli> for Config {
                 } else {
                     None
                 },
+                conda_script: None,
             },
             pinning_strategy: cli.pinning_strategy,
             allow_symbolic_links: cli.no_symbolic_links.then_some(false),
@@ -1610,8 +1623,8 @@ impl Config {
         // HACK: Use win-64 as the default tool platform if currently running on
         // win-arm64. This is a workaround for the fact that we don't have a
         // good win-arm64 toolchain yet.
-        if Platform::current() == Platform::WinArm64 {
-            config.tool_platform = Some(Platform::Win64);
+        if Subdir::current() == Some(Subdir::WinArm64) {
+            config.tool_platform = Some(Subdir::Win64);
         }
 
         config
@@ -1965,6 +1978,7 @@ impl Config {
             "default-channels",
             "detached-environments",
             "experimental",
+            "experimental.conda-script",
             "experimental.use-environment-activation-cache",
             "index-config",
             "index-config.base-url",
@@ -1993,7 +2007,7 @@ impl Config {
             "s3-options",
             "s3-options.<bucket>",
             "s3-options.<bucket>.endpoint-url",
-            "s3-options.<bucket>.force-path-style",
+            "s3-options.<bucket>.addressing-style",
             "s3-options.<bucket>.region",
             "shell",
             "shell.change-ps1",
@@ -2167,6 +2181,11 @@ impl Config {
         self.experimental.use_environment_activation_cache()
     }
 
+    /// Whether `conda-script` files may run without `--experimental`.
+    pub fn experimental_conda_script(&self) -> bool {
+        self.experimental.conda_script()
+    }
+
     /// Retrieve the value for the max_concurrent_solves field.
     pub fn max_concurrent_solves(&self) -> usize {
         self.concurrency.solves
@@ -2178,8 +2197,10 @@ impl Config {
     }
 
     /// The platform to use to install tools.
-    pub fn tool_platform(&self) -> Platform {
-        self.tool_platform.unwrap_or(Platform::current())
+    pub fn tool_platform(&self) -> Subdir {
+        self.tool_platform
+            .or(Subdir::current())
+            .unwrap_or(Subdir::NoArch)
     }
 
     pub fn get_proxies(&self) -> reqwest::Result<Vec<Proxy>> {
@@ -2293,7 +2314,7 @@ impl Config {
             "tool-platform" => {
                 self.tool_platform = value
                     .as_deref()
-                    .map(Platform::from_str)
+                    .map(Subdir::from_str)
                     .transpose()
                     .into_diagnostic()?;
             }
@@ -2438,13 +2459,14 @@ impl Config {
                                     ));
                                 }
                             }
-                            "force-path-style" => {
+                            "addressing-style" => {
                                 if let Some(value) = value {
-                                    bucket_config.force_path_style =
-                                        value.parse().into_diagnostic()?;
+                                    bucket_config.addressing_style =
+                                        S3AddressingStyle::deserialize(value.into_deserializer())
+                                            .map_err(|e: serde::de::value::Error| miette!(e))?;
                                 } else {
                                     return Err(miette!(
-                                        "s3-options.{}.force-path-style requires a value",
+                                        "s3-options.{}.addressing-style requires a value",
                                         bucket
                                     ));
                                 }
@@ -2479,15 +2501,19 @@ impl Config {
                         self.experimental.use_environment_activation_cache =
                             value.map(|v| v.parse()).transpose().into_diagnostic()?;
                     }
+                    "conda-script" => {
+                        self.experimental.conda_script =
+                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                    }
                     _ => return Err(err),
                 }
             }
             key if key.starts_with("concurrency") => {
                 if key == "concurrency" {
                     if let Some(value) = value {
-                        self.pypi_config = serde_json::de::from_str(&value).into_diagnostic()?;
+                        self.concurrency = serde_json::de::from_str(&value).into_diagnostic()?;
                     } else {
-                        self.pypi_config = PyPIConfig::default();
+                        self.concurrency = ConcurrencyConfig::default();
                     }
                     return Ok(());
                 } else if !key.starts_with("concurrency.") {
@@ -2688,7 +2714,13 @@ impl Config {
                     s3_middleware::S3Config::Custom {
                         endpoint_url: v.endpoint_url.clone(),
                         region: v.region.clone(),
-                        force_path_style: v.force_path_style,
+                        addressing_style: match v.addressing_style {
+                            S3AddressingStyle::VirtualHost => {
+                                s3_middleware::S3AddressingStyle::VirtualHost
+                            }
+                            S3AddressingStyle::Path => s3_middleware::S3AddressingStyle::Path,
+                        },
+                        credentials_provider: None,
                     },
                 )
             })
@@ -3126,7 +3158,7 @@ UNUSED = "unused"
             [s3-options.bucket1]
             endpoint-url = "https://my-s3-host"
             region = "us-east-1"
-            force-path-style = false
+            addressing-style = "path"
         "#;
         let (config, _) = Config::from_toml(toml, None).unwrap();
         let s3_options = config.s3_options.0;
@@ -3135,7 +3167,10 @@ UNUSED = "unused"
             Url::parse("https://my-s3-host").unwrap()
         );
         assert_eq!(s3_options["bucket1"].region, "us-east-1");
-        assert!(!s3_options["bucket1"].force_path_style);
+        assert_eq!(
+            s3_options["bucket1"].addressing_style,
+            S3AddressingStyle::Path
+        );
     }
 
     #[test]
@@ -3143,8 +3178,7 @@ UNUSED = "unused"
         let toml = r#"
             [s3-options.bucket1]
             endpoint-url = "https://my-s3-host"
-            region = "us-east-1"
-            # force-path-style = false
+            # region = "us-east-1"
         "#;
         let result = Config::from_toml(toml, None);
         assert!(result.is_err());
@@ -3153,7 +3187,7 @@ UNUSED = "unused"
                 .err()
                 .unwrap()
                 .to_string()
-                .contains("missing field `force-path-style`")
+                .contains("missing field `region`")
         );
     }
 
@@ -3188,6 +3222,7 @@ UNUSED = "unused"
             pinning_strategy: Some(PinningStrategy::NoPin),
             experimental: ExperimentalConfig {
                 use_environment_activation_cache: Some(true),
+                conda_script: None,
             },
             loaded_from: Vec::from([PathBuf::from_str("test").unwrap()]),
             shell: ShellConfig {
@@ -3208,7 +3243,7 @@ UNUSED = "unused"
                 S3Options {
                     endpoint_url: Url::parse("https://my-s3-host").unwrap(),
                     region: "us-east-1".to_string(),
-                    force_path_style: false,
+                    addressing_style: S3AddressingStyle::VirtualHost,
                 },
             )])),
             repodata_config: RepodataConfig {
@@ -3456,7 +3491,7 @@ UNUSED = "unused"
                     S3Options {
                         endpoint_url: Url::parse("https://my-s3-host").unwrap(),
                         region: "us-east-1".to_string(),
-                        force_path_style: false,
+                        addressing_style: S3AddressingStyle::VirtualHost,
                     },
                 ),
                 (
@@ -3464,7 +3499,7 @@ UNUSED = "unused"
                     S3Options {
                         endpoint_url: Url::parse("https://my-s3-host").unwrap(),
                         region: "us-east-1".to_string(),
-                        force_path_style: false,
+                        addressing_style: S3AddressingStyle::VirtualHost,
                     },
                 ),
             ])),
@@ -3494,7 +3529,7 @@ UNUSED = "unused"
                 S3Options {
                     endpoint_url: Url::parse("https://my-new-s3-host").unwrap(),
                     region: "us-east-1".to_string(),
-                    force_path_style: false,
+                    addressing_style: S3AddressingStyle::VirtualHost,
                 },
             )])),
             ..Default::default()
@@ -3712,7 +3747,7 @@ UNUSED = "unused"
 
         assert_eq!(config.max_concurrent_downloads(), 1);
 
-        config.set("s3-options.my-bucket", Some(r#"{"endpoint-url": "http://localhost:9000", "force-path-style": true, "region": "auto"}"#.to_string())).unwrap();
+        config.set("s3-options.my-bucket", Some(r#"{"endpoint-url": "http://localhost:9000", "addressing-style": "path", "region": "auto"}"#.to_string())).unwrap();
         let s3_options = config.s3_options.0.get("my-bucket").unwrap();
         assert!(
             s3_options
@@ -3720,14 +3755,14 @@ UNUSED = "unused"
                 .to_string()
                 .contains("http://localhost:9000")
         );
-        assert!(s3_options.force_path_style);
+        assert_eq!(s3_options.addressing_style, S3AddressingStyle::Path);
         assert_eq!(s3_options.region, "auto");
 
         // Test tool-platform
         config
             .set("tool-platform", Some("linux-64".to_string()))
             .unwrap();
-        assert_eq!(config.tool_platform, Some(Platform::Linux64));
+        assert_eq!(config.tool_platform, Some(Subdir::Linux64));
 
         // Test run-post-link-scripts
         config
@@ -3761,6 +3796,13 @@ UNUSED = "unused"
             config.experimental.use_environment_activation_cache,
             Some(true)
         );
+
+        // Test experimental.conda-script
+        config
+            .set("experimental.conda-script", Some("true".to_string()))
+            .unwrap();
+        assert_eq!(config.experimental.conda_script, Some(true));
+        assert!(config.experimental_conda_script());
 
         // Test more repodata-config options
         // disable-jlap has been removed — setting it should error
@@ -3843,8 +3885,8 @@ UNUSED = "unused"
             .unwrap();
         config
             .set(
-                "s3-options.test-bucket.force-path-style",
-                Some("false".to_string()),
+                "s3-options.test-bucket.addressing-style",
+                Some("virtual-host".to_string()),
             )
             .unwrap();
 
@@ -3862,6 +3904,35 @@ UNUSED = "unused"
         // Test max-concurrent-solves (legacy accessor)
         assert_eq!(config.max_concurrent_solves(), 5);
         assert_eq!(config.max_concurrent_downloads(), 25);
+
+        // Test concurrency full update (issue #6666)
+        config.pypi_config.index_url = Some(Url::parse("https://my-index.test").unwrap());
+        config
+            .set(
+                "concurrency",
+                Some(r#"{"solves": 10, "downloads": 50}"#.to_string()),
+            )
+            .unwrap();
+        assert_eq!(config.concurrency.solves, 10);
+        assert_eq!(config.concurrency.downloads, 50);
+        assert_eq!(
+            config.pypi_config.index_url,
+            Some(Url::parse("https://my-index.test").unwrap())
+        );
+
+        config.set("concurrency", None).unwrap();
+        assert_eq!(
+            config.concurrency.solves,
+            ConcurrencyConfig::default().solves
+        );
+        assert_eq!(
+            config.concurrency.downloads,
+            ConcurrencyConfig::default().downloads
+        );
+        assert_eq!(
+            config.pypi_config.index_url,
+            Some(Url::parse("https://my-index.test").unwrap())
+        );
 
         // Test tls-no-verify
         config

@@ -1,6 +1,6 @@
 [package]
 name = "pixi"
-version = "0.79.0"
+version = "0.81.0"
 authors.workspace = true
 edition.workspace = true
 description = "A package management and workflow tool"
@@ -69,10 +69,10 @@ tracing-subscriber = { workspace = true }
 typed-path = { workspace = true }
 url = { workspace = true }
 uv-cache = { workspace = true }
-uv-configuration = { workspace = true }
 uv-installer = { workspace = true }
 uv-normalize = { workspace = true }
 uv-python = { workspace = true }
+uv-threads = { workspace = true }
 zip = { workspace = true }
 
 [features]

@@ -16,7 +16,7 @@ use pixi_spec::{GitSpec, PixiSpec};
 use pixi_utils::EnvironmentFingerprint;
 use pixi_utils::{prefix::Prefix, rlimit::try_increase_rlimit_to_sensible};
 use rattler_conda_types::{
-    GenericVirtualPackage, MatchSpec, PackageNameMatcher, ParseStrictness, Platform, StringMatcher,
+    GenericVirtualPackage, MatchSpec, PackageNameMatcher, ParseStrictness, StringMatcher, Subdir,
     Version, VersionSpec, version_spec::RangeOperator,
 };
 use rattler_lock::{LockFile, LockedPackage};
@@ -92,7 +92,7 @@ async fn prefix_location_changed(
         .report(false)
         .default(true)
         .interact_opt()
-        .map_or(None, std::convert::identity);
+        .unwrap_or(None);
     if user_value == Some(true) {
         await_in_progress("removing old environment", |_| {
             tokio::fs::remove_dir_all(environment_dir)
@@ -320,7 +320,7 @@ impl LockedEnvironmentHash {
 #[derive(Serialize, Deserialize)]
 pub struct PlatformData {
     /// The conda subdir this platform targets, e.g. `linux-64`.
-    pub(crate) subdir: Platform,
+    pub(crate) subdir: Subdir,
     /// The virtual packages that define this platform.
     pub(crate) virtual_packages: Vec<GenericVirtualPackage>,
 }
@@ -330,7 +330,7 @@ impl PlatformData {
     /// define it. Used by callers outside this module (e.g. `pixi global`)
     /// that compute the two fields themselves rather than from a
     /// [`PixiPlatform`].
-    pub fn new(subdir: Platform, virtual_packages: Vec<GenericVirtualPackage>) -> Self {
+    pub fn new(subdir: Subdir, virtual_packages: Vec<GenericVirtualPackage>) -> Self {
         Self {
             subdir,
             virtual_packages,
@@ -338,7 +338,7 @@ impl PlatformData {
     }
 
     /// The conda subdir this platform targets, e.g. `linux-64`.
-    pub fn subdir(&self) -> Platform {
+    pub fn subdir(&self) -> Subdir {
         self.subdir
     }
 
@@ -366,7 +366,7 @@ impl Display for PlatformData {
 /// Render a platform as `<subdir>` or `<subdir> [entry, entry]`.
 fn write_platform(
     f: &mut Formatter<'_>,
-    subdir: Platform,
+    subdir: Subdir,
     entries: &[impl Display],
 ) -> std::fmt::Result {
     write!(f, "{subdir}")?;
@@ -387,13 +387,13 @@ fn write_platform(
 #[serde(from = "RequiredPlatformRaw", into = "RequiredPlatformRaw")]
 #[derive(Clone)]
 pub struct RequiredPlatform {
-    subdir: Platform,
+    subdir: Subdir,
     requirements: Vec<MatchSpec>,
 }
 
 impl RequiredPlatform {
     /// A requirement set from a subdir and the specs resolved dependencies
-    pub fn new(subdir: Platform, requirements: Vec<MatchSpec>) -> Self {
+    pub fn new(subdir: Subdir, requirements: Vec<MatchSpec>) -> Self {
         Self {
             subdir,
             requirements,
@@ -401,7 +401,7 @@ impl RequiredPlatform {
     }
 
     /// The conda subdir these requirements were resolved for.
-    pub fn subdir(&self) -> Platform {
+    pub fn subdir(&self) -> Subdir {
         self.subdir
     }
 
@@ -427,7 +427,7 @@ impl Display for RequiredPlatform {
 /// strings, matching how [`GenericVirtualPackage`] renders itself in this file
 #[derive(Serialize, Deserialize)]
 struct RequiredPlatformRaw {
-    subdir: Platform,
+    subdir: Subdir,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     requirements: Vec<String>,
     /// Written by pixi versions that recorded requirements as concrete virtual
@@ -931,7 +931,7 @@ pub async fn get_lock_file_and_prefixes<'env>(
         && target_platform.is_some()
         && let Some(platform) = environments[0].named_or_best_declared_platform(target_platform)
     {
-        let current = Platform::current();
+        let current = Subdir::current().unwrap_or(Subdir::NoArch);
         let subdir = platform.subdir();
         if !candidate_subdirs(current).contains(&subdir) {
             tracing::warn!(
@@ -1027,7 +1027,7 @@ mod tests {
         let mut builder = rattler_lock::LockFile::builder()
             .with_platforms(vec![rattler_lock::PlatformData {
                 name: rattler_lock::PlatformName::try_from("linux-64").unwrap(),
-                subdir: Platform::Linux64,
+                subdir: Subdir::Linux64,
                 virtual_packages: vec![],
             }])
             .unwrap();
@@ -1043,7 +1043,7 @@ mod tests {
         };
         PixiPlatform::new(
             PixiPlatformName::try_from("linux-box").unwrap(),
-            Platform::Linux64,
+            Subdir::Linux64,
             vec![linux],
         )
         .unwrap()
@@ -1086,7 +1086,7 @@ mod tests {
         let make = |packages: Vec<GenericVirtualPackage>| {
             PixiPlatform::new(
                 PixiPlatformName::try_from("linux-box").unwrap(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 packages,
             )
             .unwrap()
@@ -1112,13 +1112,13 @@ mod tests {
         };
         let platform = PixiPlatform::new(
             PixiPlatformName::try_from("gpu-box").unwrap(),
-            Platform::Linux64,
+            Subdir::Linux64,
             vec![cuda.clone()],
         )
         .unwrap();
 
         let data = PlatformData::from(&platform);
-        assert_eq!(data.subdir, Platform::Linux64);
+        assert_eq!(data.subdir, Subdir::Linux64);
         assert!(data.virtual_packages.contains(&cuda));
 
         // The composition survives a JSON round-trip; the custom name is not
@@ -1126,7 +1126,7 @@ mod tests {
         let json = serde_json::to_string(&data).unwrap();
         assert!(!json.contains("gpu-box"));
         let restored: PlatformData = serde_json::from_str(&json).unwrap();
-        assert_eq!(restored.subdir, Platform::Linux64);
+        assert_eq!(restored.subdir, Subdir::Linux64);
         assert!(restored.virtual_packages.contains(&cuda));
     }
 
@@ -1137,7 +1137,7 @@ mod tests {
             MatchSpec::from_str(archspec, ParseStrictness::Lenient).unwrap(),
             MatchSpec::from_str("__glibc >=2.17", ParseStrictness::Lenient).unwrap(),
         ];
-        let platform = RequiredPlatform::new(Platform::Linux64, requirements);
+        let platform = RequiredPlatform::new(Subdir::Linux64, requirements);
 
         let json = serde_json::to_string(&platform).unwrap();
         // Stored as strings, like the concrete virtual packages beside them,
@@ -1146,7 +1146,7 @@ mod tests {
         assert!(!json.contains("\"build\":{"), "{json}");
 
         let restored: RequiredPlatform = serde_json::from_str(&json).unwrap();
-        assert_eq!(restored.subdir(), Platform::Linux64);
+        assert_eq!(restored.subdir(), Subdir::Linux64);
         let archspec_spec = restored
             .requirements()
             .iter()
@@ -1171,7 +1171,7 @@ mod tests {
             "virtual_packages": ["__glibc=2.17", "__cuda=0"]
         }"#;
         let restored: RequiredPlatform = serde_json::from_str(legacy).unwrap();
-        assert_eq!(restored.subdir(), Platform::Linux64);
+        assert_eq!(restored.subdir(), Subdir::Linux64);
         // A recorded version becomes a lower bound; version 0 meant "any".
         assert_eq!(
             restored
@@ -1258,7 +1258,7 @@ mod tests {
             "__archspec 1.* ^(x86_64_v3|haswell|skylake)$",
         ] {
             let spec = MatchSpec::from_str(raw, ParseStrictness::Lenient).unwrap();
-            let platform = RequiredPlatform::new(Platform::Linux64, vec![spec.clone()]);
+            let platform = RequiredPlatform::new(Subdir::Linux64, vec![spec.clone()]);
             let json = serde_json::to_string(&platform).unwrap();
             let restored: RequiredPlatform = serde_json::from_str(&json)
                 .unwrap_or_else(|e| panic!("'{raw}' did not survive the round trip: {e}"));

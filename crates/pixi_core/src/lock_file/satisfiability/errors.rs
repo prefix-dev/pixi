@@ -97,8 +97,8 @@ pub enum EnvironmentUnsat {
 #[derive(Debug, Error)]
 pub struct PlatformDefinitionChanged {
     pub(super) name: PixiPlatformName,
-    pub(super) expected_subdir: rattler_conda_types::Platform,
-    pub(super) found_subdir: rattler_conda_types::Platform,
+    pub(super) expected_subdir: rattler_conda_types::Subdir,
+    pub(super) found_subdir: rattler_conda_types::Subdir,
     pub(super) expected_virtual_packages: Vec<String>,
     pub(super) found_virtual_packages: Vec<String>,
 }
@@ -176,12 +176,14 @@ pub(super) fn verify_exclude_newer(
                 .and_then(|binary| binary.channel.as_ref())
                 .map(ToString::to_string);
 
-            if let Some(timestamp) = record.timestamp.as_ref()
-                && exclude_newer.is_excluded(&record.name, channel.as_deref(), Some(timestamp))
+            // Select the timestamp the same way the solver does: the index
+            // timestamp if present, the build timestamp otherwise.
+            if let Some(timestamp) = record.indexed_timestamp.or(record.timestamp)
+                && timestamp > exclude_newer.cutoff_for_package(&record.name, channel.as_deref())
             {
                 return Err(ExcludeNewerMismatch {
                     package: record.name.as_source().to_string(),
-                    timestamp: (*timestamp).into(),
+                    timestamp: timestamp.into(),
                     exclude_newer: exclude_newer
                         .cutoff_for_package(&record.name, channel.as_deref()),
                 });
@@ -450,6 +452,9 @@ pub enum PlatformUnsat {
 
     #[error("direct pypi url dependency to a conda installed package '{0}' is not supported")]
     DirectUrlDependencyOnCondaInstalledPackage(uv_normalize::PackageName),
+
+    #[error("git archive dependency '{0}' is not supported")]
+    UnsupportedGitArchiveDependency(uv_normalize::PackageName),
 
     #[error("git dependency on a conda installed package '{0}' is not supported")]
     GitDependencyOnCondaInstalledPackage(uv_normalize::PackageName),

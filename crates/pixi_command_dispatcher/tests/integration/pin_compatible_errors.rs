@@ -15,7 +15,7 @@ use pixi_command_dispatcher::{
 use pixi_spec::PathSpec;
 use pixi_spec_containers::DependencyMap;
 use pixi_test_utils::format_diagnostic;
-use rattler_conda_types::Platform;
+use rattler_conda_types::Subdir;
 
 use crate::{
     default_cache_dirs, empty_pixi_env_spec, env_ref_of, run_pixi_solve, test_tempdir, to_abs_dir,
@@ -50,7 +50,7 @@ pub async fn test_pin_compatible_missing_package_reports_helpful_error() {
                 }
                 .into(),
             )]),
-            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
             ..empty_pixi_env_spec()
         },
     )

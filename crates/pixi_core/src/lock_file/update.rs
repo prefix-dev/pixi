@@ -831,6 +831,16 @@ impl<'p> LockFileDerivedData<'p> {
         {
             return;
         }
+        // A conda-script block declares its platforms by hand, so the PEP 723
+        // remedy would send its users after a command that rejects the file.
+        if self.workspace.is_conda_script() {
+            tracing::warn!(
+                "the script declares no platforms, so {} records this machine's virtual packages.\n\
+                 Add `platforms` under `[tool.pixi.workspace]` in the block to declare them explicitly.",
+                lock_file_path.display(),
+            );
+            return;
+        }
         let script = self.workspace.workspace.provenance.absolute_path();
         tracing::warn!(
             "the script declares no platforms, so {} records this machine's virtual packages.\n\

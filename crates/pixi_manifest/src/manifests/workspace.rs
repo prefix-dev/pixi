@@ -12,7 +12,7 @@ use miette::{Context, IntoDiagnostic, SourceCode, miette};
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{
-    NamedChannelOrUrl, ParseStrictness::Strict, Platform, Version, VersionSpec,
+    NamedChannelOrUrl, ParseStrictness::Strict, Subdir, Version, VersionSpec,
 };
 use toml_edit::Value;
 
@@ -924,7 +924,7 @@ impl WorkspaceManifestMut<'_> {
         // it got extended, so drop subdir-platforms whose subdir is already
         // declared.
         if self.workspace.workspace.must_migrate {
-            let declared_subdirs: HashSet<Platform> = self
+            let declared_subdirs: HashSet<Subdir> = self
                 .workspace
                 .workspace
                 .platforms
@@ -2109,7 +2109,7 @@ mod tests {
     use rattler_conda_types::{
         MatchSpec, NamedChannelOrUrl, PackageName, ParseStrictness,
         ParseStrictness::{Lenient, Strict},
-        Platform, Version, VersionSpec,
+        Subdir, Version, VersionSpec,
     };
     use rstest::rstest;
     use toml_edit::DocumentMut;
@@ -2323,16 +2323,16 @@ start = "python -m flask run --port=5050"
         assert_eq!(
             targets.user_defined_selectors().cloned().collect_vec(),
             vec![
-                TargetSelector::Subdir(Platform::Win64),
-                TargetSelector::Subdir(Platform::Osx64),
+                TargetSelector::Subdir(Subdir::Win64),
+                TargetSelector::Subdir(Subdir::Osx64),
             ]
         );
 
         let win64_target = targets
-            .for_target(&TargetSelector::Subdir(Platform::Win64))
+            .for_target(&TargetSelector::Subdir(Subdir::Win64))
             .unwrap();
         let osx64_target = targets
-            .for_target(&TargetSelector::Subdir(Platform::Osx64))
+            .for_target(&TargetSelector::Subdir(Subdir::Osx64))
             .unwrap();
         assert_eq!(
             win64_target
@@ -2730,8 +2730,8 @@ foo = "1.0"
         "#;
         let manifest = parse_pixi_toml(contents).manifest;
         println!("{:?}", manifest.workspace.build_variants);
-        let linux64 = PixiPlatform::from_subdir(Platform::Linux64);
-        let win64 = PixiPlatform::from_subdir(Platform::Win64);
+        let linux64 = PixiPlatform::from_subdir(Subdir::Linux64);
+        let win64 = PixiPlatform::from_subdir(Subdir::Win64);
         let resolved_linux = manifest
             .workspace
             .build_variants
@@ -2826,13 +2826,13 @@ foo = "1.0"
             .as_ref()
             .and_then(|a| a.env.as_ref());
         let win64_activation_env = default_targets
-            .for_target(&TargetSelector::Subdir(Platform::Win64))
+            .for_target(&TargetSelector::Subdir(Subdir::Win64))
             .unwrap()
             .activation
             .as_ref()
             .and_then(|a| a.env.as_ref());
         let linux64_activation_env = default_targets
-            .for_target(&TargetSelector::Subdir(Platform::Linux64))
+            .for_target(&TargetSelector::Subdir(Subdir::Linux64))
             .unwrap()
             .activation
             .as_ref()
@@ -2868,13 +2868,13 @@ foo = "1.0"
             .as_ref()
             .and_then(|a| a.env.as_ref());
         let feature_win64_activation_env = feature_targets
-            .for_target(&TargetSelector::Subdir(Platform::Win64))
+            .for_target(&TargetSelector::Subdir(Subdir::Win64))
             .unwrap()
             .activation
             .as_ref()
             .and_then(|a| a.env.as_ref());
         let feature_linux64_activation_env = feature_targets
-            .for_target(&TargetSelector::Subdir(Platform::Linux64))
+            .for_target(&TargetSelector::Subdir(Subdir::Linux64))
             .unwrap()
             .activation
             .as_ref()
@@ -2907,7 +2907,7 @@ foo = "1.0"
         file_contents: &str,
         name: &str,
         kind: SpecType,
-        platforms: &[Platform],
+        platforms: &[Subdir],
         feature_name: &FeatureName,
     ) {
         let mut manifest = parse_pixi_toml(file_contents);
@@ -2917,7 +2917,7 @@ foo = "1.0"
             .copied()
             .map(PixiPlatformName::from)
             .collect();
-        let subdir_options: Vec<Option<Platform>> = if platforms.is_empty() {
+        let subdir_options: Vec<Option<Subdir>> = if platforms.is_empty() {
             vec![None]
         } else {
             platforms.iter().copied().map(Some).collect()
@@ -3001,14 +3001,14 @@ foo = "1.0"
             file_contents,
             "baz",
             SpecType::Build,
-            &[Platform::Linux64],
+            &[Subdir::Linux64],
             &FeatureName::Default,
         );
         test_remove(
             file_contents,
             "bar",
             SpecType::Run,
-            &[Platform::Win64],
+            &[Subdir::Win64],
             &FeatureName::Default,
         );
         test_remove(
@@ -3067,8 +3067,8 @@ foo = "1.0"
 
         // Should still contain the fooz dependency for the different platforms
         for (platform, kind) in [
-            (Platform::Linux64, SpecType::Build),
-            (Platform::Win64, SpecType::Run),
+            (Subdir::Linux64, SpecType::Build),
+            (Subdir::Win64, SpecType::Run),
         ] {
             assert!(
                 manifest
@@ -3089,7 +3089,7 @@ foo = "1.0"
     fn test_remove_pypi(
         file_contents: &str,
         name: &str,
-        platforms: &[Platform],
+        platforms: &[Subdir],
         feature_name: &FeatureName,
     ) {
         let mut manifest = parse_pixi_toml(file_contents);
@@ -3101,7 +3101,7 @@ foo = "1.0"
             .copied()
             .map(PixiPlatformName::from)
             .collect();
-        let subdir_options: Vec<Option<Platform>> = if platforms.is_empty() {
+        let subdir_options: Vec<Option<Subdir>> = if platforms.is_empty() {
             vec![None]
         } else {
             platforms.iter().copied().map(Some).collect()
@@ -3156,16 +3156,16 @@ foo = "1.0"
     }
 
     #[rstest]
-    #[case::xpackage("xpackage", & [Platform::Linux64], FeatureName::default())]
-    #[case::jax("jax", & [Platform::Win64], FeatureName::default())]
+    #[case::xpackage("xpackage", & [Subdir::Linux64], FeatureName::default())]
+    #[case::jax("jax", & [Subdir::Win64], FeatureName::default())]
     #[case::requests("requests", & [], FeatureName::default())]
     #[case::feature_dep("feature_dep", & [], FeatureName::from("test"))]
     #[case::feature_target_dep(
-        "feature_target_dep", & [Platform::Linux64], FeatureName::from("test")
+        "feature_target_dep", & [Subdir::Linux64], FeatureName::from("test")
     )]
     fn test_remove_pypi_dependencies(
         #[case] package_name: &str,
-        #[case] platforms: &[Platform],
+        #[case] platforms: &[Subdir],
         #[case] feature_name: FeatureName,
     ) {
         let pixi_cfg = r#"[project]
@@ -3294,58 +3294,54 @@ feature_target_dep = "*"
         let mut manifest = parse_pixi_toml(file_contents);
         let mut manifest = manifest.editable();
 
-        fn pp(p: Platform) -> PixiPlatform {
+        fn pp(p: Subdir) -> PixiPlatform {
             PixiPlatform::from_subdir(p)
         }
-        fn pn(p: Platform) -> PixiPlatformName {
+        fn pn(p: Subdir) -> PixiPlatformName {
             p.into()
         }
 
         assert_eq!(
             manifest.workspace.workspace.platforms,
-            [pp(Platform::Linux64), pp(Platform::Win64)]
+            [pp(Subdir::Linux64), pp(Subdir::Win64)]
                 .into_iter()
                 .collect::<IndexSet<_>>()
         );
 
         manifest
-            .add_platforms([pp(Platform::OsxArm64)].iter(), &FeatureName::Default)
+            .add_platforms([pp(Subdir::OsxArm64)].iter(), &FeatureName::Default)
             .unwrap();
 
         assert_eq!(
             manifest.workspace.workspace.platforms,
-            [
-                pp(Platform::Linux64),
-                pp(Platform::Win64),
-                pp(Platform::OsxArm64),
-            ]
-            .into_iter()
-            .collect::<IndexSet<_>>()
-        );
-
-        manifest
-            .add_platforms(
-                [pp(Platform::LinuxAarch64), pp(Platform::Osx64)].iter(),
-                &FeatureName::from("test"),
-            )
-            .unwrap();
-
-        assert_eq!(
-            manifest
-                .workspace
-                .feature(&FeatureName::from("test"))
-                .unwrap()
-                .platforms
-                .clone()
-                .unwrap(),
-            [pn(Platform::LinuxAarch64), pn(Platform::Osx64)]
+            [pp(Subdir::Linux64), pp(Subdir::Win64), pp(Subdir::OsxArm64),]
                 .into_iter()
                 .collect::<IndexSet<_>>()
         );
 
         manifest
             .add_platforms(
-                [pp(Platform::LinuxAarch64), pp(Platform::Win64)].iter(),
+                [pp(Subdir::LinuxAarch64), pp(Subdir::Osx64)].iter(),
+                &FeatureName::from("test"),
+            )
+            .unwrap();
+
+        assert_eq!(
+            manifest
+                .workspace
+                .feature(&FeatureName::from("test"))
+                .unwrap()
+                .platforms
+                .clone()
+                .unwrap(),
+            [pn(Subdir::LinuxAarch64), pn(Subdir::Osx64)]
+                .into_iter()
+                .collect::<IndexSet<_>>()
+        );
+
+        manifest
+            .add_platforms(
+                [pp(Subdir::LinuxAarch64), pp(Subdir::Win64)].iter(),
                 &FeatureName::from("test"),
             )
             .unwrap();
@@ -3359,9 +3355,9 @@ feature_target_dep = "*"
                 .clone()
                 .unwrap(),
             [
-                pn(Platform::LinuxAarch64),
-                pn(Platform::Osx64),
-                pn(Platform::Win64),
+                pn(Subdir::LinuxAarch64),
+                pn(Subdir::Osx64),
+                pn(Subdir::Win64),
             ]
             .into_iter()
             .collect::<IndexSet<_>>()
@@ -3394,7 +3390,7 @@ platforms = [
         let mut editable = workspace.editable();
         editable
             .add_platforms(
-                [PixiPlatform::from_subdir(Platform::OsxArm64)].iter(),
+                [PixiPlatform::from_subdir(Subdir::OsxArm64)].iter(),
                 &FeatureName::Default,
             )
             .unwrap();
@@ -3552,7 +3548,7 @@ platforms = ["linux-64", "osx-64"]
             gvp("__linux", "7.0.8", "0"),
             gvp("__archspec", "1", "zen5"),
         ];
-        let candidate = PixiPlatform::from_detection(None, Platform::Linux64, customised).unwrap();
+        let candidate = PixiPlatform::from_detection(None, Subdir::Linux64, customised).unwrap();
 
         let mut workspace =
             parse_pixi_toml("[workspace]\nname = \"x\"\nchannels = []\nplatforms = [\"win-64\"]\n");
@@ -3591,7 +3587,7 @@ platforms = ["linux-64", "osx-64"]
             };
             PixiPlatform::new_with_defaults(
                 PixiPlatformName::try_from(name).unwrap(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 vec![cuda],
             )
             .unwrap()
@@ -3682,10 +3678,10 @@ platforms = ["linux-64-cuda-12-9"]
         let mut manifest = parse_pixi_toml(file_contents);
         let mut manifest = manifest.editable();
 
-        fn pp(p: Platform) -> PixiPlatform {
+        fn pp(p: Subdir) -> PixiPlatform {
             PixiPlatform::from_subdir(p)
         }
-        fn pn(p: Platform) -> PixiPlatformName {
+        fn pn(p: Subdir) -> PixiPlatformName {
             p.into()
         }
 
@@ -3695,22 +3691,18 @@ platforms = ["linux-64-cuda-12-9"]
         // platform set as a bare subdir-platform.
         assert_eq!(
             manifest.workspace.workspace.platforms,
-            [
-                pp(Platform::Linux64),
-                pp(Platform::Win64),
-                pp(Platform::Osx64),
-            ]
-            .into_iter()
-            .collect::<IndexSet<_>>()
+            [pp(Subdir::Linux64), pp(Subdir::Win64), pp(Subdir::Osx64),]
+                .into_iter()
+                .collect::<IndexSet<_>>()
         );
 
         manifest
-            .remove_platforms([pp(Platform::Linux64)].iter(), &FeatureName::Default)
+            .remove_platforms([pp(Subdir::Linux64)].iter(), &FeatureName::Default)
             .unwrap();
 
         assert_eq!(
             manifest.workspace.workspace.platforms,
-            [pp(Platform::Win64), pp(Platform::Osx64)]
+            [pp(Subdir::Win64), pp(Subdir::Osx64)]
                 .into_iter()
                 .collect::<IndexSet<_>>()
         );
@@ -3723,18 +3715,14 @@ platforms = ["linux-64-cuda-12-9"]
                 .platforms
                 .clone()
                 .unwrap(),
-            [
-                pn(Platform::Linux64),
-                pn(Platform::Win64),
-                pn(Platform::Osx64),
-            ]
-            .into_iter()
-            .collect::<IndexSet<_>>()
+            [pn(Subdir::Linux64), pn(Subdir::Win64), pn(Subdir::Osx64),]
+                .into_iter()
+                .collect::<IndexSet<_>>()
         );
 
         manifest
             .remove_platforms(
-                [pp(Platform::Linux64), pp(Platform::Osx64)].iter(),
+                [pp(Subdir::Linux64), pp(Subdir::Osx64)].iter(),
                 &FeatureName::from("test"),
             )
             .unwrap();
@@ -3747,14 +3735,14 @@ platforms = ["linux-64-cuda-12-9"]
                 .platforms
                 .clone()
                 .unwrap(),
-            [pn(Platform::Win64)].into_iter().collect::<IndexSet<_>>()
+            [pn(Subdir::Win64)].into_iter().collect::<IndexSet<_>>()
         );
 
         // Test removing non-existing platforms
         assert!(
             manifest
                 .remove_platforms(
-                    [pp(Platform::Linux64), pp(Platform::Osx64)].iter(),
+                    [pp(Subdir::Linux64), pp(Subdir::Osx64)].iter(),
                     &FeatureName::from("test"),
                 )
                 .is_err()
@@ -3786,21 +3774,21 @@ platforms = ["linux-64-cuda-12-9"]
         let mut manifest = parse_pixi_toml(file_contents);
         let mut manifest = manifest.editable();
 
-        fn pp(p: Platform) -> PixiPlatform {
+        fn pp(p: Subdir) -> PixiPlatform {
             PixiPlatform::from_subdir(p)
         }
-        fn pn(p: Platform) -> PixiPlatformName {
+        fn pn(p: Subdir) -> PixiPlatformName {
             p.into()
         }
 
         // Workspace-level remove of OsxArm64.
         manifest
-            .remove_platforms([pp(Platform::OsxArm64)].iter(), &FeatureName::Default)
+            .remove_platforms([pp(Subdir::OsxArm64)].iter(), &FeatureName::Default)
             .unwrap();
 
         assert_eq!(
             manifest.workspace.workspace.platforms,
-            [pp(Platform::Linux64)].into_iter().collect::<IndexSet<_>>(),
+            [pp(Subdir::Linux64)].into_iter().collect::<IndexSet<_>>(),
         );
 
         // The feature still references OsxArm64 -- this is the dangling
@@ -3814,9 +3802,7 @@ platforms = ["linux-64-cuda-12-9"]
             .unwrap();
         assert_eq!(
             dangling,
-            [pn(Platform::OsxArm64)]
-                .into_iter()
-                .collect::<IndexSet<_>>(),
+            [pn(Subdir::OsxArm64)].into_iter().collect::<IndexSet<_>>(),
         );
     }
 
@@ -3844,20 +3830,20 @@ platforms = ["linux-64-cuda-12-9"]
         let mut manifest = parse_pixi_toml(file_contents);
         let mut manifest = manifest.editable();
 
-        fn pp(p: Platform) -> PixiPlatform {
+        fn pp(p: Subdir) -> PixiPlatform {
             PixiPlatform::from_subdir(p)
         }
-        fn pn(p: Platform) -> PixiPlatformName {
+        fn pn(p: Subdir) -> PixiPlatformName {
             p.into()
         }
 
         // `add ... --feature gpu` extends both sides.
         manifest
-            .add_platforms([pp(Platform::OsxArm64)].iter(), &FeatureName::from("gpu"))
+            .add_platforms([pp(Subdir::OsxArm64)].iter(), &FeatureName::from("gpu"))
             .unwrap();
         assert_eq!(
             manifest.workspace.workspace.platforms,
-            [pp(Platform::Linux64), pp(Platform::OsxArm64)]
+            [pp(Subdir::Linux64), pp(Subdir::OsxArm64)]
                 .into_iter()
                 .collect::<IndexSet<_>>(),
         );
@@ -3869,14 +3855,12 @@ platforms = ["linux-64-cuda-12-9"]
                 .platforms
                 .clone()
                 .unwrap(),
-            [pn(Platform::OsxArm64)]
-                .into_iter()
-                .collect::<IndexSet<_>>(),
+            [pn(Subdir::OsxArm64)].into_iter().collect::<IndexSet<_>>(),
         );
 
         // `remove ... --feature gpu` shrinks only the feature.
         manifest
-            .remove_platforms([pp(Platform::OsxArm64)].iter(), &FeatureName::from("gpu"))
+            .remove_platforms([pp(Subdir::OsxArm64)].iter(), &FeatureName::from("gpu"))
             .unwrap();
         assert_eq!(
             manifest
@@ -3892,7 +3876,7 @@ platforms = ["linux-64-cuda-12-9"]
         // might still reference it.
         assert_eq!(
             manifest.workspace.workspace.platforms,
-            [pp(Platform::Linux64), pp(Platform::OsxArm64)]
+            [pp(Subdir::Linux64), pp(Subdir::OsxArm64)]
                 .into_iter()
                 .collect::<IndexSet<_>>(),
         );
@@ -4679,7 +4663,7 @@ channels = [
         assert_eq!(
             cuda_feature
                 .targets
-                .for_target(&TargetSelector::Subdir(Platform::OsxArm64))
+                .for_target(&TargetSelector::Subdir(Subdir::OsxArm64))
                 .unwrap()
                 .dependencies
                 .get(&SpecType::Run)
@@ -4749,7 +4733,7 @@ test = "test initial"
                 &FeatureName::Default,
             )
             .unwrap();
-        let linux64 = PixiPlatform::from_subdir(Platform::Linux64);
+        let linux64 = PixiPlatform::from_subdir(Subdir::Linux64);
         manifest
             .add_task(
                 "target_linux".into(),
@@ -4874,7 +4858,7 @@ bar = "*"
                 package_name.as_exact().unwrap(),
                 &pixi_spec,
                 SpecType::Run,
-                &[Platform::Linux64.into()],
+                &[Subdir::Linux64.into()],
                 &FeatureName::from("extra"),
                 DependencyOverwriteBehavior::Overwrite,
             )
@@ -4886,7 +4870,7 @@ bar = "*"
                 .feature(&FeatureName::from("extra"))
                 .unwrap()
                 .targets
-                .for_target(&TargetSelector::Subdir(Platform::Linux64))
+                .for_target(&TargetSelector::Subdir(Subdir::Linux64))
                 .unwrap()
                 .dependencies
                 .get(&SpecType::Run)
@@ -4910,7 +4894,7 @@ bar = "*"
                 package_name.as_exact().unwrap(),
                 &pixi_spec,
                 SpecType::Build,
-                &[Platform::Linux64.into()],
+                &[Subdir::Linux64.into()],
                 &FeatureName::from("build"),
                 DependencyOverwriteBehavior::Overwrite,
             )
@@ -4921,7 +4905,7 @@ bar = "*"
                 .workspace
                 .feature(&FeatureName::from("build"))
                 .map(|f| &f.targets)
-                .and_then(|t| t.for_target(&TargetSelector::Subdir(Platform::Linux64)))
+                .and_then(|t| t.for_target(&TargetSelector::Subdir(Subdir::Linux64)))
                 .and_then(|t| t.dependencies.get(&SpecType::Build))
                 .and_then(|deps| deps.get(&PackageName::from_str("cmake").unwrap()))
                 .and_then(|specs| specs.iter().next())
@@ -5852,7 +5836,7 @@ channels = ["nvidia", "pytorch"]
 
         manifest
             .remove_platforms(
-                [PixiPlatform::from_subdir(Platform::Linux64)].iter(),
+                [PixiPlatform::from_subdir(Subdir::Linux64)].iter(),
                 &FeatureName::Default,
             )
             .unwrap();
@@ -5980,7 +5964,7 @@ openssl = "<3"
 [target.linux-64.constraints]
 openssl = "<2"
 "#;
-        use rattler_conda_types::{PackageName, Platform};
+        use rattler_conda_types::{PackageName, Subdir};
         use std::str::FromStr;
 
         let manifest = parse_pixi_toml(contents).manifest;
@@ -5988,7 +5972,7 @@ openssl = "<2"
 
         let openssl = PackageName::from_str("openssl").unwrap();
 
-        // Platform-independent constraint
+        // Subdir-independent constraint
         let base_constraints = default_feature.constraints(None);
         assert!(base_constraints.is_some());
         let base_spec = base_constraints
@@ -6003,8 +5987,8 @@ openssl = "<2"
             .to_string();
         assert_eq!(base_spec, "<3");
 
-        // Platform-specific constraint overrides
-        let linux64 = PixiPlatform::from_subdir(Platform::Linux64);
+        // Subdir-specific constraint overrides
+        let linux64 = PixiPlatform::from_subdir(Subdir::Linux64);
         let linux_constraints = default_feature.constraints(Some(&linux64));
         assert!(linux_constraints.is_some());
         let linux_spec = linux_constraints
@@ -6197,7 +6181,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
         let mut editable = workspace.editable();
         let rich = PixiPlatform::new(
             PixiPlatformName::try_from("gpu-12-4").unwrap(),
-            Platform::Linux64,
+            Subdir::Linux64,
             vec![rattler_conda_types::GenericVirtualPackage {
                 name: rattler_conda_types::PackageName::try_from("__cuda").unwrap(),
                 version: Version::from_str("12.4").unwrap(),
@@ -6254,7 +6238,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
         let mut editable = workspace.editable();
         editable
             .add_platforms(
-                [PixiPlatform::from_subdir(Platform::Osx64)].iter(),
+                [PixiPlatform::from_subdir(Subdir::Osx64)].iter(),
                 &FeatureName::Default,
             )
             .unwrap();
@@ -6297,7 +6281,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
         let mut editable = workspace.editable();
         editable
             .add_platforms(
-                [PixiPlatform::from_subdir(Platform::Linux64)].iter(),
+                [PixiPlatform::from_subdir(Subdir::Linux64)].iter(),
                 &FeatureName::Default,
             )
             .unwrap();
@@ -6513,7 +6497,7 @@ platforms = [
         let mut editable = workspace.editable();
         editable
             .add_platforms(
-                [PixiPlatform::from_subdir(Platform::Linux64)].iter(),
+                [PixiPlatform::from_subdir(Subdir::Linux64)].iter(),
                 &FeatureName::Default,
             )
             .unwrap();
@@ -6545,7 +6529,7 @@ platforms = [
         let mut editable = workspace.editable();
         editable
             .remove_platforms(
-                [PixiPlatform::from_subdir(Platform::Osx64)].iter(),
+                [PixiPlatform::from_subdir(Subdir::Osx64)].iter(),
                 &FeatureName::Default,
             )
             .unwrap();

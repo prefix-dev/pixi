@@ -64,12 +64,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             } else {
                 format_feature_list(&features)
             };
-            writeln!(std::io::stdout(), "{output}")
-                .inspect_err(|e| {
-                    if e.kind() == std::io::ErrorKind::BrokenPipe {
-                        std::process::exit(0);
-                    }
-                })
+            pixi_utils::io::ignore_broken_pipe(writeln!(std::io::stdout(), "{output}"))
                 .into_diagnostic()?;
         }
         Command::Remove(args) => {

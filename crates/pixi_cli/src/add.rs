@@ -156,7 +156,7 @@ impl Args {
             Ok(())
         } else {
             Err(miette::miette!(
-                help = "A PEP 723 script has one implicit default run environment.",
+                help = "A script has one implicit default run environment.",
                 "`pixi add --script` does not support {}",
                 unsupported.join(", ")
             ))
@@ -454,6 +454,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         {
             workspace = workspace.with_backend_override(backend_override);
         }
+    }
+
+    if workspace.is_conda_script() && !args.dependency_config.platforms.is_empty() {
+        return Err(miette::miette!(
+            help = "restrict the dependency with a `when` condition in `[dependencies]`, or write `[tool.pixi.target.<platform>.dependencies]` by hand",
+            "`--platform` cannot edit a conda-script block"
+        ));
+    }
+
+    if workspace.is_conda_script() && args.dependency_config.git.is_some() {
+        return Err(miette::miette!(
+            help = "the specification keeps `[dependencies]` to registry packages; add the git spec under `[tool.pixi.dependencies]` by editing the block",
+            "conda-script `[dependencies]` do not support git specs"
+        ));
     }
 
     let workspace_ctx = cli_context(workspace.clone());

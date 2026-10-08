@@ -44,6 +44,6 @@ pixi workspace export conda-environment [OPTIONS] [OUTPUT_PATH]
 - <a id="arg---workspace" href="#arg---workspace">`--workspace (-w) <WORKSPACE>`</a>
 :  Name of the workspace
 - <a id="arg---script" href="#arg---script">`--script (-s) <SCRIPT>`</a>
-:  The path to a Python script containing PEP 723 metadata
+:  The path to a script with an embedded manifest: a Python script containing PEP 723 metadata, or a file of any language containing a `/// conda-script` block
 
 --8<-- "docs/reference/cli/pixi/workspace/export/conda-environment_extender:example"

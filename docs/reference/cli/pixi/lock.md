@@ -17,9 +17,9 @@ pixi lock [OPTIONS]
 - <a id="arg---json" href="#arg---json">`--json`</a>
 :  Output the changes in JSON format
 - <a id="arg---check" href="#arg---check">`--check`</a>
-:  Check if any changes have been made to the lock file. If yes, exit with a non-zero code
+:  Check if any changes have been made to the lock file. If yes, exit with a non-zero code. Implies `--dry-run`
 - <a id="arg---dry-run" href="#arg---dry-run">`--dry-run`</a>
-:  Compute the lock file without writing to disk. Implies --no-install
+:  Compute the lock file without writing to disk. Implies `--no-install`
 
 ## Config Options
 - <a id="arg---no-config" href="#arg---no-config">`--no-config`</a>
@@ -75,6 +75,6 @@ pixi lock [OPTIONS]
 - <a id="arg---workspace" href="#arg---workspace">`--workspace (-w) <WORKSPACE>`</a>
 :  Name of the workspace
 - <a id="arg---script" href="#arg---script">`--script (-s) <SCRIPT>`</a>
-:  The path to a Python script containing PEP 723 metadata
+:  The path to a script with an embedded manifest: a Python script containing PEP 723 metadata, or a file of any language containing a `/// conda-script` block
 
 --8<-- "docs/reference/cli/pixi/lock_extender:example"

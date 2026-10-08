@@ -2,10 +2,10 @@ import json
 import os
 import platform
 import shutil
-import tomli
 from pathlib import Path
 
 import pytest
+import tomli
 import tomli_w
 from inline_snapshot import snapshot
 
@@ -2779,3 +2779,373 @@ def test_install_nonexistent_package_no_empty_dir(
         assert not (envs_dir / "this-package-does-not-exist").exists(), (
             "Empty directory was left behind for failed package installation"
         )
+
+
+def test_exclude_newer_rejects_newer_packages(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
+    """The `exclude-newer` of `[global]` applies to every global environment."""
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    # Every package in dummy_channel_1 was uploaded in 2025
+    manifest.write_text(f"""
+version = {MANIFEST_VERSION}
+
+[global]
+exclude-newer = "2020-01-01"
+
+[envs.test]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-a = "*" }}
+exposed = {{ dummy-a = "dummy-a" }}
+""")
+
+    verify_cli_command(
+        [pixi, "global", "sync"],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="uploaded after the cutoff date",
+    )
+
+    manifest.write_text(f"""
+version = {MANIFEST_VERSION}
+
+[global]
+exclude-newer = "2030-01-01"
+
+[envs.test]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-a = "*" }}
+exposed = {{ dummy-a = "dummy-a" }}
+""")
+    verify_cli_command([pixi, "global", "sync"], env=env)
+    assert (tmp_path / "bin" / exec_extension("dummy-a")).is_file()
+
+
+def test_exclude_newer_channel_override(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    """A channel-level `exclude-newer` takes precedence over the one in `[global]`."""
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    manifest.write_text(f"""
+version = {MANIFEST_VERSION}
+
+[global]
+exclude-newer = "2020-01-01"
+
+[envs.test]
+channels = [{{ channel = "{dummy_channel_1}", exclude-newer = "2030-01-01" }}]
+dependencies = {{ dummy-a = "*" }}
+exposed = {{ dummy-a = "dummy-a" }}
+""")
+
+    verify_cli_command([pixi, "global", "sync"], env=env)
+    assert (tmp_path / "bin" / exec_extension("dummy-a")).is_file()
+
+    # The channel override alone excludes packages as well
+    manifest.write_text(f"""
+version = {MANIFEST_VERSION}
+
+[envs.test]
+channels = [{{ channel = "{dummy_channel_1}", exclude-newer = "2020-01-01" }}]
+dependencies = {{ dummy-a = "*" }}
+exposed = {{ dummy-a = "dummy-a" }}
+""")
+    verify_cli_command(
+        [pixi, "global", "sync"],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="uploaded after the cutoff date",
+    )
+
+
+def test_exclude_newer_package_override(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    """A package override lifts the cutoff of `[global]` for that package alone."""
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    # Every package in dummy_channel_1 was uploaded in 2025
+    manifest.write_text(f"""
+version = {MANIFEST_VERSION}
+
+[global]
+exclude-newer = "2020-01-01"
+
+[envs.test]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-b = "*" }}
+exposed = {{ dummy-b = "dummy-b" }}
+""")
+    verify_cli_command(
+        [pixi, "global", "sync"],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="uploaded after the cutoff date",
+    )
+
+    # The override lets `dummy-b` through
+    manifest.write_text(f"""
+version = {MANIFEST_VERSION}
+
+[global]
+exclude-newer = "2020-01-01"
+
+[exclude-newer]
+dummy-b = "2030-01-01"
+
+[envs.test]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-b = "*" }}
+exposed = {{ dummy-b = "dummy-b" }}
+""")
+    verify_cli_command([pixi, "global", "sync"], env=env)
+    assert (tmp_path / "bin" / exec_extension("dummy-b")).is_file()
+
+    # Every other package keeps the cutoff of `[global]`
+    manifest.write_text(f"""
+version = {MANIFEST_VERSION}
+
+[global]
+exclude-newer = "2020-01-01"
+
+[exclude-newer]
+dummy-b = "2030-01-01"
+
+[envs.test]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-b = "*", dummy-c = "*" }}
+exposed = {{ dummy-b = "dummy-b" }}
+""")
+    verify_cli_command(
+        [pixi, "global", "sync"],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="uploaded after the cutoff date",
+    )
+
+
+def test_exclude_newer_covers_url_pinned_packages(
+    pixi: Path, tmp_path: Path, channels: Path
+) -> None:
+    """A package pinned by URL has no channel in the prefix, yet the solve
+    applies the cutoff to it, so the in-sync check has to as well."""
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    package = next(
+        channels.joinpath("dummy_channel_1", CURRENT_PLATFORM).glob("dummy-c-0.1.0-*.conda")
+    )
+
+    def manifest_with(header: str) -> str:
+        return f"""
+version = {MANIFEST_VERSION}
+{header}
+[envs.test]
+channels = ["{channels.joinpath("dummy_channel_1").as_uri()}"]
+dependencies = {{ dummy-c = {{ url = "{package.as_uri()}" }} }}
+exposed = {{ dummy-c = "dummy-c" }}
+"""
+
+    manifest.write_text(manifest_with(""))
+    verify_cli_command([pixi, "global", "sync"], env=env)
+
+    # The installed record carries no channel, which is what makes this case
+    # different from a package that came from the channel list.
+    record = json.loads(
+        next(
+            tmp_path.joinpath("envs", "test", "conda-meta").glob("dummy-c-0.1.0-*.json")
+        ).read_text()
+    )
+    assert record.get("channel") is None, record
+
+    # Every package in dummy_channel_1 was uploaded in 2025
+    manifest.write_text(manifest_with('\n[global]\nexclude-newer = "2020-01-01"\n'))
+    verify_cli_command(
+        [pixi, "global", "list"],
+        env=env,
+        stderr_contains="not in sync",
+    )
+
+
+def test_exclude_newer_tightening_makes_environment_out_of_sync(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
+    """Installed packages newer than the cutoff put the environment out of sync."""
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    manifest.write_text(f"""
+version = {MANIFEST_VERSION}
+
+[envs.test]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-a = "*" }}
+exposed = {{ dummy-a = "dummy-a" }}
+""")
+    verify_cli_command([pixi, "global", "sync"], env=env)
+    verify_cli_command(
+        [pixi, "global", "list"],
+        env=env,
+        stderr_excludes="not in sync",
+    )
+
+    # A cutoff that excludes the installed package puts the environment out of sync
+    manifest.write_text(f"""
+version = {MANIFEST_VERSION}
+
+[global]
+exclude-newer = "2020-01-01"
+
+[envs.test]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-a = "*" }}
+exposed = {{ dummy-a = "dummy-a" }}
+""")
+    verify_cli_command(
+        [pixi, "global", "list"],
+        env=env,
+        stderr_contains="not in sync",
+    )
+    verify_cli_command(
+        [pixi, "global", "sync"],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="uploaded after the cutoff date",
+    )
+
+    # A cutoff that still allows the installed package keeps it in sync
+    manifest.write_text(f"""
+version = {MANIFEST_VERSION}
+
+[global]
+exclude-newer = "2030-01-01"
+
+[envs.test]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-a = "*" }}
+exposed = {{ dummy-a = "dummy-a" }}
+""")
+    verify_cli_command(
+        [pixi, "global", "list"],
+        env=env,
+        stderr_excludes="not in sync",
+    )
+
+
+def test_exclude_newer_invalid_value(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    manifest.write_text(f"""
+version = {MANIFEST_VERSION}
+
+[global]
+exclude-newer = "date"
+
+[envs.test]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-a = "*" }}
+""")
+    verify_cli_command(
+        [pixi, "global", "sync"],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="`date` is neither a valid duration, date",
+    )
+
+
+def test_exclude_newer_survives_manifest_edits(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
+    """Commands that rewrite the manifest keep the `[global]` table and its comments."""
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    header = f"""version = {MANIFEST_VERSION}
+
+[global]
+# cutoff comment
+exclude-newer = "2030-01-01" # trailing comment
+"""
+    manifest.write_text(
+        header
+        + f"""
+[envs.test]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-a = "*" }}
+exposed = {{ dummy-a = "dummy-a" }}
+"""
+    )
+    verify_cli_command([pixi, "global", "sync"], env=env)
+
+    def check_header() -> None:
+        assert manifest.read_text().startswith(header), manifest.read_text()
+
+    verify_cli_command(
+        [pixi, "global", "install", "--channel", dummy_channel_1, "dummy-b"], env=env
+    )
+    check_header()
+    verify_cli_command(
+        [pixi, "global", "expose", "add", "--environment", "test", "dummy-aa=dummy-a"], env=env
+    )
+    check_header()
+    verify_cli_command([pixi, "global", "add", "--environment", "test", "dummy-c"], env=env)
+    check_header()
+    verify_cli_command([pixi, "global", "expose", "remove", "dummy-aa"], env=env)
+    check_header()
+    verify_cli_command([pixi, "global", "remove", "--environment", "test", "dummy-c"], env=env)
+    check_header()
+    verify_cli_command([pixi, "global", "uninstall", "dummy-b", "test"], env=env)
+    check_header()
+    assert "envs" not in tomli.loads(manifest.read_text())
+
+
+def test_exclude_newer_update_respects_cutoff(
+    pixi: Path, tmp_path: Path, multiple_versions_channel_1: str
+) -> None:
+    """`pixi global update` only moves within the cutoff, in both directions."""
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    # `package` 0.1.0 was uploaded a few seconds before 0.2.0
+    between_versions = "2026-01-12T15:07:39Z"
+    manifest.write_text(
+        f'version = {MANIFEST_VERSION}\n\n[global]\nexclude-newer = "{between_versions}"\n'
+    )
+    verify_cli_command(
+        [pixi, "global", "install", "--channel", multiple_versions_channel_1, "package"],
+        env=env,
+        stderr_contains="package 0.1.0",
+        strip_ansi=True,
+    )
+
+    # Nothing newer is allowed, so update is a no-op
+    verify_cli_command(
+        [pixi, "global", "update"], env=env, stderr_contains="unchanged", strip_ansi=True
+    )
+
+    # Loosening the cutoff lets update pick up 0.2.0
+    manifest.write_text(manifest.read_text().replace(between_versions, "2030-01-01"))
+    verify_cli_command(
+        [pixi, "global", "update"], env=env, stderr_contains="0.1.0 -> 0.2.0", strip_ansi=True
+    )
+    assert (tmp_path / "bin" / exec_extension("package0.2.0")).is_file()
+
+    # Tightening again makes update downgrade
+    manifest.write_text(manifest.read_text().replace("2030-01-01", between_versions))
+    verify_cli_command(
+        [pixi, "global", "update", "package"],
+        env=env,
+        stderr_contains="0.2.0 -> 0.1.0",
+        strip_ansi=True,
+    )
+    assert not (tmp_path / "bin" / exec_extension("package0.2.0")).exists()

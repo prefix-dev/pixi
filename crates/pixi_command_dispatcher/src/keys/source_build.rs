@@ -5,10 +5,16 @@
 //! gives the backend a stable incremental-build location across runs
 //! sharing the same deps.
 
-use std::{collections::BTreeMap, hash::Hash, path::PathBuf, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    hash::{Hash, Hasher},
+    path::PathBuf,
+    sync::Arc,
+};
 
 use derive_more::Display;
 use futures::{SinkExt, channel::mpsc::unbounded};
+use pixi_build_discovery::{BackendSpec, EnabledProtocols};
 use pixi_build_types::procedures::{
     conda_build_v1::CondaPackageFormat,
     conda_outputs::{CondaOutput, CondaOutputsParams},
@@ -18,16 +24,19 @@ use pixi_record::{PixiRecord, UnresolvedPixiRecord, UnresolvedSourceRecord, Vari
 use pixi_spec::{ResolvedExcludeNewer, SourceAnchor, SourceSpec};
 use pixi_variant::VariantSelector;
 use rattler_conda_types::{
-    ChannelUrl, PackageRecord, RepoDataRecord, package::DistArchiveIdentifier, prefix::Prefix,
+    ChannelConfig, ChannelUrl, PackageName, PackageRecord, RepoDataRecord, Subdir,
+    package::DistArchiveIdentifier, prefix::Prefix,
 };
 use rattler_digest::Sha256Hash;
 use tracing::instrument;
 use url::Url;
+use xxhash_rust::xxh3::Xxh3;
 
 pub use crate::cache::{ArtifactCache, WorkspaceCache};
 use crate::cache::{
-    ArtifactCacheError, CacheLookup, SourceMutability, compute_artifact_cache_key,
-    compute_workspace_key,
+    ArtifactCacheError, CacheLookup, SourceMutability,
+    artifact::ImmutableBackend,
+    compute_artifact_cache_key, compute_workspace_key,
     markers::{SourceBuildArtifactsDir, SourceBuildWorkspacesDir},
 };
 use crate::{
@@ -35,9 +44,13 @@ use crate::{
     BackendSourceBuildPrefix, BackendSourceBuildSpec, BackendSourceBuildV1Method, BuildEnvironment,
     BuildProfile, CommandDispatcherError, CommandDispatcherErrorResultExt,
     InstallPixiEnvironmentExt, InstallPixiEnvironmentSpec, InstantiateBackendKey,
-    ProjectModelOverrides, SourceBuildError,
+    PrefixPlatformMismatchError, PrefixRecordOrigin, ProjectModelOverrides, SourceBuildError,
+    SourceBuildPrefixKind,
     build::{Dependencies, PixiRunExports, convert_extra_dependencies},
     compute_data::{HasGateway, HasIoConcurrencySemaphore},
+    injected_config::{ChannelConfigKey, EnabledProtocolsKey},
+    inline_package::discover_backend,
+    instantiate_backend_key::resolve_immutable_backend_identifier_from_spec,
 };
 use pixi_compute_cache_dirs::CacheDirsExt;
 use pixi_compute_sources::SourceCheckoutExt;
@@ -52,6 +65,92 @@ fn unwrap_dispatcher_err<E>(err: CommandDispatcherError<E>) -> E {
             unreachable!("compute-engine cancellation does not surface inside a Key compute body")
         }
     }
+}
+
+/// Hash the *contents* of the user-provided variant files before checkout. If
+/// a file cannot be read, the checkout-free path is disabled rather than
+/// keying an artifact without one of its static build inputs.
+///
+/// Only the contents go into the key, in declaration order (later files
+/// override earlier ones). The paths themselves are deliberately excluded:
+/// they are absolute, so including them would tie every cached artifact to
+/// one workspace location for no gain -- what the build reads is the content.
+fn immutable_variant_file_hashes(spec: &SourceBuildSpec) -> Option<Vec<u64>> {
+    spec.variant_files
+        .as_deref()
+        .unwrap_or_default()
+        .iter()
+        .map(|path| {
+            let file = fs_err::File::open(path).ok()?;
+            crate::file_fingerprint::hash_file_contents(file).ok()
+        })
+        .collect()
+}
+
+/// Synthetic backend identifier standing in for the real one in the
+/// checkout-free artifact cache key.
+///
+/// The real identifier is only known after a checkout, so this covers the
+/// build inputs that a checkout would otherwise have pinned. Fields are
+/// listed explicitly rather than hashing [`SourceBuildSpec`] wholesale: the
+/// spec carries values that are *not* stable across processes, and folding
+/// one of those in silently turns every lookup into a miss.
+///
+/// The user-supplied project-model overrides (build string prefix and build
+/// number) are hashed here rather than in [`compute_artifact_cache_key`]:
+/// that function now folds in the *discovered* project model and
+/// configuration, both of which require a checkout to obtain. On the
+/// checkout-free path the pinned (content-addressed) manifest source already
+/// pins the project model and configuration via the record, so only the
+/// overrides remain to be captured here.
+///
+/// Deliberately **not** hashed:
+///
+/// - `exclude_newer`, whose `ResolvedExcludeNewer::cutoff` is derived from
+///   `Utc::now()` for a relative `exclude-newer` and therefore differs on
+///   every invocation. It only influences which backend gets solved, and
+///   that is already validated on lookup by re-solving the recorded backend
+///   and comparing its `env@…` identifier.
+/// - Anything [`compute_artifact_cache_key`] already folds in itself: the
+///   record, both platforms, the package format, and the inline content
+///   hash. (`InlinePackage` hashes as just its `content_hash`, so
+///   `spec.inline` would be redundant.)
+fn immutable_backend_identifier(
+    spec: &SourceBuildSpec,
+    variant_file_hashes: &[u64],
+    enabled_protocols: &EnabledProtocols,
+    channel_config: &ChannelConfig,
+    project_model_overrides: &ProjectModelOverrides,
+) -> String {
+    let mut hasher = Xxh3::new();
+    "immutable-artifact-v5".hash(&mut hasher);
+    project_model_overrides.hash(&mut hasher);
+    spec.channels.hash(&mut hasher);
+    spec.build_profile.hash(&mut hasher);
+    spec.variant_configuration.hash(&mut hasher);
+    // Virtual packages are absent from `compute_artifact_cache_key`, but a
+    // backend may select variants on them (`__cuda`, `__glibc`), so an
+    // artifact built against one set must not be reused for another.
+    // This is an extra defensive check, as differently selected variants
+    // should already be captured by
+    // `compute_artifact_cache_key`’s `build_packages`/`host_packages`.
+    spec.build_environment
+        .build_virtual_packages
+        .hash(&mut hasher);
+    spec.build_environment
+        .host_virtual_packages
+        .hash(&mut hasher);
+    variant_file_hashes.hash(&mut hasher);
+    enabled_protocols.hash(&mut hasher);
+    // Both halves of the channel config matter: `channel_alias` expands bare
+    // channel names, and `root_dir` resolves relative ones. The artifact
+    // cache is normally workspace-local, which would make `root_dir`
+    // constant, but `CacheBase::Workspace` falls back to the global root when
+    // no workspace is configured, so entries keyed here can be shared between
+    // different roots.
+    channel_config.channel_alias.hash(&mut hasher);
+    channel_config.root_dir.hash(&mut hasher);
+    format!("immutable@{:016x}", hasher.finish())
 }
 
 /// Hashable inputs to a source build. Runtime concerns (reporters, log
@@ -156,6 +255,83 @@ async fn compute_inner(
         .map(|result| result.artifact_sha256)
         .collect();
 
+    let project_model_overrides = ProjectModelOverrides {
+        build_string_prefix: spec.build_string_prefix.clone(),
+        build_number: spec.build_number,
+    };
+    let artifacts_dir = ctx.cache_dir::<SourceBuildArtifactsDir>().await;
+    let artifact_cache = ArtifactCache::new(artifacts_dir.as_std_path())
+        .with_io_concurrency_semaphore(ctx.global_data().io_concurrency_semaphore().cloned());
+    let enabled_protocols = ctx.compute(&EnabledProtocolsKey).await;
+    let channel_config = ctx.compute(&ChannelConfigKey).await;
+    // Backend overrides are *not* checked here. An overridden backend is a
+    // `CommandSpec::System` after `ResolvedBackendCommandKey` re-applies the
+    // override, and `resolve_immutable_backend_identifier_from_spec` returns
+    // `None` for anything that is not an `EnvironmentSpec`, so an overridden
+    // backend already declines the checkout-free path on its own. Gating on
+    // "any backend is overridden" instead would disable the optimisation for
+    // every package in the workspace as soon as one unrelated backend is
+    // pointed at a local binary.
+    let immutable_cache_key = (!spec.record.has_mutable_source())
+        .then(|| immutable_variant_file_hashes(&spec))
+        .flatten()
+        .map(|variant_file_hashes| {
+            let immutable_identifier = immutable_backend_identifier(
+                &spec,
+                &variant_file_hashes,
+                &enabled_protocols,
+                &channel_config,
+                &project_model_overrides,
+            );
+            // The discovered project model and configuration require a
+            // checkout, which this path deliberately avoids. For an immutable
+            // (content-addressed) source both are pinned by the record, and
+            // the user overrides are folded into `immutable_identifier`, so a
+            // `None` model hash and the default configuration hash are safe
+            // here.
+            compute_artifact_cache_key(
+                &spec.record,
+                spec.build_environment.build_platform,
+                spec.build_environment.host_platform,
+                &immutable_identifier,
+                None,
+                crate::input_hash::ConfigurationHash::default(),
+                &build_source_dep_sha256s,
+                &host_source_dep_sha256s,
+                spec.package_format,
+                spec.inline.as_ref().map(|inline| inline.content_hash),
+            )
+        });
+
+    // this is the checkout-free path: we have a cache hit for the immutable artifact,
+    // so we return early before checking out the repo
+    if let Some(key) = immutable_cache_key.as_ref()
+        && let Some(backend) = artifact_cache
+            .immutable_backend(spec.record.name(), key)
+            .await
+        && let Ok(Some(identifier)) = resolve_immutable_backend_identifier_from_spec(
+            ctx,
+            backend.spec(),
+            spec.exclude_newer.clone(),
+        )
+        .await
+        && let Some(hit) = artifact_cache
+            .lookup_immutable(spec.record.name(), key, &backend, &identifier)
+            .await
+    {
+        tracing::debug!(
+            package = %spec.record.name().as_source(),
+            key = %key,
+            artifact = %hit.artifact.display(),
+            "checkout-free artifact cache hit",
+        );
+        return Ok(SourceBuildResult {
+            artifact: hit.artifact,
+            artifact_sha256: hit.sha256,
+            record: hit.record,
+        });
+    }
+
     let manifest_source = spec.record.manifest_source.clone();
     let manifest_checkout = ctx
         .checkout_pinned_source(manifest_source.clone())
@@ -185,7 +361,7 @@ async fn compute_inner(
         .path
         .as_dir_or_file_parent()
         .to_path_buf();
-    let backend_identifier = crate::resolve_backend_identifier(
+    let discovered_backend_identifier = crate::resolve_backend_identifier(
         ctx,
         manifest_checkout.path.as_std_path(),
         manifest_anchor.clone(),
@@ -196,31 +372,68 @@ async fn compute_inner(
     .map_err(|err: Arc<crate::InstantiateBackendError>| {
         SourceBuildError::Initialize((*err).clone())
     })?;
+    // Discovery is content-addressed, so this only retrieves the descriptor
+    // used by the identifier resolution above.
+    let discovered = discover_backend(
+        ctx,
+        manifest_checkout.path.as_std_path(),
+        spec.inline.as_ref(),
+    )
+    .await
+    .map_err(|err| SourceBuildError::Initialize(crate::InstantiateBackendError::Discovery(err)))?;
+    let BackendSpec::JsonRpc(backend_spec) = discovered
+        .backend_spec
+        .clone()
+        .resolve(manifest_anchor.clone());
+    let immutable_backend = if immutable_cache_key.is_some() {
+        resolve_immutable_backend_identifier_from_spec(
+            ctx,
+            backend_spec.clone(),
+            spec.exclude_newer.clone(),
+        )
+        .await
+        .map_err(|err| SourceBuildError::Initialize((*err).clone()))?
+        .and_then(|identifier| ImmutableBackend::new(identifier, backend_spec.clone()))
+    } else {
+        None
+    };
+    // Complex environment specs and non-environment backends retain the
+    // existing backend-keyed path.
+    let immutable_cache_key = immutable_backend.as_ref().and(immutable_cache_key);
+    let backend_identifier = immutable_backend
+        .as_ref()
+        .map(|backend| backend.identifier.clone())
+        .unwrap_or(discovered_backend_identifier);
 
     // Cache key covers structural identity + dep content addresses;
     // source-file freshness lives in the sidecar, not the key.
-    let project_model_overrides = ProjectModelOverrides {
-        build_string_prefix: spec.build_string_prefix.clone(),
-        build_number: spec.build_number,
-    };
-    let cache_key = compute_artifact_cache_key(
-        &spec.record,
-        spec.build_environment.build_platform,
-        spec.build_environment.host_platform,
-        &backend_identifier,
-        &build_source_dep_sha256s,
-        &host_source_dep_sha256s,
-        &project_model_overrides,
-        spec.package_format,
-        spec.inline.as_ref().map(|inline| inline.content_hash),
+    let project_model_with_overrides =
+        project_model_overrides.apply(discovered.init_params.project_model.clone());
+    let project_model_with_overrides_hash = project_model_with_overrides
+        .as_ref()
+        .map(crate::input_hash::ProjectModelHash::from);
+    let configuration_hash = crate::input_hash::ConfigurationHash::compute(
+        discovered.init_params.configuration.as_ref(),
+        discovered.init_params.target_configuration.as_ref(),
     );
+    let cache_key = immutable_cache_key.clone().unwrap_or_else(|| {
+        compute_artifact_cache_key(
+            &spec.record,
+            spec.build_environment.build_platform,
+            spec.build_environment.host_platform,
+            &backend_identifier,
+            project_model_with_overrides_hash,
+            configuration_hash,
+            &build_source_dep_sha256s,
+            &host_source_dep_sha256s,
+            spec.package_format,
+            spec.inline.as_ref().map(|inline| inline.content_hash),
+        )
+    });
 
     // On artifact cache hit, return without invoking the backend.
     // Force-rebuild is handled by wiping the cache entry before calling;
     // this body honors whatever state it finds on disk.
-    let artifacts_dir = ctx.cache_dir::<SourceBuildArtifactsDir>().await;
-    let artifact_cache = ArtifactCache::new(artifacts_dir.as_std_path())
-        .with_io_concurrency_semaphore(ctx.global_data().io_concurrency_semaphore().cloned());
     let source_dir = build_source_checkout
         .path
         .as_dir_or_file_parent()
@@ -232,34 +445,39 @@ async fn compute_inner(
     } else {
         SourceMutability::Immutable
     };
-    match artifact_cache
-        .lookup(ctx, spec.record.name(), &cache_key, &source_dir, mutability)
-        .await
-        .map_err(map_cache_err)?
-    {
-        CacheLookup::Hit(hit) => {
-            tracing::debug!(
-                package = %spec.record.name().as_source(),
-                artifact = %hit.artifact.display(),
-                "artifact cache hit",
-            );
-            return Ok(SourceBuildResult {
-                artifact: hit.artifact,
-                artifact_sha256: hit.sha256,
-                record: hit.record,
-            });
+    let cached = if let Some(backend) = immutable_backend.as_ref() {
+        artifact_cache
+            .lookup_immutable(spec.record.name(), &cache_key, backend, &backend_identifier)
+            .await
+    } else {
+        match artifact_cache
+            .lookup(ctx, spec.record.name(), &cache_key, &source_dir, mutability)
+            .await
+            .map_err(map_cache_err)?
+        {
+            CacheLookup::Hit(hit) => Some(hit),
+            CacheLookup::Miss(reason) => {
+                tracing::debug!(
+                    package = %spec.record.name().as_source(),
+                    key = %cache_key,
+                    reason = %reason,
+                    "artifact cache miss, rebuilding",
+                );
+                None
+            }
         }
-        CacheLookup::Miss(reason) => {
-            // Logged at the same level as the hit so a rebuild is never
-            // silent: without the reason, a changed cache key and an
-            // invalidated entry look identical from the outside.
-            tracing::debug!(
-                package = %spec.record.name().as_source(),
-                key = %cache_key,
-                reason = %reason,
-                "artifact cache miss, rebuilding",
-            );
-        }
+    };
+    if let Some(hit) = cached {
+        tracing::debug!(
+            package = %spec.record.name().as_source(),
+            artifact = %hit.artifact.display(),
+            "artifact cache hit",
+        );
+        return Ok(SourceBuildResult {
+            artifact: hit.artifact,
+            artifact_sha256: hit.sha256,
+            record: hit.record,
+        });
     }
 
     // Cache miss: now spawn the backend. `InstantiateBackendKey`
@@ -283,8 +501,8 @@ async fn compute_inner(
             SourceBuildError::Initialize((*err).clone())
         })?;
 
-    // Workspace dir is the backend's build root; state persists across
-    // runs that share the same (source, deps, variants, backend).
+    // The backend build directory is reused when the source, dependencies,
+    // variants, backend, and package and build settings match.
     // `package_format` is intentionally not included: differently-encoded
     // outputs of the same build can share the same workdir.
     let workspace_key = compute_workspace_key(
@@ -292,6 +510,8 @@ async fn compute_inner(
         spec.build_environment.build_platform,
         spec.build_environment.host_platform,
         &backend_identifier,
+        project_model_with_overrides_hash,
+        configuration_hash,
     );
     let workspaces_dir = ctx.cache_dir::<SourceBuildWorkspacesDir>().await;
     let workspace_cache = WorkspaceCache::new(workspaces_dir.as_std_path());
@@ -323,7 +543,7 @@ async fn compute_inner(
                 install_prefix(
                     ctx,
                     &spec,
-                    InstallTarget::Build,
+                    SourceBuildPrefixKind::Build,
                     directories.build_prefix.clone(),
                     spec.record.build_packages.clone(),
                     &build_source_dep_records,
@@ -334,7 +554,7 @@ async fn compute_inner(
                 install_prefix(
                     ctx,
                     &spec,
-                    InstallTarget::Host,
+                    SourceBuildPrefixKind::Host,
                     directories.host_prefix.clone(),
                     spec.record.host_packages.clone(),
                     &host_source_dep_records,
@@ -505,18 +725,32 @@ async fn compute_inner(
         SourceMutability::Immutable => (Vec::new(), Vec::new()),
     };
 
-    let stored = artifact_cache
-        .store(
-            spec.record.name(),
-            &cache_key,
-            &built.output_file,
-            input_glob_sets,
-            input_files,
-            build_started,
-            record,
-        )
-        .await
-        .map_err(map_cache_err)?;
+    let stored = if let Some(backend) = immutable_backend {
+        artifact_cache
+            .store_immutable(
+                spec.record.name(),
+                &cache_key,
+                &built.output_file,
+                build_started,
+                record,
+                backend,
+            )
+            .await
+            .map_err(map_cache_err)?
+    } else {
+        artifact_cache
+            .store(
+                spec.record.name(),
+                &cache_key,
+                &built.output_file,
+                input_glob_sets,
+                input_files,
+                build_started,
+                record,
+            )
+            .await
+            .map_err(map_cache_err)?
+    };
 
     Ok(SourceBuildResult {
         artifact: stored.artifact,
@@ -692,18 +926,12 @@ async fn fetch_matching_output(
         })
 }
 
-#[derive(Copy, Clone)]
-enum InstallTarget {
-    Build,
-    Host,
-}
-
 /// Install a build or host environment into `prefix`, returning the
 /// fully-resolved `RepoDataRecord`s that end up inside.
 async fn install_prefix(
     ctx: &mut ComputeCtx,
     spec: &SourceBuildSpec,
-    target: InstallTarget,
+    target: SourceBuildPrefixKind,
     prefix_path: PathBuf,
     packages: Vec<UnresolvedPixiRecord>,
     resolved_source_deps: &std::collections::HashMap<
@@ -727,35 +955,45 @@ async fn install_prefix(
         return Ok((Vec::new(), None));
     }
     let build_environment = match target {
-        InstallTarget::Build => spec.build_environment.to_build_from_build(),
-        InstallTarget::Host => spec.build_environment.clone(),
+        SourceBuildPrefixKind::Build => spec.build_environment.to_build_from_build(),
+        SourceBuildPrefixKind::Host => spec.build_environment.clone(),
     };
     let label = match target {
-        InstallTarget::Build => format!("{} (build)", spec.record.name().as_source()),
-        InstallTarget::Host => format!("{} (host)", spec.record.name().as_source()),
+        SourceBuildPrefixKind::Build => format!("{} (build)", spec.record.name().as_source()),
+        SourceBuildPrefixKind::Host => format!("{} (host)", spec.record.name().as_source()),
     };
     // Substitute every source entry with the binary record its build
     // produced. Handing the installer the pre-built binaries keeps it
     // from launching another build of the same package with different
     // build parameters (a different package format, notably).
     let mut records = Vec::with_capacity(packages.len());
-    let install_records = packages
-        .into_iter()
-        .map(|record| match record {
-            UnresolvedPixiRecord::Binary(binary) => {
-                records.push((*binary).clone());
-                UnresolvedPixiRecord::Binary(binary)
-            }
+    let mut install_records = Vec::with_capacity(packages.len());
+    for package in packages {
+        let (record, origin) = match package {
+            UnresolvedPixiRecord::Binary(binary) => (binary, PrefixRecordOrigin::Solved),
             UnresolvedPixiRecord::Source(source) => {
                 let built = resolved_source_deps
                     .get(source.name())
                     .expect("source dependency should have been built by recurse_source_deps")
                     .clone();
-                records.push((*built).clone());
-                UnresolvedPixiRecord::Binary(built)
+                (built, PrefixRecordOrigin::Built)
             }
-        })
-        .collect();
+        };
+        // The records were solved (or built) for
+        // `build_environment.host_platform`; a record of another platform
+        // means the platform tracking upstream went wrong, and installing it
+        // would only produce an opaque failure once the build script tries
+        // to run or link against it.
+        verify_record_matches_platform(
+            target,
+            spec.record.name(),
+            &record,
+            origin,
+            build_environment.host_platform,
+        )?;
+        records.push((*record).clone());
+        install_records.push(UnresolvedPixiRecord::Binary(record));
+    }
     let install_spec = InstallPixiEnvironmentSpec {
         name: label,
         records: install_records,
@@ -776,12 +1014,38 @@ async fn install_prefix(
         .install_pixi_environment(install_spec)
         .await
         .map_err_with(|e| match target {
-            InstallTarget::Build => SourceBuildError::InstallBuildEnvironment(Arc::new(e)),
-            InstallTarget::Host => SourceBuildError::InstallHostEnvironment(Arc::new(e)),
+            SourceBuildPrefixKind::Build => SourceBuildError::InstallBuildEnvironment(Arc::new(e)),
+            SourceBuildPrefixKind::Host => SourceBuildError::InstallHostEnvironment(Arc::new(e)),
         })
         .map_err(unwrap_dispatcher_err)?;
 
     Ok((records, Some(result)))
+}
+
+/// Check that `record` is for `platform` (or `noarch`) before it is
+/// installed into the `kind` prefix of `source_package`. A record whose
+/// subdir is not a known platform is left alone; it is not ours to judge.
+fn verify_record_matches_platform(
+    kind: SourceBuildPrefixKind,
+    source_package: &PackageName,
+    record: &RepoDataRecord,
+    origin: PrefixRecordOrigin,
+    platform: Subdir,
+) -> Result<(), PrefixPlatformMismatchError> {
+    let Ok(subdir) = record.package_record.subdir.parse::<Subdir>() else {
+        return Ok(());
+    };
+    if subdir != Subdir::NoArch && subdir != platform {
+        return Err(PrefixPlatformMismatchError {
+            kind,
+            source_package: source_package.clone(),
+            package: record.package_record.name.clone(),
+            origin,
+            subdir: record.package_record.subdir.clone(),
+            expected: platform,
+        });
+    }
+    Ok(())
 }
 
 /// Read index.json out of the freshly-built `.conda` and synthesize a
@@ -813,7 +1077,6 @@ async fn synthesize_repodata(
         channel: None,
     })
 }
-
 /// Compute the sha256 of a file on a blocking thread.
 async fn compute_package_sha256(path: &std::path::Path) -> Result<Sha256Hash, SourceBuildError> {
     let p = path.to_path_buf();
@@ -849,7 +1112,7 @@ struct Directories {
 }
 
 impl Directories {
-    fn new(work_directory: &std::path::Path, host_platform: rattler_conda_types::Platform) -> Self {
+    fn new(work_directory: &std::path::Path, host_platform: rattler_conda_types::Subdir) -> Self {
         const BUILD_DIR: &str = "bld";
         const HOST_ENV_DIR: &str = "host";
         const PLACEHOLDER_TEMPLATE_STR: &str = "_placehold";
@@ -874,5 +1137,324 @@ impl Directories {
             build_prefix,
             host_prefix,
         }
+    }
+}
+
+#[cfg(test)]
+mod immutable_identifier_tests {
+    //! The checkout-free artifact key stands in for a backend identifier that
+    //! is only knowable after a checkout, so it must be stable across
+    //! processes: anything derived from the wall clock silently turns every
+    //! lookup into a miss and stores a fresh copy of the artifact.
+    use std::str::FromStr;
+
+    use chrono::{TimeZone, Utc};
+    use pixi_record::{
+        FullSourceRecordData, PinnedGitCheckout, PinnedGitSpec, PinnedSourceSpec, SourceRecordData,
+    };
+    use rattler_conda_types::{GenericVirtualPackage, PackageName, Subdir};
+
+    use super::*;
+
+    fn record() -> Arc<UnresolvedSourceRecord> {
+        let mut package_record = PackageRecord::new(
+            PackageName::from_str("foo").unwrap(),
+            "1.0.0"
+                .parse::<rattler_conda_types::VersionWithSource>()
+                .unwrap(),
+            "h0".into(),
+        );
+        package_record.subdir = "linux-64".into();
+        Arc::new(UnresolvedSourceRecord {
+            data: SourceRecordData::Full(FullSourceRecordData {
+                package_record,
+                sources: BTreeMap::new(),
+            }),
+            manifest_source: PinnedSourceSpec::Git(PinnedGitSpec {
+                git: Url::parse("https://example.invalid/foo.git").unwrap(),
+                source: PinnedGitCheckout {
+                    commit: "0123456789abcdef0123456789abcdef01234567".parse().unwrap(),
+                    subdirectory: Default::default(),
+                    reference: pixi_spec::GitReference::DefaultBranch,
+                    lfs: None,
+                },
+            }),
+            build_source: None,
+            variants: BTreeMap::new(),
+            identifier_hash: String::new(),
+            build_packages: Vec::new(),
+            host_packages: Vec::new(),
+        })
+    }
+
+    fn spec() -> SourceBuildSpec {
+        SourceBuildSpec {
+            record: record(),
+            channels: vec![ChannelUrl::from(
+                Url::parse("https://prefix.dev/conda-forge/").unwrap(),
+            )],
+            exclude_newer: None,
+            build_environment: BuildEnvironment {
+                host_platform: Subdir::Linux64,
+                host_virtual_packages: Vec::new(),
+                build_platform: Subdir::Linux64,
+                build_virtual_packages: Vec::new(),
+            },
+            build_profile: BuildProfile::Development,
+            variant_configuration: None,
+            variant_files: None,
+            build_string_prefix: None,
+            build_number: None,
+            package_format: None,
+            inline: None,
+        }
+    }
+
+    fn identifier_with(spec: &SourceBuildSpec, variant_file_hashes: &[u64]) -> String {
+        identifier_in(
+            spec,
+            variant_file_hashes,
+            &ChannelConfig::default_with_root_dir(PathBuf::from("/workspace")),
+        )
+    }
+
+    fn identifier_in(
+        spec: &SourceBuildSpec,
+        variant_file_hashes: &[u64],
+        channel_config: &ChannelConfig,
+    ) -> String {
+        immutable_backend_identifier(
+            spec,
+            variant_file_hashes,
+            &EnabledProtocols::default(),
+            channel_config,
+            &ProjectModelOverrides {
+                build_string_prefix: spec.build_string_prefix.clone(),
+                build_number: spec.build_number,
+            },
+        )
+    }
+
+    fn identifier(spec: &SourceBuildSpec) -> String {
+        identifier_with(spec, &[])
+    }
+
+    fn cutoff(secs: i64) -> Option<ResolvedExcludeNewer> {
+        Some(ResolvedExcludeNewer::from_datetime(
+            Utc.timestamp_opt(secs, 0).unwrap(),
+        ))
+    }
+
+    /// Regression test. `exclude_newer` resolves to `Utc::now() - duration`
+    /// for a relative `exclude-newer` such as `"7d"`, so hashing it into the
+    /// key made the key unique per process: the checkout-free path could
+    /// never hit, and every run wrote a new artifact-cache entry.
+    #[test]
+    fn identifier_ignores_the_exclude_newer_cutoff() {
+        let mut early = spec();
+        early.exclude_newer = cutoff(1_700_000_000);
+        let mut late = spec();
+        late.exclude_newer = cutoff(1_700_000_042);
+
+        assert_eq!(
+            identifier(&early),
+            identifier(&late),
+            "the checkout-free key must not move with the wall clock",
+        );
+        assert_eq!(
+            identifier(&spec()),
+            identifier(&early),
+            "setting exclude-newer at all must not move the key",
+        );
+    }
+
+    #[test]
+    fn identifier_is_deterministic() {
+        assert_eq!(identifier(&spec()), identifier(&spec()));
+    }
+
+    /// Every input the key *is* responsible for must still move it: these are
+    /// the build inputs a checkout would otherwise have pinned, and which
+    /// `compute_artifact_cache_key` does not fold in itself.
+    #[test]
+    fn identifier_covers_every_input_it_owns() {
+        let baseline = identifier(&spec());
+
+        let mut channels = spec();
+        channels.channels = vec![ChannelUrl::from(
+            Url::parse("https://example.invalid/other/").unwrap(),
+        )];
+        assert_ne!(baseline, identifier(&channels), "channels");
+
+        let mut profile = spec();
+        profile.build_profile = BuildProfile::Release;
+        assert_ne!(baseline, identifier(&profile), "build profile");
+
+        let mut variants = spec();
+        variants.variant_configuration = Some(BTreeMap::from([(
+            "python".to_string(),
+            vec![VariantValue::String("3.13".to_string())],
+        )]));
+        assert_ne!(baseline, identifier(&variants), "variant configuration");
+
+        let mut virtual_packages = spec();
+        virtual_packages.build_environment.host_virtual_packages = vec![GenericVirtualPackage {
+            name: PackageName::from_str("__cuda").unwrap(),
+            version: "12.4".parse().unwrap(),
+            build_string: "0".to_string(),
+        }];
+        assert_ne!(
+            baseline,
+            identifier(&virtual_packages),
+            "host virtual packages",
+        );
+
+        assert_ne!(
+            baseline,
+            identifier_with(&spec(), &[7]),
+            "variant file hashes",
+        );
+        assert_ne!(
+            identifier_with(&spec(), &[7]),
+            identifier_with(&spec(), &[7, 9]),
+            "variant file count",
+        );
+        assert_ne!(
+            identifier_with(&spec(), &[7, 9]),
+            identifier_with(&spec(), &[9, 7]),
+            "variant file order",
+        );
+
+        let mut alias = ChannelConfig::default_with_root_dir(PathBuf::from("/workspace"));
+        alias.channel_alias = Url::parse("https://mirror.invalid/").unwrap();
+        assert_ne!(
+            baseline,
+            identifier_in(&spec(), &[], &alias),
+            "channel alias",
+        );
+        assert_ne!(
+            baseline,
+            identifier_in(
+                &spec(),
+                &[],
+                &ChannelConfig::default_with_root_dir(PathBuf::from("/elsewhere")),
+            ),
+            "channel config root dir",
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use miette::Diagnostic;
+    use rattler_conda_types::VersionWithSource;
+
+    use super::*;
+
+    fn package_b() -> PackageName {
+        PackageName::new_unchecked("package_b")
+    }
+
+    fn record(name: &str, subdir: &str) -> RepoDataRecord {
+        let mut package_record = PackageRecord::new(
+            PackageName::new_unchecked(name),
+            "1.0.0".parse::<VersionWithSource>().unwrap(),
+            "h0".into(),
+        );
+        package_record.subdir = subdir.into();
+        RepoDataRecord {
+            package_record,
+            identifier: DistArchiveIdentifier::try_from_filename(&format!("{name}-1.0.0-h0.conda"))
+                .unwrap(),
+            url: Url::parse(&format!(
+                "https://example.com/{subdir}/{name}-1.0.0-h0.conda"
+            ))
+            .unwrap(),
+            channel: None,
+        }
+    }
+
+    fn verify(
+        kind: SourceBuildPrefixKind,
+        record: &RepoDataRecord,
+        origin: PrefixRecordOrigin,
+    ) -> Result<(), PrefixPlatformMismatchError> {
+        verify_record_matches_platform(kind, &package_b(), record, origin, Subdir::Linux64)
+    }
+
+    fn help(err: &PrefixPlatformMismatchError) -> String {
+        err.help().expect("the error carries a help").to_string()
+    }
+
+    #[test]
+    fn records_of_the_prefix_platform_and_noarch_pass() {
+        for record in [record("libfoo", "linux-64"), record("pyfoo", "noarch")] {
+            for origin in [PrefixRecordOrigin::Solved, PrefixRecordOrigin::Built] {
+                verify(SourceBuildPrefixKind::Host, &record, origin)
+                    .expect("records of the prefix platform and noarch records are fine");
+            }
+        }
+    }
+
+    #[test]
+    fn solved_record_of_a_foreign_platform_is_a_pixi_bug() {
+        let err = verify(
+            SourceBuildPrefixKind::Build,
+            &record("python", "osx-arm64"),
+            PrefixRecordOrigin::Solved,
+        )
+        .expect_err("an osx-arm64 record must not be installed into a linux-64 prefix");
+
+        assert_eq!(err.kind, SourceBuildPrefixKind::Build);
+        assert_eq!(err.source_package, package_b());
+        assert_eq!(err.package.as_normalized(), "python");
+        assert_eq!(err.origin, PrefixRecordOrigin::Solved);
+        assert_eq!(err.subdir, "osx-arm64");
+        assert_eq!(err.expected, Subdir::Linux64);
+        assert_eq!(
+            err.to_string(),
+            "cannot install 'python' (osx-arm64) into the build environment of 'package_b', which \
+             is for 'linux-64'"
+        );
+        assert_eq!(
+            help(&err),
+            "'python' was picked for 'osx-arm64' while pixi solved the build environment of \
+             'package_b' for 'linux-64'; this is a bug in pixi's cross-compilation platform \
+             tracking, please report it at https://github.com/prefix-dev/pixi/issues together \
+             with the output of `pixi -vv <command>`"
+        );
+    }
+
+    #[test]
+    fn built_record_of_a_foreign_platform_is_a_backend_bug() {
+        let err = verify(
+            SourceBuildPrefixKind::Host,
+            &record("libbar", "osx-arm64"),
+            PrefixRecordOrigin::Built,
+        )
+        .expect_err("an osx-arm64 record must not be installed into a linux-64 prefix");
+
+        assert_eq!(err.origin, PrefixRecordOrigin::Built);
+        assert_eq!(
+            err.to_string(),
+            "cannot install 'libbar' (osx-arm64) into the host environment of 'package_b', which \
+             is for 'linux-64'"
+        );
+        assert_eq!(
+            help(&err),
+            "'libbar' is a source dependency that was built for this environment; its build \
+             backend was asked to build for 'linux-64' but produced a 'osx-arm64' package, please \
+             report this to the maintainers of that backend"
+        );
+    }
+
+    #[test]
+    fn record_with_unknown_subdir_is_ignored() {
+        verify(
+            SourceBuildPrefixKind::Host,
+            &record("mystery", "not-a-platform"),
+            PrefixRecordOrigin::Solved,
+        )
+        .expect("a subdir that is not a platform is not checked");
     }
 }

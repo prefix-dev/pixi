@@ -15,7 +15,7 @@ preview = ["pixi-build"]
 requires-pixi = ">=0.74"
 
 [workspace.build-variants]
-rust_compiler_version = [">=1.95,<1.96"]
+rust_compiler_version = [">=1.98,<1.99"]
 
 [workspace.target.linux-64.build-variants]
 c_stdlib_version = ["2.17"]
@@ -28,19 +28,17 @@ c_compiler = ["vs"]
 c_compiler_version = ["2026"]
 
 [exclude-newer]
-pixi-build-rust = "0d"
-# tombi arrived on conda-forge inside the workspace exclude-newer window
 tombi = "0d"
+rust_osx-arm64 = "0d"
+rust_osx-64 = "0d"
+rust_win-64 = "0d"
+rust_linux-64 = "0d"
+rust_linux-aarch64 = "0d"
 
 #
 # Shared feature that exposes the build dependencies of the pixi package,
 # including compilers, in the environment.
 #
-# Use cmake to build aws-lc-sys, because conda's CFLAGS inject -O2 which
-# overrides the -O0 required by jitterentropy-base.c, causing a build failure.
-[feature.compilers.activation.env]
-AWS_LC_SYS_CMAKE_BUILDER = "1"
-
 [feature.compilers.dev]
 pixi = { path = "." }
 
@@ -48,13 +46,13 @@ pixi = { path = "." }
 # Shared feature for Python
 #
 [feature.python.dependencies]
-python = ">=3.14.6,<3.15"
+python = ">=3.14.7,<3.15"
 
 #
 # Shared feature for Rust toolchain
 #
 [feature.rust.dependencies]
-rust-src = ">=1.95,<1.96"
+rust-src = ">=1.98,<1.99"
 
 # The target dir is anchored to the workspace root so that cargo invocations
 # from subdirectories don't create stray target folders at the invocation site.
@@ -82,14 +80,10 @@ tomlkit = ">=0.15.1,<0.16"
 #
 [feature.dev.dependencies]
 cargo-edit = ">=0.13.13,<0.14"
-cargo-nextest = ">=0.9.140,<0.10"
-git-lfs = ">=3.7.1,<4"
+cargo-nextest = ">=0.9.146,<0.10"
+git-lfs = ">=3.8.0,<4"
 
 [feature.dev.tasks]
-insta-review = {
-  cmd = "cargo insta review --workspace",
-  description = "Review cargo-insta snapshots",
-}
 pypi-proxy = {
   cmd = "python scripts/pypi-proxy.py",
   description = "Run PyPI proxy server",
@@ -128,37 +122,37 @@ update-rattler = {
 #
 [feature.python-test-deps.dependencies]
 dirty-equals = ">=0.11,<0.12"
-filelock = ">=3.32.0,<4"
-git = ">=2.55.0,<3"
-inline-snapshot = ">=0.35.2,<0.36"
+filelock = ">=4.0.7,<5"
+git = ">=2.56.0,<3"
+inline-snapshot = ">=0.35.4,<0.36"
 py-rattler = ">=0.25.0,<0.26"
 pytest = ">=9.1.1,<10"
-pytest-rerunfailures = ">=16.4,<17"
+pytest-rerunfailures = ">=16.6.1,<17"
 pytest-timeout = ">=2.4.0,<3"
 pytest-xdist = ">=3.8.0,<4"
 pyyaml = ">=6.0.3,<7"
-rattler-build = ">=0.70.0,<0.71"
+rattler-build = ">=0.75.0,<0.76"
 rich = ">=15.0.0,<16"
-tomli = ">=2.4.0,<3"
+tomli = ">=2.4.1,<3"
 tomli-w = ">=1.2.0,<2"
-types-pyyaml = ">=6.0.12.20260518,<7"
+types-pyyaml = ">=6.0.12.20260906,<7"
 
 # Dependencies to generate the pypi test indexes
-hatchling = ">=1.31.0,<2"
-python-build = ">=1.5.0,<2"
+hatchling = ">=1.32.4,<2"
+python-build = ">=1.6.1,<2"
 
 #
 # Feature for JSON schema generation and testing
 #
 [feature.schema.dependencies]
 jsonschema = ">=4.26.0,<5"
-jsonschema-rs = ">=0.48.5,<0.49"
-pydantic = ">=2.13.4,<3"
+jsonschema-rs = ">=0.58.2,<0.59"
+pydantic = ">=2.13.5,<3"
 pytest = ">=9.1.1,<10"
 pytest-timeout = ">=2.4.0,<3"
-python-fastjsonschema = ">=2.21.2,<3"
+python-fastjsonschema = ">=2.22.2,<3"
 pyyaml = ">=6.0.3,<7"
-tomli = ">=2.4.0,<3"
+tomli = ">=2.4.1,<3"
 
 [feature.schema.tasks]
 generate-schema = {
@@ -184,9 +178,9 @@ solve-group = "python"
 RUSTC_WRAPPER = "sccache"
 
 [environments.backends-release.dependencies]
-gh = ">=2.96.0,<3"
-rattler-build = ">=0.70.0,<0.71"
-sccache = ">=0.16.0,<0.17"
+gh = ">=2.101.0,<3"
+rattler-build = ">=0.75.0,<0.76"
+sccache = ">=0.18.0,<0.19"
 
 [environments.backends-release.tasks]
 generate-versions = {
@@ -238,15 +232,15 @@ solve-group = "python"
 [environments.default.dependencies]
 actionlint = ">=1.7.12,<2"
 cargo-deny = ">=0.20.2,<0.21"
-cargo-shear = ">=1.13.2,<2"
+cargo-shear = ">=1.13.4,<2"
 dprint = ">=0.50.0,<0.51"
-go-shfmt = ">=3.13.1,<4"
-ruff = ">=0.15.22,<0.16"
+go-shfmt = ">=3.14.1,<4"
+ruff = ">=0.16.9,<0.17"
 shellcheck = ">=0.11.0,<0.12"
-tombi = ">=1.2.6,<2"
-ty = ">=0.0.62,<0.0.63"
-typos = ">=1.48.0,<2"
-zizmor = ">=1.28.0,<2"
+tombi = ">=1.7.3,<2"
+ty = ">=0.0.84,<0.0.85"
+typos = ">=1.50.3,<2"
+zizmor = ">=1.30.1,<2"
 
 [environments.default.tasks]
 actionlint = {
@@ -276,11 +270,11 @@ check-openssl = {
 }
 dprint-check = {
   cmd = "dprint check --log-level=silent",
-  description = "Check formatting with dprint",
+  description = "Check YAML formatting with dprint",
 }
 dprint-fmt = {
   cmd = "dprint fmt --incremental=false",
-  description = "Format with dprint",
+  description = "Format YAML with dprint",
 }
 ruff-fmt = {
   cmd = "ruff format --exit-non-zero-on-format --force-exclude",
@@ -324,8 +318,8 @@ solve-group = "python"
 
 [environments.docs.dependencies]
 mdx_truly_sane_lists = ">=1.3,<2"
-tomli = ">=2.4.0,<3"
-zensical = ">=0.0.47,<0.1"
+tomli = ">=2.4.1,<3"
+zensical = ">=0.0.66,<0.0.67"
 
 [environments.docs.pypi-dependencies]
 # Fork of mike with Zensical support, not released on PyPI
@@ -379,7 +373,7 @@ stage-docs-files = {
 #
 # Required as it runs pixi tasks itself, so we don't want it to have a dependencies on itself.
 [environments.lefthook.dependencies]
-lefthook = ">=2.1.10,<3"
+lefthook = ">=2.1.15,<3"
 
 [environments.lefthook.tasks]
 lefthook = {
@@ -486,12 +480,12 @@ update-test-channel = {
 # Environment for release tasks
 #
 [environments.release.dependencies]
-cargo-zigbuild = ">=0.23.0,<0.24"
+cargo-zigbuild = ">=0.23.4,<0.24"
 cffconvert = ">=2.0.0,<3"
-git-cliff = ">=2.13.1,<3"
+git-cliff = ">=2.14.2,<3"
 questionary = ">=2.1.1,<3"
 tbump = ">=6.9.0,<7"
-tomli = ">=2.4.0,<3"
+tomli = ">=2.4.1,<3"
 zig = ">=0.16.0,<0.17"
 
 [environments.release.target.win-64.dependencies]
@@ -540,7 +534,7 @@ solve-group = "python"
 
 [environments.rust-test.dependencies]
 cargo-insta = ">=1.48.0,<2"
-git = ">=2.55.0,<3"
+git = ">=2.56.0,<3"
 
 [environments.rust-test.tasks]
 build-debug = {
@@ -563,9 +557,9 @@ generate-cli-docs = {
   cmd = "cargo run --locked --manifest-path crates/pixi_docs/Cargo.toml",
   description = "Generate CLI documentation",
 }
-insta = {
-  cmd = "cargo insta",
-  description = "Run cargo-insta commands",
+insta-review = {
+  cmd = "cargo insta review --workspace",
+  description = "Review cargo-insta snapshots",
 }
 install = {
   cmd = "cargo install --path crates/pixi --locked",
@@ -664,15 +658,13 @@ channels = [
 name = "pixi-build-rust"
 version = "*"
 
-# Use cmake to build aws-lc-sys, because conda's CFLAGS inject -O2 which
-# overrides the -O0 required by jitterentropy-base.c, causing a build failure.
 [package.build.config]
 compilers = ["rust", "c"]
-env = { AWS_LC_SYS_CMAKE_BUILDER = "1" }
 
 [package.build-dependencies]
 cmake = ">=4,<5"
 pkg-config = ">=0.29.2,<0.30"
+rust = "==1.98.1"
 
 [package.build-dependencies."if(linux)"]
 clang = ">=22.1.3,<23"

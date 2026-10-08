@@ -21,14 +21,14 @@ pub enum UrlError {
 
     #[error("sha256 mismatch for {url}: expected {expected}, got {actual}")]
     Sha256Mismatch {
-        url: Url,
+        url: Box<Url>,
         expected: String,
         actual: String,
     },
 
     #[error("md5 mismatch for {url}: expected {expected}, got {actual}")]
     Md5Mismatch {
-        url: Url,
+        url: Box<Url>,
         expected: String,
         actual: String,
     },

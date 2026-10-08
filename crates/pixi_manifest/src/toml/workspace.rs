@@ -92,7 +92,7 @@ pub struct TomlWorkspaceTarget {
 }
 
 /// The TOML representation of the `[[workspace]]` section in a pixi manifest.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct TomlWorkspace {
     // In TOML the workspace name can be empty. It is a required field though, but this is enforced
     // when converting the TOML model to the actual manifest. When using a PyProject we want to use
@@ -564,7 +564,7 @@ mod test {
         let cuda = workspace.platform_by_name(&cuda_name).unwrap();
         assert_eq!(
             cuda.subdir(),
-            rattler_conda_types::Platform::Linux64,
+            rattler_conda_types::Subdir::Linux64,
             "custom name should keep linux-64 as its subdir"
         );
         let declared: Vec<String> = cuda
@@ -597,8 +597,8 @@ mod test {
         assert_eq!(
             subdirs,
             vec![
-                rattler_conda_types::Platform::Linux64,
-                rattler_conda_types::Platform::OsxArm64,
+                rattler_conda_types::Subdir::Linux64,
+                rattler_conda_types::Subdir::OsxArm64,
             ]
         );
     }
@@ -607,7 +607,7 @@ mod test {
     fn test_platform_match_diagnostics_and_unsatisfied_requirements() {
         use std::collections::HashSet;
 
-        use rattler_conda_types::{GenericVirtualPackage, Platform};
+        use rattler_conda_types::{GenericVirtualPackage, Subdir};
 
         use crate::PixiPlatformName;
 
@@ -634,12 +634,12 @@ mod test {
         // materialised subdir defaults must not count); `mac` needs a subdir
         // this host can't run.
         let diagnostics =
-            workspace.platform_match_diagnostics(Platform::Linux64, &[], &env_platforms);
+            workspace.platform_match_diagnostics(Subdir::Linux64, &[], &env_platforms);
         assert_eq!(diagnostics.len(), 2);
 
         let gpu = &diagnostics[0];
         assert_eq!(gpu.name.as_str(), "gpu-linux");
-        assert_eq!(gpu.subdir, Platform::Linux64);
+        assert_eq!(gpu.subdir, Subdir::Linux64);
         assert!(gpu.subdir_matches_host);
         assert!(!gpu.matches_host());
         let unsatisfied: Vec<String> = gpu
@@ -651,7 +651,7 @@ mod test {
 
         let mac = &diagnostics[1];
         assert_eq!(mac.name.as_str(), "mac");
-        assert_eq!(mac.subdir, Platform::OsxArm64);
+        assert_eq!(mac.subdir, Subdir::OsxArm64);
         assert!(!mac.subdir_matches_host);
         assert!(mac.unsatisfied_virtual_packages.is_empty());
         assert!(!mac.matches_host());
@@ -659,7 +659,7 @@ mod test {
         // The aggregate requirements only cover host-runnable subdirs, so
         // `mac` contributes nothing.
         let requirements: Vec<String> = workspace
-            .unsatisfied_platform_requirements(Platform::Linux64, &[], &env_platforms)
+            .unsatisfied_platform_requirements(Subdir::Linux64, &[], &env_platforms)
             .iter()
             .map(ToString::to_string)
             .collect();
@@ -673,14 +673,14 @@ mod test {
             build_string: "0".to_string(),
         };
         let diagnostics = workspace.platform_match_diagnostics(
-            Platform::Linux64,
+            Subdir::Linux64,
             std::slice::from_ref(&host_cuda),
             &env_platforms,
         );
         assert!(diagnostics[0].matches_host());
         assert!(
             workspace
-                .unsatisfied_platform_requirements(Platform::Linux64, &[host_cuda], &env_platforms)
+                .unsatisfied_platform_requirements(Subdir::Linux64, &[host_cuda], &env_platforms)
                 .is_empty()
         );
     }

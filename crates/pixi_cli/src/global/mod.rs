@@ -1,5 +1,6 @@
 use clap::Parser;
 use miette::{IntoDiagnostic, Report, WrapErr};
+use pixi_manifest::PrioritizedChannel;
 use rattler_conda_types::NamedChannelOrUrl;
 use tokio::fs as tokio_fs;
 
@@ -142,17 +143,18 @@ fn eventual_environment_channels(
     environment: Option<&EnvironmentName>,
     cli_channels: &[NamedChannelOrUrl],
     force_reinstall: bool,
-) -> Vec<NamedChannelOrUrl> {
+) -> Vec<PrioritizedChannel> {
     if !force_reinstall
         && let Some(environment) = environment.and_then(|name| project.environment(name))
     {
-        return environment.channels().into_iter().cloned().collect();
+        return environment.prioritized_channels().cloned().collect();
     }
-    if cli_channels.is_empty() {
+    let channels = if cli_channels.is_empty() {
         project.config().default_channels()
     } else {
         cli_channels.to_vec()
-    }
+    };
+    channels.into_iter().map(PrioritizedChannel::from).collect()
 }
 
 /// Reverts the changes made to the project for a specific environment after an error occurred.
@@ -216,7 +218,12 @@ mod tests {
             .add_environment(&existing, Some(vec![env_channel.clone()]))
             .unwrap();
 
-        let defaults = project.config().default_channels();
+        let defaults = project
+            .config()
+            .default_channels()
+            .into_iter()
+            .map(PrioritizedChannel::from)
+            .collect::<Vec<_>>();
 
         // No target environment: --channel arguments or the defaults.
         assert_eq!(
@@ -230,7 +237,7 @@ mod tests {
                 std::slice::from_ref(&cli_channel),
                 false
             ),
-            vec![cli_channel.clone()]
+            vec![PrioritizedChannel::from(cli_channel.clone())]
         );
 
         // A named environment that does not exist yet behaves the same.
@@ -241,7 +248,7 @@ mod tests {
                 std::slice::from_ref(&cli_channel),
                 false
             ),
-            vec![cli_channel.clone()]
+            vec![PrioritizedChannel::from(cli_channel.clone())]
         );
 
         // An existing environment keeps its manifest channels; --channel
@@ -253,7 +260,7 @@ mod tests {
                 std::slice::from_ref(&cli_channel),
                 false
             ),
-            vec![env_channel]
+            vec![PrioritizedChannel::from(env_channel)]
         );
 
         // --force-reinstall recreates the environment, so the manifest
@@ -265,7 +272,7 @@ mod tests {
                 std::slice::from_ref(&cli_channel),
                 true
             ),
-            vec![cli_channel]
+            vec![PrioritizedChannel::from(cli_channel)]
         );
     }
 }

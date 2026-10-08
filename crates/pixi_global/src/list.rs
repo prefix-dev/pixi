@@ -118,12 +118,7 @@ pub async fn list_global_environments_json(
 
     let json_string =
         serde_json::to_string_pretty(&environments).expect("cannot serialize environments to JSON");
-    writeln!(std::io::stdout(), "{json_string}")
-        .inspect_err(|e| {
-            if e.kind() == std::io::ErrorKind::BrokenPipe {
-                std::process::exit(0);
-            }
-        })
+    pixi_utils::io::ignore_broken_pipe(writeln!(std::io::stdout(), "{json_string}"))
         .into_diagnostic()?;
 
     Ok(())
@@ -131,13 +126,7 @@ pub async fn list_global_environments_json(
 
 /// Write a line to stdout, treating a closed pipe as a normal end of output.
 fn write_stdout(line: &str) -> miette::Result<()> {
-    writeln!(std::io::stdout(), "{line}")
-        .inspect_err(|e| {
-            if e.kind() == std::io::ErrorKind::BrokenPipe {
-                std::process::exit(0);
-            }
-        })
-        .into_diagnostic()
+    pixi_utils::io::ignore_broken_pipe(writeln!(std::io::stdout(), "{line}")).into_diagnostic()
 }
 
 fn format_mapping(mapping: &Mapping) -> Item {

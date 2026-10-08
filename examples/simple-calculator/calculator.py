@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 A simple calculator module for demonstrating pixi task arguments.
 This file contains functions that can be called by the calculate task.

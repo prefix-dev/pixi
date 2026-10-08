@@ -20,6 +20,7 @@ use pixi_install_pypi::UnresolvedPypiRecord;
 use pixi_manifest::{
     EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName,
 };
+use pixi_pypi_spec::PypiPackageName;
 use pixi_record::{
     DevSourceRecord, LockFileResolver, PixiRecord, SourceRecordData, UnresolvedPixiRecord,
 };
@@ -34,6 +35,7 @@ use rattler_conda_types::{
     ParseMatchSpecError, ParseMatchSpecOptions, RepodataRevision,
 };
 use rattler_lock::{LockedPackage, UrlOrPath};
+use url::Url;
 use uv_distribution_types::{RequirementSource, RequiresPython};
 
 use super::errors::{LocalMetadataMismatch, PlatformUnsat, SolveGroupUnsat};
@@ -519,6 +521,9 @@ pub async fn resolve_dev_dependencies(
 }
 
 /// Resolves all dependencies of a single dev dependency
+// The unboxed `PlatformUnsat` error is boxed by the caller when the
+// per-dependency futures are collected.
+#[allow(clippy::result_large_err)]
 async fn resolve_single_dev_dependency(
     package_name: PackageName,
     source_spec: SourceLocationSpec,
@@ -934,7 +939,13 @@ async fn verify_package_platform_satisfiability(
                 if let Some((identifier, repodata_idx, _)) =
                     locked_conda_pypi_packages.get(&requirement.name)
                 {
-                    if requirement.is_editable() {
+                    if matches!(
+                        &requirement.source,
+                        RequirementSource::Directory {
+                            editable: Some(true),
+                            ..
+                        }
+                    ) {
                         delayed_pypi_error.get_or_insert_with(|| {
                             Box::new(PlatformUnsat::EditableDependencyOnCondaInstalledPackage(
                                 requirement.name.clone(),
@@ -951,7 +962,10 @@ async fn verify_package_platform_satisfiability(
                         });
                     }
 
-                    if matches!(requirement.source, RequirementSource::Git { .. }) {
+                    if matches!(
+                        requirement.source,
+                        RequirementSource::GitDirectory { .. } | RequirementSource::GitPath { .. }
+                    ) {
                         delayed_pypi_error.get_or_insert_with(|| {
                             Box::new(PlatformUnsat::GitDependencyOnCondaInstalledPackage(
                                 requirement.name.clone(),
@@ -982,10 +996,19 @@ async fn verify_package_platform_satisfiability(
                         .insert(locked_pixi_records.records[pkg_idx.0].name().clone());
                     FoundPackage::Conda(pkg_idx, Vec::new())
                 } else {
-                    match to_normalize(&requirement.name)
-                        .map(|name| locked_pypi_records.index_by_name(&name))
-                    {
-                        Ok(Some(idx)) => {
+                    let pep_name = match to_normalize(&requirement.name) {
+                        Ok(name) => name,
+                        Err(err) => {
+                            // An error occurred while converting the package name.
+                            delayed_pypi_error.get_or_insert_with(|| {
+                                Box::new(PlatformUnsat::from(ConversionError::NameConversion(err)))
+                            });
+                            continue;
+                        }
+                    };
+
+                    match locked_pypi_records.index_by_name(&pep_name) {
+                        Some(idx) => {
                             let record = &locked_pypi_records.records[idx];
 
                             // use the overridden requirements if specified
@@ -994,7 +1017,13 @@ async fn verify_package_platform_satisfiability(
                                 .cloned()
                                 .unwrap_or(requirement);
 
-                            if requirement.is_editable() {
+                            if matches!(
+                                &requirement.source,
+                                RequirementSource::Directory {
+                                    editable: Some(true),
+                                    ..
+                                }
+                            ) {
                                 if let Err(err) =
                                     pypi_satisfies_editable(&requirement, record, ctx.project_root)
                                 {
@@ -1003,12 +1032,18 @@ async fn verify_package_platform_satisfiability(
 
                                 FoundPackage::PyPi(PypiPackageIdx(idx), requirement.extras.to_vec())
                             } else {
+                                let per_package_indexes: Vec<&Url> = pypi_dependencies
+                                    .get(&PypiPackageName::from_normalized(pep_name))
+                                    .map(|specs| specs.iter().filter_map(|s| s.index()).collect())
+                                    .unwrap_or_default();
+
                                 if let Err(err) = pypi_satisfies_requirement(
                                     &requirement,
                                     record,
                                     ctx.project_root,
                                     origin,
                                     &locked_indexes,
+                                    &per_package_indexes,
                                 ) {
                                     delayed_pypi_error.get_or_insert(err);
                                 }
@@ -1016,20 +1051,13 @@ async fn verify_package_platform_satisfiability(
                                 FoundPackage::PyPi(PypiPackageIdx(idx), requirement.extras.to_vec())
                             }
                         }
-                        Ok(None) => {
+                        None => {
                             // The record does not match the spec, the lock file is inconsistent.
                             delayed_pypi_error.get_or_insert_with(|| {
                                 Box::new(PlatformUnsat::UnsatisfiableRequirement(
                                     Box::new(requirement),
                                     source.into_owned(),
                                 ))
-                            });
-                            continue;
-                        }
-                        Err(err) => {
-                            // An error occurred while converting the package name.
-                            delayed_pypi_error.get_or_insert_with(|| {
-                                Box::new(PlatformUnsat::from(ConversionError::NameConversion(err)))
                             });
                             continue;
                         }
@@ -1557,7 +1585,7 @@ mod tests {
     use std::path::Path;
 
     use pixi_manifest::{PixiPlatform, WorkspaceManifest};
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::Subdir;
     use rattler_lock::{
         FindLinksUrlOrPath, LockFile, PlatformData, PlatformName, PypiIndexes, SolveOptions,
     };
@@ -1572,7 +1600,7 @@ mod tests {
     /// A single-platform lockfile keyed by `name` with the given recorded
     /// virtual-package strings, and one empty default environment solved for
     /// it. Enough to exercise platform resolution.
-    fn lockfile_with(name: &str, subdir: Platform, vps: Vec<String>) -> LockFile {
+    fn lockfile_with(name: &str, subdir: Subdir, vps: Vec<String>) -> LockFile {
         let mut builder = LockFile::builder()
             .with_platforms(vec![PlatformData {
                 name: PlatformName::try_from(name).unwrap(),
@@ -1617,11 +1645,11 @@ mod tests {
     #[test]
     fn resolves_v6_subdir_row_for_migrated_platform() {
         let platform = migrated_osx_arm64();
-        let lock = lockfile_with("osx-arm64", Platform::OsxArm64, vec![]);
+        let lock = lockfile_with("osx-arm64", Subdir::OsxArm64, vec![]);
 
         let resolved = resolve_lock_platform_for(&lock, &platform)
             .expect("the subdir-keyed pre-v7 row must resolve for the migrated platform");
-        assert_eq!(resolved.subdir(), Platform::OsxArm64);
+        assert_eq!(resolved.subdir(), Subdir::OsxArm64);
     }
 
     /// When the lockfile already keys the row by the workspace name, the
@@ -1631,7 +1659,7 @@ mod tests {
         let platform = migrated_osx_arm64();
         let lock = lockfile_with(
             "osx-arm64-macos-12-0",
-            Platform::OsxArm64,
+            Subdir::OsxArm64,
             vec!["__osx=12.0".to_string()],
         );
 
@@ -1647,7 +1675,7 @@ mod tests {
         // Records only the osx-arm64 default `__osx`, not the required 12.0.
         let lock = lockfile_with(
             "osx-arm64",
-            Platform::OsxArm64,
+            Subdir::OsxArm64,
             vec!["__osx=11.0".to_string()],
         );
 

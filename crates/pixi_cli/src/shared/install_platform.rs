@@ -25,7 +25,7 @@ pub(crate) fn resolve_install_platform(
 mod tests {
     use std::path::Path;
 
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::Subdir;
 
     use super::*;
 
@@ -77,7 +77,7 @@ mod tests {
     #[test]
     fn cross_platform_subdir_resolves() {
         let workspace = workspace_with_platforms(&["linux-64", "osx-arm64"]);
-        let target = if Platform::current() == Platform::OsxArm64 {
+        let target = if Subdir::current().unwrap_or(Subdir::NoArch) == Subdir::OsxArm64 {
             "linux-64"
         } else {
             "osx-arm64"

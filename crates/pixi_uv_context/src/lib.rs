@@ -137,7 +137,7 @@ fn read_http_retries_from_env() -> Option<u32> {
 ///
 /// Precedence (highest wins):
 /// 1. `UV_CONCURRENT_DOWNLOADS` / `UV_CONCURRENT_BUILDS` /
-///    `UV_CONCURRENT_INSTALLS` environment variables
+///    `UV_CONCURRENT_INSTALLS` / `UV_CONCURRENT_CACHE_READS` environment variables
 /// 2. Pixi `concurrency.downloads` config value
 /// 3. uv defaults (50 downloads, system threads for builds/installs)
 fn build_concurrency(config: &Config) -> Concurrency {
@@ -150,8 +150,9 @@ fn build_concurrency(config: &Config) -> Concurrency {
     let downloads = read_usize_env("UV_CONCURRENT_DOWNLOADS").unwrap_or(downloads);
     let builds = read_usize_env("UV_CONCURRENT_BUILDS").unwrap_or(defaults.builds);
     let installs = read_usize_env("UV_CONCURRENT_INSTALLS").unwrap_or(defaults.installs);
+    let cache_reads = read_usize_env("UV_CONCURRENT_CACHE_READS").unwrap_or(defaults.cache_reads);
 
-    Concurrency::new(downloads, builds, installs)
+    Concurrency::new(downloads, builds, installs, cache_reads)
 }
 
 impl UvResolutionContext {
@@ -211,7 +212,7 @@ impl UvResolutionContext {
             capabilities: IndexCapabilities::default(),
             allow_insecure_host,
             shared_state: SharedState::default(),
-            extra_middleware: ExtraMiddleware(uv_middlewares(config, client.clone())),
+            extra_middleware: ExtraMiddleware(uv_middlewares(config, client.clone())?),
             proxies: config.get_proxies().into_diagnostic()?,
             tls_no_verify: config.tls_no_verify(),
             client: client.into_client(),
@@ -261,12 +262,12 @@ impl UvResolutionContext {
     pub fn base_client_builder<'a>(
         &self,
         allow_insecure_hosts: Vec<TrustedHost>,
-        markers: Option<&'a MarkerEnvironment>,
         connectivity: Connectivity,
     ) -> BaseClientBuilder<'a> {
         let mut builder = BaseClientBuilder::default()
             .keyring(self.keyring_provider)
             .connectivity(connectivity)
+            .cache_read_concurrency(self.concurrency.cache_reads)
             .extra_middleware(self.extra_middleware.clone());
         builder = if allow_insecure_hosts.is_empty() {
             builder
@@ -282,9 +283,6 @@ impl UvResolutionContext {
         }
         if let Some(retries) = self.http_retries {
             builder = builder.retries(retries);
-        }
-        if let Some(markers) = markers {
-            builder = builder.markers(markers);
         }
         builder
     }
@@ -306,13 +304,16 @@ impl UvResolutionContext {
         markers: Option<&MarkerEnvironment>,
         connectivity: Connectivity,
     ) -> miette::Result<Arc<RegistryClient>> {
-        let base_client_builder =
-            self.base_client_builder(allow_insecure_hosts, markers, connectivity);
+        let base_client_builder = self.base_client_builder(allow_insecure_hosts, connectivity);
 
         let mut uv_client_builder =
             RegistryClientBuilder::new(base_client_builder, self.cache.clone())
                 .index_locations(index_locations.clone())
                 .index_strategy(index_strategy);
+
+        if let Some(markers) = markers {
+            uv_client_builder = uv_client_builder.markers(markers);
+        }
 
         for p in &self.proxies {
             uv_client_builder = uv_client_builder.proxy(p.clone());

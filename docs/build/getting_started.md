@@ -41,7 +41,7 @@ In `package` you specify properties specific to the package you want to build.
 ```
 
 Packages are built by using build backends.
-By specifying `package.build.backend` and `package.build.channels` you determine which backend is used and from which channel it will be downloaded.
+By specifying `package.build.backend` you determine which backend is used, and with `package.build.backend.channels` from which channel it will be downloaded.
 
 There are [different build backends available](backends.md). 
 

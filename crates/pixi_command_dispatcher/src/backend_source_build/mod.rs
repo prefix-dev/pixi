@@ -22,7 +22,7 @@ use pixi_build_types::{
 use pixi_spec::{BinarySpec, PixiSpec, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, MatchSpec, PackageName, Platform, RepoDataRecord, VersionWithSource,
+    ChannelConfig, ChannelUrl, MatchSpec, PackageName, RepoDataRecord, Subdir, VersionWithSource,
 };
 use serde::Serialize;
 use thiserror::Error;
@@ -105,7 +105,7 @@ pub struct BackendSourceBuildV1Method {
 #[derive(Debug, Serialize)]
 pub struct BackendSourceBuildPrefix {
     /// The platform for which the packages were installed.
-    pub platform: Platform,
+    pub platform: Subdir,
 
     /// The location of the prefix on disk.
     #[serde(skip)]

@@ -40,7 +40,7 @@ use pixi_task::{
     ExecutableTask, PreferExecutable, RunOutput, SearchEnvironments, TaskExecutionError, TaskGraph,
     TaskGraphError, TaskName, get_task_env,
 };
-use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Platform};
+use rattler_conda_types::{MatchSpec, ParseStrictness::Lenient, Subdir};
 use rattler_lock::{CondaSourceData, LockFile, LockedPackage, UrlOrPath};
 use tempfile::TempDir;
 use thiserror::Error;
@@ -117,13 +117,13 @@ pub(crate) fn isolated_config_source() -> pixi_config::ConfigSourceCli {
 
 pub trait LockFileExt {
     /// Check if this package is contained in the lock file
-    fn contains_conda_package(&self, environment: &str, platform: Platform, name: &str) -> bool;
-    fn contains_pypi_package(&self, environment: &str, platform: Platform, name: &str) -> bool;
+    fn contains_conda_package(&self, environment: &str, platform: Subdir, name: &str) -> bool;
+    fn contains_pypi_package(&self, environment: &str, platform: Subdir, name: &str) -> bool;
     /// Check if this matchspec is contained in the lock file
     fn contains_match_spec(
         &self,
         environment: &str,
-        platform: Platform,
+        platform: Subdir,
         match_spec: impl IntoMatchSpec,
     ) -> bool;
 
@@ -132,28 +132,28 @@ pub trait LockFileExt {
     fn contains_pep508_requirement(
         &self,
         environment: &str,
-        platform: Platform,
+        platform: Subdir,
         requirement: pep508_rs::Requirement,
     ) -> bool;
 
     fn get_pypi_package_version(
         &self,
         environment: &str,
-        platform: Platform,
+        platform: Subdir,
         package: &str,
     ) -> Option<String>;
 
     fn get_pypi_package_url(
         &self,
         environment: &str,
-        platform: Platform,
+        platform: Subdir,
         package: &str,
     ) -> Option<UrlOrPath>;
 
     fn get_pypi_package(
         &self,
         environment: &str,
-        platform: Platform,
+        platform: Subdir,
         package: &str,
     ) -> Option<&'_ LockedPackage>;
 
@@ -163,13 +163,13 @@ pub trait LockFileExt {
     fn get_conda_source_package(
         &self,
         environment: &str,
-        platform: Platform,
+        platform: Subdir,
         package: &str,
     ) -> Option<&CondaSourceData>;
 }
 
 impl LockFileExt for LockFile {
-    fn contains_conda_package(&self, environment: &str, platform: Platform, name: &str) -> bool {
+    fn contains_conda_package(&self, environment: &str, platform: Subdir, name: &str) -> bool {
         let Some(env) = self.environment(environment) else {
             return false;
         };
@@ -183,7 +183,7 @@ impl LockFileExt for LockFile {
             .filter_map(LockedPackage::as_conda)
             .any(|package| package.name().as_normalized() == name)
     }
-    fn contains_pypi_package(&self, environment: &str, platform: Platform, name: &str) -> bool {
+    fn contains_pypi_package(&self, environment: &str, platform: Subdir, name: &str) -> bool {
         let Some(env) = self.environment(environment) else {
             return false;
         };
@@ -201,7 +201,7 @@ impl LockFileExt for LockFile {
     fn contains_match_spec(
         &self,
         environment: &str,
-        platform: Platform,
+        platform: Subdir,
         match_spec: impl IntoMatchSpec,
     ) -> bool {
         let match_spec = match_spec.into();
@@ -222,7 +222,7 @@ impl LockFileExt for LockFile {
     fn contains_pep508_requirement(
         &self,
         environment: &str,
-        platform: Platform,
+        platform: Subdir,
         requirement: pep508_rs::Requirement,
     ) -> bool {
         let Some(env) = self.environment(environment) else {
@@ -243,7 +243,7 @@ impl LockFileExt for LockFile {
     fn get_pypi_package_version(
         &self,
         environment: &str,
-        platform: Platform,
+        platform: Subdir,
         package: &str,
     ) -> Option<String> {
         let p = self.platform(&platform.to_string())?;
@@ -258,7 +258,7 @@ impl LockFileExt for LockFile {
     fn get_pypi_package(
         &self,
         environment: &str,
-        platform: Platform,
+        platform: Subdir,
         package: &str,
     ) -> Option<&'_ LockedPackage> {
         let p = self.platform(&platform.to_string())?;
@@ -271,7 +271,7 @@ impl LockFileExt for LockFile {
     fn get_pypi_package_url(
         &self,
         environment: &str,
-        platform: Platform,
+        platform: Subdir,
         package: &str,
     ) -> Option<UrlOrPath> {
         let p = self.platform(&platform.to_string())?;
@@ -286,7 +286,7 @@ impl LockFileExt for LockFile {
     fn get_conda_source_package(
         &self,
         environment: &str,
-        platform: Platform,
+        platform: Subdir,
         package: &str,
     ) -> Option<&CondaSourceData> {
         let p = self.platform(&platform.to_string())?;
@@ -482,7 +482,7 @@ impl PixiControl {
         InitBuilder {
             no_fast_prefix: false,
             args: init::Args {
-                path: self.workspace_path().to_path_buf(),
+                path: Some(self.workspace_path().to_path_buf()),
                 script: None,
                 channels: None,
                 platforms: Vec::new(),
@@ -502,7 +502,7 @@ impl PixiControl {
         InitBuilder {
             no_fast_prefix: false,
             args: init::Args {
-                path: self.workspace_path().to_path_buf(),
+                path: Some(self.workspace_path().to_path_buf()),
                 script: None,
                 channels: None,
                 platforms,
@@ -700,7 +700,8 @@ impl PixiControl {
             .0;
 
         // Create a task graph from the command line arguments.
-        let fallback_platform = pixi_manifest::PixiPlatform::from_subdir(Platform::current());
+        let fallback_platform =
+            pixi_manifest::PixiPlatform::from_subdir(Subdir::current().unwrap_or(Subdir::NoArch));
         let search_env_platform = explicit_environment
             .as_ref()
             .and_then(|e| e.best_declared_platform())
@@ -888,8 +889,10 @@ impl PixiControl {
                 config_cli: self.config_cli(),
                 config_source: isolated_config_source(),
                 lock_and_install_config: Default::default(),
-                target_platform: rattler_conda_types::Platform::current(),
-                build_platform: rattler_conda_types::Platform::current(),
+                target_platform: rattler_conda_types::Subdir::current()
+                    .unwrap_or(rattler_conda_types::Subdir::NoArch),
+                build_platform: rattler_conda_types::Subdir::current()
+                    .unwrap_or(rattler_conda_types::Subdir::NoArch),
                 output_dir: PathBuf::from("."),
                 build_dir: None,
                 clean: false,
@@ -913,7 +916,7 @@ impl TasksControl<'_> {
     pub fn add(
         &self,
         name: TaskName,
-        platform: Option<Platform>,
+        platform: Option<Subdir>,
         feature_name: FeatureName,
     ) -> TaskAddBuilder {
         TaskAddBuilder {
@@ -939,7 +942,7 @@ impl TasksControl<'_> {
     pub async fn remove(
         &self,
         name: TaskName,
-        platform: Option<Platform>,
+        platform: Option<Subdir>,
         feature_name: Option<FeatureName>,
     ) -> miette::Result<()> {
         task::execute(task::Args {
@@ -959,7 +962,7 @@ impl TasksControl<'_> {
     }
 
     /// Alias one or multiple tasks
-    pub fn alias(&self, name: TaskName, platform: Option<Platform>) -> TaskAliasBuilder {
+    pub fn alias(&self, name: TaskName, platform: Option<Subdir>) -> TaskAliasBuilder {
         TaskAliasBuilder {
             manifest_path: Some(self.pixi.manifest_path()),
             args: AliasArgs {

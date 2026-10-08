@@ -97,15 +97,16 @@ pub use dev_source_metadata::{
 };
 pub use discovered_backend::DiscoveredBackendKey;
 pub use environment::{
-    BuildEnvOf, ChannelsOf, DerivedEnvKind, DerivedParent, EnvironmentRef, EnvironmentSpec,
-    EphemeralEnv, ExcludeNewerOf, HasWorkspaceEnvRegistry, VariantsOf, WorkspaceEnvId,
-    WorkspaceEnvRef, WorkspaceEnvRegistry,
+    BuildEnvOf, ChannelsOf, DerivedEnvKind, DerivedParent, DerivedPlatform, EnvironmentRef,
+    EnvironmentSpec, EphemeralEnv, ExcludeNewerOf, HasWorkspaceEnvRegistry, VariantsOf,
+    WorkspaceEnvId, WorkspaceEnvRef, WorkspaceEnvRegistry,
 };
 pub use ephemeral_env::{
     EphemeralEnvError, EphemeralEnvKey, EphemeralEnvSpec, InstalledEphemeralEnv,
 };
 pub use errors::{
-    MissingChannelError, SolvePixiEnvironmentError, SourceBuildError, SourceMetadataError,
+    MissingChannelError, PrefixPlatformMismatchError, PrefixRecordOrigin,
+    SolvePixiEnvironmentError, SourceBuildError, SourceBuildPrefixKind, SourceMetadataError,
     SourceRecordError,
 };
 pub use injected_config::{

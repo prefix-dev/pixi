@@ -12,7 +12,6 @@ license.workspace = true
 [dependencies]
 chrono = { workspace = true }
 dunce = { workspace = true }
-hex = { workspace = true }
 miette = { workspace = true }
 pathdiff = { workspace = true }
 pep440_rs = { workspace = true }

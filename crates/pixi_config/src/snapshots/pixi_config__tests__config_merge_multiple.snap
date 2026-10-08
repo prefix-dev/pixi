@@ -95,6 +95,7 @@ Config {
             base_url: None,
             notices: None,
             channel_relations: None,
+            virtual_package_detectors: None,
         },
         per_channel: {},
     },
@@ -123,7 +124,7 @@ Config {
                     fragment: None,
                 },
                 region: "us-east-1",
-                force_path_style: false,
+                addressing_style: VirtualHost,
             },
         },
     ),
@@ -141,6 +142,7 @@ Config {
     },
     experimental: ExperimentalConfig {
         use_environment_activation_cache: None,
+        conda_script: None,
     },
     concurrency: ConcurrencyConfig {
         solves: 1,

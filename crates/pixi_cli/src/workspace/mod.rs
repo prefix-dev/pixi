@@ -1,3 +1,5 @@
+use std::process::ExitCode;
+
 use clap::Parser;
 use itertools::Itertools;
 use pixi_manifest::Feature;
@@ -46,23 +48,23 @@ pub struct Args {
     pub workspace_config: WorkspaceConfig,
 }
 
-pub async fn execute(cmd: Args) -> miette::Result<()> {
+pub async fn execute(cmd: Args) -> miette::Result<ExitCode> {
     match cmd.command {
-        Command::Activation(args) => activation::execute(args).await?,
-        Command::Channel(args) => channel::execute(args).await?,
-        Command::Dependencies(args) => dependencies::execute(args).await?,
-        Command::Description(args) => description::execute(args).await?,
-        Command::Platform(args) => platform::execute(args).await?,
-        Command::Version(args) => version::execute(args).await?,
-        Command::Environment(args) => environment::execute(args).await?,
-        Command::Feature(args) => feature::execute(args).await?,
-        Command::Export(cmd) => export::execute(cmd).await?,
-        Command::Name(args) => name::execute(args).await?,
-        Command::Preview(args) => preview::execute(args).await?,
-        Command::Register(args) => register::execute(args).await?,
-        Command::RequiresPixi(args) => requires_pixi::execute(args).await?,
-    };
-    Ok(())
+        Command::Activation(args) => activation::execute(args).await,
+        Command::Channel(args) => channel::execute(args).await,
+        Command::Dependencies(args) => dependencies::execute(args).await,
+        Command::Description(args) => description::execute(args).await,
+        Command::Platform(args) => platform::execute(args).await,
+        Command::Version(args) => version::execute(args).await,
+        Command::Environment(args) => environment::execute(args).await,
+        Command::Feature(args) => feature::execute(args).await,
+        Command::Export(cmd) => export::execute(cmd).await,
+        Command::Name(args) => name::execute(args).await,
+        Command::Preview(args) => preview::execute(args).await,
+        Command::Register(args) => register::execute(args).await,
+        Command::RequiresPixi(args) => return requires_pixi::execute(args).await,
+    }?;
+    Ok(ExitCode::SUCCESS)
 }
 
 /// Indented detail lines describing a feature's content (dependencies,

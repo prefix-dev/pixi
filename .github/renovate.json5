@@ -2,7 +2,7 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended", ":maintainLockFilesMonthly"],
   "schedule": ["on tuesday"],
-  "enabledManagers": ["github-actions", "pixi", "cargo"],
+  "enabledManagers": ["github-actions", "cargo"],
   "commitMessagePrefix": "chore(ci):",
   "ignorePaths": ["**/examples/**", "**/docs/**", "**/tests/**"],
   "labels": ["dependencies"],
@@ -17,21 +17,6 @@
       "description": "We run multiple macOS runner versions on purpose since 13 runs on x86_64",
       "matchPackageNames": "macos",
       "matchManagers": ["github-actions"],
-      "enabled": false
-    },
-    {
-      "groupName": "Pixi",
-      "matchManagers": ["pixi"]
-    },
-    {
-      "groupName": "Pixi-Lock",
-      "matchManagers": ["pixi"],
-      "matchUpdateTypes": ["lockFileMaintenance"]
-    },
-    {
-      "description": "We want to update Rust manually and keep it in sync with rust-toolchain",
-      "matchPackageNames": ["rust", "rust-src"],
-      "matchManagers": ["pixi"],
       "enabled": false
     },
     {

@@ -9,7 +9,7 @@
 
 use pixi_compute_engine::DataStore;
 use rattler::install::{Installer, InstallerError};
-use rattler_conda_types::{Platform, RepoDataRecord, prefix::Prefix};
+use rattler_conda_types::{RepoDataRecord, Subdir, prefix::Prefix};
 
 use crate::compute_data::{
     HasAllowExecuteLinkScripts, HasAllowLinkOptions, HasIoConcurrencySemaphore, HasPackageCache,
@@ -37,7 +37,7 @@ pub async fn install_binary_records(
     data: &DataStore,
     prefix: &Prefix,
     records: Vec<RepoDataRecord>,
-    target_platform: Platform,
+    target_platform: Subdir,
     reinstall_all: bool,
     reporter: Option<Box<dyn rattler::install::Reporter>>,
 ) -> Result<(), InstallerError> {

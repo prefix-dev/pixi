@@ -10,6 +10,10 @@ Script commands use `--script <PATH>`. The same `init`, `run`, `add`, `remove`,
 `install`, `lock`, and `update` commands used for workspaces can therefore
 operate on either a manifest or a standalone file.
 
+For files in other languages there is an experimental
+[`conda-script` block](../tutorials/conda_script.md) that embeds the same
+kind of metadata in any code file.
+
 ## Make a script self-contained
 
 This script downloads the USGS earthquake feed with `httpx`, then uses GDAL's
@@ -21,9 +25,7 @@ from osgeo import ogr
 
 ogr.UseExceptions()
 
-response = httpx.get(
-    "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson"
-)
+response = httpx.get("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_hour.geojson")
 dataset = ogr.Open(response.text)
 print(f"{dataset.GetLayer().GetFeatureCount()} earthquakes in the past hour")
 ```
@@ -67,12 +69,21 @@ PEP 723 defines two portable fields:
 Pixi reads those fields and extends them with a focused subset of
 `tool.pixi`:
 
-- `tool.pixi.workspace` configures channels, platforms, and resolver options.
+- `tool.pixi.workspace` configures channels, platforms, and resolver options
+  such as `exclude-newer`, `channel-priority` or `solve-strategy`.
 - `tool.pixi.dependencies` lists Conda packages.
 - `tool.pixi.pypi-dependencies` represents PyPI requirements that need
   Pixi-specific fields, such as an index or editable installation.
+- `tool.pixi.constraints` and `tool.pixi.activation` hold constraints and
+  activation settings.
 - `tool.pixi.target.<platform>` holds platform-specific dependencies,
   constraints, and activation settings.
+- `tool.pixi.exclude-newer` and `tool.pixi.pypi-exclude-newer` override the
+  cutoff date per package.
+
+Every other key under `tool.pixi` is rejected with an error pointing at it,
+since a script has one implicit environment and no features, tasks or
+packages.
 
 Other PEP 723 tools can use the portable fields and ignore `tool.pixi`. In the
 example above, another tool can install `httpx`, but only Pixi also provides
@@ -137,6 +148,8 @@ Remote scripts must already contain a PEP 723 metadata block. They are fetched
 on every invocation and executed from a secure temporary `.py` file, while
 their environment is reused from Pixi's cache. Relative paths in remote
 metadata resolve from the directory where Pixi was invoked.
+
+URLs also support [`conda-script` blocks](../tutorials/conda_script.md).
 
 Remote inputs are execution-only: commands that edit, inspect, export, or lock
 a script continue to require a local path. A remote script has no adjacent lock

@@ -9,7 +9,7 @@ use pixi_api::workspace::{Package, PackageKind};
 use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
 use pixi_manifest::PixiPlatformName;
-use rattler_conda_types::Platform;
+use rattler_conda_types::Subdir;
 use serde::Serialize;
 
 use crate::{
@@ -203,7 +203,7 @@ pub struct Args {
 pub async fn execute(args: Args) -> miette::Result<()> {
     if args.workspace_config.script.is_some() && args.environment.is_some() {
         return Err(miette::miette!(
-            help = "A PEP 723 script has one implicit default run environment.",
+            help = "A script has one implicit default run environment.",
             "`pixi list --script` does not support --environment"
         ));
     }
@@ -224,7 +224,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         None => environment
             .best_declared_platform()
             .map(|p| p.name().to_string())
-            .unwrap_or_else(|| Platform::current().to_string()),
+            .unwrap_or_else(|| Subdir::current().unwrap_or(Subdir::NoArch).to_string()),
     };
 
     let workspace_ctx = cli_context(workspace.clone());
@@ -352,7 +352,7 @@ fn get_field_cell(package: &Package, field: Field) -> Cell {
 fn print_packages_as_table(packages: &[Package], fields: &[Field]) {
     let mut table = Table::new();
     table
-        .load_preset(NOTHING)
+        .load_style(NOTHING)
         .set_content_arrangement(ContentArrangement::Disabled);
 
     // Set up header row

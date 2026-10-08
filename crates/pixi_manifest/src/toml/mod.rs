@@ -32,14 +32,14 @@ pub use manifest::TomlManifest;
 use miette::LabeledSpan;
 pub use package::{PackageDefaults, PackageError, TomlPackage, WorkspacePackageProperties};
 pub use platform::{InlineVirtualPackage, TomlPlatform, inline_virtual_package_specs};
-pub use preview::TomlPreview;
+pub use preview::{KnownOrUnknownPreviewFlag, TomlPreview};
 pub use pyproject::PyProjectToml;
 pub use run_exports::TomlRunExports;
 pub use target::TomlTarget;
 use toml_span::{DeserError, Span};
 pub use workspace::TomlWorkspace;
 
-use rattler_conda_types::Platform;
+use rattler_conda_types::Subdir;
 
 use crate::PixiPlatform;
 use crate::{FeatureName, TargetSelector, TomlError, error::GenericError, utils::PixiSpanned};
@@ -112,7 +112,7 @@ fn create_unsupported_selector_warning(
         &selector.value,
         TargetSelector::Linux | TargetSelector::Unix | TargetSelector::Win | TargetSelector::MacOs
     ) {
-        for subdir in Platform::all()
+        for subdir in Subdir::all()
             .filter(|p| selector.value.matches(&PixiPlatform::from_subdir(*p)))
             .map(|p| p.to_string())
         {

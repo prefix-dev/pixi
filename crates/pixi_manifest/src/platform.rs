@@ -4,7 +4,7 @@ use std::ops::Deref;
 use std::str::FromStr;
 
 use archspec::cpu::Microarchitecture;
-use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform, Version};
+use rattler_conda_types::{GenericVirtualPackage, PackageName, Subdir, Version};
 use rattler_virtual_packages::defaults::{
     default_glibc_version, default_linux_version, default_mac_os_version, default_windows_version,
 };
@@ -128,8 +128,8 @@ impl TryFrom<&str> for PixiPlatformName {
     }
 }
 
-impl From<Platform> for PixiPlatformName {
-    fn from(subdir: Platform) -> Self {
+impl From<Subdir> for PixiPlatformName {
+    fn from(subdir: Subdir) -> Self {
         PixiPlatformName(subdir.to_string())
     }
 }
@@ -288,7 +288,7 @@ pub enum PixiPlatformError {
 /// set that spells out past [`MAX_PLATFORM_NAME_BYTES`] has no name, and that
 /// is an error rather than a platform pixi cannot read back.
 fn synthesized_name(
-    subdir: Platform,
+    subdir: Subdir,
     declared: &[GenericVirtualPackage],
 ) -> Result<PixiPlatformName, PixiPlatformError> {
     let name = crate::toml::platform::synthesize_name_string(subdir, declared);
@@ -319,7 +319,7 @@ pub struct PixiPlatform {
     /// The workspace-unique name of this platform.
     name: PixiPlatformName,
     /// The conda subdir for this platform (e.g. `linux-64`).
-    subdir: Platform,
+    subdir: Subdir,
     /// Virtual packages declared for this platform in `pixi.toml`. Stored
     /// verbatim as parsed from the manifest so that round-tripping through
     /// the TOML layer needs no knowledge of the concrete set of virtual
@@ -340,7 +340,7 @@ impl PixiPlatform {
     /// subdir baseline a caller must build a rich platform via
     /// [`Self::new_with_defaults`] or run an `apply_edit` that adds a
     /// non-default virtual package.
-    pub fn from_subdir(subdir: Platform) -> Self {
+    pub fn from_subdir(subdir: Subdir) -> Self {
         Self {
             name: subdir.into(),
             subdir,
@@ -366,11 +366,11 @@ impl PixiPlatform {
         }
     }
 
-    pub fn subdir(&self) -> Platform {
+    pub fn subdir(&self) -> Subdir {
         self.subdir
     }
 
-    pub fn set_subdir(&mut self, subdir: Platform) -> Result<(), PixiPlatformError> {
+    pub fn set_subdir(&mut self, subdir: Subdir) -> Result<(), PixiPlatformError> {
         if self.is_subdir_platform() {
             Err(PixiPlatformError::IsSubdirPlatform)
         } else {
@@ -418,7 +418,7 @@ impl PixiPlatform {
     /// `name == subdir` case through [`Self::from_subdir`].
     pub fn new(
         name: PixiPlatformName,
-        subdir: Platform,
+        subdir: Subdir,
         declared_virtual_packages: Vec<GenericVirtualPackage>,
     ) -> Result<Self, PixiPlatformError> {
         if name.as_str() == subdir.as_str()
@@ -450,7 +450,7 @@ impl PixiPlatform {
     /// name distinct from its subdir.
     pub fn new_with_defaults(
         name: PixiPlatformName,
-        subdir: Platform,
+        subdir: Subdir,
         user_declared: Vec<GenericVirtualPackage>,
     ) -> Result<Self, PixiPlatformError> {
         if name.as_str() == subdir.as_str() {
@@ -472,7 +472,7 @@ impl PixiPlatform {
     /// enforced), safe to register and write to disk.
     pub fn from_detection(
         name: Option<PixiPlatformName>,
-        subdir: Platform,
+        subdir: Subdir,
         customised_virtual_packages: Vec<GenericVirtualPackage>,
     ) -> Result<Self, PixiPlatformError> {
         let name = match name {
@@ -674,7 +674,7 @@ impl PixiPlatform {
 #[derive(Debug, Default, Clone)]
 pub struct PlatformEdit {
     /// New value for `subdir`. Unset means "leave alone".
-    pub set_subdir: Option<Platform>,
+    pub set_subdir: Option<Subdir>,
     /// When `true`, drop the existing virtual-package list before applying
     /// the insert-or-update list below. Used by `--clear-virtual-packages`.
     pub clear_virtual_packages: bool,
@@ -719,7 +719,7 @@ impl PlatformEdit {
 ///
 /// Exposed so renderers can pass it as the `baseline` to filter the defaults
 /// out of a platform's declared virtual packages.
-pub fn subdir_default_virtual_packages(subdir: Platform) -> Vec<GenericVirtualPackage> {
+pub fn subdir_default_virtual_packages(subdir: Subdir) -> Vec<GenericVirtualPackage> {
     fn version_pkg(name: &str, version: Version) -> GenericVirtualPackage {
         GenericVirtualPackage {
             name: PackageName::try_from(name).expect("static virtual-package name"),
@@ -764,7 +764,7 @@ pub fn subdir_default_virtual_packages(subdir: Platform) -> Vec<GenericVirtualPa
 /// virtual packages from synthesized names and on-disk serialization, and by
 /// the lock-file satisfiability check to compare only the user-customized
 /// virtual packages.
-pub fn is_subdir_default(gvp: &GenericVirtualPackage, subdir: Platform) -> bool {
+pub fn is_subdir_default(gvp: &GenericVirtualPackage, subdir: Subdir) -> bool {
     subdir_default_virtual_packages(subdir).iter().any(|d| {
         d.name == gvp.name && d.version == gvp.version && d.build_string == gvp.build_string
     })
@@ -839,16 +839,16 @@ fn generic_to_virtual_package(gvp: &GenericVirtualPackage) -> Option<VirtualPack
 /// This is both "which declared platforms may this host select" and "which
 /// subdirs can this host meaningfully report virtual packages for", so
 /// selection and detection stay in agreement.
-pub fn candidate_subdirs(current: Platform) -> Vec<Platform> {
-    let mut candidate_subdirs: Vec<Platform> = vec![current];
-    if current.is_osx() && current != Platform::Osx64 {
-        candidate_subdirs.push(Platform::Osx64);
+pub fn candidate_subdirs(current: Subdir) -> Vec<Subdir> {
+    let mut candidate_subdirs: Vec<Subdir> = vec![current];
+    if current.is_osx() && current != Subdir::Osx64 {
+        candidate_subdirs.push(Subdir::Osx64);
     }
-    if current.is_windows() && current != Platform::Win64 {
-        candidate_subdirs.push(Platform::Win64);
+    if current.is_windows() && current != Subdir::Win64 {
+        candidate_subdirs.push(Subdir::Win64);
     }
-    if current == Platform::Win64 {
-        candidate_subdirs.push(Platform::Win32);
+    if current == Subdir::Win64 {
+        candidate_subdirs.push(Subdir::Win32);
     }
     candidate_subdirs
 }
@@ -1037,7 +1037,7 @@ pub fn parse_locked_virtual_package(raw: &str) -> Option<GenericVirtualPackage> 
 /// `__linux = "5.10"` is preserved untouched. The conda-libc family is
 /// special-cased: a user-supplied `__musl`/`__eglibc` replaces the default
 /// `__glibc` (rattler models all three as the same `libc` override slot).
-pub(crate) fn merge_subdir_defaults(declared: &mut Vec<GenericVirtualPackage>, subdir: Platform) {
+pub(crate) fn merge_subdir_defaults(declared: &mut Vec<GenericVirtualPackage>, subdir: Subdir) {
     let has_libc = declared
         .iter()
         .any(|gvp| matches!(gvp.name.as_normalized(), "__glibc" | "__musl" | "__eglibc"));
@@ -1052,8 +1052,8 @@ pub(crate) fn merge_subdir_defaults(declared: &mut Vec<GenericVirtualPackage>, s
     }
 }
 
-impl From<Platform> for PixiPlatform {
-    fn from(subdir: Platform) -> Self {
+impl From<Subdir> for PixiPlatform {
+    fn from(subdir: Subdir) -> Self {
         Self::from_subdir(subdir)
     }
 }
@@ -1098,7 +1098,7 @@ mod tests {
 
     use super::*;
 
-    fn rich(name: &str, subdir: Platform, vps: Vec<GenericVirtualPackage>) -> PixiPlatform {
+    fn rich(name: &str, subdir: Subdir, vps: Vec<GenericVirtualPackage>) -> PixiPlatform {
         PixiPlatform::new(
             PixiPlatformName::try_from(name).expect("valid name"),
             subdir,
@@ -1147,12 +1147,12 @@ mod tests {
     /// actually execute it.
     #[test]
     fn candidate_subdirs_covers_the_architecture_fallbacks() {
-        assert_eq!(candidate_subdirs(Platform::Linux64), [Platform::Linux64]);
-        assert!(!candidate_subdirs(Platform::Linux64).contains(&Platform::LinuxAarch64));
+        assert_eq!(candidate_subdirs(Subdir::Linux64), [Subdir::Linux64]);
+        assert!(!candidate_subdirs(Subdir::Linux64).contains(&Subdir::LinuxAarch64));
 
-        assert!(candidate_subdirs(Platform::OsxArm64).contains(&Platform::Osx64));
-        assert!(candidate_subdirs(Platform::Win64).contains(&Platform::Win32));
-        assert!(candidate_subdirs(Platform::WinArm64).contains(&Platform::Win64));
+        assert!(candidate_subdirs(Subdir::OsxArm64).contains(&Subdir::Osx64));
+        assert!(candidate_subdirs(Subdir::Win64).contains(&Subdir::Win32));
+        assert!(candidate_subdirs(Subdir::WinArm64).contains(&Subdir::Win64));
     }
 
     /// `__archspec` carries its microarchitecture in the build string, so
@@ -1255,20 +1255,19 @@ mod tests {
     fn from_detection_synthesises_name_collapses_and_keeps_explicit_name() {
         // Bare: the name is synthesised from the customised set.
         let synthesised =
-            PixiPlatform::from_detection(None, Platform::Linux64, vec![gvp("__cuda", "12")])
-                .unwrap();
+            PixiPlatform::from_detection(None, Subdir::Linux64, vec![gvp("__cuda", "12")]).unwrap();
         assert_eq!(synthesised.name().as_str(), "linux-64-cuda-12");
         assert!(!synthesised.is_subdir_platform());
 
         // Bare with no customised packages collapses to the bare subdir platform.
-        let collapsed = PixiPlatform::from_detection(None, Platform::Linux64, vec![]).unwrap();
+        let collapsed = PixiPlatform::from_detection(None, Subdir::Linux64, vec![]).unwrap();
         assert!(collapsed.is_subdir_platform());
         assert_eq!(collapsed.name().as_str(), "linux-64");
 
         // An explicit name is kept verbatim.
         let named = PixiPlatform::from_detection(
             Some(PixiPlatformName::try_from("laptop").unwrap()),
-            Platform::Linux64,
+            Subdir::Linux64,
             vec![gvp("__cuda", "12")],
         )
         .unwrap();
@@ -1296,7 +1295,7 @@ mod tests {
     fn apply_edit_upserts_replace_by_name() {
         let mut p = rich(
             "gpu-linux",
-            Platform::Linux64,
+            Subdir::Linux64,
             vec![gvp("__cuda", "12.0"), gvp("__glibc", "2.28")],
         );
 
@@ -1319,7 +1318,7 @@ mod tests {
     fn apply_edit_clear_then_upsert_drops_old() {
         let mut p = rich(
             "gpu-linux",
-            Platform::Linux64,
+            Subdir::Linux64,
             vec![gvp("__cuda", "12.0"), gvp("__glibc", "2.28")],
         );
 
@@ -1341,7 +1340,7 @@ mod tests {
     fn apply_edit_remove_by_name_removes_only_matches() {
         let mut p = rich(
             "gpu-linux",
-            Platform::Linux64,
+            Subdir::Linux64,
             vec![gvp("__cuda", "12.0"), gvp("__glibc", "2.28")],
         );
 
@@ -1362,7 +1361,7 @@ mod tests {
     fn apply_edit_adding_vp_to_subdir_platform_renames_it() {
         // Adding a VP to a bare subdir-platform must move it off the subdir
         // name: a platform with VPs can never be named after its subdir.
-        let mut p = PixiPlatform::from_subdir(Platform::Linux64);
+        let mut p = PixiPlatform::from_subdir(Subdir::Linux64);
         assert!(p.is_subdir_platform());
         p.apply_edit(PlatformEdit {
             insert_or_update_virtual_packages: vec![gvp("__cuda", "12.0")],
@@ -1371,7 +1370,7 @@ mod tests {
         .unwrap();
         assert!(!p.is_subdir_platform());
         assert_eq!(p.name().as_str(), "linux-64-cuda-12-0");
-        assert_eq!(p.subdir(), Platform::Linux64);
+        assert_eq!(p.subdir(), Subdir::Linux64);
     }
 
     /// Combine all four ops in one `PlatformEdit`. Documented order is
@@ -1381,7 +1380,7 @@ mod tests {
     fn apply_edit_combined_runs_in_documented_order() {
         let mut p = rich(
             "gpu-linux",
-            Platform::Linux64,
+            Subdir::Linux64,
             vec![
                 gvp("__cuda", "11.0"),
                 gvp("__archspec", "0"),
@@ -1403,7 +1402,7 @@ mod tests {
                 // win because remove runs after the insert-or-update pass.
                 PackageName::try_from("__future_pkg").unwrap(),
             ],
-            set_subdir: Some(Platform::LinuxAarch64),
+            set_subdir: Some(Subdir::LinuxAarch64),
         })
         .unwrap();
 
@@ -1420,7 +1419,7 @@ mod tests {
         );
         assert!(!declares(&p, "__future_pkg"));
         assert!(declares(&p, "__archspec"));
-        assert_eq!(p.subdir(), Platform::LinuxAarch64);
+        assert_eq!(p.subdir(), Subdir::LinuxAarch64);
         assert_eq!(p.name().as_str(), "gpu-linux");
     }
 
@@ -1429,7 +1428,7 @@ mod tests {
         // Removing the only non-default VP collapses the rich platform back
         // to a subdir platform. The subdir defaults are re-materialised so
         // the result is identical to `PixiPlatform::from_subdir`.
-        let mut p = rich("gpu-linux", Platform::Linux64, vec![gvp("__cuda", "12.0")]);
+        let mut p = rich("gpu-linux", Subdir::Linux64, vec![gvp("__cuda", "12.0")]);
         p.apply_edit(PlatformEdit {
             remove_virtual_packages: vec![PackageName::try_from("__cuda").unwrap()],
             ..Default::default()
@@ -1439,7 +1438,7 @@ mod tests {
         assert_eq!(p.name().as_str(), "linux-64");
         assert_eq!(
             p.declared_virtual_packages(),
-            PixiPlatform::from_subdir(Platform::Linux64).declared_virtual_packages(),
+            PixiPlatform::from_subdir(Subdir::Linux64).declared_virtual_packages(),
         );
     }
 
@@ -1447,10 +1446,10 @@ mod tests {
     fn apply_edit_rejected_when_subdir_starts_matching_name() {
         // Renaming the subdir onto the platform's own name while it still
         // carries virtual packages would forge an illegal subdir-platform.
-        let mut p = rich("linux-64", Platform::Win64, vec![gvp("__cuda", "12.0")]);
+        let mut p = rich("linux-64", Subdir::Win64, vec![gvp("__cuda", "12.0")]);
         let err = p
             .apply_edit(PlatformEdit {
-                set_subdir: Some(Platform::Linux64),
+                set_subdir: Some(Subdir::Linux64),
                 ..Default::default()
             })
             .unwrap_err();
@@ -1459,13 +1458,13 @@ mod tests {
 
     #[test]
     fn apply_edit_set_subdir_changes_only_subdir() {
-        let mut p = rich("gpu-linux", Platform::Linux64, vec![gvp("__cuda", "12.0")]);
+        let mut p = rich("gpu-linux", Subdir::Linux64, vec![gvp("__cuda", "12.0")]);
         p.apply_edit(PlatformEdit {
-            set_subdir: Some(Platform::LinuxAarch64),
+            set_subdir: Some(Subdir::LinuxAarch64),
             ..Default::default()
         })
         .unwrap();
-        assert_eq!(p.subdir(), Platform::LinuxAarch64);
+        assert_eq!(p.subdir(), Subdir::LinuxAarch64);
         assert_eq!(p.name().as_str(), "gpu-linux");
         // `__cuda` is preserved verbatim, and the linux-aarch64 defaults are
         // materialised on top: `__unix`, `__linux`, `__glibc`, `__archspec`.
@@ -1482,7 +1481,7 @@ mod tests {
     #[test]
     fn set_name_rejected_on_subdir_platform() {
         // A bare subdir-platform is an alias for its subdir and can't be renamed.
-        let mut p = PixiPlatform::from_subdir(Platform::Linux64);
+        let mut p = PixiPlatform::from_subdir(Subdir::Linux64);
         let err = p
             .set_name(PixiPlatformName::try_from("custom").unwrap())
             .unwrap_err();
@@ -1492,7 +1491,7 @@ mod tests {
     #[test]
     fn set_name_to_subdir_name_rejected_when_vps_present() {
         // A VP-bearing platform may not be renamed onto its own subdir name.
-        let mut p = rich("gpu", Platform::Linux64, vec![gvp("__cuda", "12.0")]);
+        let mut p = rich("gpu", Subdir::Linux64, vec![gvp("__cuda", "12.0")]);
         let err = p
             .set_name(PixiPlatformName::try_from("linux-64").unwrap())
             .unwrap_err();
@@ -1588,8 +1587,8 @@ mod tests {
     fn new_rejects_subdir_name_with_arbitrary_virtual_packages() {
         use strum::IntoEnumIterator;
 
-        for subdir in Platform::iter() {
-            if subdir == Platform::NoArch || subdir == Platform::Unknown {
+        for subdir in Subdir::iter() {
+            if subdir == Subdir::NoArch {
                 continue;
             }
             let name = PixiPlatformName::try_from(subdir.as_str()).unwrap_or_else(|e| {
@@ -1651,8 +1650,8 @@ mod tests {
     fn every_rattler_platform_round_trips_and_is_locked() {
         use strum::IntoEnumIterator;
 
-        for subdir in Platform::iter() {
-            if subdir == Platform::NoArch || subdir == Platform::Unknown {
+        for subdir in Subdir::iter() {
+            if subdir == Subdir::NoArch {
                 continue;
             }
 
@@ -1679,10 +1678,10 @@ mod tests {
                 "from_subdir({subdir_str}) must materialise the subdir defaults",
             );
 
-            let some_other_subdir = if subdir == Platform::Linux64 {
-                Platform::Osx64
+            let some_other_subdir = if subdir == Subdir::Linux64 {
+                Subdir::Osx64
             } else {
-                Platform::Linux64
+                Subdir::Linux64
             };
             let alt_name = PixiPlatformName::try_from("custom").unwrap();
             assert!(matches!(
@@ -1732,7 +1731,7 @@ mod tests {
     /// it into a rich platform with a synthesised name.
     #[test]
     fn apply_edit_transitions_subdir_platform_to_rich() {
-        let mut p = PixiPlatform::from_subdir(Platform::Linux64);
+        let mut p = PixiPlatform::from_subdir(Subdir::Linux64);
         assert!(p.is_subdir_platform());
         p.apply_edit(PlatformEdit {
             insert_or_update_virtual_packages: vec![gvp("__cuda", "12.0")],
@@ -1741,18 +1740,14 @@ mod tests {
         .unwrap();
         assert!(!p.is_subdir_platform());
         assert_eq!(p.name().as_str(), "linux-64-cuda-12-0");
-        assert_eq!(p.subdir(), Platform::Linux64);
+        assert_eq!(p.subdir(), Subdir::Linux64);
         // The defaults survive the transition.
         assert!(declares(&p, "__linux"));
         assert!(declares(&p, "__glibc"));
         assert!(declares(&p, "__archspec"));
     }
 
-    fn with_defaults(
-        name: &str,
-        subdir: Platform,
-        vps: Vec<GenericVirtualPackage>,
-    ) -> PixiPlatform {
+    fn with_defaults(name: &str, subdir: Subdir, vps: Vec<GenericVirtualPackage>) -> PixiPlatform {
         PixiPlatform::new_with_defaults(
             PixiPlatformName::try_from(name).expect("valid name"),
             subdir,
@@ -1766,7 +1761,7 @@ mod tests {
     /// three as the same override slot.
     #[test]
     fn declared_musl_suppresses_default_glibc() {
-        let p = with_defaults("alpine", Platform::Linux64, vec![gvp("__musl", "1.2.4")]);
+        let p = with_defaults("alpine", Subdir::Linux64, vec![gvp("__musl", "1.2.4")]);
         assert!(declares(&p, "__musl"));
         assert!(!declares(&p, "__glibc"));
     }
@@ -1774,7 +1769,7 @@ mod tests {
     /// Same guard for `__eglibc`.
     #[test]
     fn declared_eglibc_suppresses_default_glibc() {
-        let p = with_defaults("embedded", Platform::Linux64, vec![gvp("__eglibc", "2.30")]);
+        let p = with_defaults("embedded", Subdir::Linux64, vec![gvp("__eglibc", "2.30")]);
         assert!(declares(&p, "__eglibc"));
         assert!(!declares(&p, "__glibc"));
     }

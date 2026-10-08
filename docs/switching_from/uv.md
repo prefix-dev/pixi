@@ -185,6 +185,7 @@ uv supports [PEP 723 inline script metadata](https://peps.python.org/pep-0723/) 
 # dependencies = ["requests"]
 # ///
 import requests
+
 print(requests.get("https://example.com").status_code)
 ```
 

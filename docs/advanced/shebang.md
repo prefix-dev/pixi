@@ -66,7 +66,13 @@ async def _install(
         target_prefix=target_prefix,
         client=Client(
             middlewares=[
-                MirrorMiddleware({"https://conda.anaconda.org/conda-forge": ["https://repo.prefix.dev/conda-forge"]}),
+                MirrorMiddleware(
+                    {
+                        "https://conda.anaconda.org/conda-forge": [
+                            "https://repo.prefix.dev/conda-forge"
+                        ]
+                    }
+                ),
                 AuthenticationMiddleware(),
             ]
         ),

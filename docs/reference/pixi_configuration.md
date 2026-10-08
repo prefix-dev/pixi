@@ -407,6 +407,9 @@ pixi config set concurrency.solves 1
 pixi config set concurrency.downloads 12
 ```
 
+For PyPI operations, `UV_CONCURRENT_CACHE_READS` limits concurrent HTTP cache reads.
+It defaults to `4` and must be a positive integer.
+
 ### `run-post-link-scripts`
 
 Configure whether pixi should execute `post-link` and `pre-unlink` scripts or not.
@@ -606,6 +609,21 @@ Set the configuration with:
 This feature is experimental because the cache invalidation is very tricky,
 and we don't want to disturb users that are not affected by activation times.
 
+### Running conda scripts
+
+[Conda scripts](../tutorials/conda_script.md) normally need `--experimental` on every `pixi run`.
+Turn the flag into a setting with:
+
+```shell
+# For all of your workspaces
+pixi config set experimental.conda-script true --global
+
+# For a specific workspace
+pixi config set experimental.conda-script true --local
+```
+
+Running a conda script then prints a warning instead of asking for the flag, as a reminder that the format may still change.
+
 ## Mirror configuration
 
 You can configure mirrors for conda channels. We expect that mirrors are exact
@@ -643,6 +661,9 @@ team. You can use it like this:
 
 The GHCR mirror also contains `bioconda` packages. You can search the [available
 packages on Github](https://github.com/orgs/channel-mirrors/packages).
+
+For private OCI registries, credentials configured with
+`pixi auth login <registry-host>` are also used for `oci://` mirrors.
 
 ### Mirrors for PyPi resolving and PyPi package downloading
 

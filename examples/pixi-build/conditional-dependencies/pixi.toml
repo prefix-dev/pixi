@@ -14,7 +14,7 @@ cuda_probe = { path = "." }
 [tasks]
 start = {
   cmd = "cuda_probe",
-  description = "Run the executable built by the [package] section"
+  description = "Run the executable built by the [package] section",
 }
 
 [package]

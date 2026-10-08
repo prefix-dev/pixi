@@ -8,10 +8,11 @@ use url::Url;
 use pixi_config::pixi_home;
 use pixi_consts::consts;
 use pixi_global::project::FromMatchSpecError;
+use pixi_manifest::PrioritizedChannel;
 use pixi_spec::{PixiSpec, Subdirectory, SubdirectoryError};
 use rattler_conda_types::{
-    ChannelConfig, MatchSpec, NamedChannelOrUrl, PackageName, ParseMatchSpecError,
-    ParseMatchSpecOptions, RepodataRevision,
+    ChannelConfig, MatchSpec, PackageName, ParseMatchSpecError, ParseMatchSpecOptions,
+    RepodataRevision,
 };
 use typed_path::Utf8NativePathBuf;
 
@@ -267,7 +268,7 @@ impl GlobalSpecs {
         channel_config: &ChannelConfig,
         manifest_root: &Path,
         project: &pixi_global::Project,
-        channels: &[NamedChannelOrUrl],
+        channels: &[PrioritizedChannel],
     ) -> Result<Vec<pixi_global::project::GlobalSpec>, GlobalSpecsConversionError> {
         warn_deprecated_subdir(self.subdir.as_deref());
 
