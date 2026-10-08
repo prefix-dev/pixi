@@ -8,17 +8,18 @@ use std::{
 
 use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Itertools;
-use miette::{Context, IntoDiagnostic, SourceCode, miette};
+use miette::SourceCode;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{
-    NamedChannelOrUrl, ParseStrictness::Strict, Subdir, Version, VersionSpec,
+    NamedChannelOrUrl, ParseStrictness::Strict, ParseVersionError, ParseVersionSpecError, Subdir,
+    Version, VersionSpec,
 };
 use toml_edit::Value;
 
 use crate::{
     Activation, AddDependencyOutcome, DependencyOverwriteBehavior, GetFeatureError, PixiPlatform,
-    PixiPlatformName, PlatformEdit, PlatformMove, Preview, PrioritizedChannel,
+    PixiPlatformError, PixiPlatformName, PlatformEdit, PlatformMove, Preview, PrioritizedChannel,
     PypiDependencyLocation, SpecType, TargetSelector, Task, TaskName, TomlError, WorkspaceTarget,
     consts,
     environment::{Environment, EnvironmentName, NewEnvironment},
@@ -149,16 +150,13 @@ impl WorkspaceManifest {
 
     /// Returns the mutable feature with the given name or `Err` if it does not
     /// exist.
-    pub fn feature_mut<Q>(&mut self, name: &Q) -> miette::Result<&mut Feature>
+    pub fn feature_mut<Q>(&mut self, name: &Q) -> Result<&mut Feature, FeatureNotFoundError>
     where
         Q: ?Sized + Hash + Equivalent<FeatureName> + Display,
     {
-        self.features.get_mut(name).ok_or_else(|| {
-            miette!(
-                "Feature {} does not exist",
-                consts::FEATURE_STYLE.apply_to(name)
-            )
-        })
+        self.features
+            .get_mut(name)
+            .ok_or_else(|| FeatureNotFoundError(name.to_string()))
     }
 
     /// Returns the mutable feature with the given name
@@ -318,14 +316,17 @@ pub struct ActivationScriptsChange {
 fn missing_activation_feature_error(
     workspace: &WorkspaceManifest,
     feature_name: &FeatureName,
-    what: &str,
-) -> miette::Report {
+    what: &'static str,
+) -> ActivationEditError {
     match feature_name.environment_name() {
         Some(environment) if workspace.environments.find(environment).is_none() => {
-            miette!("the environment '{environment}' does not exist")
+            ActivationEditError::EnvironmentNotFound(environment.clone())
         }
-        Some(_) => miette!("no {what} are defined for {}", feature_name.user_facing()),
-        None => miette!("the feature '{}' does not exist", feature_name.as_str()),
+        Some(_) => ActivationEditError::NoneDefined {
+            what,
+            location: feature_name.user_facing().to_string(),
+        },
+        None => ActivationEditError::FeatureNotFound(feature_name.as_str().to_owned()),
     }
 }
 
@@ -361,12 +362,12 @@ impl WorkspaceManifestMut<'_> {
         task: Task,
         platform: Option<&PixiPlatform>,
         feature_name: &FeatureName,
-    ) -> miette::Result<()> {
+    ) -> Result<(), TaskEditError> {
         // Check if the task already exists
         if let Ok(tasks) = self.workspace.tasks(platform, feature_name)
             && tasks.contains_key(&name)
         {
-            miette::bail!("task {} already exists", name);
+            return Err(TaskEditError::AlreadyExists(name));
         }
 
         self.ensure_inline_environment(feature_name)?;
@@ -396,20 +397,25 @@ impl WorkspaceManifestMut<'_> {
         name: TaskName,
         platform: Option<&PixiPlatform>,
         feature_name: &FeatureName,
-    ) -> miette::Result<()> {
+    ) -> Result<(), TaskEditError> {
         // Check if the task exists
-        self.workspace
+        if !self
+            .workspace
             .tasks(platform, feature_name)?
-            .get(&name)
-            .ok_or_else(|| miette::miette!("task {} does not exist", name))?;
+            .contains_key(&name)
+        {
+            return Err(TaskEditError::NotFound(name));
+        }
 
         // Remove the task from the Toml manifest
         self.document
             .remove_task(name.as_str(), platform, feature_name)?;
 
-        // Remove the task from the internal manifest
+        // Remove the task from the internal manifest. The lookup above already
+        // established that the feature exists.
         self.workspace
-            .feature_mut(feature_name)?
+            .feature_mut(feature_name)
+            .expect("feature existence checked above")
             .targets
             .for_opt_target_mut(platform.map(TargetSelector::from).as_ref())
             .map(|target| target.tasks.remove(&name));
@@ -429,7 +435,7 @@ impl WorkspaceManifestMut<'_> {
         prepend: bool,
         target: Option<&TargetSelector>,
         feature_name: &FeatureName,
-    ) -> miette::Result<ActivationScriptsChange> {
+    ) -> Result<ActivationScriptsChange, TomlError> {
         self.ensure_inline_environment(feature_name)?;
 
         // Dedup the requested scripts, keeping the first occurrence.
@@ -484,21 +490,26 @@ impl WorkspaceManifestMut<'_> {
         scripts: Vec<String>,
         target: Option<&TargetSelector>,
         feature_name: &FeatureName,
-    ) -> miette::Result<()> {
+    ) -> Result<(), ActivationEditError> {
+        const WHAT: &str = "activation scripts";
         let location = activation_location(target, feature_name);
         if self.workspace.features.get(feature_name).is_none() {
             return Err(missing_activation_feature_error(
                 self.workspace,
                 feature_name,
-                "activation scripts",
+                WHAT,
             ));
         }
         let target_data = self
             .workspace
-            .feature_mut(feature_name)?
+            .feature_mut(feature_name)
+            .expect("feature existence checked above")
             .targets
             .for_opt_target_mut(target)
-            .ok_or_else(|| miette!("no activation scripts are defined for {location}"))?;
+            .ok_or_else(|| ActivationEditError::NoneDefined {
+                what: WHAT,
+                location: location.clone(),
+            })?;
 
         let existing = target_data
             .activation
@@ -508,9 +519,10 @@ impl WorkspaceManifestMut<'_> {
             .iter()
             .find(|script| !existing.is_some_and(|existing| existing.contains(script)))
         {
-            return Err(miette!(
-                "the activation script '{missing}' was not found for {location}"
-            ));
+            return Err(ActivationEditError::ScriptNotFound {
+                script: missing.clone(),
+                location,
+            });
         }
 
         // Update the in-memory manifest, dropping emptied containers.
@@ -548,7 +560,7 @@ impl WorkspaceManifestMut<'_> {
         variables: Vec<(String, String)>,
         target: Option<&TargetSelector>,
         feature_name: &FeatureName,
-    ) -> miette::Result<()> {
+    ) -> Result<(), TomlError> {
         self.ensure_inline_environment(feature_name)?;
 
         // Update the in-memory manifest.
@@ -582,22 +594,25 @@ impl WorkspaceManifestMut<'_> {
         keys: Vec<String>,
         target: Option<&TargetSelector>,
         feature_name: &FeatureName,
-    ) -> miette::Result<()> {
+    ) -> Result<(), ActivationEditError> {
+        const WHAT: &str = "activation environment variables";
         let location = activation_location(target, feature_name);
         if self.workspace.features.get(feature_name).is_none() {
             return Err(missing_activation_feature_error(
                 self.workspace,
                 feature_name,
-                "activation environment variables",
+                WHAT,
             ));
         }
         let target_data = self
             .workspace
-            .feature_mut(feature_name)?
+            .feature_mut(feature_name)
+            .expect("feature existence checked above")
             .targets
             .for_opt_target_mut(target)
-            .ok_or_else(|| {
-                miette!("no activation environment variables are defined for {location}")
+            .ok_or_else(|| ActivationEditError::NoneDefined {
+                what: WHAT,
+                location: location.clone(),
             })?;
 
         let existing = target_data
@@ -608,9 +623,10 @@ impl WorkspaceManifestMut<'_> {
             .iter()
             .find(|key| !existing.is_some_and(|existing| existing.contains_key(*key)))
         {
-            return Err(miette!(
-                "the activation environment variable '{missing}' was not found for {location}"
-            ));
+            return Err(ActivationEditError::EnvVarNotFound {
+                key: missing.clone(),
+                location,
+            });
         }
 
         // Update the in-memory manifest, dropping emptied containers.
@@ -646,7 +662,7 @@ impl WorkspaceManifestMut<'_> {
     /// environment must stay declared. An unreferenced feature whose manifest
     /// table is now empty is dropped from the in-memory manifest as well, so
     /// an add-then-remove round trip leaves no stub behind.
-    fn repair_activation_anchor(&mut self, feature_name: &FeatureName) -> miette::Result<()> {
+    fn repair_activation_anchor(&mut self, feature_name: &FeatureName) -> Result<(), TomlError> {
         match feature_name {
             FeatureName::Default => {}
             FeatureName::Environment(name) => {
@@ -678,7 +694,10 @@ impl WorkspaceManifestMut<'_> {
     ///
     /// This function modifies both the workspace and the TOML document. Use
     /// `ManifestProvenance::save` to persist the changes to disk.
-    pub fn add_environment(&mut self, environment: NewEnvironment) -> miette::Result<()> {
+    pub fn add_environment(
+        &mut self,
+        environment: NewEnvironment,
+    ) -> Result<(), EnvironmentEditError> {
         // Make sure the features exist and can be referenced
         for feature in environment.features.iter().flatten() {
             if self
@@ -731,7 +750,7 @@ impl WorkspaceManifestMut<'_> {
         &mut self,
         name: &EnvironmentName,
         features: Vec<FeatureName>,
-    ) -> miette::Result<()> {
+    ) -> Result<(), EnvironmentEditError> {
         // Make sure the referenced features exist
         for feature in &features {
             if !feature.is_environment() && self.workspace.features.get(feature).is_none() {
@@ -740,7 +759,7 @@ impl WorkspaceManifestMut<'_> {
         }
 
         let Some(environment) = self.workspace.environments.find(name) else {
-            return Err(miette!("the environment '{name}' does not exist"));
+            return Err(EnvironmentEditError::NotFound(name.clone()));
         };
         let solve_group = environment
             .solve_group
@@ -776,7 +795,7 @@ impl WorkspaceManifestMut<'_> {
     ///
     /// This function modifies both the workspace and the TOML document. Use
     /// `ManifestProvenance::save` to persist the changes to disk.
-    pub fn remove_environment(&mut self, name: &str) -> miette::Result<bool> {
+    pub fn remove_environment(&mut self, name: &str) -> Result<bool, TomlError> {
         // Remove the environment from the TOML document
         if !self.document.remove_environment(name)? {
             return Ok(false);
@@ -809,9 +828,9 @@ impl WorkspaceManifestMut<'_> {
     pub fn remove_feature(
         &mut self,
         feature_name: &FeatureName,
-    ) -> miette::Result<Vec<EnvironmentName>> {
+    ) -> Result<Vec<EnvironmentName>, EnvironmentEditError> {
         if feature_name.is_default() {
-            miette::bail!("Cannot remove the default feature");
+            return Err(EnvironmentEditError::RemoveDefaultFeature);
         }
 
         if self.workspace.features.get(feature_name).is_none() {
@@ -894,7 +913,7 @@ impl WorkspaceManifestMut<'_> {
     pub fn add_workspace_platforms(
         &mut self,
         platforms: &IndexSet<PixiPlatform>,
-    ) -> miette::Result<IndexSet<PixiPlatform>> {
+    ) -> Result<IndexSet<PixiPlatform>, PlatformEditError> {
         // A platform's identity is its (subdir, customised virtual packages)
         // definition, not its name. Reject adding a second entry that duplicates
         // an existing definition under a different name -- it would produce a
@@ -985,7 +1004,7 @@ impl WorkspaceManifestMut<'_> {
     fn append_subdir_platforms_toml(
         &mut self,
         new_platforms: &IndexSet<PixiPlatform>,
-    ) -> miette::Result<()> {
+    ) -> Result<(), TomlError> {
         let array = self
             .document
             .get_array_mut("platforms", &Default::default())?;
@@ -1003,7 +1022,7 @@ impl WorkspaceManifestMut<'_> {
     fn append_workspace_platforms_toml(
         &mut self,
         new_platforms: &IndexSet<PixiPlatform>,
-    ) -> miette::Result<()> {
+    ) -> Result<(), TomlError> {
         let array = self
             .document
             .get_array_mut("platforms", &Default::default())?;
@@ -1023,7 +1042,7 @@ impl WorkspaceManifestMut<'_> {
     /// for the legacy migration commit, where every entry changes shape;
     /// steady-state edits use the in-place helpers so they don't reflow the
     /// whole array.
-    fn rewrite_workspace_platforms_toml(&mut self) -> miette::Result<()> {
+    fn rewrite_workspace_platforms_toml(&mut self) -> Result<(), TomlError> {
         let entries: Vec<toml_edit::Value> = self
             .workspace
             .workspace
@@ -1046,7 +1065,7 @@ impl WorkspaceManifestMut<'_> {
         &mut self,
         mut platforms: IndexSet<PixiPlatformName>,
         feature_name: &FeatureName,
-    ) -> miette::Result<IndexSet<PixiPlatformName>> {
+    ) -> Result<IndexSet<PixiPlatformName>, TomlError> {
         if feature_name.is_default() {
             return Ok(IndexSet::new());
         }
@@ -1083,7 +1102,7 @@ impl WorkspaceManifestMut<'_> {
         &mut self,
         name: &PixiPlatformName,
         edit: PlatformEdit,
-    ) -> miette::Result<()> {
+    ) -> Result<(), PlatformEditError> {
         let (index, original) = self
             .workspace
             .workspace
@@ -1091,7 +1110,7 @@ impl WorkspaceManifestMut<'_> {
             .iter()
             .enumerate()
             .find(|(_, p)| p.name() == name)
-            .ok_or_else(|| missing_platform_error(name))?;
+            .ok_or_else(|| PlatformEditError::NotFound(name.clone()))?;
         let mut updated = original.clone();
 
         // The edit only matters if it actually changes the platform; a no-op
@@ -1100,7 +1119,7 @@ impl WorkspaceManifestMut<'_> {
         // can change explicitly. The name only changes as a consequence of a
         // VP/subdir change, so it needs no separate comparison here.
         let before = updated.clone();
-        updated.apply_edit(edit).map_err(|e| miette!(e))?;
+        updated.apply_edit(edit)?;
         if updated.subdir() == before.subdir()
             && updated.declared_virtual_packages() == before.declared_virtual_packages()
         {
@@ -1140,12 +1159,13 @@ impl WorkspaceManifestMut<'_> {
 
         if was_migrating {
             // The migration rebuilt the whole platform set; re-render it.
-            self.rewrite_workspace_platforms_toml()
+            self.rewrite_workspace_platforms_toml()?;
         } else {
             // Otherwise only this one entry changed: rewrite it in place so the
             // array keeps its order and on-disk formatting.
-            self.replace_workspace_platform_value(index, &updated)
+            self.replace_workspace_platform_value(index, &updated)?;
         }
+        Ok(())
     }
 
     /// Move the workspace platform `name` to a new position relative to the
@@ -1157,22 +1177,19 @@ impl WorkspaceManifestMut<'_> {
         &mut self,
         name: &PixiPlatformName,
         target: &PlatformMove,
-    ) -> miette::Result<()> {
+    ) -> Result<(), PlatformEditError> {
         let platforms = &self.workspace.workspace.platforms;
         let from = platforms
             .iter()
             .position(|p| p.name() == name)
-            .ok_or_else(|| missing_platform_error(name))?;
+            .ok_or_else(|| PlatformEditError::NotFound(name.clone()))?;
 
         if let PlatformMove::Before(anchor) | PlatformMove::After(anchor) = target {
             if anchor == name {
-                miette::bail!(
-                    "cannot move platform '{}' relative to itself",
-                    name.as_str()
-                );
+                return Err(PlatformEditError::MoveRelativeToItself(name.clone()));
             }
             if !platforms.iter().any(|p| p.name() == anchor) {
-                return Err(missing_platform_error(anchor));
+                return Err(PlatformEditError::NotFound(anchor.clone()));
             }
         }
 
@@ -1209,7 +1226,7 @@ impl WorkspaceManifestMut<'_> {
             return Ok(());
         }
 
-        self.rewrite_workspace_platforms_toml()
+        Ok(self.rewrite_workspace_platforms_toml()?)
     }
 
     /// Rewrite the `index`th entry of the workspace `platforms` array from
@@ -1219,7 +1236,7 @@ impl WorkspaceManifestMut<'_> {
         &mut self,
         index: usize,
         platform: &PixiPlatform,
-    ) -> miette::Result<()> {
+    ) -> Result<(), TomlError> {
         let value = crate::toml::platform::pixi_platform_to_toml_value(platform);
         let array = self
             .document
@@ -1238,7 +1255,7 @@ impl WorkspaceManifestMut<'_> {
         &mut self,
         old: &PixiPlatformName,
         new: &PixiPlatformName,
-    ) -> miette::Result<()> {
+    ) -> Result<(), TomlError> {
         let affected: Vec<FeatureName> = self
             .workspace
             .features
@@ -1297,7 +1314,7 @@ impl WorkspaceManifestMut<'_> {
         &mut self,
         platforms: impl IntoIterator<Item = &'a PixiPlatform>,
         feature_name: &FeatureName,
-    ) -> miette::Result<IndexSet<PixiPlatform>> {
+    ) -> Result<IndexSet<PixiPlatform>, PlatformEditError> {
         let pixi_platforms: IndexSet<PixiPlatform> = platforms.into_iter().cloned().collect();
         // Nothing to add (e.g. `pixi add <dep>` with no `--platform`): leave the
         // document untouched. Rewriting it here would flush the in-memory
@@ -1323,7 +1340,7 @@ impl WorkspaceManifestMut<'_> {
         &mut self,
         platforms: impl IntoIterator<Item = &'a PixiPlatform>,
         feature_name: &FeatureName,
-    ) -> miette::Result<()> {
+    ) -> Result<(), PlatformEditError> {
         let platform_names: IndexSet<PixiPlatformName> =
             platforms.into_iter().map(|p| p.name().clone()).collect();
         if feature_name.is_default() {
@@ -1337,7 +1354,7 @@ impl WorkspaceManifestMut<'_> {
     pub fn remove_workspace_platforms(
         &mut self,
         platforms: &IndexSet<PixiPlatformName>,
-    ) -> miette::Result<()> {
+    ) -> Result<(), TomlError> {
         // Update Manifest platforms. Features keep their own platform lists
         // even if entries are no longer in the workspace default: a feature
         // explicitly listing `platforms = [...]` is an opt-in to that exact
@@ -1374,7 +1391,7 @@ impl WorkspaceManifestMut<'_> {
         &mut self,
         platforms: IndexSet<PixiPlatformName>,
         feature_name: &FeatureName,
-    ) -> miette::Result<()> {
+    ) -> Result<(), PlatformEditError> {
         if feature_name.is_default() {
             return Ok(());
         }
@@ -1394,11 +1411,10 @@ impl WorkspaceManifestMut<'_> {
             .filter(|pn| !feature_platforms.contains(*pn))
             .collect();
         if !missing.is_empty() {
-            miette::bail!(
-                "{} does not declare platform(s): {}",
-                feature_name.user_facing(),
-                missing.iter().map(|pn| pn.as_str()).join(", ")
-            );
+            return Err(PlatformEditError::NotDeclaredByFeature {
+                feature: feature_name.user_facing().to_string(),
+                missing: missing.iter().map(|pn| pn.as_str()).join(", "),
+            });
         }
 
         // Update the feature platforms:
@@ -1422,7 +1438,7 @@ impl WorkspaceManifestMut<'_> {
     /// exists so that inline content can be written to it. A missing
     /// environment is created on the fly, including the default feature; the
     /// shorthand manifest forms are converted to an explicit table first.
-    fn ensure_inline_environment(&mut self, feature_name: &FeatureName) -> miette::Result<()> {
+    fn ensure_inline_environment(&mut self, feature_name: &FeatureName) -> Result<(), TomlError> {
         let Some(name) = feature_name.environment_name() else {
             return Ok(());
         };
@@ -1460,7 +1476,7 @@ impl WorkspaceManifestMut<'_> {
         targets: &[TargetSelector],
         feature_name: &FeatureName,
         overwrite_behavior: DependencyOverwriteBehavior,
-    ) -> miette::Result<AddDependencyOutcome> {
+    ) -> Result<AddDependencyOutcome, AddDependencyError> {
         self.ensure_inline_environment(feature_name)?;
         let mut any_added = false;
         let mut any_inherited = false;
@@ -1586,7 +1602,7 @@ impl WorkspaceManifestMut<'_> {
         editable: Option<bool>,
         overwrite_behavior: DependencyOverwriteBehavior,
         location: Option<PypiDependencyLocation>,
-    ) -> miette::Result<bool> {
+    ) -> Result<bool, AddDependencyError> {
         self.ensure_inline_environment(feature_name)?;
         let mut any_added = false;
         for target in to_target_options(targets) {
@@ -1674,7 +1690,7 @@ impl WorkspaceManifestMut<'_> {
         channels: impl IntoIterator<Item = PrioritizedChannel>,
         feature_name: &FeatureName,
         prepend: bool,
-    ) -> miette::Result<()> {
+    ) -> Result<(), TomlError> {
         self.ensure_inline_environment(feature_name)?;
 
         // First collect all the new channels
@@ -1743,7 +1759,7 @@ impl WorkspaceManifestMut<'_> {
         &mut self,
         channels: impl IntoIterator<Item = PrioritizedChannel>,
         feature_name: &FeatureName,
-    ) -> miette::Result<()> {
+    ) -> Result<(), RemoveChannelsError> {
         // Get current channels and channels to remove for the feature
         let current = if feature_name.is_default() {
             &mut self.workspace.workspace.channels
@@ -1757,7 +1773,7 @@ impl WorkspaceManifestMut<'_> {
                 current
                     .iter()
                     .position(|x| x.channel.to_string() == c.channel.to_string())
-                    .ok_or_else(|| miette::miette!("channel {} does not exist", c.channel.as_str()))
+                    .ok_or_else(|| RemoveChannelsError::NotFound(c.channel.as_str().to_owned()))
                     .map(|_| c.channel.to_string())
             })
             .collect::<Result<_, _>>()?;
@@ -1790,7 +1806,7 @@ impl WorkspaceManifestMut<'_> {
         &mut self,
         channels: impl IntoIterator<Item = PrioritizedChannel>,
         feature_name: &FeatureName,
-    ) -> miette::Result<()> {
+    ) -> Result<(), TomlError> {
         let channels: Vec<_> = channels.into_iter().collect();
 
         // Get the current channels
@@ -1820,35 +1836,29 @@ impl WorkspaceManifestMut<'_> {
     ///
     /// This function modifies both the workspace and the TOML document. Use
     /// `ManifestProvenance::save` to persist the changes to disk.
-    pub fn set_name(&mut self, name: &str) -> miette::Result<()> {
+    pub fn set_name(&mut self, name: &str) {
         self.workspace.workspace.name = Some(name.to_string());
         self.document.set_name(name);
-        Ok(())
     }
 
     /// Set the project description
     ///
     /// This function modifies both the workspace and the TOML document. Use
     /// `ManifestProvenance::save` to persist the changes to disk.
-    pub fn set_description(&mut self, description: &str) -> miette::Result<()> {
+    pub fn set_description(&mut self, description: &str) {
         // Update in both the manifest and the toml
         self.workspace.workspace.description = Some(description.to_string());
         self.document.set_description(description);
-
-        Ok(())
     }
 
     /// Set the project version
     ///
     /// This function modifies both the workspace and the TOML document. Use
     /// `ManifestProvenance::save` to persist the changes to disk.
-    pub fn set_version(&mut self, version: &str) -> miette::Result<()> {
+    pub fn set_version(&mut self, version: &str) -> Result<(), InvalidVersionError> {
         // Update in both the manifest and the toml
-        self.workspace.workspace.version = Some(
-            Version::from_str(version)
-                .into_diagnostic()
-                .context("could not convert version to a valid project version")?,
-        );
+        self.workspace.workspace.version =
+            Some(Version::from_str(version).map_err(InvalidVersionError)?);
         self.document.set_version(version);
         Ok(())
     }
@@ -1857,17 +1867,16 @@ impl WorkspaceManifestMut<'_> {
     ///
     /// This function modifies both the workspace and the TOML document. Use
     /// `ManifestProvenance::save` to persist the changes to disk.
-    pub fn set_requires_pixi(&mut self, version: Option<&str>) -> miette::Result<()> {
+    pub fn set_requires_pixi(&mut self, version: Option<&str>) -> Result<(), SetRequiresPixiError> {
         // Update in both the manifest and the toml
         self.workspace.workspace.requires_pixi = match version {
             Some(version) => Some(
                 VersionSpec::from_str(version, Strict)
-                    .into_diagnostic()
-                    .context("could not convert to a valid version spec")?,
+                    .map_err(SetRequiresPixiError::InvalidVersionSpec)?,
             ),
             None => None,
         };
-        self.document.set_requires_pixi(version).into_diagnostic()
+        Ok(self.document.set_requires_pixi(version)?)
     }
 }
 
@@ -1893,17 +1902,12 @@ fn normalized_channel_name(name: &str) -> String {
         .unwrap_or_else(|_| name.to_string())
 }
 
-/// Error for a workspace platform lookup by name that found nothing.
-fn missing_platform_error(name: &PixiPlatformName) -> miette::Report {
-    miette!(
-        "workspace does not define a platform named '{}'",
-        name.as_str()
-    )
-}
-
 /// Error for adding a platform whose (subdir, customised virtual packages)
 /// definition is already declared under a different name.
-fn duplicate_definition_error(existing: &PixiPlatform, incoming: &PixiPlatform) -> miette::Report {
+fn duplicate_definition_error(
+    existing: &PixiPlatform,
+    incoming: &PixiPlatform,
+) -> PlatformEditError {
     let customised = existing.customised_virtual_packages();
     let definition = if customised.is_empty() {
         format!("subdir '{}'", existing.subdir())
@@ -1915,15 +1919,11 @@ fn duplicate_definition_error(existing: &PixiPlatform, incoming: &PixiPlatform) 
             .join(", ");
         format!("subdir '{}' with virtual packages {vps}", existing.subdir())
     };
-    miette!(
-        help = format!(
-            "reuse the existing platform '{}', or give this one a distinct subdir or virtual packages",
-            existing.name()
-        ),
-        "cannot add platform '{}': its definition ({definition}) is already declared as '{}'",
-        incoming.name(),
-        existing.name(),
-    )
+    PlatformEditError::DuplicateDefinition {
+        incoming: incoming.name().clone(),
+        existing: existing.name().clone(),
+        definition,
+    }
 }
 
 /// Position of the platform named `anchor`. The caller must have verified the
@@ -2029,16 +2029,160 @@ pub enum RemoveDependencyError {
     Toml(#[from] TomlError),
 }
 
+/// Raised by [`WorkspaceManifest::feature_mut`] when the feature does not
+/// exist.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error("Feature {} does not exist", consts::FEATURE_STYLE.apply_to(.0))]
+pub struct FeatureNotFoundError(pub String);
+
+/// Errors from [`WorkspaceManifestMut::add_task`] and
+/// [`WorkspaceManifestMut::remove_task`].
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum TaskEditError {
+    #[error("task {0} already exists")]
+    AlreadyExists(TaskName),
+
+    #[error("task {0} does not exist")]
+    NotFound(TaskName),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Feature(#[from] GetFeatureError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Toml(#[from] TomlError),
+}
+
+/// Errors from removing activation scripts or environment variables.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum ActivationEditError {
+    #[error("the environment '{0}' does not exist")]
+    EnvironmentNotFound(EnvironmentName),
+
+    #[error("the feature '{0}' does not exist")]
+    FeatureNotFound(String),
+
+    /// `what` names the kind of entry, e.g. "activation scripts".
+    #[error("no {what} are defined for {location}")]
+    NoneDefined {
+        what: &'static str,
+        location: String,
+    },
+
+    #[error("the activation script '{script}' was not found for {location}")]
+    ScriptNotFound { script: String, location: String },
+
+    #[error("the activation environment variable '{key}' was not found for {location}")]
+    EnvVarNotFound { key: String, location: String },
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Toml(#[from] TomlError),
+}
+
+/// Errors from adding or editing environments and removing features.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum EnvironmentEditError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    UnknownFeature(#[from] UnknownFeature),
+
+    #[error("the environment '{0}' does not exist")]
+    NotFound(EnvironmentName),
+
+    #[error("Cannot remove the default feature")]
+    RemoveDefaultFeature,
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Toml(#[from] TomlError),
+}
+
+/// Errors from adding, editing, moving or removing platforms.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum PlatformEditError {
+    #[error("workspace does not define a platform named '{0}'")]
+    NotFound(PixiPlatformName),
+
+    #[error(
+        "cannot add platform '{incoming}': its definition ({definition}) is already declared as '{existing}'"
+    )]
+    #[diagnostic(help(
+        "reuse the existing platform '{existing}', or give this one a distinct subdir or virtual packages"
+    ))]
+    DuplicateDefinition {
+        incoming: PixiPlatformName,
+        existing: PixiPlatformName,
+        definition: String,
+    },
+
+    #[error("cannot move platform '{0}' relative to itself")]
+    MoveRelativeToItself(PixiPlatformName),
+
+    #[error("{feature} does not declare platform(s): {missing}")]
+    NotDeclaredByFeature { feature: String, missing: String },
+
+    #[error(transparent)]
+    InvalidEdit(#[from] PixiPlatformError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Toml(#[from] TomlError),
+}
+
+/// Errors from [`WorkspaceManifestMut::add_dependency`] and
+/// [`WorkspaceManifestMut::add_pep508_dependency`].
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum AddDependencyError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Dependency(#[from] DependencyError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Toml(#[from] TomlError),
+}
+
+/// Errors from [`WorkspaceManifestMut::remove_channels`].
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum RemoveChannelsError {
+    #[error("channel {0} does not exist")]
+    NotFound(String),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    FeatureNotFound(#[from] FeatureNotFoundError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Toml(#[from] TomlError),
+}
+
+/// Raised by [`WorkspaceManifestMut::set_version`].
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error("could not convert version to a valid project version")]
+pub struct InvalidVersionError(#[source] pub ParseVersionError);
+
+/// Errors from [`WorkspaceManifestMut::set_requires_pixi`].
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum SetRequiresPixiError {
+    #[error("could not convert to a valid version spec")]
+    InvalidVersionSpec(#[source] ParseVersionSpecError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Toml(#[from] TomlError),
+}
+
 /// One-shot migration from the legacy `[system-requirements]` shape to the
 /// per-platform-VPs shape. Lives in its own module so it's easy to delete
 /// once the legacy syntax is fully retired: drop the module, drop the
 /// `must_migrate` field on `Workspace`, drop the two call sites in
 /// `add_workspace_platforms` and `edit_workspace_platform`.
 mod migrate_to_rich_platforms {
-    use miette::miette;
-
     use super::WorkspaceManifestMut;
-    use crate::FeatureName;
+    use crate::{FeatureName, TomlError};
 
     /// Persist the in-memory migration when `must_migrate` is set and the
     /// edit produces a non-subdir platform: drop every `[system-requirements]`
@@ -2047,15 +2191,12 @@ mod migrate_to_rich_platforms {
     pub(super) fn commit_if_needed(
         manifest: &mut WorkspaceManifestMut<'_>,
         edit_produces_rich: bool,
-    ) -> miette::Result<()> {
+    ) -> Result<(), TomlError> {
         if !manifest.workspace.workspace.must_migrate || !edit_produces_rich {
             return Ok(());
         }
 
-        manifest
-            .document
-            .remove_system_requirements_section(None)
-            .map_err(|e| miette!(e))?;
+        manifest.document.remove_system_requirements_section(None)?;
 
         let named_features: Vec<FeatureName> = manifest
             .workspace
@@ -2067,8 +2208,7 @@ mod migrate_to_rich_platforms {
         for feature_name in &named_features {
             manifest
                 .document
-                .remove_system_requirements_section(Some(feature_name))
-                .map_err(|e| miette!(e))?;
+                .remove_system_requirements_section(Some(feature_name))?;
 
             let Some(in_memory) = manifest
                 .workspace
@@ -2078,10 +2218,7 @@ mod migrate_to_rich_platforms {
             else {
                 continue;
             };
-            let array = manifest
-                .document
-                .get_array_mut("platforms", feature_name)
-                .map_err(|e| miette!(e))?;
+            let array = manifest.document.get_array_mut("platforms", feature_name)?;
             array.clear();
             for platform_name in &in_memory {
                 array.push(platform_name.as_str());
@@ -3264,7 +3401,7 @@ feature_target_dep = "*"
             String::from("foo description")
         );
 
-        manifest.set_description("my new description").unwrap();
+        manifest.set_description("my new description");
 
         assert_eq!(
             manifest
@@ -3607,7 +3744,16 @@ platforms = ["linux-64", "osx-64"]
             .editable()
             .add_platforms(std::iter::once(&second), &FeatureName::Default)
             .unwrap_err();
-        assert!(err.to_string().contains("already declared as"), "{err}");
+        assert_matches::assert_matches!(
+            &err,
+            PlatformEditError::DuplicateDefinition { incoming, existing, .. }
+                if incoming.as_str() == "gpu-b" && existing.as_str() == "gpu-a"
+        );
+        let help = miette::Diagnostic::help(&err).unwrap().to_string();
+        assert!(
+            help.contains("reuse the existing platform 'gpu-a'"),
+            "{help}"
+        );
 
         // Re-adding the identical platform (same name + definition) is a no-op.
         workspace
@@ -5062,7 +5208,7 @@ boltons = { workspace = true }
         // Disable colors in tests
         let mut s = String::new();
         let report_handler = NarratableReportHandler::new().with_cause_chain();
-        report_handler.render_report(&mut s, err.as_ref()).unwrap();
+        report_handler.render_report(&mut s, &err).unwrap();
 
         assert_snapshot!(s, @r###"
         the feature 'non-existing' is not defined in the project manifest
@@ -5279,7 +5425,7 @@ dependencies = { other-package = "*" }
         manifest: &mut WorkspaceManifestMut<'_>,
         spec: &str,
         environment_name: &EnvironmentName,
-    ) -> miette::Result<AddDependencyOutcome> {
+    ) -> Result<AddDependencyOutcome, AddDependencyError> {
         let (name, spec) = MatchSpec::from_str(spec, Strict).unwrap().into_nameless();
         let spec = PixiSpec::from_nameless_matchspec(spec, &default_channel_config());
         manifest.add_dependency(
@@ -6641,5 +6787,111 @@ platforms = [
                 .all(|p| p.as_str() == "linux-64-cuda-12-0"),
             "feature should reference the renamed platform, got {gpu_platforms:?}",
         );
+    }
+
+    /// Each error path of [`WorkspaceManifestMut`] yields the expected typed
+    /// variant with an unchanged message, and `wrap_err` contexts that became
+    /// variant messages keep the underlying parse error as their source.
+    #[test]
+    fn test_typed_edit_errors() {
+        let mut workspace = parse_pixi_toml(
+            r#"
+            [workspace]
+            name = "t"
+            channels = ["conda-forge"]
+            platforms = ["linux-64", "osx-arm64"]
+
+            [tasks]
+            hello = "echo hello"
+
+            [feature.f1.activation]
+            scripts = ["a.sh"]
+            env = { FOO = "1" }
+
+            [environments]
+            e1 = ["f1"]
+            "#,
+        );
+        let mut manifest = workspace.editable();
+
+        let hello = TaskName::from("hello");
+        let err = manifest
+            .add_task(
+                hello.clone(),
+                Task::Plain("echo x".into()),
+                None,
+                &FeatureName::Default,
+            )
+            .unwrap_err();
+        assert_matches::assert_matches!(&err, TaskEditError::AlreadyExists(name) if *name == hello);
+        assert_eq!(err.to_string(), "task hello already exists");
+        let err = manifest
+            .remove_task(TaskName::from("nope"), None, &FeatureName::Default)
+            .unwrap_err();
+        assert_matches::assert_matches!(err, TaskEditError::NotFound(_));
+        let err = manifest
+            .remove_task(hello, None, &FeatureName::from("nosuch"))
+            .unwrap_err();
+        assert_matches::assert_matches!(err, TaskEditError::Feature(_));
+
+        let f1 = FeatureName::from("f1");
+        let err = manifest
+            .remove_activation_scripts(vec!["zz.sh".into()], None, &f1)
+            .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "the activation script 'zz.sh' was not found for feature 'f1'"
+        );
+        let err = manifest
+            .remove_activation_env(
+                vec!["FOO".into()],
+                Some(&TargetSelector::Subdir(Subdir::Win64)),
+                &f1,
+            )
+            .unwrap_err();
+        assert_matches::assert_matches!(
+            err,
+            ActivationEditError::NoneDefined {
+                what: "activation environment variables",
+                ..
+            }
+        );
+
+        let err = manifest.remove_feature(&FeatureName::Default).unwrap_err();
+        assert_matches::assert_matches!(err, EnvironmentEditError::RemoveDefaultFeature);
+
+        let channel = |name: &str| PrioritizedChannel::from(NamedChannelOrUrl::Name(name.into()));
+        let err = manifest
+            .remove_channels([channel("conda-forge")], &FeatureName::from("nosuch"))
+            .unwrap_err();
+        assert_matches::assert_matches!(err, RemoveChannelsError::FeatureNotFound(_));
+        let err = manifest
+            .remove_channels([channel("bioconda")], &FeatureName::Default)
+            .unwrap_err();
+        assert_eq!(err.to_string(), "channel bioconda does not exist");
+
+        let linux = PixiPlatformName::try_from("linux-64").unwrap();
+        let err = manifest
+            .move_workspace_platform(&linux, &PlatformMove::Before(linux.clone()))
+            .unwrap_err();
+        assert_matches::assert_matches!(err, PlatformEditError::MoveRelativeToItself(_));
+        let nope = PixiPlatformName::try_from("nope").unwrap();
+        let err = manifest
+            .move_workspace_platform(&nope, &PlatformMove::ToTop)
+            .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "workspace does not define a platform named 'nope'"
+        );
+
+        let err = manifest.set_version("not a version").unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "could not convert version to a valid project version"
+        );
+        assert!(std::error::Error::source(&err).is_some());
+        let err = manifest.set_requires_pixi(Some("<<<")).unwrap_err();
+        assert_matches::assert_matches!(err, SetRequiresPixiError::InvalidVersionSpec(_));
+        assert!(std::error::Error::source(&err).is_some());
     }
 }
