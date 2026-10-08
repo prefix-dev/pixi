@@ -358,11 +358,11 @@ mod tests {
     /// is dropped instead of being offered for disambiguation.
     #[test]
     fn test_unrunnable_environment_is_not_a_candidate() {
-        let current = rattler_conda_types::Platform::current();
-        let foreign = if current == rattler_conda_types::Platform::LinuxRiscv64 {
-            rattler_conda_types::Platform::Linux64
+        let current = rattler_conda_types::Subdir::current().expect("there is a current platform");
+        let foreign = if current == rattler_conda_types::Subdir::LinuxRiscv64 {
+            rattler_conda_types::Subdir::Linux64
         } else {
-            rattler_conda_types::Platform::LinuxRiscv64
+            rattler_conda_types::Subdir::LinuxRiscv64
         };
         let manifest_str = format!(
             r#"
@@ -398,7 +398,9 @@ mod tests {
 
     #[test]
     fn test_lock_file_runnable_environment_is_a_candidate() {
-        let current = rattler_conda_types::Platform::current();
+        let current = rattler_conda_types::Subdir::current()
+            .expect("there is a current platform")
+            .as_str();
         let manifest_str = format!(
             r#"
             [workspace]
