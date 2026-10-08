@@ -200,6 +200,17 @@ pub(super) async fn verify_partial_source_record_against_backend(
         .map_err(CommandDispatcherError::Failed)?;
     }
 
+    // A `pin-compatible` spec needs the version of the package it names.
+    // Path-based dependencies are locked as partial records that carry no
+    // version, so resolve the ones a pin targets before the check below.
+    let pin_targets = pin_compatible_targets(matching_output);
+    let pinned_build =
+        resolve_pin_target_partials(ctx, platform_setup, &record.build_packages, &pin_targets)
+            .await?;
+    let pinned_host =
+        resolve_pin_target_partials(ctx, platform_setup, &record.host_packages, &pin_targets)
+            .await?;
+
     // Verify that the locked record's runtime `depends` and `constrains`
     // still match what the backend would re-derive from its declared
     // run-dependencies plus the resolved build/host packages'
@@ -207,8 +218,14 @@ pub(super) async fn verify_partial_source_record_against_backend(
     // `[package.run-dependencies]` (and its constraints sibling) that
     // the build/host check above can't see, because changes there don't
     // necessarily perturb the build/host envs at all.
-    verify_locked_run_deps_against_backend(record, matching_output, &platform_setup.channel_config)
-        .map_err(CommandDispatcherError::Failed)?;
+    verify_locked_run_deps_against_backend(
+        record,
+        matching_output,
+        &platform_setup.channel_config,
+        &pinned_build,
+        &pinned_host,
+    )
+    .map_err(CommandDispatcherError::Failed)?;
 
     // Synthesize a full record from the matching output. We use the
     // backend's freshly-computed PackageRecord (version, build,
@@ -232,12 +249,15 @@ fn verify_locked_run_deps_against_backend(
     record: &pixi_record::UnresolvedSourceRecord,
     matching_output: &pixi_build_types::procedures::conda_outputs::CondaOutput,
     channel_config: &rattler_conda_types::ChannelConfig,
+    pinned_build: &[PixiRecord],
+    pinned_host: &[PixiRecord],
 ) -> Result<(), Box<PlatformUnsat>> {
     // Resolve build/host package slices into PixiRecords for the pin
-    // compatibility map. Partial source records get dropped from the
-    // map: pin_compatible against a record whose version isn't yet
-    // materialised would just fail downstream. Their run-exports still
-    // contribute below, read directly off the partial data.
+    // compatibility map. Partial source records carry no package record to
+    // pin against. The caller resolves the ones a pin names and passes
+    // them in as `pinned_build` / `pinned_host`. The rest stay dropped.
+    // Their run-exports still contribute below, read directly off the
+    // partial data.
     let resolved_build = resolved_records(&record.build_packages);
     let resolved_host = resolved_records(&record.host_packages);
 
@@ -246,16 +266,14 @@ fn verify_locked_run_deps_against_backend(
     // pin_compatible(host_dep) finds host entries when both envs name
     // the same package.
     let mut compat_map: PinCompatibilityMap = std::collections::HashMap::new();
-    compat_map.extend(
-        resolved_build
-            .iter()
-            .map(|r| (r.package_record().name.clone(), r)),
-    );
-    compat_map.extend(
-        resolved_host
-            .iter()
-            .map(|r| (r.package_record().name.clone(), r)),
-    );
+    for records in [
+        resolved_build.as_slice(),
+        pinned_build,
+        resolved_host.as_slice(),
+        pinned_host,
+    ] {
+        compat_map.extend(records.iter().map(|r| (r.package_record().name.clone(), r)));
+    }
 
     // Pull run_exports off direct host/build deps. Indirect (transitive)
     // entries don't contribute run-exports per conda-build semantics,
@@ -454,6 +472,143 @@ fn spec_unsat(name: &PackageName, err: &SpecConversionError) -> Box<PlatformUnsa
         name.as_source().to_string(),
         err.to_string(),
     ))
+}
+
+/// The packages a backend output's `pin-compatible` specs look up. A
+/// spec's declared name is also the name it looks up, matching
+/// rattler-build's `pin_compatible('name')`.
+fn pin_compatible_targets(
+    output: &pixi_build_types::procedures::conda_outputs::CondaOutput,
+) -> HashSet<PackageName> {
+    let pinned_packages = output
+        .run_dependencies
+        .depends
+        .iter()
+        .chain(output.extra_dependencies.values().flatten())
+        .chain(output.run_exports.weak.iter())
+        .chain(output.run_exports.strong.iter())
+        .chain(output.run_exports.noarch.iter())
+        .filter(|named| matches!(named.spec, pixi_build_types::PackageSpec::PinCompatible(_)))
+        .map(|named| named.name.as_str());
+
+    let pinned_constraints = output
+        .run_dependencies
+        .constraints
+        .iter()
+        .chain(output.run_exports.weak_constrains.iter())
+        .chain(output.run_exports.strong_constrains.iter())
+        .filter(|named| {
+            matches!(
+                named.spec,
+                pixi_build_types::ConstraintSpec::PinCompatible(_)
+            )
+        })
+        .map(|named| named.name.as_str());
+
+    pinned_packages
+        .chain(pinned_constraints)
+        .filter_map(|name| PackageName::try_from(name).ok())
+        .collect()
+}
+
+/// Resolve the partial source records a `pin-compatible` spec names.
+///
+/// A path-based source lands in the lock file as a partial record: name,
+/// depends and sources, but no package record and so no version.
+/// [`resolved_records`] drops those, so a pin against a sibling path
+/// package finds nothing and the re-derivation rejects a correct lock.
+/// Ask the backend for the sibling's metadata instead.
+///
+/// The dispatcher caches that query. A sibling that is part of the
+/// environment is resolved through the same call during this
+/// satisfiability pass, so it is normally a cache hit. Only packages a
+/// pin names are resolved, so a workspace without pins never reaches the
+/// backend from here.
+async fn resolve_pin_target_partials(
+    ctx: &VerifySatisfiabilityContext<'_>,
+    platform_setup: &crate::lock_file::platform_setup::PlatformSetup,
+    locked: &[pixi_record::UnresolvedPixiRecord],
+    targets: &HashSet<PackageName>,
+) -> Result<Vec<PixiRecord>, CommandDispatcherError<Box<PlatformUnsat>>> {
+    use pixi_command_dispatcher::BuildBackendMetadataSpec;
+
+    if targets.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let pending: Vec<&Arc<pixi_record::UnresolvedSourceRecord>> = locked
+        .iter()
+        .filter_map(|record| match record {
+            pixi_record::UnresolvedPixiRecord::Source(source)
+                if source.data.is_partial() && targets.contains(source.name()) =>
+            {
+                Some(source)
+            }
+            _ => None,
+        })
+        .collect();
+    if pending.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let pixi_platform = pixi_manifest::HasWorkspaceManifest::workspace_manifest(ctx.environment)
+        .workspace
+        .platform_by_name(&ctx.platform);
+    let inline_packages =
+        crate::workspace::grouped_environment::GroupedEnvironment::from(ctx.environment.clone())
+            .combined_inline_packages(pixi_platform);
+
+    let mut resolved = Vec::with_capacity(pending.len());
+    for source in pending {
+        let pkg_name = source.name().clone();
+        let backend_metadata = ctx
+            .command_dispatcher
+            .build_backend_metadata(BuildBackendMetadataSpec {
+                manifest_source: source.manifest_source.clone(),
+                preferred_build_source: source
+                    .build_source
+                    .as_ref()
+                    .map(|bs| bs.clone().into_pinned()),
+                env_ref: pixi_command_dispatcher::EnvironmentRef::Workspace(
+                    platform_setup.workspace_env_ref.clone(),
+                ),
+                build_string_prefix: None,
+                build_number: None,
+                inline: inline_packages.get(&pkg_name).cloned(),
+            })
+            .await
+            .map_err(|e| match e {
+                CommandDispatcherError::Cancelled => CommandDispatcherError::Cancelled,
+                CommandDispatcherError::Failed(err) => CommandDispatcherError::Failed(Box::new(
+                    PlatformUnsat::SourcePackageMetadataChanged(
+                        pkg_name.as_source().to_string(),
+                        err.to_string(),
+                    ),
+                )),
+            })?;
+
+        let output = backend_metadata
+            .metadata
+            .outputs
+            .iter()
+            .find(|o| {
+                o.metadata.name == pkg_name
+                    && variants_equivalent(&source.variants, &o.metadata.variant)
+            })
+            .ok_or_else(|| {
+                CommandDispatcherError::Failed(Box::new(PlatformUnsat::SourceVariantNotInBackend {
+                    package: pkg_name.as_source().to_string(),
+                    manifest_source: source.manifest_source.to_string(),
+                    variants: format_variants(&source.variants),
+                }))
+            })?;
+
+        resolved.push(PixiRecord::Source(Arc::new(
+            build_full_source_record_from_output(source, output),
+        )));
+    }
+
+    Ok(resolved)
 }
 
 /// Drop unresolvable partial source records and clone the rest into a
@@ -1642,7 +1797,8 @@ mod tests {
             vec![binary_constraint("openssl", "==3.0")],
         );
 
-        let result = verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG);
+        let result =
+            verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG, &[], &[]);
         assert!(result.is_ok(), "expected no drift: {result:?}");
     }
 
@@ -1658,8 +1814,9 @@ mod tests {
             vec![binary_constraint("bar", "<2")],
         );
 
-        let err = verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG)
-            .expect_err("backend declared a new constraint, locked has none");
+        let err =
+            verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG, &[], &[])
+                .expect_err("backend declared a new constraint, locked has none");
         match *err {
             super::super::PlatformUnsat::SourceRunDependenciesChanged {
                 kind: SourceRunDepKind::RunConstrains,
@@ -1681,8 +1838,9 @@ mod tests {
         let record = make_full_source_record("pkg", Vec::new(), vec!["bar <2".to_string()]);
         let output = make_conda_output_with_run_deps("pkg", Vec::new(), Vec::new());
 
-        let err = verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG)
-            .expect_err("backend dropped a constraint that's still locked");
+        let err =
+            verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG, &[], &[])
+                .expect_err("backend dropped a constraint that's still locked");
         match *err {
             super::super::PlatformUnsat::SourceRunDependenciesChanged {
                 kind: SourceRunDepKind::RunConstrains,
@@ -1740,7 +1898,8 @@ mod tests {
         ))];
         let output = make_conda_output("pkg", vec![binary_dep("gxx_linux-64", "")]);
 
-        let result = verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG);
+        let result =
+            verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG, &[], &[]);
         assert!(result.is_ok(), "expected no drift: {result:?}");
     }
 
@@ -1776,8 +1935,9 @@ mod tests {
         ))];
         let output = make_conda_output("pkg", vec![binary_dep("gxx_linux-64", "")]);
 
-        let err = verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG)
-            .expect_err("a chained run-export in the lock must surface as drift");
+        let err =
+            verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG, &[], &[])
+                .expect_err("a chained run-export in the lock must surface as drift");
         match *err {
             super::super::PlatformUnsat::SourceRunDependenciesChanged {
                 kind: SourceRunDepKind::RunDepends,
@@ -1819,7 +1979,8 @@ mod tests {
             constraints: Vec::new(),
         });
 
-        let result = verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG);
+        let result =
+            verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG, &[], &[]);
         assert!(result.is_ok(), "expected no drift: {result:?}");
     }
 
@@ -1834,8 +1995,9 @@ mod tests {
         let mut output = make_conda_output("pkg", Vec::new());
         output.run_exports.weak = vec![binary_dep("libfoo", ">=1")];
 
-        let err = verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG)
-            .expect_err("a freshly declared run-export must surface as drift");
+        let err =
+            verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG, &[], &[])
+                .expect_err("a freshly declared run-export must surface as drift");
         match *err {
             super::super::PlatformUnsat::SourceRunExportsChanged {
                 bucket,
@@ -1868,7 +2030,8 @@ mod tests {
         let mut output = make_conda_output("pkg", Vec::new());
         output.run_exports.weak = vec![binary_dep("libfoo", ">=1")];
 
-        let result = verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG);
+        let result =
+            verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG, &[], &[]);
         assert!(result.is_ok(), "expected no drift: {result:?}");
     }
 
@@ -1894,7 +2057,8 @@ mod tests {
         let mut output = make_conda_output_with_run_deps("pkg", Vec::new(), Vec::new());
         output.extra_dependencies = extra_group("test", vec![binary_dep("extra-pkg", ">=1")]);
 
-        let result = verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG);
+        let result =
+            verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG, &[], &[]);
         assert!(result.is_ok(), "matching extras must not drift: {result:?}");
     }
 
@@ -1907,8 +2071,9 @@ mod tests {
         let mut output = make_conda_output_with_run_deps("pkg", Vec::new(), Vec::new());
         output.extra_dependencies = extra_group("test", vec![binary_dep("extra-pkg", ">=1")]);
 
-        let err = verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG)
-            .expect_err("backend added an extra group the lock file lacks");
+        let err =
+            verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG, &[], &[])
+                .expect_err("backend added an extra group the lock file lacks");
         match *err {
             super::super::PlatformUnsat::SourceExtraDependenciesChanged {
                 group,
@@ -1935,8 +2100,9 @@ mod tests {
         }
         let output = make_conda_output_with_run_deps("pkg", Vec::new(), Vec::new());
 
-        let err = verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG)
-            .expect_err("backend dropped an extra group that's still locked");
+        let err =
+            verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG, &[], &[])
+                .expect_err("backend dropped an extra group that's still locked");
         match *err {
             super::super::PlatformUnsat::SourceExtraDependenciesChanged {
                 group,
@@ -1965,8 +2131,9 @@ mod tests {
         let mut output = make_conda_output_with_run_deps("pkg", Vec::new(), Vec::new());
         output.extra_dependencies = extra_group("test", vec![binary_dep("extra-pkg", ">=2")]);
 
-        let err = verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG)
-            .expect_err("the extra group's spec changed bound");
+        let err =
+            verify_locked_run_deps_against_backend(&record, &output, &CHANNEL_CONFIG, &[], &[])
+                .expect_err("the extra group's spec changed bound");
         match *err {
             super::super::PlatformUnsat::SourceExtraDependenciesChanged {
                 group,
