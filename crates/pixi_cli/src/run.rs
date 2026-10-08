@@ -25,7 +25,7 @@ use pixi_core::{
         errors::UnsupportedPlatformError,
         virtual_packages::{
             EnvironmentRunnability, classify_environment_runnability,
-            minimum_compatible_declared_platform, verify_current_platform_can_run_environment,
+            verify_current_platform_can_run_environment,
         },
     },
 };
@@ -708,28 +708,9 @@ fn command_not_found<'p>(
     explicit_environment: Option<Environment<'p>>,
     lock_file: Option<&LockFile>,
 ) {
-    let filtered_tasks = |env: Environment<'p>| {
-        let platform = env.best_declared_platform().or_else(|| {
-            lock_file
-                .and_then(|lock_file| minimum_compatible_declared_platform(&env, lock_file).ok())
-        });
-        env.tasks(platform)
-            .into_iter()
-            .flat_map(|tasks| {
-                tasks.into_iter().filter_map(|(key, _)| {
-                    if !key.as_str().starts_with('_') {
-                        Some(key)
-                    } else {
-                        None
-                    }
-                })
-            })
-            .map(ToOwned::to_owned)
-            .collect::<HashSet<_>>()
-    };
     let available_tasks: HashSet<TaskName> =
         if let Some(explicit_environment) = explicit_environment {
-            filtered_tasks(explicit_environment)
+            explicit_environment.get_filtered_tasks(lock_file)
         } else {
             workspace
                 .environments()
@@ -738,7 +719,7 @@ fn command_not_found<'p>(
                     classify_environment_runnability(env, lock_file)
                         != EnvironmentRunnability::Unsupported
                 })
-                .flat_map(filtered_tasks)
+                .flat_map(|env| env.get_filtered_tasks(lock_file))
                 .collect()
         };
 

@@ -5,7 +5,7 @@ use pixi_core::{
         Environment,
         virtual_packages::{
             EnvironmentRunnability, classify_environment_runnability,
-            minimum_compatible_declared_platform, verify_current_platform_can_run_environment,
+            verify_current_platform_can_run_environment,
         },
     },
 };
@@ -178,13 +178,10 @@ impl<'p, 'lock, D: TaskDisambiguation<'p>> SearchEnvironments<'p, 'lock, D> {
     /// pinned platform when one was given, otherwise the environment's own
     /// default (installed / best declared / first declared).
     pub(crate) fn search_platform_for(&self, env: &Environment<'p>) -> Option<&'p PixiPlatform> {
-        if let Some(platform) = self.platform {
-            return Some(platform);
+        match self.platform {
+            Some(platform) => Some(platform),
+            None => default_search_platform(env),
         }
-        default_search_platform(env).or_else(|| {
-            self.lock_file
-                .and_then(|lock_file| minimum_compatible_declared_platform(env, lock_file).ok())
-        })
     }
 
     /// Narrows a set of candidate environments to the ones this machine can

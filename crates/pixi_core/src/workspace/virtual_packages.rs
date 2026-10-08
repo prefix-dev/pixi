@@ -100,6 +100,18 @@ pub fn verify_current_platform_can_run_environment(
     }
 }
 
+/// The platform to resolve an environment's tasks against: the best declared
+/// platform for this machine, or else the one the lock file shows it can run.
+pub fn task_platform<'p>(
+    environment: &Environment<'p>,
+    lock_file: Option<&LockFile>,
+) -> Option<&'p PixiPlatform> {
+    environment.best_declared_platform().or_else(|| {
+        lock_file
+            .and_then(|lock_file| minimum_compatible_declared_platform(environment, lock_file).ok())
+    })
+}
+
 /// The declared platform an environment can run on "by accident": none of
 /// the declared platforms' virtual packages are satisfied by this machine,
 /// but the lock-resolved minimum requirements for a subdir the machine can

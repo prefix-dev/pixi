@@ -13,6 +13,7 @@ use pixi_manifest::{
     HasWorkspaceManifest, PixiPlatform, PixiPlatformName, Task, TaskName, WorkspaceManifest,
 };
 use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Subdir};
+use rattler_lock::LockFile;
 
 use super::{
     SolveGroup,
@@ -373,20 +374,14 @@ impl<'p> Environment<'p> {
         Ok(result)
     }
 
-    /// Return all tasks available for the given environment
+    /// Return all tasks available for the given environment, resolved against
+    /// its [`task_platform`](super::virtual_packages::task_platform).
     /// This will not return task prefixed with _
-    pub fn get_filtered_tasks(&self) -> HashSet<TaskName> {
-        self.tasks(self.best_declared_platform())
+    pub fn get_filtered_tasks(&self, lock_file: Option<&LockFile>) -> HashSet<TaskName> {
+        self.tasks(super::virtual_packages::task_platform(self, lock_file))
             .into_iter()
-            .flat_map(|tasks| {
-                tasks.into_iter().filter_map(|(key, _)| {
-                    if !key.as_str().starts_with('_') {
-                        Some(key)
-                    } else {
-                        None
-                    }
-                })
-            })
+            .flat_map(|tasks| tasks.into_keys())
+            .filter(|key| !key.as_str().starts_with('_'))
             .map(ToOwned::to_owned)
             .collect()
     }
@@ -799,7 +794,7 @@ mod tests {
         )
         .unwrap();
 
-        let task = manifest.default_environment().get_filtered_tasks();
+        let task = manifest.default_environment().get_filtered_tasks(None);
 
         assert_eq!(task.len(), 1);
         assert!(task.contains(&"foo".into()));
