@@ -280,7 +280,7 @@ class ExcludeNewerTable(StrictBaseModel):
     exemptions: dict[CondaPackageName, NonEmptyStr | BinaryMatchspecTable] | None = Field(
         None,
         examples=[{"polars": "1.43.1", "py-rattler": "*"}],
-        description="Package releases that are never excluded, regardless of their upload time. The value is a version or a match spec table, so `polars = \"1.43.1\"` exempts that release only and `py-rattler = \"*\"` exempts every release.",
+        description='Package releases that are never excluded, regardless of their upload time. The value is a version or a match spec table, so `polars = "1.43.1"` exempts that release only and `py-rattler = "*"` exempts every release.',
     )
 
 
