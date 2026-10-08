@@ -41,7 +41,7 @@ use pixi_manifest::platform::host::{
 };
 use pixi_manifest::platform::solver_generic_virtual_packages;
 use pixi_manifest::{
-    InlinePackageManifest, PixiPlatform, PrioritizedChannel, WorkspaceManifest,
+    ExcludeNewerError, InlinePackageManifest, PixiPlatform, PrioritizedChannel, WorkspaceManifest,
     resolve_exclude_newer,
 };
 use pixi_path::AbsPathBuf;
@@ -55,8 +55,8 @@ use pixi_utils::{
     rlimit::try_increase_rlimit_to_sensible,
 };
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, ParseChannelError,
-    PrefixRecord, Subdir, menuinst::MenuMode, package::CondaArchiveIdentifier,
+    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, PrefixRecord, Subdir,
+    menuinst::MenuMode, package::CondaArchiveIdentifier,
 };
 use rattler_networking::LazyClient;
 use rattler_repodata_gateway::Gateway;
@@ -110,8 +110,9 @@ pub enum InferPackageNameError {
     CommandDispatcher(#[from] CommandDispatcherError),
     #[error("failed to get build backend metadata for package name inference")]
     BuildBackendMetadata(#[source] Box<dyn Diagnostic + Send + Sync>),
-    #[error("failed to resolve the channel for the exclude-newer configuration")]
-    ExcludeNewer(#[from] ParseChannelError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ExcludeNewer(#[from] ExcludeNewerError),
     #[error("no package outputs found in the specified path/repository")]
     NoPackageOutputs,
     #[error("multiple package outputs found: {}", .package_names.join(", "))]
@@ -580,16 +581,11 @@ impl Project {
     fn resolved_exclude_newer<'a>(
         &'a self,
         channels: impl IntoIterator<Item = &'a PrioritizedChannel>,
-    ) -> Result<Option<ResolvedExcludeNewer>, ParseChannelError> {
+    ) -> Result<Option<ResolvedExcludeNewer>, ExcludeNewerError> {
         resolve_exclude_newer(
-            self.manifest.parsed.global.exclude_newer,
+            &self.manifest.parsed.global.exclude_newer,
             channels,
-            |channel| {
-                channel
-                    .channel
-                    .clone()
-                    .into_base_url(self.global_channel_config())
-            },
+            self.global_channel_config(),
             &self.manifest.parsed.exclude_newer_package_overrides,
         )
     }

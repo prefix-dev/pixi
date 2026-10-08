@@ -26,6 +26,32 @@ impl Deprecation {
         }
     }
 
+    /// Deprecation of the top-level `[exclude-newer]` and
+    /// `[pypi-exclude-newer]` tables of per-package cutoffs in favor of the
+    /// `exemptions` of `[workspace.exclude-newer]` and
+    /// `[workspace.pypi-exclude-newer]`. `help` carries the tailored
+    /// replacement suggestion.
+    pub fn exclude_newer_table(table: &str, help: String, span: Option<Range<usize>>) -> Self {
+        let labels = span
+            .map(|span| {
+                vec![LabeledSpan::new_primary_with_span(
+                    Some(format!(
+                        "replace this with `[workspace.{table}.exemptions]`"
+                    )),
+                    SourceSpan::new(span.start.into(), span.end - span.start),
+                )]
+            })
+            .unwrap_or_default();
+        Self {
+            message: format!(
+                "the top-level `[{table}]` table of per-package cutoffs is deprecated in favor of the `exemptions` of `[workspace.{table}]`"
+            )
+            .into(),
+            labels,
+            help: Some(help.into()),
+        }
+    }
+
     /// Deprecation of the legacy `[system-requirements]` table in favor of
     /// virtual packages declared on the `platforms` entries.
     ///

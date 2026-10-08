@@ -36,8 +36,8 @@ use pixi_install_pypi::{
     PyPIUpdateConfig, derive_link_mode,
 };
 use pixi_manifest::{
-    ChannelPriority, EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform,
-    PixiPlatformName,
+    ChannelPriority, EnvironmentName, ExcludeNewerError, FeaturesExt, HasWorkspaceManifest,
+    PixiPlatform, PixiPlatformName,
 };
 use pixi_progress::global_multi_progress;
 use pixi_record::{LockFileResolver, ParseLockFileError, PixiRecord, UnresolvedPixiRecord};
@@ -606,6 +606,10 @@ pub enum SolveCondaEnvironmentError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
+    ExcludeNewer(#[from] Box<ExcludeNewerError>),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
     Variants(#[from] VariantsError),
 
     #[error(
@@ -617,6 +621,12 @@ pub enum SolveCondaEnvironmentError {
 impl From<ParseChannelError> for SolveCondaEnvironmentError {
     fn from(value: ParseChannelError) -> Self {
         SolveCondaEnvironmentError::ParseChannels(Box::new(value))
+    }
+}
+
+impl From<ExcludeNewerError> for SolveCondaEnvironmentError {
+    fn from(value: ExcludeNewerError) -> Self {
+        SolveCondaEnvironmentError::ExcludeNewer(Box::new(value))
     }
 }
 

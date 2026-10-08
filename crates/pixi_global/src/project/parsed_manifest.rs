@@ -7,8 +7,8 @@ use itertools::{Either, Itertools};
 use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Report};
 use pixi_consts::consts;
 use pixi_manifest::{
-    InlinePackageManifest, KnownPreviewFlag, Preview, PrioritizedChannel,
-    toml::{TomlPlatform, WorkspacePackageProperties},
+    ExcludeNewerConfig, InlinePackageManifest, KnownPreviewFlag, Preview, PrioritizedChannel,
+    toml::{TomlExcludeNewer, TomlPlatform, WorkspacePackageProperties},
     utils::package_map::{DependencyTable, UniquePackageMap},
 };
 use pixi_spec::{ExcludeNewer, PixiSpec};
@@ -123,6 +123,8 @@ pub struct ParsedManifest {
     pub global: ParsedGlobal,
     /// Cutoffs that override [`ParsedGlobal::exclude_newer`] for individual
     /// packages, in every environment.
+    ///
+    /// Deprecated in favor of the `exemptions` of `[global.exclude-newer]`.
     #[serde(rename = "exclude-newer", skip_serializing_if = "IndexMap::is_empty")]
     pub exclude_newer_package_overrides: IndexMap<PackageName, ExcludeNewer>,
     /// The environments the project can create.
@@ -133,14 +135,17 @@ pub struct ParsedManifest {
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct ParsedGlobal {
     /// Packages uploaded after this cutoff are excluded from every
-    /// environment's solve.
-    #[serde(rename = "exclude-newer", skip_serializing_if = "Option::is_none")]
-    pub exclude_newer: Option<ExcludeNewer>,
+    /// environment's solve, except for the exempted releases.
+    #[serde(
+        rename = "exclude-newer",
+        skip_serializing_if = "ExcludeNewerConfig::is_empty"
+    )]
+    pub exclude_newer: ExcludeNewerConfig,
 }
 
 impl ParsedGlobal {
     fn is_empty(&self) -> bool {
-        self.exclude_newer.is_none()
+        self.exclude_newer.is_empty()
     }
 }
 
@@ -148,8 +153,9 @@ impl<'de> toml_span::Deserialize<'de> for ParsedGlobal {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         let mut th = TableHelper::new(value)?;
         let exclude_newer = th
-            .optional::<TomlWith<_, TomlFromStr<_>>>("exclude-newer")
-            .map(TomlWith::into_inner);
+            .optional::<TomlExcludeNewer>("exclude-newer")
+            .map(TomlExcludeNewer::into_inner)
+            .unwrap_or_default();
         th.finalize(None)?;
         Ok(Self { exclude_newer })
     }
@@ -194,7 +200,8 @@ impl<'de> toml_span::Deserialize<'de> for TomlParsedManifest {
     }
 }
 
-/// Parses the top-level `exclude-newer` table of per-package cutoffs.
+/// Parses the deprecated top-level `exclude-newer` table of per-package
+/// cutoffs.
 ///
 /// A scalar here is the manifest-wide cutoff written in the wrong place, so it
 /// is reported as such instead of as a bare type mismatch. Errors join the ones
@@ -661,7 +668,8 @@ mod tests {
         python = "3.11.*"
         "#;
         let manifest = ParsedManifest::from_toml_str(contents, std::path::Path::new("")).unwrap();
-        assert_snapshot!(manifest.global.exclude_newer.unwrap(), @"2025-01-02 00:00:00 UTC");
+        assert_snapshot!(manifest.global.exclude_newer.cutoff.unwrap(), @"2025-01-02 00:00:00 UTC");
+        assert!(manifest.global.exclude_newer.exemptions.is_empty());
         assert_snapshot!(
             manifest
                 .exclude_newer_package_overrides
@@ -677,6 +685,36 @@ mod tests {
                 .map(|channel| channel.exclude_newer.unwrap().to_string())
                 .join(", "),
             @"7days"
+        );
+    }
+
+    #[test]
+    fn test_exclude_newer_with_exemptions() {
+        let contents = r#"
+        [global]
+        exclude-newer = { cutoff = "7d", exemptions = { python = "3.13.*", ruff = "*" } }
+
+        [envs.python]
+        channels = ["conda-forge"]
+        [envs.python.dependencies]
+        python = "3.13.*"
+        "#;
+        let manifest = ParsedManifest::from_toml_str(contents, std::path::Path::new("")).unwrap();
+        assert_snapshot!(manifest.global.exclude_newer.cutoff.unwrap(), @"7days");
+        assert_eq!(manifest.global.exclude_newer.exemptions.len(), 2);
+        assert!(manifest.exclude_newer_package_overrides.is_empty());
+
+        // The manifest serializes back to the same table.
+        assert_snapshot!(
+            toml_edit::ser::to_string_pretty(&manifest.global).unwrap(),
+            @r#"
+        [exclude-newer]
+        cutoff = "7days"
+
+        [exclude-newer.exemptions]
+        python = "3.13.*"
+        ruff = "*"
+        "#
         );
     }
 

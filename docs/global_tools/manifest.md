@@ -89,32 +89,35 @@ This reduces the risk of installing recently published packages that might turn 
 It accepts the same values as the [workspace manifest](../reference/pixi_manifest.md#exclude-newer-optional): an RFC 3339 timestamp, a `YYYY-MM-DD` date, or a duration relative to the time of the solve.
 A date is interpreted as the start of the following day in UTC, so `2026-03-30` means `2026-03-31T00:00:00Z`.
 
-A channel can override the cutoff with its own `exclude-newer` value, and the `[exclude-newer]` table overrides it for individual packages:
+A channel can override the cutoff with its own `exclude-newer` value, and `exemptions` let vetted releases through regardless of their upload time:
 
 ```toml
 version = 1
 
 [global]
-exclude-newer = "7d"
-
-[exclude-newer]
-my-tool = "0d"
+exclude-newer = { cutoff = "7d", exemptions = { my-tool = "*", ruff = "0.15.1" } }
 
 [envs.tools]
 channels = [
     { channel = "https://my.internal/channel", exclude-newer = "0d" },
     "conda-forge",
 ]
-dependencies = { my-tool = "*" }
-exposed = { my-tool = "my-tool" }
+dependencies = { my-tool = "*", ruff = "*" }
+exposed = { my-tool = "my-tool", ruff = "ruff" }
 ```
 
-A package override applies to every environment that contains the package, and takes precedence over a channel override, which in turn takes precedence over the cutoff in `[global]`.
-Both tables work on their own: without a cutoff in `[global]`, only the packages and channels that have an override are excluded.
+An exemption applies to every environment that contains the package.
+`my-tool = "*"` exempts every release of `my-tool`, while `ruff = "0.15.1"` exempts that release only.
+Exemptions take precedence over a channel override, which in turn takes precedence over the cutoff in `[global]`.
+Channel overrides work on their own: without a cutoff in `[global]`, only the channels that have an override are excluded.
 
-Global environments have no PyPI dependencies, so there is no equivalent of the workspace's `[pypi-exclude-newer]` table.
+Global environments have no PyPI dependencies, so there is no equivalent of the workspace's `pypi-exclude-newer`.
 
-An environment containing a package that is newer than the cutoff counts as out of sync, so tightening the cutoff re-solves it on the next `pixi global sync`.
+An environment containing a package that is newer than the cutoff and not exempt counts as out of sync, so tightening the cutoff re-solves it on the next `pixi global sync`.
+
+!!! warning "Deprecated: the top-level `[exclude-newer]` table"
+    Older manifests override the cutoff per package in a top-level `[exclude-newer]` table.
+    It still works, but pixi warns about it. Move the entries to the `exemptions` of `[global.exclude-newer]` instead.
 
 
 ## Dependencies

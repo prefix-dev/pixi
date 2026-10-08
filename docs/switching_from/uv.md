@@ -290,7 +290,7 @@ equivalent is [`[workspace].exclude-newer`](../reference/pixi_manifest.md#exclud
 
 Pixi applies this cutoff across both conda and PyPI resolution.
 
-If you want to override the cutoff for a specific package, uv uses
+If you want to let a specific package through the cutoff, uv uses
 [`exclude-newer-package`](https://docs.astral.sh/uv/reference/settings/#exclude-newer-package):
 
 ```toml title="pyproject.toml"
@@ -299,56 +299,44 @@ exclude-newer = "2025-01-01"
 exclude-newer-package = { tqdm = "2025-02-01" }
 ```
 
-In Pixi, the equivalent depends on which ecosystem the package comes from:
+In Pixi, exemptions take the place of per-package cutoffs, and where to set them depends on which ecosystem the package comes from:
 
-- For a conda package, set it in [`[exclude-newer]`](../reference/pixi_manifest.md#exclude-newer-optional).
-- For a PyPI package, set it in [`[pypi-exclude-newer]`](../reference/pixi_manifest.md#exclude-newer-optional).
+- For a conda package, add it to the `exemptions` of [`[workspace.exclude-newer]`](../reference/pixi_manifest.md#exclude-newer-optional). An exemption names the releases that are allowed through, e.g. a version, so you do not have to lower the cutoff for every future release.
+- For a PyPI package, add it to the `exemptions` of [`[workspace.pypi-exclude-newer]`](../reference/pixi_manifest.md#exclude-newer-optional). PyPI exemptions only support `"*"` for now, which exempts every release of the package.
 
-For example, a conda package can combine a channel pin with a package-specific `exclude-newer`
-override:
+For example, a conda package can combine a channel pin with an `exclude-newer` exemption:
 
 === "pixi.toml"
 
     ```toml
     [workspace]
-    exclude-newer = "2025-01-01"
+    exclude-newer = { cutoff = "2025-01-01", exemptions = { pytorch-cpu = "2.6.0", openssl = "*" } }
 
     [dependencies]
     pytorch-cpu = { version = "*", channel = "pytorch" }
-
-    [exclude-newer]
-    pytorch-cpu = "2025-02-01"
-    openssl = "2024-12-01"
     ```
 
 === "pyproject.toml"
 
     ```toml
     [tool.pixi.workspace]
-    exclude-newer = "2025-01-01"
+    exclude-newer = { cutoff = "2025-01-01", exemptions = { pytorch-cpu = "2.6.0", openssl = "*" } }
 
     [tool.pixi.dependencies]
     pytorch-cpu = { version = "*", channel = "pytorch" }
-
-    [tool.pixi.exclude-newer]
-    pytorch-cpu = "2025-02-01"
-    openssl = "2024-12-01"
     ```
 
-And a PyPI package uses the same pattern, but with PyPI-specific tables:
+And a PyPI package uses the same pattern with `pypi-exclude-newer`:
 
 === "pixi.toml"
 
     ```toml
     [workspace]
     exclude-newer = "2025-01-01"
+    pypi-exclude-newer = { exemptions = { tqdm = "*" } }
 
     [pypi-dependencies]
-    torch = { version = "*", index = "https://download.pytorch.org/whl/cu124" }
-
-    [pypi-exclude-newer]
-    torch = "2025-02-01"
-    tqdm = "2025-02-01"
+    tqdm = "*"
     ```
 
 === "pyproject.toml"
@@ -356,37 +344,10 @@ And a PyPI package uses the same pattern, but with PyPI-specific tables:
     ```toml
     [tool.pixi.workspace]
     exclude-newer = "2025-01-01"
+    pypi-exclude-newer = { exemptions = { tqdm = "*" } }
 
     [tool.pixi.pypi-dependencies]
-    torch = { version = "*", index = "https://download.pytorch.org/whl/cu124" }
-
-    [tool.pixi.pypi-exclude-newer]
-    torch = "2025-02-01"
-    tqdm = "2025-02-01"
-    ```
-
-Unlike uv, Pixi can also override `exclude-newer` on a per-channel level:
-
-=== "pixi.toml"
-
-    ```toml
-    [workspace]
-    exclude-newer = "7d"
-    channels = [
-      { channel = "my-internal-channel", exclude-newer = "0d" },
-      "conda-forge",
-    ]
-    ```
-
-=== "pyproject.toml"
-
-    ```toml
-    [tool.pixi.workspace]
-    exclude-newer = "7d"
-    channels = [
-      { channel = "my-internal-channel", exclude-newer = "0d" },
-      "conda-forge",
-    ]
+    tqdm = "*"
     ```
 
 ### Lockfiles

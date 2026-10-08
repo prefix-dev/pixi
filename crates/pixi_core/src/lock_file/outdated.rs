@@ -321,6 +321,7 @@ async fn find_unsatisfiable_targets<'p>(
                 }
                 EnvironmentUnsat::ChannelsMismatch
                 | EnvironmentUnsat::InvalidChannel(_)
+                | EnvironmentUnsat::ExcludeNewer(_)
                 | EnvironmentUnsat::ChannelPriorityMismatch { .. }
                 | EnvironmentUnsat::SolveStrategyMismatch { .. }
                 | EnvironmentUnsat::ExcludeNewerMismatch(..)

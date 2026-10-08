@@ -29,7 +29,9 @@ use pixi_spec::{
 use pixi_spec_containers::DependencyMap;
 use pixi_test_utils::format_diagnostic;
 use pixi_utils::variants::VariantConfig;
-use rattler_conda_types::{ChannelUrl, GenericVirtualPackage, PackageName, Subdir, prefix::Prefix};
+use rattler_conda_types::{
+    ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, Subdir, prefix::Prefix,
+};
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use url::Url;
 
@@ -396,7 +398,6 @@ pub async fn instantiate_backend_with_compatible_api_version_honors_exclude_newe
         .unwrap();
     let channel_dir = root_dir.join("tests/data/channels/channels/backend_channel_1");
     let channel_url = Url::from_directory_path(channel_dir).unwrap().into();
-    let allowed_cutoff = "2026-12-31T00:00:00Z".parse().unwrap();
 
     let tempdir = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
@@ -408,11 +409,12 @@ pub async fn instantiate_backend_with_compatible_api_version_honors_exclude_newe
         .instantiate_tool_environment(InstantiateToolEnvironmentSpec {
             exclude_newer: Some(
                 ResolvedExcludeNewer::from_datetime("2025-01-01T00:00:00Z".parse().unwrap())
-                    .with_package_cutoff(backend_name.clone(), allowed_cutoff)
-                    .with_package_cutoff(
-                        PackageName::new_unchecked("pixi-build-api-version"),
-                        allowed_cutoff,
-                    ),
+                    .with_exemption(MatchSpec::from(backend_name.clone()))
+                    .unwrap()
+                    .with_exemption(MatchSpec::from(PackageName::new_unchecked(
+                        "pixi-build-api-version",
+                    )))
+                    .unwrap(),
             ),
             ..InstantiateToolEnvironmentSpec::new(
                 backend_name,

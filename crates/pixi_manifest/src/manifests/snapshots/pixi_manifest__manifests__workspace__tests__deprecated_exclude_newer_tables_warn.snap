@@ -1,0 +1,34 @@
+---
+source: crates/pixi_manifest/src/manifests/workspace.rs
+expression: "expect_parse_warnings(r#\"\n[workspace]\nname = \"foo\"\nchannels = []\nplatforms = []\nexclude-newer = \"7d\"\n\n[exclude-newer]\npolars = \"0d\"\nopenssl = \"2025-01-01\"\n\n[pypi-exclude-newer]\nboltons = \"0d\"\n\"#)"
+---
+  ⚠ the top-level `[exclude-newer]` table of per-package cutoffs is deprecated in favor of the `exemptions` of `[workspace.exclude-newer]`
+    ╭─[pixi.toml:8:1]
+  7 │
+  8 │ ╭─▶ [exclude-newer]
+  9 │ │   polars = "0d"
+ 10 │ ├─▶ openssl = "2025-01-01"
+    · ╰──── replace this with `[workspace.exclude-newer.exemptions]`
+ 11 │
+    ╰────
+  help: move the entries to the `exemptions` of `[workspace.exclude-newer]` instead, e.g.
+
+        [workspace.exclude-newer]
+        cutoff = "7days"
+        exemptions = { polars = "*", openssl = "*" }
+
+        An exemption allows the matching releases regardless of their upload time. Narrow `"*"` down to the releases you vetted, e.g. `"1.2.3"`.
+
+  ⚠ the top-level `[pypi-exclude-newer]` table of per-package cutoffs is deprecated in favor of the `exemptions` of `[workspace.pypi-exclude-newer]`
+    ╭─[pixi.toml:12:1]
+ 11 │
+ 12 │ ╭─▶ [pypi-exclude-newer]
+ 13 │ ├─▶ boltons = "0d"
+    · ╰──── replace this with `[workspace.pypi-exclude-newer.exemptions]`
+    ╰────
+  help: move the entries to the `exemptions` of `[workspace.pypi-exclude-newer]` instead, e.g.
+
+        [workspace.pypi-exclude-newer]
+        exemptions = { boltons = "*" }
+
+        An exemption allows every release of the package regardless of its upload time.

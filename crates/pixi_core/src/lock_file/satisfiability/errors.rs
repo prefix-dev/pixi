@@ -8,11 +8,15 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pixi_command_dispatcher::{DevSourceMetadataError, SourceCheckoutError, SourceRecordError};
-use pixi_manifest::{PixiPlatformName, pypi::pypi_options::PrereleaseMode};
+use pixi_manifest::{ExcludeNewerError, PixiPlatformName, pypi::pypi_options::PrereleaseMode};
 use pixi_record::{ParseLockFileError, SourceMismatchError};
 use pixi_uv_conversions::AsPep508Error;
-use rattler_conda_types::{MatchSpec, PackageName, ParseChannelError, ParseMatchSpecError};
+use rattler_conda_types::{
+    MatchSpec, PackageName, ParseChannelError, ParseMatchSpecError, RepoDataRecord,
+    package::{ArchiveIdentifier, CondaArchiveType, DistArchiveIdentifier},
+};
 use rattler_lock::{PackageHashes, PypiIndexes};
+use rattler_solve::TimestampExclusionReason;
 use thiserror::Error;
 use url::Url;
 use uv_distribution_filename::ExtensionError;
@@ -41,6 +45,10 @@ pub enum EnvironmentUnsat {
 
     #[error(transparent)]
     InvalidChannel(#[from] ParseChannelError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ExcludeNewer(#[from] ExcludeNewerError),
 
     #[error(transparent)]
     InvalidDistExtensionInNoBuild(#[from] ExtensionError),
@@ -171,21 +179,45 @@ pub(super) fn verify_exclude_newer(
             let Some(record) = package.record() else {
                 continue;
             };
-            let channel = package
-                .as_binary()
-                .and_then(|binary| binary.channel.as_ref())
-                .map(ToString::to_string);
 
-            // Select the timestamp the same way the solver does: the index
-            // timestamp if present, the build timestamp otherwise.
-            if let Some(timestamp) = record.indexed_timestamp.or(record.timestamp)
-                && timestamp > exclude_newer.cutoff_for_package(&record.name, channel.as_deref())
+            // A binary package is checked the way the solver checks repodata
+            // records, so exemptions on e.g. the build string or channel
+            // apply. A source package only has a package record, so only its
+            // name and version can match an exemption.
+            let binary = package.as_binary();
+            let repodata_record =
+                match binary.and_then(|binary| RepoDataRecord::try_from(binary).ok()) {
+                    Some(record) => record,
+                    None => RepoDataRecord {
+                        package_record: record.clone(),
+                        identifier: DistArchiveIdentifier::new(
+                            ArchiveIdentifier {
+                                name: record.name.as_normalized().to_string(),
+                                version: record.version.to_string(),
+                                build_string: record.build.clone(),
+                            },
+                            CondaArchiveType::Conda,
+                        ),
+                        url: Url::parse("file:///").expect("valid placeholder url"),
+                        channel: binary
+                            .and_then(|binary| binary.channel.as_ref())
+                            .map(ToString::to_string),
+                    },
+                };
+
+            if let Some(TimestampExclusionReason::NewerThanCutoff { cutoff }) =
+                exclude_newer.exclusion_reason(&repodata_record)
             {
+                // Select the timestamp the same way the solver does: the index
+                // timestamp if present, the build timestamp otherwise.
+                let timestamp = record
+                    .indexed_timestamp
+                    .or(record.timestamp)
+                    .expect("a record newer than the cutoff has a timestamp");
                 return Err(ExcludeNewerMismatch {
                     package: record.name.as_source().to_string(),
                     timestamp: timestamp.into(),
-                    exclude_newer: exclude_newer
-                        .cutoff_for_package(&record.name, channel.as_deref()),
+                    exclude_newer: cutoff,
                 });
             }
         }

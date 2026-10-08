@@ -41,7 +41,10 @@ pub use discovery::{
 };
 pub use environment::{Environment, EnvironmentName, NewEnvironment};
 pub use error::{DependencyError, GenericError, TomlError};
-pub use exclude_newer::resolve_exclude_newer;
+pub use exclude_newer::{
+    ExcludeNewerConfig, ExcludeNewerError, PypiExcludeNewerConfig, resolve_exclude_newer,
+    resolve_pypi_exclude_newer,
+};
 pub use feature::{Feature, FeatureName};
 pub use features_ext::FeaturesExt;
 pub use has_features_iter::HasFeaturesIter;

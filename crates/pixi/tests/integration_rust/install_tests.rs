@@ -1820,6 +1820,161 @@ async fn test_exclude_newer_per_package_constraint_override() {
 }
 
 #[tokio::test]
+async fn test_exclude_newer_exemption_allows_vetted_release() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("foo", "1")
+            .with_timestamp("2010-12-02T02:07:43Z".parse().unwrap())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("foo", "2")
+            .with_timestamp("2020-12-02T07:00:00Z".parse().unwrap())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("foo", "3")
+            .with_timestamp("2020-12-02T07:00:00Z".parse().unwrap())
+            .finish(),
+    );
+
+    // Only the vetted release `foo 2` is exempt from the cutoff, so the even
+    // newer `foo 3` stays excluded.
+    let channel = package_database.into_channel().await.unwrap();
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [workspace]
+    name = "test-exclude-newer-exemption"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+
+    [workspace.exclude-newer]
+    cutoff = "2015-12-02T02:07:43Z"
+    exemptions = {{ foo = "2" }}
+
+    [dependencies]
+    foo = "*"
+    "#,
+        channel = channel.url(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch)
+    ))
+    .unwrap();
+
+    pixi.lock().await.unwrap();
+
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Subdir::current().unwrap_or(Subdir::NoArch),
+        "foo ==2"
+    ));
+
+    // A wildcard exemption lets every release of the package through.
+    pixi.update_manifest(&format!(
+        r#"
+    [workspace]
+    name = "test-exclude-newer-exemption"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+    exclude-newer = {{ cutoff = "2015-12-02T02:07:43Z", exemptions = {{ foo = "*" }} }}
+
+    [dependencies]
+    foo = "*"
+    "#,
+        channel = channel.url(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch)
+    ))
+    .unwrap();
+
+    pixi.lock().await.unwrap();
+
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Subdir::current().unwrap_or(Subdir::NoArch),
+        "foo ==3"
+    ));
+}
+
+#[tokio::test]
+async fn test_exclude_newer_exemption_keeps_lock_file_satisfied() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("foo", "1")
+            .with_timestamp("2010-12-02T02:07:43Z".parse().unwrap())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("foo", "2")
+            .with_timestamp("2020-12-02T07:00:00Z".parse().unwrap())
+            .finish(),
+    );
+
+    let channel = package_database.into_channel().await.unwrap();
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [workspace]
+    name = "test-exclude-newer-exemption-satisfiability"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+    exclude-newer = {{ cutoff = "2015-12-02T02:07:43Z", exemptions = {{ foo = "2" }} }}
+
+    [dependencies]
+    foo = "*"
+    "#,
+        channel = channel.url(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch)
+    ))
+    .unwrap();
+
+    pixi.lock().await.unwrap();
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Subdir::current().unwrap_or(Subdir::NoArch),
+        "foo ==2"
+    ));
+
+    // The locked `foo 2` is newer than the cutoff but exempt, so the lock file
+    // stays up to date.
+    let up_to_date = pixi
+        .update_lock_file_with_options(UpdateLockFileOptions {
+            lock_file_usage: LockFileUsage::Locked,
+            ..Default::default()
+        })
+        .await;
+    assert!(up_to_date.is_ok(), "{up_to_date:?}");
+
+    // Dropping the exemption makes the locked package violate the cutoff.
+    pixi.update_manifest(&format!(
+        r#"
+    [workspace]
+    name = "test-exclude-newer-exemption-satisfiability"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+    exclude-newer = "2015-12-02T02:07:43Z"
+
+    [dependencies]
+    foo = "*"
+    "#,
+        channel = channel.url(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch)
+    ))
+    .unwrap();
+    let outdated = pixi
+        .update_lock_file_with_options(UpdateLockFileOptions {
+            lock_file_usage: LockFileUsage::Locked,
+            ..Default::default()
+        })
+        .await;
+    assert!(outdated.is_err());
+}
+
+#[tokio::test]
 #[cfg_attr(
     any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
     ignore

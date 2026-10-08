@@ -391,7 +391,7 @@ When specified on the workspace this will exclude any package from consideration
 This is useful to reproduce installations regardless of new package releases, or to reduce the risk of
 installing recently published (and potentially compromised) packages.
 
-The value may be specified in the following formats:
+The cutoff may be specified in the following formats:
 
 * As an [RFC 3339](https://www.rfc-editor.org/rfc/rfc3339.html) timestamp (e.g. `2023-10-01T00:00:00Z`)
 * As a date in `YYYY-MM-DD` format (e.g. `2026-03-30`). This is interpreted as the start of the following day in UTC, so `2026-03-30` means `2026-03-31T00:00:00Z`.
@@ -399,48 +399,99 @@ The value may be specified in the following formats:
 
 When using a relative duration, the lock file will be re-solved when a package is not included in the cutoff date.
 
-Both PyPi and conda packages are considered.
+Both PyPI and conda packages are considered.
 
-For conda packages, the workspace-level cutoff can be overridden per package in the
-[`[exclude-newer]`](#exclude-newer-optional) table.
+```toml
+[workspace]
+exclude-newer = "7d"
+```
 
-For PyPI packages, the workspace-level cutoff can be overridden per package in the
-[`[pypi-exclude-newer]`](#exclude-newer-optional) table.
+#### Exemptions
 
-This is especially useful when a package is pinned to a separate `channel` or `index` and needs a
-different cutoff than the rest of the workspace.
+Some releases need to get through the cutoff immediately, for example an urgent security fix that you have reviewed, or a package you publish yourself.
+Instead of lowering the cutoff for every future release of such a package, exempt the releases you vetted.
+Write `exclude-newer` as a table with a `cutoff` and `exemptions` for that.
+An exempted release is never excluded, regardless of its upload time.
+
+The value of an exemption is a version spec, or a table with the same fields as a [conda dependency](#dependencies-optional) from a channel, such as `version`, `build` or `channel`.
+`polars = "1.43.1"` exempts that release only, while `py-rattler = "*"` exempts every release of the package, including future ones.
+
+```toml
+[workspace]
+channels = [
+  # get the most recent versions of packages you control
+  { channel = "https://my.internal/channel", exclude-newer = "0d" },
+  "conda-forge",
+]
+
+[workspace.exclude-newer]
+cutoff = "7d"
+
+[workspace.exclude-newer.exemptions]
+# CVE-XXXX-YYYY: this release contains the fix
+polars = "1.43.1"
+# only ever built by us
+py-rattler = "*"
+# a release of a specific build string from a specific channel
+pytorch-cpu = { version = "2.10.0", build = "cpu_*", channel = "pytorch" }
+```
+
+A channel can override the cutoff with its own `exclude-newer` value, as shown above.
+Exemptions take precedence over the channel cutoff, which in turn takes precedence over the workspace cutoff.
+
+#### PyPI packages
+
+The cutoff of `exclude-newer` applies to PyPI packages as well.
+Use `pypi-exclude-newer` to give PyPI packages their own `cutoff`, or to exempt PyPI packages from the cutoff.
+Without a `cutoff` of its own, `pypi-exclude-newer` falls back to the cutoff of `exclude-newer`.
+
+PyPI exemptions only support `"*"` for now, which exempts every release of the package.
+This is especially useful when a package is pinned to a separate `index` and needs a different cutoff than the rest of the workspace.
+
+```toml
+[workspace]
+exclude-newer = "7d"
+pypi-exclude-newer = { exemptions = { torch = "*" } }
+
+[pypi-dependencies]
+torch = { version = ">=2.10.0", index = "https://download.pytorch.org/whl/cu124" }
+```
 
 !!! note "Satisfiability checks with `exclude-newer`"
     For conda packages, pixi stores the package timestamp in `pixi.lock` and can use it during
     lock file satisfiability checks. That means changing `exclude-newer` can trigger a re-solve
-    when a locked conda package is newer than the configured cutoff.
+    when a locked conda package is newer than the configured cutoff and not exempt.
 
     For PyPI packages, pixi does not currently store upload timestamps in `pixi.lock`. As a
-    result, changes to `exclude-newer` or `[pypi-exclude-newer]` do not trigger the same
+    result, changes to `exclude-newer` or `pypi-exclude-newer` do not trigger the same
     lock file satisfiability check for already locked PyPI packages. Run `pixi update` to
     re-resolve PyPI packages and ensure the lock file respects the configured cutoff.
 
-```toml
-[workspace]
-exclude-newer = "2025-01-01"
-
-[dependencies]
-pytorch-cpu = { version = ">=2.10.0", channel = "pytorch" }
-
-[exclude-newer]
-pytorch-cpu = "0d"
-openssl = "0d"
-
-[pypi-dependencies]
-torch = { version = ">=2.10.0", index = "https://download.pytorch.org/whl/cu124" }
-
-[pypi-exclude-newer]
-torch = "0d"
-```
-
 !!! note
-    Note that for Pypi package indexes the package index must support the `upload-time` field as specified in [`PEP 700`](https://peps.python.org/pep-0700/).
+    Note that for PyPI package indexes the package index must support the `upload-time` field as specified in [`PEP 700`](https://peps.python.org/pep-0700/).
     If the field is not present for a given distribution, the distribution will be treated as unavailable. PyPI provides `upload-time` for all packages.
+
+!!! warning "Deprecated: the top-level `[exclude-newer]` and `[pypi-exclude-newer]` tables"
+    Older manifests override the cutoff per package in the top-level `[exclude-newer]` and `[pypi-exclude-newer]` tables.
+    These tables still work, but pixi warns about them because a per-package cutoff lowers the cutoff for every future release of the package.
+    Move the entries to the `exemptions` of `[workspace.exclude-newer]` and `[workspace.pypi-exclude-newer]`, and narrow them down to the releases you vetted.
+
+    ```toml
+    # before
+    [workspace]
+    exclude-newer = "7d"
+
+    [exclude-newer]
+    openssl = "0d"
+
+    [pypi-exclude-newer]
+    torch = "0d"
+
+    # after
+    [workspace]
+    exclude-newer = { cutoff = "7d", exemptions = { openssl = "3.5.1" } }
+    pypi-exclude-newer = { exemptions = { torch = "*" } }
+    ```
 
 ### `build-variants` (optional)
 

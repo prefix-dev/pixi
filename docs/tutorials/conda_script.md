@@ -196,8 +196,8 @@ Pixi reads `[tool.pixi]` the same way as in a `pyproject.toml`, restricted to wh
 - `[tool.pixi.dependencies]` holds conda specs in pixi's native syntax, including [source dependencies](../build/dependency_types.md), which need the `pixi-build` preview declared under `[tool.pixi.workspace]`.
 - `[tool.pixi.pypi-dependencies]` holds PyPI packages.
 - `[tool.pixi.constraints]`, `[tool.pixi.activation]` and `[tool.pixi.target.<platform>]` hold constraints, activation settings and platform-specific dependencies.
-- `[tool.pixi.exclude-newer]` and `[tool.pixi.pypi-exclude-newer]` override the cutoff date per package.
-- `[tool.pixi.workspace]` holds resolver options: `platforms`, `channel-priority`, `solve-strategy`, `exclude-newer`, `conda-pypi-map`, `pypi-options`, `preview` and `requires-pixi`.
+- `[tool.pixi.workspace]` holds resolver options: `platforms`, `channel-priority`, `solve-strategy`, `exclude-newer`, `pypi-exclude-newer`, `conda-pypi-map`, `pypi-options`, `preview` and `requires-pixi`.
+- `[tool.pixi.exclude-newer]` and `[tool.pixi.pypi-exclude-newer]` are the deprecated per-package cutoff tables; use the `exemptions` of `exclude-newer` and `pypi-exclude-newer` in `[tool.pixi.workspace]` instead.
   Channels stay in the block's `channels`, so `tool.pixi.workspace.channels` is rejected.
 
 A script without `platforms` resolves for the machine it runs on.
