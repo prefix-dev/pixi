@@ -1941,9 +1941,8 @@ async fn test_exclude_newer_exemption_keeps_lock_file_satisfied() {
 
     // The locked `foo 2` is newer than the cutoff but exempt, so the lock file
     // stays up to date.
-    let up_to_date = pixi
-        .workspace()
-        .unwrap()
+    let workspace = pixi.workspace().unwrap();
+    let up_to_date = workspace
         .update_lock_file(
             None,
             UpdateLockFileOptions {
@@ -1951,7 +1950,8 @@ async fn test_exclude_newer_exemption_keeps_lock_file_satisfied() {
                 ..Default::default()
             },
         )
-        .await;
+        .await
+        .map(|_| ());
     if let Err(err) = up_to_date {
         panic!("the lock file should be up to date: {err:?}");
     }
@@ -1972,9 +1972,8 @@ async fn test_exclude_newer_exemption_keeps_lock_file_satisfied() {
         platform = Subdir::current().unwrap_or(Subdir::NoArch)
     ))
     .unwrap();
-    let outdated = pixi
-        .workspace()
-        .unwrap()
+    let workspace = pixi.workspace().unwrap();
+    let outdated = workspace
         .update_lock_file(
             None,
             UpdateLockFileOptions {
@@ -1982,7 +1981,8 @@ async fn test_exclude_newer_exemption_keeps_lock_file_satisfied() {
                 ..Default::default()
             },
         )
-        .await;
+        .await
+        .map(|_| ());
     assert!(outdated.is_err());
 }
 
