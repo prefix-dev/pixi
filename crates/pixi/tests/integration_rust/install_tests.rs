@@ -1952,7 +1952,9 @@ async fn test_exclude_newer_exemption_keeps_lock_file_satisfied() {
             },
         )
         .await;
-    assert!(up_to_date.is_ok(), "{up_to_date:?}");
+    if let Err(err) = up_to_date {
+        panic!("the lock file should be up to date: {err:?}");
+    }
 
     // Dropping the exemption makes the locked package violate the cutoff.
     pixi.update_manifest(&format!(
