@@ -1871,11 +1871,13 @@ async fn test_exclude_newer_exemption_allows_vetted_release() {
         "foo ==2"
     ));
 
-    // A wildcard exemption lets every release of the package through.
-    pixi.update_manifest(&format!(
+    // A wildcard exemption lets every release of the package through. The
+    // locked `foo 2` stays valid under the wider exemption, so a fresh
+    // workspace is needed to observe the new pick.
+    let pixi = PixiControl::from_manifest(&format!(
         r#"
     [workspace]
-    name = "test-exclude-newer-exemption"
+    name = "test-exclude-newer-wildcard-exemption"
     channels = ["{channel}"]
     platforms = ["{platform}"]
     exclude-newer = {{ cutoff = "2015-12-02T02:07:43Z", exemptions = {{ foo = "*" }} }}
