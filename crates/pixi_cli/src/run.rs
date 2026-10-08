@@ -712,13 +712,19 @@ fn command_not_found<'p>(
         if let Some(explicit_environment) = explicit_environment {
             explicit_environment.get_filtered_tasks(lock_file)
         } else {
-            workspace
-                .environments()
-                .into_iter()
-                .filter(|env| {
+            // Like task disambiguation, hide environments this machine cannot
+            // run unless that would hide all of them.
+            let (runnable, unrunnable): (Vec<_>, Vec<_>) =
+                workspace.environments().into_iter().partition(|env| {
                     classify_environment_runnability(env, lock_file)
                         != EnvironmentRunnability::Unsupported
-                })
+                });
+            let envs = if runnable.is_empty() {
+                unrunnable
+            } else {
+                runnable
+            };
+            envs.iter()
                 .flat_map(|env| env.get_filtered_tasks(lock_file))
                 .collect()
         };
@@ -740,7 +746,7 @@ fn command_not_found<'p>(
     // already satisfies, runs here regardless of the declared platforms, so
     // suggesting `platform add` would send the user after the wrong problem.
     if workspace.environments().iter().all(|env| {
-        classify_environment_runnability(env, None) == EnvironmentRunnability::Unsupported
+        classify_environment_runnability(env, lock_file) == EnvironmentRunnability::Unsupported
     }) {
         pixi_progress::println!(
             "\nHelp: This platform ({}) is not supported. Please run the following command to add this platform to the workspace:\n\n\tpixi workspace platform add {}",

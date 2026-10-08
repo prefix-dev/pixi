@@ -3,10 +3,7 @@ use pixi_core::{
     Workspace,
     workspace::{
         Environment,
-        virtual_packages::{
-            EnvironmentRunnability, classify_environment_runnability,
-            verify_current_platform_can_run_environment,
-        },
+        virtual_packages::{EnvironmentRunnability, classify_environment_runnability},
     },
 };
 use pixi_manifest::{FeaturesExt, HasWorkspaceManifest, PixiPlatform, Task, TaskName};
@@ -226,7 +223,8 @@ impl<'p, 'lock, D: TaskDisambiguation<'p>> SearchEnvironments<'p, 'lock, D> {
                         .environments()
                         .into_iter()
                         .find(|e| e.name() == default_env_name)
-                    && verify_current_platform_can_run_environment(&env, None).is_ok()
+                    && classify_environment_runnability(&env, self.lock_file)
+                        != EnvironmentRunnability::Unsupported
                     && let Ok(task_in_env) = env.task(&name, self.search_platform_for(&env))
                 {
                     return Ok((env.clone(), task_in_env));
@@ -240,7 +238,10 @@ impl<'p, 'lock, D: TaskDisambiguation<'p>> SearchEnvironments<'p, 'lock, D> {
                     // Filter out default environment
                     .filter(|env| !env.name().is_default())
                     // Filter out environments that can not run on this machine.
-                    .filter(|env| verify_current_platform_can_run_environment(env, None).is_ok())
+                    .filter(|env| {
+                        classify_environment_runnability(env, self.lock_file)
+                            != EnvironmentRunnability::Unsupported
+                    })
                     .any(|env| {
                         if let Ok(task) = env.task(&name, self.search_platform_for(env)) {
                             // If the task exists in the environment but it is not the reference to
@@ -398,28 +399,6 @@ mod tests {
         let current = rattler_conda_types::Subdir::current()
             .expect("there is a current platform")
             .as_str();
-        let manifest_str = format!(
-            r#"
-            [workspace]
-            name = "foo"
-            channels = ["foo"]
-            platforms = [{{ name = "gpu", platform = "{current}", cuda = "99" }}, "{current}"]
-
-            [feature.gpu]
-            platforms = ["gpu"]
-
-            [feature.gpu.tasks]
-            build = "echo gpu"
-
-            [feature.portable.tasks]
-            build = "echo portable"
-
-            [environments]
-            gpu = ["gpu"]
-            portable = ["portable"]
-        "#
-        );
-        let project = Workspace::from_str(Path::new("pixi.toml"), &manifest_str).unwrap();
         let lock_file = rattler_lock::LockFile::from_str_with_base_directory(
             &format!(
                 r#"version: 7
@@ -440,15 +419,53 @@ packages: []
             None,
         )
         .unwrap();
-        let search =
-            SearchEnvironments::from_opt_env_with_lock_file(&project, None, None, Some(&lock_file));
-        let err = search
-            .find_task("build".into(), FindTaskSource::CmdArgs, None)
-            .expect_err("the lock-file-runnable environment should remain ambiguous");
-        let FindTaskError::AmbiguousTask(err) = err else {
-            panic!("expected ambiguous task")
-        };
-        assert_eq!(err.environments.len(), 2);
+        // The competing task lives in a non-default feature, or in the default
+        // environment, which `find_task` resolves through a separate shortcut.
+        for other_tasks in ["[feature.portable.tasks]", "[tasks]"] {
+            let manifest_str = format!(
+                r#"
+            [workspace]
+            name = "foo"
+            channels = ["foo"]
+            platforms = [{{ name = "gpu", platform = "{current}", cuda = "99" }}, "{current}"]
+
+            [feature.gpu]
+            platforms = ["gpu"]
+
+            [feature.gpu.dependencies]
+            foo = "*"
+
+            [feature.gpu.tasks]
+            build = "echo gpu"
+
+            [feature.portable]
+
+            {other_tasks}
+            build = "echo other"
+
+            [environments]
+            gpu = ["gpu"]
+            portable = ["portable"]
+        "#
+            );
+            let project = Workspace::from_str(Path::new("pixi.toml"), &manifest_str).unwrap();
+            let search = SearchEnvironments::from_opt_env_with_lock_file(
+                &project,
+                None,
+                None,
+                Some(&lock_file),
+            );
+            let err = search
+                .find_task("build".into(), FindTaskSource::CmdArgs, None)
+                .expect_err("the lock-file-runnable environment should remain ambiguous");
+            let FindTaskError::AmbiguousTask(err) = err else {
+                panic!("expected ambiguous task")
+            };
+            assert!(
+                err.environments.iter().any(|env| env.as_str() == "gpu"),
+                "{other_tasks}"
+            );
+        }
     }
 
     #[test]
