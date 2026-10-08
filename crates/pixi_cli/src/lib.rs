@@ -20,6 +20,7 @@ use std::{env, io::IsTerminal, process::ExitCode};
 use tracing::level_filters::LevelFilter;
 
 pub mod add;
+mod auth;
 pub mod build;
 pub mod clean;
 pub mod cli_config;
@@ -172,7 +173,7 @@ pub enum Command {
     // Commands in alphabetical order
     #[clap(visible_alias = "a")]
     Add(add::Args),
-    Auth(rattler::cli::auth::Args),
+    Auth(auth::Args),
     #[clap(hide = true)]
     Build(build::Args),
     Clean(clean::Args),
@@ -379,7 +380,7 @@ pub async fn execute_command(
         Command::Clean(cmd) => clean::execute(cmd).await.map(|()| ExitCode::SUCCESS),
         Command::Run(cmd) => run::execute(cmd).await,
         Command::Global(cmd) => global::execute(cmd).await.map(|()| ExitCode::SUCCESS),
-        Command::Auth(cmd) => rattler::cli::auth::execute(cmd)
+        Command::Auth(cmd) => rattler::cli::auth::execute(cmd.inner)
             .await
             .into_diagnostic()
             .map(|()| ExitCode::SUCCESS),
