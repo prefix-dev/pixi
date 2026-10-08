@@ -1942,10 +1942,15 @@ async fn test_exclude_newer_exemption_keeps_lock_file_satisfied() {
     // The locked `foo 2` is newer than the cutoff but exempt, so the lock file
     // stays up to date.
     let up_to_date = pixi
-        .update_lock_file_with_options(UpdateLockFileOptions {
-            lock_file_usage: LockFileUsage::Locked,
-            ..Default::default()
-        })
+        .workspace()
+        .unwrap()
+        .update_lock_file(
+            None,
+            UpdateLockFileOptions {
+                lock_file_usage: LockFileUsage::Locked,
+                ..Default::default()
+            },
+        )
         .await;
     assert!(up_to_date.is_ok(), "{up_to_date:?}");
 
@@ -1966,10 +1971,15 @@ async fn test_exclude_newer_exemption_keeps_lock_file_satisfied() {
     ))
     .unwrap();
     let outdated = pixi
-        .update_lock_file_with_options(UpdateLockFileOptions {
-            lock_file_usage: LockFileUsage::Locked,
-            ..Default::default()
-        })
+        .workspace()
+        .unwrap()
+        .update_lock_file(
+            None,
+            UpdateLockFileOptions {
+                lock_file_usage: LockFileUsage::Locked,
+                ..Default::default()
+            },
+        )
         .await;
     assert!(outdated.is_err());
 }
