@@ -174,10 +174,10 @@ impl Task {
     }
 
     /// If this command is an execute command, returns the `Execute` task.
-    pub fn as_execute(&self) -> Result<&Execute, miette::Report> {
+    pub fn as_execute(&self) -> Option<&Execute> {
         match self {
-            Task::Execute(execute) => Ok(execute),
-            _ => Err(miette::miette!("Task is not an execute task")),
+            Task::Execute(execute) => Some(execute),
+            _ => None,
         }
     }
 
