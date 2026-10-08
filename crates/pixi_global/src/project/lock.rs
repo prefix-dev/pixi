@@ -26,7 +26,10 @@ impl GlobalManifestLock {
             .await
             .into_diagnostic()?;
 
-        let guard = file.lock_write().await.map_err(|_| miette::miette!("Failed to acquire global manifest lock"))?;
+        let guard = file
+            .lock_write()
+            .await
+            .map_err(|_| miette::miette!("Failed to acquire global manifest lock"))?;
         Ok(Self { _guard: guard })
     }
 }
