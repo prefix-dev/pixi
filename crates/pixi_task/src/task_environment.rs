@@ -139,22 +139,6 @@ pub(crate) fn environments_defining_task(
         .collect()
 }
 
-/// The platform to resolve an environment's task targets against when the
-/// caller did not pin one: the platform the environment was last installed
-/// for, the best declared platform for this machine, or -- so tasks of
-/// machine-incompatible environments are still found -- the first declared
-/// platform.
-pub(crate) fn default_search_platform<'p>(env: &Environment<'p>) -> Option<&'p PixiPlatform> {
-    env.installed_or_best_declared_platform().or_else(|| {
-        let env_platform_names = env.platforms();
-        env.workspace_manifest()
-            .workspace
-            .platforms
-            .iter()
-            .find(|platform| env_platform_names.contains(platform.name()))
-    })
-}
-
 impl<'p, 'lock, D: TaskDisambiguation<'p>> SearchEnvironments<'p, 'lock, D> {
     /// Returns a new `SearchEnvironments` with the given disambiguation
     /// function.
@@ -173,11 +157,11 @@ impl<'p, 'lock, D: TaskDisambiguation<'p>> SearchEnvironments<'p, 'lock, D> {
 
     /// The platform to resolve `env`'s task targets against: the caller's
     /// pinned platform when one was given, otherwise the environment's own
-    /// default (installed / best declared / first declared).
+    /// [`task_platform`](Environment::task_platform).
     pub(crate) fn search_platform_for(&self, env: &Environment<'p>) -> Option<&'p PixiPlatform> {
         match self.platform {
             Some(platform) => Some(platform),
-            None => default_search_platform(env),
+            None => env.task_platform(self.lock_file),
         }
     }
 

@@ -6,9 +6,7 @@ use pixi_core::{
     Workspace,
     workspace::{
         Environment, WorkspaceMut,
-        virtual_packages::{
-            EnvironmentRunnability, classify_environment_runnability, task_platform,
-        },
+        virtual_packages::{EnvironmentRunnability, classify_environment_runnability},
     },
 };
 use pixi_manifest::{
@@ -110,7 +108,7 @@ pub async fn list_tasks(
         .into_iter()
         .map(|(env, (runnability, task_names))| {
             let env_name = env.name().clone();
-            let task_platform = task_platform(&env, lock_file.as_ref());
+            let task_platform = env.task_platform(lock_file.as_ref());
             let task_map = task_names
                 .into_iter()
                 .flat_map(|task_name| {
