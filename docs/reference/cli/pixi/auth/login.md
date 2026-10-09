@@ -40,7 +40,7 @@ pixi auth login [OPTIONS] <HOST>
 - <a id="arg---oauth-redirect-uri" href="#arg---oauth-redirect-uri">`--oauth-redirect-uri <OAUTH_REDIRECT_URI>`</a>
 :  OAuth redirect URI (defaults to a random localhost port). Set this when the OAuth client on the `IdP` side is registered with a specific redirect URI such as `http://127.0.0.1:8000/auth/oidc`
 - <a id="arg---oauth-audience" href="#arg---oauth-audience">`--oauth-audience <OAUTH_AUDIENCE>`</a>
-:  OAuth audience to request (provider-specific). Defaults to https://api.basilisk.prefix.dev for the built-in prefix.dev login.
+:  OAuth `audience` to request, so the access token is also accepted by that API (provider-specific). No audience is requested by default
 
 ## S3 Authentication
 - <a id="arg---s3-access-key-id" href="#arg---s3-access-key-id">`--s3-access-key-id <S3_ACCESS_KEY_ID>`</a>
