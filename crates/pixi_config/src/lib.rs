@@ -1651,22 +1651,22 @@ fn invalid_value<E: std::error::Error + Send + Sync + 'static>(
     }
 }
 
+fn parse_opt<T: FromStr>(value: Option<String>, key: &str) -> Result<Option<T>, SetConfigError>
+where
+    T::Err: std::error::Error + Send + Sync + 'static,
+{
+    value
+        .map(|v| v.parse())
+        .transpose()
+        .map_err(invalid_value(key))
+}
+
 #[derive(thiserror::Error, miette::Diagnostic, Debug)]
 pub enum SaveConfigError {
     #[error(transparent)]
     Serialize(#[from] toml_edit::ser::Error),
-    #[error("failed to create directories in '{}'", path.display())]
-    CreateDir {
-        path: PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
-    #[error("failed to write config to '{}'", path.display())]
-    Write {
-        path: PathBuf,
-        #[source]
-        source: std::io::Error,
-    },
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
 }
 
 impl Config {
@@ -2329,16 +2329,10 @@ impl Config {
                 self.authentication_override_file = value.map(PathBuf::from);
             }
             "tls-no-verify" => {
-                self.tls_no_verify = value
-                    .map(|v| v.parse())
-                    .transpose()
-                    .map_err(invalid_value(key))?;
+                self.tls_no_verify = parse_opt(value, key)?;
             }
             "offline" => {
-                self.offline = value
-                    .map(|v| v.parse())
-                    .transpose()
-                    .map_err(invalid_value(key))?;
+                self.offline = parse_opt(value, key)?;
             }
             "tls-root-certs" => {
                 self.tls_root_certs = value
@@ -2397,16 +2391,10 @@ impl Config {
                 let subkey = key.strip_prefix("index-config.").unwrap();
                 match subkey {
                     "write-zst" => {
-                        self.index_config.default.write_zst = value
-                            .map(|v| v.parse())
-                            .transpose()
-                            .map_err(invalid_value(key))?;
+                        self.index_config.default.write_zst = parse_opt(value, key)?;
                     }
                     "write-shards" => {
-                        self.index_config.default.write_shards = value
-                            .map(|v| v.parse())
-                            .transpose()
-                            .map_err(invalid_value(key))?;
+                        self.index_config.default.write_shards = parse_opt(value, key)?;
                     }
                     "base-url" => {
                         self.index_config.default.base_url = value;
@@ -2431,22 +2419,13 @@ impl Config {
                 let subkey = key.strip_prefix("repodata-config.").unwrap();
                 match subkey {
                     "disable-bzip2" => {
-                        self.repodata_config.default.disable_bzip2 = value
-                            .map(|v| v.parse())
-                            .transpose()
-                            .map_err(invalid_value(key))?;
+                        self.repodata_config.default.disable_bzip2 = parse_opt(value, key)?;
                     }
                     "disable-zstd" => {
-                        self.repodata_config.default.disable_zstd = value
-                            .map(|v| v.parse())
-                            .transpose()
-                            .map_err(invalid_value(key))?;
+                        self.repodata_config.default.disable_zstd = parse_opt(value, key)?;
                     }
                     "disable-sharded" => {
-                        self.repodata_config.default.disable_sharded = value
-                            .map(|v| v.parse())
-                            .transpose()
-                            .map_err(invalid_value(key))?;
+                        self.repodata_config.default.disable_sharded = parse_opt(value, key)?;
                     }
                     _ => return Err(err()),
                 }
@@ -2567,16 +2546,10 @@ impl Config {
                     .unwrap();
                 match subkey {
                     "use-environment-activation-cache" => {
-                        self.experimental.use_environment_activation_cache = value
-                            .map(|v| v.parse())
-                            .transpose()
-                            .map_err(invalid_value(key))?;
+                        self.experimental.use_environment_activation_cache = parse_opt(value, key)?;
                     }
                     "conda-script" => {
-                        self.experimental.conda_script = value
-                            .map(|v| v.parse())
-                            .transpose()
-                            .map_err(invalid_value(key))?;
+                        self.experimental.conda_script = parse_opt(value, key)?;
                     }
                     _ => return Err(err()),
                 }
@@ -2628,22 +2601,13 @@ impl Config {
                 let subkey = key.strip_prefix("shell.").unwrap();
                 match subkey {
                     "force-activate" => {
-                        self.shell.force_activate = value
-                            .map(|v| v.parse())
-                            .transpose()
-                            .map_err(invalid_value(key))?;
+                        self.shell.force_activate = parse_opt(value, key)?;
                     }
                     "source-completion-scripts" => {
-                        self.shell.source_completion_scripts = value
-                            .map(|v| v.parse())
-                            .transpose()
-                            .map_err(invalid_value(key))?;
+                        self.shell.source_completion_scripts = parse_opt(value, key)?;
                     }
                     "change-ps1" => {
-                        self.shell.change_ps1 = value
-                            .map(|v| v.parse())
-                            .transpose()
-                            .map_err(invalid_value(key))?;
+                        self.shell.change_ps1 = parse_opt(value, key)?;
                     }
                     _ => return Err(err()),
                 }
@@ -2655,22 +2619,13 @@ impl Config {
                 return Ok(());
             }
             "allow-symbolic-links" => {
-                self.allow_symbolic_links = value
-                    .map(|v| v.parse())
-                    .transpose()
-                    .map_err(invalid_value(key))?;
+                self.allow_symbolic_links = parse_opt(value, key)?;
             }
             "allow-hard-links" => {
-                self.allow_hard_links = value
-                    .map(|v| v.parse())
-                    .transpose()
-                    .map_err(invalid_value(key))?;
+                self.allow_hard_links = parse_opt(value, key)?;
             }
             "allow-ref-links" => {
-                self.allow_ref_links = value
-                    .map(|v| v.parse())
-                    .transpose()
-                    .map_err(invalid_value(key))?;
+                self.allow_ref_links = parse_opt(value, key)?;
             }
             key if key.starts_with("proxy-config") => {
                 if key == "proxy-config" {
@@ -2761,14 +2716,8 @@ impl Config {
         tracing::debug!("Saving config to: {}", to.display());
 
         let parent = to.parent().expect("config path should have a parent");
-        fs_err::create_dir_all(parent).map_err(|source| SaveConfigError::CreateDir {
-            path: parent.to_path_buf(),
-            source,
-        })?;
-        fs_err::write(to, contents).map_err(|source| SaveConfigError::Write {
-            path: to.to_path_buf(),
-            source,
-        })
+        fs_err::create_dir_all(parent)?;
+        Ok(fs_err::write(to, contents)?)
     }
 
     /// Resolve the cache directory for `kind`, applying this config's
