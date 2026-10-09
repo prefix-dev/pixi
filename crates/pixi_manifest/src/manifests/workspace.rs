@@ -824,7 +824,8 @@ impl WorkspaceManifestMut<'_> {
     /// This function modifies both the workspace and the TOML document. Use
     /// `ManifestProvenance::save` to persist the changes to disk.
     ///
-    /// Returns the list of environments that were modified.
+    /// Returns the list of environments that were modified. Errors when the
+    /// feature does not exist.
     pub fn remove_feature(
         &mut self,
         feature_name: &FeatureName,
@@ -834,8 +835,7 @@ impl WorkspaceManifestMut<'_> {
         }
 
         if self.workspace.features.get(feature_name).is_none() {
-            tracing::warn!("Feature `{}` doesn't exist", feature_name);
-            return Ok(Vec::new());
+            return Err(GetFeatureError::FeatureDoesNotExist(feature_name.clone()).into());
         }
 
         self.workspace.features.shift_remove(feature_name);
@@ -2093,6 +2093,10 @@ pub enum EnvironmentEditError {
 
     #[error("Cannot remove the default feature")]
     RemoveDefaultFeature,
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Feature(#[from] GetFeatureError),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -5276,11 +5280,11 @@ boltons = { workspace = true }
                 .is_none()
         );
 
-        // Remove non-existent feature should succeed
-        let result = manifest
+        // Remove non-existent feature should fail
+        let err = manifest
             .remove_feature(&FeatureName::from_str("nonexistent").unwrap())
-            .unwrap();
-        assert!(result.is_empty());
+            .unwrap_err();
+        assert_eq!(err.to_string(), "feature 'nonexistent' does not exist");
 
         // Remove feature used by environment should succeed and update environments
         let modified = manifest
