@@ -264,6 +264,10 @@ cargo-shear = {
   cmd = "cargo shear --fix",
   description = "Remove unused dependencies",
 }
+check-into-diagnostic = {
+  cmd = "python scripts/check_into_diagnostic.py",
+  description = "Check that `into_diagnostic` counts per crate match the baseline",
+}
 check-openssl = {
   cmd = "python tests/scripts/check-openssl.py",
   description = "Check OpenSSL configuration",
