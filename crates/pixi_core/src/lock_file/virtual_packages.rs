@@ -9,9 +9,7 @@ use pixi_manifest::{
 use pypi_modifiers::pypi_tags::{PyPITagError, get_tags_from_machine, is_python_record};
 use rattler_conda_types::ParseMatchSpecError;
 use rattler_conda_types::ParseStrictness::Lenient;
-use rattler_conda_types::{
-    GenericVirtualPackage, MatchSpec, Matches, Subdir, Version, VersionSpec,
-};
+use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Subdir, Version, VersionSpec};
 use rattler_lock::{CondaPackageData, ConversionError, LockFile, PypiPackageData};
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -112,7 +110,26 @@ pub(crate) fn unmet_requirements(
                 name.as_normalized().starts_with("__") && name.as_normalized() != "__archspec"
             })
         })
-        .filter(|spec| !system.iter().any(|provided| spec.matches(provided)))
+        .filter(|spec| {
+            !system.iter().any(|provided| {
+                // Match rattler's solver spelling without copying the host's
+                // manifest-canonical capabilities: an omitted build is `0`.
+                let build = if provided.build_string.is_empty() {
+                    "0"
+                } else {
+                    provided.build_string.as_str()
+                };
+                spec.name.matches(&provided.name)
+                    && spec
+                        .version
+                        .as_ref()
+                        .is_none_or(|version| version.matches(&provided.version))
+                    && spec
+                        .build
+                        .as_ref()
+                        .is_none_or(|required| required.matches(build))
+            })
+        })
         .cloned()
         .collect()
 }
@@ -547,13 +564,17 @@ packages:
 
     #[test]
     fn custom_lock_requirements_use_detected_versions_and_builds() {
-        let lock = lock_requiring("__test_detector_capability >=3 detected");
+        let lock = lock_requiring("__test_detector_capability >=3,<4 detected");
         let platform = PixiPlatform::from_subdir(Subdir::Linux64);
         for (provided, compatible) in [
             (None, false),
-            (Some(("2", "detected")), false),
+            (Some(("2.9", "detected")), false),
+            (Some(("3", "")), false),
+            (Some(("3", "0")), false),
             (Some(("3", "other")), false),
             (Some(("3", "detected")), true),
+            (Some(("3.5", "detected")), true),
+            (Some(("4", "detected")), false),
         ] {
             let capabilities = provided
                 .map(|(version, build)| GenericVirtualPackage {
@@ -582,6 +603,51 @@ packages:
                     ),
                     "{provided:?}: {result:?}",
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn default_build_lock_requirements_match_builtin_and_custom_capabilities() {
+        let platform = PixiPlatform::from_subdir(Subdir::Linux64);
+        for name in ["__cuda", "__test_detector_capability"] {
+            let lock = lock_requiring(&format!("{name} >=3,<4 0"));
+            for (provided, compatible) in [
+                (None, false),
+                (Some(("2.9", "0")), false),
+                (Some(("3", "0")), true),
+                (Some(("3.5", "")), true),
+                (Some(("4", "0")), false),
+                (Some(("3", "other")), false),
+            ] {
+                let capabilities = provided
+                    .map(|(version, build)| GenericVirtualPackage {
+                        name: name.parse().unwrap(),
+                        version: version.parse().unwrap(),
+                        build_string: build.to_string(),
+                    })
+                    .into_iter()
+                    .collect();
+                let host = HostDetection::from_platform(
+                    platform_from_detected(Subdir::Linux64, capabilities).unwrap(),
+                );
+                let result = validate_system_meets_environment_requirements(
+                    &lock,
+                    &platform,
+                    &EnvironmentName::default(),
+                    &host,
+                );
+                if compatible {
+                    assert!(result.is_ok(), "{name} {provided:?}: {result:?}");
+                } else {
+                    assert!(
+                        matches!(
+                            result,
+                            Err(MachineValidationError::VirtualPackageNotFound(_))
+                        ),
+                        "{name} {provided:?}: {result:?}",
+                    );
+                }
             }
         }
     }

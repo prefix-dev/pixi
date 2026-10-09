@@ -235,6 +235,10 @@ impl WorkspaceMut {
         self.workspace
             .as_mut()
             .expect("workspace is not available")
+            .invalidate_environment_hosts();
+        self.workspace
+            .as_mut()
+            .expect("workspace is not available")
             .workspace
             .value
             .workspace
@@ -256,13 +260,10 @@ impl WorkspaceMut {
     /// workspace manifest both in memory and on-disk.
     #[must_use]
     pub fn manifest(&mut self) -> WorkspaceManifestMut<'_> {
+        let workspace = self.workspace.as_mut().expect("workspace is not available");
+        workspace.invalidate_environment_hosts();
         WorkspaceManifestMut {
-            workspace: &mut self
-                .workspace
-                .as_mut()
-                .expect("workspace is not available")
-                .workspace
-                .value,
+            workspace: &mut workspace.workspace.value,
             document: &mut self.workspace_manifest_document,
         }
     }
@@ -299,6 +300,10 @@ impl WorkspaceMut {
     /// This is useful if an operation needs to save the changes but still needs
     /// to continue the modification.
     async fn save_inner(&mut self) -> Result<(), std::io::Error> {
+        self.workspace()
+            .refresh_environment_hosts()
+            .await
+            .map_err(std::io::Error::other)?;
         let manifest_path = self.workspace().workspace.provenance.path.clone();
         let new_contents = self
             .workspace_manifest_document
@@ -353,6 +358,11 @@ impl WorkspaceMut {
         let mut workspace = self.workspace.take().expect("workspace is not available");
         if let Some(original) = self.original.take() {
             workspace.workspace.value = original.manifest;
+            workspace.invalidate_environment_hosts();
+            workspace
+                .refresh_environment_hosts()
+                .await
+                .map_err(std::io::Error::other)?;
             pixi_utils::atomic_write::atomic_write(
                 &workspace.workspace.provenance.path,
                 original.source,
@@ -466,6 +476,8 @@ impl WorkspaceMut {
         if *lock_file_update_config != LockFileUsage::Update {
             return Ok((None, skipped_packages));
         }
+
+        self.workspace().refresh_environment_hosts().await?;
 
         let original_lock_file = self
             .workspace()

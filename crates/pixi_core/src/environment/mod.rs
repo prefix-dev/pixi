@@ -900,6 +900,7 @@ pub async fn get_lock_file_and_prefixes<'env>(
     }
 
     let workspace = environments[0].workspace();
+    workspace.refresh_environment_hosts().await?;
 
     let no_install = match &lock_file_source {
         LockFileSource::Update(options) | LockFileSource::Resolve(options) => options.no_install,
@@ -970,7 +971,7 @@ pub async fn get_lock_file_and_prefixes<'env>(
     .0;
     // Pin the override so the downstream prefix helpers see it without a
     // fresh parameter on every call.
-    lock_file.target_platform = target_platform.cloned();
+    lock_file.set_explicit_target_platform(target_platform.cloned());
 
     // Get the prefix from the lock file.
     let lock_file_ref = &lock_file;

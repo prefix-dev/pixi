@@ -20,6 +20,7 @@ mod task_tests;
 mod test_activation;
 mod update_tests;
 mod upgrade_tests;
+mod virtual_package_detector_tests;
 
 /// Setup tracing for the test suite.
 /// This function initializes the tracing subscriber with the environment

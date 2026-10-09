@@ -1,4 +1,7 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, Report};
@@ -15,7 +18,9 @@ use pixi_manifest::{
 };
 use thiserror::Error;
 
-use crate::host::HostDetection;
+use crate::host::{
+    DetectorConsent, HostDetection, HostProbeError, NonInteractiveConsent, cli_detector_consent,
+};
 use crate::workspace::WorkspaceRegistry;
 use crate::workspace::{ScriptWorkspaceError, Workspace, WorkspaceRegistryError};
 
@@ -90,6 +95,10 @@ pub struct WorkspaceLocator {
     cli_config: Config,
     /// The host detection to use instead of detecting the machine.
     host: Option<HostDetection>,
+    /// Decides on virtual package detectors without a stored decision. Without
+    /// one, such detectors are skipped with a warning.
+    detector_consent: Option<Arc<dyn DetectorConsent>>,
+    use_cli_detector_consent: bool,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -97,6 +106,11 @@ pub enum WorkspaceLocatorError {
     /// An IO error occurred while trying to discover the workspace.
     #[error(transparent)]
     Io(#[from] std::io::Error),
+
+    /// The host could not be detected.
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    HostDetection(#[from] HostProbeError),
 
     /// Failed to determine the current directory.
     #[error("failed to determine the current directory")]
@@ -182,9 +196,12 @@ impl WorkspaceLocator {
     /// Constructs a new instance tailored for finding the workspace for CLI
     /// commands.
     pub fn for_cli() -> Self {
-        Self::default()
-            .with_emit_warnings(true)
-            .with_consider_environment(true)
+        Self {
+            emit_warnings: true,
+            consider_environment: true,
+            use_cli_detector_consent: true,
+            ..Self::default()
+        }
     }
 
     /// Define where the search for the workspace should start.
@@ -254,8 +271,6 @@ impl WorkspaceLocator {
         }
     }
 
-    /// When the current version conflicts with the workspace requirement,
-    /// whether to generate an error.
     /// Use `host` instead of detecting the machine.
     pub fn with_host(self, host: HostDetection) -> Self {
         Self {
@@ -264,6 +279,27 @@ impl WorkspaceLocator {
         }
     }
 
+    /// Decide on virtual package detectors without a stored decision with
+    /// `consent`, for example by asking the user.
+    pub fn with_detector_consent(self, consent: Arc<dyn DetectorConsent>) -> Self {
+        Self {
+            detector_consent: Some(consent),
+            ..self
+        }
+    }
+
+    fn detector_consent(&self, root: &Path) -> Arc<dyn DetectorConsent> {
+        self.detector_consent.clone().unwrap_or_else(|| {
+            if self.use_cli_detector_consent {
+                cli_detector_consent(Some(root))
+            } else {
+                Arc::new(NonInteractiveConsent::default())
+            }
+        })
+    }
+
+    /// When the current version conflicts with the workspace requirement,
+    /// whether to generate an error.
     pub fn with_ignore_pixi_version_check(self, ignore_pixi_version_check: bool) -> Self {
         Self {
             ignore_pixi_version_check,
@@ -273,17 +309,13 @@ impl WorkspaceLocator {
 
     /// Called to locate the workspace or error out if none could be located.
     pub async fn locate(mut self) -> Result<Workspace, WorkspaceLocatorError> {
-        let host = match self.host.take() {
-            Some(host) => host,
-            None => HostDetection::detect().await,
-        };
         if matches!(self.start, DiscoveryStart::Script(_)) {
-            return self.locate_script(host);
+            return self.locate_script().await;
         }
 
         // Determine the search root
         let explicit_start = matches!(&self.start, DiscoveryStart::ExplicitManifest(_));
-        let discovery_start = match self.start {
+        let discovery_start = match std::mem::take(&mut self.start) {
             DiscoveryStart::ExplicitManifest(path) => {
                 pixi_manifest::DiscoveryStart::ExplicitManifest(path)
             }
@@ -391,17 +423,37 @@ impl WorkspaceLocator {
             );
         }
 
-        let workspace =
-            Workspace::from_manifests(discovered_manifests, &self.global_config_source, host)
-                .with_cli_config(self.cli_config);
-
+        let root = discovered_manifests
+            .workspace
+            .provenance
+            .absolute_path()
+            .parent()
+            .expect("manifest path should always have a parent")
+            .to_owned();
+        let detector_consent = self.detector_consent(&root);
+        let config =
+            Config::load_with(&root, &self.global_config_source).merge_config(self.cli_config);
+        let injected_host = self.host.take();
+        let prepare_hosts = injected_host.is_none();
+        let mut workspace = Workspace::from_manifests_with_config(
+            discovered_manifests,
+            config,
+            injected_host.unwrap_or_else(HostDetection::builtin),
+        );
+        if prepare_hosts {
+            workspace
+                .prepare_environment_hosts(detector_consent)
+                .await?;
+        }
         Ok(workspace)
     }
 
-    fn locate_script(self, host: HostDetection) -> Result<Workspace, WorkspaceLocatorError> {
-        let DiscoveryStart::Script(path) = self.start else {
+    async fn locate_script(mut self) -> Result<Workspace, WorkspaceLocatorError> {
+        let DiscoveryStart::Script(path) = std::mem::take(&mut self.start) else {
             unreachable!("the script selection was checked before loading")
         };
+        let injected_host = self.host.take();
+        let retain_consent = injected_host.is_none();
 
         if let Some(script) =
             CondaScriptManifest::detect_with_fallback(&path, false).map_err(Box::new)?
@@ -410,12 +462,22 @@ impl WorkspaceLocator {
                 .path()
                 .parent()
                 .expect("an absolute script path always has a parent");
+            let consent = self.detector_consent(root);
             let config =
                 Config::load_with(root, &self.global_config_source).merge_config(self.cli_config);
+            let host = match injected_host {
+                Some(host) => host,
+                None => {
+                    crate::host::probe_conda_script(&script, root, &config, consent.clone()).await?
+                }
+            };
             let WithWarnings {
-                value: workspace,
+                value: mut workspace,
                 warnings,
             } = Workspace::from_conda_script(script, config, host)?;
+            if retain_consent {
+                workspace.retain_script_host(consent);
+            }
 
             if self.emit_warnings {
                 for warning in warnings {
@@ -442,12 +504,22 @@ impl WorkspaceLocator {
             .path()
             .parent()
             .expect("an absolute script path always has a parent");
+        let consent = self.detector_consent(root);
         let config =
             Config::load_with(root, &self.global_config_source).merge_config(self.cli_config);
+        let host = match injected_host {
+            Some(host) => host,
+            None => {
+                crate::host::probe_pep723_script(&script, root, &config, consent.clone()).await?
+            }
+        };
         let WithWarnings {
-            value: workspace,
+            value: mut workspace,
             warnings,
         } = Workspace::from_script(script, config, host)?;
+        if retain_consent {
+            workspace.retain_script_host(consent);
+        }
 
         if self.emit_warnings {
             for warning in warnings {

@@ -342,6 +342,7 @@ impl Workspace {
         options: UpdateLockFileOptions,
         input: LockFileInput,
     ) -> miette::Result<(LockFileDerivedData<'_>, bool)> {
+        self.refresh_environment_hosts().await?;
         let persist_lock_file = input.should_persist();
         let (lock_file, platform_names_realigned) = match input {
             LockFileInput::Workspace => {
@@ -663,17 +664,27 @@ pub struct UpdatedPrefix {
     pub prefix: Prefix,
 }
 
+enum InstallTarget {
+    Explicit(PixiPlatformName),
+    Installed(PixiPlatformName),
+}
+
+impl InstallTarget {
+    fn name(&self) -> &PixiPlatformName {
+        match self {
+            Self::Explicit(name) | Self::Installed(name) => name,
+        }
+    }
+}
+
 /// A struct that holds the lock file and any potential derived data that was
 /// computed when calling `update_lock_file`.
 pub struct LockFileDerivedData<'p> {
     pub workspace: &'p Workspace,
 
-    /// Optional workspace-platform override applied to every install-side
-    /// "which platform does this environment target" lookup. Set by the
-    /// `pixi install --platform <name>` (and `pixi reinstall --platform
-    /// <name>`) flows so cross-target installs skip the host-VP
-    /// satisfaction check that would otherwise reject them.
-    pub target_platform: Option<PixiPlatformName>,
+    /// The selected install platform and whether the user explicitly chose it.
+    /// Only explicit targets bypass host requirement validation.
+    target_platform: Option<InstallTarget>,
 
     /// The lock file
     ///
@@ -756,6 +767,16 @@ impl<'p> LockFileDerivedData<'p> {
             build_caches: Default::default(),
             resolver: Default::default(),
         }
+    }
+
+    /// Select a user-requested platform, bypassing host requirement validation.
+    pub fn set_explicit_target_platform(&mut self, platform: Option<PixiPlatformName>) {
+        self.target_platform = platform.map(InstallTarget::Explicit);
+    }
+
+    /// Select an installed platform while retaining host requirement validation.
+    pub fn set_installed_target_platform(&mut self, platform: Option<PixiPlatformName>) {
+        self.target_platform = platform.map(InstallTarget::Installed);
     }
 
     /// Returns a resolver for the current lock file, building it on first
@@ -874,16 +895,17 @@ impl<'p> LockFileDerivedData<'p> {
             .ok_or_else(|| UpdateError::LockFileMissingEnv(environment.name().clone()))?;
         Ok(LockedEnvironmentHash::from_environment(
             locked_environment,
-            environment.named_or_best_declared_platform(self.target_platform.as_ref()),
+            environment.named_or_best_declared_platform(
+                self.target_platform.as_ref().map(InstallTarget::name),
+            ),
         ))
     }
 
-    /// The declared platform install targets for `environment`: the explicit
-    /// `--platform` override or the best declared platform; when neither
-    /// matches this machine, a declared platform whose lock-resolved minimum
-    /// requirements the machine meets (running "by accident").
+    /// The explicitly selected or installed platform, or the best declared
+    /// platform. Without a selection, fall back to a declared platform whose
+    /// lock-resolved requirements this machine meets.
     fn install_platform(&self, environment: &Environment<'p>) -> Option<&'p PixiPlatform> {
-        let target_override = self.target_platform.as_ref();
+        let target_override = self.target_platform.as_ref().map(InstallTarget::name);
         environment
             .named_or_best_declared_platform(target_override)
             .or_else(|| {
@@ -937,6 +959,38 @@ impl<'p> LockFileDerivedData<'p> {
         reinstall_packages: &ReinstallPackages,
         filter: &InstallFilter,
     ) -> miette::Result<Prefix> {
+        self.workspace.refresh_environment_hosts().await?;
+
+        // A current prefix hash says nothing about this machine's capabilities.
+        // Validate locked requirements before either the cached or install path.
+        let selected_platform = self.install_platform(environment).ok_or_else(|| {
+            match verify_current_platform_can_run_environment(environment, Some(&self.lock_file)) {
+                Err(err) => miette::Report::new(err).wrap_err(format!(
+                    "Cannot install environment '{}'",
+                    environment.name().fancy_display()
+                )),
+                Ok(()) => miette::miette!(
+                    "Cannot install environment '{}': no platform supported by it matches the current system",
+                    environment.name().fancy_display()
+                ),
+            }
+        })?;
+        // Explicit overrides may intentionally target a foreign machine.
+        if !matches!(self.target_platform, Some(InstallTarget::Explicit(_)))
+            && std::env::var(pixi_consts::consts::PIXI_OVERRIDE_PLATFORM).is_err()
+        {
+            validate_system_meets_environment_requirements(
+                &self.lock_file,
+                selected_platform,
+                environment.name(),
+                environment.host(),
+            )
+            .wrap_err(format!(
+                "Cannot install environment '{}'",
+                environment.name().fancy_display()
+            ))?;
+        }
+
         // Check if the prefix is already up-to-date by validating the hash with the
         // environment file
         let hash = self.locked_environment_hash(environment)?;
@@ -948,7 +1002,7 @@ impl<'p> LockFileDerivedData<'p> {
 
         // Get the up-to-date prefix
         let UpdatedPrefix { prefix } = self
-            .update_prefix(environment, reinstall_packages, filter)
+            .update_prefix(environment, selected_platform, reinstall_packages, filter)
             .await?;
 
         // We write an invalid hash when filtering, as we will need to do a full
@@ -1064,6 +1118,7 @@ impl<'p> LockFileDerivedData<'p> {
     async fn update_prefix(
         &self,
         environment: &Environment<'p>,
+        best_declared_platform: &'p PixiPlatform,
         reinstall_packages: &ReinstallPackages,
         filter: &InstallFilter,
     ) -> miette::Result<UpdatedPrefix> {
@@ -1075,39 +1130,6 @@ impl<'p> LockFileDerivedData<'p> {
         prefix_once_cell
             .get_or_try_init(async {
                 let start = Instant::now();
-
-                // Skip the host-VP validation when `--platform` pins a target the
-                // local machine can't satisfy -- that's the case the override exists for.
-                let target_override = self.target_platform.as_ref();
-                let best_declared_platform = self.install_platform(environment).ok_or_else(|| {
-                    // Prefer the requirement-level diagnosis (which platforms
-                    // and virtual packages are unmet) over a generic message.
-                    match verify_current_platform_can_run_environment(
-                        environment,
-                        Some(&self.lock_file),
-                    ) {
-                        Err(err) => miette::Report::new(err).wrap_err(format!(
-                            "Cannot install environment '{}'",
-                            environment.name().fancy_display()
-                        )),
-                        Ok(()) => miette::miette!(
-                            "Cannot install environment '{}': no platform supported by it matches the current system",
-                            environment.name().fancy_display()
-                        ),
-                    }
-                })?;
-                if target_override.is_none() {
-                    validate_system_meets_environment_requirements(
-                        &self.lock_file,
-                        best_declared_platform,
-                        environment.name(),
-                        environment.workspace().host(),
-                    )
-                    .wrap_err(format!(
-                        "Cannot install environment '{}'",
-                        environment.name().fancy_display()
-                    ))?;
-                }
 
                 let platform = best_declared_platform;
                 let locked_env = self.locked_env(environment)?;
@@ -1204,7 +1226,12 @@ impl<'p> LockFileDerivedData<'p> {
 
                 // Get the prefix with the conda packages installed.
                 let conda_result = self
-                    .conda_prefix(environment, conda_reinstall_packages, Some(ignored_conda))
+                    .conda_prefix(
+                        environment,
+                        best_declared_platform,
+                        conda_reinstall_packages,
+                        Some(ignored_conda),
+                    )
                     .await?;
                 let prefix = conda_result.prefix.clone();
                 let python_status = *conda_result.python_status.clone();
@@ -1339,6 +1366,7 @@ impl<'p> LockFileDerivedData<'p> {
     async fn conda_prefix(
         &self,
         environment: &Environment<'p>,
+        pixi_platform: &'p PixiPlatform,
         reinstall_packages: Option<HashSet<PackageName>>,
         ignore_packages: Option<HashSet<PackageName>>,
     ) -> miette::Result<CondaPrefixUpdated> {
@@ -1352,17 +1380,6 @@ impl<'p> LockFileDerivedData<'p> {
             .get_or_try_init(async {
                 // Create object to update the prefix
                 let group = GroupedEnvironment::Environment(environment.clone());
-                // Mirror `update_prefix`: fall back to the minimum-compatible
-                // platform so an unsatisfied but unused system-requirement (e.g.
-                // a `cuda` requirement no locked package needs) doesn't block the
-                // install.
-                let pixi_platform = self.install_platform(environment).ok_or_else(|| {
-                    miette::miette!(
-                        "no platform supported by environment '{}' matches the current system",
-                        environment.name().fancy_display()
-                    )
-                })?;
-
                 // Use cached conda_prefix_updater if available, otherwise create new
                 let cache_key = lock_file::outdated::BuildCacheKey::new(
                     environment.name().clone(),
