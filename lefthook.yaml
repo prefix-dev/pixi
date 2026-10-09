@@ -63,6 +63,8 @@ pre-commit:
     - name: typos
       stage_fixed: true
       run: pixi {run} typos
+    - name: check-into-diagnostic
+      run: pixi {run} check-into-diagnostic
     - name: typecheck-python
       glob: "*.{py,pyi}"
       run: pixi {run} typecheck-python

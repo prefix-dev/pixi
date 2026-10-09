@@ -6702,6 +6702,7 @@ dependencies = [
  "temp-env",
  "tempfile",
  "thiserror 2.0.21",
+ "toml 1.1.6+spec-1.1.0",
  "toml_edit",
  "tracing",
  "url",
