@@ -8,10 +8,12 @@ OAuth against prefix.dev
 pixi auth login prefix.dev
 ```
 
-Request an OAuth audience explicitly, for example for Basilisk:
+For the built-in `prefix.dev` OAuth login, Pixi requests the
+`https://api.basilisk.prefix.dev` audience by default. Other hosts, custom OAuth
+clients, and non-OAuth methods are unchanged. Override the audience explicitly:
 
 ```shell
-pixi auth login prefix.dev --oauth-audience https://api.basilisk.prefix.dev
+pixi auth login prefix.dev --oauth-audience https://other-api.example
 ```
 
 OAuth against a self-hosted OIDC provider:
