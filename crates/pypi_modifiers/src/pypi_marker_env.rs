@@ -1,13 +1,28 @@
-use miette::IntoDiagnostic;
 use pixi_manifest::PixiPlatform;
 use rattler_conda_types::{PackageRecord, Subdir};
-use uv_pep508::{MarkerEnvironment, MarkerEnvironmentBuilder};
+use uv_pep508::{MarkerEnvironment, MarkerEnvironmentBuilder, uv_pep440::VersionParseError};
+
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum MarkerEnvironmentError {
+    #[error("could not determine python environment markers for {0}")]
+    UnsupportedPlatform(String),
+
+    #[error("unsupported python variant {0}")]
+    UnsupportedPythonVariant(String),
+
+    #[error("could not convert python version {0}, to a major minor version")]
+    NoMajorMinorVersion(String),
+
+    // Inline rather than `#[source]`: callers log this with `{e}`.
+    #[error("{0}")]
+    InvalidVersion(VersionParseError),
+}
 
 /// Determine the available env markers based on the platform and python package.
 pub fn determine_marker_environment(
     platform: &PixiPlatform,
     python_record: &PackageRecord,
-) -> miette::Result<MarkerEnvironment> {
+) -> Result<MarkerEnvironment, MarkerEnvironmentError> {
     let subdir = platform.subdir();
     // Determine system specific information
     let (sys_platform, platform_system, os_name) = if subdir.is_linux() {
@@ -17,10 +32,9 @@ pub fn determine_marker_environment(
     } else if subdir.is_windows() {
         ("win32", "Windows", "nt")
     } else {
-        miette::bail!(
-            "could not determine python environment markers for {}",
-            platform
-        )
+        return Err(MarkerEnvironmentError::UnsupportedPlatform(
+            platform.to_string(),
+        ));
     };
 
     // Determine implementation name
@@ -28,10 +42,9 @@ pub fn determine_marker_environment(
         if python_record.name.as_normalized() == "python" {
             ("cpython", "CPython")
         } else {
-            miette::bail!(
-                "unsupported python variant {}",
-                python_record.name.as_source()
-            )
+            return Err(MarkerEnvironmentError::UnsupportedPythonVariant(
+                python_record.name.as_source().to_string(),
+            ));
         };
 
     let platform_machine = match subdir {
@@ -66,10 +79,7 @@ pub fn determine_marker_environment(
             .as_major_minor()
             .map(|(major, minor)| format!("{major}.{minor}"))
             .ok_or_else(|| {
-                miette::miette!(
-                    "could not convert python version {}, to a major minor version",
-                    &python_record.version
-                )
+                MarkerEnvironmentError::NoMajorMinorVersion(python_record.version.to_string())
             })?,
         sys_platform,
         platform_machine,
@@ -78,5 +88,5 @@ pub fn determine_marker_environment(
         platform_release: "",
         platform_version: "",
     })
-    .into_diagnostic()
+    .map_err(MarkerEnvironmentError::InvalidVersion)
 }
