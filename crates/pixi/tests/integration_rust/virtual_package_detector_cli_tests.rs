@@ -1059,9 +1059,13 @@ async fn offline_workspace_commands_do_not_probe_http_channels() {
         let mut sandbox = Sandbox::new(&[]).await;
         sandbox.channel = channel.clone();
         let workspace = sandbox.workspace(true);
+        let manifest = workspace.join("pixi.toml");
+        let mut contents = fs_err::read_to_string(&manifest).unwrap();
+        contents.push_str("\n[dependencies]\nneeds-good = \"*\"\n");
+        fs_err::write(manifest, contents).unwrap();
         fs_err::write(
             workspace.join("environment.yml"),
-            "name: imported\ndependencies: []\n",
+            "name: imported\ndependencies: [needs-good]\n",
         )
         .unwrap();
         let before = requests.load(Ordering::SeqCst);
