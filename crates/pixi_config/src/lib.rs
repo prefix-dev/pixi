@@ -2357,6 +2357,9 @@ impl Config {
                         })
                     })
                     .transpose()?;
+                if let Some(detached) = &self.detached_environments {
+                    detached.validate()?;
+                }
             }
             "pinning-strategy" => {
                 self.pinning_strategy = value
@@ -2949,6 +2952,20 @@ UNUSED = "unused"
         assert_eq!(
             error_message,
             "`detached-environments` must be an absolute path, got: ./relative_path/"
+        );
+    }
+
+    /// `set` must reject a relative path, otherwise `pixi config set` writes a
+    /// file that fails validation on every later load.
+    #[test]
+    fn test_set_detached_environments_relative_path() {
+        let mut config = Config::default();
+        let err = config
+            .set("detached-environments", Some("rel/x".to_string()))
+            .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "`detached-environments` must be an absolute path, got: rel/x"
         );
     }
 
@@ -3709,13 +3726,15 @@ UNUSED = "unused"
                 .as_path()
         );
 
+        // Must be absolute on every platform; `/path/to/envs` is not on Windows.
+        let envs_dir = std::env::temp_dir().join("envs");
         config
-            .set("detached-environments", Some("/path/to/envs".to_string()))
+            .set(
+                "detached-environments",
+                Some(envs_dir.to_string_lossy().into_owned()),
+            )
             .unwrap();
-        assert_eq!(
-            config.detached_environments_dir().unwrap(),
-            Some(PathBuf::from("/path/to/envs"))
-        );
+        assert_eq!(config.detached_environments_dir().unwrap(), Some(envs_dir));
 
         config
             .set("mirrors", Some(r#"{"https://conda.anaconda.org/conda-forge": ["https://prefix.dev/conda-forge"]}"#.to_string()))
@@ -4000,7 +4019,10 @@ UNUSED = "unused"
 
         // Test detached-environments
         config
-            .set("detached-environments", Some("/custom/path".to_string()))
+            .set(
+                "detached-environments",
+                Some(std::env::temp_dir().to_string_lossy().into_owned()),
+            )
             .unwrap();
         assert!(matches!(
             config.detached_environments,
