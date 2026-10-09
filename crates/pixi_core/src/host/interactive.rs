@@ -93,8 +93,8 @@ impl DetectorConsent for InteractiveConsent {
         };
         match saved {
             Ok(()) => eprintln!(
-                "Saved in {}. Change with `pixi config set {flag} \
-                 'virtual-package-detectors.consent.{}' allow` or `deny`.",
+                "Saved in {}. To remove this decision, run:\n\n\
+                 pixi config unset {flag} 'virtual-package-detectors.consent.{}'\n",
                 path.display(),
                 toml_edit::Key::new(origin.as_str().trim_end_matches('/')),
             ),
@@ -134,7 +134,7 @@ fn ask(channel: &str, project_root: Option<&Path>, shared_path: &Path) -> Option
         system.as_str(),
     ];
     let selection = Select::with_theme(&theme)
-        .with_prompt("Where should this decision apply?")
+        .with_prompt("Where should this decision be saved?")
         .items(&options[..if workspace.is_some() { 3 } else { 2 }])
         .default(0)
         .interact()
