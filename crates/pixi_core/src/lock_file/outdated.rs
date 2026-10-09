@@ -83,6 +83,10 @@ pub struct OutdatedEnvironments<'p> {
     /// removed from the lock-file.
     pub removed_environments: HashSet<String>,
 
+    /// Human readable explanations of why environments are out of date, shown
+    /// when the lock file is not allowed to be updated (e.g. `--locked`).
+    pub reasons: Vec<String>,
+
     /// Lazily initialized UV context for building dynamic metadata.
     /// This is shared between satisfiability checking and pypi resolution.
     pub uv_context: OnceCell<UvResolutionContext>,
@@ -137,6 +141,7 @@ impl<'p> OutdatedEnvironments<'p> {
                 mut outdated_conda,
                 mut outdated_pypi,
                 disregard_locked_content,
+                mut reasons,
             },
             uv_context,
             build_caches,
@@ -199,8 +204,11 @@ impl<'p> OutdatedEnvironments<'p> {
             .map(|(name, _)| name.to_string())
             .filter(|name| workspace.environment(name.as_str()).is_none())
             .inspect(|name| {
-                tracing::info!(
-                    "environment '{name}' is out of date because it no longer exists in the manifest but is still present in the lock-file.",
+                note(
+                    &mut reasons,
+                    format!(
+                        "environment '{name}' is out of date because it no longer exists in the manifest but is still present in the lock-file."
+                    ),
                 );
             })
             .collect();
@@ -210,6 +218,7 @@ impl<'p> OutdatedEnvironments<'p> {
             pypi: outdated_pypi,
             disregard_locked_content,
             removed_environments,
+            reasons,
             uv_context,
             build_caches,
             static_metadata_cache,
@@ -226,9 +235,17 @@ impl<'p> OutdatedEnvironments<'p> {
 
 #[derive(Debug, Default)]
 struct UnsatisfiableTargets<'p> {
+    /// Human readable explanations of why targets are out of date.
+    reasons: Vec<String>,
     outdated_conda: HashMap<Environment<'p>, HashSet<PixiPlatformName>>,
     outdated_pypi: HashMap<Environment<'p>, HashSet<PixiPlatformName>>,
     disregard_locked_content: DisregardLockedContent<'p>,
+}
+
+/// Logs why a target is out of date and records it so it can be reported.
+fn note(reasons: &mut Vec<String>, reason: String) {
+    tracing::info!("{reason}");
+    reasons.push(reason);
 }
 
 /// Find all targets (combination of environment and platform) who's
@@ -273,9 +290,12 @@ async fn find_unsatisfiable_targets<'p>(
 
         // Get the locked environment from the environment
         let Some(locked_environment) = lock_file.environment(environment.name().as_str()) else {
-            tracing::info!(
-                "environment '{0}' is out of date because it does not exist in the lock file.",
-                environment.name().fancy_display()
+            note(
+                &mut unsatisfiable_targets.reasons,
+                format!(
+                    "environment '{0}' is out of date because it does not exist in the lock file.",
+                    environment.name().fancy_display()
+                ),
             );
 
             unsatisfiable_targets
@@ -289,9 +309,12 @@ async fn find_unsatisfiable_targets<'p>(
 
         // The locked environment exists, but does it match our project environment?
         if let Err(unsat) = verify_environment_satisfiability(&environment, locked_environment) {
-            tracing::info!(
-                "environment '{0}' is out of date because {unsat}",
-                environment.name().fancy_display()
+            note(
+                &mut unsatisfiable_targets.reasons,
+                format!(
+                    "environment '{0}' is out of date because {unsat}",
+                    environment.name().fancy_display()
+                ),
             );
 
             unsatisfiable_targets
@@ -411,9 +434,12 @@ async fn find_unsatisfiable_targets<'p>(
                         // remaining platforms will be skipped automatically.
                     }
                     Err(CommandDispatcherError::Failed(unsat)) if unsat.is_pypi_only() => {
-                        tracing::info!(
-                            "the pypi dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
-                            environment.name().fancy_display()
+                        note(
+                            &mut unsatisfiable_targets.reasons,
+                            format!(
+                                "the pypi dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
+                                environment.name().fancy_display()
+                            ),
                         );
 
                         unsatisfiable_targets
@@ -423,9 +449,12 @@ async fn find_unsatisfiable_targets<'p>(
                             .insert(platform);
                     }
                     Err(CommandDispatcherError::Failed(unsat)) => {
-                        tracing::info!(
-                            "the dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
-                            environment.name().fancy_display()
+                        note(
+                            &mut unsatisfiable_targets.reasons,
+                            format!(
+                                "the dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
+                                environment.name().fancy_display()
+                            ),
                         );
 
                         unsatisfiable_targets
@@ -463,9 +492,12 @@ async fn find_unsatisfiable_targets<'p>(
                 continue;
             };
 
-            tracing::info!(
-                "the dependencies of solve group '{0}' for platform {platform} are out of date because {unsat}",
-                solve_group.name(),
+            note(
+                &mut unsatisfiable_targets.reasons,
+                format!(
+                    "the dependencies of solve group '{0}' for platform {platform} are out of date because {unsat}",
+                    solve_group.name(),
+                ),
             );
 
             for env in solve_group.environments() {
@@ -484,9 +516,12 @@ async fn find_unsatisfiable_targets<'p>(
             continue;
         };
 
-        tracing::info!(
-            "the dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
-            individual_env.name().fancy_display(),
+        note(
+            &mut unsatisfiable_targets.reasons,
+            format!(
+                "the dependencies of environment '{0}' for platform {platform} are out of date because {unsat}",
+                individual_env.name().fancy_display(),
+            ),
         );
 
         unsatisfiable_targets
