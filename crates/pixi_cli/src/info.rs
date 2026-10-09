@@ -1,15 +1,19 @@
-use std::{fmt::Display, io::Write, path::PathBuf};
+use std::{fmt::Display, io::Write, path::PathBuf, sync::Arc};
 
 use chrono::{DateTime, Local};
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
+use pixi_config::DetectorDecision;
 use pixi_consts::consts;
-use pixi_core::WorkspaceLocator;
 use pixi_core::environment::{PlatformData, RequiredPlatform};
+use pixi_core::host::{
+    DenyAll, DetectedValue, DetectionSource, HostDetection, HostDetector, SkipReason, WantedNames,
+};
+use pixi_core::{WorkspaceLocator, WorkspaceLocatorError};
 use pixi_global::{BinDir, EnvRoot};
-use pixi_manifest::platform::subdir_default_virtual_packages;
+use pixi_manifest::platform::{solver_generic_virtual_packages, subdir_default_virtual_packages};
 use pixi_manifest::toml::inline_virtual_package_specs;
 use pixi_manifest::{EnvironmentName, FeatureName, PixiPlatformName};
 use pixi_manifest::{FeaturesExt, HasFeaturesIter, HasWorkspaceManifest};
@@ -18,7 +22,7 @@ use pixi_task::TaskName;
 use pixi_utils::reqwest::tls_backend;
 use rattler_conda_types::{GenericVirtualPackage, Subdir};
 use rattler_networking::authentication_storage;
-use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
+use rattler_virtual_package_detectors::merge_results;
 use serde::Serialize;
 use serde_with::{DisplayFromStr, serde_as};
 use tokio::task::spawn_blocking;
@@ -298,12 +302,130 @@ impl Display for GlobalInfo {
     }
 }
 
+/// One virtual package detector the channels register, and what became of
+/// it on this machine.
+#[derive(Serialize)]
+pub struct DetectorInfo {
+    /// The registering channel's base URL.
+    origin: String,
+    /// The detector package.
+    detector: String,
+    /// `ran`, `cached`, `failed` or `skipped`.
+    state: String,
+    /// Why it failed or was skipped.
+    detail: Option<String>,
+    /// What it reported, as `__name=version=build` or `__name absent`.
+    virtual_packages: Vec<String>,
+}
+
+impl DetectorInfo {
+    /// The detectors of `host` in the order they were reported: those that
+    /// ran, then those that failed, then those that were skipped.
+    fn from_host(host: &HostDetection, config: &pixi_config::Config) -> Vec<Self> {
+        let mut ran: Vec<Self> = Vec::new();
+        for result in host.detector_results() {
+            let DetectionSource::Detector {
+                origin,
+                detector,
+                from_cache,
+                ..
+            } = &result.source
+            else {
+                continue;
+            };
+            let reported = match &result.value {
+                DetectedValue::Absent => format!("{} absent", result.name.as_normalized()),
+                DetectedValue::Present(_) => result
+                    .virtual_package()
+                    .map(|package| package.to_string())
+                    .unwrap_or_default(),
+            };
+            let origin = origin.as_str();
+            let detector = detector.as_source();
+            match ran
+                .iter_mut()
+                .find(|info| info.origin == origin && info.detector == detector)
+            {
+                Some(info) => info.virtual_packages.push(reported),
+                None => ran.push(Self {
+                    origin: origin.to_string(),
+                    detector: detector.to_string(),
+                    state: if *from_cache { "cached" } else { "ran" }.to_string(),
+                    detail: None,
+                    virtual_packages: vec![reported],
+                }),
+            }
+        }
+        let failed = host.detector_failures().iter().map(|failure| {
+            let detail = match &failure.stderr {
+                Some(stderr) if !stderr.trim().is_empty() => {
+                    format!("{}\n{}", failure.message, stderr.trim_end())
+                }
+                _ => failure.message.clone(),
+            };
+            Self {
+                origin: failure.origin.to_string(),
+                detector: failure.detector.as_source().to_string(),
+                state: "failed".to_string(),
+                detail: Some(detail),
+                virtual_packages: Vec::new(),
+            }
+        });
+        let skipped = host.skipped_detectors().iter().map(|skipped| {
+            let detail = match &skipped.reason {
+                SkipReason::TargetIsNotHost { override_variables } => {
+                    format!(
+                        "the target platform is not this machine's; set {} to supply its virtual packages",
+                        override_variables.join(", ")
+                    )
+                }
+                SkipReason::NoWantedName => {
+                    "none of its virtual packages is needed, or all are overridden".to_string()
+                }
+                SkipReason::ConsentDenied => match config
+                    .virtual_package_detectors
+                    .consent(&skipped.origin)
+                {
+                    Some(DetectorDecision::Deny) => "denied in the configuration".to_string(),
+                    _ => format!(
+                        "no decision yet. Trust this channel with `pixi config set --shared \
+                         'virtual-package-detectors.consent.{}' allow`, or use `--local` for this repository",
+                        toml_edit::Key::new(skipped.origin.as_str().trim_end_matches('/')),
+                    ),
+                },
+            };
+            Self {
+                origin: skipped.origin.to_string(),
+                detector: skipped.detector.as_source().to_string(),
+                state: "skipped".to_string(),
+                detail: Some(detail),
+                virtual_packages: Vec::new(),
+            }
+        });
+        ran.into_iter().chain(failed).chain(skipped).collect()
+    }
+}
+
+impl Display for DetectorInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {}: {}", self.origin, self.detector, self.state)?;
+        if !self.virtual_packages.is_empty() {
+            write!(f, ", {}", self.virtual_packages.join(", "))?;
+        }
+        if let Some(detail) = &self.detail {
+            write!(f, " ({detail})")?;
+        }
+        Ok(())
+    }
+}
+
 #[serde_as]
 #[derive(Serialize)]
 pub struct Info {
     platform: String,
     #[serde_as(as = "Vec<DisplayFromStr>")]
     virtual_packages: Vec<GenericVirtualPackage>,
+    virtual_package_detectors: Vec<DetectorInfo>,
     version: String,
     tls_backend: String,
     cache_dir: Option<PathBuf>,
@@ -347,6 +469,13 @@ impl Display for Info {
                 writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Virtual packages"), p)?;
             } else {
                 writeln!(f, "{:>WIDTH$}: {}", "", p)?;
+            }
+        }
+        for (i, detector) in self.virtual_package_detectors.iter().enumerate() {
+            if i == 0 {
+                writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Detectors"), detector)?;
+            } else {
+                writeln!(f, "{:>WIDTH$}: {}", "", detector)?;
             }
         }
 
@@ -456,14 +585,57 @@ fn last_updated(path: impl Into<PathBuf>) -> miette::Result<String> {
     Ok(formatted_time)
 }
 
+/// Detects the host with every consented detector: those of the workspace's
+/// channels, or of the configured default channels outside a workspace.
+async fn detect_host(
+    workspace: Option<&pixi_core::Workspace>,
+    config: &pixi_config::Config,
+) -> miette::Result<HostDetection> {
+    let detected = match workspace {
+        Some(workspace) => workspace
+            .detect_host_with_all_detectors()
+            .await
+            .map_err(miette::Report::new),
+        None => {
+            let channel_config = config.global_channel_config();
+            let channels = config
+                .default_channels()
+                .into_iter()
+                .map(|channel| channel.into_base_url(channel_config))
+                .collect::<Result<Vec<_>, _>>()
+                .into_diagnostic()?;
+            HostDetector::new(config.clone(), Arc::new(DenyAll), None)?
+                .detect(&channels, WantedNames::All)
+                .await
+                .map_err(miette::Report::new)
+        }
+    }?;
+    // A probe that found no registrations may still have learned about a
+    // skipped detector while locating the workspace.
+    Ok(match workspace {
+        Some(workspace)
+            if detected.detector_results().is_empty()
+                && detected.detector_failures().is_empty()
+                && detected.skipped_detectors().is_empty() =>
+        {
+            workspace.host().clone()
+        }
+        _ => detected,
+    })
+}
+
 pub async fn execute(args: Args) -> miette::Result<()> {
     let source = args.config_source.source();
-    let workspace = WorkspaceLocator::for_cli()
+    let workspace = match WorkspaceLocator::for_cli()
         .with_global_config_source(source.clone())
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()
         .await
-        .ok();
+    {
+        Ok(workspace) => Some(workspace),
+        Err(error @ WorkspaceLocatorError::HostDetection(_)) => return Err(error.into()),
+        Err(_) => None,
+    };
 
     let (pixi_folder_size, cache_size) = if args.extended {
         let env_dir = workspace.as_ref().map(|p| p.pixi_dir());
@@ -563,16 +735,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         manifest: pixi_global::Project::manifest_dir()?.join(consts::GLOBAL_MANIFEST_DEFAULT_NAME),
     });
 
-    let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::from_env(), None)
-        .into_diagnostic()?
-        .iter()
-        .cloned()
-        .map(GenericVirtualPackage::from)
-        .collect::<Vec<_>>();
-
     let config = workspace
+        .as_ref()
         .map(|p| p.config().clone())
         .unwrap_or_else(|| pixi_config::Config::load_global_with(&source));
+
+    let host = detect_host(workspace.as_ref(), &config).await?;
+    let virtual_packages = merge_results(
+        solver_generic_virtual_packages(host.platform().into_diagnostic()?),
+        host.detector_results(),
+    );
+    let virtual_package_detectors = DetectorInfo::from_host(&host, &config);
 
     let auth_file: PathBuf = if let Ok(auth_file) = std::env::var("RATTLER_AUTH_FILE") {
         auth_file.into()
@@ -587,6 +760,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let info = Info {
         platform: Subdir::current().unwrap_or(Subdir::NoArch).to_string(),
         virtual_packages,
+        virtual_package_detectors,
         version: consts::PIXI_VERSION.to_string(),
         tls_backend: tls_backend().to_string(),
         cache_dir: Some(pixi_config::get_cache_dir()?),

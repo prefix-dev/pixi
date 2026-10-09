@@ -102,6 +102,14 @@ impl DetectorScript {
             .map(|body| format!("ping -n 21 127.0.0.1 >nul\r\n{body}"));
         script
     }
+
+    #[cfg(unix)]
+    pub(crate) fn unix_only(script: impl Into<String>) -> Self {
+        Self {
+            unix: script.into(),
+            windows: None,
+        }
+    }
 }
 
 fn unix_quote(value: &str) -> String {
