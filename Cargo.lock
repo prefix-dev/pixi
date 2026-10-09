@@ -6788,6 +6788,7 @@ dependencies = [
  "serde",
  "serde_ignored",
  "serde_json",
+ "shlex 2.0.1",
  "strsim",
  "tabwriter",
  "temp-env",
