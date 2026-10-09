@@ -204,8 +204,8 @@ Channel relations then determine the resolved order.
 A higher-priority accepted registration reserves its names even if its detector is denied or skipped. A lower-priority detector cannot take over those names.
 
 Running a detector executes code from the channel.
-The first time one is needed, choose **Trust** or **Don't trust** for the channel's current and future detectors. **Don't trust** is selected by default.
-Then choose **Workspace** or **System configuration** to save either decision. **Workspace** shows the full path to the workspace's `.pixi/config.toml`. **System configuration** shows the full path to the shared user configuration and applies to all repositories.
+The first time one is needed, choose **Don't trust** or **Trust** for the channel's current and future detectors. **Don't trust** is first and selected by default.
+Then choose **Don't save**, **Workspace**, or **System configuration**. **Don't save** is first and selected by default. It applies either decision only for the current command without writing configuration, so Pixi asks again next time. **Workspace** saves the decision and shows the full path to the workspace's `.pixi/config.toml`. **System configuration** saves it for all repositories and shows the full path to the shared user configuration.
 Share `.pixi/config.toml` with colleagues to apply the same decisions in their checkouts. Repository decisions take precedence over user-wide decisions, including in noninteractive sessions.
 Without a terminal, a detector without a stored decision is skipped with a warning that names the configuration key to set.
 A stored `deny` skips it silently.
