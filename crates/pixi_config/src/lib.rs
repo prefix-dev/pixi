@@ -2309,11 +2309,11 @@ impl Config {
     /// It is required to call `save()` to persist the changes.
     pub fn set(&mut self, key: &str, value: Option<String>) -> Result<(), SetConfigError> {
         let supported_keys = self.get_keys().join(",\n\t");
-        let err = || SetConfigError::UnknownKey {
+        let err = SetConfigError::UnknownKey {
             key: key.to_string(),
             supported_keys,
         };
-        let missing = || SetConfigError::MissingValue {
+        let missing = SetConfigError::MissingValue {
             key: key.to_string(),
         };
 
@@ -2385,7 +2385,7 @@ impl Config {
                         .unwrap_or_default();
                     return Ok(());
                 } else if !key.starts_with("index-config.") {
-                    return Err(err());
+                    return Err(err);
                 }
 
                 let subkey = key.strip_prefix("index-config.").unwrap();
@@ -2401,7 +2401,7 @@ impl Config {
                     }
                     // The remaining keys are lists or per-channel tables; set
                     // them through the whole `index-config` table instead.
-                    _ => return Err(err()),
+                    _ => return Err(err),
                 }
             }
             key if key.starts_with("repodata-config") => {
@@ -2413,7 +2413,7 @@ impl Config {
                         .unwrap_or_default();
                     return Ok(());
                 } else if !key.starts_with("repodata-config.") {
-                    return Err(err());
+                    return Err(err);
                 }
 
                 let subkey = key.strip_prefix("repodata-config.").unwrap();
@@ -2427,7 +2427,7 @@ impl Config {
                     "disable-sharded" => {
                         self.repodata_config.default.disable_sharded = parse_opt(value, key)?;
                     }
-                    _ => return Err(err()),
+                    _ => return Err(err),
                 }
             }
             key if key.starts_with("pypi-config") => {
@@ -2440,7 +2440,7 @@ impl Config {
                     }
                     return Ok(());
                 } else if !key.starts_with("pypi-config.") {
-                    return Err(err());
+                    return Err(err);
                 }
 
                 let subkey = key.strip_prefix("pypi-config.").unwrap();
@@ -2473,7 +2473,7 @@ impl Config {
                             .map_err(invalid_value(key))?
                             .unwrap_or_default();
                     }
-                    _ => return Err(err()),
+                    _ => return Err(err),
                 }
             }
             key if key.starts_with("s3-options") => {
@@ -2482,12 +2482,12 @@ impl Config {
                         self.s3_options =
                             serde_json::de::from_str(&value).map_err(invalid_value(key))?;
                     } else {
-                        return Err(missing());
+                        return Err(missing);
                     }
                     return Ok(());
                 }
                 let Some(subkey) = key.strip_prefix("s3-options.") else {
-                    return Err(err());
+                    return Err(err);
                 };
                 if let Some((bucket, rest)) = subkey.split_once('.') {
                     if let Some(bucket_config) = self.s3_options.0.get_mut(bucket) {
@@ -2497,14 +2497,14 @@ impl Config {
                                     bucket_config.endpoint_url =
                                         Url::parse(&value).map_err(invalid_value(key))?;
                                 } else {
-                                    return Err(missing());
+                                    return Err(missing);
                                 }
                             }
                             "region" => {
                                 if let Some(value) = value {
                                     bucket_config.region = value;
                                 } else {
-                                    return Err(missing());
+                                    return Err(missing);
                                 }
                             }
                             "addressing-style" => {
@@ -2515,14 +2515,14 @@ impl Config {
                                                 key,
                                             ))?;
                                 } else {
-                                    return Err(missing());
+                                    return Err(missing);
                                 }
                             }
-                            _ => return Err(err()),
+                            _ => return Err(err),
                         }
                     }
                 } else {
-                    let value = value.ok_or_else(missing)?;
+                    let value = value.ok_or(missing)?;
                     let s3_options: S3Options =
                         serde_json::de::from_str(&value).map_err(invalid_value(key))?;
                     self.s3_options.0.insert(subkey.to_string(), s3_options);
@@ -2538,7 +2538,7 @@ impl Config {
                     }
                     return Ok(());
                 } else if !key.starts_with(format!("{EXPERIMENTAL}.").as_str()) {
-                    return Err(err());
+                    return Err(err);
                 }
 
                 let subkey = key
@@ -2551,7 +2551,7 @@ impl Config {
                     "conda-script" => {
                         self.experimental.conda_script = parse_opt(value, key)?;
                     }
-                    _ => return Err(err()),
+                    _ => return Err(err),
                 }
             }
             key if key.starts_with("concurrency") => {
@@ -2564,7 +2564,7 @@ impl Config {
                     }
                     return Ok(());
                 } else if !key.starts_with("concurrency.") {
-                    return Err(err());
+                    return Err(err);
                 }
                 let subkey = key.strip_prefix("concurrency.").unwrap();
                 match subkey {
@@ -2572,7 +2572,7 @@ impl Config {
                         if let Some(value) = value {
                             self.concurrency.solves = value.parse().map_err(invalid_value(key))?;
                         } else {
-                            return Err(missing());
+                            return Err(missing);
                         }
                     }
                     "downloads" => {
@@ -2580,10 +2580,10 @@ impl Config {
                             self.concurrency.downloads =
                                 value.parse().map_err(invalid_value(key))?;
                         } else {
-                            return Err(missing());
+                            return Err(missing);
                         }
                     }
-                    _ => return Err(err()),
+                    _ => return Err(err),
                 }
             }
             key if key.starts_with("shell") => {
@@ -2596,7 +2596,7 @@ impl Config {
                     }
                     return Ok(());
                 } else if !key.starts_with("shell.") {
-                    return Err(err());
+                    return Err(err);
                 }
                 let subkey = key.strip_prefix("shell.").unwrap();
                 match subkey {
@@ -2609,7 +2609,7 @@ impl Config {
                     "change-ps1" => {
                         self.shell.change_ps1 = parse_opt(value, key)?;
                     }
-                    _ => return Err(err()),
+                    _ => return Err(err),
                 }
             }
             key if key.starts_with("run-post-link-scripts") => {
@@ -2637,7 +2637,7 @@ impl Config {
                     }
                     return Ok(());
                 } else if !key.starts_with("proxy-config.") {
-                    return Err(err());
+                    return Err(err);
                 }
 
                 let subkey = key.strip_prefix("proxy-config.").unwrap();
@@ -2661,7 +2661,7 @@ impl Config {
                             .map_err(invalid_value(key))?
                             .unwrap_or_default();
                     }
-                    _ => return Err(err()),
+                    _ => return Err(err),
                 }
             }
             key if key.starts_with("cache") => {
@@ -2676,7 +2676,7 @@ impl Config {
                     self.cache.validate()?;
                     return Ok(());
                 } else if !key.starts_with("cache.") {
-                    return Err(err());
+                    return Err(err);
                 }
                 let subkey = key.strip_prefix("cache.").unwrap();
                 match subkey {
@@ -2699,12 +2699,12 @@ impl Config {
                             .map_err(invalid_value(key))?
                             .unwrap_or_default();
                     }
-                    _ => return Err(err()),
+                    _ => return Err(err),
                 }
                 self.cache.expand_paths()?;
                 self.cache.validate()?;
             }
-            _ => return Err(err()),
+            _ => return Err(err),
         }
 
         Ok(())
