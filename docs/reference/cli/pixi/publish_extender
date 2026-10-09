@@ -32,8 +32,8 @@ The `--target-channel` value determines the upload backend:
 | `https://anaconda.org/<owner>` | [Anaconda.org](https://anaconda.org) |
 | `cloudsmith://<owner>/<repository>/` | [Cloudsmith](https://cloudsmith.com) |
 | `s3://bucket-name/channel` | S3-compatible storage |
-| `quetz://server/<channel>` | [Quetz](https://github.com/mamba-org/quetz) |
-| `artifactory://server/<channel>` | [JFrog Artifactory](https://jfrog.com/artifactory/) |
+| `quetz://server[/path-prefix]/<channel>` | [Quetz](https://github.com/mamba-org/quetz) |
+| `artifactory://server[/path-prefix]/<repository>` | [JFrog Artifactory](https://jfrog.com/artifactory/) |
 | `file:///path/to/channel` or a bare path like `./example` | Local filesystem channel (indexed) |
 
 --8<-- [end:description]
@@ -93,6 +93,20 @@ pixi publish --to cloudsmith://my-org/my-repository/
 ```
 
 For authentication, set `CLOUDSMITH_API_KEY` or store credentials for the Cloudsmith API URL. Set `CLOUDSMITH_API_URL` only when targeting a custom Cloudsmith API endpoint.
+
+### Publishing to JFrog Artifactory
+
+Pass the full repository URL, including any path prefix your instance serves under. JFrog-hosted
+instances put repositories below `/artifactory`, and that prefix is part of the URL:
+
+```shell
+# Build and publish to an Artifactory Conda repository
+pixi publish --to artifactory://my-org.jfrog.io/artifactory/my-repository
+```
+
+Authenticate with `pixi auth login --token <token> https://my-org.jfrog.io`, or set
+`ARTIFACTORY_TOKEN`. See the [Artifactory guide](../../../deployment/artifactory.md) for how to
+create a repository and generate a token.
 
 ### Publishing to S3
 
