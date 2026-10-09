@@ -8,6 +8,7 @@ use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
 use pixi_manifest::EnvironmentName;
 use pixi_manifest::HasFeaturesIter;
+use serde::Serialize;
 
 use crate::{cli_config::WorkspaceConfig, cli_interface::cli_context};
 
@@ -59,6 +60,10 @@ pub struct ListArgs {
     /// delimited). This output is used for autocomplete.
     #[arg(long, hide(true))]
     pub machine_readable: bool,
+
+    /// Output the environments in JSON format.
+    #[arg(long)]
+    pub json: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -72,6 +77,52 @@ pub enum Command {
     /// Remove an environment from the manifest file.
     #[clap(visible_alias = "rm")]
     Remove(RemoveArgs),
+}
+
+#[derive(Serialize)]
+struct EnvironmentInfo<'a> {
+    name: &'a str,
+    features: Vec<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    solve_group: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    dependencies: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pypi_dependencies: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tasks: Option<Vec<String>>,
+}
+
+impl<'a> EnvironmentInfo<'a> {
+    fn from_environment(e: &'a pixi_core::workspace::Environment<'_>) -> Self {
+        let inline_feature = e.features().find(|feature| feature.name.is_environment());
+        
+        let deps: Vec<_> = inline_feature
+            .and_then(|f| f.dependencies(pixi_manifest::SpecType::Run, None))
+            .map(|d| d.names().map(|n| n.as_normalized().to_string()).collect())
+            .unwrap_or_default();
+            
+        let pypi_deps: Vec<_> = inline_feature
+            .and_then(|f| f.pypi_dependencies(None))
+            .map(|d| d.names().map(|n| n.as_source().to_string()).collect())
+            .unwrap_or_default();
+            
+        let tasks: Vec<_> = inline_feature
+            .map(|f| f.targets.default().tasks.keys().map(|k| k.as_str().to_string()).collect())
+            .unwrap_or_default();
+
+        Self {
+            name: e.name().as_str(),
+            features: e.features()
+                .filter(|f| !f.name.is_environment())
+                .map(|f| f.name.as_str())
+                .collect(),
+            solve_group: e.solve_group().map(|sg| sg.name()),
+            dependencies: if deps.is_empty() { None } else { Some(deps) },
+            pypi_dependencies: if pypi_deps.is_empty() { None } else { Some(pypi_deps) },
+            tasks: if tasks.is_empty() { None } else { Some(tasks) },
+        }
+    }
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -92,6 +143,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 let names = envs.iter().map(|e| e.name().as_str()).join(" ");
                 pixi_utils::io::ignore_broken_pipe(writeln!(std::io::stdout(), "{names}"))
                     .into_diagnostic()?;
+                return Ok(());
+            }
+            if list_args.json {
+                let env_infos: Vec<_> = envs.iter().map(EnvironmentInfo::from_environment).collect();
+                pixi_utils::io::ignore_broken_pipe(writeln!(
+                    std::io::stdout(),
+                    "{}",
+                    serde_json::to_string_pretty(&env_infos).into_diagnostic()?
+                ))
+                .into_diagnostic()?;
                 return Ok(());
             }
             pixi_utils::io::ignore_broken_pipe(writeln!(
@@ -201,5 +262,70 @@ mod tests {
             dependencies: git
             tasks: greet
         ");
+    }
+
+    #[test]
+    fn environment_list_json() {
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+            [workspace]
+            name = "test"
+            channels = []
+            platforms = ["linux-64"]
+
+            [feature.lint.dependencies]
+            ruff = "*"
+
+            [environments]
+            lint = { features = ["lint"], solve-group = "tools" }
+
+            [environments.dev.dependencies]
+            git = "*"
+
+            [environments.dev.tasks]
+            greet = "echo hello"
+            "#,
+        )
+        .unwrap();
+
+        let env_infos: Vec<_> = workspace
+            .environments()
+            .iter()
+            .map(EnvironmentInfo::from_environment)
+            .collect();
+            
+        let json = serde_json::to_string_pretty(&env_infos).unwrap();
+
+        insta::assert_snapshot!(json, @r###"
+        [
+          {
+            "name": "default",
+            "features": [
+              "default"
+            ]
+          },
+          {
+            "name": "lint",
+            "features": [
+              "lint",
+              "default"
+            ],
+            "solve_group": "tools"
+          },
+          {
+            "name": "dev",
+            "features": [
+              "default"
+            ],
+            "dependencies": [
+              "git"
+            ],
+            "tasks": [
+              "greet"
+            ]
+          }
+        ]
+        "###);
     }
 }
