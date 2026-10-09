@@ -276,6 +276,39 @@ rattler_build_types = { version = "0.1.16" }
 rattler_build_variant_config = { version = "0.1.18" }
 
 [patch.crates-io]
+# Temporary combined revision of conda/rattler#2921 and #2920 until released.
+# #2920 keeps audience-bearing host grants usable for channel requests.
+# Keep the Rattler workspace
+# on one revision so shared types do not come from both git and crates.io.
+coalesced_map = { git = "https://github.com/conda/rattler", rev = "822c12f81ebb7fd83fb28753ee472a850c81bce3" }
+file_url = { git = "https://github.com/conda/rattler", rev = "822c12f81ebb7fd83fb28753ee472a850c81bce3" }
+path_resolver = { git = "https://github.com/conda/rattler", rev = "822c12f81ebb7fd83fb28753ee472a850c81bce3" }
+rattler = { git = "https://github.com/conda/rattler", rev = "822c12f81ebb7fd83fb28753ee472a850c81bce3" }
+rattler_boot_id = { git = "https://github.com/conda/rattler", rev = "822c12f81ebb7fd83fb28753ee472a850c81bce3" }
+rattler_cache = { git = "https://github.com/conda/rattler", rev = "822c12f81ebb7fd83fb28753ee472a850c81bce3" }
+rattler_conda_types = { git = "https://github.com/conda/rattler", rev = "822c12f81ebb7fd83fb28753ee472a850c81bce3" }
+rattler_conda_version = { git = "https://github.com/conda/rattler", rev = "822c12f81ebb7fd83fb28753ee472a850c81bce3" }
+rattler_config = { git = "https://github.com/conda/rattler", rev = "822c12f81ebb7fd83fb28753ee472a850c81bce3" }
+rattler_digest = { git = "https://github.com/conda/rattler", rev = "822c12f81ebb7fd83fb28753ee472a850c81bce3" }
+rattler_git = { git = "https://github.com/conda/rattler", rev = "822c12f81ebb7fd83fb28753ee472a850c81bce3" }
+rattler_index = { git = "https://github.com/conda/rattler", rev = "822c12f81ebb7fd83fb28753ee472a850c81bce3" }
+rattler_lock = { git = "https://github.com/conda/rattler", rev = "822c12f81ebb7fd83fb28753ee472a850c81bce3" }
+rattler_macros = { git = "https://github.com/conda/rattler", rev = "822c12f81ebb7fd83fb28753ee472a850c81bce3" }
+rattler_menuinst = { git = "https://github.com/conda/rattler", rev = "822c12f81ebb7fd83fb28753ee472a850c81bce3" }
+rattler_networking = { git = "https://github.com/conda/rattler", rev = "822c12f81ebb7fd83fb28753ee472a850c81bce3" }
+rattler_package_streaming = { git = "https://github.com/conda/rattler", rev = "822c12f81ebb7fd83fb28753ee472a850c81bce3" }
+rattler_prefix_guard = { git = "https://github.com/conda/rattler", rev = "822c12f81ebb7fd83fb28753ee472a850c81bce3" }
+rattler_pty = { git = "https://github.com/conda/rattler", rev = "822c12f81ebb7fd83fb28753ee472a850c81bce3" }
+rattler_redaction = { git = "https://github.com/conda/rattler", rev = "822c12f81ebb7fd83fb28753ee472a850c81bce3" }
+rattler_repodata_gateway = { git = "https://github.com/conda/rattler", rev = "822c12f81ebb7fd83fb28753ee472a850c81bce3" }
+rattler_s3 = { git = "https://github.com/conda/rattler", rev = "822c12f81ebb7fd83fb28753ee472a850c81bce3" }
+rattler_shell = { git = "https://github.com/conda/rattler", rev = "822c12f81ebb7fd83fb28753ee472a850c81bce3" }
+rattler_sigstore = { git = "https://github.com/conda/rattler", rev = "822c12f81ebb7fd83fb28753ee472a850c81bce3" }
+rattler_solve = { git = "https://github.com/conda/rattler", rev = "822c12f81ebb7fd83fb28753ee472a850c81bce3" }
+rattler_upload = { git = "https://github.com/conda/rattler", rev = "822c12f81ebb7fd83fb28753ee472a850c81bce3" }
+rattler_virtual_packages = { git = "https://github.com/conda/rattler", rev = "822c12f81ebb7fd83fb28753ee472a850c81bce3" }
+simple_spawn_blocking = { git = "https://github.com/conda/rattler", rev = "822c12f81ebb7fd83fb28753ee472a850c81bce3" }
+
 version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "d8efd77673c9a90792da9da31b6c0da7ea8a324b" }
 
 # Redirect crates.io's `reqwest-middleware` to a local shim that re-exports
