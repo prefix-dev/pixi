@@ -108,20 +108,20 @@ fn ask(channel: &str, project_root: Option<&Path>, shared_path: &Path) -> Option
     let theme = ColorfulTheme::default();
     let selection = Select::with_theme(&theme)
         .with_prompt(format!("Trust detectors from {channel}?"))
-        .items(["Trust", "Don't trust"])
-        .default(1)
+        .items(["Don't trust", "Trust"])
+        .default(0)
         .interact()
         .ok()?;
     let decision = if selection == 0 {
-        DetectorDecision::Allow
-    } else {
         DetectorDecision::Deny
+    } else {
+        DetectorDecision::Allow
     };
-    let store = if let Some(root) = project_root {
+    let store = if project_root.is_some() {
         let selection = Select::with_theme(&theme)
             .with_prompt("Where should this decision apply?")
             .items([
-                format!("Workspace ({})", root.join(".pixi/config.toml").display()),
+                "Workspace (.pixi/config.toml)".to_owned(),
                 format!("System configuration ({})", shared_path.display()),
             ])
             .default(0)
