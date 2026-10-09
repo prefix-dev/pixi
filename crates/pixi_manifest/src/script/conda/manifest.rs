@@ -635,16 +635,13 @@ mod tests {
 #
 # [tool.pixi.workspace]
 # platforms = ["linux-64", "win-64"]
-# exclude-newer = "2025-01-01"
+# exclude-newer = { cutoff = "2025-01-01", exemptions = { zlib = "*" } }
 #
 # [tool.pixi.activation.env]
 # GREETING = "hello"
 #
 # [tool.pixi.constraints]
 # openssl = ">=3"
-#
-# [tool.pixi.exclude-newer]
-# zlib = "0d"
 #
 # [tool.pixi.target.win-64.dependencies]
 # vc = "*"
@@ -667,11 +664,12 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["linux-64", "win-64"]
         );
-        assert!(workspace.workspace.exclude_newer.is_some());
+        assert!(workspace.workspace.exclude_newer.cutoff.is_some());
         assert!(
             workspace
                 .workspace
-                .exclude_newer_package_overrides
+                .exclude_newer
+                .exemptions
                 .contains_key(&PackageName::new_unchecked("zlib"))
         );
         let feature = workspace.default_feature();
@@ -695,6 +693,43 @@ mod tests {
         };
         assert!(has_vc(Subdir::Win64));
         assert!(!has_vc(Subdir::Linux64));
+    }
+
+    #[test]
+    fn deprecated_exclude_newer_table_still_works_with_a_warning() {
+        let manifest = parse(
+            r#"# /// conda-script
+# channels = ["conda-forge"]
+# entrypoint = "python ${SCRIPT}"
+#
+# [tool.pixi.workspace]
+# exclude-newer = "2025-01-01"
+#
+# [tool.pixi.exclude-newer]
+# zlib = "0d"
+# /// end-conda-script
+"#,
+        )
+        .unwrap()
+        .unwrap();
+
+        let (workspace, warnings) = manifest
+            .into_workspace_manifest(None, manifest.path().parent().unwrap())
+            .unwrap();
+        assert!(
+            workspace
+                .workspace
+                .exclude_newer_package_overrides
+                .contains_key(&PackageName::new_unchecked("zlib"))
+        );
+        assert_eq!(warnings.len(), 1);
+        assert!(
+            warnings[0].to_string().contains(
+                "the top-level `[exclude-newer]` table of per-package cutoffs is deprecated"
+            ),
+            "{}",
+            warnings[0]
+        );
     }
 
     #[test]

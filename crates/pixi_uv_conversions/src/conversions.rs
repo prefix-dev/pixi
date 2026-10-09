@@ -808,16 +808,31 @@ fn to_exclude_newer_timestamp(
 
 /// Converts a resolved PyPI exclude-newer configuration to `uv_resolver::ExcludeNewer`.
 pub fn to_exclude_newer(exclude_newer: &ResolvedPypiExcludeNewer) -> uv_resolver::ExcludeNewer {
+    let to_uv_name = |package: &pep508_rs::PackageName| {
+        PackageName::from_str(package.as_ref())
+            .expect("pep508 package name should be valid uv package name")
+    };
+
+    // Exempt packages have no cutoff at all, which takes precedence over a
+    // deprecated per-package cutoff for the same package.
     let package_cutoffs = exclude_newer
         .package_cutoffs
         .iter()
+        .filter(|(package, _)| !exclude_newer.exempt_packages.contains(*package))
         .map(|(package, cutoff)| {
             (
-                PackageName::from_str(package.as_ref())
-                    .expect("pep508 package name should be valid uv package name"),
-                to_exclude_newer_timestamp(*cutoff),
+                to_uv_name(package),
+                uv_resolver::ExcludeNewerOverride::Enabled(Box::new(to_exclude_newer_timestamp(
+                    *cutoff,
+                ))),
             )
         })
+        .chain(exclude_newer.exempt_packages.iter().map(|package| {
+            (
+                to_uv_name(package),
+                uv_resolver::ExcludeNewerOverride::Disabled,
+            )
+        }))
         .map(uv_resolver::ExcludeNewerPackageEntry::from)
         .collect();
 

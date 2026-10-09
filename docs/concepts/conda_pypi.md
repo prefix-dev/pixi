@@ -168,13 +168,13 @@ steer transitive dependencies without adding a new direct dependency.
 The difference is that conda constraints add an extra bound, while PyPI dependency overrides replace
 the requirement used for that package during PyPI resolution.
 
-Package-specific `exclude-newer` values are configured separately from both mechanisms:
+Package-specific `exclude-newer` exemptions are configured separately from both mechanisms:
 
-- use [`[exclude-newer]`](../reference/pixi_manifest.md#exclude-newer-optional) for conda packages
-- use [`[pypi-exclude-newer]`](../reference/pixi_manifest.md#exclude-newer-optional) for PyPI packages
+- use the `exemptions` of [`[workspace.exclude-newer]`](../reference/pixi_manifest.md#exclude-newer-optional) for conda packages
+- use the `exemptions` of [`[workspace.pypi-exclude-newer]`](../reference/pixi_manifest.md#exclude-newer-optional) for PyPI packages
 
 PyPI still does not have a conda-style per-channel cutoff. When you use a separate package index,
-pin the package with `index = "..."` and set its cutoff in `[pypi-exclude-newer]`.
+pin the package with `index = "..."` and exempt it in `[workspace.pypi-exclude-newer]`.
 
 ### Pinned package conflicts
 

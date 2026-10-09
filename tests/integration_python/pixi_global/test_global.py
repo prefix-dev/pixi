@@ -2887,7 +2887,7 @@ exposed = {{ dummy-b = "dummy-b" }}
         stderr_contains="uploaded after the cutoff date",
     )
 
-    # The override lets `dummy-b` through
+    # The deprecated override lets `dummy-b` through, with a warning
     manifest.write_text(f"""
 version = {MANIFEST_VERSION}
 
@@ -2902,7 +2902,11 @@ channels = ["{dummy_channel_1}"]
 dependencies = {{ dummy-b = "*" }}
 exposed = {{ dummy-b = "dummy-b" }}
 """)
-    verify_cli_command([pixi, "global", "sync"], env=env)
+    verify_cli_command(
+        [pixi, "global", "sync"],
+        env=env,
+        stderr_contains="`[exclude-newer]` table of per-package cutoffs in",
+    )
     assert (tmp_path / "bin" / exec_extension("dummy-b")).is_file()
 
     # Every other package keeps the cutoff of `[global]`
@@ -2918,6 +2922,68 @@ dummy-b = "2030-01-01"
 [envs.test]
 channels = ["{dummy_channel_1}"]
 dependencies = {{ dummy-b = "*", dummy-c = "*" }}
+exposed = {{ dummy-b = "dummy-b" }}
+""")
+    verify_cli_command(
+        [pixi, "global", "sync"],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="uploaded after the cutoff date",
+    )
+
+
+def test_exclude_newer_exemption(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    """An exemption of `[global.exclude-newer]` lifts the cutoff for the matching releases alone."""
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    # Every package in dummy_channel_1 was uploaded in 2025
+    manifest.write_text(f"""
+version = {MANIFEST_VERSION}
+
+[global]
+exclude-newer = {{ cutoff = "2020-01-01", exemptions = {{ dummy-b = "*" }} }}
+
+[envs.test]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-b = "*" }}
+exposed = {{ dummy-b = "dummy-b" }}
+""")
+    verify_cli_command([pixi, "global", "sync"], env=env)
+    assert (tmp_path / "bin" / exec_extension("dummy-b")).is_file()
+
+    # Every other package keeps the cutoff
+    manifest.write_text(f"""
+version = {MANIFEST_VERSION}
+
+[global.exclude-newer]
+cutoff = "2020-01-01"
+exemptions = {{ dummy-b = "*" }}
+
+[envs.test]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-b = "*", dummy-c = "*" }}
+exposed = {{ dummy-b = "dummy-b" }}
+""")
+    verify_cli_command(
+        [pixi, "global", "sync"],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="uploaded after the cutoff date",
+    )
+
+    # An exemption for another release does not lift the cutoff
+    manifest.write_text(f"""
+version = {MANIFEST_VERSION}
+
+[global.exclude-newer]
+cutoff = "2020-01-01"
+exemptions = {{ dummy-b = "99.0.0" }}
+
+[envs.test]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-b = "*" }}
 exposed = {{ dummy-b = "dummy-b" }}
 """)
     verify_cli_command(

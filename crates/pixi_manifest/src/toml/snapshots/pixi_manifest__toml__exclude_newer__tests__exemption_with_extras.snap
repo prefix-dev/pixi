@@ -1,0 +1,9 @@
+---
+source: crates/pixi_manifest/src/toml/exclude_newer.rs
+expression: "render_error(input, err)"
+---
+  × an exclude-newer exemption cannot have `extras`, they do not select packages
+   ╭─[pixi.toml:1:43]
+ 1 │ exclude-newer = { exemptions = { polars = { version = "*", extras = ["foo"] } } }
+   ·                                           ───────────────────────────────────
+   ╰────

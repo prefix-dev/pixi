@@ -68,6 +68,19 @@ impl Manifest {
             )?,
         };
 
+        if !manifest.exclude_newer_package_overrides.is_empty() {
+            let exemptions = manifest
+                .exclude_newer_package_overrides
+                .keys()
+                .map(|name| format!("{} = \"*\"", name.as_source()))
+                .collect::<Vec<_>>()
+                .join(", ");
+            tracing::warn!(
+                "the top-level `[exclude-newer]` table of per-package cutoffs in {} is deprecated in favor of the `exemptions` of `[global.exclude-newer]`, e.g. `exclude-newer = {{ cutoff = \"7d\", exemptions = {{ {exemptions} }} }}`",
+                manifest_path.display()
+            );
+        }
+
         let manifest = Self {
             path: manifest_path.to_path_buf(),
 

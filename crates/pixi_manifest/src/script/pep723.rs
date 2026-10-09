@@ -1083,8 +1083,8 @@ print("hello")
           ·   ───────────
         8 │ # ///
           ╰────
-         help: a script represents one implicit default environment; `tool.pixi.workspace` accepts `channel-priority`, `conda-pypi-map`, `exclude-newer`, `platforms`, `preview`, `pypi-options`, `requires-
-               pixi`, `solve-strategy`
+         help: a script represents one implicit default environment; `tool.pixi.workspace` accepts `channel-priority`, `conda-pypi-map`, `exclude-newer`, `platforms`, `preview`, `pypi-exclude-newer`,
+               `pypi-options`, `requires-pixi`, `solve-strategy`
         "#);
     }
 
@@ -1140,11 +1140,45 @@ print("hello")
 #
 # [tool.pixi.workspace]
 # channels = ["conda-forge"]
-# exclude-newer = "2025-01-01"
+# exclude-newer = { cutoff = "2025-01-01", exemptions = { zlib = "*" } }
+# pypi-exclude-newer = { exemptions = { requests = "*" } }
 # conda-pypi-map = { conda-forge = "mapping.json" }
 #
 # [tool.pixi.dependencies]
 # zlib = "*"
+# ///
+"#,
+        );
+
+        let script = ScriptManifest::from_path(path).unwrap().unwrap();
+        let (manifest, warnings) = script.into_workspace_manifest().unwrap();
+        assert!(warnings.is_empty());
+        assert!(manifest.workspace.exclude_newer.cutoff.is_some());
+        assert!(
+            manifest
+                .workspace
+                .exclude_newer
+                .exemptions
+                .contains_key(&PackageName::from_str("zlib").unwrap())
+        );
+        assert!(
+            manifest
+                .workspace
+                .pypi_exclude_newer
+                .exemptions
+                .contains_key(&PypiPackageName::from_str("requests").unwrap())
+        );
+    }
+
+    #[test]
+    fn accepts_deprecated_exclude_newer_tables_with_a_warning() {
+        let (_directory, path) = script(
+            r#"# /// script
+# dependencies = []
+#
+# [tool.pixi.workspace]
+# channels = ["conda-forge"]
+# exclude-newer = "2025-01-01"
 #
 # [tool.pixi.exclude-newer]
 # zlib = "0d"
@@ -1156,8 +1190,7 @@ print("hello")
         );
 
         let script = ScriptManifest::from_path(path).unwrap().unwrap();
-        let (manifest, _) = script.into_workspace_manifest().unwrap();
-        assert!(manifest.workspace.exclude_newer.is_some());
+        let (manifest, warnings) = script.into_workspace_manifest().unwrap();
         assert!(
             manifest
                 .workspace
@@ -1169,6 +1202,15 @@ print("hello")
                 .workspace
                 .pypi_exclude_newer_package_overrides
                 .contains_key(&PypiPackageName::from_str("requests").unwrap())
+        );
+        let warnings = warnings.iter().map(ToString::to_string).collect::<Vec<_>>();
+        assert_eq!(warnings.len(), 2, "{warnings:?}");
+        assert!(
+            warnings[0].contains("`[exclude-newer]` table of per-package cutoffs is deprecated")
+        );
+        assert!(
+            warnings[1]
+                .contains("`[pypi-exclude-newer]` table of per-package cutoffs is deprecated")
         );
     }
 

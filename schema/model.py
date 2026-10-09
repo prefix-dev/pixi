@@ -269,6 +269,36 @@ KnownPreviewFeature = PixiBuildFeature
 #     PixiBuild: Annotated[str, Field(description="Enables building of source records")] = "pixi-build"
 
 
+class ExcludeNewerTable(StrictBaseModel):
+    """The `exclude-newer` cutoff for conda packages together with the releases that are exempt from it."""
+
+    cutoff: ExcludeNewer | None = Field(
+        None,
+        examples=["2023-11-03T03:33:12Z", "2026-04-01", "7d"],
+        description="Exclude any package newer than this timestamp or duration. Can be an absolute timestamp or a relative duration accepted by humantime (for example '0d', '1 week', '2w', '1 month', '1M', '72h', '72 hours', or '1h30m').",
+    )
+    exemptions: dict[CondaPackageName, NonEmptyStr | BinaryMatchspecTable] | None = Field(
+        None,
+        examples=[{"polars": "1.43.1", "py-rattler": "*"}],
+        description='Package releases that are never excluded, regardless of their upload time. The value is a version or a match spec table, so `polars = "1.43.1"` exempts that release only and `py-rattler = "*"` exempts every release.',
+    )
+
+
+class PypiExcludeNewerTable(StrictBaseModel):
+    """The `exclude-newer` cutoff for PyPI packages together with the packages that are exempt from it."""
+
+    cutoff: ExcludeNewer | None = Field(
+        None,
+        examples=["2023-11-03T03:33:12Z", "2026-04-01", "7d"],
+        description="Exclude any PyPI package newer than this timestamp or duration. Without a cutoff, the cutoff of `exclude-newer` applies to PyPI packages as well.",
+    )
+    exemptions: dict[PyPIPackageName, Literal["*"]] | None = Field(
+        None,
+        examples=[{"torch": "*"}],
+        description="PyPI packages that are never excluded, regardless of their upload time. Only `*`, which exempts every release of the package, is supported for now.",
+    )
+
+
 class Workspace(StrictBaseModel):
     """The project's metadata information."""
 
@@ -303,7 +333,7 @@ class Workspace(StrictBaseModel):
 - 'lowest': solve all packages to the lowest compatible version.
 - 'lowest-direct': solve direct dependencies to the lowest compatible version and transitive ones to the highest compatible version.""",
     )
-    exclude_newer: ExcludeNewer | None = Field(
+    exclude_newer: ExcludeNewer | ExcludeNewerTable | None = Field(
         None,
         examples=[
             "2023-11-03T03:33:12Z",
@@ -316,8 +346,18 @@ class Workspace(StrictBaseModel):
             "72h",
             "72 hours",
             "1h30m",
+            {"cutoff": "7d", "exemptions": {"polars": "1.43.1", "py-rattler": "*"}},
         ],
-        description="Exclude any package newer than this timestamp or duration. Can be an absolute timestamp or a relative duration accepted by humantime (for example '0d', '1 week', '2w', '1 month', '1M', '72h', '72 hours', or '1h30m').",
+        description="Exclude any package newer than this timestamp or duration. Can be an absolute timestamp or a relative duration accepted by humantime (for example '0d', '1 week', '2w', '1 month', '1M', '72h', '72 hours', or '1h30m'), or a table with a `cutoff` and `exemptions` for vetted releases.",
+    )
+    pypi_exclude_newer: ExcludeNewer | PypiExcludeNewerTable | None = Field(
+        None,
+        examples=[
+            "2023-11-03T03:33:12Z",
+            "7d",
+            {"exemptions": {"torch": "*"}},
+        ],
+        description="Exclude any PyPI package newer than this timestamp or duration, or a table with a `cutoff` and `exemptions`. Without a `cutoff`, the cutoff of `exclude-newer` applies to PyPI packages as well.",
     )
     platforms: list[Platform | PlatformName | WorkspacePlatform] | None = Field(
         None,
@@ -1383,14 +1423,16 @@ class BaseManifest(BaseModel):
     constraints: InheritableDependencies = ConstraintsField
     exclude_newer: dict[CondaPackageName, ExcludeNewer] | None = Field(
         None,
-        description="Workspace-wide per-package `exclude-newer` overrides for conda packages",
+        deprecated=True,
+        description="Workspace-wide per-package `exclude-newer` overrides for conda packages. Deprecated in favor of the `exemptions` of `[workspace.exclude-newer]`",
     )
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies"
     )
     pypi_exclude_newer: dict[PyPIPackageName, ExcludeNewer] | None = Field(
         None,
-        description="Workspace-wide per-package `exclude-newer` overrides for PyPI packages",
+        deprecated=True,
+        description="Workspace-wide per-package `exclude-newer` overrides for PyPI packages. Deprecated in favor of the `exemptions` of `[workspace.pypi-exclude-newer]`",
     )
     dev: dict[CondaPackageName, SourceSpecTable] | None = Field(
         None,

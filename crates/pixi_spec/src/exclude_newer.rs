@@ -1,5 +1,6 @@
 use chrono::{DateTime, Days, NaiveDate, NaiveTime, Utc};
-use rattler_conda_types::{ChannelUrl, PackageName};
+use rattler_conda_types::{ChannelUrl, MatchSpec, PackageName};
+pub use rattler_solve::InvalidExemptionError;
 use std::{collections::BTreeMap, str::FromStr};
 
 /// Specifies how to exclude newer packages from the solve.
@@ -30,8 +31,17 @@ pub struct ResolvedExcludeNewer {
 
     /// Package-specific cutoff dates that override both [`Self::cutoff`] and
     /// [`Self::channel_cutoffs`] for matching package names.
+    ///
+    /// Deprecated in favor of [`Self::exemptions`]. Only the deprecated
+    /// top-level `[exclude-newer]` manifest table still populates this.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub package_cutoffs: BTreeMap<PackageName, DateTime<Utc>>,
+
+    /// Records matching any of these specs are never excluded, regardless of
+    /// their timestamp. This allows a single vetted release through without
+    /// lowering the cutoff for every future release of the package.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exemptions: Vec<MatchSpec>,
 
     /// Whether to include packages that don't have a timestamp.
     pub include_unknown_timestamp: bool,
@@ -58,6 +68,7 @@ impl ResolvedExcludeNewer {
             cutoff,
             channel_cutoffs: BTreeMap::new(),
             package_cutoffs: BTreeMap::new(),
+            exemptions: Vec::new(),
             // TODO: After https://github.com/conda/ceps/pull/154 we might need to rethink this
             // https://github.com/prefix-dev/pixi/pull/5848/changes#r3051252281
             include_unknown_timestamp: true,
@@ -71,9 +82,31 @@ impl ResolvedExcludeNewer {
     }
 
     /// Adds a package-specific cutoff override.
+    ///
+    /// Deprecated in favor of [`Self::with_exemption`], which allows specific
+    /// vetted releases instead of lowering the cutoff for every release of a
+    /// package.
+    #[deprecated(note = "use `with_exemption` to allow specific vetted releases instead")]
     pub fn with_package_cutoff(mut self, package: PackageName, cutoff: DateTime<Utc>) -> Self {
         self.package_cutoffs.insert(package, cutoff);
         self
+    }
+
+    /// Exempts records matching `spec` from the cutoff.
+    ///
+    /// The spec must name exactly one package and must not carry extras, a
+    /// condition, or a namespace, as those do not select records. The same
+    /// validation the solver applies is run here, so converting the resolved
+    /// configuration into a [`rattler_solve::ExcludeNewer`] cannot fail.
+    pub fn with_exemption(mut self, spec: MatchSpec) -> Result<Self, InvalidExemptionError> {
+        // Validate the way the solver does so the conversion below is
+        // infallible.
+        rattler_solve::ExcludeNewer::from_datetime(jiff::Timestamp::MAX)
+            .with_exemption(spec.clone())?;
+        if !self.exemptions.contains(&spec) {
+            self.exemptions.push(spec);
+        }
+        Ok(self)
     }
 }
 
@@ -118,8 +151,17 @@ impl From<ResolvedExcludeNewer> for rattler_solve::ExcludeNewer {
                 .with_channel_cutoff(channel.to_string(), to_saturating_jiff_timestamp(cutoff));
         }
 
+        // The deprecated per-package cutoffs keep working until the
+        // top-level `[exclude-newer]` manifest table is removed.
+        #[allow(deprecated)]
         for (package, cutoff) in value.package_cutoffs {
             config = config.with_package_cutoff(package, to_saturating_jiff_timestamp(cutoff));
+        }
+
+        for spec in value.exemptions {
+            config = config
+                .with_exemption(spec)
+                .expect("exemptions are validated when they are added");
         }
 
         config
@@ -329,6 +371,7 @@ mod test {
             .unwrap()
             .with_timezone(&Utc);
 
+        #[allow(deprecated)]
         let config: rattler_solve::ExcludeNewer =
             ResolvedExcludeNewer::from_datetime(default_cutoff)
                 .with_channel_cutoff(
@@ -360,6 +403,67 @@ mod test {
             config.timestamp_policy(),
             rattler_solve::TimestampPolicy::AllowMissing
         );
+    }
+
+    #[test]
+    fn test_resolved_into_rattler_solve_preserves_exemptions() {
+        use rattler_conda_types::{
+            PackageRecord, ParseStrictness, RepoDataRecord, Version, package::DistArchiveIdentifier,
+        };
+
+        let default_cutoff = DateTime::parse_from_rfc3339("2006-12-02T02:07:43Z")
+            .unwrap()
+            .with_timezone(&Utc);
+
+        let config: rattler_solve::ExcludeNewer =
+            ResolvedExcludeNewer::from_datetime(default_cutoff)
+                .with_exemption(
+                    MatchSpec::from_str("foo ==1.2.3", ParseStrictness::Strict).unwrap(),
+                )
+                .unwrap()
+                .into();
+
+        let record = |name: &str, version: &str| {
+            let mut package_record = PackageRecord::new(
+                PackageName::new_unchecked(name),
+                Version::from_str(version).unwrap(),
+                "0".to_string(),
+            );
+            package_record.timestamp = Some(
+                "2020-01-01T00:00:00Z"
+                    .parse::<jiff::Timestamp>()
+                    .unwrap()
+                    .into(),
+            );
+            RepoDataRecord {
+                package_record,
+                identifier: DistArchiveIdentifier::from_str(&format!("{name}-{version}-0.conda"))
+                    .unwrap(),
+                url: url::Url::parse("https://example.com/pkg.conda").unwrap(),
+                channel: None,
+            }
+        };
+
+        assert!(!config.is_excluded(&record("foo", "1.2.3")));
+        assert!(config.is_excluded(&record("foo", "1.2.4")));
+        assert!(config.is_excluded(&record("bar", "1.2.3")));
+    }
+
+    #[test]
+    fn test_with_exemption_rejects_invalid_specs() {
+        let err = ResolvedExcludeNewer::from_datetime(DateTime::<Utc>::MAX_UTC)
+            .with_exemption(MatchSpec::default())
+            .unwrap_err();
+        assert!(matches!(err, InvalidExemptionError::NotExactName(_)));
+
+        let err = ResolvedExcludeNewer::from_datetime(DateTime::<Utc>::MAX_UTC)
+            .with_exemption(MatchSpec {
+                name: PackageName::new_unchecked("foo").into(),
+                extras: Some(vec!["bar".to_string()]),
+                ..MatchSpec::default()
+            })
+            .unwrap_err();
+        assert!(matches!(err, InvalidExemptionError::UnsupportedField(_)));
     }
 
     #[test]

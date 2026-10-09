@@ -25,6 +25,7 @@ use crate::{
     TaskName, TomlError, Warning, WithWarnings, WorkspaceManifest,
     environment::EnvironmentIdx,
     error::{FeatureNotEnabled, GenericError},
+    exclude_newer::deprecated_table_migration_help,
     manifests::PackageManifest,
     pypi::pypi_options::PypiOptions,
     system_requirements::virtual_packages_for_subdir,
@@ -568,14 +569,39 @@ impl TomlManifest {
             root_directory,
         )?;
         warnings.append(&mut workspace_warnings);
-        workspace.exclude_newer_package_overrides = self
-            .exclude_newer
-            .map(PixiSpanned::into_inner)
-            .unwrap_or_default();
-        workspace.pypi_exclude_newer_package_overrides = self
-            .pypi_exclude_newer
-            .map(PixiSpanned::into_inner)
-            .unwrap_or_default();
+        if let Some(exclude_newer) = self.exclude_newer {
+            warnings.push(
+                Deprecation::exclude_newer_table(
+                    "exclude-newer",
+                    deprecated_table_migration_help(
+                        "exclude-newer",
+                        workspace.exclude_newer.cutoff,
+                        exclude_newer.value.keys().map(PackageName::as_source),
+                    ),
+                    exclude_newer.span.clone(),
+                )
+                .into(),
+            );
+            workspace.exclude_newer_package_overrides = exclude_newer.value;
+        }
+        if let Some(pypi_exclude_newer) = self.pypi_exclude_newer {
+            warnings.push(
+                Deprecation::exclude_newer_table(
+                    "pypi-exclude-newer",
+                    deprecated_table_migration_help(
+                        "pypi-exclude-newer",
+                        workspace.pypi_exclude_newer.cutoff,
+                        pypi_exclude_newer
+                            .value
+                            .keys()
+                            .map(PypiPackageName::as_source),
+                    ),
+                    pypi_exclude_newer.span.clone(),
+                )
+                .into(),
+            );
+            workspace.pypi_exclude_newer_package_overrides = pypi_exclude_newer.value;
+        }
 
         migrate_system_requirements_to_platforms(&mut workspace, &mut features, &feature_sysreqs)?;
 

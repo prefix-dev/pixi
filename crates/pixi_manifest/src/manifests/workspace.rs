@@ -6191,6 +6191,226 @@ boltons = "0d"
     }
 
     #[test]
+    fn test_exclude_newer_table_syntax_is_parsed() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+
+[workspace.exclude-newer]
+cutoff = "7d"
+
+[workspace.exclude-newer.exemptions]
+polars = "1.43.1"
+py-rattler = "*"
+numpy = { version = "2.*", channel = "conda-forge" }
+
+[workspace.pypi-exclude-newer]
+cutoff = "2025-01-01"
+exemptions = { torch = "*" }
+"#;
+        use pixi_pypi_spec::PypiPackageName;
+        use rattler_conda_types::PackageName;
+        use std::str::FromStr;
+
+        let workspace = parse_pixi_toml(contents).manifest.workspace;
+        assert_eq!(workspace.exclude_newer.cutoff.unwrap().to_string(), "7days");
+        assert_eq!(
+            workspace
+                .exclude_newer
+                .exemptions
+                .keys()
+                .map(PackageName::as_source)
+                .sorted()
+                .collect::<Vec<_>>(),
+            ["numpy", "polars", "py-rattler"]
+        );
+        assert_eq!(
+            workspace.pypi_exclude_newer.cutoff.unwrap().to_string(),
+            "2025-01-02 00:00:00 UTC"
+        );
+        assert!(
+            workspace
+                .pypi_exclude_newer
+                .exemptions
+                .contains_key(&PypiPackageName::from_str("torch").unwrap())
+        );
+        assert!(workspace.exclude_newer_package_overrides.is_empty());
+        assert!(workspace.pypi_exclude_newer_package_overrides.is_empty());
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_tables_warn() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "7d"
+
+[exclude-newer]
+polars = "0d"
+openssl = "2025-01-01"
+
+[pypi-exclude-newer]
+boltons = "0d"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_exclude_newer_config_applies_exemptions() {
+        struct TestFeatures<'a> {
+            manifest: &'a WorkspaceManifest,
+            features: Vec<&'a Feature>,
+        }
+
+        impl<'a> HasWorkspaceManifest<'a> for TestFeatures<'a> {
+            fn workspace_manifest(&self) -> &'a WorkspaceManifest {
+                self.manifest
+            }
+        }
+
+        impl<'a> HasFeaturesIter<'a> for TestFeatures<'a> {
+            fn features(&self) -> impl DoubleEndedIterator<Item = &'a Feature> + 'a {
+                self.features.clone().into_iter()
+            }
+        }
+
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = { cutoff = "2015-12-02T02:07:43Z", exemptions = { polars = "1.43.1", numpy = "*" } }
+"#;
+
+        let manifest = parse_pixi_toml(contents).manifest;
+        let default_feature = manifest.default_feature();
+        let features = TestFeatures {
+            manifest: &manifest,
+            features: vec![default_feature],
+        };
+        let resolved = features
+            .exclude_newer_config_resolved(&default_channel_config())
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            resolved
+                .exemptions
+                .iter()
+                .map(ToString::to_string)
+                .sorted()
+                .collect::<Vec<_>>(),
+            ["numpy *", "polars ==1.43.1"]
+        );
+
+        let config: rattler_solve::ExcludeNewer = resolved.into();
+        let record = |name: &str, version: &str| {
+            let mut package_record = rattler_conda_types::PackageRecord::new(
+                PackageName::new_unchecked(name),
+                rattler_conda_types::Version::from_str(version).unwrap(),
+                "0".to_string(),
+            );
+            package_record.timestamp = Some(
+                "2020-01-01T00:00:00Z"
+                    .parse::<jiff::Timestamp>()
+                    .unwrap()
+                    .into(),
+            );
+            rattler_conda_types::RepoDataRecord {
+                package_record,
+                identifier: rattler_conda_types::package::DistArchiveIdentifier::from_str(
+                    &format!("{name}-{version}-0.conda"),
+                )
+                .unwrap(),
+                url: url::Url::parse("https://example.com/pkg.conda").unwrap(),
+                channel: None,
+            }
+        };
+        assert!(!config.is_excluded(&record("polars", "1.43.1")));
+        assert!(config.is_excluded(&record("polars", "1.43.2")));
+        assert!(!config.is_excluded(&record("numpy", "2.0.0")));
+        assert!(config.is_excluded(&record("pandas", "2.0.0")));
+    }
+
+    #[test]
+    fn test_pypi_exclude_newer_config_falls_back_to_conda_cutoff() {
+        struct TestFeatures<'a> {
+            manifest: &'a WorkspaceManifest,
+            features: Vec<&'a Feature>,
+        }
+
+        impl<'a> HasWorkspaceManifest<'a> for TestFeatures<'a> {
+            fn workspace_manifest(&self) -> &'a WorkspaceManifest {
+                self.manifest
+            }
+        }
+
+        impl<'a> HasFeaturesIter<'a> for TestFeatures<'a> {
+            fn features(&self) -> impl DoubleEndedIterator<Item = &'a Feature> + 'a {
+                self.features.clone().into_iter()
+            }
+        }
+
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "2015-12-02T02:07:43Z"
+pypi-exclude-newer = { exemptions = { torch = "*" } }
+"#;
+        let manifest = parse_pixi_toml(contents).manifest;
+        let default_feature = manifest.default_feature();
+        let features = TestFeatures {
+            manifest: &manifest,
+            features: vec![default_feature],
+        };
+        let resolved = features.pypi_exclude_newer_config_resolved();
+        assert_eq!(
+            resolved.cutoff.unwrap(),
+            "2015-12-02T02:07:43Z"
+                .parse::<chrono::DateTime<chrono::Utc>>()
+                .unwrap()
+        );
+        assert_eq!(
+            resolved
+                .exempt_packages
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>(),
+            ["torch"]
+        );
+
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "2015-12-02T02:07:43Z"
+pypi-exclude-newer = "2016-12-02T02:07:43Z"
+"#;
+        let manifest = parse_pixi_toml(contents).manifest;
+        let default_feature = manifest.default_feature();
+        let features = TestFeatures {
+            manifest: &manifest,
+            features: vec![default_feature],
+        };
+        assert_eq!(
+            features
+                .pypi_exclude_newer_config_resolved()
+                .cutoff
+                .unwrap(),
+            "2016-12-02T02:07:43Z"
+                .parse::<chrono::DateTime<chrono::Utc>>()
+                .unwrap()
+        );
+    }
+
+    #[test]
     fn test_exclude_newer_config_applies_package_overrides() {
         struct TestFeatures<'a> {
             manifest: &'a WorkspaceManifest,

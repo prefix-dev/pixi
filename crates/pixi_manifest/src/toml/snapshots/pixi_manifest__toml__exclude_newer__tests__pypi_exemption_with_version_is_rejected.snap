@@ -1,0 +1,9 @@
+---
+source: crates/pixi_manifest/src/toml/exclude_newer.rs
+expression: "render_error(input, err)"
+---
+  × PyPI exclude-newer exemptions can only exempt every release of a package for now, use `torch = "*"`
+   ╭─[pixi.toml:1:48]
+ 1 │ pypi-exclude-newer = { exemptions = { torch = "==2.10.0" } }
+   ·                                                ────────
+   ╰────
