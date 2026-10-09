@@ -53,7 +53,7 @@ pub use metrics::CacheMetrics;
 pub use purl::PurlDerivationSource;
 pub use pypi_names::PypiNames;
 pub use reporter::Reporter;
-pub use resolvers::ProjectDefinedMapping;
+pub use resolvers::{ProjectDefinedMapping, ProjectDefinedMappingError};
 
 use crate::{
     derivation::DerivationOutcome,
@@ -150,6 +150,9 @@ pub enum MappingError {
     #[error("failed to fetch conda-pypi mapping from remote source")]
     #[diagnostic(help("{}", MAPPING_OFFLINE_HELP))]
     Reqwest(#[source] reqwest_middleware::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ProjectDefined(#[from] ProjectDefinedMappingError),
 }
 
 impl From<reqwest_middleware::Error> for MappingError {
@@ -238,7 +241,7 @@ impl PurlDerivationClient {
         derivation_mode: &PurlDerivationMode,
         conda_packages: impl IntoIterator<Item = &mut RepoDataRecord>,
         reporter: Option<Arc<dyn Reporter>>,
-    ) -> miette::Result<()> {
+    ) -> Result<(), MappingError> {
         let start = Instant::now();
 
         // Collect the records into a vec so we can iterate multiple times.
@@ -309,9 +312,7 @@ impl PurlDerivationClient {
         let mut amended_records = 0;
         let mut total_records = 0;
         while let Some(next) = amend_futures.next().await {
-            // Use `Report::new` instead of `into_diagnostic` to preserve the
-            // diagnostic help text on `MappingError`.
-            let (record, derived_purls) = next.map_err(miette::Report::new)?;
+            let (record, derived_purls) = next?;
 
             if let Some(derived_purls) = derived_purls.into_purls() {
                 replace_pypi_purls(record, derived_purls);

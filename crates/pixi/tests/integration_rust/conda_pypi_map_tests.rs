@@ -1531,7 +1531,7 @@ async fn test_prefix_fetch_failure_error_mentions_escape_hatches() {
         .await
         .expect_err("an offline prefix.dev lookup should fail");
 
-    let rendered = format!("{err:?}");
+    let rendered = format!("{:?}", miette::Report::new(err));
     // Strip all whitespace before matching: miette wraps the help text at
     // arbitrary points, potentially splitting tokens across lines.
     let collapsed: String = rendered.chars().filter(|c| !c.is_whitespace()).collect();
