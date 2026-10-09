@@ -132,6 +132,17 @@ platforms = [
 platforms = ["linux-64-cuda-12-0"]  # the synthesized name for the entry above
 ```
 
+!!! note "Platform names on the command line"
+    A `--platform` flag accepts either the platform's name or its bare conda
+    subdir. Commands that read solved state (`pixi list`, `pixi tree`,
+    `pixi install`) map a bare subdir onto the platform the workspace declares
+    for it, so `pixi list --platform linux-64` shows the `linux-64-cuda-12-0`
+    environment above. Commands that write to the manifest (`pixi add`,
+    `pixi task add`) keep the subdir you typed, so they produce a
+    `[target.linux-64]` selector -- which applies to every platform on that
+    subdir. Pass the platform's name explicitly to scope a dependency or task
+    to one variant.
+
 !!! note "Platform names in `pixi.lock`"
     Platforms are written to `pixi.lock` under the same name the manifest
     uses (explicit or synthesized), so tools that consume the lock file can
