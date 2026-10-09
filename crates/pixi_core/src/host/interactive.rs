@@ -15,6 +15,7 @@ use crate::host::{Consent, ConsentRequest, DetectorConsent};
 
 #[derive(Clone, Copy)]
 enum DecisionStore {
+    Session,
     Repository,
     Shared,
 }
@@ -61,7 +62,13 @@ impl DetectorConsent for InteractiveConsent {
             return Consent::Deny;
         };
 
+        let decision = match answer.decision {
+            DetectorDecision::Allow => Consent::Allow,
+            DetectorDecision::Deny => Consent::Deny,
+        };
+        decisions.insert(origin.clone(), decision);
         let (path, flag, saved) = match answer.store {
+            DecisionStore::Session => return decision,
             DecisionStore::Repository => {
                 let root = self
                     .project_root
@@ -91,11 +98,6 @@ impl DetectorConsent for InteractiveConsent {
                 path.display()
             ),
         }
-        let decision = match answer.decision {
-            DetectorDecision::Allow => Consent::Allow,
-            DetectorDecision::Deny => Consent::Deny,
-        };
-        decisions.insert(origin.clone(), decision);
         decision
     }
 }
@@ -117,21 +119,27 @@ fn ask(channel: &str, project_root: Option<&Path>, shared_path: &Path) -> Option
     } else {
         DetectorDecision::Allow
     };
-    let store = if project_root.is_some() {
-        let selection = Select::with_theme(&theme)
-            .with_prompt("Where should this decision apply?")
-            .items([
-                "Workspace (.pixi/config.toml)".to_owned(),
-                format!("System configuration ({})", shared_path.display()),
-            ])
-            .default(0)
-            .interact()
-            .ok()?;
-        if selection == 0 {
-            DecisionStore::Repository
+    let system = format!("System configuration ({})", shared_path.display());
+    let options = [
+        "Don't save",
+        "Workspace (.pixi/config.toml)",
+        system.as_str(),
+    ];
+    let standalone_options = [options[0], options[2]];
+    let selection = Select::with_theme(&theme)
+        .with_prompt("Where should this decision apply?")
+        .items(if project_root.is_some() {
+            &options[..]
         } else {
-            DecisionStore::Shared
-        }
+            &standalone_options[..]
+        })
+        .default(0)
+        .interact()
+        .ok()?;
+    let store = if selection == 0 {
+        DecisionStore::Session
+    } else if project_root.is_some() && selection == 1 {
+        DecisionStore::Repository
     } else {
         DecisionStore::Shared
     };

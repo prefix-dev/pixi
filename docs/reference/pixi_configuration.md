@@ -562,7 +562,7 @@ For persistent behavior, prefer `[cache.netfs-redirect]` or
 
 Channels can register virtual package detectors: small packages whose executable reports virtual packages such as an externally installed MPI.
 Running a detector executes code from the channel. Pixi asks whether to **Don't trust** or **Trust** the channel's current and future detectors, with **Don't trust** first and selected by default.
-Then choose **Workspace** to save the decision in the workspace's `.pixi/config.toml`, or **System configuration** to save it in the shared user configuration for all repositories. **Workspace** shows the relative path `.pixi/config.toml`. **System configuration** shows the full destination path.
+Then choose **Don't save**, **Workspace**, or **System configuration**. **Don't save** is first and selected by default. It applies the decision only for the current command without writing configuration, so Pixi asks again next time. **Workspace** saves the decision in the workspace's `.pixi/config.toml` and shows that relative path. **System configuration** saves it in the shared user configuration for all repositories and shows the full destination path. Outside a workspace, only **Don't save** and **System configuration** are offered.
 Share `.pixi/config.toml` with colleagues to apply the same decisions in their checkouts.
 Repository decisions take precedence over user-wide decisions. A repository `allow` authorizes the channel's detectors for anyone using that configuration, including noninteractive sessions.
 `--offline` also applies to detector discovery and installation.
