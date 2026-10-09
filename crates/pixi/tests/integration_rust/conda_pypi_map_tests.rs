@@ -10,6 +10,7 @@ use std::{
     sync::Arc,
 };
 
+use miette::Diagnostic;
 use pypi_mapping::{
     self, ProjectDefinedChannelMapping, ProjectDefinedMapping, ProjectDefinedMappingLocation,
     PurlDerivationMode, PurlDerivationSource, PypiNames,
@@ -1531,14 +1532,10 @@ async fn test_prefix_fetch_failure_error_mentions_escape_hatches() {
         .await
         .expect_err("an offline prefix.dev lookup should fail");
 
-    let rendered = format!("{:?}", miette::Report::new(err));
-    // Strip all whitespace before matching: miette wraps the help text at
-    // arbitrary points, potentially splitting tokens across lines.
-    let collapsed: String = rendered.chars().filter(|c| !c.is_whitespace()).collect();
+    let help = err.help().expect("should carry a help text").to_string();
     assert!(
-        collapsed.contains("mapping-mode=\"replace\"")
-            && collapsed.contains("conda-pypi-map=false"),
-        "the error should suggest the offline escape hatches, got: {rendered}"
+        help.contains("mapping-mode = \"replace\"") && help.contains("conda-pypi-map = false"),
+        "the error should suggest the offline escape hatches, got: {help}"
     );
 }
 
