@@ -1294,6 +1294,25 @@ fn should_skip_existing(
     Ok(false)
 }
 
+/// The channel a Prefix.dev URL points at: the full path after the host, so
+/// that namespaced channels like `https://prefix.dev/<namespace>/<channel>`
+/// resolve to `<namespace>/<channel>` instead of just `<channel>`.
+fn prefix_channel_from_url(url: &Url) -> miette::Result<String> {
+    let channel = url
+        .path_segments()
+        .map(|segments| {
+            segments
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<_>>()
+                .join("/")
+        })
+        .unwrap_or_default();
+    if channel.is_empty() {
+        return Err(miette::miette!("Invalid Prefix URL: missing channel name"));
+    }
+    Ok(channel)
+}
+
 /// Upload packages to a Prefix.dev server.
 async fn upload_to_prefix(
     url: &Url,
@@ -1307,11 +1326,7 @@ async fn upload_to_prefix(
 
     tracing::info!("Uploading packages to Prefix.dev: {}", url);
 
-    let channel = url
-        .path_segments()
-        .and_then(|mut segments| segments.next_back())
-        .ok_or_else(|| miette::miette!("Invalid Prefix URL: missing channel name"))?
-        .to_string();
+    let channel = prefix_channel_from_url(url)?;
 
     let mut server_url = rewrite_scheme_to_https(url, "prefix")?;
     server_url.set_path("");
@@ -1727,6 +1742,29 @@ mod tests {
         // defaults.
         let stable = index_options(&config, "s3://bucket/stable");
         assert_eq!(stable.base_url, None);
+    }
+
+    #[test]
+    fn prefix_channel_keeps_the_namespace() {
+        let channel = |url: &str| prefix_channel_from_url(&Url::parse(url).unwrap());
+        assert_eq!(
+            channel("https://prefix.dev/my-channel").unwrap(),
+            "my-channel"
+        );
+        assert_eq!(
+            channel("https://prefix.dev/my-channel/").unwrap(),
+            "my-channel"
+        );
+        assert_eq!(
+            channel("https://prefix.dev/vslamlab/vslamlab").unwrap(),
+            "vslamlab/vslamlab"
+        );
+        assert_eq!(
+            channel("prefix://prefix.dev/vslamlab/vslamlab/").unwrap(),
+            "vslamlab/vslamlab"
+        );
+        assert!(channel("https://prefix.dev").is_err());
+        assert!(channel("https://prefix.dev/").is_err());
     }
 
     #[test]
