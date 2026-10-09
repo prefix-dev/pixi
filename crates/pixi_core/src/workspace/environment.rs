@@ -13,6 +13,7 @@ use pixi_manifest::{
     HasWorkspaceManifest, PixiPlatform, PixiPlatformName, Task, TaskName, WorkspaceManifest,
 };
 use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Subdir};
+use rattler_lock::LockFile;
 
 use super::{
     SolveGroup,
@@ -373,20 +374,37 @@ impl<'p> Environment<'p> {
         Ok(result)
     }
 
-    /// Return all tasks available for the given environment
-    /// This will not return task prefixed with _
-    pub fn get_filtered_tasks(&self) -> HashSet<TaskName> {
-        self.tasks(self.best_declared_platform())
-            .into_iter()
-            .flat_map(|tasks| {
-                tasks.into_iter().filter_map(|(key, _)| {
-                    if !key.as_str().starts_with('_') {
-                        Some(key)
-                    } else {
-                        None
-                    }
+    /// The platform to resolve this environment's task targets against when
+    /// the caller pins none: the platform it was last installed for, the best
+    /// declared platform for this machine, the declared platform the lock file
+    /// shows this machine can run, or -- so tasks of environments this machine
+    /// cannot run are still found -- the first declared platform.
+    pub fn task_platform(&self, lock_file: Option<&LockFile>) -> Option<&'p PixiPlatform> {
+        self.installed_or_best_declared_platform()
+            .or_else(|| {
+                lock_file.and_then(|lock_file| {
+                    super::virtual_packages::minimum_compatible_declared_platform(self, lock_file)
+                        .ok()
                 })
             })
+            .or_else(|| {
+                let env_platform_names = self.platforms();
+                self.workspace_manifest()
+                    .workspace
+                    .platforms
+                    .iter()
+                    .find(|platform| env_platform_names.contains(platform.name()))
+            })
+    }
+
+    /// Return all tasks available for the given environment, resolved against
+    /// its [`task_platform`](Self::task_platform).
+    /// This will not return task prefixed with _
+    pub fn get_filtered_tasks(&self, lock_file: Option<&LockFile>) -> HashSet<TaskName> {
+        self.tasks(self.task_platform(lock_file))
+            .into_iter()
+            .flat_map(|tasks| tasks.into_keys())
+            .filter(|key| !key.as_str().starts_with('_'))
             .map(ToOwned::to_owned)
             .collect()
     }
@@ -799,7 +817,7 @@ mod tests {
         )
         .unwrap();
 
-        let task = manifest.default_environment().get_filtered_tasks();
+        let task = manifest.default_environment().get_filtered_tasks(None);
 
         assert_eq!(task.len(), 1);
         assert!(task.contains(&"foo".into()));

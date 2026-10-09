@@ -36,6 +36,7 @@ use pixi_task::{
     PreferExecutable, SearchEnvironments, TaskAndEnvironment, TaskGraph, get_task_env,
 };
 use rattler_conda_types::Subdir;
+use rattler_lock::LockFile;
 use thiserror::Error;
 use tokio_util::sync::CancellationToken;
 use tracing::Level;
@@ -342,7 +343,12 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
 
     // Print all available tasks if no task is provided
     if args.task.is_empty() {
-        command_not_found(&workspace, explicit_environment);
+        let lock_file = workspace
+            .load_lock_file()
+            .await
+            .ok()
+            .map(|r| r.into_lock_file_or_empty_with_warning());
+        command_not_found(&workspace, explicit_environment, lock_file.as_ref());
         return Ok(ExitCode::SUCCESS);
     }
 
@@ -424,9 +430,13 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
     } else {
         None
     };
-    let search_environment =
-        SearchEnvironments::from_opt_env(&workspace, explicit_environment.clone(), search_platform)
-            .with_disambiguate_fn(disambiguate_task_interactive);
+    let search_environment = SearchEnvironments::from_opt_env_with_lock_file(
+        &workspace,
+        explicit_environment.clone(),
+        search_platform,
+        Some(lock_file.as_lock_file()),
+    )
+    .with_disambiguate_fn(disambiguate_task_interactive);
 
     let task_graph = TaskGraph::from_cmd_args(
         &workspace,
@@ -664,7 +674,11 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
             }
             Err(TaskExecutionError::NonZeroExitCode(code)) => {
                 if code == 127 {
-                    command_not_found(&workspace, explicit_environment.clone());
+                    command_not_found(
+                        &workspace,
+                        explicit_environment.clone(),
+                        Some(lock_file.as_lock_file()),
+                    );
                 }
                 return Ok(process_exit::exit_code_from_code(code));
             }
@@ -689,15 +703,29 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
 }
 
 /// Called when a command was not found.
-fn command_not_found<'p>(workspace: &'p Workspace, explicit_environment: Option<Environment<'p>>) {
+fn command_not_found<'p>(
+    workspace: &'p Workspace,
+    explicit_environment: Option<Environment<'p>>,
+    lock_file: Option<&LockFile>,
+) {
     let available_tasks: HashSet<TaskName> =
         if let Some(explicit_environment) = explicit_environment {
-            explicit_environment.get_filtered_tasks()
+            explicit_environment.get_filtered_tasks(lock_file)
         } else {
-            workspace
-                .environments()
-                .into_iter()
-                .flat_map(|env| env.get_filtered_tasks())
+            // Like task disambiguation, hide environments this machine cannot
+            // run unless that would hide all of them.
+            let (runnable, unrunnable): (Vec<_>, Vec<_>) =
+                workspace.environments().into_iter().partition(|env| {
+                    classify_environment_runnability(env, lock_file)
+                        != EnvironmentRunnability::Unsupported
+                });
+            let envs = if runnable.is_empty() {
+                unrunnable
+            } else {
+                runnable
+            };
+            envs.iter()
+                .flat_map(|env| env.get_filtered_tasks(lock_file))
                 .collect()
         };
 
@@ -718,7 +746,7 @@ fn command_not_found<'p>(workspace: &'p Workspace, explicit_environment: Option<
     // already satisfies, runs here regardless of the declared platforms, so
     // suggesting `platform add` would send the user after the wrong problem.
     if workspace.environments().iter().all(|env| {
-        classify_environment_runnability(env, None) == EnvironmentRunnability::Unsupported
+        classify_environment_runnability(env, lock_file) == EnvironmentRunnability::Unsupported
     }) {
         pixi_progress::println!(
             "\nHelp: This platform ({}) is not supported. Please run the following command to add this platform to the workspace:\n\n\tpixi workspace platform add {}",
