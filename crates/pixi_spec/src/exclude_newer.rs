@@ -118,8 +118,6 @@ impl From<ResolvedExcludeNewer> for rattler_solve::ExcludeNewer {
                 .with_channel_cutoff(channel.to_string(), to_saturating_jiff_timestamp(cutoff));
         }
 
-        // Preserve Pixi's per-package date cutoffs with the temporary Rattler
-        // pin. Release exemptions are not an equivalent replacement.
         #[allow(deprecated)]
         for (package, cutoff) in value.package_cutoffs {
             config = config.with_package_cutoff(package, to_saturating_jiff_timestamp(cutoff));
