@@ -54,6 +54,7 @@ dialoguer = "0.12.0"
 digest = "0.11"
 dirs = "7.0.0"
 dunce = "1.0.5"
+embed-manifest = "1.5.1"
 fancy_display = { path = "crates/fancy_display" }
 filetime = "0.2.26"
 flate2 = "1.1.0"
