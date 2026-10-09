@@ -85,7 +85,11 @@ impl<'a> FeatureInfo<'a> {
         Self {
             name: name.as_str(),
             dependencies: if deps.is_empty() { None } else { Some(deps) },
-            pypi_dependencies: if pypi_deps.is_empty() { None } else { Some(pypi_deps) },
+            pypi_dependencies: if pypi_deps.is_empty() {
+                None
+            } else {
+                Some(pypi_deps)
+            },
             tasks: if tasks.is_empty() { None } else { Some(tasks) },
         }
     }
@@ -217,12 +221,12 @@ mod tests {
         let workspace_ctx = cli_context(workspace);
 
         let features = workspace_ctx.list_features().await;
-        
+
         let feature_infos: Vec<_> = features
             .iter()
             .map(|(name, feature)| FeatureInfo::from_feature(name, feature))
             .collect();
-            
+
         let json = serde_json::to_string_pretty(&feature_infos).unwrap();
 
         insta::assert_snapshot!(json, @r###"

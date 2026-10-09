@@ -84,7 +84,7 @@ struct EnvironmentInfo<'a> {
     name: &'a str,
     features: Vec<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    solve_group: Option<&'a str>,
+    solve_group: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     dependencies: Option<Vec<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -96,30 +96,42 @@ struct EnvironmentInfo<'a> {
 impl<'a> EnvironmentInfo<'a> {
     fn from_environment(e: &'a pixi_core::workspace::Environment<'_>) -> Self {
         let inline_feature = e.features().find(|feature| feature.name.is_environment());
-        
+
         let deps: Vec<_> = inline_feature
             .and_then(|f| f.dependencies(pixi_manifest::SpecType::Run, None))
             .map(|d| d.names().map(|n| n.as_normalized().to_string()).collect())
             .unwrap_or_default();
-            
+
         let pypi_deps: Vec<_> = inline_feature
             .and_then(|f| f.pypi_dependencies(None))
             .map(|d| d.names().map(|n| n.as_source().to_string()).collect())
             .unwrap_or_default();
-            
+
         let tasks: Vec<_> = inline_feature
-            .map(|f| f.targets.default().tasks.keys().map(|k| k.as_str().to_string()).collect())
+            .map(|f| {
+                f.targets
+                    .default()
+                    .tasks
+                    .keys()
+                    .map(|k| k.as_str().to_string())
+                    .collect()
+            })
             .unwrap_or_default();
 
         Self {
             name: e.name().as_str(),
-            features: e.features()
+            features: e
+                .features()
                 .filter(|f| !f.name.is_environment())
                 .map(|f| f.name.as_str())
                 .collect(),
-            solve_group: e.solve_group().map(|sg| sg.name()),
+            solve_group: e.solve_group().map(|sg| sg.name().to_string()),
             dependencies: if deps.is_empty() { None } else { Some(deps) },
-            pypi_dependencies: if pypi_deps.is_empty() { None } else { Some(pypi_deps) },
+            pypi_dependencies: if pypi_deps.is_empty() {
+                None
+            } else {
+                Some(pypi_deps)
+            },
             tasks: if tasks.is_empty() { None } else { Some(tasks) },
         }
     }
@@ -146,7 +158,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 return Ok(());
             }
             if list_args.json {
-                let env_infos: Vec<_> = envs.iter().map(EnvironmentInfo::from_environment).collect();
+                let env_infos: Vec<_> =
+                    envs.iter().map(EnvironmentInfo::from_environment).collect();
                 pixi_utils::io::ignore_broken_pipe(writeln!(
                     std::io::stdout(),
                     "{}",
@@ -294,7 +307,7 @@ mod tests {
             .iter()
             .map(EnvironmentInfo::from_environment)
             .collect();
-            
+
         let json = serde_json::to_string_pretty(&env_infos).unwrap();
 
         insta::assert_snapshot!(json, @r###"
