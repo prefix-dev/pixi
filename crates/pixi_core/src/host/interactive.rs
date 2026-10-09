@@ -1,6 +1,7 @@
 //! Asking whether detectors from a channel may run and remembering the decision.
 
 use std::{
+    borrow::Cow,
     collections::HashMap,
     path::{Path, PathBuf},
 };
@@ -10,6 +11,7 @@ use dialoguer::{Select, theme::ColorfulTheme};
 use pixi_config::{DetectorDecision, write_detector_decision, write_repository_detector_decision};
 use pixi_progress::global_multi_progress;
 use rattler_conda_types::ChannelUrl;
+use shlex::try_quote;
 
 use crate::host::{Consent, ConsentRequest, DetectorConsent};
 
@@ -76,14 +78,17 @@ impl DetectorConsent for InteractiveConsent {
                     .expect("repository scope has a root");
                 (
                     root.join(".pixi/config.toml"),
-                    "--local",
+                    Cow::Owned(format!(
+                        "--local --manifest-path {}",
+                        try_quote(&root.to_string_lossy()).expect("workspace paths contain no nul")
+                    )),
                     write_repository_detector_decision(root, origin, answer.decision),
                 )
             }
             DecisionStore::Shared => {
                 let path = pixi_config::shared_user_config_write_path();
                 let saved = write_detector_decision(&path, origin, answer.decision);
-                (path, "--shared", saved)
+                (path, Cow::Borrowed("--shared"), saved)
             }
         };
         match saved {
@@ -104,7 +109,8 @@ impl DetectorConsent for InteractiveConsent {
 
 fn ask(channel: &str, project_root: Option<&Path>, shared_path: &Path) -> Option<Answer> {
     eprintln!(
-        "\nDetectors inspect your system and run code on your machine.\n\
+        "\nDetectors inspect your system to identify capabilities that packages depend on, \
+         and run code on your machine.\n\
          Trust applies to current and future detectors from this channel."
     );
     let theme = ColorfulTheme::default();
@@ -120,19 +126,16 @@ fn ask(channel: &str, project_root: Option<&Path>, shared_path: &Path) -> Option
         DetectorDecision::Allow
     };
     let system = format!("System configuration ({})", shared_path.display());
+    let workspace = project_root
+        .map(|root| format!("Workspace ({})", root.join(".pixi/config.toml").display()));
     let options = [
         "Don't save",
-        "Workspace (.pixi/config.toml)",
+        workspace.as_deref().unwrap_or(&system),
         system.as_str(),
     ];
-    let standalone_options = [options[0], options[2]];
     let selection = Select::with_theme(&theme)
         .with_prompt("Where should this decision apply?")
-        .items(if project_root.is_some() {
-            &options[..]
-        } else {
-            &standalone_options[..]
-        })
+        .items(&options[..if workspace.is_some() { 3 } else { 2 }])
         .default(0)
         .interact()
         .ok()?;
