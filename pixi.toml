@@ -6,6 +6,7 @@ authors = [
   "Ruben Arts <ruben@prefix.dev>",
   "Nichita Morcotilo <nichita@prefix.dev>",
   "Julian Hofer <julian@prefix.dev>",
+  "Lucas Colley <lucas@prefix.dev>",
 ]
 channels = ["https://prefix.dev/conda-forge"]
 description = "Package management made easy!"

@@ -30,6 +30,9 @@ authors:
   - given-names: Julian
     family-names: Hofer
     email: julian.hofer@protonmail.com
+  - given-names: Lucas
+    family-names: Colley
+    email: lucascolley@proton.me
 repository-code: 'https://github.com/prefix-dev/pixi/releases/tag/v0.81.0'
 url: 'https://pixi.sh/v0.81.0'
 abstract: >-
