@@ -61,13 +61,15 @@ pixi global install gh nvim ipython btop ripgrep
 
 ## How Tools Compare to Pixi
 
-| Builtin Core Features       | Pixi | Conda | Pip | Poetry | uv |
-|-----------------------------|------|-------|-----|--------|----|
-| Installs Python             | ✅    | ✅     | ❌   | ❌      | ✅  |
-| Supports Multiple Languages | ✅    | ✅     | ❌   | ❌      | ❌  |
-| Lockfiles                   | ✅    | ❌     | ❌   | ✅      | ✅  |
-| Task runner                 | ✅    | ❌     | ❌   | ❌      | ❌  |
-| Workspace Management        | ✅    | ❌     | ❌   | ✅      | ✅  |
+| Builtin Core Features       | Pixi | Conda | Pip | Poetry | uv | [mise](https://mise.jdx.dev/) |
+|-----------------------------|------|-------|-----|--------|----|--------------------------------|
+| Installs Python             | ✅    | ✅     | ❌   | ❌      | ✅  | ✅                              |
+| Supports Multiple Languages | ✅    | ✅     | ❌   | ❌      | ❌  | ✅                              |
+| Lockfiles                   | ✅    | ❌     | ❌   | ✅      | ✅  | ✅                              |
+| Task runner                 | ✅    | ❌     | ❌   | ❌      | ❌  | ✅                              |
+| Workspace Management        | ✅    | ❌     | ❌   | ✅      | ✅  | ✅                              |
+
+mise provides these features for development tools and tasks, and its lockfile covers tools rather than application dependencies. Pixi resolves project dependencies from Conda and PyPI and can also [build packages](build/getting_started.md).
 
 ---
 
