@@ -85,8 +85,8 @@ Each inline-table entry has:
 - `platform`: the conda subdir the entry targets (e.g. `linux-64`, `osx-arm64`). Required.
 - `name`: optional workspace-scoped identifier the platform is referenced by elsewhere (in `feature.<name>.platforms`, in lockfile rows, in CLI commands).
   When omitted, Pixi synthesizes a name from `platform` plus the declared virtual packages, so two entries that declare the same set in different key order share the same identifier.
-- Friendly keys for the common virtual packages: `cuda`, `archspec`, `glibc`, `linux`, `macos` (alias `osx`), `windows`.
-  Each maps onto the matching `__name` conda virtual package (`cuda` -> `__cuda`, `glibc` -> `__glibc`, `macos` -> `__osx`, etc.).
+- Friendly keys for the common virtual packages: `cuda`, `amdgpu`, `archspec`, `glibc`, `linux`, `macos` (alias `osx`), `windows`.
+  Each maps onto the matching `__name` conda virtual package (`cuda` -> `__cuda`, `amdgpu` -> `__amdgpu`, `glibc` -> `__glibc`, `macos` -> `__osx`, etc.).
 - `archspec` names a CPU microarchitecture (`x86_64_v3`, `skylake`, `m1`,
   `armv8.2a`, ...) rather than a version. The name must be one the bundled
   [archspec](https://github.com/archspec/archspec) database knows, and Pixi
@@ -116,7 +116,22 @@ Each inline-table entry has:
   conda CEP, `__cuda_arch` is meaningless without `__cuda`, so `arch` requires
   `driver`; declaring `arch` (or a raw `__cuda_arch`) alone is rejected.
 
-- For virtual packages without a friendly key, a raw `__name = "version"` entry is also accepted as an escape hatch. Only the virtual packages pixi knows how to override (`__win`, `__osx`, `__linux`, `__cuda`, `__archspec`, and the libc family `__glibc`/`__musl`/`__eglibc`) take effect at detection; any other raw `__name` is stored but ignored when checking host compatibility.
+- `amdgpu = true` declares `__amdgpu`, which only states that an AMD GPU is
+  present. An AMDGPU target name (`gfx90a`, `gfx1100`, ...) additionally
+  declares the GPU architecture as `__amdgpu_arch`, which conda stores as an
+  ISA version (`gfx90a` is `9.0.10`):
+
+  ```toml title="pixi.toml"
+  platforms = [
+    { name = "rocm", platform = "linux-64", amdgpu = true },
+    { name = "mi250", platform = "linux-64", amdgpu = "gfx90a" },
+  ]
+  ```
+
+  A raw `__amdgpu_arch` takes the ISA version and is rejected without
+  `__amdgpu`.
+
+- For virtual packages without a friendly key, a raw `__name = "version"` entry is also accepted as an escape hatch. Only the virtual packages pixi knows how to override (`__win`, `__osx`, `__linux`, `__cuda`, `__amdgpu`, `__archspec`, and the libc family `__glibc`/`__musl`/`__eglibc`) take effect at detection; any other raw `__name` is stored but ignored when checking host compatibility.
 
 A feature's `platforms` array is a list of names that must each resolve to a workspace platform (or be a bare conda subdir, which Pixi treats as an alias for that subdir).
 This is how you bind a feature to the rich variant:
@@ -174,10 +189,11 @@ Adding a platform whose definition already exists under a *different* name is re
 
 [`pixi workspace platform`](../reference/cli/pixi/workspace/platform/index.md) is the CLI surface for these entries:
 
-- `pixi workspace platform add <PLATFORM> [--cuda 12.0] [--cuda-arch 8.6] [--glibc 2.28] ...`
+- `pixi workspace platform add <PLATFORM> [--cuda 12.0] [--cuda-arch 8.6] [--amdgpu] [--amdgpu-arch gfx90a] [--glibc 2.28] ...`
   appends bare subdirs or rich platforms (or the current machine via
   `--auto-detect`, see above). `--cuda-arch` requires `--cuda` (or
   an existing `__cuda`) and serializes as `cuda = { driver, arch }`.
+  `--amdgpu-arch` also declares `__amdgpu` and serializes as `amdgpu = "gfx90a"`.
 - `pixi workspace platform edit <NAME> [--cuda 12.1] [--remove-virtual-package __glibc]` mutates a custom platform's declared virtual packages.
 - `pixi workspace platform move <NAME> --to-top | --to-bottom | --before <NAME> | --after <NAME>` reorders an entry; since order is selection priority, this is how you promote or demote a platform.
 - `pixi workspace platform list` inspects what is declared.

@@ -3993,6 +3993,20 @@
       "type": "object",
       "additionalProperties": true,
       "properties": {
+        "amdgpu": {
+          "title": "Amdgpu",
+          "description": "Declare the presence-only `__amdgpu` virtual package with `true`, or an AMDGPU target name (e.g. `gfx90a`) to also declare its `__amdgpu_arch`.",
+          "anyOf": [
+            {
+              "type": "boolean",
+              "const": true
+            },
+            {
+              "type": "string",
+              "pattern": "^gfx[0-9]+[0-9a-fA-F]{2}$"
+            }
+          ]
+        },
         "archspec": {
           "title": "Archspec",
           "description": "Declare a `__archspec` virtual package with the given microarchitecture, e.g. `x86_64_v3`.",
