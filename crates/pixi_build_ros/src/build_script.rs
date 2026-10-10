@@ -69,6 +69,23 @@ mod tests {
     }
 
     #[test]
+    fn test_windows_ament_cmake_uses_absolute_python_install_dir() {
+        // Regression test: a relative PYTHON_INSTALL_DIR such as
+        // "../Lib/site-packages" is recorded literally by CMake in
+        // install_manifest.txt and then leaks into the package file list, where
+        // entries containing `..` are rejected.
+        let template = include_str!("../templates/bld_ament_cmake.bat");
+        assert!(
+            template.contains(r#"set "PYTHON_INSTALL_DIR=%SP_DIR:\=/%""#),
+            "the ament_cmake Windows template must use an absolute site-packages path"
+        );
+        assert!(
+            !template.contains("relpath"),
+            "the relative PYTHON_INSTALL_DIR computation must be gone"
+        );
+    }
+
+    #[test]
     fn test_render_ament_python() {
         let script = render_build_script("ament_python", "jazzy", &PathBuf::from("/src")).unwrap();
 
