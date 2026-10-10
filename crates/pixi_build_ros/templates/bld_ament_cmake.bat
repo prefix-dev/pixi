@@ -24,32 +24,38 @@ set "CMAKE_GENERATOR=Ninja"
 :: Once those are solved, we can switch back to use Ninja
 :: set "CMAKE_GENERATOR=Visual Studio %VS_MAJOR% %VS_YEAR%"
 
-:: PYTHON_INSTALL_DIR should be a relative path, see
-:: https://github.com/ament/ament_cmake/blob/2.3.2/ament_cmake_python/README.md
-:: So we compute the relative path of %SP_DIR% w.r.t. to LIBRARY_PREFIX,
-:: but it is not trivial to do this in Command Prompt scripting, so let's do it via
-:: python
+:: PYTHON_INSTALL_DIR is passed as an absolute path with forward slashes.
+::
+:: The ament_cmake_python README suggests a relative path, but a relative value
+:: such as ../Lib/site-packages makes CMake record the literal
+:: "%LIBRARY_PREFIX%/../Lib/site-packages/..." in install_manifest.txt. That
+:: manifest is appended verbatim to %RATTLER_BUILD_PACKAGE_FILES% below, and the
+:: package writer rejects archive entries containing "..":
+::   paths in archives must not have `..` when setting path for Library
+::
+:: A backslash absolute path is not an option either: it ends up in the
+:: generated cmake_install.cmake and breaks its string parsing
+:: (Invalid character escape '\b').
+set "PYTHON_INSTALL_DIR=%SP_DIR:\=/%"
 
-:: This line is scary, but it basically assigns the output of the command inside (` and `)
-:: to the variable specified after DO SET
-:: The equivalent in bash is PYTHON_INSTALL_DIR=`python -c ...`
-FOR /F "tokens=* USEBACKQ" %%i IN (`python -c "import os;print(os.path.relpath(os.environ['SP_DIR'],os.environ['LIBRARY_PREFIX']).replace('\\','/'))"`) DO SET PYTHON_INSTALL_DIR=%%i
-
+:: Path-bearing arguments are quoted: cmd.exe splits an unquoted expanded value on
+:: spaces, so a build prefix that contains one would otherwise arrive at CMake as
+:: several arguments.
 cmake ^
     -G "%CMAKE_GENERATOR%" ^
-    -DCMAKE_INSTALL_PREFIX=%LIBRARY_PREFIX% ^
+    "-DCMAKE_INSTALL_PREFIX=%LIBRARY_PREFIX%" ^
     -DCMAKE_BUILD_TYPE=%BUILD_TYPE% ^
     -DCMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP=True ^
-    -DPYTHON_EXECUTABLE=%PYTHON% ^
-    -DPython_EXECUTABLE=%PYTHON% ^
-    -DPython3_EXECUTABLE=%PYTHON% ^
+    "-DPYTHON_EXECUTABLE=%PYTHON%" ^
+    "-DPython_EXECUTABLE=%PYTHON%" ^
+    "-DPython3_EXECUTABLE=%PYTHON%" ^
     -DSETUPTOOLS_DEB_LAYOUT=OFF ^
     -DBUILD_SHARED_LIBS=ON ^
     -DBUILD_TESTING=OFF ^
     -DCMAKE_OBJECT_PATH_MAX=255 ^
     --compile-no-warning-as-error ^
-    -DPYTHON_INSTALL_DIR=%PYTHON_INSTALL_DIR% ^
-    %SRC_DIR%
+    "-DPYTHON_INSTALL_DIR=%PYTHON_INSTALL_DIR%" ^
+    "%SRC_DIR%"
 if errorlevel 1 exit 1
 
 :: We explicitly pass %CPU_COUNT% to cmake --build as we are not using Ninja,
