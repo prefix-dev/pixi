@@ -86,6 +86,21 @@ mod tests {
     }
 
     #[test]
+    fn test_windows_ament_cmake_quotes_path_arguments() {
+        // cmd.exe splits an unquoted expanded value on spaces, so the build
+        // prefix must not be handed to cmake as a bare %VAR%.
+        let template = include_str!("../templates/bld_ament_cmake.bat");
+        for arg in [
+            r#""-DCMAKE_INSTALL_PREFIX=%LIBRARY_PREFIX%""#,
+            r#""-DPYTHON_EXECUTABLE=%PYTHON%""#,
+            r#""-DPYTHON_INSTALL_DIR=%PYTHON_INSTALL_DIR%""#,
+            r#""%SRC_DIR%""#,
+        ] {
+            assert!(template.contains(arg), "expected quoted argument {arg}");
+        }
+    }
+
+    #[test]
     fn test_render_ament_python() {
         let script = render_build_script("ament_python", "jazzy", &PathBuf::from("/src")).unwrap();
 

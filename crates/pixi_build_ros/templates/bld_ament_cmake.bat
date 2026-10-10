@@ -38,21 +38,24 @@ set "CMAKE_GENERATOR=Ninja"
 :: (Invalid character escape '\b').
 set "PYTHON_INSTALL_DIR=%SP_DIR:\=/%"
 
+:: Path-bearing arguments are quoted: cmd.exe splits an unquoted expanded value on
+:: spaces, so a build prefix that contains one would otherwise arrive at CMake as
+:: several arguments.
 cmake ^
     -G "%CMAKE_GENERATOR%" ^
-    -DCMAKE_INSTALL_PREFIX=%LIBRARY_PREFIX% ^
+    "-DCMAKE_INSTALL_PREFIX=%LIBRARY_PREFIX%" ^
     -DCMAKE_BUILD_TYPE=%BUILD_TYPE% ^
     -DCMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP=True ^
-    -DPYTHON_EXECUTABLE=%PYTHON% ^
-    -DPython_EXECUTABLE=%PYTHON% ^
-    -DPython3_EXECUTABLE=%PYTHON% ^
+    "-DPYTHON_EXECUTABLE=%PYTHON%" ^
+    "-DPython_EXECUTABLE=%PYTHON%" ^
+    "-DPython3_EXECUTABLE=%PYTHON%" ^
     -DSETUPTOOLS_DEB_LAYOUT=OFF ^
     -DBUILD_SHARED_LIBS=ON ^
     -DBUILD_TESTING=OFF ^
     -DCMAKE_OBJECT_PATH_MAX=255 ^
     --compile-no-warning-as-error ^
-    -DPYTHON_INSTALL_DIR=%PYTHON_INSTALL_DIR% ^
-    %SRC_DIR%
+    "-DPYTHON_INSTALL_DIR=%PYTHON_INSTALL_DIR%" ^
+    "%SRC_DIR%"
 if errorlevel 1 exit 1
 
 :: We explicitly pass %CPU_COUNT% to cmake --build as we are not using Ninja,
