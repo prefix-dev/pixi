@@ -93,6 +93,19 @@ in `snake_case`:
 
 The following reference describes all available configuration options.
 
+!!! tip "Describing options from the CLI"
+    Run `pixi config list --describe` to print every option with its type, default and a short explanation.
+    Options you have set are shown with their current value; the rest are commented out and show their default.
+    Pass a key to describe a single option, or add `--json` for machine-readable output.
+
+    ```shell
+    $ pixi config list --describe tls-no-verify
+    # Disable TLS certificate verification for all network connections. Use only for testing or trusted internal networks.
+    # Type: bool
+    # Default: false
+    # tls-no-verify = false
+    ```
+
 ### `default-channels`
 
 The `default-channels` provide fallback channels for commands that do not obtain channels from an existing workspace or

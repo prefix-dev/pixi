@@ -90,6 +90,10 @@ struct ListArgs {
     #[arg(long)]
     json: bool,
 
+    /// Describe every configuration option with its type, default, and a short explanation
+    #[arg(long)]
+    describe: bool,
+
     #[clap(flatten)]
     config_source: pixi_config::ConfigSourceCli,
 
@@ -213,6 +217,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         Subcommand::List(args) => {
             let config = load_config(&args.common, &args.config_source.source())?;
+
+            if args.describe {
+                let out = render_describe(&config, args.key.as_deref(), args.json)?;
+                pixi_utils::io::ignore_broken_pipe(writeln!(std::io::stdout(), "{out}"))
+                    .into_diagnostic()?;
+                return Ok(());
+            }
 
             let out = if let Some(key) = args.key {
                 let partial = partial_config(&config, &key)?;
@@ -696,6 +707,176 @@ fn resolve_parent_keys(doc: &TomlDocument, parents: &[&str]) -> Vec<String> {
     resolved
 }
 
+fn render_describe(
+    config: &Config,
+    key_filter: Option<&str>,
+    json: bool,
+) -> miette::Result<String> {
+    let descriptions = config.describe_keys();
+    let as_listed = |opt: &'static pixi_config::ConfigOptionDescription| {
+        // Keys with a placeholder segment have no single value to show.
+        let path =
+            (!opt.key.contains('<')).then(|| opt.key.split('.').map(str::to_string).collect());
+        (opt, opt.key.to_string(), path)
+    };
+
+    // Each selected option is paired with the name to display and the path to
+    // look its value up at. A filter like `s3-options.my-bucket.region` matches
+    // the `s3-options.<bucket>.region` option, like `pixi config list <key>`.
+    let selected: Vec<(
+        &pixi_config::ConfigOptionDescription,
+        String,
+        Option<Vec<String>>,
+    )> = if let Some(k) = key_filter {
+        if let Some(opt) = descriptions.iter().find(|opt| opt.key == k) {
+            // Keys copied from the listing, placeholders included, match as-is.
+            vec![as_listed(opt)]
+        } else {
+            let key_path = KeyPath::parse(k)?;
+            let segments: Vec<&str> = key_path
+                .parents()
+                .into_iter()
+                .chain([key_path.target()])
+                .collect();
+            let matches: Vec<_> = descriptions
+                .iter()
+                .filter(|opt| is_known_key(&[opt.key], &segments))
+                .map(|opt| {
+                    let path = segments.iter().map(|s| s.to_string()).collect();
+                    (opt, k.to_string(), Some(path))
+                })
+                .collect();
+            if matches.is_empty() {
+                return Err(miette::miette!(
+                    "Unknown configuration key '{}'. Run `pixi config list --describe` to list every available key.",
+                    k
+                ));
+            }
+            matches
+        }
+    } else {
+        descriptions.iter().map(as_listed).collect()
+    };
+
+    let doc = toml_edit::ser::to_string_pretty(config)
+        .into_diagnostic()
+        .and_then(|s| s.parse::<toml_edit::DocumentMut>().into_diagnostic())?;
+    let lookup = |path: &Option<Vec<String>>| {
+        path.as_ref()
+            .and_then(|path| lookup_path(doc.as_table(), path))
+    };
+
+    if json {
+        // Go through TOML like `partial_config` does, so unset fields are
+        // dropped instead of showing up as nulls.
+        let json_doc: serde_json::Value =
+            toml_edit::de::from_str(&doc.to_string()).into_diagnostic()?;
+        let arr: Vec<serde_json::Value> = selected
+            .iter()
+            .map(|(opt, name, path)| {
+                let value = path
+                    .as_ref()
+                    .and_then(|path| {
+                        path.iter()
+                            .try_fold(&json_doc, |value, segment| value.get(segment))
+                    })
+                    .cloned()
+                    .unwrap_or(serde_json::Value::Null);
+                serde_json::json!({
+                    "key": name,
+                    "description": opt.description,
+                    "type": opt.value_type,
+                    "default": opt.default,
+                    "value": value,
+                })
+            })
+            .collect();
+        return serde_json::to_string_pretty(&arr).into_diagnostic();
+    }
+
+    let mut out = String::new();
+    for (i, (opt, name, path)) in selected.iter().enumerate() {
+        if i > 0 {
+            out.push('\n');
+        }
+        out.push_str("# ");
+        out.push_str(opt.description);
+        out.push('\n');
+        out.push_str("# Type: ");
+        out.push_str(opt.value_type);
+        out.push('\n');
+        out.push_str("# Default: ");
+        out.push_str(opt.default);
+        out.push('\n');
+
+        match lookup(path).map(format_toml_value) {
+            Some(value) => {
+                out.push_str(name);
+                out.push_str(" = ");
+                out.push_str(&value);
+                out.push('\n');
+            }
+            None => {
+                out.push_str("# ");
+                out.push_str(name);
+                out.push_str(" = ");
+                out.push_str(opt.default);
+                out.push('\n');
+            }
+        }
+    }
+    Ok(out)
+}
+
+fn lookup_path<'a>(table: &'a toml_edit::Table, path: &[String]) -> Option<&'a toml_edit::Item> {
+    let (first, rest) = path.split_first()?;
+    let mut item = table.get(first)?;
+    for part in rest {
+        item = item.as_table_like().and_then(|t| t.get(part))?;
+    }
+    Some(item)
+}
+
+fn format_toml_value(item: &toml_edit::Item) -> String {
+    match item {
+        toml_edit::Item::Value(v) => v.to_string().trim().to_string(),
+        toml_edit::Item::Table(t) => table_to_inline(t).to_string().trim().to_string(),
+        toml_edit::Item::ArrayOfTables(arr) => {
+            let mut out = toml_edit::Array::new();
+            for t in arr {
+                out.push(table_to_inline(t));
+            }
+            out.to_string().trim().to_string()
+        }
+        toml_edit::Item::None => String::new(),
+    }
+}
+
+fn table_to_inline(table: &toml_edit::Table) -> toml_edit::InlineTable {
+    let mut inline = toml_edit::InlineTable::new();
+    for (k, v) in table.iter() {
+        if let Some(val) = item_to_value(v) {
+            inline.insert(k, val);
+        }
+    }
+    inline
+}
+
+fn item_to_value(item: &toml_edit::Item) -> Option<toml_edit::Value> {
+    match item {
+        toml_edit::Item::Value(v) => Some(v.clone()),
+        toml_edit::Item::Table(t) => Some(toml_edit::Value::InlineTable(table_to_inline(t))),
+        toml_edit::Item::ArrayOfTables(arr) => {
+            let mut out = toml_edit::Array::new();
+            for t in arr {
+                out.push(table_to_inline(t));
+            }
+            Some(toml_edit::Value::Array(out))
+        }
+        toml_edit::Item::None => None,
+    }
+}
+
 /// Extract only the value at the (possibly nested) `key` from the config,
 /// wrapped in its parent tables so it serializes like the full config would.
 fn partial_config(config: &Config, key: &str) -> miette::Result<serde_json::Value> {
@@ -862,6 +1043,7 @@ mod tests {
         execute_subcommand(Subcommand::List(ListArgs {
             key: None,
             json: false,
+            describe: false,
             common: test_context.common_args,
             config_source: pixi_config::ConfigSourceCli::default(),
         }))
@@ -1482,6 +1664,7 @@ region = "us-east-1"
                 subcommand: Subcommand::List(ListArgs {
                     key: Some(key.clone()),
                     json: false,
+                    describe: false,
                     common: test_context.common_args.clone(),
                     config_source: pixi_config::ConfigSourceCli {
                         no_config: true,
