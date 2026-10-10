@@ -18,8 +18,7 @@ layout pixi
 `direnv` ensures that the environment is deactivated when you leave the directory.
 Additional arguments are passed to `pixi shell-hook`, so you can activate a different environment with `layout pixi -e <env_name>`.
 
-`layout pixi` must be used in the workspace root and requires a `pixi.lock`. If there is none yet, run `pixi lock` first.
-It guards the manifest (`pixi.toml` or `pyproject.toml`) and `pixi.lock` with:
+`layout pixi` guards the manifest (`pixi.toml` or `pyproject.toml`) and `pixi.lock` with:
 
 - [`require_allowed`](https://direnv.net/man/direnv-stdlib.1.html#coderequireallowed-ltpathgt-ltpathgt-code), which blocks the `.envrc` until you run `direnv allow` again whenever one of these files changes;
 - [`watch_file`](https://direnv.net/man/direnv-stdlib.1.html#codewatchfile-ltpathgt-ltpathgt-code), which makes `direnv` reload the `.envrc` whenever one of these files changes.
