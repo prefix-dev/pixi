@@ -1,4 +1,5 @@
 use chrono::{DateTime, Days, NaiveDate, NaiveTime, Utc};
+use itertools::Either;
 use rattler_conda_types::{ChannelUrl, PackageName, RepoDataRecord, Version, VersionSpec};
 use std::{collections::BTreeMap, str::FromStr};
 
@@ -172,13 +173,13 @@ impl ExcludeNewerFilter {
 
     /// Use native solver filtering when there are no version exemptions.
     ///
-    /// Rattler does not yet support exemptions. Return the complete filter
-    /// otherwise, so callers cannot silently drop them during conversion.
-    pub fn into_solver_cutoff(self) -> Result<rattler_solve::ExcludeNewer, Self> {
+    /// Rattler does not yet support exemptions. The right variant retains the
+    /// complete filter so callers cannot silently drop them during conversion.
+    pub fn into_solver_cutoff(self) -> Either<rattler_solve::ExcludeNewer, Self> {
         if self.exemptions.is_empty() {
-            Ok(self.cutoffs)
+            Either::Left(self.cutoffs)
         } else {
-            Err(self)
+            Either::Right(self)
         }
     }
 }

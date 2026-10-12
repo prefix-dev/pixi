@@ -3,7 +3,7 @@ use std::{
     sync::Arc,
 };
 
-use itertools::Itertools;
+use itertools::{Either, Itertools};
 use pixi_record::{PixiRecord, SourceRecord};
 use pixi_spec::{BinarySpec, ExcludeNewerFilter, ResolvedExcludeNewer, SourceSpec};
 use pixi_spec_containers::DependencyMap;
@@ -300,8 +300,8 @@ impl SolveCondaEnvironmentSpec {
 
             let mut excluded_candidates = self.excluded_candidates;
             let exclude_newer = match exclude_newer.map(ExcludeNewerFilter::into_solver_cutoff) {
-                Some(Ok(cutoff)) => Some(cutoff),
-                Some(Err(filter)) => {
+                Some(Either::Left(cutoff)) => Some(cutoff),
+                Some(Either::Right(filter)) => {
                     for record in solvable_records.iter().flatten().copied().chain(&installed) {
                         if let Some(reason) = filter.exclusion_reason(record) {
                             excluded_candidates
