@@ -150,13 +150,13 @@ impl WorkspaceManifest {
 
     /// Returns the mutable feature with the given name or `Err` if it does not
     /// exist.
-    pub fn feature_mut<Q>(&mut self, name: &Q) -> Result<&mut Feature, FeatureNotFoundError>
-    where
-        Q: ?Sized + Hash + Equivalent<FeatureName> + Display,
-    {
+    pub fn feature_mut(
+        &mut self,
+        name: &FeatureName,
+    ) -> Result<&mut Feature, FeatureNotFoundError> {
         self.features
             .get_mut(name)
-            .ok_or_else(|| FeatureNotFoundError(name.to_string()))
+            .ok_or_else(|| FeatureNotFoundError(name.clone()))
     }
 
     /// Returns the mutable feature with the given name
@@ -324,23 +324,40 @@ fn missing_activation_feature_error(
         }
         Some(_) => ActivationEditError::NoneDefined {
             what,
-            location: feature_name.user_facing().to_string(),
+            location: ActivationLocation::new(None, feature_name),
         },
-        None => ActivationEditError::FeatureNotFound(feature_name.as_str().to_owned()),
+        None => ActivationEditError::FeatureNotFound(feature_name.clone()),
     }
 }
 
-/// A human-readable description of the feature/target an activation edit
-/// applies to, used in error messages.
-fn activation_location(target: Option<&TargetSelector>, feature_name: &FeatureName) -> String {
-    let feature = if feature_name.is_default() {
-        "the default feature".to_string()
-    } else {
-        feature_name.user_facing().to_string()
-    };
-    match target {
-        Some(target) => format!("{feature} and target '{target}'"),
-        None => feature,
+/// The feature/target an activation edit applies to. Its [`Display`] is the
+/// human-readable description used in error messages.
+#[derive(Debug, Clone)]
+pub struct ActivationLocation {
+    pub feature_name: FeatureName,
+    pub target: Option<TargetSelector>,
+}
+
+impl ActivationLocation {
+    fn new(target: Option<&TargetSelector>, feature_name: &FeatureName) -> Self {
+        Self {
+            feature_name: feature_name.clone(),
+            target: target.cloned(),
+        }
+    }
+}
+
+impl Display for ActivationLocation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.feature_name.is_default() {
+            write!(f, "the default feature")?;
+        } else {
+            write!(f, "{}", self.feature_name.user_facing())?;
+        }
+        if let Some(target) = &self.target {
+            write!(f, " and target '{target}'")?;
+        }
+        Ok(())
     }
 }
 
@@ -492,7 +509,7 @@ impl WorkspaceManifestMut<'_> {
         feature_name: &FeatureName,
     ) -> Result<(), ActivationEditError> {
         const WHAT: &str = "activation scripts";
-        let location = activation_location(target, feature_name);
+        let location = ActivationLocation::new(target, feature_name);
         if self.workspace.features.get(feature_name).is_none() {
             return Err(missing_activation_feature_error(
                 self.workspace,
@@ -596,7 +613,7 @@ impl WorkspaceManifestMut<'_> {
         feature_name: &FeatureName,
     ) -> Result<(), ActivationEditError> {
         const WHAT: &str = "activation environment variables";
-        let location = activation_location(target, feature_name);
+        let location = ActivationLocation::new(target, feature_name);
         if self.workspace.features.get(feature_name).is_none() {
             return Err(missing_activation_feature_error(
                 self.workspace,
@@ -1412,8 +1429,8 @@ impl WorkspaceManifestMut<'_> {
             .collect();
         if !missing.is_empty() {
             return Err(PlatformEditError::NotDeclaredByFeature {
-                feature: feature_name.user_facing().to_string(),
-                missing: missing.iter().map(|pn| pn.as_str()).join(", "),
+                feature_name: feature_name.clone(),
+                missing: missing.into_iter().cloned().collect(),
             });
         }
 
@@ -1773,7 +1790,7 @@ impl WorkspaceManifestMut<'_> {
                 current
                     .iter()
                     .position(|x| x.channel.to_string() == c.channel.to_string())
-                    .ok_or_else(|| RemoveChannelsError::NotFound(c.channel.as_str().to_owned()))
+                    .ok_or_else(|| RemoveChannelsError::NotFound(c.channel.clone()))
                     .map(|_| c.channel.to_string())
             })
             .collect::<Result<_, _>>()?;
@@ -2033,7 +2050,7 @@ pub enum RemoveDependencyError {
 /// exist.
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 #[error("Feature {} does not exist", consts::FEATURE_STYLE.apply_to(.0))]
-pub struct FeatureNotFoundError(pub String);
+pub struct FeatureNotFoundError(pub FeatureName);
 
 /// Errors from [`WorkspaceManifestMut::add_task`] and
 /// [`WorkspaceManifestMut::remove_task`].
@@ -2060,21 +2077,27 @@ pub enum ActivationEditError {
     #[error("the environment '{0}' does not exist")]
     EnvironmentNotFound(EnvironmentName),
 
-    #[error("the feature '{0}' does not exist")]
-    FeatureNotFound(String),
+    #[error("the feature '{}' does not exist", .0.as_str())]
+    FeatureNotFound(FeatureName),
 
     /// `what` names the kind of entry, e.g. "activation scripts".
     #[error("no {what} are defined for {location}")]
     NoneDefined {
         what: &'static str,
-        location: String,
+        location: ActivationLocation,
     },
 
     #[error("the activation script '{script}' was not found for {location}")]
-    ScriptNotFound { script: String, location: String },
+    ScriptNotFound {
+        script: String,
+        location: ActivationLocation,
+    },
 
     #[error("the activation environment variable '{key}' was not found for {location}")]
-    EnvVarNotFound { key: String, location: String },
+    EnvVarNotFound {
+        key: String,
+        location: ActivationLocation,
+    },
 
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -2120,8 +2143,15 @@ pub enum PlatformEditError {
     #[error("cannot move platform '{0}' relative to itself")]
     MoveRelativeToItself(PixiPlatformName),
 
-    #[error("{feature} does not declare platform(s): {missing}")]
-    NotDeclaredByFeature { feature: String, missing: String },
+    #[error(
+        "{} does not declare platform(s): {}",
+        .feature_name.user_facing(),
+        .missing.iter().join(", ")
+    )]
+    NotDeclaredByFeature {
+        feature_name: FeatureName,
+        missing: Vec<PixiPlatformName>,
+    },
 
     #[error(transparent)]
     InvalidEdit(#[from] PixiPlatformError),
@@ -2147,8 +2177,8 @@ pub enum AddDependencyError {
 /// Errors from [`WorkspaceManifestMut::remove_channels`].
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 pub enum RemoveChannelsError {
-    #[error("channel {0} does not exist")]
-    NotFound(String),
+    #[error("channel {} does not exist", .0.as_str())]
+    NotFound(NamedChannelOrUrl),
 
     #[error(transparent)]
     #[diagnostic(transparent)]

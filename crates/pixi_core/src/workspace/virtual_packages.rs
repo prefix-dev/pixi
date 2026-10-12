@@ -305,10 +305,14 @@ fn describe_resolution_gap(
 /// `__archspec` carries a constant version and names its microarchitecture in
 /// the build string, so rendering it like the others produces the useless
 /// "archspec >=0"; name the microarchitecture instead.
+/// AMDGPU ISA requirements are exact, not lower bounds.
 fn describe_requirement(required: &GenericVirtualPackage) -> String {
     let name = required.name.as_normalized().trim_start_matches('_');
     match archspec_microarchitecture_of(required) {
         Some(microarchitecture) => format!("{name} {microarchitecture}"),
+        None if required.name.as_normalized() == "__amdgpu_arch" => {
+            format!("{name} =={}", required.version)
+        }
         None => format!("{name} >={}", required.version),
     }
 }
@@ -948,6 +952,34 @@ packages: []
         assert_eq!(
             verdict,
             RunPlatformVerdict::OnlyMinimum(vec![gvp("__glibc", "2.28")])
+        );
+    }
+
+    #[test]
+    fn classify_wrong_amdgpu_architecture_against_package_requirements() {
+        let required_arch = gvp("__amdgpu_arch", "9.0.10");
+        let resolved = platform_data(
+            Subdir::Linux64,
+            vec![gvp("__amdgpu", "0"), required_arch.clone()],
+        );
+        let base = [gvp("__amdgpu", "0"), gvp("__amdgpu_arch", "9.0.11")];
+        let minimum = required_platform(Subdir::Linux64, &["__amdgpu", "__amdgpu_arch ==9.0.10"]);
+
+        assert_eq!(
+            classify_run_platform(&[Subdir::Linux64], &base, &resolved, &minimum),
+            RunPlatformVerdict::BelowMinimum(
+                required_platform(Subdir::Linux64, &["__amdgpu_arch ==9.0.10"])
+                    .requirements()
+                    .to_vec()
+            )
+        );
+
+        // With no package dependency on the architecture, only the declared
+        // resolution target is unmet; the installed packages still run.
+        let minimum = required_platform(Subdir::Linux64, &["__amdgpu"]);
+        assert_eq!(
+            classify_run_platform(&[Subdir::Linux64], &base, &resolved, &minimum),
+            RunPlatformVerdict::OnlyMinimum(vec![required_arch])
         );
     }
 

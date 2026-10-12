@@ -48,11 +48,11 @@ pub use has_features_iter::HasFeaturesIter;
 pub use has_manifest_ref::HasWorkspaceManifest;
 use itertools::Itertools;
 pub use manifests::{
-    ActivationEditError, ActivationScriptsChange, AddDependencyError, AssociateProvenance,
-    EnvironmentEditError, FeatureNotFoundError, InvalidVersionError, ManifestKind,
-    ManifestProvenance, ManifestSource, MissingTargetError, PackageManifest, PlatformEditError,
-    ProvenanceError, RemoveChannelsError, RemoveDependencyError, SetRequiresPixiError,
-    TaskEditError, WithProvenance, WorkspaceManifest, WorkspaceManifestMut,
+    ActivationEditError, ActivationLocation, ActivationScriptsChange, AddDependencyError,
+    AssociateProvenance, EnvironmentEditError, FeatureNotFoundError, InvalidVersionError,
+    ManifestKind, ManifestProvenance, ManifestSource, MissingTargetError, PackageManifest,
+    PlatformEditError, ProvenanceError, RemoveChannelsError, RemoveDependencyError,
+    SetRequiresPixiError, TaskEditError, WithProvenance, WorkspaceManifest, WorkspaceManifestMut,
 };
 use miette::Diagnostic;
 pub use package::Package;
