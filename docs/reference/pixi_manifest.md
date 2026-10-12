@@ -471,29 +471,6 @@ torch = { version = ">=2.10.0", index = "https://download.pytorch.org/whl/cu124"
     Note that for PyPI package indexes the package index must support the `upload-time` field as specified in [`PEP 700`](https://peps.python.org/pep-0700/).
     If the field is not present for a given distribution, the distribution will be treated as unavailable. PyPI provides `upload-time` for all packages.
 
-!!! warning "Deprecated: the top-level `[exclude-newer]` and `[pypi-exclude-newer]` tables"
-    Older manifests override the cutoff per package in the top-level `[exclude-newer]` and `[pypi-exclude-newer]` tables.
-    These tables still work, but pixi warns about them because a per-package cutoff lowers the cutoff for every future release of the package.
-    Move the entries with a zero cutoff such as `"0d"` to the `exemptions` of `[workspace.exclude-newer]` and `[workspace.pypi-exclude-newer]`, and narrow them down to the releases you vetted.
-    Per-package cutoffs other than a zero cutoff have no replacement and will stop working when the tables are removed.
-
-    ```toml
-    # before
-    [workspace]
-    exclude-newer = "7d"
-
-    [exclude-newer]
-    openssl = "0d"
-
-    [pypi-exclude-newer]
-    torch = "0d"
-
-    # after
-    [workspace]
-    exclude-newer = { cutoff = "7d", exemptions = { openssl = "3.5.1" } }
-    pypi-exclude-newer = { exemptions = { torch = "*" } }
-    ```
-
 ### `build-variants` (optional)
 
 !!! warning "Preview Flag"

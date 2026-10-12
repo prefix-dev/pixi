@@ -115,11 +115,6 @@ Global environments have no PyPI dependencies, so there is no equivalent of the 
 
 An environment containing a package that is newer than the cutoff and not exempt counts as out of sync, so tightening the cutoff re-solves it on the next `pixi global sync`.
 
-!!! warning "Deprecated: the top-level `[exclude-newer]` table"
-    Older manifests override the cutoff per package in a top-level `[exclude-newer]` table.
-    It still works, but pixi warns about it. Move the entries with a zero cutoff such as `"0d"` to the `exemptions` of `[global.exclude-newer]` instead.
-    Per-package cutoffs other than a zero cutoff have no replacement and will stop working when the table is removed.
-
 
 ## Dependencies
 

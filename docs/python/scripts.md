@@ -79,10 +79,6 @@ Pixi reads those fields and extends them with a focused subset of
   activation settings.
 - `tool.pixi.target.<platform>` holds platform-specific dependencies,
   constraints, and activation settings.
-- `tool.pixi.exclude-newer` and `tool.pixi.pypi-exclude-newer` are the
-  deprecated per-package cutoff tables; use the `exemptions` of
-  `tool.pixi.workspace.exclude-newer` and
-  `tool.pixi.workspace.pypi-exclude-newer` instead.
 
 Every other key under `tool.pixi` is rejected with an error pointing at it,
 since a script has one implicit environment and no features, tasks or
