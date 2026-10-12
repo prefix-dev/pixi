@@ -101,7 +101,7 @@ impl GenerateRecipe for RGenerator {
         host_platform: Subdir,
         _python_params: Option<PythonParams>,
         variants: &HashSet<NormalizedKey>,
-        _channels: Vec<ChannelUrl>,
+        channels: Vec<ChannelUrl>,
         _cache_dir: Option<PathBuf>,
         _workspace_scratch_directory: Option<PathBuf>,
         _workspace_directory: Option<PathBuf>,
@@ -188,6 +188,8 @@ impl GenerateRecipe for RGenerator {
         // Add R package dependencies from DESCRIPTION (Imports + Depends) unless ignored
         if !config.ignore_description_dependencies.unwrap_or(false) {
             let r_dependencies = metadata_provider.runtime_dependencies().into_diagnostic()?;
+            // Bioconductor packages among the dependencies, which come from bioconda
+            let mut from_bioconda = Vec::new();
 
             for dep in r_dependencies {
                 // Skip packages that are built into r-base (the base packages)
@@ -198,6 +200,9 @@ impl GenerateRecipe for RGenerator {
                 // Convert R package name to conda package name, respecting custom mapping
                 let conda_name =
                     metadata::r_package_to_conda_with_mapping(&dep.name, Some(&config.mapping));
+                if conda_name.starts_with("bioconductor-") {
+                    from_bioconda.push(dep.name.clone());
+                }
 
                 let lower_dep = dep.name.to_lowercase();
                 let r_name = format!("r-{lower_dep}");
@@ -242,6 +247,9 @@ impl GenerateRecipe for RGenerator {
                 // Convert R package name to conda package name, respecting custom mapping
                 let conda_name =
                     metadata::r_package_to_conda_with_mapping(&dep.name, Some(&config.mapping));
+                if conda_name.starts_with("bioconductor-") {
+                    from_bioconda.push(dep.name.clone());
+                }
 
                 let lower_dep = dep.name.to_lowercase();
                 let r_name = format!("r-{lower_dep}");
@@ -265,6 +273,22 @@ impl GenerateRecipe for RGenerator {
                         .host
                         .push(matchspec_item(&dep_spec).into_diagnostic()?);
                 }
+            }
+
+            // Without bioconda, the solver would only say it found no
+            // `bioconductor-*` candidates. The channels are empty when they
+            // aren't known, e.g. in tests.
+            let has_bioconda = channels
+                .iter()
+                .any(|channel| channel.as_str().contains("bioconda"));
+            if !from_bioconda.is_empty() && !channels.is_empty() && !has_bioconda {
+                from_bioconda.sort();
+                from_bioconda.dedup();
+                miette::bail!(
+                    help = "Add bioconda to the workspace's channels, e.g. with `pixi workspace channel add bioconda`, or map these packages to other names with the backend's `mapping` setting.",
+                    "This package depends on Bioconductor packages ({}), which come from bioconda as `bioconductor-<name>`, but bioconda isn't among the channels.",
+                    from_bioconda.join(", ")
+                );
             }
         }
 
@@ -1305,6 +1329,66 @@ SystemRequirements: CMake (>= 3.15), libxml2, pkg-config
         assert!(
             host.iter().any(|r| r.starts_with("openssl")),
             "Should keep the openssl C library, got {host:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_bioconductor_dependencies_need_bioconda() {
+        let temp_dir = TempDir::new().unwrap();
+        fs::write(
+            temp_dir.path().join("DESCRIPTION"),
+            "Package: BonEV\nVersion: 1.0\nDepends: qvalue\n",
+        )
+        .await
+        .unwrap();
+
+        let project_model = project_fixture!({
+            "name": "r-bonev",
+            "version": "1.0",
+            "targets": {
+                "defaultTarget": {}
+            }
+        });
+        let channel = |url: &str| ChannelUrl::from(url::Url::parse(url).unwrap());
+
+        let generate = |channels: Vec<ChannelUrl>| {
+            let project_model = project_model.clone();
+            let path = temp_dir.path().to_path_buf();
+            async move {
+                RGenerator::default()
+                    .generate_recipe(
+                        &project_model,
+                        &RBackendConfig::default(),
+                        path,
+                        Subdir::Linux64,
+                        None,
+                        &HashSet::new(),
+                        channels,
+                        None,
+                        None,
+                        None,
+                        None,
+                    )
+                    .await
+            }
+        };
+
+        let error = generate(vec![channel("https://prefix.dev/conda-forge")])
+            .await
+            .expect_err("Should fail without bioconda");
+        assert!(
+            error.to_string().contains("qvalue"),
+            "Should name the Bioconductor package, got {error}"
+        );
+
+        assert!(
+            generate(vec![
+                channel("https://prefix.dev/conda-forge"),
+                channel("https://prefix.dev/bioconda"),
+            ])
+            .await
+            .is_ok(),
+            "Should work with bioconda"
         );
     }
 
