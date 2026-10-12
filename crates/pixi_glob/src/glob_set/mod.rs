@@ -494,6 +494,33 @@ mod tests {
         "#);
     }
 
+    /// A symlink pointing at one of its own ancestors, as pnpm/npm workspace
+    /// `node_modules` create, is skipped instead of failing the whole walk.
+    #[cfg(unix)]
+    #[test]
+    fn symlink_loop_is_skipped_not_fatal() {
+        let temp_dir = tempdir().unwrap();
+        let root_path = temp_dir.path().join("workspace");
+        fs::create_dir(&root_path).unwrap();
+
+        File::create(root_path.join("regular.txt")).unwrap();
+
+        // A real file next to a symlink pointing back at its own parent
+        let nested = root_path.join("nested");
+        fs::create_dir(&nested).unwrap();
+        File::create(nested.join("inner.txt")).unwrap();
+        std::os::unix::fs::symlink("..", nested.join("loop")).unwrap();
+
+        let glob_set = GlobSet::create(vec!["**"]);
+        let entries = glob_set.collect_matching(&root_path).unwrap();
+
+        let paths = sorted_paths(entries, &root_path);
+        assert_yaml_snapshot!(paths, @r#"
+        - nested/inner.txt
+        - regular.txt
+        "#);
+    }
+
     fn workspace_root_for_marker_tests() -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
