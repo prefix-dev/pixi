@@ -143,7 +143,7 @@ impl GenerateRecipe for RGenerator {
         let r_dependencies = metadata_provider.runtime_dependencies().into_diagnostic()?;
 
         for dep in r_dependencies {
-            // Skip packages that are built into r-base (base + recommended packages)
+            // Skip packages that are built into r-base (the base packages)
             if metadata::is_builtin_package(&dep.name) {
                 continue;
             }
@@ -666,6 +666,89 @@ Imports:
             ".source[0].path" => "[path]",
             ".build.script.content" => "[build_script]",
         });
+    }
+
+    #[tokio::test]
+    async fn test_recommended_packages_are_dependencies() {
+        let temp_dir = TempDir::new().unwrap();
+
+        // Base packages (methods, stats) come with r-base; recommended
+        // packages (MASS, Matrix) are separate packages on conda-forge
+        fs::write(
+            temp_dir.path().join("DESCRIPTION"),
+            r#"Package: example
+Version: 1.0.0
+Depends:
+    R (>= 4.1.0),
+    methods
+Imports:
+    stats,
+    MASS (>= 7.3),
+    Matrix
+LinkingTo:
+    Matrix
+"#,
+        )
+        .await
+        .unwrap();
+
+        let project_model = project_fixture!({
+            "name": "r-example",
+            "version": "1.0.0",
+            "targets": {
+                "defaultTarget": {}
+            }
+        });
+
+        let generated_recipe = RGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &RBackendConfig::default(),
+                temp_dir.path().to_path_buf(),
+                Subdir::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let host: Vec<String> = generated_recipe
+            .recipe
+            .requirements
+            .host
+            .iter()
+            .map(|req| req.to_string())
+            .collect();
+        let run: Vec<String> = generated_recipe
+            .recipe
+            .requirements
+            .run
+            .iter()
+            .map(|req| req.to_string())
+            .collect();
+
+        for reqs in [&host, &run] {
+            assert!(
+                reqs.iter()
+                    .any(|req| req.contains("r-mass") && req.contains(">=7.3")),
+                "Should have r-mass >=7.3, got {reqs:?}"
+            );
+            assert!(
+                reqs.iter().any(|req| req.starts_with("r-matrix")),
+                "Should have r-matrix, got {reqs:?}"
+            );
+            assert!(
+                !reqs
+                    .iter()
+                    .any(|req| req.starts_with("r-stats") || req.starts_with("r-methods")),
+                "Base packages should be left out, got {reqs:?}"
+            );
+        }
     }
 
     #[tokio::test]

@@ -212,7 +212,8 @@ The backend reads dependencies from the `DESCRIPTION` file:
 
 ### Built-in Packages
 
-Packages that are included with R (such as `stats`, `utils`, `base`, `methods`, `Matrix`, `MASS`, etc.) are automatically filtered out and not added as separate dependencies.
+R's base packages (such as `stats`, `utils`, `base` and `methods`) come with `r-base`, so they are filtered out and not added as separate dependencies.
+R's recommended packages (such as `MASS`, `Matrix` and `mgcv`) are separate packages on conda-forge (`r-mass`, `r-matrix`, `r-mgcv`), so they are added like any other dependency.
 
 ### Rust
 
