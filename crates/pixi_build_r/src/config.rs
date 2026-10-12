@@ -38,12 +38,12 @@ pub struct RBackendConfig {
     /// Custom mapping of R package names to conda package names.
     ///
     /// For example: `mapping = { "Biobase" = "bioconductor-biobase" }`
-    #[serde(default, alias = "r-conda-map")]
+    #[serde(default)]
     pub mapping: IndexMap<String, String>,
 
     /// Ignore dependencies declared in the DESCRIPTION file.
     /// If true, only dependencies explicitly declared in the pixi manifest are used.
-    #[serde(default, alias = "ignore-description-manifest")]
+    #[serde(default)]
     pub ignore_description_dependencies: Option<bool>,
 }
 
@@ -171,7 +171,7 @@ mod tests {
     }
 
     #[test]
-    fn test_deserialize_mapping_and_aliases() {
+    fn test_deserialize_mapping() {
         // Test `mapping`
         let json_data = json!({
             "mapping": {
@@ -190,20 +190,6 @@ mod tests {
             Some("bioconductor-deseq2")
         );
         assert_eq!(config.ignore_description_dependencies, Some(true));
-
-        // Test alias `r-conda-map` and `ignore-description-manifest`
-        let json_alias = json!({
-            "r-conda-map": {
-                "limma": "bioconductor-limma"
-            },
-            "ignore-description-manifest": false
-        });
-        let config_alias: RBackendConfig = serde_json::from_value(json_alias).unwrap();
-        assert_eq!(
-            config_alias.mapping.get("limma").map(String::as_str),
-            Some("bioconductor-limma")
-        );
-        assert_eq!(config_alias.ignore_description_dependencies, Some(false));
     }
 
     #[test]

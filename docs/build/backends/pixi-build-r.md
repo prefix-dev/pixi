@@ -203,7 +203,6 @@ channels = ["conda-forge", "r"]
 
 - **Type**: `Map<String, String>`
 - **Default**: `{}`
-- **Alias**: `r-conda-map`
 - **Target Merge Behavior**: `Merge` - Platform mappings are merged with base mappings, overriding keys with the same name
 
 Custom mapping of R package names to conda package names. This allows you to override default naming conventions or map packages with non-standard names on Conda channels:
@@ -212,16 +211,12 @@ Custom mapping of R package names to conda package names. This allows you to ove
 [package.build.config]
 mapping = { Biobase = "bioconductor-biobase", my_pkg = "custom-conda-package" }
 
-# Or using the alias:
-[package.build.config.r-conda-map]
-Biobase = "bioconductor-biobase"
 ```
 
 ### `ignore-description-dependencies`
 
 - **Type**: `Boolean`
 - **Default**: `false`
-- **Alias**: `ignore-description-manifest`
 - **Target Merge Behavior**: `Overwrite` - Target value overrides base value
 
 When set to `true`, `pixi-build-r` does not automatically extract dependencies from the `DESCRIPTION` file. Only dependencies explicitly defined in the `pixi.toml` manifest (`host-dependencies`, `run-dependencies`) will be included in the generated recipe.
@@ -248,7 +243,7 @@ The backend reads dependencies from the `DESCRIPTION` file:
 
 Packages in the Bioconductor ecosystem (hosted on the `bioconda` channel) follow the naming convention `bioconductor-<pkg>`. `pixi-build-r` includes a comprehensive built-in registry of Bioconductor packages. When a package listed in `DESCRIPTION` matches a known Bioconductor package, it is automatically mapped to `bioconductor-<lowercase>` instead of `r-<lowercase>`.
 
-If a package requires a custom name, you can also use `mapping` (or `r-conda-map`) to specify the mapping explicitly.
+If a package requires a custom name, you can also use `mapping` to specify the mapping explicitly.
 
 ### Built-in Packages
 

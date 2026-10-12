@@ -198,7 +198,7 @@ pub fn parse_r_dependencies(deps_str: &str) -> Vec<RDependency> {
 /// - "R" -> "r-base"
 /// - Bioconductor packages -> `bioconductor-<lowercase>` (e.g. "Biobase" -> "bioconductor-biobase")
 /// - CRAN / other R packages -> `r-<lowercase>` (e.g. "curl" -> "r-curl", "jsonlite" -> "r-jsonlite")
-#[allow(dead_code)]
+#[cfg(test)]
 pub fn r_package_to_conda(name: &str) -> String {
     r_package_to_conda_with_mapping(name, None)
 }
