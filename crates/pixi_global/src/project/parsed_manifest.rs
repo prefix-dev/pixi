@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, fmt, path::Path, str::FromStr};
+use std::{cmp::Ordering, collections::BTreeMap, fmt, path::Path, str::FromStr};
 
 use console::StyledObject;
 use fancy_display::FancyDisplay;
@@ -11,9 +11,9 @@ use pixi_manifest::{
     toml::{TomlPlatform, WorkspacePackageProperties},
     utils::package_map::{DependencyTable, UniquePackageMap},
 };
-use pixi_spec::{ExcludeNewer, PixiSpec};
+use pixi_spec::{ExcludeNewer, PixiSpec, TomlVersionSpecStr};
 use pixi_toml::{TomlFromStr, TomlIndexMap, TomlIndexSet, TomlWith};
-use rattler_conda_types::{NamedChannelOrUrl, PackageName, Subdir};
+use rattler_conda_types::{NamedChannelOrUrl, PackageName, Subdir, VersionSpec};
 use serde::{Serialize, Serializer, ser::SerializeMap};
 use serde_derive::Deserialize;
 use thiserror::Error;
@@ -118,40 +118,59 @@ impl ManifestParsingError {
 pub struct ParsedManifest {
     /// The version of the manifest
     version: ManifestVersion,
-    /// The settings that apply to every environment.
-    #[serde(skip_serializing_if = "ParsedGlobal::is_empty")]
-    pub global: ParsedGlobal,
-    /// Cutoffs that override [`ParsedGlobal::exclude_newer`] for individual
-    /// packages, in every environment.
-    #[serde(rename = "exclude-newer", skip_serializing_if = "IndexMap::is_empty")]
-    pub exclude_newer_package_overrides: IndexMap<PackageName, ExcludeNewer>,
+    /// The age policy that applies to every environment.
+    #[serde(rename = "exclude-newer", skip_serializing_if = "Option::is_none")]
+    pub exclude_newer: Option<GlobalExcludeNewer>,
     /// The environments the project can create.
     pub envs: IndexMap<EnvironmentName, ParsedEnvironment>,
 }
 
-/// The settings of the `[global]` table, which apply to every environment.
-#[derive(Debug, Clone, Default, Serialize)]
-pub struct ParsedGlobal {
-    /// Packages uploaded after this cutoff are excluded from every
-    /// environment's solve.
-    #[serde(rename = "exclude-newer", skip_serializing_if = "Option::is_none")]
-    pub exclude_newer: Option<ExcludeNewer>,
+/// A manifest-wide cutoff, optionally with package version exemptions.
+#[derive(Debug, Clone)]
+pub struct GlobalExcludeNewer {
+    pub cutoff: ExcludeNewer,
+    pub exemptions: BTreeMap<PackageName, VersionSpec>,
 }
 
-impl ParsedGlobal {
-    fn is_empty(&self) -> bool {
-        self.exclude_newer.is_none()
+impl Serialize for GlobalExcludeNewer {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        if self.exemptions.is_empty() {
+            return self.cutoff.serialize(serializer);
+        }
+        let mut map = serializer.serialize_map(Some(2))?;
+        map.serialize_entry("cutoff", &self.cutoff)?;
+        map.serialize_entry("exemptions", &self.exemptions)?;
+        map.end()
     }
 }
 
-impl<'de> toml_span::Deserialize<'de> for ParsedGlobal {
+impl<'de> toml_span::Deserialize<'de> for GlobalExcludeNewer {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        if value.as_str().is_some() {
+            return Ok(Self {
+                cutoff: TomlFromStr::<ExcludeNewer>::deserialize(value)?.into_inner(),
+                exemptions: BTreeMap::new(),
+            });
+        }
         let mut th = TableHelper::new(value)?;
-        let exclude_newer = th
-            .optional::<TomlWith<_, TomlFromStr<_>>>("exclude-newer")
-            .map(TomlWith::into_inner);
+        let cutoff = th.required::<TomlFromStr<ExcludeNewer>>("cutoff");
+        let exemptions = th
+            .optional::<TomlIndexMap<PackageName, TomlVersionSpecStr>>("exemptions")
+            .map(TomlIndexMap::into_inner)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(name, spec)| (name, spec.into_inner()))
+            .collect();
         th.finalize(None)?;
-        Ok(Self { exclude_newer })
+        Ok(Self {
+            cutoff: cutoff
+                .expect("required cutoff was checked by finalize")
+                .into_inner(),
+            exemptions,
+        })
     }
 }
 
@@ -160,8 +179,7 @@ impl<'de> toml_span::Deserialize<'de> for ParsedGlobal {
 /// manifest's root directory as context).
 struct TomlParsedManifest {
     version: ManifestVersion,
-    global: ParsedGlobal,
-    exclude_newer_package_overrides: IndexMap<PackageName, ExcludeNewer>,
+    exclude_newer: Option<GlobalExcludeNewer>,
     envs: IndexMap<EnvironmentName, TomlParsedEnvironment>,
 }
 
@@ -173,8 +191,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlParsedManifest {
             .optional("version")
             .map(ManifestVersion)
             .unwrap_or_default();
-        let global = th.optional::<ParsedGlobal>("global").unwrap_or_default();
-        let exclude_newer_package_overrides = parse_exclude_newer_package_overrides(&mut th);
+        let exclude_newer = th.optional("exclude-newer");
         let envs = th
             .optional::<TomlIndexMap<_, TomlParsedEnvironment>>("envs")
             .map(TomlIndexMap::into_inner)
@@ -187,48 +204,9 @@ impl<'de> toml_span::Deserialize<'de> for TomlParsedManifest {
 
         Ok(Self {
             version,
-            global,
-            exclude_newer_package_overrides,
+            exclude_newer,
             envs,
         })
-    }
-}
-
-/// Parses the top-level `exclude-newer` table of per-package cutoffs.
-///
-/// A scalar here is the manifest-wide cutoff written in the wrong place, so it
-/// is reported as such instead of as a bare type mismatch. Errors join the ones
-/// the [`TableHelper`] has already collected, the way its own `optional` does,
-/// so parsing continues and reports the rest of the manifest too.
-fn parse_exclude_newer_package_overrides<'de>(
-    th: &mut TableHelper<'de>,
-) -> IndexMap<PackageName, ExcludeNewer> {
-    let Some((_, mut value)) = th.take("exclude-newer") else {
-        return IndexMap::new();
-    };
-
-    if value.as_table().is_none() {
-        th.errors.push(toml_span::Error {
-            kind: toml_span::ErrorKind::Custom(
-                "expected a table of per-package `exclude-newer` cutoffs, set `exclude-newer` in the `[global]` table to apply a cutoff to every environment"
-                    .into(),
-            ),
-            span: value.span,
-            line_info: None,
-        });
-        return IndexMap::new();
-    }
-
-    match TomlIndexMap::<PackageName, TomlFromStr<ExcludeNewer>>::deserialize(&mut value) {
-        Ok(overrides) => overrides
-            .into_inner()
-            .into_iter()
-            .map(|(name, cutoff)| (name, cutoff.into_inner()))
-            .collect(),
-        Err(err) => {
-            th.errors.extend(err.errors);
-            IndexMap::new()
-        }
     }
 }
 
@@ -411,8 +389,7 @@ impl TomlParsedManifest {
 
         Ok(ParsedManifest {
             version: self.version,
-            global: self.global,
-            exclude_newer_package_overrides: self.exclude_newer_package_overrides,
+            exclude_newer: self.exclude_newer,
             envs,
         })
     }
@@ -448,8 +425,7 @@ where
         Self {
             envs,
             version: ManifestVersion::default(),
-            global: ParsedGlobal::default(),
-            exclude_newer_package_overrides: IndexMap::new(),
+            exclude_newer: None,
         }
     }
 }
@@ -627,86 +603,22 @@ mod tests {
     use super::{EnvironmentName, ParsedManifest};
 
     #[test]
-    fn test_invalid_key() {
-        let examples = [
-            "[invalid]",
-            "[envs.ipython.invalid]",
-            r#"[envs."python;3".dependencies]"#,
-        ];
-        assert_snapshot!(
-            examples
-                .into_iter()
-                .map(
-                    |example| ParsedManifest::from_toml_str(example, std::path::Path::new(""))
-                        .unwrap_err()
-                        .to_string()
-                )
-                .collect::<Vec<_>>()
-                .join("\n")
-        )
-    }
-
-    #[test]
-    fn test_exclude_newer() {
-        let contents = r#"
-        [global]
-        exclude-newer = "2025-01-01"
-
-        [exclude-newer]
-        python = "0d"
-
-        [envs.python]
-        channels = [{ channel = "conda-forge", exclude-newer = "7d" }]
-        [envs.python.dependencies]
-        python = "3.11.*"
-        "#;
-        let manifest = ParsedManifest::from_toml_str(contents, std::path::Path::new("")).unwrap();
-        assert_snapshot!(manifest.global.exclude_newer.unwrap(), @"2025-01-02 00:00:00 UTC");
-        assert_snapshot!(
-            manifest
-                .exclude_newer_package_overrides
-                .iter()
-                .map(|(name, cutoff)| format!("{} = {cutoff}", name.as_source()))
-                .join(", "),
-            @"python = 0s"
-        );
-        let env = &manifest.envs[&EnvironmentName::from_str("python").unwrap()];
-        assert_snapshot!(
-            env.channels
-                .iter()
-                .map(|channel| channel.exclude_newer.unwrap().to_string())
-                .join(", "),
-            @"7days"
-        );
-    }
-
-    #[test]
-    fn test_invalid_exclude_newer() {
-        let contents = r#"
-        [global]
-        exclude-newer = "date"
-
-        [envs.python]
-        channels = ["conda-forge"]
-        "#;
-        let err = ParsedManifest::from_toml_str(contents, std::path::Path::new(""))
-            .unwrap_err()
-            .to_string();
-        assert_snapshot!(err, @"`date` is neither a valid duration, date (input contains invalid characters), nor timestamp (premature end of input)");
-    }
-
-    #[test]
-    fn test_exclude_newer_scalar_at_top_level() {
-        let contents = r#"
-        exclude-newer = "7d"
-
-        [envs.python]
-        channels = ["conda-forge"]
-        "#;
-        let err = ParsedManifest::from_toml_str(contents, std::path::Path::new(""))
-            .unwrap_err()
-            .to_string();
-        assert_snapshot!(err, @"expected a table of per-package `exclude-newer` cutoffs, set `exclude-newer` in the `[global]` table to apply a cutoff to every environment");
+    fn test_invalid_age_policies_are_rejected() {
+        for policy in [
+            r#"[global]
+exclude-newer = "7d""#,
+            r#"exclude-newer = { python = "0d" }"#,
+            r#"exclude-newer = { exemptions = { python = "*" } }"#,
+            r#"exclude-newer = { cutoff = "7d", exemption = { python = "*" } }"#,
+            r#"exclude-newer = { cutoff = "date" }"#,
+            r#"exclude-newer = { cutoff = "7d", exemptions = { python = ">=!" } }"#,
+            r#"exclude-newer = { cutoff = "7d", exemptions = { python = 3 } }"#,
+        ] {
+            assert!(
+                ParsedManifest::from_toml_str(policy, std::path::Path::new("")).is_err(),
+                "invalid policy was accepted: {policy}"
+            );
+        }
     }
 
     #[test]

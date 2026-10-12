@@ -5,7 +5,7 @@ use std::{
 
 use itertools::Itertools;
 use pixi_record::{PixiRecord, SourceRecord};
-use pixi_spec::{BinarySpec, ResolvedExcludeNewer, SourceSpec};
+use pixi_spec::{BinarySpec, ExcludeNewerFilter, ResolvedExcludeNewer, SourceSpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     ChannelUrl, GenericVirtualPackage, MatchSpec, RepoDataRecord, Subdir, Version,
@@ -125,7 +125,7 @@ impl SolveCondaEnvironmentSpec {
         // Solving is a CPU-intensive task, we spawn this on a background task to allow
         // for more concurrency.
         let solve_result = tokio::task::spawn_blocking(move || {
-            let exclude_newer = self.exclude_newer.clone().map(Into::into);
+            let exclude_newer = self.exclude_newer.map(ExcludeNewerFilter::from);
 
             // Determine for which records we have source records because those records should only
             //  be installed as source records.
@@ -298,6 +298,22 @@ impl SolveCondaEnvironmentSpec {
                 solvable_records.push(repo_data.iter().collect_vec());
             }
 
+            let mut excluded_candidates = self.excluded_candidates;
+            let exclude_newer = match exclude_newer.map(ExcludeNewerFilter::into_solver_cutoff) {
+                Some(Ok(cutoff)) => Some(cutoff),
+                Some(Err(filter)) => {
+                    for record in solvable_records.iter().flatten().copied().chain(&installed) {
+                        if let Some(reason) = filter.exclusion_reason(record) {
+                            excluded_candidates
+                                .entry(record.url.clone())
+                                .or_insert_with(|| reason.to_string().into());
+                        }
+                    }
+                    None
+                }
+                None => None,
+            };
+
             // Construct a solver task that we can start solving.
             let task = rattler_solve::SolverTask {
                 specs: source_match_specs
@@ -311,7 +327,7 @@ impl SolveCondaEnvironmentSpec {
                 exclude_newer,
                 strategy: self.strategy,
                 constraints: constrains_match_specs,
-                excluded_candidates: self.excluded_candidates,
+                excluded_candidates,
                 ..rattler_solve::SolverTask::from_iter(solvable_records)
             };
 

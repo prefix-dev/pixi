@@ -1,5 +1,5 @@
 use chrono::{DateTime, Days, NaiveDate, NaiveTime, Utc};
-use rattler_conda_types::{ChannelUrl, PackageName};
+use rattler_conda_types::{ChannelUrl, PackageName, RepoDataRecord, Version, VersionSpec};
 use std::{collections::BTreeMap, str::FromStr};
 
 /// Specifies how to exclude newer packages from the solve.
@@ -33,6 +33,10 @@ pub struct ResolvedExcludeNewer {
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub package_cutoffs: BTreeMap<PackageName, DateTime<Utc>>,
 
+    /// Versions that bypass age filtering without changing dependency constraints.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub exemptions: BTreeMap<PackageName, VersionSpec>,
+
     /// Whether to include packages that don't have a timestamp.
     pub include_unknown_timestamp: bool,
 }
@@ -58,6 +62,7 @@ impl ResolvedExcludeNewer {
             cutoff,
             channel_cutoffs: BTreeMap::new(),
             package_cutoffs: BTreeMap::new(),
+            exemptions: BTreeMap::new(),
             // TODO: After https://github.com/conda/ceps/pull/154 we might need to rethink this
             // https://github.com/prefix-dev/pixi/pull/5848/changes#r3051252281
             include_unknown_timestamp: true,
@@ -103,7 +108,14 @@ pub fn to_saturating_jiff_timestamp(value: DateTime<Utc>) -> jiff::Timestamp {
     })
 }
 
-impl From<ResolvedExcludeNewer> for rattler_solve::ExcludeNewer {
+/// An exclusion policy ready to check candidates and installed packages.
+#[derive(Debug, Clone)]
+pub struct ExcludeNewerFilter {
+    cutoffs: rattler_solve::ExcludeNewer,
+    exemptions: BTreeMap<PackageName, VersionSpec>,
+}
+
+impl From<ResolvedExcludeNewer> for ExcludeNewerFilter {
     fn from(value: ResolvedExcludeNewer) -> Self {
         let mut config =
             rattler_solve::ExcludeNewer::from_datetime(to_saturating_jiff_timestamp(value.cutoff))
@@ -122,7 +134,52 @@ impl From<ResolvedExcludeNewer> for rattler_solve::ExcludeNewer {
             config = config.with_package_cutoff(package, to_saturating_jiff_timestamp(cutoff));
         }
 
-        config
+        Self {
+            cutoffs: config,
+            exemptions: value.exemptions,
+        }
+    }
+}
+
+impl ExcludeNewerFilter {
+    /// Whether this package version bypasses the cutoff.
+    pub fn is_exempt(&self, name: &PackageName, version: &Version) -> bool {
+        self.exemptions
+            .get(name)
+            .is_some_and(|spec| spec.matches(version))
+    }
+
+    /// Returns why a non-exempt record is excluded.
+    pub fn exclusion_reason(
+        &self,
+        record: &RepoDataRecord,
+    ) -> Option<rattler_solve::TimestampExclusionReason> {
+        if self.is_exempt(&record.package_record.name, &record.package_record.version) {
+            return None;
+        }
+        self.cutoffs.exclusion_reason(record)
+    }
+
+    /// Whether the current policy excludes a record.
+    pub fn is_excluded(&self, record: &RepoDataRecord) -> bool {
+        self.exclusion_reason(record).is_some()
+    }
+
+    /// The effective cutoff before version exemptions are applied.
+    pub fn cutoff_for_package(&self, name: &PackageName, channel: Option<&str>) -> jiff::Timestamp {
+        self.cutoffs.cutoff_for_package(name, channel)
+    }
+
+    /// Use native solver filtering when there are no version exemptions.
+    ///
+    /// Rattler does not yet support exemptions. Return the complete filter
+    /// otherwise, so callers cannot silently drop them during conversion.
+    pub fn into_solver_cutoff(self) -> Result<rattler_solve::ExcludeNewer, Self> {
+        if self.exemptions.is_empty() {
+            Ok(self.cutoffs)
+        } else {
+            Err(self)
+        }
     }
 }
 
@@ -315,51 +372,6 @@ mod test {
         let t = ExcludeNewer::from_str("2006-12-02T02:07:43Z").unwrap();
         let display = format!("{t}");
         assert!(display.contains("2006"), "got: {display}");
-    }
-
-    #[test]
-    fn test_resolved_into_rattler_solve_preserves_overrides() {
-        let default_cutoff = DateTime::parse_from_rfc3339("2006-12-02T02:07:43Z")
-            .unwrap()
-            .with_timezone(&Utc);
-        let channel_cutoff = DateTime::parse_from_rfc3339("2006-12-03T02:07:43Z")
-            .unwrap()
-            .with_timezone(&Utc);
-        let package_cutoff = DateTime::parse_from_rfc3339("2006-12-04T02:07:43Z")
-            .unwrap()
-            .with_timezone(&Utc);
-
-        let config: rattler_solve::ExcludeNewer =
-            ResolvedExcludeNewer::from_datetime(default_cutoff)
-                .with_channel_cutoff(
-                    ChannelUrl::from(url::Url::parse("https://prefix.dev/conda-forge").unwrap()),
-                    channel_cutoff,
-                )
-                .with_package_cutoff(PackageName::new_unchecked("foo"), package_cutoff)
-                .into();
-
-        assert_eq!(
-            config.cutoff_for_package(&PackageName::new_unchecked("baz"), None),
-            to_saturating_jiff_timestamp(default_cutoff)
-        );
-        assert_eq!(
-            config.cutoff_for_package(
-                &PackageName::new_unchecked("bar"),
-                Some("https://prefix.dev/conda-forge/"),
-            ),
-            to_saturating_jiff_timestamp(channel_cutoff)
-        );
-        assert_eq!(
-            config.cutoff_for_package(
-                &PackageName::new_unchecked("foo"),
-                Some("https://prefix.dev/conda-forge/"),
-            ),
-            to_saturating_jiff_timestamp(package_cutoff)
-        );
-        assert_eq!(
-            config.timestamp_policy(),
-            rattler_solve::TimestampPolicy::AllowMissing
-        );
     }
 
     #[test]

@@ -84,37 +84,39 @@ More information on channels can be found [here](../advanced/channel_logic.md).
 
 ## Exclude newer
 
-The `exclude-newer` key of the `[global]` table excludes packages uploaded after a cutoff from the solve of every environment in the manifest.
+The `exclude-newer` key excludes packages uploaded after a cutoff from the solve of every environment in the manifest.
 This reduces the risk of installing recently published packages that might turn out to be compromised.
 It accepts the same values as the [workspace manifest](../reference/pixi_manifest.md#exclude-newer-optional): an RFC 3339 timestamp, a `YYYY-MM-DD` date, or a duration relative to the time of the solve.
 A date is interpreted as the start of the following day in UTC, so `2026-03-30` means `2026-03-31T00:00:00Z`.
 
-A channel can override the cutoff with its own `exclude-newer` value, and the `[exclude-newer]` table overrides it for individual packages:
+Use the string shorthand, such as `exclude-newer = "7d"`, when you only need a cutoff.
+To allow a reviewed release before it reaches that age, use a table with `cutoff` and `exemptions`:
 
 ```toml
 version = 1
 
-[global]
-exclude-newer = "7d"
-
-[exclude-newer]
-my-tool = "0d"
+exclude-newer = { cutoff = "7d", exemptions = { polars = "==1.43.1", my-tool = "*" } }
 
 [envs.tools]
 channels = [
     { channel = "https://my.internal/channel", exclude-newer = "0d" },
     "conda-forge",
 ]
-dependencies = { my-tool = "*" }
+dependencies = { my-tool = "*", polars = "*" }
 exposed = { my-tool = "my-tool" }
 ```
 
-A package override applies to every environment that contains the package, and takes precedence over a channel override, which in turn takes precedence over the cutoff in `[global]`.
-Both tables work on their own: without a cutoff in `[global]`, only the packages and channels that have an override are excluded.
+Exemptions use Conda version constraints: `==1.43.1` exempts that version, a range such as `>=1.43.1,<1.44` exempts matching versions, and `"*"` exempts every version of a package.
+An exemption applies to all builds of matching versions in every environment, including when the package is a transitive dependency.
+Approving one version does not pin the dependency to that version.
 
-Global environments have no PyPI dependencies, so there is no equivalent of the workspace's `[pypi-exclude-newer]` table.
+A channel can override the manifest-wide cutoff with its own `exclude-newer` value, as shown above.
+Version exemptions bypass both the manifest-wide and channel cutoffs.
+Without a manifest-wide policy, channel cutoffs still work on their own.
 
-An environment containing a package that is newer than the cutoff counts as out of sync, so tightening the cutoff re-solves it on the next `pixi global sync`.
+An environment containing a non-exempt package newer than its cutoff counts as out of sync.
+Tightening the cutoff or removing an exemption re-solves it on the next `pixi global sync`, potentially downgrading packages.
+If no allowed version satisfies the dependencies, the sync fails.
 
 
 ## Dependencies

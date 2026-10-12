@@ -1155,7 +1155,7 @@ mod tests {
             std::env::current_dir().unwrap(),
         );
         let env = workspace.environment("combined").unwrap();
-        let config: rattler_solve::ExcludeNewer = env
+        let config: pixi_spec::ExcludeNewerFilter = env
             .exclude_newer_config_resolved(&channel_config)
             .unwrap()
             .unwrap()
@@ -1233,7 +1233,7 @@ mod tests {
             std::env::current_dir().unwrap(),
         );
         let env = workspace.environment("combined").unwrap();
-        let config: rattler_solve::ExcludeNewer = env
+        let config: pixi_spec::ExcludeNewerFilter = env
             .exclude_newer_config_resolved(&channel_config)
             .unwrap()
             .unwrap()
@@ -1295,7 +1295,7 @@ mod tests {
 
         let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
         let env = workspace.environment("default").unwrap();
-        let config: rattler_solve::ExcludeNewer = env
+        let config: pixi_spec::ExcludeNewerFilter = env
             .exclude_newer_config_resolved(&channel_config)
             .unwrap()
             .unwrap()
