@@ -237,13 +237,31 @@ The backend reads dependencies from the `DESCRIPTION` file:
 - R version constraints are converted to conda format (e.g., `(>= 1.5)` becomes `>=1.5`)
 - CRAN package names are converted to conda names with the `r-` prefix (e.g., `dplyr` becomes `r-dplyr`)
 - Bioconductor package names are converted to conda names with the `bioconductor-` prefix (e.g., `Biobase` becomes `bioconductor-biobase`)
-- Explicit dependencies specified in `host-dependencies` or `run-dependencies` take precedence and prevent redundant or conflicting dependencies from being added from `DESCRIPTION`
+- A dependency already in `host-dependencies` or `run-dependencies`, as `r-<pkg>`, `bioconductor-<pkg>` or its mapped name, isn't added again from `DESCRIPTION`, so the manifest can set its version or name
 
 ### Bioconductor Support
 
-Packages in the Bioconductor ecosystem (hosted on the `bioconda` channel) follow the naming convention `bioconductor-<pkg>`. `pixi-build-r` includes a comprehensive built-in registry of Bioconductor packages. When a package listed in `DESCRIPTION` matches a known Bioconductor package, it is automatically mapped to `bioconductor-<lowercase>` instead of `r-<lowercase>`.
+Bioconductor packages are on the `bioconda` channel, named `bioconductor-<pkg>`.
+When a dependency in `DESCRIPTION` is a Bioconductor package, `pixi-build-r` adds it as `bioconductor-<lowercase>` instead of `r-<lowercase>`.
+It knows them from a built-in list of Bioconductor's software, annotation data, experiment data and workflow packages of recent releases, generated from Bioconductor's own package lists (`pixi run update-bioconductor-packages`).
 
-If a package requires a custom name, you can also use `mapping` to specify the mapping explicitly.
+These dependencies need `bioconda` among the workspace's channels:
+
+```toml
+[workspace]
+channels = ["conda-forge", "bioconda"]
+```
+
+Without it, the build stops with an error that names the Bioconductor packages.
+
+A Bioconductor package built from source is itself named `bioconductor-<lowercase>`, as every Bioconductor package declares `biocViews` in its `DESCRIPTION`, so its key in the manifest is that name:
+
+```toml
+[dependencies]
+bioconductor-dnacopy = { git = "https://github.com/bioc/DNAcopy", branch = "RELEASE_3_22", package.build.backend.name = "pixi-build-r" }
+```
+
+If a package needs another name, set it with `mapping`.
 
 ### Built-in Packages
 
