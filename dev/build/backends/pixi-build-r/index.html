@@ -2274,6 +2274,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#rust" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Rust
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -9021,6 +9032,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#rust" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Rust
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -9265,6 +9287,9 @@ They only work in build scripts.</p>
 <h3 id="built-in-packages">Built-in Packages<a class="headerlink" href="#built-in-packages" title="Permanent link">#</a></h3>
 <p>R's base packages (such as <code>stats</code>, <code>utils</code>, <code>base</code> and <code>methods</code>) come with <code>r-base</code>, so they are filtered out and not added as separate dependencies.
 R's recommended packages (such as <code>MASS</code>, <code>Matrix</code> and <code>mgcv</code>) are separate packages on conda-forge (<code>r-mass</code>, <code>r-matrix</code>, <code>r-mgcv</code>), so they are added like any other dependency.</p>
+<h3 id="rust">Rust<a class="headerlink" href="#rust" title="Permanent link">#</a></h3>
+<p>Packages with Rust code declare it in <code>SystemRequirements</code>, as CRAN asks: <code>Cargo (Rust's package manager), rustc</code>.
+When <code>SystemRequirements</code> mentions <code>cargo</code> or <code>rustc</code>, the backend adds <code>rust</code> to the build requirements, and on Windows also <code>rust-std-x86_64-pc-windows-gnu</code>, since R packages build their Rust code for the GNU target there.</p>
 <h2 id="build-process">Build Process<a class="headerlink" href="#build-process" title="Permanent link">#</a></h2>
 <p>The R backend follows this build process:</p>
 <ol>
