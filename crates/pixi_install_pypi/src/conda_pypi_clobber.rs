@@ -207,6 +207,19 @@ impl CondaPrefixPath {
         }
     }
 
+    /// Convert a RECORD entry of an *installed* distribution to the
+    /// prefix-relative form, or `None` if the file lands outside the prefix.
+    ///
+    /// Such entries are relative to the directory holding the `.dist-info`,
+    /// not to the wheel install scheme used by [`Self::from_wheel_record`].
+    fn from_installed_record(site_packages: &Path, record_path: impl AsRef<Path>) -> Option<Self> {
+        let path = normalize_std(&site_packages.join(record_path));
+        match path.components().next() {
+            Some(std::path::Component::Normal(_)) => Some(Self(path)),
+            _ => None,
+        }
+    }
+
     fn as_path(&self) -> &Path {
         &self.0
     }
@@ -229,6 +242,19 @@ impl PypiCondaClobberRegistry {
         Self {
             paths_registry: registry,
         }
+    }
+
+    /// Find the conda package that owns any of the RECORD entries of an
+    /// *installed* distribution whose `.dist-info` sits in `site_packages`.
+    pub(crate) fn conda_owner_of_installed_record<'a>(
+        &self,
+        site_packages: &Path,
+        record_paths: impl IntoIterator<Item = &'a str>,
+    ) -> Option<&rattler_conda_types::PackageName> {
+        record_paths.into_iter().find_map(|record_path| {
+            let path = CondaPrefixPath::from_installed_record(site_packages, record_path)?;
+            self.paths_registry.get(&path)
+        })
     }
 
     /// Check if the installation of the wheels is going to clobber any installed conda package
@@ -436,6 +462,48 @@ mod tests {
                 None
             );
         }
+    }
+
+    /// Entries of an installed distribution are relative to its `.dist-info`
+    /// directory, so they map straight onto conda's prefix-relative form.
+    #[test]
+    fn installed_record_path_is_matched_prefix_relative() {
+        assert_eq!(
+            CondaPrefixPath::from_installed_record(
+                std::path::Path::new("lib/python3.12/site-packages"),
+                "boltons/__init__.py"
+            ),
+            Some(CondaPrefixPath(PathBuf::from(
+                "lib/python3.12/site-packages/boltons/__init__.py"
+            )))
+        );
+    }
+
+    /// Console scripts are recorded as `../../../bin/<script>`: they escape
+    /// site-packages but still land inside the prefix.
+    #[test]
+    fn installed_record_path_escaping_site_packages_is_matched() {
+        assert_eq!(
+            CondaPrefixPath::from_installed_record(
+                std::path::Path::new("lib/python3.12/site-packages"),
+                "../../../bin/prek"
+            ),
+            Some(CondaPrefixPath(PathBuf::from("bin/prek")))
+        );
+    }
+
+    /// Entries that escape the prefix (or are absolute) cannot be conda-owned.
+    #[test]
+    fn installed_record_path_outside_prefix_is_ignored() {
+        let site_packages = std::path::Path::new("lib/python3.12/site-packages");
+        assert_eq!(
+            CondaPrefixPath::from_installed_record(site_packages, "../../../../../bin/prek"),
+            None
+        );
+        assert_eq!(
+            CondaPrefixPath::from_installed_record(site_packages, "/abs/evil"),
+            None
+        );
     }
 
     #[test]
