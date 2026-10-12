@@ -141,6 +141,11 @@ runner solving a CUDA-enabled lock file).
 - `CONDA_OVERRIDE_WIN` sets the `__win` version. Example: `CONDA_OVERRIDE_WIN=0`.
 - `CONDA_OVERRIDE_ARCHSPEC` sets the `__archspec` CPU microarchitecture name. Example: `CONDA_OVERRIDE_ARCHSPEC=skylake`. Set it to `0` to mark the microarchitecture as unknown.
 
+On a machine without an AMD GPU, set both `CONDA_OVERRIDE_AMDGPU=0` and
+`CONDA_OVERRIDE_AMDGPU_ARCH=<major.minor.stepping>` to mock an architecture.
+The architecture override is ignored when `__amdgpu` is absent. Unsupported
+platform errors include the required assignments in their override hints.
+
 Setting any of these to an empty string (for example `CONDA_OVERRIDE_CUDA=""`)
 disables the corresponding virtual package instead of setting a version, which
 is useful for solving a lock file as if the feature were absent.

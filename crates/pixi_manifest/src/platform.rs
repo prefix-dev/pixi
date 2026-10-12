@@ -867,13 +867,13 @@ pub fn candidate_subdirs(current: Subdir) -> Vec<Subdir> {
 
 /// Returns `true` when `system` provides the capability `required` names.
 ///
-/// Every virtual package but one is a version: the system satisfies it by
-/// carrying the same name at a version at least as high. `__archspec` is the
-/// exception -- per CEP 30 its version is a constant and the microarchitecture
-/// lives in the build string -- so it is compared through the archspec
-/// database instead, where a host satisfies a requirement by being that
-/// microarchitecture or a strict superset of it (`zen2` covers `x86_64_v3`,
-/// `haswell` does not cover `zen2`).
+/// Most virtual packages are satisfied by the same name at a version at least
+/// as high. `__amdgpu_arch` instead requires the exact ISA version: a different
+/// architecture is not necessarily compatible. `__archspec` carries its
+/// microarchitecture in the build string (its version is constant per CEP 30),
+/// so it is compared through the archspec database instead, where a host
+/// satisfies a requirement by being that microarchitecture or a strict
+/// superset of it (`zen2` covers `x86_64_v3`, `haswell` does not cover `zen2`).
 pub fn capability_satisfied_by(
     required: &GenericVirtualPackage,
     system: &[GenericVirtualPackage],
@@ -881,9 +881,15 @@ pub fn capability_satisfied_by(
     if required.name.as_normalized() == "__archspec" {
         return archspec_capability_satisfied_by(required, system);
     }
-    system
-        .iter()
-        .any(|provided| provided.name == required.name && provided.version >= required.version)
+    let exact_version = required.name.as_normalized() == "__amdgpu_arch";
+    system.iter().any(|provided| {
+        provided.name == required.name
+            && if exact_version {
+                provided.version == required.version
+            } else {
+                provided.version >= required.version
+            }
+    })
 }
 
 /// The `__archspec` half of [`capability_satisfied_by`].
@@ -1030,7 +1036,8 @@ fn validate_amdgpu_arch(version: &str) -> Result<(), String> {
 /// Target features (`gfx90a:xnack-`) are rejected: `__amdgpu_arch` has no way
 /// to express them, so accepting them would silently drop part of the input.
 pub fn amdgpu_arch_from_target_name(name: &str) -> Result<Version, String> {
-    if !name.contains(':')
+    if name.is_ascii()
+        && !name.contains(':')
         && let Some(arch_info) = AmdGpuArchInfo::from_target_id(name)
     {
         return Ok(arch_info.to_version());
@@ -1217,6 +1224,58 @@ mod tests {
             name: PackageName::try_from("__archspec").unwrap(),
             version: Version::major(0),
             build_string: microarchitecture.to_string(),
+        }
+    }
+
+    #[test]
+    fn amdgpu_arch_capability_requires_exact_isa_version() {
+        let required = gvp("__amdgpu_arch", "9.0.10");
+        assert!(capability_satisfied_by(
+            &required,
+            &[gvp("__amdgpu_arch", "9.0.10")]
+        ));
+        for version in ["8.0.10", "10.0.10", "9.1.10", "9.0.9", "9.0.11"] {
+            assert!(
+                !capability_satisfied_by(&required, &[gvp("__amdgpu_arch", version)]),
+                "a different ISA version {version} must not satisfy {required}"
+            );
+        }
+        assert!(!capability_satisfied_by(&required, &[]));
+        assert!(!capability_satisfied_by(&required, &[gvp("__amdgpu", "0")]));
+    }
+
+    #[test]
+    fn amdgpu_presence_capability_does_not_require_an_architecture() {
+        let required = gvp("__amdgpu", "0");
+        assert!(capability_satisfied_by(&required, &[gvp("__amdgpu", "0")]));
+        assert!(!capability_satisfied_by(&required, &[]));
+        assert!(!capability_satisfied_by(
+            &required,
+            &[gvp("__amdgpu_arch", "9.0.10")]
+        ));
+    }
+
+    #[test]
+    fn cuda_capabilities_remain_lower_bounds() {
+        for name in ["__cuda", "__cuda_arch"] {
+            let required = gvp(name, "12");
+            assert!(capability_satisfied_by(&required, &[gvp(name, "12")]));
+            assert!(capability_satisfied_by(&required, &[gvp(name, "13")]));
+            assert!(!capability_satisfied_by(&required, &[gvp(name, "11")]));
+            assert!(!capability_satisfied_by(&required, &[]));
+        }
+    }
+
+    #[test]
+    fn amdgpu_target_parser_rejects_unicode_without_panicking() {
+        for name in ["gfx9éa", "gfx9💥", "gfx９0a"] {
+            assert!(amdgpu_arch_from_target_name(name).is_err(), "{name}");
+        }
+        for (name, version) in [("gfx90a", "9.0.10"), ("gfx1100", "11.0.0")] {
+            assert_eq!(
+                amdgpu_arch_from_target_name(name).unwrap(),
+                Version::from_str(version).unwrap()
+            );
         }
     }
 

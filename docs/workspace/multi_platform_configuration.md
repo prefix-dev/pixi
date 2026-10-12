@@ -130,8 +130,11 @@ Each inline-table entry has:
 
   A raw `__amdgpu_arch` takes the ISA version and is rejected without
   `__amdgpu`.
+  Concrete AMDGPU architectures must match exactly: a higher ISA version does
+  not imply compatibility with a lower one. Unlike CUDA compute capability,
+  `amdgpu = "gfx90a"` is not a minimum architecture requirement.
 
-- For virtual packages without a friendly key, a raw `__name = "version"` entry is also accepted as an escape hatch. Only the virtual packages pixi knows how to override (`__win`, `__osx`, `__linux`, `__cuda`, `__amdgpu`, `__archspec`, and the libc family `__glibc`/`__musl`/`__eglibc`) take effect at detection; any other raw `__name` is stored but ignored when checking host compatibility.
+- For virtual packages without a friendly key, a raw `__name = "version"` entry is also accepted as an escape hatch. Only the virtual packages pixi knows how to override (`__win`, `__osx`, `__linux`, `__cuda`, `__cuda_arch`, `__amdgpu`, `__amdgpu_arch`, `__archspec`, and the libc family `__glibc`/`__musl`/`__eglibc`) take effect at detection; any other raw `__name` is stored but ignored when checking host compatibility.
 
 A feature's `platforms` array is a list of names that must each resolve to a workspace platform (or be a bare conda subdir, which Pixi treats as an alias for that subdir).
 This is how you bind a feature to the rich variant:

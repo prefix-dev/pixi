@@ -3,6 +3,7 @@ use std::io::Write;
 use std::str::FromStr;
 
 use clap::Parser;
+use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_api::WorkspaceContext;
 use pixi_core::{WorkspaceLocator, environment::LockFileUsage};
@@ -741,8 +742,13 @@ async fn execute_edit(
     };
 
     if edit.is_noop() {
+        let command = <VirtualPackageArgs as clap::Args>::augment_args(clap::Command::new("edit"));
+        let flags = command
+            .get_arguments()
+            .filter_map(clap::Arg::get_long)
+            .format_with(", ", |flag, f| f(&format_args!("--{flag}")));
         miette::bail!(
-            "nothing to do: pass at least one of --subdir, a virtual-package flag (--cuda, --archspec, --glibc, --linux, --macos, --windows), a `__name=value` positional, --remove-virtual-package, or --clear-virtual-packages"
+            "nothing to do: pass at least one of --subdir, a virtual-package flag ({flags}), a `__name=value` positional, --remove-virtual-package, or --clear-virtual-packages"
         );
     }
 
