@@ -215,6 +215,11 @@ The backend reads dependencies from the `DESCRIPTION` file:
 R's base packages (such as `stats`, `utils`, `base` and `methods`) come with `r-base`, so they are filtered out and not added as separate dependencies.
 R's recommended packages (such as `MASS`, `Matrix` and `mgcv`) are separate packages on conda-forge (`r-mass`, `r-matrix`, `r-mgcv`), so they are added like any other dependency.
 
+### Rust
+
+Packages with Rust code declare it in `SystemRequirements`, as CRAN asks: `Cargo (Rust's package manager), rustc`.
+When `SystemRequirements` mentions `cargo` or `rustc`, the backend adds `rust` to the build requirements, and on Windows also `rust-std-x86_64-pc-windows-gnu`, since R packages build their Rust code for the GNU target there.
+
 ## Build Process
 
 The R backend follows this build process:

@@ -67,7 +67,7 @@ impl GenerateRecipe for RGenerator {
         model: &pixi_build_types::ProjectModel,
         config: &Self::Config,
         manifest_path: PathBuf,
-        _host_platform: Subdir,
+        host_platform: Subdir,
         _python_params: Option<PythonParams>,
         variants: &HashSet<NormalizedKey>,
         _channels: Vec<ChannelUrl>,
@@ -111,6 +111,23 @@ impl GenerateRecipe for RGenerator {
             &mut requirements.build,
             variants,
         );
+
+        // Rust, for packages with Rust code. The plain `rust` package, as
+        // conda-forge's R recipes use (e.g. r-gifski), rather than
+        // `compiler('rust')`, with which R's Makevars didn't find the library
+        // cargo built.
+        if metadata_provider.needs_rust().into_diagnostic()? {
+            requirements
+                .build
+                .push(matchspec_item("rust").into_diagnostic()?);
+            // On Windows, R packages build their Rust code for the GNU target,
+            // whose standard library `rust` doesn't bring
+            if host_platform == Subdir::Win64 {
+                requirements
+                    .build
+                    .push(matchspec_item("rust-std-x86_64-pc-windows-gnu").into_diagnostic()?);
+            }
+        }
 
         // Add the R runtime to host and run requirements. A user-provided
         // r-base spec intersects with this one in the solver, so duplicates
@@ -732,6 +749,82 @@ LinkingTo:
                 "Base packages should be left out, got {reqs:?}"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn test_rust_is_added_when_system_requirements_ask_for_cargo() {
+        let temp_dir = TempDir::new().unwrap();
+        fs::write(
+            temp_dir.path().join("DESCRIPTION"),
+            r#"Package: hellorust
+Version: 1.2.3
+SystemRequirements: Cargo (Rust's package manager), rustc
+"#,
+        )
+        .await
+        .unwrap();
+
+        let project_model = project_fixture!({
+            "name": "r-hellorust",
+            "version": "1.2.3",
+            "targets": {
+                "defaultTarget": {}
+            }
+        });
+
+        let build_requirements = |platform: Subdir| {
+            let project_model = project_model.clone();
+            let path = temp_dir.path().to_path_buf();
+            async move {
+                RGenerator::default()
+                    .generate_recipe(
+                        &project_model,
+                        &RBackendConfig::default(),
+                        path,
+                        platform,
+                        None,
+                        &HashSet::new(),
+                        vec![],
+                        None,
+                        None,
+                        None,
+                        None,
+                    )
+                    .await
+                    .expect("Failed to generate recipe")
+                    .recipe
+                    .requirements
+                    .build
+                    .iter()
+                    // The package name, without any version
+                    .map(|req| {
+                        req.to_string()
+                            .split_whitespace()
+                            .next()
+                            .unwrap_or_default()
+                            .to_string()
+                    })
+                    .collect::<Vec<String>>()
+            }
+        };
+
+        let linux = build_requirements(Subdir::Linux64).await;
+        assert!(
+            linux.iter().any(|req| req == "rust"),
+            "Should have rust in build requirements, got {linux:?}"
+        );
+        assert!(
+            !linux.iter().any(|req| req.starts_with("rust-std")),
+            "Should only add the GNU target's standard library on Windows, got {linux:?}"
+        );
+
+        let windows = build_requirements(Subdir::Win64).await;
+        assert!(
+            windows
+                .iter()
+                .any(|req| req == "rust-std-x86_64-pc-windows-gnu"),
+            "Should have the GNU target's standard library on Windows, got {windows:?}"
+        );
     }
 
     #[tokio::test]
