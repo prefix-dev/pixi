@@ -9263,7 +9263,8 @@ They only work in build scripts.</p>
 <li>R package names are converted to conda names with the <code>r-</code> prefix (e.g., <code>dplyr</code> becomes <code>r-dplyr</code>)</li>
 </ul>
 <h3 id="built-in-packages">Built-in Packages<a class="headerlink" href="#built-in-packages" title="Permanent link">#</a></h3>
-<p>Packages that are included with R (such as <code>stats</code>, <code>utils</code>, <code>base</code>, <code>methods</code>, <code>Matrix</code>, <code>MASS</code>, etc.) are automatically filtered out and not added as separate dependencies.</p>
+<p>R's base packages (such as <code>stats</code>, <code>utils</code>, <code>base</code> and <code>methods</code>) come with <code>r-base</code>, so they are filtered out and not added as separate dependencies.
+R's recommended packages (such as <code>MASS</code>, <code>Matrix</code> and <code>mgcv</code>) are separate packages on conda-forge (<code>r-mass</code>, <code>r-matrix</code>, <code>r-mgcv</code>), so they are added like any other dependency.</p>
 <h2 id="build-process">Build Process<a class="headerlink" href="#build-process" title="Permanent link">#</a></h2>
 <p>The R backend follows this build process:</p>
 <ol>
