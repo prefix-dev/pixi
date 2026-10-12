@@ -119,15 +119,19 @@ This is a different class of supply-chain risk from "is this version vulnerable?
 !!! tip "Disable activation scripts in Pixi"
     We plan to add an option to disable shell activation scripts and allow JSON-style activations only. Track progress in [pixi#4889](https://github.com/prefix-dev/pixi/issues/4889).
 
-This also affects `direnv` integrations. The documented [`direnv` setup](integration/third_party/direnv.md) uses `watch_file pixi.lock`, which means a lock file change causes `direnv` to re-run `pixi shell-hook`. If the new lock file introduces a package with a malicious activation script, switching to that lock file can trigger the same arbitrary code execution without a fresh manual approval.
+This also affects `direnv` integrations, which run `pixi shell-hook` automatically when you enter a directory. Without an approval step, a `git pull` or a branch switch that introduces a package with a malicious activation script, or a malicious `[activation]` section in the manifest, can trigger arbitrary code execution as soon as you `cd` into the workspace.
 
 !!! warning "Resolution itself can execute code"
     Code execution is not limited to installation and activation. Commands that only resolve dependencies, such as `pixi lock`, `pixi install`, and `pixi update` (even with `--no-install`), can also lead to arbitrary code execution. To resolve a workspace that contains source dependencies, Pixi has to invoke the package's build backend, which is itself arbitrary code that can be malicious. Only run these commands on projects you trust, or inside a sandbox.
 
-!!! tip "`require_allowed` in `direnv`"
-    There is an upstream `direnv` pull request, [direnv#1530](https://github.com/direnv/direnv/pull/1530), that adds `require_allowed pixi.toml pixi.lock`. Once released, that can be used to force a fresh `direnv allow` when the manifest or lock file changes.
+Keep `post-link` scripts disabled unless you have a concrete package that requires them and you have reviewed that behavior.
 
-Keep `post-link` scripts disabled unless you have a concrete package that requires them and you have reviewed that behavior. If you use `direnv`, be aware that `watch_file pixi.lock` improves convenience but also lowers the friction for activation-time code execution after dependency changes. Re-introduce an approval step on lock file changes as soon as your `direnv` version supports it.
+If you use `direnv`, use [`layout pixi`](integration/third_party/direnv.md). It guards the manifest and `pixi.lock` with [`require_allowed`](https://direnv.net/man/direnv-stdlib.1.html#coderequireallowed-ltpathgt-ltpathgt-code), so any change to them requires a fresh `direnv allow` before the environment is activated again. Review the diff before you approve it. If your manifest references activation scripts from your repository, guard them as well:
+
+```shell title=".envrc"
+require_allowed scripts/activate.sh
+layout pixi
+```
 
 ## 5. Scan The Installed Environment Directly
 
@@ -222,4 +226,5 @@ If you want a conservative default posture, we recommend:
 - selectively bypass the delay only for trusted or urgent fixes;
 - update or override dependencies when advisories land;
 - scan the installed environment with Syft and your vulnerability scanner;
-- generate attestations for packages you publish.
+- generate attestations for packages you publish;
+- use `layout pixi` if you activate environments automatically with `direnv`.
