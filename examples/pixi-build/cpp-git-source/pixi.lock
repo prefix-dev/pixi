@@ -77,7 +77,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/linux-64/xorg-libxrender-0.9.12-hb9d3cd8_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/xorg-libxscrnsaver-1.2.4-hb9d3cd8_0.conda
       - conda: https://prefix.dev/conda-forge/linux-64/xorg-libxtst-1.2.5-hb9d3cd8_3.conda
-      - conda_source: sdl_example[10db969c] @ .
+      - conda_source: sdl_example[849927c1] @ .
       osx-arm64:
       - conda: https://prefix.dev/conda-forge/osx-arm64/bzip2-1.0.8-hd037594_9.conda
       - conda: https://prefix.dev/conda-forge/osx-arm64/dbus-1.16.2-h3ff7a7c_1.conda
@@ -103,7 +103,7 @@ environments:
       - conda: https://prefix.dev/conda-forge/win-64/vc-14.5-h1b7c187_39.conda
       - conda: https://prefix.dev/conda-forge/win-64/vc14_runtime-14.51.36231-h1b9f54f_39.conda
       - conda: https://prefix.dev/conda-forge/win-64/vcomp14-14.51.36231-h1b9f54f_39.conda
-      - conda_source: sdl_example[6e39f1ba] @ .
+      - conda_source: sdl_example[8b445dc8] @ .
 packages:
 - conda: https://prefix.dev/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
   build_number: 20
@@ -2419,14 +2419,15 @@ packages:
     - zstd >=1.5.7,<1.6.0a0
   size: 388453
   timestamp: 1764777142545
-- conda_source: sdl_example[10db969c] @ .
+- conda_source: sdl_example[849927c1] @ .
   variants:
     c_stdlib: sysroot
     c_stdlib_version: '2.28'
     target_platform: linux-64
   depends:
-  - libstdcxx >=15
   - libgcc >=15
+  - libgcc >=15
+  - libstdcxx >=15
   - __glibc >=2.28,<3.0.a0
   - sdl2 >=2.32.56,<3.0a0
   source:
@@ -2529,8 +2530,9 @@ packages:
   - conda: https://prefix.dev/conda-forge/linux-64/xorg-libxrender-0.9.12-hb9d3cd8_0.conda
   - conda: https://prefix.dev/conda-forge/linux-64/xorg-libxscrnsaver-1.2.4-hb9d3cd8_0.conda
   - conda: https://prefix.dev/conda-forge/linux-64/xorg-libxtst-1.2.5-hb9d3cd8_3.conda
-- conda_source: sdl_example[6e39f1ba] @ .
+- conda_source: sdl_example[8b445dc8] @ .
   variants:
+    c_compiler: vs2022
     cxx_compiler: vs2022
     target_platform: win-64
   depends:
