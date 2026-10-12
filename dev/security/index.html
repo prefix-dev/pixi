@@ -8969,26 +8969,26 @@ Once this CEP is implemented, Pixi will switch the behavior of <code>exclude-new
 <p class="admonition-title">Disable activation scripts in Pixi</p>
 <p>We plan to add an option to disable shell activation scripts and allow JSON-style activations only. Track progress in <a href="https://github.com/prefix-dev/pixi/issues/4889">pixi#4889</a>.</p>
 </div>
-<p>This also affects <code>direnv</code> integrations. The documented <a href="../integration/third_party/direnv/"><code>direnv</code> setup</a> uses <code>watch_file pixi.lock</code>, which means a lock file change causes <code>direnv</code> to re-run <code>pixi shell-hook</code>. If the new lock file introduces a package with a malicious activation script, switching to that lock file can trigger the same arbitrary code execution without a fresh manual approval.</p>
+<p>This also affects <code>direnv</code> integrations, which run <code>pixi shell-hook</code> automatically when you enter a directory. Without an approval step, a <code>git pull</code> or a branch switch that introduces a package with a malicious activation script, or a malicious <code>[activation]</code> section in the manifest, can trigger arbitrary code execution as soon as you <code>cd</code> into the workspace.</p>
 <div class="admonition warning">
 <p class="admonition-title">Resolution itself can execute code</p>
 <p>Code execution is not limited to installation and activation. Commands that only resolve dependencies, such as <code>pixi lock</code>, <code>pixi install</code>, and <code>pixi update</code> (even with <code>--no-install</code>), can also lead to arbitrary code execution. To resolve a workspace that contains source dependencies, Pixi has to invoke the package's build backend, which is itself arbitrary code that can be malicious. Only run these commands on projects you trust, or inside a sandbox.</p>
 </div>
-<div class="admonition tip">
-<p class="admonition-title"><code>require_allowed</code> in <code>direnv</code></p>
-<p>There is an upstream <code>direnv</code> pull request, <a href="https://github.com/direnv/direnv/pull/1530">direnv#1530</a>, that adds <code>require_allowed pixi.toml pixi.lock</code>. Once released, that can be used to force a fresh <code>direnv allow</code> when the manifest or lock file changes.</p>
-</div>
-<p>Keep <code>post-link</code> scripts disabled unless you have a concrete package that requires them and you have reviewed that behavior. If you use <code>direnv</code>, be aware that <code>watch_file pixi.lock</code> improves convenience but also lowers the friction for activation-time code execution after dependency changes. Re-introduce an approval step on lock file changes as soon as your <code>direnv</code> version supports it.</p>
+<p>Keep <code>post-link</code> scripts disabled unless you have a concrete package that requires them and you have reviewed that behavior.</p>
+<p>If you use <code>direnv</code>, use <a href="../integration/third_party/direnv/"><code>layout pixi</code></a>. It guards the manifest and <code>pixi.lock</code> with <a href="https://direnv.net/man/direnv-stdlib.1.html#coderequireallowed-ltpathgt-ltpathgt-code"><code>require_allowed</code></a>, so any change to them requires a fresh <code>direnv allow</code> before the environment is activated again. Review the diff before you approve it. If your manifest references activation scripts from your repository, guard them as well:</p>
+<div class="language-shell highlight"><span class="filename">.envrc</span><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>require_allowed<span class="w"> </span>scripts/activate.sh
+</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>layout<span class="w"> </span>pixi
+</span></code></pre></div>
 <h2 id="5-scan-the-installed-environment-directly">5. Scan The Installed Environment Directly<a class="headerlink" href="#5-scan-the-installed-environment-directly" title="Permanent link">#</a></h2>
 <p>For CVE analysis today, our preferred workflow is to scan the installed Pixi-managed environment directly with <a href="https://github.com/anchore/syft">Syft</a> and a vulnerability scanner such as <a href="https://github.com/anchore/grype">Grype</a>. The goal here is narrow: find known-vulnerable software that is actually present in the environment you built, including transitive dependencies and ecosystem-specific packages that may never appear clearly in <code>pixi.toml</code>. This improves visibility into what is really on disk, which is what your security tooling ultimately needs to analyze.</p>
 <p>This does not protect against every supply-chain problem. It does not stop a malicious package from being installed, verify package provenance, or catch issues that are not yet in the scanner's advisory data. It is also limited by ecosystem matching quality. That matters for conda in particular, because cross-ecosystem CVE matching is still improving. Today, scanning the installed filesystem is often the most practical workaround: instead of asking "what did I intend to install?", you ask "what ended up in this environment?"</p>
 <p>In practice, that means scanning the concrete environment directory, usually in CI or as part of release review, and generating a portable SBOM only when you need to archive or share the inventory. We recommend enabling the conda and auditable Rust catalogers explicitly so the behavior stays consistent across different scan targets:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-3-1"><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>syft<span class="w"> </span>.pixi/envs/default<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-2"><a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="w">  </span>--select-catalogers<span class="o">=</span>+conda-meta-cataloger,+cargo-auditable-binary-cataloger<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-3-3"><a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a><span class="w">  </span>--output<span class="w"> </span>syft-json<span class="o">=</span>syft-output.json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>syft<span class="w"> </span>.pixi/envs/default<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="w">  </span>--select-catalogers<span class="o">=</span>+conda-meta-cataloger,+cargo-auditable-binary-cataloger<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a><span class="w">  </span>--output<span class="w"> </span>syft-json<span class="o">=</span>syft-output.json
 </span></code></pre></div>
 <p>That output can then be fed to Grype for CVE scanning:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>grype<span class="w"> </span>syft-output.json
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>grype<span class="w"> </span>syft-output.json
 </span></code></pre></div>
 <p>Syft will detect conda packages from <code>conda-meta</code> when scanning a filesystem location like <code>.pixi/envs/default</code>, but it does not always do so by default when scanning a container image that contains a conda environment. Passing the catalogers explicitly avoids that surprise.</p>
 <p>If you want to continue straight into vulnerability analysis, prefer feeding Syft's own output into your scanner instead of converting through CycloneDX first. In practice, format conversion can lose information, and scanning a CycloneDX export can produce different results from scanning Syft's native output directly.</p>
@@ -9003,21 +9003,21 @@ Once this CEP is implemented, Pixi will switch the behavior of <code>exclude-new
 <p>You can generate attestations directly during publish or upload an existing attestation in CI.</p>
 <p>For more background on Sigstore attestations in the conda ecosystem, see the <a href="https://rattler-build.prefix.dev/latest/sigstore/">Rattler-Build Sigstore documentation</a>.</p>
 <p>For example:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-5-1"><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--target-channel<span class="w"> </span>https://prefix.dev/&lt;channel-name&gt;<span class="w"> </span>--generate-attestation
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--target-channel<span class="w"> </span>https://prefix.dev/&lt;channel-name&gt;<span class="w"> </span>--generate-attestation
 </span></code></pre></div>
 <p>When using the lower-level upload command for prefix.dev, Pixi can also upload an existing attestation or generate one during CI:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-6-1"><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>pixi<span class="w"> </span>upload<span class="w"> </span>prefix<span class="w"> </span>--channel<span class="w"> </span>&lt;channel-name&gt;<span class="w"> </span>--generate-attestation<span class="w"> </span>dist/*.conda
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>pixi<span class="w"> </span>upload<span class="w"> </span>prefix<span class="w"> </span>--channel<span class="w"> </span>&lt;channel-name&gt;<span class="w"> </span>--generate-attestation<span class="w"> </span>dist/*.conda
 </span></code></pre></div>
 <p>Consumers can then validate those attestations with Sigstore tooling. For example, with the GitHub CLI:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>my-package-0.1.0-h123_0.conda<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-2"><a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="w">  </span>--owner<span class="w"> </span>my-org<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-7-3"><a id="__codelineno-7-3" name="__codelineno-7-3" href="#__codelineno-7-3"></a><span class="w">  </span>--predicate-type<span class="w"> </span><span class="s2">&quot;https://schemas.conda.org/attestations-publish-1.schema.json&quot;</span>
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>gh<span class="w"> </span>attestation<span class="w"> </span>verify<span class="w"> </span>my-package-0.1.0-h123_0.conda<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span>--owner<span class="w"> </span>my-org<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span>--predicate-type<span class="w"> </span><span class="s2">&quot;https://schemas.conda.org/attestations-publish-1.schema.json&quot;</span>
 </span></code></pre></div>
 <p>Or with <code>cosign</code>:</p>
-<div class="language-bash highlight"><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>cosign<span class="w"> </span>verify-blob<span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s2">&quot;https://github.com/my-org/.*&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">&quot;https://token.actions.githubusercontent.com&quot;</span><span class="w"> </span><span class="se">\</span>
-</span><span id="__span-8-4"><a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="w">  </span>my-package-0.1.0-h123_0.conda
+<div class="language-bash highlight"><pre><span></span><code><span id="__span-9-1"><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>cosign<span class="w"> </span>verify-blob<span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-2"><a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="w">  </span>--certificate-identity-regexp<span class="w"> </span><span class="s2">&quot;https://github.com/my-org/.*&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-3"><a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="w">  </span>--certificate-oidc-issuer<span class="w"> </span><span class="s2">&quot;https://token.actions.githubusercontent.com&quot;</span><span class="w"> </span><span class="se">\</span>
+</span><span id="__span-9-4"><a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a><span class="w">  </span>my-package-0.1.0-h123_0.conda
 </span></code></pre></div>
 <p>One example of a channel that already uses package signing extensively is the <a href="https://prefix.dev/channels/github-releases">github-releases</a> channel on prefix.dev (GitHub: <a href="https://github.com/hunger/octoconda">hunger/octoconda</a>).</p>
 <div class="admonition note">
@@ -9038,7 +9038,8 @@ Once this CEP is implemented, Pixi will switch the behavior of <code>exclude-new
 <li>selectively bypass the delay only for trusted or urgent fixes;</li>
 <li>update or override dependencies when advisories land;</li>
 <li>scan the installed environment with Syft and your vulnerability scanner;</li>
-<li>generate attestations for packages you publish.</li>
+<li>generate attestations for packages you publish;</li>
+<li>use <code>layout pixi</code> if you activate environments automatically with <code>direnv</code>.</li>
 </ul>
 
 

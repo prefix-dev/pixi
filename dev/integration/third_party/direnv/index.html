@@ -8669,30 +8669,42 @@
   <h1 id="__skip">Direnv</h1>
 
 <p><code>direnv</code> is a tool which automatically activates an environment as soon as you enter a directory with a <code>.envrc</code> file that you accepted at some point.
-This tutorial will demonstrate how to use <code>direnv</code> with Pixi`.</p>
+This tutorial will demonstrate how to use <code>direnv</code> with Pixi.</p>
 <p>First install <code>direnv</code> by running the following command:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>install<span class="w"> </span>direnv
 </span></code></pre></div>
 <p>Then create a <code>.envrc</code> file in your Pixi workspace root with the following content:</p>
-<div class="language-shell highlight"><span class="filename">.envrc</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>watch_file<span class="w"> </span>pixi.lock<span class="w"> </span><span class="c1"># (1)!</span>
-</span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="nb">eval</span><span class="w"> </span><span class="s2">&quot;</span><span class="k">$(</span>pixi<span class="w"> </span>shell-hook<span class="k">)</span><span class="s2">&quot;</span><span class="w"> </span><span class="c1"># (2)!</span>
+<div class="language-shell highlight"><span class="filename">.envrc</span><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>layout<span class="w"> </span>pixi
 </span></code></pre></div>
-<ol>
-<li>This ensures that every time your <code>pixi.lock</code> changes, <code>direnv</code> invokes the shell-hook again.</li>
-<li>This installs the environment if needed, and activates it. <code>direnv</code> ensures that the environment is deactivated when you leave the directory.</li>
-</ol>
+<p><a href="https://direnv.net/man/direnv-stdlib.1.html#codelayout-pixicode"><code>layout pixi</code></a> installs the environment if needed and activates it by running <code>pixi shell-hook</code>.
+<code>direnv</code> ensures that the environment is deactivated when you leave the directory.
+Additional arguments are passed to <code>pixi shell-hook</code>, so you can activate a different environment with <code>layout pixi -e &lt;env_name&gt;</code>.</p>
+<p><code>layout pixi</code> guards the manifest (<code>pixi.toml</code> or <code>pyproject.toml</code>) and <code>pixi.lock</code> with:</p>
+<ul>
+<li><a href="https://direnv.net/man/direnv-stdlib.1.html#coderequireallowed-ltpathgt-ltpathgt-code"><code>require_allowed</code></a>, which blocks the <code>.envrc</code> until you run <code>direnv allow</code> again whenever one of these files changes;</li>
+<li><a href="https://direnv.net/man/direnv-stdlib.1.html#codewatchfile-ltpathgt-ltpathgt-code"><code>watch_file</code></a>, which makes <code>direnv</code> reload the <code>.envrc</code> whenever one of these files changes.</li>
+</ul>
+<div class="admonition warning">
+<p class="admonition-title">Review manifest and lock file changes before running <code>direnv allow</code></p>
+<p>Activating a Pixi environment can execute arbitrary code, for example through <a href="../../../workspace/environment/#activation">activation scripts</a> of installed packages or the <code>[activation]</code> section of your manifest.
+<code>require_allowed</code> makes sure that <code>direnv</code> does not activate an environment from a changed manifest or lock file (e.g. after <code>git pull</code> or switching branches) until you have reviewed the change.
+If your manifest references activation scripts from your repository, add <code>require_allowed path/to/script.sh</code> to your <code>.envrc</code> to guard them as well.
+See <a href="../../../security/#4-treat-package-hooks-as-code-execution">Supply Chain Security</a> for more details.</p>
+</div>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>$<span class="w"> </span><span class="nb">cd</span><span class="w"> </span>my-project
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>direnv:<span class="w"> </span>error<span class="w"> </span>/my-project/.envrc<span class="w"> </span>is<span class="w"> </span>blocked.<span class="w"> </span>Run<span class="w"> </span><span class="sb">`</span>direnv<span class="w"> </span>allow<span class="sb">`</span><span class="w"> </span>to<span class="w"> </span>approve<span class="w"> </span>its<span class="w"> </span>content
 </span><span id="__span-2-3"><a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>$<span class="w"> </span>direnv<span class="w"> </span>allow
-</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>direnv:<span class="w"> </span>loading<span class="w"> </span>/my-project/.envrc
-</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>✔<span class="w"> </span>Project<span class="w"> </span><span class="k">in</span><span class="w"> </span>/my-project<span class="w"> </span>is<span class="w"> </span>ready<span class="w"> </span>to<span class="w"> </span>use!
-</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>direnv:<span class="w"> </span><span class="nb">export</span><span class="w"> </span>+CONDA_DEFAULT_ENV<span class="w"> </span>+CONDA_PREFIX<span class="w"> </span>+PIXI_ENVIRONMENT_NAME<span class="w"> </span>+PIXI_ENVIRONMENT_PLATFORMS<span class="w"> </span>+PIXI_WORKSPACE_MANIFEST<span class="w"> </span>+PIXI_WORKSPACE_NAME<span class="w"> </span>+PIXI_WORKSPACE_ROOT<span class="w"> </span>+PIXI_WORKSPACE_VERSION<span class="w"> </span>+PIXI_PROMPT<span class="w"> </span>~PATH
-</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>$<span class="w"> </span>which<span class="w"> </span>python
-</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>/my-project/.pixi/envs/default/bin/python
-</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>$<span class="w"> </span><span class="nb">cd</span><span class="w"> </span>..
-</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>direnv:<span class="w"> </span>unloading
-</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>$<span class="w"> </span>which<span class="w"> </span>python
-</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>python<span class="w"> </span>not<span class="w"> </span>found
+</span><span id="__span-2-4"><a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>direnv:<span class="w"> </span>allowing<span class="w"> </span>pixi.toml
+</span><span id="__span-2-5"><a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>direnv:<span class="w"> </span>allowing<span class="w"> </span>pixi.lock
+</span><span id="__span-2-6"><a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>direnv:<span class="w"> </span>loading<span class="w"> </span>/my-project/.envrc
+</span><span id="__span-2-7"><a id="__codelineno-2-7" name="__codelineno-2-7" href="#__codelineno-2-7"></a>✔<span class="w"> </span>Project<span class="w"> </span><span class="k">in</span><span class="w"> </span>/my-project<span class="w"> </span>is<span class="w"> </span>ready<span class="w"> </span>to<span class="w"> </span>use!
+</span><span id="__span-2-8"><a id="__codelineno-2-8" name="__codelineno-2-8" href="#__codelineno-2-8"></a>direnv:<span class="w"> </span><span class="nb">export</span><span class="w"> </span>+CONDA_DEFAULT_ENV<span class="w"> </span>+CONDA_PREFIX<span class="w"> </span>+PIXI_ENVIRONMENT_NAME<span class="w"> </span>+PIXI_ENVIRONMENT_PLATFORMS<span class="w"> </span>+PIXI_WORKSPACE_MANIFEST<span class="w"> </span>+PIXI_WORKSPACE_NAME<span class="w"> </span>+PIXI_WORKSPACE_ROOT<span class="w"> </span>+PIXI_WORKSPACE_VERSION<span class="w"> </span>+PIXI_PROMPT<span class="w"> </span>~PATH
+</span><span id="__span-2-9"><a id="__codelineno-2-9" name="__codelineno-2-9" href="#__codelineno-2-9"></a>$<span class="w"> </span>which<span class="w"> </span>python
+</span><span id="__span-2-10"><a id="__codelineno-2-10" name="__codelineno-2-10" href="#__codelineno-2-10"></a>/my-project/.pixi/envs/default/bin/python
+</span><span id="__span-2-11"><a id="__codelineno-2-11" name="__codelineno-2-11" href="#__codelineno-2-11"></a>$<span class="w"> </span><span class="nb">cd</span><span class="w"> </span>..
+</span><span id="__span-2-12"><a id="__codelineno-2-12" name="__codelineno-2-12" href="#__codelineno-2-12"></a>direnv:<span class="w"> </span>unloading
+</span><span id="__span-2-13"><a id="__codelineno-2-13" name="__codelineno-2-13" href="#__codelineno-2-13"></a>$<span class="w"> </span>which<span class="w"> </span>python
+</span><span id="__span-2-14"><a id="__codelineno-2-14" name="__codelineno-2-14" href="#__codelineno-2-14"></a>python<span class="w"> </span>not<span class="w"> </span>found
 </span></code></pre></div>
 <p>While <code>direnv</code> comes with <a href="https://direnv.net/docs/hook.html">hooks for the common shells</a>,
 these hooks into the shell should not be relied on when using and IDE.</p>
