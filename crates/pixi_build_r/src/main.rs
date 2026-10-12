@@ -35,35 +35,20 @@ fn requirement_contains_package(
         .any(|item| requirement_item_contains_any_package(item, package_names))
 }
 
+/// Whether a requirement is for one of `package_names`, by its exact conda name.
 fn requirement_item_contains_any_package(
     item: &Item<SerializableMatchSpec>,
     package_names: &[&str],
 ) -> bool {
     match item {
-        Item::Value(value) => {
-            if let Some(exact_name) = value.as_concrete().and_then(|spec| spec.0.name.as_exact()) {
-                let normalized = exact_name.as_normalized();
-                if package_names
+        Item::Value(value) => value
+            .as_concrete()
+            .and_then(|spec| spec.0.name.as_exact())
+            .is_some_and(|name| {
+                package_names
                     .iter()
-                    .any(|name| name.eq_ignore_ascii_case(normalized))
-                {
-                    return true;
-                }
-            }
-            if let Some(first_token) = value.to_string().split_whitespace().next() {
-                let pkg = first_token
-                    .split(['=', '<', '>', '~', '!', ' '])
-                    .next()
-                    .unwrap_or(first_token);
-                if package_names
-                    .iter()
-                    .any(|name| name.eq_ignore_ascii_case(pkg))
-                {
-                    return true;
-                }
-            }
-            false
-        }
+                    .any(|candidate| candidate.eq_ignore_ascii_case(name.as_normalized()))
+            }),
         Item::Conditional(cond) => cond
             .then
             .iter()
@@ -217,12 +202,10 @@ impl GenerateRecipe for RGenerator {
                 let lower_dep = dep.name.to_lowercase();
                 let r_name = format!("r-{lower_dep}");
                 let bioc_name = format!("bioconductor-{lower_dep}");
-                let candidate_names = [
-                    conda_name.as_str(),
-                    r_name.as_str(),
-                    bioc_name.as_str(),
-                    lower_dep.as_str(),
-                ];
+                // The R package's possible conda names, but not its bare R name,
+                // which can be another conda package: the R package openssl is
+                // r-openssl, while openssl is the C library.
+                let candidate_names = [conda_name.as_str(), r_name.as_str(), bioc_name.as_str()];
 
                 // Build the dependency spec string
                 let dep_spec = if let Some(version) = &dep.version {
@@ -263,12 +246,10 @@ impl GenerateRecipe for RGenerator {
                 let lower_dep = dep.name.to_lowercase();
                 let r_name = format!("r-{lower_dep}");
                 let bioc_name = format!("bioconductor-{lower_dep}");
-                let candidate_names = [
-                    conda_name.as_str(),
-                    r_name.as_str(),
-                    bioc_name.as_str(),
-                    lower_dep.as_str(),
-                ];
+                // The R package's possible conda names, but not its bare R name,
+                // which can be another conda package: the R package openssl is
+                // r-openssl, while openssl is the C library.
+                let candidate_names = [conda_name.as_str(), r_name.as_str(), bioc_name.as_str()];
 
                 if !requirement_contains_package(&requirements.host, &candidate_names) {
                     // Build the dependency spec string
@@ -1260,6 +1241,70 @@ SystemRequirements: CMake (>= 3.15), libxml2, pkg-config
             !host_reqs
                 .iter()
                 .any(|r| r == "r-biobase" || r.starts_with("r-biobase "))
+        );
+    }
+
+    #[tokio::test]
+    async fn test_same_named_conda_package_does_not_replace_r_package() {
+        let temp_dir = TempDir::new().unwrap();
+
+        // jose depends on the R package openssl; the package also needs the
+        // openssl C library, which is a different conda package
+        fs::write(
+            temp_dir.path().join("DESCRIPTION"),
+            "Package: jose\nVersion: 1.2.1\nDepends: openssl (>= 1.2.1)\nImports: jsonlite\n",
+        )
+        .await
+        .unwrap();
+
+        let project_model = project_fixture!({
+            "name": "r-jose",
+            "version": "1.2.1",
+            "targets": {
+                "defaultTarget": {
+                    "hostDependencies": {
+                        "openssl": {
+                            "binary": {
+                                "version": "*"
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        let generated_recipe = RGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &RBackendConfig::default(),
+                temp_dir.path().to_path_buf(),
+                Subdir::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let host: Vec<String> = generated_recipe
+            .recipe
+            .requirements
+            .host
+            .iter()
+            .map(|r| r.to_string())
+            .collect();
+        assert!(
+            host.iter()
+                .any(|r| r.starts_with("r-openssl") && r.contains(">=1.2.1")),
+            "Should have r-openssl >=1.2.1 next to the openssl C library, got {host:?}"
+        );
+        assert!(
+            host.iter().any(|r| r.starts_with("openssl")),
+            "Should keep the openssl C library, got {host:?}"
         );
     }
 
