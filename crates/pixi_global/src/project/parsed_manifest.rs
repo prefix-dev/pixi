@@ -597,7 +597,6 @@ mod tests {
     use std::str::FromStr;
 
     use insta::assert_snapshot;
-    use itertools::Itertools;
     use rattler_conda_types::PackageName;
 
     use super::{EnvironmentName, ParsedManifest};

@@ -3102,9 +3102,7 @@ def test_exclude_newer_update_respects_cutoff(
     manifest = manifests.joinpath("pixi-global.toml")
     # `package` 0.1.0 was uploaded a few seconds before 0.2.0
     between_versions = "2026-01-12T15:07:39Z"
-    manifest.write_text(
-        f'version = {MANIFEST_VERSION}\nexclude-newer = "{between_versions}"\n'
-    )
+    manifest.write_text(f'version = {MANIFEST_VERSION}\nexclude-newer = "{between_versions}"\n')
     verify_cli_command(
         [pixi, "global", "install", "--channel", multiple_versions_channel_1, "package"],
         env=env,
