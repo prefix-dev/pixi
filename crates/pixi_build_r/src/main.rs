@@ -1373,9 +1373,9 @@ SystemRequirements: CMake (>= 3.15), libxml2, pkg-config
             }
         };
 
-        let error = generate(vec![channel("https://prefix.dev/conda-forge")])
-            .await
-            .expect_err("Should fail without bioconda");
+        let Err(error) = generate(vec![channel("https://prefix.dev/conda-forge")]).await else {
+            panic!("Should fail without bioconda");
+        };
         assert!(
             error.to_string().contains("qvalue"),
             "Should name the Bioconductor package, got {error}"
