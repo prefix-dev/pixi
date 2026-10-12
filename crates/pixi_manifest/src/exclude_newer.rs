@@ -2,6 +2,7 @@ use std::fmt::Write;
 
 use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
+use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_pypi_spec::{PypiPackageName, VersionOrStar};
 use pixi_spec::{
@@ -232,39 +233,83 @@ pub fn resolve_pypi_exclude_newer<'a>(
     exclude_newer
 }
 
-/// Renders the exemptions that replace the deprecated per-package cutoffs of
-/// a top-level `[exclude-newer]` or `[pypi-exclude-newer]` table, for use in
-/// the deprecation hint.
-///
-/// A per-package cutoff lowers the cutoff for every release of the package,
-/// which the wildcard exemption `"*"` comes closest to. Conda users are
-/// encouraged to narrow it down to the releases they vetted; PyPI exemptions
-/// only support the wildcard for now.
-pub(crate) fn deprecated_table_migration_help<'a>(
-    table: &str,
-    cutoff: Option<ExcludeNewer>,
-    packages: impl IntoIterator<Item = &'a str>,
-) -> String {
-    let mut help = format!(
-        "move the entries to the `exemptions` of `[workspace.{table}]` instead, e.g.\n\n[workspace.{table}]"
-    );
-    if let Some(cutoff) = cutoff {
-        let _ = write!(help, "\ncutoff = \"{cutoff}\"");
+/// The migration of a deprecated top-level `[exclude-newer]` or
+/// `[pypi-exclude-newer]` table of per-package cutoffs, for use in the
+/// deprecation warning.
+#[derive(Debug, Clone)]
+pub struct ExcludeNewerTableMigration {
+    /// Whether any of the entries can be replaced by an exemption.
+    pub has_replacement: bool,
+
+    /// The help text that suggests the replacement, or announces the removal
+    /// of the entries without one.
+    pub help: String,
+}
+
+impl ExcludeNewerTableMigration {
+    /// Builds the migration of the deprecated per-package cutoffs of `table`
+    /// to the `exemptions` of `[{parent}.{table}]`.
+    ///
+    /// A zero cutoff such as `0d` lifts the cutoff for every release of the
+    /// package, which is exactly what the wildcard exemption `"*"` does. Any
+    /// other per-package cutoff has no replacement and will stop working once
+    /// the table is removed.
+    pub fn new<'a>(
+        parent: &str,
+        table: &str,
+        cutoff: Option<ExcludeNewer>,
+        overrides: impl IntoIterator<Item = (&'a str, &'a ExcludeNewer)>,
+    ) -> Self {
+        let (exemptions, without_replacement): (Vec<_>, Vec<_>) = overrides
+            .into_iter()
+            .partition(|(_, cutoff)| matches!(cutoff, ExcludeNewer::Duration(d) if d.is_zero()));
+
+        let mut help = String::new();
+        if !exemptions.is_empty() {
+            let entries = if without_replacement.is_empty() {
+                "the entries"
+            } else {
+                "the entries with a zero cutoff"
+            };
+            let _ = write!(
+                help,
+                "move {entries} to the `exemptions` of `[{parent}.{table}]` instead, e.g.\n\n[{parent}.{table}]"
+            );
+            if let Some(cutoff) = cutoff {
+                let _ = write!(help, "\ncutoff = \"{cutoff}\"");
+            }
+            let exemptions = exemptions
+                .iter()
+                .map(|(package, _)| format!("{package} = \"*\""))
+                .join(", ");
+            let _ = write!(help, "\nexemptions = {{ {exemptions} }}");
+            if table == "pypi-exclude-newer" {
+                help.push_str(
+                    "\n\nAn exemption allows every release of the package regardless of its upload time.",
+                );
+            } else {
+                help.push_str(
+                    "\n\nAn exemption allows the matching releases regardless of their upload time. Narrow `\"*\"` down to the releases you vetted, e.g. `\"1.2.3\"`.",
+                );
+            }
+        }
+        if !without_replacement.is_empty() {
+            if !help.is_empty() {
+                help.push_str("\n\n");
+            }
+            let packages = without_replacement
+                .iter()
+                .map(|(package, _)| format!("`{package}`"))
+                .join(", ");
+            let _ = write!(
+                help,
+                "per-package cutoffs other than a zero cutoff have no replacement, the cutoffs of {packages} will stop working when the table is removed in a future release"
+            );
+        }
+
+        Self {
+            has_replacement: !exemptions.is_empty(),
+            help,
+        }
     }
-    let exemptions = packages
-        .into_iter()
-        .map(|package| format!("{package} = \"*\""))
-        .collect::<Vec<_>>()
-        .join(", ");
-    let _ = write!(help, "\nexemptions = {{ {exemptions} }}");
-    if table == "pypi-exclude-newer" {
-        help.push_str(
-            "\n\nAn exemption allows every release of the package regardless of its upload time.",
-        );
-    } else {
-        help.push_str(
-            "\n\nAn exemption allows the matching releases regardless of their upload time. Narrow `\"*\"` down to the releases you vetted, e.g. `\"1.2.3\"`.",
-        );
-    }
-    help
 }

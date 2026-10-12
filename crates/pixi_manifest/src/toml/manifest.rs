@@ -20,12 +20,11 @@ use toml_span::{
 use url::Url;
 
 use crate::{
-    Activation, Environment, EnvironmentName, Environments, Feature, FeatureName, KnownPreviewFlag,
-    PixiPlatform, PixiPlatformName, SolveGroups, SystemRequirements, TargetSelector, Targets, Task,
-    TaskName, TomlError, Warning, WithWarnings, WorkspaceManifest,
+    Activation, Environment, EnvironmentName, Environments, ExcludeNewerTableMigration, Feature,
+    FeatureName, KnownPreviewFlag, PixiPlatform, PixiPlatformName, SolveGroups, SystemRequirements,
+    TargetSelector, Targets, Task, TaskName, TomlError, Warning, WithWarnings, WorkspaceManifest,
     environment::EnvironmentIdx,
     error::{FeatureNotEnabled, GenericError},
-    exclude_newer::deprecated_table_migration_help,
     manifests::PackageManifest,
     pypi::pypi_options::PypiOptions,
     system_requirements::virtual_packages_for_subdir,
@@ -573,10 +572,14 @@ impl TomlManifest {
             warnings.push(
                 Deprecation::exclude_newer_table(
                     "exclude-newer",
-                    deprecated_table_migration_help(
+                    ExcludeNewerTableMigration::new(
+                        "workspace",
                         "exclude-newer",
                         workspace.exclude_newer.cutoff,
-                        exclude_newer.value.keys().map(PackageName::as_source),
+                        exclude_newer
+                            .value
+                            .iter()
+                            .map(|(name, cutoff)| (name.as_source(), cutoff)),
                     ),
                     exclude_newer.span.clone(),
                 )
@@ -588,13 +591,14 @@ impl TomlManifest {
             warnings.push(
                 Deprecation::exclude_newer_table(
                     "pypi-exclude-newer",
-                    deprecated_table_migration_help(
+                    ExcludeNewerTableMigration::new(
+                        "workspace",
                         "pypi-exclude-newer",
                         workspace.pypi_exclude_newer.cutoff,
                         pypi_exclude_newer
                             .value
-                            .keys()
-                            .map(PypiPackageName::as_source),
+                            .iter()
+                            .map(|(name, cutoff)| (name.as_source(), cutoff)),
                     ),
                     pypi_exclude_newer.span.clone(),
                 )

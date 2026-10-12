@@ -4,6 +4,8 @@ use miette::{Diagnostic, LabeledSpan, Severity, SourceSpan};
 use thiserror::Error;
 use toml_span::Span;
 
+use crate::ExcludeNewerTableMigration;
+
 /// A deprecation message for a field.
 #[derive(Debug, Error)]
 #[error("{message}")]
@@ -27,28 +29,42 @@ impl Deprecation {
     }
 
     /// Deprecation of the top-level `[exclude-newer]` and
-    /// `[pypi-exclude-newer]` tables of per-package cutoffs in favor of the
-    /// `exemptions` of `[workspace.exclude-newer]` and
-    /// `[workspace.pypi-exclude-newer]`. `help` carries the tailored
-    /// replacement suggestion.
-    pub fn exclude_newer_table(table: &str, help: String, span: Option<Range<usize>>) -> Self {
+    /// `[pypi-exclude-newer]` tables of per-package cutoffs. Entries with a
+    /// zero cutoff are replaced by the `exemptions` of
+    /// `[workspace.exclude-newer]` and `[workspace.pypi-exclude-newer]`, all
+    /// others have no replacement.
+    pub fn exclude_newer_table(
+        table: &str,
+        migration: ExcludeNewerTableMigration,
+        span: Option<Range<usize>>,
+    ) -> Self {
+        let (message, label) = if migration.has_replacement {
+            (
+                format!(
+                    "the top-level `[{table}]` table of per-package cutoffs is deprecated in favor of the `exemptions` of `[workspace.{table}]`"
+                ),
+                format!("replace this with `[workspace.{table}.exemptions]`"),
+            )
+        } else {
+            (
+                format!(
+                    "the top-level `[{table}]` table of per-package cutoffs is deprecated and will be removed in a future release"
+                ),
+                "this table will be removed".to_string(),
+            )
+        };
         let labels = span
             .map(|span| {
                 vec![LabeledSpan::new_primary_with_span(
-                    Some(format!(
-                        "replace this with `[workspace.{table}.exemptions]`"
-                    )),
+                    Some(label),
                     SourceSpan::new(span.start.into(), span.end - span.start),
                 )]
             })
             .unwrap_or_default();
         Self {
-            message: format!(
-                "the top-level `[{table}]` table of per-package cutoffs is deprecated in favor of the `exemptions` of `[workspace.{table}]`"
-            )
-            .into(),
+            message: message.into(),
             labels,
-            help: Some(help.into()),
+            help: Some(migration.help.into()),
         }
     }
 

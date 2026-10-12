@@ -474,7 +474,8 @@ torch = { version = ">=2.10.0", index = "https://download.pytorch.org/whl/cu124"
 !!! warning "Deprecated: the top-level `[exclude-newer]` and `[pypi-exclude-newer]` tables"
     Older manifests override the cutoff per package in the top-level `[exclude-newer]` and `[pypi-exclude-newer]` tables.
     These tables still work, but pixi warns about them because a per-package cutoff lowers the cutoff for every future release of the package.
-    Move the entries to the `exemptions` of `[workspace.exclude-newer]` and `[workspace.pypi-exclude-newer]`, and narrow them down to the releases you vetted.
+    Move the entries with a zero cutoff such as `"0d"` to the `exemptions` of `[workspace.exclude-newer]` and `[workspace.pypi-exclude-newer]`, and narrow them down to the releases you vetted.
+    Per-package cutoffs other than a zero cutoff have no replacement and will stop working when the tables are removed.
 
     ```toml
     # before

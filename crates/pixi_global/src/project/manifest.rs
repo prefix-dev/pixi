@@ -9,7 +9,7 @@ use indexmap::IndexSet;
 use miette::IntoDiagnostic;
 use pixi_config::Config;
 use pixi_consts::consts;
-use pixi_manifest::{PrioritizedChannel, toml::TomlDocument};
+use pixi_manifest::{ExcludeNewerTableMigration, PrioritizedChannel, toml::TomlDocument};
 use pixi_toml::TomlIndexMap;
 use pixi_utils::{executable_from_path, strip_executable_extension};
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Subdir};
@@ -69,15 +69,19 @@ impl Manifest {
         };
 
         if !manifest.exclude_newer_package_overrides.is_empty() {
-            let exemptions = manifest
-                .exclude_newer_package_overrides
-                .keys()
-                .map(|name| format!("{} = \"*\"", name.as_source()))
-                .collect::<Vec<_>>()
-                .join(", ");
+            let migration = ExcludeNewerTableMigration::new(
+                "global",
+                "exclude-newer",
+                manifest.global.exclude_newer.cutoff,
+                manifest
+                    .exclude_newer_package_overrides
+                    .iter()
+                    .map(|(name, cutoff)| (name.as_source(), cutoff)),
+            );
             tracing::warn!(
-                "the top-level `[exclude-newer]` table of per-package cutoffs in {} is deprecated in favor of the `exemptions` of `[global.exclude-newer]`, e.g. `exclude-newer = {{ cutoff = \"7d\", exemptions = {{ {exemptions} }} }}`",
-                manifest_path.display()
+                "the top-level `[exclude-newer]` table of per-package cutoffs in {} is deprecated: {}",
+                manifest_path.display(),
+                migration.help
             );
         }
 
