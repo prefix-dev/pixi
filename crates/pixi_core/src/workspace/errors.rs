@@ -5,6 +5,8 @@ use itertools::Itertools;
 use miette::{Diagnostic, LabeledSpan};
 use pixi_manifest::{EnvironmentName, PixiPlatformName, PlatformMatchDiagnosis, TaskName};
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Subdir, Version};
+use rattler_virtual_packages::amdgpu::AmdGpuArchInfo;
+use rattler_virtual_packages::{AmdGpu, AmdGpuArch, EnvOverride};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
@@ -201,9 +203,11 @@ impl Diagnostic for UnsupportedPlatformError {
 fn format_requirements(reqs: &[GenericVirtualPackage]) -> String {
     reqs.iter()
         .map(|r| {
-            // Version 0 encodes a version-less requirement (a bare `__cuda`
-            // dependency): the package must be present at any version.
-            if r.version == Version::major(0) {
+            // Concrete AMDGPU architectures are exact targets, including zero.
+            // For other packages, version 0 encodes a version-less requirement.
+            if r.name.as_normalized() == "__amdgpu_arch" {
+                format!("{} == {}", r.name.as_normalized(), r.version)
+            } else if r.version == Version::major(0) {
                 format!("{} (any version)", r.name.as_normalized())
             } else {
                 format!("{} >= {}", r.name.as_normalized(), r.version)
@@ -251,8 +255,8 @@ fn override_applies_to(name: &str, target: Subdir) -> bool {
 /// `CONDA_OVERRIDE_*` hint for a virtual package the machine does not provide:
 /// the required version when known, a realistic example otherwise.
 ///
-/// `None` when there is no such variable (e.g. `__unix`), or when `target` is a
-/// platform that ignores it
+/// `None` when there is no such variable (e.g. `__unix`), when `target` ignores
+/// it, or when a known AMDGPU architecture cannot be represented as a numeric ISA.
 pub(crate) fn conda_override_hint(
     name: &str,
     version: Option<&Version>,
@@ -261,6 +265,8 @@ pub(crate) fn conda_override_hint(
     let env_var = match name {
         "__glibc" => "CONDA_OVERRIDE_GLIBC",
         "__cuda" => "CONDA_OVERRIDE_CUDA",
+        "__amdgpu" => AmdGpu::DEFAULT_ENV_NAME,
+        "__amdgpu_arch" => AmdGpuArch::DEFAULT_ENV_NAME,
         "__osx" => "CONDA_OVERRIDE_OSX",
         "__linux" => "CONDA_OVERRIDE_LINUX",
         "__win" => "CONDA_OVERRIDE_WIN",
@@ -269,6 +275,20 @@ pub(crate) fn conda_override_hint(
     };
     if !override_applies_to(name, target) {
         return None;
+    }
+    if name == "__amdgpu" {
+        return Some(format!("{env_var}=0"));
+    }
+    if name == "__amdgpu_arch" {
+        let mut example = version.map_or_else(|| "11.0.0".to_string(), ToString::to_string);
+        // Conda versions can omit trailing zeros, but the override requires all
+        // three ISA components. Let rattler reject nonnumeric or oversized ISAs.
+        for _ in example.bytes().filter(|&b| b == b'.').count()..2 {
+            example.push_str(".0");
+        }
+        let arch = example.parse::<AmdGpuArchInfo>().ok()?;
+        // Architecture overrides alone are discarded on GPU-less hosts.
+        return Some(format!("{}=0 {env_var}={arch}", AmdGpu::DEFAULT_ENV_NAME));
     }
     // A version-0 requirement means "any version"; "=0" reads like nonsense,
     // so suggest a realistic value instead.
@@ -344,6 +364,82 @@ mod tests {
 
     fn spec(raw: &str) -> MatchSpec {
         MatchSpec::from_str(raw, rattler_conda_types::ParseStrictness::Lenient).unwrap()
+    }
+
+    fn parse_amd_override_hint(hint: &str) -> (Option<AmdGpu>, Option<AmdGpuArch>) {
+        let mut presence = None;
+        let mut arch = None;
+        for assignment in hint.split_whitespace() {
+            let (name, value) = assignment.split_once('=').unwrap();
+            match name {
+                AmdGpu::DEFAULT_ENV_NAME => {
+                    presence = AmdGpu::parse_version_opt(value).unwrap();
+                }
+                AmdGpuArch::DEFAULT_ENV_NAME => {
+                    arch = AmdGpuArch::parse_version_opt(value).unwrap();
+                }
+                _ => panic!("unexpected override: {assignment}"),
+            }
+        }
+        (presence, arch)
+    }
+
+    #[test]
+    fn amdgpu_presence_hints_parse_as_present() {
+        for version in [None, Some(Version::major(0)), Some(Version::major(11))] {
+            let hint = conda_override_hint("__amdgpu", version.as_ref(), Subdir::Linux64).unwrap();
+            let (presence, arch) = parse_amd_override_hint(&hint);
+            assert!(presence.is_some());
+            assert!(arch.is_none());
+        }
+    }
+
+    #[test]
+    fn amdgpu_arch_hints_preserve_exact_isa_and_enable_presence() {
+        for raw in ["9", "9.0", "9.0.10", "11.0.0", "11.5.1", "0", "0.0.0"] {
+            let requested = Version::from_str(raw).unwrap();
+            for target in [Subdir::Linux64, Subdir::Win64] {
+                let hint = conda_override_hint("__amdgpu_arch", Some(&requested), target).unwrap();
+                let (presence, arch) = parse_amd_override_hint(&hint);
+                assert!(presence.is_some(), "{raw}");
+                assert_eq!(arch.unwrap().version, requested, "{raw}");
+            }
+        }
+    }
+
+    #[test]
+    fn unknown_amdgpu_arch_hint_is_parseable_and_enables_presence() {
+        let hint = conda_override_hint("__amdgpu_arch", None, Subdir::Linux64).unwrap();
+        let (presence, arch) = parse_amd_override_hint(&hint);
+        assert!(presence.is_some());
+        assert_eq!(arch.unwrap().version, Version::from_str("11.0.0").unwrap());
+    }
+
+    #[test]
+    fn unusable_amdgpu_arch_versions_do_not_suggest_a_different_isa() {
+        for raw in [
+            "9.0.10a",
+            "9.0.10.1",
+            "4294967296.0.0",
+            "1!9.0.10",
+            "9.0.10+1",
+        ] {
+            let requested = Version::from_str(raw).unwrap();
+            assert!(
+                conda_override_hint("__amdgpu_arch", Some(&requested), Subdir::Linux64).is_none(),
+                "{raw}"
+            );
+        }
+    }
+
+    #[test]
+    fn declared_amdgpu_arch_diagnostic_describes_exact_compatibility() {
+        for (requested, other) in [("9.0.10", "11.0.0"), ("0", "1")] {
+            let rendered = format_requirements(&[vp("__amdgpu_arch", requested)]);
+            let constraint = spec(&rendered).version.unwrap();
+            assert!(constraint.matches(&Version::from_str(requested).unwrap()));
+            assert!(!constraint.matches(&Version::from_str(other).unwrap()));
+        }
     }
 
     #[test]
