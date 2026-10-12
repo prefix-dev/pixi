@@ -1,8 +1,7 @@
 #![deny(missing_docs)]
-use miette::IntoDiagnostic;
 use pixi_git::{
     GitUrl,
-    sha::GitSha,
+    sha::{GitSha, OidParseError},
     url::{RepositoryUrl, redact_credentials},
 };
 use pixi_path::normalize::normalize_typed;
@@ -344,7 +343,9 @@ impl PinnedGitCheckout {
 
     /// Extracts a pinned git checkout from the query pairs and the hash
     /// fragment in the given URL.
-    pub fn from_locked_url(locked_url: &LockedGitUrl) -> miette::Result<PinnedGitCheckout> {
+    pub fn from_locked_url(
+        locked_url: &LockedGitUrl,
+    ) -> Result<PinnedGitCheckout, LockedGitUrlError> {
         let url = &locked_url.0;
         let mut reference = None;
         let mut subdirectory = None;
@@ -357,7 +358,7 @@ impl PinnedGitCheckout {
                         .replace(GitReference::Tag(val.into_owned()))
                         .is_some()
                     {
-                        return Err(miette::miette!("multiple tags in URL"));
+                        return Err(LockedGitUrlError::Duplicate("tags"));
                     }
                 }
                 "branch" => {
@@ -365,7 +366,7 @@ impl PinnedGitCheckout {
                         .replace(GitReference::Branch(val.into_owned()))
                         .is_some()
                     {
-                        return Err(miette::miette!("multiple branches in URL"));
+                        return Err(LockedGitUrlError::Duplicate("branches"));
                     }
                 }
                 "rev" => {
@@ -373,7 +374,7 @@ impl PinnedGitCheckout {
                         .replace(GitReference::Rev(val.into_owned()))
                         .is_some()
                     {
-                        return Err(miette::miette!("multiple revs in URL"));
+                        return Err(LockedGitUrlError::Duplicate("revs"));
                     }
                 }
                 // If the URL points to a subdirectory, extract it, as in (git):
@@ -381,12 +382,12 @@ impl PinnedGitCheckout {
                 //   `git+https://git.example.com/MyProject.git@v1.0#egg=pkg&subdirectory=pkg_dir`
                 "subdirectory" => {
                     if subdirectory.replace(val.into_owned()).is_some() {
-                        return Err(miette::miette!("multiple subdirectories in URL"));
+                        return Err(LockedGitUrlError::Duplicate("subdirectories"));
                     }
                 }
                 "lfs" => {
                     if lfs.replace(&*val == "true").is_some() {
-                        return Err(miette::miette!("multiple lfs flags in URL"));
+                        return Err(LockedGitUrlError::Duplicate("lfs flags"));
                     }
                 }
                 _ => continue,
@@ -398,8 +399,7 @@ impl PinnedGitCheckout {
             reference.replace(GitReference::DefaultBranch);
         }
 
-        let commit = GitSha::from_str(url.fragment().ok_or(miette::miette!("missing sha"))?)
-            .into_diagnostic()?;
+        let commit = GitSha::from_str(url.fragment().ok_or(LockedGitUrlError::MissingSha)?)?;
 
         Ok(PinnedGitCheckout {
             commit,
@@ -625,10 +625,10 @@ impl LockedGitUrl {
     }
 
     /// Converts this [`LockedGitUrl`] into a [`PinnedGitSpec`].
-    pub fn to_pinned_git_spec(&self) -> miette::Result<PinnedGitSpec> {
+    pub fn to_pinned_git_spec(&self) -> Result<PinnedGitSpec, LockedGitUrlError> {
         let git_source = PinnedGitCheckout::from_locked_url(self)?;
 
-        let git_url = GitUrl::try_from(self.0.clone()).into_diagnostic()?;
+        let git_url = GitUrl::try_from(self.0.clone())?;
 
         // strip git+ from the scheme
         let git_url = git_url.repository().clone();
@@ -645,9 +645,8 @@ impl LockedGitUrl {
     }
 
     /// Parses a locked git URL from a string.
-    pub fn parse(url: &str) -> miette::Result<Self> {
-        let url = Url::parse(url).into_diagnostic()?;
-        Ok(Self(url))
+    pub fn parse(url: &str) -> Result<Self, url::ParseError> {
+        Ok(Self(Url::parse(url)?))
     }
 
     /// Converts this [`LockedGitUrl`] into a [`Url`].
@@ -669,7 +668,7 @@ impl From<Url> for LockedGitUrl {
 }
 
 impl TryFrom<LockedGitUrl> for PinnedGitSpec {
-    type Error = miette::Report;
+    type Error = LockedGitUrlError;
     fn try_from(value: LockedGitUrl) -> Result<Self, Self::Error> {
         value.to_pinned_git_spec()
     }
@@ -685,6 +684,21 @@ impl Display for LockedGitUrl {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
     }
+}
+
+#[derive(Debug, Error, miette::Diagnostic)]
+/// An error that occurs when converting a [`LockedGitUrl`] into a pinned git
+/// checkout.
+pub enum LockedGitUrlError {
+    /// A query parameter appears more than once.
+    #[error("multiple {0} in URL")]
+    Duplicate(&'static str),
+    /// The URL has no commit hash fragment.
+    #[error("missing sha")]
+    MissingSha,
+    /// The URL or its commit hash could not be parsed.
+    #[error(transparent)]
+    Invalid(#[from] OidParseError),
 }
 
 #[derive(Debug, Error)]
