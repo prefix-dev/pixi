@@ -18,13 +18,24 @@ static CRAN_SPDX_MAP: LazyLock<HashMap<String, String>> = LazyLock::new(|| {
     serde_json::from_str(json_str).expect("Failed to parse cran_spdx_licenses.json")
 });
 
-/// Bioconductor software packages list loaded from JSON file.
-/// Bioconductor packages in conda use the 'bioconductor-' prefix instead of 'r-'.
+/// The list of Bioconductor packages, as `scripts/update_bioconductor_packages.py`
+/// writes it from Bioconductor's own package lists.
+#[derive(serde::Deserialize)]
+struct BioconductorPackages {
+    packages: Vec<String>,
+}
+
+/// Bioconductor packages (software, annotation data, experiment data and
+/// workflows of recent releases), lowercased. Their conda packages use the
+/// `bioconductor-` prefix instead of `r-`.
 static BIOCONDUCTOR_PACKAGES: LazyLock<HashSet<String>> = LazyLock::new(|| {
     let json_str = include_str!("../bioconductor_mapping/bioconductor_packages.json");
-    let packages: Vec<String> =
+    let list: BioconductorPackages =
         serde_json::from_str(json_str).expect("Failed to parse bioconductor_packages.json");
-    packages.into_iter().map(|s| s.to_lowercase()).collect()
+    list.packages
+        .into_iter()
+        .map(|s| s.to_lowercase())
+        .collect()
 });
 
 /// Check if an R package is a known Bioconductor package.
@@ -589,6 +600,20 @@ mod tests {
         let provider = DescriptionMetadataProvider::new(temp_dir.path());
         assert!(!provider.needs_cmake().unwrap());
         assert!(!provider.needs_pkg_config().unwrap());
+    }
+
+    #[test]
+    fn test_is_bioconductor_package() {
+        // Software, annotation data and experiment data packages
+        assert!(is_bioconductor_package("limma"));
+        assert!(is_bioconductor_package("org.Hs.eg.db"));
+        assert!(is_bioconductor_package("GO.db"));
+        assert!(is_bioconductor_package("GenomeInfoDbData"));
+        assert!(is_bioconductor_package("airway"));
+        // Case-insensitive, and not CRAN packages
+        assert!(is_bioconductor_package("BIOBASE"));
+        assert!(!is_bioconductor_package("dplyr"));
+        assert!(!is_bioconductor_package("openssl"));
     }
 
     #[test]
