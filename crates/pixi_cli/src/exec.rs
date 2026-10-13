@@ -15,7 +15,10 @@ use pixi_manifest::platform::host::{detect_host, host_subdir};
 use pixi_manifest::platform::solver_generic_virtual_packages;
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 use pixi_utils::prefix::Prefix;
-use pixi_utils::{EnvironmentHash, EnvironmentLock, reqwest::build_reqwest_clients};
+use pixi_utils::{
+    EnvironmentHash, EnvironmentLock, reqwest::build_reqwest_clients,
+    rlimit::try_increase_rlimit_to_sensible,
+};
 use rattler::{
     install::{IndicatifReporter, Installer},
     package_cache::PackageCache,
@@ -335,6 +338,9 @@ pub async fn create_exec_prefix(
     // Force the initialization of the rayon thread pool to avoid implicit creation
     // by the Installer.
     initialize_rayon_once();
+
+    // Try to increase the rlimit to a sensible value for installation.
+    try_increase_rlimit_to_sensible();
 
     // Mark the prefix dirty for the duration of the install so a crash
     // is detected next time.
