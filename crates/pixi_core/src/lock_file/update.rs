@@ -32,8 +32,8 @@ use pixi_command_dispatcher::{
 use pixi_consts::consts;
 use pixi_glob::GlobHashCache;
 use pixi_install_pypi::{
-    LazyEnvironmentVariables, PyPIBuildConfig, PyPIContextConfig, PyPIEnvironmentUpdater,
-    PyPIUpdateConfig, derive_link_mode,
+    LazyEnvVarsError, LazyEnvironmentVariables, PyPIBuildConfig, PyPIContextConfig,
+    PyPIEnvironmentUpdater, PyPIUpdateConfig, derive_link_mode,
 };
 use pixi_manifest::{
     ChannelPriority, EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform,
@@ -1458,7 +1458,7 @@ struct LazyPixiEnvironmentVars<'p> {
 impl LazyEnvironmentVariables for LazyPixiEnvironmentVars<'_> {
     fn resolve(
         &self,
-    ) -> Pin<Box<dyn Future<Output = miette::Result<HashMap<String, String>>> + '_>> {
+    ) -> Pin<Box<dyn Future<Output = Result<HashMap<String, String>, LazyEnvVarsError>> + '_>> {
         let environment = self.environment.clone();
         Box::pin(async move {
             let workspace = environment.workspace();

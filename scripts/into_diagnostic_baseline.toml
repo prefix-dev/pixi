@@ -11,6 +11,5 @@ pixi_build_rust = 1
 pixi_cli = 254
 pixi_core = 94
 pixi_global = 78
-pixi_install_pypi = 19
 pixi_test_utils = 5
 trampoline = 7
