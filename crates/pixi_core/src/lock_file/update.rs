@@ -1242,6 +1242,7 @@ impl<'p> LockFileDerivedData<'p> {
                             self.workspace.config(),
                             self.workspace.client()?.clone(),
                         )
+                        .map_err(miette::Report::from)
                     })?
                     .clone()
                     .set_cache_refresh(uv_reinstall, uv_packages);
@@ -2477,6 +2478,7 @@ impl<'p> UpdateContext<'p> {
                 .uv_context
                 .get_or_try_init(|| {
                     UvResolutionContext::from_config(project.config(), project.client()?.clone())
+                        .map_err(miette::Report::from)
                 })?
                 .clone();
 

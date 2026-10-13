@@ -7443,6 +7443,8 @@ dependencies = [
  "pixi_utils",
  "pixi_uv_conversions",
  "reqwest",
+ "tempfile",
+ "thiserror 2.0.21",
  "tracing",
  "uv-cache",
  "uv-client",
