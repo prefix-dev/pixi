@@ -53,7 +53,8 @@ mod discovery;
 /// passed. Use `--path` to build and publish a single package.
 ///
 /// Supported destinations for `--target-channel` (alias `--to`):
-///   - prefix.dev: `https://prefix.dev/<channel-name>`
+///   - prefix.dev: `https://prefix.dev/<channel-name>` or
+///     `https://prefix.dev/<namespace>/<channel-name>`
 ///   - anaconda.org: `https://anaconda.org/<owner>/<label>`
 ///   - Cloudsmith: `cloudsmith://<owner>/<repository>`
 ///   - S3: `s3://bucket-name`
