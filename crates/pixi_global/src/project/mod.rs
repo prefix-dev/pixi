@@ -562,8 +562,9 @@ impl Project {
     fn lazy_client_and_authenticated_client(
         &self,
     ) -> miette::Result<&(LazyReqwestClient, rattler_networking::LazyClient)> {
-        self.client
-            .get_or_try_init(|| build_lazy_reqwest_clients(Some(self.config()), None))
+        Ok(self
+            .client
+            .get_or_try_init(|| build_lazy_reqwest_clients(Some(self.config()), None))?)
     }
 
     pub fn config(&self) -> &Config {

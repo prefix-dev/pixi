@@ -478,7 +478,7 @@ fn guess_package_spec(command: &str) -> MatchSpec {
 async fn run_activation(
     prefix: &Prefix,
 ) -> miette::Result<std::collections::HashMap<String, String>> {
-    wrap_in_progress("running activation", move || prefix.run_activation()).await
+    Ok(wrap_in_progress("running activation", move || prefix.run_activation()).await?)
 }
 
 fn to_exec_match_specs(specs: &[MatchSpecOrPath]) -> miette::Result<Vec<MatchSpec>> {
