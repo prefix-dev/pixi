@@ -6257,7 +6257,7 @@ polars = "0d"
             manifest: &manifest,
             features: vec![default_feature],
         };
-        let config: pixi_spec::ExcludeNewerFilter = features
+        let config: rattler_solve::ExcludeNewer = features
             .exclude_newer_config_resolved(&default_channel_config())
             .unwrap()
             .unwrap()
@@ -6305,7 +6305,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
             features: vec![default_feature],
         };
         let channel_config = default_channel_config();
-        let config: pixi_spec::ExcludeNewerFilter = features
+        let config: rattler_solve::ExcludeNewer = features
             .exclude_newer_config_resolved(&channel_config)
             .unwrap()
             .unwrap()

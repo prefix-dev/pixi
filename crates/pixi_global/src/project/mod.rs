@@ -46,7 +46,7 @@ use pixi_manifest::{
 };
 use pixi_path::AbsPathBuf;
 use pixi_reporters::TopLevelProgress;
-use pixi_spec::{BinarySpec, ExcludeNewerFilter, PathBinarySpec, ResolvedExcludeNewer};
+use pixi_spec::{BinarySpec, PathBinarySpec, ResolvedExcludeNewer};
 use pixi_spec_containers::DependencyMap;
 use pixi_utils::variants::VariantConfig;
 use pixi_utils::{
@@ -581,7 +581,7 @@ impl Project {
         channels: impl IntoIterator<Item = &'a PrioritizedChannel>,
     ) -> Result<Option<ResolvedExcludeNewer>, ParseChannelError> {
         let policy = self.manifest.parsed.exclude_newer.as_ref();
-        let mut resolved = resolve_exclude_newer(
+        let resolved = resolve_exclude_newer(
             policy.map(|policy| policy.cutoff),
             channels,
             |channel| {
@@ -592,10 +592,21 @@ impl Project {
             },
             std::iter::empty(),
         )?;
-        if let (Some(resolved), Some(policy)) = (&mut resolved, policy) {
-            resolved.exemptions.clone_from(&policy.exemptions);
-        }
-        Ok(resolved)
+        let exemptions = policy
+            .into_iter()
+            .flat_map(|policy| &policy.exemptions)
+            .map(|(name, version)| MatchSpec {
+                name: name.clone().into(),
+                version: Some(version.clone()),
+                ..MatchSpec::default()
+            });
+        Ok(resolved.map(|resolved| {
+            exemptions.fold(resolved, |resolved, exemption| {
+                resolved
+                    .with_exemption(exemption)
+                    .expect("an exemption with only a name and a version is valid")
+            })
+        }))
     }
 
     /// The virtual packages to solve an environment against.
@@ -1235,7 +1246,7 @@ impl Project {
             .resolved_exclude_newer(&environment.channels)
             .into_diagnostic()?
         {
-            let exclude_newer = ExcludeNewerFilter::from(exclude_newer);
+            let exclude_newer = rattler_solve::ExcludeNewer::from(exclude_newer);
             for record in &prefix_records {
                 let package = &record.repodata_record.package_record;
                 let channel = record.repodata_record.channel.as_deref();
