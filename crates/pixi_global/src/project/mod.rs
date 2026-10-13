@@ -19,7 +19,7 @@ use itertools::{Either, Itertools};
 pub use manifest::{ExposedType, Manifest, Mapping};
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use once_cell::sync::OnceCell;
-pub use parsed_manifest::{ExposedName, ParsedEnvironment, ParsedGlobal, ParsedManifest};
+pub use parsed_manifest::{ExposedName, GlobalExcludeNewer, ParsedEnvironment, ParsedManifest};
 use pixi_build_discovery::DiscoveryError;
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
@@ -46,7 +46,7 @@ use pixi_manifest::{
 };
 use pixi_path::AbsPathBuf;
 use pixi_reporters::TopLevelProgress;
-use pixi_spec::{BinarySpec, PathBinarySpec, ResolvedExcludeNewer};
+use pixi_spec::{BinarySpec, ExcludeNewerFilter, PathBinarySpec, ResolvedExcludeNewer};
 use pixi_spec_containers::DependencyMap;
 use pixi_utils::variants::VariantConfig;
 use pixi_utils::{
@@ -574,15 +574,14 @@ impl Project {
         self.config.global_channel_config()
     }
 
-    /// Resolves the manifest's `exclude-newer` cutoff together with the
-    /// overrides of the given channels and of individual packages into
-    /// absolute cutoffs.
+    /// Resolves the manifest-wide and channel cutoffs, keeping version exemptions.
     fn resolved_exclude_newer<'a>(
         &'a self,
         channels: impl IntoIterator<Item = &'a PrioritizedChannel>,
     ) -> Result<Option<ResolvedExcludeNewer>, ParseChannelError> {
-        resolve_exclude_newer(
-            self.manifest.parsed.global.exclude_newer,
+        let policy = self.manifest.parsed.exclude_newer.as_ref();
+        let mut resolved = resolve_exclude_newer(
+            policy.map(|policy| policy.cutoff),
             channels,
             |channel| {
                 channel
@@ -590,8 +589,12 @@ impl Project {
                     .clone()
                     .into_base_url(self.global_channel_config())
             },
-            &self.manifest.parsed.exclude_newer_package_overrides,
-        )
+            std::iter::empty(),
+        )?;
+        if let (Some(resolved), Some(policy)) = (&mut resolved, policy) {
+            resolved.exemptions.clone_from(&policy.exemptions);
+        }
+        Ok(resolved)
     }
 
     /// The virtual packages to solve an environment against.
@@ -1231,7 +1234,7 @@ impl Project {
             .resolved_exclude_newer(&environment.channels)
             .into_diagnostic()?
         {
-            let exclude_newer = rattler_solve::ExcludeNewer::from(exclude_newer);
+            let exclude_newer = ExcludeNewerFilter::from(exclude_newer);
             for record in &prefix_records {
                 let package = &record.repodata_record.package_record;
                 let channel = record.repodata_record.channel.as_deref();
