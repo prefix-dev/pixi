@@ -47,7 +47,7 @@ use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_cache_key::RepositoryUrl;
 use uv_client::{RegistryClient, RegistryClientBuilder};
-use uv_configuration::{Constraints, Overrides};
+use uv_configuration::{Constraints, DependencyModifiers, Overrides};
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
     BuiltDist, ConfigSettings, DependencyMetadata, Diagnostic, Dist, FileLocation,
@@ -701,7 +701,11 @@ pub async fn resolve_pypi(
 
     let constraints = Constraints::from_requirements(constraints.iter().cloned());
 
-    let overrides = Overrides::from_requirements(dependency_overrides);
+    // Pixi does not exclude any dependencies.
+    let modifiers = DependencyModifiers::new(
+        Overrides::from_requirements(dependency_overrides),
+        uv_configuration::Excludes::default(),
+    );
 
     // Wrap the resolution in panic catching to handle conda prefix initialization failures
     // This includes both lookahead resolution and main resolution since both use lazy_build_dispatch
@@ -709,8 +713,6 @@ pub async fn resolve_pypi(
 
     let resolution_future = panic::AssertUnwindSafe(async {
         let lookahead_index = InMemoryIndex::default();
-        // Pixi does not exclude any dependencies.
-        let excludes = uv_configuration::Excludes::default();
         // uv 0.11.4 changed `LookaheadResolver::resolve` to return both the
         // lookaheads and a hash strategy refined by what it discovered along
         // the way. We adopt the refined strategy for the downstream resolver
@@ -719,8 +721,7 @@ pub async fn resolve_pypi(
             LookaheadResolver::new(
                 &requirements,
                 &constraints,
-                &overrides,
-                &excludes,
+                &modifiers,
                 &hash_strategy,
                 &lookahead_index,
                 DistributionDatabase::new(
@@ -761,8 +762,7 @@ pub async fn resolve_pypi(
         let manifest = Manifest::new(
             requirements,
             constraints,
-            overrides,
-            excludes.clone(),
+            modifiers,
             Preferences::from_iter(preferences, &resolver_env),
             None,
             Default::default(),
