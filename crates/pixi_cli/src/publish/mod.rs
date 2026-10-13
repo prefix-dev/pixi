@@ -1299,15 +1299,7 @@ fn should_skip_existing(
 /// that namespaced channels like `https://prefix.dev/<namespace>/<channel>`
 /// resolve to `<namespace>/<channel>` instead of just `<channel>`.
 fn prefix_channel_from_url(url: &Url) -> miette::Result<String> {
-    let channel = url
-        .path_segments()
-        .map(|segments| {
-            segments
-                .filter(|s| !s.is_empty())
-                .collect::<Vec<_>>()
-                .join("/")
-        })
-        .unwrap_or_default();
+    let channel = url.path().trim_matches('/');
     if channel.is_empty() {
         return Err(miette::miette!("Invalid Prefix URL: missing channel name"));
     }
@@ -1322,7 +1314,7 @@ fn prefix_channel_from_url(url: &Url) -> miette::Result<String> {
             "`{url}` is a channel view page URL, not the URL used for uploads"
         ));
     }
-    Ok(channel)
+    Ok(channel.to_string())
 }
 
 /// Upload packages to a Prefix.dev server.
