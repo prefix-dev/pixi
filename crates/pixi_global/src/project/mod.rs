@@ -41,8 +41,8 @@ use pixi_manifest::platform::host::{
 };
 use pixi_manifest::platform::solver_generic_virtual_packages;
 use pixi_manifest::{
-    InlinePackageManifest, PixiPlatform, PrioritizedChannel, WorkspaceManifest,
-    resolve_exclude_newer,
+    ExcludeNewerConfig, ExcludeNewerError, InlinePackageManifest, PixiPlatform, PrioritizedChannel,
+    WorkspaceManifest, resolve_exclude_newer,
 };
 use pixi_path::AbsPathBuf;
 use pixi_reporters::TopLevelProgress;
@@ -55,8 +55,8 @@ use pixi_utils::{
     rlimit::try_increase_rlimit_to_sensible,
 };
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, ParseChannelError,
-    PrefixRecord, Subdir, menuinst::MenuMode, package::CondaArchiveIdentifier,
+    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, PrefixRecord, Subdir,
+    menuinst::MenuMode, package::CondaArchiveIdentifier,
 };
 use rattler_networking::LazyClient;
 use rattler_repodata_gateway::Gateway;
@@ -110,8 +110,9 @@ pub enum InferPackageNameError {
     CommandDispatcher(#[from] CommandDispatcherError),
     #[error("failed to get build backend metadata for package name inference")]
     BuildBackendMetadata(#[source] Box<dyn Diagnostic + Send + Sync>),
-    #[error("failed to resolve the channel for the exclude-newer configuration")]
-    ExcludeNewer(#[from] ParseChannelError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ExcludeNewer(#[from] ExcludeNewerError),
     #[error("no package outputs found in the specified path/repository")]
     NoPackageOutputs,
     #[error("multiple package outputs found: {}", .package_names.join(", "))]
@@ -579,34 +580,27 @@ impl Project {
     fn resolved_exclude_newer<'a>(
         &'a self,
         channels: impl IntoIterator<Item = &'a PrioritizedChannel>,
-    ) -> Result<Option<ResolvedExcludeNewer>, ParseChannelError> {
-        let policy = self.manifest.parsed.exclude_newer.as_ref();
-        let resolved = resolve_exclude_newer(
-            policy.map(|policy| policy.cutoff),
-            channels,
-            |channel| {
-                channel
-                    .channel
-                    .clone()
-                    .into_base_url(self.global_channel_config())
-            },
-            std::iter::empty(),
-        )?;
-        let exemptions = policy
-            .into_iter()
-            .flat_map(|policy| &policy.exemptions)
-            .map(|(name, version)| MatchSpec {
-                name: name.clone().into(),
-                version: Some(version.clone()),
-                ..MatchSpec::default()
-            });
-        Ok(resolved.map(|resolved| {
-            exemptions.fold(resolved, |resolved, exemption| {
-                resolved
-                    .with_exemption(exemption)
-                    .expect("an exemption with only a name and a version is valid")
+    ) -> Result<Option<ResolvedExcludeNewer>, ExcludeNewerError> {
+        let config = self
+            .manifest
+            .parsed
+            .exclude_newer
+            .as_ref()
+            .map(|policy| ExcludeNewerConfig {
+                cutoff: Some(policy.cutoff),
+                exemptions: policy
+                    .exemptions
+                    .iter()
+                    .map(|(name, version)| (name.clone(), BinarySpec::Version(version.clone())))
+                    .collect(),
             })
-        }))
+            .unwrap_or_default();
+        resolve_exclude_newer(
+            &config,
+            channels,
+            self.global_channel_config(),
+            std::iter::empty(),
+        )
     }
 
     /// The virtual packages to solve an environment against.

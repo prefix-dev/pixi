@@ -1818,6 +1818,87 @@ async fn test_exclude_newer_per_package_constraint_override() {
 }
 
 #[tokio::test]
+async fn test_exclude_newer_exemption_allows_vetted_release() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("foo", "1")
+            .with_timestamp("2010-12-02T02:07:43Z".parse().unwrap())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("foo", "2")
+            .with_timestamp("2020-12-02T07:00:00Z".parse().unwrap())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("foo", "3")
+            .with_timestamp("2020-12-02T07:00:00Z".parse().unwrap())
+            .finish(),
+    );
+
+    // Only the vetted release `foo 2` is exempt from the cutoff, so the even
+    // newer `foo 3` stays excluded.
+    let channel = package_database.into_channel().await.unwrap();
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [workspace]
+    name = "test-exclude-newer-exemption"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+
+    [workspace.exclude-newer]
+    cutoff = "2015-12-02T02:07:43Z"
+    exemptions = {{ foo = "2" }}
+
+    [dependencies]
+    foo = "*"
+    "#,
+        channel = channel.url(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch)
+    ))
+    .unwrap();
+
+    pixi.lock().await.unwrap();
+
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Subdir::current().unwrap_or(Subdir::NoArch),
+        "foo ==2"
+    ));
+
+    // A wildcard exemption lets every release of the package through. The
+    // locked `foo 2` stays valid under the wider exemption, so a fresh
+    // workspace is needed to observe the new pick.
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [workspace]
+    name = "test-exclude-newer-wildcard-exemption"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+    exclude-newer = {{ cutoff = "2015-12-02T02:07:43Z", exemptions = {{ foo = "*" }} }}
+
+    [dependencies]
+    foo = "*"
+    "#,
+        channel = channel.url(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch)
+    ))
+    .unwrap();
+
+    pixi.lock().await.unwrap();
+
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Subdir::current().unwrap_or(Subdir::NoArch),
+        "foo ==3"
+    ));
+}
+
+#[tokio::test]
 #[cfg_attr(
     any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
     ignore

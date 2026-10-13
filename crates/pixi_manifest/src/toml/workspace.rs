@@ -5,7 +5,7 @@ use std::{
 };
 
 use indexmap::{IndexMap, IndexSet};
-use pixi_spec::{ExcludeNewer, TomlSpec, TomlVersionSpecStr};
+use pixi_spec::{TomlSpec, TomlVersionSpecStr};
 use pixi_toml::{TomlFromStr, TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
 use rattler_conda_types::{PackageName, Version, VersionSpec};
 use std::str::FromStr;
@@ -13,12 +13,13 @@ use toml_span::{DeserError, Span, Spanned, Value, de_helpers::TableHelper, value
 use url::Url;
 
 use crate::{
-    KnownPreviewFlag, PixiPlatform, PrioritizedChannel, S3Options, TargetSelector, Targets,
-    TomlError, WithWarnings, Workspace,
+    ExcludeNewerConfig, KnownPreviewFlag, PixiPlatform, PrioritizedChannel, PypiExcludeNewerConfig,
+    S3Options, TargetSelector, Targets, TomlError, WithWarnings, Workspace,
     error::GenericError,
     pypi::pypi_options::PypiOptions,
     toml::{
-        manifest::ExternalWorkspaceProperties, platform::TomlPixiPlatform, preview::TomlPreview,
+        TomlExcludeNewer, TomlPypiExcludeNewer, manifest::ExternalWorkspaceProperties,
+        platform::TomlPixiPlatform, preview::TomlPreview,
     },
     utils::PixiSpanned,
     workspace::{BuildVariantSource, ChannelPriority, CondaPypiMap, SolveStrategy},
@@ -119,7 +120,8 @@ pub struct TomlWorkspace {
     pub build_variants: Option<HashMap<String, Vec<String>>>,
     pub build_variant_files: Option<Vec<Spanned<TomlFromStr<PathBuf>>>>,
     pub requires_pixi: Option<VersionSpec>,
-    pub exclude_newer: Option<ExcludeNewer>,
+    pub exclude_newer: ExcludeNewerConfig,
+    pub pypi_exclude_newer: PypiExcludeNewerConfig,
 
     /// `[workspace.dependencies]` pool for `{ workspace = true }` inheritance.
     pub dependencies: Option<PixiSpanned<WorkspaceDependencyMap>>,
@@ -263,6 +265,7 @@ impl TomlWorkspace {
             ),
             requires_pixi: self.requires_pixi,
             exclude_newer: self.exclude_newer,
+            pypi_exclude_newer: self.pypi_exclude_newer,
             exclude_newer_package_overrides: IndexMap::default(),
             pypi_exclude_newer_package_overrides: IndexMap::default(),
             dependencies,
@@ -398,8 +401,13 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             .optional::<TomlVersionSpecStr>("requires-pixi")
             .map(TomlVersionSpecStr::into_inner);
         let exclude_newer = th
-            .optional::<TomlWith<_, TomlFromStr<_>>>("exclude-newer")
-            .map(TomlWith::into_inner);
+            .optional::<TomlExcludeNewer>("exclude-newer")
+            .map(TomlExcludeNewer::into_inner)
+            .unwrap_or_default();
+        let pypi_exclude_newer = th
+            .optional::<TomlPypiExcludeNewer>("pypi-exclude-newer")
+            .map(TomlPypiExcludeNewer::into_inner)
+            .unwrap_or_default();
         let dependencies = th.optional("dependencies");
 
         th.finalize(None)?;
@@ -428,6 +436,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             build_variant_files,
             requires_pixi,
             exclude_newer,
+            pypi_exclude_newer,
             dependencies,
             span: value.span,
         })
