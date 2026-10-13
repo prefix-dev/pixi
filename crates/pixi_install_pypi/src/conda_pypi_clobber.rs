@@ -240,12 +240,12 @@ impl PypiCondaClobberRegistry {
         self,
         wheels: Vec<CachedDist>,
         venv: &PythonEnvironment,
-    ) -> miette::Result<Option<ClobberReport>> {
+    ) -> Option<ClobberReport> {
         let Some(install_paths) = WheelInstallPaths::from_environment(venv) else {
             tracing::debug!(
                 "skipping conda-clobber check: the interpreter's install scheme is not inside its sys_prefix"
             );
-            return Ok(None);
+            return None;
         };
 
         let mut clobber_report = ClobberReport::default();
@@ -298,9 +298,9 @@ impl PypiCondaClobberRegistry {
             }
         }
         if clobber_report.is_empty() {
-            return Ok(None);
+            return None;
         }
-        Ok(Some(clobber_report))
+        Some(clobber_report)
     }
 }
 
