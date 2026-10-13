@@ -190,6 +190,8 @@ impl<'p> ExecutableTask<'p> {
                 )
             };
 
+            let task = task.trim_end();
+
             // Skip the export if it's empty, to avoid leading blank lines.
             let full_script = if export.is_empty() {
                 format!("{task}{cli_args}")
