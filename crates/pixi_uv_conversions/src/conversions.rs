@@ -5,7 +5,6 @@ use std::{
 
 use crate::GitUrlWithPrefix;
 use crate::git_url::decode_windows_drive_letter;
-use miette::IntoDiagnostic;
 use pep440_rs::VersionSpecifiers;
 use pixi_git::{git::GitReference as PixiGitReference, sha::GitSha as PixiGitSha};
 use pixi_manifest::pypi::{
@@ -16,7 +15,8 @@ use pixi_manifest::pypi::{
     },
 };
 use pixi_record::{
-    CondaEnvironmentFingerprint, LockedGitUrl, PinnedGitCheckout, PinnedGitSpec, PixiRecord,
+    CondaEnvironmentFingerprint, LockedGitUrl, LockedGitUrlError, PinnedGitCheckout, PinnedGitSpec,
+    PixiRecord,
 };
 use pixi_spec::GitReference as PixiReference;
 use std::{collections::HashSet, fmt::Write};
@@ -402,6 +402,15 @@ pub fn into_pinned_git_spec(
     PinnedGitSpec::new(decode_windows_drive_letter(&repository), pinned_checkout)
 }
 
+/// An error that occurs when converting a [`LockedGitUrl`] into a uv git url.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum ParsedGitUrlError {
+    #[error(transparent)]
+    LockedGitUrl(#[from] LockedGitUrlError),
+    #[error(transparent)]
+    GitUrl(#[from] uv_git_types::GitUrlParseError),
+}
+
 /// Convert a locked git url into a parsed git url
 /// [`LockedGitUrl`] is always recorded in the lock file and looks like this:
 /// <git+https://git.example.com/MyProject.git?tag=v1.0&subdirectory=pkg_dir#1c4b2c7864a60ea169e091901fcde63a8d6fbfdc>
@@ -413,7 +422,7 @@ pub fn into_pinned_git_spec(
 /// which is used in the uv crate.
 pub fn to_parsed_git_url(
     locked_git_url: &LockedGitUrl,
-) -> miette::Result<uv_pypi_types::ParsedGitDirectoryUrl> {
+) -> Result<uv_pypi_types::ParsedGitDirectoryUrl, ParsedGitUrlError> {
     let git_source = PinnedGitCheckout::from_locked_url(locked_git_url)?;
     let parsed_git_url = uv_pypi_types::ParsedGitDirectoryUrl::from_source(
         uv_git_types::GitUrl::from_fields(
@@ -430,8 +439,7 @@ pub fn to_parsed_git_url(
             into_uv_git_reference(git_source.reference.into()),
             Some(into_uv_git_sha(git_source.commit)),
             to_uv_git_lfs(git_source.lfs),
-        )
-        .into_diagnostic()?,
+        )?,
         if git_source.subdirectory.is_empty() {
             None
         } else {

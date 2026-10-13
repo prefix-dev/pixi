@@ -296,7 +296,7 @@ fn load_config(common_args: &CommonArgs, source: &GlobalConfigSource) -> miette:
         let local_config = match Config::from_path(path) {
             Ok(config) => config,
             Err(ConfigError::FileNotFound(_)) => Config::default(),
-            Err(error) => return Err(error).into_diagnostic(),
+            Err(error) => return Err(error.into()),
         };
         return Ok(base_config.merge_config(local_config));
     }
@@ -399,7 +399,7 @@ fn alter_config(
     let mut config = match Config::from_path(&to) {
         Ok(config) => config,
         Err(ConfigError::FileNotFound(_)) => Config::default(),
-        Err(e) => return Err(e).into_diagnostic(),
+        Err(e) => return Err(e.into()),
     };
 
     match mode {

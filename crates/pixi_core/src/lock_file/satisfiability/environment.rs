@@ -245,10 +245,7 @@ pub fn verify_environment_satisfiability(
 
     let resolved_exclude_newer = environment.exclude_newer_config_resolved(&config)?;
 
-    let exclude_newer = resolved_exclude_newer
-        .as_ref()
-        .cloned()
-        .map(rattler_solve::ExcludeNewer::from);
+    let exclude_newer = resolved_exclude_newer.map(pixi_spec::ExcludeNewerFilter::from);
 
     if let Err(err) = verify_exclude_newer(exclude_newer.as_ref(), &locked_environment) {
         return Err(EnvironmentUnsat::ExcludeNewerMismatch(err));

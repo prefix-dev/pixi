@@ -4,7 +4,6 @@ use std::{
     str::FromStr,
 };
 
-use miette::{IntoDiagnostic, Report, WrapErr};
 use pep440_rs::VersionSpecifiers;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
@@ -22,6 +21,21 @@ use crate::{
         ExternalWorkspaceProperties, FromTomlStr, PackageDefaults, PyProjectToml, TomlManifest,
     },
 };
+
+/// Errors from [`PyProjectManifest::from_path`].
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum PyProjectReadError {
+    #[error("Failed to read file: {path:?}")]
+    Io {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Toml(#[from] TomlError),
+}
 
 #[derive(Debug)]
 pub struct PyProjectManifest {
@@ -45,11 +59,12 @@ pub struct ToolPoetry {
 
 impl PyProjectManifest {
     /// Parses a `pyproject.toml` file into a PyProjectManifest
-    pub fn from_path(path: &PathBuf) -> Result<Self, Report> {
-        let source = fs_err::read_to_string(path)
-            .into_diagnostic()
-            .wrap_err_with(|| format!("Failed to read file: {path:?}"))?;
-        Self::from_toml_str(&source).into_diagnostic()
+    pub fn from_path(path: &PathBuf) -> Result<Self, PyProjectReadError> {
+        let source = fs_err::read_to_string(path).map_err(|source| PyProjectReadError::Io {
+            path: path.clone(),
+            source,
+        })?;
+        Ok(Self::from_toml_str(&source)?)
     }
 
     /// Ensures the `pyproject.toml` contains a `[tool.pixi]` table
@@ -325,6 +340,7 @@ mod tests {
     use pixi_pypi_spec::PypiPackageName;
     use rattler_conda_types::{ParseStrictness, VersionSpec};
 
+    use super::{PathBuf, PyProjectManifest, PyProjectReadError};
     use crate::toml::FromTomlStr;
     use crate::{FeatureName, ManifestSource, Manifests};
 
@@ -672,5 +688,29 @@ mod tests {
                 .unwrap()
                 .contains_key("git")
         );
+    }
+
+    #[test]
+    fn from_path_io_error_keeps_cause() {
+        let path = PathBuf::from("/definitely/not/here/pyproject.toml");
+        let err = PyProjectManifest::from_path(&path).unwrap_err();
+        assert!(matches!(err, PyProjectReadError::Io { .. }));
+        assert!(err.to_string().starts_with("Failed to read file:"), "{err}");
+        assert!(std::error::Error::source(&err).is_some());
+    }
+
+    #[test]
+    fn from_path_toml_error_keeps_help() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("pyproject.toml");
+        fs_err::write(
+            &path,
+            "[project]\nname = \"foo\"\n[tool.pixi.workspace]\nplatfroms = []\nchannels = []\n",
+        )
+        .unwrap();
+        let err = PyProjectManifest::from_path(&path).unwrap_err();
+        assert!(matches!(err, PyProjectReadError::Toml(_)));
+        let help = miette::Diagnostic::help(&err).map(|help| help.to_string());
+        assert_eq!(help.as_deref(), Some("Did you mean 'platforms'?"));
     }
 }

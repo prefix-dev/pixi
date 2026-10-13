@@ -21,7 +21,15 @@ use uv_distribution_filename::WheelFilename;
 /// Define accepted virtual packages as a constant set
 /// These packages will be checked against the system virtual packages
 const ACCEPTED_VIRTUAL_PACKAGES: &[&str] = &[
-    "__glibc", "__musl", "__eglibc", "__cuda", "__osx", "__win", "__linux",
+    "__glibc",
+    "__musl",
+    "__eglibc",
+    "__cuda",
+    "__osx",
+    "__win",
+    "__linux",
+    "__amdgpu",
+    "__amdgpu_arch",
 ];
 
 #[derive(Debug, Error, Diagnostic)]
@@ -507,6 +515,60 @@ packages:
         // A bare requirement only asks for presence.
         assert!(unmet_requirements(&[spec("__cuda")], &cuda("11")).is_empty());
         assert_eq!(unmet_requirements(&[spec("__cuda")], &[]).len(), 1);
+    }
+
+    #[test]
+    fn unmet_requirements_checks_amdgpu_presence_and_exact_architecture() {
+        let specs = required_virtual_package_specs(&["__amdgpu", "__amdgpu_arch ==9.0.10"]);
+        let gpu = GenericVirtualPackage {
+            name: PackageName::try_from("__amdgpu").unwrap(),
+            version: Version::major(0),
+            build_string: String::new(),
+        };
+        let arch = |version: &str| GenericVirtualPackage {
+            name: PackageName::try_from("__amdgpu_arch").unwrap(),
+            version: Version::from_str(version).unwrap(),
+            build_string: String::new(),
+        };
+
+        assert_eq!(unmet_requirements(&specs, &[]), specs);
+        assert_eq!(
+            unmet_requirements(&specs, std::slice::from_ref(&gpu)),
+            required_virtual_package_specs(&["__amdgpu_arch ==9.0.10"])
+        );
+        assert_eq!(
+            unmet_requirements(&specs, &[arch("9.0.10")]),
+            required_virtual_package_specs(&["__amdgpu"])
+        );
+        assert!(unmet_requirements(&specs, &[gpu.clone(), arch("9.0.10")]).is_empty());
+        for version in ["10.0.10", "9.1.10", "9.0.11"] {
+            assert_eq!(
+                unmet_requirements(&specs, &[gpu.clone(), arch(version)]),
+                required_virtual_package_specs(&["__amdgpu_arch ==9.0.10"])
+            );
+        }
+    }
+
+    #[test]
+    fn unmet_requirements_preserves_broader_amdgpu_package_specs() {
+        let system = [
+            GenericVirtualPackage {
+                name: PackageName::try_from("__amdgpu").unwrap(),
+                version: Version::major(0),
+                build_string: String::new(),
+            },
+            GenericVirtualPackage {
+                name: PackageName::try_from("__amdgpu_arch").unwrap(),
+                version: Version::from_str("9.4.2").unwrap(),
+                build_string: String::new(),
+            },
+        ];
+        for raw in ["__amdgpu", "__amdgpu_arch", "__amdgpu_arch >=9.0.10,<10"] {
+            let specs = required_virtual_package_specs(&[raw]);
+            assert!(unmet_requirements(&specs, &system).is_empty(), "{raw}");
+        }
+        let specs = required_virtual_package_specs(&["__amdgpu_arch >=9.0.10,<9.4"]);
+        assert_eq!(unmet_requirements(&specs, &system), specs);
     }
 
     #[test]

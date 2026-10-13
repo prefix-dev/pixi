@@ -346,7 +346,7 @@ impl<'p> ExecutableTask<'p> {
     /// Emit warnings for missing input/output globs given a computed hash.
     pub fn warn_on_missing_globs(&self, post_hash: &TaskHash) {
         let (rendered_inputs, rendered_outputs) = match self.task().as_execute() {
-            Ok(exe) => {
+            Some(exe) => {
                 let context = self.render_context();
                 let ins = exe
                     .inputs
@@ -358,7 +358,7 @@ impl<'p> ExecutableTask<'p> {
                     .map(|p| p.render(&context).unwrap_or_default());
                 (ins, outs)
             }
-            Err(_) => (None, None),
+            None => (None, None),
         };
 
         // Outputs warning
@@ -453,7 +453,7 @@ impl<'p> ExecutableTask<'p> {
         &self,
         post_run_hash: Option<TaskHash>,
     ) -> Result<(), CacheUpdateError> {
-        let execute = if let Ok(task) = self.task().as_execute() {
+        let execute = if let Some(task) = self.task().as_execute() {
             task
         } else {
             // Don't save cache for non-execute tasks

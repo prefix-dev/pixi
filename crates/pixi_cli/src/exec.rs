@@ -15,7 +15,10 @@ use pixi_manifest::platform::host::{detect_host, host_subdir};
 use pixi_manifest::platform::solver_generic_virtual_packages;
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 use pixi_utils::prefix::Prefix;
-use pixi_utils::{EnvironmentHash, EnvironmentLock, reqwest::build_reqwest_clients};
+use pixi_utils::{
+    EnvironmentHash, EnvironmentLock, reqwest::build_reqwest_clients,
+    rlimit::try_increase_rlimit_to_sensible,
+};
 use rattler::{
     install::{IndicatifReporter, Installer},
     package_cache::PackageCache,
@@ -336,6 +339,9 @@ pub async fn create_exec_prefix(
     // by the Installer.
     initialize_rayon_once();
 
+    // Try to increase the rlimit to a sensible value for installation.
+    try_increase_rlimit_to_sensible();
+
     // Mark the prefix dirty for the duration of the install so a crash
     // is detected next time.
     env_lock
@@ -478,7 +484,7 @@ fn guess_package_spec(command: &str) -> MatchSpec {
 async fn run_activation(
     prefix: &Prefix,
 ) -> miette::Result<std::collections::HashMap<String, String>> {
-    wrap_in_progress("running activation", move || prefix.run_activation()).await
+    Ok(wrap_in_progress("running activation", move || prefix.run_activation()).await?)
 }
 
 fn to_exec_match_specs(specs: &[MatchSpecOrPath]) -> miette::Result<Vec<MatchSpec>> {
