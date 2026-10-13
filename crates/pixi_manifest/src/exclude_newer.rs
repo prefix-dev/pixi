@@ -9,6 +9,7 @@ use pixi_spec::{
     BinarySpec, ExcludeNewer, InvalidExemptionError, ResolvedExcludeNewer, SpecConversionError,
 };
 use rattler_conda_types::{ChannelConfig, PackageName, ParseChannelError};
+use serde::ser::SerializeMap;
 
 use crate::{PrioritizedChannel, pypi::ResolvedPypiExcludeNewer};
 
@@ -58,6 +59,27 @@ impl ExcludeNewerConfig {
 impl From<ExcludeNewer> for ExcludeNewerConfig {
     fn from(cutoff: ExcludeNewer) -> Self {
         Self::from_cutoff(cutoff)
+    }
+}
+
+impl serde::Serialize for ExcludeNewerConfig {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match (&self.cutoff, self.exemptions.is_empty()) {
+            (Some(cutoff), true) => cutoff.serialize(serializer),
+            (cutoff, _) => {
+                let mut map = serializer.serialize_map(None)?;
+                if let Some(cutoff) = cutoff {
+                    map.serialize_entry("cutoff", cutoff)?;
+                }
+                if !self.exemptions.is_empty() {
+                    map.serialize_entry("exemptions", &self.exemptions)?;
+                }
+                map.end()
+            }
+        }
     }
 }
 
