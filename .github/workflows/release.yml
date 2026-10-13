@@ -111,11 +111,8 @@ jobs:
         with:
           target: ${{ matrix.target }}
           cache: false
-          # This action defaults to writing RUSTFLAGS=-D warnings into the job
-          # environment. RUSTFLAGS overrides every `[target.*].rustflags` entry
-          # in .cargo/config.toml, which silently dropped `+crt-static` from the
-          # Windows release builds (pixi#6915). Leave the variable alone here;
-          # the "Set build options" step below composes the full value.
+          build-warnings: warn
+          # Preserve target-specific rustflags from .cargo/config.toml.
           rustflags: ""
 
       - name: Set build options
