@@ -18,7 +18,7 @@ pub enum ExcludeNewer {
 }
 
 /// A fully resolved exclude-newer configuration with absolute cutoffs.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct ResolvedExcludeNewer {
     /// The default cutoff date. Packages uploaded after this date are excluded.
@@ -37,8 +37,11 @@ pub struct ResolvedExcludeNewer {
     /// Records matching any of these specs are never excluded, regardless of
     /// their timestamp. This allows a single vetted release through without
     /// lowering the cutoff for every future release of the package.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub exemptions: Vec<MatchSpec>,
+    ///
+    /// Private so that every spec goes through [`validate_exemption`], which
+    /// keeps the conversion into a [`rattler_solve::ExcludeNewer`] infallible.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    exemptions: Vec<MatchSpec>,
 
     /// Whether to include packages that don't have a timestamp.
     pub include_unknown_timestamp: bool,
@@ -91,15 +94,25 @@ impl ResolvedExcludeNewer {
     /// validation the solver applies is run here, so converting the resolved
     /// configuration into a [`rattler_solve::ExcludeNewer`] cannot fail.
     pub fn with_exemption(mut self, spec: MatchSpec) -> Result<Self, InvalidExemptionError> {
-        // Validate the way the solver does so the conversion below is
-        // infallible.
-        rattler_solve::ExcludeNewer::from_datetime(jiff::Timestamp::MAX)
-            .with_exemption(spec.clone())?;
+        validate_exemption(&spec)?;
         if !self.exemptions.contains(&spec) {
             self.exemptions.push(spec);
         }
         Ok(self)
     }
+
+    /// Returns the specs of the records that are exempt from the cutoff.
+    pub fn exemptions(&self) -> &[MatchSpec] {
+        &self.exemptions
+    }
+}
+
+/// Validates an exemption the way the solver does, so that converting a
+/// [`ResolvedExcludeNewer`] into a [`rattler_solve::ExcludeNewer`] cannot fail.
+fn validate_exemption(spec: &MatchSpec) -> Result<(), InvalidExemptionError> {
+    rattler_solve::ExcludeNewer::from_datetime(jiff::Timestamp::MAX)
+        .with_exemption(spec.clone())
+        .map(|_| ())
 }
 
 /// Converts a chrono [`DateTime<Utc>`] into the `jiff::Timestamp` that both the
