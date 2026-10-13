@@ -379,10 +379,12 @@ pub async fn execute_command(
         Command::Clean(cmd) => clean::execute(cmd).await.map(|()| ExitCode::SUCCESS),
         Command::Run(cmd) => run::execute(cmd).await,
         Command::Global(cmd) => global::execute(cmd).await.map(|()| ExitCode::SUCCESS),
-        Command::Auth(cmd) => rattler::cli::auth::execute(cmd)
-            .await
-            .into_diagnostic()
-            .map(|()| ExitCode::SUCCESS),
+        Command::Auth(cmd) => rattler::cli::auth::execute(
+            cmd.with_default_oauth_audience("prefix.dev", "https://api.basilisk.prefix.dev"),
+        )
+        .await
+        .into_diagnostic()
+        .map(|()| ExitCode::SUCCESS),
         Command::Install(cmd) => install::execute(cmd).await.map(|()| ExitCode::SUCCESS),
         Command::InstallPing(cmd) => install_ping::execute(cmd).await.map(|()| ExitCode::SUCCESS),
         Command::Reinstall(cmd) => reinstall::execute(cmd).await.map(|()| ExitCode::SUCCESS),
