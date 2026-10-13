@@ -159,7 +159,7 @@ impl Display for ExcludeNewerMismatch {
 }
 
 pub(super) fn verify_exclude_newer(
-    exclude_newer: Option<&rattler_solve::ExcludeNewer>,
+    exclude_newer: Option<&pixi_spec::ExcludeNewerFilter>,
     locked_environment: &rattler_lock::Environment<'_>,
 ) -> Result<(), ExcludeNewerMismatch> {
     let Some(exclude_newer) = exclude_newer else {
@@ -171,6 +171,9 @@ pub(super) fn verify_exclude_newer(
             let Some(record) = package.record() else {
                 continue;
             };
+            if exclude_newer.is_exempt(&record.name, &record.version) {
+                continue;
+            }
             let channel = package
                 .as_binary()
                 .and_then(|binary| binary.channel.as_ref())

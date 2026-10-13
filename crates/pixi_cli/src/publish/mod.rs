@@ -53,7 +53,8 @@ mod discovery;
 /// passed. Use `--path` to build and publish a single package.
 ///
 /// Supported destinations for `--target-channel` (alias `--to`):
-///   - prefix.dev: `https://prefix.dev/<channel-name>`
+///   - prefix.dev: `https://prefix.dev/<channel-name>` or
+///     `https://prefix.dev/<namespace>/<channel-name>`
 ///   - anaconda.org: `https://anaconda.org/<owner>/<label>`
 ///   - Cloudsmith: `cloudsmith://<owner>/<repository>`
 ///   - S3: `s3://bucket-name`
@@ -1294,6 +1295,28 @@ fn should_skip_existing(
     Ok(false)
 }
 
+/// The channel a Prefix.dev URL points at: the full path after the host, so
+/// that namespaced channels like `https://prefix.dev/<namespace>/<channel>`
+/// resolve to `<namespace>/<channel>` instead of just `<channel>`.
+fn prefix_channel_from_url(url: &Url) -> miette::Result<String> {
+    let channel = url.path().trim_matches('/');
+    if channel.is_empty() {
+        return Err(miette::miette!("Invalid Prefix URL: missing channel name"));
+    }
+    // `https://prefix.dev/channels/<channel>` is the channel's web page, not
+    // an upload target. Older versions accepted it because they only used
+    // the last path segment, so point users at the right URL.
+    if let Some(rest) = channel.strip_prefix("channels/") {
+        let mut suggestion = url.clone();
+        suggestion.set_path(rest);
+        return Err(miette::miette!(
+            help = format!("use `{suggestion}` instead"),
+            "`{url}` is a channel view page URL, not the URL used for uploads"
+        ));
+    }
+    Ok(channel.to_string())
+}
+
 /// Upload packages to a Prefix.dev server.
 async fn upload_to_prefix(
     url: &Url,
@@ -1307,11 +1330,7 @@ async fn upload_to_prefix(
 
     tracing::info!("Uploading packages to Prefix.dev: {}", url);
 
-    let channel = url
-        .path_segments()
-        .and_then(|mut segments| segments.next_back())
-        .ok_or_else(|| miette::miette!("Invalid Prefix URL: missing channel name"))?
-        .to_string();
+    let channel = prefix_channel_from_url(url)?;
 
     let mut server_url = rewrite_scheme_to_https(url, "prefix")?;
     server_url.set_path("");
@@ -1727,6 +1746,34 @@ mod tests {
         // defaults.
         let stable = index_options(&config, "s3://bucket/stable");
         assert_eq!(stable.base_url, None);
+    }
+
+    #[test]
+    fn prefix_channel_keeps_the_namespace() {
+        let channel = |url: &str| prefix_channel_from_url(&Url::parse(url).unwrap());
+        assert_eq!(
+            channel("https://prefix.dev/my-channel").unwrap(),
+            "my-channel"
+        );
+        assert_eq!(
+            channel("https://prefix.dev/my-channel/").unwrap(),
+            "my-channel"
+        );
+        assert_eq!(
+            channel("https://prefix.dev/vslamlab/vslamlab").unwrap(),
+            "vslamlab/vslamlab"
+        );
+        assert_eq!(
+            channel("prefix://prefix.dev/vslamlab/vslamlab/").unwrap(),
+            "vslamlab/vslamlab"
+        );
+        let err = channel("https://prefix.dev/channels/my-channel").unwrap_err();
+        assert_eq!(
+            err.help().unwrap().to_string(),
+            "use `https://prefix.dev/my-channel` instead"
+        );
+        assert!(channel("https://prefix.dev").is_err());
+        assert!(channel("https://prefix.dev/").is_err());
     }
 
     #[test]

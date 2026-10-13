@@ -267,7 +267,6 @@ pub(crate) fn need_reinstall(
                             if LockedGitUrl::is_locked_git_url(url) {
                                 let locked_git_url = LockedGitUrl::new(url.clone());
                                 to_parsed_git_url(&locked_git_url)
-                                    // Needs the conversion because of a miette error
                                     .map_err(|e| NeedsReinstallError::PixiGitUrl(e.to_string()))
                             } else {
                                 // it is not a git url, so we fallback to use the url as is

@@ -78,7 +78,7 @@ jiff = "0.2.8"
 jsonrpc-core = "18.0.0"
 jsonrpc-http-server = "18.0.0"
 jsonrpc-stdio-server = "18.0.0"
-jsonrpsee = "=0.26.0"
+jsonrpsee = "=0.26.1"
 libc = { version = "0.2.170", default-features = false }
 memchr = "2.8"
 miette = { version = "7.6.0" }
@@ -199,36 +199,36 @@ typed-path = "0.12.0"
 unicode-width = "0.2.2"
 url = "2.5"
 # uv 0.12.10 publishes these internal crates as 0.0.77.
-uv-build-frontend = "0.0.87"
-uv-cache = "0.0.87"
-uv-cache-info = "0.0.87"
-uv-cache-key = "0.0.87"
-uv-client = "0.0.87"
-uv-configuration = "0.0.87"
-uv-dispatch = "0.0.87"
-uv-distribution = "0.0.87"
-uv-distribution-filename = "0.0.87"
-uv-distribution-types = "0.0.87"
-uv-errors = "0.0.87"
-uv-flags = "0.0.87"
-uv-git = "0.0.87"
-uv-git-types = "0.0.87"
-uv-install-wheel = "0.0.87"
-uv-installer = "0.0.87"
-uv-normalize = "0.0.87"
-uv-pep440 = "0.0.87"
-uv-pep508 = "0.0.87"
-uv-platform-tags = "0.0.87"
-uv-preview = "0.0.87"
-uv-pypi-types = "0.0.87"
-uv-python = "0.0.87"
-uv-redacted = "0.0.87"
-uv-requirements = "0.0.87"
-uv-requirements-txt = "0.0.87"
-uv-resolver = "0.0.87"
-uv-threads = "0.0.87"
-uv-types = "0.0.87"
-uv-workspace = "0.0.87"
+uv-build-frontend = "0.0.90"
+uv-cache = "0.0.90"
+uv-cache-info = "0.0.90"
+uv-cache-key = "0.0.90"
+uv-client = "0.0.90"
+uv-configuration = "0.0.90"
+uv-dispatch = "0.0.90"
+uv-distribution = "0.0.90"
+uv-distribution-filename = "0.0.90"
+uv-distribution-types = "0.0.90"
+uv-errors = "0.0.90"
+uv-flags = "0.0.90"
+uv-git = "0.0.90"
+uv-git-types = "0.0.90"
+uv-install-wheel = "0.0.90"
+uv-installer = "0.0.90"
+uv-normalize = "0.0.90"
+uv-pep440 = "0.0.90"
+uv-pep508 = "0.0.90"
+uv-platform-tags = "0.0.90"
+uv-preview = "0.0.90"
+uv-pypi-types = "0.0.90"
+uv-python = "0.0.90"
+uv-redacted = "0.0.90"
+uv-requirements = "0.0.90"
+uv-requirements-txt = "0.0.90"
+uv-resolver = "0.0.90"
+uv-threads = "0.0.90"
+uv-types = "0.0.90"
+uv-workspace = "0.0.90"
 webpki-root-certs = "1"
 which = "8.0.0"
 xxhash-rust = "0.8.15"
@@ -237,7 +237,7 @@ zstd = { version = "0.14.0", default-features = false }
 
 # Rattler crates
 file_url = "0.3.0"
-rattler = { version = "0.53", default-features = false }
+rattler = { version = "0.54", default-features = false }
 rattler_cache = { version = "0.10", default-features = false }
 rattler_conda_types = { version = "0.56", default-features = false, features = [
   "rayon",
@@ -249,7 +249,7 @@ rattler_index = { version = "0.33", default-features = false, features = [
 ] }
 rattler_lock = { version = "0.34", default-features = false }
 rattler_menuinst = { version = "0.4", default-features = false }
-rattler_networking = { version = "0.33", default-features = false, features = [
+rattler_networking = { version = "0.34", default-features = false, features = [
   "dirs",
   "google-cloud-auth",
 ] }
@@ -267,13 +267,13 @@ rattler_virtual_packages = { version = "8.1", default-features = false }
 simple_spawn_blocking = { version = "1.1.0", default-features = false }
 
 # Rattler build crates
-rattler_build_core = { version = "0.2.17", default-features = false, features = [
+rattler_build_core = { version = "0.2.18", default-features = false, features = [
   "s3",
 ] }
-rattler_build_jinja = { version = "0.1.18" }
-rattler_build_recipe = { version = "0.1.18" }
-rattler_build_types = { version = "0.1.16" }
-rattler_build_variant_config = { version = "0.1.18" }
+rattler_build_jinja = { version = "0.1.19" }
+rattler_build_recipe = { version = "0.1.19" }
+rattler_build_types = { version = "0.1.17" }
+rattler_build_variant_config = { version = "0.1.19" }
 
 [patch.crates-io]
 version-ranges = { git = "https://github.com/astral-sh/pubgrub", rev = "d8efd77673c9a90792da9da31b6c0da7ea8a324b" }

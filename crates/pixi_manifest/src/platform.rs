@@ -5,10 +5,13 @@ use std::str::FromStr;
 
 use archspec::cpu::Microarchitecture;
 use rattler_conda_types::{GenericVirtualPackage, PackageName, Subdir, Version};
+use rattler_virtual_packages::amdgpu::AmdGpuArchInfo;
 use rattler_virtual_packages::defaults::{
     default_glibc_version, default_linux_version, default_mac_os_version, default_windows_version,
 };
-use rattler_virtual_packages::{Archspec, Cuda, CudaArch, LibC, Linux, Osx, VirtualPackage};
+use rattler_virtual_packages::{
+    AmdGpu, AmdGpuArch, Archspec, Cuda, CudaArch, LibC, Linux, Osx, VirtualPackage,
+};
 
 use crate::TargetSelector;
 
@@ -273,6 +276,8 @@ pub enum PixiPlatformError {
     IsSubdirPlatform,
     #[error("`__cuda_arch` requires `__cuda` to be declared as well")]
     CudaArchRequiresCuda,
+    #[error("`__amdgpu_arch` requires `__amdgpu` to be declared as well")]
+    AmdGpuArchRequiresAmdGpu,
     #[error(transparent)]
     Name(#[from] PixiPlatformNameError),
 }
@@ -295,12 +300,19 @@ fn synthesized_name(
     Ok(PixiPlatformName::try_from(name.as_str())?)
 }
 
-/// `true` when the declared set names `__cuda_arch` but not `__cuda`. Conda's
-/// CEP couples the two: a compute capability is meaningless without a CUDA
-/// driver, so this combination is rejected wherever a platform is built.
-fn declares_cuda_arch_without_cuda(declared: &[GenericVirtualPackage]) -> bool {
+/// Reject a declared set that names a GPU architecture without the GPU it
+/// belongs to. Conda's CEPs couple `__cuda_arch` to `__cuda` and
+/// `__amdgpu_arch` to `__amdgpu`: an architecture is meaningless without the
+/// device, so these combinations are rejected wherever a platform is built.
+fn check_gpu_arch_coupling(declared: &[GenericVirtualPackage]) -> Result<(), PixiPlatformError> {
     let has = |name: &str| declared.iter().any(|gvp| gvp.name.as_normalized() == name);
-    has("__cuda_arch") && !has("__cuda")
+    if has("__cuda_arch") && !has("__cuda") {
+        return Err(PixiPlatformError::CudaArchRequiresCuda);
+    }
+    if has("__amdgpu_arch") && !has("__amdgpu") {
+        return Err(PixiPlatformError::AmdGpuArchRequiresAmdGpu);
+    }
+    Ok(())
 }
 
 /// A platform declared by the workspace.
@@ -426,9 +438,7 @@ impl PixiPlatform {
         {
             return Err(PixiPlatformError::IsSubdirPlatform);
         }
-        if declares_cuda_arch_without_cuda(&declared_virtual_packages) {
-            return Err(PixiPlatformError::CudaArchRequiresCuda);
-        }
+        check_gpu_arch_coupling(&declared_virtual_packages)?;
         Ok(Self {
             name,
             subdir,
@@ -650,9 +660,7 @@ impl PixiPlatform {
         // default rather than left absent.
         merge_subdir_defaults(&mut self.declared_virtual_packages, self.subdir);
 
-        if declares_cuda_arch_without_cuda(&self.declared_virtual_packages) {
-            return Err(PixiPlatformError::CudaArchRequiresCuda);
-        }
+        check_gpu_arch_coupling(&self.declared_virtual_packages)?;
 
         if was_auto {
             // Recompute the synthesised name from the new subdir + VPs.
@@ -822,6 +830,10 @@ fn generic_to_virtual_package(gvp: &GenericVirtualPackage) -> Option<VirtualPack
         "__cuda_arch" => Some(VirtualPackage::CudaArch(CudaArch {
             version: gvp.version.clone(),
         })),
+        "__amdgpu" => Some(VirtualPackage::AmdGpu(AmdGpu)),
+        "__amdgpu_arch" => Some(VirtualPackage::AmdGpuArch(AmdGpuArch {
+            version: gvp.version.clone(),
+        })),
         "__archspec" => Some(VirtualPackage::Archspec(archspec_from_build_string(
             &gvp.build_string,
         ))),
@@ -855,13 +867,13 @@ pub fn candidate_subdirs(current: Subdir) -> Vec<Subdir> {
 
 /// Returns `true` when `system` provides the capability `required` names.
 ///
-/// Every virtual package but one is a version: the system satisfies it by
-/// carrying the same name at a version at least as high. `__archspec` is the
-/// exception -- per CEP 30 its version is a constant and the microarchitecture
-/// lives in the build string -- so it is compared through the archspec
-/// database instead, where a host satisfies a requirement by being that
-/// microarchitecture or a strict superset of it (`zen2` covers `x86_64_v3`,
-/// `haswell` does not cover `zen2`).
+/// Most virtual packages are satisfied by the same name at a version at least
+/// as high. `__amdgpu_arch` instead requires the exact ISA version: a different
+/// architecture is not necessarily compatible. `__archspec` carries its
+/// microarchitecture in the build string (its version is constant per CEP 30),
+/// so it is compared through the archspec database instead, where a host
+/// satisfies a requirement by being that microarchitecture or a strict
+/// superset of it (`zen2` covers `x86_64_v3`, `haswell` does not cover `zen2`).
 pub fn capability_satisfied_by(
     required: &GenericVirtualPackage,
     system: &[GenericVirtualPackage],
@@ -869,9 +881,15 @@ pub fn capability_satisfied_by(
     if required.name.as_normalized() == "__archspec" {
         return archspec_capability_satisfied_by(required, system);
     }
-    system
-        .iter()
-        .any(|provided| provided.name == required.name && provided.version >= required.version)
+    let exact_version = required.name.as_normalized() == "__amdgpu_arch";
+    system.iter().any(|provided| {
+        provided.name == required.name
+            && if exact_version {
+                provided.version == required.version
+            } else {
+                provided.version >= required.version
+            }
+    })
 }
 
 /// The `__archspec` half of [`capability_satisfied_by`].
@@ -967,20 +985,88 @@ pub fn validate_archspec_name(name: &str) -> Result<(), String> {
     }
 }
 
-/// Validate the build string of a raw `__name = "version[=build]"` entry.
-/// Every user-facing parser routes through this, so the CLI and the manifest
-/// accept exactly the same values. Only `__archspec` constrains its build
-/// string today.
-pub fn validate_virtual_package_build_string(
+/// Validate the value of a raw `__name = "version[=build]"` entry. Every
+/// user-facing parser routes through this, so the CLI and the manifest accept
+/// exactly the same values. `version` is the version as the user wrote it.
+///
+/// Only the virtual packages whose value has a fixed shape are constrained:
+/// `__archspec` must name a known microarchitecture, `__amdgpu` is
+/// presence-only (version `0`), and `__amdgpu_arch` is an AMDGPU ISA version
+/// (`major.minor.stepping`).
+pub fn validate_virtual_package(
     name: &PackageName,
+    version: &str,
     build_string: &str,
 ) -> Result<(), String> {
-    if name.as_normalized() == "__archspec"
-        && let Some(microarchitecture) = archspec_microarchitecture(build_string)
-    {
-        validate_archspec_name(microarchitecture)?;
+    match name.as_normalized() {
+        "__archspec" => {
+            if let Some(microarchitecture) = archspec_microarchitecture(build_string) {
+                validate_archspec_name(microarchitecture)?;
+            }
+        }
+        "__amdgpu" => validate_amdgpu_presence(version)?,
+        "__amdgpu_arch" => validate_amdgpu_arch(version)?,
+        _ => {}
     }
     Ok(())
+}
+
+/// `__amdgpu` only says that an AMD GPU is present; its version is always `0`.
+fn validate_amdgpu_presence(version: &str) -> Result<(), String> {
+    if version == "0" {
+        Ok(())
+    } else {
+        Err(format!(
+            "'{version}' is not a valid `__amdgpu` version: `__amdgpu` only declares that an AMD GPU is present, so its version is always '0'"
+        ))
+    }
+}
+
+/// Validate an AMDGPU ISA version (`major.minor.stepping`, e.g. `9.0.10` for
+/// `gfx90a`) as declared for `__amdgpu_arch`.
+fn validate_amdgpu_arch(version: &str) -> Result<(), String> {
+    AmdGpuArchInfo::from_str(version)
+        .map(drop)
+        .map_err(|error| error.to_string())
+}
+
+/// Parse an AMDGPU target name (`gfx90a`, `gfx1100`) into the `__amdgpu_arch`
+/// ISA version it stands for (`9.0.10`, `11.0.0`).
+///
+/// Target features (`gfx90a:xnack-`) are rejected: `__amdgpu_arch` has no way
+/// to express them, so accepting them would silently drop part of the input.
+pub fn amdgpu_arch_from_target_name(name: &str) -> Result<Version, String> {
+    if name.is_ascii()
+        && !name.contains(':')
+        && let Some(arch_info) = AmdGpuArchInfo::from_target_id(name)
+    {
+        return Ok(arch_info.to_version());
+    }
+    match AmdGpuArchInfo::from_str(name)
+        .ok()
+        .and_then(|arch_info| amdgpu_target_name(&arch_info.to_string()))
+    {
+        Some(target_name) => Err(format!(
+            "'{name}' is not an AMDGPU target name, write it as '{target_name}'"
+        )),
+        None => Err(format!(
+            "'{name}' is not an AMDGPU target name, expected something like 'gfx90a' or 'gfx1100'"
+        )),
+    }
+}
+
+/// The AMDGPU target name (`gfx90a`) for an `__amdgpu_arch` ISA version
+/// (`9.0.10`). `None` when `isa_version` is not an ISA version, or when its
+/// minor or stepping is too large for the single hex digit a target name
+/// spends on each.
+pub fn amdgpu_target_name(isa_version: &str) -> Option<String> {
+    let arch_info = AmdGpuArchInfo::from_str(isa_version).ok()?;
+    (arch_info.minor < 16 && arch_info.stepping < 16).then(|| {
+        format!(
+            "gfx{}{:x}{:x}",
+            arch_info.major, arch_info.minor, arch_info.stepping
+        )
+    })
 }
 
 /// The best did-you-mean candidate for an unknown microarchitecture name: the
@@ -1141,6 +1227,58 @@ mod tests {
         }
     }
 
+    #[test]
+    fn amdgpu_arch_capability_requires_exact_isa_version() {
+        let required = gvp("__amdgpu_arch", "9.0.10");
+        assert!(capability_satisfied_by(
+            &required,
+            &[gvp("__amdgpu_arch", "9.0.10")]
+        ));
+        for version in ["8.0.10", "10.0.10", "9.1.10", "9.0.9", "9.0.11"] {
+            assert!(
+                !capability_satisfied_by(&required, &[gvp("__amdgpu_arch", version)]),
+                "a different ISA version {version} must not satisfy {required}"
+            );
+        }
+        assert!(!capability_satisfied_by(&required, &[]));
+        assert!(!capability_satisfied_by(&required, &[gvp("__amdgpu", "0")]));
+    }
+
+    #[test]
+    fn amdgpu_presence_capability_does_not_require_an_architecture() {
+        let required = gvp("__amdgpu", "0");
+        assert!(capability_satisfied_by(&required, &[gvp("__amdgpu", "0")]));
+        assert!(!capability_satisfied_by(&required, &[]));
+        assert!(!capability_satisfied_by(
+            &required,
+            &[gvp("__amdgpu_arch", "9.0.10")]
+        ));
+    }
+
+    #[test]
+    fn cuda_capabilities_remain_lower_bounds() {
+        for name in ["__cuda", "__cuda_arch"] {
+            let required = gvp(name, "12");
+            assert!(capability_satisfied_by(&required, &[gvp(name, "12")]));
+            assert!(capability_satisfied_by(&required, &[gvp(name, "13")]));
+            assert!(!capability_satisfied_by(&required, &[gvp(name, "11")]));
+            assert!(!capability_satisfied_by(&required, &[]));
+        }
+    }
+
+    #[test]
+    fn amdgpu_target_parser_rejects_unicode_without_panicking() {
+        for name in ["gfx9éa", "gfx9💥", "gfx９0a"] {
+            assert!(amdgpu_arch_from_target_name(name).is_err(), "{name}");
+        }
+        for (name, version) in [("gfx90a", "9.0.10"), ("gfx1100", "11.0.0")] {
+            assert_eq!(
+                amdgpu_arch_from_target_name(name).unwrap(),
+                Version::from_str(version).unwrap()
+            );
+        }
+    }
+
     /// A machine runs its own subdir plus the architecture fallbacks, and
     /// nothing across Linux architectures. Detection leans on this to decide
     /// whether a reading taken for a subdir describes a machine that could
@@ -1230,25 +1368,29 @@ mod tests {
     }
 
     #[test]
-    fn validate_virtual_package_build_string_only_constrains_archspec() {
+    fn validate_virtual_package_constrains_fixed_shape_values() {
         let archspec = PackageName::try_from("__archspec").unwrap();
         let other = PackageName::try_from("__cuda").unwrap();
         // An unknown-microarchitecture build string is accepted in both of
-        // its encodings, and only `__archspec` is checked at all.
-        assert_eq!(
-            validate_virtual_package_build_string(&archspec, "skylake"),
-            Ok(())
-        );
-        assert_eq!(validate_virtual_package_build_string(&archspec, ""), Ok(()));
-        assert_eq!(
-            validate_virtual_package_build_string(&archspec, "0"),
-            Ok(())
-        );
-        assert!(validate_virtual_package_build_string(&archspec, "nonsense").is_err());
-        assert_eq!(
-            validate_virtual_package_build_string(&other, "nonsense"),
-            Ok(())
-        );
+        // its encodings, and only `__archspec` checks its build string at all.
+        assert_eq!(validate_virtual_package(&archspec, "0", "skylake"), Ok(()));
+        assert_eq!(validate_virtual_package(&archspec, "0", ""), Ok(()));
+        assert_eq!(validate_virtual_package(&archspec, "0", "0"), Ok(()));
+        assert!(validate_virtual_package(&archspec, "0", "nonsense").is_err());
+        assert_eq!(validate_virtual_package(&other, "12", "nonsense"), Ok(()));
+
+        // `__amdgpu` is presence-only and `__amdgpu_arch` is an ISA version.
+        let amdgpu = PackageName::try_from("__amdgpu").unwrap();
+        let amdgpu_arch = PackageName::try_from("__amdgpu_arch").unwrap();
+        assert_eq!(validate_virtual_package(&amdgpu, "0", ""), Ok(()));
+        assert!(validate_virtual_package(&amdgpu, "1", "").is_err());
+        assert_eq!(validate_virtual_package(&amdgpu_arch, "9.0.10", ""), Ok(()));
+        for invalid in ["9.0", "gfx90a", "9.0.10.0"] {
+            assert!(
+                validate_virtual_package(&amdgpu_arch, invalid, "").is_err(),
+                "{invalid}"
+            );
+        }
     }
 
     #[test]
