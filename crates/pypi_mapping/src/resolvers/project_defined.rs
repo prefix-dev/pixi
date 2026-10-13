@@ -1,5 +1,4 @@
 use async_once_cell::OnceCell as AsyncCell;
-use miette::{IntoDiagnostic, WrapErr};
 use rattler_conda_types::RepoDataRecord;
 use rattler_networking::LazyClient;
 use std::path::Path;
@@ -10,6 +9,41 @@ use crate::{
     ProjectDefinedMappingLocation, PurlDerivationSource, ResolvedChannelMapping,
     channel::normalize_channel, derivation::DerivationOutcome, purl::pypi_purl,
 };
+
+/// An error that occurs when loading a project-defined conda-pypi mapping.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum ProjectDefinedMappingError {
+    #[error("{0} is not a valid file url")]
+    InvalidFileUrl(Url),
+
+    #[error("failed to download conda-pypi mapping from {url}")]
+    #[diagnostic(help("{}", LOCATION_FETCH_HELP))]
+    Download {
+        url: Url,
+        #[source]
+        source: reqwest_middleware::Error,
+    },
+
+    #[error("fetching the conda-pypi mapping from {url} returned status {status}")]
+    #[diagnostic(help("{}", LOCATION_FETCH_HELP))]
+    Status {
+        url: Url,
+        status: reqwest::StatusCode,
+    },
+
+    #[error(
+        "failed to parse pypi name mapping located at {location}. Please make sure that it's a valid json: {err}"
+    )]
+    InvalidJson {
+        location: String,
+        err: serde_json::Error,
+        #[help]
+        help: Option<&'static str>,
+    },
+
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+}
 
 /// Struct with a mapping of channel names to their respective mapping
 /// configuration: one or more sources (remote url, local file or in-memory
@@ -45,7 +79,7 @@ impl ProjectDefinedMapping {
     pub async fn fetch_project_defined(
         &self,
         client: &LazyClient,
-    ) -> miette::Result<MappingByChannel> {
+    ) -> Result<MappingByChannel, ProjectDefinedMappingError> {
         self.mapping_value
             .get_or_try_init(async {
                 let mut mapping_url_to_name: MappingByChannel = Default::default();
@@ -57,7 +91,7 @@ impl ProjectDefinedMapping {
                             ProjectDefinedMappingLocation::Url { url } => {
                                 if url.scheme() == "file" {
                                     let file_path = url.to_file_path().map_err(|_| {
-                                        miette::miette!("{} is not a valid file url", url)
+                                        ProjectDefinedMappingError::InvalidFileUrl(url.clone())
                                     })?;
                                     fetch_mapping_from_path(&file_path)?
                                 } else {
@@ -100,37 +134,31 @@ const LOCATION_FETCH_HELP: &str = "Check that the `location` URL in your `conda-
 async fn fetch_mapping_from_url(
     client: &LazyClient,
     url: &Url,
-) -> miette::Result<CompressedMapping> {
+) -> Result<CompressedMapping, ProjectDefinedMappingError> {
     let response = client
         .client()
         .get(url.clone())
         .send()
         .await
-        .into_diagnostic()
-        .wrap_err(miette::diagnostic!(
-            help = LOCATION_FETCH_HELP,
-            "failed to download conda-pypi mapping from {}",
-            url.as_str()
-        ))?;
+        .map_err(|source| ProjectDefinedMappingError::Download {
+            url: url.clone(),
+            source,
+        })?;
 
     if !response.status().is_success() {
-        return Err(miette::miette!(
-            help = LOCATION_FETCH_HELP,
-            "fetching the conda-pypi mapping from {} returned status {}",
-            url.as_str(),
-            response.status()
-        ));
+        return Err(ProjectDefinedMappingError::Status {
+            url: url.clone(),
+            status: response.status(),
+        });
     }
 
     let body = response
         .text()
         .await
-        .into_diagnostic()
-        .wrap_err(miette::diagnostic!(
-            help = LOCATION_FETCH_HELP,
-            "failed to download conda-pypi mapping from {}",
-            url.as_str()
-        ))?;
+        .map_err(|err| ProjectDefinedMappingError::Download {
+            url: url.clone(),
+            source: err.into(),
+        })?;
 
     parse_mapping_body(&body, url.as_str())
 }
@@ -139,38 +167,28 @@ async fn fetch_mapping_from_url(
 /// page URL instead of the raw file) gets an explicit hint, because the bare
 /// serde error ("expected value at line 1 column 1") does not tell the user
 /// what went wrong.
-fn parse_mapping_body(body: &str, source: &str) -> miette::Result<CompressedMapping> {
-    serde_json::from_str(body).map_err(|err| {
-        if body.trim_start().starts_with('<') {
-            miette::miette!(
-                help = "the response looks like an HTML page, not JSON. If this is a GitHub \
-                        link, use the raw file URL (raw.githubusercontent.com) instead of the \
-                        `blob/` page.",
-                "failed to parse pypi name mapping located at {source}. Please make sure that \
-                 it's a valid json: {err}"
-            )
-        } else {
-            miette::miette!(
-                "failed to parse pypi name mapping located at {source}. Please make sure that \
-                 it's a valid json: {err}"
-            )
-        }
+fn parse_mapping_body(
+    body: &str,
+    source: &str,
+) -> Result<CompressedMapping, ProjectDefinedMappingError> {
+    serde_json::from_str(body).map_err(|err| ProjectDefinedMappingError::InvalidJson {
+        location: source.to_string(),
+        err,
+        help: body.trim_start().starts_with('<').then_some(
+            "the response looks like an HTML page, not JSON. If this is a GitHub \
+             link, use the raw file URL (raw.githubusercontent.com) instead of the \
+             `blob/` page.",
+        ),
     })
 }
 
-fn fetch_mapping_from_path(path: &Path) -> miette::Result<CompressedMapping> {
-    let file = fs_err::File::open(path)
-        .into_diagnostic()
-        .context(format!("failed to open file {}", path.display()))?;
-    let reader = std::io::BufReader::new(file);
-    let mapping_by_name = serde_json::from_reader(reader)
-        .into_diagnostic()
-        .context(format!(
-        "failed to parse pypi name mapping located at {}. Please make sure that it's a valid json",
-        path.display()
-    ))?;
-
-    Ok(mapping_by_name)
+fn fetch_mapping_from_path(path: &Path) -> Result<CompressedMapping, ProjectDefinedMappingError> {
+    let reader = std::io::BufReader::new(fs_err::File::open(path)?);
+    serde_json::from_reader(reader).map_err(|err| ProjectDefinedMappingError::InvalidJson {
+        location: path.display().to_string(),
+        err,
+        help: None,
+    })
 }
 
 /// This is a client that uses a project-defined in-memory mapping to derive purls.
@@ -245,6 +263,8 @@ impl ProjectDefined {
 
 #[cfg(test)]
 mod test {
+    use miette::Diagnostic;
+
     use super::parse_mapping_body;
     use crate::PypiNames;
 
@@ -257,6 +277,19 @@ mod test {
         .unwrap_err();
         let help = err.help().expect("should carry a help text").to_string();
         assert!(help.contains("raw.githubusercontent.com"), "{help}");
+    }
+
+    #[test]
+    fn test_download_error_keeps_location_help() {
+        let source = reqwest::Client::new().get("http://[").build().unwrap_err();
+        let err = super::ProjectDefinedMappingError::Download {
+            url: "https://example.com/m.json".parse().unwrap(),
+            source: source.into(),
+        };
+        assert_eq!(
+            err.help().map(|h| h.to_string()).as_deref(),
+            Some(super::LOCATION_FETCH_HELP)
+        );
     }
 
     #[test]
