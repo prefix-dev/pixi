@@ -1310,6 +1310,17 @@ fn prefix_channel_from_url(url: &Url) -> miette::Result<String> {
     if channel.is_empty() {
         return Err(miette::miette!("Invalid Prefix URL: missing channel name"));
     }
+    // `https://prefix.dev/channels/<channel>` is the channel's web page, not
+    // an upload target. Older versions accepted it because they only used
+    // the last path segment, so point users at the right URL.
+    if let Some(rest) = channel.strip_prefix("channels/") {
+        let mut suggestion = url.clone();
+        suggestion.set_path(rest);
+        return Err(miette::miette!(
+            help = format!("use `{suggestion}` instead"),
+            "`{url}` is a channel view page URL, not the URL used for uploads"
+        ));
+    }
     Ok(channel)
 }
 
@@ -1762,6 +1773,11 @@ mod tests {
         assert_eq!(
             channel("prefix://prefix.dev/vslamlab/vslamlab/").unwrap(),
             "vslamlab/vslamlab"
+        );
+        let err = channel("https://prefix.dev/channels/my-channel").unwrap_err();
+        assert_eq!(
+            err.help().unwrap().to_string(),
+            "use `https://prefix.dev/my-channel` instead"
         );
         assert!(channel("https://prefix.dev").is_err());
         assert!(channel("https://prefix.dev/").is_err());
