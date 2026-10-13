@@ -503,10 +503,10 @@ pub(super) async fn lock_pypi_packages(
                     let uv_ctx = ctx
                         .uv_context
                         .get_or_try_init(|| {
-                            UvResolutionContext::from_config(
+                            Ok::<_, miette::Report>(UvResolutionContext::from_config(
                                 ctx.config,
                                 ctx.environment.workspace().client()?.clone(),
-                            )
+                            )?)
                         })
                         .map_err(|e| {
                             CommandDispatcherError::Failed(Box::new(

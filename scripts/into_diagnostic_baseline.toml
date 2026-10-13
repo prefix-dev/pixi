@@ -13,5 +13,4 @@ pixi_core = 94
 pixi_global = 78
 pixi_install_pypi = 19
 pixi_test_utils = 5
-pixi_uv_context = 4
 trampoline = 7
