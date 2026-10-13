@@ -128,12 +128,16 @@ class CudaTable(BaseModel):
     )
 
 
+# AMDGPU target names: decimal major, then one hex digit each for minor and stepping.
+AmdGpuTargetName = Annotated[str, StringConstraints(pattern=r"^gfx[0-9]+[0-9a-fA-F]{2}$")]
+
+
 class WorkspacePlatform(BaseModel):
     """A workspace platform: a conda subdir plus declared virtual-package
     guarantees, identified by a workspace-scoped name."""
 
     # extra="allow" because workspace platforms accept top-level virtual-package
-    # shortcut keys (`cuda`, `archspec`, `glibc`, `linux`, `macos`/`osx`,
+    # shortcut keys (`cuda`, `amdgpu`, `archspec`, `glibc`, `linux`, `macos`/`osx`,
     # `windows`) and forward-compatible raw `__name` keys whose value is
     # `version` or `version=build_string`. Listing the fixed slots explicitly is
     # enough for documentation; the open shape is preserved here.
@@ -165,6 +169,10 @@ class WorkspacePlatform(BaseModel):
     cuda: NonEmptyStr | CudaTable | None = Field(
         None,
         description="Declare a `__cuda` virtual package at the given version (e.g. `12.0`), or a `{ driver, arch }` table to also declare `__cuda_arch` (GPU compute capability).",
+    )
+    amdgpu: Literal[True] | AmdGpuTargetName | None = Field(
+        None,
+        description="Declare the presence-only `__amdgpu` virtual package with `true`, or an AMDGPU target name (e.g. `gfx90a`) to also declare its `__amdgpu_arch`.",
     )
     archspec: NonEmptyStr | None = Field(
         None,
