@@ -6431,6 +6431,63 @@ exemptions = { torch = "*" }
     }
 
     #[test]
+    fn test_deprecated_exclude_newer_tables_warn() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "7d"
+
+[exclude-newer]
+polars = "0d"
+openssl = "2025-01-01"
+
+[pypi-exclude-newer]
+boltons = "0d"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_tables_without_replacement_warn() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "7d"
+
+[exclude-newer]
+openssl = "30d"
+
+[pypi-exclude-newer]
+boltons = "2025-01-01"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_table_without_cutoff_warns() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = [{ channel = "conda-forge", exclude-newer = "7d" }]
+platforms = []
+
+[exclude-newer]
+polars = "0d"
+
+[pypi-exclude-newer]
+boltons = "0d"
+"#
+        ));
+    }
+
+    #[test]
     fn test_exclude_newer_config_applies_exemptions() {
         let contents = r#"
 [workspace]
