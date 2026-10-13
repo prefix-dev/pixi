@@ -1171,7 +1171,7 @@ print("hello")
     }
 
     #[test]
-    fn accepts_per_package_exclude_newer_tables() {
+    fn accepts_deprecated_exclude_newer_tables_with_a_warning() {
         let (_directory, path) = script(
             r#"# /// script
 # dependencies = []
@@ -1190,7 +1190,7 @@ print("hello")
         );
 
         let script = ScriptManifest::from_path(path).unwrap().unwrap();
-        let (manifest, _) = script.into_workspace_manifest().unwrap();
+        let (manifest, warnings) = script.into_workspace_manifest().unwrap();
         assert!(
             manifest
                 .workspace
@@ -1202,6 +1202,15 @@ print("hello")
                 .workspace
                 .pypi_exclude_newer_package_overrides
                 .contains_key(&PypiPackageName::from_str("requests").unwrap())
+        );
+        let warnings = warnings.iter().map(ToString::to_string).collect::<Vec<_>>();
+        assert_eq!(warnings.len(), 2, "{warnings:?}");
+        assert!(
+            warnings[0].contains("`[exclude-newer]` table of per-package cutoffs is deprecated")
+        );
+        assert!(
+            warnings[1]
+                .contains("`[pypi-exclude-newer]` table of per-package cutoffs is deprecated")
         );
     }
 
