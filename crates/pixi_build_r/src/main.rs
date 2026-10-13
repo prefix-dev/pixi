@@ -129,6 +129,20 @@ impl GenerateRecipe for RGenerator {
             }
         }
 
+        // CMake and pkg-config, when `SystemRequirements` names them.
+        // Otherwise the build uses whichever is on the machine's PATH, or
+        // fails without one.
+        if metadata_provider.needs_cmake().into_diagnostic()? {
+            requirements
+                .build
+                .push(matchspec_item("cmake").into_diagnostic()?);
+        }
+        if metadata_provider.needs_pkg_config().into_diagnostic()? {
+            requirements
+                .build
+                .push(matchspec_item("pkg-config").into_diagnostic()?);
+        }
+
         // Add the R runtime to host and run requirements. A user-provided
         // r-base spec intersects with this one in the solver, so duplicates
         // are harmless.
@@ -824,6 +838,67 @@ SystemRequirements: Cargo (Rust's package manager), rustc
                 .iter()
                 .any(|req| req == "rust-std-x86_64-pc-windows-gnu"),
             "Should have the GNU target's standard library on Windows, got {windows:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_cmake_and_pkg_config_are_added_when_system_requirements_name_them() {
+        let temp_dir = TempDir::new().unwrap();
+        fs::write(
+            temp_dir.path().join("DESCRIPTION"),
+            r#"Package: demo
+Version: 1.0
+SystemRequirements: CMake (>= 3.15), libxml2, pkg-config
+"#,
+        )
+        .await
+        .unwrap();
+
+        let project_model = project_fixture!({
+            "name": "r-demo",
+            "version": "1.0",
+            "targets": {
+                "defaultTarget": {}
+            }
+        });
+
+        let build: Vec<String> = RGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &RBackendConfig::default(),
+                temp_dir.path().to_path_buf(),
+                Subdir::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe")
+            .recipe
+            .requirements
+            .build
+            .iter()
+            // The package name, without any version
+            .map(|req| {
+                req.to_string()
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or_default()
+                    .to_string()
+            })
+            .collect();
+
+        assert!(
+            build.iter().any(|req| req == "cmake"),
+            "Should have cmake in build requirements, got {build:?}"
+        );
+        assert!(
+            build.iter().any(|req| req == "pkg-config"),
+            "Should have pkg-config in build requirements, got {build:?}"
         );
     }
 
