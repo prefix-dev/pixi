@@ -78,7 +78,7 @@ jiff = "0.2.8"
 jsonrpc-core = "18.0.0"
 jsonrpc-http-server = "18.0.0"
 jsonrpc-stdio-server = "18.0.0"
-jsonrpsee = "=0.26.0"
+jsonrpsee = "=0.26.1"
 libc = { version = "0.2.170", default-features = false }
 memchr = "2.8"
 miette = { version = "7.6.0" }
