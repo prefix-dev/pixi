@@ -10345,6 +10345,8 @@ The easiest way is to use `pixi publish`, which builds the package and uploads i
 pixi publish --target-channel https://prefix.dev/<channel-name>
 ```
 
+For a channel in a namespace, include the namespace in the URL: `https://prefix.dev/<namespace>/<channel-name>`.
+
 You can also build and upload separately for more control. Use `pixi publish --target-dir <PATH>` to build the package into a local directory (no channel indexing), then upload the artifact with `pixi upload`:
 
 ```bash

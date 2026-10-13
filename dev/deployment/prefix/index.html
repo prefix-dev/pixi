@@ -8924,6 +8924,7 @@ Create a channel by navigating to <code>Channels</code> and clicking "New Channe
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-0-1"><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="c1"># Build and publish in one step</span>
 </span><span id="__span-0-2"><a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--target-channel<span class="w"> </span>https://prefix.dev/&lt;channel-name&gt;
 </span></code></pre></div>
+<p>For a channel in a namespace, include the namespace in the URL: <code>https://prefix.dev/&lt;namespace&gt;/&lt;channel-name&gt;</code>.</p>
 <p>You can also build and upload separately for more control. Use <code>pixi publish --target-dir &lt;PATH&gt;</code> to build the package into a local directory (no channel indexing), then upload the artifact with <code>pixi upload</code>:</p>
 <div class="language-bash highlight"><pre><span></span><code><span id="__span-1-1"><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Build into a local directory first, then upload the artifact</span>
 </span><span id="__span-1-2"><a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>pixi<span class="w"> </span>publish<span class="w"> </span>--target-dir<span class="w"> </span>./output
