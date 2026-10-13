@@ -31,6 +31,9 @@ pub struct ResolvedExcludeNewer {
 
     /// Package-specific cutoff dates that override both [`Self::cutoff`] and
     /// [`Self::channel_cutoffs`] for matching package names.
+    ///
+    /// Deprecated in favor of [`Self::exemptions`]. Only the deprecated
+    /// top-level `[exclude-newer]` manifest table still populates this.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub package_cutoffs: BTreeMap<PackageName, DateTime<Utc>>,
 
@@ -82,6 +85,11 @@ impl ResolvedExcludeNewer {
     }
 
     /// Adds a package-specific cutoff override.
+    ///
+    /// Deprecated in favor of [`Self::with_exemption`], which allows specific
+    /// vetted releases instead of lowering the cutoff for every release of a
+    /// package.
+    #[deprecated(note = "use `with_exemption` to allow specific vetted releases instead")]
     pub fn with_package_cutoff(mut self, package: PackageName, cutoff: DateTime<Utc>) -> Self {
         self.package_cutoffs.insert(package, cutoff);
         self
@@ -156,6 +164,8 @@ impl From<ResolvedExcludeNewer> for rattler_solve::ExcludeNewer {
                 .with_channel_cutoff(channel.to_string(), to_saturating_jiff_timestamp(cutoff));
         }
 
+        // The deprecated per-package cutoffs keep working until the
+        // top-level `[exclude-newer]` manifest table is removed.
         #[allow(deprecated)]
         for (package, cutoff) in value.package_cutoffs {
             config = config.with_package_cutoff(package, to_saturating_jiff_timestamp(cutoff));
@@ -374,6 +384,7 @@ mod test {
             .unwrap()
             .with_timezone(&Utc);
 
+        #[allow(deprecated)]
         let config: rattler_solve::ExcludeNewer =
             ResolvedExcludeNewer::from_datetime(default_cutoff)
                 .with_channel_cutoff(

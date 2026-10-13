@@ -42,8 +42,8 @@ pub use discovery::{
 pub use environment::{Environment, EnvironmentName, NewEnvironment, ParseEnvironmentNameError};
 pub use error::{DependencyError, GenericError, TomlError, UnknownFeature};
 pub use exclude_newer::{
-    ExcludeNewerConfig, ExcludeNewerError, PypiExcludeNewerConfig, resolve_exclude_newer,
-    resolve_pypi_exclude_newer,
+    ExcludeNewerConfig, ExcludeNewerError, ExcludeNewerTableMigration, PypiExcludeNewerConfig,
+    resolve_exclude_newer, resolve_pypi_exclude_newer,
 };
 pub use feature::{Feature, FeatureName};
 pub use features_ext::FeaturesExt;
