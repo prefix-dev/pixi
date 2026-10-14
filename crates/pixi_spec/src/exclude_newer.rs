@@ -123,9 +123,9 @@ fn validate_exemption(spec: &MatchSpec) -> Result<(), InvalidExemptionError> {
 /// `rattler_solve::ExcludeNewer` requires a non-optional default cutoff, so a
 /// workspace with only channel- or package-level cutoffs gets
 /// `DateTime::<Utc>::MAX_UTC` as its "never exclude by default" sentinel (see
-/// `exclude_newer_config_resolved_impl` in
-/// `crates/pixi_manifest/src/features_ext.rs`). Saturating preserves that
-/// meaning, since no package is newer than `Timestamp::MAX`.
+/// `resolve_exclude_newer` in `crates/pixi_manifest/src/exclude_newer.rs`).
+/// Saturating preserves that meaning, since no package is newer than
+/// `Timestamp::MAX`.
 ///
 /// Leap seconds are clamped instead of saturated: chrono reports them as a full
 /// extra second of subsecond nanos, which jiff rejects, and saturating a cutoff
