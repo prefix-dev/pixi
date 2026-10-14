@@ -148,7 +148,7 @@ pub fn verify_environment_satisfiability(
         let expected_vps: Vec<String> = records
             .iter()
             .filter(|gvp| !pixi_manifest::platform::is_subdir_default(gvp, workspace_subdir))
-            .map(|vp| vp.to_string())
+            .map(pixi_manifest::platform::format_virtual_package)
             .collect();
         let locked_vps: Vec<String> = locked
             .virtual_packages

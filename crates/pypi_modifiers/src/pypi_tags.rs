@@ -406,7 +406,7 @@ pub fn get_tags_from_machine(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rattler_conda_types::VersionWithSource;
+    use rattler_conda_types::{VersionWithSource, package::BuildString};
     use rattler_virtual_packages::{LibC, Osx};
     use std::str::FromStr;
     use uv_distribution_filename::WheelFilename;
@@ -476,7 +476,7 @@ mod tests {
             vec![GenericVirtualPackage {
                 name: "__osx".parse().unwrap(),
                 version: "12.0".parse().unwrap(),
-                build_string: String::new(),
+                build_string: BuildString::new_unchecked(""),
             }],
         )
         .unwrap();
@@ -489,7 +489,7 @@ mod tests {
             vec![GenericVirtualPackage {
                 name: "__osx".parse().unwrap(),
                 version: "15".parse().unwrap(),
-                build_string: String::new(),
+                build_string: BuildString::new_unchecked(""),
             }],
         )
         .unwrap();
@@ -623,7 +623,7 @@ mod tests {
         let python_record = PackageRecord::new(
             "python".parse().unwrap(),
             VersionWithSource::from_str("3.13.3").unwrap(),
-            "h2334245_104_cp313".to_string(),
+            "h2334245_104_cp313".parse().unwrap(),
         );
         let res =
             get_tags_from_machine(&vpkgs, &PixiPlatform::from_subdir(platform), &python_record)
@@ -651,7 +651,7 @@ mod tests {
         let python_record = PackageRecord::new(
             "python".parse().unwrap(),
             VersionWithSource::from_str("3.13.3").unwrap(),
-            "h2334245_104_cp313".to_string(),
+            "h2334245_104_cp313".parse().unwrap(),
         );
         let res =
             get_tags_from_machine(&vpkgs, &PixiPlatform::from_subdir(platform), &python_record)
@@ -677,7 +677,7 @@ mod tests {
         let python_record = PackageRecord::new(
             "python".parse().unwrap(),
             VersionWithSource::from_str("3.13.3").unwrap(),
-            "h2334245_104_cp313".to_string(),
+            "h2334245_104_cp313".parse().unwrap(),
         );
         let res =
             get_tags_from_machine(&vpkgs, &PixiPlatform::from_subdir(platform), &python_record)
@@ -711,7 +711,7 @@ mod tests {
         GenericVirtualPackage {
             name: PackageName::try_from(name).unwrap(),
             version: Version::from_str(version).unwrap(),
-            build_string: String::new(),
+            build_string: BuildString::new_unchecked(""),
         }
     }
 

@@ -1196,7 +1196,7 @@ pub async fn probe_pep723_script(
 
 #[cfg(test)]
 mod tests {
-    use rattler_conda_types::{NamelessMatchSpec, Version};
+    use rattler_conda_types::{NamelessMatchSpec, Version, package::BuildString};
     use std::path::Path;
 
     use crate::Workspace;
@@ -1257,7 +1257,7 @@ mod tests {
                         vec![GenericVirtualPackage {
                             name: name.clone(),
                             version: Version::major(1),
-                            build_string: "0".to_string(),
+                            build_string: BuildString::new_unchecked("0"),
                         }]
                     } else {
                         Vec::new()
@@ -1493,7 +1493,7 @@ default = {{ features = ["plain"], no-default-feature = true }}
         let records = vec![GenericVirtualPackage {
             name: PackageName::try_from("__vendor").unwrap(),
             version: Version::major(7),
-            build_string: String::new(),
+            build_string: BuildString::new_unchecked(""),
         }];
         let platform = platform_from_detected(Subdir::Linux64, records.clone()).unwrap();
         let host = HostDetection::from_platform(platform);
@@ -1511,12 +1511,12 @@ default = {{ features = ["plain"], no-default-feature = true }}
                 GenericVirtualPackage {
                     name: "__archspec".parse().unwrap(),
                     version: Version::major(0),
-                    build_string: "zen2".to_string(),
+                    build_string: BuildString::new_unchecked("zen2"),
                 },
                 GenericVirtualPackage {
                     name: "__cuda".parse().unwrap(),
                     version: Version::major(13),
-                    build_string: String::new(),
+                    build_string: BuildString::new_unchecked(""),
                 },
             ],
         )
@@ -1529,12 +1529,12 @@ default = {{ features = ["plain"], no-default-feature = true }}
                 GenericVirtualPackage {
                     name: "__archspec".parse().unwrap(),
                     version: Version::major(1),
-                    build_string: "zen2".to_string(),
+                    build_string: BuildString::new_unchecked("zen2"),
                 },
                 GenericVirtualPackage {
                     name: "__cuda".parse().unwrap(),
                     version: Version::major(13),
-                    build_string: "0".to_string(),
+                    build_string: BuildString::new_unchecked("0"),
                 },
             ]
         );
