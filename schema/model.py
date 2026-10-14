@@ -287,8 +287,8 @@ class ExcludeNewerTable(StrictBaseModel):
     )
     exemptions: dict[CondaPackageName, NonEmptyStr | ExcludeNewerExemptionTable] | None = Field(
         None,
-        examples=[{"polars": "1.43.1", "py-rattler": "*"}],
-        description='Package releases that are never excluded, regardless of their upload time. The value is a version or a match spec table, so `polars = "1.43.1"` exempts that release only and `py-rattler = "*"` exempts every release.',
+        examples=[{"polars": "==1.43.1", "py-rattler": "*"}],
+        description='Package releases that are never excluded, regardless of their upload time. The value is a version or a match spec table, so `polars = "==1.43.1"` exempts that release only and `py-rattler = "*"` exempts every release.',
     )
 
 
@@ -354,7 +354,7 @@ class Workspace(StrictBaseModel):
             "72h",
             "72 hours",
             "1h30m",
-            {"cutoff": "7d", "exemptions": {"polars": "1.43.1", "py-rattler": "*"}},
+            {"cutoff": "7d", "exemptions": {"polars": "==1.43.1", "py-rattler": "*"}},
         ],
         description="Exclude any package newer than this timestamp or duration. Can be an absolute timestamp or a relative duration accepted by humantime (for example '0d', '1 week', '2w', '1 month', '1M', '72h', '72 hours', or '1h30m'), or a table with a `cutoff` and `exemptions` for vetted releases.",
     )

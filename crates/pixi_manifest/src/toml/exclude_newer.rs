@@ -19,7 +19,7 @@ use crate::{ExcludeNewerConfig, PypiExcludeNewerConfig};
 ///
 /// ```toml
 /// exclude-newer = "7d"
-/// exclude-newer = { cutoff = "7d", exemptions = { polars = "1.43.1" } }
+/// exclude-newer = { cutoff = "7d", exemptions = { polars = "==1.43.1" } }
 /// ```
 #[derive(Debug, Clone)]
 pub struct TomlExcludeNewer(pub ExcludeNewerConfig);

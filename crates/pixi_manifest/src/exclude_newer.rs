@@ -24,7 +24,7 @@ use crate::{PrioritizedChannel, pypi::ResolvedPypiExcludeNewer};
 /// ```toml
 /// [workspace.exclude-newer]
 /// cutoff = "7d"
-/// exemptions = { py-rattler = "*", polars = "1.43.1" }
+/// exemptions = { py-rattler = "*", polars = "==1.43.1" }
 /// ```
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ExcludeNewerConfig {
@@ -32,8 +32,9 @@ pub struct ExcludeNewerConfig {
     pub cutoff: Option<ExcludeNewer>,
 
     /// Package releases that are never excluded, regardless of their
-    /// timestamp. The value is a binary spec, so `polars = "1.43.1"` exempts
-    /// that release only and `py-rattler = "*"` exempts every release.
+    /// timestamp. The value is a binary spec, so `polars = "==1.43.1"`
+    /// exempts that release only and `py-rattler = "*"` exempts every
+    /// release.
     pub exemptions: IndexMap<PackageName, BinarySpec>,
 }
 
