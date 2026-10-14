@@ -1,0 +1,21 @@
+
+--8<-- [start:description]
+
+Use this command group to manage the shared `[workspace.dependencies]` pool from the command line. Entries in this pool can be reused from dependency tables with `{ workspace = true }`.
+
+--8<-- [end:description]
+
+--8<-- [start:example]
+
+## Examples
+
+```shell
+pixi workspace dependencies add numpy
+pixi workspace dependencies add "numpy=1.*" boltons
+pixi workspace dependencies add shared-lib --path packages/shared-lib
+pixi workspace dependencies add shared-lib --git https://github.com/org/shared-lib --tag v1.2.3
+pixi workspace dependencies list
+pixi workspace dependencies remove numpy
+```
+
+--8<-- [end:example]

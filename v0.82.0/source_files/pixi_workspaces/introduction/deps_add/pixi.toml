@@ -1,0 +1,8 @@
+[workspace]
+channels = ["conda-forge"]
+name = "hello-world"
+platforms = ["linux-64", "osx-arm64", "win-64"]
+
+[dependencies]
+cowpy = "1.1.*"
+python = "3.13.*"
