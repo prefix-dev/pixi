@@ -188,7 +188,6 @@ This form of authentication (bearer token in the request headers) is mainly used
 #### Username and password
 
 Specify the username and password using the `auth-username` and `auth-password` input arguments.
-This form of authentication (HTTP Basic Auth) is used in some enterprise environments with [artifactory](https://jfrog.com/artifactory) for example.
 
 ```yaml
 - uses: prefix-dev/setup-pixi@v0.11.1
@@ -251,22 +250,17 @@ steps:
 pixi performs an [OAuth 2.0 Token Exchange (RFC 8693)](https://datatracker.ietf.org/doc/html/rfc8693) with the host.
 You can fine-tune the exchange using the following optional inputs:
 
-- `auth-workload-identity-audience`: the audience requested in the OIDC ID token. Defaults to the host, or `prefix.dev` for prefix.dev hosts.
-- `auth-workload-identity-exchange`: `token-exchange` or `prefix`. Defaults to `prefix` for prefix.dev hosts and `token-exchange` otherwise.
+- `auth-workload-identity-audience`: the audience requested in the OIDC ID token.
+- `auth-workload-identity-exchange`: `token-exchange` or `prefix`.
 - `auth-workload-identity-token-endpoint`: a URL or a path on the host used for `token-exchange`.
-  Defaults to the `token_endpoint` from the host's RFC 8414 metadata, or `/access/api/v1/oidc/token` for `*.jfrog.io` hosts.
+  Defaults to the `token_endpoint` from the host's RFC 8414 metadata.
 
 ```yaml
 - uses: prefix-dev/setup-pixi@v0.11.1
   with:
     auth-host: https://my-org.jfrog.io
     auth-workload-identity: true
-    # auth-workload-identity-token-endpoint: /access/api/v1/oidc/token # (1)!
-    # auth-workload-identity-audience: ${{ vars.ARTIFACTORY_OIDC_AUDIENCE }} # (2)!
 ```
-
-1. defaults to `/access/api/v1/oidc/token` for `*.jfrog.io`, might be needed for self-hosted Artifactory
-2. defaults to `my-org.jfrog.io`
 
 See the [Artifactory section](../../deployment/artifactory.md) for how to set this up with Artifactory.
 
