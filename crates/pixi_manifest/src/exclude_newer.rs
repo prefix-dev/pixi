@@ -6,7 +6,6 @@ use pixi_spec::{
     BinarySpec, ExcludeNewer, InvalidExemptionError, ResolvedExcludeNewer, SpecConversionError,
 };
 use rattler_conda_types::{ChannelConfig, PackageName, ParseChannelError};
-use serde::ser::SerializeMap;
 
 use crate::{PrioritizedChannel, pypi::ResolvedPypiExcludeNewer};
 
@@ -59,27 +58,6 @@ impl From<ExcludeNewer> for ExcludeNewerConfig {
     }
 }
 
-impl serde::Serialize for ExcludeNewerConfig {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        match (&self.cutoff, self.exemptions.is_empty()) {
-            (Some(cutoff), true) => cutoff.serialize(serializer),
-            (cutoff, _) => {
-                let mut map = serializer.serialize_map(None)?;
-                if let Some(cutoff) = cutoff {
-                    map.serialize_entry("cutoff", cutoff)?;
-                }
-                if !self.exemptions.is_empty() {
-                    map.serialize_entry("exemptions", &self.exemptions)?;
-                }
-                map.end()
-            }
-        }
-    }
-}
-
 /// The `pypi-exclude-newer` configuration of a workspace for PyPI packages.
 ///
 /// Mirrors [`ExcludeNewerConfig`]. Without a cutoff of its own, the conda
@@ -100,27 +78,6 @@ impl PypiExcludeNewerConfig {
     /// Returns true if neither a cutoff nor exemptions are configured.
     pub fn is_empty(&self) -> bool {
         self.cutoff.is_none() && self.exemptions.is_empty()
-    }
-}
-
-impl serde::Serialize for PypiExcludeNewerConfig {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        match (&self.cutoff, self.exemptions.is_empty()) {
-            (Some(cutoff), true) => cutoff.serialize(serializer),
-            (cutoff, _) => {
-                let mut map = serializer.serialize_map(None)?;
-                if let Some(cutoff) = cutoff {
-                    map.serialize_entry("cutoff", cutoff)?;
-                }
-                if !self.exemptions.is_empty() {
-                    map.serialize_entry("exemptions", &self.exemptions)?;
-                }
-                map.end()
-            }
-        }
     }
 }
 
