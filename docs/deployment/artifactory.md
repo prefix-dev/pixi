@@ -111,8 +111,7 @@ For CI/CD pipelines, you can authenticate with Artifactory using OIDC (OpenID Co
 
 ```yaml
 - name: Set up Pixi
-  # TODO: UPDATE THIS VERSION
-  uses: prefix-dev/setup-pixi@82d477f15f3a381dbcc8adc1206ce643fe110fb7 # v0.9.3
+  uses: prefix-dev/setup-pixi@a2789fe3805b9ae22d6c25a15df2f2c624cd092e # v0.11.1
   with:
     auth-host: https://my-org.jfrog.io
     auth-workload-identity: true
