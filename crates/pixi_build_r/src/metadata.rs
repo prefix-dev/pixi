@@ -194,12 +194,13 @@ pub enum MetadataError {
     Io(#[from] std::io::Error),
 }
 
-/// Whether a `SystemRequirements` field asks for Rust: it mentions `cargo` or
-/// `rustc` as a word.
-fn mentions_rust(system_requirements: &str) -> bool {
+/// Whether a `SystemRequirements` field mentions any of `words` as a word,
+/// ignoring case. A hyphen belongs to a word, so `pkg-config` is one, and
+/// `libcargo-dev` isn't `cargo`.
+fn mentions_any(system_requirements: &str, words: &[&str]) -> bool {
     system_requirements
-        .split(|c: char| !c.is_ascii_alphanumeric())
-        .any(|word| word.eq_ignore_ascii_case("cargo") || word.eq_ignore_ascii_case("rustc"))
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '-'))
+        .any(|word| words.iter().any(|w| word.eq_ignore_ascii_case(w)))
 }
 
 /// Parsed DESCRIPTION file data
@@ -312,11 +313,26 @@ impl DescriptionMetadataProvider {
     /// Whether the package has Rust code. CRAN asks such packages to declare
     /// `Cargo (Rust's package manager), rustc` in `SystemRequirements`.
     pub fn needs_rust(&self) -> Result<bool, MetadataError> {
+        self.system_requirements_mention(&["cargo", "rustc"])
+    }
+
+    /// Whether the package builds with CMake, as `SystemRequirements` says.
+    pub fn needs_cmake(&self) -> Result<bool, MetadataError> {
+        self.system_requirements_mention(&["cmake"])
+    }
+
+    /// Whether the package finds its libraries with pkg-config, as
+    /// `SystemRequirements` says.
+    pub fn needs_pkg_config(&self) -> Result<bool, MetadataError> {
+        self.system_requirements_mention(&["pkg-config", "pkgconfig"])
+    }
+
+    fn system_requirements_mention(&self, words: &[&str]) -> Result<bool, MetadataError> {
         Ok(self
             .ensure_data()?
             .system_requirements
             .as_deref()
-            .is_some_and(mentions_rust))
+            .is_some_and(|requirements| mentions_any(requirements, words)))
     }
 
     /// Get LinkingTo dependencies (packages needed for C/C++ headers at compile time)
@@ -482,6 +498,44 @@ mod tests {
         let temp_dir = create_test_description("Package: other\nVersion: 1.0\n");
         let provider = DescriptionMetadataProvider::new(temp_dir.path());
         assert!(!provider.needs_rust().unwrap());
+    }
+
+    #[test]
+    fn test_needs_cmake_and_pkg_config() {
+        // As CRAN packages write them: sundialr, xmlrectr
+        let temp_dir = create_test_description(
+            "Package: sundialr\nVersion: 0.1.6\nSystemRequirements: cmake\n",
+        );
+        let provider = DescriptionMetadataProvider::new(temp_dir.path());
+        assert!(provider.needs_cmake().unwrap());
+        assert!(!provider.needs_pkg_config().unwrap());
+
+        let temp_dir = create_test_description(
+            "Package: xmlrectr\nVersion: 0.1\nSystemRequirements: libxml2 development files, pkg-config; on Windows\n    use the matching Rtools toolchain\n",
+        );
+        let provider = DescriptionMetadataProvider::new(temp_dir.path());
+        assert!(provider.needs_pkg_config().unwrap());
+        assert!(!provider.needs_cmake().unwrap());
+
+        let temp_dir = create_test_description(
+            "Package: other\nVersion: 1.0\nSystemRequirements: CMake (>= 3.15), pkgconfig\n",
+        );
+        let provider = DescriptionMetadataProvider::new(temp_dir.path());
+        assert!(provider.needs_cmake().unwrap());
+        assert!(provider.needs_pkg_config().unwrap());
+
+        // Only as a word, and not without the field
+        let temp_dir = create_test_description(
+            "Package: other\nVersion: 1.0\nSystemRequirements: libcmake-dev, pkg\n",
+        );
+        let provider = DescriptionMetadataProvider::new(temp_dir.path());
+        assert!(!provider.needs_cmake().unwrap());
+        assert!(!provider.needs_pkg_config().unwrap());
+
+        let temp_dir = create_test_description("Package: other\nVersion: 1.0\n");
+        let provider = DescriptionMetadataProvider::new(temp_dir.path());
+        assert!(!provider.needs_cmake().unwrap());
+        assert!(!provider.needs_pkg_config().unwrap());
     }
 
     #[test]

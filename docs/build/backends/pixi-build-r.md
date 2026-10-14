@@ -220,6 +220,10 @@ R's recommended packages (such as `MASS`, `Matrix` and `mgcv`) are separate pack
 Packages with Rust code declare it in `SystemRequirements`, as CRAN asks: `Cargo (Rust's package manager), rustc`.
 When `SystemRequirements` mentions `cargo` or `rustc`, the backend adds `rust` to the build requirements, and on Windows also `rust-std-x86_64-pc-windows-gnu`, since R packages build their Rust code for the GNU target there.
 
+### CMake and pkg-config
+
+When `SystemRequirements` names `cmake`, the backend adds `cmake` to the build requirements, and when it names `pkg-config`, `pkg-config`, so the build doesn't depend on whichever of them is on the machine's `PATH`.
+
 ## Build Process
 
 The R backend follows this build process:
