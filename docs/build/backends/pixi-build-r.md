@@ -18,7 +18,7 @@ This backend automatically generates conda packages from R projects by:
 
 - **DESCRIPTION parsing**: Reads package metadata, dependencies (`Imports`, `Depends`, `LinkingTo`), and license information from the standard R `DESCRIPTION` file
 - **Automatic compiler detection**: Detects native code by checking for a `src/` directory or `LinkingTo` fields, and adds C, C++, and Fortran compilers automatically
-- **Dependency mapping**: Converts R package names to conda names: CRAN packages become `r-<pkg>`, Bioconductor packages become `bioconductor-<pkg>`, with support for custom overrides
+- **Dependency mapping**: Converts R package names to conda names: CRAN packages become `r-<pkg>`, Bioconductor packages become `bioconductor-<pkg>`
 - **Cross-platform support**: Generates platform-appropriate build scripts for Linux, macOS, and Windows
 
 ## Basic Usage
@@ -199,20 +199,6 @@ Channels to use for resolving R package dependencies.
 channels = ["conda-forge", "r"]
 ```
 
-### `mapping`
-
-- **Type**: `Map<String, String>`
-- **Default**: `{}`
-- **Target Merge Behavior**: `Merge` - Platform mappings are merged with base mappings, overriding keys with the same name
-
-Custom mapping of R package names to conda package names. This allows you to override default naming conventions or map packages with non-standard names on Conda channels:
-
-```toml
-[package.build.config]
-mapping = { Biobase = "bioconductor-biobase", my_pkg = "custom-conda-package" }
-
-```
-
 ### `ignore-description-dependencies`
 
 - **Type**: `Boolean`
@@ -261,7 +247,7 @@ A Bioconductor package built from source is itself named `bioconductor-<lowercas
 bioconductor-dnacopy = { git = "https://github.com/bioc/DNAcopy", branch = "RELEASE_3_22", package.build.backend.name = "pixi-build-r" }
 ```
 
-If a package needs another name, set it with `mapping`.
+If a dependency has another name on conda, set `ignore-description-dependencies`, and declare the package's dependencies yourself.
 
 ### Built-in Packages
 

@@ -119,8 +119,7 @@ impl GenerateRecipe for RGenerator {
             manifest_path.clone()
         };
 
-        let mut metadata_provider =
-            DescriptionMetadataProvider::new(&manifest_root).with_mapping(config.mapping.clone());
+        let mut metadata_provider = DescriptionMetadataProvider::new(&manifest_root);
 
         let mut generated_recipe =
             GeneratedRecipe::from_model(model.clone(), &mut metadata_provider).into_diagnostic()?;
@@ -197,9 +196,8 @@ impl GenerateRecipe for RGenerator {
                     continue;
                 }
 
-                // Convert R package name to conda package name, respecting custom mapping
-                let conda_name =
-                    metadata::r_package_to_conda_with_mapping(&dep.name, Some(&config.mapping));
+                // Convert R package name to conda package name
+                let conda_name = metadata::r_package_to_conda(&dep.name);
                 if conda_name.starts_with("bioconductor-") {
                     from_bioconda.push(dep.name.clone());
                 }
@@ -210,7 +208,7 @@ impl GenerateRecipe for RGenerator {
                 // The R package's possible conda names, but not its bare R name,
                 // which can be another conda package: the R package openssl is
                 // r-openssl, while openssl is the C library.
-                let candidate_names = [conda_name.as_str(), r_name.as_str(), bioc_name.as_str()];
+                let candidate_names = [r_name.as_str(), bioc_name.as_str()];
 
                 // Build the dependency spec string
                 let dep_spec = if let Some(version) = &dep.version {
@@ -244,9 +242,8 @@ impl GenerateRecipe for RGenerator {
                     continue;
                 }
 
-                // Convert R package name to conda package name, respecting custom mapping
-                let conda_name =
-                    metadata::r_package_to_conda_with_mapping(&dep.name, Some(&config.mapping));
+                // Convert R package name to conda package name
+                let conda_name = metadata::r_package_to_conda(&dep.name);
                 if conda_name.starts_with("bioconductor-") {
                     from_bioconda.push(dep.name.clone());
                 }
@@ -257,7 +254,7 @@ impl GenerateRecipe for RGenerator {
                 // The R package's possible conda names, but not its bare R name,
                 // which can be another conda package: the R package openssl is
                 // r-openssl, while openssl is the C library.
-                let candidate_names = [conda_name.as_str(), r_name.as_str(), bioc_name.as_str()];
+                let candidate_names = [r_name.as_str(), bioc_name.as_str()];
 
                 if !requirement_contains_package(&requirements.host, &candidate_names) {
                     // Build the dependency spec string
@@ -285,7 +282,7 @@ impl GenerateRecipe for RGenerator {
                 from_bioconda.sort();
                 from_bioconda.dedup();
                 miette::bail!(
-                    help = "Add bioconda to the workspace's channels, e.g. with `pixi workspace channel add bioconda`, or map these packages to other names with the backend's `mapping` setting.",
+                    help = "Add bioconda to the workspace's channels, e.g. with `pixi workspace channel add bioconda`.",
                     "This package depends on Bioconductor packages ({}), which come from bioconda as `bioconductor-<name>`, but bioconda isn't among the channels.",
                     from_bioconda.join(", ")
                 );
@@ -1142,62 +1139,6 @@ SystemRequirements: CMake (>= 3.15), libxml2, pkg-config
         // curl is a CRAN package, should map to r-curl
         assert!(host_reqs.iter().any(|r| r == "r-curl"));
         assert!(run_reqs.iter().any(|r| r == "r-curl"));
-    }
-
-    #[tokio::test]
-    async fn test_custom_mapping_in_config() {
-        let temp_dir = TempDir::new().unwrap();
-
-        fs::write(
-            temp_dir.path().join("DESCRIPTION"),
-            "Package: testpkg\nVersion: 1.0.0\nImports: Biobase, SomeOther\n",
-        )
-        .await
-        .unwrap();
-
-        let project_model = project_fixture!({
-            "name": "r-testpkg",
-            "version": "1.0.0",
-            "targets": {
-                "defaultTarget": {}
-            }
-        });
-
-        let mut config = RBackendConfig::default();
-        config
-            .mapping
-            .insert("Biobase".to_string(), "custom-biobase-pkg".to_string());
-        config
-            .mapping
-            .insert("SomeOther".to_string(), "my-custom-other".to_string());
-
-        let generated_recipe = RGenerator::default()
-            .generate_recipe(
-                &project_model,
-                &config,
-                temp_dir.path().to_path_buf(),
-                Subdir::Linux64,
-                None,
-                &HashSet::new(),
-                vec![],
-                None,
-                None,
-                None,
-                None,
-            )
-            .await
-            .expect("Failed to generate recipe");
-
-        let host_reqs: Vec<String> = generated_recipe
-            .recipe
-            .requirements
-            .host
-            .iter()
-            .map(|r| r.to_string())
-            .collect();
-
-        assert!(host_reqs.iter().any(|r| r == "custom-biobase-pkg"));
-        assert!(host_reqs.iter().any(|r| r == "my-custom-other"));
     }
 
     #[tokio::test]

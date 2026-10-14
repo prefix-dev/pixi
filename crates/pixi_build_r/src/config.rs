@@ -35,12 +35,6 @@ pub struct RBackendConfig {
     #[serde(default)]
     pub channels: Option<Vec<String>>,
 
-    /// Custom mapping of R package names to conda package names.
-    ///
-    /// For example: `mapping = { "Biobase" = "bioconductor-biobase" }`
-    #[serde(default)]
-    pub mapping: IndexMap<String, String>,
-
     /// Ignore dependencies declared in the DESCRIPTION file.
     /// If true, only dependencies explicitly declared in the pixi manifest are used.
     #[serde(default)]
@@ -78,11 +72,6 @@ impl BackendConfig for RBackendConfig {
                 .channels
                 .clone()
                 .or_else(|| self.channels.clone()),
-            mapping: {
-                let mut merged_mapping = self.mapping.clone();
-                merged_mapping.extend(target_config.mapping.clone());
-                merged_mapping
-            },
             ignore_description_dependencies: target_config
                 .ignore_description_dependencies
                 .or(self.ignore_description_dependencies),
@@ -171,64 +160,31 @@ mod tests {
     }
 
     #[test]
-    fn test_deserialize_mapping() {
-        // Test `mapping`
-        let json_data = json!({
-            "mapping": {
-                "Biobase": "bioconductor-biobase",
-                "DESeq2": "bioconductor-deseq2"
-            },
-            "ignore-description-dependencies": true
-        });
+    fn test_deserialize_ignore_description_dependencies() {
+        let json_data = json!({ "ignore-description-dependencies": true });
         let config: RBackendConfig = serde_json::from_value(json_data).unwrap();
-        assert_eq!(
-            config.mapping.get("Biobase").map(String::as_str),
-            Some("bioconductor-biobase")
-        );
-        assert_eq!(
-            config.mapping.get("DESeq2").map(String::as_str),
-            Some("bioconductor-deseq2")
-        );
         assert_eq!(config.ignore_description_dependencies, Some(true));
     }
 
     #[test]
-    fn test_merge_with_target_config_mapping() {
+    fn test_merge_with_target_config_ignore_description_dependencies() {
         let base_config = RBackendConfig {
-            mapping: IndexMap::from([
-                ("Biobase".to_string(), "bioconductor-biobase".to_string()),
-                ("shared".to_string(), "base-val".to_string()),
-            ]),
             ignore_description_dependencies: Some(false),
             ..Default::default()
         };
-
         let target_config = RBackendConfig {
-            mapping: IndexMap::from([
-                ("shared".to_string(), "target-val".to_string()),
-                ("DESeq2".to_string(), "bioconductor-deseq2".to_string()),
-            ]),
             ignore_description_dependencies: Some(true),
             ..Default::default()
         };
-
         let merged = base_config
             .merge_with_target_config(&target_config)
             .unwrap();
-
-        assert_eq!(merged.mapping.len(), 3);
-        assert_eq!(
-            merged.mapping.get("Biobase").map(String::as_str),
-            Some("bioconductor-biobase")
-        );
-        assert_eq!(
-            merged.mapping.get("shared").map(String::as_str),
-            Some("target-val")
-        );
-        assert_eq!(
-            merged.mapping.get("DESeq2").map(String::as_str),
-            Some("bioconductor-deseq2")
-        );
         assert_eq!(merged.ignore_description_dependencies, Some(true));
+
+        // The base's value when the target doesn't set it
+        let merged = base_config
+            .merge_with_target_config(&RBackendConfig::default())
+            .unwrap();
+        assert_eq!(merged.ignore_description_dependencies, Some(false));
     }
 }

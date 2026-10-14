@@ -4,7 +4,6 @@ use std::{
     sync::LazyLock,
 };
 
-use indexmap::IndexMap;
 use miette::Diagnostic;
 use once_cell::unsync::OnceCell;
 use pixi_build_backend::generated_recipe::MetadataProvider;
@@ -192,38 +191,16 @@ pub fn parse_r_dependencies(deps_str: &str) -> Vec<RDependency> {
     dependencies
 }
 
-/// Convert R package name to conda package name without custom mapping.
+/// Convert R package name to conda package name
 ///
 /// Converts R package names according to conda packaging conventions:
 /// - "R" -> "r-base"
 /// - Bioconductor packages -> `bioconductor-<lowercase>` (e.g. "Biobase" -> "bioconductor-biobase")
 /// - CRAN / other R packages -> `r-<lowercase>` (e.g. "curl" -> "r-curl", "jsonlite" -> "r-jsonlite")
-#[cfg(test)]
 pub fn r_package_to_conda(name: &str) -> String {
-    r_package_to_conda_with_mapping(name, None)
-}
-
-/// Convert R package name to conda package name, respecting custom user mapping.
-///
-/// If a custom mapping is provided and contains the package name (case-insensitively),
-/// the mapped name is used.
-/// Otherwise, falls back to Bioconductor (`bioconductor-<pkg>`) or CRAN (`r-<pkg>`) convention.
-pub fn r_package_to_conda_with_mapping(
-    name: &str,
-    mapping: Option<&IndexMap<String, String>>,
-) -> String {
     // Special case: "R" refers to the R language itself, which is r-base
     if name == "R" {
         return "r-base".to_string();
-    }
-
-    // User-provided mapping takes highest precedence
-    if let Some(mapping) = mapping {
-        for (k, v) in mapping {
-            if k.eq_ignore_ascii_case(name) {
-                return v.clone();
-            }
-        }
     }
 
     let lower = name.to_lowercase();
@@ -283,7 +260,6 @@ struct DescriptionData {
 pub struct DescriptionMetadataProvider {
     manifest_root: PathBuf,
     description_data: OnceCell<DescriptionData>,
-    mapping: Option<IndexMap<String, String>>,
 }
 
 impl DescriptionMetadataProvider {
@@ -291,13 +267,7 @@ impl DescriptionMetadataProvider {
         Self {
             manifest_root: manifest_root.into(),
             description_data: OnceCell::default(),
-            mapping: None,
         }
-    }
-
-    pub fn with_mapping(mut self, mapping: IndexMap<String, String>) -> Self {
-        self.mapping = Some(mapping);
-        self
     }
 
     /// Parse DESCRIPTION file in DCF (Debian Control File) format
@@ -462,15 +432,12 @@ impl MetadataProvider for DescriptionMetadataProvider {
     fn name(&mut self) -> Result<Option<String>, Self::Error> {
         let data = self.ensure_data()?;
         Ok(data.package.as_deref().map(|pkg| {
-            let name = r_package_to_conda_with_mapping(pkg, self.mapping.as_ref());
             // Every Bioconductor package declares `biocViews`, so this also
-            // names packages that aren't in the built-in list yet, unless
-            // the mapping names the package otherwise
-            let lower = pkg.to_lowercase();
-            if data.bioc_views.is_some() && name == format!("r-{lower}") {
-                format!("bioconductor-{lower}")
+            // names packages that aren't in the built-in list yet
+            if data.bioc_views.is_some() {
+                format!("bioconductor-{}", pkg.to_lowercase())
             } else {
-                name
+                r_package_to_conda(pkg)
             }
         }))
     }
@@ -704,42 +671,6 @@ Version: 1.1-3
         let temp_dir = create_test_description("Package: BrandNewBioc\nVersion: 0.99.0\n");
         let mut provider = DescriptionMetadataProvider::new(temp_dir.path());
         assert_eq!(provider.name().unwrap(), Some("r-brandnewbioc".to_string()));
-
-        // The mapping wins
-        let temp_dir = create_test_description(
-            "Package: BrandNewBioc\nVersion: 0.99.0\nbiocViews: Software\n",
-        );
-        let mut mapping = IndexMap::new();
-        mapping.insert("BrandNewBioc".to_string(), "custom-name".to_string());
-        let mut provider = DescriptionMetadataProvider::new(temp_dir.path()).with_mapping(mapping);
-        assert_eq!(provider.name().unwrap(), Some("custom-name".to_string()));
-    }
-
-    #[test]
-    fn test_custom_mapping_in_metadata_provider() {
-        let content = r#"Package: CustomPkg
-Version: 1.0.0
-"#;
-        let temp_dir = create_test_description(content);
-        let mut mapping = IndexMap::new();
-        mapping.insert("CustomPkg".to_string(), "custom-conda-name".to_string());
-        let mut provider =
-            DescriptionMetadataProvider::new(temp_dir.path()).with_mapping(mapping.clone());
-
-        assert_eq!(
-            provider.name().unwrap(),
-            Some("custom-conda-name".to_string())
-        );
-
-        assert_eq!(
-            r_package_to_conda_with_mapping("CustomPkg", Some(&mapping)),
-            "custom-conda-name"
-        );
-        // Case-insensitive mapping lookup
-        assert_eq!(
-            r_package_to_conda_with_mapping("custompkg", Some(&mapping)),
-            "custom-conda-name"
-        );
     }
 
     #[test]
