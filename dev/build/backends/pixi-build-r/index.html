@@ -2285,6 +2285,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#cmake-and-pkg-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        CMake and pkg-config
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -9043,6 +9054,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#cmake-and-pkg-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        CMake and pkg-config
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -9290,6 +9312,8 @@ R's recommended packages (such as <code>MASS</code>, <code>Matrix</code> and <co
 <h3 id="rust">Rust<a class="headerlink" href="#rust" title="Permanent link">#</a></h3>
 <p>Packages with Rust code declare it in <code>SystemRequirements</code>, as CRAN asks: <code>Cargo (Rust's package manager), rustc</code>.
 When <code>SystemRequirements</code> mentions <code>cargo</code> or <code>rustc</code>, the backend adds <code>rust</code> to the build requirements, and on Windows also <code>rust-std-x86_64-pc-windows-gnu</code>, since R packages build their Rust code for the GNU target there.</p>
+<h3 id="cmake-and-pkg-config">CMake and pkg-config<a class="headerlink" href="#cmake-and-pkg-config" title="Permanent link">#</a></h3>
+<p>When <code>SystemRequirements</code> names <code>cmake</code>, the backend adds <code>cmake</code> to the build requirements, and when it names <code>pkg-config</code>, <code>pkg-config</code>, so the build doesn't depend on whichever of them is on the machine's <code>PATH</code>.</p>
 <h2 id="build-process">Build Process<a class="headerlink" href="#build-process" title="Permanent link">#</a></h2>
 <p>The R backend follows this build process:</p>
 <ol>
