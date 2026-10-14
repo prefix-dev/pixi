@@ -285,7 +285,7 @@ class ExcludeNewerTable(StrictBaseModel):
         examples=["2023-11-03T03:33:12Z", "2026-04-01", "7d"],
         description="Exclude any package newer than this timestamp or duration. Can be an absolute timestamp or a relative duration accepted by humantime (for example '0d', '1 week', '2w', '1 month', '1M', '72h', '72 hours', or '1h30m').",
     )
-    exemptions: dict[CondaPackageName, NonEmptyStr | BinaryMatchspecTable] | None = Field(
+    exemptions: dict[CondaPackageName, NonEmptyStr | ExcludeNewerExemptionTable] | None = Field(
         None,
         examples=[{"polars": "1.43.1", "py-rattler": "*"}],
         description='Package releases that are never excluded, regardless of their upload time. The value is a version or a match spec table, so `polars = "1.43.1"` exempts that release only and `py-rattler = "*"` exempts every release.',
@@ -433,8 +433,8 @@ class Workspace(StrictBaseModel):
 ########################
 
 
-class BinaryMatchspecTable(StrictBaseModel):
-    """A precise description of a `conda` binary package version. Excludes source-location fields."""
+class MatchspecSelectorTable(StrictBaseModel):
+    """The match spec fields that select `conda` binary package records."""
 
     version: NonEmptyStr | None = Field(
         None,
@@ -454,10 +454,6 @@ class BinaryMatchspecTable(StrictBaseModel):
     subdir: NonEmptyStr | None = Field(
         None, description="The subdir of the package, also known as platform"
     )
-    extras: list[NonEmptyStr] | None = Field(
-        None,
-        description="Optional extra dependencies to select for the package",
-    )
     flags: list[NonEmptyStr] | None = Field(
         None,
         description="Plain string flags used to select package variants",
@@ -466,13 +462,31 @@ class BinaryMatchspecTable(StrictBaseModel):
     license_family: NonEmptyStr | None = Field(
         None, description="The license family of the package"
     )
+    track_features: list[NonEmptyStr] | None = Field(
+        None, description="The track features of the package"
+    )
+
+
+class BinaryMatchspecTable(MatchspecSelectorTable):
+    """A precise description of a `conda` binary package version. Excludes source-location fields."""
+
+    extras: list[NonEmptyStr] | None = Field(
+        None,
+        description="Optional extra dependencies to select for the package",
+    )
     when: When | None = Field(
         None,
         description="The condition under which this match spec applies. Use a package string, `{ all = [...] }`, `{ any = [...] }`, or `{ package = ..., version = ..., build = ... }`.",
     )
-    track_features: list[NonEmptyStr] | None = Field(
-        None, description="The track features of the package"
-    )
+
+
+class ExcludeNewerExemptionTable(MatchspecSelectorTable):
+    """The match spec fields that select the releases exempt from `exclude-newer`."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(json_schema_extra={"minProperties": 1})
+
+    md5: Md5Sum | None = Field(None, description="The md5 hash of the package")
+    sha256: Sha256Sum | None = Field(None, description="The sha256 hash of the package")
 
 
 class MatchspecTable(BinaryMatchspecTable):
