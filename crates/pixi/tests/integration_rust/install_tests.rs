@@ -2434,7 +2434,7 @@ amdgpu-arch = "*"
             .map(|record| record.build.clone())
             .unwrap_or_else(|| panic!("amdgpu-arch should be locked for {platform_name}"));
         assert!(
-            build.starts_with(expected_build),
+            build.as_str().starts_with(expected_build),
             "{platform_name} resolved amdgpu-arch build {build}, expected {expected_build}"
         );
     }

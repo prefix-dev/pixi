@@ -105,7 +105,10 @@ pub fn resolve_lock_platform_for<'lock>(
             records
         }
     };
-    let declared: Vec<String> = records.iter().map(|gvp| gvp.to_string()).collect();
+    let declared: Vec<String> = records
+        .iter()
+        .map(pixi_manifest::platform::format_virtual_package)
+        .collect();
     let locked: &[String] = candidate.virtual_packages();
     let matches = locked.is_empty() || declared.iter().all(|d| locked.iter().any(|l| l == d));
     matches.then_some(candidate)
@@ -1546,7 +1549,7 @@ impl MatchesMatchspec for GenericVirtualPackage {
         }
 
         if let Some(build) = &spec.build
-            && !build.matches(&self.build_string)
+            && !build.matches(self.build_string.as_str())
         {
             return false;
         }

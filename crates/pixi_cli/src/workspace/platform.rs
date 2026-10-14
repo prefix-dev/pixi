@@ -19,7 +19,7 @@ use pixi_manifest::{
     },
 };
 use rattler_conda_types::{
-    GenericVirtualPackage, PackageName, Subdir, Version,
+    GenericVirtualPackage, PackageName, Subdir, Version, package::BuildString,
     virtual_package_detector::VirtualPackageName,
 };
 
@@ -143,7 +143,7 @@ impl VirtualPackageArgs {
                 GenericVirtualPackage {
                     name: virtual_package_name("__amdgpu"),
                     version: zero_version(),
-                    build_string: String::new(),
+                    build_string: BuildString::new_unchecked(""),
                 },
             )?;
         }
@@ -156,7 +156,7 @@ impl VirtualPackageArgs {
                 GenericVirtualPackage {
                     name: virtual_package_name("__amdgpu_arch"),
                     version,
-                    build_string: String::new(),
+                    build_string: BuildString::new_unchecked(""),
                 },
             )?;
         }
@@ -172,7 +172,7 @@ impl VirtualPackageArgs {
                 GenericVirtualPackage {
                     name: virtual_package_name("__archspec"),
                     version: zero_version(),
-                    build_string: value,
+                    build_string: BuildString::new_unchecked(value),
                 },
             )?;
         }
@@ -1414,7 +1414,10 @@ mod tests {
             ..Default::default()
         };
         let specs = args.into_specs(Subdir::Linux64, &[]).unwrap();
-        let rendered: Vec<String> = specs.iter().map(ToString::to_string).collect();
+        let rendered: Vec<String> = specs
+            .iter()
+            .map(pixi_manifest::platform::format_virtual_package)
+            .collect();
         assert_eq!(rendered, ["__cuda=12.0=h1", "__glibc=2.28"]);
 
         let args = VirtualPackageArgs {

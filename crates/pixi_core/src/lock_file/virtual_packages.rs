@@ -42,7 +42,7 @@ impl VirtualPackageNotFoundError {
             required_package,
             system_virtual_packages
                 .iter()
-                .map(|vpkg| vpkg.to_string())
+                .map(pixi_manifest::platform::format_virtual_package)
                 .join(", "),
         );
         VirtualPackageNotFoundError { msg, help }
@@ -364,7 +364,9 @@ mod test {
     use pixi_manifest::platform::host::platform_from_detected;
     use pixi_test_utils::format_diagnostic;
     use rattler_conda_types::package::DistArchiveIdentifier;
-    use rattler_conda_types::{PackageName, PackageRecord, ParseStrictness, Subdir};
+    use rattler_conda_types::{
+        PackageName, PackageRecord, ParseStrictness, Subdir, package::BuildString,
+    };
     use rattler_lock::{CondaBinaryData, PlatformData, PlatformName, UrlOrPath};
     use rattler_virtual_packages::{Override, VirtualPackage, VirtualPackageOverrides};
     use std::path::Path;
@@ -526,7 +528,7 @@ packages:
             vec![GenericVirtualPackage {
                 name: rattler_conda_types::PackageName::try_from("__cuda").unwrap(),
                 version: rattler_conda_types::Version::from_str(v).unwrap(),
-                build_string: String::new(),
+                build_string: BuildString::new_unchecked(""),
             }]
         };
 
@@ -555,12 +557,12 @@ packages:
         let gpu = GenericVirtualPackage {
             name: PackageName::try_from("__amdgpu").unwrap(),
             version: Version::major(0),
-            build_string: String::new(),
+            build_string: BuildString::new_unchecked(""),
         };
         let arch = |version: &str| GenericVirtualPackage {
             name: PackageName::try_from("__amdgpu_arch").unwrap(),
             version: Version::from_str(version).unwrap(),
-            build_string: String::new(),
+            build_string: BuildString::new_unchecked(""),
         };
 
         assert_eq!(unmet_requirements(&specs, &[]), specs);
@@ -587,12 +589,12 @@ packages:
             GenericVirtualPackage {
                 name: PackageName::try_from("__amdgpu").unwrap(),
                 version: Version::major(0),
-                build_string: String::new(),
+                build_string: BuildString::new_unchecked(""),
             },
             GenericVirtualPackage {
                 name: PackageName::try_from("__amdgpu_arch").unwrap(),
                 version: Version::from_str("9.4.2").unwrap(),
-                build_string: String::new(),
+                build_string: BuildString::new_unchecked(""),
             },
         ];
         for raw in ["__amdgpu", "__amdgpu_arch", "__amdgpu_arch >=9.0.10,<10"] {
@@ -612,7 +614,7 @@ packages:
             vec![GenericVirtualPackage {
                 name: rattler_conda_types::PackageName::try_from("__archspec").unwrap(),
                 version: rattler_conda_types::Version::major(1),
-                build_string: microarchitecture.to_string(),
+                build_string: BuildString::new_unchecked(microarchitecture),
             }]
         };
 
@@ -634,7 +636,7 @@ packages:
         let cuda = vec![GenericVirtualPackage {
             name: rattler_conda_types::PackageName::try_from("__cuda").unwrap(),
             version: rattler_conda_types::Version::major(12),
-            build_string: "real".to_string(),
+            build_string: BuildString::new_unchecked("real"),
         }];
         assert_eq!(
             unmet_requirements(&[spec("__cuda 12 other")], &cuda).len(),
@@ -660,7 +662,7 @@ packages:
                 .map(|(version, build)| GenericVirtualPackage {
                     name: "__test_detector_capability".parse().unwrap(),
                     version: version.parse().unwrap(),
-                    build_string: build.to_string(),
+                    build_string: BuildString::new_unchecked(build),
                 })
                 .into_iter()
                 .collect();
@@ -705,7 +707,7 @@ packages:
                     .map(|(version, build)| GenericVirtualPackage {
                         name: name.parse().unwrap(),
                         version: version.parse().unwrap(),
-                        build_string: build.to_string(),
+                        build_string: BuildString::new_unchecked(build),
                     })
                     .into_iter()
                     .collect();
@@ -834,7 +836,7 @@ packages:
         let mut record = PackageRecord::new(
             PackageName::new_unchecked("needs-libc"),
             Version::from_str("1.0").unwrap(),
-            "0".to_string(),
+            "0".parse().unwrap(),
         );
         record.subdir = "linux-64".to_string();
         record.depends = vec![depends.to_string()];
@@ -910,7 +912,7 @@ packages:
                 .map(|version| GenericVirtualPackage {
                     name: "__glibc".parse().unwrap(),
                     version: version.parse().unwrap(),
-                    build_string: "0".to_string(),
+                    build_string: BuildString::new_unchecked("0"),
                 })
                 .into_iter()
                 .collect();
@@ -1046,17 +1048,17 @@ packages:
         let libc = GenericVirtualPackage {
             name: "__glibc".parse().unwrap(),
             version: "2.17".parse().unwrap(),
-            build_string: "".to_string(),
+            build_string: BuildString::new_unchecked(""),
         };
         let cuda = GenericVirtualPackage {
             name: "__cuda".parse().unwrap(),
             version: "11.8".parse().unwrap(),
-            build_string: "".to_string(),
+            build_string: BuildString::new_unchecked(""),
         };
         let osx = GenericVirtualPackage {
             name: "__osx".parse().unwrap(),
             version: "10.14".parse().unwrap(),
-            build_string: "".to_string(),
+            build_string: BuildString::new_unchecked(""),
         };
         let system_virtual_packages = vec![libc, cuda, osx];
 
