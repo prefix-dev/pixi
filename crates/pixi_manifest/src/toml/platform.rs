@@ -4,7 +4,9 @@ use indexmap::IndexSet;
 use itertools::Itertools;
 
 use pixi_toml::TomlEnum;
-use rattler_conda_types::{GenericVirtualPackage, PackageName, Subdir, Version};
+use rattler_conda_types::{
+    GenericVirtualPackage, PackageName, Subdir, Version, package::BuildString,
+};
 use serde::{Serialize, ser::SerializeMap};
 use toml_span::{
     DeserError, Deserialize, Error, ErrorKind, Span, Spanned, Value,
@@ -430,7 +432,7 @@ fn build_friendly_virtual_package(
             Ok(GenericVirtualPackage {
                 name: package_name,
                 version,
-                build_string: String::new(),
+                build_string: BuildString::new_unchecked(""),
             })
         }
         VirtualPackageValueKind::Microarch => {
@@ -451,7 +453,7 @@ fn build_friendly_virtual_package(
             Ok(GenericVirtualPackage {
                 name: package_name,
                 version: Version::major(0),
-                build_string: raw.value.clone(),
+                build_string: BuildString::new_unchecked(raw.value.clone()),
             })
         }
         VirtualPackageValueKind::Presence => {
@@ -465,7 +467,7 @@ fn build_friendly_virtual_package(
             Ok(GenericVirtualPackage {
                 name: package_name,
                 version: Version::major(0),
-                build_string: String::new(),
+                build_string: BuildString::new_unchecked(""),
             })
         }
     }
@@ -561,7 +563,7 @@ fn take_amdgpu_entry<'de>(
     let presence = GenericVirtualPackage {
         name: PackageName::try_from("__amdgpu").expect("static virtual-package name is valid"),
         version: Version::major(0),
-        build_string: String::new(),
+        build_string: BuildString::new_unchecked(""),
     };
     match value.take() {
         ValueInner::Boolean(true) => Ok(vec![presence]),
@@ -588,7 +590,7 @@ fn take_amdgpu_entry<'de>(
                     name: PackageName::try_from("__amdgpu_arch")
                         .expect("static virtual-package name is valid"),
                     version,
-                    build_string: String::new(),
+                    build_string: BuildString::new_unchecked(""),
                 },
             ])
         }
@@ -632,8 +634,8 @@ fn parse_raw_virtual_package(
         span: value_span,
         line_info: None,
     })?;
-    let build_string = parts.next().unwrap_or("").to_string();
-    crate::platform::validate_virtual_package(&name, version_str, &build_string).map_err(
+    let build_string = BuildString::new_unchecked(parts.next().unwrap_or(""));
+    crate::platform::validate_virtual_package(&name, version_str, build_string.as_str()).map_err(
         |message| Error {
             kind: ErrorKind::Custom(message.into()),
             span: value_span,
@@ -927,7 +929,7 @@ fn classify_virtual_packages(
             VirtualPackageValueKind::Version | VirtualPackageValueKind::Presence => {
                 package.version.to_string()
             }
-            VirtualPackageValueKind::Microarch => package.build_string.clone(),
+            VirtualPackageValueKind::Microarch => package.build_string.to_string(),
         };
         consumed.insert(entry.conda_name);
         friendly.push((entry.key, value));
@@ -1613,7 +1615,7 @@ mod test {
         GenericVirtualPackage {
             name: PackageName::try_from(name).unwrap(),
             version: Version::from_str(version).unwrap(),
-            build_string: String::new(),
+            build_string: BuildString::new_unchecked(""),
         }
     }
 
@@ -1621,7 +1623,7 @@ mod test {
         GenericVirtualPackage {
             name: PackageName::try_from("__archspec").unwrap(),
             version: Version::major(0),
-            build_string: microarch.to_string(),
+            build_string: BuildString::new_unchecked(microarch),
         }
     }
 
@@ -1690,7 +1692,7 @@ mod test {
     #[test]
     fn test_serialize_falls_back_to_raw_for_odd_shapes() {
         let mut odd = version_virtual_package("__cuda", "12.0");
-        odd.build_string = "weird".to_string();
+        odd.build_string = BuildString::new_unchecked("weird");
         let platform =
             platform_with_packages("linux-64-cuda-12-0-weird", Subdir::Linux64, vec![odd]);
         let json = serde_json::to_value(TomlPixiPlatform(platform)).unwrap();

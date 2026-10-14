@@ -2277,6 +2277,7 @@ mod tests {
         MatchSpec, NamedChannelOrUrl, PackageName, ParseStrictness,
         ParseStrictness::{Lenient, Strict},
         Subdir, Version, VersionSpec,
+        package::BuildString,
     };
     use rstest::rstest;
     use toml_edit::DocumentMut;
@@ -3704,7 +3705,7 @@ platforms = ["linux-64", "osx-64"]
             rattler_conda_types::GenericVirtualPackage {
                 name: PackageName::try_from(name).unwrap(),
                 version: Version::from_str(version).unwrap(),
-                build_string: build.to_string(),
+                build_string: BuildString::new_unchecked(build),
             }
         }
         // `"0"` build strings mirror what rattler's detection emits for
@@ -3750,7 +3751,7 @@ platforms = ["linux-64", "osx-64"]
             let cuda = rattler_conda_types::GenericVirtualPackage {
                 name: PackageName::try_from("__cuda").unwrap(),
                 version: Version::from_str("12").unwrap(),
-                build_string: String::new(),
+                build_string: BuildString::new_unchecked(""),
             };
             PixiPlatform::new_with_defaults(
                 PixiPlatformName::try_from(name).unwrap(),
@@ -6525,7 +6526,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
             vec![rattler_conda_types::GenericVirtualPackage {
                 name: rattler_conda_types::PackageName::try_from("__cuda").unwrap(),
                 version: Version::from_str("12.4").unwrap(),
-                build_string: String::new(),
+                build_string: BuildString::new_unchecked(""),
             }],
         )
         .expect("rich platform with name != subdir");
@@ -6638,7 +6639,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
         rattler_conda_types::GenericVirtualPackage {
             name: rattler_conda_types::PackageName::try_from(name).unwrap(),
             version: Version::from_str(version).unwrap(),
-            build_string: String::new(),
+            build_string: BuildString::new_unchecked(""),
         }
     }
 
@@ -6798,7 +6799,7 @@ platforms = [
                         rattler_conda_types::GenericVirtualPackage {
                             name: rattler_conda_types::PackageName::try_from("__archspec").unwrap(),
                             version: Version::major(0),
-                            build_string: "x86_64_v3".to_string(),
+                            build_string: BuildString::new_unchecked("x86_64_v3"),
                         },
                     ],
                     ..Default::default()

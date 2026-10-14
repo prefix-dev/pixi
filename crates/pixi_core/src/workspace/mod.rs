@@ -1535,7 +1535,9 @@ mod tests {
     use pixi_config::{CacheConfig, Config, DetachedEnvironments};
     use pixi_manifest::{FeatureName, FeaturesExt, HasWorkspaceManifest, script::ScriptManifest};
     use pypi_mapping::{MappingMode, ProjectDefinedChannelMapping, ProjectDefinedMappingLocation};
-    use rattler_conda_types::{Channel, GenericVirtualPackage, NamedChannelOrUrl, Subdir, Version};
+    use rattler_conda_types::{
+        Channel, GenericVirtualPackage, NamedChannelOrUrl, Subdir, Version, package::BuildString,
+    };
     use url::Url;
     use xxhash_rust::xxh3::xxh3_64;
 
@@ -1920,7 +1922,7 @@ packages: []
             vec![GenericVirtualPackage {
                 name: "__osx".parse().unwrap(),
                 version: Version::from_str("13.5").unwrap(),
-                build_string: "0".to_string(),
+                build_string: BuildString::new_unchecked("0"),
             }],
         )
         .unwrap();
@@ -1962,7 +1964,7 @@ packages: []
             vec![GenericVirtualPackage {
                 name: "__osx".parse().unwrap(),
                 version: Version::from_str("15.1.1").unwrap(),
-                build_string: "0".to_string(),
+                build_string: BuildString::new_unchecked("0"),
             }],
         )
         .unwrap();
@@ -1994,7 +1996,7 @@ packages: []
             vec![GenericVirtualPackage {
                 name: "__glibc".parse().unwrap(),
                 version: Version::from_str("2.28.1").unwrap(),
-                build_string: "0".to_string(),
+                build_string: BuildString::new_unchecked("0"),
             }],
         )
         .unwrap();

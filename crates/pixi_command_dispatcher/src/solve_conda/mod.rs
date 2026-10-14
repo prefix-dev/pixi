@@ -9,7 +9,7 @@ use pixi_spec::{BinarySpec, ResolvedExcludeNewer, SourceSpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     ChannelUrl, GenericVirtualPackage, MatchSpec, RepoDataRecord, Subdir, Version,
-    package::{ArchiveIdentifier, CondaArchiveType, DistArchiveIdentifier},
+    package::{ArchiveIdentifier, BuildString, CondaArchiveType, DistArchiveIdentifier},
 };
 use rattler_repodata_gateway::RepoData;
 use rattler_solve::{ChannelPriority, SolveStrategy, SolverImpl};
@@ -263,7 +263,7 @@ impl SolveCondaEnvironmentSpec {
                         ..rattler_conda_types::PackageRecord::new(
                             rattler_conda_types::PackageName::new_unchecked(prefixed_name.clone()),
                             Version::major(0),
-                            build_string.clone(),
+                            BuildString::new_unchecked(build_string.clone()),
                         )
                     },
                     url: url.clone(),
@@ -372,7 +372,7 @@ fn unique_url(source: &SourceRecord) -> Url {
     url.query_pairs_mut()
         .append_pair("name", source.package_record().name.as_source())
         .append_pair("version", &source.package_record().version.as_str())
-        .append_pair("build", &source.package_record().build)
+        .append_pair("build", source.package_record().build.as_str())
         .append_pair("subdir", &source.package_record().subdir);
 
     url

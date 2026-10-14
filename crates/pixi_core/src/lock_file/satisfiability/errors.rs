@@ -194,7 +194,7 @@ pub(super) fn verify_exclude_newer(
                             ArchiveIdentifier {
                                 name: record.name.as_normalized().to_string(),
                                 version: record.version.to_string(),
-                                build_string: record.build.clone(),
+                                build_string: record.build.to_string(),
                             },
                             CondaArchiveType::Conda,
                         ),

@@ -500,10 +500,8 @@ fn parse_specs(
                 {
                     // If the build contains a wildcard, keep it
                     nameless_match_spec.build = match nameless_match_spec.build {
-                        Some(build @ StringMatcher::Glob(_) | build @ StringMatcher::Regex(_)) => {
-                            Some(build)
-                        }
-                        _ => None,
+                        Some(StringMatcher::Exact(_)) | None => None,
+                        build => build,
                     };
                     nameless_match_spec.build_number = None;
                     nameless_match_spec.md5 = None;

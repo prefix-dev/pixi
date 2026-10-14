@@ -340,14 +340,14 @@ pub struct UnknownTask<'p> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rattler_conda_types::{PackageName, Version};
+    use rattler_conda_types::{PackageName, Version, package::BuildString};
     use std::str::FromStr;
 
     fn vp(name: &str, version: &str) -> GenericVirtualPackage {
         GenericVirtualPackage {
             name: PackageName::from_str(name).unwrap(),
             version: Version::from_str(version).unwrap(),
-            build_string: String::new(),
+            build_string: BuildString::new_unchecked(""),
         }
     }
 
