@@ -1,12 +1,13 @@
 use std::str::FromStr;
 
 use indexmap::IndexMap;
+use itertools::Itertools;
 use pixi_pypi_spec::{PypiPackageName, VersionOrStar};
 use pixi_spec::{BinarySpec, DetailedSpec, ExcludeNewer, SpecError, TomlSpec};
 use pixi_toml::TomlFromStr;
 use rattler_conda_types::PackageName;
 use toml_span::{
-    DeserError, Deserialize, ErrorKind, Value,
+    DeserError, Deserialize, ErrorKind, Span, Value,
     de_helpers::{TableHelper, expected},
     value::ValueInner,
 };
@@ -75,6 +76,33 @@ impl<'de> toml_span::Deserialize<'de> for TomlExcludeNewer {
     }
 }
 
+/// Records the span of every exemption name that was parsed so far and
+/// reports a [`ErrorKind::DuplicateKey`] when a name shows up twice. Package
+/// names are normalized, so this also catches keys that differ only in case,
+/// like `polars` and `Polars`, which would otherwise silently overwrite each
+/// other.
+fn check_duplicate_exemption<N: std::hash::Hash + Eq + Clone>(
+    name_spans: &mut IndexMap<N, Span>,
+    name: &N,
+    key: &toml_span::value::Key<'_>,
+    errors: &mut DeserError,
+) -> bool {
+    if let Some(first) = name_spans.get(name) {
+        errors.errors.push(toml_span::Error {
+            kind: ErrorKind::DuplicateKey {
+                key: key.name.to_string(),
+                first: *first,
+            },
+            span: key.span,
+            line_info: None,
+        });
+        false
+    } else {
+        name_spans.insert(name.clone(), key.span);
+        true
+    }
+}
+
 /// Parses the `exemptions` table of `[workspace.exclude-newer]`. Every entry
 /// is a package name mapped to a version string or a table with match spec
 /// fields, like a dependency.
@@ -88,9 +116,13 @@ fn parse_conda_exemptions(
 
     let mut errors = DeserError { errors: vec![] };
     let mut exemptions = IndexMap::new();
-    for (key, mut entry) in table {
+    let mut name_spans = IndexMap::new();
+    for (key, mut entry) in table.into_iter().sorted_by_key(|(k, _)| k.span.start) {
         let name = match PackageName::from_str(&key.name) {
-            Ok(name) => name,
+            Ok(name) if check_duplicate_exemption(&mut name_spans, &name, &key, &mut errors) => {
+                name
+            }
+            Ok(_) => continue,
             Err(err) => {
                 errors.errors.push(toml_span::Error {
                     kind: ErrorKind::Custom(err.to_string().into()),
@@ -275,9 +307,13 @@ fn parse_pypi_exemptions(
 
     let mut errors = DeserError { errors: vec![] };
     let mut exemptions = IndexMap::new();
-    for (key, mut entry) in table {
+    let mut name_spans = IndexMap::new();
+    for (key, mut entry) in table.into_iter().sorted_by_key(|(k, _)| k.span.start) {
         let name = match PypiPackageName::from_str(&key.name) {
-            Ok(name) => name,
+            Ok(name) if check_duplicate_exemption(&mut name_spans, &name, &key, &mut errors) => {
+                name
+            }
+            Ok(_) => continue,
             Err(err) => {
                 errors.errors.push(toml_span::Error {
                     kind: ErrorKind::Custom(err.to_string().into()),
@@ -372,13 +408,13 @@ exclude-newer = { cutoff = "2025-01-01", exemptions = { polars = "1.43.1", py-ra
             serde_json::to_string_pretty(&config.exemptions).unwrap(),
             @r#"
         {
+          "polars": "==1.43.1",
+          "py-rattler": "*",
           "numpy": {
             "version": "2.*",
             "build": "py313*",
             "channel": "conda-forge"
-          },
-          "polars": "==1.43.1",
-          "py-rattler": "*"
+          }
         }
         "#
         );
@@ -395,6 +431,34 @@ exclude-newer = { cutoff = "2025-01-01", exemptions = { polars = "1.43.1", py-ra
     fn test_exemption_empty_table() {
         let input = r#"exclude-newer = { cutoff = "7d", exemptions = { polars = {} } }"#;
         let err = parse_conda(input).unwrap_err();
+        assert_snapshot!(render_error(input, err));
+    }
+
+    #[test]
+    fn test_exemption_duplicate_name() {
+        let input = r#"
+[exclude-newer]
+cutoff = "7d"
+
+[exclude-newer.exemptions]
+polars = "1.0"
+Polars = "2.0"
+"#;
+        let err = parse_conda(input).unwrap_err();
+        assert_snapshot!(render_error(input, err));
+    }
+
+    #[test]
+    fn test_pypi_exemption_duplicate_name() {
+        let input = r#"
+[pypi-exclude-newer]
+cutoff = "7d"
+
+[pypi-exclude-newer.exemptions]
+scikit-learn = "*"
+scikit_learn = "*"
+"#;
+        let err = parse_pypi(input).unwrap_err();
         assert_snapshot!(render_error(input, err));
     }
 
