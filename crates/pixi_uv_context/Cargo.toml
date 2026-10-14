@@ -15,6 +15,7 @@ pixi_config = { workspace = true }
 pixi_utils = { workspace = true, default-features = false }
 pixi_uv_conversions = { workspace = true }
 reqwest = { workspace = true }
+thiserror = { workspace = true }
 tracing = { workspace = true }
 uv-cache = { workspace = true }
 uv-client = { workspace = true }
@@ -26,3 +27,6 @@ uv-pep508 = { workspace = true }
 uv-preview = { workspace = true }
 uv-types = { workspace = true }
 uv-workspace = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

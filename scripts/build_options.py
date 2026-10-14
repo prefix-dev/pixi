@@ -14,28 +14,14 @@ import argparse
 import os
 from pathlib import Path
 
-# Cargo picks extra rustc flags from exactly one source: if RUSTFLAGS is set it
-# wins outright and every `[target.*].rustflags` entry in .cargo/config.toml is
-# ignored. The release workflow needs RUSTFLAGS for `-D warnings`, so any flag
-# that config.toml would otherwise contribute has to be repeated here.
-BASE_RUSTFLAGS = ["-D", "warnings"]
-
-# Statically link the MSVC CRT. Without this the binary imports
-# vcruntime140.dll, which is not present in stock Windows Server container
-# images, and pixi.exe fails to start with STATUS_DLL_NOT_FOUND.
-# See https://github.com/prefix-dev/pixi/issues/6915.
-MSVC_RUSTFLAGS = ["-C", "target-feature=+crt-static"]
-
-
-def rustflags_for(target: str) -> list[str]:
-    flags = list(BASE_RUSTFLAGS)
-    if target.endswith("-pc-windows-msvc"):
-        flags += MSVC_RUSTFLAGS
-    return flags
-
 
 def build_env(target: str) -> dict[str, str]:
-    env: dict[str, str] = {"RUSTFLAGS": " ".join(rustflags_for(target))}
+    env: dict[str, str] = {}
+    # Explicit RUSTFLAGS override target rustflags in .cargo/config.toml.
+    # Keep the static MSVC CRT so Windows binaries do not need vcruntime140.dll.
+    # See https://github.com/prefix-dev/pixi/issues/6915.
+    if target.endswith("-pc-windows-msvc"):
+        env["RUSTFLAGS"] = "-C target-feature=+crt-static"
     # aarch64 Linux runners may use 64 KiB pages; jemalloc must be told the
     # page size at compile time so the binary runs on those hosts.
     if target.startswith("aarch64-") and "linux" in target:

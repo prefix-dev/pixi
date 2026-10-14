@@ -32,8 +32,8 @@ use pixi_command_dispatcher::{
 use pixi_consts::consts;
 use pixi_glob::GlobHashCache;
 use pixi_install_pypi::{
-    LazyEnvironmentVariables, PyPIBuildConfig, PyPIContextConfig, PyPIEnvironmentUpdater,
-    PyPIUpdateConfig, derive_link_mode,
+    LazyEnvVarsError, LazyEnvironmentVariables, PyPIBuildConfig, PyPIContextConfig,
+    PyPIEnvironmentUpdater, PyPIUpdateConfig, derive_link_mode,
 };
 use pixi_manifest::{
     ChannelPriority, EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform,
@@ -1242,6 +1242,7 @@ impl<'p> LockFileDerivedData<'p> {
                             self.workspace.config(),
                             self.workspace.client()?.clone(),
                         )
+                        .map_err(miette::Report::from)
                     })?
                     .clone()
                     .set_cache_refresh(uv_reinstall, uv_packages);
@@ -1457,7 +1458,7 @@ struct LazyPixiEnvironmentVars<'p> {
 impl LazyEnvironmentVariables for LazyPixiEnvironmentVars<'_> {
     fn resolve(
         &self,
-    ) -> Pin<Box<dyn Future<Output = miette::Result<HashMap<String, String>>> + '_>> {
+    ) -> Pin<Box<dyn Future<Output = Result<HashMap<String, String>, LazyEnvVarsError>> + '_>> {
         let environment = self.environment.clone();
         Box::pin(async move {
             let workspace = environment.workspace();
@@ -2477,6 +2478,7 @@ impl<'p> UpdateContext<'p> {
                 .uv_context
                 .get_or_try_init(|| {
                     UvResolutionContext::from_config(project.config(), project.client()?.clone())
+                        .map_err(miette::Report::from)
                 })?
                 .clone();
 

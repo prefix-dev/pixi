@@ -1,6 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
-    path::Path,
+    path::{Path, PathBuf},
     pin::Pin,
     sync::Arc,
 };
@@ -8,7 +8,7 @@ use std::{
 use conda_pypi_clobber::PypiCondaClobberRegistry;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
-use miette::{IntoDiagnostic, WrapErr};
+use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pixi_consts::consts;
 use pixi_manifest::{
@@ -20,22 +20,26 @@ use pixi_progress::await_in_progress;
 use pixi_python_status::PythonStatus;
 use pixi_record::PixiRecord;
 use pixi_reporters::{UvReporter, UvReporterOptions};
-use pixi_utils::prefix::Prefix;
-use pixi_uv_context::UvResolutionContext;
+use pixi_utils::prefix::{Prefix, PrefixError};
+use pixi_uv_context::{RegistryClientBuildError, UvResolutionContext};
 use pixi_uv_conversions::{
-    BuildIsolation, configure_insecure_hosts_for_tls_bypass, locked_indexes_to_index_locations,
+    BuildIsolation, ConversionError, ConvertFlatIndexLocationError,
+    configure_insecure_hosts_for_tls_bypass, locked_indexes_to_index_locations,
     pypi_cache_config_settings, pypi_cache_config_settings_with_macos_deployment_target,
     pypi_options_to_build_options, to_exclude_newer, to_index_strategy,
 };
-use plan::{InstallPlanner, InstallReason, NeedReinstall, PyPIInstallationPlan};
+use plan::{
+    InstallPlanner, InstallPlannerError, InstallReason, NeedReinstall, PyPIInstallationPlan,
+};
 use pypi_modifiers::{
     Tags,
+    pypi_tags::PyPITagError,
     pypi_tags::{get_pypi_tags, is_python_record, macos_deployment_target},
 };
 use rattler_lock::{PypiDistributionData, PypiIndexes, PypiPackageData, UrlOrPath};
 use rayon::prelude::*;
 use utils::elapsed;
-use uv_client::RegistryClient;
+use uv_client::{FlatIndexError, RegistryClient};
 use uv_configuration::{BuildOptions, Constraints, IndexStrategy};
 use uv_dispatch::BuildDispatch;
 use uv_distribution::{BuiltWheelIndex, DistributionDatabase, RegistryWheelIndex};
@@ -43,14 +47,18 @@ use uv_distribution_types::{
     CachedDist, ConfigSettings, DependencyMetadata, Dist, ExtraBuildRequires, ExtraBuildVariables,
     IndexLocations, InstalledDist, Name, PackageConfigSettings, Resolution,
 };
+use uv_fs::LockedFileError;
 use uv_install_wheel::LinkMode;
-use uv_installer::{Preparer, SitePackages, UninstallError};
-use uv_normalize::PackageName;
-use uv_python::{Interpreter, PythonEnvironment};
+use uv_installer::{PrepareError, Preparer, SitePackages, UninstallError};
+use uv_normalize::{InvalidNameError, PackageName};
+use uv_python::{Interpreter, InterpreterError, PythonEnvironment};
 use uv_resolver::{ExcludeNewer, FlatIndex};
 use uv_types::HashStrategy;
 
-use crate::plan::{CachedWheels, RequiredDists};
+use crate::{
+    conversions::ConvertToUvDistError,
+    plan::{CachedWheels, RequiredDists},
+};
 
 /// Extra data available from the manifest, not the lock file
 #[derive(Clone)]
@@ -164,11 +172,11 @@ pub enum ContinuePyPIPrefixUpdate<'a> {
 async fn uninstall_outdated_site_packages(
     layout: &uv_install_wheel::Layout,
     site_packages: &Path,
-) -> miette::Result<()> {
+) -> std::io::Result<()> {
     let mut dist_dirs = Vec::new();
-    for entry in fs_err::read_dir(site_packages).into_diagnostic()? {
-        let entry = entry.into_diagnostic()?;
-        if entry.file_type().into_diagnostic()?.is_dir() {
+    for entry in fs_err::read_dir(site_packages)? {
+        let entry = entry?;
+        if entry.file_type()?.is_dir() {
             dist_dirs.push(entry.path());
         }
     }
@@ -244,7 +252,7 @@ pub async fn on_python_interpreter_change<'a>(
     status: &'a PythonStatus,
     prefix: &Prefix,
     pypi_records: &[InstallablePypiRecord],
-) -> miette::Result<ContinuePyPIPrefixUpdate<'a>> {
+) -> std::io::Result<ContinuePyPIPrefixUpdate<'a>> {
     match status {
         PythonStatus::Removed { old } => {
             let site_packages_path = prefix.root().join(&old.site_packages_path);
@@ -277,6 +285,74 @@ pub async fn on_python_interpreter_change<'a>(
         }
         PythonStatus::DoesNotExist => Ok(ContinuePyPIPrefixUpdate::Skip),
     }
+}
+
+/// An error that can occur while updating the PyPI packages of an environment.
+#[derive(Debug, thiserror::Error, Diagnostic)]
+pub enum PyPIUpdateError {
+    #[error(transparent)]
+    UninstallOutdated(std::io::Error),
+
+    #[error(
+        "could not resolve pypi dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {}, or run:\n\n\tpixi add python",
+        consts::WORKSPACE_MANIFEST
+    )]
+    NoPythonInterpreter,
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Tags(#[from] PyPITagError),
+
+    #[error(transparent)]
+    IndexLocations(#[from] ConvertFlatIndexLocationError),
+
+    #[error(transparent)]
+    BuildOptions(#[from] InvalidNameError),
+
+    #[error(transparent)]
+    Interpreter(#[from] InterpreterError),
+
+    #[error("error locking installation directory")]
+    LockInstallationDirectory(#[source] LockedFileError),
+
+    #[error("Failed to create required distributions")]
+    RequiredDistributions(#[source] ConvertToUvDistError),
+
+    #[error("error while determining PyPI installation plan")]
+    InstallationPlan(#[source] Box<InstallPlannerError>),
+
+    #[error(transparent)]
+    RegistryClient(#[from] RegistryClientBuildError),
+
+    #[error(transparent)]
+    FlatIndex(#[from] FlatIndexError),
+
+    #[error(transparent)]
+    BuildIsolation(#[from] ConversionError),
+
+    #[error("while removing duplicate metadata")]
+    RemoveDuplicateMetadata(#[source] std::io::Error),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    EnvironmentVariables(LazyEnvVarsError),
+
+    #[error("Failed to prepare distributions")]
+    PrepareDistributions(#[source] Box<PrepareError>),
+
+    #[error(transparent)]
+    RemoveDistribution(std::io::Error),
+
+    #[error(transparent)]
+    Uninstall(UninstallError),
+
+    #[error("failed to determine the currently installed packages for {}", .0.display())]
+    InstalledPackages(
+        PathBuf,
+        #[source]
+        #[diagnostic_source]
+        PrefixError,
+    ),
 }
 
 /// Configuration for PyPI environment updates, grouping basic environment
@@ -345,7 +421,10 @@ pub trait LazyEnvironmentVariables {
 }
 
 type LazyEnvVarsFuture<'t> =
-    Pin<Box<dyn Future<Output = miette::Result<HashMap<String, String>>> + 't>>;
+    Pin<Box<dyn Future<Output = Result<HashMap<String, String>, LazyEnvVarsError>> + 't>>;
+
+/// The error a [`LazyEnvironmentVariables`] implementation returns.
+pub type LazyEnvVarsError = Box<dyn Diagnostic + Send + Sync + 'static>;
 
 /// Minimal config needed for installation planning.
 /// Avoids expensive HTTP client and flat index network I/O
@@ -438,13 +517,14 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         python_status: &PythonStatus,
         pixi_records: &[PixiRecord],
         pypi_records: &[InstallablePypiRecord],
-    ) -> miette::Result<()> {
+    ) -> Result<(), PyPIUpdateError> {
         // Initialize UV flags from environment variables and pypi-options before any operations
         initialize_uv_flags(self.build_config.skip_wheel_filename_check);
 
         let python_info =
             match on_python_interpreter_change(python_status, self.config.prefix, pypi_records)
-                .await?
+                .await
+                .map_err(PyPIUpdateError::UninstallOutdated)?
             {
                 ContinuePyPIPrefixUpdate::Continue(info) => info,
                 ContinuePyPIPrefixUpdate::Skip => return Ok(()),
@@ -473,7 +553,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         pixi_records: &[PixiRecord],
         pypi_records: &[InstallablePypiRecord],
         python_info: &rattler::install::PythonInfo,
-    ) -> miette::Result<()> {
+    ) -> Result<(), PyPIUpdateError> {
         // Cheap planning setup (no network I/O)
         let planner_config = self
             .setup_planner_config(pixi_records, &python_info.path)
@@ -484,15 +564,13 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             .venv
             .lock()
             .await
-            .into_diagnostic()
-            .with_context(|| "error locking installation directory")?;
+            .map_err(PyPIUpdateError::LockInstallationDirectory)?;
 
         // Convert the locked records into uv distributions once.
         // Both the install planner and the hash verification policy derive from them.
         let required_dists =
             RequiredDists::from_packages(pypi_records.iter(), self.config.lock_file_dir)
-                .into_diagnostic()
-                .context("Failed to create required distributions")?;
+                .map_err(PyPIUpdateError::RequiredDistributions)?;
         let hash_strategy =
             LockedDistHashes::from_required_dists(&required_dists).into_verify_strategy();
 
@@ -522,12 +600,12 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         &self,
         pixi_records: &[PixiRecord],
         python_interpreter_path: &Path,
-    ) -> miette::Result<UvInstallerPlannerConfig> {
+    ) -> Result<UvInstallerPlannerConfig, PyPIUpdateError> {
         let python_record = pixi_records
             .iter()
             .find(|r| is_python_record(r))
             .cloned()
-            .ok_or_else(|| miette::miette!("could not resolve pypi dependencies because no python interpreter is added to the dependencies of the project.\nMake sure to add a python interpreter to the [dependencies] section of the {manifest}, or run:\n\n\tpixi add python", manifest=consts::WORKSPACE_MANIFEST))?;
+            .ok_or(PyPIUpdateError::NoPythonInterpreter)?;
 
         let tags = get_pypi_tags(self.config.platform, python_record.package_record())?;
 
@@ -535,12 +613,10 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             .context_config
             .pypi_indexes
             .map(|indexes| locked_indexes_to_index_locations(indexes, self.config.lock_file_dir))
-            .unwrap_or_else(|| Ok(IndexLocations::default()))
-            .into_diagnostic()?;
+            .unwrap_or_else(|| Ok(IndexLocations::default()))?;
 
         let build_options =
-            pypi_options_to_build_options(self.build_config.no_build, self.build_config.no_binary)
-                .into_diagnostic()?;
+            pypi_options_to_build_options(self.build_config.no_build, self.build_config.no_binary)?;
 
         // The backend gets clean settings; the conda-environment fingerprint is
         // applied only to the build cache key via `CacheScopedBuildContext`, so
@@ -557,8 +633,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         // Setup the interpreter from the conda prefix
         let python_location = self.config.prefix.root().join(python_interpreter_path);
         let interpreter =
-            Interpreter::query(&python_location, &self.context_config.uv_context.cache)
-                .into_diagnostic()?;
+            Interpreter::query(&python_location, &self.context_config.uv_context.cache)?;
 
         tracing::debug!(
             "using python interpreter: {} from {}",
@@ -584,7 +659,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         &self,
         planner_config: UvInstallerPlannerConfig,
         hash_strategy: HashStrategy,
-    ) -> miette::Result<UvInstallerConfig> {
+    ) -> Result<UvInstallerConfig, PyPIUpdateError> {
         let index_strategy = to_index_strategy(self.build_config.index_strategy);
 
         let allow_insecure_hosts = configure_insecure_hosts_for_tls_bypass(
@@ -609,15 +684,9 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &self.context_config.uv_context.cache,
             &planner_config.index_locations,
         )
-        .await
-        .into_diagnostic()?;
+        .await?;
 
-        let build_isolation = self
-            .build_config
-            .no_build_isolation
-            .clone()
-            .try_into()
-            .into_diagnostic()?;
+        let build_isolation = self.build_config.no_build_isolation.clone().try_into()?;
 
         let exclude_newer = self.build_config.exclude_newer;
 
@@ -646,7 +715,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         required_dists: &RequiredDists,
         hash_strategy: &HashStrategy,
         planner_config: &UvInstallerPlannerConfig,
-    ) -> miette::Result<PyPIInstallationPlan> {
+    ) -> Result<PyPIInstallationPlan, PyPIUpdateError> {
         // Find out what packages are already installed
         let site_packages = SitePackages::from_environment(&planner_config.venv)
             .expect("could not create site-packages");
@@ -702,8 +771,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             required_dists,
             &planner_config.build_options,
         )
-        .into_diagnostic()
-        .context("error while determining PyPI installation plan")?;
+        .map_err(|err| PyPIUpdateError::InstallationPlan(Box::new(err)))?;
 
         // Show totals
         let total_to_install = installation_plan.cached.len() + installation_plan.remote.len();
@@ -756,7 +824,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         &self,
         installation_plan: &PyPIInstallationPlan,
         setup: &UvInstallerConfig,
-    ) -> miette::Result<()> {
+    ) -> Result<(), PyPIUpdateError> {
         let start = std::time::Instant::now();
         let PyPIInstallationPlan {
             cached,
@@ -785,8 +853,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         } = self.separate_distributions_by_build_isolation(remote);
 
         self.remove_duplicate_metadata(duplicates)
-            .into_diagnostic()
-            .wrap_err("while removing duplicate metadata")?;
+            .map_err(PyPIUpdateError::RemoveDuplicateMetadata)?;
         self.remove_packages(setup, extraneous, reinstalls).await?;
 
         // Install regular PyPI packages (with build isolation) as a batch
@@ -943,7 +1010,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         &self,
         remote: &[(Dist, InstallReason)],
         setup: &UvInstallerConfig,
-    ) -> miette::Result<Vec<CachedDist>> {
+    ) -> Result<Vec<CachedDist>, PyPIUpdateError> {
         let start = std::time::Instant::now();
 
         let options = UvReporterOptions::new()
@@ -953,7 +1020,10 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
 
         let mut env_vars = if let Some(lazy_vars) = &self.context_config.environment_variables_lazy
         {
-            lazy_vars.resolve().await?
+            lazy_vars
+                .resolve()
+                .await
+                .map_err(PyPIUpdateError::EnvironmentVariables)?
         } else {
             HashMap::new()
         };
@@ -1016,8 +1086,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
                 &resolution,
             )
             .await
-            .into_diagnostic()
-            .context("Failed to prepare distributions")?;
+            .map_err(|err| PyPIUpdateError::PrepareDistributions(Box::new(err)))?;
 
         let s = if remote_dists.len() == 1 { "" } else { "s" };
         tracing::info!(
@@ -1091,7 +1160,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         setup: &UvInstallerConfig,
         extraneous: &[InstalledDist],
         reinstalls: &[(InstalledDist, NeedReinstall)],
-    ) -> miette::Result<()> {
+    ) -> Result<(), PyPIUpdateError> {
         if extraneous.is_empty() && reinstalls.is_empty() {
             return Ok(());
         }
@@ -1116,13 +1185,13 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
                     {
                         tokio::fs::remove_dir_all(dist_info.install_path())
                             .await
-                            .into_diagnostic()?;
+                            .map_err(PyPIUpdateError::RemoveDistribution)?;
                     }
 
                     continue;
                 }
                 Err(err) => {
-                    return Err(miette::miette!(err));
+                    return Err(PyPIUpdateError::Uninstall(err));
                 }
             };
             tracing::debug!(
@@ -1161,18 +1230,15 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         all_dists: &[CachedDist],
         reinstalls: &[(InstalledDist, NeedReinstall)],
         setup: &UvInstallerConfig,
-    ) -> miette::Result<()> {
+    ) -> Result<(), PyPIUpdateError> {
         // Determine the currently installed conda packages.
-        let installed_packages =
-            self.config
-                .prefix
-                .find_installed_packages()
-                .with_context(|| {
-                    format!(
-                        "failed to determine the currently installed packages for {}",
-                        self.config.prefix.root().display()
-                    )
-                })?;
+        let installed_packages = self
+            .config
+            .prefix
+            .find_installed_packages()
+            .map_err(|err| {
+                PyPIUpdateError::InstalledPackages(self.config.prefix.root().to_path_buf(), err)
+            })?;
 
         let pypi_conda_clobber = PypiCondaClobberRegistry::with_conda_packages(&installed_packages);
 
@@ -1191,25 +1257,19 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
 
         // Verify if pypi wheels will override existing conda packages and warn if they
         // are
-        match pypi_conda_clobber.clobber_on_installation(all_dists.to_vec(), &setup.venv) {
-            Ok(Some(clobber_report)) => {
-                tracing::warn!("{clobber_report}");
+        if let Some(clobber_report) =
+            pypi_conda_clobber.clobber_on_installation(all_dists.to_vec(), &setup.venv)
+        {
+            tracing::warn!("{clobber_report}");
 
-                // because we are removing conda packages
-                // we filter the ones we already warn
-                if !installer_mismatch.is_empty() {
-                    installer_mismatch.retain(|name| {
-                        !clobber_report
-                            .keys()
-                            .any(|(_, conda_package)| conda_package == name)
-                    });
-                }
-            }
-            Ok(None) => {}
-            Err(err) => {
-                // The check is best-effort: don't fail the installation, but
-                // don't fail it silently either.
-                tracing::debug!("could not check for conda-pypi clobbering: {err}");
+            // because we are removing conda packages
+            // we filter the ones we already warn
+            if !installer_mismatch.is_empty() {
+                installer_mismatch.retain(|name| {
+                    !clobber_report
+                        .keys()
+                        .any(|(_, conda_package)| conda_package == name)
+                });
             }
         }
 
@@ -1234,7 +1294,7 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
         &self,
         all_dists: Vec<CachedDist>,
         setup: &UvInstallerConfig,
-    ) -> miette::Result<()> {
+    ) -> Result<(), PyPIUpdateError> {
         if all_dists.is_empty() {
             return Ok(());
         }
@@ -1298,4 +1358,22 @@ pub fn initialize_uv_flags(skip_wheel_filename_check_option: Option<bool>) {
 
     // Initialize the global flags (ignore error if already initialized)
     let _ = uv_flags::init(flags);
+}
+
+#[cfg(test)]
+mod tests {
+    use miette::Diagnostic;
+    use pixi_utils::prefix::PrefixError;
+
+    use super::PyPIUpdateError;
+
+    #[test]
+    fn installed_packages_error_keeps_the_prefix_help() {
+        let err = PyPIUpdateError::InstalledPackages("/prefix".into(), PrefixError::JoinError);
+        let help = err
+            .diagnostic_source()
+            .and_then(|source| source.help())
+            .map(|help| help.to_string());
+        assert!(help.is_some_and(|help| help.contains("pixi clean")));
+    }
 }
