@@ -144,6 +144,11 @@ enum InvalidExemptionSpec {
     )]
     NotBinary,
 
+    #[error(
+        "an exclude-newer exemption table must specify at least one match spec field, use `\"*\"` to exempt every release"
+    )]
+    Empty,
+
     #[error(transparent)]
     Spec(#[from] SpecError),
 }
@@ -160,6 +165,11 @@ fn binary_exemption_spec(spec: TomlSpec) -> Result<BinarySpec, InvalidExemptionS
             }
             if detailed.condition.is_some() {
                 return Err(InvalidExemptionSpec::Condition);
+            }
+            // An empty table would match every release, so a typo would
+            // silently exempt the package entirely.
+            if *detailed == DetailedSpec::default() {
+                return Err(InvalidExemptionSpec::Empty);
             }
             // A bare version string parses into a detailed spec that only
             // carries a version. Keep it as the plain version it was written
@@ -377,6 +387,13 @@ exclude-newer = { cutoff = "2025-01-01", exemptions = { polars = "1.43.1", py-ra
     #[test]
     fn test_exemptions_without_cutoff() {
         let input = r#"exclude-newer = { exemptions = { polars = "*" } }"#;
+        let err = parse_conda(input).unwrap_err();
+        assert_snapshot!(render_error(input, err));
+    }
+
+    #[test]
+    fn test_exemption_empty_table() {
+        let input = r#"exclude-newer = { cutoff = "7d", exemptions = { polars = {} } }"#;
         let err = parse_conda(input).unwrap_err();
         assert_snapshot!(render_error(input, err));
     }
