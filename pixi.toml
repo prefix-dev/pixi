@@ -172,7 +172,7 @@ test-schema = {
 # Environment for building and releasing pixi-build-backends
 #
 [environments.backends-release]
-features = ["backends-release-deps", "python"]
+features = ["backends-release-deps", "python", "rust"]
 solve-group = "python"
 
 [environments.backends-release.activation.env]
