@@ -116,7 +116,9 @@ Supported destinations for `--target-channel` (alias `--to`):
 - Cloudsmith: `cloudsmith://<owner>/<repository>`
 - S3: `s3://bucket-name`
 - Quetz: `quetz://server/<channel>`
-- Artifactory: `artifactory://server/<channel>`
+- Artifactory: `artifactory://server/<channel>` or, when Artifactory
+  is served under a path prefix (e.g. JFrog Cloud),
+  `artifactory://server/<prefix>/<channel>`
 - Local filesystem channel (with indexing):
   `file:///path/to/channel` or a bare path
 
