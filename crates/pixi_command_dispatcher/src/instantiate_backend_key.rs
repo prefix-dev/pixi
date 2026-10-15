@@ -23,7 +23,7 @@ use pixi_build_frontend::{
     in_memory::BoxedInMemoryBackend,
     json_rpc,
     json_rpc::{CommunicationError, JsonRpcBackend},
-    tool::{IsolatedTool, SystemTool, Tool},
+    tool::{BackendVerbosity, IsolatedTool, SystemTool, Tool},
 };
 use pixi_build_types::{
     PIXI_BUILD_API_VERSION_NAME, PIXI_BUILD_API_VERSION_SPEC, PixiBuildApiVersion, ProjectModel,
@@ -46,7 +46,7 @@ use xxhash_rust::xxh3::Xxh3;
 use crate::InlinePackage;
 use crate::compute_data::HasInstantiateBackendReporter;
 use crate::ephemeral_env::{EphemeralEnvError, EphemeralEnvKey, EphemeralEnvSpec};
-use crate::injected_config::ToolBuildEnvironmentKey;
+use crate::injected_config::{BackendVerbosityKey, ToolBuildEnvironmentKey};
 use crate::inline_package::discover_backend;
 use crate::reporter::InstantiateBackendReporter;
 use crate::resolved_backend_command::{ResolvedBackendCommand, ResolvedBackendCommandKey};
@@ -360,6 +360,8 @@ impl InstantiateBackendKey {
 
         check_project_model_invariant(api_version, &discovered.init_params)?;
 
+        let backend_verbosity = *ctx.compute(&BackendVerbosityKey).await;
+
         spawn_json_rpc(
             source_dir,
             self.checkout_root.clone(),
@@ -369,6 +371,7 @@ impl InstantiateBackendKey {
             api_version,
             cache_dir_root,
             workspace_scratch_directory,
+            backend_verbosity,
         )
         .await
     }
@@ -685,9 +688,10 @@ async fn spawn_json_rpc(
     api_version: PixiBuildApiVersion,
     cache_dir_root: PathBuf,
     workspace_scratch_directory: Option<PathBuf>,
+    backend_verbosity: BackendVerbosity,
 ) -> Result<BackendHandle, Arc<InstantiateBackendError>> {
     let project_model = project_model_overrides.apply(init_params.project_model.clone());
-    let backend = JsonRpcBackend::setup(
+    let backend = JsonRpcBackend::setup_with_verbosity(
         source_dir,
         init_params.manifest_path.clone(),
         init_params.workspace_root.clone(),
@@ -698,6 +702,7 @@ async fn spawn_json_rpc(
         Some(cache_dir_root),
         workspace_scratch_directory,
         tool,
+        backend_verbosity,
     )
     .await
     .map_err(|e| Arc::new(InstantiateBackendError::JsonRpc(Arc::new(e))))?;
