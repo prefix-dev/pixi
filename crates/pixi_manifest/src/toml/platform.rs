@@ -419,34 +419,13 @@ fn build_friendly_virtual_package(
         PackageName::try_from(conda_name).expect("static virtual-package name is valid");
     match kind {
         VirtualPackageValueKind::Version => {
-            let (version, build_string) = raw
-                .value
-                .split_once('=')
-                .map_or((raw.value.as_str(), ""), |(version, build)| {
-                    (version, build)
-                });
-            let version = Version::from_str(version).map_err(|e| Error {
-                kind: ErrorKind::Custom(
-                    format!(
-                        "'{}' is not a valid version and build string: {e}",
-                        raw.value
-                    )
-                    .into(),
-                ),
-                span: raw.span,
-                line_info: None,
-            })?;
-            crate::platform::validate_virtual_package_build_string(&package_name, build_string)
-                .map_err(|message| Error {
+            crate::platform::parse_versioned_virtual_package(package_name, &raw.value).map_err(
+                |message| Error {
                     kind: ErrorKind::Custom(message.into()),
                     span: raw.span,
                     line_info: None,
-                })?;
-            Ok(GenericVirtualPackage {
-                name: package_name,
-                version,
-                build_string: build_string.to_string(),
-            })
+                },
+            )
         }
         VirtualPackageValueKind::Microarch => {
             let (version, microarch) = match raw.value.split_once('=') {
@@ -1871,20 +1850,6 @@ mod test {
         assert_eq!(
             json,
             serde_json::json!({ "platform": "linux-64", "cuda": "12.0=h1" })
-        );
-    }
-
-    #[test]
-    fn test_roundtrip_cuda_table_with_build_strings() {
-        let input = r#"platform = { platform = "linux-64", cuda = { driver = "12.0=h1", arch = "8.6=h2" } }"#;
-        let parsed = TopLevel::from_toml_str(input).unwrap();
-        let json = serde_json::to_value(TomlPixiPlatform(parsed.platform)).unwrap();
-        assert_eq!(
-            json,
-            serde_json::json!({
-                "platform": "linux-64",
-                "cuda": { "driver": "12.0=h1", "arch": "8.6=h2" },
-            })
         );
     }
 

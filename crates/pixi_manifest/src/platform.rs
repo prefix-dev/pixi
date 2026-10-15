@@ -1120,6 +1120,24 @@ pub fn amdgpu_target_name(isa_version: &str) -> Option<String> {
     })
 }
 
+/// Parse a `"version[=build_string]"` value for a version-style built-in key
+/// such as `cuda` or `glibc`. The manifest and the CLI flags both route
+/// through this, so they accept exactly the same values.
+pub fn parse_versioned_virtual_package(
+    name: PackageName,
+    value: &str,
+) -> Result<GenericVirtualPackage, String> {
+    let (version_str, build_string) = value.split_once('=').unwrap_or((value, ""));
+    let version = Version::from_str(version_str)
+        .map_err(|e| format!("'{value}' is not a valid version and build string: {e}"))?;
+    validate_virtual_package(&name, version_str, build_string)?;
+    Ok(GenericVirtualPackage {
+        name,
+        version,
+        build_string: build_string.to_string(),
+    })
+}
+
 /// The best did-you-mean candidate for an unknown microarchitecture name: the
 /// underscore spelling when that is what was meant (conda build strings cannot
 /// contain `-`), otherwise the most similar database entry.
