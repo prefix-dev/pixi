@@ -409,9 +409,8 @@ mod test {
 
     #[test]
     fn test_resolved_into_rattler_solve_preserves_exemptions() {
-        use rattler_conda_types::{
-            PackageRecord, ParseStrictness, RepoDataRecord, Version, package::DistArchiveIdentifier,
-        };
+        use pixi_test_utils::uploaded_record;
+        use rattler_conda_types::ParseStrictness;
 
         let default_cutoff = DateTime::parse_from_rfc3339("2006-12-02T02:07:43Z")
             .unwrap()
@@ -425,30 +424,9 @@ mod test {
                 .unwrap()
                 .into();
 
-        let record = |name: &str, version: &str| {
-            let mut package_record = PackageRecord::new(
-                PackageName::new_unchecked(name),
-                Version::from_str(version).unwrap(),
-                "0".to_string(),
-            );
-            package_record.timestamp = Some(
-                "2020-01-01T00:00:00Z"
-                    .parse::<jiff::Timestamp>()
-                    .unwrap()
-                    .into(),
-            );
-            RepoDataRecord {
-                package_record,
-                identifier: DistArchiveIdentifier::from_str(&format!("{name}-{version}-0.conda"))
-                    .unwrap(),
-                url: url::Url::parse("https://example.com/pkg.conda").unwrap(),
-                channel: None,
-            }
-        };
-
-        assert!(!config.is_excluded(&record("foo", "1.2.3")));
-        assert!(config.is_excluded(&record("foo", "1.2.4")));
-        assert!(config.is_excluded(&record("bar", "1.2.3")));
+        assert!(!config.is_excluded(&uploaded_record("foo", "1.2.3", None)));
+        assert!(config.is_excluded(&uploaded_record("foo", "1.2.4", None)));
+        assert!(config.is_excluded(&uploaded_record("bar", "1.2.3", None)));
     }
 
     #[test]

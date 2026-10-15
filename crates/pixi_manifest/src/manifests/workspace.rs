@@ -6311,33 +6311,13 @@ exclude-newer = { cutoff = "2015-12-02T02:07:43Z", exemptions = { polars = "1.43
             ["numpy *", "polars ==1.43.1"]
         );
 
+        use pixi_test_utils::uploaded_record;
+
         let config: rattler_solve::ExcludeNewer = resolved.into();
-        let record = |name: &str, version: &str| {
-            let mut package_record = rattler_conda_types::PackageRecord::new(
-                PackageName::new_unchecked(name),
-                rattler_conda_types::Version::from_str(version).unwrap(),
-                "0".to_string(),
-            );
-            package_record.timestamp = Some(
-                "2020-01-01T00:00:00Z"
-                    .parse::<jiff::Timestamp>()
-                    .unwrap()
-                    .into(),
-            );
-            rattler_conda_types::RepoDataRecord {
-                package_record,
-                identifier: rattler_conda_types::package::DistArchiveIdentifier::from_str(
-                    &format!("{name}-{version}-0.conda"),
-                )
-                .unwrap(),
-                url: url::Url::parse("https://example.com/pkg.conda").unwrap(),
-                channel: None,
-            }
-        };
-        assert!(!config.is_excluded(&record("polars", "1.43.1")));
-        assert!(config.is_excluded(&record("polars", "1.43.2")));
-        assert!(!config.is_excluded(&record("numpy", "2.0.0")));
-        assert!(config.is_excluded(&record("pandas", "2.0.0")));
+        assert!(!config.is_excluded(&uploaded_record("polars", "1.43.1", None)));
+        assert!(config.is_excluded(&uploaded_record("polars", "1.43.2", None)));
+        assert!(!config.is_excluded(&uploaded_record("numpy", "2.0.0", None)));
+        assert!(config.is_excluded(&uploaded_record("pandas", "2.0.0", None)));
     }
 
     #[test]

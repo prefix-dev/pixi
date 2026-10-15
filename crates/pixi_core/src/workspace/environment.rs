@@ -533,13 +533,14 @@ impl Hash for Environment<'_> {
 
 #[cfg(test)]
 mod tests {
-    use std::{collections::HashSet, path::Path, str::FromStr};
+    use std::{collections::HashSet, path::Path};
 
     use indexmap::indexmap;
     use insta::assert_snapshot;
     use itertools::Itertools;
     use pixi_manifest::CondaDependencies;
-    use rattler_conda_types::{ChannelUrl, NamedChannelOrUrl, PackageName};
+    use pixi_test_utils::uploaded_record;
+    use rattler_conda_types::{NamedChannelOrUrl, PackageName};
 
     use super::*;
 
@@ -1307,43 +1308,29 @@ mod tests {
             .into_base_url(&channel_config)
             .unwrap();
 
-        let record = |name: &str, version: &str, channel: &ChannelUrl| {
-            let mut package_record = rattler_conda_types::PackageRecord::new(
-                PackageName::new_unchecked(name),
-                rattler_conda_types::Version::from_str(version).unwrap(),
-                "0".to_string(),
-            );
-            package_record.timestamp = Some(
-                "2020-01-01T00:00:00Z"
-                    .parse::<jiff::Timestamp>()
-                    .unwrap()
-                    .into(),
-            );
-            rattler_conda_types::RepoDataRecord {
-                package_record,
-                identifier: rattler_conda_types::package::DistArchiveIdentifier::from_str(
-                    &format!("{name}-{version}-0.conda"),
-                )
-                .unwrap(),
-                url: channel
-                    .url()
-                    .join(&format!("noarch/{name}-{version}-0.conda"))
-                    .unwrap(),
-                channel: Some(channel.to_string()),
-            }
-        };
-
         // The exempt release is allowed from any channel, other releases are
         // not.
-        assert!(!config.is_excluded(&record("polars", "1.43.1", &conda_forge)));
-        assert!(!config.is_excluded(&record("polars", "1.43.1", &my_private_forge)));
-        assert!(config.is_excluded(&record("polars", "1.43.2", &conda_forge)));
-        assert!(config.is_excluded(&record("polars", "1.43.2", &my_private_forge)));
+        assert!(!config.is_excluded(&uploaded_record("polars", "1.43.1", Some(&conda_forge))));
+        assert!(!config.is_excluded(&uploaded_record(
+            "polars",
+            "1.43.1",
+            Some(&my_private_forge)
+        )));
+        assert!(config.is_excluded(&uploaded_record("polars", "1.43.2", Some(&conda_forge))));
+        assert!(config.is_excluded(&uploaded_record(
+            "polars",
+            "1.43.2",
+            Some(&my_private_forge)
+        )));
 
         // An exemption with a channel only applies to records from that
         // channel.
-        assert!(!config.is_excluded(&record("openssl", "3.5.1", &conda_forge)));
-        assert!(config.is_excluded(&record("openssl", "3.5.1", &my_private_forge)));
+        assert!(!config.is_excluded(&uploaded_record("openssl", "3.5.1", Some(&conda_forge))));
+        assert!(config.is_excluded(&uploaded_record(
+            "openssl",
+            "3.5.1",
+            Some(&my_private_forge)
+        )));
     }
 
     #[test]
