@@ -165,8 +165,14 @@ impl Diagnostic for UnsupportedPlatformError {
 
     fn help(&self) -> Option<Box<dyn Display + '_>> {
         // Both kinds can be mocked the same way, so the hints are pooled --
-        // but each reads its own shape to find the name and version.
-        let declared = self.unsatisfied_requirements.iter().filter_map(|req| {
+        // but each reads its own shape to find the name and version. An
+        // override always reports the default build string, so it cannot
+        // mock a requirement that declares another one.
+        let (declared_builds, mockable): (Vec<_>, Vec<_>) = self
+            .unsatisfied_requirements
+            .iter()
+            .partition(|req| declared_build_string(req).is_some());
+        let declared = mockable.into_iter().filter_map(|req| {
             conda_override_hint(req.name.as_normalized(), Some(&req.version), self.platform)
         });
         let required = self
@@ -175,7 +181,7 @@ impl Diagnostic for UnsupportedPlatformError {
             .filter_map(|spec| spec_override_hint(spec, self.platform));
         let overrides: Vec<String> = declared.chain(required).unique().collect();
 
-        let base = if overrides.is_empty() {
+        let mut base = if overrides.is_empty() {
             format!(
                 "supported platforms are {}",
                 self.environments_platforms.iter().format(", ")
@@ -186,6 +192,17 @@ impl Diagnostic for UnsupportedPlatformError {
                 overrides.join("\n  ")
             )
         };
+        if !declared_builds.is_empty() {
+            base.push_str(&format!(
+                "\nThis machine must provide {} with the declared build string; \
+                 `CONDA_OVERRIDE_*` variables cannot mock a build string.",
+                declared_builds
+                    .iter()
+                    .map(|req| req.name.as_normalized())
+                    .unique()
+                    .format(", ")
+            ));
+        }
         // `--platform` pins a target and skips host virtual-package
         // validation, so it's the escape hatch when the machine can't run any
         // declared platform.
@@ -205,15 +222,31 @@ fn format_requirements(reqs: &[GenericVirtualPackage]) -> String {
         .map(|r| {
             // Concrete AMDGPU architectures are exact targets, including zero.
             // For other packages, version 0 encodes a version-less requirement.
-            if r.name.as_normalized() == "__amdgpu_arch" {
+            let requirement = if r.name.as_normalized() == "__amdgpu_arch" {
                 format!("{} == {}", r.name.as_normalized(), r.version)
             } else if r.version == Version::major(0) {
                 format!("{} (any version)", r.name.as_normalized())
             } else {
                 format!("{} >= {}", r.name.as_normalized(), r.version)
+            };
+            match declared_build_string(r) {
+                Some(build) => format!("{requirement} with build string '{build}'"),
+                None => requirement,
             }
         })
         .join(", ")
+}
+
+/// The build string a declared virtual package requires, `None` when it is
+/// the default (empty or `"0"`). A machine providing the package with another
+/// build string does not satisfy it. `__archspec` keeps its microarchitecture
+/// in the build string and is matched differently, so it never counts.
+fn declared_build_string(req: &GenericVirtualPackage) -> Option<&str> {
+    match req.build_string.as_str() {
+        "" | "0" => None,
+        _ if req.name.as_normalized() == "__archspec" => None,
+        build => Some(build),
+    }
 }
 
 /// Render lock-derived requirements.
@@ -630,6 +663,29 @@ mod tests {
         );
         let help = e.help().unwrap().to_string();
         assert!(!help.contains("CONDA_OVERRIDE"), "{help}");
+    }
+
+    #[test]
+    fn declared_build_string_is_reported_instead_of_an_override() {
+        let mut cuda = vp("__cuda", "12");
+        cuda.build_string = "hx".to_string();
+        let mut e = err(vec![cuda.clone()]);
+        e.platform_diagnostics = vec![diagnosis("gpu", Subdir::Linux64, true, vec![cuda])];
+        let display = e.to_string();
+        assert!(
+            display.contains("missing virtual packages: __cuda >= 12 with build string 'hx'"),
+            "{display}"
+        );
+        assert!(
+            display.contains("Unsatisfied requirements: __cuda >= 12 with build string 'hx'"),
+            "{display}"
+        );
+        let help = e.help().unwrap().to_string();
+        assert!(!help.contains("CONDA_OVERRIDE_CUDA"), "{help}");
+        assert!(
+            help.contains("must provide __cuda with the declared build string"),
+            "{help}"
+        );
     }
 
     #[test]
