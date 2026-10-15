@@ -472,18 +472,12 @@ impl<'p> TaskGraph<'p> {
                     Cow::Owned(_) => unreachable!("only named tasks can have dependencies"),
                 };
 
-                let task_specific_environment = match &dependency.environment {
-                    Some(environment) => {
-                        Some(project.environment(environment).ok_or_else(|| {
-                            TaskGraphError::UnknownEnvironment {
-                                task: node_name.to_string(),
-                                dependency: dependency.task_name.to_string(),
-                                environment: environment.to_string(),
-                            }
-                        })?)
-                    }
-                    None => None,
-                };
+                let task_specific_environment =
+                    dependency.environment.as_ref().map(|environment| {
+                        project
+                            .environment(environment)
+                            .expect("task environments are validated when the manifest is parsed")
+                    });
 
                 let (task_env, task_dependency) = match search_environments.find_task(
                     dependency.task_name.clone(),
@@ -732,15 +726,6 @@ pub enum TaskGraphError {
 
     #[error(transparent)]
     InvalidArgValue(#[from] InvalidArgValueError),
-
-    #[error(
-        "task '{task}' depends on task '{dependency}' in environment '{environment}', which is not defined"
-    )]
-    UnknownEnvironment {
-        task: String,
-        dependency: String,
-        environment: String,
-    },
 }
 
 #[cfg(test)]
