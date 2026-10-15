@@ -832,17 +832,13 @@ impl WorkspaceManifestMut<'_> {
             .flat_map(|feature| feature.targets.targets())
             .flat_map(|target| &target.tasks)
             .filter(|(_, task)| task.referenced_environments().any(|e| e.as_str() == name))
-            .map(|(task_name, _)| task_name.as_str())
+            .map(|(task_name, _)| format!("'{}'", task_name.as_str()))
             .sorted()
             .dedup()
-            .collect_vec();
+            .join(", ");
         if !referencing_tasks.is_empty() {
             return Err(GenericError::new(format!(
-                "cannot remove environment '{name}' because tasks refer to it: {}",
-                referencing_tasks
-                    .iter()
-                    .map(|t| format!("'{t}'"))
-                    .format(", ")
+                "cannot remove environment '{name}' because tasks refer to it: {referencing_tasks}"
             ))
             .with_help("remove these references first")
             .into());
