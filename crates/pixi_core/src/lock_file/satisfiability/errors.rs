@@ -182,8 +182,8 @@ pub(super) fn verify_exclude_newer(
 
             // A binary package is checked the way the solver checks repodata
             // records, so exemptions on e.g. the build string or channel
-            // apply. A source package only has a package record, so only its
-            // name and version can match an exemption.
+            // apply. A source package has no channel, so channel-scoped
+            // exemptions never match it, as in the solver.
             let binary = package.as_binary();
             let repodata_record =
                 match binary.and_then(|binary| RepoDataRecord::try_from(binary).ok()) {
