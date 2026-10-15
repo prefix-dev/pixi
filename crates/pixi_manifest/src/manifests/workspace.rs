@@ -391,12 +391,7 @@ impl WorkspaceManifestMut<'_> {
 
         // Refuse to write a task that refers to an environment that does not
         // exist, the manifest would fail to parse afterwards.
-        let referenced_environments = task.default_environment().into_iter().chain(
-            task.depends_on()
-                .iter()
-                .filter_map(|d| d.environment.as_ref()),
-        );
-        for environment in referenced_environments {
+        for environment in task.referenced_environments() {
             if self.workspace.environments.find(environment).is_none() {
                 return Err(TaskEditError::UnknownEnvironment(environment.clone()));
             }
@@ -836,16 +831,7 @@ impl WorkspaceManifestMut<'_> {
             .filter(|feature| feature.name.environment_name().map(|n| n.as_str()) != Some(name))
             .flat_map(|feature| feature.targets.targets())
             .flat_map(|target| &target.tasks)
-            .filter(|(_, task)| {
-                task.default_environment()
-                    .into_iter()
-                    .chain(
-                        task.depends_on()
-                            .iter()
-                            .filter_map(|d| d.environment.as_ref()),
-                    )
-                    .any(|environment| environment.as_str() == name)
-            })
+            .filter(|(_, task)| task.referenced_environments().any(|e| e.as_str() == name))
             .map(|(task_name, _)| task_name.as_str())
             .sorted()
             .dedup()
