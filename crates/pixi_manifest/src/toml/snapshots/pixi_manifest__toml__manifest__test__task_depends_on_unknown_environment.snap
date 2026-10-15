@@ -1,0 +1,6 @@
+---
+source: crates/pixi_manifest/src/toml/manifest.rs
+expression: "expect_parse_failure(r#\"\n        [workspace]\n        channels = []\n        platforms = []\n\n        [tasks]\n        foo = \"bar\"\n        baz = [{ task = \"foo\", environment = \"oops\" }]\n        \"#,)"
+---
+  × task 'baz' depends on task 'foo' in environment 'oops', which is not defined
+  help: defined environments: default

@@ -24,7 +24,7 @@ use crate::{
     Task, TaskName, TomlError, WorkspaceTarget, consts,
     environment::{Environment, EnvironmentName, NewEnvironment},
     environments::Environments,
-    error::{DependencyError, UnknownFeature},
+    error::{DependencyError, GenericError, UnknownFeature},
     feature::{Feature, FeatureName},
     manifests::document::ManifestDocument,
     solve_group::SolveGroups,
@@ -388,6 +388,19 @@ impl WorkspaceManifestMut<'_> {
         }
 
         self.ensure_inline_environment(feature_name)?;
+
+        // Refuse to write a task that refers to an environment that does not
+        // exist, the manifest would fail to parse afterwards.
+        let referenced_environments = task.default_environment().into_iter().chain(
+            task.depends_on()
+                .iter()
+                .filter_map(|d| d.environment.as_ref()),
+        );
+        for environment in referenced_environments {
+            if self.workspace.environments.find(environment).is_none() {
+                return Err(TaskEditError::UnknownEnvironment(environment.clone()));
+            }
+        }
 
         // Add the task to the Toml manifest
         self.document
@@ -813,6 +826,42 @@ impl WorkspaceManifestMut<'_> {
     /// This function modifies both the workspace and the TOML document. Use
     /// `ManifestProvenance::save` to persist the changes to disk.
     pub fn remove_environment(&mut self, name: &str) -> Result<bool, TomlError> {
+        // Refuse to remove an environment that tasks still refer to, the
+        // manifest would fail to parse afterwards. Tasks defined inline on the
+        // environment are removed along with it.
+        let referencing_tasks = self
+            .workspace
+            .features
+            .values()
+            .filter(|feature| feature.name.environment_name().map(|n| n.as_str()) != Some(name))
+            .flat_map(|feature| feature.targets.targets())
+            .flat_map(|target| &target.tasks)
+            .filter(|(_, task)| {
+                task.default_environment()
+                    .into_iter()
+                    .chain(
+                        task.depends_on()
+                            .iter()
+                            .filter_map(|d| d.environment.as_ref()),
+                    )
+                    .any(|environment| environment.as_str() == name)
+            })
+            .map(|(task_name, _)| task_name.as_str())
+            .sorted()
+            .dedup()
+            .collect_vec();
+        if !referencing_tasks.is_empty() {
+            return Err(GenericError::new(format!(
+                "cannot remove environment '{name}' because tasks refer to it: {}",
+                referencing_tasks
+                    .iter()
+                    .map(|t| format!("'{t}'"))
+                    .format(", ")
+            ))
+            .with_help("remove these references first")
+            .into());
+        }
+
         // Remove the environment from the TOML document
         if !self.document.remove_environment(name)? {
             return Ok(false);
@@ -2079,6 +2128,9 @@ pub enum TaskEditError {
     #[error("task {0} does not exist")]
     NotFound(TaskName),
 
+    #[error("the environment '{0}' does not exist")]
+    UnknownEnvironment(EnvironmentName),
+
     #[error(transparent)]
     #[diagnostic(transparent)]
     Feature(#[from] GetFeatureError),
@@ -2289,7 +2341,7 @@ mod tests {
     use itertools::Itertools;
     use miette::NarratableReportHandler;
     use pixi_spec::PixiSpec;
-    use pixi_test_utils::format_parse_error;
+    use pixi_test_utils::{format_diagnostic, format_parse_error};
     use rattler_conda_types::{
         MatchSpec, NamedChannelOrUrl, PackageName, ParseStrictness,
         ParseStrictness::{Lenient, Strict},
@@ -5330,6 +5382,40 @@ boltons = { workspace = true }
 
         assert!(manifest.remove_environment("foo").unwrap());
         assert!(!manifest.remove_environment("default").unwrap());
+    }
+
+    #[test]
+    fn test_remove_environment_referenced_by_task() {
+        let contents = r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [environments]
+        foo = []
+        bar = []
+
+        [environments.baz.tasks]
+        own = { cmd = "echo", default-environment = "baz" }
+
+        [tasks]
+        a = "echo"
+        b = [{ task = "a", environment = "foo" }]
+        c = { cmd = "echo", default-environment = "foo" }
+        "#;
+        let mut manifest = parse_pixi_toml(contents);
+        let mut manifest = manifest.editable();
+
+        let err = manifest.remove_environment("foo").unwrap_err();
+        assert_snapshot!(format_diagnostic(&err), @r"
+        × cannot remove environment 'foo' because tasks refer to it: 'b', 'c'
+        help: remove these references first
+        ");
+        assert!(manifest.workspace.environment("foo").is_some());
+
+        // Only the environment's own inline tasks refer to it.
+        assert!(manifest.remove_environment("baz").unwrap());
+        assert!(manifest.remove_environment("bar").unwrap());
     }
 
     #[test]
