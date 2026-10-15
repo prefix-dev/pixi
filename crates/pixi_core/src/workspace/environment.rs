@@ -539,6 +539,7 @@ mod tests {
     use insta::assert_snapshot;
     use itertools::Itertools;
     use pixi_manifest::CondaDependencies;
+    use pixi_test_utils::uploaded_record;
     use rattler_conda_types::{NamedChannelOrUrl, PackageName};
 
     use super::*;
@@ -1269,6 +1270,67 @@ mod tests {
             config.cutoff_for_package(&package, Some(nvidia.as_str())),
             "2019-12-02T02:07:43Z".parse::<jiff::Timestamp>().unwrap()
         );
+    }
+
+    #[test]
+    fn test_exclude_newer_exemptions_win_over_channel_and_workspace_cutoffs() {
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [workspace]
+        name = "test"
+        channels = [{ channel = "my-private-forge", exclude-newer = "2016-12-02T02:07:43Z" }, "conda-forge"]
+        platforms = ["linux-64"]
+
+        [workspace.exclude-newer]
+        cutoff = "2015-12-02T02:07:43Z"
+        exemptions = { polars = "1.43.1", openssl = { version = "*", channel = "conda-forge" } }
+
+        [dependencies]
+        polars = "*"
+        openssl = "*"
+        "#,
+        )
+        .unwrap();
+
+        let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
+        let env = workspace.environment("default").unwrap();
+        let config: rattler_solve::ExcludeNewer = env
+            .exclude_newer_config_resolved(&channel_config)
+            .unwrap()
+            .unwrap()
+            .into();
+
+        let my_private_forge = NamedChannelOrUrl::Name("my-private-forge".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
+        let conda_forge = NamedChannelOrUrl::Name("conda-forge".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
+
+        // The exempt release is allowed from any channel, other releases are
+        // not.
+        assert!(!config.is_excluded(&uploaded_record("polars", "1.43.1", Some(&conda_forge))));
+        assert!(!config.is_excluded(&uploaded_record(
+            "polars",
+            "1.43.1",
+            Some(&my_private_forge)
+        )));
+        assert!(config.is_excluded(&uploaded_record("polars", "1.43.2", Some(&conda_forge))));
+        assert!(config.is_excluded(&uploaded_record(
+            "polars",
+            "1.43.2",
+            Some(&my_private_forge)
+        )));
+
+        // An exemption with a channel only applies to records from that
+        // channel.
+        assert!(!config.is_excluded(&uploaded_record("openssl", "3.5.1", Some(&conda_forge))));
+        assert!(config.is_excluded(&uploaded_record(
+            "openssl",
+            "3.5.1",
+            Some(&my_private_forge)
+        )));
     }
 
     #[test]

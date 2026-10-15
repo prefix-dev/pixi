@@ -123,9 +123,9 @@ fn validate_exemption(spec: &MatchSpec) -> Result<(), InvalidExemptionError> {
 /// `rattler_solve::ExcludeNewer` requires a non-optional default cutoff, so a
 /// workspace with only channel- or package-level cutoffs gets
 /// `DateTime::<Utc>::MAX_UTC` as its "never exclude by default" sentinel (see
-/// `exclude_newer_config_resolved_impl` in
-/// `crates/pixi_manifest/src/features_ext.rs`). Saturating preserves that
-/// meaning, since no package is newer than `Timestamp::MAX`.
+/// `resolve_exclude_newer` in `crates/pixi_manifest/src/exclude_newer.rs`).
+/// Saturating preserves that meaning, since no package is newer than
+/// `Timestamp::MAX`.
 ///
 /// Leap seconds are clamped instead of saturated: chrono reports them as a full
 /// extra second of subsecond nanos, which jiff rejects, and saturating a cutoff
@@ -409,9 +409,8 @@ mod test {
 
     #[test]
     fn test_resolved_into_rattler_solve_preserves_exemptions() {
-        use rattler_conda_types::{
-            PackageRecord, ParseStrictness, RepoDataRecord, Version, package::DistArchiveIdentifier,
-        };
+        use pixi_test_utils::uploaded_record;
+        use rattler_conda_types::ParseStrictness;
 
         let default_cutoff = DateTime::parse_from_rfc3339("2006-12-02T02:07:43Z")
             .unwrap()
@@ -425,30 +424,9 @@ mod test {
                 .unwrap()
                 .into();
 
-        let record = |name: &str, version: &str| {
-            let mut package_record = PackageRecord::new(
-                PackageName::new_unchecked(name),
-                Version::from_str(version).unwrap(),
-                "0".to_string(),
-            );
-            package_record.timestamp = Some(
-                "2020-01-01T00:00:00Z"
-                    .parse::<jiff::Timestamp>()
-                    .unwrap()
-                    .into(),
-            );
-            RepoDataRecord {
-                package_record,
-                identifier: DistArchiveIdentifier::from_str(&format!("{name}-{version}-0.conda"))
-                    .unwrap(),
-                url: url::Url::parse("https://example.com/pkg.conda").unwrap(),
-                channel: None,
-            }
-        };
-
-        assert!(!config.is_excluded(&record("foo", "1.2.3")));
-        assert!(config.is_excluded(&record("foo", "1.2.4")));
-        assert!(config.is_excluded(&record("bar", "1.2.3")));
+        assert!(!config.is_excluded(&uploaded_record("foo", "1.2.3", None)));
+        assert!(config.is_excluded(&uploaded_record("foo", "1.2.4", None)));
+        assert!(config.is_excluded(&uploaded_record("bar", "1.2.3", None)));
     }
 
     #[test]

@@ -8,7 +8,7 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pixi_command_dispatcher::{DevSourceMetadataError, SourceCheckoutError, SourceRecordError};
-use pixi_manifest::{PixiPlatformName, pypi::pypi_options::PrereleaseMode};
+use pixi_manifest::{ExcludeNewerError, PixiPlatformName, pypi::pypi_options::PrereleaseMode};
 use pixi_record::{ParseLockFileError, SourceMismatchError};
 use pixi_uv_conversions::AsPep508Error;
 use rattler_conda_types::{MatchSpec, PackageName, ParseChannelError, ParseMatchSpecError};
@@ -41,6 +41,10 @@ pub enum EnvironmentUnsat {
 
     #[error(transparent)]
     InvalidChannel(#[from] ParseChannelError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ExcludeNewer(#[from] ExcludeNewerError),
 
     #[error(transparent)]
     InvalidDistExtensionInNoBuild(#[from] ExtensionError),

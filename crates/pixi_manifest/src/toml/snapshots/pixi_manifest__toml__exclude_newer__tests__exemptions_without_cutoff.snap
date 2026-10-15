@@ -1,0 +1,9 @@
+---
+source: crates/pixi_manifest/src/toml/exclude_newer.rs
+expression: "render_error(input, err)"
+---
+  × missing field 'cutoff' in table
+   ╭─[pixi.toml:1:17]
+ 1 │ exclude-newer = { exemptions = { polars = "*" } }
+   ·                 ─────────────────────────────────
+   ╰────
