@@ -1103,7 +1103,7 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
                 // Create IndexJson from project model for on-the-fly package generation
                 let index_json = IndexJson {
                     arch: None,
-                    build: rattler_conda_types::package::BuildString::new_unchecked("0"),
+                    build: rattler_conda_types::package::BuildString::new_unchecked(""),
                     build_number: 0,
                     constrains: vec![],
                     depends: vec![],

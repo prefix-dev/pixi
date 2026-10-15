@@ -205,12 +205,24 @@ impl VirtualPackageArgs {
         if let Some(value) = self.macos {
             require_subdir_family(subdir, Subdir::is_osx, "--macos", "osx")?;
             let version = parse_virtual_package_version("--macos", &value)?;
-            push_unique(&mut specs, &mut seen_names, "__osx", version, "0".to_string())?;
+            push_unique(
+                &mut specs,
+                &mut seen_names,
+                "__osx",
+                version,
+                "0".to_string(),
+            )?;
         }
         if let Some(value) = self.windows {
             require_subdir_family(subdir, Subdir::is_windows, "--windows", "win")?;
             let version = parse_virtual_package_version("--windows", &value)?;
-            push_unique(&mut specs, &mut seen_names, "__win", version, "0".to_string())?;
+            push_unique(
+                &mut specs,
+                &mut seen_names,
+                "__win",
+                version,
+                "0".to_string(),
+            )?;
         }
 
         for raw in raw_specs {

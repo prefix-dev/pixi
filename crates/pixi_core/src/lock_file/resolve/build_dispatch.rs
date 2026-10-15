@@ -643,17 +643,18 @@ impl BuildContext for LazyBuildDispatch<'_> {
     }
 
     fn config_settings_package(&self) -> &uv_distribution_types::PackageConfigSettings {
+        // Doesn't depend on the conda prefix, so it can be provided before the
+        // build dispatch is initialized: uv reads it while computing source
+        // distribution cache keys.
         self.lazy_deps
             .package_config_settings
-            .get()
-            .expect("package config settings not initialized, this is a programming error")
+            .get_or_init(|| self.params.package_config_settings.clone())
     }
 
     fn extra_build_requires(&self) -> &uv_distribution_types::ExtraBuildRequires {
         self.lazy_deps
             .extra_build_requires
-            .get()
-            .expect("extra build requires not initialized, this is a programming error")
+            .get_or_init(|| self.params.extra_build_requires.clone())
     }
 
     fn build_isolation(&self) -> uv_types::BuildIsolation<'_> {
@@ -668,7 +669,6 @@ impl BuildContext for LazyBuildDispatch<'_> {
     fn extra_build_variables(&self) -> &ExtraBuildVariables {
         self.lazy_deps
             .extra_build_variables
-            .get()
-            .expect("extra build variables not initialized, this is a programming error")
+            .get_or_init(|| self.params.extra_build_variables.clone())
     }
 }
