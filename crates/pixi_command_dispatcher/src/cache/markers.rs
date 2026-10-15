@@ -1,13 +1,11 @@
-//! [`CacheLocation`] markers for every cache directory the dispatcher
-//! knows about.
+//! `PackagesDir` declares an env-var override for
+//! `PIXI_CACHE_CONDA_PACKAGES_DIR`.
 //!
 //! Each marker is a zero-sized type whose [`CacheLocation`] impl
 //! describes a fixed `<base>/<name>` layout. Markers also key
 //! programmatic overrides on
 //! [`CacheDirs`](pixi_compute_cache_dirs::CacheDirs) via their
-//! `TypeId`. None declare an env-var override yet; behaviour is
-//! identical to the previous synchronous getters until a marker opts
-//! in.
+//! `TypeId`.
 
 use pixi_compute_cache_dirs::{CacheBase, CacheLocation};
 use pixi_consts::consts;
@@ -31,6 +29,9 @@ impl CacheLocation for PackagesDir {
     }
     fn base() -> CacheBase {
         CacheBase::Root
+    }
+    fn env_override() -> Option<&'static str> {
+        Some("PIXI_CACHE_CONDA_PACKAGES_DIR")
     }
 }
 
@@ -80,5 +81,50 @@ impl CacheLocation for LegacySourceEnvDir {
     }
     fn base() -> CacheBase {
         CacheBase::Workspace
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use pixi_compute_cache_dirs::CacheDirs;
+    use pixi_path::AbsPathBuf;
+
+    use super::*;
+
+    #[test]
+    fn test_packages_dir_default_resolution() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = AbsPathBuf::new(temp.path().to_path_buf())
+            .unwrap()
+            .into_assume_dir();
+        let cache_dirs = CacheDirs::new(root.clone());
+        let env = HashMap::new();
+        let resolved = cache_dirs.resolve_with_env::<PackagesDir>(&env);
+        assert_eq!(
+            resolved,
+            root.join(consts::CACHED_PACKAGES).into_assume_dir()
+        );
+    }
+
+    #[test]
+    fn test_packages_dir_env_override() {
+        let temp_root = tempfile::tempdir().unwrap();
+        let root = AbsPathBuf::new(temp_root.path().to_path_buf())
+            .unwrap()
+            .into_assume_dir();
+        let temp_pkgs = tempfile::tempdir().unwrap();
+        let custom_pkgs = AbsPathBuf::new(temp_pkgs.path().to_path_buf())
+            .unwrap()
+            .into_assume_dir();
+        let cache_dirs = CacheDirs::new(root);
+        let mut env = HashMap::new();
+        env.insert(
+            "PIXI_CACHE_CONDA_PACKAGES_DIR".to_string(),
+            custom_pkgs.as_std_path().to_string_lossy().to_string(),
+        );
+        let resolved = cache_dirs.resolve_with_env::<PackagesDir>(&env);
+        assert_eq!(resolved, custom_pkgs);
     }
 }
