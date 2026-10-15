@@ -17,7 +17,7 @@ use toml_span::{
 
 use crate::{
     PixiPlatform, PixiPlatformName,
-    platform::{solver_record, subdir_default_virtual_packages},
+    platform::{manifest_record, solver_record, subdir_default_virtual_packages},
     system_requirements::{SystemRequirements, virtual_packages_for_subdir},
 };
 
@@ -851,8 +851,10 @@ fn render_key_value(key: &str, value: &str) -> String {
 /// [`PixiPlatformName::try_from`] (non-alphanumeric characters collapse to a
 /// single `-` and leading/trailing dashes are stripped).
 pub(crate) fn synthesize_name_string(subdir: Subdir, declared: &[GenericVirtualPackage]) -> String {
+    // Detector spelling names the same platform as manifest spelling.
+    let declared: Vec<_> = declared.iter().map(manifest_record).collect();
     let (friendly, raw) =
-        classify_virtual_packages(declared, Some(&subdir_default_virtual_packages(subdir)));
+        classify_virtual_packages(&declared, Some(&subdir_default_virtual_packages(subdir)));
     let mut parts: Vec<String> = vec![subdir.as_str().to_string()];
     for (key, value) in friendly {
         parts.push(format!("{key}-{}", sanitize_name_segment(&value)));
