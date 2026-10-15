@@ -11141,7 +11141,7 @@ To avoid this, you can use the `post-cleanup` input to specify the post cleanup 
 If you set `post-cleanup` to `true`, the action will delete the following files:
 
 - `.pixi` environment
-- the pixi binary
+- the pixi binary, if it was downloaded by this action (a preinstalled pixi found on `PATH` is left untouched)
 - the rattler cache
 - other rattler files in `~/.rattler`
 

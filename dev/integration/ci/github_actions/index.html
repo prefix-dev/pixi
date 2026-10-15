@@ -9455,7 +9455,7 @@ To avoid this, you can use the <code>post-cleanup</code> input to specify the po
 <p>If you set <code>post-cleanup</code> to <code>true</code>, the action will delete the following files:</p>
 <ul>
 <li><code>.pixi</code> environment</li>
-<li>the pixi binary</li>
+<li>the pixi binary, if it was downloaded by this action (a preinstalled pixi found on <code>PATH</code> is left untouched)</li>
 <li>the rattler cache</li>
 <li>other rattler files in <code>~/.rattler</code></li>
 </ul>
