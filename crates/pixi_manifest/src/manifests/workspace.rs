@@ -6180,6 +6180,21 @@ openssl = "<2"
         assert_eq!(linux_spec, "<2");
     }
 
+    /// The default feature of a manifest, to call [`FeaturesExt`] methods on.
+    struct DefaultFeature<'a>(&'a WorkspaceManifest);
+
+    impl<'a> HasWorkspaceManifest<'a> for DefaultFeature<'a> {
+        fn workspace_manifest(&self) -> &'a WorkspaceManifest {
+            self.0
+        }
+    }
+
+    impl<'a> HasFeaturesIter<'a> for DefaultFeature<'a> {
+        fn features(&self) -> impl DoubleEndedIterator<Item = &'a Feature> + 'a {
+            std::iter::once(self.0.default_feature())
+        }
+    }
+
     #[test]
     fn test_package_exclude_newer_tables_are_parsed() {
         let contents = r#"
@@ -6272,23 +6287,6 @@ exemptions = { torch = "*" }
 
     #[test]
     fn test_exclude_newer_config_applies_exemptions() {
-        struct TestFeatures<'a> {
-            manifest: &'a WorkspaceManifest,
-            features: Vec<&'a Feature>,
-        }
-
-        impl<'a> HasWorkspaceManifest<'a> for TestFeatures<'a> {
-            fn workspace_manifest(&self) -> &'a WorkspaceManifest {
-                self.manifest
-            }
-        }
-
-        impl<'a> HasFeaturesIter<'a> for TestFeatures<'a> {
-            fn features(&self) -> impl DoubleEndedIterator<Item = &'a Feature> + 'a {
-                self.features.clone().into_iter()
-            }
-        }
-
         let contents = r#"
 [workspace]
 name = "foo"
@@ -6298,11 +6296,7 @@ exclude-newer = { cutoff = "2015-12-02T02:07:43Z", exemptions = { polars = "1.43
 "#;
 
         let manifest = parse_pixi_toml(contents).manifest;
-        let default_feature = manifest.default_feature();
-        let features = TestFeatures {
-            manifest: &manifest,
-            features: vec![default_feature],
-        };
+        let features = DefaultFeature(&manifest);
         let resolved = features
             .exclude_newer_config_resolved(&default_channel_config())
             .unwrap()
@@ -6348,23 +6342,6 @@ exclude-newer = { cutoff = "2015-12-02T02:07:43Z", exemptions = { polars = "1.43
 
     #[test]
     fn test_pypi_exclude_newer_config_falls_back_to_conda_cutoff() {
-        struct TestFeatures<'a> {
-            manifest: &'a WorkspaceManifest,
-            features: Vec<&'a Feature>,
-        }
-
-        impl<'a> HasWorkspaceManifest<'a> for TestFeatures<'a> {
-            fn workspace_manifest(&self) -> &'a WorkspaceManifest {
-                self.manifest
-            }
-        }
-
-        impl<'a> HasFeaturesIter<'a> for TestFeatures<'a> {
-            fn features(&self) -> impl DoubleEndedIterator<Item = &'a Feature> + 'a {
-                self.features.clone().into_iter()
-            }
-        }
-
         let contents = r#"
 [workspace]
 name = "foo"
@@ -6374,11 +6351,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
 pypi-exclude-newer = { exemptions = { torch = "*" } }
 "#;
         let manifest = parse_pixi_toml(contents).manifest;
-        let default_feature = manifest.default_feature();
-        let features = TestFeatures {
-            manifest: &manifest,
-            features: vec![default_feature],
-        };
+        let features = DefaultFeature(&manifest);
         let resolved = features.pypi_exclude_newer_config_resolved();
         assert_eq!(
             resolved.cutoff.unwrap(),
@@ -6404,11 +6377,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
 pypi-exclude-newer = "2016-12-02T02:07:43Z"
 "#;
         let manifest = parse_pixi_toml(contents).manifest;
-        let default_feature = manifest.default_feature();
-        let features = TestFeatures {
-            manifest: &manifest,
-            features: vec![default_feature],
-        };
+        let features = DefaultFeature(&manifest);
         assert_eq!(
             features
                 .pypi_exclude_newer_config_resolved()
@@ -6422,23 +6391,6 @@ pypi-exclude-newer = "2016-12-02T02:07:43Z"
 
     #[test]
     fn test_exclude_newer_config_applies_package_overrides() {
-        struct TestFeatures<'a> {
-            manifest: &'a WorkspaceManifest,
-            features: Vec<&'a Feature>,
-        }
-
-        impl<'a> HasWorkspaceManifest<'a> for TestFeatures<'a> {
-            fn workspace_manifest(&self) -> &'a WorkspaceManifest {
-                self.manifest
-            }
-        }
-
-        impl<'a> HasFeaturesIter<'a> for TestFeatures<'a> {
-            fn features(&self) -> impl DoubleEndedIterator<Item = &'a Feature> + 'a {
-                self.features.clone().into_iter()
-            }
-        }
-
         let contents = r#"
 [project]
 name = "foo"
@@ -6452,11 +6404,7 @@ polars = "0d"
 
         let before = jiff::Timestamp::now();
         let manifest = parse_pixi_toml(contents).manifest;
-        let default_feature = manifest.default_feature();
-        let features = TestFeatures {
-            manifest: &manifest,
-            features: vec![default_feature],
-        };
+        let features = DefaultFeature(&manifest);
         let config: rattler_solve::ExcludeNewer = features
             .exclude_newer_config_resolved(&default_channel_config())
             .unwrap()
@@ -6472,23 +6420,6 @@ polars = "0d"
 
     #[test]
     fn test_exclude_newer_config_applies_channel_overrides() {
-        struct TestFeatures<'a> {
-            manifest: &'a WorkspaceManifest,
-            features: Vec<&'a Feature>,
-        }
-
-        impl<'a> HasWorkspaceManifest<'a> for TestFeatures<'a> {
-            fn workspace_manifest(&self) -> &'a WorkspaceManifest {
-                self.manifest
-            }
-        }
-
-        impl<'a> HasFeaturesIter<'a> for TestFeatures<'a> {
-            fn features(&self) -> impl DoubleEndedIterator<Item = &'a Feature> + 'a {
-                self.features.clone().into_iter()
-            }
-        }
-
         let contents = r#"
 [project]
 name = "foo"
@@ -6499,11 +6430,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
 
         let before = jiff::Timestamp::now();
         let manifest = parse_pixi_toml(contents).manifest;
-        let default_feature = manifest.default_feature();
-        let features = TestFeatures {
-            manifest: &manifest,
-            features: vec![default_feature],
-        };
+        let features = DefaultFeature(&manifest);
         let channel_config = default_channel_config();
         let config: rattler_solve::ExcludeNewer = features
             .exclude_newer_config_resolved(&channel_config)
