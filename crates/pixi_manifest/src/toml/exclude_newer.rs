@@ -33,46 +33,59 @@ impl TomlExcludeNewer {
 
 impl<'de> toml_span::Deserialize<'de> for TomlExcludeNewer {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
-        match value.take() {
-            ValueInner::String(cutoff) => {
-                let cutoff = ExcludeNewer::from_str(&cutoff).map_err(|err| {
-                    DeserError::from(toml_span::Error {
-                        kind: ErrorKind::Custom(err.into()),
-                        span: value.span,
-                        line_info: None,
-                    })
-                })?;
-                Ok(Self(ExcludeNewerConfig::from_cutoff(cutoff)))
-            }
-            inner @ ValueInner::Table(_) => {
-                let mut table = Value::with_span(inner, value.span);
-                let mut th = TableHelper::new(&mut table)?;
-                // Unlike `pypi-exclude-newer`, there is no cutoff to fall
-                // back to, so exemptions without a cutoff would do nothing.
-                let cutoff = th
-                    .required::<TomlFromStr<ExcludeNewer>>("cutoff")
-                    .ok()
-                    .map(TomlFromStr::into_inner);
-                let exemptions = match th.take("exemptions") {
-                    Some((_, mut exemptions)) => match parse_conda_exemptions(&mut exemptions) {
-                        Ok(exemptions) => exemptions,
-                        Err(err) => {
-                            th.errors.extend(err.errors);
-                            IndexMap::new()
-                        }
-                    },
-                    None => IndexMap::new(),
-                };
-                th.finalize(None)?;
-                Ok(Self(ExcludeNewerConfig { cutoff, exemptions }))
-            }
-            other => Err(expected(
-                "a cutoff string or a table with `cutoff` and `exemptions`",
-                other,
-                value.span,
-            )
-            .into()),
+        // Unlike `pypi-exclude-newer`, there is no cutoff to fall back to, so
+        // exemptions without a cutoff would do nothing.
+        let (cutoff, exemptions) =
+            parse_cutoff_and_exemptions(value, true, parse_conda_exemptions)?;
+        Ok(Self(ExcludeNewerConfig { cutoff, exemptions }))
+    }
+}
+
+/// Parses either a bare cutoff string or a table with a `cutoff` and
+/// `exemptions`, the latter parsed by `parse_exemptions`.
+fn parse_cutoff_and_exemptions<'de, E: Default>(
+    value: &mut Value<'de>,
+    cutoff_required: bool,
+    parse_exemptions: impl FnOnce(&mut Value<'de>) -> Result<E, DeserError>,
+) -> Result<(Option<ExcludeNewer>, E), DeserError> {
+    match value.take() {
+        ValueInner::String(cutoff) => {
+            let cutoff = ExcludeNewer::from_str(&cutoff).map_err(|err| {
+                DeserError::from(toml_span::Error {
+                    kind: ErrorKind::Custom(err.into()),
+                    span: value.span,
+                    line_info: None,
+                })
+            })?;
+            Ok((Some(cutoff), E::default()))
         }
+        inner @ ValueInner::Table(_) => {
+            let mut table = Value::with_span(inner, value.span);
+            let mut th = TableHelper::new(&mut table)?;
+            let cutoff = if cutoff_required {
+                th.required::<TomlFromStr<ExcludeNewer>>("cutoff").ok()
+            } else {
+                th.optional::<TomlFromStr<ExcludeNewer>>("cutoff")
+            }
+            .map(TomlFromStr::into_inner);
+            let exemptions = match th.take("exemptions") {
+                Some((_, mut exemptions)) => {
+                    parse_exemptions(&mut exemptions).unwrap_or_else(|err| {
+                        th.errors.extend(err.errors);
+                        E::default()
+                    })
+                }
+                None => E::default(),
+            };
+            th.finalize(None)?;
+            Ok((cutoff, exemptions))
+        }
+        other => Err(expected(
+            "a cutoff string or a table with `cutoff` and `exemptions`",
+            other,
+            value.span,
+        )
+        .into()),
     }
 }
 
@@ -249,46 +262,9 @@ impl TomlPypiExcludeNewer {
 
 impl<'de> toml_span::Deserialize<'de> for TomlPypiExcludeNewer {
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
-        match value.take() {
-            ValueInner::String(cutoff) => {
-                let cutoff = ExcludeNewer::from_str(&cutoff).map_err(|err| {
-                    DeserError::from(toml_span::Error {
-                        kind: ErrorKind::Custom(err.into()),
-                        span: value.span,
-                        line_info: None,
-                    })
-                })?;
-                Ok(Self(PypiExcludeNewerConfig {
-                    cutoff: Some(cutoff),
-                    exemptions: IndexMap::new(),
-                }))
-            }
-            inner @ ValueInner::Table(_) => {
-                let mut table = Value::with_span(inner, value.span);
-                let mut th = TableHelper::new(&mut table)?;
-                let cutoff = th
-                    .optional::<TomlFromStr<ExcludeNewer>>("cutoff")
-                    .map(TomlFromStr::into_inner);
-                let exemptions = match th.take("exemptions") {
-                    Some((_, mut exemptions)) => match parse_pypi_exemptions(&mut exemptions) {
-                        Ok(exemptions) => exemptions,
-                        Err(err) => {
-                            th.errors.extend(err.errors);
-                            IndexMap::new()
-                        }
-                    },
-                    None => IndexMap::new(),
-                };
-                th.finalize(None)?;
-                Ok(Self(PypiExcludeNewerConfig { cutoff, exemptions }))
-            }
-            other => Err(expected(
-                "a cutoff string or a table with `cutoff` and `exemptions`",
-                other,
-                value.span,
-            )
-            .into()),
-        }
+        let (cutoff, exemptions) =
+            parse_cutoff_and_exemptions(value, false, parse_pypi_exemptions)?;
+        Ok(Self(PypiExcludeNewerConfig { cutoff, exemptions }))
     }
 }
 
