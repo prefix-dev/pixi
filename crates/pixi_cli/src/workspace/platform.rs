@@ -16,7 +16,10 @@ use pixi_manifest::{
         subdir_default_virtual_packages,
     },
 };
-use rattler_conda_types::{GenericVirtualPackage, PackageName, Subdir, Version};
+use rattler_conda_types::{
+    GenericVirtualPackage, PackageName, Subdir, Version,
+    virtual_package_detector::VirtualPackageName,
+};
 
 use crate::{
     cli_config::{ScriptWorkspaceConfig, script_lock_file_usage},
@@ -291,9 +294,12 @@ fn parse_raw_virtual_package(spec: &str) -> miette::Result<GenericVirtualPackage
             "'{spec}' is not a virtual package spec: name must start with '__' followed by a name (e.g. '__cuda=12.0')"
         );
     }
-    let name = PackageName::try_from(name_str)
+    // Validate like the manifest parser does, so whatever the CLI writes can
+    // be read back.
+    let name = VirtualPackageName::try_from(name_str)
         .into_diagnostic()
-        .map_err(|e| miette::miette!("'{name_str}' is not a valid virtual package name: {e}"))?;
+        .map_err(|e| miette::miette!("'{name_str}' is not a valid virtual package name: {e}"))?
+        .into_package_name();
     let version_str = parts.next().unwrap_or("0");
     let version = Version::from_str(version_str)
         .into_diagnostic()
@@ -1402,6 +1408,16 @@ mod tests {
         // manifest's raw parser -- rather than being silently dropped.
         let package = parse_raw_virtual_package("__foo=1=special=build").unwrap();
         assert_eq!(package.build_string, "special=build");
+    }
+
+    #[test]
+    fn parse_raw_virtual_package_rejects_names_the_manifest_rejects() {
+        for spec in ["__a..b=1", "__a__b=1", "__-x=1", "___x=1"] {
+            assert!(
+                parse_raw_virtual_package(spec).is_err(),
+                "{spec} must be rejected"
+            );
+        }
     }
 
     #[test]
