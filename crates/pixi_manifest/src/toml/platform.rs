@@ -799,7 +799,10 @@ pub fn inline_virtual_package_specs(
         .collect();
     let lookup =
         |conda_name: &str| (*by_name.get(conda_name).expect("entry came from `declared`")).clone();
-    platform_inline_entries(declared, baseline)
+    // Detected records render in manifest spelling, like their names; the
+    // returned packages keep the records as given.
+    let spelled: Vec<_> = declared.iter().map(manifest_record).collect();
+    platform_inline_entries(&spelled, baseline)
         .into_iter()
         .map(|entry| match entry {
             InlinePlatformEntry::Scalar {
@@ -1869,6 +1872,42 @@ mod test {
             json,
             serde_json::json!({ "platform": "linux-64", "cuda": "12.0=h1" })
         );
+    }
+
+    #[test]
+    fn test_roundtrip_cuda_table_with_build_strings() {
+        let input = r#"platform = { platform = "linux-64", cuda = { driver = "12.0=h1", arch = "8.6=h2" } }"#;
+        let parsed = TopLevel::from_toml_str(input).unwrap();
+        let json = serde_json::to_value(TomlPixiPlatform(parsed.platform)).unwrap();
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "platform": "linux-64",
+                "cuda": { "driver": "12.0=h1", "arch": "8.6=h2" },
+            })
+        );
+    }
+
+    #[test]
+    fn detected_records_render_in_manifest_spelling() {
+        let detected = |name: &str, version: &str, build: &str| GenericVirtualPackage {
+            name: name.parse().unwrap(),
+            version: version.parse().unwrap(),
+            build_string: build.to_string(),
+        };
+        let declared = [
+            detected("__unix", "0", "0"),
+            detected("__osx", "15.1", "0"),
+            detected("__archspec", "1", "m4"),
+        ];
+        let specs = inline_virtual_package_specs(
+            &declared,
+            Some(&subdir_default_virtual_packages(Subdir::OsxArm64)),
+        );
+        let rendered: Vec<_> = specs.iter().map(|spec| spec.rendered.as_str()).collect();
+        assert_eq!(rendered, ["archspec=m4", "macos=15.1"]);
+        // The records themselves are not rewritten.
+        assert_eq!(specs[0].packages, [declared[2].clone()]);
     }
 
     #[test]
