@@ -305,6 +305,31 @@ c_compiler = ["vs2019"]
 cxx_compiler = ["vs2019"]
 ```
 
+## CMake Build Type
+
+For `ament_cmake`, `catkin` and `cmake` packages the backend passes `CMAKE_BUILD_TYPE` to CMake.
+It defaults to `Release`, and the `cmake_build_type` variant selects a different one:
+
+```toml title="pixi.toml"
+[workspace.build-variants]
+cmake_build_type = ["Debug"]
+```
+
+The variant is read from the workspace manifest. Changing it changes the build string, so a `Debug`
+build does not overwrite the `Release` artifact of the same package and version.
+
+Setting `CMAKE_BUILD_TYPE` in [`env`](#env) overrides the variant:
+
+```toml title="pixi.toml"
+[package.build.config]
+env = { CMAKE_BUILD_TYPE = "RelWithDebInfo" }
+```
+
+A build type pinned this way is not part of the build string, so prefer the variant when you want
+the two build types to produce distinguishable artifacts.
+
+This setting has no effect on `ament_python` packages.
+
 ## Build Process
 
 The ROS backend follows this build process:

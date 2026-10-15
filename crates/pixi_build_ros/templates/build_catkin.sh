@@ -95,7 +95,7 @@ fi
 cmake ${CMAKE_ARGS} --compile-no-warning-as-error \
     -DCMAKE_INSTALL_PREFIX=$PREFIX \
     -DCMAKE_PREFIX_PATH=$PREFIX \
-    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_BUILD_TYPE=@BUILD_TYPE@ \
     -DCMAKE_INSTALL_LIBDIR=lib \
     -DCMAKE_NO_SYSTEM_FROM_IMPORTED=ON \
     -DCMAKE_FIND_FRAMEWORK=LAST \
@@ -116,13 +116,13 @@ cmake ${CMAKE_ARGS} --compile-no-warning-as-error \
     -G "$GENERATOR" \
     $SRC_DIR
 
-cmake --build . --config Release --target all
+cmake --build . --config @BUILD_TYPE@ --target all
 
 if [[ $SKIP_TESTING == "OFF" ]]; then
-    cmake --build . --config Release --target run_tests
+    cmake --build . --config @BUILD_TYPE@ --target run_tests
 fi
 
-cmake --build . --config Release --target install
+cmake --build . --config @BUILD_TYPE@ --target install
 
 if [ "${PKG_NAME}" == "ros-noetic-catkin" ]; then
     # Copy the [de]activate scripts to $PREFIX/etc/conda/[de]activate.d.

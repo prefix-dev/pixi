@@ -31,6 +31,17 @@ use crate::package_map::{
 };
 use crate::package_xml::PackageXml;
 
+/// Variant key selecting the CMake build type for cmake-based ROS packages.
+///
+/// Left undeclared in `default_variants` on purpose: declaring it would put it
+/// in every package's build hash and rename artifacts that are otherwise
+/// unchanged. Packages that never set it keep the build string they have today.
+const CMAKE_BUILD_TYPE_VARIANT: &str = "cmake_build_type";
+
+/// Build type used when the variant is not set, matching the behaviour before
+/// this was configurable.
+const DEFAULT_CMAKE_BUILD_TYPE: &str = "Release";
+
 #[derive(Default, Clone)]
 pub struct RosGenerator {}
 
@@ -307,6 +318,19 @@ impl GenerateRecipe for RosGenerator {
         script_env.insert(
             "ROS_VERSION".to_string(),
             Value::new_concrete(distro.version.as_env_value().to_string(), None),
+        );
+        // Resolved by rattler-build from the `cmake_build_type` variant, so
+        // `--variant cmake_build_type=Debug` reaches the build script. Falls
+        // back to the previous hardcoded value when unset.
+        script_env.insert(
+            "CMAKE_BUILD_TYPE".to_string(),
+            Value::new_template(
+                JinjaTemplate::new(format!(
+                    "${{{{ {CMAKE_BUILD_TYPE_VARIANT} | default('{DEFAULT_CMAKE_BUILD_TYPE}') }}}}"
+                ))
+                .expect("valid jinja template"),
+                None,
+            ),
         );
         if let Some(user_env) = &config.env {
             for (k, v) in user_env {

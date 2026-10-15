@@ -54,7 +54,7 @@ if errorlevel 1 exit 1
 
 :: We explicitly pass %CPU_COUNT% to cmake --build as we are not using Ninja,
 :: see the comment before setting the CMAKE_GENERATOR env variable
-cmake --build . --config Release --parallel %CPU_COUNT% --target install
+cmake --build . --config %BUILD_TYPE% --parallel %CPU_COUNT% --target install
 if errorlevel 1 exit 1
 
 :: `cmake --install` only copies files, it never removes them, so a prefix reused
