@@ -1942,7 +1942,7 @@ async fn test_exclude_newer_exemption_keeps_lock_file_satisfied() {
     // The locked `foo 2` is newer than the cutoff but exempt, so the lock file
     // stays up to date.
     let workspace = pixi.workspace().unwrap();
-    let up_to_date = workspace
+    workspace
         .update_lock_file(
             None,
             UpdateLockFileOptions {
@@ -1951,10 +1951,8 @@ async fn test_exclude_newer_exemption_keeps_lock_file_satisfied() {
             },
         )
         .await
-        .map(|_| ());
-    if let Err(err) = up_to_date {
-        panic!("the lock file should be up to date: {err:?}");
-    }
+        .map(|_| ())
+        .expect("the lock file should be up to date");
 
     // Dropping the exemption makes the locked package violate the cutoff.
     pixi.update_manifest(&format!(
