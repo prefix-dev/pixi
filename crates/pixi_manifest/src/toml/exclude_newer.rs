@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
 
 use indexmap::IndexMap;
 use itertools::Itertools;
@@ -95,7 +95,7 @@ fn parse_cutoff_and_exemptions<'de, E: Default>(
 /// like `polars` and `Polars`, which would otherwise silently overwrite each
 /// other.
 fn check_duplicate_exemption<N: std::hash::Hash + Eq + Clone>(
-    name_spans: &mut IndexMap<N, Span>,
+    name_spans: &mut HashMap<N, Span>,
     name: &N,
     key: &toml_span::value::Key<'_>,
     errors: &mut DeserError,
@@ -129,13 +129,10 @@ fn parse_conda_exemptions(
 
     let mut errors = DeserError { errors: vec![] };
     let mut exemptions = IndexMap::new();
-    let mut name_spans = IndexMap::new();
+    let mut name_spans = HashMap::new();
     for (key, mut entry) in table.into_iter().sorted_by_key(|(k, _)| k.span.start) {
         let name = match PackageName::from_str(&key.name) {
-            Ok(name) if check_duplicate_exemption(&mut name_spans, &name, &key, &mut errors) => {
-                name
-            }
-            Ok(_) => continue,
+            Ok(name) => name,
             Err(err) => {
                 errors.errors.push(toml_span::Error {
                     kind: ErrorKind::Custom(err.to_string().into()),
@@ -145,6 +142,9 @@ fn parse_conda_exemptions(
                 continue;
             }
         };
+        if !check_duplicate_exemption(&mut name_spans, &name, &key, &mut errors) {
+            continue;
+        }
 
         let span = entry.span;
         let spec = match TomlSpec::deserialize_from_value(&mut entry) {
@@ -272,13 +272,10 @@ fn parse_pypi_exemptions(
 
     let mut errors = DeserError { errors: vec![] };
     let mut exemptions = IndexMap::new();
-    let mut name_spans = IndexMap::new();
+    let mut name_spans = HashMap::new();
     for (key, mut entry) in table.into_iter().sorted_by_key(|(k, _)| k.span.start) {
         let name = match PypiPackageName::from_str(&key.name) {
-            Ok(name) if check_duplicate_exemption(&mut name_spans, &name, &key, &mut errors) => {
-                name
-            }
-            Ok(_) => continue,
+            Ok(name) => name,
             Err(err) => {
                 errors.errors.push(toml_span::Error {
                     kind: ErrorKind::Custom(err.to_string().into()),
@@ -288,6 +285,9 @@ fn parse_pypi_exemptions(
                 continue;
             }
         };
+        if !check_duplicate_exemption(&mut name_spans, &name, &key, &mut errors) {
+            continue;
+        }
 
         let span = entry.span;
         let version = match VersionOrStar::deserialize(&mut entry) {
