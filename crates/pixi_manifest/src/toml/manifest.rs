@@ -380,31 +380,39 @@ impl TomlManifest {
         let mut features_used_by_environments = HashSet::new();
         for (name, env) in toml_environments {
             // Decompose the TOML
-            let (inline, included_features, features_span, solve_group, no_default_feature) =
-                match env {
-                    TomlEnvironmentList::Map(env) => {
-                        let TomlEnvironment {
-                            features,
-                            solve_group,
-                            no_default_feature,
-                            inline,
-                        } = *env;
-                        let (features, features_span) = features.map_or_else(
-                            || (Vec::new(), None),
-                            |Spanned { value, span }| (value, Some(span)),
-                        );
-                        (
-                            Some(inline),
-                            features,
-                            features_span,
-                            solve_group,
-                            no_default_feature,
-                        )
-                    }
-                    TomlEnvironmentList::Seq(features) => {
-                        (None, features.value, Some(features.span), None, false)
-                    }
-                };
+            let (
+                inline,
+                included_features,
+                features_span,
+                solve_group,
+                no_default_feature,
+                description,
+            ) = match env {
+                TomlEnvironmentList::Map(env) => {
+                    let TomlEnvironment {
+                        features,
+                        solve_group,
+                        no_default_feature,
+                        description,
+                        inline,
+                    } = *env;
+                    let (features, features_span) = features.map_or_else(
+                        || (Vec::new(), None),
+                        |Spanned { value, span }| (value, Some(span)),
+                    );
+                    (
+                        Some(inline),
+                        features,
+                        features_span,
+                        solve_group,
+                        no_default_feature,
+                        description,
+                    )
+                }
+                TomlEnvironmentList::Seq(features) => {
+                    (None, features.value, Some(features.span), None, false, None)
+                }
+            };
 
             // Synthesize the implicit feature that carries the environment's
             // inline content and prepend it to the environment's features.
@@ -532,6 +540,7 @@ impl TomlManifest {
                 features: feature_names,
                 solve_group: solve_group.map(|sg| solve_groups.add(sg, environment_idx)),
                 no_default_feature,
+                description,
             }));
         }
 
@@ -3150,6 +3159,37 @@ mod test {
     }
 
     #[test]
+    fn test_environment_description() {
+        let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [feature.test.dependencies]
+        pytest = "*"
+
+        [environments]
+        test = { features = ["test"], description = "environment for tests" }
+        plain = ["test"]
+        "#,
+            Path::new(""),
+        )
+        .unwrap();
+
+        let test = manifest
+            .environment("test")
+            .expect("test environment exists");
+        assert_eq!(test.description.as_deref(), Some("environment for tests"));
+
+        let plain = manifest
+            .environment("plain")
+            .expect("plain environment exists");
+        assert_eq!(plain.description, None);
+    }
+
+    #[test]
     fn test_environment_inline_full_content() {
         let manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
@@ -3202,8 +3242,8 @@ mod test {
         git = "*"
         "#,
         ), @r###"
-          × Unexpected keys, expected only 'features', 'solve-group', 'no-default-feature', 'platforms', 'channels', 'channel-priority', 'solve-strategy', 'target', 'dependencies', 'pypi-dependencies',
-          │ 'dev', 'constraints', 'activation', 'tasks', 'pypi-options'
+          × Unexpected keys, expected only 'features', 'solve-group', 'no-default-feature', 'description', 'platforms', 'channels', 'channel-priority', 'solve-strategy', 'target', 'dependencies', 'pypi-
+          │ dependencies', 'dev', 'constraints', 'activation', 'tasks', 'pypi-options'
            ╭─[pixi.toml:7:27]
          6 │
          7 │         [environments.dev.host-dependencies]
@@ -3261,8 +3301,8 @@ mod test {
         cuda = "12"
         "#,
         ), @r###"
-          × Unexpected keys, expected only 'features', 'solve-group', 'no-default-feature', 'platforms', 'channels', 'channel-priority', 'solve-strategy', 'target', 'dependencies', 'pypi-dependencies',
-          │ 'dev', 'constraints', 'activation', 'tasks', 'pypi-options'
+          × Unexpected keys, expected only 'features', 'solve-group', 'no-default-feature', 'description', 'platforms', 'channels', 'channel-priority', 'solve-strategy', 'target', 'dependencies', 'pypi-
+          │ dependencies', 'dev', 'constraints', 'activation', 'tasks', 'pypi-options'
             ╭─[pixi.toml:10:27]
           9 │
          10 │         [environments.dev.system-requirements]

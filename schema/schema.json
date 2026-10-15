@@ -904,6 +904,12 @@
             "minLength": 1
           }
         },
+        "description": {
+          "title": "Description",
+          "description": "A short description of the environment",
+          "type": "string",
+          "minLength": 1
+        },
         "dev": {
           "title": "Dev",
           "description": "Source packages whose dependencies should be installed without building the package itself. Useful for development environments.",
