@@ -25,7 +25,7 @@ use std::{
 };
 
 use crate::{
-    activation::{CurrentEnvVarBehavior, initialize_env_variables},
+    activation::{ActivationError, CurrentEnvVarBehavior, initialize_env_variables},
     lock_file::filter_lock_file,
     repodata::Repodata,
 };
@@ -1360,13 +1360,10 @@ pub async fn get_activated_environment_variables<'a>(
     lock_file: Option<&LockFile>,
     force_activate: bool,
     experimental_cache: bool,
-) -> miette::Result<&'a HashMap<String, String>> {
-    let vars = project_env_vars.get(environment.name()).ok_or_else(|| {
-        miette::miette!(
-            "{} environment should be already created during project creation",
-            environment.name()
-        )
-    })?;
+) -> Result<&'a HashMap<String, String>, ActivationError> {
+    let vars = project_env_vars
+        .get(environment.name())
+        .ok_or_else(|| ActivationError::MissingEnvironmentVars(environment.name().clone()))?;
     match current_env_var_behavior {
         CurrentEnvVarBehavior::Clean => {
             vars.clean()
