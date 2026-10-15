@@ -1,0 +1,13 @@
+---
+source: crates/pixi_manifest/src/toml/manifest.rs
+expression: "expect_parse_failure(r#\"\n        [workspace]\n        channels = []\n        platforms = []\n\n        [tasks]\n        foo = \"bar\"\n        baz = [{ task = \"foo\", enviroment = \"default\" }]\n        \"#,)"
+---
+  × Unexpected keys, expected only 'task', 'args', 'environment'
+   ╭─[pixi.toml:8:32]
+ 7 │         foo = "bar"
+ 8 │         baz = [{ task = "foo", enviroment = "default" }]
+   ·                                ─────┬────
+   ·                                     ╰── 'enviroment' was not expected here
+ 9 │
+   ╰────
+  help: Did you mean 'environment'?
