@@ -551,7 +551,7 @@ pub async fn resolve_pypi(
     // The BuildDispatch might resolve or install when building wheels which will be
     // mostly with build isolation. In that case we want to use fresh
     // non-tampered requests.
-    .with_shared_state(context.shared_state.fork())
+    .with_shared_state(context.shared_state.fork().into_inner())
     .with_no_sources(context.no_sources.clone())
     .with_concurrency(context.concurrency.clone())
     .with_link_mode(link_mode)

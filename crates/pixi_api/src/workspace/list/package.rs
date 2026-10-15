@@ -61,7 +61,7 @@ impl Package {
         let kind = PackageKind::from(package);
 
         let build = match package {
-            PackageExt::Conda(pkg) => pkg.record().map(|r| r.build.clone()),
+            PackageExt::Conda(pkg) => pkg.record().map(|r| r.build.to_string()),
             PackageExt::PyPI(_, _) => None,
         };
 

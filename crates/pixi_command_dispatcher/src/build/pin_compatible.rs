@@ -54,7 +54,7 @@ pub fn resolve_pin_compatible(
     let pin = Pin::try_from(spec.clone())?;
     Ok(pin.resolve(
         &record.package_record().version,
-        &record.package_record().build,
+        record.package_record().build.as_str(),
     )?)
 }
 
@@ -92,7 +92,7 @@ mod tests {
         let mut pr = PackageRecord::new(
             pkg_name,
             VersionWithSource::from_str(version).expect("valid version"),
-            build.to_string(),
+            rattler_conda_types::package::BuildString::new_unchecked(build.to_string()),
         );
         pr.subdir = "linux-64".into();
         let file_name = format!("{name}-{version}-{build}.conda");

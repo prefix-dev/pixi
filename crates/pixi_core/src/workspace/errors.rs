@@ -347,7 +347,7 @@ mod tests {
         GenericVirtualPackage {
             name: PackageName::from_str(name).unwrap(),
             version: Version::from_str(version).unwrap(),
-            build_string: String::new(),
+            build_string: rattler_conda_types::package::BuildString::new_unchecked("0"),
         }
     }
 

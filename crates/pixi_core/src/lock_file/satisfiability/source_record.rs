@@ -816,7 +816,7 @@ fn verify_locked_against_backend_specs(
                     unsat(format!("{} (pin_compatible: {err})", dep_name.as_source()))
                 })?;
                 let resolved = pin
-                    .resolve(&pin_record.version, &pin_record.build)
+                    .resolve(&pin_record.version, pin_record.build.as_str())
                     .map_err(|err| {
                         unsat(format!("{} (pin_compatible: {err})", dep_name.as_source()))
                     })?;
@@ -920,7 +920,9 @@ fn build_full_source_record_from_output(
             .as_ref()
             .map(ToString::to_string),
         name: output.metadata.name.clone(),
-        build: output.metadata.build.clone(),
+        build: rattler_conda_types::package::BuildString::new_unchecked(
+            output.metadata.build.clone(),
+        ),
         version: output.metadata.version.clone(),
         build_number: output.metadata.build_number,
         license: output.metadata.license.clone(),
@@ -1015,7 +1017,7 @@ mod tests {
         let mut pr = PackageRecord::new(
             pkg_name,
             VersionWithSource::from_str(version).expect("valid version"),
-            "h0".into(),
+            rattler_conda_types::package::BuildString::new_unchecked("h0"),
         );
         pr.subdir = "linux-64".into();
         let file_name = format!("{name}-{version}-h0.conda");
@@ -1573,7 +1575,7 @@ mod tests {
             "1.0.0"
                 .parse::<rattler_conda_types::VersionWithSource>()
                 .unwrap(),
-            "h0_0".into(),
+            rattler_conda_types::package::BuildString::new_unchecked("h0_0"),
         );
         pr.subdir = "linux-64".into();
         pr.depends = depends;

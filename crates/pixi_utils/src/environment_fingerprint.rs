@@ -121,7 +121,7 @@ mod tests {
             version
                 .parse::<rattler_conda_types::VersionWithSource>()
                 .unwrap(),
-            "0".into(),
+            rattler_conda_types::package::BuildString::new_unchecked("0"),
         );
         package_record.subdir = "noarch".into();
         RepoDataRecord {

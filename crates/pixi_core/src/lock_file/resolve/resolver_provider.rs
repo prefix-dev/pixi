@@ -13,13 +13,12 @@ use pixi_record::PixiRecord;
 use uv_distribution::{ArchiveMetadata, Metadata};
 use uv_distribution_filename::SourceDistExtension;
 use uv_distribution_types::{
-    Dist, File, FileLocation, HashComparison, IndexUrl, PrioritizedDist, RegistrySourceDist,
-    SourceDist, SourceDistCompatibility, UrlString,
+    Dist, File, FileLocation, IndexUrl, RegistrySourceDist, SourceDist, UrlString,
 };
 use uv_redacted::DisplaySafeUrl;
 use uv_resolver::{
-    DefaultResolverProvider, FlatDistributions, MetadataResponse, ResolverProvider, VersionMap,
-    VersionsResponse, WheelMetadataResult,
+    DefaultResolverProvider, FlatDistributions, HashComparison, MetadataResponse, PrioritizedDist,
+    ResolverProvider, SourceDistCompatibility, VersionMap, VersionsResponse, WheelMetadataResult,
 };
 use uv_types::BuildContext;
 

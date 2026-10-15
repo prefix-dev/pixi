@@ -521,10 +521,10 @@ impl PixiPlatform {
     /// pixi's per-subdir baseline. This is the set that defines a platform's
     /// identity (see [`Self::has_same_definition`]).
     ///
-    /// Build strings are canonicalised (`"0"` -> `""`): rattler's detection
-    /// uses `"0"` as the placeholder build for version-only virtual packages
-    /// (`__glibc`, `__linux`, ...), while the manifest's friendly form drops it
-    /// entirely, so the two must compare equal.
+    /// Build strings are canonicalised (`""` -> `"0"`): rattler uses `"0"` as
+    /// the placeholder build for version-only virtual packages (`__glibc`,
+    /// `__linux`, ...), while the manifest's friendly form drops it entirely,
+    /// so the two must compare equal.
     pub fn customised_virtual_packages(&self) -> Vec<GenericVirtualPackage> {
         self.declared_virtual_packages
             .iter()
@@ -532,8 +532,8 @@ impl PixiPlatform {
             .map(|gvp| GenericVirtualPackage {
                 name: gvp.name.clone(),
                 version: gvp.version.clone(),
-                build_string: if gvp.build_string == "0" {
-                    String::new()
+                build_string: if gvp.build_string.is_empty() {
+                    rattler_conda_types::package::BuildString::new_unchecked("0")
                 } else {
                     gvp.build_string.clone()
                 },
@@ -732,7 +732,7 @@ pub fn subdir_default_virtual_packages(subdir: Subdir) -> Vec<GenericVirtualPack
         GenericVirtualPackage {
             name: PackageName::try_from(name).expect("static virtual-package name"),
             version,
-            build_string: String::new(),
+            build_string: rattler_conda_types::package::BuildString::new_unchecked("0"),
         }
     }
 
@@ -742,7 +742,7 @@ pub fn subdir_default_virtual_packages(subdir: Subdir) -> Vec<GenericVirtualPack
         defaults.push(GenericVirtualPackage {
             name: PackageName::try_from("__unix").expect("static virtual-package name"),
             version: Version::major(0),
-            build_string: "0".to_string(),
+            build_string: rattler_conda_types::package::BuildString::new_unchecked("0"),
         });
     }
     if subdir.is_linux() {
@@ -759,7 +759,7 @@ pub fn subdir_default_virtual_packages(subdir: Subdir) -> Vec<GenericVirtualPack
         defaults.push(GenericVirtualPackage {
             name: PackageName::try_from("__archspec").expect("static virtual-package name"),
             version: Version::major(0),
-            build_string: spec.as_str().to_string(),
+            build_string: rattler_conda_types::package::BuildString::new_unchecked(spec.as_str()),
         });
     }
 
@@ -835,7 +835,7 @@ fn generic_to_virtual_package(gvp: &GenericVirtualPackage) -> Option<VirtualPack
             version: gvp.version.clone(),
         })),
         "__archspec" => Some(VirtualPackage::Archspec(archspec_from_build_string(
-            &gvp.build_string,
+            gvp.build_string.as_str(),
         ))),
         _ => None,
     }
@@ -905,14 +905,14 @@ fn archspec_capability_satisfied_by(
     required: &GenericVirtualPackage,
     system: &[GenericVirtualPackage],
 ) -> bool {
-    let Some(required_name) = archspec_microarchitecture(&required.build_string) else {
+    let Some(required_name) = archspec_microarchitecture(required.build_string.as_str()) else {
         return true;
     };
     system
         .iter()
         .filter(|provided| provided.name == required.name)
         .any(
-            |provided| match archspec_microarchitecture(&provided.build_string) {
+            |provided| match archspec_microarchitecture(provided.build_string.as_str()) {
                 None => true,
                 Some(provided_name) => archspec_covers(provided_name, required_name),
             },
@@ -1108,13 +1108,13 @@ pub fn parse_locked_virtual_package(raw: &str) -> Option<GenericVirtualPackage> 
     let mut parts = raw.splitn(3, '=');
     let name_str = parts.next()?;
     let version_str = parts.next()?;
-    let build_string = parts.next().unwrap_or("").to_string();
+    let build_string = parts.next().filter(|b| !b.is_empty()).unwrap_or("0");
     let name = PackageName::try_from(name_str).ok()?;
     let version = Version::from_str(version_str).ok()?;
     Some(GenericVirtualPackage {
         name,
         version,
-        build_string,
+        build_string: rattler_conda_types::package::BuildString::new_unchecked(build_string),
     })
 }
 
@@ -1197,7 +1197,7 @@ mod tests {
         GenericVirtualPackage {
             name: PackageName::try_from(name).unwrap(),
             version: Version::from_str(version).unwrap(),
-            build_string: String::new(),
+            build_string: rattler_conda_types::package::BuildString::new_unchecked("0"),
         }
     }
 
@@ -1223,7 +1223,9 @@ mod tests {
         GenericVirtualPackage {
             name: PackageName::try_from("__archspec").unwrap(),
             version: Version::major(0),
-            build_string: microarchitecture.to_string(),
+            build_string: rattler_conda_types::package::BuildString::new_unchecked(
+                microarchitecture.to_string(),
+            ),
         }
     }
 

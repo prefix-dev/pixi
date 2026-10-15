@@ -143,15 +143,21 @@ pub fn verify_environment_satisfiability(
             .filter(|gvp| !pixi_manifest::platform::is_subdir_default(gvp, workspace_subdir))
             .map(|vp| vp.to_string())
             .collect();
+        // Re-render parsed entries so that lock files written before rattler
+        // always emitted the build string (`__cuda=12.0` vs `__cuda=12.0=0`)
+        // compare equal to the manifest's canonical form.
         let locked_vps: Vec<String> = locked
             .virtual_packages
             .iter()
-            .filter(|raw| {
-                pixi_manifest::platform::parse_locked_virtual_package(raw)
-                    .map(|gvp| !pixi_manifest::platform::is_subdir_default(&gvp, workspace_subdir))
-                    .unwrap_or(true)
-            })
-            .cloned()
+            .filter_map(
+                |raw| match pixi_manifest::platform::parse_locked_virtual_package(raw) {
+                    Some(gvp) => {
+                        (!pixi_manifest::platform::is_subdir_default(&gvp, workspace_subdir))
+                            .then(|| gvp.to_string())
+                    }
+                    None => Some(raw.clone()),
+                },
+            )
             .collect();
         let same_subdir = workspace_subdir == locked.subdir;
         // Compare VPs as multisets: lockfile ordering is not part of the

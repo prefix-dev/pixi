@@ -729,7 +729,7 @@ async fn read_local_package_metadata(
     .with_index_strategy(index_strategy)
     .with_capabilities(ctx.uv_context.capabilities.clone())
     .with_workspace_cache(ctx.uv_context.workspace_cache.clone())
-    .with_shared_state(ctx.uv_context.shared_state.fork())
+    .with_shared_state(ctx.uv_context.shared_state.fork().into_inner())
     .with_no_sources(ctx.uv_context.no_sources.clone())
     .with_concurrency(ctx.uv_context.concurrency.clone())
     .with_cache_config_settings(&cache_config_settings);

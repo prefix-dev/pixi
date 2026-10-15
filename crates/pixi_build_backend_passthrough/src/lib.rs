@@ -120,7 +120,7 @@ impl InMemoryBackend for PassthroughBackend {
         // Check if there are real variants (not just target_platform)
         let has_real_variants = variant.keys().any(|k| k != "target_platform");
         let build_string =
-            compute_build_string(&self.index_json.build, &variant, has_real_variants);
+            compute_build_string(self.index_json.build.as_str(), &variant, has_real_variants);
 
         let output_dir = params
             .output_directory
@@ -162,7 +162,8 @@ impl InMemoryBackend for PassthroughBackend {
                 // Create a modified index_json with augmented fields from project_model
                 // This must match what conda_outputs returns in CondaOutputMetadata
                 let mut modified_index_json = self.index_json.clone();
-                modified_index_json.build = build_string.clone();
+                modified_index_json.build =
+                    rattler_conda_types::package::BuildString::new_unchecked(build_string.clone());
                 modified_index_json.subdir = Some(subdir.to_string());
                 if let Some(name) = &self.project_model.name {
                     modified_index_json.name =
@@ -605,7 +606,7 @@ fn create_output(
         .or_else(|| Some(index_json.version.version()))
         .cloned()
         .unwrap_or_else(|| Version::major(0));
-    let output_build = compute_build_string(&index_json.build, &variant, has_real_variants);
+    let output_build = compute_build_string(index_json.build.as_str(), &variant, has_real_variants);
 
     CondaOutput {
         build_dependencies: Some(extract_dependencies(
@@ -1102,7 +1103,7 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
                 // Create IndexJson from project model for on-the-fly package generation
                 let index_json = IndexJson {
                     arch: None,
-                    build: String::new(),
+                    build: rattler_conda_types::package::BuildString::new_unchecked("0"),
                     build_number: 0,
                     constrains: vec![],
                     depends: vec![],

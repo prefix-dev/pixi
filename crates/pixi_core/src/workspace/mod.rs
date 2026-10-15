@@ -1920,7 +1920,7 @@ packages: []
             vec![GenericVirtualPackage {
                 name: "__osx".parse().unwrap(),
                 version: Version::from_str("13.5").unwrap(),
-                build_string: "0".to_string(),
+                build_string: rattler_conda_types::package::BuildString::new_unchecked("0"),
             }],
         )
         .unwrap();
@@ -1962,7 +1962,7 @@ packages: []
             vec![GenericVirtualPackage {
                 name: "__osx".parse().unwrap(),
                 version: Version::from_str("15.1.1").unwrap(),
-                build_string: "0".to_string(),
+                build_string: rattler_conda_types::package::BuildString::new_unchecked("0"),
             }],
         )
         .unwrap();
@@ -1994,7 +1994,7 @@ packages: []
             vec![GenericVirtualPackage {
                 name: "__glibc".parse().unwrap(),
                 version: Version::from_str("2.28.1").unwrap(),
-                build_string: "0".to_string(),
+                build_string: rattler_conda_types::package::BuildString::new_unchecked("0"),
             }],
         )
         .unwrap();
