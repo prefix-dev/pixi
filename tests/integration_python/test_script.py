@@ -2,7 +2,7 @@ import json
 import shutil
 import textwrap
 import threading
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -18,7 +18,7 @@ def assert_no_workspace_state_created(workspace: Path) -> None:
 
 
 @contextmanager
-def remote_script_server(source: str) -> Iterator[tuple[str, list[str]]]:
+def remote_script_server(source: str) -> Generator[tuple[str, list[str]]]:
     requests: list[str] = []
 
     class Handler(BaseHTTPRequestHandler):
