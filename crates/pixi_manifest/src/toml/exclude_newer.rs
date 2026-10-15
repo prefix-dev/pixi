@@ -219,24 +219,13 @@ fn binary_exemption_spec(spec: TomlSpec) -> Result<BinarySpec, InvalidExemptionS
             // A bare version string parses into a detailed spec that only
             // carries a version. Keep it as the plain version it was written
             // as.
-            match *detailed {
-                DetailedSpec {
-                    version: Some(version),
-                    build: None,
-                    build_number: None,
-                    file_name: None,
-                    extras: None,
-                    flags: None,
-                    channel: None,
-                    subdir: None,
-                    license: None,
-                    license_family: None,
-                    condition: None,
-                    track_features: None,
-                    md5: None,
-                    sha256: None,
-                } => Ok(BinarySpec::Version(version)),
-                detailed => Ok(BinarySpec::DetailedVersion(Box::new(detailed))),
+            let version_only = DetailedSpec {
+                version: detailed.version.clone(),
+                ..DetailedSpec::default()
+            };
+            match detailed.version.clone() {
+                Some(version) if *detailed == version_only => Ok(BinarySpec::Version(version)),
+                _ => Ok(BinarySpec::DetailedVersion(detailed)),
             }
         }
         BinarySpec::Url(_) | BinarySpec::Path(_) => Err(InvalidExemptionSpec::NotBinary),
