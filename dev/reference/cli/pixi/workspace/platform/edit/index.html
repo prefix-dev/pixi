@@ -8818,13 +8818,13 @@
 </li>
 <li>
 <dl>
-<dt><a id="arg---cuda" href="#arg---cuda"><code>--cuda &lt;VERSION&gt;</code></a></dt>
+<dt><a id="arg---cuda" href="#arg---cuda"><code>--cuda &lt;VERSION[=BUILD]&gt;</code></a></dt>
 <dd>Declare a <code>__cuda</code> virtual package at the given version, e.g. <code>12.0</code>. Valid on any subdir</dd>
 </dl>
 </li>
 <li>
 <dl>
-<dt><a id="arg---cuda-arch" href="#arg---cuda-arch"><code>--cuda-arch &lt;VERSION&gt;</code></a></dt>
+<dt><a id="arg---cuda-arch" href="#arg---cuda-arch"><code>--cuda-arch &lt;VERSION[=BUILD]&gt;</code></a></dt>
 <dd>Declare a <code>__cuda_arch</code> virtual package (GPU compute capability) at the given version, e.g. <code>8.6</code>. Requires <code>--cuda</code> (or an existing <code>__cuda</code>), matching the conda CEP coupling. Serialized as <code>cuda = { driver, arch }</code></dd>
 </dl>
 </li>
@@ -8848,26 +8848,26 @@
 </li>
 <li>
 <dl>
-<dt><a id="arg---glibc" href="#arg---glibc"><code>--glibc &lt;VERSION&gt;</code></a></dt>
+<dt><a id="arg---glibc" href="#arg---glibc"><code>--glibc &lt;VERSION[=BUILD]&gt;</code></a></dt>
 <dd>Declare a <code>__glibc</code> virtual package at the given version, e.g. <code>2.28</code>. Only valid on linux subdirs</dd>
 </dl>
 </li>
 <li>
 <dl>
-<dt><a id="arg---linux" href="#arg---linux"><code>--linux &lt;VERSION&gt;</code></a></dt>
+<dt><a id="arg---linux" href="#arg---linux"><code>--linux &lt;VERSION[=BUILD]&gt;</code></a></dt>
 <dd>Declare a <code>__linux</code> virtual package at the given kernel version, e.g. <code>5.10</code>. Only valid on linux subdirs</dd>
 </dl>
 </li>
 <li>
 <dl>
-<dt><a id="arg---macos" href="#arg---macos"><code>--macos &lt;VERSION&gt;</code></a></dt>
+<dt><a id="arg---macos" href="#arg---macos"><code>--macos &lt;VERSION[=BUILD]&gt;</code></a></dt>
 <dd>Declare a <code>__osx</code> virtual package at the given macOS version, e.g. <code>14.0</code>. Only valid on osx subdirs
 <br><strong>aliases</strong>: osx</dd>
 </dl>
 </li>
 <li>
 <dl>
-<dt><a id="arg---windows" href="#arg---windows"><code>--windows &lt;VERSION&gt;</code></a></dt>
+<dt><a id="arg---windows" href="#arg---windows"><code>--windows &lt;VERSION[=BUILD]&gt;</code></a></dt>
 <dd>Declare a <code>__win</code> virtual package at the given Windows version, e.g. <code>10</code>. Only valid on win subdirs</dd>
 </dl>
 </li>

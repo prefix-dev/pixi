@@ -4190,7 +4190,7 @@
       "title": "WorkspacePlatform",
       "description": "A workspace platform: a conda subdir plus declared virtual-package\nguarantees, identified by a workspace-scoped name.",
       "type": "object",
-      "additionalProperties": true,
+      "additionalProperties": false,
       "properties": {
         "amdgpu": {
           "title": "Amdgpu",
@@ -4276,6 +4276,11 @@
           "minLength": 1
         }
       },
+      "patternProperties": {
+        "^__[a-z0-9][._-]?([a-z0-9]+(\\.|-|_|$))*$": {
+          "type": "string"
+        }
+      },
       "anyOf": [
         {
           "required": [
@@ -4287,7 +4292,10 @@
             "platform"
           ]
         }
-      ]
+      ],
+      "propertyNames": {
+        "maxLength": 64
+      }
     },
     "WorkspaceTarget": {
       "title": "WorkspaceTarget",

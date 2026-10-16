@@ -9037,7 +9037,7 @@ not imply compatibility with a lower one. Unlike CUDA compute capability,
 </li>
 </ul>
 <ul>
-<li>For virtual packages without a friendly key, a raw <code>__name = "version"</code> entry is also accepted as an escape hatch. Only the virtual packages pixi knows how to override (<code>__win</code>, <code>__osx</code>, <code>__linux</code>, <code>__cuda</code>, <code>__cuda_arch</code>, <code>__amdgpu</code>, <code>__amdgpu_arch</code>, <code>__archspec</code>, and the libc family <code>__glibc</code>/<code>__musl</code>/<code>__eglibc</code>) take effect at detection; any other raw <code>__name</code> is stored but ignored when checking host compatibility.</li>
+<li>For virtual packages without a friendly key, a raw <code>__name = "version"</code> entry is also accepted as an escape hatch, for example <code>__conda_forge_openmpi = "5.0"</code> for a name a channel-registered detector reports. The solver treats it as available exactly like the friendly keys, and a machine satisfies it when it provides that name with the same build string at the declared version or newer (<code>__amdgpu_arch</code> requires the exact version). Pixi's built-in detection only reports the names it knows (<code>__win</code>, <code>__osx</code>, <code>__linux</code>, <code>__cuda</code>, <code>__cuda_arch</code>, <code>__amdgpu</code>, <code>__amdgpu_arch</code>, <code>__archspec</code>, and the libc family <code>__glibc</code>/<code>__musl</code>/<code>__eglibc</code>); any other name has to come from a detector for the host check to pass.</li>
 </ul>
 <p>A feature's <code>platforms</code> array is a list of names that must each resolve to a workspace platform (or be a bare conda subdir, which Pixi treats as an alias for that subdir).
 This is how you bind a feature to the rich variant:</p>
@@ -9089,7 +9089,8 @@ After installing, <code>pixi info</code> reports each environment's <strong>Mini
   appends bare subdirs or rich platforms (or the current machine via
   <code>--auto-detect</code>, see above). <code>--cuda-arch</code> requires <code>--cuda</code> (or
   an existing <code>__cuda</code>) and serializes as <code>cuda = { driver, arch }</code>.
-  <code>--amdgpu-arch</code> also declares <code>__amdgpu</code> and serializes as <code>amdgpu = "gfx90a"</code>.</li>
+  <code>--amdgpu-arch</code> also declares <code>__amdgpu</code> and serializes as <code>amdgpu = "gfx90a"</code>.
+  Other virtual packages use <code>__name[=version[=build_string]]</code> positionals, for example <code>__site_service=2=h1</code>.</li>
 <li><code>pixi workspace platform edit &lt;NAME&gt; [--cuda 12.1] [--remove-virtual-package __glibc]</code> mutates a custom platform's declared virtual packages.</li>
 <li><code>pixi workspace platform move &lt;NAME&gt; --to-top | --to-bottom | --before &lt;NAME&gt; | --after &lt;NAME&gt;</code> reorders an entry; since order is selection priority, this is how you promote or demote a platform.</li>
 <li><code>pixi workspace platform list</code> inspects what is declared.</li>
