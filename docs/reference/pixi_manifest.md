@@ -104,8 +104,8 @@ Recognised keys on an inline-table entry:
 
 - `platform`: the conda subdir the entry targets (e.g. `linux-64`, `osx-arm64`). Required unless `name` itself parses as a subdir.
 - `name`: workspace-scoped identifier used by `feature.<name>.platforms`, lockfile rows, and the CLI. Defaults to a name auto-derived from `platform` plus the declared virtual packages.
-- Built-in virtual-package keys: `cuda`, `archspec`, `glibc`, `linux`, `macos` (alias `osx`), `windows`. They provide specialized syntax and validation for their matching conda virtual packages.
-- Any other key declares the canonical `__key` virtual package. Its value is `"version"` or `"version=build_string"`, for example `amdgpu = "0"` or `site_service = "2=h1"`. Canonical `__`-prefixed keys remain accepted and provide an escape hatch for collisions with metadata or built-in shortcuts, such as `__windows = "1"` alongside `windows = "10"` (which declares `__win`). Pixi validates names against the detector protocol, so detector-provided names require no client update.
+- Built-in virtual-package keys: `cuda`, `amdgpu`, `archspec`, `glibc`, `linux`, `macos` (alias `osx`), `windows`.
+- Other virtual packages require a `__`-prefixed key and a `"version"` or `"version=build_string"` value, for example `__site_service = "2=h1"`.
 
 Bare-string entries (`"linux-64"`) keep their original meaning: solve for that subdir against Pixi's [default declared virtual packages](../workspace/system_requirements.md#default-declared-virtual-packages).
 

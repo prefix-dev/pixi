@@ -197,6 +197,7 @@ Adding a platform whose definition already exists under a *different* name is re
   `--auto-detect`, see above). `--cuda-arch` requires `--cuda` (or
   an existing `__cuda`) and serializes as `cuda = { driver, arch }`.
   `--amdgpu-arch` also declares `__amdgpu` and serializes as `amdgpu = "gfx90a"`.
+  Other virtual packages use `__name[=version[=build_string]]` positionals, for example `__site_service=2=h1`.
 - `pixi workspace platform edit <NAME> [--cuda 12.1] [--remove-virtual-package __glibc]` mutates a custom platform's declared virtual packages.
 - `pixi workspace platform move <NAME> --to-top | --to-bottom | --before <NAME> | --after <NAME>` reorders an entry; since order is selection priority, this is how you promote or demote a platform.
 - `pixi workspace platform list` inspects what is declared.

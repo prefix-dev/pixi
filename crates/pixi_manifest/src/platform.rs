@@ -1120,9 +1120,7 @@ pub fn amdgpu_target_name(isa_version: &str) -> Option<String> {
     })
 }
 
-/// Parse a `"version[=build_string]"` value for a version-style built-in key
-/// such as `cuda` or `glibc`. The manifest and the CLI flags both route
-/// through this, so they accept exactly the same values.
+/// Parse a `"version[=build_string]"` virtual-package value.
 pub fn parse_versioned_virtual_package(
     name: PackageName,
     value: &str,

@@ -209,9 +209,8 @@ const FRIENDLY_VIRTUAL_PACKAGES: &[FriendlyVirtualPackage] = &[
 ///   requires `driver`. `amdgpu` is either `true`, declaring the
 ///   presence-only `__amdgpu`, or an AMDGPU target name like `"gfx90a"` that
 ///   declares `__amdgpu` plus the coupled `__amdgpu_arch` (AMDGPU ISA version).
-/// * Other keys declare `__name` packages with `"version"` or
-///   `"version=build_string"` values. The `__` prefix is optional unless the
-///   key collides with metadata or a built-in shortcut.
+/// * Other keys must start with `__` and declare raw virtual packages with
+///   `"version"` or `"version=build_string"` values.
 pub struct TomlPixiPlatform(pub PixiPlatform);
 
 impl TomlPixiPlatform {
@@ -255,10 +254,10 @@ impl<'de> Deserialize<'de> for TomlPixiPlatform {
                     }
                 }
 
-                // Remaining keys declare virtual packages, with or without `__`.
                 let custom_keys: Vec<String> = th
                     .table
                     .keys()
+                    .filter(|key| key.name.starts_with("__"))
                     .map(|key| key.name.as_ref().to_owned())
                     .collect();
                 for key_name in custom_keys {
@@ -607,28 +606,23 @@ fn take_amdgpu_entry<'de>(
     }
 }
 
-/// Parse a friendly or canonical virtual-package declaration.
 fn parse_custom_virtual_package(
     key: &str,
     key_span: Span,
     value: &mut Value<'_>,
 ) -> Result<GenericVirtualPackage, Error> {
-    let name = if key.starts_with("__") {
-        VirtualPackageName::try_from(key)
-    } else {
-        VirtualPackageName::try_from(format!("__{key}"))
-    }
-    .map_err(|error| Error {
-        kind: ErrorKind::Custom(
-            format!("'{key}' is not a valid virtual-package key: {error}").into(),
-        ),
-        span: key_span,
-        line_info: None,
-    })?
-    .into_package_name();
+    let name = VirtualPackageName::try_from(key)
+        .map_err(|error| Error {
+            kind: ErrorKind::Custom(
+                format!("'{key}' is not a valid virtual-package key: {error}").into(),
+            ),
+            span: key_span,
+            line_info: None,
+        })?
+        .into_package_name();
     let value_span = value.span;
     let s = match value.take() {
-        ValueInner::String(s) => s.into_owned(),
+        ValueInner::String(s) => s,
         other => {
             return Err(Error {
                 kind: ErrorKind::Wanted {
@@ -640,27 +634,10 @@ fn parse_custom_virtual_package(
             });
         }
     };
-    let mut parts = s.splitn(2, '=');
-    let version_str = parts.next().unwrap_or("");
-    let version = Version::from_str(version_str).map_err(|e| Error {
-        kind: ErrorKind::Custom(
-            format!("'{version_str}' is not a valid virtual-package version: {e}").into(),
-        ),
+    crate::platform::parse_versioned_virtual_package(name, &s).map_err(|message| Error {
+        kind: ErrorKind::Custom(message.into()),
         span: value_span,
         line_info: None,
-    })?;
-    let build_string = parts.next().unwrap_or("").to_string();
-    crate::platform::validate_virtual_package(&name, version_str, &build_string).map_err(
-        |message| Error {
-            kind: ErrorKind::Custom(message.into()),
-            span: value_span,
-            line_info: None,
-        },
-    )?;
-    Ok(GenericVirtualPackage {
-        name,
-        version,
-        build_string,
     })
 }
 
@@ -754,9 +731,9 @@ pub struct InlineVirtualPackage {
     /// both the device and its architecture package so callers can
     /// satisfaction-check each.
     pub packages: Vec<GenericVirtualPackage>,
-    /// Friendly keys are preferred, with canonical `__name` keys retained for
-    /// collisions. Coupled CUDA packages use `cuda = { driver, arch }`, and
-    /// coupled AMD GPU packages use `amdgpu = "gfx.."`.
+    /// Friendly keys are preferred; raw packages retain their canonical `__name`
+    /// keys. Coupled CUDA packages use `cuda = { driver, arch }`, and coupled
+    /// AMD GPU packages use `amdgpu = "gfx.."`.
     pub rendered: String,
 }
 
@@ -765,8 +742,8 @@ pub struct InlineVirtualPackage {
 /// with the underlying conda VP so callers can run match logic against
 /// them.
 ///
-/// Built-in entries use friendly keys in canonical order. Arbitrary entries
-/// sort alphabetically and retain `__` where needed to avoid collisions.
+/// Built-in entries use friendly keys in canonical order. Raw entries sort
+/// alphabetically and retain their canonical `__name` keys.
 /// Subdir defaults are filtered out, so only customised entries appear.
 pub fn inline_virtual_package_specs(
     declared: &[GenericVirtualPackage],
@@ -1057,20 +1034,8 @@ fn platform_inline_entries(
         if folded.contains(&conda_name.as_str()) {
             continue;
         }
-        let unprefixed = conda_name.strip_prefix("__").unwrap_or(&conda_name);
-        let collides = matches!(unprefixed, "name" | "platform")
-            || FRIENDLY_VIRTUAL_PACKAGES.iter().any(|entry| {
-                (entry.key == unprefixed || entry.aliases.contains(&unprefixed))
-                    && (entry.conda_name != conda_name
-                        || !matches!(entry.kind, VirtualPackageValueKind::Version))
-            });
-        let key = if collides {
-            conda_name.clone()
-        } else {
-            unprefixed.to_string()
-        };
         entries.push(InlinePlatformEntry::Scalar {
-            key,
+            key: conda_name.clone(),
             value,
             conda_name,
         });
@@ -1287,7 +1252,7 @@ mod test {
     #[test]
     fn test_workspace_platform_arbitrary_virtual_packages_need_no_client_support() {
         let parsed = TopLevel::from_toml_str(
-            r#"platform = { name = "detected", platform = "linux-64", __amdgpu = "0", site_service = "2=h1" }"#,
+            r#"platform = { name = "detected", platform = "linux-64", __amdgpu = "0", __site_service = "2=h1" }"#,
         )
         .unwrap();
         let custom: Vec<String> = virtual_package_specs(&parsed.platform)
@@ -1304,17 +1269,27 @@ mod test {
                 "name": "detected",
                 "platform": "linux-64",
                 "amdgpu": true,
-                "site_service": "2=h1",
+                "__site_service": "2=h1",
             }),
         );
     }
 
     #[test]
-    fn canonical_names_round_trip_without_metadata_or_alias_collisions() {
+    fn raw_names_and_values_round_trip() {
         let parsed = TopLevel::from_toml_str(
-            r#"platform = { name = "custom", platform = "linux-64", windows = "10", macos = "14", __name = "1=h1", __platform = "2=h2", __windows = "3=h3", __macos = "4=h4", __site_service = "2=h1", __amdgpu = "0=h1", __amdgpu_arch = "9.0.16", __cuda = "12.0=h1", __cuda_arch = "8.6=h2" }"#,
+            r#"platform = { name = "custom", platform = "linux-64", windows = "10", macos = "14", __name = "1=h1", __platform = "2=h2", __windows = "3=h3", __macos = "4=h4", __site_service = "2=h1", __amdgpu = "0=h1", __amdgpu_arch = "9.0.16", __cuda = "12.0=h1", __cuda_arch = "8.6=h2", __archspec = "5=zen2" }"#,
         )
         .unwrap();
+        let json = serde_json::to_value(TomlPixiPlatform(parsed.platform.clone())).unwrap();
+        for (key, value) in [
+            ("__name", "1=h1"),
+            ("__platform", "2=h2"),
+            ("__site_service", "2=h1"),
+            ("__amdgpu", "0=h1"),
+            ("__archspec", "5=zen2"),
+        ] {
+            assert_eq!(json[key], value);
+        }
         let encoded = format!(
             "platform = {}",
             pixi_platform_to_toml_value(&parsed.platform)
@@ -1334,6 +1309,7 @@ mod test {
             ("__amdgpu_arch", "9.0.16", ""),
             ("__cuda", "12.0", "h1"),
             ("__cuda_arch", "8.6", "h2"),
+            ("__archspec", "5", "zen2"),
         ] {
             let package = restored
                 .platform
@@ -1350,13 +1326,28 @@ mod test {
     fn friendly_and_canonical_declarations_of_the_same_package_are_rejected() {
         for declarations in [
             r#"cuda = "12", __cuda = "13""#,
-            r#"site_service = "2=h1", __site_service = "3=h2""#,
             r#"windows = "10", __win = "11""#,
         ] {
             let input = format!(
                 r#"platform = {{ name = "custom", platform = "linux-64", {declarations} }}"#
             );
             assert!(TopLevel::from_toml_str(&input).is_err());
+        }
+    }
+
+    #[test]
+    fn unprefixed_custom_names_and_builtin_typos_are_rejected() {
+        for key in ["cud", "cdua", "site_service", "cuda_arch"] {
+            let input =
+                format!(r#"platform = {{ name = "custom", platform = "linux-64", {key} = "12" }}"#);
+            let mut value = toml_span::parse(&input).unwrap();
+            let error = TopLevel::deserialize(&mut value).unwrap_err();
+            assert!(error.errors.iter().any(|error| matches!(
+                &error.kind,
+                ErrorKind::UnexpectedKeys { keys, expected }
+                    if keys.iter().any(|(name, _)| name == key)
+                        && expected.iter().any(|name| name == "cuda")
+            )));
         }
     }
 
@@ -1468,25 +1459,6 @@ mod test {
         );
     }
 
-    /// Arbitrary detector-compatible keys work without a compiled-in shortcut.
-    #[test]
-    fn test_workspace_platform_arbitrary_virtual_package_forward_compat() {
-        let parsed =
-            TopLevel::from_toml_str(r#"platform = { platform = "linux-64", future_pkg = "1.2" }"#)
-                .unwrap();
-        assert_eq!(
-            virtual_package_specs(&parsed.platform),
-            vec![
-                "__future_pkg=1.2".to_string(),
-                "__unix=0".to_string(),
-                "__linux=4.18".to_string(),
-                "__glibc=2.28".to_string(),
-                "__archspec=0=x86_64".to_string(),
-            ]
-        );
-        assert_eq!(parsed.platform.name().as_str(), "linux-64-future-pkg-1-2");
-    }
-
     #[test]
     fn test_workspace_platform_cuda_table_parses() {
         // The `cuda` table expands to `__cuda` + `__cuda_arch`.
@@ -1541,10 +1513,10 @@ mod test {
         );
     }
 
-    /// A lone `cuda_arch` (no `cuda` anywhere) is rejected by the model.
+    /// A lone `__cuda_arch` (no `cuda` anywhere) is rejected by the model.
     #[test]
     fn test_workspace_platform_cuda_arch_without_cuda_rejected() {
-        let input = r#"platform = { name = "gpu", platform = "linux-64", cuda_arch = "8.6" }"#;
+        let input = r#"platform = { name = "gpu", platform = "linux-64", __cuda_arch = "8.6" }"#;
         let error = TopLevel::from_toml_str(input).unwrap_err();
         let rendered = format_parse_error(input, error);
         assert!(
@@ -1626,7 +1598,7 @@ mod test {
 
     #[test]
     fn test_workspace_platform_arbitrary_key_uses_detector_name_rules() {
-        let input = r#"platform = { platform = "linux-64", AMDGPU = "0" }"#;
+        let input = r#"platform = { platform = "linux-64", __AMDGPU = "0" }"#;
         let error = TopLevel::from_toml_str(input).unwrap_err();
         let rendered = format_parse_error(input, error);
         assert!(
@@ -1849,7 +1821,7 @@ mod test {
         let json = serde_json::to_value(TomlPixiPlatform(parsed.platform)).unwrap();
         assert_eq!(
             json,
-            serde_json::json!({ "platform": "linux-64", "cuda": "12.0=h1" })
+            serde_json::json!({ "platform": "linux-64", "__cuda": "12.0=h1" })
         );
     }
 
@@ -1878,7 +1850,7 @@ mod test {
     #[test]
     fn unknown_archspec_build_round_trips() {
         let parsed = TopLevel::from_toml_str(
-            r#"platform = { name = "unknown-arch", platform = "linux-64", archspec = "1=0" }"#,
+            r#"platform = { name = "unknown-arch", platform = "linux-64", __archspec = "1=0" }"#,
         )
         .unwrap();
         let encoded = format!(

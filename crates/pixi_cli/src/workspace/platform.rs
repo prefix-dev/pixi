@@ -39,17 +39,7 @@ pub struct Args {
     pub command: Command,
 }
 
-/// Common virtual-package shortcut flags shared by `add` and `edit`. Wrapped
-/// in a clap struct so the rules (parsing, validation, conversion to
-/// `GenericVirtualPackage`) live in one place.
-///
-/// Mirrors the TOML's per-virtual-package keys (`cuda`, `amdgpu`, `archspec`,
-/// `glibc`, `linux`, `macos`, `windows`) and accepts the same values, so the
-/// version-style flags take an optional build string (`--cuda 12.0=h1`).
-/// Virtual packages without a friendly flag are declared as trailing
-/// `__name[=version[=build_string]]` positionals on the surrounding `add` /
-/// `edit` command, matching the `__name` raw-key escape hatch in the TOML
-/// layer.
+/// Built-in virtual-package flags shared by `add` and `edit`.
 #[derive(Parser, Debug, Default, Clone)]
 pub struct VirtualPackageArgs {
     /// Declare a `__cuda` virtual package at the given version, e.g. `12.0`.
@@ -287,35 +277,13 @@ fn parse_virtual_package_flag(
 }
 
 fn parse_raw_virtual_package(spec: &str) -> miette::Result<GenericVirtualPackage> {
-    // `splitn` keeps trailing '=' segments in the build string, matching the
-    // manifest's raw parser, instead of silently dropping them.
-    let mut parts = spec.splitn(3, '=');
-    let name_str = parts.next().unwrap_or("");
-    if name_str.strip_prefix("__").is_none_or(str::is_empty) {
-        miette::bail!(
-            "'{spec}' is not a virtual package spec: name must start with '__' followed by a name (e.g. '__cuda=12.0')"
-        );
-    }
-    // Validate like the manifest parser does, so whatever the CLI writes can
-    // be read back.
-    let name = VirtualPackageName::try_from(name_str)
+    let (name, value) = spec.split_once('=').unwrap_or((spec, "0"));
+    let name = VirtualPackageName::try_from(name)
         .into_diagnostic()
-        .map_err(|e| miette::miette!("'{name_str}' is not a valid virtual package name: {e}"))?
+        .map_err(|e| miette::miette!("'{name}' is not a valid virtual package name: {e}"))?
         .into_package_name();
-    let version_str = parts.next().unwrap_or("0");
-    let version = Version::from_str(version_str)
-        .into_diagnostic()
-        .map_err(|e| {
-            miette::miette!("'{version_str}' is not a valid virtual package version: {e}")
-        })?;
-    let build_string = parts.next().unwrap_or("").to_string();
-    pixi_manifest::platform::validate_virtual_package(&name, version_str, &build_string)
-        .map_err(|message| miette::miette!("{message}"))?;
-    Ok(GenericVirtualPackage {
-        name,
-        version,
-        build_string,
-    })
+    pixi_manifest::platform::parse_versioned_virtual_package(name, value)
+        .map_err(|message| miette::miette!("{message}"))
 }
 
 /// Parse a positional add argument. Accepts either a bare subdir
@@ -1429,15 +1397,21 @@ mod tests {
 
     #[test]
     fn parse_raw_virtual_package_keeps_trailing_segments_in_build_string() {
-        // Extra '=' segments belong to the build string -- as in the
-        // manifest's raw parser -- rather than being silently dropped.
         let package = parse_raw_virtual_package("__foo=1=special=build").unwrap();
         assert_eq!(package.build_string, "special=build");
     }
 
     #[test]
     fn parse_raw_virtual_package_rejects_names_the_manifest_rejects() {
-        for spec in ["__a..b=1", "__a__b=1", "__-x=1", "___x=1"] {
+        for spec in [
+            "cud=1",
+            "site_service=1",
+            "__=1",
+            "__a..b=1",
+            "__a__b=1",
+            "__-x=1",
+            "___x=1",
+        ] {
             assert!(
                 parse_raw_virtual_package(spec).is_err(),
                 "{spec} must be rejected"
