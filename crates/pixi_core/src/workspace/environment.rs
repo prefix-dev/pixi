@@ -19,7 +19,7 @@ use super::{
     errors::{UnknownTask, UnsupportedPlatformError},
 };
 use crate::{Workspace, workspace::HasWorkspaceRef};
-use pixi_manifest::platform::host::{host_baseline, host_capabilities, host_subdir};
+use pixi_manifest::platform::{VirtualPackageRecords, host::host_baseline};
 
 /// Describes a single environment from a project manifest. This is used to
 /// describe environments that can be installed and activated.
@@ -137,11 +137,12 @@ impl<'p> Environment<'p> {
             .platforms
             .iter()
             .find(|platform| {
+                let records = match platform.records() {
+                    VirtualPackageRecords::Manifest(records)
+                    | VirtualPackageRecords::Detected(records) => records,
+                };
                 platform.subdir() == resolved.subdir()
-                    && virtual_packages_match(
-                        platform.declared_virtual_packages(),
-                        resolved.virtual_packages(),
-                    )
+                    && virtual_packages_match(records, resolved.virtual_packages())
             })
     }
 
@@ -172,8 +173,8 @@ impl<'p> Environment<'p> {
     /// the environment itself declares support for, and return the most
     /// preferred one.
     pub fn best_declared_platform(&self) -> Option<&'p PixiPlatform> {
-        let current = host_subdir();
-        let system_virtual_packages = host_capabilities();
+        let current = self.workspace.host().subdir();
+        let system_virtual_packages = self.workspace.host().capabilities();
         let env_platforms = self.platforms();
 
         // The candidates are the workspace platforms whose subdir matches this
@@ -266,8 +267,8 @@ impl<'p> Environment<'p> {
     /// virtual packages declared by the workspace's host-subdir platforms
     /// this machine doesn't provide so the user can see what to mock.
     pub fn unsupported_platform_error(&self) -> UnsupportedPlatformError {
-        let current = host_subdir();
-        let system_virtual_packages = host_capabilities();
+        let current = self.workspace.host().subdir();
+        let system_virtual_packages = self.workspace.host().capabilities();
         let env_platforms = self.platforms();
         let workspace = &self.workspace_manifest().workspace;
         let unsatisfied_requirements = workspace.unsatisfied_platform_requirements(
@@ -535,6 +536,8 @@ impl Hash for Environment<'_> {
 mod tests {
     use std::{collections::HashSet, path::Path};
 
+    use pixi_manifest::platform::host::host_subdir;
+
     use indexmap::indexmap;
     use insta::assert_snapshot;
     use itertools::Itertools;
@@ -676,8 +679,8 @@ mod tests {
             1,
             "expected one composed linux-64 platform, got {linux64:?}"
         );
-        let virtual_packages: HashSet<&str> = linux64[0]
-            .declared_virtual_packages()
+        let manifest_records = linux64[0].manifest_virtual_package_records();
+        let virtual_packages: HashSet<&str> = manifest_records
             .iter()
             .map(|package| package.name.as_normalized())
             .collect();
@@ -1653,19 +1656,21 @@ mod tests {
     #[test]
     fn test_best_platform_win32_on_win64() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let manifest = Workspace::from_str(
-            &temp_dir.path().join("pixi.toml"),
-            r#"
+        // Simulate a win-64 current platform via PIXI_OVERRIDE_PLATFORM. The
+        // host is detected when the workspace is built, so the override has
+        // to be in place before that.
+        let best = temp_env::with_var(consts::PIXI_OVERRIDE_PLATFORM, Some("win-64"), || {
+            let manifest = Workspace::from_str(
+                &temp_dir.path().join("pixi.toml"),
+                r#"
         [project]
         name = "foobar"
         channels = []
         platforms = ["win-32"]
         "#,
-        )
-        .unwrap();
-        let env = manifest.default_environment();
-        // Simulate a win-64 current platform via PIXI_OVERRIDE_PLATFORM.
-        let best = temp_env::with_var(consts::PIXI_OVERRIDE_PLATFORM, Some("win-64"), || {
+            )
+            .unwrap();
+            let env = manifest.default_environment();
             env.best_declared_platform().map(|p| p.subdir())
         });
         assert_eq!(best, Some(Subdir::Win32));

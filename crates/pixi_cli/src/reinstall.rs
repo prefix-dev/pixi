@@ -57,7 +57,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.project_config.workspace_locator_start())
-        .locate()?
+        .locate()
+        .await?
         .with_cli_config(args.config.clone());
 
     let target_platform = resolve_install_platform(&workspace, args.platform.as_ref())?;

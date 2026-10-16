@@ -186,7 +186,7 @@ impl KeyPath {
 pub async fn execute(args: Args) -> miette::Result<()> {
     match args.subcommand {
         Subcommand::Edit(args) => {
-            let config_path = determine_config_write_path(&args.common)?;
+            let config_path = determine_config_write_path(&args.common).await?;
 
             let editor = args.editor.unwrap_or_else(|| {
                 if cfg!(windows) {
@@ -212,7 +212,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             child.wait().into_diagnostic()?;
         }
         Subcommand::List(args) => {
-            let config = load_config(&args.common, &args.config_source.source())?;
+            let config = load_config(&args.common, &args.config_source.source()).await?;
 
             let out = if let Some(key) = args.key {
                 let partial = partial_config(&config, &key)?;
@@ -233,29 +233,37 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             pixi_utils::io::ignore_broken_pipe(writeln!(std::io::stdout(), "{out}"))
                 .into_diagnostic()?;
         }
-        Subcommand::Prepend(args) => alter_config(
-            &args.common,
-            &args.key,
-            Some(args.value),
-            AlterMode::Prepend,
-        )?,
-        Subcommand::Append(args) => {
-            alter_config(&args.common, &args.key, Some(args.value), AlterMode::Append)?
+        Subcommand::Prepend(args) => {
+            alter_config(
+                &args.common,
+                &args.key,
+                Some(args.value),
+                AlterMode::Prepend,
+            )
+            .await?
         }
-        Subcommand::Set(args) => alter_config(&args.common, &args.key, args.value, AlterMode::Set)?,
-        Subcommand::Unset(args) => alter_config(&args.common, &args.key, None, AlterMode::Unset)?,
+        Subcommand::Append(args) => {
+            alter_config(&args.common, &args.key, Some(args.value), AlterMode::Append).await?
+        }
+        Subcommand::Set(args) => {
+            alter_config(&args.common, &args.key, args.value, AlterMode::Set).await?
+        }
+        Subcommand::Unset(args) => {
+            alter_config(&args.common, &args.key, None, AlterMode::Unset).await?
+        }
     };
     Ok(())
 }
 
-fn determine_project_root(common_args: &CommonArgs) -> miette::Result<Option<PathBuf>> {
+async fn determine_project_root(common_args: &CommonArgs) -> miette::Result<Option<PathBuf>> {
     let workspace = WorkspaceLocator::default()
         .with_closest_package(false) // Dont care about the package
         .with_emit_warnings(false) // No reason to emit warnings
         .with_consider_environment(true)
         .with_search_start(common_args.workspace_config.workspace_locator_start())
         .with_ignore_pixi_version_check(true)
-        .locate();
+        .locate()
+        .await;
     match workspace {
         Err(WorkspaceLocatorError::WorkspaceNotFound(_)) => {
             if common_args.local {
@@ -277,7 +285,10 @@ fn determine_project_root(common_args: &CommonArgs) -> miette::Result<Option<Pat
 
 /// Load the configuration the given arguments select, taking the global layer
 /// from `source`.
-fn load_config(common_args: &CommonArgs, source: &GlobalConfigSource) -> miette::Result<Config> {
+async fn load_config(
+    common_args: &CommonArgs,
+    source: &GlobalConfigSource,
+) -> miette::Result<Config> {
     if common_args.system {
         return Ok(Config::load_system());
     }
@@ -302,7 +313,7 @@ fn load_config(common_args: &CommonArgs, source: &GlobalConfigSource) -> miette:
     }
 
     // Otherwise, check if we are in a project/workspace root
-    if let Some(root) = determine_project_root(common_args)? {
+    if let Some(root) = determine_project_root(common_args).await? {
         return Ok(Config::load_with(&root, source));
     }
 
@@ -327,7 +338,7 @@ fn same_config_path(left: &Path, right: &Path) -> bool {
             .is_some_and(|(left, right)| left == right)
 }
 
-fn determine_config_write_path(common_args: &CommonArgs) -> miette::Result<PathBuf> {
+async fn determine_config_write_path(common_args: &CommonArgs) -> miette::Result<PathBuf> {
     if let Some(path) = &common_args.path {
         return Ok(path.clone());
     }
@@ -337,7 +348,7 @@ fn determine_config_write_path(common_args: &CommonArgs) -> miette::Result<PathB
     }
 
     if !common_args.global
-        && let Some(root) = determine_project_root(common_args)?
+        && let Some(root) = determine_project_root(common_args).await?
     {
         return Ok(root.join(consts::PIXI_DIR).join(consts::CONFIG_FILE));
     }
@@ -369,13 +380,13 @@ fn determine_config_write_path(common_args: &CommonArgs) -> miette::Result<PathB
 /// - The existing config file cannot be read or parsed as valid TOML.
 /// - A list-only operation (`Prepend`/`Append`) is attempted on a non-list key.
 /// - Persisting the updated content disk fails.
-fn alter_config(
+async fn alter_config(
     common_args: &CommonArgs,
     key: &str,
     value: Option<String>,
     mode: AlterMode,
 ) -> miette::Result<()> {
-    let to = determine_config_write_path(common_args)?;
+    let to = determine_config_write_path(common_args).await?;
     let content = match fs_err::read_to_string(&to) {
         Ok(s) => s,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
@@ -436,7 +447,9 @@ fn alter_config(
                         // Local file is missing default-channels. Load inherited global layers,
                         // add the channel, and user AlterMode::Set to write the full merged array.
                         let mut new_channels =
-                            load_config(common_args, &GlobalConfigSource::Search)?.default_channels;
+                            load_config(common_args, &GlobalConfigSource::Search)
+                                .await?
+                                .default_channels;
                         if is_prepend {
                             new_channels.insert(0, channel);
                         } else {
@@ -794,12 +807,13 @@ mod tests {
         result.expect("The subcommand execution failed");
     }
 
-    #[test]
-    fn test_determine_config_write_path() {
+    #[tokio::test]
+    async fn test_determine_config_write_path() {
         let test_context = TestContext::setup(None);
         let mut config_path = test_context.config_path.clone();
 
         let mut config_write_path = determine_config_write_path(&test_context.common_args)
+            .await
             .expect("Determine config write path should have succeeded");
 
         if cfg!(target_os = "macos") {

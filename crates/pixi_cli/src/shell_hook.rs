@@ -169,7 +169,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.project_config.workspace_locator_start())
-        .locate()?
+        .locate()
+        .await?
         .with_cli_config(config);
 
     let environment = workspace.environment_from_name_or_env_var(args.environment)?;
@@ -226,7 +227,7 @@ mod tests {
     async fn test_shell_hook_unix() {
         let default_shell = rattler_shell::shell::ShellEnum::default();
         let path_var_name = default_shell.path_var(&Subdir::current().unwrap_or(Subdir::NoArch));
-        let project = WorkspaceLocator::default().locate().unwrap();
+        let project = WorkspaceLocator::default().locate().await.unwrap();
         let environment = project.default_environment();
 
         let script = generate_activation_script(
@@ -283,7 +284,7 @@ mod tests {
     async fn test_shell_hook_windows() {
         let default_shell = rattler_shell::shell::ShellEnum::default();
         let path_var_name = default_shell.path_var(&Subdir::current().unwrap_or(Subdir::NoArch));
-        let project = WorkspaceLocator::default().locate().unwrap();
+        let project = WorkspaceLocator::default().locate().await.unwrap();
         let environment = project.default_environment();
 
         let script = generate_activation_script(

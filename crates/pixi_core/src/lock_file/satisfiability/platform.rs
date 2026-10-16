@@ -19,6 +19,7 @@ use pixi_config::Config;
 use pixi_install_pypi::UnresolvedPypiRecord;
 use pixi_manifest::{
     EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName,
+    platform::VirtualPackageRecords,
 };
 use pixi_pypi_spec::PypiPackageName;
 use pixi_record::{
@@ -99,11 +100,12 @@ pub fn resolve_lock_platform_for<'lock>(
         return Some(found);
     }
     let candidate = lock_file.platform(platform.subdir().as_str())?;
-    let declared: Vec<String> = platform
-        .declared_virtual_packages()
-        .iter()
-        .map(|gvp| gvp.to_string())
-        .collect();
+    let records = match platform.records() {
+        VirtualPackageRecords::Manifest(records) | VirtualPackageRecords::Detected(records) => {
+            records
+        }
+    };
+    let declared: Vec<String> = records.iter().map(|gvp| gvp.to_string()).collect();
     let locked: &[String] = candidate.virtual_packages();
     let matches = locked.is_empty() || declared.iter().all(|d| locked.iter().any(|l| l == d));
     matches.then_some(candidate)

@@ -81,7 +81,7 @@ impl From<&pixi_manifest::PixiPlatform> for PlatformInfo {
             subdir: platform.subdir().to_string(),
             // Declared platform: filter the subdir defaults, like `platform list`.
             virtual_packages: friendly_virtual_packages(
-                platform.declared_virtual_packages(),
+                platform.manifest_virtual_package_records().as_ref(),
                 Some(&subdir_default_virtual_packages(platform.subdir())),
             ),
         }
@@ -462,6 +462,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_global_config_source(source.clone())
         .with_search_start(args.project_config.workspace_locator_start())
         .locate()
+        .await
         .ok();
 
     let (pixi_folder_size, cache_size) = if args.extended {

@@ -180,7 +180,7 @@ impl Workspace {
         // CI on a different host, etc.). Only the user-customised VPs
         // need to be satisfied by the host.
         let satisfies_system = |p: &&PixiPlatform| {
-            p.declared_virtual_packages()
+            p.manifest_virtual_package_records()
                 .iter()
                 .filter(|declared| !is_subdir_default(declared, p.subdir()))
                 .all(|declared| capability_satisfied_by(declared, system_virtual_packages))
@@ -259,7 +259,7 @@ impl Workspace {
             .map(|p| {
                 let subdir = p.subdir();
                 let unsatisfied_virtual_packages = p
-                    .declared_virtual_packages()
+                    .manifest_virtual_package_records()
                     .iter()
                     .filter(|declared| !is_subdir_default(declared, subdir))
                     .filter(|declared| !capability_satisfied_by(declared, system_virtual_packages))

@@ -37,7 +37,7 @@ use pixi_install_pypi::{
 };
 use pixi_manifest::{
     ChannelPriority, EnvironmentName, ExcludeNewerError, FeaturesExt, HasWorkspaceManifest,
-    PixiPlatform, PixiPlatformName,
+    PixiPlatform, PixiPlatformName, platform::VirtualPackageRecords,
 };
 use pixi_progress::global_multi_progress;
 use pixi_record::{LockFileResolver, ParseLockFileError, PixiRecord, UnresolvedPixiRecord};
@@ -50,7 +50,7 @@ use pixi_uv_conversions::{
 use pypi_mapping::{self, PurlDerivationClient};
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{Arch, GenericVirtualPackage, PackageName, ParseChannelError};
+use rattler_conda_types::{Arch, PackageName, ParseChannelError};
 use rattler_lock::{LockFile, LockedPackage, ParseCondaLockError};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -1111,7 +1111,7 @@ impl<'p> LockFileDerivedData<'p> {
                         &self.lock_file,
                         best_declared_platform,
                         environment.name(),
-                        None,
+                        environment.workspace().host(),
                     )
                     .wrap_err(format!(
                         "Cannot install environment '{}'",
@@ -1391,10 +1391,7 @@ impl<'p> LockFileDerivedData<'p> {
                         CondaPrefixUpdater::builder(
                             group,
                             pixi_platform.clone(),
-                            virtual_packages
-                                .into_iter()
-                                .map(GenericVirtualPackage::from)
-                                .collect(),
+                            virtual_packages,
                             self.command_dispatcher.clone(),
                         )
                         .finish()?
@@ -2780,14 +2777,14 @@ impl<'p> UpdateContext<'p> {
             .into_iter()
             .filter_map(|name| {
                 let pixi_platform = workspace.workspace.platform_by_name(&name)?;
+                let records = match pixi_platform.records() {
+                    VirtualPackageRecords::Manifest(records)
+                    | VirtualPackageRecords::Detected(records) => records,
+                };
                 Some(rattler_lock::PlatformData {
                     name: rattler_lock::PlatformName::try_from(name.as_str()).ok()?,
                     subdir: pixi_platform.subdir(),
-                    virtual_packages: pixi_platform
-                        .declared_virtual_packages()
-                        .iter()
-                        .map(|vp| vp.to_string())
-                        .collect(),
+                    virtual_packages: records.iter().map(|vp| vp.to_string()).collect(),
                 })
             })
             .collect();
@@ -3286,11 +3283,7 @@ async fn spawn_extract_environment_task(
             .wrap_err("failed to get variant configuration")?;
 
         // Get virtual packages for the build environment
-        let virtual_packages: Vec<_> = environment
-            .virtual_packages(pixi_platform)
-            .into_iter()
-            .map(GenericVirtualPackage::from)
-            .collect();
+        let virtual_packages = environment.virtual_packages(pixi_platform);
 
         let build_environment = BuildEnvironment::simple(pixi_platform.subdir(), virtual_packages);
 
