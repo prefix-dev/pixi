@@ -274,11 +274,12 @@ pub(crate) fn validate_system_meets_environment_requirements(
     );
 
     // Check if all the required virtual conda packages match the system virtual packages.
-    if let Some(unmet) = unmet_requirements(&required_virtual_packages, system_capabilities).first()
+    if let Some(unmet) =
+        unmet_requirements(&required_virtual_packages, &system_capabilities).first()
     {
         return Err(VirtualPackageNotFoundError::new(
             unmet,
-            system_capabilities,
+            &system_capabilities,
             platform.subdir(),
         )
         .into());

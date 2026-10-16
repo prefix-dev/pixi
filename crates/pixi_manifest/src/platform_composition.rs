@@ -87,21 +87,21 @@ fn referenced_platforms<'a>(
 /// that does not customise a virtual package does not constrain it.
 fn union_virtual_packages(platforms: &[&PixiPlatform]) -> Vec<GenericVirtualPackage> {
     let mut union: BTreeMap<String, GenericVirtualPackage> = BTreeMap::new();
-    for package in platforms.iter().flat_map(|platform| {
-        let subdir = platform.subdir();
-        platform
-            .declared_virtual_packages()
+    for platform in platforms {
+        for package in platform
+            .manifest_records()
             .iter()
-            .filter(move |gvp| !crate::platform::is_subdir_default(gvp, subdir))
-    }) {
-        union
-            .entry(package.name.as_normalized().to_string())
-            .and_modify(|existing| {
-                if package.version > existing.version {
-                    *existing = package.clone();
-                }
-            })
-            .or_insert_with(|| package.clone());
+            .filter(|gvp| !crate::platform::is_subdir_default(gvp, platform.subdir()))
+        {
+            union
+                .entry(package.name.as_normalized().to_string())
+                .and_modify(|existing| {
+                    if package.version > existing.version {
+                        *existing = package.clone();
+                    }
+                })
+                .or_insert_with(|| package.clone());
+        }
     }
     union.into_values().collect()
 }

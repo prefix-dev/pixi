@@ -19,7 +19,7 @@ use super::{
     errors::{UnknownTask, UnsupportedPlatformError},
 };
 use crate::{Workspace, workspace::HasWorkspaceRef};
-use pixi_manifest::platform::host::host_baseline;
+use pixi_manifest::platform::{VirtualPackageRecords, host::host_baseline};
 
 /// Describes a single environment from a project manifest. This is used to
 /// describe environments that can be installed and activated.
@@ -137,11 +137,12 @@ impl<'p> Environment<'p> {
             .platforms
             .iter()
             .find(|platform| {
+                let records = match platform.records() {
+                    VirtualPackageRecords::Manifest(records)
+                    | VirtualPackageRecords::Detected(records) => records,
+                };
                 platform.subdir() == resolved.subdir()
-                    && virtual_packages_match(
-                        platform.declared_virtual_packages(),
-                        resolved.virtual_packages(),
-                    )
+                    && virtual_packages_match(records, resolved.virtual_packages())
             })
     }
 
@@ -173,7 +174,7 @@ impl<'p> Environment<'p> {
     /// preferred one.
     pub fn best_declared_platform(&self) -> Option<&'p PixiPlatform> {
         let current = self.workspace.host().subdir();
-        let system_virtual_packages = self.workspace.host().capabilities().to_vec();
+        let system_virtual_packages = self.workspace.host().capabilities();
         let env_platforms = self.platforms();
 
         // The candidates are the workspace platforms whose subdir matches this
@@ -267,7 +268,7 @@ impl<'p> Environment<'p> {
     /// this machine doesn't provide so the user can see what to mock.
     pub fn unsupported_platform_error(&self) -> UnsupportedPlatformError {
         let current = self.workspace.host().subdir();
-        let system_virtual_packages = self.workspace.host().capabilities().to_vec();
+        let system_virtual_packages = self.workspace.host().capabilities();
         let env_platforms = self.platforms();
         let workspace = &self.workspace_manifest().workspace;
         let unsatisfied_requirements = workspace.unsatisfied_platform_requirements(
@@ -678,8 +679,8 @@ mod tests {
             1,
             "expected one composed linux-64 platform, got {linux64:?}"
         );
-        let virtual_packages: HashSet<&str> = linux64[0]
-            .declared_virtual_packages()
+        let manifest_records = linux64[0].manifest_records();
+        let virtual_packages: HashSet<&str> = manifest_records
             .iter()
             .map(|package| package.name.as_normalized())
             .collect();

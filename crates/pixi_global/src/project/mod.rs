@@ -38,7 +38,6 @@ use pixi_core::lock_file::virtual_packages::required_virtual_package_specs;
 use pixi_core::repodata::Repodata;
 use pixi_core::workspace::stdlib_variants::{StdlibVersionPin, derive_stdlib_variants};
 use pixi_manifest::platform::host::{host_subdir, platform_from_detected};
-use pixi_manifest::platform::solver_generic_virtual_packages;
 use pixi_manifest::{
     ExcludeNewerConfig, ExcludeNewerError, InlinePackageManifest, PixiPlatform, PrioritizedChannel,
     WorkspaceManifest, resolve_exclude_newer,
@@ -620,7 +619,7 @@ impl Project {
             .map(|p| p == host.subdir().only_platform().unwrap_or(""))
             .unwrap_or(false)
         {
-            Ok(solver_generic_virtual_packages(host.platform()?))
+            Ok(host.platform()?.solver_records().into_owned())
         } else {
             Ok(vec![])
         }

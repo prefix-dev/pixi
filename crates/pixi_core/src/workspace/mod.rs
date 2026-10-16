@@ -317,7 +317,7 @@ fn implicit_script_platforms(
         }
         if !unsatisfied_capabilities(
             &recorded.customised_virtual_packages(),
-            host.declared_virtual_packages(),
+            host.solver_records().as_ref(),
         )
         .is_empty()
         {
@@ -1216,7 +1216,7 @@ impl Workspace {
         {
             // If the tool platform is the same as the current platform, we just assume the
             // same virtual packages apply.
-            self.host.capabilities().to_vec()
+            self.host.capabilities().into_owned()
         } else {
             vec![]
         };
@@ -1663,13 +1663,13 @@ packages: []
                 .platforms
                 .iter()
                 .find(|p| {
-                    p.declared_virtual_packages()
+                    p.manifest_records()
                         .iter()
                         .any(|g| g.name.as_normalized() == "__glibc")
                 })
                 .expect("the migration should synthesise a platform carrying __glibc");
-            let glibc = glibc_platform
-                .declared_virtual_packages()
+            let manifest_records = glibc_platform.manifest_records();
+            let glibc = manifest_records
                 .iter()
                 .find(|g| g.name.as_normalized() == "__glibc")
                 .unwrap();
@@ -2056,7 +2056,7 @@ packages: []
         let platform = workspace.pixi_platform_for_subdir(Subdir::Linux64);
         assert_eq!(
             platform
-                .declared_virtual_packages()
+                .manifest_records()
                 .iter()
                 .find(|vp| vp.name.as_normalized() == "__glibc")
                 .map(|vp| vp.version.to_string()),
@@ -2084,15 +2084,15 @@ packages: []
 
         let declared = workspace.pixi_platform_for_subdir(Subdir::Linux64);
         assert_eq!(
-            declared.declared_virtual_packages(),
-            PixiPlatform::from_subdir(Subdir::Linux64).declared_virtual_packages()
+            declared.manifest_records(),
+            PixiPlatform::from_subdir(Subdir::Linux64).manifest_records()
         );
 
         let undeclared = workspace.pixi_platform_for_subdir(Subdir::OsxArm64);
         assert_eq!(undeclared.name().as_str(), "osx-arm64");
         assert_eq!(
-            undeclared.declared_virtual_packages(),
-            PixiPlatform::from_subdir(Subdir::OsxArm64).declared_virtual_packages()
+            undeclared.manifest_records(),
+            PixiPlatform::from_subdir(Subdir::OsxArm64).manifest_records()
         );
     }
 

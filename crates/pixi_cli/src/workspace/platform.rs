@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::str::FromStr;
@@ -855,7 +856,7 @@ async fn execute_list(
 /// in declaration order, each followed by its usage lines.
 fn format_workspace_platform_rows(
     workspace: &pixi_core::Workspace,
-    machine: &HostMachine,
+    machine: &HostMachine<'_>,
 ) -> String {
     let reachability = MachineReachability::compute(workspace, machine);
     let multiple_environments = workspace.environments().len() > 1;
@@ -906,7 +907,7 @@ async fn execute_remove(
 
 /// Pretty-print rattler's host detection as a "diagnostic" header rather
 /// than another `<name>:` row.
-fn print_autodetected_host(stdout: &mut std::io::Stdout, machine: &HostMachine) {
+fn print_autodetected_host(stdout: &mut std::io::Stdout, machine: &HostMachine<'_>) {
     let _ = writeln!(stdout, "Your current machine was detected as:");
     let _ = writeln!(
         stdout,
@@ -966,17 +967,17 @@ struct PlatformUsers {
 /// Snapshot of the local machine used to color platform rows in `list`:
 /// the subdir we target, which subdirs we can run packages from (that one plus
 /// arch fallbacks) and which virtual packages rattler detected on the host.
-struct HostMachine {
+struct HostMachine<'a> {
     subdir: Subdir,
     candidate_subdirs: Vec<Subdir>,
-    detected: Vec<GenericVirtualPackage>,
+    detected: Cow<'a, [GenericVirtualPackage]>,
 }
 
-impl HostMachine {
-    fn from_host(host: &pixi_core::host::HostDetection) -> Self {
+impl<'a> HostMachine<'a> {
+    fn from_host(host: &'a pixi_core::host::HostDetection) -> Self {
         let subdir = host.subdir();
         let candidate_subdirs = candidate_subdirs(subdir);
-        let detected = host.capabilities().to_vec();
+        let detected = host.capabilities();
         HostMachine {
             subdir,
             candidate_subdirs,
@@ -1012,7 +1013,7 @@ impl HostMachine {
             return false;
         }
         pixi_manifest::toml::inline_virtual_package_specs(
-            platform.declared_virtual_packages(),
+            platform.manifest_records().as_ref(),
             Some(&subdir_default_virtual_packages(subdir)),
         )
         .iter()
@@ -1029,7 +1030,7 @@ struct MachineReachability {
 }
 
 impl MachineReachability {
-    fn compute(workspace: &pixi_core::Workspace, machine: &HostMachine) -> Self {
+    fn compute(workspace: &pixi_core::Workspace, machine: &HostMachine<'_>) -> Self {
         let manifest = workspace.workspace_manifest();
         let supported: HashSet<&str> = manifest
             .workspace
@@ -1078,7 +1079,7 @@ impl MachineReachability {
 /// platform, with unreachable names dimmed.
 fn format_workspace_platform_row(
     platform: &PixiPlatform,
-    machine: &HostMachine,
+    machine: &HostMachine<'_>,
     users: &PlatformUsers,
     reachability: &MachineReachability,
     multiple_environments: bool,
@@ -1096,7 +1097,7 @@ fn format_workspace_platform_row(
 
     let mut all_vps_ok = true;
     for spec in pixi_manifest::toml::inline_virtual_package_specs(
-        platform.declared_virtual_packages(),
+        platform.manifest_records().as_ref(),
         Some(&subdir_default_virtual_packages(subdir)),
     ) {
         let satisfied = spec.packages.iter().all(|p| machine.satisfies(p));
@@ -1209,7 +1210,7 @@ fn show_to_json(
         "name": platform.name().as_str(),
         "subdir": platform.subdir().as_str(),
         "virtual_packages": render_friendly(
-            platform.declared_virtual_packages(),
+            platform.manifest_records().as_ref(),
             Some(&subdir_default_virtual_packages(platform.subdir())),
         ),
         "detected_virtual_packages": detected,
@@ -1222,7 +1223,7 @@ fn show_to_json(
 /// JSON counterpart to [`print_autodetected_host`]. Carries the same data
 /// shape as a real platform entry plus an `is_autodetected: true` marker so
 /// downstream tooling can tell synthetic rows apart from declared ones.
-fn autodetected_to_json(machine: &HostMachine) -> serde_json::Value {
+fn autodetected_to_json(machine: &HostMachine<'_>) -> serde_json::Value {
     let detected: Vec<String> = render_friendly(&machine.detected, None);
     serde_json::json!({
         "name": "current",
@@ -1271,11 +1272,11 @@ mod tests {
     }
 
     /// A host that runs linux-64 with no customised virtual packages.
-    fn linux_machine() -> HostMachine {
+    fn linux_machine() -> HostMachine<'static> {
         HostMachine {
             subdir: Subdir::Linux64,
             candidate_subdirs: vec![Subdir::Linux64],
-            detected: Vec::new(),
+            detected: Cow::Borrowed(&[]),
         }
     }
 

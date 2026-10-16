@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::fmt::{self, Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
@@ -315,6 +316,35 @@ fn check_gpu_arch_coupling(declared: &[GenericVirtualPackage]) -> Result<(), Pix
     Ok(())
 }
 
+/// Complete records in their source spelling.
+#[derive(Debug, Clone)]
+pub enum VirtualPackageRecords {
+    /// Manifest declarations, including explicit versions and builds.
+    Manifest(Vec<GenericVirtualPackage>),
+    /// Detector records, preserved without shorthand normalization.
+    Detected(Vec<GenericVirtualPackage>),
+}
+
+impl VirtualPackageRecords {
+    fn as_slice(&self) -> &[GenericVirtualPackage] {
+        match self {
+            Self::Manifest(records) | Self::Detected(records) => records,
+        }
+    }
+
+    fn manifest_records_mut(&mut self) -> &mut Vec<GenericVirtualPackage> {
+        if let Self::Detected(records) = self {
+            let mut records = std::mem::take(records);
+            records.iter_mut().for_each(normalize_manifest_record);
+            *self = Self::Manifest(records);
+        }
+        match self {
+            Self::Manifest(records) => records,
+            Self::Detected(_) => unreachable!(),
+        }
+    }
+}
+
 /// A platform declared by the workspace.
 ///
 /// A workspace platform is a named view onto a conda subdir, optionally
@@ -332,10 +362,7 @@ pub struct PixiPlatform {
     name: PixiPlatformName,
     /// The conda subdir for this platform (e.g. `linux-64`).
     subdir: Subdir,
-    /// Complete virtual-package records, in manifest or detector spelling.
-    declared_virtual_packages: Vec<GenericVirtualPackage>,
-    /// Detector records are already solver records and must not be normalized.
-    virtual_packages_are_detected: bool,
+    virtual_packages: VirtualPackageRecords,
 }
 
 impl PixiPlatform {
@@ -354,8 +381,9 @@ impl PixiPlatform {
         Self {
             name: subdir.into(),
             subdir,
-            declared_virtual_packages: subdir_default_virtual_packages(subdir),
-            virtual_packages_are_detected: false,
+            virtual_packages: VirtualPackageRecords::Manifest(subdir_default_virtual_packages(
+                subdir,
+            )),
         }
     }
 
@@ -368,7 +396,8 @@ impl PixiPlatform {
         // subdir, so a bare subdir-platform can't be renamed, and a VP-bearing
         // one can't be renamed onto its own subdir name.
         if self.is_subdir_platform()
-            || (name.as_str() == self.subdir.as_str() && !self.declared_virtual_packages.is_empty())
+            || (name.as_str() == self.subdir.as_str()
+                && !self.virtual_packages.as_slice().is_empty())
         {
             Err(PixiPlatformError::IsSubdirPlatform)
         } else {
@@ -401,7 +430,7 @@ impl PixiPlatform {
         self.name.as_str()
             == crate::toml::platform::synthesize_name_string(
                 self.subdir,
-                &self.declared_virtual_packages,
+                self.virtual_packages.as_slice(),
             )
     }
 
@@ -441,8 +470,7 @@ impl PixiPlatform {
         Ok(Self {
             name,
             subdir,
-            declared_virtual_packages,
-            virtual_packages_are_detected: false,
+            virtual_packages: VirtualPackageRecords::Manifest(declared_virtual_packages),
         })
     }
 
@@ -500,31 +528,38 @@ impl PixiPlatform {
         }
     }
 
-    pub fn set_declared_virtual_packages(
-        &mut self,
-        declared_virtual_packages: Vec<GenericVirtualPackage>,
-    ) -> Result<(), PixiPlatformError> {
-        if self.is_subdir_platform() {
-            Err(PixiPlatformError::IsSubdirPlatform)
-        } else {
-            self.virtual_packages_are_detected = false;
-            self.declared_virtual_packages = declared_virtual_packages;
-            Ok(())
+    /// Source-tagged records for consumers that must preserve exact stored fields.
+    /// Use [`Self::solver_records`] for solving and [`Self::manifest_records`] for rendering.
+    pub fn records(&self) -> &VirtualPackageRecords {
+        &self.virtual_packages
+    }
+
+    /// Complete solver records. Detector records pass through unchanged;
+    /// manifest shorthand expands to build `0` and archspec version 1.
+    pub fn solver_records(&self) -> Cow<'_, [GenericVirtualPackage]> {
+        match &self.virtual_packages {
+            VirtualPackageRecords::Manifest(records) => {
+                Cow::Owned(records.iter().map(solver_record).collect())
+            }
+            VirtualPackageRecords::Detected(records) => Cow::Borrowed(records),
         }
     }
 
-    pub fn declared_virtual_packages(&self) -> &[GenericVirtualPackage] {
-        &self.declared_virtual_packages
+    /// Complete manifest records. Explicit manifest versions and builds are
+    /// preserved; detector records use manifest shorthand where available.
+    pub fn manifest_records(&self) -> Cow<'_, [GenericVirtualPackage]> {
+        match &self.virtual_packages {
+            VirtualPackageRecords::Manifest(records) => Cow::Borrowed(records),
+            VirtualPackageRecords::Detected(records) => {
+                Cow::Owned(records.iter().map(manifest_record).collect())
+            }
+        }
     }
 
-    /// The declared virtual packages with the subdir defaults filtered out.
-    ///
-    /// Records are rewritten into manifest spelling for rendering: a `"0"`
-    /// build becomes `""` and `__archspec` version 1 becomes the version-0
-    /// shorthand. The complete solver records define platform identity; see
-    /// [`Self::has_same_definition`].
+    /// Customised records in canonical manifest spelling, excluding subdir defaults.
     pub fn customised_virtual_packages(&self) -> Vec<GenericVirtualPackage> {
-        self.declared_virtual_packages
+        self.virtual_packages
+            .as_slice()
             .iter()
             .filter(|gvp| !is_subdir_default(gvp, self.subdir))
             .map(manifest_record)
@@ -537,8 +572,8 @@ impl PixiPlatform {
         if self.subdir != other.subdir {
             return false;
         }
-        let mut a = solver_generic_virtual_packages(self);
-        let mut b = solver_generic_virtual_packages(other);
+        let mut a = self.solver_records().into_owned();
+        let mut b = other.solver_records().into_owned();
         a.sort();
         b.sort();
         a == b
@@ -598,25 +633,21 @@ impl PixiPlatform {
         // entry where they don't belong.
         let old_subdir = self.subdir;
 
+        let declared = self.virtual_packages.manifest_records_mut();
         if edit.clear_virtual_packages {
-            self.declared_virtual_packages.clear();
+            declared.clear();
         }
 
         for upsert in edit.insert_or_update_virtual_packages {
-            if let Some(existing) = self
-                .declared_virtual_packages
-                .iter_mut()
-                .find(|gvp| gvp.name == upsert.name)
-            {
+            if let Some(existing) = declared.iter_mut().find(|gvp| gvp.name == upsert.name) {
                 *existing = upsert;
             } else {
-                self.declared_virtual_packages.push(upsert);
+                declared.push(upsert);
             }
         }
 
         if !edit.remove_virtual_packages.is_empty() {
-            self.declared_virtual_packages
-                .retain(|gvp| !edit.remove_virtual_packages.contains(&gvp.name));
+            declared.retain(|gvp| !edit.remove_virtual_packages.contains(&gvp.name));
         }
 
         if let Some(subdir) = edit.set_subdir {
@@ -628,11 +659,10 @@ impl PixiPlatform {
             // the new subdir. Custom values the user explicitly set (a
             // non-default version) survive -- only entries that match the
             // old subdir's default exactly are stripped.
-            self.declared_virtual_packages
-                .retain(|gvp| !is_subdir_default(gvp, old_subdir));
+            declared.retain(|gvp| !is_subdir_default(gvp, old_subdir));
         }
 
-        if self.declared_virtual_packages.is_empty() {
+        if declared.is_empty() {
             // Dropping the last virtual package collapses a rich platform
             // back to a subdir platform: the name resets to the subdir,
             // and the subdir defaults are re-materialised so the
@@ -646,14 +676,13 @@ impl PixiPlatform {
         // entry with the same name wins, so an `--remove-virtual-package`
         // pass that strips a default value will be re-seeded from the subdir
         // default rather than left absent.
-        self.virtual_packages_are_detected = false;
-        merge_subdir_defaults(&mut self.declared_virtual_packages, self.subdir);
+        merge_subdir_defaults(declared, self.subdir);
 
-        check_gpu_arch_coupling(&self.declared_virtual_packages)?;
+        check_gpu_arch_coupling(declared)?;
 
         if was_auto {
             // Recompute the synthesised name from the new subdir + VPs.
-            self.name = synthesized_name(self.subdir, &self.declared_virtual_packages)?;
+            self.name = synthesized_name(self.subdir, declared)?;
         } else if self.name.as_str() == self.subdir.as_str() {
             // A preserved custom name that now equals the subdir while VPs
             // remain would forge an illegal subdir-platform.
@@ -771,46 +800,30 @@ pub fn is_subdir_default(gvp: &GenericVirtualPackage, subdir: Subdir) -> bool {
 ///
 /// This typed view is useful for consumers such as Python platform tags, but
 /// cannot represent arbitrary detector build strings or archspec versions.
-/// Solvers must use [`solver_generic_virtual_packages`] for complete records.
+/// Solvers must use [`PixiPlatform::solver_records`] for complete records.
 pub fn solver_virtual_packages(platform: &PixiPlatform) -> Vec<VirtualPackage> {
     platform
-        .declared_virtual_packages()
+        .virtual_packages
+        .as_slice()
         .iter()
         .filter_map(generic_to_virtual_package)
         .collect()
 }
 
-/// Every declared virtual package in the form a solve is given.
-///
-/// Detector records pass through unchanged. Manifest records retain explicit
-/// versions and builds, with an omitted build defaulting to `0` and the
-/// version-0 `__archspec` shorthand expanding to solver version 1.
-pub fn solver_generic_virtual_packages(platform: &PixiPlatform) -> Vec<GenericVirtualPackage> {
-    if platform.virtual_packages_are_detected {
-        return platform.declared_virtual_packages.clone();
-    }
-    platform
-        .declared_virtual_packages()
-        .iter()
-        .map(solver_record)
-        .collect()
+/// A solver record in manifest spelling.
+pub(crate) fn manifest_record(gvp: &GenericVirtualPackage) -> GenericVirtualPackage {
+    let mut gvp = gvp.clone();
+    normalize_manifest_record(&mut gvp);
+    gvp
 }
 
-/// A solver record in manifest spelling, the inverse of [`solver_record`].
-pub(crate) fn manifest_record(gvp: &GenericVirtualPackage) -> GenericVirtualPackage {
-    let is_archspec = gvp.name.as_normalized() == "__archspec";
-    GenericVirtualPackage {
-        name: gvp.name.clone(),
-        version: if is_archspec && gvp.version == Version::major(1) {
-            Version::major(0)
-        } else {
-            gvp.version.clone()
-        },
-        build_string: if !is_archspec && gvp.build_string == "0" {
-            String::new()
-        } else {
-            gvp.build_string.clone()
-        },
+fn normalize_manifest_record(gvp: &mut GenericVirtualPackage) {
+    if gvp.name.as_normalized() == "__archspec" {
+        if gvp.version == Version::major(1) {
+            gvp.version = Version::major(0);
+        }
+    } else if gvp.build_string == "0" {
+        gvp.build_string.clear();
     }
 }
 
@@ -1230,7 +1243,7 @@ mod tests {
     /// having to spell out every materialised subdir default.
     fn declared_by_name(platform: &PixiPlatform, names: &[&str]) -> Vec<(String, String)> {
         platform
-            .declared_virtual_packages()
+            .manifest_records()
             .iter()
             .filter(|gvp| names.contains(&gvp.name.as_normalized()))
             .map(|gvp| {
@@ -1360,7 +1373,7 @@ mod tests {
     /// re-seeded from the subdir defaults.
     fn declares(platform: &PixiPlatform, name: &str) -> bool {
         platform
-            .declared_virtual_packages()
+            .manifest_records()
             .iter()
             .any(|gvp| gvp.name.as_normalized() == name)
     }
@@ -1375,19 +1388,97 @@ mod tests {
         .unwrap();
         assert_eq!(
             platform
-                .declared_virtual_packages()
+                .manifest_records()
                 .iter()
                 .find(|package| package.name.as_normalized() == "__archspec")
                 .unwrap(),
             &archspec("zen2")
         );
-        let solver = solver_generic_virtual_packages(&platform);
+        let solver = platform.solver_records();
         let package = solver
             .iter()
             .find(|package| package.name.as_normalized() == "__archspec")
             .unwrap();
         assert_eq!(package.version, Version::major(1));
         assert_eq!(package.build_string, "zen2");
+    }
+
+    #[test]
+    fn record_source_controls_solver_shorthand_and_identity() {
+        let raw = vec![gvp("__site", "2"), archspec("zen2")];
+        let manifest = PixiPlatform::new(
+            PixiPlatformName::try_from("declared").unwrap(),
+            Subdir::Linux64,
+            raw.clone(),
+        )
+        .unwrap();
+        let detected = host::platform_from_detected(Subdir::Linux64, raw.clone()).unwrap();
+        assert_eq!(manifest.manifest_records().as_ref(), raw.as_slice());
+        assert_eq!(detected.solver_records().as_ref(), raw.as_slice());
+        let solver = manifest.solver_records();
+        assert_eq!(solver[0].build_string, "0");
+        assert_eq!(solver[1].version, Version::major(1));
+        assert!(!manifest.has_same_definition(&detected));
+
+        let normalized =
+            host::platform_from_detected(Subdir::Linux64, solver.into_owned()).unwrap();
+        assert!(manifest.has_same_definition(&normalized));
+        assert_eq!(normalized.manifest_records().as_ref(), raw.as_slice());
+    }
+
+    #[test]
+    fn manifest_records_preserve_explicit_versions_and_builds() {
+        let mut architecture = archspec("zen2");
+        architecture.version = Version::major(1);
+        let mut site = gvp("__site", "2");
+        site.build_string = "0".to_string();
+        let records = vec![architecture, site];
+        let platform = PixiPlatform::new(
+            PixiPlatformName::try_from("declared").unwrap(),
+            Subdir::Linux64,
+            records.clone(),
+        )
+        .unwrap();
+        assert_eq!(platform.manifest_records().as_ref(), records.as_slice());
+        assert_eq!(platform.solver_records().as_ref(), records.as_slice());
+    }
+
+    #[test]
+    fn editing_detected_records_transitions_to_manifest_spelling() {
+        let declared = PixiPlatform::new_with_defaults(
+            PixiPlatformName::try_from("declared").unwrap(),
+            Subdir::Linux64,
+            vec![archspec("zen2"), gvp("__cuda", "12.4")],
+        )
+        .unwrap();
+        let mut detected =
+            host::platform_from_detected(Subdir::Linux64, declared.solver_records().into_owned())
+                .unwrap();
+        detected
+            .apply_edit(PlatformEdit {
+                insert_or_update_virtual_packages: vec![gvp("__site", "2")],
+                ..Default::default()
+            })
+            .unwrap();
+        let mut expected = declared;
+        expected
+            .apply_edit(PlatformEdit {
+                insert_or_update_virtual_packages: vec![gvp("__site", "2")],
+                ..Default::default()
+            })
+            .unwrap();
+        let records = detected.manifest_records();
+        let architecture = records
+            .iter()
+            .find(|record| record.name.as_normalized() == "__archspec")
+            .unwrap();
+        assert_eq!(architecture.version, Version::major(0));
+        let cuda = records
+            .iter()
+            .find(|record| record.name.as_normalized() == "__cuda")
+            .unwrap();
+        assert!(cuda.build_string.is_empty());
+        assert!(detected.has_same_definition(&expected));
     }
 
     #[test]
@@ -1627,8 +1718,8 @@ mod tests {
         assert!(p.is_subdir_platform());
         assert_eq!(p.name().as_str(), "linux-64");
         assert_eq!(
-            p.declared_virtual_packages(),
-            PixiPlatform::from_subdir(Subdir::Linux64).declared_virtual_packages(),
+            p.manifest_records(),
+            PixiPlatform::from_subdir(Subdir::Linux64).manifest_records(),
         );
     }
 
@@ -1863,7 +1954,7 @@ mod tests {
             assert_eq!(platform.name().as_str(), subdir_str);
             assert_eq!(platform.subdir(), subdir);
             assert_eq!(
-                platform.declared_virtual_packages(),
+                platform.manifest_records().as_ref(),
                 subdir_default_virtual_packages(subdir).as_slice(),
                 "from_subdir({subdir_str}) must materialise the subdir defaults",
             );
@@ -1880,10 +1971,6 @@ mod tests {
             ));
             assert!(matches!(
                 platform.set_subdir(some_other_subdir),
-                Err(PixiPlatformError::IsSubdirPlatform)
-            ));
-            assert!(matches!(
-                platform.set_declared_virtual_packages(vec![gvp("__cuda", "12.0")]),
                 Err(PixiPlatformError::IsSubdirPlatform)
             ));
             // set_subdir-only edits are blocked: the subdir baseline is

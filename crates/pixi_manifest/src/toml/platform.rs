@@ -14,7 +14,7 @@ use toml_span::{
 
 use crate::{
     PixiPlatform, PixiPlatformName,
-    platform::subdir_default_virtual_packages,
+    platform::{solver_record, subdir_default_virtual_packages},
     system_requirements::{SystemRequirements, virtual_packages_for_subdir},
 };
 
@@ -334,10 +334,10 @@ impl Serialize for TomlPixiPlatform {
         let platform = &self.0;
         let name = platform.name().as_str();
         let subdir_str = platform.subdir().to_string();
-        let declared = platform.declared_virtual_packages();
+        let declared = platform.manifest_records();
 
         let entries = platform_inline_entries(
-            declared,
+            &declared,
             Some(&subdir_default_virtual_packages(platform.subdir())),
         );
         // Subdir platforms (`name == subdir`) carry the subdir defaults, but
@@ -888,11 +888,8 @@ fn classify_virtual_packages(
         .iter()
         .filter(|gvp| {
             baseline.is_none_or(|base| {
-                !base.iter().any(|d| {
-                    d.name == gvp.name
-                        && d.version == gvp.version
-                        && d.build_string == gvp.build_string
-                })
+                let record = solver_record(gvp);
+                !base.iter().any(|default| solver_record(default) == record)
             })
         })
         .collect();
@@ -1117,10 +1114,10 @@ fn suggested_platform_entry(candidates: &[GenericVirtualPackage], subdir: Subdir
 pub(crate) fn pixi_platform_to_toml_value(platform: &PixiPlatform) -> toml_edit::Value {
     let name = platform.name().as_str();
     let subdir_str = platform.subdir().to_string();
-    let declared = platform.declared_virtual_packages();
+    let declared = platform.manifest_records();
 
     let entries = platform_inline_entries(
-        declared,
+        &declared,
         Some(&subdir_default_virtual_packages(platform.subdir())),
     );
     if name == subdir_str && entries.is_empty() {
@@ -1187,7 +1184,7 @@ mod test {
 
     fn virtual_package_specs(platform: &PixiPlatform) -> Vec<String> {
         platform
-            .declared_virtual_packages()
+            .manifest_records()
             .iter()
             .map(|package| {
                 let build_is_zero = package.build_string.is_empty() || package.build_string == "0";
@@ -1214,8 +1211,8 @@ mod test {
         assert_eq!(parsed.platform.subdir(), Subdir::Linux64);
         assert!(parsed.platform.is_subdir_platform());
         assert_eq!(
-            parsed.platform.declared_virtual_packages(),
-            crate::PixiPlatform::from_subdir(Subdir::Linux64).declared_virtual_packages(),
+            parsed.platform.manifest_records(),
+            crate::PixiPlatform::from_subdir(Subdir::Linux64).manifest_records(),
         );
     }
 
@@ -1228,8 +1225,8 @@ mod test {
         assert_eq!(parsed.platform.subdir(), Subdir::OsxArm64);
         assert!(parsed.platform.is_subdir_platform());
         assert_eq!(
-            parsed.platform.declared_virtual_packages(),
-            crate::PixiPlatform::from_subdir(Subdir::OsxArm64).declared_virtual_packages(),
+            parsed.platform.manifest_records(),
+            crate::PixiPlatform::from_subdir(Subdir::OsxArm64).manifest_records(),
         );
     }
 
@@ -1271,7 +1268,8 @@ mod test {
             r#"platform = { platform = "linux-64", archspec = "x86_64_v3" }"#,
         )
         .unwrap();
-        let package = &parsed.platform.declared_virtual_packages()[0];
+        let records = parsed.platform.manifest_records();
+        let package = &records[0];
         assert_eq!(package.name.as_normalized(), "__archspec");
         assert_eq!(package.version, Version::major(0));
         assert_eq!(package.build_string, "x86_64_v3");
@@ -1698,6 +1696,39 @@ mod test {
         let encoded = format!("platform = {}", pixi_platform_to_toml_value(&detected));
         let restored = TopLevel::from_toml_str(&encoded).unwrap();
         assert_eq!(restored.platform.name(), detected.name());
+    }
+
+    #[test]
+    fn detected_records_render_as_manifest_shorthand_and_round_trip() {
+        let declared = PixiPlatform::new_with_defaults(
+            PixiPlatformName::try_from("declared").unwrap(),
+            Subdir::Linux64,
+            vec![
+                archspec_virtual_package("zen2"),
+                version_virtual_package("__cuda", "12.4"),
+            ],
+        )
+        .unwrap();
+        let detected = crate::platform::host::platform_from_detected(
+            Subdir::Linux64,
+            declared.solver_records().into_owned(),
+        )
+        .unwrap();
+        let json = serde_json::to_value(TomlPixiPlatform(detected.clone())).unwrap();
+        assert_eq!(json["archspec"], "zen2");
+        assert_eq!(json["cuda"], "12.4");
+        assert!(json.get("__archspec").is_none());
+        assert!(json.get("__cuda").is_none());
+        assert!(json.get("__unix").is_none());
+
+        let rendered = pixi_platform_to_toml_value(&detected);
+        let table = rendered.as_inline_table().unwrap();
+        assert_eq!(table.get("archspec").unwrap().as_str(), Some("zen2"));
+        assert_eq!(table.get("cuda").unwrap().as_str(), Some("12.4"));
+        assert!(table.get("__unix").is_none());
+        let restored = TopLevel::from_toml_str(&format!("platform = {rendered}")).unwrap();
+        assert_eq!(restored.platform.name(), detected.name());
+        assert!(restored.platform.has_same_definition(&detected));
     }
 
     /// VPs whose shape doesn't match the friendly form (e.g. a `__cuda` with

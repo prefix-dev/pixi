@@ -37,7 +37,7 @@ use pixi_install_pypi::{
 };
 use pixi_manifest::{
     ChannelPriority, EnvironmentName, ExcludeNewerError, FeaturesExt, HasWorkspaceManifest,
-    PixiPlatform, PixiPlatformName,
+    PixiPlatform, PixiPlatformName, platform::VirtualPackageRecords,
 };
 use pixi_progress::global_multi_progress;
 use pixi_record::{LockFileResolver, ParseLockFileError, PixiRecord, UnresolvedPixiRecord};
@@ -2777,14 +2777,14 @@ impl<'p> UpdateContext<'p> {
             .into_iter()
             .filter_map(|name| {
                 let pixi_platform = workspace.workspace.platform_by_name(&name)?;
+                let records = match pixi_platform.records() {
+                    VirtualPackageRecords::Manifest(records)
+                    | VirtualPackageRecords::Detected(records) => records,
+                };
                 Some(rattler_lock::PlatformData {
                     name: rattler_lock::PlatformName::try_from(name.as_str()).ok()?,
                     subdir: pixi_platform.subdir(),
-                    virtual_packages: pixi_platform
-                        .declared_virtual_packages()
-                        .iter()
-                        .map(|vp| vp.to_string())
-                        .collect(),
+                    virtual_packages: records.iter().map(|vp| vp.to_string()).collect(),
                 })
             })
             .collect();

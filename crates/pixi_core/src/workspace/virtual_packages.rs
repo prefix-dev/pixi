@@ -11,7 +11,7 @@ use fancy_display::FancyDisplay;
 use miette::Diagnostic;
 use pixi_manifest::{
     EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName,
-    platform::{candidate_subdirs, solver_generic_virtual_packages, unsatisfied_capabilities},
+    platform::{candidate_subdirs, unsatisfied_capabilities},
 };
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Subdir};
 use rattler_lock::LockFile;
@@ -132,7 +132,7 @@ pub fn minimum_compatible_declared_platform<'p>(
         // only content is tasks still runs under an unsatisfiable requirement.
         let unsatisfied = required
             .get(subdir)
-            .map(|specs| unmet_requirements(specs, system_virtual_packages))
+            .map(|specs| unmet_requirements(specs, &system_virtual_packages))
             .unwrap_or_default();
         if unsatisfied.is_empty() {
             if let Some(declared) = declared_platforms
@@ -408,7 +408,7 @@ pub fn verify_run_platform(
             };
             (
                 vec![platform.subdir()],
-                platform.declared_virtual_packages().to_vec(),
+                platform.solver_records(),
                 name.clone(),
                 platform.subdir(),
             )
@@ -421,7 +421,7 @@ pub fn verify_run_platform(
             let subdirs = candidate_subdirs(current);
             (
                 subdirs,
-                host.capabilities().to_vec(),
+                host.capabilities(),
                 PixiPlatformName::from(current),
                 current,
             )
@@ -562,12 +562,10 @@ pub fn classify_environment_runnability(
 }
 
 impl Environment<'_> {
-    /// Returns the set of virtual packages to use for the specified platform.
-    /// Reads them straight off `platform.declared_virtual_packages()`: the
-    /// subdir baseline is materialised by [`PixiPlatform::from_subdir`], so
-    /// there is no separate "compute defaults" step.
+    /// Returns solver records for the platform, preserving detected host
+    /// records and normalizing manifest declarations for the solver.
     pub fn virtual_packages(&self, platform: &PixiPlatform) -> Vec<GenericVirtualPackage> {
-        solver_generic_virtual_packages(platform)
+        platform.solver_records().into_owned()
     }
 }
 
