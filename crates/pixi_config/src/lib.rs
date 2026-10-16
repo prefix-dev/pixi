@@ -134,8 +134,8 @@ static CONFIG_OPTION_DESCRIPTIONS: &[ConfigOptionDescription] = &[
     },
     ConfigOptionDescription {
         key: "detached-environments",
-        description: "Where to store environments. `true` keeps them in the cache directory, `false` keeps them in `.pixi/`, or set an explicit path.",
-        value_type: "bool or path",
+        description: "Where to store environments. `true` keeps them in the cache directory, `false` keeps them in `.pixi/`, or set an absolute path.",
+        value_type: "bool or absolute path",
         default: "false",
     },
     ConfigOptionDescription {
