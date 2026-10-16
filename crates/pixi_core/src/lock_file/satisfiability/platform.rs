@@ -1546,7 +1546,7 @@ impl MatchesMatchspec for GenericVirtualPackage {
         }
 
         if let Some(build) = &spec.build
-            && !build.matches(&self.build_string)
+            && !build.matches(self.build_string.as_str())
         {
             return false;
         }

@@ -73,7 +73,7 @@ pub fn uploaded_record(
     let mut package_record = rattler_conda_types::PackageRecord::new(
         rattler_conda_types::PackageName::new_unchecked(name),
         rattler_conda_types::Version::from_str(version).unwrap(),
-        "0".to_string(),
+        rattler_conda_types::package::BuildString::new_unchecked("0"),
     );
     package_record.timestamp = Some(
         "2020-01-01T00:00:00Z"

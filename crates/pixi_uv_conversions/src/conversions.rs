@@ -27,7 +27,7 @@ use uv_distribution_types::{
 };
 use uv_normalize::{InvalidNameError, PackageName};
 use uv_pep508::{VerbatimUrl, VerbatimUrlError};
-use uv_python::PythonEnvironment;
+use uv_python_interpreter::PythonEnvironment;
 use uv_redacted::DisplaySafeUrl;
 
 use crate::{ConversionError, VersionError, WorkspaceAnchor};

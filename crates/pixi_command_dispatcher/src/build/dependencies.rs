@@ -660,7 +660,7 @@ mod tests {
         let mut pr = PackageRecord::new(
             PackageName::from_str(name).unwrap(),
             VersionWithSource::from_str(version).unwrap(),
-            "h0".into(),
+            rattler_conda_types::package::BuildString::new_unchecked("h0"),
         );
         pr.subdir = "linux-64".into();
         pr.run_exports = Some(run_exports);

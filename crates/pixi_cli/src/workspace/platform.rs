@@ -127,7 +127,7 @@ impl VirtualPackageArgs {
                 &mut seen_names,
                 "__cuda",
                 version,
-                String::new(),
+                "0".to_string(),
             )?;
         }
         if let Some(value) = self.cuda_arch {
@@ -141,7 +141,7 @@ impl VirtualPackageArgs {
                 &mut seen_names,
                 "__cuda_arch",
                 version,
-                String::new(),
+                "0".to_string(),
             )?;
         }
         if self.amdgpu || self.amdgpu_arch.is_some() {
@@ -152,7 +152,7 @@ impl VirtualPackageArgs {
                 &mut seen_names,
                 "__amdgpu",
                 zero_version(),
-                String::new(),
+                "0".to_string(),
             )?;
         }
         if let Some(value) = self.amdgpu_arch {
@@ -163,7 +163,7 @@ impl VirtualPackageArgs {
                 &mut seen_names,
                 "__amdgpu_arch",
                 version,
-                String::new(),
+                "0".to_string(),
             )?;
         }
         if let Some(value) = self.archspec {
@@ -188,7 +188,7 @@ impl VirtualPackageArgs {
                 &mut seen_names,
                 "__glibc",
                 version,
-                String::new(),
+                "0".to_string(),
             )?;
         }
         if let Some(value) = self.linux {
@@ -199,18 +199,30 @@ impl VirtualPackageArgs {
                 &mut seen_names,
                 "__linux",
                 version,
-                String::new(),
+                "0".to_string(),
             )?;
         }
         if let Some(value) = self.macos {
             require_subdir_family(subdir, Subdir::is_osx, "--macos", "osx")?;
             let version = parse_virtual_package_version("--macos", &value)?;
-            push_unique(&mut specs, &mut seen_names, "__osx", version, String::new())?;
+            push_unique(
+                &mut specs,
+                &mut seen_names,
+                "__osx",
+                version,
+                "0".to_string(),
+            )?;
         }
         if let Some(value) = self.windows {
             require_subdir_family(subdir, Subdir::is_windows, "--windows", "win")?;
             let version = parse_virtual_package_version("--windows", &value)?;
-            push_unique(&mut specs, &mut seen_names, "__win", version, String::new())?;
+            push_unique(
+                &mut specs,
+                &mut seen_names,
+                "__win",
+                version,
+                "0".to_string(),
+            )?;
         }
 
         for raw in raw_specs {
@@ -247,7 +259,7 @@ fn push_unique(
     specs.push(GenericVirtualPackage {
         name,
         version,
-        build_string,
+        build_string: rattler_conda_types::package::BuildString::new_unchecked(build_string),
     });
     Ok(())
 }
@@ -300,13 +312,13 @@ fn parse_raw_virtual_package(spec: &str) -> miette::Result<GenericVirtualPackage
         .map_err(|e| {
             miette::miette!("'{version_str}' is not a valid virtual package version: {e}")
         })?;
-    let build_string = parts.next().unwrap_or("").to_string();
+    let build_string = parts.next().unwrap_or("0").to_string();
     pixi_manifest::platform::validate_virtual_package(&name, version_str, &build_string)
         .map_err(|message| miette::miette!("{message}"))?;
     Ok(GenericVirtualPackage {
         name,
         version,
-        build_string,
+        build_string: rattler_conda_types::package::BuildString::new_unchecked(build_string),
     })
 }
 

@@ -1162,7 +1162,7 @@ mod immutable_identifier_tests {
             "1.0.0"
                 .parse::<rattler_conda_types::VersionWithSource>()
                 .unwrap(),
-            "h0".into(),
+            rattler_conda_types::package::BuildString::new_unchecked("h0"),
         );
         package_record.subdir = "linux-64".into();
         Arc::new(UnresolvedSourceRecord {
@@ -1301,7 +1301,7 @@ mod immutable_identifier_tests {
         virtual_packages.build_environment.host_virtual_packages = vec![GenericVirtualPackage {
             name: PackageName::from_str("__cuda").unwrap(),
             version: "12.4".parse().unwrap(),
-            build_string: "0".to_string(),
+            build_string: rattler_conda_types::package::BuildString::new_unchecked("0"),
         }];
         assert_ne!(
             baseline,
@@ -1359,7 +1359,7 @@ mod tests {
         let mut package_record = PackageRecord::new(
             PackageName::new_unchecked(name),
             "1.0.0".parse::<VersionWithSource>().unwrap(),
-            "h0".into(),
+            rattler_conda_types::package::BuildString::new_unchecked("h0"),
         );
         package_record.subdir = subdir.into();
         RepoDataRecord {

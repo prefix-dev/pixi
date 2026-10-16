@@ -498,13 +498,10 @@ fn parse_specs(
                 if let Some(packages) = &args.specs.packages
                     && packages.contains(&name.as_normalized().to_string())
                 {
-                    // If the build contains a wildcard, keep it
-                    nameless_match_spec.build = match nameless_match_spec.build {
-                        Some(build @ StringMatcher::Glob(_) | build @ StringMatcher::Regex(_)) => {
-                            Some(build)
-                        }
-                        _ => None,
-                    };
+                    // If the build contains a wildcard or pattern, keep it
+                    nameless_match_spec.build = nameless_match_spec
+                        .build
+                        .filter(|build| !matches!(build, StringMatcher::Exact(_)));
                     nameless_match_spec.build_number = None;
                     nameless_match_spec.md5 = None;
                     nameless_match_spec.sha256 = None;

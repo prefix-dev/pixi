@@ -111,7 +111,7 @@ mod tests {
             package_record: PackageRecord::new(
                 PackageName::new_unchecked(name),
                 VersionWithSource::from(Version::from_str(version).unwrap()),
-                build.to_string(),
+                rattler_conda_types::package::BuildString::new_unchecked(build),
             ),
         }
     }

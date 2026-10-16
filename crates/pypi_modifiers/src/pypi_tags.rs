@@ -472,7 +472,7 @@ mod tests {
             vec![GenericVirtualPackage {
                 name: "__osx".parse().unwrap(),
                 version: "12.0".parse().unwrap(),
-                build_string: String::new(),
+                build_string: rattler_conda_types::package::BuildString::new_unchecked("0"),
             }],
         )
         .unwrap();
@@ -485,7 +485,7 @@ mod tests {
             vec![GenericVirtualPackage {
                 name: "__osx".parse().unwrap(),
                 version: "15".parse().unwrap(),
-                build_string: String::new(),
+                build_string: rattler_conda_types::package::BuildString::new_unchecked("0"),
             }],
         )
         .unwrap();
@@ -619,7 +619,7 @@ mod tests {
         let python_record = PackageRecord::new(
             "python".parse().unwrap(),
             VersionWithSource::from_str("3.13.3").unwrap(),
-            "h2334245_104_cp313".to_string(),
+            rattler_conda_types::package::BuildString::new_unchecked("h2334245_104_cp313"),
         );
         let res =
             get_tags_from_machine(&vpkgs, &PixiPlatform::from_subdir(platform), &python_record)
@@ -647,7 +647,7 @@ mod tests {
         let python_record = PackageRecord::new(
             "python".parse().unwrap(),
             VersionWithSource::from_str("3.13.3").unwrap(),
-            "h2334245_104_cp313".to_string(),
+            rattler_conda_types::package::BuildString::new_unchecked("h2334245_104_cp313"),
         );
         let res =
             get_tags_from_machine(&vpkgs, &PixiPlatform::from_subdir(platform), &python_record)
@@ -673,7 +673,7 @@ mod tests {
         let python_record = PackageRecord::new(
             "python".parse().unwrap(),
             VersionWithSource::from_str("3.13.3").unwrap(),
-            "h2334245_104_cp313".to_string(),
+            rattler_conda_types::package::BuildString::new_unchecked("h2334245_104_cp313"),
         );
         let res =
             get_tags_from_machine(&vpkgs, &PixiPlatform::from_subdir(platform), &python_record)
@@ -707,7 +707,7 @@ mod tests {
         GenericVirtualPackage {
             name: PackageName::try_from(name).unwrap(),
             version: Version::from_str(version).unwrap(),
-            build_string: String::new(),
+            build_string: rattler_conda_types::package::BuildString::new_unchecked("0"),
         }
     }
 

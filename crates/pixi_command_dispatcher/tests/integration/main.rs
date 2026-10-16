@@ -1354,7 +1354,7 @@ fn build_string(packages: &[pixi_record::UnresolvedPixiRecord], name: &str) -> S
         .unwrap_or_else(|| panic!("{name} should be a binary dependency"))
         .package_record
         .build
-        .clone()
+        .to_string()
 }
 
 /// A package can receive the same source dependency through two channels at
@@ -3604,7 +3604,7 @@ pub async fn test_prefix_platform_mismatch_is_reported_before_installing() {
     let mut smuggled = PackageRecord::new(
         PackageName::new_unchecked("libfoo"),
         "1.0.0".parse::<VersionWithSource>().unwrap(),
-        "h0".into(),
+        rattler_conda_types::package::BuildString::new_unchecked("h0"),
     );
     smuggled.subdir = tool_platform.to_string();
     let smuggled = RepoDataRecord {

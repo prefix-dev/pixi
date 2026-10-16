@@ -1041,7 +1041,7 @@ mod tests {
             let package_record = PackageRecord::new(
                 PackageName::from_str(name).expect("valid name"),
                 VersionWithSource::from_str("1.0").expect("valid version"),
-                "h0".into(),
+                rattler_conda_types::package::BuildString::new_unchecked("h0"),
             );
             let file_name = format!("{name}-1.0-h0.conda");
             crate::UnresolvedPixiRecord::Binary(std::sync::Arc::new(RepoDataRecord {
@@ -1506,7 +1506,7 @@ mod tests {
             "1.0.0"
                 .parse::<rattler_conda_types::VersionWithSource>()
                 .unwrap(),
-            "h1234_0".into(),
+            rattler_conda_types::package::BuildString::new_unchecked("h1234_0"),
         );
         record.subdir = "linux-64".into();
         record.depends = vec!["python >=3.8".into()];

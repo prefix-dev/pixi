@@ -584,10 +584,10 @@ mod test {
         assert_eq!(
             declared,
             vec![
-                "__cuda=12.0".to_string(),
+                "__cuda=12.0=0".to_string(),
                 "__unix=0=0".to_string(),
-                "__linux=4.18".to_string(),
-                "__glibc=2.28".to_string(),
+                "__linux=4.18=0".to_string(),
+                "__glibc=2.28=0".to_string(),
                 "__archspec=0=x86_64".to_string(),
             ],
             "rich platforms materialise the subdir defaults alongside the declared __cuda; \
@@ -656,7 +656,7 @@ mod test {
             .iter()
             .map(ToString::to_string)
             .collect();
-        assert_eq!(unsatisfied, vec!["__cuda=12.0".to_string()]);
+        assert_eq!(unsatisfied, vec!["__cuda=12.0=0".to_string()]);
 
         let mac = &diagnostics[1];
         assert_eq!(mac.name.as_str(), "mac");
@@ -672,14 +672,14 @@ mod test {
             .iter()
             .map(ToString::to_string)
             .collect();
-        assert_eq!(requirements, vec!["__cuda=12.0".to_string()]);
+        assert_eq!(requirements, vec!["__cuda=12.0=0".to_string()]);
 
         // With a recent-enough host cuda, `gpu-linux` runs and nothing is
         // unsatisfied.
         let host_cuda = GenericVirtualPackage {
             name: "__cuda".parse().unwrap(),
             version: "12.4".parse().unwrap(),
-            build_string: "0".to_string(),
+            build_string: rattler_conda_types::package::BuildString::new_unchecked("0"),
         };
         let diagnostics = workspace.platform_match_diagnostics(
             Subdir::Linux64,

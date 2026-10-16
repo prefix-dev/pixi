@@ -32,7 +32,7 @@ use tempfile::{TempDir, tempdir};
 use tokio::{fs, task::JoinSet};
 use url::Url;
 use uv_normalize::PackageName;
-use uv_python::PythonEnvironment;
+use uv_python_interpreter::PythonEnvironment;
 use uv_threads::initialize_rayon_once;
 
 use crate::common::pypi_index::PyPIPackage;
@@ -345,8 +345,8 @@ fn create_uv_environment(prefix: &Path, cache: &uv_cache::Cache) -> PythonEnviro
     };
 
     // Current interpreter and venv
-    let interpreter = uv_python::Interpreter::query(python, cache).unwrap();
-    uv_python::PythonEnvironment::from_interpreter(interpreter)
+    let interpreter = uv_python_interpreter::Interpreter::query(python, cache).unwrap();
+    uv_python_interpreter::PythonEnvironment::from_interpreter(interpreter)
 }
 
 // Helper to check if a pypi package is installed.
@@ -2295,7 +2295,7 @@ cuda-arch = "*"
             .map(|record| record.build.clone())
             .unwrap_or_else(|| panic!("cuda-arch should be locked for {platform_name}"));
         assert!(
-            build.starts_with(expected_build),
+            build.as_str().starts_with(expected_build),
             "{platform_name} resolved cuda-arch build {build}, expected {expected_build}"
         );
     }
@@ -2349,7 +2349,7 @@ amdgpu-arch = "*"
             .map(|record| record.build.clone())
             .unwrap_or_else(|| panic!("amdgpu-arch should be locked for {platform_name}"));
         assert!(
-            build.starts_with(expected_build),
+            build.as_str().starts_with(expected_build),
             "{platform_name} resolved amdgpu-arch build {build}, expected {expected_build}"
         );
     }

@@ -2221,7 +2221,7 @@ mod tests {
         let mut package_record = PackageRecord::new(
             "python".parse().unwrap(),
             VersionWithSource::from_str("3.9.7").unwrap(),
-            "build_string".to_string(),
+            rattler_conda_types::package::BuildString::new_unchecked("build_string"),
         );
 
         // Set platform to something different than current
@@ -2275,7 +2275,7 @@ mod tests {
         GenericVirtualPackage {
             name: name.parse().unwrap(),
             version: version.parse().unwrap(),
-            build_string: "0".to_string(),
+            build_string: rattler_conda_types::package::BuildString::new_unchecked("0"),
         }
     }
 

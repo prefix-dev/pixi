@@ -350,10 +350,10 @@ def test_add_cuda_table_via_flags(pixi: Path, tmp_pixi_workspace: Path) -> None:
     lock_entry = next(
         p
         for p in _lockfile_platforms(tmp_pixi_workspace)
-        if isinstance(p, dict) and "__cuda_arch=8.6" in p.get("virtual-packages", [])
+        if isinstance(p, dict) and "__cuda_arch=8.6=0" in p.get("virtual-packages", [])
     )
     assert lock_entry["subdir"] == CURRENT_PLATFORM
-    assert "__cuda=12.0" in lock_entry["virtual-packages"]
+    assert "__cuda=12.0=0" in lock_entry["virtual-packages"]
 
 
 def test_add_cuda_table_via_toml_round_trips(pixi: Path, tmp_pixi_workspace: Path) -> None:
@@ -633,7 +633,7 @@ def test_lockfile_records_custom_platform_and_vps(pixi: Path, tmp_pixi_workspace
     entry = next(
         p
         for p in lock_platforms
-        if isinstance(p, dict) and "__cuda=12.0" in p.get("virtual-packages", [])
+        if isinstance(p, dict) and "__cuda=12.0=0" in p.get("virtual-packages", [])
     )
     assert entry["subdir"] == "linux-64"
     assert entry["name"] == "gpu-linux"

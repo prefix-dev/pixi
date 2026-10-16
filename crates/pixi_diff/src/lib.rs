@@ -588,7 +588,7 @@ mod tests {
             package_record: PackageRecord::new(
                 PackageName::new_unchecked("foo"),
                 Version::from_str("1.0").unwrap(),
-                "0".to_string(),
+                rattler_conda_types::package::BuildString::new_unchecked("0"),
             ),
             location: UrlOrPath::Url(Url::parse(url).unwrap()),
             file_name: DistArchiveIdentifier::try_from_filename("foo-1.0-0.conda").unwrap(),

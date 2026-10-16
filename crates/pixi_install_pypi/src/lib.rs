@@ -51,7 +51,7 @@ use uv_fs::LockedFileError;
 use uv_install_wheel::LinkMode;
 use uv_installer::{PrepareError, Preparer, SitePackages, UninstallError};
 use uv_normalize::{InvalidNameError, PackageName};
-use uv_python::{Interpreter, InterpreterError, PythonEnvironment};
+use uv_python_interpreter::{Interpreter, InterpreterError, PythonEnvironment};
 use uv_resolver::{ExcludeNewer, FlatIndex};
 use uv_types::HashStrategy;
 
@@ -1117,7 +1117,11 @@ impl<'a> PyPIEnvironmentUpdater<'a> {
             &setup.index_locations,
             &setup.flat_index,
             &setup.dependency_metadata,
-            self.context_config.uv_context.shared_state.fork(),
+            self.context_config
+                .uv_context
+                .shared_state
+                .fork()
+                .into_inner(),
             setup.index_strategy,
             &setup.config_settings,
             &self.context_config.uv_context.package_config_settings,
