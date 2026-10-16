@@ -40,14 +40,14 @@ pub enum ActivationError {
     #[error("failed to create activator for '{0}'")]
     CreateActivator(EnvironmentName, #[source] ShellActivationError),
 
-    #[error(
-        "Failed to run activation script for '{environment}'. Status: {status}. Stdout: {stdout}. Stderr: {stderr}. Script: {script}"
-    )]
+    #[error("failed to run activation script for '{environment}' ({status})")]
     RunScript {
         environment: EnvironmentName,
         status: std::process::ExitStatus,
         stdout: String,
-        stderr: String,
+        /// The script's stderr, shown as help when non-empty.
+        #[help]
+        stderr: Option<String>,
         script: String,
     },
 
@@ -60,10 +60,10 @@ pub enum ActivationError {
     #[error("failed to write the activation cache")]
     WriteCache(#[source] std::io::Error),
 
-    #[error("Currently it's not possible to run a `clean-env` option on Windows.")]
+    #[error("`clean-env` is not supported on Windows")]
     CleanEnvOnWindows,
 
-    #[error("{0} environment should be already created during project creation")]
+    #[error("environment '{0}' should have been created during workspace creation")]
     MissingEnvironmentVars(EnvironmentName),
 }
 
@@ -380,7 +380,7 @@ pub async fn run_activation(
                 environment: environment.name().clone(),
                 status,
                 stdout,
-                stderr,
+                stderr: (!stderr.trim().is_empty()).then_some(stderr),
                 script,
             });
         }
@@ -945,10 +945,10 @@ mod tests {
         )
         .await
         .unwrap_err();
-        let ActivationError::RunScript { status, stderr, .. } = err else {
+        assert_eq!(err.help().map(|h| h.to_string()).as_deref(), Some("oops\n"));
+        let ActivationError::RunScript { status, .. } = err else {
             panic!("expected RunScript, got {err:?}");
         };
         assert_eq!(status.code(), Some(3));
-        assert!(stderr.contains("oops"), "{stderr}");
     }
 }
