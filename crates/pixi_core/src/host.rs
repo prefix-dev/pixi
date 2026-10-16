@@ -389,7 +389,9 @@ impl HostDetector {
             self.client.clone(),
             &root,
             native,
-            builtin_platform.solver_records().into_owned(),
+            builtin_platform
+                .solver_virtual_package_records()
+                .into_owned(),
         )?;
         let _clear_progress = pixi_reporters::TopLevelProgress::clear_when_done(Some(
             environment_provider.progress(),
@@ -485,7 +487,12 @@ impl HostDetector {
 
         let mut results = outcome.results;
         let platform = loop {
-            let merged = merge_results(builtin_platform.solver_records().into_owned(), &results);
+            let merged = merge_results(
+                builtin_platform
+                    .solver_virtual_package_records()
+                    .into_owned(),
+                &results,
+            );
             match platform_from_detected(subdir, merged) {
                 Ok(platform) => break Ok(platform),
                 Err(error) => {
@@ -494,7 +501,7 @@ impl HostDetector {
                     let offending = match &error {
                         PixiPlatformError::CudaArchRequiresCuda => {
                             let removed_cuda = builtin_platform
-                                .solver_records()
+                                .solver_virtual_package_records()
                                 .iter()
                                 .any(|package| package.name.as_normalized() == "__cuda")
                                 .then(|| {
