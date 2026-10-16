@@ -1297,6 +1297,7 @@ mod test {
         let restored = TopLevel::from_toml_str(&encoded).unwrap();
         assert_eq!(restored.platform.name().as_str(), "custom");
         assert_eq!(restored.platform.subdir(), Subdir::Linux64);
+        let restored_records = restored.platform.manifest_records();
         for (name, version, build) in [
             ("__win", "10", ""),
             ("__osx", "14", ""),
@@ -1311,9 +1312,7 @@ mod test {
             ("__cuda_arch", "8.6", "h2"),
             ("__archspec", "5", "zen2"),
         ] {
-            let package = restored
-                .platform
-                .declared_virtual_packages()
+            let package = restored_records
                 .iter()
                 .find(|package| package.name.as_normalized() == name)
                 .unwrap();
@@ -1860,8 +1859,8 @@ mod test {
         let restored = TopLevel::from_toml_str(&encoded).unwrap();
         assert_eq!(restored.platform.name(), parsed.platform.name());
         assert_eq!(
-            restored.platform.declared_virtual_packages(),
-            parsed.platform.declared_virtual_packages()
+            restored.platform.manifest_records(),
+            parsed.platform.manifest_records()
         );
     }
 

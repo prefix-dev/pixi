@@ -23,8 +23,8 @@ use rattler_virtual_packages::{
 use xxhash_rust::xxh3::xxh3_128;
 
 use super::{
-    PixiPlatform, PixiPlatformError, PixiPlatformName, PixiPlatformNameError, VirtualPackageRecords,
-    candidate_subdirs, check_gpu_arch_coupling,
+    PixiPlatform, PixiPlatformError, PixiPlatformName, PixiPlatformNameError,
+    VirtualPackageRecords, candidate_subdirs, check_gpu_arch_coupling,
 };
 
 /// A host platform could not be determined.
@@ -681,7 +681,7 @@ mod tests {
         ];
         let platform = platform_from_detected(Subdir::Linux64, packages.clone()).unwrap();
         assert!(platform.name().as_str().len() <= MAX_PLATFORM_NAME_BYTES);
-        assert!(platform.declared_virtual_packages().iter().any(|package| {
+        assert!(platform.solver_records().iter().any(|package| {
             package.name.as_normalized() == long_name && package.version == Version::major(1)
         }));
         let mut reordered = packages;
