@@ -685,8 +685,8 @@ async fn one_channel_decision_allows_all_its_detectors() {
     );
     assert_eq!(host.detector_results().len(), 2);
     assert_eq!(test_good_version(host).as_deref(), Some("1.2.3"));
-    let other = host
-        .capabilities()
+    let capabilities = host.capabilities();
+    let other = capabilities
         .iter()
         .find(|package| package.name.as_normalized() == "__test_other")
         .unwrap();

@@ -193,7 +193,7 @@ impl<'p> Environment<'p> {
         let candidates = self
             .workspace_manifest()
             .workspace
-            .possible_pixi_platforms(current, system_virtual_packages);
+            .possible_pixi_platforms(current, &system_virtual_packages);
         let selected = candidates
             .iter()
             .copied()
@@ -283,11 +283,11 @@ impl<'p> Environment<'p> {
         let workspace = &self.workspace_manifest().workspace;
         let unsatisfied_requirements = workspace.unsatisfied_platform_requirements(
             current,
-            system_virtual_packages,
+            &system_virtual_packages,
             &env_platforms,
         );
         let platform_diagnostics =
-            workspace.platform_match_diagnostics(current, system_virtual_packages, &env_platforms);
+            workspace.platform_match_diagnostics(current, &system_virtual_packages, &env_platforms);
         UnsupportedPlatformError {
             environments_platforms: env_platforms.into_iter().collect(),
             environment: self.name().clone(),
