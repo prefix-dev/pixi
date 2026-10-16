@@ -83,21 +83,11 @@ async fn generate_activation_script(
             .unwrap_or_else(|| ShellEnum::from_env().unwrap_or_default())
     });
 
-<<<<<<< HEAD
-<<<<<<< HEAD
     let activator = get_activator(
         environment,
         shell.clone(),
         &environment.activation_platform(),
     )?;
-=======
-    // Read current environment variables
-    let current_env = std::env::vars().collect::<HashMap<String, String>>();
-
-=======
->>>>>>> 86dcb8708 (remove duplicate var)
-    let activator = get_activator(environment, shell.clone()).into_diagnostic()?;
->>>>>>> 3a7866033 (refactor: allow env_vars to restore to pre-activation state)
 
     let path = std::env::var("PATH")
         .ok()
@@ -150,7 +140,11 @@ async fn generate_deactivation_script(
             .unwrap_or_else(|| ShellEnum::from_env().unwrap_or_default())
     });
 
-    let activator = get_activator(environment, shell.clone()).into_diagnostic()?;
+    let activator = get_activator(
+        environment,
+        shell.clone(),
+        &environment.activation_platform(),
+    )?;
 
     let current_env = std::env::vars().collect::<HashMap<String, String>>();
 
