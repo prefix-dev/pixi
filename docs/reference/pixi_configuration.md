@@ -480,6 +480,7 @@ The fields under `[cache]` map one-to-one to the caches pixi maintains:
 | `pypi-wheels` | uv wheel cache (`uv-cache`) | Stay shared |
 | `pypi-mapping` | conda↔PyPI name mapping | Redirect to node-local |
 | `exec-environments` | Cached `pixi exec` envs | Redirect to node-local |
+| `virtual-package-detectors` | Environments and cached reports of [virtual package detectors](../workspace/multi_platform_configuration.md#virtual-package-detectors) | Redirect to node-local |
 | `build-tool-environments` | Cached build-tool envs | Redirect to node-local |
 | `detached-environments` | Workspace envs when [`detached-environments`](#detached-environments) is `true` | Redirect to node-local |
 
@@ -536,6 +537,7 @@ that kind and uses the path verbatim.
 | `PIXI_CACHE_PYPI_WHEELS_DIR` | `cache.pypi-wheels` |
 | `PIXI_CACHE_PYPI_MAPPING_DIR` | `cache.pypi-mapping` |
 | `PIXI_CACHE_EXEC_ENVIRONMENTS_DIR` | `cache.exec-environments` |
+| `PIXI_CACHE_VIRTUAL_PACKAGE_DETECTORS_DIR` | `cache.virtual-package-detectors` |
 | `PIXI_CACHE_BUILD_TOOL_ENVIRONMENTS_DIR` | `cache.build-tool-environments` |
 | `PIXI_CACHE_DETACHED_ENVIRONMENTS_DIR` | `cache.detached-environments` |
 
@@ -558,9 +560,10 @@ For persistent behavior, prefer `[cache.netfs-redirect]` or
 
 ### `virtual-package-detectors`
 
-Channels can register virtual package detectors: small packages whose executable reports virtual packages such as an externally installed MPI.
-Running a detector executes code from the channel. Pixi asks whether to **Trust** or **Don't trust** the channel's current and future detectors, with **Don't trust** selected by default.
-Then choose **Workspace** to save the decision in the workspace's `.pixi/config.toml`, or **System configuration** to save it in the shared user configuration for all repositories. Both choices show the full destination path.
+Channels can register virtual package detectors: small packages whose executable reports virtual packages such as an externally installed MPI. These identify system capabilities that packages depend on.
+Running a detector executes code from the channel. Pixi asks whether to **Don't trust** or **Trust** the channel's current and future detectors, with **Don't trust** first and selected by default.
+Then choose **Don't save**, **Workspace**, or **System configuration**. **Don't save** is first and selected by default. It applies the decision only for the current command without writing configuration, so Pixi asks again next time. **Workspace** saves the decision in the workspace's `.pixi/config.toml` and shows its full path. **System configuration** saves it in the shared user configuration for all repositories and shows the full destination path. Outside a workspace, only **Don't save** and **System configuration** are offered.
+After saving, Pixi shows a `pixi config unset` command on its own line, with a blank line before and after so it is easy to copy. It includes `--manifest-path` for workspace decisions, so it also works from another directory. Removing the decision lets Pixi ask again unless another configuration layer provides one.
 Share `.pixi/config.toml` with colleagues to apply the same decisions in their checkouts.
 Repository decisions take precedence over user-wide decisions. A repository `allow` authorizes the channel's detectors for anyone using that configuration, including noninteractive sessions.
 `--offline` also applies to detector discovery and installation.

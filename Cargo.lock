@@ -6742,6 +6742,7 @@ name = "pixi_core"
 version = "0.1.0"
 dependencies = [
  "async-once-cell",
+ "async-trait",
  "barrier_cell",
  "console",
  "dashmap",
@@ -6795,16 +6796,19 @@ dependencies = [
  "rattler",
  "rattler_conda_types",
  "rattler_digest",
+ "rattler_environment_digest",
  "rattler_lock",
  "rattler_networking",
  "rattler_repodata_gateway",
  "rattler_shell",
  "rattler_solve",
+ "rattler_virtual_package_detectors",
  "rattler_virtual_packages",
  "rstest",
  "serde",
  "serde_ignored",
  "serde_json",
+ "shlex 2.0.1",
  "strsim",
  "tabwriter",
  "temp-env",
@@ -8553,6 +8557,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "rattler_environment_digest"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b3890eb0e961960497dc9cbc24b845196d08d5c265d8594f21ec57c7da43c48"
+dependencies = [
+ "hex",
+ "rattler_conda_types",
+ "rattler_digest",
+]
+
+[[package]]
 name = "rattler_git"
 version = "0.3.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8995,6 +9010,38 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "tokio-util 0.7.19",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "rattler_virtual_package_detectors"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46d54add7968c309a28f979ee92ceca79c86a10d975d0b60db3500669c616155"
+dependencies = [
+ "async-trait",
+ "fs-err",
+ "futures",
+ "hex",
+ "indexmap 2.14.2",
+ "rattler",
+ "rattler_boot_id",
+ "rattler_cache",
+ "rattler_conda_types",
+ "rattler_config",
+ "rattler_digest",
+ "rattler_environment_digest",
+ "rattler_networking",
+ "rattler_prefix_guard",
+ "rattler_repodata_gateway",
+ "rattler_shell",
+ "rattler_solve",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
  "tracing",
  "url",
 ]

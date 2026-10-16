@@ -144,9 +144,9 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(source)
         .with_search_start(workspace_config.workspace_locator_start())
+        .with_cli_config(args.config)
         .locate()
-        .await?
-        .with_cli_config(args.config);
+        .await?;
 
     sanity_check_workspace(&workspace).await?;
 

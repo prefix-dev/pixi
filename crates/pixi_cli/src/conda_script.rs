@@ -132,7 +132,11 @@ pub(crate) async fn execute_run(
         )
         .await?
         .0;
-    lock_file.target_platform = user_platform.clone();
+    if user_platform.is_some() {
+        lock_file.set_explicit_target_platform(user_platform.clone());
+    } else {
+        lock_file.set_installed_target_platform(run_platform);
+    }
 
     if allow_installs && user_platform.is_none() {
         let runnability =
