@@ -6,7 +6,8 @@ setlocal EnableDelayedExpansion
 set "SRC_DIR=@SRC_DIR@"
 
 set "BUILD_DIR=@BUILD_DIR@"
-set "BUILD_TYPE=@BUILD_TYPE@"
+if not defined ROS_CMAKE_BUILD_TYPE set "ROS_CMAKE_BUILD_TYPE=Release"
+set "BUILD_TYPE=%ROS_CMAKE_BUILD_TYPE%"
 
 set "PYTHONPATH=%LIBRARY_PREFIX%\lib\site-packages;%SP_DIR%"
 
@@ -39,6 +40,7 @@ cmake ^
     -G "%CMAKE_GENERATOR%" ^
     -DCMAKE_INSTALL_PREFIX=%LIBRARY_PREFIX% ^
     -DCMAKE_BUILD_TYPE=%BUILD_TYPE% ^
+    -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL ^
     -DCMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP=True ^
     -DPYTHON_EXECUTABLE=%PYTHON% ^
     -DPython_EXECUTABLE=%PYTHON% ^
@@ -54,7 +56,7 @@ if errorlevel 1 exit 1
 
 :: We explicitly pass %CPU_COUNT% to cmake --build as we are not using Ninja,
 :: see the comment before setting the CMAKE_GENERATOR env variable
-cmake --build . --config Release --parallel %CPU_COUNT% --target install
+cmake --build . --config %BUILD_TYPE% --parallel %CPU_COUNT% --target install
 if errorlevel 1 exit 1
 
 :: `cmake --install` only copies files, it never removes them, so a prefix reused
