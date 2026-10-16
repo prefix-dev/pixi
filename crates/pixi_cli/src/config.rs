@@ -1,6 +1,6 @@
 use crate::cli_config::WorkspaceConfig;
 use clap::Parser;
-use miette::{IntoDiagnostic, WrapErr};
+use miette::{Diagnostic, IntoDiagnostic, WrapErr};
 use pixi_config;
 use pixi_config::{Config, ConfigError, GlobalConfigSource};
 use pixi_consts::consts;
@@ -16,6 +16,7 @@ use std::{
     path::{Path, PathBuf},
     str::FromStr,
 };
+use thiserror::Error;
 use toml_edit::{DocumentMut, Item, Key};
 
 #[derive(Parser, Debug)]
@@ -236,14 +237,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Subcommand::List(args) => {
             let config = load_config(&args.common, &args.config_source.source()).await?;
 
-            if args.describe {
-                let out = render_describe(&config, args.key.as_deref(), args.json)?;
-                pixi_utils::io::ignore_broken_pipe(writeln!(std::io::stdout(), "{out}"))
-                    .into_diagnostic()?;
-                return Ok(());
-            }
-
-            let out = if let Some(key) = args.key {
+            let out = if args.describe {
+                render_describe(&config, args.key.as_deref(), args.json)?
+            } else if let Some(key) = args.key {
                 let partial = partial_config(&config, &key)?;
                 if args.json {
                     serde_json::to_string_pretty(&partial).into_diagnostic()?
@@ -932,11 +928,39 @@ fn resolve_parent_keys(doc: &TomlDocument, parents: &[&str]) -> Vec<String> {
     resolved
 }
 
+/// An error that occurs while rendering `pixi config list --describe`.
+#[derive(Debug, Error, Diagnostic)]
+enum DescribeError {
+    #[error("failed to parse the key '{key}'")]
+    InvalidKey {
+        key: String,
+        #[source]
+        source: toml_edit::TomlError,
+    },
+
+    #[error(
+        "Unknown configuration key '{0}'. Run `pixi config list --describe` to list every available key."
+    )]
+    UnknownKey(String),
+
+    #[error(transparent)]
+    SerializeToml(#[from] toml_edit::ser::Error),
+
+    #[error(transparent)]
+    ParseToml(#[from] toml_edit::TomlError),
+
+    #[error(transparent)]
+    DeserializeToml(#[from] toml_edit::de::Error),
+
+    #[error(transparent)]
+    SerializeJson(#[from] serde_json::Error),
+}
+
 fn render_describe(
     config: &Config,
     key_filter: Option<&str>,
     json: bool,
-) -> miette::Result<String> {
+) -> Result<String, DescribeError> {
     let descriptions = config.describe_keys();
     let as_listed = |opt: &'static pixi_config::ConfigOptionDescription| {
         // Keys with a placeholder segment have no single value to show.
@@ -957,25 +981,29 @@ fn render_describe(
             // Keys copied from the listing, placeholders included, match as-is.
             vec![as_listed(opt)]
         } else {
-            let key_path = KeyPath::parse(k)?;
-            let segments: Vec<&str> = key_path
-                .parents()
-                .into_iter()
-                .chain([key_path.target()])
-                .collect();
+            let keys = Key::parse(k).map_err(|source| DescribeError::InvalidKey {
+                key: k.to_string(),
+                source,
+            })?;
+            let segments: Vec<&str> = keys.iter().map(Key::get).collect();
+            let key_path = segments.split_last().map(|(target, parents)| KeyPath {
+                parent_keys: parents.iter().map(|s| s.to_string()).collect(),
+                target_key: target.to_string(),
+            });
             let matches: Vec<_> = descriptions
                 .iter()
-                .filter(|opt| is_known_key(&[opt.key], &key_path))
+                .filter(|opt| {
+                    key_path
+                        .as_ref()
+                        .is_some_and(|key_path| is_known_key(&[opt.key], key_path))
+                })
                 .map(|opt| {
                     let path = segments.iter().map(|s| s.to_string()).collect();
                     (opt, k.to_string(), Some(path))
                 })
                 .collect();
             if matches.is_empty() {
-                return Err(miette::miette!(
-                    "Unknown configuration key '{}'. Run `pixi config list --describe` to list every available key.",
-                    k
-                ));
+                return Err(DescribeError::UnknownKey(k.to_string()));
             }
             matches
         }
@@ -983,9 +1011,7 @@ fn render_describe(
         descriptions.iter().map(as_listed).collect()
     };
 
-    let doc = toml_edit::ser::to_string_pretty(config)
-        .into_diagnostic()
-        .and_then(|s| s.parse::<toml_edit::DocumentMut>().into_diagnostic())?;
+    let doc = toml_edit::ser::to_string_pretty(config)?.parse::<toml_edit::DocumentMut>()?;
     let lookup = |path: &Option<Vec<String>>| {
         path.as_ref()
             .and_then(|path| lookup_path(doc.as_table(), path))
@@ -994,8 +1020,7 @@ fn render_describe(
     if json {
         // Go through TOML like `partial_config` does, so unset fields are
         // dropped instead of showing up as nulls.
-        let json_doc: serde_json::Value =
-            toml_edit::de::from_str(&doc.to_string()).into_diagnostic()?;
+        let json_doc: serde_json::Value = toml_edit::de::from_str(&doc.to_string())?;
         let arr: Vec<serde_json::Value> = selected
             .iter()
             .map(|(opt, name, path)| {
@@ -1016,7 +1041,7 @@ fn render_describe(
                 })
             })
             .collect();
-        return serde_json::to_string_pretty(&arr).into_diagnostic();
+        return Ok(serde_json::to_string_pretty(&arr)?);
     }
 
     let mut out = String::new();
