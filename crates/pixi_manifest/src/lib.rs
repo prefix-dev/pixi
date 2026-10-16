@@ -39,7 +39,7 @@ pub use discovery::{
     DiscoveryStart, ExplicitManifestError, InvalidRequiresPixiError, LoadManifestsError, Manifests,
     PixiVersionMismatchError, WorkspaceDiscoverer, WorkspaceDiscoveryError,
 };
-pub use environment::{Environment, EnvironmentName, NewEnvironment};
+pub use environment::{Environment, EnvironmentName, NewEnvironment, ParseEnvironmentNameError};
 pub use error::{DependencyError, GenericError, TomlError, UnknownFeature};
 pub use exclude_newer::{
     ExcludeNewerConfig, ExcludeNewerError, PypiExcludeNewerConfig, resolve_exclude_newer,
