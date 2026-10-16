@@ -23,7 +23,7 @@ use rattler_conda_types::{MatchSpec, PackageName, StringMatcher};
 
 use crate::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
 
-/// Checks if there are newer versions of the dependencies and upgrades them in the lock file and manifest file.
+/// Check if there are newer versions of the dependencies and upgrade them in the lock file and manifest file.
 ///
 /// `pixi upgrade` loosens the requirements for the given packages, updates the lock file and the adapts the manifest accordingly.
 /// By default, all features are upgraded.

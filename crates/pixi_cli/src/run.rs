@@ -50,7 +50,7 @@ use crate::run_script::{
 };
 use crate::shared::install_platform::resolve_install_platform;
 
-/// Runs task in the pixi environment.
+/// Run task in the pixi environment.
 ///
 /// This command is used to run tasks in the pixi environment.
 /// It will activate the environment and run the task in the environment.

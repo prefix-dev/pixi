@@ -28,7 +28,7 @@ pub enum ImportFileFormat {
     PypiTxt,
 }
 
-/// Imports a file into an environment in an existing workspace.
+/// Import a file into an environment in an existing workspace.
 ///
 /// If `--format` isn't provided, `import` will try each format in turn
 #[derive(Parser, Debug, Default, Clone)]
