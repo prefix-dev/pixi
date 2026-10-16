@@ -4,7 +4,7 @@ use pixi_consts::consts::{
     WORKSPACE_MANIFEST,
 };
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     ffi::OsStr,
     fmt,
     path::{Path, PathBuf},
@@ -17,6 +17,7 @@ use indicatif::ProgressBar;
 use miette::{Context, IntoDiagnostic};
 use pixi_auth::get_auth_store;
 use pixi_build_frontend::BackendOverride;
+use pixi_build_types::procedures::conda_outputs::CondaOutputMetadata;
 use pixi_command_dispatcher::{
     BackendMetadataDir, BuildBackendMetadataSpec, BuildEnvironment, BuildProfile, CacheDirs,
     ComputeResultExt, CondaPackageFormat, EnvironmentRef, EnvironmentSpec, EphemeralEnv,
@@ -34,9 +35,10 @@ use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
 use pixi_reporters::TopLevelProgress;
 use pixi_spec::SourceLocationSpec;
 use pixi_utils::variants::{VariantConfig, VariantValue};
-use rattler_conda_types::{GenericVirtualPackage, Subdir};
+use rattler_conda_types::{Channel, GenericVirtualPackage, PackageName, Subdir};
 use rattler_networking::{AuthenticationStorage, s3_middleware};
 use rattler_package_streaming::seek::read_package_file;
+use rattler_repodata_gateway::fetch::CacheAction;
 
 mod discovery;
 
@@ -139,9 +141,10 @@ pub struct Args {
     /// Do not skip packages that already exist at the target.
     ///
     /// Packages that already exist at the target are skipped by default.
+    /// For prefix.dev and local filesystem targets, existing packages are
+    /// detected before building, so they are neither built nor uploaded.
     /// With this flag they fail the publish instead, unless `--force` is
-    /// also given to overwrite them. Skipping is enforced for prefix.dev and
-    /// local filesystem targets; S3 fails on existing packages unless
+    /// also given to overwrite them. S3 fails on existing packages unless
     /// `--force` is given, and the remaining backends follow their
     /// server-side behavior.
     #[arg(long)]
@@ -859,9 +862,71 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         );
     }
 
+    // Packages that already exist at the target are skipped by default. Find
+    // them before building, so they are neither built nor uploaded.
+    let mut skipped_outputs: HashSet<(String, BTreeMap<String, VariantValue>)> = HashSet::new();
+    if skip_existing {
+        let outputs: Vec<&CondaOutputMetadata> = package_plans
+            .iter()
+            .flat_map(|(_, backend_metadata)| backend_metadata.metadata.outputs.iter())
+            .map(|output| &output.metadata)
+            .collect();
+        let exists = find_existing_outputs(&target, &outputs, &workspace).await;
+        let existing: Vec<_> = outputs
+            .into_iter()
+            .zip(exists)
+            .filter_map(|(output, exists)| exists.then_some(output))
+            .collect();
+        for output in existing {
+            pixi_progress::println!(
+                "{}Skipping '{}/{}' (already exists)",
+                console::style(console::Emoji("⏭ ", "")).yellow(),
+                output.subdir,
+                package_identity(&output.name, &output.version, &output.build),
+            );
+            skipped_outputs.insert((
+                output.name.as_normalized().to_string(),
+                output
+                    .variant
+                    .iter()
+                    .map(|(k, v)| (k.clone(), VariantValue::from(v.clone())))
+                    .collect(),
+            ));
+        }
+    }
+    let is_skipped = |output: &CondaOutputMetadata| {
+        !skipped_outputs.is_empty()
+            && skipped_outputs.contains(&(
+                output.name.as_normalized().to_string(),
+                output
+                    .variant
+                    .iter()
+                    .map(|(k, v)| (k.clone(), VariantValue::from(v.clone())))
+                    .collect(),
+            ))
+    };
+
+    // A package whose outputs all exist needs neither resolving nor building.
+    package_plans.retain(|(_, backend_metadata)| {
+        !backend_metadata
+            .metadata
+            .outputs
+            .iter()
+            .all(|output| is_skipped(&output.metadata))
+    });
+    if package_plans.is_empty() {
+        pixi_progress::println!(
+            "{}All packages already exist at {}, nothing to publish",
+            console::style(console::Emoji("✔ ", "")).green(),
+            target,
+        );
+        return Ok(());
+    }
+
     let packages: Vec<_> = package_plans
         .iter()
         .flat_map(|(_, backend_metadata)| backend_metadata.metadata.outputs.iter())
+        .filter(|output| !is_skipped(&output.metadata))
         .collect();
 
     // The CondaOutput metadata uses `pixi_build_types::VariantValue`, while the
@@ -997,7 +1062,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .await
                 .map_err_into_dispatcher(std::convert::identity)
                 .into_diagnostic()?;
-            resolved_records.extend(records.iter().cloned());
+            resolved_records.extend(
+                records
+                    .iter()
+                    .filter(|record| {
+                        !skipped_outputs.contains(&(
+                            record.data.package_record.name.as_normalized().to_string(),
+                            record.variants.clone(),
+                        ))
+                    })
+                    .cloned(),
+            );
         }
     }
 
@@ -1122,6 +1197,146 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     }
 
     Ok(())
+}
+
+/// The identity of a package in a channel subdir: `<name>-<version>-<build>`.
+///
+/// This is the archive filename without its extension, so a package counts as
+/// existing whether it was uploaded as `.conda` or as `.tar.bz2`.
+fn package_identity(name: &PackageName, version: &impl fmt::Display, build: &str) -> String {
+    format!("{}-{}-{}", name.as_normalized(), version, build)
+}
+
+/// Determine which of `outputs` already exist at the publish target, so that
+/// `pixi publish` does not build packages whose upload would be skipped
+/// anyway. Returns one flag per output.
+///
+/// Only targets that enforce skipping at upload time are checked: local
+/// directories, local `file://` channels and prefix.dev. For every other
+/// target all flags are `false` and the upload backend decides. A failed
+/// lookup is not fatal: it is reported and every output is built, so the
+/// upload-time check still applies.
+async fn find_existing_outputs(
+    target: &UrlOrPath,
+    outputs: &[&CondaOutputMetadata],
+    workspace: &Workspace,
+) -> Vec<bool> {
+    match existing_package_identities(target, outputs, workspace).await {
+        Ok(Some(existing)) => outputs
+            .iter()
+            .map(|output| {
+                existing.contains(&(
+                    output.subdir.to_string(),
+                    package_identity(&output.name, &output.version, &output.build),
+                ))
+            })
+            .collect(),
+        Ok(None) => vec![false; outputs.len()],
+        Err(err) => {
+            pixi_progress::println!(
+                "{}could not check which packages already exist at {target}, building all of \
+                 them: {err}",
+                console::style(console::Emoji("⚠️  ", "warning: ")).yellow(),
+            );
+            vec![false; outputs.len()]
+        }
+    }
+}
+
+/// The `(subdir, identity)` pairs of the `outputs` that already exist at the
+/// target, or `None` when the target is not checked before building.
+async fn existing_package_identities(
+    target: &UrlOrPath,
+    outputs: &[&CondaOutputMetadata],
+    workspace: &Workspace,
+) -> miette::Result<Option<HashSet<(String, String)>>> {
+    // Local targets: look for the archive files the upload would write. A
+    // directory holds them flat, a `file://` channel per subdir.
+    let local_dir = match target {
+        UrlOrPath::Path(dir) => Some((dir.clone(), false)),
+        UrlOrPath::Url(url) if url.scheme() == "file" => Some((
+            url.to_file_path()
+                .map_err(|()| miette::miette!("Invalid file URL: {}", url))?,
+            true,
+        )),
+        UrlOrPath::Url(_) => None,
+    };
+    if let Some((dir, per_subdir)) = local_dir {
+        let mut existing = HashSet::new();
+        for output in outputs {
+            let subdir = output.subdir.to_string();
+            let dir = if per_subdir {
+                dir.join(&subdir)
+            } else {
+                dir.clone()
+            };
+            let identity = package_identity(&output.name, &output.version, &output.build);
+            if [".conda", ".tar.bz2"]
+                .iter()
+                .any(|ext| dir.join(format!("{identity}{ext}")).is_file())
+            {
+                existing.insert((subdir, identity));
+            }
+        }
+        return Ok(Some(existing));
+    }
+
+    // prefix.dev: query the channel's repodata.
+    let UrlOrPath::Url(url) = target else {
+        unreachable!("local targets are handled above");
+    };
+    let is_prefix = url.scheme() == "prefix"
+        || (matches!(url.scheme(), "http" | "https")
+            && url
+                .host_str()
+                .is_some_and(|host| host.contains("prefix.dev")));
+    if !is_prefix {
+        return Ok(None);
+    }
+    let channel_url = rewrite_scheme_to_https(url, "prefix")?;
+    let channel = Channel::from_url(channel_url);
+
+    // Bypass the repodata cache: a stale cache could miss a package uploaded
+    // moments ago, or report one that has since been removed.
+    let config = workspace.config();
+    let mut channel_config = rattler_repodata_gateway::ChannelConfig::from(config);
+    channel_config.default.cache_action = CacheAction::NoCache;
+    for source in channel_config.per_channel.values_mut() {
+        source.cache_action = CacheAction::NoCache;
+    }
+    let gateway = config
+        .gateway()
+        .with_channel_config(channel_config)
+        .with_client(workspace.authenticated_client()?.clone())
+        .finish();
+
+    let subdirs: Vec<Subdir> = outputs
+        .iter()
+        .map(|output| output.subdir)
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
+    let names: BTreeSet<PackageName> = outputs.iter().map(|output| output.name.clone()).collect();
+    let repodata = gateway
+        .query([channel], subdirs, names)
+        .execute()
+        .await
+        .into_diagnostic()?
+        .repodata;
+
+    Ok(Some(
+        repodata
+            .iter()
+            .flat_map(|repodata| repodata.iter())
+            .map(|record| {
+                let record = &record.package_record;
+                (
+                    record.subdir.clone(),
+                    package_identity(&record.name, &record.version, &record.build),
+                )
+            })
+            .collect(),
+    ))
 }
 
 /// Parse a target URL string, treating bare paths as `file://` URLs resolved against `base`.

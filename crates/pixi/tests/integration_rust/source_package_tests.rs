@@ -3470,6 +3470,86 @@ async fn test_publish_without_target_builds_but_does_not_upload() {
     );
 }
 
+/// With skip-existing (the default), a package that already exists at the
+/// target is not rebuilt: a second publish into the same target directory
+/// must not invoke the build backend at all.
+#[tokio::test]
+async fn test_publish_skip_existing_skips_build() {
+    setup_tracing();
+
+    let pixi = PixiControl::from_manifest(&simple_package_manifest(
+        Subdir::current().unwrap_or(Subdir::NoArch),
+    ))
+    .unwrap();
+    let target_dir = TempDir::new().unwrap();
+
+    let (instantiator, mut observer) =
+        ObservableBackend::instantiator(PassthroughBackend::instantiator());
+    publish::execute(publish_args_for_test(
+        Some(BackendOverride::from_memory(instantiator)),
+        Some(pixi.manifest_path()),
+        Some(target_dir.path().to_path_buf()),
+    ))
+    .await
+    .expect("first publish should succeed");
+    assert!(
+        !observer.build_events().is_empty(),
+        "the first publish must build the package"
+    );
+    assert_eq!(
+        artifact_file_names(target_dir.path()),
+        ["my-package-1.0.0-.conda"]
+    );
+
+    let (instantiator, mut observer) =
+        ObservableBackend::instantiator(PassthroughBackend::instantiator());
+    publish::execute(publish_args_for_test(
+        Some(BackendOverride::from_memory(instantiator)),
+        Some(pixi.manifest_path()),
+        Some(target_dir.path().to_path_buf()),
+    ))
+    .await
+    .expect("second publish should succeed");
+    assert!(
+        observer.build_events().is_empty(),
+        "a package that already exists at the target must not be rebuilt"
+    );
+    assert_eq!(
+        artifact_file_names(target_dir.path()),
+        ["my-package-1.0.0-.conda"]
+    );
+
+    // With `--no-skip-existing` nothing is skipped up front: the publish
+    // reaches the upload, which refuses to overwrite the existing package.
+    let (instantiator, _observer) =
+        ObservableBackend::instantiator(PassthroughBackend::instantiator());
+    let err = publish::execute(publish::Args {
+        no_skip_existing: true,
+        ..publish_args_for_test(
+            Some(BackendOverride::from_memory(instantiator)),
+            Some(pixi.manifest_path()),
+            Some(target_dir.path().to_path_buf()),
+        )
+    })
+    .await
+    .expect_err("publishing an existing package with --no-skip-existing should fail");
+    assert!(
+        err.to_string().contains("already exists"),
+        "unexpected error: {err}"
+    );
+}
+
+/// The file names in `dir`, sorted.
+fn artifact_file_names(dir: &std::path::Path) -> Vec<String> {
+    let mut names: Vec<String> = fs::read_dir(dir)
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    names
+}
+
 /// Serializes tests that must change the process working directory:
 /// workspace-wide publishing (no `--path`) anchors workspace discovery at the
 /// current directory.
