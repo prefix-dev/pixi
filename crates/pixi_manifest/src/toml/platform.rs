@@ -1297,7 +1297,7 @@ mod test {
         let restored = TopLevel::from_toml_str(&encoded).unwrap();
         assert_eq!(restored.platform.name().as_str(), "custom");
         assert_eq!(restored.platform.subdir(), Subdir::Linux64);
-        let restored_records = restored.platform.manifest_records();
+        let restored_records = restored.platform.manifest_virtual_package_records();
         for (name, version, build) in [
             ("__win", "10", ""),
             ("__osx", "14", ""),
@@ -1859,8 +1859,8 @@ mod test {
         let restored = TopLevel::from_toml_str(&encoded).unwrap();
         assert_eq!(restored.platform.name(), parsed.platform.name());
         assert_eq!(
-            restored.platform.manifest_records(),
-            parsed.platform.manifest_records()
+            restored.platform.manifest_virtual_package_records(),
+            parsed.platform.manifest_virtual_package_records()
         );
     }
 

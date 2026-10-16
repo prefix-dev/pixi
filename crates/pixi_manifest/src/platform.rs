@@ -1435,7 +1435,7 @@ mod tests {
                 .iter()
                 .all(|vp| !matches!(vp, VirtualPackage::Cuda(_)))
         );
-        let generic = platform.solver_records();
+        let generic = platform.solver_virtual_package_records();
         let raw: Vec<String> = generic
             .iter()
             .filter(|gvp| !gvp.name.as_normalized().starts_with("__glibc"))
@@ -1601,7 +1601,10 @@ mod tests {
             },
         ];
         let platform = rich("explicit", Subdir::Linux64, packages.clone());
-        assert_eq!(platform.solver_records().as_ref(), packages.as_slice());
+        assert_eq!(
+            platform.solver_virtual_package_records().as_ref(),
+            packages.as_slice()
+        );
     }
 
     #[test]

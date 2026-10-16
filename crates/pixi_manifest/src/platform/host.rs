@@ -681,9 +681,15 @@ mod tests {
         ];
         let platform = platform_from_detected(Subdir::Linux64, packages.clone()).unwrap();
         assert!(platform.name().as_str().len() <= MAX_PLATFORM_NAME_BYTES);
-        assert!(platform.solver_records().iter().any(|package| {
-            package.name.as_normalized() == long_name && package.version == Version::major(1)
-        }));
+        assert!(
+            platform
+                .solver_virtual_package_records()
+                .iter()
+                .any(|package| {
+                    package.name.as_normalized() == long_name
+                        && package.version == Version::major(1)
+                })
+        );
         let mut reordered = packages;
         reordered.reverse();
         let reordered = platform_from_detected(Subdir::Linux64, reordered).unwrap();
