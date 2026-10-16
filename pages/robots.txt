@@ -1,0 +1,9 @@
+# Served from the root of https://pixi.prefix.dev/ (copied to gh-pages by .github/workflows/docs.yml).
+# Only the latest docs should show up in search results; old versions and dev stay reachable but uncrawled.
+User-agent: *
+Allow: /latest/
+Disallow: /v
+Disallow: /dev/
+Disallow: /devel/
+
+Sitemap: https://pixi.prefix.dev/latest/sitemap.xml
