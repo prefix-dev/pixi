@@ -136,22 +136,18 @@ class WorkspacePlatform(BaseModel):
     """A workspace platform: a conda subdir plus declared virtual-package
     guarantees, identified by a workspace-scoped name."""
 
-    # extra="allow" because workspace platforms accept top-level virtual-package
-    # shortcut keys (`cuda`, `amdgpu`, `archspec`, `glibc`, `linux`, `macos`/`osx`,
-    # `windows`) and forward-compatible raw `__name` keys whose value is
-    # `version` or `version=build_string`. Listing the fixed slots explicitly is
-    # enough for documentation; the open shape is preserved here.
     model_config: ClassVar[ConfigDict] = ConfigDict(
-        extra="allow",
+        extra="forbid",
         alias_generator=hyphenize,
-        # A platform entry must set at least one of `name`/`platform`; the
-        # parser rejects an empty table. The schema can't express this with
-        # required fields alone (both are optional), so spell it out.
         json_schema_extra={
+            "patternProperties": {
+                r"^__[a-z0-9][._-]?([a-z0-9]+(\.|-|_|$))*$": {"type": "string"},
+            },
+            "propertyNames": {"maxLength": 64},
             "anyOf": [
                 {"required": ["name"]},
                 {"required": ["platform"]},
-            ]
+            ],
         },
     )
 

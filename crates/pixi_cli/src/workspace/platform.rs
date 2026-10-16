@@ -16,7 +16,10 @@ use pixi_manifest::{
         subdir_default_virtual_packages,
     },
 };
-use rattler_conda_types::{GenericVirtualPackage, PackageName, Subdir, Version};
+use rattler_conda_types::{
+    GenericVirtualPackage, PackageName, Subdir, Version,
+    virtual_package_detector::VirtualPackageName,
+};
 
 use crate::{
     cli_config::{ScriptWorkspaceConfig, script_lock_file_usage},
@@ -36,26 +39,18 @@ pub struct Args {
     pub command: Command,
 }
 
-/// Common virtual-package shortcut flags shared by `add` and `edit`. Wrapped
-/// in a clap struct so the rules (parsing, validation, conversion to
-/// `GenericVirtualPackage`) live in one place.
-///
-/// Mirrors the TOML's per-virtual-package keys (`cuda`, `amdgpu`, `archspec`,
-/// `glibc`, `linux`, `macos`, `windows`). Virtual packages without a friendly flag are
-/// declared as trailing `__name[=version[=build_string]]` positionals on the
-/// surrounding `add` / `edit` command, matching the `__name` raw-key escape
-/// hatch in the TOML layer.
+/// Built-in virtual-package flags shared by `add` and `edit`.
 #[derive(Parser, Debug, Default, Clone)]
 pub struct VirtualPackageArgs {
     /// Declare a `__cuda` virtual package at the given version, e.g. `12.0`.
     /// Valid on any subdir.
-    #[clap(long, value_name = "VERSION")]
+    #[clap(long, value_name = "VERSION[=BUILD]")]
     pub cuda: Option<String>,
 
     /// Declare a `__cuda_arch` virtual package (GPU compute capability) at the
     /// given version, e.g. `8.6`. Requires `--cuda` (or an existing `__cuda`),
     /// matching the conda CEP coupling. Serialized as `cuda = { driver, arch }`.
-    #[clap(long, value_name = "VERSION")]
+    #[clap(long, value_name = "VERSION[=BUILD]")]
     pub cuda_arch: Option<String>,
 
     /// Declare a `__amdgpu` virtual package, stating that an AMD GPU is
@@ -76,22 +71,22 @@ pub struct VirtualPackageArgs {
 
     /// Declare a `__glibc` virtual package at the given version, e.g. `2.28`.
     /// Only valid on linux subdirs.
-    #[clap(long, value_name = "VERSION")]
+    #[clap(long, value_name = "VERSION[=BUILD]")]
     pub glibc: Option<String>,
 
     /// Declare a `__linux` virtual package at the given kernel version,
     /// e.g. `5.10`. Only valid on linux subdirs.
-    #[clap(long, value_name = "VERSION")]
+    #[clap(long, value_name = "VERSION[=BUILD]")]
     pub linux: Option<String>,
 
     /// Declare a `__osx` virtual package at the given macOS version,
     /// e.g. `14.0`. Only valid on osx subdirs.
-    #[clap(long, visible_alias = "osx", value_name = "VERSION")]
+    #[clap(long, visible_alias = "osx", value_name = "VERSION[=BUILD]")]
     pub macos: Option<String>,
 
     /// Declare a `__win` virtual package at the given Windows version,
     /// e.g. `10`. Only valid on win subdirs.
-    #[clap(long, value_name = "VERSION")]
+    #[clap(long, value_name = "VERSION[=BUILD]")]
     pub windows: Option<String>,
 }
 
@@ -121,13 +116,10 @@ impl VirtualPackageArgs {
         let mut seen_names = HashSet::new();
 
         if let Some(value) = self.cuda {
-            let version = parse_virtual_package_version("--cuda", &value)?;
             push_unique(
                 &mut specs,
                 &mut seen_names,
-                "__cuda",
-                version,
-                String::new(),
+                parse_virtual_package_flag("--cuda", "__cuda", &value)?,
             )?;
         }
         if let Some(value) = self.cuda_arch {
@@ -135,13 +127,10 @@ impl VirtualPackageArgs {
             // the platform model once the full virtual-package set is known --
             // here we only collect the spec, since `edit` may add `--cuda-arch`
             // to a platform that already declares `__cuda`.
-            let version = parse_virtual_package_version("--cuda-arch", &value)?;
             push_unique(
                 &mut specs,
                 &mut seen_names,
-                "__cuda_arch",
-                version,
-                String::new(),
+                parse_virtual_package_flag("--cuda-arch", "__cuda_arch", &value)?,
             )?;
         }
         if self.amdgpu || self.amdgpu_arch.is_some() {
@@ -150,9 +139,11 @@ impl VirtualPackageArgs {
             push_unique(
                 &mut specs,
                 &mut seen_names,
-                "__amdgpu",
-                zero_version(),
-                String::new(),
+                GenericVirtualPackage {
+                    name: virtual_package_name("__amdgpu"),
+                    version: zero_version(),
+                    build_string: String::new(),
+                },
             )?;
         }
         if let Some(value) = self.amdgpu_arch {
@@ -161,9 +152,11 @@ impl VirtualPackageArgs {
             push_unique(
                 &mut specs,
                 &mut seen_names,
-                "__amdgpu_arch",
-                version,
-                String::new(),
+                GenericVirtualPackage {
+                    name: virtual_package_name("__amdgpu_arch"),
+                    version,
+                    build_string: String::new(),
+                },
             )?;
         }
         if let Some(value) = self.archspec {
@@ -175,42 +168,44 @@ impl VirtualPackageArgs {
             push_unique(
                 &mut specs,
                 &mut seen_names,
-                "__archspec",
-                zero_version(),
-                value,
+                GenericVirtualPackage {
+                    name: virtual_package_name("__archspec"),
+                    version: zero_version(),
+                    build_string: value,
+                },
             )?;
         }
         if let Some(value) = self.glibc {
             require_subdir_family(subdir, Subdir::is_linux, "--glibc", "linux")?;
-            let version = parse_virtual_package_version("--glibc", &value)?;
             push_unique(
                 &mut specs,
                 &mut seen_names,
-                "__glibc",
-                version,
-                String::new(),
+                parse_virtual_package_flag("--glibc", "__glibc", &value)?,
             )?;
         }
         if let Some(value) = self.linux {
             require_subdir_family(subdir, Subdir::is_linux, "--linux", "linux")?;
-            let version = parse_virtual_package_version("--linux", &value)?;
             push_unique(
                 &mut specs,
                 &mut seen_names,
-                "__linux",
-                version,
-                String::new(),
+                parse_virtual_package_flag("--linux", "__linux", &value)?,
             )?;
         }
         if let Some(value) = self.macos {
             require_subdir_family(subdir, Subdir::is_osx, "--macos", "osx")?;
-            let version = parse_virtual_package_version("--macos", &value)?;
-            push_unique(&mut specs, &mut seen_names, "__osx", version, String::new())?;
+            push_unique(
+                &mut specs,
+                &mut seen_names,
+                parse_virtual_package_flag("--macos", "__osx", &value)?,
+            )?;
         }
         if let Some(value) = self.windows {
             require_subdir_family(subdir, Subdir::is_windows, "--windows", "win")?;
-            let version = parse_virtual_package_version("--windows", &value)?;
-            push_unique(&mut specs, &mut seen_names, "__win", version, String::new())?;
+            push_unique(
+                &mut specs,
+                &mut seen_names,
+                parse_virtual_package_flag("--windows", "__win", &value)?,
+            )?;
         }
 
         for raw in raw_specs {
@@ -233,22 +228,15 @@ impl VirtualPackageArgs {
 fn push_unique(
     specs: &mut Vec<GenericVirtualPackage>,
     seen: &mut HashSet<String>,
-    conda_name: &str,
-    version: Version,
-    build_string: String,
+    package: GenericVirtualPackage,
 ) -> miette::Result<()> {
-    let name = virtual_package_name(conda_name);
-    let normalized = name.as_normalized().to_string();
+    let normalized = package.name.as_normalized().to_string();
     if !seen.insert(normalized.clone()) {
         miette::bail!(
             "virtual package '{normalized}' was specified more than once on the command line"
         );
     }
-    specs.push(GenericVirtualPackage {
-        name,
-        version,
-        build_string,
-    });
+    specs.push(package);
     Ok(())
 }
 
@@ -275,39 +263,27 @@ fn zero_version() -> Version {
     Version::from_str("0").expect("'0' is a valid Version")
 }
 
-fn parse_virtual_package_version(flag: &str, value: &str) -> miette::Result<Version> {
-    Version::from_str(value)
-        .into_diagnostic()
-        .map_err(|e| miette::miette!("{flag}: '{value}' is not a valid version: {e}"))
+/// Parse a version-style flag the way the manifest parses the matching key.
+fn parse_virtual_package_flag(
+    flag: &str,
+    conda_name: &str,
+    value: &str,
+) -> miette::Result<GenericVirtualPackage> {
+    pixi_manifest::platform::parse_versioned_virtual_package(
+        virtual_package_name(conda_name),
+        value,
+    )
+    .map_err(|message| miette::miette!("{flag}: {message}"))
 }
 
 fn parse_raw_virtual_package(spec: &str) -> miette::Result<GenericVirtualPackage> {
-    // `splitn` keeps trailing '=' segments in the build string, matching the
-    // manifest's raw parser, instead of silently dropping them.
-    let mut parts = spec.splitn(3, '=');
-    let name_str = parts.next().unwrap_or("");
-    if name_str.strip_prefix("__").is_none_or(str::is_empty) {
-        miette::bail!(
-            "'{spec}' is not a virtual package spec: name must start with '__' followed by a name (e.g. '__cuda=12.0')"
-        );
-    }
-    let name = PackageName::try_from(name_str)
+    let (name, value) = spec.split_once('=').unwrap_or((spec, "0"));
+    let name = VirtualPackageName::try_from(name)
         .into_diagnostic()
-        .map_err(|e| miette::miette!("'{name_str}' is not a valid virtual package name: {e}"))?;
-    let version_str = parts.next().unwrap_or("0");
-    let version = Version::from_str(version_str)
-        .into_diagnostic()
-        .map_err(|e| {
-            miette::miette!("'{version_str}' is not a valid virtual package version: {e}")
-        })?;
-    let build_string = parts.next().unwrap_or("").to_string();
-    pixi_manifest::platform::validate_virtual_package(&name, version_str, &build_string)
-        .map_err(|message| miette::miette!("{message}"))?;
-    Ok(GenericVirtualPackage {
-        name,
-        version,
-        build_string,
-    })
+        .map_err(|e| miette::miette!("'{name}' is not a valid virtual package name: {e}"))?
+        .into_package_name();
+    pixi_manifest::platform::parse_versioned_virtual_package(name, value)
+        .map_err(|message| miette::miette!("{message}"))
 }
 
 /// Parse a positional add argument. Accepts either a bare subdir
@@ -1397,11 +1373,50 @@ mod tests {
     }
 
     #[test]
+    fn into_specs_accepts_build_strings_like_the_manifest() {
+        let args = VirtualPackageArgs {
+            cuda: Some("12.0=h1".into()),
+            glibc: Some("2.28".into()),
+            ..Default::default()
+        };
+        let specs = args.into_specs(Subdir::Linux64, &[]).unwrap();
+        let rendered: Vec<String> = specs.iter().map(ToString::to_string).collect();
+        assert_eq!(rendered, ["__cuda=12.0=h1", "__glibc=2.28"]);
+
+        let args = VirtualPackageArgs {
+            cuda: Some("=h1".into()),
+            ..Default::default()
+        };
+        let err = args.into_specs(Subdir::Linux64, &[]).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("--cuda: '=h1' is not a valid version and build string"),
+            "{err}"
+        );
+    }
+
+    #[test]
     fn parse_raw_virtual_package_keeps_trailing_segments_in_build_string() {
-        // Extra '=' segments belong to the build string -- as in the
-        // manifest's raw parser -- rather than being silently dropped.
         let package = parse_raw_virtual_package("__foo=1=special=build").unwrap();
         assert_eq!(package.build_string, "special=build");
+    }
+
+    #[test]
+    fn parse_raw_virtual_package_rejects_names_the_manifest_rejects() {
+        for spec in [
+            "cud=1",
+            "site_service=1",
+            "__=1",
+            "__a..b=1",
+            "__a__b=1",
+            "__-x=1",
+            "___x=1",
+        ] {
+            assert!(
+                parse_raw_virtual_package(spec).is_err(),
+                "{spec} must be rejected"
+            );
+        }
     }
 
     #[test]
