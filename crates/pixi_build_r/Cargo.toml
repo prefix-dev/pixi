@@ -31,7 +31,6 @@ insta = { workspace = true, features = ["filters", "redactions", "yaml"] }
 rstest = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
 tempfile = { workspace = true }
-url = { workspace = true }
 
 [features]
 default = ["rustls"]

@@ -45,7 +45,11 @@ def releases(oldest: str) -> list[str]:
     if current is None:
         raise SystemExit(f"Couldn't find release_version in {CONFIG_URL}")
     major, newest = (int(part) for part in current.group(1).split("."))
-    first = int(oldest.split(".")[1])
+    oldest_major, first = (int(part) for part in oldest.split("."))
+    if oldest_major != major:
+        raise SystemExit(
+            f"--oldest {oldest} isn't in the current major release {major}, which this doesn't support"
+        )
     return [f"{major}.{minor}" for minor in range(first, newest + 1)]
 
 

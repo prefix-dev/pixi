@@ -253,7 +253,6 @@ struct DescriptionData {
     depends: Option<String>,
     imports: Option<String>,
     system_requirements: Option<String>,
-    bioc_views: Option<String>,
 }
 
 /// MetadataProvider implementation for R DESCRIPTION files
@@ -328,7 +327,6 @@ impl DescriptionMetadataProvider {
             "Depends" => data.depends = Some(value),
             "Imports" => data.imports = Some(value),
             "SystemRequirements" => data.system_requirements = Some(value),
-            "biocViews" => data.bioc_views = Some(value),
             _ => {}
         }
     }
@@ -430,16 +428,11 @@ impl MetadataProvider for DescriptionMetadataProvider {
     type Error = MetadataError;
 
     fn name(&mut self) -> Result<Option<String>, Self::Error> {
-        let data = self.ensure_data()?;
-        Ok(data.package.as_deref().map(|pkg| {
-            // Every Bioconductor package declares `biocViews`, so this also
-            // names packages that aren't in the built-in list yet
-            if data.bioc_views.is_some() {
-                format!("bioconductor-{}", pkg.to_lowercase())
-            } else {
-                r_package_to_conda(pkg)
-            }
-        }))
+        Ok(self
+            .ensure_data()?
+            .package
+            .as_deref()
+            .map(r_package_to_conda))
     }
 
     fn version(&mut self) -> Result<Option<Version>, Self::Error> {
@@ -653,24 +646,6 @@ Version: 1.1-3
             provider_cran.name().unwrap(),
             Some(r_package_to_conda("RColorBrewer"))
         );
-    }
-
-    #[test]
-    fn test_name_from_bioc_views() {
-        // A Bioconductor package that isn't in the built-in list
-        let temp_dir = create_test_description(
-            "Package: BrandNewBioc\nVersion: 0.99.0\nbiocViews: Software, Sequencing\n",
-        );
-        let mut provider = DescriptionMetadataProvider::new(temp_dir.path());
-        assert_eq!(
-            provider.name().unwrap(),
-            Some("bioconductor-brandnewbioc".to_string())
-        );
-
-        // Without biocViews, it's a CRAN package
-        let temp_dir = create_test_description("Package: BrandNewBioc\nVersion: 0.99.0\n");
-        let mut provider = DescriptionMetadataProvider::new(temp_dir.path());
-        assert_eq!(provider.name().unwrap(), Some("r-brandnewbioc".to_string()));
     }
 
     #[test]

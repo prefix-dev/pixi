@@ -223,7 +223,7 @@ The backend reads dependencies from the `DESCRIPTION` file:
 - R version constraints are converted to conda format (e.g., `(>= 1.5)` becomes `>=1.5`)
 - CRAN package names are converted to conda names with the `r-` prefix (e.g., `dplyr` becomes `r-dplyr`)
 - Bioconductor package names are converted to conda names with the `bioconductor-` prefix (e.g., `Biobase` becomes `bioconductor-biobase`)
-- A dependency already in `host-dependencies` or `run-dependencies`, as `r-<pkg>`, `bioconductor-<pkg>` or its mapped name, isn't added again from `DESCRIPTION`, so the manifest can set its version or name
+- A dependency the manifest declares for all platforms, as `r-<pkg>` or `bioconductor-<pkg>`, replaces the one from `DESCRIPTION`, so the manifest can set its version. The name it uses in `host-dependencies` or `run-dependencies` applies to both
 
 ### Bioconductor Support
 
@@ -238,16 +238,16 @@ These dependencies need `bioconda` among the workspace's channels:
 channels = ["conda-forge", "bioconda"]
 ```
 
-Without it, the build stops with an error that names the Bioconductor packages.
+Without it, the solve fails with no candidates for `bioconductor-<pkg>`.
 
-A Bioconductor package built from source is itself named `bioconductor-<lowercase>`, as every Bioconductor package declares `biocViews` in its `DESCRIPTION`, so its key in the manifest is that name:
+A Bioconductor package built from source is itself named `bioconductor-<lowercase>` when it's in the built-in list, so its key in the manifest is that name:
 
 ```toml
 [dependencies]
 bioconductor-dnacopy = { git = "https://github.com/bioc/DNAcopy", branch = "RELEASE_3_22", package.build.backend.name = "pixi-build-r" }
 ```
 
-If a dependency has another name on conda, set `ignore-description-dependencies`, and declare the package's dependencies yourself.
+If a Bioconductor package is on conda as `r-<pkg>` instead, as `SpiecEasi` is, declare it under that name in the manifest. For any other name, set `ignore-description-dependencies`, and declare the package's dependencies yourself.
 
 ### Built-in Packages
 

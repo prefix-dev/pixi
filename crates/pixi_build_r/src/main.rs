@@ -26,35 +26,16 @@ fn matchspec_item(
     Ok(Item::Value(Value::new_concrete(spec.parse()?, None)))
 }
 
-fn requirement_contains_package(
-    requirements: &ConditionalList<SerializableMatchSpec>,
-    package_names: &[&str],
-) -> bool {
+/// The exact conda names of the requirements that apply on every platform.
+fn unconditional_names(requirements: &ConditionalList<SerializableMatchSpec>) -> Vec<String> {
     requirements
         .iter()
-        .any(|item| requirement_item_contains_any_package(item, package_names))
-}
-
-/// Whether a requirement is for one of `package_names`, by its exact conda name.
-fn requirement_item_contains_any_package(
-    item: &Item<SerializableMatchSpec>,
-    package_names: &[&str],
-) -> bool {
-    match item {
-        Item::Value(value) => value
-            .as_concrete()
-            .and_then(|spec| spec.0.name.as_exact())
-            .is_some_and(|name| {
-                package_names
-                    .iter()
-                    .any(|candidate| candidate.eq_ignore_ascii_case(name.as_normalized()))
-            }),
-        Item::Conditional(cond) => cond
-            .then
-            .iter()
-            .chain(cond.else_value.iter().flat_map(|items| items.iter()))
-            .any(|item| requirement_item_contains_any_package(item, package_names)),
-    }
+        .filter_map(|item| match item {
+            Item::Value(value) => value.as_concrete()?.0.name.as_exact(),
+            Item::Conditional(_) => None,
+        })
+        .map(|name| name.as_normalized().to_string())
+        .collect()
 }
 
 #[derive(Default, Clone)]
@@ -101,7 +82,7 @@ impl GenerateRecipe for RGenerator {
         host_platform: Subdir,
         _python_params: Option<PythonParams>,
         variants: &HashSet<NormalizedKey>,
-        channels: Vec<ChannelUrl>,
+        _channels: Vec<ChannelUrl>,
         _cache_dir: Option<PathBuf>,
         _workspace_scratch_directory: Option<PathBuf>,
         _workspace_directory: Option<PathBuf>,
@@ -123,6 +104,12 @@ impl GenerateRecipe for RGenerator {
 
         let mut generated_recipe =
             GeneratedRecipe::from_model(model.clone(), &mut metadata_provider).into_diagnostic()?;
+
+        // The manifest's own requirements, which take precedence over the
+        // DESCRIPTION's. Platform-specific ones don't, as they don't cover
+        // the other platforms.
+        let manifest_host = unconditional_names(&generated_recipe.recipe.requirements.host);
+        let manifest_run = unconditional_names(&generated_recipe.recipe.requirements.run);
 
         let requirements = &mut generated_recipe.recipe.requirements;
 
@@ -184,31 +171,40 @@ impl GenerateRecipe for RGenerator {
             .run
             .push(matchspec_item("r-base").into_diagnostic()?);
 
-        // Add R package dependencies from DESCRIPTION (Imports + Depends) unless ignored
+        // Add R package dependencies from DESCRIPTION unless ignored: Imports
+        // and Depends to host and run, LinkingTo (packages providing headers
+        // for C/C++ compilation) to host only
         if !config.ignore_description_dependencies.unwrap_or(false) {
-            let r_dependencies = metadata_provider.runtime_dependencies().into_diagnostic()?;
-            // Bioconductor packages among the dependencies, which come from bioconda
-            let mut from_bioconda = Vec::new();
+            let runtime_deps = metadata_provider.runtime_dependencies().into_diagnostic()?;
+            let linking_to_deps = metadata_provider.linking_to().into_diagnostic()?;
 
-            for dep in r_dependencies {
+            let deps = runtime_deps
+                .into_iter()
+                .map(|dep| (dep, true))
+                .chain(linking_to_deps.into_iter().map(|dep| (dep, false)));
+            for (dep, at_runtime) in deps {
                 // Skip packages that are built into r-base (the base packages)
                 if metadata::is_builtin_package(&dep.name) {
                     continue;
                 }
 
-                // Convert R package name to conda package name
-                let conda_name = metadata::r_package_to_conda(&dep.name);
-                if conda_name.starts_with("bioconductor-") {
-                    from_bioconda.push(dep.name.clone());
-                }
-
+                // The conda name the manifest gives the R package, so that it
+                // can rename it, else the mapped one. Not its bare R name,
+                // which can be another conda package: the R package openssl
+                // is r-openssl, while openssl is the C library.
                 let lower_dep = dep.name.to_lowercase();
-                let r_name = format!("r-{lower_dep}");
-                let bioc_name = format!("bioconductor-{lower_dep}");
-                // The R package's possible conda names, but not its bare R name,
-                // which can be another conda package: the R package openssl is
-                // r-openssl, while openssl is the C library.
-                let candidate_names = [r_name.as_str(), bioc_name.as_str()];
+                let candidate_names = [
+                    format!("r-{lower_dep}"),
+                    format!("bioconductor-{lower_dep}"),
+                ];
+                let manifest_name = manifest_host
+                    .iter()
+                    .chain(&manifest_run)
+                    .find(|name| candidate_names.contains(name));
+                let conda_name = match manifest_name {
+                    Some(name) => name.clone(),
+                    None => metadata::r_package_to_conda(&dep.name),
+                };
 
                 // Build the dependency spec string
                 let dep_spec = if let Some(version) = &dep.version {
@@ -218,74 +214,19 @@ impl GenerateRecipe for RGenerator {
                     conda_name.clone()
                 };
 
-                // Add to host requirements (runtime dependencies) if not already present
-                if !requirement_contains_package(&requirements.host, &candidate_names) {
+                // A manifest requirement replaces the DESCRIPTION's, so that
+                // it can set the version. DESCRIPTION's own duplicates, e.g. in
+                // Imports and LinkingTo, intersect in the solver.
+                if !manifest_host.contains(&conda_name) {
                     requirements
                         .host
                         .push(matchspec_item(&dep_spec).into_diagnostic()?);
                 }
-
-                // Also add to run requirements if not already present
-                if !requirement_contains_package(&requirements.run, &candidate_names) {
+                if at_runtime && !manifest_run.contains(&conda_name) {
                     requirements
                         .run
                         .push(matchspec_item(&dep_spec).into_diagnostic()?);
                 }
-            }
-
-            // Add LinkingTo dependencies (packages providing headers for C/C++ compilation)
-            let linking_to_deps = metadata_provider.linking_to().into_diagnostic()?;
-
-            for dep in linking_to_deps {
-                // Skip packages that are built into r-base
-                if metadata::is_builtin_package(&dep.name) {
-                    continue;
-                }
-
-                // Convert R package name to conda package name
-                let conda_name = metadata::r_package_to_conda(&dep.name);
-                if conda_name.starts_with("bioconductor-") {
-                    from_bioconda.push(dep.name.clone());
-                }
-
-                let lower_dep = dep.name.to_lowercase();
-                let r_name = format!("r-{lower_dep}");
-                let bioc_name = format!("bioconductor-{lower_dep}");
-                // The R package's possible conda names, but not its bare R name,
-                // which can be another conda package: the R package openssl is
-                // r-openssl, while openssl is the C library.
-                let candidate_names = [r_name.as_str(), bioc_name.as_str()];
-
-                if !requirement_contains_package(&requirements.host, &candidate_names) {
-                    // Build the dependency spec string
-                    let dep_spec = if let Some(version) = &dep.version {
-                        let conda_version = metadata::r_version_to_conda(version);
-                        format!("{} {}", conda_name, conda_version)
-                    } else {
-                        conda_name
-                    };
-
-                    // Add to host requirements only (LinkingTo packages provide headers at compile time)
-                    requirements
-                        .host
-                        .push(matchspec_item(&dep_spec).into_diagnostic()?);
-                }
-            }
-
-            // Without bioconda, the solver would only say it found no
-            // `bioconductor-*` candidates. The channels are empty when they
-            // aren't known, e.g. in tests.
-            let has_bioconda = channels
-                .iter()
-                .any(|channel| channel.as_str().contains("bioconda"));
-            if !from_bioconda.is_empty() && !channels.is_empty() && !has_bioconda {
-                from_bioconda.sort();
-                from_bioconda.dedup();
-                miette::bail!(
-                    help = "Add bioconda to the workspace's channels, e.g. with `pixi workspace channel add bioconda`.",
-                    "This package depends on Bioconductor packages ({}), which come from bioconda as `bioconductor-<name>`, but bioconda isn't among the channels.",
-                    from_bioconda.join(", ")
-                );
             }
         }
 
@@ -1273,63 +1214,144 @@ SystemRequirements: CMake (>= 3.15), libxml2, pkg-config
         );
     }
 
-    #[tokio::test]
-    async fn test_bioconductor_dependencies_need_bioconda() {
+    /// The host and run requirements generated for a DESCRIPTION.
+    async fn generate_requirements(
+        description: &str,
+        project_model: pixi_build_types::ProjectModel,
+    ) -> (Vec<String>, Vec<String>) {
         let temp_dir = TempDir::new().unwrap();
-        fs::write(
-            temp_dir.path().join("DESCRIPTION"),
-            "Package: BonEV\nVersion: 1.0\nDepends: qvalue\n",
-        )
-        .await
-        .unwrap();
-
-        let project_model = project_fixture!({
-            "name": "r-bonev",
-            "version": "1.0",
-            "targets": {
-                "defaultTarget": {}
-            }
-        });
-        let channel = |url: &str| ChannelUrl::from(url::Url::parse(url).unwrap());
-
-        let generate = |channels: Vec<ChannelUrl>| {
-            let project_model = project_model.clone();
-            let path = temp_dir.path().to_path_buf();
-            async move {
-                RGenerator::default()
-                    .generate_recipe(
-                        &project_model,
-                        &RBackendConfig::default(),
-                        path,
-                        Subdir::Linux64,
-                        None,
-                        &HashSet::new(),
-                        channels,
-                        None,
-                        None,
-                        None,
-                        None,
-                    )
-                    .await
-            }
-        };
-
-        let Err(error) = generate(vec![channel("https://prefix.dev/conda-forge")]).await else {
-            panic!("Should fail without bioconda");
-        };
-        assert!(
-            error.to_string().contains("qvalue"),
-            "Should name the Bioconductor package, got {error}"
-        );
-
-        assert!(
-            generate(vec![
-                channel("https://prefix.dev/conda-forge"),
-                channel("https://prefix.dev/bioconda"),
-            ])
+        fs::write(temp_dir.path().join("DESCRIPTION"), description)
             .await
-            .is_ok(),
-            "Should work with bioconda"
+            .unwrap();
+
+        let generated_recipe = RGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &RBackendConfig::default(),
+                temp_dir.path().to_path_buf(),
+                Subdir::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let requirements = generated_recipe.recipe.requirements;
+        let to_strings = |list: ConditionalList<SerializableMatchSpec>| {
+            list.iter().map(|r| r.to_string()).collect::<Vec<_>>()
+        };
+        (to_strings(requirements.host), to_strings(requirements.run))
+    }
+
+    #[tokio::test]
+    async fn test_description_duplicates_keep_their_bounds() {
+        // Both specs stay, so that the solver intersects them
+        let (host, run) = generate_requirements(
+            "Package: testpkg\nVersion: 1.0.0\nImports: Rcpp\nLinkingTo: Rcpp (>= 1.0.12)\n",
+            project_fixture!({
+                "name": "r-testpkg",
+                "version": "1.0.0",
+                "targets": { "defaultTarget": {} }
+            }),
+        )
+        .await;
+
+        assert!(host.contains(&"r-rcpp".to_string()), "got {host:?}");
+        assert!(
+            host.contains(&"r-rcpp >=1.0.12".to_string()),
+            "got {host:?}"
+        );
+        assert!(run.contains(&"r-rcpp".to_string()), "got {run:?}");
+    }
+
+    #[tokio::test]
+    async fn test_platform_specific_dependency_keeps_description_dependency() {
+        // A Windows-only manifest requirement doesn't cover the other platforms
+        let (host, _) = generate_requirements(
+            "Package: testpkg\nVersion: 1.0.0\nImports: Rcpp\n",
+            project_fixture!({
+                "name": "r-testpkg",
+                "version": "1.0.0",
+                "targets": {
+                    "defaultTarget": {},
+                    "conditional": {
+                        "win": {
+                            "hostDependencies": {
+                                "r-rcpp": { "binary": { "version": ">=1.0.12" } }
+                            }
+                        }
+                    }
+                }
+            }),
+        )
+        .await;
+        assert!(host.contains(&"r-rcpp".to_string()), "got {host:?}");
+    }
+
+    #[tokio::test]
+    async fn test_manifest_name_applies_to_both_host_and_run() {
+        // The manifest names Biobase r-biobase in host only; run uses that
+        // name too rather than the mapped bioconductor-biobase
+        let (host, run) = generate_requirements(
+            "Package: testpkg\nVersion: 1.0.0\nImports: Biobase\n",
+            project_fixture!({
+                "name": "r-testpkg",
+                "version": "1.0.0",
+                "targets": {
+                    "defaultTarget": {
+                        "hostDependencies": {
+                            "r-biobase": { "binary": { "version": "*" } }
+                        }
+                    }
+                }
+            }),
+        )
+        .await;
+
+        assert!(
+            !host
+                .iter()
+                .chain(&run)
+                .any(|r| r.contains("bioconductor-biobase")),
+            "got {host:?} and {run:?}"
+        );
+        assert_eq!(host.iter().filter(|r| r.contains("biobase")).count(), 1);
+        assert!(run.contains(&"r-biobase".to_string()), "got {run:?}");
+    }
+
+    #[tokio::test]
+    async fn test_manifest_source_dependency_replaces_description_dependency() {
+        // A Bioconductor package built from source in host replaces the
+        // DESCRIPTION's binary spec there; run keeps the DESCRIPTION's bound
+        let (host, run) = generate_requirements(
+            "Package: testpkg\nVersion: 1.0.0\nImports: DNAcopy (>= 1.80)\n",
+            project_fixture!({
+                "name": "r-testpkg",
+                "version": "1.0.0",
+                "targets": {
+                    "defaultTarget": {
+                        "hostDependencies": {
+                            "bioconductor-dnacopy": {
+                                "source": { "path": { "path": "../DNAcopy" } }
+                            }
+                        }
+                    }
+                }
+            }),
+        )
+        .await;
+
+        let host_dnacopy: Vec<_> = host.iter().filter(|r| r.contains("dnacopy")).collect();
+        assert_eq!(host_dnacopy.len(), 1, "got {host:?}");
+        assert!(host_dnacopy[0].contains("source://"), "got {host:?}");
+        assert!(
+            run.contains(&"bioconductor-dnacopy >=1.80".to_string()),
+            "got {run:?}"
         );
     }
 
