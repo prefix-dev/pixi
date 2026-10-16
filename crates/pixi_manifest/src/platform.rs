@@ -332,12 +332,10 @@ pub struct PixiPlatform {
     name: PixiPlatformName,
     /// The conda subdir for this platform (e.g. `linux-64`).
     subdir: Subdir,
-    /// Virtual packages declared for this platform in `pixi.toml`. Stored
-    /// verbatim as parsed from the manifest so that round-tripping through
-    /// the TOML layer needs no knowledge of the concrete set of virtual
-    /// packages rattler supports. This is the only set that means anything:
-    /// it is what the solver is given and what the lock file records.
+    /// Complete virtual-package records, in manifest or detector spelling.
     declared_virtual_packages: Vec<GenericVirtualPackage>,
+    /// Detector records are already solver records and must not be normalized.
+    virtual_packages_are_detected: bool,
 }
 
 impl PixiPlatform {
@@ -357,6 +355,7 @@ impl PixiPlatform {
             name: subdir.into(),
             subdir,
             declared_virtual_packages: subdir_default_virtual_packages(subdir),
+            virtual_packages_are_detected: false,
         }
     }
 
@@ -443,6 +442,7 @@ impl PixiPlatform {
             name,
             subdir,
             declared_virtual_packages,
+            virtual_packages_are_detected: false,
         })
     }
 
@@ -507,6 +507,7 @@ impl PixiPlatform {
         if self.is_subdir_platform() {
             Err(PixiPlatformError::IsSubdirPlatform)
         } else {
+            self.virtual_packages_are_detected = false;
             self.declared_virtual_packages = declared_virtual_packages;
             Ok(())
         }
@@ -516,41 +517,28 @@ impl PixiPlatform {
         &self.declared_virtual_packages
     }
 
-    /// The declared virtual packages with the subdir defaults filtered out --
-    /// the part of the platform that reflects user/machine intent rather than
-    /// pixi's per-subdir baseline. This is the set that defines a platform's
-    /// identity (see [`Self::has_same_definition`]).
+    /// The declared virtual packages with the subdir defaults filtered out.
     ///
-    /// Build strings are canonicalised (`"0"` -> `""`): rattler's detection
-    /// uses `"0"` as the placeholder build for version-only virtual packages
-    /// (`__glibc`, `__linux`, ...), while the manifest's friendly form drops it
-    /// entirely, so the two must compare equal.
+    /// Records are rewritten into manifest spelling for rendering: a `"0"`
+    /// build becomes `""` and `__archspec` version 1 becomes the version-0
+    /// shorthand. The complete solver records define platform identity; see
+    /// [`Self::has_same_definition`].
     pub fn customised_virtual_packages(&self) -> Vec<GenericVirtualPackage> {
         self.declared_virtual_packages
             .iter()
             .filter(|gvp| !is_subdir_default(gvp, self.subdir))
-            .map(|gvp| GenericVirtualPackage {
-                name: gvp.name.clone(),
-                version: gvp.version.clone(),
-                build_string: if gvp.build_string == "0" {
-                    String::new()
-                } else {
-                    gvp.build_string.clone()
-                },
-            })
+            .map(manifest_record)
             .collect()
     }
 
-    /// Two platforms share a *definition* when they target the same subdir and
-    /// declare the same customised virtual packages; names are irrelevant. This
-    /// is what makes two differently-named entries duplicates of each other, and
-    /// mirrors the comparison the lock-file satisfiability check uses.
+    /// Two platforms share a definition when they target the same subdir and
+    /// provide the same complete solver records, regardless of their names.
     pub fn has_same_definition(&self, other: &PixiPlatform) -> bool {
         if self.subdir != other.subdir {
             return false;
         }
-        let mut a = self.customised_virtual_packages();
-        let mut b = other.customised_virtual_packages();
+        let mut a = solver_generic_virtual_packages(self);
+        let mut b = solver_generic_virtual_packages(other);
         a.sort();
         b.sort();
         a == b
@@ -658,6 +646,7 @@ impl PixiPlatform {
         // entry with the same name wins, so an `--remove-virtual-package`
         // pass that strips a default value will be re-seeded from the subdir
         // default rather than left absent.
+        self.virtual_packages_are_detected = false;
         merge_subdir_defaults(&mut self.declared_virtual_packages, self.subdir);
 
         check_gpu_arch_coupling(&self.declared_virtual_packages)?;
@@ -766,32 +755,23 @@ pub fn subdir_default_virtual_packages(subdir: Subdir) -> Vec<GenericVirtualPack
     defaults
 }
 
-/// Returns `true` if `gvp` is exactly the value `subdir_default_virtual_packages`
-/// would emit for `subdir`.
-///  Used by the TOML layer to elide default-matching
-/// virtual packages from synthesized names and on-disk serialization, and by
-/// the lock-file satisfiability check to compare only the user-customized
-/// virtual packages.
+/// Returns `true` if `gvp` reaches the solver as the same record
+/// `subdir_default_virtual_packages` would emit for `subdir`, so detector
+/// spelling (`"0"` builds, `__archspec` version 1) matches the defaults too.
+/// Used by the TOML layer to elide default-matching virtual packages from
+/// synthesized names and on-disk serialization.
 pub fn is_subdir_default(gvp: &GenericVirtualPackage, subdir: Subdir) -> bool {
-    subdir_default_virtual_packages(subdir).iter().any(|d| {
-        d.name == gvp.name && d.version == gvp.version && d.build_string == gvp.build_string
-    })
+    let gvp = solver_record(gvp);
+    subdir_default_virtual_packages(subdir)
+        .iter()
+        .any(|d| solver_record(d) == gvp)
 }
 
-/// Convert a platform's declared virtual packages into the form rattler's
-/// solver wants.
+/// The declared virtual packages rattler has a typed slot for.
 ///
-/// The manifest and rattler disagree on how a virtual package is spelled --
-/// the manifest writes empty build strings and pins `__archspec` to version 0,
-/// rattler stamps `"0"` and version 1 (see `host::canonicalize_detected`). The
-/// round trip through the typed [`VirtualPackage`] restores rattler's spelling,
-/// so this is the *only* supported way to hand a [`PixiPlatform`]'s packages to
-/// a solver. Passing `declared_virtual_packages()` straight through makes every
-/// package that depends on `__archspec 1=<micro>` unsolvable.
-///
-/// Unknown conda virtual-package names (those rattler has no typed slot for)
-/// are dropped -- they round-trip through the manifest but never influence
-/// solving directly.
+/// This typed view is useful for consumers such as Python platform tags, but
+/// cannot represent arbitrary detector build strings or archspec versions.
+/// Solvers must use [`solver_generic_virtual_packages`] for complete records.
 pub fn solver_virtual_packages(platform: &PixiPlatform) -> Vec<VirtualPackage> {
     platform
         .declared_virtual_packages()
@@ -800,12 +780,55 @@ pub fn solver_virtual_packages(platform: &PixiPlatform) -> Vec<VirtualPackage> {
         .collect()
 }
 
-/// [`solver_virtual_packages`] in the generic form most solver callers hold.
+/// Every declared virtual package in the form a solve is given.
+///
+/// Detector records pass through unchanged. Manifest records retain explicit
+/// versions and builds, with an omitted build defaulting to `0` and the
+/// version-0 `__archspec` shorthand expanding to solver version 1.
 pub fn solver_generic_virtual_packages(platform: &PixiPlatform) -> Vec<GenericVirtualPackage> {
-    solver_virtual_packages(platform)
-        .into_iter()
-        .map(GenericVirtualPackage::from)
+    if platform.virtual_packages_are_detected {
+        return platform.declared_virtual_packages.clone();
+    }
+    platform
+        .declared_virtual_packages()
+        .iter()
+        .map(solver_record)
         .collect()
+}
+
+/// A solver record in manifest spelling, the inverse of [`solver_record`].
+pub(crate) fn manifest_record(gvp: &GenericVirtualPackage) -> GenericVirtualPackage {
+    let is_archspec = gvp.name.as_normalized() == "__archspec";
+    GenericVirtualPackage {
+        name: gvp.name.clone(),
+        version: if is_archspec && gvp.version == Version::major(1) {
+            Version::major(0)
+        } else {
+            gvp.version.clone()
+        },
+        build_string: if !is_archspec && gvp.build_string == "0" {
+            String::new()
+        } else {
+            gvp.build_string.clone()
+        },
+    }
+}
+
+/// A manifest record in the spelling a solve is given.
+pub(crate) fn solver_record(gvp: &GenericVirtualPackage) -> GenericVirtualPackage {
+    GenericVirtualPackage {
+        name: gvp.name.clone(),
+        version: if gvp.name.as_normalized() == "__archspec" && gvp.version == Version::major(0) {
+            Version::major(1)
+        } else {
+            gvp.version.clone()
+        },
+        build_string: if gvp.build_string.is_empty() {
+            "0".to_string()
+        } else {
+            gvp.build_string.clone()
+        },
+    }
 }
 
 fn generic_to_virtual_package(gvp: &GenericVirtualPackage) -> Option<VirtualPackage> {
@@ -1340,6 +1363,31 @@ mod tests {
             .declared_virtual_packages()
             .iter()
             .any(|gvp| gvp.name.as_normalized() == name)
+    }
+
+    #[test]
+    fn manifest_archspec_shorthand_reaches_the_solver_as_version_one() {
+        let platform = PixiPlatform::new_with_defaults(
+            PixiPlatformName::try_from("zen-host").unwrap(),
+            Subdir::Linux64,
+            vec![archspec("zen2")],
+        )
+        .unwrap();
+        assert_eq!(
+            platform
+                .declared_virtual_packages()
+                .iter()
+                .find(|package| package.name.as_normalized() == "__archspec")
+                .unwrap(),
+            &archspec("zen2")
+        );
+        let solver = solver_generic_virtual_packages(&platform);
+        let package = solver
+            .iter()
+            .find(|package| package.name.as_normalized() == "__archspec")
+            .unwrap();
+        assert_eq!(package.version, Version::major(1));
+        assert_eq!(package.build_string, "zen2");
     }
 
     #[test]

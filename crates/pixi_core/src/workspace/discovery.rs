@@ -254,8 +254,6 @@ impl WorkspaceLocator {
         }
     }
 
-    /// When the current version conflicts with the workspace requirement,
-    /// whether to generate an error.
     /// Use `host` instead of detecting the machine.
     pub fn with_host(self, host: HostDetection) -> Self {
         Self {
@@ -264,6 +262,8 @@ impl WorkspaceLocator {
         }
     }
 
+    /// When the current version conflicts with the workspace requirement,
+    /// whether to generate an error.
     pub fn with_ignore_pixi_version_check(self, ignore_pixi_version_check: bool) -> Self {
         Self {
             ignore_pixi_version_check,

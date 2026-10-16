@@ -1684,6 +1684,22 @@ mod test {
         );
     }
 
+    #[test]
+    fn detected_platform_name_survives_manifest_serialization() {
+        let detected = crate::platform::host::platform_from_detected(
+            Subdir::Linux64,
+            vec![GenericVirtualPackage {
+                name: "__archspec".parse().unwrap(),
+                version: Version::major(1),
+                build_string: "zen2".to_string(),
+            }],
+        )
+        .unwrap();
+        let encoded = format!("platform = {}", pixi_platform_to_toml_value(&detected));
+        let restored = TopLevel::from_toml_str(&encoded).unwrap();
+        assert_eq!(restored.platform.name(), detected.name());
+    }
+
     /// VPs whose shape doesn't match the friendly form (e.g. a `__cuda` with
     /// a non-empty build string) fall through to the raw `__name = ...` form
     /// so we never silently drop information.

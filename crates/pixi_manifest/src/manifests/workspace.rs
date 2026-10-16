@@ -18,10 +18,10 @@ use rattler_conda_types::{
 use toml_edit::Value;
 
 use crate::{
-    Activation, AddDependencyOutcome, DependencyOverwriteBehavior, GetFeatureError, PixiPlatform,
-    PixiPlatformError, PixiPlatformName, PlatformEdit, PlatformMove, Preview, PrioritizedChannel,
-    PypiDependencyLocation, SpecType, TargetSelector, Task, TaskName, TomlError, WorkspaceTarget,
-    consts,
+    Activation, AddDependencyOutcome, DependencyOverwriteBehavior, GetFeatureError,
+    KnownPreviewFlag, PixiPlatform, PixiPlatformError, PixiPlatformName, PlatformEdit,
+    PlatformMove, Preview, PrioritizedChannel, PypiDependencyLocation, SpecType, TargetSelector,
+    Task, TaskName, TomlError, WorkspaceTarget, consts,
     environment::{Environment, EnvironmentName, NewEnvironment},
     environments::Environments,
     error::{DependencyError, UnknownFeature},
@@ -1849,6 +1849,22 @@ impl WorkspaceManifestMut<'_> {
         Ok(())
     }
 
+    /// Enables a preview flag in both the parsed workspace and the TOML document.
+    /// Returns false if the flag was already enabled.
+    pub fn add_preview_flag(&mut self, flag: KnownPreviewFlag) -> Result<bool, TomlError> {
+        let added = self.document.add_preview_flag(flag.into())?;
+        match &mut self.workspace.workspace.preview {
+            Preview::Flags(flags) => {
+                if !flags.contains(&flag) {
+                    flags.push(flag);
+                }
+            }
+            preview @ Preview::AllEnabled(false) => *preview = Preview::Flags(vec![flag]),
+            Preview::AllEnabled(true) => {}
+        }
+        Ok(added)
+    }
+
     /// Set the workspace name.
     ///
     /// This function modifies both the workspace and the TOML document. Use
@@ -2378,6 +2394,56 @@ start = "python -m flask run --port=5050"
         rattler_conda_types::ChannelConfig::default_with_root_dir(
             std::env::current_dir().expect("Could not retrieve the current directory"),
         )
+    }
+
+    #[rstest]
+    #[case("", true)]
+    #[case("preview = false", true)]
+    #[case("preview = true", false)]
+    #[case("preview = [\"pixi-build\"]", false)]
+    #[case("preview = [\"existing-flag\"]", true)]
+    fn test_add_preview_flag_keeps_parsed_and_document_in_sync(
+        #[case] preview: &str,
+        #[case] expected_added: bool,
+    ) {
+        let source = format!("{PROJECT_BOILERPLATE}\n{preview}\n");
+        let mut workspace = parse_pixi_toml(&source);
+
+        assert_eq!(
+            workspace
+                .editable()
+                .add_preview_flag(KnownPreviewFlag::PixiBuild)
+                .unwrap(),
+            expected_added
+        );
+        assert!(
+            !workspace
+                .editable()
+                .add_preview_flag(KnownPreviewFlag::PixiBuild)
+                .unwrap()
+        );
+
+        let rendered = workspace.document.render().unwrap();
+        let reparsed = parse_pixi_toml(&rendered);
+        assert_eq!(
+            workspace.manifest.workspace.preview,
+            reparsed.manifest.workspace.preview
+        );
+        assert!(
+            workspace
+                .manifest
+                .workspace
+                .preview
+                .is_enabled(KnownPreviewFlag::PixiBuild)
+        );
+        if preview.contains("existing-flag") {
+            let document = DocumentMut::from_str(&rendered).unwrap();
+            let flags = document["project"]["preview"].as_array().unwrap();
+            assert_eq!(
+                flags.iter().filter_map(Value::as_str).collect::<Vec<_>>(),
+                ["existing-flag", "pixi-build"]
+            );
+        }
     }
 
     #[test]

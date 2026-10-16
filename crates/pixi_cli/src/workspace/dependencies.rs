@@ -127,13 +127,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
 
             if add_args.has_source_dependency() {
-                workspace = ensure_pixi_build_preview_enabled(
-                    workspace,
-                    &args.config_source,
-                    args.workspace_config.workspace_locator_start(),
-                    pixi_config::ConfigCli::default(),
-                )
-                .await?;
+                workspace = ensure_pixi_build_preview_enabled(workspace).await?;
                 if let Some(backend_override) = args.workspace_config.backend_override.clone() {
                     workspace = workspace.with_backend_override(backend_override);
                 }

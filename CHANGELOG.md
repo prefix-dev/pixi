@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Preserve absent virtual packages when applying empty `CONDA_OVERRIDE_*` values.
+- Reuse the workspace's host detection when enabling the `pixi-build` preview for source dependencies.
+
 ### [0.82.0] - 2026-10-13
 #### ✨ Highlights
 
