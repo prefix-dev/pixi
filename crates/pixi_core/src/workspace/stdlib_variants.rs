@@ -90,7 +90,7 @@ pub fn derive_stdlib_variants<'a>(
         return Vec::new();
     };
 
-    let manifest_records = platform.manifest_records();
+    let manifest_records = platform.manifest_virtual_package_records();
     let Some(declared) = manifest_records
         .iter()
         .find(|vp| vp.name.as_normalized() == vp_name)

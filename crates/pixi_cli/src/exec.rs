@@ -271,7 +271,7 @@ pub async fn create_exec_prefix(
         .platform()
         .into_diagnostic()
         .context("failed to determine virtual packages")?
-        .solver_records()
+        .solver_virtual_package_records()
         .into_owned();
 
     // `pixi exec` solves outside the command dispatcher, so it has to build

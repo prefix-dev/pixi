@@ -408,7 +408,7 @@ pub fn verify_run_platform(
             };
             (
                 vec![platform.subdir()],
-                platform.solver_records(),
+                platform.solver_virtual_package_records(),
                 name.clone(),
                 platform.subdir(),
             )
@@ -562,10 +562,10 @@ pub fn classify_environment_runnability(
 }
 
 impl Environment<'_> {
-    /// Returns solver records for the platform, preserving detected host
+    /// Returns conda virtual-package records for solving, preserving detected host
     /// records and normalizing manifest declarations for the solver.
     pub fn virtual_packages(&self, platform: &PixiPlatform) -> Vec<GenericVirtualPackage> {
-        platform.solver_records().into_owned()
+        platform.solver_virtual_package_records().into_owned()
     }
 }
 

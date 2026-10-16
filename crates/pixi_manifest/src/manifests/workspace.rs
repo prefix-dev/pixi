@@ -1138,7 +1138,8 @@ impl WorkspaceManifestMut<'_> {
         let before = updated.clone();
         updated.apply_edit(edit)?;
         if updated.subdir() == before.subdir()
-            && updated.manifest_records() == before.manifest_records()
+            && updated.manifest_virtual_package_records()
+                == before.manifest_virtual_package_records()
         {
             return Ok(());
         }

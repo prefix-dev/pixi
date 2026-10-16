@@ -1013,7 +1013,7 @@ impl<'a> HostMachine<'a> {
             return false;
         }
         pixi_manifest::toml::inline_virtual_package_specs(
-            platform.manifest_records().as_ref(),
+            platform.manifest_virtual_package_records().as_ref(),
             Some(&subdir_default_virtual_packages(subdir)),
         )
         .iter()
@@ -1097,7 +1097,7 @@ fn format_workspace_platform_row(
 
     let mut all_vps_ok = true;
     for spec in pixi_manifest::toml::inline_virtual_package_specs(
-        platform.manifest_records().as_ref(),
+        platform.manifest_virtual_package_records().as_ref(),
         Some(&subdir_default_virtual_packages(subdir)),
     ) {
         let satisfied = spec.packages.iter().all(|p| machine.satisfies(p));
@@ -1210,7 +1210,7 @@ fn show_to_json(
         "name": platform.name().as_str(),
         "subdir": platform.subdir().as_str(),
         "virtual_packages": render_friendly(
-            platform.manifest_records().as_ref(),
+            platform.manifest_virtual_package_records().as_ref(),
             Some(&subdir_default_virtual_packages(platform.subdir())),
         ),
         "detected_virtual_packages": detected,

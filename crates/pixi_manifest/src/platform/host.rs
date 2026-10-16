@@ -310,7 +310,7 @@ pub fn host_baseline() -> PixiPlatform {
 /// subdir defaults.
 fn subdir_baseline(subdir: Subdir) -> PixiPlatform {
     let mut virtual_packages = PixiPlatform::from_subdir(subdir)
-        .solver_records()
+        .solver_virtual_package_records()
         .into_owned();
     apply_conda_overrides(&mut virtual_packages, subdir);
     platform_from_detected(subdir, virtual_packages)
@@ -395,7 +395,7 @@ pub fn platform_from_detected(
 ) -> Result<PixiPlatform, PixiPlatformError> {
     check_gpu_arch_coupling(&detected)?;
     let baseline = PixiPlatform::from_subdir(subdir);
-    if same_set(&detected, &baseline.solver_records()) {
+    if same_set(&detected, &baseline.solver_virtual_package_records()) {
         return Ok(PixiPlatform {
             name: subdir.into(),
             subdir,
@@ -493,7 +493,7 @@ mod tests {
 
     fn declared(platform: &PixiPlatform, name: &str) -> Option<String> {
         platform
-            .solver_records()
+            .solver_virtual_package_records()
             .iter()
             .find(|gvp| gvp.name.as_normalized() == name)
             .map(|gvp| gvp.version.to_string())
@@ -703,7 +703,10 @@ mod tests {
         let platform = temp_env::with_var("CONDA_OVERRIDE_GLIBC", Some(""), || {
             subdir_baseline(Subdir::Linux64)
         });
-        assert!(!has_package(&platform.solver_records(), "__glibc"));
+        assert!(!has_package(
+            &platform.solver_virtual_package_records(),
+            "__glibc"
+        ));
         assert!(!platform.is_subdir_platform());
     }
 
@@ -711,8 +714,8 @@ mod tests {
     fn host_platform_preserves_absence_only_baselines() {
         let baseline = PixiPlatform::from_subdir(Subdir::Linux64);
         for defaults in [
-            baseline.manifest_records().into_owned(),
-            baseline.solver_records().into_owned(),
+            baseline.manifest_virtual_package_records().into_owned(),
+            baseline.solver_virtual_package_records().into_owned(),
         ] {
             for removed in &defaults {
                 let packages: Vec<_> = defaults
@@ -721,10 +724,13 @@ mod tests {
                     .cloned()
                     .collect();
                 let platform = platform_from_detected(Subdir::Linux64, packages.clone()).unwrap();
-                assert_eq!(platform.solver_records().as_ref(), packages.as_slice());
+                assert_eq!(
+                    platform.solver_virtual_package_records().as_ref(),
+                    packages.as_slice()
+                );
                 assert!(!super::super::capability_satisfied_by(
                     removed,
-                    &platform.solver_records()
+                    &platform.solver_virtual_package_records()
                 ));
                 assert!(!platform.is_subdir_platform());
                 assert!(!platform.has_same_definition(&baseline));
@@ -743,7 +749,7 @@ mod tests {
             }
         }
         let empty = platform_from_detected(Subdir::Linux64, Vec::new()).unwrap();
-        assert!(empty.solver_records().is_empty());
+        assert!(empty.solver_virtual_package_records().is_empty());
     }
 
     #[test]
@@ -772,7 +778,10 @@ mod tests {
                 _ => {}
             }
             let platform = platform_from_detected(Subdir::Linux64, packages.clone()).unwrap();
-            assert_eq!(platform.solver_records().as_ref(), packages.as_slice());
+            assert_eq!(
+                platform.solver_virtual_package_records().as_ref(),
+                packages.as_slice()
+            );
         }
     }
 
@@ -786,7 +795,10 @@ mod tests {
                     build_string: build.to_string(),
                 }];
                 let platform = platform_from_detected(Subdir::Linux64, packages.clone()).unwrap();
-                assert_eq!(platform.solver_records().as_ref(), packages.as_slice());
+                assert_eq!(
+                    platform.solver_virtual_package_records().as_ref(),
+                    packages.as_slice()
+                );
             }
         }
     }
@@ -815,7 +827,10 @@ mod tests {
 
         let platform = platform_from_detected(Subdir::Linux64, defaults.clone()).unwrap();
         assert!(platform.is_subdir_platform(), "got {platform:?}");
-        assert_eq!(platform.solver_records().as_ref(), defaults.as_slice());
+        assert_eq!(
+            platform.solver_virtual_package_records().as_ref(),
+            defaults.as_slice()
+        );
         assert!(platform.has_same_definition(&PixiPlatform::from_subdir(Subdir::Linux64)));
         assert!(platform.customised_virtual_packages().is_empty());
     }

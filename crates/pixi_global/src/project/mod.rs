@@ -619,7 +619,10 @@ impl Project {
             .map(|p| p == host.subdir().only_platform().unwrap_or(""))
             .unwrap_or(false)
         {
-            Ok(host.platform()?.solver_records().into_owned())
+            Ok(host
+                .platform()?
+                .solver_virtual_package_records()
+                .into_owned())
         } else {
             Ok(vec![])
         }

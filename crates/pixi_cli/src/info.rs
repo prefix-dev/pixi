@@ -81,7 +81,7 @@ impl From<&pixi_manifest::PixiPlatform> for PlatformInfo {
             subdir: platform.subdir().to_string(),
             // Declared platform: filter the subdir defaults, like `platform list`.
             virtual_packages: friendly_virtual_packages(
-                platform.manifest_records().as_ref(),
+                platform.manifest_virtual_package_records().as_ref(),
                 Some(&subdir_default_virtual_packages(platform.subdir())),
             ),
         }

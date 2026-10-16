@@ -362,6 +362,7 @@ pub struct PixiPlatform {
     name: PixiPlatformName,
     /// The conda subdir for this platform (e.g. `linux-64`).
     subdir: Subdir,
+    /// Source records; missing detected packages are not filled from subdir defaults.
     virtual_packages: VirtualPackageRecords,
 }
 
@@ -529,14 +530,15 @@ impl PixiPlatform {
     }
 
     /// Source-tagged records for consumers that must preserve exact stored fields.
-    /// Use [`Self::solver_records`] for solving and [`Self::manifest_records`] for rendering.
+    /// Use [`Self::solver_virtual_package_records`] for solving and
+    /// [`Self::manifest_virtual_package_records`] for rendering.
     pub fn records(&self) -> &VirtualPackageRecords {
         &self.virtual_packages
     }
 
-    /// Complete solver records. Detector records pass through unchanged;
-    /// manifest shorthand expands to build `0` and archspec version 1.
-    pub fn solver_records(&self) -> Cow<'_, [GenericVirtualPackage]> {
+    /// Complete conda virtual-package records for solving. Detector records pass
+    /// through unchanged; manifest shorthand expands to build `0` and archspec version 1.
+    pub fn solver_virtual_package_records(&self) -> Cow<'_, [GenericVirtualPackage]> {
         match &self.virtual_packages {
             VirtualPackageRecords::Manifest(records) => {
                 Cow::Owned(records.iter().map(solver_record).collect())
@@ -545,9 +547,9 @@ impl PixiPlatform {
         }
     }
 
-    /// Complete manifest records. Explicit manifest versions and builds are
-    /// preserved; detector records use manifest shorthand where available.
-    pub fn manifest_records(&self) -> Cow<'_, [GenericVirtualPackage]> {
+    /// Complete conda virtual-package records for manifest rendering. Explicit manifest
+    /// versions and builds are preserved; detector records use shorthand where available.
+    pub fn manifest_virtual_package_records(&self) -> Cow<'_, [GenericVirtualPackage]> {
         match &self.virtual_packages {
             VirtualPackageRecords::Manifest(records) => Cow::Borrowed(records),
             VirtualPackageRecords::Detected(records) => {
@@ -572,8 +574,8 @@ impl PixiPlatform {
         if self.subdir != other.subdir {
             return false;
         }
-        let mut a = self.solver_records().into_owned();
-        let mut b = other.solver_records().into_owned();
+        let mut a = self.solver_virtual_package_records().into_owned();
+        let mut b = other.solver_virtual_package_records().into_owned();
         a.sort();
         b.sort();
         a == b
@@ -800,7 +802,7 @@ pub fn is_subdir_default(gvp: &GenericVirtualPackage, subdir: Subdir) -> bool {
 ///
 /// This typed view is useful for consumers such as Python platform tags, but
 /// cannot represent arbitrary detector build strings or archspec versions.
-/// Solvers must use [`PixiPlatform::solver_records`] for complete records.
+/// Solvers must use [`PixiPlatform::solver_virtual_package_records`] for complete records.
 pub fn solver_virtual_packages(platform: &PixiPlatform) -> Vec<VirtualPackage> {
     platform
         .virtual_packages
@@ -1243,7 +1245,7 @@ mod tests {
     /// having to spell out every materialised subdir default.
     fn declared_by_name(platform: &PixiPlatform, names: &[&str]) -> Vec<(String, String)> {
         platform
-            .manifest_records()
+            .manifest_virtual_package_records()
             .iter()
             .filter(|gvp| names.contains(&gvp.name.as_normalized()))
             .map(|gvp| {
@@ -1373,7 +1375,7 @@ mod tests {
     /// re-seeded from the subdir defaults.
     fn declares(platform: &PixiPlatform, name: &str) -> bool {
         platform
-            .manifest_records()
+            .manifest_virtual_package_records()
             .iter()
             .any(|gvp| gvp.name.as_normalized() == name)
     }
@@ -1388,13 +1390,13 @@ mod tests {
         .unwrap();
         assert_eq!(
             platform
-                .manifest_records()
+                .manifest_virtual_package_records()
                 .iter()
                 .find(|package| package.name.as_normalized() == "__archspec")
                 .unwrap(),
             &archspec("zen2")
         );
-        let solver = platform.solver_records();
+        let solver = platform.solver_virtual_package_records();
         let package = solver
             .iter()
             .find(|package| package.name.as_normalized() == "__archspec")
@@ -1413,9 +1415,15 @@ mod tests {
         )
         .unwrap();
         let detected = host::platform_from_detected(Subdir::Linux64, raw.clone()).unwrap();
-        assert_eq!(manifest.manifest_records().as_ref(), raw.as_slice());
-        assert_eq!(detected.solver_records().as_ref(), raw.as_slice());
-        let solver = manifest.solver_records();
+        assert_eq!(
+            manifest.manifest_virtual_package_records().as_ref(),
+            raw.as_slice()
+        );
+        assert_eq!(
+            detected.solver_virtual_package_records().as_ref(),
+            raw.as_slice()
+        );
+        let solver = manifest.solver_virtual_package_records();
         assert_eq!(solver[0].build_string, "0");
         assert_eq!(solver[1].version, Version::major(1));
         assert!(!manifest.has_same_definition(&detected));
@@ -1423,7 +1431,10 @@ mod tests {
         let normalized =
             host::platform_from_detected(Subdir::Linux64, solver.into_owned()).unwrap();
         assert!(manifest.has_same_definition(&normalized));
-        assert_eq!(normalized.manifest_records().as_ref(), raw.as_slice());
+        assert_eq!(
+            normalized.manifest_virtual_package_records().as_ref(),
+            raw.as_slice()
+        );
     }
 
     #[test]
@@ -1439,8 +1450,14 @@ mod tests {
             records.clone(),
         )
         .unwrap();
-        assert_eq!(platform.manifest_records().as_ref(), records.as_slice());
-        assert_eq!(platform.solver_records().as_ref(), records.as_slice());
+        assert_eq!(
+            platform.manifest_virtual_package_records().as_ref(),
+            records.as_slice()
+        );
+        assert_eq!(
+            platform.solver_virtual_package_records().as_ref(),
+            records.as_slice()
+        );
     }
 
     #[test]
@@ -1451,9 +1468,11 @@ mod tests {
             vec![archspec("zen2"), gvp("__cuda", "12.4")],
         )
         .unwrap();
-        let mut detected =
-            host::platform_from_detected(Subdir::Linux64, declared.solver_records().into_owned())
-                .unwrap();
+        let mut detected = host::platform_from_detected(
+            Subdir::Linux64,
+            declared.solver_virtual_package_records().into_owned(),
+        )
+        .unwrap();
         detected
             .apply_edit(PlatformEdit {
                 insert_or_update_virtual_packages: vec![gvp("__site", "2")],
@@ -1467,7 +1486,7 @@ mod tests {
                 ..Default::default()
             })
             .unwrap();
-        let records = detected.manifest_records();
+        let records = detected.manifest_virtual_package_records();
         let architecture = records
             .iter()
             .find(|record| record.name.as_normalized() == "__archspec")
@@ -1718,8 +1737,8 @@ mod tests {
         assert!(p.is_subdir_platform());
         assert_eq!(p.name().as_str(), "linux-64");
         assert_eq!(
-            p.manifest_records(),
-            PixiPlatform::from_subdir(Subdir::Linux64).manifest_records(),
+            p.manifest_virtual_package_records(),
+            PixiPlatform::from_subdir(Subdir::Linux64).manifest_virtual_package_records(),
         );
     }
 
@@ -1954,7 +1973,7 @@ mod tests {
             assert_eq!(platform.name().as_str(), subdir_str);
             assert_eq!(platform.subdir(), subdir);
             assert_eq!(
-                platform.manifest_records().as_ref(),
+                platform.manifest_virtual_package_records().as_ref(),
                 subdir_default_virtual_packages(subdir).as_slice(),
                 "from_subdir({subdir_str}) must materialise the subdir defaults",
             );

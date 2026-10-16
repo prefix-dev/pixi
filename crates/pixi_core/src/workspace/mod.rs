@@ -317,7 +317,7 @@ fn implicit_script_platforms(
         }
         if !unsatisfied_capabilities(
             &recorded.customised_virtual_packages(),
-            host.solver_records().as_ref(),
+            host.solver_virtual_package_records().as_ref(),
         )
         .is_empty()
         {
@@ -1663,12 +1663,12 @@ packages: []
                 .platforms
                 .iter()
                 .find(|p| {
-                    p.manifest_records()
+                    p.manifest_virtual_package_records()
                         .iter()
                         .any(|g| g.name.as_normalized() == "__glibc")
                 })
                 .expect("the migration should synthesise a platform carrying __glibc");
-            let manifest_records = glibc_platform.manifest_records();
+            let manifest_records = glibc_platform.manifest_virtual_package_records();
             let glibc = manifest_records
                 .iter()
                 .find(|g| g.name.as_normalized() == "__glibc")
@@ -2056,7 +2056,7 @@ packages: []
         let platform = workspace.pixi_platform_for_subdir(Subdir::Linux64);
         assert_eq!(
             platform
-                .manifest_records()
+                .manifest_virtual_package_records()
                 .iter()
                 .find(|vp| vp.name.as_normalized() == "__glibc")
                 .map(|vp| vp.version.to_string()),
@@ -2084,15 +2084,15 @@ packages: []
 
         let declared = workspace.pixi_platform_for_subdir(Subdir::Linux64);
         assert_eq!(
-            declared.manifest_records(),
-            PixiPlatform::from_subdir(Subdir::Linux64).manifest_records()
+            declared.manifest_virtual_package_records(),
+            PixiPlatform::from_subdir(Subdir::Linux64).manifest_virtual_package_records()
         );
 
         let undeclared = workspace.pixi_platform_for_subdir(Subdir::OsxArm64);
         assert_eq!(undeclared.name().as_str(), "osx-arm64");
         assert_eq!(
-            undeclared.manifest_records(),
-            PixiPlatform::from_subdir(Subdir::OsxArm64).manifest_records()
+            undeclared.manifest_virtual_package_records(),
+            PixiPlatform::from_subdir(Subdir::OsxArm64).manifest_virtual_package_records()
         );
     }
 

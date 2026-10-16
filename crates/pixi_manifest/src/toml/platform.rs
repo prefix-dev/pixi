@@ -334,7 +334,7 @@ impl Serialize for TomlPixiPlatform {
         let platform = &self.0;
         let name = platform.name().as_str();
         let subdir_str = platform.subdir().to_string();
-        let declared = platform.manifest_records();
+        let declared = platform.manifest_virtual_package_records();
 
         let entries = platform_inline_entries(
             &declared,
@@ -1114,7 +1114,7 @@ fn suggested_platform_entry(candidates: &[GenericVirtualPackage], subdir: Subdir
 pub(crate) fn pixi_platform_to_toml_value(platform: &PixiPlatform) -> toml_edit::Value {
     let name = platform.name().as_str();
     let subdir_str = platform.subdir().to_string();
-    let declared = platform.manifest_records();
+    let declared = platform.manifest_virtual_package_records();
 
     let entries = platform_inline_entries(
         &declared,
@@ -1184,7 +1184,7 @@ mod test {
 
     fn virtual_package_specs(platform: &PixiPlatform) -> Vec<String> {
         platform
-            .manifest_records()
+            .manifest_virtual_package_records()
             .iter()
             .map(|package| {
                 let build_is_zero = package.build_string.is_empty() || package.build_string == "0";
@@ -1211,8 +1211,8 @@ mod test {
         assert_eq!(parsed.platform.subdir(), Subdir::Linux64);
         assert!(parsed.platform.is_subdir_platform());
         assert_eq!(
-            parsed.platform.manifest_records(),
-            crate::PixiPlatform::from_subdir(Subdir::Linux64).manifest_records(),
+            parsed.platform.manifest_virtual_package_records(),
+            crate::PixiPlatform::from_subdir(Subdir::Linux64).manifest_virtual_package_records(),
         );
     }
 
@@ -1225,8 +1225,8 @@ mod test {
         assert_eq!(parsed.platform.subdir(), Subdir::OsxArm64);
         assert!(parsed.platform.is_subdir_platform());
         assert_eq!(
-            parsed.platform.manifest_records(),
-            crate::PixiPlatform::from_subdir(Subdir::OsxArm64).manifest_records(),
+            parsed.platform.manifest_virtual_package_records(),
+            crate::PixiPlatform::from_subdir(Subdir::OsxArm64).manifest_virtual_package_records(),
         );
     }
 
@@ -1268,7 +1268,7 @@ mod test {
             r#"platform = { platform = "linux-64", archspec = "x86_64_v3" }"#,
         )
         .unwrap();
-        let records = parsed.platform.manifest_records();
+        let records = parsed.platform.manifest_virtual_package_records();
         let package = &records[0];
         assert_eq!(package.name.as_normalized(), "__archspec");
         assert_eq!(package.version, Version::major(0));
@@ -1711,7 +1711,7 @@ mod test {
         .unwrap();
         let detected = crate::platform::host::platform_from_detected(
             Subdir::Linux64,
-            declared.solver_records().into_owned(),
+            declared.solver_virtual_package_records().into_owned(),
         )
         .unwrap();
         let json = serde_json::to_value(TomlPixiPlatform(detected.clone())).unwrap();

@@ -577,7 +577,7 @@ mod test {
             "custom name should keep linux-64 as its subdir"
         );
         let declared: Vec<String> = cuda
-            .manifest_records()
+            .manifest_virtual_package_records()
             .iter()
             .map(|vp| vp.to_string())
             .collect();

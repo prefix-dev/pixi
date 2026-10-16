@@ -679,7 +679,7 @@ mod tests {
             1,
             "expected one composed linux-64 platform, got {linux64:?}"
         );
-        let manifest_records = linux64[0].manifest_records();
+        let manifest_records = linux64[0].manifest_virtual_package_records();
         let virtual_packages: HashSet<&str> = manifest_records
             .iter()
             .map(|package| package.name.as_normalized())

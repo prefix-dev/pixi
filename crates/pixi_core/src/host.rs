@@ -91,7 +91,7 @@ impl HostDetection {
     /// declarations are normalized into solver records.
     pub fn capabilities(&self) -> Cow<'_, [GenericVirtualPackage]> {
         match &self.platform {
-            Ok(platform) => platform.solver_records(),
+            Ok(platform) => platform.solver_virtual_package_records(),
             Err(_) => Cow::Borrowed(&[]),
         }
     }

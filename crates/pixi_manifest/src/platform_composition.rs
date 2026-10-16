@@ -89,7 +89,7 @@ fn union_virtual_packages(platforms: &[&PixiPlatform]) -> Vec<GenericVirtualPack
     let mut union: BTreeMap<String, GenericVirtualPackage> = BTreeMap::new();
     for platform in platforms {
         for package in platform
-            .manifest_records()
+            .manifest_virtual_package_records()
             .iter()
             .filter(|gvp| !crate::platform::is_subdir_default(gvp, platform.subdir()))
         {
