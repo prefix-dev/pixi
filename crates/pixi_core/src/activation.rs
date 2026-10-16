@@ -3,14 +3,14 @@ use crate::{environment::EnvironmentHash, workspace::HasWorkspaceRef};
 use fs_err::tokio as tokio_fs;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use miette::IntoDiagnostic;
+use miette::Diagnostic;
 use pixi_manifest::EnvironmentName;
 use pixi_manifest::FeaturesExt;
 use pixi_manifest::PixiPlatform;
 use rattler_lock::LockFile;
 use rattler_shell::{
     activation::{
-        ActivationError::FailedToRunActivationScript, ActivationVariables, Activator,
+        ActivationError as ShellActivationError, ActivationVariables, Activator,
         PathModificationBehavior,
     },
     shell::ShellEnum,
@@ -18,8 +18,11 @@ use rattler_shell::{
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use thiserror::Error;
 
-// Setting a base prefix for the pixi package
+// Setting base prefixes for the pixi package. The `WORKSPACE` variants are the
+// current names; the `PROJECT` variants are kept as legacy aliases.
+const WORKSPACE_PREFIX: &str = "PIXI_WORKSPACE_";
 const PROJECT_PREFIX: &str = "PIXI_PROJECT_";
 
 pub enum CurrentEnvVarBehavior {
@@ -30,6 +33,38 @@ pub enum CurrentEnvVarBehavior {
     Include,
     /// Do not take any environment variables from the current shell.
     Exclude,
+}
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum ActivationError {
+    #[error("failed to create activator for '{0}'")]
+    CreateActivator(EnvironmentName, #[source] ShellActivationError),
+
+    #[error("failed to run activation script for '{environment}' ({status})")]
+    RunScript {
+        environment: EnvironmentName,
+        status: std::process::ExitStatus,
+        stdout: String,
+        /// The script's stderr, shown as help when non-empty.
+        #[help]
+        stderr: Option<String>,
+        script: String,
+    },
+
+    #[error("failed to activate '{0}'")]
+    Activation(EnvironmentName, #[source] ShellActivationError),
+
+    #[error("failed to serialize the activation cache")]
+    SerializeCache(#[source] serde_json::Error),
+
+    #[error("failed to write the activation cache")]
+    WriteCache(#[source] std::io::Error),
+
+    #[error("`clean-env` is not supported on Windows")]
+    CleanEnvOnWindows,
+
+    #[error("environment '{0}' should have been created during workspace creation")]
+    MissingEnvironmentVars(EnvironmentName),
 }
 
 #[derive(Serialize, Deserialize)]
@@ -49,36 +84,34 @@ struct ActivationCache {
 impl Workspace {
     /// Returns environment variables and their values that should be injected when running a command.
     pub(crate) fn get_metadata_env(&self) -> HashMap<String, String> {
-        let mut map = HashMap::from_iter([
-            (
-                format!("{PROJECT_PREFIX}ROOT"),
-                self.root().to_string_lossy().into_owned(),
-            ),
-            (
-                format!("{PROJECT_PREFIX}NAME"),
-                self.display_name().to_string(),
-            ),
-            (
-                format!("{PROJECT_PREFIX}MANIFEST"),
-                self.workspace
-                    .provenance
-                    .path
-                    .to_string_lossy()
-                    .into_owned(),
-            ),
-            (
-                format!("{PROJECT_PREFIX}VERSION"),
-                self.workspace
-                    .value
-                    .workspace
-                    .version
-                    .as_ref()
-                    .map_or("NO_VERSION_SPECIFIED".to_string(), |version| {
-                        version.to_string()
-                    }),
-            ),
-            (String::from("PIXI_IN_SHELL"), String::from("1")),
-        ]);
+        let root = self.root().to_string_lossy().into_owned();
+        let name = self.display_name().to_string();
+        let manifest = self
+            .workspace
+            .provenance
+            .path
+            .to_string_lossy()
+            .into_owned();
+        let version = self
+            .workspace
+            .value
+            .workspace
+            .version
+            .as_ref()
+            .map_or("NO_VERSION_SPECIFIED".to_string(), |version| {
+                version.to_string()
+            });
+
+        // Set each value under both the current `WORKSPACE` prefix and the
+        // legacy `PROJECT` prefix.
+        let mut map = HashMap::new();
+        for prefix in [WORKSPACE_PREFIX, PROJECT_PREFIX] {
+            map.insert(format!("{prefix}ROOT"), root.clone());
+            map.insert(format!("{prefix}NAME"), name.clone());
+            map.insert(format!("{prefix}MANIFEST"), manifest.clone());
+            map.insert(format!("{prefix}VERSION"), version.clone());
+        }
+        map.insert(String::from("PIXI_IN_SHELL"), String::from("1"));
 
         if let Ok(exe_path) = std::env::current_exe() {
             map.insert(
@@ -122,7 +155,7 @@ pub fn get_activator<'p>(
     environment: &'p Environment<'p>,
     shell: ShellEnum,
     platform: &PixiPlatform,
-) -> miette::Result<Activator<ShellEnum>> {
+) -> Result<Activator<ShellEnum>, ActivationError> {
     let subdir = platform.subdir();
     let additional_activation_scripts = environment.activation_scripts(Some(platform));
 
@@ -162,8 +195,8 @@ pub fn get_activator<'p>(
         }
     }
 
-    let mut activator =
-        Activator::from_path(environment.dir().as_path(), shell, subdir).into_diagnostic()?;
+    let mut activator = Activator::from_path(environment.dir().as_path(), shell, subdir)
+        .map_err(|e| ActivationError::CreateActivator(environment.name().clone(), e))?;
 
     // Add the custom activation scripts from the environment
     activator
@@ -282,7 +315,7 @@ pub async fn run_activation(
     _lock_file: Option<&LockFile>,
     force_activate: bool,
     experimental: bool,
-) -> miette::Result<HashMap<String, String>> {
+) -> Result<HashMap<String, String>, ActivationError> {
     // Try the activation cache first. It is keyed on `platform` and on the
     // prefix's install fingerprint, which changes whenever any package's
     // content changes, so a hit means the env-var map is still up to date.
@@ -302,13 +335,7 @@ pub async fn run_activation(
     }
     tracing::debug!("Running activation script for {:?}", environment.name());
 
-    let activator = get_activator(environment, ShellEnum::default(), platform).map_err(|e| {
-        miette::miette!(format!(
-            "failed to create activator for {:?}\n{}",
-            environment.name(),
-            e
-        ))
-    })?;
+    let activator = get_activator(environment, ShellEnum::default(), platform)?;
 
     let path_modification_behavior = match env_var_behavior {
         // We need to replace the full environment path with the new one.
@@ -340,35 +367,24 @@ pub async fn run_activation(
         )
     })
     .await
-    .into_diagnostic()?
+    .unwrap_or_else(|e| std::panic::resume_unwind(e.into_panic()))
     {
         Ok(activator) => activator,
-        Err(e) => {
-            match e {
-                FailedToRunActivationScript {
-                    script,
-                    stdout,
-                    stderr,
-                    status,
-                } => {
-                    return Err(miette::miette!(format!(
-                        "Failed to run activation script for {:?}. Status: {}. Stdout: {}. Stderr: {}. Script: {}",
-                        environment.name(), // Make sure `environment` is accessible here
-                        status,
-                        stdout,
-                        stderr,
-                        script,
-                    )));
-                }
-                _ => {
-                    // Handle other activation errors
-                    return Err(miette::miette!(format!(
-                        "An activation error occurred: {:?}",
-                        e
-                    )));
-                }
-            }
+        Err(ShellActivationError::FailedToRunActivationScript {
+            script,
+            stdout,
+            stderr,
+            status,
+        }) => {
+            return Err(ActivationError::RunScript {
+                environment: environment.name().clone(),
+                status,
+                stdout,
+                stderr: (!stderr.trim().is_empty()).then_some(stderr),
+                script,
+            });
         }
+        Err(e) => return Err(ActivationError::Activation(environment.name().clone(), e)),
     };
 
     // Persist the cache so future calls can short-circuit. Same
@@ -401,14 +417,14 @@ pub async fn run_activation(
             ),
             environment_variables: activator_result.clone(),
         };
-        let cache = serde_json::to_string(&cache).into_diagnostic()?;
+        let cache = serde_json::to_string(&cache).map_err(ActivationError::SerializeCache)?;
 
         tokio_fs::create_dir_all(environment.workspace().activation_env_cache_folder())
             .await
-            .into_diagnostic()?;
+            .map_err(ActivationError::WriteCache)?;
         tokio_fs::write(&cache_file, cache)
             .await
-            .into_diagnostic()?;
+            .map_err(ActivationError::WriteCache)?;
         tracing::debug!(
             "Wrote activation cache for {} to {}",
             environment.name(),
@@ -503,7 +519,7 @@ pub(crate) async fn initialize_env_variables(
     lock_file: Option<&LockFile>,
     force_activate: bool,
     experimental: bool,
-) -> miette::Result<HashMap<String, String>> {
+) -> Result<HashMap<String, String>, ActivationError> {
     let activation_env = run_activation(
         environment,
         platform,
@@ -517,9 +533,7 @@ pub(crate) async fn initialize_env_variables(
     // Get environment variables from the currently activated shell.
     let current_shell_env_vars = match env_var_behavior {
         CurrentEnvVarBehavior::Clean if cfg!(windows) => {
-            return Err(miette::miette!(
-                "Currently it's not possible to run a `clean-env` option on Windows."
-            ));
+            return Err(ActivationError::CleanEnvOnWindows);
         }
         CurrentEnvVarBehavior::Clean => get_clean_environment_variables(),
         CurrentEnvVarBehavior::Include => std::env::vars().collect(),
@@ -631,6 +645,14 @@ mod tests {
                 .unwrap()
                 .to_string()
         );
+
+        // The `WORKSPACE` variants mirror the legacy `PROJECT` variants.
+        for suffix in ["NAME", "ROOT", "MANIFEST", "VERSION"] {
+            assert_eq!(
+                env.get(&format!("PIXI_WORKSPACE_{suffix}")),
+                env.get(&format!("PIXI_PROJECT_{suffix}")),
+            );
+        }
     }
 
     #[test]
@@ -893,5 +915,40 @@ mod tests {
             "ACTIVATION1234",
             "The new variable should be set"
         );
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_run_activation_failing_script() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        fs_err::write(temp_dir.path().join("fail.sh"), "echo oops >&2\nexit 3\n").unwrap();
+        let workspace = r#"
+        [workspace]
+        name = "pixi"
+        channels = []
+        platforms = []
+
+        [activation]
+        scripts = ["fail.sh"]
+        "#;
+        let project =
+            Workspace::from_str(temp_dir.path().join("pixi.toml").as_path(), workspace).unwrap();
+        let default_env = project.default_environment();
+
+        let err = run_activation(
+            &default_env,
+            &default_env.activation_platform(),
+            &CurrentEnvVarBehavior::Exclude,
+            None,
+            false,
+            false,
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(err.help().map(|h| h.to_string()).as_deref(), Some("oops\n"));
+        let ActivationError::RunScript { status, .. } = err else {
+            panic!("expected RunScript, got {err:?}");
+        };
+        assert_eq!(status.code(), Some(3));
     }
 }

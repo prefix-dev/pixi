@@ -43,7 +43,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2
+      - uses: prefix-dev/setup-pixi@9dabb60412d3d2d967a8d682f7ce01317af40514 # v0.11.0
         with:
           environments: release
       - name: Extract version
@@ -101,7 +101,7 @@ jobs:
           submodules: recursive
           persist-credentials: false
 
-      - uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2
+      - uses: prefix-dev/setup-pixi@9dabb60412d3d2d967a8d682f7ce01317af40514 # v0.11.0
         with:
           environments: release
           activate-environment: true
@@ -109,14 +109,10 @@ jobs:
       - name: Install Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2.0.0
         with:
-          toolchain: "1.98.1"
           target: ${{ matrix.target }}
           cache: false
-          # This action defaults to writing RUSTFLAGS=-D warnings into the job
-          # environment. RUSTFLAGS overrides every `[target.*].rustflags` entry
-          # in .cargo/config.toml, which silently dropped `+crt-static` from the
-          # Windows release builds (pixi#6915). Leave the variable alone here;
-          # the "Set build options" step below composes the full value.
+          build-warnings: warn
+          # Preserve target-specific rustflags from .cargo/config.toml.
           rustflags: ""
 
       - name: Set build options
@@ -215,7 +211,7 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2
+      - uses: prefix-dev/setup-pixi@9dabb60412d3d2d967a8d682f7ce01317af40514 # v0.11.0
         with:
           environments: release
       - name: Create and push tag
@@ -242,7 +238,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.tag }}
           fetch-depth: 0
           persist-credentials: false
-      - uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2
+      - uses: prefix-dev/setup-pixi@9dabb60412d3d2d967a8d682f7ce01317af40514 # v0.11.0
         with:
           environments: release
       - name: Download artifacts

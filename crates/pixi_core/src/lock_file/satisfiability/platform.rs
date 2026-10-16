@@ -19,6 +19,7 @@ use pixi_config::Config;
 use pixi_install_pypi::UnresolvedPypiRecord;
 use pixi_manifest::{
     EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName,
+    platform::VirtualPackageRecords,
 };
 use pixi_pypi_spec::PypiPackageName;
 use pixi_record::{
@@ -99,11 +100,12 @@ pub fn resolve_lock_platform_for<'lock>(
         return Some(found);
     }
     let candidate = lock_file.platform(platform.subdir().as_str())?;
-    let declared: Vec<String> = platform
-        .declared_virtual_packages()
-        .iter()
-        .map(|gvp| gvp.to_string())
-        .collect();
+    let records = match platform.records() {
+        VirtualPackageRecords::Manifest(records) | VirtualPackageRecords::Detected(records) => {
+            records
+        }
+    };
+    let declared: Vec<String> = records.iter().map(|gvp| gvp.to_string()).collect();
     let locked: &[String] = candidate.virtual_packages();
     let matches = locked.is_empty() || declared.iter().all(|d| locked.iter().any(|l| l == d));
     matches.then_some(candidate)
@@ -939,7 +941,13 @@ async fn verify_package_platform_satisfiability(
                 if let Some((identifier, repodata_idx, _)) =
                     locked_conda_pypi_packages.get(&requirement.name)
                 {
-                    if requirement.is_editable() {
+                    if matches!(
+                        &requirement.source,
+                        RequirementSource::Directory {
+                            editable: Some(true),
+                            ..
+                        }
+                    ) {
                         delayed_pypi_error.get_or_insert_with(|| {
                             Box::new(PlatformUnsat::EditableDependencyOnCondaInstalledPackage(
                                 requirement.name.clone(),
@@ -956,7 +964,10 @@ async fn verify_package_platform_satisfiability(
                         });
                     }
 
-                    if matches!(requirement.source, RequirementSource::Git { .. }) {
+                    if matches!(
+                        requirement.source,
+                        RequirementSource::GitDirectory { .. } | RequirementSource::GitPath { .. }
+                    ) {
                         delayed_pypi_error.get_or_insert_with(|| {
                             Box::new(PlatformUnsat::GitDependencyOnCondaInstalledPackage(
                                 requirement.name.clone(),
@@ -1008,7 +1019,13 @@ async fn verify_package_platform_satisfiability(
                                 .cloned()
                                 .unwrap_or(requirement);
 
-                            if requirement.is_editable() {
+                            if matches!(
+                                &requirement.source,
+                                RequirementSource::Directory {
+                                    editable: Some(true),
+                                    ..
+                                }
+                            ) {
                                 if let Err(err) =
                                     pypi_satisfies_editable(&requirement, record, ctx.project_root)
                                 {

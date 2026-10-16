@@ -5,7 +5,6 @@ use std::{
 
 use crate::GitUrlWithPrefix;
 use crate::git_url::decode_windows_drive_letter;
-use miette::IntoDiagnostic;
 use pep440_rs::VersionSpecifiers;
 use pixi_git::{git::GitReference as PixiGitReference, sha::GitSha as PixiGitSha};
 use pixi_manifest::pypi::{
@@ -16,14 +15,15 @@ use pixi_manifest::pypi::{
     },
 };
 use pixi_record::{
-    CondaEnvironmentFingerprint, LockedGitUrl, PinnedGitCheckout, PinnedGitSpec, PixiRecord,
+    CondaEnvironmentFingerprint, LockedGitUrl, LockedGitUrlError, PinnedGitCheckout, PinnedGitSpec,
+    PixiRecord,
 };
 use pixi_spec::GitReference as PixiReference;
 use std::{collections::HashSet, fmt::Write};
 use uv_configuration::BuildOptions;
 use uv_configuration::TrustedHost;
 use uv_distribution_types::{
-    ConfigSettingEntry, ConfigSettings, GitSourceDist, Index, IndexLocations, IndexUrl,
+    ConfigSettingEntry, ConfigSettings, GitDirectorySourceDist, Index, IndexLocations, IndexUrl,
 };
 use uv_normalize::{InvalidNameError, PackageName};
 use uv_pep508::{VerbatimUrl, VerbatimUrlError};
@@ -314,7 +314,7 @@ pub fn to_prerelease_mode(prerelease_mode: Option<&PrereleaseMode>) -> uv_resolv
         Some(PrereleaseMode::IfNecessary) => uv_resolver::PrereleaseMode::IfNecessary,
         Some(PrereleaseMode::Explicit) => uv_resolver::PrereleaseMode::Explicit,
         Some(PrereleaseMode::IfNecessaryOrExplicit) | None => {
-            uv_resolver::PrereleaseMode::IfNecessaryOrExplicit
+            uv_resolver::PrereleaseMode::IfNecessary
         }
     }
 }
@@ -351,7 +351,7 @@ pub fn into_pixi_reference(git_reference: uv_git_types::GitReference) -> PixiRef
     }
 }
 
-/// Convert a solved [`GitSourceDist`] into [`PinnedGitSpec`]
+/// Convert a solved [`GitDirectorySourceDist`] into [`PinnedGitSpec`]
 ///
 /// The `original_reference` parameter allows preserving the original git reference
 /// from the manifest (e.g., `Branch("main")`). When uv resolves a git dependency,
@@ -367,7 +367,7 @@ pub fn into_pixi_reference(git_reference: uv_git_types::GitReference) -> PixiRef
 /// actually says, so the satisfiability check matches without relying on the
 /// no-ref fallback.
 pub fn into_pinned_git_spec(
-    dist: GitSourceDist,
+    dist: GitDirectorySourceDist,
     original_reference: Option<PixiReference>,
 ) -> PinnedGitSpec {
     // Necessary to convert between our gitsha and uv gitsha.
@@ -402,21 +402,29 @@ pub fn into_pinned_git_spec(
     PinnedGitSpec::new(decode_windows_drive_letter(&repository), pinned_checkout)
 }
 
+/// An error that occurs when converting a [`LockedGitUrl`] into a uv git url.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum ParsedGitUrlError {
+    #[error(transparent)]
+    LockedGitUrl(#[from] LockedGitUrlError),
+    #[error(transparent)]
+    GitUrl(#[from] uv_git_types::GitUrlParseError),
+}
+
 /// Convert a locked git url into a parsed git url
 /// [`LockedGitUrl`] is always recorded in the lock file and looks like this:
 /// <git+https://git.example.com/MyProject.git?tag=v1.0&subdirectory=pkg_dir#1c4b2c7864a60ea169e091901fcde63a8d6fbfdc>
 ///
-/// [`uv_pypi_types::ParsedGitUrl`] looks like this:
+/// [`uv_pypi_types::ParsedGitDirectoryUrl`] looks like this:
 /// <git+https://git.example.com/MyProject.git@v1.0#subdirectory=pkg_dir>
 ///
 /// So we need to convert the locked git url into a parsed git url.
 /// which is used in the uv crate.
 pub fn to_parsed_git_url(
     locked_git_url: &LockedGitUrl,
-) -> miette::Result<uv_pypi_types::ParsedGitUrl> {
+) -> Result<uv_pypi_types::ParsedGitDirectoryUrl, ParsedGitUrlError> {
     let git_source = PinnedGitCheckout::from_locked_url(locked_git_url)?;
-    // Construct manually [`ParsedGitUrl`] from locked url.
-    let parsed_git_url = uv_pypi_types::ParsedGitUrl::from_source(
+    let parsed_git_url = uv_pypi_types::ParsedGitDirectoryUrl::from_source(
         uv_git_types::GitUrl::from_fields(
             {
                 let mut url = locked_git_url.to_url();
@@ -431,8 +439,7 @@ pub fn to_parsed_git_url(
             into_uv_git_reference(git_source.reference.into()),
             Some(into_uv_git_sha(git_source.commit)),
             to_uv_git_lfs(git_source.lfs),
-        )
-        .into_diagnostic()?,
+        )?,
         if git_source.subdirectory.is_empty() {
             None
         } else {
@@ -473,6 +480,18 @@ pub fn to_requirements<'req>(
     to_requirements_relative_to(requirements, None)
 }
 
+fn write_git_requirement_source(
+    output: &mut String,
+    git: &uv_git_types::GitUrl,
+) -> std::fmt::Result {
+    // `url()`, not `repository()`, preserves the original URL spelling; see #6185.
+    write!(output, " @ git+{}", git.url())?;
+    if let Some(reference) = git.reference().as_str() {
+        write!(output, "@{reference}")?;
+    }
+    Ok(())
+}
+
 /// Same as [`to_requirements`], but re-anchors the `given` on file-URL path/directory
 /// requirements to the workspace root carried by `anchor`.
 ///
@@ -499,6 +518,7 @@ pub fn to_requirements_relative_to<'req>(
                 source,
                 marker,
                 groups: _groups,
+                scope: _scope,
                 origin: _origin,
             } = requirement;
 
@@ -529,19 +549,24 @@ pub fn to_requirements_relative_to<'req>(
                 uv_distribution_types::RequirementSource::Url { url, .. } => {
                     write!(package_string, " @ {url}")?;
                 }
-                uv_distribution_types::RequirementSource::Git {
+                uv_distribution_types::RequirementSource::GitDirectory {
                     url: _,
                     git,
                     subdirectory,
                 } => {
-                    // `url()`, not `repository()`, see #6185.
-                    write!(package_string, " @ git+{}", git.url())?;
-                    if let Some(reference) = git.reference().as_str() {
-                        write!(package_string, "@{reference}")?;
-                    }
+                    write_git_requirement_source(&mut package_string, git)?;
                     if let Some(subdirectory) = subdirectory {
                         writeln!(package_string, "#subdirectory={}", subdirectory.display())?;
                     }
+                }
+                uv_distribution_types::RequirementSource::GitPath {
+                    url: _,
+                    git,
+                    install_path,
+                    ext: _,
+                } => {
+                    write_git_requirement_source(&mut package_string, git)?;
+                    write!(package_string, "#path={}", install_path.display())?;
                 }
                 uv_distribution_types::RequirementSource::Path { url, .. }
                 | uv_distribution_types::RequirementSource::Directory { url, .. } => {
@@ -657,15 +682,12 @@ pub fn to_uv_version(
 /// Converts the locked [`rattler_lock::PackageHashes`] into the uv
 /// [`uv_pypi_types::HashDigest`] representation.
 pub fn to_uv_hash_digests(hash: &rattler_lock::PackageHashes) -> Vec<uv_pypi_types::HashDigest> {
-    use uv_pypi_types::{HashAlgorithm, HashDigest};
+    use uv_pypi_types::{Digest, HashDigest};
 
-    let md5_digest = |md5: &rattler_digest::Md5Hash| HashDigest {
-        algorithm: HashAlgorithm::Md5,
-        digest: hex::encode(md5).into(),
-    };
-    let sha256_digest = |sha256: &rattler_digest::Sha256Hash| HashDigest {
-        algorithm: HashAlgorithm::Sha256,
-        digest: hex::encode(sha256).into(),
+    let md5_digest =
+        |md5: &rattler_digest::Md5Hash| HashDigest::Md5(Digest::from_bytes((*md5).into()));
+    let sha256_digest = |sha256: &rattler_digest::Sha256Hash| {
+        HashDigest::Sha256(Digest::from_bytes((*sha256).into()))
     };
 
     match hash {
@@ -794,23 +816,38 @@ fn to_exclude_newer_timestamp(
 
 /// Converts a resolved PyPI exclude-newer configuration to `uv_resolver::ExcludeNewer`.
 pub fn to_exclude_newer(exclude_newer: &ResolvedPypiExcludeNewer) -> uv_resolver::ExcludeNewer {
+    let to_uv_name = |package: &pep508_rs::PackageName| {
+        PackageName::from_str(package.as_ref())
+            .expect("pep508 package name should be valid uv package name")
+    };
+
+    // Exempt packages have no cutoff at all, which takes precedence over a
+    // deprecated per-package cutoff for the same package.
     let package_cutoffs = exclude_newer
         .package_cutoffs
         .iter()
+        .filter(|(package, _)| !exclude_newer.exempt_packages.contains(*package))
         .map(|(package, cutoff)| {
             (
-                PackageName::from_str(package.as_ref())
-                    .expect("pep508 package name should be valid uv package name"),
-                to_exclude_newer_timestamp(*cutoff),
+                to_uv_name(package),
+                uv_resolver::ExcludeNewerOverride::Enabled(Box::new(to_exclude_newer_timestamp(
+                    *cutoff,
+                ))),
             )
         })
+        .chain(exclude_newer.exempt_packages.iter().map(|package| {
+            (
+                to_uv_name(package),
+                uv_resolver::ExcludeNewerOverride::Disabled,
+            )
+        }))
         .map(uv_resolver::ExcludeNewerPackageEntry::from)
         .collect();
 
-    uv_resolver::ExcludeNewer::new(
-        exclude_newer.cutoff.map(to_exclude_newer_timestamp),
-        package_cutoffs,
-    )
+    uv_resolver::ExcludeNewer {
+        global: exclude_newer.cutoff.map(to_exclude_newer_timestamp),
+        package: package_cutoffs,
+    }
 }
 
 #[cfg(test)]
@@ -955,6 +992,7 @@ mod tests {
             name: uv_normalize::PackageName::from_str("isaaclab").unwrap(),
             extras: Box::new([]),
             groups: Box::new([]),
+            scope: Default::default(),
             marker: MarkerTree::TRUE,
             source: RequirementSource::Registry {
                 specifier: uv_pep440::VersionSpecifiers::empty(),
@@ -1002,6 +1040,7 @@ mod tests {
             name: uv_normalize::PackageName::from_str("pkg-b").unwrap(),
             extras: Box::new([]),
             groups: Box::new([]),
+            scope: Default::default(),
             marker: MarkerTree::TRUE,
             source: RequirementSource::Directory {
                 install_path: pkg_b.clone().into_boxed_path(),
@@ -1058,6 +1097,7 @@ mod tests {
             name: uv_normalize::PackageName::from_str("pkg-b").unwrap(),
             extras: Box::new([]),
             groups: Box::new([]),
+            scope: Default::default(),
             marker: MarkerTree::TRUE,
             source: RequirementSource::Directory {
                 install_path: pkg_b.clone().into_boxed_path(),
@@ -1097,6 +1137,7 @@ mod tests {
             name: uv_normalize::PackageName::from_str("pkg-b").unwrap(),
             extras: Box::new([]),
             groups: Box::new([]),
+            scope: Default::default(),
             marker: MarkerTree::TRUE,
             source: RequirementSource::Directory {
                 install_path: pkg_b.clone().into_boxed_path(),
@@ -1119,7 +1160,7 @@ mod tests {
     /// #6185: lock file URL must keep original casing and `.git` suffix.
     #[test]
     fn into_pinned_git_spec_preserves_original_url() {
-        use uv_distribution_types::GitSourceDist;
+        use uv_distribution_types::GitDirectorySourceDist;
         use uv_git_types::{GitLfs, GitOid, GitReference as UvGitReference, GitUrl as UvGitUrl};
         use uv_normalize::PackageName;
         use uv_pep508::VerbatimUrl;
@@ -1136,7 +1177,7 @@ mod tests {
         )
         .unwrap();
 
-        let dist = GitSourceDist {
+        let dist = GitDirectorySourceDist {
             name: PackageName::from_str("cowsay").unwrap(),
             git: Box::new(git_url),
             subdirectory: None,

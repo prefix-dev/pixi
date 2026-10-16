@@ -65,13 +65,13 @@ impl LockedDistHashes {
 
     /// Turn the locked digests into the [`HashStrategy`] handed to uv.
     ///
-    /// This uses [`HashStrategy::Verify`] rather than [`HashStrategy::Require`].
+    /// This uses [`HashStrategy::verify`] to validate hashes only when present.
     /// Artifacts with a locked digest must match it.
     /// Artifacts without one install unverified, mirroring what the lock file is able to pin.
     /// The strategy defends against a tampered artifact (registry, mirror, or transport).
     /// It does not defend against a tampered lock file: whoever can edit it can drop the digest.
     pub fn into_verify_strategy(self) -> HashStrategy {
-        HashStrategy::Verify(Arc::new(self.hashes))
+        HashStrategy::verify(Arc::new(self.hashes))
     }
 }
 
@@ -81,7 +81,7 @@ impl LockedDistHashes {
 fn supports_hash_verification(dist: &Dist) -> bool {
     !matches!(
         dist,
-        Dist::Source(SourceDist::Git(_) | SourceDist::Directory(_))
+        Dist::Source(SourceDist::GitDirectory(_) | SourceDist::Directory(_))
     )
 }
 
@@ -94,9 +94,9 @@ fn verification_digests(hash: &PackageHashes) -> Vec<HashDigest> {
     let mut digests = to_uv_hash_digests(hash);
     if digests
         .iter()
-        .any(|digest| digest.algorithm == HashAlgorithm::Sha256)
+        .any(|digest| digest.algorithm() == HashAlgorithm::Sha256)
     {
-        digests.retain(|digest| digest.algorithm == HashAlgorithm::Sha256);
+        digests.retain(|digest| digest.algorithm() == HashAlgorithm::Sha256);
     }
     digests
 }
@@ -107,7 +107,7 @@ mod tests {
 
     use rattler_digest::{Md5, Sha256, parse_digest_from_hex};
     use rattler_lock::{PypiDistributionData, UrlOrPath};
-    use uv_distribution_types::HashPolicy;
+    use uv_distribution_types::ArchiveHashPolicy;
 
     use super::*;
     use crate::{InstallablePypiRecord, ManifestData};
@@ -164,19 +164,19 @@ mod tests {
         let (strategy, required) = strategy_for(&records);
 
         let dist = &required.values().next().unwrap().dist;
-        let HashPolicy::Any(digests) = strategy.get(dist) else {
+        let ArchiveHashPolicy::Any(digests) = strategy.archive_policy(dist) else {
             panic!("expected the locked registry wheel to be validated");
         };
         assert_eq!(digests.len(), 1);
-        assert_eq!(digests[0].algorithm, HashAlgorithm::Sha256);
-        assert_eq!(digests[0].digest.as_ref(), SHA256_HEX);
+        assert_eq!(digests[0].algorithm(), HashAlgorithm::Sha256);
+        assert_eq!(digests[0].digest(), SHA256_HEX);
 
         // The cache index looks distributions up by name and version.
         let name = uv_normalize::PackageName::from_str("foo").unwrap();
         let version = uv_pep440::Version::from_str("1.0.0").unwrap();
         assert!(matches!(
-            strategy.get_package(&name, &version),
-            HashPolicy::Any(_)
+            strategy.archive_policy_for_package(&name, &version),
+            ArchiveHashPolicy::Any(_)
         ));
     }
 
@@ -191,12 +191,12 @@ mod tests {
         let (strategy, required) = strategy_for(&records);
 
         let dist = &required.values().next().unwrap().dist;
-        let HashPolicy::Any(digests) = strategy.get(dist) else {
+        let ArchiveHashPolicy::Any(digests) = strategy.archive_policy(dist) else {
             panic!("expected the locked registry wheel to be validated");
         };
         assert_eq!(digests.len(), 1);
-        assert_eq!(digests[0].algorithm, HashAlgorithm::Sha256);
-        assert_eq!(digests[0].digest.as_ref(), SHA256_HEX);
+        assert_eq!(digests[0].algorithm(), HashAlgorithm::Sha256);
+        assert_eq!(digests[0].digest(), SHA256_HEX);
     }
 
     #[test]
@@ -208,7 +208,10 @@ mod tests {
         let (strategy, required) = strategy_for(&records);
 
         let dist = &required.values().next().unwrap().dist;
-        assert!(matches!(strategy.get(dist), HashPolicy::None));
+        assert!(matches!(
+            strategy.archive_policy(dist),
+            ArchiveHashPolicy::None
+        ));
     }
 
     #[test]
@@ -227,7 +230,10 @@ mod tests {
             matches!(dist, Dist::Source(SourceDist::Directory(_))),
             "fixture should produce a directory dist"
         );
-        assert!(matches!(strategy.get(dist), HashPolicy::None));
+        assert!(matches!(
+            strategy.archive_policy(dist),
+            ArchiveHashPolicy::None
+        ));
     }
 
     #[test]
@@ -241,10 +247,13 @@ mod tests {
 
         let dist = &required.values().next().unwrap().dist;
         assert!(
-            matches!(dist, Dist::Source(SourceDist::Git(_))),
+            matches!(dist, Dist::Source(SourceDist::GitDirectory(_))),
             "fixture should produce a git dist"
         );
-        assert!(matches!(strategy.get(dist), HashPolicy::None));
+        assert!(matches!(
+            strategy.archive_policy(dist),
+            ArchiveHashPolicy::None
+        ));
     }
 
     #[test]
@@ -259,8 +268,8 @@ mod tests {
         let name = uv_normalize::PackageName::from_str("hatchling").unwrap();
         let version = uv_pep440::Version::from_str("1.25.0").unwrap();
         assert!(matches!(
-            strategy.get_package(&name, &version),
-            HashPolicy::None
+            strategy.archive_policy_for_package(&name, &version),
+            ArchiveHashPolicy::None
         ));
     }
 }

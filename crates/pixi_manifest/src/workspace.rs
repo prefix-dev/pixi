@@ -16,7 +16,8 @@ use url::Url;
 
 use super::pypi::pypi_options::PypiOptions;
 use crate::{
-    PixiPlatform, PixiPlatformName, PrioritizedChannel, S3Options, TargetSelector, Targets,
+    ExcludeNewerConfig, PixiPlatform, PixiPlatformName, PrioritizedChannel, PypiExcludeNewerConfig,
+    S3Options, TargetSelector, Targets,
     platform::{candidate_subdirs, capability_satisfied_by, is_subdir_default},
     preview::Preview,
 };
@@ -101,13 +102,21 @@ pub struct Workspace {
     /// Version requirement for pixi itself
     pub requires_pixi: Option<VersionSpec>,
 
-    /// Exclude package candidates that are newer than this date.
-    pub exclude_newer: Option<ExcludeNewer>,
+    /// Exclude conda package candidates that are newer than a cutoff, with
+    /// exemptions for vetted releases.
+    pub exclude_newer: ExcludeNewerConfig,
 
-    /// Workspace-wide conda package exclude-newer overrides.
+    /// Exclude PyPI package candidates that are newer than a cutoff, with
+    /// exemptions for vetted packages. Falls back to the cutoff of
+    /// [`Self::exclude_newer`].
+    pub pypi_exclude_newer: PypiExcludeNewerConfig,
+
+    /// Workspace-wide conda package exclude-newer overrides from the
+    /// deprecated top-level `[exclude-newer]` table.
     pub exclude_newer_package_overrides: IndexMap<PackageName, ExcludeNewer>,
 
-    /// Workspace-wide PyPI package exclude-newer overrides.
+    /// Workspace-wide PyPI package exclude-newer overrides from the
+    /// deprecated top-level `[pypi-exclude-newer]` table.
     pub pypi_exclude_newer_package_overrides: IndexMap<PypiPackageName, ExcludeNewer>,
 
     /// `[workspace.dependencies]` pool. Path specs remain relative to
@@ -171,7 +180,7 @@ impl Workspace {
         // CI on a different host, etc.). Only the user-customised VPs
         // need to be satisfied by the host.
         let satisfies_system = |p: &&PixiPlatform| {
-            p.declared_virtual_packages()
+            p.manifest_virtual_package_records()
                 .iter()
                 .filter(|declared| !is_subdir_default(declared, p.subdir()))
                 .all(|declared| capability_satisfied_by(declared, system_virtual_packages))
@@ -250,7 +259,7 @@ impl Workspace {
             .map(|p| {
                 let subdir = p.subdir();
                 let unsatisfied_virtual_packages = p
-                    .declared_virtual_packages()
+                    .manifest_virtual_package_records()
                     .iter()
                     .filter(|declared| !is_subdir_default(declared, subdir))
                     .filter(|declared| !capability_satisfied_by(declared, system_virtual_packages))

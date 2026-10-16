@@ -9,14 +9,12 @@ use crate::workspace::{
 };
 use fancy_display::FancyDisplay;
 use miette::Diagnostic;
-use pixi_manifest::platform::host::{host_capabilities, host_subdir};
 use pixi_manifest::{
     EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName,
-    platform::{candidate_subdirs, solver_virtual_packages, unsatisfied_capabilities},
+    platform::{candidate_subdirs, unsatisfied_capabilities},
 };
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Subdir};
 use rattler_lock::LockFile;
-use rattler_virtual_packages::VirtualPackage;
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::path::PathBuf;
@@ -69,7 +67,7 @@ pub fn verify_current_platform_can_run_environment(
                 lock_file,
                 current_platform,
                 environment.name(),
-                None,
+                environment.workspace.host(),
             )?;
         }
         return Ok(());
@@ -109,8 +107,9 @@ pub fn minimum_compatible_declared_platform<'p>(
     environment: &Environment<'p>,
     lock_file: &LockFile,
 ) -> Result<&'p PixiPlatform, Vec<MatchSpec>> {
-    let current = host_subdir();
-    let system_virtual_packages = host_capabilities();
+    let host = environment.workspace.host();
+    let current = host.subdir();
+    let system_virtual_packages = host.capabilities();
     let candidate_subdirs = candidate_subdirs(current);
 
     let manifest = environment.workspace_manifest();
@@ -305,10 +304,14 @@ fn describe_resolution_gap(
 /// `__archspec` carries a constant version and names its microarchitecture in
 /// the build string, so rendering it like the others produces the useless
 /// "archspec >=0"; name the microarchitecture instead.
+/// AMDGPU ISA requirements are exact, not lower bounds.
 fn describe_requirement(required: &GenericVirtualPackage) -> String {
     let name = required.name.as_normalized().trim_start_matches('_');
     match archspec_microarchitecture_of(required) {
         Some(microarchitecture) => format!("{name} {microarchitecture}"),
+        None if required.name.as_normalized() == "__amdgpu_arch" => {
+            format!("{name} =={}", required.version)
+        }
         None => format!("{name} >={}", required.version),
     }
 }
@@ -405,7 +408,7 @@ pub fn verify_run_platform(
             };
             (
                 vec![platform.subdir()],
-                platform.declared_virtual_packages().to_vec(),
+                platform.solver_virtual_package_records(),
                 name.clone(),
                 platform.subdir(),
             )
@@ -413,11 +416,12 @@ pub fn verify_run_platform(
         // Auto-detected machine: its real virtual packages, and the subdirs it
         // can run (current subdir plus architecture fallbacks).
         None => {
-            let current = host_subdir();
+            let host = environment.workspace.host();
+            let current = host.subdir();
             let subdirs = candidate_subdirs(current);
             (
                 subdirs,
-                host_capabilities(),
+                host.capabilities(),
                 PixiPlatformName::from(current),
                 current,
             )
@@ -558,18 +562,19 @@ pub fn classify_environment_runnability(
 }
 
 impl Environment<'_> {
-    /// Returns the set of virtual packages to use for the specified platform.
-    /// Reads them straight off `platform.declared_virtual_packages()`: the
-    /// subdir baseline is materialised by [`PixiPlatform::from_subdir`], so
-    /// there is no separate "compute defaults" step.
-    pub fn virtual_packages(&self, platform: &PixiPlatform) -> Vec<VirtualPackage> {
-        solver_virtual_packages(platform)
+    /// Returns conda virtual-package records for solving, preserving detected host
+    /// records and normalizing manifest declarations for the solver.
+    pub fn virtual_packages(&self, platform: &PixiPlatform) -> Vec<GenericVirtualPackage> {
+        platform.solver_virtual_package_records().into_owned()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
+
+    use pixi_manifest::platform::solver_virtual_packages;
+    use rattler_virtual_packages::VirtualPackage;
 
     use insta::assert_debug_snapshot;
     use itertools::Itertools;
@@ -660,6 +665,13 @@ packages:
             classify_environment_runnability(
                 &environment,
                 Some(&lock("  depends:\n  - __cuda >=9999\n")),
+            ),
+            EnvironmentRunnability::Unsupported,
+        );
+        assert_eq!(
+            classify_environment_runnability(
+                &environment,
+                Some(&lock("  depends:\n  - __test_detector_capability >=3\n")),
             ),
             EnvironmentRunnability::Unsupported,
         );
@@ -952,6 +964,34 @@ packages: []
     }
 
     #[test]
+    fn classify_wrong_amdgpu_architecture_against_package_requirements() {
+        let required_arch = gvp("__amdgpu_arch", "9.0.10");
+        let resolved = platform_data(
+            Subdir::Linux64,
+            vec![gvp("__amdgpu", "0"), required_arch.clone()],
+        );
+        let base = [gvp("__amdgpu", "0"), gvp("__amdgpu_arch", "9.0.11")];
+        let minimum = required_platform(Subdir::Linux64, &["__amdgpu", "__amdgpu_arch ==9.0.10"]);
+
+        assert_eq!(
+            classify_run_platform(&[Subdir::Linux64], &base, &resolved, &minimum),
+            RunPlatformVerdict::BelowMinimum(
+                required_platform(Subdir::Linux64, &["__amdgpu_arch ==9.0.10"])
+                    .requirements()
+                    .to_vec()
+            )
+        );
+
+        // With no package dependency on the architecture, only the declared
+        // resolution target is unmet; the installed packages still run.
+        let minimum = required_platform(Subdir::Linux64, &["__amdgpu"]);
+        assert_eq!(
+            classify_run_platform(&[Subdir::Linux64], &base, &resolved, &minimum),
+            RunPlatformVerdict::OnlyMinimum(vec![required_arch])
+        );
+    }
+
+    #[test]
     fn resolution_gap_names_missing_virtual_package() {
         let base = PixiPlatformName::from(Subdir::Linux64);
         let gap = describe_resolution_gap(&base, None, &[gvp("__cuda", "12")], &[]);
@@ -1009,6 +1049,27 @@ packages: []
             }
             other => panic!("expected BelowMinimum, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn classify_custom_capability_resolution_and_package_floor() {
+        let name = "__test_detector_capability";
+        let resolved = platform_data(Subdir::Linux64, vec![gvp(name, "4")]);
+        let minimum = required_platform(Subdir::Linux64, &["__test_detector_capability >=3"]);
+        for capabilities in [vec![], vec![gvp(name, "2")]] {
+            assert_eq!(
+                classify_run_platform(&[Subdir::Linux64], &capabilities, &resolved, &minimum),
+                RunPlatformVerdict::BelowMinimum(minimum.requirements().to_vec()),
+            );
+        }
+        assert_eq!(
+            classify_run_platform(&[Subdir::Linux64], &[gvp(name, "3")], &resolved, &minimum),
+            RunPlatformVerdict::OnlyMinimum(vec![gvp(name, "4")]),
+        );
+        assert_eq!(
+            classify_run_platform(&[Subdir::Linux64], &[gvp(name, "4")], &resolved, &minimum),
+            RunPlatformVerdict::Compatible,
+        );
     }
 
     #[test]

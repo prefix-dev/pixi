@@ -16,6 +16,7 @@ use indicatif::ProgressDrawTarget;
 use itertools::Itertools;
 use miette::{Diagnostic, IntoDiagnostic};
 use pixi_config::{ConfigCli, ConfigCliActivation};
+use pixi_core::host::HostDetection;
 use pixi_core::{
     Workspace, WorkspaceLocator,
     environment::sanity_check_workspace,
@@ -208,6 +209,7 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
                         root,
                         &prepared.cache_name,
                         &cache_key,
+                        HostDetection::detect().await,
                     )?;
                     if not_hidden {
                         global_multi_progress()
@@ -230,6 +232,7 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
                 script_path,
                 &prepared.cache_name,
                 &cache_key,
+                HostDetection::detect().await,
             )?;
             for warning in warnings {
                 tracing::warn!("{warning}");
@@ -259,6 +262,7 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
                 "<stdin>".into(),
                 "stdin",
                 &cache_key,
+                HostDetection::detect().await,
             )?;
             for warning in warnings {
                 tracing::warn!("{warning}");
@@ -289,7 +293,8 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
                     global_multi_progress().set_draw_target(ProgressDrawTarget::stderr_with_hz(20));
                 }
                 let entrypoint = manifest.metadata().entrypoint.clone();
-                let workspace = Workspace::from_conda_script(manifest, config)?;
+                let workspace =
+                    Workspace::from_conda_script(manifest, config, HostDetection::detect().await)?;
                 let code = crate::conda_script::execute_run(workspace, entrypoint, args).await?;
                 return Ok(process_exit::exit_code_from_code(code));
             }
@@ -297,13 +302,17 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
                 .with_global_config_source(global_config_source)
                 .with_search_start(pixi_core::workspace::DiscoveryStart::Script(path))
                 .with_cli_config(cli_config)
-                .locate()?
+                .locate()
+                .await?
         }
-        None => WorkspaceLocator::for_cli()
-            .with_global_config_source(global_config_source)
-            .with_search_start(args.workspace_config.workspace_locator_start())
-            .with_cli_config(cli_config)
-            .locate()?,
+        None => {
+            WorkspaceLocator::for_cli()
+                .with_global_config_source(global_config_source)
+                .with_search_start(args.workspace_config.workspace_locator_start())
+                .with_cli_config(cli_config)
+                .locate()
+                .await?
+        }
     };
 
     let stdin_display_args = if stdin_script_command.is_some() {

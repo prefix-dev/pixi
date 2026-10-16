@@ -60,3 +60,36 @@ pub fn format_diagnostic(error: &dyn Diagnostic) -> String {
         .format("\n")
         .to_string()
 }
+
+/// Builds a record of `name` and `version` that was uploaded on 2020-01-01,
+/// to check which records an exclude-newer configuration excludes.
+pub fn uploaded_record(
+    name: &str,
+    version: &str,
+    channel: Option<&rattler_conda_types::ChannelUrl>,
+) -> rattler_conda_types::RepoDataRecord {
+    use std::str::FromStr;
+
+    let mut package_record = rattler_conda_types::PackageRecord::new(
+        rattler_conda_types::PackageName::new_unchecked(name),
+        rattler_conda_types::Version::from_str(version).unwrap(),
+        "0".to_string(),
+    );
+    package_record.timestamp = Some(
+        "2020-01-01T00:00:00Z"
+            .parse::<jiff::Timestamp>()
+            .unwrap()
+            .into(),
+    );
+    let file_name = format!("{name}-{version}-0.conda");
+    rattler_conda_types::RepoDataRecord {
+        package_record,
+        identifier: rattler_conda_types::package::DistArchiveIdentifier::from_str(&file_name)
+            .unwrap(),
+        url: match channel {
+            Some(channel) => channel.url().join(&format!("noarch/{file_name}")).unwrap(),
+            None => url::Url::parse("https://example.com/pkg.conda").unwrap(),
+        },
+        channel: channel.map(ToString::to_string),
+    }
+}

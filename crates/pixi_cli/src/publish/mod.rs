@@ -34,7 +34,7 @@ use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
 use pixi_reporters::TopLevelProgress;
 use pixi_spec::SourceLocationSpec;
 use pixi_utils::variants::{VariantConfig, VariantValue};
-use rattler_conda_types::{GenericVirtualPackage, Subdir};
+use rattler_conda_types::Subdir;
 use rattler_networking::{AuthenticationStorage, s3_middleware};
 use rattler_package_streaming::seek::read_package_file;
 
@@ -53,7 +53,8 @@ mod discovery;
 /// passed. Use `--path` to build and publish a single package.
 ///
 /// Supported destinations for `--target-channel` (alias `--to`):
-///   - prefix.dev: `https://prefix.dev/<channel-name>`
+///   - prefix.dev: `https://prefix.dev/<channel-name>` or
+///     `https://prefix.dev/<namespace>/<channel-name>`
 ///   - anaconda.org: `https://anaconda.org/<owner>/<label>`
 ///   - Cloudsmith: `cloudsmith://<owner>/<repository>`
 ///   - S3: `s3://bucket-name`
@@ -567,7 +568,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_global_config_source(args.config_source.source())
         .with_search_start(workspace_locator.clone())
         .with_closest_package(true)
-        .locate()?
+        .locate()
+        .await?
         .with_cli_config(args.config_cli);
     if let Some(backend_override) = args.backend_override.clone() {
         workspace = workspace.with_backend_override(backend_override);
@@ -657,20 +659,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         variant_files.extend(resolve_variant_config_paths(&args.variant_config, &cwd));
     }
 
-    let mut build_virtual_packages: Vec<GenericVirtualPackage> = workspace
+    let mut build_virtual_packages = workspace
         .default_environment()
-        .virtual_packages(&build_pixi_platform)
-        .into_iter()
-        .map(GenericVirtualPackage::from)
-        .collect();
+        .virtual_packages(&build_pixi_platform);
     apply_conda_overrides(&mut build_virtual_packages, build_pixi_platform.subdir());
 
-    let mut host_virtual_packages: Vec<GenericVirtualPackage> = workspace
+    let mut host_virtual_packages = workspace
         .default_environment()
-        .virtual_packages(&target_pixi_platform)
-        .into_iter()
-        .map(GenericVirtualPackage::from)
-        .collect();
+        .virtual_packages(&target_pixi_platform);
     apply_conda_overrides(&mut host_virtual_packages, target_pixi_platform.subdir());
 
     let build_environment = BuildEnvironment {
@@ -1294,6 +1290,28 @@ fn should_skip_existing(
     Ok(false)
 }
 
+/// The channel a Prefix.dev URL points at: the full path after the host, so
+/// that namespaced channels like `https://prefix.dev/<namespace>/<channel>`
+/// resolve to `<namespace>/<channel>` instead of just `<channel>`.
+fn prefix_channel_from_url(url: &Url) -> miette::Result<String> {
+    let channel = url.path().trim_matches('/');
+    if channel.is_empty() {
+        return Err(miette::miette!("Invalid Prefix URL: missing channel name"));
+    }
+    // `https://prefix.dev/channels/<channel>` is the channel's web page, not
+    // an upload target. Older versions accepted it because they only used
+    // the last path segment, so point users at the right URL.
+    if let Some(rest) = channel.strip_prefix("channels/") {
+        let mut suggestion = url.clone();
+        suggestion.set_path(rest);
+        return Err(miette::miette!(
+            help = format!("use `{suggestion}` instead"),
+            "`{url}` is a channel view page URL, not the URL used for uploads"
+        ));
+    }
+    Ok(channel.to_string())
+}
+
 /// Upload packages to a Prefix.dev server.
 async fn upload_to_prefix(
     url: &Url,
@@ -1307,11 +1325,7 @@ async fn upload_to_prefix(
 
     tracing::info!("Uploading packages to Prefix.dev: {}", url);
 
-    let channel = url
-        .path_segments()
-        .and_then(|mut segments| segments.next_back())
-        .ok_or_else(|| miette::miette!("Invalid Prefix URL: missing channel name"))?
-        .to_string();
+    let channel = prefix_channel_from_url(url)?;
 
     let mut server_url = rewrite_scheme_to_https(url, "prefix")?;
     server_url.set_path("");
@@ -1727,6 +1741,34 @@ mod tests {
         // defaults.
         let stable = index_options(&config, "s3://bucket/stable");
         assert_eq!(stable.base_url, None);
+    }
+
+    #[test]
+    fn prefix_channel_keeps_the_namespace() {
+        let channel = |url: &str| prefix_channel_from_url(&Url::parse(url).unwrap());
+        assert_eq!(
+            channel("https://prefix.dev/my-channel").unwrap(),
+            "my-channel"
+        );
+        assert_eq!(
+            channel("https://prefix.dev/my-channel/").unwrap(),
+            "my-channel"
+        );
+        assert_eq!(
+            channel("https://prefix.dev/vslamlab/vslamlab").unwrap(),
+            "vslamlab/vslamlab"
+        );
+        assert_eq!(
+            channel("prefix://prefix.dev/vslamlab/vslamlab/").unwrap(),
+            "vslamlab/vslamlab"
+        );
+        let err = channel("https://prefix.dev/channels/my-channel").unwrap_err();
+        assert_eq!(
+            err.help().unwrap().to_string(),
+            "use `https://prefix.dev/my-channel` instead"
+        );
+        assert!(channel("https://prefix.dev").is_err());
+        assert!(channel("https://prefix.dev/").is_err());
     }
 
     #[test]

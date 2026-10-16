@@ -35,5 +35,9 @@ The workflow:
    `sha256.sum` of all artifacts.
 5. Dispatches the docs deploy and the WinGet publish.
 
+Release builds emit warnings without failing on them, including in PGO builds.
+CI and lint jobs enforce warning-free code. Linux targets build through
+`cargo-zigbuild`.
+
 Enable **dry-run** to build and package everything without signing, tagging or
 publishing - useful for validating the build matrix from a branch.

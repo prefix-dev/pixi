@@ -24,9 +24,11 @@ zmodload zsh/zpty
 zmodload zsh/datetime
 
 # Seconds to wait for each step, and how often to look while waiting. Plain
-# scalars, not `typeset -F`, so they read as `5` rather than `5.000000000` in
-# the messages below and in `sleep`.
-typeset TIMEOUT=5
+# scalars, not `typeset -F`, so they read as `20` rather than `20.000000000` in
+# the messages below and in `sleep`. A probe that works returns as soon as the
+# step is done, so the timeout only needs to be generous enough for a loaded CI
+# runner, where 5s proved too short.
+typeset TIMEOUT=20
 typeset POLL=0.05
 
 completion_dir=${1:?completion dir}

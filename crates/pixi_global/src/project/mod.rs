@@ -19,7 +19,7 @@ use itertools::{Either, Itertools};
 pub use manifest::{ExposedType, Manifest, Mapping};
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use once_cell::sync::OnceCell;
-pub use parsed_manifest::{ExposedName, ParsedEnvironment, ParsedGlobal, ParsedManifest};
+pub use parsed_manifest::{ExposedName, GlobalExcludeNewer, ParsedEnvironment, ParsedManifest};
 use pixi_build_discovery::DiscoveryError;
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
@@ -33,16 +33,14 @@ use pixi_consts::consts::{self};
 use pixi_core::environment::{
     EnvironmentFile, LockedEnvironmentHash, PlatformData, RequiredPlatform, write_environment_file,
 };
+use pixi_core::host::{HostDetection, HostUndetected};
 use pixi_core::lock_file::virtual_packages::required_virtual_package_specs;
 use pixi_core::repodata::Repodata;
 use pixi_core::workspace::stdlib_variants::{StdlibVersionPin, derive_stdlib_variants};
-use pixi_manifest::platform::host::{
-    HostDetectionError, detect_host, host_subdir, platform_from_detected,
-};
-use pixi_manifest::platform::solver_generic_virtual_packages;
+use pixi_manifest::platform::host::{host_subdir, platform_from_detected};
 use pixi_manifest::{
-    InlinePackageManifest, PixiPlatform, PrioritizedChannel, WorkspaceManifest,
-    resolve_exclude_newer,
+    ExcludeNewerConfig, ExcludeNewerError, InlinePackageManifest, PixiPlatform, PrioritizedChannel,
+    WorkspaceManifest, resolve_exclude_newer,
 };
 use pixi_path::AbsPathBuf;
 use pixi_reporters::TopLevelProgress;
@@ -55,8 +53,8 @@ use pixi_utils::{
     rlimit::try_increase_rlimit_to_sensible,
 };
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, ParseChannelError,
-    PrefixRecord, Subdir, menuinst::MenuMode, package::CondaArchiveIdentifier,
+    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, PrefixRecord, Subdir,
+    menuinst::MenuMode, package::CondaArchiveIdentifier,
 };
 use rattler_networking::LazyClient;
 use rattler_repodata_gateway::Gateway;
@@ -110,8 +108,9 @@ pub enum InferPackageNameError {
     CommandDispatcher(#[from] CommandDispatcherError),
     #[error("failed to get build backend metadata for package name inference")]
     BuildBackendMetadata(#[source] Box<dyn Diagnostic + Send + Sync>),
-    #[error("failed to resolve the channel for the exclude-newer configuration")]
-    ExcludeNewer(#[from] ParseChannelError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ExcludeNewer(#[from] ExcludeNewerError),
     #[error("no package outputs found in the specified path/repository")]
     NoPackageOutputs,
     #[error("multiple package outputs found: {}", .package_names.join(", "))]
@@ -159,6 +158,8 @@ pub struct Project {
     top_level_progress: OnceCell<Arc<pixi_reporters::TopLevelProgress>>,
     /// Optional backend override for testing purposes
     backend_override: Option<BackendOverride>,
+    /// What this machine provides, detected when the project was loaded.
+    host: HostDetection,
 }
 
 impl Debug for Project {
@@ -343,6 +344,7 @@ impl Project {
             command_dispatcher: OnceCell::new(),
             top_level_progress: OnceCell::new(),
             backend_override: None,
+            host: HostDetection::builtin(),
         }
     }
 
@@ -562,8 +564,9 @@ impl Project {
     fn lazy_client_and_authenticated_client(
         &self,
     ) -> miette::Result<&(LazyReqwestClient, rattler_networking::LazyClient)> {
-        self.client
-            .get_or_try_init(|| build_lazy_reqwest_clients(Some(self.config()), None))
+        Ok(self
+            .client
+            .get_or_try_init(|| build_lazy_reqwest_clients(Some(self.config()), None))?)
     }
 
     pub fn config(&self) -> &Config {
@@ -574,23 +577,30 @@ impl Project {
         self.config.global_channel_config()
     }
 
-    /// Resolves the manifest's `exclude-newer` cutoff together with the
-    /// overrides of the given channels and of individual packages into
-    /// absolute cutoffs.
+    /// Resolves the manifest-wide and channel cutoffs, keeping version exemptions.
     fn resolved_exclude_newer<'a>(
         &'a self,
         channels: impl IntoIterator<Item = &'a PrioritizedChannel>,
-    ) -> Result<Option<ResolvedExcludeNewer>, ParseChannelError> {
+    ) -> Result<Option<ResolvedExcludeNewer>, ExcludeNewerError> {
+        let config = self
+            .manifest
+            .parsed
+            .exclude_newer
+            .as_ref()
+            .map(|policy| ExcludeNewerConfig {
+                cutoff: Some(policy.cutoff),
+                exemptions: policy
+                    .exemptions
+                    .iter()
+                    .map(|(name, version)| (name.clone(), BinarySpec::Version(version.clone())))
+                    .collect(),
+            })
+            .unwrap_or_default();
         resolve_exclude_newer(
-            self.manifest.parsed.global.exclude_newer,
+            &config,
             channels,
-            |channel| {
-                channel
-                    .channel
-                    .clone()
-                    .into_base_url(self.global_channel_config())
-            },
-            &self.manifest.parsed.exclude_newer_package_overrides,
+            self.global_channel_config(),
+            std::iter::empty(),
         )
     }
 
@@ -601,15 +611,18 @@ impl Project {
     /// so the solve respects run constraints on virtual packages. For any other
     /// platform the machine can't be inspected, so the list is empty.
     fn virtual_packages_for(
+        host: &HostDetection,
         platform: &Subdir,
-    ) -> Result<Vec<GenericVirtualPackage>, HostDetectionError> {
-        let host = host_subdir();
+    ) -> Result<Vec<GenericVirtualPackage>, HostUndetected> {
         if platform
             .only_platform()
-            .map(|p| p == host.only_platform().unwrap_or(""))
+            .map(|p| p == host.subdir().only_platform().unwrap_or(""))
             .unwrap_or(false)
         {
-            Ok(solver_generic_virtual_packages(&detect_host(host)?))
+            Ok(host
+                .platform()?
+                .solver_virtual_package_records()
+                .into_owned())
         } else {
             Ok(vec![])
         }
@@ -716,7 +729,8 @@ impl Project {
             ));
         }
 
-        let solve_virtual_packages = Self::virtual_packages_for(&platform).into_diagnostic()?;
+        let solve_virtual_packages =
+            Self::virtual_packages_for(&self.host, &platform).into_diagnostic()?;
 
         // Convert dependency specs to binary specs for CommandDispatcher
         let mut pixi_specs = DependencyMap::default();
@@ -2321,6 +2335,10 @@ mod tests {
         } else {
             Subdir::Win64
         };
-        assert!(Project::virtual_packages_for(&other).unwrap().is_empty());
+        assert!(
+            Project::virtual_packages_for(&HostDetection::builtin(), &other)
+                .unwrap()
+                .is_empty()
+        );
     }
 }

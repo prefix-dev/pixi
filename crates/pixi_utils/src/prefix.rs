@@ -1,9 +1,9 @@
 use crate::{is_binary_folder, strip_executable_extension};
 use itertools::Itertools;
-use miette::{Context, Diagnostic, IntoDiagnostic};
+use miette::Diagnostic;
 use rattler_conda_types::{PackageName, PrefixRecord, Subdir};
 use rattler_shell::{
-    activation::{ActivationVariables, Activator},
+    activation::{ActivationError, ActivationVariables, Activator},
     shell::ShellEnum,
 };
 use std::{
@@ -12,7 +12,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use thiserror::Error;
-use uv_configuration::initialize_rayon_once;
+use uv_threads::initialize_rayon_once;
 
 #[derive(Error, Debug, Diagnostic)]
 pub enum PrefixError {
@@ -26,6 +26,12 @@ pub enum PrefixError {
     #[error("executing prefix related task failed")]
     #[diagnostic(help("try running the command again, or `pixi clean` to reset the environment"))]
     JoinError,
+
+    #[error("failed to construct the environment activator")]
+    ActivatorConstruction(#[source] ActivationError),
+
+    #[error("failed to run activation")]
+    Activation(#[source] ActivationError),
 }
 
 /// Points to a directory that serves as a Conda prefix.
@@ -48,19 +54,17 @@ impl Prefix {
 
     /// Runs the activation scripts of the prefix and returns the environment
     /// variables that were modified as part of this process.
-    pub async fn run_activation(&self) -> miette::Result<HashMap<String, String>> {
+    pub async fn run_activation(&self) -> Result<HashMap<String, String>, PrefixError> {
         let activator = Activator::from_path(
             self.root(),
             ShellEnum::default(),
             Subdir::current().unwrap_or(Subdir::NoArch),
         )
-        .into_diagnostic()
-        .context("failed to constructor environment activator")?;
+        .map_err(PrefixError::ActivatorConstruction)?;
 
         activator
             .run_activation(ActivationVariables::from_env().unwrap_or_default(), None)
-            .into_diagnostic()
-            .context("failed to run activation")
+            .map_err(PrefixError::Activation)
     }
 
     /// Scans the `conda-meta` directory of an environment and returns all the

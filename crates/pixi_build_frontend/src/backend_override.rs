@@ -150,7 +150,7 @@ impl BackendOverride {
     /// to separate different tools. and the `=` is used to separate the
     /// tool name from the path. If no path is provided the tool is assumed to
     /// be available in the root.
-    pub fn from_env() -> miette::Result<Option<Self>> {
+    pub fn from_env() -> Result<Option<Self>, ParseError> {
         let backend_override = match std::env::var("PIXI_BUILD_BACKEND_OVERRIDE_ALL") {
             Ok(_) => {
                 tracing::warn!("overriding build backend with system prefixed tools");

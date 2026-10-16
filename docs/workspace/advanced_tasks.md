@@ -27,7 +27,7 @@ say-hello = { cmd = ["echo", "hello world"], description = "Greet the world." }
 build = { cmd = ["ninja", "-C", ".build"], depends-on = ["configure"] }
 
 # Using environment variables
-run = "python main.py $PIXI_PROJECT_ROOT"
+run = "python main.py $PIXI_WORKSPACE_ROOT"
 set = "export VAR=hello && echo $VAR"
 
 # Cross platform file operations

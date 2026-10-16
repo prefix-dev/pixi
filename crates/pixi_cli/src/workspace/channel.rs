@@ -133,7 +133,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
-        .locate()?;
+        .locate()
+        .await?;
 
     let is_script = args.workspace_config.script.is_some();
     let lock_file_exists = workspace.lock_file_path().is_file();

@@ -15,5 +15,5 @@ mod same_name;
 pub use prefix_compressed::{PrefixCompressed, PrefixCompressedBuilder};
 pub use prefix_hash::{PrefixHash, PrefixHashBuilder, PrefixHashError};
 pub(crate) use project_defined::ProjectDefined;
-pub use project_defined::ProjectDefinedMapping;
+pub use project_defined::{ProjectDefinedMapping, ProjectDefinedMappingError};
 pub(crate) use same_name::SameName;

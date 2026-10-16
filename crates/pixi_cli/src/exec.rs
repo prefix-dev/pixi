@@ -10,12 +10,15 @@ use pixi_api::workspace::platforms::resolve_platforms;
 use pixi_command_dispatcher::offline::exclusions_for_solve;
 use pixi_config::{self, Config, ConfigCli};
 use pixi_core::environment::list::{PackageToOutput, print_package_table};
+use pixi_core::host::HostDetection;
 use pixi_manifest::PixiPlatformName;
-use pixi_manifest::platform::host::{detect_host, host_subdir};
-use pixi_manifest::platform::solver_generic_virtual_packages;
+use pixi_manifest::platform::host::host_subdir;
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 use pixi_utils::prefix::Prefix;
-use pixi_utils::{EnvironmentHash, EnvironmentLock, reqwest::build_reqwest_clients};
+use pixi_utils::{
+    EnvironmentHash, EnvironmentLock, reqwest::build_reqwest_clients,
+    rlimit::try_increase_rlimit_to_sensible,
+};
 use rattler::{
     install::{IndicatifReporter, Installer},
     package_cache::PackageCache,
@@ -23,7 +26,7 @@ use rattler::{
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, PackageName, Subdir};
 use rattler_solve::{SolverImpl, SolverTask, resolvo::Solver};
 use reqwest_middleware::ClientWithMiddleware;
-use uv_configuration::initialize_rayon_once;
+use uv_threads::initialize_rayon_once;
 
 use crate::{cli_config::ChannelsConfig, match_spec_or_path::MatchSpecOrPath, process_exit};
 
@@ -264,11 +267,12 @@ pub async fn create_exec_prefix(
     let repodata = query_output.repodata;
 
     // Determine virtual packages of the platform we are targeting
-    let virtual_packages: Vec<GenericVirtualPackage> = solver_generic_virtual_packages(
-        &detect_host(platform)
-            .into_diagnostic()
-            .context("failed to determine virtual packages")?,
-    );
+    let virtual_packages: Vec<GenericVirtualPackage> = HostDetection::builtin_for(platform)
+        .platform()
+        .into_diagnostic()
+        .context("failed to determine virtual packages")?
+        .solver_virtual_package_records()
+        .into_owned();
 
     // `pixi exec` solves outside the command dispatcher, so it has to build
     // the offline exclusions itself rather than inheriting them.
@@ -335,6 +339,9 @@ pub async fn create_exec_prefix(
     // Force the initialization of the rayon thread pool to avoid implicit creation
     // by the Installer.
     initialize_rayon_once();
+
+    // Try to increase the rlimit to a sensible value for installation.
+    try_increase_rlimit_to_sensible();
 
     // Mark the prefix dirty for the duration of the install so a crash
     // is detected next time.
@@ -478,7 +485,7 @@ fn guess_package_spec(command: &str) -> MatchSpec {
 async fn run_activation(
     prefix: &Prefix,
 ) -> miette::Result<std::collections::HashMap<String, String>> {
-    wrap_in_progress("running activation", move || prefix.run_activation()).await
+    Ok(wrap_in_progress("running activation", move || prefix.run_activation()).await?)
 }
 
 fn to_exec_match_specs(specs: &[MatchSpecOrPath]) -> miette::Result<Vec<MatchSpec>> {

@@ -8,7 +8,10 @@ use miette::{Context, IntoDiagnostic};
 use pixi_consts::consts;
 use pixi_git::credentials::store_credentials_from_url;
 pub use pixi_install_pypi::{ContinuePyPIPrefixUpdate, on_python_interpreter_change};
-use pixi_manifest::{FeaturesExt, PixiPlatform, PixiPlatformName, platform::candidate_subdirs};
+use pixi_manifest::{
+    FeaturesExt, PixiPlatform, PixiPlatformName,
+    platform::{VirtualPackageRecords, candidate_subdirs},
+};
 use pixi_progress::await_in_progress;
 use pixi_pypi_spec::PixiPypiSource;
 pub use pixi_python_status::PythonStatus;
@@ -290,11 +293,12 @@ impl LockedEnvironmentHash {
         // the order they appear in the manifest.
         if let Some(platform) = platform {
             platform.subdir().to_string().hash(&mut hasher);
-            let mut virtual_packages: Vec<String> = platform
-                .declared_virtual_packages()
-                .iter()
-                .map(ToString::to_string)
-                .collect();
+            let records = match platform.records() {
+                VirtualPackageRecords::Manifest(records)
+                | VirtualPackageRecords::Detected(records) => records,
+            };
+            let mut virtual_packages: Vec<String> =
+                records.iter().map(ToString::to_string).collect();
             virtual_packages.sort_unstable();
             for virtual_package in virtual_packages {
                 virtual_package.hash(&mut hasher);
@@ -350,9 +354,14 @@ impl PlatformData {
 
 impl From<&PixiPlatform> for PlatformData {
     fn from(platform: &PixiPlatform) -> Self {
+        let records = match platform.records() {
+            VirtualPackageRecords::Manifest(records) | VirtualPackageRecords::Detected(records) => {
+                records
+            }
+        };
         Self {
             subdir: platform.subdir(),
-            virtual_packages: platform.declared_virtual_packages().to_vec(),
+            virtual_packages: records.clone(),
         }
     }
 }
@@ -1128,6 +1137,45 @@ mod tests {
         let restored: PlatformData = serde_json::from_str(&json).unwrap();
         assert_eq!(restored.subdir, Subdir::Linux64);
         assert!(restored.virtual_packages.contains(&cuda));
+    }
+
+    #[test]
+    fn platform_data_preserves_source_records() {
+        let records = vec![
+            GenericVirtualPackage {
+                name: "__archspec".parse().unwrap(),
+                version: Version::major(1),
+                build_string: "zen2".to_string(),
+            },
+            GenericVirtualPackage {
+                name: "__unix".parse().unwrap(),
+                version: Version::major(0),
+                build_string: "0".to_string(),
+            },
+            GenericVirtualPackage {
+                name: "__vendor".parse().unwrap(),
+                version: Version::major(7),
+                build_string: String::new(),
+            },
+        ];
+        let declared = PixiPlatform::new(
+            "declared".try_into().unwrap(),
+            Subdir::Linux64,
+            records.clone(),
+        )
+        .unwrap();
+        let detected =
+            pixi_manifest::platform::host::platform_from_detected(Subdir::Linux64, records.clone())
+                .unwrap();
+
+        for platform in [declared, detected] {
+            let data = PlatformData::from(&platform);
+            assert_eq!(data.virtual_packages(), records.as_slice());
+            let json = serde_json::to_string(&data).unwrap();
+            let restored: PlatformData = serde_json::from_str(&json).unwrap();
+            assert_eq!(restored.subdir(), Subdir::Linux64);
+            assert_eq!(restored.virtual_packages(), records.as_slice());
+        }
     }
 
     #[test]

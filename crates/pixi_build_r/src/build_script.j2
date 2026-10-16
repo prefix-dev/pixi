@@ -6,7 +6,8 @@
 {# Platform-specific variables #}
 {%- if is_cmd_exe -%}
 {%- set R_CMD = "R.exe CMD" -%}
-{%- set LIBRARY_DIR = "%LIBRARY_PREFIX%\\R\\library" -%}
+{#- conda-forge's R on Windows lives in %PREFIX%\Lib\R, not in %LIBRARY_PREFIX% (%PREFIX%\Library) -#}
+{%- set LIBRARY_DIR = "%PREFIX%\\Lib\\R\\library" -%}
 {%- set LINE_CONT = "^" -%}
 {%- else -%}
 {%- set R_CMD = "R CMD" -%}

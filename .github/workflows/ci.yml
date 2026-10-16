@@ -32,6 +32,7 @@ env:
   XDG_CACHE_HOME: ${{ github.workspace }}/.cache
   PYTEST_ADDOPTS: "--color=yes"
   PYTHONIOENCODING: utf-8 # necessary to make unicode symbols print correctly on Windows
+  PIXI_NO_TELEMETRY: 1 # keep CI runs of the install scripts out of the install counts
 
   #
   # The cargo profile used to build the binary artifacts. CI uses the `ci`
@@ -91,7 +92,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Set up pixi
-        uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2
+        uses: prefix-dev/setup-pixi@9dabb60412d3d2d967a8d682f7ce01317af40514 # v0.11.0
         with:
           environments: lefthook
           cache-write: ${{ github.ref == 'refs/heads/main' }}
@@ -144,7 +145,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2
+      - uses: prefix-dev/setup-pixi@9dabb60412d3d2d967a8d682f7ce01317af40514 # v0.11.0
         with:
           environments: "rust-test"
 
@@ -190,7 +191,7 @@ jobs:
         with:
           cache: rust
           path: ~/.rustup
-      - uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2
+      - uses: prefix-dev/setup-pixi@9dabb60412d3d2d967a8d682f7ce01317af40514 # v0.11.0
         with:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
           environments: rust-test
@@ -201,7 +202,7 @@ jobs:
           PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
       - name: Install cargo-sweep
         if: github.ref == 'refs/heads/main'
-        uses: taiki-e/install-action@7623a79cdfecb99d681017af368ca353d9f49bb5 # v2.87.19
+        uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
         with:
           tool: cargo-sweep
       - name: Prune target before save
@@ -224,7 +225,7 @@ jobs:
         with:
           cache: rust
           path: ~/.rustup
-      - uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2
+      - uses: prefix-dev/setup-pixi@9dabb60412d3d2d967a8d682f7ce01317af40514 # v0.11.0
         with:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
           environments: rust-test
@@ -235,7 +236,7 @@ jobs:
           PIXI_TEST_R2_SECRET_ACCESS_KEY: ${{ secrets.PIXI_TEST_R2_SECRET_ACCESS_KEY }}
       - name: Install cargo-sweep
         if: github.ref == 'refs/heads/main'
-        uses: taiki-e/install-action@7623a79cdfecb99d681017af368ca353d9f49bb5 # v2.87.19
+        uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
         with:
           tool: cargo-sweep
       - name: Prune target before save
@@ -257,7 +258,7 @@ jobs:
           persist-credentials: false
       - name: Create Dev Drive
         run: ${{ github.workspace }}/.github/workflows/setup-dev-drive.ps1
-      - uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2
+      - uses: prefix-dev/setup-pixi@9dabb60412d3d2d967a8d682f7ce01317af40514 # v0.11.0
         with:
           cache-write: ${{ github.ref == 'refs/heads/main' }}
           environments: rust-test
@@ -290,7 +291,7 @@ jobs:
         with:
           cache: rust
           path: ~/.rustup
-      - uses: rui314/setup-mold@10ca16bf91dc22e05ebdc935cad9c75ea248f621 # v1
+      - uses: rui314/setup-mold@339e96b4ff1f3bd865856ba4cbbe8818a7acb038 # v1
       - name: "Setup musl"
         run: |
           sudo apt update
@@ -314,7 +315,7 @@ jobs:
           retention-days: 14
       - name: Install cargo-sweep
         if: github.ref == 'refs/heads/main'
-        uses: taiki-e/install-action@7623a79cdfecb99d681017af368ca353d9f49bb5 # v2.87.19
+        uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
         with:
           tool: cargo-sweep
       - name: Prune target before save
@@ -330,7 +331,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
-      - uses: rui314/setup-mold@10ca16bf91dc22e05ebdc935cad9c75ea248f621 # v1
+      - uses: rui314/setup-mold@339e96b4ff1f3bd865856ba4cbbe8818a7acb038 # v1
       - name: "Setup cross-compilation toolchain"
         run: |
           sudo apt update
@@ -387,7 +388,7 @@ jobs:
           retention-days: 14
       - name: Install cargo-sweep
         if: github.ref == 'refs/heads/main'
-        uses: taiki-e/install-action@7623a79cdfecb99d681017af368ca353d9f49bb5 # v2.87.19
+        uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
         with:
           tool: cargo-sweep
       - name: Prune target before save
@@ -504,7 +505,7 @@ jobs:
           PIXI_BUILD_BACKEND_OVERRIDE: pixi-build-rust=${{ env.PIXI_WORKSPACE }}/${{ env.TARGET_RELEASE }}/pixi-build-rust.exe
 
   test-pytest-macos-aarch64:
-    timeout-minutes: 10
+    timeout-minutes: 30
     name: Pytest | macos aarch64
     runs-on: namespace-profile-macos-15-arm64-6
     needs: build-binary-macos-aarch64
@@ -962,7 +963,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup ucrt64 msys2
-        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2.32.0
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
         with:
           msystem: UCRT64
           install: unzip
@@ -986,7 +987,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup ucrt64 msys2
-        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2.32.0
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
         with:
           msystem: UCRT64
       - name: "Install"
@@ -1010,7 +1011,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Setup ucrt64 msys2
-        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2.32.0
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
         with:
           msystem: UCRT64
       - name: "Before Install"

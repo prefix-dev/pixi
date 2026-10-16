@@ -450,6 +450,12 @@ pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Resu
         tracing::warn!(fetch_release_warning);
     }
 
+    // Best-effort anonymous ping; must not affect the update result.
+    let ping_version = target_version
+        .as_ref()
+        .map_or_else(|| "latest".to_string(), |v| v.to_string());
+    crate::install_ping::self_update_ping(&client, &ping_version, is_quiet).await;
+
     Ok(())
 }
 

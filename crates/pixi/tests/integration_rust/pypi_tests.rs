@@ -978,6 +978,111 @@ async fn test_exclude_newer_per_package_pypi_index_override() {
 }
 
 #[tokio::test]
+async fn test_exclude_newer_pypi_exemption_lifts_cutoff() {
+    setup_tracing();
+
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
+
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .with_timestamp("2010-12-02T02:07:43Z".parse().unwrap())
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+
+    let idx = PyPIDatabase::new()
+        .with(
+            PyPIPackage::new("foo", "1.0.0")
+                .with_timestamp("2010-12-02T02:07:43Z".parse().unwrap()),
+        )
+        .with(
+            PyPIPackage::new("foo", "2.0.0")
+                .with_timestamp("2020-12-02T07:00:00Z".parse().unwrap()),
+        )
+        .with(
+            PyPIPackage::new("bar", "1.0.0")
+                .with_timestamp("2010-12-02T02:07:43Z".parse().unwrap()),
+        )
+        .with(
+            PyPIPackage::new("bar", "2.0.0")
+                .with_timestamp("2020-12-02T07:00:00Z".parse().unwrap()),
+        )
+        .into_simple_index()
+        .unwrap();
+
+    // The cutoff of `exclude-newer` applies to PyPI packages as well, but the
+    // exemption lifts it for `foo` alone.
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+        [workspace]
+        name = "pypi-exclude-newer-exemption"
+        platforms = ["{platform}"]
+        channels = ["{channel_url}"]
+        exclude-newer = "2015-12-02T02:07:43Z"
+        pypi-exclude-newer = {{ exemptions = {{ foo = "*" }} }}
+        conda-pypi-map = false
+
+        [dependencies]
+        python = "==3.12.0"
+
+        [pypi-dependencies]
+        foo = "*"
+        bar = "*"
+
+        [pypi-options]
+        index-url = "{idx_url}"
+        "#,
+        platform = platform,
+        channel_url = channel.url(),
+        idx_url = idx.index_url(),
+    ))
+    .unwrap();
+
+    let lock_file = pixi.update_lock_file().await.unwrap();
+    assert_eq!(
+        lock_file.get_pypi_package_version("default", platform, "foo"),
+        Some("2.0.0".into())
+    );
+    assert_eq!(
+        lock_file.get_pypi_package_version("default", platform, "bar"),
+        Some("1.0.0".into())
+    );
+
+    // A PyPI-specific cutoff applies without a conda cutoff.
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+        [workspace]
+        name = "pypi-exclude-newer-own-cutoff"
+        platforms = ["{platform}"]
+        channels = ["{channel_url}"]
+        pypi-exclude-newer = "2015-12-02T02:07:43Z"
+        conda-pypi-map = false
+
+        [dependencies]
+        python = "==3.12.0"
+
+        [pypi-dependencies]
+        bar = "*"
+
+        [pypi-options]
+        index-url = "{idx_url}"
+        "#,
+        platform = platform,
+        channel_url = channel.url(),
+        idx_url = idx.index_url(),
+    ))
+    .unwrap();
+
+    let lock_file = pixi.update_lock_file().await.unwrap();
+    assert_eq!(
+        lock_file.get_pypi_package_version("default", platform, "bar"),
+        Some("1.0.0".into())
+    );
+}
+
+#[tokio::test]
 async fn test_exclude_newer_dependency_override_pypi_index_override() {
     setup_tracing();
 

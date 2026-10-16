@@ -1169,6 +1169,29 @@ def _platforms_from_script(script: Path) -> list[str | dict[str, Any]]:
     return tomli.loads(block)["tool"]["pixi"]["workspace"]["platforms"]
 
 
+def test_implicit_script_lock_preserves_solver_records(
+    pixi: Path, tmp_pixi_workspace: Path, dummy_python_channel: str
+) -> None:
+    script = _write_script(tmp_pixi_workspace, dummy_python_channel)
+    lock = script.with_name("analysis.py.pixi.lock")
+    env = {
+        "CONDA_OVERRIDE_ARCHSPEC": "x86_64_v3",
+        "CONDA_OVERRIDE_CUDA": "12.4",
+    }
+    command = [str(pixi), "lock", "--no-config", "--script", str(script)]
+    verify_cli_command(command, env=env)
+
+    rows = yaml.safe_load(lock.read_text())["platforms"]
+    records = {record for row in rows for record in row["virtual-packages"]}
+    assert "__archspec=1=x86_64_v3" in records
+    assert "__cuda=12.4=0" in records
+
+    original = lock.read_bytes()
+    verify_cli_command([*command, "--check", "--dry-run"], env=env)
+    verify_cli_command(command, env=env)
+    assert lock.read_bytes() == original
+
+
 def test_add_auto_detected_to_script_without_lock_file(
     pixi: Path, tmp_pixi_workspace: Path, dummy_python_channel: str
 ) -> None:

@@ -114,7 +114,7 @@ fn get_linux_platform_tags(
 ) -> Result<uv_platform_tags::Platform, PyPITagError> {
     let arch = get_arch_tags(platform)?;
 
-    let (family, version) = declared_libc(platform.declared_virtual_packages())
+    let (family, version) = declared_libc(platform.manifest_virtual_package_records().as_ref())
         .unwrap_or_else(|| ("glibc", default_glibc_version(platform.subdir())));
 
     match family {
@@ -166,7 +166,11 @@ fn get_windows_platform_tags(
 /// macOS version pixi targets: declared `__osx`, else the subdir default.
 /// Call only for macOS platforms.
 fn macos_target_version(platform: &PixiPlatform) -> Version {
-    declared_version(platform.declared_virtual_packages(), "__osx").unwrap_or_else(|| {
+    declared_version(
+        platform.manifest_virtual_package_records().as_ref(),
+        "__osx",
+    )
+    .unwrap_or_else(|| {
         default_mac_os_version(platform.subdir())
             .expect("macos_target_version() called with non-osx platform")
     })
@@ -291,7 +295,7 @@ fn create_tags(
     gil_disabled: bool,
 ) -> Result<uv_platform_tags::Tags, PyPITagError> {
     uv_platform_tags::Tags::from_env(
-        &platform,
+        platform,
         python_version,
         implementation_name,
         // TODO: This might not be entirely correct..

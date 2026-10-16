@@ -17,9 +17,9 @@ pixi lock [OPTIONS]
 - <a id="arg---json" href="#arg---json">`--json`</a>
 :  Output the changes in JSON format
 - <a id="arg---check" href="#arg---check">`--check`</a>
-:  Check if any changes have been made to the lock file. If yes, exit with a non-zero code
+:  Check if any changes have been made to the lock file. If yes, exit with a non-zero code. Implies `--dry-run`
 - <a id="arg---dry-run" href="#arg---dry-run">`--dry-run`</a>
-:  Compute the lock file without writing to disk. Implies --no-install
+:  Compute the lock file without writing to disk. Implies `--no-install`
 
 ## Config Options
 - <a id="arg---no-config" href="#arg---no-config">`--no-config`</a>

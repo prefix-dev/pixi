@@ -129,7 +129,7 @@ impl TaskHash {
     pub fn task_args_hash(task: &ExecutableTask<'_>) -> Result<Option<NameHash>, InputHashesError> {
         let mut hasher = Xxh3::new();
 
-        let Ok(execute) = task.task().as_execute() else {
+        let Some(execute) = task.task().as_execute() else {
             return Ok(None);
         };
 
@@ -164,7 +164,7 @@ pub struct InputHashes {
 impl InputHashes {
     /// Compute the input hashes from a task. Returns `None` if no files match.
     pub async fn from_task(task: &ExecutableTask<'_>) -> Result<Option<Self>, InputHashesError> {
-        let Ok(execute) = task.task().as_execute() else {
+        let Some(execute) = task.task().as_execute() else {
             return Ok(None);
         };
 
@@ -203,7 +203,7 @@ impl OutputHashes {
     /// Compute the output hashes from a task. Returns `None` if no files match.
     pub async fn from_task(task: &ExecutableTask<'_>) -> Result<Option<Self>, InputHashesError> {
         let outputs: Vec<String> = match task.task().as_execute() {
-            Ok(execute) => {
+            Some(execute) => {
                 if let Some(outputs) = execute.outputs.clone() {
                     let context = task.render_context();
                     let mut rendered_outputs = Vec::new();
@@ -221,7 +221,7 @@ impl OutputHashes {
                     return Ok(None);
                 }
             }
-            Err(_) => return Ok(None),
+            None => return Ok(None),
         };
 
         let files = FileHashes::from_files(task.project().root(), outputs.iter()).await?;

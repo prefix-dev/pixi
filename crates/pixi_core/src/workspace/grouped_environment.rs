@@ -103,10 +103,10 @@ impl<'p> GroupedEnvironment<'p> {
             }
         }
     }
-    /// Returns the virtual packages from the group, sourced from the
-    /// platform's declared virtual packages with default fillers.
+    /// Returns solver records for the platform, preserving detected host
+    /// records and normalizing manifest declarations for the solver.
     pub fn virtual_packages(&self, platform: &PixiPlatform) -> Vec<GenericVirtualPackage> {
-        pixi_manifest::platform::solver_generic_virtual_packages(platform)
+        platform.solver_virtual_package_records().into_owned()
     }
 
     /// Returns the channel configuration for this grouped environment

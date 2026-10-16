@@ -24,20 +24,24 @@ pixi workspace platform edit [OPTIONS] <NAME> [__NAME[=VERSION[=BUILD]]]...
 ## Options
 - <a id="arg---subdir" href="#arg---subdir">`--subdir <SUBDIR>`</a>
 :  Set a new conda subdir for this platform
-- <a id="arg---cuda" href="#arg---cuda">`--cuda <VERSION>`</a>
+- <a id="arg---cuda" href="#arg---cuda">`--cuda <VERSION[=BUILD]>`</a>
 :  Declare a `__cuda` virtual package at the given version, e.g. `12.0`. Valid on any subdir
-- <a id="arg---cuda-arch" href="#arg---cuda-arch">`--cuda-arch <VERSION>`</a>
+- <a id="arg---cuda-arch" href="#arg---cuda-arch">`--cuda-arch <VERSION[=BUILD]>`</a>
 :  Declare a `__cuda_arch` virtual package (GPU compute capability) at the given version, e.g. `8.6`. Requires `--cuda` (or an existing `__cuda`), matching the conda CEP coupling. Serialized as `cuda = { driver, arch }`
+- <a id="arg---amdgpu" href="#arg---amdgpu">`--amdgpu`</a>
+:  Declare a `__amdgpu` virtual package, stating that an AMD GPU is present. Valid on any subdir. Serialized as `amdgpu = true`
+- <a id="arg---amdgpu-arch" href="#arg---amdgpu-arch">`--amdgpu-arch <TARGET>`</a>
+:  Declare a `__amdgpu_arch` virtual package from an AMDGPU target name, e.g. `gfx90a`. Also declares `__amdgpu`. Serialized as `amdgpu = "<target>"`
 - <a id="arg---archspec" href="#arg---archspec">`--archspec <ARCH>`</a>
 :  Declare a `__archspec` virtual package with the given microarchitecture string, e.g. `x86_64_v3`. Valid on any subdir
-- <a id="arg---glibc" href="#arg---glibc">`--glibc <VERSION>`</a>
+- <a id="arg---glibc" href="#arg---glibc">`--glibc <VERSION[=BUILD]>`</a>
 :  Declare a `__glibc` virtual package at the given version, e.g. `2.28`. Only valid on linux subdirs
-- <a id="arg---linux" href="#arg---linux">`--linux <VERSION>`</a>
+- <a id="arg---linux" href="#arg---linux">`--linux <VERSION[=BUILD]>`</a>
 :  Declare a `__linux` virtual package at the given kernel version, e.g. `5.10`. Only valid on linux subdirs
-- <a id="arg---macos" href="#arg---macos">`--macos <VERSION>`</a>
+- <a id="arg---macos" href="#arg---macos">`--macos <VERSION[=BUILD]>`</a>
 :  Declare a `__osx` virtual package at the given macOS version, e.g. `14.0`. Only valid on osx subdirs
 <br>**aliases**: osx
-- <a id="arg---windows" href="#arg---windows">`--windows <VERSION>`</a>
+- <a id="arg---windows" href="#arg---windows">`--windows <VERSION[=BUILD]>`</a>
 :  Declare a `__win` virtual package at the given Windows version, e.g. `10`. Only valid on win subdirs
 - <a id="arg---remove-virtual-package" href="#arg---remove-virtual-package">`--remove-virtual-package <NAME>`</a>
 :  Remove the named virtual package from this platform. Can be repeated

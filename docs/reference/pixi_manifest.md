@@ -85,7 +85,7 @@ Pixi solves the dependencies for all these platforms and puts them in the lock f
 --8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_platforms"
 ```
 
-The available platforms (except `noarch` and `unknown`) are listed [here](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/platform/enum.Platform.html).
+The available (save `noarch`) platforms are listed [here](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/subdir/enum.Subdir.html).
 
 #### Inline-table entries (per-platform virtual packages)
 
@@ -104,8 +104,8 @@ Recognised keys on an inline-table entry:
 
 - `platform`: the conda subdir the entry targets (e.g. `linux-64`, `osx-arm64`). Required unless `name` itself parses as a subdir.
 - `name`: workspace-scoped identifier used by `feature.<name>.platforms`, lockfile rows, and the CLI. Defaults to a name auto-derived from `platform` plus the declared virtual packages.
-- Friendly virtual-package keys: `cuda`, `archspec`, `glibc`, `linux`, `macos` (alias `osx`), `windows`. Each maps to the matching `__name` conda virtual package (`cuda` to `__cuda`, `glibc` to `__glibc`, `macos` to `__osx`, etc.).
-- Raw `__name = "version"` entries are accepted as an escape hatch for virtual packages without a friendly key.
+- Built-in virtual-package keys: `cuda`, `amdgpu`, `archspec`, `glibc`, `linux`, `macos` (alias `osx`), `windows`.
+- Other virtual packages require a `__`-prefixed key and a `"version"` or `"version=build_string"` value, for example `__site_service = "2=h1"`.
 
 Bare-string entries (`"linux-64"`) keep their original meaning: solve for that subdir against Pixi's [default declared virtual packages](../workspace/system_requirements.md#default-declared-virtual-packages).
 
@@ -755,9 +755,9 @@ By default, `pixi` will allow pre-release versions when a package only has pre-r
 
 - **"disallow"**: Disallow all pre-release versions.
 - **"allow"**: Allow all pre-release versions.
-- **"if-necessary"**: Allow pre-release versions if all versions of a package are pre-release.
-- **"explicit"**: Allow pre-release versions for first-party packages with explicit pre-release markers in their version requirements.
-- **"if-necessary-or-explicit"** (default): Allow pre-release versions if all versions of a package are pre-release, or if the package has an explicit pre-release marker in its version requirements.
+- **"if-necessary"**: Prefer stable versions, falling back to pre-release versions when necessary to satisfy the requirements.
+- **"explicit"**: Prefer stable versions for first-party packages with explicit pre-release markers in their version requirements, falling back to pre-releases when necessary. Disallow pre-releases for other packages.
+- **"if-necessary-or-explicit"** (default): Alias for `"if-necessary"`, following uv 0.12's pre-release selection policy.
 
 Example:
 ```toml
@@ -1053,6 +1053,9 @@ Learn more about installing PyTorch [here](../python/pytorch.md).
 
 A git repository to install from.
 This support both https:// and ssh:// urls.
+
+Git dependencies must refer to a project directory, optionally selected with `subdirectory`.
+References to wheel or source archives inside a Git repository using `#path=...` are not supported.
 
 Use `git` in combination with `rev`, `subdirectory` or `lfs`:
 

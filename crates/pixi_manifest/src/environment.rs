@@ -62,7 +62,7 @@ impl EnvironmentName {
     /// to read from an environment variable, otherwise it will fall back to
     /// default.
     ///
-    /// If `PIXI_PROJECT_ROOT` is set to a path different from `workspace_root`,
+    /// If `PIXI_WORKSPACE_ROOT` (or legacy `PIXI_PROJECT_ROOT`) is set to a path different from `workspace_root`,
     /// the environment variable fallback is skipped. This handles the case
     /// where a pixi task runs another pixi project via `--manifest-path` - the
     /// child process should not inherit the parent's environment name.
@@ -77,9 +77,9 @@ impl EnvironmentName {
 
         // Check if we should ignore PIXI_ env vars because they belong to a
         // different workspace
-        let should_ignore_env_vars = std::env::var("PIXI_PROJECT_ROOT")
-            .ok()
-            .is_some_and(|pixi_root| Path::new(&pixi_root) != workspace_root);
+        let should_ignore_env_vars =
+            crate::utils::workspace_or_project_env("PIXI_WORKSPACE_ROOT", "PIXI_PROJECT_ROOT")
+                .is_some_and(|pixi_root| Path::new(&pixi_root) != workspace_root);
 
         if should_ignore_env_vars {
             return Ok(EnvironmentName::Default);
