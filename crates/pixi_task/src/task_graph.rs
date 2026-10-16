@@ -134,7 +134,7 @@ impl TaskNode<'_> {
     pub(crate) fn full_command(
         &self,
         context: &pixi_manifest::task::TaskRenderContext,
-    ) -> miette::Result<Option<String>> {
+    ) -> Result<Option<String>, pixi_manifest::task::TemplateStringError> {
         let mut cmd = self.task.as_single_command(context)?;
 
         let extra = self.extra_passthrough_args();
