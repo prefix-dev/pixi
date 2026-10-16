@@ -228,8 +228,8 @@ async fn explicit_foreign_solve_skips_detector_and_preserves_override() {
             .await
             .unwrap();
         assert_eq!(host.subdir(), target);
-        let package = host
-            .capabilities()
+        let capabilities = host.capabilities();
+        let package = capabilities
             .iter()
             .find(|package| package.name.as_normalized() == "__test_good")
             .unwrap();
