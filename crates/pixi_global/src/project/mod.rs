@@ -749,7 +749,7 @@ impl Project {
         let solve_virtual_packages = host
             .platform()
             .into_diagnostic()?
-            .solver_records()
+            .solver_virtual_package_records()
             .into_owned();
 
         // Convert dependency specs to binary specs for CommandDispatcher

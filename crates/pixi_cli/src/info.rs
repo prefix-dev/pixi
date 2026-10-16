@@ -744,7 +744,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let virtual_packages = merge_results(
         host.platform()
             .into_diagnostic()?
-            .solver_records()
+            .solver_virtual_package_records()
             .into_owned(),
         host.detector_results(),
     );
