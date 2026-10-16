@@ -17,7 +17,9 @@ use toml_span::{
 
 use crate::{
     PixiPlatform, PixiPlatformName,
-    platform::{manifest_record, solver_record, subdir_default_virtual_packages},
+    platform::{
+        is_default_build_string, manifest_record, solver_record, subdir_default_virtual_packages,
+    },
     system_requirements::{SystemRequirements, virtual_packages_for_subdir},
 };
 
@@ -889,15 +891,13 @@ fn classify_virtual_packages(
             continue;
         };
         let fits = match entry.kind {
-            VirtualPackageValueKind::Version => {
-                package.build_string.is_empty() || package.build_string == "0"
-            }
+            VirtualPackageValueKind::Version => is_default_build_string(&package.build_string),
             VirtualPackageValueKind::Microarch => {
                 package.version == Version::major(0) && !package.build_string.is_empty()
             }
             VirtualPackageValueKind::Presence => {
                 package.version == Version::major(0)
-                    && (package.build_string.is_empty() || package.build_string == "0")
+                    && is_default_build_string(&package.build_string)
             }
         };
         if !fits {
@@ -924,8 +924,9 @@ fn classify_virtual_packages(
     let raw: Vec<RawEntry> = leftover
         .into_iter()
         .map(|package| {
-            let build_is_zero = package.build_string.is_empty() || package.build_string == "0";
-            let value = if build_is_zero && package.name.as_normalized() != "__archspec" {
+            let value = if is_default_build_string(&package.build_string)
+                && package.name.as_normalized() != "__archspec"
+            {
                 package.version.to_string()
             } else {
                 let build = if package.build_string.is_empty() {
@@ -1174,8 +1175,7 @@ mod test {
             .manifest_virtual_package_records()
             .iter()
             .map(|package| {
-                let build_is_zero = package.build_string.is_empty() || package.build_string == "0";
-                if build_is_zero {
+                if is_default_build_string(&package.build_string) {
                     format!("{}={}", package.name.as_normalized(), package.version)
                 } else {
                     format!(

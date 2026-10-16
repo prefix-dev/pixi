@@ -930,17 +930,15 @@ pub fn capability_satisfied_by(
             } else {
                 provided.version >= required.version
             }
-            && normalized_build_string(&provided.build_string)
-                == normalized_build_string(&required.build_string)
+            && (provided.build_string == required.build_string
+                || is_default_build_string(&provided.build_string)
+                    && is_default_build_string(&required.build_string))
     })
 }
 
-fn normalized_build_string(build_string: &str) -> &str {
-    if build_string.is_empty() {
-        "0"
-    } else {
-        build_string
-    }
+/// Whether a build string is the default build, spelled empty or `"0"`.
+pub fn is_default_build_string(build_string: &str) -> bool {
+    build_string.is_empty() || build_string == "0"
 }
 
 /// The `__archspec` half of [`capability_satisfied_by`].
@@ -1000,14 +998,9 @@ pub fn unsatisfied_capabilities(
 
 /// The microarchitecture named by an `__archspec` build string, or `None` when
 /// it encodes "unknown microarchitecture" (empty, or the `"0"` sentinel rattler
-/// serializes `Archspec::Unknown` as). The single owner of that encoding;
-/// validate and render through this rather than re-testing the strings.
+/// serializes `Archspec::Unknown` as).
 pub fn archspec_microarchitecture(build_string: &str) -> Option<&str> {
-    if build_string.is_empty() || build_string == "0" {
-        None
-    } else {
-        Some(build_string)
-    }
+    (!is_default_build_string(build_string)).then_some(build_string)
 }
 
 /// Map an `__archspec` build string to rattler's typed [`Archspec`]. A name the

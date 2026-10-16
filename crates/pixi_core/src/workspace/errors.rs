@@ -3,7 +3,10 @@ use crate::lock_file::virtual_packages::spec_version;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::{Diagnostic, LabeledSpan};
-use pixi_manifest::{EnvironmentName, PixiPlatformName, PlatformMatchDiagnosis, TaskName};
+use pixi_manifest::{
+    EnvironmentName, PixiPlatformName, PlatformMatchDiagnosis, TaskName,
+    platform::is_default_build_string,
+};
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Subdir, Version};
 use rattler_virtual_packages::amdgpu::AmdGpuArchInfo;
 use rattler_virtual_packages::{AmdGpu, AmdGpuArch, EnvOverride};
@@ -242,11 +245,8 @@ fn format_requirements(reqs: &[GenericVirtualPackage]) -> String {
 /// build string does not satisfy it. `__archspec` keeps its microarchitecture
 /// in the build string and is matched differently, so it never counts.
 fn declared_build_string(req: &GenericVirtualPackage) -> Option<&str> {
-    match req.build_string.as_str() {
-        "" | "0" => None,
-        _ if req.name.as_normalized() == "__archspec" => None,
-        build => Some(build),
-    }
+    let build = req.build_string.as_str();
+    (!is_default_build_string(build) && req.name.as_normalized() != "__archspec").then_some(build)
 }
 
 /// Render lock-derived requirements.
