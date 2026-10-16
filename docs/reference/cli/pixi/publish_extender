@@ -33,7 +33,7 @@ The `--target-channel` value determines the upload backend:
 | `cloudsmith://<owner>/<repository>/` | [Cloudsmith](https://cloudsmith.com) |
 | `s3://bucket-name/channel` | S3-compatible storage |
 | `quetz://server/<channel>` | [Quetz](https://github.com/mamba-org/quetz) |
-| `artifactory://server/<channel>` | [JFrog Artifactory](https://jfrog.com/artifactory/) |
+| `artifactory://server/<channel>` or `artifactory://server/<prefix>/<channel>` (e.g. `artifactory://<org>.jfrog.io/artifactory/<channel>` for JFrog Cloud) | [JFrog Artifactory](https://jfrog.com/artifactory/) |
 | `file:///path/to/channel` or a bare path like `./example` | Local filesystem channel (indexed) |
 
 --8<-- [end:description]
