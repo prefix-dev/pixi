@@ -2786,7 +2786,7 @@ impl<'p> UpdateContext<'p> {
                     virtual_packages: pixi_platform
                         .declared_virtual_packages()
                         .iter()
-                        .map(|vp| vp.to_string())
+                        .map(pixi_manifest::platform::format_virtual_package)
                         .collect(),
                 })
             })

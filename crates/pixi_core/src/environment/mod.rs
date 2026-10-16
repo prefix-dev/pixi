@@ -487,7 +487,7 @@ fn legacy_requirement(package: &GenericVirtualPackage) -> MatchSpec {
         name: PackageNameMatcher::Exact(package.name.clone()),
         version,
         build: (!package.build_string.is_empty())
-            .then(|| StringMatcher::Exact(package.build_string.clone())),
+            .then(|| StringMatcher::Exact(package.build_string.to_string())),
         ..MatchSpec::default()
     }
 }
@@ -1001,7 +1001,7 @@ pub type PerGroupAndPlatform<'p, T> = PerGroup<'p, HashMap<PixiPlatformName, T>>
 mod tests {
     use std::str::FromStr;
 
-    use rattler_conda_types::{PackageName, Version};
+    use rattler_conda_types::{PackageName, Version, package::BuildString};
 
     use super::*;
 
@@ -1039,7 +1039,7 @@ mod tests {
         let linux = GenericVirtualPackage {
             name: PackageName::from_str("__linux").unwrap(),
             version: Version::from_str(version).unwrap(),
-            build_string: String::new(),
+            build_string: BuildString::new_unchecked(""),
         };
         PixiPlatform::new(
             PixiPlatformName::try_from("linux-box").unwrap(),
@@ -1081,7 +1081,7 @@ mod tests {
         let gvp = |name: &str, version: &str| GenericVirtualPackage {
             name: PackageName::from_str(name).unwrap(),
             version: Version::from_str(version).unwrap(),
-            build_string: String::new(),
+            build_string: BuildString::new_unchecked(""),
         };
         let make = |packages: Vec<GenericVirtualPackage>| {
             PixiPlatform::new(
@@ -1108,7 +1108,7 @@ mod tests {
         let cuda = GenericVirtualPackage {
             name: PackageName::from_str("__cuda").unwrap(),
             version: Version::from_str("12").unwrap(),
-            build_string: String::new(),
+            build_string: BuildString::new_unchecked(""),
         };
         let platform = PixiPlatform::new(
             PixiPlatformName::try_from("gpu-box").unwrap(),

@@ -13,7 +13,7 @@
 //! describes it the way pixi assumes it, [`detect_host`] describes the machine
 //! the way it is. Both apply `CONDA_OVERRIDE_*`.
 
-use rattler_conda_types::{GenericVirtualPackage, Subdir, Version};
+use rattler_conda_types::{GenericVirtualPackage, Subdir, Version, package::BuildString};
 use rattler_virtual_packages::{
     AmdGpu, AmdGpuArch, Archspec, Cuda, CudaArch, DetectVirtualPackageError, EnvOverride, LibC,
     Linux, Osx, Override, VirtualPackageOverrides, VirtualPackages, Windows,
@@ -181,7 +181,7 @@ pub fn apply_conda_overrides(packages: &mut Vec<GenericVirtualPackage>, subdir: 
         packages.push(GenericVirtualPackage {
             name: name.parse().expect("static virtual package name is valid"),
             version,
-            build_string: "0".to_string(),
+            build_string: BuildString::new_unchecked("0"),
         });
     };
 
@@ -265,14 +265,14 @@ fn apply_glibc_override(packages: &mut Vec<GenericVirtualPackage>, subdir: Subdi
                 .find(|p| p.name.as_normalized() == "__glibc")
             {
                 glibc.version = libc.version;
-                glibc.build_string = "0".to_string();
+                glibc.build_string = BuildString::new_unchecked("0");
             } else {
                 packages.push(GenericVirtualPackage {
                     name: "__glibc"
                         .parse()
                         .expect("static virtual package name is valid"),
                     version: libc.version,
-                    build_string: "0".to_string(),
+                    build_string: BuildString::new_unchecked("0"),
                 });
             }
         }
@@ -451,7 +451,7 @@ fn canonicalize_detected(gvp: GenericVirtualPackage) -> GenericVirtualPackage {
             ..gvp
         },
         _ if gvp.build_string == "0" => GenericVirtualPackage {
-            build_string: String::new(),
+            build_string: BuildString::new_unchecked(""),
             ..gvp
         },
         _ => gvp,
@@ -524,7 +524,7 @@ mod tests {
         GenericVirtualPackage {
             name: PackageName::try_from(name).unwrap(),
             version: Version::from_str(version).unwrap(),
-            build_string: "0".to_string(),
+            build_string: BuildString::new_unchecked("0"),
         }
     }
 
@@ -532,7 +532,7 @@ mod tests {
         GenericVirtualPackage {
             name: PackageName::try_from("__archspec").unwrap(),
             version: Version::major(1),
-            build_string: microarchitecture.to_string(),
+            build_string: BuildString::new_unchecked(microarchitecture),
         }
     }
 
@@ -566,7 +566,7 @@ mod tests {
         GenericVirtualPackage {
             name: name.parse().unwrap(),
             version: Version::from_str(version).unwrap(),
-            build_string: "0".to_string(),
+            build_string: BuildString::new_unchecked("0"),
         }
     }
 
@@ -750,10 +750,10 @@ mod tests {
             .map(|gvp| {
                 // Restate them the way rattler would hand them over.
                 if gvp.name.as_normalized() == "__archspec" {
-                    detected_archspec(&gvp.build_string)
+                    detected_archspec(gvp.build_string.as_str())
                 } else if gvp.build_string.is_empty() {
                     GenericVirtualPackage {
-                        build_string: "0".to_string(),
+                        build_string: BuildString::new_unchecked("0"),
                         ..gvp
                     }
                 } else {

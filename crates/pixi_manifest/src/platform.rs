@@ -4,7 +4,9 @@ use std::ops::Deref;
 use std::str::FromStr;
 
 use archspec::cpu::Microarchitecture;
-use rattler_conda_types::{GenericVirtualPackage, PackageName, Subdir, Version};
+use rattler_conda_types::{
+    GenericVirtualPackage, PackageName, Subdir, Version, package::BuildString,
+};
 use rattler_virtual_packages::amdgpu::AmdGpuArchInfo;
 use rattler_virtual_packages::defaults::{
     default_glibc_version, default_linux_version, default_mac_os_version, default_windows_version,
@@ -533,7 +535,7 @@ impl PixiPlatform {
                 name: gvp.name.clone(),
                 version: gvp.version.clone(),
                 build_string: if gvp.build_string == "0" {
-                    String::new()
+                    BuildString::new_unchecked("")
                 } else {
                     gvp.build_string.clone()
                 },
@@ -732,7 +734,7 @@ pub fn subdir_default_virtual_packages(subdir: Subdir) -> Vec<GenericVirtualPack
         GenericVirtualPackage {
             name: PackageName::try_from(name).expect("static virtual-package name"),
             version,
-            build_string: String::new(),
+            build_string: BuildString::new_unchecked(""),
         }
     }
 
@@ -742,7 +744,7 @@ pub fn subdir_default_virtual_packages(subdir: Subdir) -> Vec<GenericVirtualPack
         defaults.push(GenericVirtualPackage {
             name: PackageName::try_from("__unix").expect("static virtual-package name"),
             version: Version::major(0),
-            build_string: "0".to_string(),
+            build_string: BuildString::new_unchecked("0"),
         });
     }
     if subdir.is_linux() {
@@ -759,7 +761,7 @@ pub fn subdir_default_virtual_packages(subdir: Subdir) -> Vec<GenericVirtualPack
         defaults.push(GenericVirtualPackage {
             name: PackageName::try_from("__archspec").expect("static virtual-package name"),
             version: Version::major(0),
-            build_string: spec.as_str().to_string(),
+            build_string: BuildString::new_unchecked(spec.as_str()),
         });
     }
 
@@ -835,7 +837,7 @@ fn generic_to_virtual_package(gvp: &GenericVirtualPackage) -> Option<VirtualPack
             version: gvp.version.clone(),
         })),
         "__archspec" => Some(VirtualPackage::Archspec(archspec_from_build_string(
-            &gvp.build_string,
+            gvp.build_string.as_str(),
         ))),
         _ => None,
     }
@@ -905,14 +907,14 @@ fn archspec_capability_satisfied_by(
     required: &GenericVirtualPackage,
     system: &[GenericVirtualPackage],
 ) -> bool {
-    let Some(required_name) = archspec_microarchitecture(&required.build_string) else {
+    let Some(required_name) = archspec_microarchitecture(required.build_string.as_str()) else {
         return true;
     };
     system
         .iter()
         .filter(|provided| provided.name == required.name)
         .any(
-            |provided| match archspec_microarchitecture(&provided.build_string) {
+            |provided| match archspec_microarchitecture(provided.build_string.as_str()) {
                 None => true,
                 Some(provided_name) => archspec_covers(provided_name, required_name),
             },
@@ -1098,17 +1100,36 @@ fn is_known_archspec_name(name: &str) -> bool {
     Microarchitecture::known_targets().contains_key(name)
 }
 
+/// Format a virtual package the way it's stored in `pixi.lock` -- either
+/// `__name=version` or `__name=version=build_string`. Unlike
+/// `GenericVirtualPackage::Display`, an empty build string is omitted, which
+/// keeps the entries pixi writes identical to the ones it wrote before rattler
+/// started printing the build string unconditionally. The inverse is
+/// [`parse_locked_virtual_package`].
+pub fn format_virtual_package(gvp: &GenericVirtualPackage) -> String {
+    if gvp.build_string.is_empty() {
+        format!("{}={}", gvp.name.as_normalized(), gvp.version)
+    } else {
+        format!(
+            "{}={}={}",
+            gvp.name.as_normalized(),
+            gvp.version,
+            gvp.build_string
+        )
+    }
+}
+
 /// Parse a virtual-package entry the way it's stored in `pixi.lock` -- either
 /// `__name=version` or `__name=version=build_string` -- back into a
-/// [`GenericVirtualPackage`]. The lock-file serializer uses the same shape
-/// rattler emits via `GenericVirtualPackage::Display`. Returns `None` if the
-/// input doesn't have the expected `=`-separated form (we don't trust pixi to
-/// repair a malformed lock-file entry from the satisfiability path).
+/// [`GenericVirtualPackage`]. The lock-file serializer writes the same shape
+/// through [`format_virtual_package`]. Returns `None` if the input doesn't
+/// have the expected `=`-separated form (we don't trust pixi to repair a
+/// malformed lock-file entry from the satisfiability path).
 pub fn parse_locked_virtual_package(raw: &str) -> Option<GenericVirtualPackage> {
     let mut parts = raw.splitn(3, '=');
     let name_str = parts.next()?;
     let version_str = parts.next()?;
-    let build_string = parts.next().unwrap_or("").to_string();
+    let build_string = BuildString::new_unchecked(parts.next().unwrap_or(""));
     let name = PackageName::try_from(name_str).ok()?;
     let version = Version::from_str(version_str).ok()?;
     Some(GenericVirtualPackage {
@@ -1197,8 +1218,28 @@ mod tests {
         GenericVirtualPackage {
             name: PackageName::try_from(name).unwrap(),
             version: Version::from_str(version).unwrap(),
-            build_string: String::new(),
+            build_string: BuildString::new_unchecked(""),
         }
+    }
+
+    /// The lock-file entry of a virtual package omits an empty build string
+    /// and round-trips through [`parse_locked_virtual_package`].
+    #[test]
+    fn locked_virtual_package_format_round_trips() {
+        let cuda = gvp("__cuda", "12.0");
+        assert_eq!(format_virtual_package(&cuda), "__cuda=12.0");
+        assert_eq!(parse_locked_virtual_package("__cuda=12.0"), Some(cuda));
+
+        let archspec = GenericVirtualPackage {
+            name: PackageName::try_from("__archspec").unwrap(),
+            version: Version::major(0),
+            build_string: BuildString::new_unchecked("x86_64_v3"),
+        };
+        assert_eq!(format_virtual_package(&archspec), "__archspec=0=x86_64_v3");
+        assert_eq!(
+            parse_locked_virtual_package("__archspec=0=x86_64_v3"),
+            Some(archspec)
+        );
     }
 
     /// Extract `(name, version)` pairs for entries whose virtual-package
@@ -1223,7 +1264,7 @@ mod tests {
         GenericVirtualPackage {
             name: PackageName::try_from("__archspec").unwrap(),
             version: Version::major(0),
-            build_string: microarchitecture.to_string(),
+            build_string: BuildString::new_unchecked(microarchitecture),
         }
     }
 

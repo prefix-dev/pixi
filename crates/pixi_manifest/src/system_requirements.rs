@@ -1,7 +1,9 @@
 use std::collections::BTreeMap;
 
 use miette::Diagnostic;
-use rattler_conda_types::{GenericVirtualPackage, PackageName, Subdir, Version};
+use rattler_conda_types::{
+    GenericVirtualPackage, PackageName, Subdir, Version, package::BuildString,
+};
 use rattler_virtual_packages::{Cuda, LibC, Linux, Osx, VirtualPackage};
 use serde::Serialize;
 use serde_value::Value;
@@ -172,7 +174,7 @@ fn make_virtual_package(conda_name: &str, version: Version) -> GenericVirtualPac
     GenericVirtualPackage {
         name: PackageName::try_from(conda_name).expect("static virtual-package name is valid"),
         version,
-        build_string: String::new(),
+        build_string: BuildString::new_unchecked(""),
     }
 }
 

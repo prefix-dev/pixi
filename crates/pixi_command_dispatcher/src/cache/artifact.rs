@@ -1182,7 +1182,7 @@ mod tests {
             "1.0.0"
                 .parse::<rattler_conda_types::VersionWithSource>()
                 .unwrap(),
-            "h0".into(),
+            "h0".parse().unwrap(),
         );
         pr.subdir = "linux-64".into();
         RepoDataRecord {
@@ -2817,7 +2817,7 @@ mod cache_key_tests {
             "1.0.0"
                 .parse::<rattler_conda_types::VersionWithSource>()
                 .unwrap(),
-            "h0".into(),
+            "h0".parse().unwrap(),
         );
         pr.subdir = "linux-64".into();
         UnresolvedSourceRecord {
@@ -2842,7 +2842,7 @@ mod cache_key_tests {
             "1.0.0"
                 .parse::<rattler_conda_types::VersionWithSource>()
                 .unwrap(),
-            "h0".into(),
+            "h0".parse().unwrap(),
         );
         pr.subdir = "linux-64".into();
         pr.sha256 = parse_digest_from_hex::<rattler_digest::Sha256>(sha);

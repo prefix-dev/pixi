@@ -16,7 +16,9 @@ use pixi_manifest::{
         subdir_default_virtual_packages,
     },
 };
-use rattler_conda_types::{GenericVirtualPackage, PackageName, Subdir, Version};
+use rattler_conda_types::{
+    GenericVirtualPackage, PackageName, Subdir, Version, package::BuildString,
+};
 
 use crate::{
     cli_config::{ScriptWorkspaceConfig, script_lock_file_usage},
@@ -247,7 +249,7 @@ fn push_unique(
     specs.push(GenericVirtualPackage {
         name,
         version,
-        build_string,
+        build_string: BuildString::new_unchecked(build_string),
     });
     Ok(())
 }
@@ -300,8 +302,8 @@ fn parse_raw_virtual_package(spec: &str) -> miette::Result<GenericVirtualPackage
         .map_err(|e| {
             miette::miette!("'{version_str}' is not a valid virtual package version: {e}")
         })?;
-    let build_string = parts.next().unwrap_or("").to_string();
-    pixi_manifest::platform::validate_virtual_package(&name, version_str, &build_string)
+    let build_string = BuildString::new_unchecked(parts.next().unwrap_or(""));
+    pixi_manifest::platform::validate_virtual_package(&name, version_str, build_string.as_str())
         .map_err(|message| miette::miette!("{message}"))?;
     Ok(GenericVirtualPackage {
         name,
