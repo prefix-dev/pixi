@@ -746,7 +746,11 @@ impl Project {
         )
         .detect_for_specs(&channel_urls, platform, &specs)
         .await?;
-        let solve_virtual_packages = host.platform().into_diagnostic()?.solver_records().into_owned();
+        let solve_virtual_packages = host
+            .platform()
+            .into_diagnostic()?
+            .solver_records()
+            .into_owned();
 
         // Convert dependency specs to binary specs for CommandDispatcher
         let mut pixi_specs = DependencyMap::default();

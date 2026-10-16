@@ -10,15 +10,15 @@ Edit an existing workspace platform's subdir and/or virtual packages
 
 ## Usage
 ```
-pixi workspace platform edit [OPTIONS] <NAME> [NAME=VERSION[=BUILD]]...
+pixi workspace platform edit [OPTIONS] <NAME> [__NAME[=VERSION[=BUILD]]]...
 ```
 
 ## Arguments
 - <a id="arg-NAME" href="#arg-NAME">`<NAME>`</a>
 :  Name of the platform to edit
 <br>**required**: `true`
-- <a id="arg-NAME=VERSION[=BUILD]" href="#arg-NAME=VERSION[=BUILD]">`<NAME=VERSION[=BUILD]>`</a>
-:  Arbitrary virtual-package specs (`name=version[=build_string]`) to declare or update, with an optional canonical `__` prefix. Use the built-in flags (`--cuda`, `--archspec`, ...) for specialized syntax
+- <a id="arg-__NAME[=VERSION[=BUILD]]" href="#arg-__NAME[=VERSION[=BUILD]]">`<__NAME[=VERSION[=BUILD]]>`</a>
+:  Raw virtual-package specs (`__name[=version[=build_string]]`) to declare or update. Built-in flags (`--cuda`, `--archspec`, ...) offer specialized syntax
 <br>May be provided more than once.
 
 ## Options
@@ -43,8 +43,8 @@ pixi workspace platform edit [OPTIONS] <NAME> [NAME=VERSION[=BUILD]]...
 <br>**aliases**: osx
 - <a id="arg---windows" href="#arg---windows">`--windows <VERSION[=BUILD]>`</a>
 :  Declare a `__win` virtual package at the given Windows version, e.g. `10`. Only valid on win subdirs
-- <a id="arg---remove-virtual-package" href="#arg---remove-virtual-package">`--remove-virtual-package <NAME>`</a>
-:  Remove a virtual package by friendly or canonical name. Can be repeated
+- <a id="arg---remove-virtual-package" href="#arg---remove-virtual-package">`--remove-virtual-package <__NAME>`</a>
+:  Remove a virtual package by canonical `__name`. Can be repeated
 <br>May be provided more than once.
 - <a id="arg---clear-virtual-packages" href="#arg---clear-virtual-packages">`--clear-virtual-packages`</a>
 :  Clear all virtual packages before applying any add/upsert operations

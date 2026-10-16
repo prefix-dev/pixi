@@ -742,7 +742,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let host = detect_host(workspace.as_ref(), &config).await?;
     let virtual_packages = merge_results(
-        host.platform().into_diagnostic()?.solver_records().into_owned(),
+        host.platform()
+            .into_diagnostic()?
+            .solver_records()
+            .into_owned(),
         host.detector_results(),
     );
     let virtual_package_detectors = DetectorInfo::from_host(&host, &config);

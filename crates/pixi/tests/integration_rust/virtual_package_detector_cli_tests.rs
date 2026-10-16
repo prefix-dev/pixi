@@ -1307,7 +1307,7 @@ async fn platform_commands_round_trip_friendly_and_canonical_virtual_packages() 
             .iter()
             .any(|package| package == "__site_service=2=h1")
     );
-    assert!(packages.iter().any(|package| package == "__amdgpu"));
+    assert!(packages.iter().any(|package| package == "amdgpu"));
     assert!(
         packages
             .iter()
@@ -1354,5 +1354,5 @@ async fn platform_commands_round_trip_friendly_and_canonical_virtual_packages() 
             .iter()
             .any(|package| package == "__site_service=3=h2")
     );
-    assert!(!packages.iter().any(|package| package == "__amdgpu"));
+    assert!(!packages.iter().any(|package| package == "amdgpu"));
 }

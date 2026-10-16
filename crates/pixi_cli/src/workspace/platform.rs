@@ -353,7 +353,7 @@ pub struct EditArgs {
     /// Raw virtual-package specs (`__name[=version[=build_string]]`) to declare
     /// or update. Built-in flags (`--cuda`, `--archspec`, ...) offer specialized syntax.
     #[clap(value_name = "__NAME[=VERSION[=BUILD]]")]
-    pub custom_virtual_packages: Vec<String>,
+    pub raw_virtual_packages: Vec<String>,
 
     /// Set a new conda subdir for this platform.
     #[clap(long, value_name = "SUBDIR")]
@@ -692,8 +692,7 @@ async fn execute_edit(
     };
     let insert_or_update_virtual_packages = args
         .virtual_packages
-        .clone()
-        .into_specs(subdir, &args.custom_virtual_packages)?;
+        .into_specs(subdir, &args.raw_virtual_packages)?;
 
     let remove_virtual_packages: Vec<PackageName> = args
         .remove_virtual_packages
@@ -719,7 +718,7 @@ async fn execute_edit(
             .filter_map(clap::Arg::get_long)
             .format_with(", ", |flag, f| f(&format_args!("--{flag}")));
         miette::bail!(
-            "nothing to do: pass at least one of --subdir, a virtual-package flag ({flags}), a `name=version` positional, --remove-virtual-package, or --clear-virtual-packages"
+            "nothing to do: pass at least one of --subdir, a virtual-package flag ({flags}), a `__name=version` positional, --remove-virtual-package, or --clear-virtual-packages"
         );
     }
 
