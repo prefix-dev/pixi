@@ -427,12 +427,18 @@ impl PixiPlatform {
     /// True when this entry has no `name` of its own and its name was derived
     /// from the subdir plus its virtual packages. Also decides whether a
     /// `name` key is written back out.
+    ///
+    /// Names are synthesised from manifest spelling, so detector records
+    /// (`__archspec 1=zen2`) must be normalised before the comparison.
     pub fn has_derived_name(&self) -> bool {
+        self.has_name_derived_from(&self.manifest_virtual_package_records())
+    }
+
+    /// [`Self::has_derived_name`] for callers that already hold
+    /// [`Self::manifest_virtual_package_records`].
+    pub(crate) fn has_name_derived_from(&self, manifest_records: &[GenericVirtualPackage]) -> bool {
         self.name.as_str()
-            == crate::toml::platform::synthesize_name_string(
-                self.subdir,
-                self.virtual_packages.as_slice(),
-            )
+            == crate::toml::platform::synthesize_name_string(self.subdir, manifest_records)
     }
 
     /// Returns true if a feature's `platforms` reference `name` selects this
@@ -1473,12 +1479,17 @@ mod tests {
             declared.solver_virtual_package_records().into_owned(),
         )
         .unwrap();
+        assert!(detected.has_derived_name());
+        let detected_name = detected.name().clone();
         detected
             .apply_edit(PlatformEdit {
                 insert_or_update_virtual_packages: vec![gvp("__site", "2")],
                 ..Default::default()
             })
             .unwrap();
+        // The derived name follows the edit instead of going stale.
+        assert!(detected.has_derived_name());
+        assert_ne!(detected.name(), &detected_name);
         let mut expected = declared;
         expected
             .apply_edit(PlatformEdit {

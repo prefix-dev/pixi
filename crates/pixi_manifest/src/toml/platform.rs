@@ -349,7 +349,7 @@ impl Serialize for TomlPixiPlatform {
             return serializer.serialize_str(name);
         }
 
-        let emit_name = !platform.has_derived_name();
+        let emit_name = !platform.has_name_derived_from(&declared);
 
         let count = 1 + usize::from(emit_name) + entries.len();
         let mut map = serializer.serialize_map(Some(count))?;
@@ -1125,7 +1125,7 @@ pub(crate) fn pixi_platform_to_toml_value(platform: &PixiPlatform) -> toml_edit:
     }
 
     let mut table = toml_edit::InlineTable::new();
-    if !platform.has_derived_name() {
+    if !platform.has_name_derived_from(&declared) {
         table.insert("name", name.into());
     }
     table.insert("platform", subdir_str.into());
@@ -1715,6 +1715,7 @@ mod test {
         )
         .unwrap();
         let json = serde_json::to_value(TomlPixiPlatform(detected.clone())).unwrap();
+        assert!(json.get("name").is_none());
         assert_eq!(json["archspec"], "zen2");
         assert_eq!(json["cuda"], "12.4");
         assert!(json.get("__archspec").is_none());
@@ -1723,6 +1724,7 @@ mod test {
 
         let rendered = pixi_platform_to_toml_value(&detected);
         let table = rendered.as_inline_table().unwrap();
+        assert!(table.get("name").is_none());
         assert_eq!(table.get("archspec").unwrap().as_str(), Some("zen2"));
         assert_eq!(table.get("cuda").unwrap().as_str(), Some("12.4"));
         assert!(table.get("__unix").is_none());
