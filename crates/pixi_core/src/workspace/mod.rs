@@ -30,16 +30,17 @@ use crate::{
     repodata::Repodata,
 };
 use async_once_cell::OnceCell as AsyncCell;
+pub use conda_pypi_map::CondaPypiMapError;
 pub use discovery::{DiscoveryStart, WorkspaceLocator, WorkspaceLocatorError};
 pub use environment::Environment;
 pub use has_project_ref::HasWorkspaceRef;
 use indexmap::{Equivalent, IndexSet};
-use miette::{Diagnostic, IntoDiagnostic};
+use miette::Diagnostic;
 use once_cell::sync::OnceCell;
 use pep508_rs::Requirement;
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{CacheDirs, CommandDispatcher, CommandDispatcherBuilder, Limits};
-use pixi_config::{CacheKind, Config, RunPostLinkScripts};
+use pixi_config::{CacheDirError, CacheKind, Config, RunPostLinkScripts};
 use pixi_consts::consts;
 use pixi_diff::LockFileDiff;
 use pixi_manifest::script::conda::CondaScriptManifest;
@@ -52,7 +53,7 @@ use pixi_manifest::{
 use pixi_path::AbsPathBuf;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::SourceSpec;
-use pixi_utils::reqwest::build_lazy_reqwest_clients;
+use pixi_utils::reqwest::{ReqwestClientError, build_lazy_reqwest_clients};
 use pixi_utils::{
     reqwest::LazyReqwestClient,
     variants::{VariantConfig, VariantValue},
@@ -202,6 +203,27 @@ pub struct Workspace {
 enum WorkspaceStorage {
     Project,
     Script(WorkspaceScript),
+}
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum EnvironmentFromNameError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Parse(#[from] pixi_manifest::ParseEnvironmentNameError),
+
+    #[error("unknown environment '{0}'")]
+    Unknown(EnvironmentName),
+}
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum CommandDispatcherBuilderError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    CacheDir(#[from] CacheDirError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Client(#[from] ReqwestClientError),
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -1024,12 +1046,11 @@ impl Workspace {
     pub fn environment_from_name_or_env_var(
         &self,
         name: Option<String>,
-    ) -> miette::Result<Environment<'_>> {
-        let environment_name =
-            EnvironmentName::from_arg_or_env_var(name, self.root()).into_diagnostic()?;
+    ) -> Result<Environment<'_>, EnvironmentFromNameError> {
+        let environment_name = EnvironmentName::from_arg_or_env_var(name, self.root())?;
 
         self.environment(&environment_name)
-            .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))
+            .ok_or(EnvironmentFromNameError::Unknown(environment_name))
     }
 
     /// Returns all the solve groups in the project.
@@ -1168,13 +1189,13 @@ impl Workspace {
 
     /// Returns the reqwest client used for http networking
     /// this api is not used now, uncomment when use in the future
-    pub fn client(&self) -> miette::Result<&LazyReqwestClient> {
+    pub fn client(&self) -> Result<&LazyReqwestClient, ReqwestClientError> {
         Ok(&self.lazy_client_and_authenticated_client()?.0)
     }
 
     /// Create an authenticated reqwest client for this project
     /// use authentication from `rattler_networking`
-    pub fn authenticated_client(&self) -> miette::Result<&LazyClient> {
+    pub fn authenticated_client(&self) -> Result<&LazyClient, ReqwestClientError> {
         Ok(&self.lazy_client_and_authenticated_client()?.1)
     }
 
@@ -1200,7 +1221,7 @@ impl Workspace {
     pub fn command_dispatcher_builder(
         &self,
         progress: Option<&Arc<pixi_reporters::TopLevelProgress>>,
-    ) -> miette::Result<CommandDispatcherBuilder> {
+    ) -> Result<CommandDispatcherBuilder, CommandDispatcherBuilderError> {
         let cache_dir = AbsPathBuf::new(pixi_config::get_cache_dir()?)
             .expect("cache dir is not absolute")
             .into_assume_dir();
@@ -1265,10 +1286,10 @@ impl Workspace {
 
     fn lazy_client_and_authenticated_client(
         &self,
-    ) -> miette::Result<&(LazyReqwestClient, rattler_networking::LazyClient)> {
-        Ok(self.client.get_or_try_init(|| {
+    ) -> Result<&(LazyReqwestClient, rattler_networking::LazyClient), ReqwestClientError> {
+        self.client.get_or_try_init(|| {
             build_lazy_reqwest_clients(Some(self.config()), Some(self.s3_config.clone()))
-        })?)
+        })
     }
 
     pub fn config(&self) -> &Config {
@@ -1295,7 +1316,7 @@ impl Workspace {
     /// Returns which PyPI purl derivation mode we should use.
     /// It can use project-defined mappings in the format `conda_name: pypi_name`,
     /// or the self-hosted prefix.dev mappings.
-    pub fn pypi_name_derivation_mode(&self) -> miette::Result<&PurlDerivationMode> {
+    pub fn pypi_name_derivation_mode(&self) -> Result<&PurlDerivationMode, CondaPypiMapError> {
         self.derivation_mode.get_or_try_init(|| {
             conda_pypi_map::build_pypi_name_derivation_mode(
                 &self.workspace.value,
@@ -2191,11 +2212,12 @@ packages: []
             "#;
         let workspace = Workspace::from_str(Path::new("pixi.toml"), non_existing_channel).unwrap();
 
-        // We output error message with bold channel name,
-        // so we need to disable colors for snapshot
-        console::set_colors_enabled(false);
-
-        insta::assert_snapshot!(workspace.pypi_name_derivation_mode().unwrap_err());
+        let err = workspace.pypi_name_derivation_mode().unwrap_err();
+        let CondaPypiMapError::UnusedChannel { channel, channels } = err else {
+            panic!("expected UnusedChannel, got {err:?}");
+        };
+        assert_eq!(channel, "non-existing-channel");
+        assert_eq!(channels, "conda-forge, pytorch");
     }
 
     #[test]
