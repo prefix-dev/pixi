@@ -8,7 +8,8 @@ use crate::lock_file::records_by_name::HasNameVersion;
 use itertools::Itertools;
 use pixi_install_pypi::UnresolvedPypiRecord;
 use pixi_manifest::{
-    FeaturesExt, HasWorkspaceManifest, PixiPlatformName, pypi::pypi_options::NoBuild,
+    FeaturesExt, HasWorkspaceManifest, PixiPlatformName, platform::VirtualPackageRecords,
+    pypi::pypi_options::NoBuild,
 };
 use pixi_pypi_spec::PixiPypiSource;
 use pypi_modifiers::Tags;
@@ -137,8 +138,12 @@ pub fn verify_environment_satisfiability(
         // changed (e.g. adding/removing `__cuda` or pinning `__glibc` to
         // a non-default version).
         let workspace_subdir = workspace_platform.subdir();
-        let expected_vps: Vec<String> = workspace_platform
-            .declared_virtual_packages()
+        let records = match workspace_platform.records() {
+            VirtualPackageRecords::Manifest(records) | VirtualPackageRecords::Detected(records) => {
+                records
+            }
+        };
+        let expected_vps: Vec<String> = records
             .iter()
             .filter(|gvp| !pixi_manifest::platform::is_subdir_default(gvp, workspace_subdir))
             .map(|vp| vp.to_string())
@@ -243,9 +248,9 @@ pub fn verify_environment_satisfiability(
         });
     }
 
-    let resolved_exclude_newer = environment.exclude_newer_config_resolved(&config)?;
-
-    let exclude_newer = resolved_exclude_newer.map(pixi_spec::ExcludeNewerFilter::from);
+    let exclude_newer = environment
+        .exclude_newer_config_resolved(&config)?
+        .map(rattler_solve::ExcludeNewer::from);
 
     if let Err(err) = verify_exclude_newer(exclude_newer.as_ref(), &locked_environment) {
         return Err(EnvironmentUnsat::ExcludeNewerMismatch(err));

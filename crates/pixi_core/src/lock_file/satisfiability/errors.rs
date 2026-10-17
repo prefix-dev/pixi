@@ -8,7 +8,7 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pixi_command_dispatcher::{DevSourceMetadataError, SourceCheckoutError, SourceRecordError};
-use pixi_manifest::{PixiPlatformName, pypi::pypi_options::PrereleaseMode};
+use pixi_manifest::{ExcludeNewerError, PixiPlatformName, pypi::pypi_options::PrereleaseMode};
 use pixi_record::{ParseLockFileError, SourceMismatchError};
 use pixi_uv_conversions::AsPep508Error;
 use rattler_conda_types::{MatchSpec, PackageName, ParseChannelError, ParseMatchSpecError};
@@ -41,6 +41,10 @@ pub enum EnvironmentUnsat {
 
     #[error(transparent)]
     InvalidChannel(#[from] ParseChannelError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ExcludeNewer(#[from] ExcludeNewerError),
 
     #[error(transparent)]
     InvalidDistExtensionInNoBuild(#[from] ExtensionError),
@@ -159,7 +163,7 @@ impl Display for ExcludeNewerMismatch {
 }
 
 pub(super) fn verify_exclude_newer(
-    exclude_newer: Option<&pixi_spec::ExcludeNewerFilter>,
+    exclude_newer: Option<&rattler_solve::ExcludeNewer>,
     locked_environment: &rattler_lock::Environment<'_>,
 ) -> Result<(), ExcludeNewerMismatch> {
     let Some(exclude_newer) = exclude_newer else {
@@ -171,9 +175,6 @@ pub(super) fn verify_exclude_newer(
             let Some(record) = package.record() else {
                 continue;
             };
-            if exclude_newer.is_exempt(&record.name, &record.version) {
-                continue;
-            }
             let channel = package
                 .as_binary()
                 .and_then(|binary| binary.channel.as_ref())

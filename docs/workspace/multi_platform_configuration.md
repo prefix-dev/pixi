@@ -134,7 +134,7 @@ Each inline-table entry has:
   not imply compatibility with a lower one. Unlike CUDA compute capability,
   `amdgpu = "gfx90a"` is not a minimum architecture requirement.
 
-- For virtual packages without a friendly key, a raw `__name = "version"` entry is also accepted as an escape hatch. Only the virtual packages pixi knows how to override (`__win`, `__osx`, `__linux`, `__cuda`, `__cuda_arch`, `__amdgpu`, `__amdgpu_arch`, `__archspec`, and the libc family `__glibc`/`__musl`/`__eglibc`) take effect at detection; any other raw `__name` is stored but ignored when checking host compatibility.
+- For virtual packages without a friendly key, a raw `__name = "version"` entry is also accepted as an escape hatch, for example `__conda_forge_openmpi = "5.0"` for a name a channel-registered detector reports. The solver treats it as available exactly like the friendly keys, and a machine satisfies it when it provides that name with the same build string at the declared version or newer (`__amdgpu_arch` requires the exact version). Pixi's built-in detection only reports the names it knows (`__win`, `__osx`, `__linux`, `__cuda`, `__cuda_arch`, `__amdgpu`, `__amdgpu_arch`, `__archspec`, and the libc family `__glibc`/`__musl`/`__eglibc`); any other name has to come from a detector for the host check to pass.
 
 A feature's `platforms` array is a list of names that must each resolve to a workspace platform (or be a bare conda subdir, which Pixi treats as an alias for that subdir).
 This is how you bind a feature to the rich variant:
@@ -197,6 +197,7 @@ Adding a platform whose definition already exists under a *different* name is re
   `--auto-detect`, see above). `--cuda-arch` requires `--cuda` (or
   an existing `__cuda`) and serializes as `cuda = { driver, arch }`.
   `--amdgpu-arch` also declares `__amdgpu` and serializes as `amdgpu = "gfx90a"`.
+  Other virtual packages use `__name[=version[=build_string]]` positionals, for example `__site_service=2=h1`.
 - `pixi workspace platform edit <NAME> [--cuda 12.1] [--remove-virtual-package __glibc]` mutates a custom platform's declared virtual packages.
 - `pixi workspace platform move <NAME> --to-top | --to-bottom | --before <NAME> | --after <NAME>` reorders an entry; since order is selection priority, this is how you promote or demote a platform.
 - `pixi workspace platform list` inspects what is declared.

@@ -10,9 +10,9 @@ use pixi_api::workspace::platforms::resolve_platforms;
 use pixi_command_dispatcher::offline::exclusions_for_solve;
 use pixi_config::{self, Config, ConfigCli};
 use pixi_core::environment::list::{PackageToOutput, print_package_table};
+use pixi_core::host::HostDetection;
 use pixi_manifest::PixiPlatformName;
-use pixi_manifest::platform::host::{detect_host, host_subdir};
-use pixi_manifest::platform::solver_generic_virtual_packages;
+use pixi_manifest::platform::host::host_subdir;
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 use pixi_utils::prefix::Prefix;
 use pixi_utils::{
@@ -267,11 +267,12 @@ pub async fn create_exec_prefix(
     let repodata = query_output.repodata;
 
     // Determine virtual packages of the platform we are targeting
-    let virtual_packages: Vec<GenericVirtualPackage> = solver_generic_virtual_packages(
-        &detect_host(platform)
-            .into_diagnostic()
-            .context("failed to determine virtual packages")?,
-    );
+    let virtual_packages: Vec<GenericVirtualPackage> = HostDetection::builtin_for(platform)
+        .platform()
+        .into_diagnostic()
+        .context("failed to determine virtual packages")?
+        .solver_virtual_package_records()
+        .into_owned();
 
     // `pixi exec` solves outside the command dispatcher, so it has to build
     // the offline exclusions itself rather than inheriting them.

@@ -19,7 +19,7 @@ use super::{
     errors::{UnknownTask, UnsupportedPlatformError},
 };
 use crate::{Workspace, workspace::HasWorkspaceRef};
-use pixi_manifest::platform::host::{host_baseline, host_capabilities, host_subdir};
+use pixi_manifest::platform::{VirtualPackageRecords, host::host_baseline};
 
 /// Describes a single environment from a project manifest. This is used to
 /// describe environments that can be installed and activated.
@@ -137,11 +137,12 @@ impl<'p> Environment<'p> {
             .platforms
             .iter()
             .find(|platform| {
+                let records = match platform.records() {
+                    VirtualPackageRecords::Manifest(records)
+                    | VirtualPackageRecords::Detected(records) => records,
+                };
                 platform.subdir() == resolved.subdir()
-                    && virtual_packages_match(
-                        platform.declared_virtual_packages(),
-                        resolved.virtual_packages(),
-                    )
+                    && virtual_packages_match(records, resolved.virtual_packages())
             })
     }
 
@@ -172,8 +173,8 @@ impl<'p> Environment<'p> {
     /// the environment itself declares support for, and return the most
     /// preferred one.
     pub fn best_declared_platform(&self) -> Option<&'p PixiPlatform> {
-        let current = host_subdir();
-        let system_virtual_packages = host_capabilities();
+        let current = self.workspace.host().subdir();
+        let system_virtual_packages = self.workspace.host().capabilities();
         let env_platforms = self.platforms();
 
         // The candidates are the workspace platforms whose subdir matches this
@@ -266,8 +267,8 @@ impl<'p> Environment<'p> {
     /// virtual packages declared by the workspace's host-subdir platforms
     /// this machine doesn't provide so the user can see what to mock.
     pub fn unsupported_platform_error(&self) -> UnsupportedPlatformError {
-        let current = host_subdir();
-        let system_virtual_packages = host_capabilities();
+        let current = self.workspace.host().subdir();
+        let system_virtual_packages = self.workspace.host().capabilities();
         let env_platforms = self.platforms();
         let workspace = &self.workspace_manifest().workspace;
         let unsatisfied_requirements = workspace.unsatisfied_platform_requirements(
@@ -535,10 +536,13 @@ impl Hash for Environment<'_> {
 mod tests {
     use std::{collections::HashSet, path::Path};
 
+    use pixi_manifest::platform::host::host_subdir;
+
     use indexmap::indexmap;
     use insta::assert_snapshot;
     use itertools::Itertools;
     use pixi_manifest::CondaDependencies;
+    use pixi_test_utils::uploaded_record;
     use rattler_conda_types::{NamedChannelOrUrl, PackageName};
 
     use super::*;
@@ -675,8 +679,8 @@ mod tests {
             1,
             "expected one composed linux-64 platform, got {linux64:?}"
         );
-        let virtual_packages: HashSet<&str> = linux64[0]
-            .declared_virtual_packages()
+        let manifest_records = linux64[0].manifest_virtual_package_records();
+        let virtual_packages: HashSet<&str> = manifest_records
             .iter()
             .map(|package| package.name.as_normalized())
             .collect();
@@ -1155,7 +1159,7 @@ mod tests {
             std::env::current_dir().unwrap(),
         );
         let env = workspace.environment("combined").unwrap();
-        let config: pixi_spec::ExcludeNewerFilter = env
+        let config: rattler_solve::ExcludeNewer = env
             .exclude_newer_config_resolved(&channel_config)
             .unwrap()
             .unwrap()
@@ -1233,7 +1237,7 @@ mod tests {
             std::env::current_dir().unwrap(),
         );
         let env = workspace.environment("combined").unwrap();
-        let config: pixi_spec::ExcludeNewerFilter = env
+        let config: rattler_solve::ExcludeNewer = env
             .exclude_newer_config_resolved(&channel_config)
             .unwrap()
             .unwrap()
@@ -1272,6 +1276,67 @@ mod tests {
     }
 
     #[test]
+    fn test_exclude_newer_exemptions_win_over_channel_and_workspace_cutoffs() {
+        let workspace = Workspace::from_str(
+            Path::new("pixi.toml"),
+            r#"
+        [workspace]
+        name = "test"
+        channels = [{ channel = "my-private-forge", exclude-newer = "2016-12-02T02:07:43Z" }, "conda-forge"]
+        platforms = ["linux-64"]
+
+        [workspace.exclude-newer]
+        cutoff = "2015-12-02T02:07:43Z"
+        exemptions = { polars = "1.43.1", openssl = { version = "*", channel = "conda-forge" } }
+
+        [dependencies]
+        polars = "*"
+        openssl = "*"
+        "#,
+        )
+        .unwrap();
+
+        let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
+        let env = workspace.environment("default").unwrap();
+        let config: rattler_solve::ExcludeNewer = env
+            .exclude_newer_config_resolved(&channel_config)
+            .unwrap()
+            .unwrap()
+            .into();
+
+        let my_private_forge = NamedChannelOrUrl::Name("my-private-forge".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
+        let conda_forge = NamedChannelOrUrl::Name("conda-forge".to_string())
+            .into_base_url(&channel_config)
+            .unwrap();
+
+        // The exempt release is allowed from any channel, other releases are
+        // not.
+        assert!(!config.is_excluded(&uploaded_record("polars", "1.43.1", Some(&conda_forge))));
+        assert!(!config.is_excluded(&uploaded_record(
+            "polars",
+            "1.43.1",
+            Some(&my_private_forge)
+        )));
+        assert!(config.is_excluded(&uploaded_record("polars", "1.43.2", Some(&conda_forge))));
+        assert!(config.is_excluded(&uploaded_record(
+            "polars",
+            "1.43.2",
+            Some(&my_private_forge)
+        )));
+
+        // An exemption with a channel only applies to records from that
+        // channel.
+        assert!(!config.is_excluded(&uploaded_record("openssl", "3.5.1", Some(&conda_forge))));
+        assert!(config.is_excluded(&uploaded_record(
+            "openssl",
+            "3.5.1",
+            Some(&my_private_forge)
+        )));
+    }
+
+    #[test]
     fn test_exclude_newer_package_channel_workspace_precedence() {
         let workspace = Workspace::from_str(
             Path::new("pixi.toml"),
@@ -1295,7 +1360,7 @@ mod tests {
 
         let channel_config = ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap());
         let env = workspace.environment("default").unwrap();
-        let config: pixi_spec::ExcludeNewerFilter = env
+        let config: rattler_solve::ExcludeNewer = env
             .exclude_newer_config_resolved(&channel_config)
             .unwrap()
             .unwrap()
@@ -1591,19 +1656,21 @@ mod tests {
     #[test]
     fn test_best_platform_win32_on_win64() {
         let temp_dir = tempfile::tempdir().unwrap();
-        let manifest = Workspace::from_str(
-            &temp_dir.path().join("pixi.toml"),
-            r#"
+        // Simulate a win-64 current platform via PIXI_OVERRIDE_PLATFORM. The
+        // host is detected when the workspace is built, so the override has
+        // to be in place before that.
+        let best = temp_env::with_var(consts::PIXI_OVERRIDE_PLATFORM, Some("win-64"), || {
+            let manifest = Workspace::from_str(
+                &temp_dir.path().join("pixi.toml"),
+                r#"
         [project]
         name = "foobar"
         channels = []
         platforms = ["win-32"]
         "#,
-        )
-        .unwrap();
-        let env = manifest.default_environment();
-        // Simulate a win-64 current platform via PIXI_OVERRIDE_PLATFORM.
-        let best = temp_env::with_var(consts::PIXI_OVERRIDE_PLATFORM, Some("win-64"), || {
+            )
+            .unwrap();
+            let env = manifest.default_environment();
             env.best_declared_platform().map(|p| p.subdir())
         });
         assert_eq!(best, Some(Subdir::Win32));

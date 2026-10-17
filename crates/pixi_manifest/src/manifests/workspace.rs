@@ -18,10 +18,10 @@ use rattler_conda_types::{
 use toml_edit::Value;
 
 use crate::{
-    Activation, AddDependencyOutcome, DependencyOverwriteBehavior, GetFeatureError, PixiPlatform,
-    PixiPlatformError, PixiPlatformName, PlatformEdit, PlatformMove, Preview, PrioritizedChannel,
-    PypiDependencyLocation, SpecType, TargetSelector, Task, TaskName, TomlError, WorkspaceTarget,
-    consts,
+    Activation, AddDependencyOutcome, DependencyOverwriteBehavior, GetFeatureError,
+    KnownPreviewFlag, PixiPlatform, PixiPlatformError, PixiPlatformName, PlatformEdit,
+    PlatformMove, Preview, PrioritizedChannel, PypiDependencyLocation, SpecType, TargetSelector,
+    Task, TaskName, TomlError, WorkspaceTarget, consts,
     environment::{Environment, EnvironmentName, NewEnvironment},
     environments::Environments,
     error::{DependencyError, UnknownFeature},
@@ -1138,7 +1138,8 @@ impl WorkspaceManifestMut<'_> {
         let before = updated.clone();
         updated.apply_edit(edit)?;
         if updated.subdir() == before.subdir()
-            && updated.declared_virtual_packages() == before.declared_virtual_packages()
+            && updated.manifest_virtual_package_records()
+                == before.manifest_virtual_package_records()
         {
             return Ok(());
         }
@@ -1340,10 +1341,10 @@ impl WorkspaceManifestMut<'_> {
         if pixi_platforms.is_empty() {
             return Ok(IndexSet::new());
         }
+        let added_to_workspace = self.add_workspace_platforms(&pixi_platforms)?;
         self.ensure_inline_environment(feature_name)?;
         let platform_names: IndexSet<PixiPlatformName> =
             pixi_platforms.iter().map(|p| p.name().clone()).collect();
-        let added_to_workspace = self.add_workspace_platforms(&pixi_platforms)?;
         let added_to_feature = self.add_feature_platforms(platform_names, feature_name)?;
         Ok(pixi_platforms
             .into_iter()
@@ -1847,6 +1848,22 @@ impl WorkspaceManifestMut<'_> {
         }
 
         Ok(())
+    }
+
+    /// Enables a preview flag in both the parsed workspace and the TOML document.
+    /// Returns false if the flag was already enabled.
+    pub fn add_preview_flag(&mut self, flag: KnownPreviewFlag) -> Result<bool, TomlError> {
+        let added = self.document.add_preview_flag(flag.into())?;
+        match &mut self.workspace.workspace.preview {
+            Preview::Flags(flags) => {
+                if !flags.contains(&flag) {
+                    flags.push(flag);
+                }
+            }
+            preview @ Preview::AllEnabled(false) => *preview = Preview::Flags(vec![flag]),
+            Preview::AllEnabled(true) => {}
+        }
+        Ok(added)
     }
 
     /// Set the workspace name.
@@ -2378,6 +2395,56 @@ start = "python -m flask run --port=5050"
         rattler_conda_types::ChannelConfig::default_with_root_dir(
             std::env::current_dir().expect("Could not retrieve the current directory"),
         )
+    }
+
+    #[rstest]
+    #[case("", true)]
+    #[case("preview = false", true)]
+    #[case("preview = true", false)]
+    #[case("preview = [\"pixi-build\"]", false)]
+    #[case("preview = [\"existing-flag\"]", true)]
+    fn test_add_preview_flag_keeps_parsed_and_document_in_sync(
+        #[case] preview: &str,
+        #[case] expected_added: bool,
+    ) {
+        let source = format!("{PROJECT_BOILERPLATE}\n{preview}\n");
+        let mut workspace = parse_pixi_toml(&source);
+
+        assert_eq!(
+            workspace
+                .editable()
+                .add_preview_flag(KnownPreviewFlag::PixiBuild)
+                .unwrap(),
+            expected_added
+        );
+        assert!(
+            !workspace
+                .editable()
+                .add_preview_flag(KnownPreviewFlag::PixiBuild)
+                .unwrap()
+        );
+
+        let rendered = workspace.document.render().unwrap();
+        let reparsed = parse_pixi_toml(&rendered);
+        assert_eq!(
+            workspace.manifest.workspace.preview,
+            reparsed.manifest.workspace.preview
+        );
+        assert!(
+            workspace
+                .manifest
+                .workspace
+                .preview
+                .is_enabled(KnownPreviewFlag::PixiBuild)
+        );
+        if preview.contains("existing-flag") {
+            let document = DocumentMut::from_str(&rendered).unwrap();
+            let flags = document["project"]["preview"].as_array().unwrap();
+            assert_eq!(
+                flags.iter().filter_map(Value::as_str).collect::<Vec<_>>(),
+                ["existing-flag", "pixi-build"]
+            );
+        }
     }
 
     #[test]
@@ -6180,6 +6247,21 @@ openssl = "<2"
         assert_eq!(linux_spec, "<2");
     }
 
+    /// The default feature of a manifest, to call [`FeaturesExt`] methods on.
+    struct DefaultFeature<'a>(&'a WorkspaceManifest);
+
+    impl<'a> HasWorkspaceManifest<'a> for DefaultFeature<'a> {
+        fn workspace_manifest(&self) -> &'a WorkspaceManifest {
+            self.0
+        }
+    }
+
+    impl<'a> HasFeaturesIter<'a> for DefaultFeature<'a> {
+        fn features(&self) -> impl DoubleEndedIterator<Item = &'a Feature> + 'a {
+            std::iter::once(self.0.default_feature())
+        }
+    }
+
     #[test]
     fn test_package_exclude_newer_tables_are_parsed() {
         let contents = r#"
@@ -6221,24 +6303,141 @@ boltons = "0d"
     }
 
     #[test]
+    fn test_exclude_newer_table_syntax_is_parsed() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+
+[workspace.exclude-newer]
+cutoff = "7d"
+
+[workspace.exclude-newer.exemptions]
+polars = "1.43.1"
+py-rattler = "*"
+numpy = { version = "2.*", channel = "conda-forge" }
+
+[workspace.pypi-exclude-newer]
+cutoff = "2025-01-01"
+exemptions = { torch = "*" }
+"#;
+        use pixi_pypi_spec::PypiPackageName;
+        use rattler_conda_types::PackageName;
+        use std::str::FromStr;
+
+        let workspace = parse_pixi_toml(contents).manifest.workspace;
+        assert_eq!(workspace.exclude_newer.cutoff.unwrap().to_string(), "7days");
+        assert_eq!(
+            workspace
+                .exclude_newer
+                .exemptions
+                .keys()
+                .map(PackageName::as_source)
+                .sorted()
+                .collect::<Vec<_>>(),
+            ["numpy", "polars", "py-rattler"]
+        );
+        assert_eq!(
+            workspace.pypi_exclude_newer.cutoff.unwrap().to_string(),
+            "2025-01-02 00:00:00 UTC"
+        );
+        assert!(
+            workspace
+                .pypi_exclude_newer
+                .exemptions
+                .contains_key(&PypiPackageName::from_str("torch").unwrap())
+        );
+        assert!(workspace.exclude_newer_package_overrides.is_empty());
+        assert!(workspace.pypi_exclude_newer_package_overrides.is_empty());
+    }
+
+    #[test]
+    fn test_exclude_newer_config_applies_exemptions() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = { cutoff = "2015-12-02T02:07:43Z", exemptions = { polars = "1.43.1", numpy = "*" } }
+"#;
+
+        let manifest = parse_pixi_toml(contents).manifest;
+        let features = DefaultFeature(&manifest);
+        let resolved = features
+            .exclude_newer_config_resolved(&default_channel_config())
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            resolved
+                .exemptions()
+                .iter()
+                .map(ToString::to_string)
+                .sorted()
+                .collect::<Vec<_>>(),
+            ["numpy *", "polars ==1.43.1"]
+        );
+
+        use pixi_test_utils::uploaded_record;
+
+        let config: rattler_solve::ExcludeNewer = resolved.into();
+        assert!(!config.is_excluded(&uploaded_record("polars", "1.43.1", None)));
+        assert!(config.is_excluded(&uploaded_record("polars", "1.43.2", None)));
+        assert!(!config.is_excluded(&uploaded_record("numpy", "2.0.0", None)));
+        assert!(config.is_excluded(&uploaded_record("pandas", "2.0.0", None)));
+    }
+
+    #[test]
+    fn test_pypi_exclude_newer_config_falls_back_to_conda_cutoff() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "2015-12-02T02:07:43Z"
+pypi-exclude-newer = { exemptions = { torch = "*" } }
+"#;
+        let manifest = parse_pixi_toml(contents).manifest;
+        let features = DefaultFeature(&manifest);
+        let resolved = features.pypi_exclude_newer_config_resolved();
+        assert_eq!(
+            resolved.cutoff.unwrap(),
+            "2015-12-02T02:07:43Z"
+                .parse::<chrono::DateTime<chrono::Utc>>()
+                .unwrap()
+        );
+        assert_eq!(
+            resolved
+                .exempt_packages
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>(),
+            ["torch"]
+        );
+
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "2015-12-02T02:07:43Z"
+pypi-exclude-newer = "2016-12-02T02:07:43Z"
+"#;
+        let manifest = parse_pixi_toml(contents).manifest;
+        let features = DefaultFeature(&manifest);
+        assert_eq!(
+            features
+                .pypi_exclude_newer_config_resolved()
+                .cutoff
+                .unwrap(),
+            "2016-12-02T02:07:43Z"
+                .parse::<chrono::DateTime<chrono::Utc>>()
+                .unwrap()
+        );
+    }
+
+    #[test]
     fn test_exclude_newer_config_applies_package_overrides() {
-        struct TestFeatures<'a> {
-            manifest: &'a WorkspaceManifest,
-            features: Vec<&'a Feature>,
-        }
-
-        impl<'a> HasWorkspaceManifest<'a> for TestFeatures<'a> {
-            fn workspace_manifest(&self) -> &'a WorkspaceManifest {
-                self.manifest
-            }
-        }
-
-        impl<'a> HasFeaturesIter<'a> for TestFeatures<'a> {
-            fn features(&self) -> impl DoubleEndedIterator<Item = &'a Feature> + 'a {
-                self.features.clone().into_iter()
-            }
-        }
-
         let contents = r#"
 [project]
 name = "foo"
@@ -6252,12 +6451,8 @@ polars = "0d"
 
         let before = jiff::Timestamp::now();
         let manifest = parse_pixi_toml(contents).manifest;
-        let default_feature = manifest.default_feature();
-        let features = TestFeatures {
-            manifest: &manifest,
-            features: vec![default_feature],
-        };
-        let config: pixi_spec::ExcludeNewerFilter = features
+        let features = DefaultFeature(&manifest);
+        let config: rattler_solve::ExcludeNewer = features
             .exclude_newer_config_resolved(&default_channel_config())
             .unwrap()
             .unwrap()
@@ -6272,23 +6467,6 @@ polars = "0d"
 
     #[test]
     fn test_exclude_newer_config_applies_channel_overrides() {
-        struct TestFeatures<'a> {
-            manifest: &'a WorkspaceManifest,
-            features: Vec<&'a Feature>,
-        }
-
-        impl<'a> HasWorkspaceManifest<'a> for TestFeatures<'a> {
-            fn workspace_manifest(&self) -> &'a WorkspaceManifest {
-                self.manifest
-            }
-        }
-
-        impl<'a> HasFeaturesIter<'a> for TestFeatures<'a> {
-            fn features(&self) -> impl DoubleEndedIterator<Item = &'a Feature> + 'a {
-                self.features.clone().into_iter()
-            }
-        }
-
         let contents = r#"
 [project]
 name = "foo"
@@ -6299,13 +6477,9 @@ exclude-newer = "2015-12-02T02:07:43Z"
 
         let before = jiff::Timestamp::now();
         let manifest = parse_pixi_toml(contents).manifest;
-        let default_feature = manifest.default_feature();
-        let features = TestFeatures {
-            manifest: &manifest,
-            features: vec![default_feature],
-        };
+        let features = DefaultFeature(&manifest);
         let channel_config = default_channel_config();
-        let config: pixi_spec::ExcludeNewerFilter = features
+        let config: rattler_solve::ExcludeNewer = features
             .exclude_newer_config_resolved(&channel_config)
             .unwrap()
             .unwrap()

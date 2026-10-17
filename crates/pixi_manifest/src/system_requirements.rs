@@ -145,7 +145,7 @@ impl SystemRequirements {
             && self.archspec.is_none()
     }
 
-    /// Same shape as `PixiPlatform::declared_virtual_packages` -- used by the
+    /// Manifest records, used by the
     /// `[system-requirements]` back-compat shim. `archspec` is deprecated and
     /// not materialised.
     pub fn to_declared_virtual_packages(&self) -> Vec<GenericVirtualPackage> {

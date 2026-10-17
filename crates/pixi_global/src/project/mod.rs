@@ -33,20 +33,18 @@ use pixi_consts::consts::{self};
 use pixi_core::environment::{
     EnvironmentFile, LockedEnvironmentHash, PlatformData, RequiredPlatform, write_environment_file,
 };
+use pixi_core::host::{HostDetection, HostUndetected};
 use pixi_core::lock_file::virtual_packages::required_virtual_package_specs;
 use pixi_core::repodata::Repodata;
 use pixi_core::workspace::stdlib_variants::{StdlibVersionPin, derive_stdlib_variants};
-use pixi_manifest::platform::host::{
-    HostDetectionError, detect_host, host_subdir, platform_from_detected,
-};
-use pixi_manifest::platform::solver_generic_virtual_packages;
+use pixi_manifest::platform::host::{host_subdir, platform_from_detected};
 use pixi_manifest::{
-    InlinePackageManifest, PixiPlatform, PrioritizedChannel, WorkspaceManifest,
-    resolve_exclude_newer,
+    ExcludeNewerConfig, ExcludeNewerError, InlinePackageManifest, PixiPlatform, PrioritizedChannel,
+    WorkspaceManifest, resolve_exclude_newer,
 };
 use pixi_path::AbsPathBuf;
 use pixi_reporters::TopLevelProgress;
-use pixi_spec::{BinarySpec, ExcludeNewerFilter, PathBinarySpec, ResolvedExcludeNewer};
+use pixi_spec::{BinarySpec, PathBinarySpec, ResolvedExcludeNewer};
 use pixi_spec_containers::DependencyMap;
 use pixi_utils::variants::VariantConfig;
 use pixi_utils::{
@@ -55,8 +53,8 @@ use pixi_utils::{
     rlimit::try_increase_rlimit_to_sensible,
 };
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, ParseChannelError,
-    PrefixRecord, Subdir, menuinst::MenuMode, package::CondaArchiveIdentifier,
+    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, PrefixRecord, Subdir,
+    menuinst::MenuMode, package::CondaArchiveIdentifier,
 };
 use rattler_networking::LazyClient;
 use rattler_repodata_gateway::Gateway;
@@ -88,7 +86,7 @@ mod parsed_manifest;
 pub use global_spec::{
     FromMatchSpecError, GlobalSpec, InlinePackageValue, InlinePackageValueError,
 };
-use pixi_utils::reqwest::{LazyReqwestClient, build_lazy_reqwest_clients};
+use pixi_utils::reqwest::{LazyReqwestClient, ReqwestClientError, build_lazy_reqwest_clients};
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 pub enum CommandDispatcherError {
@@ -110,8 +108,9 @@ pub enum InferPackageNameError {
     CommandDispatcher(#[from] CommandDispatcherError),
     #[error("failed to get build backend metadata for package name inference")]
     BuildBackendMetadata(#[source] Box<dyn Diagnostic + Send + Sync>),
-    #[error("failed to resolve the channel for the exclude-newer configuration")]
-    ExcludeNewer(#[from] ParseChannelError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ExcludeNewer(#[from] ExcludeNewerError),
     #[error("no package outputs found in the specified path/repository")]
     NoPackageOutputs,
     #[error("multiple package outputs found: {}", .package_names.join(", "))]
@@ -159,6 +158,8 @@ pub struct Project {
     top_level_progress: OnceCell<Arc<pixi_reporters::TopLevelProgress>>,
     /// Optional backend override for testing purposes
     backend_override: Option<BackendOverride>,
+    /// What this machine provides, detected when the project was loaded.
+    host: HostDetection,
 }
 
 impl Debug for Project {
@@ -343,6 +344,7 @@ impl Project {
             command_dispatcher: OnceCell::new(),
             top_level_progress: OnceCell::new(),
             backend_override: None,
+            host: HostDetection::builtin(),
         }
     }
 
@@ -555,16 +557,15 @@ impl Project {
 
     /// Create an authenticated reqwest client for this project
     /// use authentication from `rattler_networking`
-    pub fn authenticated_client(&self) -> miette::Result<&LazyClient> {
+    pub fn authenticated_client(&self) -> Result<&LazyClient, ReqwestClientError> {
         Ok(&self.lazy_client_and_authenticated_client()?.1)
     }
 
     fn lazy_client_and_authenticated_client(
         &self,
-    ) -> miette::Result<&(LazyReqwestClient, rattler_networking::LazyClient)> {
-        Ok(self
-            .client
-            .get_or_try_init(|| build_lazy_reqwest_clients(Some(self.config()), None))?)
+    ) -> Result<&(LazyReqwestClient, rattler_networking::LazyClient), ReqwestClientError> {
+        self.client
+            .get_or_try_init(|| build_lazy_reqwest_clients(Some(self.config()), None))
     }
 
     pub fn config(&self) -> &Config {
@@ -579,23 +580,27 @@ impl Project {
     fn resolved_exclude_newer<'a>(
         &'a self,
         channels: impl IntoIterator<Item = &'a PrioritizedChannel>,
-    ) -> Result<Option<ResolvedExcludeNewer>, ParseChannelError> {
-        let policy = self.manifest.parsed.exclude_newer.as_ref();
-        let mut resolved = resolve_exclude_newer(
-            policy.map(|policy| policy.cutoff),
+    ) -> Result<Option<ResolvedExcludeNewer>, ExcludeNewerError> {
+        let config = self
+            .manifest
+            .parsed
+            .exclude_newer
+            .as_ref()
+            .map(|policy| ExcludeNewerConfig {
+                cutoff: Some(policy.cutoff),
+                exemptions: policy
+                    .exemptions
+                    .iter()
+                    .map(|(name, version)| (name.clone(), BinarySpec::Version(version.clone())))
+                    .collect(),
+            })
+            .unwrap_or_default();
+        resolve_exclude_newer(
+            &config,
             channels,
-            |channel| {
-                channel
-                    .channel
-                    .clone()
-                    .into_base_url(self.global_channel_config())
-            },
+            self.global_channel_config(),
             std::iter::empty(),
-        )?;
-        if let (Some(resolved), Some(policy)) = (&mut resolved, policy) {
-            resolved.exemptions.clone_from(&policy.exemptions);
-        }
-        Ok(resolved)
+        )
     }
 
     /// The virtual packages to solve an environment against.
@@ -605,15 +610,18 @@ impl Project {
     /// so the solve respects run constraints on virtual packages. For any other
     /// platform the machine can't be inspected, so the list is empty.
     fn virtual_packages_for(
+        host: &HostDetection,
         platform: &Subdir,
-    ) -> Result<Vec<GenericVirtualPackage>, HostDetectionError> {
-        let host = host_subdir();
+    ) -> Result<Vec<GenericVirtualPackage>, HostUndetected> {
         if platform
             .only_platform()
-            .map(|p| p == host.only_platform().unwrap_or(""))
+            .map(|p| p == host.subdir().only_platform().unwrap_or(""))
             .unwrap_or(false)
         {
-            Ok(solver_generic_virtual_packages(&detect_host(host)?))
+            Ok(host
+                .platform()?
+                .solver_virtual_package_records()
+                .into_owned())
         } else {
             Ok(vec![])
         }
@@ -720,7 +728,8 @@ impl Project {
             ));
         }
 
-        let solve_virtual_packages = Self::virtual_packages_for(&platform).into_diagnostic()?;
+        let solve_virtual_packages =
+            Self::virtual_packages_for(&self.host, &platform).into_diagnostic()?;
 
         // Convert dependency specs to binary specs for CommandDispatcher
         let mut pixi_specs = DependencyMap::default();
@@ -1235,7 +1244,7 @@ impl Project {
             .resolved_exclude_newer(&environment.channels)
             .into_diagnostic()?
         {
-            let exclude_newer = ExcludeNewerFilter::from(exclude_newer);
+            let exclude_newer = rattler_solve::ExcludeNewer::from(exclude_newer);
             for record in &prefix_records {
                 let package = &record.repodata_record.package_record;
                 let channel = record.repodata_record.channel.as_deref();
@@ -1957,7 +1966,7 @@ fn inline_packages_for_environment(
 
 impl Repodata for Project {
     /// Returns the [`Gateway`] used by this project.
-    fn repodata_gateway(&self) -> miette::Result<&Gateway> {
+    fn repodata_gateway(&self) -> Result<&Gateway, ReqwestClientError> {
         self.repodata_gateway.get_or_try_init(|| {
             let client = self.authenticated_client()?.clone();
             let concurrent_downloads = self.concurrent_downloads_semaphore();
@@ -2325,6 +2334,10 @@ mod tests {
         } else {
             Subdir::Win64
         };
-        assert!(Project::virtual_packages_for(&other).unwrap().is_empty());
+        assert!(
+            Project::virtual_packages_for(&HostDetection::builtin(), &other)
+                .unwrap()
+                .is_empty()
+        );
     }
 }

@@ -2,7 +2,10 @@ use std::{
     collections::HashMap,
     path::{Path, PathBuf},
     str::FromStr,
+    sync::Arc,
 };
+
+use miette::NamedSource;
 
 use pep440_rs::VersionSpecifiers;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
@@ -20,6 +23,7 @@ use crate::{
     toml::{
         ExternalWorkspaceProperties, FromTomlStr, PackageDefaults, PyProjectToml, TomlManifest,
     },
+    utils::WithSourceCode,
 };
 
 /// Errors from [`PyProjectManifest::from_path`].
@@ -34,7 +38,7 @@ pub enum PyProjectReadError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Toml(#[from] TomlError),
+    Toml(#[from] Box<WithSourceCode<TomlError, NamedSource<Arc<str>>>>),
 }
 
 #[derive(Debug)]
@@ -64,7 +68,11 @@ impl PyProjectManifest {
             path: path.clone(),
             source,
         })?;
-        Ok(Self::from_toml_str(&source)?)
+        Self::from_toml_str(&source).map_err(|error| {
+            let source = NamedSource::new(path.to_string_lossy(), Arc::from(source))
+                .with_language(ManifestKind::Pyproject.language());
+            Box::new(WithSourceCode { error, source }).into()
+        })
     }
 
     /// Ensures the `pyproject.toml` contains a `[tool.pixi]` table
@@ -712,5 +720,14 @@ mod tests {
         assert!(matches!(err, PyProjectReadError::Toml(_)));
         let help = miette::Diagnostic::help(&err).map(|help| help.to_string());
         assert_eq!(help.as_deref(), Some("Did you mean 'platforms'?"));
+
+        // The error carries the file contents, so its span renders in context.
+        let mut rendered = String::new();
+        miette::NarratableReportHandler::new()
+            .render_report(&mut rendered, &err)
+            .unwrap();
+        // spellchecker:off
+        assert!(rendered.contains("platfroms = []"), "{rendered}");
+        // spellchecker:on
     }
 }

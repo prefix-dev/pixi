@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::str::FromStr;
@@ -11,12 +12,14 @@ use pixi_manifest::{
     EnvironmentName, FeatureName, FeaturesExt, HasWorkspaceManifest, PixiPlatform,
     PixiPlatformName, PlatformEdit, PlatformMove,
     platform::{
-        candidate_subdirs, capability_satisfied_by,
-        host::{detect_host, host_capabilities, host_subdir, machine_virtual_packages},
+        candidate_subdirs, capability_satisfied_by, host::machine_virtual_packages,
         subdir_default_virtual_packages,
     },
 };
-use rattler_conda_types::{GenericVirtualPackage, PackageName, Subdir, Version};
+use rattler_conda_types::{
+    GenericVirtualPackage, PackageName, Subdir, Version,
+    virtual_package_detector::VirtualPackageName,
+};
 
 use crate::{
     cli_config::{ScriptWorkspaceConfig, script_lock_file_usage},
@@ -36,26 +39,18 @@ pub struct Args {
     pub command: Command,
 }
 
-/// Common virtual-package shortcut flags shared by `add` and `edit`. Wrapped
-/// in a clap struct so the rules (parsing, validation, conversion to
-/// `GenericVirtualPackage`) live in one place.
-///
-/// Mirrors the TOML's per-virtual-package keys (`cuda`, `amdgpu`, `archspec`,
-/// `glibc`, `linux`, `macos`, `windows`). Virtual packages without a friendly flag are
-/// declared as trailing `__name[=version[=build_string]]` positionals on the
-/// surrounding `add` / `edit` command, matching the `__name` raw-key escape
-/// hatch in the TOML layer.
+/// Built-in virtual-package flags shared by `add` and `edit`.
 #[derive(Parser, Debug, Default, Clone)]
 pub struct VirtualPackageArgs {
     /// Declare a `__cuda` virtual package at the given version, e.g. `12.0`.
     /// Valid on any subdir.
-    #[clap(long, value_name = "VERSION")]
+    #[clap(long, value_name = "VERSION[=BUILD]")]
     pub cuda: Option<String>,
 
     /// Declare a `__cuda_arch` virtual package (GPU compute capability) at the
     /// given version, e.g. `8.6`. Requires `--cuda` (or an existing `__cuda`),
     /// matching the conda CEP coupling. Serialized as `cuda = { driver, arch }`.
-    #[clap(long, value_name = "VERSION")]
+    #[clap(long, value_name = "VERSION[=BUILD]")]
     pub cuda_arch: Option<String>,
 
     /// Declare a `__amdgpu` virtual package, stating that an AMD GPU is
@@ -76,22 +71,22 @@ pub struct VirtualPackageArgs {
 
     /// Declare a `__glibc` virtual package at the given version, e.g. `2.28`.
     /// Only valid on linux subdirs.
-    #[clap(long, value_name = "VERSION")]
+    #[clap(long, value_name = "VERSION[=BUILD]")]
     pub glibc: Option<String>,
 
     /// Declare a `__linux` virtual package at the given kernel version,
     /// e.g. `5.10`. Only valid on linux subdirs.
-    #[clap(long, value_name = "VERSION")]
+    #[clap(long, value_name = "VERSION[=BUILD]")]
     pub linux: Option<String>,
 
     /// Declare a `__osx` virtual package at the given macOS version,
     /// e.g. `14.0`. Only valid on osx subdirs.
-    #[clap(long, visible_alias = "osx", value_name = "VERSION")]
+    #[clap(long, visible_alias = "osx", value_name = "VERSION[=BUILD]")]
     pub macos: Option<String>,
 
     /// Declare a `__win` virtual package at the given Windows version,
     /// e.g. `10`. Only valid on win subdirs.
-    #[clap(long, value_name = "VERSION")]
+    #[clap(long, value_name = "VERSION[=BUILD]")]
     pub windows: Option<String>,
 }
 
@@ -121,13 +116,10 @@ impl VirtualPackageArgs {
         let mut seen_names = HashSet::new();
 
         if let Some(value) = self.cuda {
-            let version = parse_virtual_package_version("--cuda", &value)?;
             push_unique(
                 &mut specs,
                 &mut seen_names,
-                "__cuda",
-                version,
-                String::new(),
+                parse_virtual_package_flag("--cuda", "__cuda", &value)?,
             )?;
         }
         if let Some(value) = self.cuda_arch {
@@ -135,13 +127,10 @@ impl VirtualPackageArgs {
             // the platform model once the full virtual-package set is known --
             // here we only collect the spec, since `edit` may add `--cuda-arch`
             // to a platform that already declares `__cuda`.
-            let version = parse_virtual_package_version("--cuda-arch", &value)?;
             push_unique(
                 &mut specs,
                 &mut seen_names,
-                "__cuda_arch",
-                version,
-                String::new(),
+                parse_virtual_package_flag("--cuda-arch", "__cuda_arch", &value)?,
             )?;
         }
         if self.amdgpu || self.amdgpu_arch.is_some() {
@@ -150,9 +139,11 @@ impl VirtualPackageArgs {
             push_unique(
                 &mut specs,
                 &mut seen_names,
-                "__amdgpu",
-                zero_version(),
-                String::new(),
+                GenericVirtualPackage {
+                    name: virtual_package_name("__amdgpu"),
+                    version: zero_version(),
+                    build_string: String::new(),
+                },
             )?;
         }
         if let Some(value) = self.amdgpu_arch {
@@ -161,9 +152,11 @@ impl VirtualPackageArgs {
             push_unique(
                 &mut specs,
                 &mut seen_names,
-                "__amdgpu_arch",
-                version,
-                String::new(),
+                GenericVirtualPackage {
+                    name: virtual_package_name("__amdgpu_arch"),
+                    version,
+                    build_string: String::new(),
+                },
             )?;
         }
         if let Some(value) = self.archspec {
@@ -175,42 +168,44 @@ impl VirtualPackageArgs {
             push_unique(
                 &mut specs,
                 &mut seen_names,
-                "__archspec",
-                zero_version(),
-                value,
+                GenericVirtualPackage {
+                    name: virtual_package_name("__archspec"),
+                    version: zero_version(),
+                    build_string: value,
+                },
             )?;
         }
         if let Some(value) = self.glibc {
             require_subdir_family(subdir, Subdir::is_linux, "--glibc", "linux")?;
-            let version = parse_virtual_package_version("--glibc", &value)?;
             push_unique(
                 &mut specs,
                 &mut seen_names,
-                "__glibc",
-                version,
-                String::new(),
+                parse_virtual_package_flag("--glibc", "__glibc", &value)?,
             )?;
         }
         if let Some(value) = self.linux {
             require_subdir_family(subdir, Subdir::is_linux, "--linux", "linux")?;
-            let version = parse_virtual_package_version("--linux", &value)?;
             push_unique(
                 &mut specs,
                 &mut seen_names,
-                "__linux",
-                version,
-                String::new(),
+                parse_virtual_package_flag("--linux", "__linux", &value)?,
             )?;
         }
         if let Some(value) = self.macos {
             require_subdir_family(subdir, Subdir::is_osx, "--macos", "osx")?;
-            let version = parse_virtual_package_version("--macos", &value)?;
-            push_unique(&mut specs, &mut seen_names, "__osx", version, String::new())?;
+            push_unique(
+                &mut specs,
+                &mut seen_names,
+                parse_virtual_package_flag("--macos", "__osx", &value)?,
+            )?;
         }
         if let Some(value) = self.windows {
             require_subdir_family(subdir, Subdir::is_windows, "--windows", "win")?;
-            let version = parse_virtual_package_version("--windows", &value)?;
-            push_unique(&mut specs, &mut seen_names, "__win", version, String::new())?;
+            push_unique(
+                &mut specs,
+                &mut seen_names,
+                parse_virtual_package_flag("--windows", "__win", &value)?,
+            )?;
         }
 
         for raw in raw_specs {
@@ -233,22 +228,15 @@ impl VirtualPackageArgs {
 fn push_unique(
     specs: &mut Vec<GenericVirtualPackage>,
     seen: &mut HashSet<String>,
-    conda_name: &str,
-    version: Version,
-    build_string: String,
+    package: GenericVirtualPackage,
 ) -> miette::Result<()> {
-    let name = virtual_package_name(conda_name);
-    let normalized = name.as_normalized().to_string();
+    let normalized = package.name.as_normalized().to_string();
     if !seen.insert(normalized.clone()) {
         miette::bail!(
             "virtual package '{normalized}' was specified more than once on the command line"
         );
     }
-    specs.push(GenericVirtualPackage {
-        name,
-        version,
-        build_string,
-    });
+    specs.push(package);
     Ok(())
 }
 
@@ -275,39 +263,27 @@ fn zero_version() -> Version {
     Version::from_str("0").expect("'0' is a valid Version")
 }
 
-fn parse_virtual_package_version(flag: &str, value: &str) -> miette::Result<Version> {
-    Version::from_str(value)
-        .into_diagnostic()
-        .map_err(|e| miette::miette!("{flag}: '{value}' is not a valid version: {e}"))
+/// Parse a version-style flag the way the manifest parses the matching key.
+fn parse_virtual_package_flag(
+    flag: &str,
+    conda_name: &str,
+    value: &str,
+) -> miette::Result<GenericVirtualPackage> {
+    pixi_manifest::platform::parse_versioned_virtual_package(
+        virtual_package_name(conda_name),
+        value,
+    )
+    .map_err(|message| miette::miette!("{flag}: {message}"))
 }
 
 fn parse_raw_virtual_package(spec: &str) -> miette::Result<GenericVirtualPackage> {
-    // `splitn` keeps trailing '=' segments in the build string, matching the
-    // manifest's raw parser, instead of silently dropping them.
-    let mut parts = spec.splitn(3, '=');
-    let name_str = parts.next().unwrap_or("");
-    if name_str.strip_prefix("__").is_none_or(str::is_empty) {
-        miette::bail!(
-            "'{spec}' is not a virtual package spec: name must start with '__' followed by a name (e.g. '__cuda=12.0')"
-        );
-    }
-    let name = PackageName::try_from(name_str)
+    let (name, value) = spec.split_once('=').unwrap_or((spec, "0"));
+    let name = VirtualPackageName::try_from(name)
         .into_diagnostic()
-        .map_err(|e| miette::miette!("'{name_str}' is not a valid virtual package name: {e}"))?;
-    let version_str = parts.next().unwrap_or("0");
-    let version = Version::from_str(version_str)
-        .into_diagnostic()
-        .map_err(|e| {
-            miette::miette!("'{version_str}' is not a valid virtual package version: {e}")
-        })?;
-    let build_string = parts.next().unwrap_or("").to_string();
-    pixi_manifest::platform::validate_virtual_package(&name, version_str, &build_string)
-        .map_err(|message| miette::miette!("{message}"))?;
-    Ok(GenericVirtualPackage {
-        name,
-        version,
-        build_string,
-    })
+        .map_err(|e| miette::miette!("'{name}' is not a valid virtual package name: {e}"))?
+        .into_package_name();
+    pixi_manifest::platform::parse_versioned_virtual_package(name, value)
+        .map_err(|message| miette::miette!("{message}"))
 }
 
 /// Parse a positional add argument. Accepts either a bare subdir
@@ -534,7 +510,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
-        .locate()?;
+        .locate()
+        .await?;
 
     let lock_file_usage = script_lock_file_usage(
         LockFileUsage::Update,
@@ -668,8 +645,9 @@ async fn execute_add_auto_detected(
     feature: FeatureName,
     lock_file_usage: LockFileUsage,
 ) -> miette::Result<()> {
-    let subdir = host_subdir();
-    let detected = detect_host(subdir).into_diagnostic()?;
+    let host = workspace_ctx.workspace().host();
+    let subdir = host.subdir();
+    let detected = host.platform().into_diagnostic()?.clone();
     let overrides = virtual_packages.into_specs(subdir, raw_specs)?;
     let merged = merge_virtual_packages(detected.customised_virtual_packages(), overrides);
     let explicit = explicit_name.is_some();
@@ -807,7 +785,7 @@ async fn execute_list(
     if args.json {
         // Same snapshot the human output renders, so the two views of one
         // command cannot disagree about the host.
-        let machine = HostMachine::detect();
+        let machine = HostMachine::from_host(workspace.host());
         let mut platforms: Vec<serde_json::Value> =
             Vec::with_capacity(workspace_platforms.len() + 1);
         platforms.push(autodetected_to_json(&machine));
@@ -835,7 +813,7 @@ async fn execute_list(
     }
 
     let mut stdout = std::io::stdout();
-    let machine = HostMachine::detect();
+    let machine = HostMachine::from_host(workspace.host());
     print_autodetected_host(&mut stdout, &machine);
 
     if !workspace_platforms.is_empty() {
@@ -854,7 +832,7 @@ async fn execute_list(
 /// in declaration order, each followed by its usage lines.
 fn format_workspace_platform_rows(
     workspace: &pixi_core::Workspace,
-    machine: &HostMachine,
+    machine: &HostMachine<'_>,
 ) -> String {
     let reachability = MachineReachability::compute(workspace, machine);
     let multiple_environments = workspace.environments().len() > 1;
@@ -905,7 +883,7 @@ async fn execute_remove(
 
 /// Pretty-print rattler's host detection as a "diagnostic" header rather
 /// than another `<name>:` row.
-fn print_autodetected_host(stdout: &mut std::io::Stdout, machine: &HostMachine) {
+fn print_autodetected_host(stdout: &mut std::io::Stdout, machine: &HostMachine<'_>) {
     let _ = writeln!(stdout, "Your current machine was detected as:");
     let _ = writeln!(
         stdout,
@@ -965,17 +943,17 @@ struct PlatformUsers {
 /// Snapshot of the local machine used to color platform rows in `list`:
 /// the subdir we target, which subdirs we can run packages from (that one plus
 /// arch fallbacks) and which virtual packages rattler detected on the host.
-struct HostMachine {
+struct HostMachine<'a> {
     subdir: Subdir,
     candidate_subdirs: Vec<Subdir>,
-    detected: Vec<GenericVirtualPackage>,
+    detected: Cow<'a, [GenericVirtualPackage]>,
 }
 
-impl HostMachine {
-    fn detect() -> Self {
-        let subdir = host_subdir();
+impl<'a> HostMachine<'a> {
+    fn from_host(host: &'a pixi_core::host::HostDetection) -> Self {
+        let subdir = host.subdir();
         let candidate_subdirs = candidate_subdirs(subdir);
-        let detected = host_capabilities();
+        let detected = host.capabilities();
         HostMachine {
             subdir,
             candidate_subdirs,
@@ -1011,7 +989,7 @@ impl HostMachine {
             return false;
         }
         pixi_manifest::toml::inline_virtual_package_specs(
-            platform.declared_virtual_packages(),
+            platform.manifest_virtual_package_records().as_ref(),
             Some(&subdir_default_virtual_packages(subdir)),
         )
         .iter()
@@ -1028,7 +1006,7 @@ struct MachineReachability {
 }
 
 impl MachineReachability {
-    fn compute(workspace: &pixi_core::Workspace, machine: &HostMachine) -> Self {
+    fn compute(workspace: &pixi_core::Workspace, machine: &HostMachine<'_>) -> Self {
         let manifest = workspace.workspace_manifest();
         let supported: HashSet<&str> = manifest
             .workspace
@@ -1077,7 +1055,7 @@ impl MachineReachability {
 /// platform, with unreachable names dimmed.
 fn format_workspace_platform_row(
     platform: &PixiPlatform,
-    machine: &HostMachine,
+    machine: &HostMachine<'_>,
     users: &PlatformUsers,
     reachability: &MachineReachability,
     multiple_environments: bool,
@@ -1095,7 +1073,7 @@ fn format_workspace_platform_row(
 
     let mut all_vps_ok = true;
     for spec in pixi_manifest::toml::inline_virtual_package_specs(
-        platform.declared_virtual_packages(),
+        platform.manifest_virtual_package_records().as_ref(),
         Some(&subdir_default_virtual_packages(subdir)),
     ) {
         let satisfied = spec.packages.iter().all(|p| machine.satisfies(p));
@@ -1208,7 +1186,7 @@ fn show_to_json(
         "name": platform.name().as_str(),
         "subdir": platform.subdir().as_str(),
         "virtual_packages": render_friendly(
-            platform.declared_virtual_packages(),
+            platform.manifest_virtual_package_records().as_ref(),
             Some(&subdir_default_virtual_packages(platform.subdir())),
         ),
         "detected_virtual_packages": detected,
@@ -1221,7 +1199,7 @@ fn show_to_json(
 /// JSON counterpart to [`print_autodetected_host`]. Carries the same data
 /// shape as a real platform entry plus an `is_autodetected: true` marker so
 /// downstream tooling can tell synthetic rows apart from declared ones.
-fn autodetected_to_json(machine: &HostMachine) -> serde_json::Value {
+fn autodetected_to_json(machine: &HostMachine<'_>) -> serde_json::Value {
     let detected: Vec<String> = render_friendly(&machine.detected, None);
     serde_json::json!({
         "name": "current",
@@ -1270,11 +1248,11 @@ mod tests {
     }
 
     /// A host that runs linux-64 with no customised virtual packages.
-    fn linux_machine() -> HostMachine {
+    fn linux_machine() -> HostMachine<'static> {
         HostMachine {
             subdir: Subdir::Linux64,
             candidate_subdirs: vec![Subdir::Linux64],
-            detected: Vec::new(),
+            detected: Cow::Borrowed(&[]),
         }
     }
 
@@ -1395,11 +1373,50 @@ mod tests {
     }
 
     #[test]
+    fn into_specs_accepts_build_strings_like_the_manifest() {
+        let args = VirtualPackageArgs {
+            cuda: Some("12.0=h1".into()),
+            glibc: Some("2.28".into()),
+            ..Default::default()
+        };
+        let specs = args.into_specs(Subdir::Linux64, &[]).unwrap();
+        let rendered: Vec<String> = specs.iter().map(ToString::to_string).collect();
+        assert_eq!(rendered, ["__cuda=12.0=h1", "__glibc=2.28"]);
+
+        let args = VirtualPackageArgs {
+            cuda: Some("=h1".into()),
+            ..Default::default()
+        };
+        let err = args.into_specs(Subdir::Linux64, &[]).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("--cuda: '=h1' is not a valid version and build string"),
+            "{err}"
+        );
+    }
+
+    #[test]
     fn parse_raw_virtual_package_keeps_trailing_segments_in_build_string() {
-        // Extra '=' segments belong to the build string -- as in the
-        // manifest's raw parser -- rather than being silently dropped.
         let package = parse_raw_virtual_package("__foo=1=special=build").unwrap();
         assert_eq!(package.build_string, "special=build");
+    }
+
+    #[test]
+    fn parse_raw_virtual_package_rejects_names_the_manifest_rejects() {
+        for spec in [
+            "cud=1",
+            "site_service=1",
+            "__=1",
+            "__a..b=1",
+            "__a__b=1",
+            "__-x=1",
+            "___x=1",
+        ] {
+            assert!(
+                parse_raw_virtual_package(spec).is_err(),
+                "{spec} must be rejected"
+            );
+        }
     }
 
     #[test]

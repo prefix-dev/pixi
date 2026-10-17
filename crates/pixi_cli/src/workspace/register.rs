@@ -104,7 +104,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .with_global_config_source(args.config_source.source())
                 .with_closest_package(false)
                 .with_search_start(args.workspace_config.workspace_locator_start())
-                .locate()?;
+                .locate()
+                .await?;
 
             let target_name = args
                 .name

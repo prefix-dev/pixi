@@ -22,7 +22,10 @@
 //! load and disappear the next time the lock file is written.
 use std::{collections::HashMap, path::Path};
 
-use pixi_manifest::{PixiPlatform, WorkspaceManifest, platform};
+use pixi_manifest::{
+    PixiPlatform, WorkspaceManifest,
+    platform::{self, VirtualPackageRecords},
+};
 use pixi_record::{LockFileResolver, LockFileResolverError, LockFileWriter};
 use rattler_conda_types::GenericVirtualPackage;
 use rattler_lock::{LockFile, LockedPackage, PlatformData, PlatformName};
@@ -120,8 +123,12 @@ fn compute_renames(lock_file: &LockFile, manifest: &WorkspaceManifest) -> HashMa
 /// subdir defaults so only user-set customisations participate in the match.
 fn workspace_customisations(platform: &PixiPlatform) -> Vec<GenericVirtualPackage> {
     let subdir = platform.subdir();
-    let mut customised: Vec<GenericVirtualPackage> = platform
-        .declared_virtual_packages()
+    let records = match platform.records() {
+        VirtualPackageRecords::Manifest(records) | VirtualPackageRecords::Detected(records) => {
+            records
+        }
+    };
+    let mut customised: Vec<GenericVirtualPackage> = records
         .iter()
         .filter(|gvp| !platform::is_subdir_default(gvp, subdir))
         .cloned()
