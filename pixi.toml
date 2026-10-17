@@ -270,6 +270,10 @@ check-into-diagnostic = {
   cmd = "python scripts/check_into_diagnostic.py",
   description = "Check that `into_diagnostic` counts per crate match the baseline",
 }
+update-bioconductor-packages = {
+  cmd = "python scripts/update_bioconductor_packages.py",
+  description = "Update pixi-build-r's list of Bioconductor packages from bioconductor.org",
+}
 check-openssl = {
   cmd = "python tests/scripts/check-openssl.py",
   description = "Check OpenSSL configuration",

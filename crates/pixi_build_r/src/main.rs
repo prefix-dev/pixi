@@ -13,7 +13,7 @@ use pixi_build_backend::{
     tools::BackendIdentifier,
     variants::NormalizedKey,
 };
-use rattler_build_recipe::stage0::{Item, Script, SerializableMatchSpec, Value};
+use rattler_build_recipe::stage0::{ConditionalList, Item, Script, SerializableMatchSpec, Value};
 use rattler_conda_types::{ChannelUrl, Subdir};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
@@ -24,6 +24,18 @@ fn matchspec_item(
     spec: &str,
 ) -> Result<Item<SerializableMatchSpec>, rattler_conda_types::ParseMatchSpecError> {
     Ok(Item::Value(Value::new_concrete(spec.parse()?, None)))
+}
+
+/// The exact conda names of the requirements that apply on every platform.
+fn unconditional_names(requirements: &ConditionalList<SerializableMatchSpec>) -> Vec<String> {
+    requirements
+        .iter()
+        .filter_map(|item| match item {
+            Item::Value(value) => value.as_concrete()?.0.name.as_exact(),
+            Item::Conditional(_) => None,
+        })
+        .map(|name| name.as_normalized().to_string())
+        .collect()
 }
 
 #[derive(Default, Clone)]
@@ -93,6 +105,12 @@ impl GenerateRecipe for RGenerator {
         let mut generated_recipe =
             GeneratedRecipe::from_model(model.clone(), &mut metadata_provider).into_diagnostic()?;
 
+        // The manifest's own requirements, which take precedence over the
+        // DESCRIPTION's. Platform-specific ones don't, as they don't cover
+        // the other platforms.
+        let manifest_host = unconditional_names(&generated_recipe.recipe.requirements.host);
+        let manifest_run = unconditional_names(&generated_recipe.recipe.requirements.run);
+
         let requirements = &mut generated_recipe.recipe.requirements;
 
         // Auto-detect or use configured compilers
@@ -153,61 +171,63 @@ impl GenerateRecipe for RGenerator {
             .run
             .push(matchspec_item("r-base").into_diagnostic()?);
 
-        // Add R package dependencies from DESCRIPTION (Imports + Depends)
-        let r_dependencies = metadata_provider.runtime_dependencies().into_diagnostic()?;
+        // Add R package dependencies from DESCRIPTION unless ignored: Imports
+        // and Depends to host and run, LinkingTo (packages providing headers
+        // for C/C++ compilation) to host only
+        if !config.ignore_description_dependencies.unwrap_or(false) {
+            let runtime_deps = metadata_provider.runtime_dependencies().into_diagnostic()?;
+            let linking_to_deps = metadata_provider.linking_to().into_diagnostic()?;
 
-        for dep in r_dependencies {
-            // Skip packages that are built into r-base (the base packages)
-            if metadata::is_builtin_package(&dep.name) {
-                continue;
+            let deps = runtime_deps
+                .into_iter()
+                .map(|dep| (dep, true))
+                .chain(linking_to_deps.into_iter().map(|dep| (dep, false)));
+            for (dep, at_runtime) in deps {
+                // Skip packages that are built into r-base (the base packages)
+                if metadata::is_builtin_package(&dep.name) {
+                    continue;
+                }
+
+                // The conda name the manifest gives the R package, so that it
+                // can rename it, else the mapped one. Not its bare R name,
+                // which can be another conda package: the R package openssl
+                // is r-openssl, while openssl is the C library.
+                let lower_dep = dep.name.to_lowercase();
+                let candidate_names = [
+                    format!("r-{lower_dep}"),
+                    format!("bioconductor-{lower_dep}"),
+                ];
+                let manifest_name = manifest_host
+                    .iter()
+                    .chain(&manifest_run)
+                    .find(|name| candidate_names.contains(name));
+                let conda_name = match manifest_name {
+                    Some(name) => name.clone(),
+                    None => metadata::r_package_to_conda(&dep.name),
+                };
+
+                // Build the dependency spec string
+                let dep_spec = if let Some(version) = &dep.version {
+                    let conda_version = metadata::r_version_to_conda(version);
+                    format!("{} {}", conda_name, conda_version)
+                } else {
+                    conda_name.clone()
+                };
+
+                // A manifest requirement replaces the DESCRIPTION's, so that
+                // it can set the version. DESCRIPTION's own duplicates, e.g. in
+                // Imports and LinkingTo, intersect in the solver.
+                if !manifest_host.contains(&conda_name) {
+                    requirements
+                        .host
+                        .push(matchspec_item(&dep_spec).into_diagnostic()?);
+                }
+                if at_runtime && !manifest_run.contains(&conda_name) {
+                    requirements
+                        .run
+                        .push(matchspec_item(&dep_spec).into_diagnostic()?);
+                }
             }
-
-            // Convert R package name to conda package name
-            let conda_name = metadata::r_package_to_conda(&dep.name);
-
-            // Build the dependency spec string
-            let dep_spec = if let Some(version) = &dep.version {
-                let conda_version = metadata::r_version_to_conda(version);
-                format!("{} {}", conda_name, conda_version)
-            } else {
-                conda_name
-            };
-
-            // Add to host requirements (runtime dependencies)
-            requirements
-                .host
-                .push(matchspec_item(&dep_spec).into_diagnostic()?);
-
-            // Also add to run requirements
-            requirements
-                .run
-                .push(matchspec_item(&dep_spec).into_diagnostic()?);
-        }
-
-        // Add LinkingTo dependencies (packages providing headers for C/C++ compilation)
-        let linking_to_deps = metadata_provider.linking_to().into_diagnostic()?;
-
-        for dep in linking_to_deps {
-            // Skip packages that are built into r-base
-            if metadata::is_builtin_package(&dep.name) {
-                continue;
-            }
-
-            // Convert R package name to conda package name
-            let conda_name = metadata::r_package_to_conda(&dep.name);
-
-            // Build the dependency spec string
-            let dep_spec = if let Some(version) = &dep.version {
-                let conda_version = metadata::r_version_to_conda(version);
-                format!("{} {}", conda_name, conda_version)
-            } else {
-                conda_name
-            };
-
-            // Add to host requirements only (LinkingTo packages provide headers at compile time)
-            requirements
-                .host
-                .push(matchspec_item(&dep_spec).into_diagnostic()?);
         }
 
         // Generate build script
@@ -906,8 +926,51 @@ SystemRequirements: CMake (>= 3.15), libxml2, pkg-config
     async fn test_package_name_derived_from_description_is_r_prefixed() {
         // When the model carries no name (the inline source-dependency flow),
         // the recipe name comes from the DESCRIPTION via the metadata provider.
-        // It must be r-prefixed and lowercased so that a dependent's `Imports`
+        // For CRAN packages, it must be r-prefixed and lowercased so that a dependent's `Imports`
         // (which maps through r_package_to_conda) resolves against it.
+        let temp_dir = TempDir::new().unwrap();
+
+        fs::write(
+            temp_dir.path().join("DESCRIPTION"),
+            "Package: RColorBrewer\nVersion: 1.0.0\nTitle: Test Package\n",
+        )
+        .await
+        .unwrap();
+
+        let project_model = project_fixture!({
+            "version": "1.0.0",
+            "targets": {
+                "defaultTarget": {}
+            }
+        });
+
+        let generated_recipe = RGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &RBackendConfig::default(),
+                temp_dir.path().to_path_buf(),
+                Subdir::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        assert_eq!(
+            generated_recipe.recipe.package.name.to_string(),
+            "r-rcolorbrewer"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_package_name_derived_from_description_for_bioconductor() {
+        // For Bioconductor packages, the recipe name comes from the DESCRIPTION
+        // and must be bioconductor-prefixed and lowercased.
         let temp_dir = TempDir::new().unwrap();
 
         fs::write(
@@ -943,8 +1006,414 @@ SystemRequirements: CMake (>= 3.15), libxml2, pkg-config
 
         assert_eq!(
             generated_recipe.recipe.package.name.to_string(),
-            "r-rhdf5lib"
+            "bioconductor-rhdf5lib"
         );
+    }
+
+    #[tokio::test]
+    async fn test_bioconductor_dependencies_auto_mapped() {
+        let temp_dir = TempDir::new().unwrap();
+
+        fs::write(
+            temp_dir.path().join("DESCRIPTION"),
+            "Package: testpkg\nVersion: 1.0.0\nImports: Biobase, GenomicRanges (>= 1.40.0), curl\n",
+        )
+        .await
+        .unwrap();
+
+        let project_model = project_fixture!({
+            "name": "r-testpkg",
+            "version": "1.0.0",
+            "targets": {
+                "defaultTarget": {}
+            }
+        });
+
+        let generated_recipe = RGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &RBackendConfig::default(),
+                temp_dir.path().to_path_buf(),
+                Subdir::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let host_reqs: Vec<String> = generated_recipe
+            .recipe
+            .requirements
+            .host
+            .iter()
+            .map(|r| r.to_string())
+            .collect();
+        let run_reqs: Vec<String> = generated_recipe
+            .recipe
+            .requirements
+            .run
+            .iter()
+            .map(|r| r.to_string())
+            .collect();
+
+        // Biobase should auto-map to bioconductor-biobase
+        assert!(host_reqs.iter().any(|r| r == "bioconductor-biobase"));
+        assert!(run_reqs.iter().any(|r| r == "bioconductor-biobase"));
+
+        // GenomicRanges should auto-map to bioconductor-genomicranges >=1.40.0
+        assert!(
+            host_reqs
+                .iter()
+                .any(|r| r.contains("bioconductor-genomicranges") && r.contains(">=1.40.0"))
+        );
+        assert!(
+            run_reqs
+                .iter()
+                .any(|r| r.contains("bioconductor-genomicranges") && r.contains(">=1.40.0"))
+        );
+
+        // curl is a CRAN package, should map to r-curl
+        assert!(host_reqs.iter().any(|r| r == "r-curl"));
+        assert!(run_reqs.iter().any(|r| r == "r-curl"));
+    }
+
+    #[tokio::test]
+    async fn test_explicit_dependencies_prevent_duplicates_and_conflicts() {
+        let temp_dir = TempDir::new().unwrap();
+
+        fs::write(
+            temp_dir.path().join("DESCRIPTION"),
+            "Package: testpkg\nVersion: 1.0.0\nImports: Biobase\n",
+        )
+        .await
+        .unwrap();
+
+        let project_model = project_fixture!({
+            "name": "r-testpkg",
+            "version": "1.0.0",
+            "targets": {
+                "defaultTarget": {
+                    "hostDependencies": {
+                        "bioconductor-biobase": {
+                            "binary": {
+                                "version": ">=2.60"
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        let generated_recipe = RGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &RBackendConfig::default(),
+                temp_dir.path().to_path_buf(),
+                Subdir::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let host_reqs: Vec<String> = generated_recipe
+            .recipe
+            .requirements
+            .host
+            .iter()
+            .map(|r| r.to_string())
+            .collect();
+
+        // Host requirements should have exactly 1 biobase spec (the user's explicit >=2.60 constraint),
+        // and NO r-biobase!
+        let biobase_count = host_reqs.iter().filter(|r| r.contains("biobase")).count();
+        assert_eq!(biobase_count, 1);
+        assert!(
+            host_reqs
+                .iter()
+                .any(|r| r.contains("bioconductor-biobase") && r.contains(">=2.60"))
+        );
+        assert!(
+            !host_reqs
+                .iter()
+                .any(|r| r == "r-biobase" || r.starts_with("r-biobase "))
+        );
+    }
+
+    #[tokio::test]
+    async fn test_same_named_conda_package_does_not_replace_r_package() {
+        let temp_dir = TempDir::new().unwrap();
+
+        // jose depends on the R package openssl; the package also needs the
+        // openssl C library, which is a different conda package
+        fs::write(
+            temp_dir.path().join("DESCRIPTION"),
+            "Package: jose\nVersion: 1.2.1\nDepends: openssl (>= 1.2.1)\nImports: jsonlite\n",
+        )
+        .await
+        .unwrap();
+
+        let project_model = project_fixture!({
+            "name": "r-jose",
+            "version": "1.2.1",
+            "targets": {
+                "defaultTarget": {
+                    "hostDependencies": {
+                        "openssl": {
+                            "binary": {
+                                "version": "*"
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        let generated_recipe = RGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &RBackendConfig::default(),
+                temp_dir.path().to_path_buf(),
+                Subdir::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let host: Vec<String> = generated_recipe
+            .recipe
+            .requirements
+            .host
+            .iter()
+            .map(|r| r.to_string())
+            .collect();
+        assert!(
+            host.iter()
+                .any(|r| r.starts_with("r-openssl") && r.contains(">=1.2.1")),
+            "Should have r-openssl >=1.2.1 next to the openssl C library, got {host:?}"
+        );
+        assert!(
+            host.iter().any(|r| r.starts_with("openssl")),
+            "Should keep the openssl C library, got {host:?}"
+        );
+    }
+
+    /// The host and run requirements generated for a DESCRIPTION.
+    async fn generate_requirements(
+        description: &str,
+        project_model: pixi_build_types::ProjectModel,
+    ) -> (Vec<String>, Vec<String>) {
+        let temp_dir = TempDir::new().unwrap();
+        fs::write(temp_dir.path().join("DESCRIPTION"), description)
+            .await
+            .unwrap();
+
+        let generated_recipe = RGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &RBackendConfig::default(),
+                temp_dir.path().to_path_buf(),
+                Subdir::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let requirements = generated_recipe.recipe.requirements;
+        let to_strings = |list: ConditionalList<SerializableMatchSpec>| {
+            list.iter().map(|r| r.to_string()).collect::<Vec<_>>()
+        };
+        (to_strings(requirements.host), to_strings(requirements.run))
+    }
+
+    #[tokio::test]
+    async fn test_description_duplicates_keep_their_bounds() {
+        // Both specs stay, so that the solver intersects them
+        let (host, run) = generate_requirements(
+            "Package: testpkg\nVersion: 1.0.0\nImports: Rcpp\nLinkingTo: Rcpp (>= 1.0.12)\n",
+            project_fixture!({
+                "name": "r-testpkg",
+                "version": "1.0.0",
+                "targets": { "defaultTarget": {} }
+            }),
+        )
+        .await;
+
+        assert!(host.contains(&"r-rcpp".to_string()), "got {host:?}");
+        assert!(
+            host.contains(&"r-rcpp >=1.0.12".to_string()),
+            "got {host:?}"
+        );
+        assert!(run.contains(&"r-rcpp".to_string()), "got {run:?}");
+    }
+
+    #[tokio::test]
+    async fn test_platform_specific_dependency_keeps_description_dependency() {
+        // A Windows-only manifest requirement doesn't cover the other platforms
+        let (host, _) = generate_requirements(
+            "Package: testpkg\nVersion: 1.0.0\nImports: Rcpp\n",
+            project_fixture!({
+                "name": "r-testpkg",
+                "version": "1.0.0",
+                "targets": {
+                    "defaultTarget": {},
+                    "conditional": {
+                        "win": {
+                            "hostDependencies": {
+                                "r-rcpp": { "binary": { "version": ">=1.0.12" } }
+                            }
+                        }
+                    }
+                }
+            }),
+        )
+        .await;
+        assert!(host.contains(&"r-rcpp".to_string()), "got {host:?}");
+    }
+
+    #[tokio::test]
+    async fn test_manifest_name_applies_to_both_host_and_run() {
+        // The manifest names Biobase r-biobase in host only; run uses that
+        // name too rather than the mapped bioconductor-biobase
+        let (host, run) = generate_requirements(
+            "Package: testpkg\nVersion: 1.0.0\nImports: Biobase\n",
+            project_fixture!({
+                "name": "r-testpkg",
+                "version": "1.0.0",
+                "targets": {
+                    "defaultTarget": {
+                        "hostDependencies": {
+                            "r-biobase": { "binary": { "version": "*" } }
+                        }
+                    }
+                }
+            }),
+        )
+        .await;
+
+        assert!(
+            !host
+                .iter()
+                .chain(&run)
+                .any(|r| r.contains("bioconductor-biobase")),
+            "got {host:?} and {run:?}"
+        );
+        assert_eq!(host.iter().filter(|r| r.contains("biobase")).count(), 1);
+        assert!(run.contains(&"r-biobase".to_string()), "got {run:?}");
+    }
+
+    #[tokio::test]
+    async fn test_manifest_source_dependency_replaces_description_dependency() {
+        // A Bioconductor package built from source in host replaces the
+        // DESCRIPTION's binary spec there; run keeps the DESCRIPTION's bound
+        let (host, run) = generate_requirements(
+            "Package: testpkg\nVersion: 1.0.0\nImports: DNAcopy (>= 1.80)\n",
+            project_fixture!({
+                "name": "r-testpkg",
+                "version": "1.0.0",
+                "targets": {
+                    "defaultTarget": {
+                        "hostDependencies": {
+                            "bioconductor-dnacopy": {
+                                "source": { "path": { "path": "../DNAcopy" } }
+                            }
+                        }
+                    }
+                }
+            }),
+        )
+        .await;
+
+        let host_dnacopy: Vec<_> = host.iter().filter(|r| r.contains("dnacopy")).collect();
+        assert_eq!(host_dnacopy.len(), 1, "got {host:?}");
+        assert!(host_dnacopy[0].contains("source://"), "got {host:?}");
+        assert!(
+            run.contains(&"bioconductor-dnacopy >=1.80".to_string()),
+            "got {run:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_ignore_description_dependencies() {
+        let temp_dir = TempDir::new().unwrap();
+
+        fs::write(
+            temp_dir.path().join("DESCRIPTION"),
+            "Package: testpkg\nVersion: 1.0.0\nImports: Biobase, curl\nLinkingTo: Rcpp\n",
+        )
+        .await
+        .unwrap();
+
+        let project_model = project_fixture!({
+            "name": "r-testpkg",
+            "version": "1.0.0",
+            "targets": {
+                "defaultTarget": {}
+            }
+        });
+
+        let config = RBackendConfig {
+            ignore_description_dependencies: Some(true),
+            ..Default::default()
+        };
+
+        let generated_recipe = RGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &config,
+                temp_dir.path().to_path_buf(),
+                Subdir::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let host_reqs: Vec<String> = generated_recipe
+            .recipe
+            .requirements
+            .host
+            .iter()
+            .map(|r| r.to_string())
+            .collect();
+        let run_reqs: Vec<String> = generated_recipe
+            .recipe
+            .requirements
+            .run
+            .iter()
+            .map(|r| r.to_string())
+            .collect();
+
+        // Should only have r-base in host and run requirements
+        assert_eq!(host_reqs, vec!["r-base".to_string()]);
+        assert_eq!(run_reqs, vec!["r-base".to_string()]);
     }
 
     #[tokio::test]
