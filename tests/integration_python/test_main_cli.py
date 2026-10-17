@@ -1940,6 +1940,11 @@ dependencies:
             [str(tmp_pixi_workspace / "export_test")],
             "pixi workspace export conda-explicit-spec",
         ),
+        (
+            ["workspace", "export", "conda-explicit-spec", "--sha256"],
+            [str(tmp_pixi_workspace / "export_test_sha256")],
+            "pixi workspace export conda-explicit-spec --sha256",
+        ),
         # Upgrade commands
         (["upgrade"], [], "pixi upgrade"),
         # Pixi publish (builds and uploads)

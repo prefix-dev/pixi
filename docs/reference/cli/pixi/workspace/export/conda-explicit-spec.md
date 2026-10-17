@@ -31,6 +31,9 @@ pixi workspace export conda-explicit-spec [OPTIONS] <OUTPUT_DIR>
 - <a id="arg---ignore-source-errors" href="#arg---ignore-source-errors">`--ignore-source-errors`</a>
 :  Source dependencies are not supported in the conda explicit spec file
 <br>**default**: `false`
+- <a id="arg---sha256" href="#arg---sha256">`--sha256`</a>
+:  Emit sha256 hashes instead of md5
+<br>**default**: `false`
 
 ## Config Options
 - <a id="arg---no-config" href="#arg---no-config">`--no-config`</a>
