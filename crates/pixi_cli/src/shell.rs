@@ -376,17 +376,19 @@ pub async fn execute(args: Args) -> miette::Result<ExitCode> {
 
     tracing::info!("Starting shell: {:?}", interactive_shell);
 
-    let prompt_hook = if workspace.config().change_ps1() {
-        let prompt_name = prompt::prompt_name(workspace.display_name(), environment.name());
-        [
-            prompt::shell_prompt(&interactive_shell, prompt_name.as_str()),
-            prompt::shell_hook(&interactive_shell)
-                .unwrap_or_default()
-                .to_owned(),
-        ]
-        .join("\n")
-    } else {
-        String::new()
+    let prompt_hook = {
+        let mut parts = Vec::new();
+        if workspace.config().change_ps1() {
+            let prompt_name = prompt::prompt_name(workspace.display_name(), environment.name());
+            parts.push(prompt::shell_prompt(
+                &interactive_shell,
+                prompt_name.as_str(),
+            ));
+        }
+        if let Some(hook) = prompt::shell_hook(&interactive_shell) {
+            parts.push(hook.to_string());
+        }
+        parts.join("\n")
     };
 
     let source_shell_completions = workspace.config().shell.source_completion_scripts();
