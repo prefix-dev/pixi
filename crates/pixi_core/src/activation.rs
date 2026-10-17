@@ -105,12 +105,15 @@ impl Workspace {
         // Set each value under both the current `WORKSPACE` prefix and the
         // legacy `PROJECT` prefix.
         let mut map = HashMap::new();
+        let lock_file = self.lock_file_path().to_string_lossy().into_owned();
         for prefix in [WORKSPACE_PREFIX, PROJECT_PREFIX] {
             map.insert(format!("{prefix}ROOT"), root.clone());
             map.insert(format!("{prefix}NAME"), name.clone());
             map.insert(format!("{prefix}MANIFEST"), manifest.clone());
             map.insert(format!("{prefix}VERSION"), version.clone());
+            map.insert(format!("{prefix}LOCK_FILE"), lock_file.clone());
         }
+        map.insert(String::from("PIXI_LOCK_FILE"), lock_file);
         map.insert(String::from("PIXI_IN_SHELL"), String::from("1"));
 
         if let Ok(exe_path) = std::env::current_exe() {

@@ -11,6 +11,16 @@ pub fn zsh_hook() -> &'static str {
     include_str!("shell_snippets/pixi-zsh.sh")
 }
 
+/// Sets default pixi hook for the fish shell
+pub fn fish_hook() -> &'static str {
+    include_str!("shell_snippets/pixi-fish.fish")
+}
+
+/// Sets default pixi hook for the powershell
+pub fn powershell_hook() -> &'static str {
+    include_str!("shell_snippets/pixi-powershell.ps1")
+}
+
 /// Sets default pixi prompt for posix shells
 pub fn posix_prompt(env_name: &str) -> String {
     format!("export PS1=\"({env_name}) ${{PS1:-}}\"")
@@ -74,7 +84,12 @@ pub fn xonsh_prompt() -> String {
 pub fn powershell_prompt(env_name: &str) -> String {
     format!(
         "$old_prompt = $function:prompt\n\
-         function prompt {{\"({env_name}) $($old_prompt.Invoke())\"}}"
+         function prompt {{\n\
+             if (Get-Command __pixi_watch_lock -ErrorAction SilentlyContinue) {{\n\
+                 __pixi_watch_lock\n\
+             }}\n\
+             \"({env_name}) $($old_prompt.Invoke())\"\n\
+         }}"
     )
 }
 
@@ -96,6 +111,8 @@ pub fn shell_hook(shell: &ShellEnum) -> Option<&str> {
     match shell {
         ShellEnum::Bash(_) => Some(bash_hook()),
         ShellEnum::Zsh(_) => Some(zsh_hook()),
+        ShellEnum::Fish(_) => Some(fish_hook()),
+        ShellEnum::PowerShell(_) => Some(powershell_hook()),
         _ => None,
     }
 }
