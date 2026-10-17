@@ -13,6 +13,9 @@ pub struct ResolvedPypiExcludeNewer {
     pub cutoff: Option<DateTime<Utc>>,
 
     /// Package-specific cutoff dates that override [`Self::cutoff`].
+    ///
+    /// Deprecated in favor of [`Self::exempt_packages`]. Only the deprecated
+    /// top-level `[pypi-exclude-newer]` manifest table still populates this.
     pub package_cutoffs: BTreeMap<PackageName, DateTime<Utc>>,
 
     /// Packages that are never excluded, regardless of their upload time.
@@ -30,6 +33,9 @@ impl ResolvedPypiExcludeNewer {
     }
 
     /// Adds a package-specific cutoff override.
+    ///
+    /// Deprecated in favor of [`Self::with_exempt_package`].
+    #[deprecated(note = "use `with_exempt_package` to exempt a package from the cutoff instead")]
     pub fn with_package_cutoff(mut self, package: PackageName, cutoff: DateTime<Utc>) -> Self {
         self.package_cutoffs.insert(package, cutoff);
         self
