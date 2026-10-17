@@ -111,9 +111,8 @@ impl<'p> ExecutableTask<'p> {
         init_cwd: Option<PathBuf>,
     ) -> Self {
         let node = &task_graph[task_id];
-        let platform = task_graph
-            .platform()
-            .or_else(|| crate::task_environment::default_search_platform(&node.run_environment))
+        let platform = node
+            .platform
             .cloned()
             .unwrap_or_else(|| node.run_environment.activation_platform());
 

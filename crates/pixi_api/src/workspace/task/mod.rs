@@ -85,7 +85,10 @@ pub async fn list_tasks(
                 classify_environment_runnability(&explicit_environment, lock_file.as_ref());
             HashMap::from([(
                 explicit_environment.clone(),
-                (runnability, explicit_environment.get_filtered_tasks()),
+                (
+                    runnability,
+                    explicit_environment.get_filtered_tasks(lock_file.as_ref()),
+                ),
             )])
         } else {
             workspace
@@ -93,7 +96,10 @@ pub async fn list_tasks(
                 .iter()
                 .map(|env| {
                     let runnability = classify_environment_runnability(env, lock_file.as_ref());
-                    (env.clone(), (runnability, env.get_filtered_tasks()))
+                    (
+                        env.clone(),
+                        (runnability, env.get_filtered_tasks(lock_file.as_ref())),
+                    )
                 })
                 .collect()
         };
@@ -102,11 +108,11 @@ pub async fn list_tasks(
         .into_iter()
         .map(|(env, (runnability, task_names))| {
             let env_name = env.name().clone();
-            let best_declared_platform = env.best_declared_platform();
+            let task_platform = env.task_platform(lock_file.as_ref());
             let task_map = task_names
                 .into_iter()
                 .flat_map(|task_name| {
-                    env.task(&task_name, best_declared_platform)
+                    env.task(&task_name, task_platform)
                         .ok()
                         .map(|task| (task_name, task.clone()))
                 })
