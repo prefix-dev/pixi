@@ -19,7 +19,7 @@ use itertools::{Either, Itertools};
 pub use manifest::{ExposedType, Manifest, Mapping};
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use once_cell::sync::OnceCell;
-pub use parsed_manifest::{ExposedName, GlobalExcludeNewer, ParsedEnvironment, ParsedManifest};
+pub use parsed_manifest::{ExposedName, ParsedEnvironment, ParsedManifest};
 use pixi_build_discovery::DiscoveryError;
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
@@ -39,8 +39,8 @@ use pixi_core::repodata::Repodata;
 use pixi_core::workspace::stdlib_variants::{StdlibVersionPin, derive_stdlib_variants};
 use pixi_manifest::platform::host::{host_subdir, platform_from_detected};
 use pixi_manifest::{
-    ExcludeNewerConfig, ExcludeNewerError, InlinePackageManifest, PixiPlatform, PrioritizedChannel,
-    WorkspaceManifest, resolve_exclude_newer,
+    ExcludeNewerError, InlinePackageManifest, PixiPlatform, PrioritizedChannel, WorkspaceManifest,
+    resolve_exclude_newer,
 };
 use pixi_path::AbsPathBuf;
 use pixi_reporters::TopLevelProgress;
@@ -576,27 +576,15 @@ impl Project {
         self.config.global_channel_config()
     }
 
-    /// Resolves the manifest-wide and channel cutoffs, keeping version exemptions.
+    /// Resolves the manifest's `exclude-newer` cutoff together with the
+    /// overrides of the given channels and the exemptions into absolute
+    /// cutoffs.
     fn resolved_exclude_newer<'a>(
         &'a self,
         channels: impl IntoIterator<Item = &'a PrioritizedChannel>,
     ) -> Result<Option<ResolvedExcludeNewer>, ExcludeNewerError> {
-        let config = self
-            .manifest
-            .parsed
-            .exclude_newer
-            .as_ref()
-            .map(|policy| ExcludeNewerConfig {
-                cutoff: Some(policy.cutoff),
-                exemptions: policy
-                    .exemptions
-                    .iter()
-                    .map(|(name, version)| (name.clone(), BinarySpec::Version(version.clone())))
-                    .collect(),
-            })
-            .unwrap_or_default();
         resolve_exclude_newer(
-            &config,
+            &self.manifest.parsed.exclude_newer,
             channels,
             self.global_channel_config(),
             std::iter::empty(),
