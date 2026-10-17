@@ -86,7 +86,7 @@ mod parsed_manifest;
 pub use global_spec::{
     FromMatchSpecError, GlobalSpec, InlinePackageValue, InlinePackageValueError,
 };
-use pixi_utils::reqwest::{LazyReqwestClient, build_lazy_reqwest_clients};
+use pixi_utils::reqwest::{LazyReqwestClient, ReqwestClientError, build_lazy_reqwest_clients};
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 pub enum CommandDispatcherError {
@@ -557,16 +557,15 @@ impl Project {
 
     /// Create an authenticated reqwest client for this project
     /// use authentication from `rattler_networking`
-    pub fn authenticated_client(&self) -> miette::Result<&LazyClient> {
+    pub fn authenticated_client(&self) -> Result<&LazyClient, ReqwestClientError> {
         Ok(&self.lazy_client_and_authenticated_client()?.1)
     }
 
     fn lazy_client_and_authenticated_client(
         &self,
-    ) -> miette::Result<&(LazyReqwestClient, rattler_networking::LazyClient)> {
-        Ok(self
-            .client
-            .get_or_try_init(|| build_lazy_reqwest_clients(Some(self.config()), None))?)
+    ) -> Result<&(LazyReqwestClient, rattler_networking::LazyClient), ReqwestClientError> {
+        self.client
+            .get_or_try_init(|| build_lazy_reqwest_clients(Some(self.config()), None))
     }
 
     pub fn config(&self) -> &Config {
@@ -1967,7 +1966,7 @@ fn inline_packages_for_environment(
 
 impl Repodata for Project {
     /// Returns the [`Gateway`] used by this project.
-    fn repodata_gateway(&self) -> miette::Result<&Gateway> {
+    fn repodata_gateway(&self) -> Result<&Gateway, ReqwestClientError> {
         self.repodata_gateway.get_or_try_init(|| {
             let client = self.authenticated_client()?.clone();
             let concurrent_downloads = self.concurrent_downloads_semaphore();
