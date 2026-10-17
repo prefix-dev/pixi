@@ -46,10 +46,10 @@ pub struct Args {
     pub workspace_config: WorkspaceConfig,
 
     #[command(subcommand)]
-    command: Option<Command>,
+    pub command: Option<Command>,
 
     /// The environment directory to remove.
-    #[arg(long, short, conflicts_with_all = ["command", "build"])]
+    #[arg(long, short, conflicts_with_all = ["command", "build", "build_workspaces"])]
     pub environment: Option<String>,
 
     /// Only remove the activation cache
@@ -59,6 +59,11 @@ pub struct Args {
     /// Only remove the pixi-build cache
     #[arg(long)]
     pub build: bool,
+
+    /// Only remove the source-build working directories (`.pixi/bld`),
+    /// keeping the built artifacts so packages are not rebuilt
+    #[arg(long, visible_alias = "bld")]
+    pub build_workspaces: bool,
 
     /// Only remove disassociated workspace registries
     #[arg(long)]
@@ -101,6 +106,11 @@ pub struct CacheArgs {
     /// Clean only the build related cache
     #[arg(long)]
     pub build: bool,
+
+    /// Clean only the source-build working directories, keeping the built
+    /// artifacts
+    #[arg(long, visible_alias = "bld")]
+    pub build_workspaces: bool,
 
     /// Answer yes to all questions.
     #[clap(short = 'y', long = "yes", alias = "assume-yes")]
@@ -173,7 +183,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 explicit_env.name().fancy_display()
             );
         }
-    } else if !args.activation_cache && !args.build && !args.workspaces_registry {
+    } else if !args.activation_cache
+        && !args.build
+        && !args.build_workspaces
+        && !args.workspaces_registry
+    {
         // Remove all pixi related work from the workspace. Always clean both
         // the default .pixi location and the effective (possibly detached) location
         // so leftover artifacts are removed regardless of config changes.
@@ -206,6 +220,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 console::style("Hint: ").blue(),
                 console::style("pixi clean cache --build").bold()
             );
+        } else if args.build_workspaces
+            && let Some(dir) = workspace_build_workspaces_dir(&workspace)
+        {
+            total_removed += remove_folder_with_progress(dir, true).await?;
         }
         if args.workspaces_registry {
             prune_workspace_registry().await?;
@@ -270,6 +288,17 @@ async fn clean_cache(args: CacheArgs, config: &pixi_config::Config) -> miette::R
                 .into(),
         );
         dirs.push(cache_dirs.resolve_from_env::<BackendMetadataDir>().into());
+    } else if args.build_workspaces {
+        let cache_dirs = CacheDirs::new(
+            pixi_path::AbsPathBuf::new(&cache_dir)
+                .expect("cache dir is not absolute")
+                .into_assume_dir(),
+        );
+        dirs.push(
+            cache_dirs
+                .resolve_from_env::<SourceBuildWorkspacesDir>()
+                .into(),
+        );
     }
     if dirs.is_empty() && (args.assume_yes || dialoguer::Confirm::new()
                 .with_prompt("No cache types specified using the flags.\nDo you really want to remove all cache directories from your machine?")
@@ -407,6 +436,18 @@ fn print_total_removed(total: u64) {
         console::style("Removed").green().bold(),
         human_bytes(total as f64)
     );
+}
+
+fn workspace_build_workspaces_dir(workspace: &Workspace) -> Option<PathBuf> {
+    let cache_abs = AbsPathBuf::new(pixi_config::get_cache_dir().ok()?).ok()?;
+    let workspace_abs = AbsPathBuf::new(workspace.pixi_dir()).ok()?;
+    let cache_dirs =
+        CacheDirs::new(cache_abs.into_assume_dir()).with_workspace(workspace_abs.into_assume_dir());
+    Some(
+        cache_dirs
+            .resolve_from_env::<SourceBuildWorkspacesDir>()
+            .into(),
+    )
 }
 
 /// Build-related per-workspace cache directories. Aggregated here so
