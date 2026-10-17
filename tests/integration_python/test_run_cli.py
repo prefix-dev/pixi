@@ -1255,6 +1255,81 @@ def test_multiple_dependencies_with_environments(
     )
 
 
+def test_dependency_unknown_environment_errors(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """A dependency on an undefined environment is an error, not a fallback to default."""
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest_path.write_text(
+        EMPTY_BOILERPLATE_PROJECT
+        + '\n[tasks]\nfoo = "echo bar"\nbaz = [{ task = "foo", environment = "oops" }]\n'
+    )
+
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "baz"],
+        expected_exit_code=ExitCode.FAILURE,
+        stdout_excludes="bar",
+        stderr_contains="task 'baz' depends on task 'foo' in environment 'oops', which is not defined",
+    )
+
+
+def test_task_add_unknown_default_environment_errors(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest_path.write_text(EMPTY_BOILERPLATE_PROJECT)
+
+    verify_cli_command(
+        [
+            pixi,
+            "task",
+            "add",
+            "--manifest-path",
+            manifest_path,
+            "--default-environment",
+            "oops",
+            "foo",
+            "echo bar",
+        ],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="the environment 'oops' does not exist",
+    )
+    assert manifest_path.read_text() == EMPTY_BOILERPLATE_PROJECT
+
+    # The environment created inline by `--environment` counts as defined.
+    verify_cli_command(
+        [
+            pixi,
+            "task",
+            "add",
+            "--manifest-path",
+            manifest_path,
+            "--environment",
+            "new",
+            "--default-environment",
+            "new",
+            "foo",
+            "echo bar",
+        ],
+    )
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", manifest_path, "foo"],
+        stdout_contains="bar",
+    )
+
+
+def test_environment_remove_referenced_by_task_errors(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")
+    manifest = (
+        EMPTY_BOILERPLATE_PROJECT
+        + '\n[environments]\nfe = []\n[tasks]\na = "echo a"\nb = [{ task = "a", environment = "fe" }]\n'
+    )
+    manifest_path.write_text(manifest)
+
+    verify_cli_command(
+        [pixi, "workspace", "environment", "remove", "--manifest-path", manifest_path, "fe"],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="cannot remove environment 'fe' because tasks refer to it: 'b'",
+    )
+    assert manifest_path.read_text() == manifest
+
+
 def test_short_circuit_composition(pixi: Path, tmp_pixi_workspace: Path) -> None:
     """Test that short-circuiting composition works."""
     manifest_path = tmp_pixi_workspace.joinpath("pixi.toml")

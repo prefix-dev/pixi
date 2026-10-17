@@ -1,0 +1,6 @@
+---
+source: crates/pixi_manifest/src/toml/manifest.rs
+expression: "expect_parse_failure(r#\"\n        [workspace]\n        channels = []\n        platforms = []\n\n        [feature.test.dependencies]\n\n        [environments]\n        test = [\"test\"]\n\n        [feature.test.tasks]\n        foo = { cmd = \"bar\", default-environment = \"tset\" }\n        \"#,)"
+---
+  × task 'foo' in feature 'test' has default-environment 'tset', which is not defined
+  help: defined environments: default, test

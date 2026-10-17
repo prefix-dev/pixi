@@ -113,7 +113,8 @@ pixi run style
 
 ### Environment specification for task dependencies
 
-You can specify the environment to use for a dependent task:
+You can specify the environment to use for a dependent task.
+The environment must be defined in the workspace, otherwise Pixi reports an error when it loads the manifest:
 
 ```toml title="pixi.toml"
 --8<-- "docs/source_files/pixi_tomls/tasks_depends_on.toml:tasks"
@@ -169,6 +170,7 @@ You can set the default Pixi [environment](../tutorials/multi_environment.md#add
 ```toml title="pixi.toml"
 --8<-- "docs/source_files/pixi_tomls/task_default_environment.toml:default-environment"
 ```
+As with task dependencies, the environment must be defined in the workspace.
 
 The default environment can be overridden as usual with the `--environment` argument:
 ```shell
