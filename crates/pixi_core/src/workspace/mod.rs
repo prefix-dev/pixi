@@ -74,7 +74,7 @@ use rattler_repodata_gateway::Gateway;
 pub use registry::{WorkspaceRegistry, WorkspaceRegistryError};
 pub use solve_group::SolveGroup;
 use tokio::sync::Semaphore;
-pub use workspace_mut::WorkspaceMut;
+pub use workspace_mut::{AddSpecsError, WorkspaceMut};
 use xxhash_rust::xxh3::xxh3_64;
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();

@@ -9,16 +9,17 @@ use crate::lock_file::SolveCondaEnvironmentError;
 use fancy_display::FancyDisplay;
 use indexmap::IndexMap;
 use itertools::Itertools;
-use miette::{IntoDiagnostic, NamedSource};
+use miette::{Diagnostic, IntoDiagnostic, NamedSource};
 use pep440_rs::VersionSpecifiers;
 use pep508_rs::{Requirement, VersionOrUrl::VersionSpecifier};
 use pixi_command_dispatcher::SolvePixiEnvironmentError::MissingChannel;
 use pixi_config::PinningStrategy;
 use pixi_diff::LockFileDiff;
 use pixi_manifest::{
-    AddDependencyOutcome, DependencyOverwriteBehavior, FeatureName, FeaturesExt, HasFeaturesIter,
-    LoadManifestsError, ManifestDocument, ManifestKind, PixiPlatformName, PypiDependencyLocation,
-    SpecType, TargetSelector, TomlError, WorkspaceManifest, WorkspaceManifestMut,
+    AddDependencyError, AddDependencyOutcome, DependencyOverwriteBehavior, FeatureName,
+    FeaturesExt, HasFeaturesIter, LoadManifestsError, ManifestDocument, ManifestKind,
+    PixiPlatformName, PypiDependencyLocation, SpecType, TargetSelector, TomlError,
+    WorkspaceManifest, WorkspaceManifestMut,
     script::{ScriptManifest, conda::CondaScriptManifest},
     toml::TomlDocument,
     utils::WithSourceCode,
@@ -27,6 +28,7 @@ use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{MatchSpec, NamelessMatchSpec, PackageName, Version};
 use rattler_lock::LockFile;
+use thiserror::Error;
 use toml_edit::DocumentMut;
 
 use crate::{
@@ -38,6 +40,19 @@ use crate::{
         WorkspaceStorage, grouped_environment::GroupedEnvironment, workspace_script::ScriptSource,
     },
 };
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum AddSpecsError {
+    #[error(
+        "{} does not support wildcard dependencies",
+        pixi_utils::executable_name()
+    )]
+    WildcardDependency,
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    AddDependency(#[from] AddDependencyError),
+}
 
 struct OriginalContent {
     manifest: WorkspaceManifest,
@@ -669,15 +684,12 @@ impl WorkspaceMut {
         pypi_deps: Vec<Requirement>,
         targets: &[TargetSelector],
         feature_name: &FeatureName,
-    ) -> Result<(), miette::Error> {
+    ) -> Result<(), AddSpecsError> {
         for spec in conda_deps {
             // Determine the name of the package to add
             let (name_matcher, spec) = spec.clone().into_nameless();
             let Some(name) = name_matcher.as_exact() else {
-                miette::bail!(
-                    "{} does not support wildcard dependencies",
-                    pixi_utils::executable_name()
-                );
+                return Err(AddSpecsError::WildcardDependency);
             };
             let spec = PixiSpec::from_nameless_matchspec(spec, &self.workspace().channel_config());
             self.manifest().add_dependency(
@@ -713,7 +725,7 @@ impl WorkspaceMut {
         affect_environment_and_platforms: Vec<(String, PixiPlatformName)>,
         feature_name: &FeatureName,
         targets: &[TargetSelector],
-    ) -> miette::Result<HashMap<String, String>> {
+    ) -> Result<HashMap<String, String>, AddDependencyError> {
         let mut implicit_constraints = HashMap::new();
 
         // Determine the conda records that were affected by the add.
@@ -795,7 +807,7 @@ impl WorkspaceMut {
         feature_name: &FeatureName,
         targets: &[TargetSelector],
         editable: bool,
-    ) -> miette::Result<HashMap<String, String>> {
+    ) -> Result<HashMap<String, String>, AddDependencyError> {
         let mut implicit_constraints = HashMap::new();
 
         let affect_environment_and_platforms = affect_environment_and_platforms
