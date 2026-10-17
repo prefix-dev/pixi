@@ -19,7 +19,7 @@ use rattler_lock::{LockFile, LockedPackage};
 
 use crate::cli_config::ScriptWorkspaceConfig;
 
-/// Updates dependencies to newer compatible versions.
+/// Update dependencies to newer compatible versions.
 ///
 /// Projects and scripts with an adjacent lock file write that lock file. A
 /// script without one writes its cached resolution.
