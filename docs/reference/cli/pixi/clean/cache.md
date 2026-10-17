@@ -30,6 +30,9 @@ pixi clean cache [OPTIONS]
 :  Clean only the build backends environments cache
 - <a id="arg---build" href="#arg---build">`--build`</a>
 :  Clean only the build related cache
+- <a id="arg---build-workspaces" href="#arg---build-workspaces">`--build-workspaces`</a>
+:  Clean only the source-build working directories, keeping the built artifacts
+<br>**aliases**: bld
 - <a id="arg---yes" href="#arg---yes">`--yes (-y)`</a>
 :  Answer yes to all questions
 
