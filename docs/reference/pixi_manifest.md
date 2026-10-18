@@ -1306,6 +1306,7 @@ The environments table is defined using the following fields:
   These dependencies will then be the same version in all environments that have the same solve group.
   But the different environments contain different subsets of the solve-groups dependencies set.
 - `no-default-feature`: Whether to include the default feature in that environment. The default is `false`, to include the default feature.
+- `description`: A short, human-readable description of the environment. It is shown by `pixi info`.
 
 Additionally, most fields that a [feature](#the-feature-table) accepts - `dependencies`, `pypi-dependencies`, `tasks`, `activation`, `channels`, `platforms`, `constraints`, `target` and more - can be set directly on an environment. See [Defining dependencies directly on an environment](#defining-dependencies-directly-on-an-environment).
 
@@ -1314,6 +1315,7 @@ Additionally, most fields that a [feature](#the-feature-table) accepts - `depend
 test = {features = ["test"], solve-group = "test"}
 prod = {features = ["prod"], solve-group = "test"}
 lint = {features = ["lint"], no-default-feature = true}
+test-integration = {features = ["test", "dev-server"], description = "environment for integration tests using a development server"}
 ```
 As shown in the example above, in the simplest of cases, it is possible to define an environment only by listing its features:
 
