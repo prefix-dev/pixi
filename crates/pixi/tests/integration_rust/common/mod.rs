@@ -843,7 +843,7 @@ impl PixiControl {
             &self.manifest_path(),
             &pixi_config::GlobalConfigSource::None,
         )?;
-        workspace.load_lock_file().await?.into_lock_file()
+        Ok(workspace.load_lock_file().await?.into_lock_file()?)
     }
 
     /// Load the current lock file and makes sure that its up to date with the
