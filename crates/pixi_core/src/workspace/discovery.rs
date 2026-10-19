@@ -50,7 +50,7 @@ pub enum DiscoveryStart {
 
 impl DiscoveryStart {
     /// Returns the path where the search should start.
-    pub fn path(&self) -> miette::Result<PathBuf, WorkspaceLocatorError> {
+    pub fn path(&self) -> Result<PathBuf, WorkspaceLocatorError> {
         match self {
             DiscoveryStart::CurrentDir => {
                 std::env::current_dir().map_err(WorkspaceLocatorError::CurrentDir)
@@ -59,9 +59,11 @@ impl DiscoveryStart {
             DiscoveryStart::ExplicitManifest(path) => Ok(path.clone()),
             DiscoveryStart::Script(path) => Ok(path.clone()),
             DiscoveryStart::WorkspaceRegistry(name) => {
-                let registry = WorkspaceRegistry::load()
-                    .map_err(|_| WorkspaceLocatorError::MissingRegistry())?;
-                let path = registry.named_workspace(name)?;
+                let registry =
+                    WorkspaceRegistry::load().map_err(WorkspaceLocatorError::MissingRegistry)?;
+                let path = registry
+                    .named_workspace(name)
+                    .map_err(WorkspaceLocatorError::MissingWorkspace)?;
                 if !path.exists() {
                     return Err(WorkspaceLocatorError::MissingWorkspacePath {
                         name: name.to_string(),
@@ -137,11 +139,11 @@ pub enum WorkspaceLocatorError {
     ExplicitManifestError(#[from] ExplicitManifestError),
 
     #[error("unable to load the workspace registry")]
-    MissingRegistry(),
+    MissingRegistry(#[source] WorkspaceRegistryError),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    MissingWorkspace(#[from] WorkspaceRegistryError),
+    MissingWorkspace(WorkspaceRegistryError),
 
     #[error("could not find workspace '{}' at '{}'", .name, .path.display())]
     #[diagnostic(help = "clean the registry with `pixi workspace register prune`")]
@@ -295,8 +297,8 @@ impl WorkspaceLocator {
             ),
             DiscoveryStart::SearchRoot(path) => pixi_manifest::DiscoveryStart::SearchRoot(path),
             DiscoveryStart::WorkspaceRegistry(name) => {
-                let registry = WorkspaceRegistry::load()
-                    .map_err(|_| WorkspaceLocatorError::MissingRegistry())?;
+                let registry =
+                    WorkspaceRegistry::load().map_err(WorkspaceLocatorError::MissingRegistry)?;
                 let path = registry
                     .named_workspace(&name)
                     .map_err(WorkspaceLocatorError::MissingWorkspace)?;
