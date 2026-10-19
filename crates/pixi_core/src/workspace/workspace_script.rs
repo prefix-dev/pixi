@@ -3,7 +3,6 @@ use std::{
     sync::Arc,
 };
 
-use miette::{Context, IntoDiagnostic};
 use pixi_manifest::script::ScriptManifest;
 use pixi_manifest::script::conda::CondaScriptManifest;
 use rattler_lock::LockFile;
@@ -13,7 +12,9 @@ use xxhash_rust::xxh3::xxh3_64;
 use super::{Workspace, WorkspaceStorage};
 use crate::{
     environment::LockFileUsage,
-    lock_file::{LockFileDerivedData, UpdateLockFileOptions},
+    lock_file::{
+        LoadLockFileError, LockFileDerivedData, UpdateLockFileOptions, WriteLockFileError,
+    },
 };
 
 const RESOLUTION_CACHE_VERSION: u32 = 1;
@@ -146,38 +147,30 @@ impl WorkspaceScript {
     }
 
     /// Writes a lock file to the script's resolution cache.
-    async fn write_cached_resolution(&self, lock_file: &LockFile) -> miette::Result<()> {
+    async fn write_cached_resolution(
+        &self,
+        lock_file: &LockFile,
+    ) -> Result<(), WriteLockFileError> {
         let path = self.resolution_cache_path();
         let lock_file = lock_file
             .render_to_string()
-            .into_diagnostic()
-            .context("failed to serialize the cached script resolution")?;
+            .map_err(WriteLockFileError::SerializeCachedResolution)?;
         let contents = serde_json::to_vec(&CachedResolution {
             version: RESOLUTION_CACHE_VERSION,
             lock_file,
         })
-        .into_diagnostic()
-        .context("failed to serialize the script resolution cache")?;
+        .map_err(WriteLockFileError::SerializeCache)?;
         if let Some(parent) = path.parent() {
-            tokio::fs::create_dir_all(parent)
-                .await
-                .into_diagnostic()
-                .wrap_err_with(|| {
-                    format!(
-                        "failed to create the script environment cache `{}`",
-                        parent.display()
-                    )
-                })?;
+            tokio::fs::create_dir_all(parent).await.map_err(|source| {
+                WriteLockFileError::CreateCacheDir {
+                    path: parent.to_path_buf(),
+                    source,
+                }
+            })?;
         }
         pixi_utils::atomic_write::atomic_write(&path, contents)
             .await
-            .into_diagnostic()
-            .wrap_err_with(|| {
-                format!(
-                    "failed to write the script resolution cache `{}`",
-                    path.display()
-                )
-            })
+            .map_err(|source| WriteLockFileError::WriteCache { path, source })
     }
 }
 
@@ -186,7 +179,7 @@ impl Workspace {
     ///
     /// Projects and scripts with an adjacent lock file use that lock file. A
     /// script without one uses its cached resolution.
-    pub async fn load_lock_file_for_update(&self) -> miette::Result<LockFile> {
+    pub async fn load_lock_file_for_update(&self) -> Result<LockFile, LoadLockFileError> {
         if let WorkspaceStorage::Script(script) = &self.storage
             && !script.lock_file_path().is_some_and(|path| path.is_file())
         {
@@ -268,7 +261,7 @@ impl LockFileDerivedData<'_> {
     ///
     /// Projects and scripts with an adjacent lock file write that lock file. A
     /// script without one writes its cached resolution.
-    pub async fn write_updated_resolution(&self) -> miette::Result<()> {
+    pub async fn write_updated_resolution(&self) -> Result<(), WriteLockFileError> {
         if let WorkspaceStorage::Script(script) = &self.workspace.storage
             && !script.lock_file_path().is_some_and(|path| path.is_file())
         {
