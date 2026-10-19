@@ -191,7 +191,7 @@ async fn write_channel(channel: &Path) {
     write_channel_with(channel, &[Detector::default_report()]).await;
 }
 
-/// A workspace on `subdir` whose platform declares canonical detector names,
+/// A workspace on `subdir` whose platform declares the supplied TOML keys,
 /// using `channel`, with the detector cache under the workspace.
 fn workspace_declaring(channel: &Url, subdir: Subdir, declares: &[(&str, &str)]) -> PixiControl {
     let platform = if declares.is_empty() {
@@ -199,13 +199,7 @@ fn workspace_declaring(channel: &Url, subdir: Subdir, declares: &[(&str, &str)])
     } else {
         let entries = declares
             .iter()
-            .map(|(name, version)| {
-                format!(
-                    r#"{} = "{version}""#,
-                    name.strip_prefix("__")
-                        .expect("canonical virtual-package name")
-                )
-            })
+            .map(|(name, version)| format!(r#"{name} = "{version}""#))
             .collect::<Vec<_>>()
             .join(", ");
         format!(r#"{{ platform = "{subdir}", {entries} }}"#)
@@ -232,7 +226,7 @@ platforms = [{platform}]
     pixi
 }
 
-/// A workspace on the current subdir whose platform declares `test_good`,
+/// A workspace on the current subdir whose platform declares `__test_good`,
 /// using `channel`, with the detector cache under the workspace.
 fn workspace_for(channel: &Url, declares_test_good: bool) -> PixiControl {
     let subdir = Subdir::current().unwrap();
@@ -457,7 +451,7 @@ async fn a_detector_for_a_built_in_name_runs_when_a_friendly_key_declares_it() {
     };
     write_channel_with(channel_dir.path(), &[cuda]).await;
     let channel = Url::from_directory_path(channel_dir.path()).unwrap();
-    let pixi = workspace_declaring(&channel, Subdir::current().unwrap(), &[("__cuda", "12.0")]);
+    let pixi = workspace_declaring(&channel, Subdir::current().unwrap(), &[("cuda", "12.0")]);
     store_consent(&pixi, &channel, "allow");
 
     let workspace = locate(&pixi).await;
@@ -1037,8 +1031,7 @@ async fn a_reboot_lifetime_is_cached_until_the_boot_session_changes() {
     );
     assert_eq!(test_good_version(second.host()).as_deref(), Some("1.2.3"));
 
-    // The stored entry is bound to the boot session; forging another one
-    // expires it.
+    // Keep a valid BootId so this tests boot-session expiry, not a malformed entry.
     let results = detector_cache(&pixi).join("results");
     let entry = fs_err::read_dir(&results)
         .unwrap()
@@ -1048,7 +1041,13 @@ async fn a_reboot_lifetime_is_cached_until_the_boot_session_changes() {
         .path();
     let mut cached: serde_json::Value =
         serde_json::from_str(&fs_err::read_to_string(&entry).unwrap()).unwrap();
-    cached["boot_id"] = serde_json::Value::String("00000000-0000-0000-0000-000000000000".into());
+    let different_boot_id = serde_json::json!({"uuid": "00000000-0000-0000-0000-000000000000"});
+    assert!(
+        cached["boot_id"].is_object(),
+        "the cached REBOOT result records an observed boot session"
+    );
+    assert_ne!(cached["boot_id"], different_boot_id);
+    cached["boot_id"] = different_boot_id;
     fs_err::write(&entry, serde_json::to_string(&cached).unwrap()).unwrap();
     let third = locate(&pixi).await;
     assert_eq!(
