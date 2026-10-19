@@ -25,7 +25,9 @@ use pixi_pty::unix::PtySession;
 
 use pixi_utils::prefix::Prefix;
 
-/// Start a shell in a pixi environment, run `exit` to leave the shell.
+/// Start a shell in a pixi environment.
+///
+/// Run `exit` to leave the shell.
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]

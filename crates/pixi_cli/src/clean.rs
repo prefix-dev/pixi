@@ -31,7 +31,7 @@ pub enum Command {
     Cache(CacheArgs),
 }
 
-/// Clean up the workspace.
+/// Clean up workspaces/environments/caches.
 ///
 /// This command removes the information in the .pixi folder, i.e. the
 /// installed environments and caches. Use options to only remove selected parts.

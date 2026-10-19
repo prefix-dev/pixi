@@ -16,31 +16,31 @@ pixi [OPTIONS] [COMMAND]
 |---------|-------------|
 | [`add`](add.md) | Add dependencies to the workspace |
 | [`auth`](auth/index.md) | Login to prefix.dev or anaconda.org servers to access private channels |
-| [`clean`](clean/index.md) | Clean up the workspace |
+| [`clean`](clean/index.md) | Clean up workspaces/environments/caches |
 | [`completion`](completion.md) | Generate a shell completion script |
-| [`config`](config/index.md) | Configuration management |
-| [`exec`](exec.md) | Run a command and install it in a temporary environment |
-| [`global`](global/index.md) | Subcommand for global package management actions |
-| [`info`](info.md) | Information about the pixi installation, current workspace and environments |
+| [`config`](config/index.md) | Manage configuration |
+| [`exec`](exec.md) | Run a command in a temporary environment |
+| [`global`](global/index.md) | Manage globally-installed packages |
+| [`info`](info.md) | Get information about the pixi installation and current workspace |
 | [`init`](init.md) | Create a new workspace or script |
-| [`import`](import.md) | Import a file into an environment in an existing workspace. |
-| [`install`](install.md) | Install an environment, both updating the lock file and installing the environment |
-| [`list`](list.md) | List the packages of the current workspace |
-| [`lock`](lock.md) | Solve environment and update the lock file without installing the environments |
-| [`reinstall`](reinstall.md) | Re-install an environment, both updating the lock file and re-installing the environment |
-| [`publish`](publish.md) | Build the conda packages of a workspace and publish them to a channel. |
-| [`remove`](remove.md) | Remove dependencies from the workspace |
-| [`run`](run.md) | Run task in the pixi environment |
-| [`search`](search.md) | Search a conda package |
+| [`import`](import.md) | Import a file into an environment in an existing workspace |
+| [`install`](install.md) | Install an environment |
+| [`list`](list.md) | List the packages of an environment |
+| [`lock`](lock.md) | Solve environments and update the lock file without installing the environments |
+| [`reinstall`](reinstall.md) | Re-install an environment |
+| [`publish`](publish.md) | Build the conda packages of a workspace and publish them |
+| [`remove`](remove.md) | Remove dependencies from a workspace |
+| [`run`](run.md) | Run a task in an environment |
+| [`search`](search.md) | Search for conda packages |
 | [`self-update`](self-update.md) | Update pixi to the latest version or a specific version |
-| [`shell`](shell.md) | Start a shell in a pixi environment, run `exit` to leave the shell |
-| [`shell-hook`](shell-hook.md) | Print the pixi environment activation script |
-| [`task`](task/index.md) | Interact with tasks in the workspace |
+| [`shell`](shell.md) | Start a shell in a pixi environment |
+| [`shell-hook`](shell-hook.md) | Print a pixi environment activation script |
+| [`task`](task/index.md) | Interact with tasks in a workspace |
 | [`tree`](tree.md) | Show a tree of workspace dependencies |
 | [`update`](update.md) | Update dependencies to newer compatible versions |
 | [`upgrade`](upgrade.md) | Check if there are newer versions of the dependencies and upgrade them in the lock file and manifest file |
 | [`upload`](upload/index.md) | Upload conda packages to various channels |
-| [`workspace`](workspace/index.md) | Modify the workspace configuration file through the command line |
+| [`workspace`](workspace/index.md) | Modify the workspace configuration file |
 
 
 ## Global Options

@@ -94,7 +94,7 @@ pixi upgrade [OPTIONS] [PACKAGES]...
 ## Description
 Check if there are newer versions of the dependencies and upgrade them in the lock file and manifest file.
 
-`pixi upgrade` loosens the requirements for the given packages, updates the lock file and the adapts the manifest accordingly. By default, all features are upgraded.
+`pixi upgrade` loosens the requirements for the given packages, updates the lock file, and adapts the manifest accordingly. By default, all features are upgraded.
 
 
 --8<-- "docs/reference/cli/pixi/upgrade_extender:example"

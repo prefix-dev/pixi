@@ -24,7 +24,7 @@ use crate::{
     cli_interface::{CliInterface, cli_context},
 };
 
-/// Search a conda package
+/// Search for conda packages
 ///
 /// Its output will list the latest version of package.
 #[derive(Debug, Parser)]

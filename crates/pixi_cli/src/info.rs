@@ -27,7 +27,7 @@ use crate::cli_config::WorkspaceConfig;
 
 static WIDTH: usize = 19;
 
-/// Information about the pixi installation, current workspace and environments.
+/// Get information about the pixi installation and current workspace.
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]

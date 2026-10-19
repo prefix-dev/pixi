@@ -137,7 +137,7 @@ enum AlterMode {
     Unset,
 }
 
-/// Configuration management
+/// Manage configuration
 #[derive(Parser, Debug)]
 #[clap(arg_required_else_help = true)]
 pub struct Args {

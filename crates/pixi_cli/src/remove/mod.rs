@@ -15,7 +15,7 @@ use crate::{
 
 use error::DependencyRemovalError;
 
-/// Remove dependencies from the workspace.
+/// Remove dependencies from a workspace.
 ///
 ///  If the workspace manifest is a `pyproject.toml`, removing a pypi dependency
 /// with the `--pypi` flag will remove it from either
