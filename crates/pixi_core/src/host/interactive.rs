@@ -91,7 +91,7 @@ impl DetectorConsent for InteractiveConsent {
                 (path, Cow::Borrowed("--shared"), saved)
             }
         };
-        match saved {
+        match saved.map_err(miette::Report::new) {
             Ok(()) => eprintln!(
                 "Saved in {}. To remove this decision, run:\n\n\
                  pixi config unset {flag} 'virtual-package-detectors.consent.{}'\n",
