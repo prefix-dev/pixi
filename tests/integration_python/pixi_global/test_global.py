@@ -2363,6 +2363,98 @@ def test_remove_dependency(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> 
     )
 
 
+@pytest.mark.parametrize(
+    "removed_exposures",
+    [
+        {"custom-a": "dummy-a"},
+        {"custom-a": "dummy-a", "another-a": "dummy-a", "custom-aa": "dummy-aa"},
+        {"custom-a": "bin/dummy-a"},
+        {},
+    ],
+    ids=["renamed", "multiple-aliases", "path-qualified", "unrelated-only"],
+)
+def test_remove_dependency_custom_exposures(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str, removed_exposures: dict[str, str]
+) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    retained_exposures = {"dummy-a": "dummy-b"}
+    exposures = removed_exposures | retained_exposures
+    expose_args = [
+        arg for name, target in exposures.items() for arg in ("--expose", f"{name}={target}")
+    ]
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "--environment",
+            "my-env",
+            *expose_args,
+            "dummy-a",
+            "dummy-b",
+        ],
+        env=env,
+    )
+    for name in exposures:
+        assert (tmp_path / "bin" / exec_extension(name)).is_file()
+
+    verify_cli_command(
+        [pixi, "global", "remove", "--environment", "my-env", "dummy-a"],
+        env=env,
+    )
+
+    manifest = tomli.loads((tmp_path / "manifests" / "pixi-global.toml").read_text())
+    assert manifest["envs"]["my-env"]["dependencies"] == {"dummy-b": "*"}
+    assert manifest["envs"]["my-env"]["exposed"] == retained_exposures
+    for name in removed_exposures:
+        assert not (tmp_path / "bin" / exec_extension(name)).exists()
+    assert (tmp_path / "bin" / exec_extension("dummy-a")).is_file()
+    records = [
+        json.loads(record.read_text())["name"]
+        for record in (tmp_path / "envs" / "my-env" / "conda-meta").glob("*.json")
+    ]
+    assert set(records) == {"dummy-b"}
+
+
+def test_remove_dependency_preserves_transitive_exposures(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
+    env = {"PIXI_HOME": str(tmp_path)}
+    verify_cli_command(
+        [
+            pixi,
+            "global",
+            "install",
+            "--channel",
+            dummy_channel_1,
+            "--environment",
+            "my-env",
+            "--expose",
+            "dummy-b",
+            "--expose",
+            "custom-b=dummy-b",
+            "dummy-b",
+            "dummy-g",
+        ],
+        env=env,
+    )
+
+    verify_cli_command(
+        [pixi, "global", "remove", "--environment", "my-env", "dummy-b"],
+        env=env,
+    )
+
+    manifest = tomli.loads((tmp_path / "manifests" / "pixi-global.toml").read_text())
+    assert manifest["envs"]["my-env"]["dependencies"] == {"dummy-g": "*"}
+    assert manifest["envs"]["my-env"]["exposed"] == {"dummy-b": "dummy-b", "custom-b": "dummy-b"}
+    for name in ("dummy-b", "custom-b"):
+        verify_cli_command(
+            [tmp_path / "bin" / exec_extension(name)], env=env, stdout_contains="dummy-b on"
+        )
+
+
 def test_update_env_not_installed(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")
