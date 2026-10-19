@@ -402,11 +402,8 @@ pub async fn verify_platform_satisfiability(
                     }
                 }
             }
-            PixiRecordsByName::from_unique_iter(host_pixi_records).map_err(|duplicate| {
-                PlatformUnsat::DuplicateEntry(
-                    duplicate.package_record().name.as_source().to_string(),
-                )
-            })
+            PixiRecordsByName::from_unique_iter(host_pixi_records)
+                .map_err(|duplicate| duplicate.package_record().name.as_source().to_string())
         };
 
         verify_package_platform_satisfiability(
@@ -628,7 +625,7 @@ async fn verify_package_platform_satisfiability(
     platform_setup: &crate::lock_file::platform_setup::PlatformSetup,
     locked_pixi_records: &PixiRecordsByName,
     unresolved_pypi_environment: &PypiRecordsByName,
-    building_pixi_records: Result<PixiRecordsByName, PlatformUnsat>,
+    building_pixi_records: Result<PixiRecordsByName, String>,
     locked_pypi_indexes: Option<&rattler_lock::PypiIndexes>,
 ) -> Result<
     (VerifiedIndividualEnvironment, LockedPypiRecordsByName),

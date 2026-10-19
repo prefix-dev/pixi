@@ -201,6 +201,10 @@ impl<'a> UvBuildDispatchParams<'a> {
     }
 }
 
+/// The conda records to install into the build prefix, or the reason they
+/// are unavailable, raised only once a source build needs them.
+pub type BuildingRecords = Result<Vec<PixiRecord>, Box<dyn miette::Diagnostic + Send + Sync>>;
+
 /// Handles the lazy initialization of a build dispatch.
 ///
 /// A build dispatch is used to manage building Python packages from source,
@@ -213,7 +217,7 @@ impl<'a> UvBuildDispatchParams<'a> {
 pub struct LazyBuildDispatch<'a> {
     pub params: UvBuildDispatchParams<'a>,
     pub prefix_updater: CondaPrefixUpdater,
-    pub repodata_records: Cell<Option<miette::Result<Vec<PixiRecord>>>>,
+    pub repodata_records: Cell<Option<BuildingRecords>>,
 
     pub build_dispatch: AsyncCell<BuildDispatch<'a>>,
 
@@ -326,7 +330,7 @@ impl<'a> LazyBuildDispatch<'a> {
         prefix_updater: CondaPrefixUpdater,
         project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
         environment: Environment<'a>,
-        repodata_records: miette::Result<Vec<PixiRecord>>,
+        repodata_records: BuildingRecords,
         no_build_isolation: NoBuildIsolation,
         lazy_deps: &'a LazyBuildDispatchDependencies,
         ignore_packages: Option<HashSet<rattler_conda_types::PackageName>>,
@@ -372,7 +376,7 @@ impl<'a> LazyBuildDispatch<'a> {
                     .repodata_records
                     .replace(None)
                     .expect("this function cannot be called twice")
-                    .map_err(|err| LazyBuildDispatchError::InitializationError(err.into()))?;
+                    .map_err(LazyBuildDispatchError::InitializationError)?;
 
                 let prefix = self
                     .prefix_updater
