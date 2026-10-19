@@ -497,34 +497,35 @@ impl HostDetector {
                 Ok(platform) => break Ok(platform),
                 Err(error) => {
                     // Validate the complete set first: separate detectors can
-                    // supply CUDA and its architecture in either order.
-                    let offending = match &error {
-                        PixiPlatformError::CudaArchRequiresCuda => {
-                            let removed_cuda = builtin_platform
-                                .solver_virtual_package_records()
-                                .iter()
-                                .any(|package| package.name.as_normalized() == "__cuda")
-                                .then(|| {
-                                    results.iter().find(|result| {
-                                        result.name.as_normalized() == "__cuda"
-                                            && matches!(result.value, DetectedValue::Absent)
-                                            && matches!(
-                                                result.source,
-                                                DetectionSource::Detector { .. }
-                                            )
-                                    })
-                                })
-                                .flatten();
-                            removed_cuda.or_else(|| {
-                                results.iter().find(|result| {
-                                    result.name.as_normalized() == "__cuda_arch"
-                                        && matches!(result.value, DetectedValue::Present(_))
-                                        && matches!(result.source, DetectionSource::Detector { .. })
-                                })
-                            })
+                    // supply a GPU and its architecture in either order.
+                    let coupling = match &error {
+                        PixiPlatformError::CudaArchRequiresCuda => Some(("__cuda", "__cuda_arch")),
+                        PixiPlatformError::AmdGpuArchRequiresAmdGpu => {
+                            Some(("__amdgpu", "__amdgpu_arch"))
                         }
                         _ => None,
                     };
+                    let offending = coupling.and_then(|(device, arch)| {
+                        let removed_device = builtin_platform
+                            .solver_virtual_package_records()
+                            .iter()
+                            .any(|package| package.name.as_normalized() == device)
+                            .then(|| {
+                                results.iter().find(|result| {
+                                    result.name.as_normalized() == device
+                                        && matches!(result.value, DetectedValue::Absent)
+                                        && matches!(result.source, DetectionSource::Detector { .. })
+                                })
+                            })
+                            .flatten();
+                        removed_device.or_else(|| {
+                            results.iter().find(|result| {
+                                result.name.as_normalized() == arch
+                                    && matches!(result.value, DetectedValue::Present(_))
+                                    && matches!(result.source, DetectionSource::Detector { .. })
+                            })
+                        })
+                    });
                     let Some(DetectorResult {
                         source:
                             DetectionSource::Detector {
