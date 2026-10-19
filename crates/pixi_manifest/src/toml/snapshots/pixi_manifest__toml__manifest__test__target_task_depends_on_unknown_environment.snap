@@ -1,6 +1,0 @@
----
-source: crates/pixi_manifest/src/toml/manifest.rs
-expression: "expect_parse_failure(r#\"\n        [workspace]\n        channels = []\n        platforms = [\"linux-64\"]\n\n        [tasks]\n        foo = \"bar\"\n\n        [target.linux-64.tasks]\n        baz = { cmd = \"qux\", depends-on = [{ task = \"foo\", environment = \"oops\" }] }\n        \"#,)"
----
-  × task 'baz' for target 'linux-64' depends on task 'foo' in environment 'oops', which is not defined
-  help: defined environments: default

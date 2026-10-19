@@ -1621,7 +1621,10 @@ mod test {
         foo = "bar"
         baz = [{ task = "foo", environment = "oops" }]
         "#,
-        ));
+        ), @"
+          × task 'baz' depends on task 'foo' in environment 'oops', which is not defined
+          help: defined environments: default
+        ");
     }
 
     #[test]
@@ -1636,7 +1639,15 @@ mod test {
         foo = "bar"
         baz = [{ task = "foo", environment = "doesnt_exist" }]
         "#,
-        ));
+        ), @r#"
+          × Failed to parse environment name 'doesnt_exist', please use only lowercase letters, numbers and dashes
+           ╭─[pixi.toml:8:47]
+         7 │         foo = "bar"
+         8 │         baz = [{ task = "foo", environment = "doesnt_exist" }]
+           ·                                               ────────────
+         9 │
+           ╰────
+        "#);
     }
 
     // spellchecker:off
@@ -1652,7 +1663,17 @@ mod test {
         foo = "bar"
         baz = [{ task = "foo", enviroment = "default" }]
         "#,
-        ));
+        ), @r#"
+          × Unexpected keys, expected only 'task', 'args', 'environment'
+           ╭─[pixi.toml:8:32]
+         7 │         foo = "bar"
+         8 │         baz = [{ task = "foo", enviroment = "default" }]
+           ·                                ─────┬────
+           ·                                     ╰── 'enviroment' was not expected here
+         9 │
+           ╰────
+          help: Did you mean 'environment'?
+        "#);
     }
 
     #[test]
@@ -1667,7 +1688,17 @@ mod test {
         foo = "bar"
         baz = { cmd = "qux", depends_on = [{ task = "foo", enviroment = "default" }] }
         "#,
-        ));
+        ), @r#"
+          × Unexpected keys, expected only 'task', 'args', 'environment'
+           ╭─[pixi.toml:8:60]
+         7 │         foo = "bar"
+         8 │         baz = { cmd = "qux", depends_on = [{ task = "foo", enviroment = "default" }] }
+           ·                                                            ─────┬────
+           ·                                                                 ╰── 'enviroment' was not expected here
+         9 │
+           ╰────
+          help: Did you mean 'environment'?
+        "#);
     }
     // spellchecker:on
 
@@ -1685,7 +1716,10 @@ mod test {
         [environments.dev.tasks]
         baz = [{ task = "foo", environment = "oops" }]
         "#,
-        ));
+        ), @"
+          × task 'baz' in environment 'dev' depends on task 'foo' in environment 'oops', which is not defined
+          help: defined environments: default, dev
+        ");
     }
 
     #[test]
@@ -1704,7 +1738,10 @@ mod test {
         [feature.test.tasks]
         foo = { cmd = "bar", default-environment = "tset" }
         "#,
-        ));
+        ), @"
+          × task 'foo' in feature 'test' has default-environment 'tset', which is not defined
+          help: defined environments: default, test
+        ");
     }
 
     #[test]
@@ -1721,7 +1758,10 @@ mod test {
         [target.linux-64.tasks]
         baz = { cmd = "qux", depends-on = [{ task = "foo", environment = "oops" }] }
         "#,
-        ));
+        ), @"
+          × task 'baz' for target 'linux-64' depends on task 'foo' in environment 'oops', which is not defined
+          help: defined environments: default
+        ");
     }
 
     #[test]
