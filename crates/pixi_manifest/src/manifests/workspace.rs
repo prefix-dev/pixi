@@ -835,8 +835,9 @@ impl WorkspaceManifestMut<'_> {
             .map(|(task_name, _)| format!("'{}'", task_name.as_str()))
             .sorted()
             .dedup()
-            .join(", ");
+            .collect_vec();
         if !referencing_tasks.is_empty() {
+            let referencing_tasks = referencing_tasks.join(", ");
             return Err(GenericError::new(format!(
                 "cannot remove environment '{name}' because tasks refer to it: {referencing_tasks}"
             ))
