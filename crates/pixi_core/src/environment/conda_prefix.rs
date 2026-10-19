@@ -299,7 +299,7 @@ pub async fn update_prefix_conda(
 
         for package in result.transaction.installed_packages() {
             let rel_script_path =
-                LinkScriptType::PreUnlink.get_path(&package.package_record, &host_subdir);
+                LinkScriptType::PostLink.get_path(&package.package_record, &host_subdir);
             let post_link_script = prefix.root().join(&rel_script_path);
 
             if post_link_script.exists() {
