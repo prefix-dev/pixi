@@ -42,7 +42,7 @@ use pixi_manifest::{
 };
 use pixi_progress::global_multi_progress;
 use pixi_record::{LockFileResolver, LockFileResolverError, PixiRecord, UnresolvedPixiRecord};
-use pixi_utils::{prefix::Prefix, variants::VariantConfig};
+use pixi_utils::{diagnostic::Cause, prefix::Prefix, variants::VariantConfig};
 use pixi_uv_context::{UvResolutionContext, UvResolutionContextError};
 use pixi_uv_conversions::{
     ConversionError, to_exclude_newer, to_extra_name, to_marker_environment, to_normalize,
@@ -618,6 +618,127 @@ pub enum WriteLockFileError {
     },
 }
 
+/// An error that can occur while updating the lock file.
+#[derive(Debug, Error, Diagnostic)]
+pub enum UpdateLockFileError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    HostProbe(#[from] crate::host::HostProbeError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    LoadLockFile(#[from] LoadLockFileError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    VersionMismatch(#[from] LockFileVersionMismatchError),
+
+    #[error("lock file not up-to-date with the workspace")]
+    NotUpToDate,
+
+    #[error("transient scripts cannot use `{0}` because they do not have an adjacent lock file")]
+    TransientScriptWithoutLockFile(&'static str),
+
+    #[error("no lock file exists for the script, but `{0}` was requested")]
+    #[diagnostic(help("Create one with `pixi lock --script <PATH>`."))]
+    MissingScriptLockFile(&'static str),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    CommandDispatcherBuilder(#[from] CommandDispatcherBuilderError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Resolver(#[from] LockFileResolverError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    CacheDir(#[from] CacheDirError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Client(#[from] ReqwestClientError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ChannelPriority(#[from] ChannelPriorityCombinationError),
+
+    #[error(transparent)]
+    ParseChannel(#[from] ParseChannelError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    UvContext(#[from] UvResolutionContextError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    UnsupportedPypiPlatform(#[from] UnsupportedPypiPlatformError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    SolveConda(#[from] SolveCondaEnvironmentError),
+
+    #[error(
+        "failed to solve the pypi requirements of environment '{environment}' for platform '{platform}'"
+    )]
+    #[diagnostic(forward(source))]
+    SolvePypi {
+        environment: GroupedEnvironmentName,
+        platform: PixiPlatformName,
+        #[source]
+        source: Cause<SolveError>,
+    },
+
+    #[error(transparent)]
+    Conversion(#[from] ConversionError),
+
+    #[error(transparent)]
+    PypiIdentifier(#[from] super::package_identifier::ConversionError),
+
+    #[error("failed to get variant configuration")]
+    #[diagnostic(forward(0))]
+    ExtractVariants(#[source] Cause<VariantsError>),
+
+    #[error("failed to resolve exclude-newer")]
+    #[diagnostic(forward(0))]
+    ExtractExcludeNewer(#[source] Cause<ExcludeNewerError>),
+
+    #[error("failed to resolve channel priority")]
+    #[diagnostic(forward(0))]
+    ExtractChannelPriority(#[source] Cause<ChannelPriorityCombinationError>),
+
+    #[error("failed to resolve dev dependencies")]
+    ExtractDevDependencies(#[source] CommandDispatcherError<Box<PlatformUnsat>>),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Write(#[from] WriteLockFileError),
+}
+
+/// An error that occurs when the PyPI dependencies of an environment cannot be
+/// solved on this machine.
+#[derive(Debug, Error, Diagnostic)]
+pub enum UnsupportedPypiPlatformError {
+    /// No declared platform of the environment runs on this machine.
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    UnsupportedPlatform(Box<UnsupportedPlatformError>),
+
+    #[error(
+        "unable to solve the pypi dependencies of the {} '{group}' because there is no compatible Python interpreter for '{platform}'",
+        if matches!(.group, GroupedEnvironmentName::Group(_)) { "solve group" } else { "environment" }
+    )]
+    #[diagnostic(help("Try `pixi add python`."))]
+    NoPythonInterpreter {
+        group: GroupedEnvironmentName,
+        platform: PixiPlatformName,
+    },
+
+    #[error("there is no compatible Python interpreter for '{0}'")]
+    #[diagnostic(help("Try `pixi add python`."))]
+    NoPythonInterpreterForPlatform(PixiPlatformName),
+}
+
 /// An error that can occur while bringing an environment's prefix up-to-date
 /// with the lock file.
 #[derive(Debug, Error, Diagnostic)]
@@ -637,7 +758,7 @@ pub enum UpdatePrefixError {
     PlatformUnsupported {
         environment: EnvironmentName,
         #[source]
-        source: VerifyCurrentPlatformError,
+        source: Cause<VerifyCurrentPlatformError>,
     },
 
     #[error("cannot install environment '{environment}'")]
@@ -645,7 +766,7 @@ pub enum UpdatePrefixError {
     RequirementsUnmet {
         environment: EnvironmentName,
         #[source]
-        source: MachineValidationError,
+        source: Cause<MachineValidationError>,
     },
 
     #[error("the lock file has no entry for platform '{platform}' in environment '{environment}'")]
@@ -681,7 +802,7 @@ pub enum UpdatePrefixError {
     UpdatePypi {
         environment: EnvironmentName,
         #[source]
-        source: Box<PyPIUpdateError>,
+        source: Cause<PyPIUpdateError>,
     },
 
     #[error(transparent)]
@@ -1104,7 +1225,7 @@ impl<'p> LockFileDerivedData<'p> {
                     .map_err(|source| {
                         UpdatePrefixError::RequirementsUnmet {
                             environment: environment.name().clone(),
-                            source,
+                            source: Cause::new(source),
                         }
                     })?;
                 }
@@ -1120,7 +1241,7 @@ impl<'p> LockFileDerivedData<'p> {
             match verify_current_platform_can_run_environment(environment, Some(&self.lock_file)) {
                 Err(source) => UpdatePrefixError::PlatformUnsupported {
                     environment: environment.name().clone(),
-                    source,
+                    source: Cause::new(source),
                 },
                 Ok(()) => UpdatePrefixError::NoMatchingPlatform(environment.name().clone()),
             }
@@ -1158,7 +1279,7 @@ impl<'p> LockFileDerivedData<'p> {
             )
             .map_err(|source| UpdatePrefixError::RequirementsUnmet {
                 environment: environment.name().clone(),
-                source,
+                source: Cause::new(source),
             })?;
         }
         if let Some(prefix) = cached {
@@ -1517,7 +1638,7 @@ impl<'p> LockFileDerivedData<'p> {
                 }
                 .map_err(|source| UpdatePrefixError::UpdatePypi {
                     environment: environment.name().clone(),
-                    source: Box::new(source),
+                    source: Cause::new(source),
                 })?;
 
                 tracing::info!(
@@ -3931,12 +4052,14 @@ mod tests {
         .unwrap();
         let err = UpdatePrefixError::RequirementsUnmet {
             environment: EnvironmentName::Default,
-            source: crate::lock_file::virtual_packages::VirtualPackageNotFoundError::new(
-                &spec,
-                &[],
-                rattler_conda_types::Subdir::OsxArm64,
-            )
-            .into(),
+            source: Cause::new(
+                crate::lock_file::virtual_packages::VirtualPackageNotFoundError::new(
+                    &spec,
+                    &[],
+                    rattler_conda_types::Subdir::OsxArm64,
+                )
+                .into(),
+            ),
         };
         assert!(err.diagnostic_source().is_none());
         let help = err.help().expect("help is forwarded").to_string();
