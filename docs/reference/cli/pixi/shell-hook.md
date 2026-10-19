@@ -21,6 +21,9 @@ pixi shell-hook [OPTIONS]
 - <a id="arg---json" href="#arg---json">`--json`</a>
 :  Emit the environment variables set by running the activation as JSON
 <br>**default**: `false`
+- <a id="arg---deactivate" href="#arg---deactivate">`--deactivate`</a>
+:  Generate a deactivation script instead of an activation script
+<br>**default**: `false`
 
 ## Config Options
 - <a id="arg---no-config" href="#arg---no-config">`--no-config`</a>
