@@ -22,7 +22,7 @@ use pixi_core::{
 
 use crate::cli_config::{LockAndInstallConfig, WorkspaceConfig};
 
-/// Print the pixi environment activation script.
+/// Print a pixi environment activation script.
 ///
 /// You can source the script to activate the environment without needing pixi
 /// itself.

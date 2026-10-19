@@ -11,11 +11,11 @@ use deno_task_shell::{
 };
 use fs_err::tokio as tokio_fs;
 use itertools::Itertools;
-use miette::{Context, Diagnostic};
+use miette::Diagnostic;
 use pixi_consts::consts;
 use pixi_core::{
     Workspace,
-    activation::CurrentEnvVarBehavior,
+    activation::{ActivationError, CurrentEnvVarBehavior},
     workspace::get_activated_environment_variables,
     workspace::{Environment, HasWorkspaceRef},
 };
@@ -566,7 +566,7 @@ pub async fn get_task_env(
     lock_file: Option<&LockFile>,
     force_activate: bool,
     experimental_cache: bool,
-) -> miette::Result<HashMap<String, String>> {
+) -> Result<HashMap<String, String>, ActivationError> {
     // Get environment variables from the activation
     let env_var_behavior = if clean_env {
         CurrentEnvVarBehavior::Clean
@@ -584,8 +584,7 @@ pub async fn get_task_env(
             experimental_cache,
         )
     })
-    .await
-    .wrap_err("failed to activate environment")?
+    .await?
     .clone();
 
     // Add the current working directory to the environment

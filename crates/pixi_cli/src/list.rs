@@ -150,7 +150,7 @@ pub const DEFAULT_FIELDS: [Field; 6] = [
     Field::Source,
 ];
 
-/// List the packages of the current workspace
+/// List the packages of an environment
 ///
 /// Highlighted packages are explicit dependencies.
 #[derive(Debug, Parser)]

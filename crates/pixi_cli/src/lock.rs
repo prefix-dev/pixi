@@ -10,7 +10,7 @@ use pixi_diff::{LockFileDiff, LockFileJsonDiff};
 use crate::cli_config::NoInstallConfig;
 use crate::cli_config::ScriptWorkspaceConfig;
 
-/// Solve environment and update the lock file without installing the
+/// Solve environments and update the lock file without installing the
 /// environments.
 #[derive(Debug, Default, Parser)]
 #[clap(arg_required_else_help = false)]
