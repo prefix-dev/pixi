@@ -25,7 +25,7 @@ use crate::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
 
 /// Check if there are newer versions of the dependencies and upgrade them in the lock file and manifest file.
 ///
-/// `pixi upgrade` loosens the requirements for the given packages, updates the lock file and the adapts the manifest accordingly.
+/// `pixi upgrade` loosens the requirements for the given packages, updates the lock file, and adapts the manifest accordingly.
 /// By default, all features are upgraded.
 #[derive(Parser, Debug, Default)]
 pub struct Args {
