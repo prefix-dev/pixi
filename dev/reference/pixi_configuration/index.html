@@ -9547,14 +9547,14 @@ The configuration is loaded in the following order:</p>
 </div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-</div>
 <p>The highest priority wins. If a configuration file is found in a higher priority location, the values from the
 configuration read from lower priority locations are overwritten.</p>
+</div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-</div>
 <p>To find the locations where <code>pixi</code> looks for configuration files, run
 <code>pixi info -vvv</code>.</p>
+</div>
 <h3 id="configuration-shared-with-other-rattler-based-tools">Configuration shared with other rattler-based tools<a class="headerlink" href="#configuration-shared-with-other-rattler-based-tools" title="Permanent link">#</a></h3>
 <p>The <code>rattler</code> locations are read by every rattler-based tool, so a setting placed there applies to Pixi and <code>rattler-build</code> alike.
 They accept only the options that all of these tools understand, such as <code>default-channels</code>, <code>mirrors</code>, <code>s3-options</code>, <code>index-config</code> and <code>concurrency</code>.
@@ -9573,18 +9573,19 @@ of the system and user-level config layers — the project-local
 <h2 id="configuration-options">Configuration options<a class="headerlink" href="#configuration-options" title="Permanent link">#</a></h2>
 <details class="info">
 <summary>Naming convention in configuration</summary>
-</details>
 <p>In Pixi <code>0.20.1</code> and older the global configuration options used <code>snake_case</code> which
 we've changed to <code>kebab-case</code> for consistency with the rest of the configuration.
 For backwards compatibility, the following configuration options can still be written
 in <code>snake_case</code>:</p>
-<div class="language-text highlight"><pre><span></span><code>- `default_channels`
-- `change_ps1`
-- `tls_no_verify`
-- `authentication_override_file`
-- `mirrors` and its sub-options
-- `repodata_config` and its sub-options
-</code></pre></div>
+<ul>
+<li><code>default_channels</code></li>
+<li><code>change_ps1</code></li>
+<li><code>tls_no_verify</code></li>
+<li><code>authentication_override_file</code></li>
+<li><code>mirrors</code> and its sub-options</li>
+<li><code>repodata_config</code> and its sub-options</li>
+</ul>
+</details>
 <p>The following reference describes all available configuration options.</p>
 <h3 id="default-channels"><code>default-channels</code><a class="headerlink" href="#default-channels" title="Permanent link">#</a></h3>
 <p>The <code>default-channels</code> provide fallback channels for commands that do not obtain channels from an existing workspace or
@@ -9852,10 +9853,10 @@ The longest matching prefix wins, so a general entry can be narrowed for one cha
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title"><code>index-url</code> and <code>extra-index-urls</code> are <em>not</em> globals</p>
-</div>
 <p>Unlike pip, these settings, with the exception of <code>keyring-provider</code> will only modify the <code>pixi.toml</code>/<code>pyproject.toml</code>
 file and are not globally interpreted when not present in the manifest.
 This is because we want to keep the manifest file as complete and reproducible as possible.</p>
+</div>
 <h3 id="s3-options"><code>s3-options</code><a class="headerlink" href="#s3-options" title="Permanent link">#</a></h3>
 <p>Configuration for S3 authentication. This will lead to Pixi not using AWS's default credentials but instead use the
 credentials from the Pixi authentication storage, see the <a href="../../deployment/s3/">S3 section</a> for more information.</p>
@@ -9900,9 +9901,9 @@ architecture for which there is fewer support for certain build backends.</p>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Virtual packages</p>
-</div>
 <p>The virtual packages for the tool platform are detected from the current system. If the tool platform is for a different
 operating system than the current system, no virtual packages will be used.</p>
+</div>
 <h3 id="cache"><code>cache</code><a class="headerlink" href="#cache" title="Permanent link">#</a></h3>
 <p>The <code>[cache]</code> table lets you redirect specific pixi caches independently.</p>
 <div class="language-toml highlight"><span class="filename">config.toml</span><pre><span></span><code><span id="__span-22-1"><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="k">[cache]</span>
@@ -10127,9 +10128,9 @@ the future.</p>
 </span></code></pre></div>
 <div class="admonition note">
 <p class="admonition-title">Why is this experimental?</p>
-</div>
 <p>This feature is experimental because the cache invalidation is very tricky,
 and we don't want to disturb users that are not affected by activation times.</p>
+</div>
 <h3 id="running-conda-scripts">Running conda scripts<a class="headerlink" href="#running-conda-scripts" title="Permanent link">#</a></h3>
 <p><a href="../../tutorials/conda_script/">Conda scripts</a> normally need <code>--experimental</code> on every <code>pixi run</code>.
 Turn the flag into a setting with:</p>
