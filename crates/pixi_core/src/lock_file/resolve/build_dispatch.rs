@@ -500,7 +500,9 @@ impl BuildContext for LazyBuildDispatch<'_> {
                 if g.is_none() {
                     *g = Some(e);
                 }
-                panic!("could not initialize build dispatch correctly")
+                // `resume_unwind` skips the panic hook, so no panic message is printed
+                // before `super::pypi::resolve_pypi` catches this and reports the error
+                std::panic::resume_unwind(Box::new("could not initialize build dispatch correctly"))
             }
         }
     }
