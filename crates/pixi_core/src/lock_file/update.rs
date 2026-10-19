@@ -1082,6 +1082,34 @@ impl<'p> LockFileDerivedData<'p> {
         reinstall_packages: &ReinstallPackages,
         filter: &InstallFilter,
     ) -> Result<Prefix, UpdatePrefixError> {
+        // An installed prefix that matches the lock file runs without detecting
+        // the host. Detector-provided names are unknown then and not checked.
+        if update_mode == UpdateMode::QuickValidate
+            && let Some(platform) = self.reusable_prefix_platform(environment)
+            && let Some(locked_environment) =
+                self.lock_file.environment(environment.name().as_str())
+        {
+            let hash = LockedEnvironmentHash::from_environment(locked_environment, Some(platform));
+            if let Some(prefix) = self.cached_prefix(environment, platform, &hash) {
+                if !matches!(self.target_platform, Some(InstallTarget::Explicit(_)))
+                    && !platform_override_is_foreign()
+                {
+                    validate_system_meets_environment_requirements(
+                        &self.lock_file,
+                        platform,
+                        environment.name(),
+                        environment.host(),
+                        UnknownNames::Unchecked,
+                    )
+                    .map_err(|source| UpdatePrefixError::RequirementsUnmet {
+                        environment: environment.name().clone(),
+                        source,
+                    })?;
+                }
+                return Ok(prefix);
+            }
+        }
+
         self.workspace.refresh_environment_hosts().await?;
 
         // A current prefix hash says nothing about this machine's capabilities.
@@ -1187,6 +1215,20 @@ impl<'p> LockFileDerivedData<'p> {
         }
 
         Ok(prefix)
+    }
+
+    /// The platform an installed prefix can be reused for without detecting
+    /// the host: the selected platform, or the one it was installed for.
+    fn reusable_prefix_platform(&self, environment: &Environment<'p>) -> Option<&'p PixiPlatform> {
+        match self.target_platform.as_ref().map(InstallTarget::name) {
+            Some(name) => environment.named_or_best_declared_platform(Some(name)),
+            None => environment
+                .installed_resolved_platform()
+                .filter(|platform| {
+                    let declared = environment.platforms();
+                    declared.is_empty() || declared.contains(platform.name())
+                }),
+        }
     }
 
     /// The installed prefix of `environment` if its environment file matches

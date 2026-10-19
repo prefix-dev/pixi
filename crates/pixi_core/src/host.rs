@@ -150,6 +150,9 @@ pub struct HostDetection {
     failures: Vec<DetectorFailureReport>,
     skipped: Vec<SkippedRegistration>,
     unknown: Vec<String>,
+    /// Whether channel-registered detectors were consulted. Without them,
+    /// every name built-in detection does not report is unknown.
+    detectors_consulted: bool,
 }
 
 impl HostDetection {
@@ -206,6 +209,7 @@ impl HostDetection {
             failures: Vec::new(),
             skipped: Vec::new(),
             unknown: Vec::new(),
+            detectors_consulted: false,
         }
     }
 
@@ -251,11 +255,24 @@ impl HostDetection {
     }
 
     /// Whether this machine's value of the virtual package `name` is unknown:
-    /// its detector has no stored decision and nobody could be asked. Host
-    /// validation does not check unknown names, so a noninteractive session
-    /// keeps running what an earlier, consented detection installed.
+    /// its detector has no stored decision and nobody could be asked, or no
+    /// detector was consulted and built-in detection does not report it.
+    /// Checks of an installed environment skip unknown names, so it keeps
+    /// running what an earlier detection installed.
     pub fn is_unknown(&self, name: &str) -> bool {
         self.unknown.iter().any(|unknown| unknown == name)
+            || (!self.detectors_consulted
+                && !self
+                    .capabilities()
+                    .iter()
+                    .any(|package| package.name.as_normalized() == name))
+    }
+
+    /// Marks that channel-registered detectors were consulted, even if none
+    /// were registered.
+    fn with_detectors_consulted(mut self) -> Self {
+        self.detectors_consulted = true;
+        self
     }
 }
 
@@ -384,6 +401,17 @@ impl HostDetector {
     /// execute only when the target is this machine's native subdir. For
     /// other targets their names are absent unless overridden.
     pub async fn detect_for_target(
+        &self,
+        channels: &[ChannelUrl],
+        target: Subdir,
+        wanted: WantedNames,
+    ) -> Result<HostDetection, HostDetectError> {
+        self.detect_target(channels, target, wanted)
+            .await
+            .map(HostDetection::with_detectors_consulted)
+    }
+
+    async fn detect_target(
         &self,
         channels: &[ChannelUrl],
         target: Subdir,
@@ -656,6 +684,7 @@ impl HostDetector {
             failures,
             skipped: outcome.skipped,
             unknown,
+            detectors_consulted: true,
         })
     }
 
@@ -677,6 +706,18 @@ impl HostDetector {
     }
 
     async fn detect_for_specs_with_wanted(
+        &self,
+        channels: &[ChannelUrl],
+        platform: Subdir,
+        specs: &[MatchSpec],
+        wanted: WantedNames,
+    ) -> Result<HostDetection, HostDetectError> {
+        self.detect_specs(channels, platform, specs, wanted)
+            .await
+            .map(HostDetection::with_detectors_consulted)
+    }
+
+    async fn detect_specs(
         &self,
         channels: &[ChannelUrl],
         platform: Subdir,

@@ -371,8 +371,9 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
     // Sanity check of prefix location
     sanity_check_workspace(&workspace).await?;
 
-    // Running validates this machine against what each task's environment needs.
-    workspace.refresh_environment_hosts().await?;
+    workspace
+        .refresh_environment_hosts_for_platform_selection()
+        .await?;
 
     // `--platform` pins which declared platform the environment is installed
     // and activated for. Without it we auto-upgrade to the platform the

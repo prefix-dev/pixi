@@ -122,6 +122,7 @@ pub fn minimum_compatible_declared_platform<'p>(
     let current = host.subdir();
     let system_virtual_packages = host.capabilities();
     let candidate_subdirs = candidate_subdirs(current);
+    let installed = environment.installed_resolved_platform().is_some();
 
     let manifest = environment.workspace_manifest();
     let env_platform_names = environment.platforms();
@@ -144,12 +145,15 @@ pub fn minimum_compatible_declared_platform<'p>(
         let unsatisfied = required
             .get(subdir)
             .map(|specs| {
+                // An installed environment keeps running where a value is unknown.
                 let known = specs
                     .iter()
                     .filter(|spec| {
-                        spec.name
-                            .as_exact()
-                            .is_none_or(|name| !host.is_unknown(name.as_normalized()))
+                        !installed
+                            || spec
+                                .name
+                                .as_exact()
+                                .is_none_or(|name| !host.is_unknown(name.as_normalized()))
                     })
                     .cloned()
                     .collect::<Vec<_>>();
