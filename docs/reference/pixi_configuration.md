@@ -51,12 +51,12 @@ The configuration is loaded in the following order:
     | 1            | `C:\ProgramData\rattler\config.toml`                                   | Shared system-wide configuration                      |
 
 !!! note
-The highest priority wins. If a configuration file is found in a higher priority location, the values from the
-configuration read from lower priority locations are overwritten.
+    The highest priority wins. If a configuration file is found in a higher priority location, the values from the
+    configuration read from lower priority locations are overwritten.
 
 !!! note
-To find the locations where `pixi` looks for configuration files, run
-`pixi info -vvv`.
+    To find the locations where `pixi` looks for configuration files, run
+    `pixi info -vvv`.
 
 ### Configuration shared with other rattler-based tools
 
@@ -79,10 +79,10 @@ of the system and user-level config layers — the project-local
 ## Configuration options
 
 ??? info "Naming convention in configuration"
-In Pixi `0.20.1` and older the global configuration options used `snake_case` which
-we've changed to `kebab-case` for consistency with the rest of the configuration.
-For backwards compatibility, the following configuration options can still be written
-in `snake_case`:
+    In Pixi `0.20.1` and older the global configuration options used `snake_case` which
+    we've changed to `kebab-case` for consistency with the rest of the configuration.
+    For backwards compatibility, the following configuration options can still be written
+    in `snake_case`:
 
     - `default_channels`
     - `change_ps1`
@@ -379,9 +379,9 @@ To setup a certain number of defaults for the usage of PyPI registries. You can 
 ```
 
 !!! Note "`index-url` and `extra-index-urls` are *not* globals"
-Unlike pip, these settings, with the exception of `keyring-provider` will only modify the `pixi.toml`/`pyproject.toml`
-file and are not globally interpreted when not present in the manifest.
-This is because we want to keep the manifest file as complete and reproducible as possible.
+    Unlike pip, these settings, with the exception of `keyring-provider` will only modify the `pixi.toml`/`pyproject.toml`
+    file and are not globally interpreted when not present in the manifest.
+    This is because we want to keep the manifest file as complete and reproducible as possible.
 
 ### `s3-options`
 
@@ -439,8 +439,8 @@ architecture for which there is fewer support for certain build backends.
 ```
 
 !!! Note "Virtual packages"
-The virtual packages for the tool platform are detected from the current system. If the tool platform is for a different
-operating system than the current system, no virtual packages will be used.
+    The virtual packages for the tool platform are detected from the current system. If the tool platform is for a different
+    operating system than the current system, no virtual packages will be used.
 
 ### `cache`
 
@@ -606,8 +606,8 @@ Set the configuration with:
 ```
 
 !!! note "Why is this experimental?"
-This feature is experimental because the cache invalidation is very tricky,
-and we don't want to disturb users that are not affected by activation times.
+    This feature is experimental because the cache invalidation is very tricky,
+    and we don't want to disturb users that are not affected by activation times.
 
 ### Running conda scripts
 
