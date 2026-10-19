@@ -795,6 +795,12 @@ impl<'a> HasFeaturesIter<'a> for ScriptEnvironment<'a> {
 }
 
 impl HostScope {
+    /// Whether a platform in scope declares virtual packages beyond its
+    /// subdir's defaults, so that selecting it depends on detection.
+    pub(crate) fn declares_virtual_packages(&self) -> bool {
+        !self.names.is_empty()
+    }
+
     pub(crate) fn for_environment(
         environment: &GroupedEnvironment<'_>,
     ) -> Result<Self, HostProbeError> {

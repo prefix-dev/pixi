@@ -170,6 +170,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let relaxed_lock_file = unlock_packages(&workspace, loaded_lock_file, &specs);
 
     // Update the packages in the lock file.
+    workspace.refresh_environment_hosts().await?;
     let progress = pixi_reporters::TopLevelProgress::from_global();
     let dispatcher = workspace
         .command_dispatcher_builder(Some(&progress))?

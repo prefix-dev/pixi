@@ -436,16 +436,14 @@ impl WorkspaceLocator {
         let config =
             Config::load_with(&root, &self.global_config_source).merge_config(self.cli_config);
         let injected_host = self.host.take();
-        let prepare_hosts = injected_host.is_none();
+        let retain_consent = injected_host.is_none();
         let mut workspace = Workspace::from_manifests_with_config(
             discovered_manifests,
             config,
             injected_host.unwrap_or_else(HostDetection::builtin),
         );
-        if prepare_hosts {
-            workspace
-                .prepare_environment_hosts(detector_consent)
-                .await?;
+        if retain_consent {
+            workspace.retain_detector_consent(detector_consent);
         }
         Ok(workspace)
     }

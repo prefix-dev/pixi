@@ -87,6 +87,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let environment = workspace
         .environment_from_name_or_env_var(args.environment)
         .wrap_err("Environment not found")?;
+    workspace
+        .refresh_environment_hosts_for_platform_selection()
+        .await?;
 
     let lock_file_usage = script_lock_file_usage(
         args.lock_file_update_config.lock_file_usage()?,
@@ -123,7 +126,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .next()
             .expect("resolve_platforms preserves length"),
         None => environment
-            .best_declared_platform()
+            .installed_or_best_declared_platform()
             .cloned()
             .ok_or_else(|| {
                 miette::miette!(

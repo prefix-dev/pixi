@@ -315,10 +315,6 @@ impl WorkspaceMut {
     /// This is useful if an operation needs to save the changes but still needs
     /// to continue the modification.
     async fn save_inner(&mut self) -> Result<(), std::io::Error> {
-        self.workspace()
-            .refresh_environment_hosts()
-            .await
-            .map_err(std::io::Error::other)?;
         let manifest_path = self.workspace().workspace.provenance.path.clone();
         let new_contents = self
             .workspace_manifest_document
@@ -379,10 +375,6 @@ impl WorkspaceMut {
             )
             .await?;
             workspace.invalidate_environment_hosts();
-            workspace
-                .refresh_environment_hosts()
-                .await
-                .map_err(std::io::Error::other)?;
         }
 
         Ok(workspace)

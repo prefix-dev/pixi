@@ -774,13 +774,10 @@ impl Workspace {
         self.environment_hosts = Arc::new(AsyncCell::new_with(hosts));
     }
 
-    /// Prepares host detections once for each distinct environment solve scope.
-    async fn prepare_environment_hosts(
-        &mut self,
-        consent: Arc<dyn DetectorConsent>,
-    ) -> Result<(), HostProbeError> {
+    /// Retains the consent policy that [`Self::refresh_environment_hosts`]
+    /// detects hosts with.
+    fn retain_detector_consent(&mut self, consent: Arc<dyn DetectorConsent>) {
         self.detector_consent = Some(consent);
-        self.refresh_environment_hosts().await
     }
 
     /// Invalidates environment mappings without discarding unchanged detections.
@@ -793,8 +790,33 @@ impl Workspace {
         }
     }
 
-    /// Refreshes invalidated hosts before asynchronous solve and install decisions.
-    pub(crate) async fn refresh_environment_hosts(&self) -> Result<(), HostProbeError> {
+    /// Detects hosts when selecting a platform depends on it: when an
+    /// environment that is not installed yet has a platform that declares
+    /// virtual packages beyond its subdir's defaults. Otherwise the built-in
+    /// host, or the installed platform, selects the platform without any
+    /// detection.
+    pub async fn refresh_environment_hosts_for_platform_selection(
+        &self,
+    ) -> Result<(), HostProbeError> {
+        for environment in self.environments() {
+            if environment.installed_resolved_platform().is_some() {
+                continue;
+            }
+            let scope = HostScope::for_environment(
+                &grouped_environment::GroupedEnvironment::from(environment),
+            )?;
+            if scope.declares_virtual_packages() {
+                return self.refresh_environment_hosts().await;
+            }
+        }
+        Ok(())
+    }
+
+    /// Detects each environment's host once per distinct solve scope. Until
+    /// this runs, environments see the built-in host only. Call it before a
+    /// solve, an install, or another decision that depends on detector
+    /// results.
+    pub async fn refresh_environment_hosts(&self) -> Result<(), HostProbeError> {
         let Some(consent) = &self.detector_consent else {
             // Synchronous constructors and explicitly injected hosts never probe.
             return Ok(());
@@ -1733,10 +1755,8 @@ mod tests {
             .lock()
             .await
             .push((scope, host.clone()));
-        workspace
-            .prepare_environment_hosts(Arc::new(DenyAll))
-            .await
-            .unwrap();
+        workspace.retain_detector_consent(Arc::new(DenyAll));
+        workspace.refresh_environment_hosts().await.unwrap();
 
         let mut modified = workspace.clone().modify().unwrap();
         modified

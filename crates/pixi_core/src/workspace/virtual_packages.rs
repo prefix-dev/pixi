@@ -9,6 +9,7 @@ use crate::workspace::{
 };
 use fancy_display::FancyDisplay;
 use miette::Diagnostic;
+use pixi_manifest::platform::host::platform_override_is_foreign;
 use pixi_manifest::{
     EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName,
     platform::{candidate_subdirs, unsatisfied_capabilities},
@@ -37,9 +38,10 @@ pub enum VerifyCurrentPlatformError {
 ///
 /// Two checks, in order:
 ///
-/// 1. *Declared compatibility* -- does one of the environment's declared
-///    platforms match this machine (subdir + declared virtual packages)? This
-///    is [`Environment::best_declared_platform`].
+/// 1. *Declared compatibility* -- was the environment installed for one of its
+///    declared platforms, or does one match this machine (subdir + declared
+///    virtual packages)? This is
+///    [`Environment::installed_or_best_declared_platform`].
 /// 2. *Resolution compatibility* -- if (1) fails and a resolution is available,
 ///    fall back to the virtual-package requirements the resolved dependencies
 ///    actually place on the machine (a declared platform may promise virtual
@@ -54,12 +56,12 @@ pub fn verify_current_platform_can_run_environment(
 ) -> Result<(), VerifyCurrentPlatformError> {
     // When overriding platform skip validation entirely.
     // The host platform wouldn't satisfy the requirements
-    if std::env::var(pixi_consts::consts::PIXI_OVERRIDE_PLATFORM).is_ok() {
+    if platform_override_is_foreign() {
         return Ok(());
     }
 
     // Check 1:
-    if let Some(current_platform) = environment.best_declared_platform() {
+    if let Some(current_platform) = environment.installed_or_best_declared_platform() {
         // Declared-compatible. Keep validating the resolved requirements
         // (conda virtual packages + pypi wheel tags) against the lock file.
         if let Some(lock_file) = lock_file {
@@ -390,7 +392,7 @@ pub fn verify_run_platform(
 ) -> Result<(), RunPlatformUnsupportedError> {
     // An explicit platform override means the user vouches for the machine, so
     // host validation is skipped.
-    if std::env::var(pixi_consts::consts::PIXI_OVERRIDE_PLATFORM).is_ok() {
+    if platform_override_is_foreign() {
         return Ok(());
     }
 
@@ -540,7 +542,7 @@ pub fn classify_environment_runnability(
 ) -> EnvironmentRunnability {
     // Mirror `verify_current_platform_can_run_environment`: an explicit
     // platform override means the user vouches for the machine.
-    if std::env::var(pixi_consts::consts::PIXI_OVERRIDE_PLATFORM).is_ok() {
+    if platform_override_is_foreign() {
         return EnvironmentRunnability::ByDesign;
     }
 

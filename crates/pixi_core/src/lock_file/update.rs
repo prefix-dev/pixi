@@ -37,7 +37,8 @@ use pixi_install_pypi::{
 };
 use pixi_manifest::{
     ChannelPriority, EnvironmentName, ExcludeNewerError, FeaturesExt, HasWorkspaceManifest,
-    PixiPlatform, PixiPlatformName, platform::VirtualPackageRecords,
+    PixiPlatform, PixiPlatformName,
+    platform::{VirtualPackageRecords, host::platform_override_is_foreign},
 };
 use pixi_progress::global_multi_progress;
 use pixi_record::{LockFileResolver, LockFileResolverError, PixiRecord, UnresolvedPixiRecord};
@@ -343,7 +344,6 @@ impl Workspace {
         options: UpdateLockFileOptions,
         input: LockFileInput,
     ) -> miette::Result<(LockFileDerivedData<'_>, bool)> {
-        self.refresh_environment_hosts().await?;
         let persist_lock_file = input.should_persist();
         let (lock_file, platform_names_realigned) = match input {
             LockFileInput::Workspace => {
@@ -465,6 +465,9 @@ impl Workspace {
         if !options.lock_file_usage.allow_updates() {
             miette::bail!("lock file not up-to-date with the workspace");
         }
+
+        // Solving orders and selects platforms by what this machine provides.
+        self.refresh_environment_hosts().await?;
 
         // The environments whose conda dependencies are about to be re-solved.
         // Captured before `outdated` is moved so we can validate their requested
@@ -1026,6 +1029,12 @@ impl<'p> LockFileDerivedData<'p> {
                 if target_override.is_some() {
                     return None;
                 }
+                if let Some(installed) = environment.installed_resolved_platform().filter(|p| {
+                    let declared = environment.platforms();
+                    declared.is_empty() || declared.contains(p.name())
+                }) {
+                    return Some(installed);
+                }
                 let fallback =
                     minimum_compatible_declared_platform(environment, &self.lock_file).ok();
                 if let Some(platform) = fallback {
@@ -1088,7 +1097,7 @@ impl<'p> LockFileDerivedData<'p> {
         })?;
         // Explicit overrides may intentionally target a foreign machine.
         if !matches!(self.target_platform, Some(InstallTarget::Explicit(_)))
-            && std::env::var(pixi_consts::consts::PIXI_OVERRIDE_PLATFORM).is_err()
+            && !platform_override_is_foreign()
         {
             validate_system_meets_environment_requirements(
                 &self.lock_file,
@@ -1106,7 +1115,7 @@ impl<'p> LockFileDerivedData<'p> {
         // environment file
         let hash = self.locked_environment_hash(environment)?;
         if update_mode == UpdateMode::QuickValidate
-            && let Some(prefix) = self.cached_prefix(environment, &hash)
+            && let Some(prefix) = self.cached_prefix(environment, selected_platform, &hash)
         {
             return Ok(prefix);
         }
@@ -1170,9 +1179,12 @@ impl<'p> LockFileDerivedData<'p> {
         Ok(prefix)
     }
 
+    /// The installed prefix of `environment` if its environment file matches
+    /// `hash`, judging source packages by the selected `platform`.
     fn cached_prefix(
         &self,
         environment: &Environment<'p>,
+        platform: &'p PixiPlatform,
         hash: &LockedEnvironmentHash,
     ) -> Option<Prefix> {
         let Ok(Some(environment_file)) = read_environment_file(&environment.dir()) else {
@@ -1192,8 +1204,7 @@ impl<'p> LockFileDerivedData<'p> {
                 .lock_file
                 .environment(environment.name().as_str())
                 .is_some_and(|env| {
-                    self.install_platform(environment)
-                        .and_then(|platform| resolve_lock_platform_for(&self.lock_file, platform))
+                    resolve_lock_platform_for(&self.lock_file, platform)
                         .and_then(|platform| env.conda_packages(platform))
                         .is_some_and(|mut packages| {
                             packages.any(|package| package.as_source().is_some())
@@ -1204,7 +1215,7 @@ impl<'p> LockFileDerivedData<'p> {
             // that is a directory, this is basically the only kind of source dependency
             // that you'll modify on a general basis.
             let contains_pypi_source_pkgs = environment
-                .pypi_dependencies(environment.best_declared_platform())
+                .pypi_dependencies(Some(platform))
                 .iter()
                 .any(|(_, req)| {
                     req.iter()

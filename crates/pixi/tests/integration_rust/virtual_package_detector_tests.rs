@@ -265,8 +265,9 @@ fn store_consent(pixi: &PixiControl, channel: &Url, decision: &str) {
     fs_err::write(path, contents).unwrap();
 }
 
+/// Locates the workspace and detects its hosts.
 async fn try_locate(pixi: &PixiControl) -> miette::Result<Workspace> {
-    WorkspaceLocator::default()
+    let workspace = WorkspaceLocator::default()
         .with_search_start(DiscoveryStart::ExplicitManifest(pixi.manifest_path()))
         .with_global_config_source(GlobalConfigSource::File(
             pixi.workspace_path().join("trusted-config.toml"),
@@ -274,7 +275,12 @@ async fn try_locate(pixi: &PixiControl) -> miette::Result<Workspace> {
         .with_cli_config(pixi.config_cli())
         .locate()
         .await
-        .map_err(miette::Report::new)
+        .map_err(miette::Report::new)?;
+    workspace
+        .refresh_environment_hosts()
+        .await
+        .map_err(miette::Report::new)?;
+    Ok(workspace)
 }
 
 async fn locate(pixi: &PixiControl) -> Workspace {
@@ -836,7 +842,7 @@ async fn an_empty_override_variable_declares_the_name_absent() {
 }
 
 #[tokio::test]
-async fn an_invalid_override_variable_fails_to_locate_the_workspace() {
+async fn an_invalid_override_variable_fails_host_detection() {
     let channel_dir = tempfile::tempdir().unwrap();
     write_channel(channel_dir.path()).await;
     let channel = Url::from_directory_path(channel_dir.path()).unwrap();

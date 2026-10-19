@@ -270,6 +270,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             // without writing to disk, then revert. Reuse the already-loaded original lock file.
             let _clear_progress =
                 pixi_reporters::TopLevelProgress::clear_when_done(Some(&progress));
+            workspace.workspace().refresh_environment_hosts().await?;
             let dispatcher = workspace
                 .workspace()
                 .command_dispatcher_builder(Some(&progress))?

@@ -160,6 +160,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // the current platform. When the user explicitly asks for an environment
     // (or the default), we still want to surface the platform error.
     if args.all {
+        workspace.refresh_environment_hosts().await?;
         let (supported, skipped): (Vec<_>, Vec<_>) = environments
             .into_iter()
             .partition(|env| env.best_declared_platform().is_some());

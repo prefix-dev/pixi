@@ -922,7 +922,9 @@ pub async fn get_lock_file_and_prefixes<'env>(
     }
 
     let workspace = environments[0].workspace();
-    workspace.refresh_environment_hosts().await?;
+    workspace
+        .refresh_environment_hosts_for_platform_selection()
+        .await?;
 
     let no_install = match &lock_file_source {
         LockFileSource::Update(options) | LockFileSource::Resolve(options) => options.no_install,
