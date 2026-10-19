@@ -170,7 +170,6 @@ You can set the default Pixi [environment](../tutorials/multi_environment.md#add
 ```toml title="pixi.toml"
 --8<-- "docs/source_files/pixi_tomls/task_default_environment.toml:default-environment"
 ```
-As with task dependencies, the environment must be defined in the workspace.
 
 The default environment can be overridden as usual with the `--environment` argument:
 ```shell
