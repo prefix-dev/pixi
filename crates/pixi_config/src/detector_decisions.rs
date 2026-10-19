@@ -238,7 +238,7 @@ mod tests {
     }
 
     #[test]
-    fn repository_decisions_override_global_consent() {
+    fn a_deny_wins_over_an_allow_from_another_layer() {
         let directory = tempfile::tempdir().unwrap();
         let repository = directory.path().join("repository");
         let shared = directory.path().join("shared.toml");
@@ -254,7 +254,7 @@ mod tests {
                 Config::load_with(&repository, &source)
                     .virtual_package_detectors
                     .consent(&origin()),
-                Some(repository_decision)
+                Some(DetectorDecision::Deny)
             );
         }
     }

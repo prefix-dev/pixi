@@ -562,7 +562,7 @@ Channels can register virtual package detectors: small packages whose executable
 Running a detector executes code from the channel. Pixi asks whether to **Trust** or **Don't trust** the channel's current and future detectors, with **Don't trust** selected by default.
 Then choose **Workspace** to save the decision in the workspace's `.pixi/config.toml`, or **System configuration** to save it in the shared user configuration for all repositories. Both choices show the full destination path.
 Share `.pixi/config.toml` with colleagues to apply the same decisions in their checkouts.
-Repository decisions take precedence over user-wide decisions. A repository `allow` authorizes the channel's detectors for anyone using that configuration, including noninteractive sessions.
+A `deny` at any configuration level wins over an `allow` from another level. A repository `allow` authorizes the channel's detectors for anyone using that configuration, including noninteractive sessions, unless they denied the channel themselves.
 `--offline` also applies to detector discovery and installation.
 Detectors inherit the host environment during activation and execution, including non-UTF-8 values on Unix.
 

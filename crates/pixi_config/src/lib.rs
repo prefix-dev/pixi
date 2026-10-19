@@ -1636,6 +1636,24 @@ pub use rattler_config::config::virtual_package_detectors::{
     DetectorDecision, VirtualPackageDetectorsConfig,
 };
 
+/// Merges detector configuration so that `other` wins for the timeout, while a
+/// `deny` for a channel wins over an `allow` from any other layer. A
+/// repository configuration can therefore authorize detectors, but never
+/// override a user's explicit refusal.
+fn merge_virtual_package_detectors(
+    base: VirtualPackageDetectorsConfig,
+    other: &VirtualPackageDetectorsConfig,
+) -> VirtualPackageDetectorsConfig {
+    let mut merged = rattler_config::config::Config::merge_config(base.clone(), other)
+        .expect("VirtualPackageDetectorsConfig::merge_config is infallible");
+    for (origin, decision) in &base.consent {
+        if *decision == DetectorDecision::Deny {
+            merged.set_consent(origin.clone(), DetectorDecision::Deny);
+        }
+    }
+    merged
+}
+
 // `BuildConfig` and `PackageFormatAndCompression` now live in
 // `rattler_config`. Re-exported so external paths keep compiling.
 pub use rattler_config::config::build::{BuildConfig, PackageFormatAndCompression};
@@ -2186,10 +2204,10 @@ impl Config {
             pinning_strategy: other.pinning_strategy.or(self.pinning_strategy),
             shell: self.shell.merge(other.shell),
             experimental: self.experimental.merge(other.experimental),
-            virtual_package_detectors: self
-                .virtual_package_detectors
-                .merge_config(&other.virtual_package_detectors)
-                .expect("VirtualPackageDetectorsConfig::merge_config is infallible"),
+            virtual_package_detectors: merge_virtual_package_detectors(
+                self.virtual_package_detectors,
+                &other.virtual_package_detectors,
+            ),
             // Make other take precedence over self to allow for setting the value through the CLI
             concurrency: self
                 .concurrency
@@ -3555,6 +3573,43 @@ UNUSED = "unused"
         assert!(Config::keys_not_shared(shared).unwrap().is_empty());
         let not_shared = Config::keys_not_shared("[shell]\nchange-ps1 = false\n").unwrap();
         assert_eq!(not_shared, ["shell"]);
+    }
+
+    #[test]
+    fn test_virtual_package_detectors_deny_wins_across_layers() {
+        let origin = |url: &str| ChannelUrl::from(Url::parse(url).unwrap());
+        let config = |decisions: &[(&str, DetectorDecision)]| {
+            let mut detectors = VirtualPackageDetectorsConfig::default();
+            for (url, decision) in decisions {
+                detectors.set_consent(origin(url), *decision);
+            }
+            Config {
+                virtual_package_detectors: detectors,
+                ..Config::default()
+            }
+        };
+        let user = config(&[
+            ("https://denied.example/channel", DetectorDecision::Deny),
+            ("https://allowed.example/channel", DetectorDecision::Allow),
+        ]);
+        let repository = config(&[
+            ("https://denied.example/channel", DetectorDecision::Allow),
+            ("https://allowed.example/channel", DetectorDecision::Deny),
+            ("https://new.example/channel", DetectorDecision::Allow),
+        ]);
+        let merged = user.merge_config(repository).virtual_package_detectors;
+        assert_eq!(
+            merged.consent(&origin("https://denied.example/channel")),
+            Some(DetectorDecision::Deny)
+        );
+        assert_eq!(
+            merged.consent(&origin("https://allowed.example/channel")),
+            Some(DetectorDecision::Deny)
+        );
+        assert_eq!(
+            merged.consent(&origin("https://new.example/channel")),
+            Some(DetectorDecision::Allow)
+        );
     }
 
     #[test]
