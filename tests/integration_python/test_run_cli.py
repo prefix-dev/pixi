@@ -390,6 +390,23 @@ def test_detached_environments_run(pixi: Path, tmp_path: Path, dummy_channel_1: 
     )
 
 
+def test_run_moved_workspace(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    workspace = tmp_path.joinpath("workspace")
+    moved = tmp_path.joinpath("moved")
+
+    verify_cli_command([pixi, "init", workspace, "--channel", dummy_channel_1])
+    verify_cli_command([pixi, "add", "dummy-a", "--manifest-path", workspace])
+
+    workspace.rename(moved)
+
+    # Environments are non-relocatable, so pixi must refuse to use the moved one
+    verify_cli_command(
+        [pixi, "run", "--manifest-path", moved, "echo", "hi"],
+        ExitCode.FAILURE,
+        stderr_contains="has moved",
+    )
+
+
 @pytest.mark.slow
 def test_run_help(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
