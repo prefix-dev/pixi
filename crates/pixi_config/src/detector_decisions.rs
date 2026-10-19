@@ -5,12 +5,70 @@ use std::path::{Path, PathBuf};
 #[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
 
-use miette::{Context, IntoDiagnostic};
+use miette::Diagnostic;
 use pixi_consts::consts;
 use rattler_conda_types::ChannelUrl;
+use thiserror::Error;
 use toml_edit::{DocumentMut, Item, Table, TableLike, value};
 
 use crate::DetectorDecision;
+
+/// Failure to validate or persist a channel-wide detector decision.
+#[derive(Debug, Error, Diagnostic)]
+pub enum DetectorConfigError {
+    #[error("failed to read '{}'", path.display())]
+    Read {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("failed to parse '{}'", path.display())]
+    Parse {
+        path: PathBuf,
+        #[source]
+        source: toml_edit::TomlError,
+    },
+    #[error("'{segment}' in '{}' is not a table", path.display())]
+    NotATable {
+        path: PathBuf,
+        segment: &'static str,
+    },
+    #[error(
+        "consent for '{key}' must be a channel-wide scalar \"allow\" or \"deny\", not a per-detector table"
+    )]
+    InvalidConsent { key: String },
+    #[error("failed to create '{}'", path.display())]
+    CreateDirectory {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("failed to write '{}'", path.display())]
+    Write {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("failed to resolve repository '{}'", path.display())]
+    Canonicalize {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("failed to inspect repository detector configuration '{}'", path.display())]
+    Metadata {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("repository detector configuration '{}' must not be a symlink", .0.display())]
+    Symlink(PathBuf),
+    #[error("repository detector configuration '{}' has an invalid file type", .0.display())]
+    InvalidFileType(PathBuf),
+    #[cfg(unix)]
+    #[error("repository detector configuration '{}' must not be hard-linked", .0.display())]
+    HardLink(PathBuf),
+}
 
 /// Stores a channel-wide `decision` in `path`, preserving unrelated settings,
 /// comments, inline tables, and existing URL spellings.
@@ -18,20 +76,24 @@ pub fn write_detector_decision(
     path: &Path,
     origin: &ChannelUrl,
     decision: DetectorDecision,
-) -> miette::Result<()> {
+) -> Result<(), DetectorConfigError> {
     let contents = match fs_err::read_to_string(path) {
         Ok(contents) => contents,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
-        Err(error) => {
-            return Err(error)
-                .into_diagnostic()
-                .wrap_err_with(|| format!("failed to read '{}'", path.display()));
+        Err(source) => {
+            return Err(DetectorConfigError::Read {
+                path: path.to_owned(),
+                source,
+            });
         }
     };
-    let mut document = contents
-        .parse::<DocumentMut>()
-        .into_diagnostic()
-        .wrap_err_with(|| format!("failed to parse '{}'", path.display()))?;
+    let mut document =
+        contents
+            .parse::<DocumentMut>()
+            .map_err(|source| DetectorConfigError::Parse {
+                path: path.to_owned(),
+                source,
+            })?;
     let mut table: &mut dyn TableLike = document.as_table_mut();
     for segment in ["virtual-package-detectors", "consent"] {
         let item = table.entry(segment).or_insert_with(|| {
@@ -41,7 +103,10 @@ pub fn write_detector_decision(
         });
         table = item
             .as_table_like_mut()
-            .ok_or_else(|| miette::miette!("'{segment}' in '{}' is not a table", path.display()))?;
+            .ok_or_else(|| DetectorConfigError::NotATable {
+                path: path.to_owned(),
+                segment,
+            })?;
     }
     let canonical = canonical_channel(origin);
     let existing = table.iter().find_map(|(key, _)| {
@@ -53,9 +118,9 @@ pub fn write_detector_decision(
     });
     let key = existing.as_deref().unwrap_or(&canonical);
     if table.get(key).is_some_and(|item| item.as_str().is_none()) {
-        miette::bail!(
-            "consent for '{key}' must be a channel-wide scalar \"allow\" or \"deny\", not a per-detector table"
-        );
+        return Err(DetectorConfigError::InvalidConsent {
+            key: key.to_owned(),
+        });
     }
     let mut replacement = value(match decision {
         DetectorDecision::Allow => "allow",
@@ -68,48 +133,52 @@ pub fn write_detector_decision(
     }
     table.insert(key, replacement);
     if let Some(parent) = path.parent() {
-        fs_err::create_dir_all(parent)
-            .into_diagnostic()
-            .wrap_err_with(|| format!("failed to create '{}'", parent.display()))?;
+        fs_err::create_dir_all(parent).map_err(|source| DetectorConfigError::CreateDirectory {
+            path: parent.to_owned(),
+            source,
+        })?;
     }
-    fs_err::write(path, document.to_string())
-        .into_diagnostic()
-        .wrap_err_with(|| format!("failed to write '{}'", path.display()))
+    fs_err::write(path, document.to_string()).map_err(|source| DetectorConfigError::Write {
+        path: path.to_owned(),
+        source,
+    })
 }
 
 /// Returns the canonical repository's local configuration path, refusing
 /// checkout-controlled links that could redirect a repository-scoped write.
-pub fn repository_detector_config_path(project_root: &Path) -> miette::Result<PathBuf> {
-    let repository = fs_err::canonicalize(project_root).into_diagnostic()?;
+pub fn repository_detector_config_path(
+    project_root: &Path,
+) -> Result<PathBuf, DetectorConfigError> {
+    let repository =
+        fs_err::canonicalize(project_root).map_err(|source| DetectorConfigError::Canonicalize {
+            path: project_root.to_owned(),
+            source,
+        })?;
     let directory = repository.join(consts::PIXI_DIR);
     let path = directory.join(consts::CONFIG_FILE);
     for candidate in [&directory, &path] {
         match fs_err::symlink_metadata(candidate) {
             Ok(metadata) => {
                 if metadata.file_type().is_symlink() {
-                    miette::bail!(
-                        "repository detector configuration '{}' must not be a symlink",
-                        candidate.display()
-                    );
+                    return Err(DetectorConfigError::Symlink(candidate.to_owned()));
                 }
                 if (candidate == &directory && !metadata.is_dir())
                     || (candidate == &path && !metadata.is_file())
                 {
-                    miette::bail!(
-                        "repository detector configuration '{}' has an invalid file type",
-                        candidate.display()
-                    );
+                    return Err(DetectorConfigError::InvalidFileType(candidate.to_owned()));
                 }
                 #[cfg(unix)]
                 if metadata.is_file() && metadata.nlink() != 1 {
-                    miette::bail!(
-                        "repository detector configuration '{}' must not be hard-linked",
-                        candidate.display()
-                    );
+                    return Err(DetectorConfigError::HardLink(candidate.to_owned()));
                 }
             }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(error).into_diagnostic(),
+            Err(source) => {
+                return Err(DetectorConfigError::Metadata {
+                    path: candidate.to_owned(),
+                    source,
+                });
+            }
         }
     }
     Ok(path)
@@ -120,7 +189,7 @@ pub fn write_repository_detector_decision(
     project_root: &Path,
     origin: &ChannelUrl,
     decision: DetectorDecision,
-) -> miette::Result<()> {
+) -> Result<(), DetectorConfigError> {
     let path = repository_detector_config_path(project_root)?;
     write_detector_decision(&path, origin, decision)
 }

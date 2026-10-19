@@ -558,13 +558,15 @@ For persistent behavior, prefer `[cache.netfs-redirect]` or
 
 ### `virtual-package-detectors`
 
-Channels can register virtual package detectors: small packages whose executable reports virtual packages such as an externally installed MPI.
-Running a detector executes code from the channel. Pixi asks whether to **Trust** or **Don't trust** the channel's current and future detectors, with **Don't trust** selected by default.
-Then choose **Workspace** to save the decision in the workspace's `.pixi/config.toml`, or **System configuration** to save it in the shared user configuration for all repositories. Both choices show the full destination path.
-Share `.pixi/config.toml` with colleagues to apply the same decisions in their checkouts.
-A `deny` at any configuration level wins over an `allow` from another level. A repository `allow` authorizes the channel's detectors for anyone using that configuration, including noninteractive sessions, unless they denied the channel themselves.
-`--offline` also applies to detector discovery and installation.
-Detectors inherit the host environment during activation and execution, including non-UTF-8 values on Unix.
+Channels can register virtual package detectors: small packages whose executable reports [virtual packages](../conda_ecosystem.md#virtual-packages-describing-the-host-system).
+These identify system capabilities that packages depend on.
+One example for this could be a detector reporting which [MPI](https://en.wikipedia.org/wiki/Message_Passing_Interface) implementation and version you have on your system. 
+
+That also means, you run external and potentially untrusted code shortly before installing an environment.
+This is why Pixi asks whether to trust detectors coming from a certain channel.
+Additionally, it allows you to store your decision in your configuration, so you don't have to answer the question with every Pixi command.
+It applies the decision only to the current command without writing configuration, so Pixi asks again next time.
+See for example this entry how such an configuration might look like:
 
 ```toml title="config.toml"
 [virtual-package-detectors]

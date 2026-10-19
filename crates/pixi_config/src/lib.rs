@@ -20,7 +20,8 @@ pub use rattler_config::locations::{
 
 mod detector_decisions;
 pub use detector_decisions::{
-    repository_detector_config_path, write_detector_decision, write_repository_detector_decision,
+    DetectorConfigError, repository_detector_config_path, write_detector_decision,
+    write_repository_detector_decision,
 };
 use rattler_networking::s3_middleware;
 use rattler_repodata_gateway::{Gateway, GatewayBuilder, SourceConfig, fetch::CacheAction};
