@@ -13,7 +13,7 @@ use pixi_progress::global_multi_progress;
 use rattler_conda_types::ChannelUrl;
 use shlex::try_quote;
 
-use crate::host::{Consent, ConsentRequest, DetectorConsent};
+use crate::host::{Consent, ConsentRequest, DetectorConsent, consent_origin};
 
 #[derive(Clone, Copy)]
 enum DecisionStore {
@@ -46,7 +46,7 @@ impl InteractiveConsent {
 impl DetectorConsent for InteractiveConsent {
     async fn decide(&self, request: &ConsentRequest<'_>) -> Consent {
         let mut decisions = self.decisions.lock().await;
-        let origin = &request.channel.base_url;
+        let origin = &consent_origin(&request.channel.base_url);
         if let Some(decision) = decisions.get(origin) {
             return *decision;
         }

@@ -24,7 +24,7 @@ use std::{
 use crate::workspace::grouped_environment::GroupedEnvironment;
 use async_trait::async_trait;
 use miette::Diagnostic;
-use pixi_config::{CacheKind, Config};
+use pixi_config::{CacheKind, Config, DetectorDecision};
 use pixi_manifest::platform::{
     PixiPlatform, PixiPlatformError, candidate_subdirs,
     host::{detect_host, host_subdir, platform_from_detected},
@@ -42,7 +42,7 @@ use rattler_networking::s3_middleware::S3Config;
 use rattler_repodata_gateway::{AcceptedDetectorRegistration, Gateway};
 use rattler_shell::environment::EnvironmentSnapshot;
 use rattler_virtual_package_detectors::{
-    CacheClock, ConfiguredConsent, DetectOptions, OverrideError, detect, limits, merge_results,
+    CacheClock, DetectOptions, OverrideError, detect, limits, merge_results,
 };
 use thiserror::Error;
 
@@ -58,6 +58,58 @@ pub use interactive::InteractiveConsent;
 
 /// How many detectors are prepared and run at the same time.
 const DETECTOR_CONCURRENCY: usize = 4;
+
+/// The origin under which consent for a registering channel is stored and
+/// shown: its base URL without credentials such as a `/t/<token>` prefix.
+pub fn consent_origin(url: &ChannelUrl) -> ChannelUrl {
+    ChannelUrl::from(rattler_redaction::strip_url_for_serialization(url.as_ref()))
+}
+
+/// Uses the decisions stored in the configuration, asking `fallback` for the
+/// rest. Decisions are looked up by [`consent_origin`].
+struct StoredConsent {
+    config: pixi_config::VirtualPackageDetectorsConfig,
+    fallback: Arc<dyn DetectorConsent>,
+}
+
+impl StoredConsent {
+    fn stored(&self, channel: &Channel) -> Option<Consent> {
+        self.config
+            .consent(&consent_origin(&channel.base_url))
+            .map(|stored| match stored {
+                DetectorDecision::Allow => Consent::Allow,
+                DetectorDecision::Deny => Consent::Deny,
+            })
+    }
+}
+
+#[async_trait]
+impl DetectorConsent for StoredConsent {
+    async fn decide(&self, request: &ConsentRequest<'_>) -> Consent {
+        match self.stored(request.channel) {
+            Some(consent) => consent,
+            None => self.fallback.decide(request).await,
+        }
+    }
+
+    fn decide_before_resolving(
+        &self,
+        channel: &Channel,
+        registration: &DetectorRegistration,
+    ) -> Option<Consent> {
+        self.stored(channel)
+            .or_else(|| self.fallback.decide_before_resolving(channel, registration))
+    }
+
+    fn can_allow(&self) -> bool {
+        self.fallback.can_allow()
+            || self
+                .config
+                .consent
+                .values()
+                .any(|decision| *decision == DetectorDecision::Allow)
+    }
+}
 
 /// Asks about untrusted detector channels in a terminal, otherwise skips them.
 pub fn cli_detector_consent(project_root: Option<&Path>) -> Arc<dyn DetectorConsent> {
@@ -78,7 +130,8 @@ pub struct HostUndetected {
 /// A detector that failed, as reported to the user.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DetectorFailureReport {
-    /// The registration's origin: the registering channel's base URL.
+    /// The registration's origin: the registering channel's base URL
+    /// without credentials, see [`consent_origin`].
     pub origin: ChannelUrl,
     /// The detector package.
     pub detector: PackageName,
@@ -221,20 +274,20 @@ pub struct NonInteractiveConsent {
 
 impl NonInteractiveConsent {
     fn warn_once(&self, channel: &Channel) {
-        let key = channel.base_url.clone();
+        let key = consent_origin(&channel.base_url);
         let mut warned = self
             .warned
             .lock()
             .expect("the consent warning set is never poisoned");
-        if !warned.insert(key) {
+        if !warned.insert(key.clone()) {
             return;
         }
         tracing::warn!(
             "Detectors from {} do not run without your consent. Trust this channel with \
              `pixi config set --shared 'virtual-package-detectors.consent.{}' allow`, \
              or use `--local` for this repository. Set `deny` to block its detectors.",
-            channel.base_url,
-            toml_edit::Key::new(channel.base_url.as_str().trim_end_matches('/')),
+            key,
+            toml_edit::Key::new(key.as_str().trim_end_matches('/')),
         );
     }
 }
@@ -396,10 +449,10 @@ impl HostDetector {
         let _clear_progress = pixi_reporters::TopLevelProgress::clear_when_done(Some(
             environment_provider.progress(),
         ));
-        let consent = ConfiguredConsent::new(
-            self.config.virtual_package_detectors.clone(),
-            self.consent.clone(),
-        );
+        let consent = StoredConsent {
+            config: self.config.virtual_package_detectors.clone(),
+            fallback: self.consent.clone(),
+        };
         let environment = EnvironmentSnapshot::from_system();
         let outcome = detect(
             registrations,
@@ -440,7 +493,7 @@ impl HostDetector {
                     source = cause.source();
                 }
                 DetectorFailureReport {
-                    origin: failure.origin.clone(),
+                    origin: consent_origin(&failure.origin),
                     detector: failure.detector.clone(),
                     message,
                     stderr: failure.stderr.clone(),
@@ -472,14 +525,14 @@ impl HostDetector {
                     "Not running the virtual package detector '{}' of {} because the target \
                      platform {} is not this machine's. Set {} to supply its virtual packages.",
                     skipped.detector.as_source(),
-                    skipped.origin,
+                    consent_origin(&skipped.origin),
                     subdir,
                     override_variables.join(", ")
                 ),
                 SkipReason::NoWantedName | SkipReason::ConsentDenied => tracing::debug!(
                     "Not running the virtual package detector '{}' of {}: {:?}",
                     skipped.detector.as_source(),
-                    skipped.origin,
+                    consent_origin(&skipped.origin),
                     skipped.reason
                 ),
             }
@@ -544,10 +597,10 @@ impl HostDetector {
                         "The virtual package detector '{}' of {} produced an invalid host \
                          platform, its results are ignored: {error}",
                         detector.as_source(),
-                        origin,
+                        consent_origin(&origin),
                     );
                     failures.push(DetectorFailureReport {
-                        origin: origin.clone(),
+                        origin: consent_origin(&origin),
                         detector: detector.clone(),
                         message: error.to_string(),
                         stderr: None,
@@ -899,6 +952,26 @@ mod tests {
     use crate::Workspace;
 
     use super::*;
+
+    #[tokio::test]
+    async fn consent_is_stored_and_looked_up_without_credentials() {
+        let channel = |url: &str| Channel::from_url(url::Url::parse(url).unwrap());
+        let tokened = channel("https://user:secret@prefix.dev/t/token-123/private-channel");
+        let origin = consent_origin(&tokened.base_url);
+        assert_eq!(origin.as_str(), "https://prefix.dev/private-channel/");
+
+        let mut config = pixi_config::VirtualPackageDetectorsConfig::default();
+        config.set_consent(origin, DetectorDecision::Allow);
+        let consent = StoredConsent {
+            config,
+            fallback: Arc::new(DenyAll),
+        };
+        assert_eq!(consent.stored(&tokened), Some(Consent::Allow));
+        assert_eq!(
+            consent.stored(&channel("https://prefix.dev/other-channel")),
+            None
+        );
+    }
 
     #[test]
     fn environment_scope_ignores_unused_feature_demand_and_platforms() {

@@ -63,6 +63,7 @@ rattler_digest = { workspace = true }
 rattler_environment_digest = { workspace = true }
 rattler_lock = { workspace = true }
 rattler_networking = { workspace = true, default-features = false }
+rattler_redaction = { workspace = true }
 rattler_repodata_gateway = { workspace = true }
 rattler_shell = { workspace = true }
 rattler_solve = { workspace = true }
