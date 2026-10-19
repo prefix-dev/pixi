@@ -9375,7 +9375,8 @@ In that package we have some tasks that depend on each other, so we can assure t
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-7-1"><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>pixi<span class="w"> </span>run<span class="w"> </span>style
 </span></code></pre></div>
 <h3 id="environment-specification-for-task-dependencies">Environment specification for task dependencies<a class="headerlink" href="#environment-specification-for-task-dependencies" title="Permanent link">#</a></h3>
-<p>You can specify the environment to use for a dependent task:</p>
+<p>You can specify the environment to use for a dependent task.
+The environment must be defined in the workspace, otherwise Pixi reports an error when it loads the manifest:</p>
 <div class="language-toml highlight"><span class="filename">pixi.toml</span><pre><span></span><code><span id="__span-8-1"><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="k">[tasks]</span>
 </span><span id="__span-8-2"><a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a><span class="n">test</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;python --version&quot;</span>
 </span><span id="__span-8-3"><a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>
