@@ -5313,7 +5313,7 @@ myproject = { path = ".", editable = true }
 Pixi will use your build system and reports an error:
 
 ```shell
-Error:   × Failed to update PyPI packages for environment 'default'
+Error:   × failed to update PyPI packages for environment 'default'
   ├─▶ Failed to prepare distributions
   ├─▶ Failed to build `proj1 @ file:///.../proj1`
   ├─▶ The build backend returned an error
