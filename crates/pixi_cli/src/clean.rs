@@ -31,10 +31,10 @@ pub enum Command {
     Cache(CacheArgs),
 }
 
-/// Cleanup the environments.
+/// Clean up workspaces/environments/caches.
 ///
-/// This command removes the information in the .pixi folder.
-/// You can specify the environment to remove with the `--environment` flag.
+/// This command removes the information in the .pixi folder, i.e. the
+/// installed environments and caches. Use options to only remove selected parts.
 ///
 /// Use the `cache` subcommand to clean the cache.
 #[derive(Parser, Debug)]

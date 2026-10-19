@@ -14,8 +14,7 @@ use crate::cli_config::ScriptWorkspaceConfig;
 use crate::shared::install_platform::resolve_install_platform;
 use pixi_manifest::platform::host::host_baseline;
 
-/// Install an environment, both updating the lock file and installing the
-/// environment.
+/// Install an environment.
 ///
 /// This command installs an environment, if the lock file is not up-to-date it
 /// will be updated.
