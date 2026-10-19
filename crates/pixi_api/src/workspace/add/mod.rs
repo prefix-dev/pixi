@@ -118,7 +118,7 @@ pub async fn add_conda_dep(
         }
         Err(e) => {
             workspace.revert().await.into_diagnostic()?;
-            return Err(e);
+            return Err(e.into());
         }
     };
 
@@ -175,7 +175,7 @@ pub async fn add_pypi_dep(
         }
         Err(e) => {
             workspace.revert().await.into_diagnostic()?;
-            return Err(e);
+            return Err(e.into());
         }
     };
 
