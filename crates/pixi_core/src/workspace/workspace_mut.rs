@@ -373,16 +373,16 @@ impl WorkspaceMut {
         let mut workspace = self.workspace.take().expect("workspace is not available");
         if let Some(original) = self.original.take() {
             workspace.workspace.value = original.manifest;
-            workspace.invalidate_environment_hosts();
-            workspace
-                .refresh_environment_hosts()
-                .await
-                .map_err(std::io::Error::other)?;
             pixi_utils::atomic_write::atomic_write(
                 &workspace.workspace.provenance.path,
                 original.source,
             )
             .await?;
+            workspace.invalidate_environment_hosts();
+            workspace
+                .refresh_environment_hosts()
+                .await
+                .map_err(std::io::Error::other)?;
         }
 
         Ok(workspace)
