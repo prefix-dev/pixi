@@ -947,6 +947,8 @@ python3-tornado:
   robostack: [tornado]
 python3-torchvision-pip:
   robostack: [torchvision]
+python3-tqdm:
+  robostack: [tqdm]
 python3-transforms3d:
   robostack: [transforms3d]
 python3-twisted:
