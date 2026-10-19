@@ -41,7 +41,7 @@ use pixi_manifest::{
 };
 use pixi_progress::global_multi_progress;
 use pixi_record::{LockFileResolver, LockFileResolverError, PixiRecord, UnresolvedPixiRecord};
-use pixi_utils::{prefix::Prefix, variants::VariantConfig};
+use pixi_utils::{diagnostic::Cause, prefix::Prefix, variants::VariantConfig};
 use pixi_uv_context::{UvResolutionContext, UvResolutionContextError};
 use pixi_uv_conversions::{
     ConversionError, to_exclude_newer, to_extra_name, to_marker_environment, to_normalize,
@@ -629,7 +629,7 @@ pub enum UpdatePrefixError {
     PlatformUnsupported {
         environment: EnvironmentName,
         #[source]
-        source: VerifyCurrentPlatformError,
+        source: Cause<VerifyCurrentPlatformError>,
     },
 
     #[error("cannot install environment '{environment}'")]
@@ -637,7 +637,7 @@ pub enum UpdatePrefixError {
     RequirementsUnmet {
         environment: EnvironmentName,
         #[source]
-        source: MachineValidationError,
+        source: Cause<MachineValidationError>,
     },
 
     #[error("the lock file has no entry for platform '{platform}' in environment '{environment}'")]
@@ -673,7 +673,7 @@ pub enum UpdatePrefixError {
     UpdatePypi {
         environment: EnvironmentName,
         #[source]
-        source: Box<PyPIUpdateError>,
+        source: Cause<PyPIUpdateError>,
     },
 
     #[error(transparent)]
@@ -1199,7 +1199,7 @@ impl<'p> LockFileDerivedData<'p> {
                         ) {
                             Err(source) => UpdatePrefixError::PlatformUnsupported {
                                 environment: environment.name().clone(),
-                                source,
+                                source: Cause::new(source),
                             },
                             Ok(()) => {
                                 UpdatePrefixError::NoMatchingPlatform(environment.name().clone())
@@ -1216,7 +1216,7 @@ impl<'p> LockFileDerivedData<'p> {
                     .map_err(|source| {
                         UpdatePrefixError::RequirementsUnmet {
                             environment: environment.name().clone(),
-                            source,
+                            source: Cause::new(source),
                         }
                     })?;
                 }
@@ -1420,7 +1420,7 @@ impl<'p> LockFileDerivedData<'p> {
                 }
                 .map_err(|source| UpdatePrefixError::UpdatePypi {
                     environment: environment.name().clone(),
-                    source: Box::new(source),
+                    source: Cause::new(source),
                 })?;
 
                 tracing::info!(
@@ -3841,12 +3841,14 @@ mod tests {
         .unwrap();
         let err = UpdatePrefixError::RequirementsUnmet {
             environment: EnvironmentName::Default,
-            source: crate::lock_file::virtual_packages::VirtualPackageNotFoundError::new(
-                &spec,
-                &[],
-                rattler_conda_types::Subdir::OsxArm64,
-            )
-            .into(),
+            source: Cause::new(
+                crate::lock_file::virtual_packages::VirtualPackageNotFoundError::new(
+                    &spec,
+                    &[],
+                    rattler_conda_types::Subdir::OsxArm64,
+                )
+                .into(),
+            ),
         };
         assert!(err.diagnostic_source().is_none());
         let help = err.help().expect("help is forwarded").to_string();
