@@ -39,7 +39,7 @@ use rattler_lock::{LockedPackage, UrlOrPath};
 use url::Url;
 use uv_distribution_types::{RequirementSource, RequiresPython};
 
-use super::errors::{LocalMetadataMismatch, PlatformUnsat, SolveGroupUnsat};
+use super::errors::{DuplicateEntry, LocalMetadataMismatch, PlatformUnsat, SolveGroupUnsat};
 use super::legacy;
 use super::pypi::{lock_pypi_packages, pypi_satisfies_editable, pypi_satisfies_requirement};
 use super::pypi_metadata;
@@ -359,18 +359,18 @@ pub async fn verify_platform_satisfiability(
 
         let pixi_records_by_name = PixiRecordsByName::from_unique_iter(resolved_records.clone())
             .map_err(|duplicate| {
-                CommandDispatcherError::Failed(Box::new(PlatformUnsat::DuplicateEntry(
-                    duplicate.package_record().name.as_source().to_string(),
-                )))
+                CommandDispatcherError::Failed(Box::new(
+                    DuplicateEntry(duplicate.package_record().name.as_source().to_string()).into(),
+                ))
             })?;
 
         // Create a lookup table from package name to package record. Returns an error
         // if we find a duplicate entry for a record
         let pypi_records_by_name =
             PypiRecordsByName::from_unique_iter(pypi_packages).map_err(|duplicate| {
-                CommandDispatcherError::Failed(Box::new(PlatformUnsat::DuplicateEntry(
-                    duplicate.name().to_string(),
-                )))
+                CommandDispatcherError::Failed(Box::new(
+                    DuplicateEntry(duplicate.name().to_string()).into(),
+                ))
             })?;
 
         // Get host platform records for building (we can only run Python on the host platform)
@@ -402,8 +402,9 @@ pub async fn verify_platform_satisfiability(
                     }
                 }
             }
-            PixiRecordsByName::from_unique_iter(host_pixi_records)
-                .map_err(|duplicate| duplicate.package_record().name.as_source().to_string())
+            PixiRecordsByName::from_unique_iter(host_pixi_records).map_err(|duplicate| {
+                DuplicateEntry(duplicate.package_record().name.as_source().to_string())
+            })
         };
 
         verify_package_platform_satisfiability(
@@ -625,7 +626,7 @@ async fn verify_package_platform_satisfiability(
     platform_setup: &crate::lock_file::platform_setup::PlatformSetup,
     locked_pixi_records: &PixiRecordsByName,
     unresolved_pypi_environment: &PypiRecordsByName,
-    building_pixi_records: Result<PixiRecordsByName, String>,
+    building_pixi_records: Result<PixiRecordsByName, DuplicateEntry>,
     locked_pypi_indexes: Option<&rattler_lock::PypiIndexes>,
 ) -> Result<
     (VerifiedIndividualEnvironment, LockedPypiRecordsByName),
