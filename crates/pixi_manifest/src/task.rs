@@ -300,6 +300,16 @@ impl Task {
         }
     }
 
+    /// Returns the environments the task refers to, through its
+    /// `default-environment` and the `environment` of its dependencies.
+    pub fn referenced_environments(&self) -> impl Iterator<Item = &EnvironmentName> {
+        self.default_environment().into_iter().chain(
+            self.depends_on()
+                .iter()
+                .filter_map(|d| d.environment.as_ref()),
+        )
+    }
+
     /// Returns the arguments of the task.
     pub fn args(&self) -> Option<&[TaskArg]> {
         match self {

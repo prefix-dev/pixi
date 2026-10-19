@@ -30,7 +30,7 @@ use uv_threads::initialize_rayon_once;
 
 use crate::{cli_config::ChannelsConfig, match_spec_or_path::MatchSpecOrPath, process_exit};
 
-/// Run a command and install it in a temporary environment.
+/// Run a command in a temporary environment.
 ///
 /// Remove the temporary environments with `pixi clean cache --exec`.
 #[derive(Parser, Debug)]

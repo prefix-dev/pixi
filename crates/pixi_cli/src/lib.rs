@@ -355,6 +355,9 @@ fn setup_logging(args: &Args, use_colors: bool) -> miette::Result<()> {
     // Set up the tracing subscriber
     let fmt_layer = tracing_subscriber::fmt::layer()
         .with_ansi(use_colors)
+        // Our log messages embed `console::style` colours, which the default
+        // sanitization would print as literal `\x1b` sequences
+        .with_ansi_sanitization(false)
         .with_target(pixi_level >= LevelFilter::INFO)
         .with_writer(IndicatifWriter::new(pixi_progress::global_multi_progress()))
         .without_time();

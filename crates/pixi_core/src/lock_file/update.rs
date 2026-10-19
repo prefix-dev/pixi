@@ -1451,6 +1451,7 @@ impl<'p> LockFileDerivedData<'p> {
                     .update(records, reinstall_packages, ignore_packages)
                     .await
                     .cloned()
+                    .map_err(miette::Report::from)
             })
             .await
             .cloned()
@@ -3550,7 +3551,7 @@ async fn spawn_solve_pypi_task<'p>(
         Err(err) => {
             let (repodata_records, _guard) =
                 tokio::join!(repodata_solve_records, semaphore.acquire_owned());
-            (repodata_records, Err(err))
+            (repodata_records, Err(err.into()))
         }
     };
 

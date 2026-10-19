@@ -40,7 +40,7 @@ use rattler_package_streaming::seek::read_package_file;
 
 mod discovery;
 
-/// Build the conda packages of a workspace and publish them to a channel.
+/// Build the conda packages of a workspace and publish them
 ///
 /// Builds every package in the workspace that opts into publishing with
 /// `publish = true` in its `[package]` section - in dependency order, so

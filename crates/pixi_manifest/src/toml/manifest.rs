@@ -578,6 +578,7 @@ impl TomlManifest {
             .unwrap_or_default();
 
         migrate_system_requirements_to_platforms(&mut workspace, &mut features, &feature_sysreqs)?;
+        validate_task_environments(&features, &environments)?;
 
         let mut workspace_manifest = WorkspaceManifest {
             workspace,
@@ -622,6 +623,56 @@ impl TomlManifest {
 
         Ok((workspace_manifest, package_manifest, warnings))
     }
+}
+
+/// Error if a task refers to an environment that is not defined, either
+/// through `default-environment` or the `environment` of a `depends-on` entry.
+fn validate_task_environments(
+    features: &IndexMap<FeatureName, Feature>,
+    environments: &Environments,
+) -> Result<(), TomlError> {
+    let unknown_environment = |message: String| {
+        let names = environments.by_name.keys().map(EnvironmentName::as_str);
+        TomlError::from(
+            GenericError::new(message)
+                .with_help(format!("defined environments: {}", names.format(", "))),
+        )
+    };
+    for feature in features.values() {
+        let in_feature = match feature.name {
+            FeatureName::Default => String::new(),
+            _ => format!(" in {}", feature.name.user_facing()),
+        };
+        for (target, selector) in feature.targets.iter() {
+            let in_feature = match selector {
+                Some(selector) => format!("{in_feature} for target '{selector}'"),
+                None => in_feature.clone(),
+            };
+            // Sort for a deterministic error when several tasks are invalid.
+            for (task_name, task) in target.tasks.iter().sorted_by_key(|(name, _)| *name) {
+                if let Some(env) = task.default_environment()
+                    && !environments.by_name.contains_key(env)
+                {
+                    return Err(unknown_environment(format!(
+                        "task '{}'{in_feature} has default-environment '{env}', which is not defined",
+                        task_name.as_str(),
+                    )));
+                }
+                for dependency in task.depends_on() {
+                    if let Some(env) = &dependency.environment
+                        && !environments.by_name.contains_key(env)
+                    {
+                        return Err(unknown_environment(format!(
+                            "task '{}'{in_feature} depends on task '{}' in environment '{env}', which is not defined",
+                            task_name.as_str(),
+                            dependency.task_name.as_str(),
+                        )));
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Rebuild `workspace.platforms` so it owns one `PixiPlatform` per
@@ -1556,6 +1607,189 @@ mod test {
         platforms = []
         "#,
         ));
+    }
+
+    #[test]
+    fn test_task_depends_on_unknown_environment() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [tasks]
+        foo = "bar"
+        baz = [{ task = "foo", environment = "oops" }]
+        "#,
+        ), @"
+          × task 'baz' depends on task 'foo' in environment 'oops', which is not defined
+          help: defined environments: default
+        ");
+    }
+
+    #[test]
+    fn test_alias_invalid_environment_name() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [tasks]
+        foo = "bar"
+        baz = [{ task = "foo", environment = "doesnt_exist" }]
+        "#,
+        ), @r#"
+          × Failed to parse environment name 'doesnt_exist', please use only lowercase letters, numbers and dashes
+           ╭─[pixi.toml:8:47]
+         7 │         foo = "bar"
+         8 │         baz = [{ task = "foo", environment = "doesnt_exist" }]
+           ·                                               ────────────
+         9 │
+           ╰────
+        "#);
+    }
+
+    // spellchecker:off
+    #[test]
+    fn test_alias_unknown_dependency_key() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [tasks]
+        foo = "bar"
+        baz = [{ task = "foo", enviroment = "default" }]
+        "#,
+        ), @r#"
+          × Unexpected keys, expected only 'task', 'args', 'environment'
+           ╭─[pixi.toml:8:32]
+         7 │         foo = "bar"
+         8 │         baz = [{ task = "foo", enviroment = "default" }]
+           ·                                ─────┬────
+           ·                                     ╰── 'enviroment' was not expected here
+         9 │
+           ╰────
+          help: Did you mean 'environment'?
+        "#);
+    }
+
+    #[test]
+    fn test_deprecated_depends_on_unknown_dependency_key() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [tasks]
+        foo = "bar"
+        baz = { cmd = "qux", depends_on = [{ task = "foo", enviroment = "default" }] }
+        "#,
+        ), @r#"
+          × Unexpected keys, expected only 'task', 'args', 'environment'
+           ╭─[pixi.toml:8:60]
+         7 │         foo = "bar"
+         8 │         baz = { cmd = "qux", depends_on = [{ task = "foo", enviroment = "default" }] }
+           ·                                                            ─────┬────
+           ·                                                                 ╰── 'enviroment' was not expected here
+         9 │
+           ╰────
+          help: Did you mean 'environment'?
+        "#);
+    }
+    // spellchecker:on
+
+    #[test]
+    fn test_inline_environment_task_unknown_environment() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [tasks]
+        foo = "bar"
+
+        [environments.dev.tasks]
+        baz = [{ task = "foo", environment = "oops" }]
+        "#,
+        ), @"
+          × task 'baz' in environment 'dev' depends on task 'foo' in environment 'oops', which is not defined
+          help: defined environments: default, dev
+        ");
+    }
+
+    #[test]
+    fn test_task_unknown_default_environment() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [feature.test.dependencies]
+
+        [environments]
+        test = ["test"]
+
+        [feature.test.tasks]
+        foo = { cmd = "bar", default-environment = "tset" }
+        "#,
+        ), @"
+          × task 'foo' in feature 'test' has default-environment 'tset', which is not defined
+          help: defined environments: default, test
+        ");
+    }
+
+    #[test]
+    fn test_target_task_depends_on_unknown_environment() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = ["linux-64"]
+
+        [tasks]
+        foo = "bar"
+
+        [target.linux-64.tasks]
+        baz = { cmd = "qux", depends-on = [{ task = "foo", environment = "oops" }] }
+        "#,
+        ), @"
+          × task 'baz' for target 'linux-64' depends on task 'foo' in environment 'oops', which is not defined
+          help: defined environments: default
+        ");
+    }
+
+    #[test]
+    fn test_task_known_environments() {
+        let manifest = <TomlManifest as FromTomlStr>::from_toml_str(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [feature.test.dependencies]
+
+        [environments]
+        test = ["test"]
+
+        [tasks]
+        foo = { cmd = "bar", default-environment = "test" }
+        baz = [{ task = "foo", environment = "test" }, { task = "foo", environment = "default" }]
+        "#,
+        )
+        .expect("parse toml");
+        manifest
+            .into_workspace_manifest(
+                ExternalWorkspaceProperties::default(),
+                PackageDefaults::default(),
+                Path::new(""),
+            )
+            .expect("known environments are accepted");
     }
 
     /// Parses a workspace manifest and returns both the workspace and (required)
