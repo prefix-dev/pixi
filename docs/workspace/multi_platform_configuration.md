@@ -190,7 +190,7 @@ Adding a platform whose definition already exists under a *different* name is re
 
 ### Virtual package detectors
 
-Channels can register **virtual package detectors**: packages that report system capabilities, such as an MPI runtime or a driver installed outside the environment.
+Channels can register virtual package detectors: packages that report system capabilities, such as an MPI runtime or a driver installed outside the environment.
 Pixi uses their results to check whether your machine satisfies a platform's declared virtual packages.
 Detectors can extend or replace Pixi's built-in detection.
 

@@ -1101,9 +1101,11 @@ impl<'p> LockFileDerivedData<'p> {
                         environment.host(),
                         UnknownNames::Unchecked,
                     )
-                    .map_err(|source| UpdatePrefixError::RequirementsUnmet {
-                        environment: environment.name().clone(),
-                        source,
+                    .map_err(|source| {
+                        UpdatePrefixError::RequirementsUnmet {
+                            environment: environment.name().clone(),
+                            source,
+                        }
                     })?;
                 }
                 return Ok(prefix);
