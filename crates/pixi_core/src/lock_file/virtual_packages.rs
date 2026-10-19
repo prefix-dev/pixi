@@ -218,12 +218,23 @@ fn get_wheels_from_pypi_package_data(pypi_packages: Vec<PypiPackageData>) -> Vec
         .collect_vec()
 }
 
+/// How host validation treats virtual packages whose value on this machine is
+/// unknown, see [`HostDetection::is_unknown`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum UnknownNames {
+    /// As absent: a new install needs every value it depends on.
+    Absent,
+    /// Not checked: an installed environment keeps running.
+    Unchecked,
+}
+
 /// Validate that current machine has all the required virtual packages for the given environment
 pub(crate) fn validate_system_meets_environment_requirements(
     lock_file: &LockFile,
     platform: &PixiPlatform,
     environment_name: &EnvironmentName,
     host: &HostDetection,
+    unknown: UnknownNames,
 ) -> Result<bool, MachineValidationError> {
     // Early out if there are no packages in the lock file
     if lock_file.is_empty() {
@@ -259,7 +270,16 @@ pub(crate) fn validate_system_meets_environment_requirements(
         .collect_vec();
 
     // Get the virtual packages required by the conda records
-    let required_virtual_packages = get_required_virtual_packages_from_depends(&all_depends)?;
+    let required_virtual_packages = get_required_virtual_packages_from_depends(&all_depends)?
+        .into_iter()
+        .filter(|spec| {
+            unknown == UnknownNames::Absent
+                || spec
+                    .name
+                    .as_exact()
+                    .is_none_or(|name| !host.is_unknown(name.as_normalized()))
+        })
+        .collect_vec();
 
     // Find the python package record (needed for wheel tag validation below).
     // This works for binary and full source packages; partial source records
@@ -647,6 +667,7 @@ packages:
                 &platform,
                 &EnvironmentName::default(),
                 &host,
+                UnknownNames::Absent,
             );
             if compatible {
                 assert!(result.is_ok(), "{provided:?}: {result:?}");
@@ -691,6 +712,7 @@ packages:
                     &platform,
                     &EnvironmentName::default(),
                     &host,
+                    UnknownNames::Absent,
                 );
                 if compatible {
                     assert!(result.is_ok(), "{name} {provided:?}: {result:?}");
@@ -724,6 +746,7 @@ packages:
             &platform,
             &EnvironmentName::default(),
             &host_from_overrides(overrides),
+            UnknownNames::Absent,
         );
         assert!(result.is_ok(), "{result:?}");
 
@@ -736,6 +759,7 @@ packages:
             &platform,
             &EnvironmentName::default(),
             &host_from_overrides(overrides),
+            UnknownNames::Absent,
         );
         assert!(result.is_err());
     }
@@ -789,6 +813,7 @@ packages:
             &platform,
             &EnvironmentName::default(),
             &host_from_overrides(overrides),
+            UnknownNames::Absent,
         );
         assert!(
             matches!(
@@ -818,6 +843,7 @@ packages:
             &platform,
             &EnvironmentName::default(),
             &host_from_overrides(overrides),
+            UnknownNames::Absent,
         );
         assert!(result.is_ok(), "{result:?}");
 
@@ -831,6 +857,7 @@ packages:
             &platform,
             &EnvironmentName::default(),
             &host_from_overrides(overrides),
+            UnknownNames::Absent,
         );
         if Subdir::current()
             .expect("pixi runs on a known conda platform")
@@ -941,6 +968,7 @@ packages:
             &platform,
             &EnvironmentName::default(),
             &host_from_overrides(overrides),
+            UnknownNames::Absent,
         )
         .unwrap();
     }

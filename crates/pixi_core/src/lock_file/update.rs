@@ -80,7 +80,7 @@ use crate::{
         self,
         reporter::SolveProgressBar,
         virtual_packages::{
-            MachineValidationError, compute_required_virtual_package_specs,
+            MachineValidationError, UnknownNames, compute_required_virtual_package_specs,
             validate_system_meets_environment_requirements,
         },
     },
@@ -1095,28 +1095,38 @@ impl<'p> LockFileDerivedData<'p> {
                 Ok(()) => UpdatePrefixError::NoMatchingPlatform(environment.name().clone()),
             }
         })?;
-        // Explicit overrides may intentionally target a foreign machine.
+
+        // Check if the prefix is already up-to-date by validating the hash with the
+        // environment file
+        let hash = self.locked_environment_hash(environment)?;
+        let cached = (update_mode == UpdateMode::QuickValidate)
+            .then(|| self.cached_prefix(environment, selected_platform, &hash))
+            .flatten();
+
+        // Explicit overrides may intentionally target a foreign machine. A
+        // current prefix keeps running where a detector could not be asked,
+        // while a new install needs every value it depends on.
         if !matches!(self.target_platform, Some(InstallTarget::Explicit(_)))
             && !platform_override_is_foreign()
         {
+            let unknown = if cached.is_some() {
+                UnknownNames::Unchecked
+            } else {
+                UnknownNames::Absent
+            };
             validate_system_meets_environment_requirements(
                 &self.lock_file,
                 selected_platform,
                 environment.name(),
                 environment.host(),
+                unknown,
             )
             .map_err(|source| UpdatePrefixError::RequirementsUnmet {
                 environment: environment.name().clone(),
                 source,
             })?;
         }
-
-        // Check if the prefix is already up-to-date by validating the hash with the
-        // environment file
-        let hash = self.locked_environment_hash(environment)?;
-        if update_mode == UpdateMode::QuickValidate
-            && let Some(prefix) = self.cached_prefix(environment, selected_platform, &hash)
-        {
+        if let Some(prefix) = cached {
             return Ok(prefix);
         }
 

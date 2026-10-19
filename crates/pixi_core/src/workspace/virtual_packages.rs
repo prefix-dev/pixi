@@ -1,7 +1,7 @@
 use crate::environment::{PlatformData, RequiredPlatform};
 use crate::lock_file::virtual_packages::{
-    MachineValidationError, compute_required_virtual_package_specs, unmet_requirements,
-    validate_system_meets_environment_requirements,
+    MachineValidationError, UnknownNames, compute_required_virtual_package_specs,
+    unmet_requirements, validate_system_meets_environment_requirements,
 };
 use crate::workspace::{
     Environment, HasWorkspaceRef,
@@ -16,6 +16,7 @@ use pixi_manifest::{
 };
 use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Subdir};
 use rattler_lock::LockFile;
+use std::borrow::Cow;
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::path::PathBuf;
@@ -65,11 +66,19 @@ pub fn verify_current_platform_can_run_environment(
         // Declared-compatible. Keep validating the resolved requirements
         // (conda virtual packages + pypi wheel tags) against the lock file.
         if let Some(lock_file) = lock_file {
+            // An installed environment keeps running where a detector could
+            // not be asked.
+            let unknown = if environment.installed_resolved_platform().is_some() {
+                UnknownNames::Unchecked
+            } else {
+                UnknownNames::Absent
+            };
             validate_system_meets_environment_requirements(
                 lock_file,
                 current_platform,
                 environment.name(),
                 environment.host(),
+                unknown,
             )?;
         }
         return Ok(());
@@ -134,7 +143,18 @@ pub fn minimum_compatible_declared_platform<'p>(
         // only content is tasks still runs under an unsatisfiable requirement.
         let unsatisfied = required
             .get(subdir)
-            .map(|specs| unmet_requirements(specs, &system_virtual_packages))
+            .map(|specs| {
+                let known = specs
+                    .iter()
+                    .filter(|spec| {
+                        spec.name
+                            .as_exact()
+                            .is_none_or(|name| !host.is_unknown(name.as_normalized()))
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>();
+                unmet_requirements(&known, &system_virtual_packages)
+            })
             .unwrap_or_default();
         if unsatisfied.is_empty() {
             if let Some(declared) = declared_platforms
@@ -417,13 +437,23 @@ pub fn verify_run_platform(
         }
         // Auto-detected machine: its real virtual packages, and the subdirs it
         // can run (current subdir plus architecture fallbacks).
+        // Names whose value is unknown take the value the environment was
+        // installed with, so they are not checked.
         None => {
             let host = environment.host();
             let current = host.subdir();
             let subdirs = candidate_subdirs(current);
+            let mut capabilities = host.capabilities().into_owned();
+            capabilities.extend(
+                resolved
+                    .virtual_packages()
+                    .iter()
+                    .filter(|package| host.is_unknown(package.name.as_normalized()))
+                    .cloned(),
+            );
             (
                 subdirs,
-                host.capabilities(),
+                Cow::Owned(capabilities),
                 PixiPlatformName::from(current),
                 current,
             )

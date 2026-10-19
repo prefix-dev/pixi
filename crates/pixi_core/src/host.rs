@@ -149,6 +149,7 @@ pub struct HostDetection {
     results: Vec<DetectorResult>,
     failures: Vec<DetectorFailureReport>,
     skipped: Vec<SkippedRegistration>,
+    unknown: Vec<String>,
 }
 
 impl HostDetection {
@@ -204,6 +205,7 @@ impl HostDetection {
             results: Vec::new(),
             failures: Vec::new(),
             skipped: Vec::new(),
+            unknown: Vec::new(),
         }
     }
 
@@ -246,6 +248,14 @@ impl HostDetection {
     /// The registered detectors that did not run, and why.
     pub fn skipped_detectors(&self) -> &[SkippedRegistration] {
         &self.skipped
+    }
+
+    /// Whether this machine's value of the virtual package `name` is unknown:
+    /// its detector has no stored decision and nobody could be asked. Host
+    /// validation does not check unknown names, so a noninteractive session
+    /// keeps running what an earlier, consented detection installed.
+    pub fn is_unknown(&self, name: &str) -> bool {
+        self.unknown.iter().any(|unknown| unknown == name)
     }
 }
 
@@ -613,12 +623,39 @@ impl HostDetector {
                 }
             }
         };
+        let unknown = if self.consent.can_allow() {
+            Vec::new()
+        } else {
+            outcome
+                .skipped
+                .iter()
+                .filter(|skipped| {
+                    skipped.reason == SkipReason::ConsentDenied
+                        && self
+                            .config
+                            .virtual_package_detectors
+                            .consent(&consent_origin(&skipped.origin))
+                            .is_none()
+                })
+                .flat_map(|skipped| {
+                    registrations
+                        .iter()
+                        .filter(move |accepted| {
+                            accepted.channel.base_url == skipped.origin
+                                && accepted.registration.detector == skipped.detector
+                        })
+                        .flat_map(|accepted| accepted.registration.virtual_packages.iter())
+                        .map(|name| name.as_normalized().to_string())
+                })
+                .collect()
+        };
         Ok(HostDetection {
             subdir,
             platform,
             results,
             failures,
             skipped: outcome.skipped,
+            unknown,
         })
     }
 
