@@ -1,10 +1,13 @@
 pub(crate) mod conda_metadata;
 mod conda_prefix;
 pub mod list;
-pub use conda_prefix::{CondaPrefixUpdated, CondaPrefixUpdater, CondaPrefixUpdaterBuilder};
+pub use conda_prefix::{
+    CondaPrefixUpdateError, CondaPrefixUpdated, CondaPrefixUpdater, CondaPrefixUpdaterBuildError,
+    CondaPrefixUpdaterBuilder,
+};
 use dialoguer::theme::ColorfulTheme;
 use futures::{FutureExt, StreamExt, TryStreamExt, stream};
-use miette::{Context, IntoDiagnostic};
+use miette::Diagnostic;
 use pixi_consts::consts;
 use pixi_git::credentials::store_credentials_from_url;
 pub use pixi_install_pypi::{ContinuePyPIPrefixUpdate, on_python_interpreter_change};
@@ -31,6 +34,7 @@ use std::{
     io::ErrorKind,
     path::{Path, PathBuf},
 };
+use thiserror::Error;
 use xxhash_rust::xxh3::Xxh3;
 
 use crate::workspace;
@@ -43,11 +47,57 @@ use crate::{
     workspace::{Environment, HasWorkspaceRef, grouped_environment::GroupedEnvironment},
 };
 
+/// Errors that can occur while checking that the workspace is in a sane state.
+#[derive(Debug, Error, Diagnostic)]
+pub enum SanityCheckError {
+    #[error(transparent)]
+    ReadPrefixFile(std::io::Error),
+
+    #[error("failed to remove old environment directory")]
+    RemoveEnvironmentDir(#[source] std::io::Error),
+
+    #[error(
+        "the environment directory has moved from '{}' to '{}'",
+        .previous.display(),
+        .current.display()
+    )]
+    #[diagnostic(help(
+        "Environments are non-relocatable, moving them can cause issues. Remove the environment directory, pixi will recreate it on the next run."
+    ))]
+    EnvironmentDirMoved { previous: PathBuf, current: PathBuf },
+
+    #[error("failed to create the .pixi directory at '{}'", .path.display())]
+    CreatePixiDir {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("failed to create '{}'", .path.display())]
+    CreateFile {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+}
+
+/// Errors that can occur while reading or writing the environment file.
+#[derive(Debug, Error, Diagnostic)]
+pub enum EnvironmentFileError {
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+
+    #[error("failed to serialize the environment file")]
+    Serialize(#[source] serde_json::Error),
+}
+
 /// Verify the location of the prefix folder is not changed so the applied
 /// prefix path is still valid. Errors when there is a file system error or the
-/// path does not align with the defined prefix. Returns false when the file is
-/// not present.
-pub async fn verify_prefix_location_unchanged(environment_dir: &Path) -> miette::Result<()> {
+/// path does not align with the defined prefix. Succeeds when the file is not
+/// present.
+pub async fn verify_prefix_location_unchanged(
+    environment_dir: &Path,
+) -> Result<(), SanityCheckError> {
     let prefix_file = environment_dir
         .join(consts::CONDA_META_DIR)
         .join(consts::PREFIX_FILE_NAME);
@@ -63,7 +113,7 @@ pub async fn verify_prefix_location_unchanged(environment_dir: &Path) -> miette:
         // Scream the error if we don't know it.
         Err(e) => {
             tracing::error!("failed to read prefix file: {}", prefix_file.display());
-            Err(e).into_diagnostic()
+            Err(SanityCheckError::ReadPrefixFile(e))
         }
         // Check if the path in the file aligns with the current path.
         Ok(p) if prefix_file.starts_with(&p) => Ok(()),
@@ -80,7 +130,7 @@ pub async fn verify_prefix_location_unchanged(environment_dir: &Path) -> miette:
 async fn prefix_location_changed(
     environment_dir: &Path,
     previous_dir: &Path,
-) -> miette::Result<()> {
+) -> Result<(), SanityCheckError> {
     let theme = ColorfulTheme {
         active_item_style: console::Style::new().for_stderr().magenta(),
         ..ColorfulTheme::default()
@@ -101,15 +151,13 @@ async fn prefix_location_changed(
             tokio::fs::remove_dir_all(environment_dir)
         })
         .await
-        .into_diagnostic()
-        .context("failed to remove old environment directory")?;
+        .map_err(SanityCheckError::RemoveEnvironmentDir)?;
         Ok(())
     } else {
-        Err(miette::diagnostic!(
-            help = "Remove the environment directory, pixi will recreate it on the next run.",
-            "The environment directory has moved from `{}` to `{}`. Environments are non-relocatable, moving them can cause issues.", previous_dir.display(), environment_dir.display()
-        )
-            .into())
+        Err(SanityCheckError::EnvironmentDirMoved {
+            previous: previous_dir.to_path_buf(),
+            current: environment_dir.to_path_buf(),
+        })
     }
 }
 
@@ -557,39 +605,40 @@ fn environment_file_path(environment_dir: &Path) -> PathBuf {
 pub fn write_environment_file(
     environment_dir: &Path,
     env_file: EnvironmentFile,
-) -> miette::Result<PathBuf> {
+) -> Result<PathBuf, EnvironmentFileError> {
     let path = environment_file_path(environment_dir);
 
     let parent = path
         .parent()
         .expect("There should already be a conda-meta folder");
 
-    match fs_err::create_dir_all(parent).into_diagnostic() {
+    match fs_err::create_dir_all(parent) {
         Ok(_) => {
             // Using json as it's easier to machine read it.
-            let contents = serde_json::to_string_pretty(&env_file).into_diagnostic()?;
-            match fs_err::write(&path, contents).into_diagnostic() {
+            let contents =
+                serde_json::to_string_pretty(&env_file).map_err(EnvironmentFileError::Serialize)?;
+            match fs_err::write(&path, contents) {
                 Ok(_) => {
                     tracing::debug!("Wrote environment file to: {:?}", path);
                 }
-                Err(e) => tracing::debug!(
-                    "Unable to write environment file to: {:?} => {:?}",
-                    path,
-                    e.root_cause().to_string()
-                ),
+                Err(e) => {
+                    tracing::debug!("Unable to write environment file to: {:?} => {e:?}", path)
+                }
             };
             Ok(path)
         }
         Err(e) => {
             tracing::debug!("Unable to create conda-meta folder to: {:?}", path);
-            Err(e)
+            Err(e.into())
         }
     }
 }
 
 /// Reading the environment file of the environment.
 /// Removing it if it's not valid.
-pub fn read_environment_file(environment_dir: &Path) -> miette::Result<Option<EnvironmentFile>> {
+pub fn read_environment_file(
+    environment_dir: &Path,
+) -> Result<Option<EnvironmentFile>, EnvironmentFileError> {
     let path = environment_file_path(environment_dir);
 
     let contents = match fs_err::read_to_string(&path) {
@@ -605,7 +654,7 @@ pub fn read_environment_file(environment_dir: &Path) -> miette::Result<Option<En
                 e
             );
             let _ = fs_err::remove_file(&path);
-            return Err(e).into_diagnostic();
+            return Err(e.into());
         }
     };
     let env_file: EnvironmentFile = match serde_json::from_str(&contents) {
@@ -629,7 +678,7 @@ pub fn read_environment_file(environment_dir: &Path) -> miette::Result<Option<En
 ///     2. It verifies that the system requirements are met.
 ///     3. It verifies the absence of the `env` folder.
 ///     4. It verifies that the prefix contains a `.gitignore` file.
-pub async fn sanity_check_workspace(project: &Workspace) -> miette::Result<()> {
+pub async fn sanity_check_workspace(project: &Workspace) -> Result<(), SanityCheckError> {
     // Sanity check of prefix location
     verify_prefix_location_unchanged(project.environments_dir().as_path()).await?;
 
@@ -691,35 +740,6 @@ pub fn store_credentials_from_requirements(git_requirements: Vec<GitSpec>) {
     }
 }
 
-/// Extract any credentials that are defined on the project dependencies
-/// themselves. While we don't store plaintext credentials in the `pixi.lock`,
-/// we do respect credentials that are defined in the `pixi.toml` or
-/// `pyproject.toml`.
-pub async fn store_credentials_from_project(project: &Workspace) -> miette::Result<()> {
-    for env in project.environments() {
-        let env_platforms = env.platforms();
-        for platform in env_platforms {
-            // A feature may name a platform absent from `workspace.platforms`;
-            // pass the `Option` through (a miss means no platform overrides).
-            let platform = project
-                .workspace
-                .value
-                .workspace
-                .platform_by_name(&platform);
-            let dependencies = env.combined_dependencies(platform);
-            for (_, dep_spec) in dependencies {
-                for spec in dep_spec {
-                    if let PixiSpec::Git(spec) = spec {
-                        store_credentials_from_url(&spec.git);
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(())
-}
-
 /// Create a file at the given path with the given contents if it does not exist.
 /// If the file already exists, it does nothing.
 /// If the file cannot be created due to a read-only filesystem,
@@ -727,8 +747,7 @@ pub async fn store_credentials_from_project(project: &Workspace) -> miette::Resu
 async fn best_effort_write_file_if_missing(
     path: &Path,
     contents: &str,
-    error_message: &str,
-) -> miette::Result<()> {
+) -> Result<(), SanityCheckError> {
     if !path.exists() {
         match tokio::fs::write(path, contents).await {
             Ok(_) => Ok(()),
@@ -736,9 +755,10 @@ async fn best_effort_write_file_if_missing(
                 tracing::debug!("Failed to create file at: {}, error: {}", path.display(), e);
                 Ok(())
             }
-            Err(e) => Err(e)
-                .into_diagnostic()
-                .wrap_err(format!("{error_message} {}", path.display())),
+            Err(source) => Err(SanityCheckError::CreateFile {
+                path: path.to_path_buf(),
+                source,
+            }),
         }?;
     }
     Ok(())
@@ -749,7 +769,7 @@ async fn best_effort_write_file_if_missing(
 /// If the `.gitignore` file doesn't exist, create it with a '*' pattern.
 /// Also creates a `.condapackageignore` file to exclude the `.pixi` directory
 /// from builds.
-async fn ensure_pixi_directory_and_gitignore(pixi_dir: &Path) -> miette::Result<()> {
+async fn ensure_pixi_directory_and_gitignore(pixi_dir: &Path) -> Result<(), SanityCheckError> {
     let gitignore_path = pixi_dir.join(".gitignore");
     let condapackageignore_path = pixi_dir.join(".condapackageignore");
 
@@ -757,26 +777,16 @@ async fn ensure_pixi_directory_and_gitignore(pixi_dir: &Path) -> miette::Result<
     if !pixi_dir.exists() {
         tokio::fs::create_dir_all(&pixi_dir)
             .await
-            .into_diagnostic()
-            .wrap_err(format!(
-                "Failed to create .pixi/ directory at {}",
-                pixi_dir.display()
-            ))?;
+            .map_err(|source| SanityCheckError::CreatePixiDir {
+                path: pixi_dir.to_path_buf(),
+                source,
+            })?;
     }
 
-    best_effort_write_file_if_missing(
-        &gitignore_path,
-        "*\n!config.toml\n",
-        "Failed to create .gitignore file at",
-    )
-    .await?;
+    best_effort_write_file_if_missing(&gitignore_path, "*\n!config.toml\n").await?;
 
-    best_effort_write_file_if_missing(
-        &condapackageignore_path,
-        ".pixi\n!.pixi/config.toml\n",
-        "Failed to create .condapackageignore file at",
-    )
-    .await?;
+    best_effort_write_file_if_missing(&condapackageignore_path, ".pixi\n!.pixi/config.toml\n")
+        .await?;
 
     Ok(())
 }

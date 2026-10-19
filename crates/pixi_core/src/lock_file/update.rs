@@ -1451,6 +1451,7 @@ impl<'p> LockFileDerivedData<'p> {
                     .update(records, reinstall_packages, ignore_packages)
                     .await
                     .cloned()
+                    .map_err(miette::Report::from)
             })
             .await
             .cloned()
