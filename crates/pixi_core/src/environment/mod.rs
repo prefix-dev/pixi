@@ -679,8 +679,11 @@ pub fn read_environment_file(
 ///     3. It verifies the absence of the `env` folder.
 ///     4. It verifies that the prefix contains a `.gitignore` file.
 pub async fn sanity_check_workspace(project: &Workspace) -> Result<(), SanityCheckError> {
-    // Sanity check of prefix location
-    verify_prefix_location_unchanged(project.environments_dir().as_path()).await?;
+    // Sanity check of prefix location, the prefix file lives in each
+    // environment's `conda-meta` folder
+    for environment in project.environments() {
+        verify_prefix_location_unchanged(&environment.dir()).await?;
+    }
 
     // TODO: remove on a 1.0 release
     // Check for old `env` folder as we moved to `envs` in 0.13.0

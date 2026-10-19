@@ -198,6 +198,12 @@ pub(super) fn verify_exclude_newer(
     Ok(())
 }
 
+/// `Clone`, unlike [`PlatformUnsat`], so that every lazy build dispatch can
+/// own a copy when the host records it needs are unusable.
+#[derive(Debug, Clone, Error, Diagnostic)]
+#[error("there was a duplicate entry for '{0}'")]
+pub struct DuplicateEntry(pub String);
+
 #[derive(Debug, Error)]
 #[error(
     "the locked source package '{package}' has timestamps that exceed the environment's exclude-newer cutoff"
@@ -403,8 +409,8 @@ pub enum PlatformUnsat {
     #[error("the conda package does not satisfy the pypi requirement '{0}' (required by '{1}')")]
     CondaUnsatisfiableRequirement(Box<uv_distribution_types::Requirement>, String),
 
-    #[error("there was a duplicate entry for '{0}'")]
-    DuplicateEntry(String),
+    #[error(transparent)]
+    DuplicateEntry(#[from] DuplicateEntry),
 
     #[error(
         "failed to recompute the build/host environments of a source record loaded from a pre-v7 lock file: {0}"
