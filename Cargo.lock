@@ -6727,6 +6727,7 @@ dependencies = [
  "rattler_conda_types",
  "rattler_config",
  "rattler_networking",
+ "rattler_redaction",
  "rattler_repodata_gateway",
  "reqwest",
  "rstest",
