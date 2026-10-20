@@ -65,9 +65,8 @@ struct CommonArgs {
     #[arg(long, short, conflicts_with_all = &["local", "global", "shared", "path"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
     system: bool,
 
-    /// Operation on the configuration shared with other rattler-based tools
-    /// (`~/.config/rattler/config.toml`), which only accepts the keys every
-    /// such tool understands
+    /// Operation on the user configuration shared with other rattler-based tools,
+    /// which only accepts the keys every such tool understands
     #[arg(long, conflicts_with_all = &["local", "global", "system", "path"], help_heading = consts::CLAP_CONFIG_OPTIONS)]
     shared: bool,
 
@@ -265,6 +264,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
 async fn determine_project_root(common_args: &CommonArgs) -> miette::Result<Option<PathBuf>> {
     let workspace = WorkspaceLocator::default()
+        // Configuration commands must not run channel-provided detectors.
         .with_host(HostDetection::builtin())
         .with_closest_package(false) // Dont care about the package
         .with_emit_warnings(false) // No reason to emit warnings
@@ -435,11 +435,6 @@ async fn alter_config(
                 .context("failed to read config file");
         }
     };
-    let keys_before = if common_args.shared {
-        Config::keys_not_shared(&content)?
-    } else {
-        Vec::new()
-    };
 
     let doc_mut = content
         .parse::<toml_edit::DocumentMut>()
@@ -502,7 +497,13 @@ async fn alter_config(
                         } else {
                             config.default_channels.push(channel)
                         }
-                        transplant_config_key(&config, &mut toml_doc, key, &mode)?;
+                        transplant_config_key(
+                            &config,
+                            &mut toml_doc,
+                            key,
+                            &mode,
+                            common_args.shared,
+                        )?;
                     } else {
                         // Local file is missing default-channels. Load inherited global layers,
                         // add the channel, and user AlterMode::Set to write the full merged array.
@@ -516,7 +517,13 @@ async fn alter_config(
                             new_channels.push(channel)
                         }
                         config.default_channels = new_channels;
-                        transplant_config_key(&config, &mut toml_doc, key, &AlterMode::Set)?;
+                        transplant_config_key(
+                            &config,
+                            &mut toml_doc,
+                            key,
+                            &AlterMode::Set,
+                            common_args.shared,
+                        )?;
                     }
                 }
                 // `extra-index-urls` is concatenated across layers, so only
@@ -531,7 +538,7 @@ async fn alter_config(
                     } else {
                         config.pypi_config.extra_index_urls.push(url);
                     }
-                    transplant_config_key(&config, &mut toml_doc, key, &mode)?;
+                    transplant_config_key(&config, &mut toml_doc, key, &mode, common_args.shared)?;
                 }
                 _ => {
                     let list_keys = ["default-channels", "pypi-config.extra-index-urls"];
@@ -549,7 +556,8 @@ async fn alter_config(
             let has_value = value.is_some();
             config.set(key, value)?;
 
-            let written = transplant_config_key(&config, &mut toml_doc, key, &mode)?;
+            let written =
+                transplant_config_key(&config, &mut toml_doc, key, &mode, common_args.shared)?;
             if has_value && !written {
                 return Err(miette::miette!(
                     "the key '{key}' was accepted but could not be written; this is a bug in pixi"
@@ -560,19 +568,6 @@ async fn alter_config(
     }
 
     let contents = toml_doc.to_string();
-    if common_args.shared {
-        // Only keys this edit adds are checked; a foreign key that was
-        // already in the file is not this command's doing.
-        let mut not_shared = Config::keys_not_shared(&contents)?;
-        not_shared.retain(|key| !keys_before.contains(key));
-        if !not_shared.is_empty() {
-            return Err(miette::miette!(
-                "'{}' is not a key shared by all rattler-based tools, so it cannot be written to \
-                 the shared configuration. Use `--global` to set it for pixi alone.",
-                not_shared.join("', '")
-            ));
-        }
-    }
     let parent = to.parent().expect("config path should have a parent");
     fs_err::create_dir_all(parent)
         .into_diagnostic()
@@ -673,6 +668,7 @@ fn transplant_config_key(
     toml_doc: &mut TomlDocument,
     key: &str,
     mode: &AlterMode,
+    shared: bool,
 ) -> miette::Result<bool> {
     let key_path = KeyPath::parse(key)?;
 
@@ -696,6 +692,27 @@ fn transplant_config_key(
                 return Ok(false);
             }
             Err(e) => return Err(e),
+        }
+    }
+    if shared {
+        // Validate the serialized section being edited, not unrelated foreign
+        // keys on disk. Keep required siblings, such as an S3 bucket's region.
+        let root = key_path
+            .parent_keys
+            .first()
+            .map(String::as_str)
+            .unwrap_or_else(|| key_path.target());
+        let mut selected = DocumentMut::new();
+        selected[root] = get_any_spelling(temp_doc.as_item(), root)
+            .expect("the serialized key has a root")
+            .clone();
+        let not_shared = Config::keys_not_shared(&selected.to_string())?;
+        if !not_shared.is_empty() {
+            return Err(miette::miette!(
+                "'{}' is not a key shared by all rattler-based tools, so it cannot be written to \
+                 the shared configuration. Use `--global` to set it for pixi alone.",
+                not_shared.join("', '")
+            ));
         }
     }
 
@@ -1284,6 +1301,124 @@ mod tests {
             },
         )
         .await;
+    }
+
+    #[tokio::test]
+    async fn shared_rejects_writes_to_existing_foreign_tables() {
+        let original = "# keep this comment\n[shell]\nchange-ps1 = false\n";
+        for (key, value) in [
+            ("shell.force-activate", "true"),
+            ("shell.change-ps1", "true"),
+            (r#""shell"."force-activate""#, "true"),
+            ("shell", r#"{"force-activate": true}"#),
+            (r#""shell""#, r#"{"force-activate": true}"#),
+        ] {
+            let mut context = TestContext::setup(Some(original));
+            context.common_args.shared = true;
+            let result = alter_config(
+                &context.common_args,
+                key,
+                Some(value.to_string()),
+                AlterMode::Set,
+            )
+            .await;
+            assert!(result.is_err(), "{key}");
+            assert_eq!(context.read_config(), original, "{key}");
+        }
+    }
+
+    #[tokio::test]
+    async fn shared_writes_preserve_unrelated_foreign_keys() {
+        let original = concat!(
+            "\"tls-no-verify.extra\" = false\n",
+            "\"repodata-config.disable-zstd\" = false\n",
+            "# keep this comment\n[shell]\nchange-ps1 = false\nforeign-option = \"keep\"\n",
+            "\n[repodata-config]\nforeign-option = \"also keep\"\n",
+        );
+        let mut context = TestContext::setup(Some(original));
+        context.common_args.shared = true;
+        alter_config(
+            &context.common_args,
+            "tls-no-verify",
+            Some("true".to_string()),
+            AlterMode::Set,
+        )
+        .await
+        .unwrap();
+        let contents = context.read_config();
+        assert!(contents.contains("# keep this comment"));
+        let document = contents.parse::<DocumentMut>().unwrap();
+        assert_eq!(document["shell"]["change-ps1"].as_bool(), Some(false));
+        assert_eq!(document["shell"]["foreign-option"].as_str(), Some("keep"));
+        assert_eq!(
+            Config::from_shared_path(&context.config_path)
+                .unwrap()
+                .tls_no_verify,
+            Some(true)
+        );
+        alter_config(
+            &context.common_args,
+            "repodata-config.disable-zstd",
+            Some("true".to_string()),
+            AlterMode::Set,
+        )
+        .await
+        .unwrap();
+        let document = context.read_config().parse::<DocumentMut>().unwrap();
+        assert_eq!(document["tls-no-verify.extra"].as_bool(), Some(false));
+        assert_eq!(
+            document["repodata-config.disable-zstd"].as_bool(),
+            Some(false)
+        );
+        assert_eq!(
+            document["repodata-config"]["foreign-option"].as_str(),
+            Some("also keep")
+        );
+        assert_eq!(
+            document["repodata-config"]["disable-zstd"].as_bool(),
+            Some(true)
+        );
+
+        alter_config(
+            &context.common_args,
+            r#""shell"."change-ps1""#,
+            None,
+            AlterMode::Unset,
+        )
+        .await
+        .unwrap();
+        let contents = context.read_config();
+        let document = contents.parse::<DocumentMut>().unwrap();
+        assert!(document["shell"].get("change-ps1").is_none());
+        assert_eq!(document["shell"]["foreign-option"].as_str(), Some("keep"));
+        assert_eq!(document["tls-no-verify"].as_bool(), Some(true));
+
+        alter_config(&context.common_args, "shell", None, AlterMode::Set)
+            .await
+            .unwrap();
+        let document = context.read_config().parse::<DocumentMut>().unwrap();
+        assert!(document.get("shell").is_none());
+        assert_eq!(document["tls-no-verify"].as_bool(), Some(true));
+    }
+
+    #[tokio::test]
+    async fn shared_leaf_writes_keep_required_siblings() {
+        let mut context = TestContext::setup(Some(
+            "[s3-options.bucket]\nendpoint-url = \"https://old.example.com\"\nregion = \"eu-west-1\"\n",
+        ));
+        context.common_args.shared = true;
+        alter_config(
+            &context.common_args,
+            "s3-options.bucket.endpoint-url",
+            Some("https://new.example.com".to_string()),
+            AlterMode::Set,
+        )
+        .await
+        .unwrap();
+        let config = Config::from_shared_path(&context.config_path).unwrap();
+        let bucket = &config.s3_options.0["bucket"];
+        assert_eq!(bucket.endpoint_url.as_str(), "https://new.example.com/");
+        assert_eq!(bucket.region, "eu-west-1");
     }
 
     #[tokio::test]
@@ -1938,6 +2073,43 @@ region = "us-east-1"
     }
 
     #[test]
+    fn list_selected_values_serialize_as_toml_and_json() {
+        let (config, _) = Config::from_toml(
+            "default-channels = [\"conda-forge\"]\n[shell]\nchange-ps1 = false\nforce-activate = true\n",
+            None,
+        )
+        .unwrap();
+        for (key, expected) in [
+            (
+                "default-channels",
+                serde_json::json!({"default-channels": ["conda-forge"]}),
+            ),
+            (
+                "shell.change-ps1",
+                serde_json::json!({"shell": {"change-ps1": false}}),
+            ),
+            (
+                "shell",
+                serde_json::json!({"shell": {"change-ps1": false, "force-activate": true}}),
+            ),
+        ] {
+            let partial = partial_config(&config, key).unwrap();
+            let toml = toml_edit::ser::to_string_pretty(&partial).unwrap();
+            let json = serde_json::to_string_pretty(&partial).unwrap();
+            assert_eq!(
+                toml_edit::de::from_str::<JsonValue>(&toml).unwrap(),
+                expected,
+                "{key}"
+            );
+            assert_eq!(
+                serde_json::from_str::<JsonValue>(&json).unwrap(),
+                expected,
+                "{key}"
+            );
+        }
+    }
+
+    #[test]
     fn test_partial_config_nested_keys() {
         let (config, _) = Config::from_toml(
             r#"
@@ -1979,6 +2151,19 @@ timeout-seconds = 7
         let (config, _) = Config::from_toml("default-channels = [\"conda-forge\"]", None).unwrap();
         assert_eq!(
             partial_config(&config, "s3-options.missing.region").unwrap(),
+            serde_json::json!({})
+        );
+        let unset = partial_config(&config, "detached-environments").unwrap();
+        assert_eq!(
+            toml_edit::de::from_str::<JsonValue>(
+                &toml_edit::ser::to_string_pretty(&unset).unwrap()
+            )
+            .unwrap(),
+            serde_json::json!({})
+        );
+        assert_eq!(
+            serde_json::from_str::<JsonValue>(&serde_json::to_string_pretty(&unset).unwrap())
+                .unwrap(),
             serde_json::json!({})
         );
         for key in [

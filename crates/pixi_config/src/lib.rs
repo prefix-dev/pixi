@@ -3003,30 +3003,34 @@ pub fn config_path_global() -> Vec<PathBuf> {
     .collect()
 }
 
-/// Pixi's own user configuration file to write: the first of
-/// [`config_path_global`] that exists, otherwise the last candidate.
+/// Pixi's own user configuration file to write: the highest-priority existing
+/// candidate from [`config_path_global`], otherwise the last candidate.
 pub fn user_config_write_path() -> PathBuf {
-    let mut locations = config_path_global();
-    let fallback = locations
-        .pop()
-        .expect("there is always a candidate for the user configuration file");
-    locations
-        .into_iter()
-        .find(|path| path.exists())
-        .unwrap_or(fallback)
+    user_config_write_path_from(config_path_global(), ConfigLayer::Tool)
+        .expect("there is always a candidate for the user configuration file")
 }
 
-/// The shared user configuration file to write: the first of
-/// [`shared_user_config_paths`] that exists, otherwise the one in the user
-/// configuration directory.
+/// The shared user configuration file to write: the highest-priority existing
+/// candidate from [`shared_user_config_paths`], otherwise the first candidate.
 pub fn shared_user_config_write_path() -> PathBuf {
-    let candidates = shared_user_config_paths();
-    candidates
-        .iter()
-        .find(|path| path.exists())
-        .cloned()
-        .or_else(|| candidates.first().cloned())
+    user_config_write_path_from(shared_user_config_paths(), ConfigLayer::Shared)
         .expect("the user configuration directory is known")
+}
+
+fn user_config_write_path_from(
+    mut candidates: Vec<PathBuf>,
+    layer: ConfigLayer,
+) -> Option<PathBuf> {
+    let last = candidates.len().checked_sub(1)?;
+    let fallback = match layer {
+        ConfigLayer::Shared => 0,
+        ConfigLayer::Tool => last,
+    };
+    let selected = candidates
+        .iter()
+        .rposition(|path| path.exists())
+        .unwrap_or(fallback);
+    Some(candidates.swap_remove(selected))
 }
 
 /// Every configuration file pixi reads by default, from lowest to highest
@@ -3453,20 +3457,32 @@ UNUSED = "unused"
 
     #[test]
     fn test_s3_options_invalid_config() {
-        // The addressing style is optional. The region is required.
-        let toml = r#"
+        for region in ["", "region = 42", "region = true"] {
+            let toml = format!(
+                r#"
+                [s3-options.bucket1]
+                endpoint-url = "https://my-s3-host"
+                {region}
+                "#
+            );
+            assert!(matches!(
+                Config::from_toml(&toml, None),
+                Err(ParseConfigError::Toml(_))
+            ));
+        }
+
+        let (config, _) = Config::from_toml(
+            r#"
             [s3-options.bucket1]
             endpoint-url = "https://my-s3-host"
-        "#;
-        let result = Config::from_toml(toml, None);
-        assert!(result.is_err());
-        assert!(
-            result
-                .err()
-                .unwrap()
-                .to_string()
-                .contains("missing field `region`")
-        );
+            region = "us-east-1"
+            "#,
+            None,
+        )
+        .unwrap();
+        let bucket = &config.s3_options.0["bucket1"];
+        assert_eq!(bucket.region, "us-east-1");
+        assert_eq!(bucket.addressing_style, S3AddressingStyle::VirtualHost);
     }
 
     #[test]
@@ -3894,6 +3910,67 @@ UNUSED = "unused"
                 .all(|layer| *layer == ConfigLayer::Tool),
             "no shared file may sit above a user-level pixi file"
         );
+    }
+
+    #[rstest]
+    fn test_user_config_write_path_matches_load_precedence(
+        #[values(ConfigLayer::Shared, ConfigLayer::Tool)] layer: ConfigLayer,
+        #[values(
+            [true, true, true],
+            [true, true, false],
+            [true, false, false],
+            [false, true, true],
+            [false, true, false],
+            [false, false, true]
+        )]
+        existing: [bool; 3],
+    ) {
+        let directory = tempfile::tempdir().unwrap();
+        let candidates: Vec<_> = ["xdg.toml", "user.toml", "home.toml"]
+            .map(|name| directory.path().join(name))
+            .into();
+        for (path, exists) in candidates.iter().zip(existing) {
+            if exists {
+                fs_err::write(path, "tls-no-verify = true\n").unwrap();
+            }
+        }
+        let selected = user_config_write_path_from(candidates.clone(), layer).unwrap();
+        let expected = existing.iter().rposition(|exists| *exists).unwrap();
+        assert_eq!(selected, candidates[expected]);
+        fs_err::write(&selected, "tls-no-verify = false\n").unwrap();
+
+        let locations = match layer {
+            ConfigLayer::Shared => layer_locations(candidates, Vec::new()),
+            ConfigLayer::Tool => layer_locations(Vec::new(), candidates),
+        };
+        let mut config = Config::default();
+        for location in locations {
+            let loaded = match location.layer {
+                ConfigLayer::Shared => Config::from_shared_path(&location.path),
+                ConfigLayer::Tool => Config::from_path(&location.path),
+            };
+            match loaded {
+                Ok(loaded) => config = config.merge_config(loaded),
+                Err(ConfigError::FileNotFound(_)) => {}
+                Err(error) => panic!("{error}"),
+            }
+        }
+        assert_eq!(config.tls_no_verify, Some(false));
+    }
+
+    #[rstest]
+    #[case(ConfigLayer::Shared, 0)]
+    #[case(ConfigLayer::Tool, 2)]
+    fn test_user_config_write_path_fallback(#[case] layer: ConfigLayer, #[case] fallback: usize) {
+        let directory = tempfile::tempdir().unwrap();
+        let candidates: Vec<_> = ["xdg.toml", "user.toml", "home.toml"]
+            .map(|name| directory.path().join(name))
+            .into();
+        assert_eq!(
+            user_config_write_path_from(candidates.clone(), layer),
+            Some(candidates[fallback].clone())
+        );
+        assert_eq!(user_config_write_path_from(Vec::new(), layer), None);
     }
 
     #[test]
