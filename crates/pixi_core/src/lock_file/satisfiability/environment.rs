@@ -295,16 +295,17 @@ impl PypiWheelTagsCheck {
                     Some((lock_platform.name().to_string(), pixi_platform, packages))
                 })
                 .flat_map(|(lock_platform_name, pixi_platform, packages)| {
-                    packages.map(move |package| {
-                        (lock_platform_name.clone(), pixi_platform, package)
-                    })
+                    packages
+                        .map(move |package| (lock_platform_name.clone(), pixi_platform, package))
                 })
-                .filter_map(|(lock_platform_name, pixi_platform, package)| match package {
-                    LockedPackage::Conda(rattler_lock::CondaPackageData::Binary(package)) => {
-                        Some((lock_platform_name, pixi_platform, package))
-                    }
-                    _ => None,
-                })
+                .filter_map(
+                    |(lock_platform_name, pixi_platform, package)| match package {
+                        LockedPackage::Conda(rattler_lock::CondaPackageData::Binary(package)) => {
+                            Some((lock_platform_name, pixi_platform, package))
+                        }
+                        _ => None,
+                    },
+                )
                 .filter(|(_, _, package)| {
                     pypi_modifiers::pypi_tags::is_python_record(&package.package_record)
                 })
