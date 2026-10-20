@@ -13,9 +13,8 @@ use pixi_config::{
 };
 use pixi_progress::global_multi_progress;
 use rattler_conda_types::ChannelUrl;
-use shlex::try_quote;
 
-use crate::host::{Consent, ConsentRequest, DetectorConsent};
+use crate::host::{Consent, ConsentRequest, DetectorConsent, consent_key_argument};
 
 #[derive(Clone, Copy)]
 enum DecisionStore {
@@ -80,10 +79,7 @@ impl DetectorConsent for InteractiveConsent {
                     .expect("repository scope has a root");
                 (
                     root.join(".pixi/config.toml"),
-                    Cow::Owned(format!(
-                        "--local --manifest-path {}",
-                        try_quote(&root.to_string_lossy()).expect("workspace paths contain no nul")
-                    )),
+                    Cow::Owned(format!("--local --manifest-path {}", path_argument(root))),
                     write_repository_detector_decision(root, origin, answer.decision),
                 )
             }
@@ -96,9 +92,9 @@ impl DetectorConsent for InteractiveConsent {
         match saved.map_err(miette::Report::new) {
             Ok(()) => eprintln!(
                 "Saved in {}. To remove this decision, run:\n\n\
-                 pixi config unset {flag} 'virtual-package-detectors.consent.{}'\n",
+                 pixi config unset {flag} {}\n",
                 path.display(),
-                toml_edit::Key::new(origin.as_str().trim_end_matches('/')),
+                consent_key_argument(origin),
             ),
             Err(error) => tracing::warn!(
                 "Could not save the decision in {}. Pixi will ask again next time: {error:?}",
@@ -109,6 +105,31 @@ impl DetectorConsent for InteractiveConsent {
     }
 }
 
+/// A path argument quoted for the shell the user most likely pastes it into.
+fn path_argument(path: &Path) -> String {
+    let path = path.to_string_lossy();
+    if cfg!(windows) {
+        format!("\"{path}\"")
+    } else {
+        shlex::try_quote(&path)
+            .map(|quoted| quoted.into_owned())
+            .unwrap_or_else(|_| path.into_owned())
+    }
+}
+
+/// Shows `select`, ending the process like an interrupt would when the user
+/// presses Ctrl-C. Other failures, such as a closed terminal, return `None`.
+fn interact(select: Select<'_>) -> Option<usize> {
+    match select.interact() {
+        Ok(selection) => Some(selection),
+        Err(dialoguer::Error::IO(error)) if error.kind() == std::io::ErrorKind::Interrupted => {
+            let _ = console::Term::stderr().show_cursor();
+            std::process::exit(130);
+        }
+        Err(_) => None,
+    }
+}
+
 fn ask(channel: &str, project_root: Option<&Path>, shared_path: &Path) -> Option<Answer> {
     eprintln!(
         "\nDetectors inspect your system to identify capabilities that packages depend on, \
@@ -116,31 +137,31 @@ fn ask(channel: &str, project_root: Option<&Path>, shared_path: &Path) -> Option
          Trust applies to current and future detectors from this channel."
     );
     let theme = ColorfulTheme::default();
-    let selection = Select::with_theme(&theme)
-        .with_prompt(format!("Trust detectors from {channel}?"))
-        .items(["Don't trust", "Trust"])
-        .default(0)
-        .interact()
-        .ok()?;
+    let selection = interact(
+        Select::with_theme(&theme)
+            .with_prompt(format!("Trust detectors from {channel}?"))
+            .items(["Don't trust", "Trust"])
+            .default(0),
+    )?;
     let decision = if selection == 0 {
         DetectorDecision::Deny
     } else {
         DetectorDecision::Allow
     };
-    let system = format!("System configuration ({})", shared_path.display());
+    let user = format!("User configuration ({})", shared_path.display());
     let workspace = project_root
         .map(|root| format!("Workspace ({})", root.join(".pixi/config.toml").display()));
     let options = [
         "Don't save",
-        workspace.as_deref().unwrap_or(&system),
-        system.as_str(),
+        workspace.as_deref().unwrap_or(&user),
+        user.as_str(),
     ];
-    let selection = Select::with_theme(&theme)
-        .with_prompt("Where should this decision be saved?")
-        .items(&options[..if workspace.is_some() { 3 } else { 2 }])
-        .default(0)
-        .interact()
-        .ok()?;
+    let selection = interact(
+        Select::with_theme(&theme)
+            .with_prompt("Where should this decision be saved?")
+            .items(&options[..if workspace.is_some() { 3 } else { 2 }])
+            .default(0),
+    )?;
     let store = if selection == 0 {
         DecisionStore::Session
     } else if project_root.is_some() && selection == 1 {

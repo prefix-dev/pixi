@@ -102,6 +102,14 @@ impl DetectorScript {
             .map(|body| format!("ping -n 21 127.0.0.1 >nul\r\n{body}"));
         script
     }
+
+    #[cfg(unix)]
+    pub(crate) fn unix_only(script: impl Into<String>) -> Self {
+        Self {
+            unix: script.into(),
+            windows: None,
+        }
+    }
 }
 
 fn unix_quote(value: &str) -> String {
@@ -574,6 +582,32 @@ async fn a_malformed_report_is_reported() {
     let failures = host.detector_failures();
     assert_eq!(failures.len(), 1, "{failures:?}");
     assert_eq!(test_good_version(host), None);
+}
+
+#[tokio::test]
+async fn a_report_with_an_unprefixed_name_is_rejected_without_partial_results() {
+    let channel_dir = tempfile::tempdir().unwrap();
+    write_channel_with(
+        channel_dir.path(),
+        &[Detector::good(DetectorScript::report(
+            r#"{"version":1,"virtual_packages":{"__test_good":{"version":"1.2.3"},"test_good":{"version":"9.9"}}}"#,
+        ))],
+    )
+    .await;
+    let channel = Url::from_directory_path(channel_dir.path()).unwrap();
+    let pixi = workspace_for(&channel, true);
+    store_consent(&pixi, &channel, "allow");
+
+    let workspace = locate(&pixi).await;
+    let host = workspace.host();
+    assert_eq!(host.detector_failures().len(), 1);
+    assert!(host.detector_results().is_empty());
+    assert_eq!(test_good_version(host), None);
+    assert!(
+        host.capabilities()
+            .iter()
+            .all(|package| package.name.as_normalized() != "test_good")
+    );
 }
 
 #[tokio::test]

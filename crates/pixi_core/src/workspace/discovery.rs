@@ -290,10 +290,13 @@ impl WorkspaceLocator {
         }
     }
 
-    fn detector_consent(&self, root: &Path) -> Arc<dyn DetectorConsent> {
+    /// The consent policy to detect hosts with. Only a manifest workspace
+    /// passes its `workspace_root`, so only there can a decision be saved in
+    /// the workspace configuration.
+    fn detector_consent(&self, workspace_root: Option<&Path>) -> Arc<dyn DetectorConsent> {
         self.detector_consent.clone().unwrap_or_else(|| {
             if self.use_cli_detector_consent {
-                cli_detector_consent(Some(root))
+                cli_detector_consent(workspace_root)
             } else {
                 Arc::new(NonInteractiveConsent::default())
             }
@@ -432,7 +435,7 @@ impl WorkspaceLocator {
             .parent()
             .expect("manifest path should always have a parent")
             .to_owned();
-        let detector_consent = self.detector_consent(&root);
+        let detector_consent = self.detector_consent(Some(&root));
         let config =
             Config::load_with(&root, &self.global_config_source).merge_config(self.cli_config);
         let injected_host = self.host.take();
@@ -462,7 +465,7 @@ impl WorkspaceLocator {
                 .path()
                 .parent()
                 .expect("an absolute script path always has a parent");
-            let consent = self.detector_consent(root);
+            let consent = self.detector_consent(None);
             let config =
                 Config::load_with(root, &self.global_config_source).merge_config(self.cli_config);
             let host = match injected_host {
@@ -504,7 +507,7 @@ impl WorkspaceLocator {
             .path()
             .parent()
             .expect("an absolute script path always has a parent");
-        let consent = self.detector_consent(root);
+        let consent = self.detector_consent(None);
         let config =
             Config::load_with(root, &self.global_config_source).merge_config(self.cli_config);
         let host = match injected_host {

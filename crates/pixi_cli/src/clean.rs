@@ -6,8 +6,11 @@ use pixi_consts::consts;
 use pixi_core::Workspace;
 use pixi_core::WorkspaceLocator;
 use pixi_core::WorkspaceLocatorError;
+use pixi_core::host::HostDetection;
 use pixi_core::workspace::WorkspaceRegistry;
 use pixi_manifest::EnvironmentName;
+use pixi_manifest::PixiPlatform;
+use pixi_manifest::platform::host::host_subdir;
 use pixi_path::AbsPathBuf;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -90,6 +93,10 @@ pub struct CacheArgs {
     #[arg(long)]
     pub repodata: bool,
 
+    /// Clean only the virtual package detector environments and their cached reports.
+    #[arg(long)]
+    pub virtual_package_detectors: bool,
+
     /// Clean only the viewed channel notices cache.
     #[arg(long)]
     pub notices: bool,
@@ -116,7 +123,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         // Resolve the cache config from the workspace when one is available so
         // workspace-level `[cache.*]` overrides are honored, falling back to
         // the global (system + user) config when run outside a workspace.
+        // Only the configuration is needed here, so the host is not probed:
+        // that could run a detector into the very cache about to be cleaned.
         let config = match WorkspaceLocator::for_cli()
+            .with_host(HostDetection::from_platform(PixiPlatform::from_subdir(
+                host_subdir(),
+            )))
             .with_global_config_source(args.config_source.source())
             .with_closest_package(false)
             .with_search_start(args.workspace_config.workspace_locator_start())
@@ -237,6 +249,9 @@ async fn clean_cache(args: CacheArgs, config: &pixi_config::Config) -> miette::R
     }
     if args.exec {
         dirs.push(config.cache_dir_for(pixi_config::CacheKind::ExecEnvironments)?);
+    }
+    if args.virtual_package_detectors {
+        dirs.push(config.cache_dir_for(pixi_config::CacheKind::VirtualPackageDetectors)?);
     }
     if args.build_backends {
         let cache_dirs = CacheDirs::new(

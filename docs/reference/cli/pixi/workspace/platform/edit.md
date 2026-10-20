@@ -43,8 +43,8 @@ pixi workspace platform edit [OPTIONS] <NAME> [__NAME[=VERSION[=BUILD]]]...
 <br>**aliases**: osx
 - <a id="arg---windows" href="#arg---windows">`--windows <VERSION[=BUILD]>`</a>
 :  Declare a `__win` virtual package at the given Windows version, e.g. `10`. Only valid on win subdirs
-- <a id="arg---remove-virtual-package" href="#arg---remove-virtual-package">`--remove-virtual-package <NAME>`</a>
-:  Remove the named virtual package from this platform. Can be repeated
+- <a id="arg---remove-virtual-package" href="#arg---remove-virtual-package">`--remove-virtual-package <__NAME>`</a>
+:  Remove a virtual package by canonical `__name`. Can be repeated
 <br>May be provided more than once.
 - <a id="arg---clear-virtual-packages" href="#arg---clear-virtual-packages">`--clear-virtual-packages`</a>
 :  Clear all virtual packages before applying any add/upsert operations
