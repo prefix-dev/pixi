@@ -416,6 +416,14 @@ async fn determine_config_write_destination(
     Ok((pixi_config::user_config_write_path(), None))
 }
 
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+enum ConfigEditError {
+    #[error(transparent)]
+    ParseKey(#[from] toml_edit::TomlError),
+    #[error(transparent)]
+    NotATable(#[from] pixi_toml_edit::NotATableError),
+}
+
 /// Alters a specific key in the user configuration file according to the given `mode`.
 ///
 /// Handles reading the existing TOML document (or initializing a new one),
@@ -467,7 +475,7 @@ async fn alter_config(
     };
 
     let repository_consent = if let Some(root) = &repository {
-        let segments = Key::parse(key).into_diagnostic()?;
+        let segments = Key::parse(key).map_err(ConfigEditError::ParseKey)?;
         let is_consent = segments
             .first()
             .is_some_and(|segment| segment.get() == "virtual-package-detectors")
@@ -806,7 +814,7 @@ fn transplant_config_key(
     };
     for spelling in spellings {
         if spelling != target_key {
-            remove_entry(target_table, &spelling).into_diagnostic()?;
+            remove_entry(target_table, &spelling).map_err(ConfigEditError::NotATable)?;
         }
     }
 
