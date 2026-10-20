@@ -1264,6 +1264,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#virtual-package-detectors" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Virtual package detectors
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#managing-platforms-from-the-cli" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -8817,6 +8828,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#virtual-package-detectors" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        Virtual package detectors
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#managing-platforms-from-the-cli" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -9082,6 +9104,15 @@ Adding a platform whose definition already exists under a <em>different</em> nam
 <p>Auto-detection captures your machine exactly, which is usually more specific than your packages actually need.
 After installing, <code>pixi info</code> reports each environment's <strong>Minimum platform</strong> (the virtual-package requirements some resolved dependency really places on the machine), so you can see which ones are safe to drop with <code>pixi workspace platform edit</code>.</p>
 </div>
+<h3 id="virtual-package-detectors">Virtual package detectors<a class="headerlink" href="#virtual-package-detectors" title="Permanent link">#</a></h3>
+<p>Channels can register virtual package detectors: packages that report system capabilities, such as an MPI runtime or a driver installed outside the environment.
+Pixi uses their results to check whether your machine satisfies a platform's declared virtual packages.
+Detectors can extend or replace Pixi's built-in detection.</p>
+<p>Pixi runs detectors when their virtual packages are needed for the current machine, not for foreign target platforms.
+Workspace lock-file solves use the virtual packages declared in the manifest, not detected values.</p>
+<p>Detectors execute code from the channel, so Pixi asks whether to trust them before running them.
+You can save the decision in the <a href="../../reference/pixi_configuration/#virtual-package-detectors">configuration</a>.
+Without a terminal, detectors without a saved decision are skipped.</p>
 <h3 id="managing-platforms-from-the-cli">Managing platforms from the CLI<a class="headerlink" href="#managing-platforms-from-the-cli" title="Permanent link">#</a></h3>
 <p><a href="../../reference/cli/pixi/workspace/platform/"><code>pixi workspace platform</code></a> is the CLI surface for these entries:</p>
 <ul>
