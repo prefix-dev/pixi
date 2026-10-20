@@ -4,8 +4,8 @@ use miette::{IntoDiagnostic, WrapErr};
 use pixi_config;
 use pixi_config::{Config, ConfigError, GlobalConfigSource};
 use pixi_consts::consts;
+use pixi_core::WorkspaceLocator;
 use pixi_core::workspace::WorkspaceLocatorError;
-use pixi_core::{WorkspaceLocator, host::HostDetection};
 use pixi_manifest::toml::TomlDocument;
 use pixi_toml_edit::{insert_array_element, push_array_element, remove_entry, upsert_entry};
 use rattler_conda_types::{ChannelUrl, NamedChannelOrUrl};
@@ -275,8 +275,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
 async fn determine_project_root(common_args: &CommonArgs) -> miette::Result<Option<PathBuf>> {
     let workspace = WorkspaceLocator::default()
-        // Configuration commands must not run channel-provided detectors.
-        .with_host(HostDetection::builtin())
         .with_closest_package(false) // Dont care about the package
         .with_emit_warnings(false) // No reason to emit warnings
         .with_consider_environment(true)
