@@ -274,7 +274,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .workspace()
                 .command_dispatcher_builder(Some(&progress))?
                 .finish();
-            let derived = UpdateContext::builder(workspace.workspace(), dispatcher)?
+            let derived = UpdateContext::builder(workspace.workspace(), dispatcher)
                 .with_lock_file(original_lock_file.clone())
                 .with_no_install(args.no_install_config.no_install || args.dry_run)
                 .finish()

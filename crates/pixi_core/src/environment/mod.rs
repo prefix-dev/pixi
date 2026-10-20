@@ -12,7 +12,7 @@ use pixi_consts::consts;
 use pixi_git::credentials::store_credentials_from_url;
 pub use pixi_install_pypi::{ContinuePyPIPrefixUpdate, on_python_interpreter_change};
 use pixi_manifest::{
-    FeaturesExt, PixiPlatform, PixiPlatformName,
+    EnvironmentName, FeaturesExt, PixiPlatform, PixiPlatformName,
     platform::{VirtualPackageRecords, candidate_subdirs},
 };
 use pixi_progress::await_in_progress;
@@ -41,8 +41,8 @@ use crate::workspace;
 use crate::{
     Workspace,
     lock_file::{
-        LockFileDerivedData, ReinstallPackages, UpdateLockFileOptions, UpdateMode,
-        resolve_lock_platform_for,
+        LockFileDerivedData, ReinstallPackages, UpdateLockFileError, UpdateLockFileOptions,
+        UpdateMode, UpdatePrefixError, resolve_lock_platform_for,
     },
     workspace::{Environment, HasWorkspaceRef, grouped_environment::GroupedEnvironment},
 };
@@ -872,7 +872,7 @@ pub async fn get_update_lock_file_and_prefix<'env>(
     update_lock_file_options: UpdateLockFileOptions,
     reinstall_packages: ReinstallPackages,
     filter: &InstallFilter,
-) -> miette::Result<(LockFileDerivedData<'env>, Prefix)> {
+) -> Result<(LockFileDerivedData<'env>, Prefix), LockFileAndPrefixesError> {
     let (lock_file, prefixes) = get_lock_file_and_prefixes(
         std::slice::from_ref(environment),
         None,
@@ -890,6 +890,32 @@ pub async fn get_update_lock_file_and_prefix<'env>(
             .next()
             .expect("must be at least one prefix"),
     ))
+}
+
+/// An error that can occur while updating the lock file and the prefixes of
+/// a set of environments.
+#[derive(Debug, Error, Diagnostic)]
+pub enum LockFileAndPrefixesError {
+    #[error("no environments provided to install")]
+    NoEnvironments,
+
+    #[error("platform '{platform}' is not part of environment '{environment}'")]
+    PlatformNotInEnvironment {
+        platform: PixiPlatformName,
+        environment: EnvironmentName,
+    },
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    SanityCheck(#[from] SanityCheckError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    UpdateLockFile(#[from] UpdateLockFileError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    UpdatePrefix(#[from] UpdatePrefixError),
 }
 
 /// Chooses how installation obtains lock data.
@@ -916,9 +942,9 @@ pub async fn get_lock_file_and_prefixes<'env>(
     lock_file_source: LockFileSource,
     reinstall_packages: ReinstallPackages,
     filter: &InstallFilter,
-) -> miette::Result<(LockFileDerivedData<'env>, Vec<Prefix>)> {
+) -> Result<(LockFileDerivedData<'env>, Vec<Prefix>), LockFileAndPrefixesError> {
     if environments.is_empty() {
-        return Err(miette::miette!("No environments provided to install."));
+        return Err(LockFileAndPrefixesError::NoEnvironments);
     }
 
     let workspace = environments[0].workspace();
@@ -935,11 +961,10 @@ pub async fn get_lock_file_and_prefixes<'env>(
                 .is_none()
             && let Some(name) = target_platform
         {
-            return Err(miette::miette!(
-                "platform '{}' is not part of environment '{}'",
-                name,
-                env.name(),
-            ));
+            return Err(LockFileAndPrefixesError::PlatformNotInEnvironment {
+                platform: name.clone(),
+                environment: env.name().clone(),
+            });
         }
         if !no_install {
             env.emit_emulation_warning();

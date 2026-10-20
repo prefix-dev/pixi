@@ -46,7 +46,7 @@ pub use exclude_newer::{
     resolve_pypi_exclude_newer,
 };
 pub use feature::{Feature, FeatureName};
-pub use features_ext::FeaturesExt;
+pub use features_ext::{ChannelPriorityCombinationError, FeaturesExt};
 pub use has_features_iter::HasFeaturesIter;
 pub use has_manifest_ref::HasWorkspaceManifest;
 use itertools::Itertools;
