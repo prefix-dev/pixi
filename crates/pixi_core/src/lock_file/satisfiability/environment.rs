@@ -292,7 +292,7 @@ impl PypiWheelTagsCheck {
                                 .iter()
                                 .find(|p| p.subdir() == lock_platform.subdir())
                         })?;
-                    Some((lock_platform.name().to_owned(), pixi_platform, packages))
+                    Some((lock_platform.name().to_string(), pixi_platform, packages))
                 })
                 .flat_map(|(lock_platform_name, pixi_platform, packages)| {
                     packages.map(move |package| {
