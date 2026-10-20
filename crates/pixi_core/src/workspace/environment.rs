@@ -95,6 +95,26 @@ impl<'p> Environment<'p> {
             .unwrap_or(&self.workspace.host)
     }
 
+    /// Host values for reusing this prefix without rerunning its detectors.
+    pub(crate) fn host_for_cached_run(&self) -> std::borrow::Cow<'p, HostDetection> {
+        let Ok(Some(file)) = crate::environment::read_environment_file(&self.dir()) else {
+            return std::borrow::Cow::Borrowed(self.host());
+        };
+        self.host().for_cached_run(
+            &file.detector_virtual_packages,
+            file.resolved_platform
+                .iter()
+                .flat_map(|platform| platform.virtual_packages())
+                .map(|package| &package.name)
+                .chain(
+                    file.minimum_supported_platform
+                        .iter()
+                        .flat_map(|platform| platform.requirements())
+                        .filter_map(|spec| spec.name.as_exact()),
+                ),
+        )
+    }
+
     /// Returns the solve group to which this environment belongs, or `None` if
     /// no solve group was specified.
     pub fn solve_group(&self) -> Option<SolveGroup<'p>> {
@@ -183,8 +203,16 @@ impl<'p> Environment<'p> {
     /// the environment itself declares support for, and return the most
     /// preferred one.
     pub fn best_declared_platform(&self) -> Option<&'p PixiPlatform> {
-        let current = self.host().subdir();
-        let system_virtual_packages = self.host().capabilities();
+        self.best_declared_platform_with_host(self.host())
+    }
+
+    /// Selects the best declared platform using an independently detected host.
+    pub fn best_declared_platform_with_host(
+        &self,
+        host: &HostDetection,
+    ) -> Option<&'p PixiPlatform> {
+        let current = host.subdir();
+        let system_virtual_packages = host.capabilities();
         let env_platforms = self.platforms();
 
         // The candidates are the workspace platforms whose subdir matches this

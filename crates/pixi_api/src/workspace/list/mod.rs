@@ -36,7 +36,7 @@ pub async fn list(
 ) -> miette::Result<Vec<Package>> {
     let environment = workspace.environment_from_name_or_env_var(environment)?;
     workspace
-        .refresh_environment_hosts_for_platform_selection()
+        .refresh_environment_hosts_for_platform_selection(std::slice::from_ref(&environment))
         .await?;
 
     // Held across the solve so the package table is not written over bars that

@@ -8,12 +8,14 @@ use std::{
 
 use async_trait::async_trait;
 use dialoguer::{Select, theme::ColorfulTheme};
-use pixi_config::{DetectorDecision, write_detector_decision, write_repository_detector_decision};
+use pixi_config::{
+    DetectorDecision, consent_origin, write_detector_decision, write_repository_detector_decision,
+};
 use pixi_progress::global_multi_progress;
 use rattler_conda_types::ChannelUrl;
 use shlex::try_quote;
 
-use crate::host::{Consent, ConsentRequest, DetectorConsent, consent_origin};
+use crate::host::{Consent, ConsentRequest, DetectorConsent};
 
 #[derive(Clone, Copy)]
 enum DecisionStore {

@@ -10,12 +10,12 @@
 //!
 //! Detecting costs time (CUDA detection loads a driver), and detectors add
 //! network access and consent, so a [`HostDetector`] prepares detections
-//! asynchronously while the workspace is located. Consumers read the cached
-//! [`HostDetection`] for their solve channels instead of probing the machine.
+//! lazily before a solve, install, or platform choice needs them. Consumers
+//! read the cached [`HostDetection`] for their solve channels.
 
 use std::{
     borrow::Cow,
-    collections::{BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     io::IsTerminal,
     path::Path,
     sync::{Arc, Mutex},
@@ -24,7 +24,7 @@ use std::{
 use crate::workspace::grouped_environment::GroupedEnvironment;
 use async_trait::async_trait;
 use miette::Diagnostic;
-use pixi_config::{CacheKind, Config, DetectorDecision};
+use pixi_config::{CacheKind, Config, DetectorDecision, consent_origin};
 use pixi_manifest::platform::{
     PixiPlatform, PixiPlatformError, candidate_subdirs,
     host::{detect_host, host_subdir, platform_from_detected},
@@ -35,20 +35,21 @@ use pixi_manifest::{
 use pixi_utils::reqwest::build_lazy_reqwest_clients;
 use rattler_conda_types::{
     Channel, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, Subdir,
-    virtual_package_detector::DetectorRegistration,
+    virtual_package_detector::{DetectorRegistration, VirtualPackageName},
 };
 use rattler_networking::LazyClient;
 use rattler_networking::s3_middleware::S3Config;
 use rattler_repodata_gateway::{AcceptedDetectorRegistration, Gateway};
 use rattler_shell::environment::EnvironmentSnapshot;
 use rattler_virtual_package_detectors::{
-    CacheClock, DetectOptions, OverrideError, detect, limits, merge_results,
+    CacheClock, DetectOptions, OverrideError, OverrideValue, detect, limits, merge_results,
+    overrides::parse_override_for,
 };
 use thiserror::Error;
 
 pub use rattler_virtual_package_detectors::{
-    Consent, ConsentRequest, DenyAll, DetectedValue, DetectionSource, DetectorConsent,
-    DetectorResult, SkipReason, SkippedRegistration, WantedNames,
+    Consent, ConsentRequest, DenyAll, DetectedValue, DetectedVersion, DetectionSource,
+    DetectorConsent, DetectorResult, SkipReason, SkippedRegistration, WantedNames,
 };
 
 mod environment;
@@ -58,12 +59,6 @@ pub use interactive::InteractiveConsent;
 
 /// How many detectors are prepared and run at the same time.
 const DETECTOR_CONCURRENCY: usize = 4;
-
-/// The origin under which consent for a registering channel is stored and
-/// shown: its base URL without credentials such as a `/t/<token>` prefix.
-pub fn consent_origin(url: &ChannelUrl) -> ChannelUrl {
-    ChannelUrl::from(rattler_redaction::strip_url_for_serialization(url.as_ref()))
-}
 
 /// Uses the decisions stored in the configuration, asking `fallback` for the
 /// rest. Decisions are looked up by [`consent_origin`].
@@ -150,8 +145,9 @@ pub struct HostDetection {
     failures: Vec<DetectorFailureReport>,
     skipped: Vec<SkippedRegistration>,
     unknown: Vec<String>,
-    /// Whether channel-registered detectors were consulted. Without them,
-    /// every name built-in detection does not report is unknown.
+    /// Recorded detector values used only for cached wheel-tag validation.
+    cached_detector_values: BTreeMap<PackageName, Option<DetectedVersion>>,
+    /// Whether channel-registered detectors were consulted.
     detectors_consulted: bool,
 }
 
@@ -209,6 +205,7 @@ impl HostDetection {
             failures: Vec::new(),
             skipped: Vec::new(),
             unknown: Vec::new(),
+            cached_detector_values: BTreeMap::new(),
             detectors_consulted: false,
         }
     }
@@ -254,18 +251,167 @@ impl HostDetection {
         &self.skipped
     }
 
-    /// Whether this machine's value of the virtual package `name` is unknown:
-    /// its detector has no stored decision and nobody could be asked, or no
-    /// detector was consulted and built-in detection does not report it.
-    /// Checks of an installed environment skip unknown names, so it keeps
-    /// running what an earlier detection installed.
+    /// Whether an installed environment may retain this name's previous value.
+    /// Built-in names require recorded detector provenance; unprobed custom
+    /// names remain unknown. Explicit overrides always take precedence.
     pub fn is_unknown(&self, name: &str) -> bool {
+        if self.results.iter().any(|result| {
+            result.name.as_normalized() == name
+                && matches!(result.source, DetectionSource::Override { .. })
+        }) {
+            return false;
+        }
+        if self
+            .cached_detector_values
+            .keys()
+            .any(|recorded| recorded.as_normalized() == name)
+        {
+            return true;
+        }
+        if matches!(
+            name,
+            "__unix"
+                | "__linux"
+                | "__osx"
+                | "__win"
+                | "__ios"
+                | "__android"
+                | "__glibc"
+                | "__musl"
+                | "__eglibc"
+                | "__cuda"
+                | "__cuda_arch"
+                | "__amdgpu"
+                | "__amdgpu_arch"
+                | "__archspec"
+        ) {
+            return false;
+        }
         self.unknown.iter().any(|unknown| unknown == name)
             || (!self.detectors_consulted
                 && !self
                     .capabilities()
                     .iter()
                     .any(|package| package.name.as_normalized() == name))
+    }
+
+    /// Effective detector values to retain in installed metadata, without origins
+    /// or overrides. `None` records a detector's explicit absence.
+    pub fn detector_virtual_packages(&self) -> BTreeMap<PackageName, Option<DetectedVersion>> {
+        self.results
+            .iter()
+            .filter(|result| matches!(result.source, DetectionSource::Detector { .. }))
+            .map(|result| {
+                (
+                    result.name.clone(),
+                    match &result.value {
+                        DetectedValue::Absent => None,
+                        DetectedValue::Present(value) => Some(value.clone()),
+                    },
+                )
+            })
+            .collect()
+    }
+
+    /// Applies installed provenance and current overrides without running detectors.
+    pub(crate) fn for_cached_run<'a>(
+        &self,
+        detector_values: &'a BTreeMap<PackageName, Option<DetectedVersion>>,
+        required_names: impl IntoIterator<Item = &'a PackageName>,
+    ) -> Cow<'_, Self> {
+        if self.detectors_consulted && self.unknown.is_empty() {
+            return Cow::Borrowed(self);
+        }
+        let mut host = Cow::Borrowed(self);
+        let mut seen = HashSet::new();
+        for name in detector_values.keys().chain(required_names) {
+            if !seen.insert(name)
+                || (self.detectors_consulted
+                    && !self
+                        .unknown
+                        .iter()
+                        .any(|unknown| unknown == name.as_normalized()))
+            {
+                continue;
+            }
+            let Ok(virtual_name) = VirtualPackageName::try_from(name.as_normalized()) else {
+                continue;
+            };
+            let variable = virtual_name.override_variable();
+            match parse_override_for(&virtual_name, &variable, std::env::var_os(&variable)) {
+                Ok(Some(value)) => {
+                    host.to_mut().results.push(DetectorResult {
+                        name: name.clone(),
+                        value: match value {
+                            OverrideValue::Absent => DetectedValue::Absent,
+                            OverrideValue::Present(value) => DetectedValue::Present(value),
+                        },
+                        source: DetectionSource::Override { variable },
+                    });
+                }
+                Ok(None) if detector_values.contains_key(name) => {
+                    let host = host.to_mut();
+                    host.unknown.push(name.as_normalized().to_owned());
+                    host.cached_detector_values
+                        .insert(name.clone(), detector_values[name].clone());
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    host.to_mut().platform = Err(HostUndetected {
+                        message: error.to_string(),
+                    });
+                    return host;
+                }
+            }
+        }
+        if let Cow::Owned(host) = &mut host {
+            if !host.results.is_empty() {
+                host.platform = host.platform().and_then(|platform| {
+                    platform_from_detected(
+                        host.subdir,
+                        merge_results(
+                            platform.solver_virtual_package_records().iter().cloned(),
+                            &host.results,
+                        ),
+                    )
+                    .map_err(|error| HostUndetected {
+                        message: error.to_string(),
+                    })
+                });
+            }
+        }
+        host
+    }
+
+    /// Uses installed values only for unknown detector-provided wheel-tag inputs.
+    /// Python, ABI and architecture validation still runs against the lock.
+    pub(crate) fn platform_for_cached_wheels(
+        &self,
+    ) -> Result<Cow<'_, PixiPlatform>, HostUndetected> {
+        let platform = self.platform()?;
+        if self.cached_detector_values.is_empty() {
+            return Ok(Cow::Borrowed(platform));
+        }
+        let packages = platform
+            .solver_virtual_package_records()
+            .iter()
+            .filter(|package| !self.cached_detector_values.contains_key(&package.name))
+            .cloned()
+            .chain(
+                self.cached_detector_values
+                    .iter()
+                    .filter_map(|(name, value)| {
+                        value
+                            .clone()
+                            .map(|value| value.into_virtual_package(name.clone()))
+                    }),
+            )
+            .collect();
+        platform_from_detected(self.subdir, packages)
+            .map(Cow::Owned)
+            .map_err(|error| HostUndetected {
+                message: error.to_string(),
+            })
     }
 
     /// Marks that channel-registered detectors were consulted, even if none
@@ -684,6 +830,7 @@ impl HostDetector {
             failures,
             skipped: outcome.skipped,
             unknown,
+            cached_detector_values: BTreeMap::new(),
             detectors_consulted: true,
         })
     }
@@ -1036,6 +1183,120 @@ mod tests {
     use crate::Workspace;
 
     use super::*;
+
+    #[test]
+    fn installed_provenance_excludes_override_sources() {
+        let mut host = HostDetection::from_platform(
+            platform_from_detected(Subdir::Linux64, Vec::new()).unwrap(),
+        );
+        host.results = vec![
+            DetectorResult {
+                name: "__cuda".parse().unwrap(),
+                value: DetectedValue::Present(rattler_virtual_package_detectors::DetectedVersion {
+                    version: Version::major(3),
+                    build_string: "0".to_string(),
+                }),
+                source: DetectionSource::Detector {
+                    origin: ChannelUrl::from(
+                        url::Url::parse("https://example.com/channel").unwrap(),
+                    ),
+                    detector: "host-detector".parse().unwrap(),
+                    digest: Default::default(),
+                    from_cache: false,
+                },
+            },
+            DetectorResult {
+                name: "__test_detector_capability".parse().unwrap(),
+                value: DetectedValue::Absent,
+                source: DetectionSource::Override {
+                    variable: "CONDA_OVERRIDE_TEST_DETECTOR_CAPABILITY".to_string(),
+                },
+            },
+        ];
+        assert_eq!(
+            host.detector_virtual_packages(),
+            BTreeMap::from([(
+                "__cuda".parse::<PackageName>().unwrap(),
+                Some(DetectedVersion {
+                    version: Version::major(3),
+                    build_string: "0".to_string(),
+                }),
+            )])
+        );
+    }
+
+    #[test]
+    fn cached_provenance_keeps_detector_replacements_unknown() {
+        for name in ["__cuda", "__glibc", "__test_detector_capability"] {
+            let name: PackageName = name.parse().unwrap();
+            let variable = VirtualPackageName::try_from(name.as_normalized())
+                .unwrap()
+                .override_variable();
+            temp_env::with_var(variable, None::<&str>, || {
+                for present in [false, true] {
+                    let packages = if present {
+                        vec![GenericVirtualPackage {
+                            name: name.clone(),
+                            version: Version::major(1),
+                            build_string: "0".to_string(),
+                        }]
+                    } else {
+                        Vec::new()
+                    };
+                    let host = HostDetection::from_platform(
+                        platform_from_detected(Subdir::Linux64, packages).unwrap(),
+                    );
+                    assert_eq!(
+                        host.is_unknown(name.as_normalized()),
+                        !present && name.as_normalized() == "__test_detector_capability"
+                    );
+                    let names = BTreeMap::from([(name.clone(), None)]);
+                    let cached = host.for_cached_run(&names, []);
+                    assert!(cached.is_unknown(name.as_normalized()));
+                    let consulted = host.with_detectors_consulted();
+                    assert!(
+                        !consulted
+                            .for_cached_run(&names, [])
+                            .is_unknown(name.as_normalized())
+                    );
+                }
+            });
+        }
+    }
+
+    #[test]
+    fn cached_overrides_replace_provenance_including_explicit_absence() {
+        for name in ["__cuda", "__test_detector_capability"] {
+            let name: PackageName = name.parse().unwrap();
+            let variable = VirtualPackageName::try_from(name.as_normalized())
+                .unwrap()
+                .override_variable();
+            let host = HostDetection::from_platform(
+                platform_from_detected(Subdir::Linux64, Vec::new()).unwrap(),
+            );
+            for provenance in [BTreeMap::new(), BTreeMap::from([(name.clone(), None)])] {
+                for (value, present) in [("", false), ("3", true)] {
+                    temp_env::with_var(&variable, Some(value), || {
+                        let cached = host.for_cached_run(&provenance, [&name]);
+                        assert!(!cached.is_unknown(name.as_normalized()));
+                        assert_eq!(
+                            cached.capabilities().iter().any(|package| {
+                                package.name == name && package.version == Version::major(3)
+                            }),
+                            present,
+                        );
+                    });
+                }
+                temp_env::with_var(&variable, Some("3=bad=build"), || {
+                    assert!(
+                        host.for_cached_run(&provenance, [&name])
+                            .platform()
+                            .is_err()
+                    );
+                });
+            }
+        }
+    }
 
     #[tokio::test]
     async fn consent_is_stored_and_looked_up_without_credentials() {

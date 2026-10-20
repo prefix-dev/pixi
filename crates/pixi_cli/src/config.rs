@@ -188,6 +188,17 @@ impl KeyPath {
     pub fn target(&self) -> &str {
         &self.target_key
     }
+
+    fn consent_origin(&self) -> Option<ChannelUrl> {
+        if self.parent_keys != ["virtual-package-detectors", "consent"] {
+            return None;
+        }
+        url::Url::parse(self.target())
+            .ok()
+            .filter(|url| !url.cannot_be_a_base())
+            .map(ChannelUrl::from)
+            .map(|origin| pixi_config::consent_origin(&origin))
+    }
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -446,7 +457,12 @@ async fn alter_config(
     // Edit only the file that is about to be written. Starting from the
     // merged config would bake every inherited setting into it, so the user
     // would silently stop following the layers they inherit from.
-    let mut config = match Config::from_path(&to) {
+    let loaded = if common_args.shared {
+        Config::from_shared_path(&to)
+    } else {
+        Config::from_path(&to)
+    };
+    let mut config = match loaded {
         Ok(config) => config,
         Err(ConfigError::FileNotFound(_)) => Config::default(),
         Err(e) => return Err(e.into()),
@@ -564,7 +580,7 @@ async fn alter_config(
                 ));
             }
         }
-        AlterMode::Unset => unset(&mut toml_doc, key)?,
+        AlterMode::Unset => unset(&mut toml_doc, key, common_args.shared)?,
     }
 
     let contents = toml_doc.to_string();
@@ -593,7 +609,7 @@ async fn alter_config(
 /// - `key` is not a valid key path.
 /// - The specified key does not exist in the document.
 /// - The unset operation leaves the config as invalid.
-fn unset(toml_doc: &mut TomlDocument, key: &str) -> miette::Result<()> {
+fn unset(toml_doc: &mut TomlDocument, key: &str, shared: bool) -> miette::Result<()> {
     let key_path = KeyPath::parse(key)?;
 
     let top_level_table = key_path.parents().is_empty();
@@ -608,14 +624,23 @@ fn unset(toml_doc: &mut TomlDocument, key: &str) -> miette::Result<()> {
             .into_diagnostic()?
     };
 
-    key_spellings(key_path.target())
-        .iter()
-        .find_map(|spelling| remove_entry(parent_table, spelling).ok().flatten())
-        .ok_or_else(|| miette::miette!("Key '{}' not found in configuration file", key))?;
+    let spellings = matching_target_keys(parent_table, &key_path);
+    if spellings.is_empty() {
+        miette::bail!("Key '{}' not found in configuration file", key);
+    }
+    for spelling in spellings {
+        remove_entry(parent_table, &spelling).into_diagnostic()?;
+    }
 
     prune_empty_parents(toml_doc, key_path.parents())?;
 
-    Config::from_toml(&toml_doc.to_string(), None)
+    let contents = toml_doc.to_string();
+    let validation = if shared {
+        Config::keys_not_shared(&contents).map(|_| ())
+    } else {
+        Config::from_toml(&contents, None).map(|_| ())
+    };
+    validation
         .wrap_err_with(|| format!("Unsetting the {key} would leave the config file invalid"))?;
 
     Ok(())
@@ -682,11 +707,16 @@ fn transplant_config_key(
     for parent in key_path.parents() {
         current_item = get_any_spelling(current_item, parent).unwrap_or(&Item::None);
     }
-    current_item = get_any_spelling(current_item, key_path.target()).unwrap_or(&Item::None);
+    let consent_origin = key_path.consent_origin();
+    let serialized_target = consent_origin
+        .as_ref()
+        .map(ChannelUrl::as_str)
+        .unwrap_or_else(|| key_path.target());
+    current_item = get_any_spelling(current_item, serialized_target).unwrap_or(&Item::None);
 
     if current_item.is_none() {
         // fall back into unset
-        match unset(toml_doc, key) {
+        match unset(toml_doc, key, shared) {
             Ok(()) => return Ok(false),
             Err(e) if e.to_string().contains("not found in configuration file") => {
                 return Ok(false);
@@ -757,11 +787,30 @@ fn transplant_config_key(
     if let Some(alias) = legacy_alias(&key_path.target_key) {
         let _ = remove_entry(target_table, &alias).into_diagnostic()?;
     }
-    let target_key = key_spellings(key_path.target())
-        .into_iter()
-        .find(|spelling| target_table.get(spelling).is_some())
-        .or_else(|| canonical_channel_url(key_path.target()))
-        .unwrap_or_else(|| key_path.target().to_string());
+    let spellings = matching_target_keys(target_table, &key_path);
+    let target_key = if let Some(origin) = &consent_origin {
+        spellings
+            .iter()
+            .find(|key| {
+                url::Url::parse(key)
+                    .ok()
+                    .map(ChannelUrl::from)
+                    .is_some_and(|channel| channel == *origin)
+            })
+            .cloned()
+            .unwrap_or_else(|| origin.as_str().trim_end_matches('/').to_string())
+    } else {
+        spellings
+            .first()
+            .cloned()
+            .or_else(|| canonical_channel_url(key_path.target()))
+            .unwrap_or_else(|| key_path.target().to_string())
+    };
+    for spelling in spellings {
+        if spelling != target_key {
+            remove_entry(target_table, &spelling).into_diagnostic()?;
+        }
+    }
 
     if let Some(value) = current_item.as_value() {
         upsert_entry(target_table, &target_key, value.clone()).into_diagnostic()?;
@@ -772,6 +821,27 @@ fn transplant_config_key(
     }
 
     Ok(true)
+}
+
+fn matching_target_keys(item: &Item, key_path: &KeyPath) -> Vec<String> {
+    if let Some(origin) = key_path.consent_origin() {
+        return item
+            .as_table_like()
+            .into_iter()
+            .flat_map(|table| table.iter())
+            .filter_map(|(key, _)| {
+                url::Url::parse(key)
+                    .ok()
+                    .map(ChannelUrl::from)
+                    .filter(|channel| pixi_config::consent_origin(channel) == origin)
+                    .map(|_| key.to_string())
+            })
+            .collect();
+    }
+    key_spellings(key_path.target())
+        .into_iter()
+        .filter(|spelling| item.get(spelling).is_some())
+        .collect()
 }
 
 /// Looks `segment` up in `item` under any of its spellings.
@@ -863,11 +933,16 @@ fn partial_config(config: &Config, key: &str) -> miette::Result<JsonValue> {
     let mut value: JsonValue =
         toml_edit::de::from_str(&toml_edit::ser::to_string(config).into_diagnostic()?)
             .into_diagnostic()?;
+    let consent_origin = key_path.consent_origin();
+    let lookup_target = consent_origin
+        .as_ref()
+        .map(ChannelUrl::as_str)
+        .unwrap_or_else(|| key_path.target());
     for segment in key_path
         .parent_keys
         .iter()
         .map(String::as_str)
-        .chain(once(key_path.target()))
+        .chain(once(lookup_target))
     {
         match value.get_mut(segment) {
             Some(child) => value = child.take(),
@@ -954,6 +1029,92 @@ mod tests {
         let result = execute(args).await;
 
         result.expect("The subcommand execution failed");
+    }
+
+    #[tokio::test]
+    async fn consent_revocation_removes_equivalent_origins() {
+        let original = concat!(
+            "[virtual-package-detectors.consent]\n",
+            "\"https://prefix.dev/channel\" = \"allow\"\n",
+            "\"https://prefix.dev/channel/\" = \"allow\"\n",
+            "\"https://user:secret@prefix.dev/t/token/channel\" = \"allow\"\n",
+            "\"https://prefix.dev/other\" = \"allow\"\n",
+        );
+        let origin = ChannelUrl::from(url::Url::parse("https://prefix.dev/channel").unwrap());
+        for mode in [AlterMode::Set, AlterMode::Unset] {
+            let context = TestContext::setup(Some(original));
+            let expected = matches!(mode, AlterMode::Set).then_some(DetectorDecision::Deny);
+            alter_config(
+                &context.common_args,
+                "virtual-package-detectors.consent.\"https://prefix.dev/channel\"",
+                expected.map(|_| "deny".to_string()),
+                mode,
+            )
+            .await
+            .unwrap();
+            let config = Config::from_path(&context.config_path).unwrap();
+            assert_eq!(config.virtual_package_detectors.consent(&origin), expected);
+            let other = ChannelUrl::from(url::Url::parse("https://prefix.dev/other").unwrap());
+            assert_eq!(
+                config.virtual_package_detectors.consent(&other),
+                Some(DetectorDecision::Allow)
+            );
+            assert!(!context.read_config().contains("secret"));
+        }
+    }
+
+    #[tokio::test]
+    async fn authenticated_consent_keys_are_saved_without_credentials() {
+        let context = TestContext::setup(None);
+        alter_config(
+            &context.common_args,
+            "virtual-package-detectors.consent.\"https://user:secret@prefix.dev/t/token/channel\"",
+            Some("deny".to_string()),
+            AlterMode::Set,
+        )
+        .await
+        .unwrap();
+        let config = Config::from_path(&context.config_path).unwrap();
+        let origin = ChannelUrl::from(url::Url::parse("https://prefix.dev/channel").unwrap());
+        assert_eq!(
+            config.virtual_package_detectors.consent(&origin),
+            Some(DetectorDecision::Deny)
+        );
+        assert!(!context.read_config().contains("secret"));
+        assert!(!context.read_config().contains("/t/token/"));
+    }
+
+    #[tokio::test]
+    async fn shared_edits_ignore_foreign_value_types() {
+        let mut context = TestContext::setup(Some(
+            "shell = \"foreign-tool-setting\"\ntls-no-verify = false\n",
+        ));
+        context.common_args.shared = true;
+        alter_config(
+            &context.common_args,
+            "tls-no-verify",
+            Some("true".to_string()),
+            AlterMode::Set,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            Config::from_shared_path(&context.config_path)
+                .unwrap()
+                .tls_no_verify,
+            Some(true)
+        );
+        alter_config(
+            &context.common_args,
+            "tls-no-verify",
+            None,
+            AlterMode::Unset,
+        )
+        .await
+        .unwrap();
+        let document = context.read_config().parse::<DocumentMut>().unwrap();
+        assert_eq!(document["shell"].as_str(), Some("foreign-tool-setting"));
+        assert!(document.get("tls-no-verify").is_none());
     }
 
     #[tokio::test]

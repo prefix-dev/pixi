@@ -567,8 +567,8 @@ One example for this could be a detector reporting which [MPI](https://en.wikipe
 That also means, you run external and potentially untrusted code shortly before installing an environment.
 This is why Pixi asks whether to trust detectors coming from a certain channel.
 Additionally, it allows you to store your decision in your configuration, so you don't have to answer the question with every Pixi command.
-It applies the decision only to the current command without writing configuration, so Pixi asks again next time.
-See for example this entry how such an configuration might look like:
+If you choose not to save it, the decision applies only to the current command, so Pixi asks again next time.
+For example, a saved decision looks like this:
 
 ```toml title="config.toml"
 [virtual-package-detectors]
@@ -579,6 +579,11 @@ timeout-seconds = 30
 [virtual-package-detectors.consent]
 "https://conda.anaconda.org/conda-forge" = "allow"
 ```
+
+Consent is matched against the channel's base URL without credentials or authentication tokens.
+Equivalent URLs, including spellings with or without a trailing slash, share one decision.
+Across configuration layers, a `deny` takes precedence over an `allow`.
+Setting or unsetting a channel's consent key updates all equivalent spellings in the selected file; newly saved keys do not contain credentials.
 
 ## Experimental
 

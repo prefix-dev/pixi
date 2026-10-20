@@ -88,7 +88,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .environment_from_name_or_env_var(args.environment)
         .wrap_err("Environment not found")?;
     workspace
-        .refresh_environment_hosts_for_platform_selection()
+        .refresh_environment_hosts_for_platform_selection(std::slice::from_ref(&environment))
         .await?;
 
     let lock_file_usage = script_lock_file_usage(

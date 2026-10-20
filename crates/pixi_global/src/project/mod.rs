@@ -794,7 +794,7 @@ impl Project {
             .map(|channel| channel.base_url.clone())
             .collect::<Vec<_>>();
 
-        let build_environment = BuildEnvironment::simple(platform, solve_virtual_packages.clone());
+        let build_environment = BuildEnvironment::simple(platform, solve_virtual_packages.to_vec());
 
         // Derive the `c_stdlib` build variants for source builds, mirroring what
         // a workspace does, so `stdlib('c')` recipes pin a deployment target that
@@ -922,8 +922,7 @@ impl Project {
         self.write_environment_file(
             env_name,
             &prefix,
-            platform,
-            solve_virtual_packages,
+            &host,
             &resolved_depends,
             source_fingerprints_for_environment(environment),
         )?;
@@ -939,15 +938,14 @@ impl Project {
         &self,
         env_name: &EnvironmentName,
         prefix: &Prefix,
-        platform: Subdir,
-        resolved_virtual_packages: Vec<GenericVirtualPackage>,
+        host: &HostDetection,
         resolved_depends: &[String],
         source_fingerprints: BTreeMap<String, u64>,
     ) -> miette::Result<()> {
-        let resolved_platform = PlatformData::new(platform, resolved_virtual_packages);
+        let resolved_platform = PlatformData::new(host.subdir(), host.capabilities().into_owned());
         let depends: Vec<&str> = resolved_depends.iter().map(String::as_str).collect();
         let minimum_supported_platform =
-            RequiredPlatform::new(platform, required_virtual_package_specs(&depends));
+            RequiredPlatform::new(host.subdir(), required_virtual_package_specs(&depends));
 
         write_environment_file(
             prefix.root(),
@@ -960,6 +958,7 @@ impl Project {
                 environment_lock_file_hash: LockedEnvironmentHash::invalid(),
                 resolved_platform: Some(resolved_platform),
                 minimum_supported_platform: Some(minimum_supported_platform),
+                detector_virtual_packages: host.detector_virtual_packages(),
                 source_fingerprints,
             },
         )?;

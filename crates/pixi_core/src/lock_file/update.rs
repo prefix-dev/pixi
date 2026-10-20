@@ -1098,7 +1098,7 @@ impl<'p> LockFileDerivedData<'p> {
                         &self.lock_file,
                         platform,
                         environment.name(),
-                        environment.host(),
+                        &environment.host_for_cached_run(),
                         UnknownNames::Unchecked,
                     )
                     .map_err(|source| {
@@ -1144,11 +1144,16 @@ impl<'p> LockFileDerivedData<'p> {
             } else {
                 UnknownNames::Absent
             };
+            let host = if cached.is_some() {
+                environment.host_for_cached_run()
+            } else {
+                std::borrow::Cow::Borrowed(environment.host())
+            };
             validate_system_meets_environment_requirements(
                 &self.lock_file,
                 selected_platform,
                 environment.name(),
-                environment.host(),
+                &host,
                 unknown,
             )
             .map_err(|source| UpdatePrefixError::RequirementsUnmet {
@@ -1186,6 +1191,7 @@ impl<'p> LockFileDerivedData<'p> {
                 environment_lock_file_hash: hash,
                 resolved_platform,
                 minimum_supported_platform,
+                detector_virtual_packages: environment.host().detector_virtual_packages(),
                 source_fingerprints: Default::default(),
             },
         )?;

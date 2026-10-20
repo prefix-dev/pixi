@@ -22,10 +22,11 @@ use pixi_spec::{GitSpec, PixiSpec};
 use pixi_utils::EnvironmentFingerprint;
 use pixi_utils::{prefix::Prefix, rlimit::try_increase_rlimit_to_sensible};
 use rattler_conda_types::{
-    GenericVirtualPackage, MatchSpec, PackageNameMatcher, ParseStrictness, StringMatcher, Subdir,
-    Version, VersionSpec, version_spec::RangeOperator,
+    GenericVirtualPackage, MatchSpec, PackageName, PackageNameMatcher, ParseStrictness,
+    StringMatcher, Subdir, Version, VersionSpec, version_spec::RangeOperator,
 };
 use rattler_lock::{LockFile, LockedPackage};
+use rattler_virtual_package_detectors::DetectedVersion;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use std::{
@@ -467,6 +468,11 @@ impl RequiredPlatform {
         &self.requirements
     }
 
+    /// Keeps only requirements whose values are known for cached-run validation.
+    pub(crate) fn retain_requirements(&mut self, keep: impl FnMut(&MatchSpec) -> bool) {
+        self.requirements.retain(keep);
+    }
+
     /// The requirements as conda match-spec strings: how they are written to the
     /// marker file and shown by `pixi info`, and the only form that round-trips.
     pub fn requirement_strings(&self) -> Vec<String> {
@@ -578,6 +584,10 @@ pub struct EnvironmentFile {
     /// versions.
     #[serde(default)]
     pub minimum_supported_platform: Option<RequiredPlatform>,
+    /// Installed detector values, with `None` recording explicit absence.
+    /// Older markers record no provenance; built-in values remain authoritative.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub detector_virtual_packages: BTreeMap<PackageName, Option<DetectedVersion>>,
     /// Fingerprints of the manifest's source dependencies at install time,
     /// keyed by package name: a hash of the source spec plus any inline
     /// package definition. Only written by `pixi global`, which has no lock
@@ -923,7 +933,7 @@ pub async fn get_lock_file_and_prefixes<'env>(
 
     let workspace = environments[0].workspace();
     workspace
-        .refresh_environment_hosts_for_platform_selection()
+        .refresh_environment_hosts_for_platform_selection(environments)
         .await?;
 
     let no_install = match &lock_file_source {
@@ -1044,6 +1054,36 @@ mod tests {
         let parsed: EnvironmentFile = serde_json::from_str(json).expect("legacy file parses");
         assert!(parsed.resolved_platform.is_none());
         assert!(parsed.minimum_supported_platform.is_none());
+        assert!(parsed.detector_virtual_packages.is_empty());
+    }
+
+    #[test]
+    fn environment_file_roundtrips_detector_values_and_absence() {
+        let file = EnvironmentFile {
+            manifest_path: PathBuf::from("/ws/pixi.toml"),
+            environment_name: "default".to_string(),
+            pixi_version: "test".to_string(),
+            environment_lock_file_hash: LockedEnvironmentHash::invalid(),
+            resolved_platform: None,
+            minimum_supported_platform: None,
+            detector_virtual_packages: BTreeMap::from([
+                (
+                    "__cuda".parse().unwrap(),
+                    Some(DetectedVersion {
+                        version: Version::major(3),
+                        build_string: "0".to_string(),
+                    }),
+                ),
+                ("__test_missing".parse().unwrap(), None),
+            ]),
+            source_fingerprints: BTreeMap::new(),
+        };
+        let serialized = serde_json::to_string(&file).unwrap();
+        let restored: EnvironmentFile = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(
+            restored.detector_virtual_packages,
+            file.detector_virtual_packages
+        );
     }
 
     /// A linux-64 lock environment with no packages, so the quick-validate

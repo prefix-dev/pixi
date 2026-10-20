@@ -20,7 +20,7 @@ pub use rattler_config::locations::{
 
 mod detector_decisions;
 pub use detector_decisions::{
-    DetectorConfigError, repository_detector_config_path, write_detector_decision,
+    DetectorConfigError, consent_origin, repository_detector_config_path, write_detector_decision,
     write_repository_detector_decision,
 };
 use rattler_networking::s3_middleware;
@@ -1428,7 +1428,7 @@ impl From<CommonConfig> for Config {
             allow_symbolic_links: common.allow_symbolic_links,
             allow_hard_links: common.allow_hard_links,
             allow_ref_links: common.allow_ref_links,
-            virtual_package_detectors: common.virtual_package_detectors,
+            virtual_package_detectors: normalize_detector_consent(common.virtual_package_detectors),
             ..Default::default()
         }
     }
@@ -1642,17 +1642,37 @@ pub use rattler_config::config::virtual_package_detectors::{
 /// repository configuration can therefore authorize detectors, but never
 /// override a user's explicit refusal.
 fn merge_virtual_package_detectors(
-    base: VirtualPackageDetectorsConfig,
+    mut base: VirtualPackageDetectorsConfig,
     other: &VirtualPackageDetectorsConfig,
 ) -> VirtualPackageDetectorsConfig {
-    let mut merged = rattler_config::config::Config::merge_config(base.clone(), other)
-        .expect("VirtualPackageDetectorsConfig::merge_config is infallible");
-    for (origin, decision) in &base.consent {
+    base = normalize_detector_consent(base);
+    base.timeout_seconds = other.timeout_seconds.or(base.timeout_seconds);
+    for (origin, decision) in &other.consent {
+        let entry = base
+            .consent
+            .entry(consent_origin(origin))
+            .or_insert(*decision);
         if *decision == DetectorDecision::Deny {
-            merged.set_consent(origin.clone(), DetectorDecision::Deny);
+            *entry = DetectorDecision::Deny;
         }
     }
-    merged
+    base
+}
+
+fn normalize_detector_consent(
+    mut config: VirtualPackageDetectorsConfig,
+) -> VirtualPackageDetectorsConfig {
+    config.consent = config.consent.into_iter().fold(
+        indexmap::IndexMap::new(),
+        |mut consent, (origin, decision)| {
+            let entry = consent.entry(consent_origin(&origin)).or_insert(decision);
+            if decision == DetectorDecision::Deny {
+                *entry = DetectorDecision::Deny;
+            }
+            consent
+        },
+    );
+    config
 }
 
 // `BuildConfig` and `PackageFormatAndCompression` now live in
@@ -1782,6 +1802,8 @@ impl Config {
         let mut config: Config = serde_ignored::deserialize(de, |path| {
             unused_keys.insert(path.to_string());
         })?;
+        config.virtual_package_detectors =
+            normalize_detector_consent(config.virtual_package_detectors);
 
         fn create_deprecation_warning(old: &str, new: &str, source_path: Option<&Path>) {
             let msg = format!(
@@ -2815,7 +2837,7 @@ impl Config {
                 None => VirtualPackageDetectorsConfig::default(),
             };
             rattler_config::config::Config::validate(&detectors).map_err(invalid_value(key))?;
-            self.virtual_package_detectors = detectors;
+            self.virtual_package_detectors = normalize_detector_consent(detectors);
             return Ok(());
         }
         let Some(subkey) = key.strip_prefix("virtual-package-detectors.") else {
@@ -2840,6 +2862,8 @@ impl Config {
                 Some(value) => serde_json::de::from_str(&value).map_err(invalid_value(key))?,
                 None => Default::default(),
             };
+            self.virtual_package_detectors =
+                normalize_detector_consent(std::mem::take(&mut self.virtual_package_detectors));
             return Ok(());
         }
         let Some(consent_key) = subkey.strip_prefix("consent.") else {
@@ -2852,6 +2876,7 @@ impl Config {
             .and_then(|origin| Url::parse(origin).ok())
             .filter(|url| !url.cannot_be_a_base())
             .map(ChannelUrl::from)
+            .map(|origin| consent_origin(&origin))
             .ok_or_else(|| {
                 SetConfigError::DetectorConsent(
                     "the consent origin must be a channel URL, quoted when it contains dots: \
@@ -3590,6 +3615,35 @@ UNUSED = "unused"
         assert!(Config::keys_not_shared(shared).unwrap().is_empty());
         let not_shared = Config::keys_not_shared("[shell]\nchange-ps1 = false\n").unwrap();
         assert_eq!(not_shared, ["shell"]);
+    }
+
+    #[test]
+    fn authenticated_detector_denials_survive_loading_and_merging() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("config.toml");
+        fs_err::write(
+            &path,
+            "[virtual-package-detectors.consent]\n\
+             \"https://user:secret@prefix.dev/t/token/channel\" = \"deny\"\n",
+        )
+        .unwrap();
+        let (repository, _) = Config::from_toml(
+            "[virtual-package-detectors.consent]\n\"https://prefix.dev/channel\" = \"allow\"\n",
+            None,
+        )
+        .unwrap();
+        let origin = ChannelUrl::from(Url::parse("https://prefix.dev/channel").unwrap());
+        for user in [
+            Config::from_path(&path).unwrap(),
+            Config::from_shared_path(&path).unwrap(),
+        ] {
+            assert_eq!(
+                user.merge_config(repository.clone())
+                    .virtual_package_detectors
+                    .consent(&origin),
+                Some(DetectorDecision::Deny)
+            );
+        }
     }
 
     #[test]

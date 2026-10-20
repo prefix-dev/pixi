@@ -371,9 +371,15 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
     // Sanity check of prefix location
     sanity_check_workspace(&workspace).await?;
 
-    workspace
-        .refresh_environment_hosts_for_platform_selection()
-        .await?;
+    if let Some(environment) = &explicit_environment {
+        workspace
+            .refresh_environment_hosts_for_platform_selection(std::slice::from_ref(environment))
+            .await?;
+    } else {
+        workspace
+            .refresh_environment_hosts_for_platform_selection(&workspace.environments())
+            .await?;
+    }
 
     // `--platform` pins which declared platform the environment is installed
     // and activated for. Without it we auto-upgrade to the platform the

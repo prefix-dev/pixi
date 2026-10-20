@@ -436,7 +436,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .await?;
     let environment = workspace.environment_from_name_or_env_var(args.environment)?;
     workspace
-        .refresh_environment_hosts_for_platform_selection()
+        .refresh_environment_hosts_for_platform_selection(std::slice::from_ref(&environment))
         .await?;
     let workspace_platforms = (&workspace)
         .workspace_manifest()

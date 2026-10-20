@@ -790,20 +790,21 @@ impl Workspace {
         }
     }
 
-    /// Detects hosts when selecting a platform depends on it: when an
-    /// environment that is not installed yet has a platform that declares
+    /// Detects hosts when selecting a platform depends on it: when a
+    /// candidate environment that is not installed yet has a platform that declares
     /// virtual packages beyond its subdir's defaults. Otherwise the built-in
     /// host, or the installed platform, selects the platform without any
     /// detection.
     pub async fn refresh_environment_hosts_for_platform_selection(
         &self,
+        environments: &[Environment<'_>],
     ) -> Result<(), HostProbeError> {
-        for environment in self.environments() {
+        for environment in environments {
             if environment.installed_resolved_platform().is_some() {
                 continue;
             }
             let scope = HostScope::for_environment(
-                &grouped_environment::GroupedEnvironment::from(environment),
+                &grouped_environment::GroupedEnvironment::from(environment.clone()),
             )?;
             if scope.declares_virtual_packages() {
                 return self.refresh_environment_hosts().await;
@@ -874,12 +875,21 @@ impl Workspace {
         let channels = grouped_environment::GroupedEnvironment::from(self.default_environment())
             .channel_urls(&self.channel_config())
             .map_err(HostProbeError::Channel)?;
+        self.detect_host_with_all_detectors_for_channels(&channels)
+            .await
+    }
+
+    /// Probes every consented detector registered by the supplied effective channels.
+    pub async fn detect_host_with_all_detectors_for_channels(
+        &self,
+        channels: &[ChannelUrl],
+    ) -> Result<HostDetection, HostProbeError> {
         let consent = self
             .detector_consent
             .clone()
             .unwrap_or_else(|| Arc::new(DenyAll));
         let detector = self.host_detector(consent)?;
-        Ok(detector.detect(&channels, WantedNames::All).await?)
+        Ok(detector.detect(channels, WantedNames::All).await?)
     }
 
     pub fn env_vars(&self) -> &HashMap<EnvironmentName, EnvironmentVars> {

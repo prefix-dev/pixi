@@ -13,6 +13,11 @@ use toml_edit::{DocumentMut, Item, Table, TableLike, value};
 
 use crate::DetectorDecision;
 
+/// The registration channel's base URL without embedded credentials or tokens.
+pub fn consent_origin(url: &ChannelUrl) -> ChannelUrl {
+    ChannelUrl::from(rattler_redaction::strip_url_for_serialization(url.as_ref()))
+}
+
 /// Failure to validate or persist a channel-wide detector decision.
 #[derive(Debug, Error, Diagnostic)]
 pub enum DetectorConfigError {
@@ -108,15 +113,28 @@ pub fn write_detector_decision(
                 segment,
             })?;
     }
-    let canonical = canonical_channel(origin);
-    let existing = table.iter().find_map(|(key, _)| {
-        url::Url::parse(key)
-            .ok()
-            .map(ChannelUrl::from)
-            .filter(|channel| channel == origin)
-            .map(|_| key.to_string())
-    });
-    let key = existing.as_deref().unwrap_or(&canonical);
+    let origin = consent_origin(origin);
+    let canonical = canonical_channel(&origin);
+    let existing: Vec<String> = table
+        .iter()
+        .filter_map(|(key, _)| {
+            url::Url::parse(key)
+                .ok()
+                .map(ChannelUrl::from)
+                .filter(|channel| consent_origin(channel) == origin)
+                .map(|_| key.to_string())
+        })
+        .collect();
+    let key = existing
+        .iter()
+        .find(|key| {
+            url::Url::parse(key)
+                .ok()
+                .map(ChannelUrl::from)
+                .is_some_and(|channel| channel == origin)
+        })
+        .map(String::as_str)
+        .unwrap_or(&canonical);
     if table.get(key).is_some_and(|item| item.as_str().is_none()) {
         return Err(DetectorConfigError::InvalidConsent {
             key: key.to_owned(),
@@ -130,6 +148,11 @@ pub fn write_detector_decision(
         && let Some(next) = replacement.as_value_mut()
     {
         *next.decor_mut() = previous.decor().clone();
+    }
+    for spelling in &existing {
+        if spelling != key {
+            table.remove(spelling);
+        }
     }
     table.insert(key, replacement);
     if let Some(parent) = path.parent() {
@@ -287,6 +310,29 @@ mod tests {
                 .consent(&origin()),
             Some(DetectorDecision::Deny)
         );
+    }
+
+    #[test]
+    fn decisions_replace_all_equivalent_origin_spellings() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("config.toml");
+        fs_err::write(
+            &path,
+            "[virtual-package-detectors.consent]\n\
+             \"https://prefix.dev/conda-forge\" = \"allow\"\n\
+             \"https://prefix.dev/conda-forge/\" = \"allow\"\n\
+             \"https://user:secret@prefix.dev/t/token/conda-forge\" = \"allow\"\n",
+        )
+        .unwrap();
+        write_detector_decision(&path, &origin(), DetectorDecision::Deny).unwrap();
+        assert_eq!(
+            Config::from_path(&path)
+                .unwrap()
+                .virtual_package_detectors
+                .consent(&origin()),
+            Some(DetectorDecision::Deny)
+        );
+        assert!(!fs_err::read_to_string(&path).unwrap().contains("secret"));
     }
 
     #[test]

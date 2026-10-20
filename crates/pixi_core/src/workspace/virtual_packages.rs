@@ -73,11 +73,16 @@ pub fn verify_current_platform_can_run_environment(
             } else {
                 UnknownNames::Absent
             };
+            let host = if unknown == UnknownNames::Unchecked {
+                environment.host_for_cached_run()
+            } else {
+                Cow::Borrowed(environment.host())
+            };
             validate_system_meets_environment_requirements(
                 lock_file,
                 current_platform,
                 environment.name(),
-                environment.host(),
+                &host,
                 unknown,
             )?;
         }
@@ -118,60 +123,53 @@ pub fn minimum_compatible_declared_platform<'p>(
     environment: &Environment<'p>,
     lock_file: &LockFile,
 ) -> Result<&'p PixiPlatform, Vec<MatchSpec>> {
-    let host = environment.host();
+    let env_platform_names = environment.platforms();
+    let installed_platform = environment
+        .installed_resolved_platform()
+        .filter(|platform| env_platform_names.contains(platform.name()));
+    let installed = installed_platform.is_some();
+    let host = if installed {
+        environment.host_for_cached_run()
+    } else {
+        Cow::Borrowed(environment.host())
+    };
     let current = host.subdir();
     let system_virtual_packages = host.capabilities();
-    let candidate_subdirs = candidate_subdirs(current);
-    let installed = environment.installed_resolved_platform().is_some();
-
     let manifest = environment.workspace_manifest();
-    let env_platform_names = environment.platforms();
-    // Workspace declaration order, so ties between declared platforms that
-    // share a subdir resolve deterministically.
-    let declared_platforms: Vec<&PixiPlatform> = manifest
-        .workspace
-        .platforms
-        .iter()
-        .filter(|platform| env_platform_names.contains(platform.name()))
-        .collect();
-    let required =
-        compute_required_virtual_package_specs(lock_file, environment.name(), &declared_platforms);
-
     let mut unmet: Option<Vec<MatchSpec>> = None;
-    for subdir in &candidate_subdirs {
-        // A subdir with no resolved packages requires no virtual packages, so
-        // the machine trivially satisfies it -- e.g. an empty environment whose
-        // only content is tasks still runs under an unsatisfiable requirement.
-        let unsatisfied = required
-            .get(subdir)
-            .map(|specs| {
-                // An installed environment keeps running where a value is unknown.
-                let known = specs
-                    .iter()
-                    .filter(|spec| {
-                        !installed
-                            || spec
-                                .name
-                                .as_exact()
-                                .is_none_or(|name| !host.is_unknown(name.as_normalized()))
-                    })
-                    .cloned()
-                    .collect::<Vec<_>>();
-                unmet_requirements(&known, &system_virtual_packages)
-            })
-            .unwrap_or_default();
-        if unsatisfied.is_empty() {
-            if let Some(declared) = declared_platforms
-                .iter()
-                .find(|declared| declared.subdir() == *subdir)
-            {
+    for subdir in candidate_subdirs(current) {
+        for declared in manifest.workspace.platforms.iter().filter(|platform| {
+            platform.subdir() == subdir
+                && env_platform_names.contains(platform.name())
+                && installed_platform.is_none_or(|installed| installed.name() == platform.name())
+        }) {
+            // Platform aliases sharing a subdir can select different packages.
+            // Their requirements must not be combined into one impossible floor.
+            let required =
+                compute_required_virtual_package_specs(lock_file, environment.name(), &[declared]);
+            let unsatisfied = required
+                .get(&subdir)
+                .map(|specs| {
+                    let known = specs
+                        .iter()
+                        .filter(|spec| {
+                            !installed
+                                || spec
+                                    .name
+                                    .as_exact()
+                                    .is_none_or(|name| !host.is_unknown(name.as_normalized()))
+                        })
+                        .cloned()
+                        .collect::<Vec<_>>();
+                    unmet_requirements(&known, &system_virtual_packages)
+                })
+                .unwrap_or_default();
+            if unsatisfied.is_empty() {
                 return Ok(declared);
             }
-            continue;
+            unmet.get_or_insert(unsatisfied);
         }
-        unmet.get_or_insert(unsatisfied);
     }
-
     Err(unmet.unwrap_or_default())
 }
 
@@ -183,6 +181,8 @@ enum RunPlatformFailure {
     UnmetRequirements(Vec<MatchSpec>),
     /// The environment was installed for a subdir, which the machine cannot run.
     UnrunnableSubdir(Subdir),
+    /// Detection or an explicit override could not be interpreted.
+    Detection(crate::host::HostUndetected),
 }
 
 /// The platform the environment was installed for cannot run the installed
@@ -202,6 +202,7 @@ impl Diagnostic for RunPlatformUnsupportedError {
     /// Generate a good help text for the `RunPlatformUnsupportedError`
     fn help(&self) -> Option<Box<dyn Display + '_>> {
         match &self.failure {
+            RunPlatformFailure::Detection(error) => Some(Box::new(error)),
             RunPlatformFailure::UnrunnableSubdir(subdir) => Some(Box::new(format!(
                 "It was installed for subdir '{subdir}', which this machine cannot run. \
                  Reinstall for this machine with 'pixi install'."
@@ -258,7 +259,7 @@ fn classify_run_platform(
     let meets_resolved = base_subdirs.contains(&resolved.subdir()) && unmet_resolved.is_empty();
     let meets_minimum = base_subdirs.contains(&minimum.subdir()) && unmet_minimum.is_empty();
 
-    if meets_resolved {
+    if meets_resolved && meets_minimum {
         RunPlatformVerdict::Compatible
     } else if meets_minimum {
         RunPlatformVerdict::OnlyMinimum(unmet_resolved)
@@ -420,7 +421,7 @@ pub fn verify_run_platform(
         return Ok(());
     }
 
-    let (Some(resolved), Some(minimum)) = environment.installed_platforms() else {
+    let (Some(mut resolved), Some(mut minimum)) = environment.installed_platforms() else {
         // No marker (older pixi or not installed) -- nothing to validate.
         return Ok(());
     };
@@ -441,20 +442,27 @@ pub fn verify_run_platform(
         }
         // Auto-detected machine: its real virtual packages, and the subdirs it
         // can run (current subdir plus architecture fallbacks).
-        // Names whose value is unknown take the value the environment was
-        // installed with, so they are not checked.
+        // Recorded detector names remain unchecked unless explicitly overridden.
         None => {
-            let host = environment.host();
+            let host = environment.host_for_cached_run();
+            host.platform()
+                .map_err(|error| RunPlatformUnsupportedError {
+                    environment: environment.name().clone(),
+                    platform: PixiPlatformName::from(host.subdir()),
+                    subdir: host.subdir(),
+                    failure: RunPlatformFailure::Detection(error),
+                })?;
             let current = host.subdir();
             let subdirs = candidate_subdirs(current);
-            let mut capabilities = host.capabilities().into_owned();
-            capabilities.extend(
-                resolved
-                    .virtual_packages()
-                    .iter()
-                    .filter(|package| host.is_unknown(package.name.as_normalized()))
-                    .cloned(),
-            );
+            resolved
+                .virtual_packages
+                .retain(|package| !host.is_unknown(package.name.as_normalized()));
+            minimum.retain_requirements(|spec| {
+                spec.name
+                    .as_exact()
+                    .is_none_or(|name| !host.is_unknown(name.as_normalized()))
+            });
+            let capabilities = host.capabilities().into_owned();
             (
                 subdirs,
                 Cow::Owned(capabilities),
@@ -567,9 +575,9 @@ pub(crate) fn environment_has_dependencies_for_platform(
 ///   require (computed from the lock file);
 /// - and is unsupported when it meets neither.
 ///
-/// Unlike run-time validation, this never consults the `conda-meta/pixi`
-/// marker: the marker records the platform a *previous* install resolved for,
-/// which goes stale when the manifest changes.
+/// Requirements come from the current lock file, not a previous install's
+/// marker. An installed platform narrows the selection while it remains
+/// declared, so another alias's packages cannot invalidate the cached prefix.
 pub fn classify_environment_runnability(
     environment: &Environment<'_>,
     lock_file: Option<&LockFile>,
@@ -640,6 +648,111 @@ mod tests {
             insta::with_settings!({snapshot_suffix => platform.as_str()}, {
                 assert_debug_snapshot!(packages);
             });
+        }
+    }
+
+    #[test]
+    fn cached_run_platform_uses_persisted_detector_provenance_and_overrides() {
+        use crate::environment::{EnvironmentFile, LockedEnvironmentHash, write_environment_file};
+        use crate::host::HostDetection;
+        use pixi_manifest::platform::host::platform_from_detected;
+        use rattler_conda_types::{PackageName, Version};
+
+        let subdir = Subdir::current().unwrap_or(Subdir::NoArch);
+        for name in ["__cuda", "__test_detector_capability"] {
+            let package_name: PackageName = name.parse().unwrap();
+            let variable = format!(
+                "CONDA_OVERRIDE_{}",
+                name.trim_start_matches("__").to_uppercase()
+            );
+            let directory = tempfile::tempdir().unwrap();
+            let manifest_path = directory.path().join("pixi.toml");
+            let mut workspace = crate::Workspace::from_str(
+                &manifest_path,
+                &format!(
+                    "[workspace]\nname = 'cached-provenance'\nchannels = []\nplatforms = ['{subdir}']"
+                ),
+            )
+            .unwrap();
+            workspace.host = HostDetection::from_platform(
+                platform_from_detected(
+                    subdir,
+                    vec![GenericVirtualPackage {
+                        name: package_name.clone(),
+                        version: Version::major(1),
+                        build_string: "0".to_string(),
+                    }],
+                )
+                .unwrap(),
+            );
+            let environment = workspace.default_environment();
+            for declared in [false, true] {
+                for recorded in [false, true] {
+                    write_environment_file(
+                        &environment.dir(),
+                        EnvironmentFile {
+                            manifest_path: manifest_path.clone(),
+                            environment_name: environment.name().to_string(),
+                            pixi_version: "test".to_string(),
+                            environment_lock_file_hash: LockedEnvironmentHash::invalid(),
+                            resolved_platform: Some(PlatformData::new(
+                                subdir,
+                                if declared {
+                                    vec![GenericVirtualPackage {
+                                        name: package_name.clone(),
+                                        version: Version::major(3),
+                                        build_string: "0".to_string(),
+                                    }]
+                                } else {
+                                    Vec::new()
+                                },
+                            )),
+                            minimum_supported_platform: Some(RequiredPlatform::new(
+                                subdir,
+                                vec![
+                                    MatchSpec::from_str(
+                                        &format!("{name} >=3"),
+                                        rattler_conda_types::ParseStrictness::Lenient,
+                                    )
+                                    .unwrap(),
+                                ],
+                            )),
+                            detector_virtual_packages: if recorded {
+                                [(
+                                    package_name.clone(),
+                                    Some(crate::host::DetectedVersion {
+                                        version: Version::major(3),
+                                        build_string: "0".to_string(),
+                                    }),
+                                )]
+                                .into()
+                            } else {
+                                Default::default()
+                            },
+                            source_fingerprints: Default::default(),
+                        },
+                    )
+                    .unwrap();
+                    for (value, compatible) in [
+                        (None, recorded),
+                        (Some(""), false),
+                        (Some("3"), true),
+                        (Some("3=bad=build"), false),
+                    ] {
+                        temp_env::with_vars(
+                            [("PIXI_OVERRIDE_PLATFORM", None), (variable.as_str(), value)],
+                            || {
+                                let result = verify_run_platform(&environment, None);
+                                assert_eq!(
+                                    result.is_ok(),
+                                    compatible,
+                                    "{name}, declared={declared}, recorded={recorded}, override={value:?}: {result:?}"
+                                );
+                            },
+                        );
+                    }
+                }
+            }
         }
     }
 
