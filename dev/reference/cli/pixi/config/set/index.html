@@ -8893,6 +8893,12 @@
 </li>
 <li>
 <dl>
+<dt><a id="arg---shared" href="#arg---shared"><code>--shared</code></a></dt>
+<dd>Operation on the user configuration shared with other rattler-based tools, which only accepts the keys every such tool understands</dd>
+</dl>
+</li>
+<li>
+<dl>
 <dt><a id="arg---path" href="#arg---path"><code>--path (-p) &lt;PATH&gt;</code></a></dt>
 <dd>Path to a local configuration file</dd>
 </dl>
@@ -8924,6 +8930,8 @@
 </span><span id="__span-1-5"><a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>detached-environments<span class="w"> </span><span class="nb">false</span>
 </span><span id="__span-1-6"><a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>s3-options.my-bucket<span class="w"> </span><span class="s1">&#39;{&quot;endpoint-url&quot;: &quot;http://localhost:9000&quot;, &quot;addressing-style&quot;: &quot;path&quot;, &quot;region&quot;: &quot;auto&quot;}&#39;</span>
 </span><span id="__span-1-7"><a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>default-channels<span class="w"> </span><span class="s1">&#39;[&quot;conda-forge&quot;, &quot;bioconda&quot;]&#39;</span><span class="w"> </span>--path<span class="w"> </span>/path/to/config.toml
+</span><span id="__span-1-8"><a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>--shared<span class="w"> </span><span class="s1">&#39;virtual-package-detectors.consent.&quot;https://conda.anaconda.org/conda-forge&quot;&#39;</span><span class="w"> </span>allow
+</span><span id="__span-1-9"><a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>pixi<span class="w"> </span>config<span class="w"> </span><span class="nb">set</span><span class="w"> </span>--local<span class="w"> </span><span class="s1">&#39;virtual-package-detectors.consent.&quot;https://conda.anaconda.org/conda-forge&quot;&#39;</span><span class="w"> </span>allow
 </span></code></pre></div>
 
 
