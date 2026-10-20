@@ -233,7 +233,7 @@ uv-workspace = "0.0.90"
 webpki-root-certs = "1"
 which = "8.0.0"
 xxhash-rust = "0.8.15"
-zip = { version = "8.0.0", default-features = false }
+zip = { version = "9.0.0", default-features = false }
 zstd = { version = "0.14.0", default-features = false }
 
 # Rattler crates
