@@ -13,7 +13,7 @@ use pixi_manifest::{
 };
 use pixi_pypi_spec::PixiPypiSource;
 use pypi_modifiers::Tags;
-use rattler_conda_types::{ChannelUrl, NamedChannelOrUrl, Subdir};
+use rattler_conda_types::{ChannelUrl, NamedChannelOrUrl};
 use rattler_lock::{LockedPackage, PypiIndexes, UrlOrPath};
 use url::Url;
 use uv_distribution_filename::{DistExtension, ExtensionError, SourceDistExtension, WheelFilename};
@@ -282,6 +282,16 @@ impl PypiWheelTagsCheck {
                 .filter_map(|(lock_platform, packages)| {
                     // Keep the lock platform name: it is the unique key for the
                     // tag cache, and it is what the check below looks up.
+                    let pixi_platform = PixiPlatformName::try_from(lock_platform.name().as_str())
+                        .ok()
+                        .and_then(|name| workspace.workspace.platform_by_name(&name))
+                        .or_else(|| {
+                            workspace
+                                .workspace
+                                .platforms
+                                .iter()
+                                .find(|p| p.subdir() == lock_platform.subdir())
+                        })?;
                     Some((lock_platform.name().to_owned(), pixi_platform, packages))
                 })
                 .flat_map(|(lock_platform_name, pixi_platform, packages)| {
