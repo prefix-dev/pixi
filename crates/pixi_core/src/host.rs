@@ -364,21 +364,21 @@ impl HostDetection {
                 }
             }
         }
-        if let Cow::Owned(host) = &mut host {
-            if !host.results.is_empty() {
-                host.platform = host.platform().and_then(|platform| {
-                    platform_from_detected(
-                        host.subdir,
-                        merge_results(
-                            platform.solver_virtual_package_records().iter().cloned(),
-                            &host.results,
-                        ),
-                    )
-                    .map_err(|error| HostUndetected {
-                        message: error.to_string(),
-                    })
-                });
-            }
+        if let Cow::Owned(host) = &mut host
+            && !host.results.is_empty()
+        {
+            host.platform = host.platform().and_then(|platform| {
+                platform_from_detected(
+                    host.subdir,
+                    merge_results(
+                        platform.solver_virtual_package_records().iter().cloned(),
+                        &host.results,
+                    ),
+                )
+                .map_err(|error| HostUndetected {
+                    message: error.to_string(),
+                })
+            });
         }
         host
     }
