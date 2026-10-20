@@ -239,6 +239,7 @@ mod custom_platform_scoping {
                     local.subdir(),
                     Vec::new(),
                 )),
+                detector_virtual_packages: Default::default(),
                 source_fingerprints: Default::default(),
             },
         )

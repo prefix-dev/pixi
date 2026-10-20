@@ -33,7 +33,9 @@ use pixi_consts::consts::{self};
 use pixi_core::environment::{
     EnvironmentFile, LockedEnvironmentHash, PlatformData, RequiredPlatform, write_environment_file,
 };
-use pixi_core::host::{HostDetection, HostUndetected};
+use pixi_core::host::{
+    DetectorConsent, HostDetection, HostDetector, HostUndetected, NonInteractiveConsent,
+};
 use pixi_core::lock_file::virtual_packages::required_virtual_package_specs;
 use pixi_core::repodata::Repodata;
 use pixi_core::workspace::stdlib_variants::{StdlibVersionPin, derive_stdlib_variants};
@@ -158,8 +160,10 @@ pub struct Project {
     top_level_progress: OnceCell<Arc<pixi_reporters::TopLevelProgress>>,
     /// Optional backend override for testing purposes
     backend_override: Option<BackendOverride>,
-    /// What this machine provides, detected when the project was loaded.
-    host: HostDetection,
+    /// What this machine provides, detected on first use.
+    host: OnceCell<HostDetection>,
+    /// Decides on virtual package detectors without a stored decision.
+    detector_consent: Arc<dyn DetectorConsent>,
 }
 
 impl Debug for Project {
@@ -344,7 +348,8 @@ impl Project {
             command_dispatcher: OnceCell::new(),
             top_level_progress: OnceCell::new(),
             backend_override: None,
-            host: HostDetection::builtin(),
+            host: OnceCell::new(),
+            detector_consent: Arc::new(NonInteractiveConsent::default()),
         }
     }
 
@@ -508,6 +513,19 @@ impl Project {
         C: Into<Config>,
     {
         self.config = self.config.merge_config(config.into());
+        self
+    }
+
+    /// What this machine provides, with pixi's built-in detection. Detectors
+    /// registered by an environment's channels run when it is installed.
+    pub fn host(&self) -> &HostDetection {
+        self.host.get_or_init(HostDetection::builtin)
+    }
+
+    /// Decide on virtual package detectors without a stored decision with
+    /// `consent`, for example by asking the user.
+    pub fn with_detector_consent(mut self, consent: Arc<dyn DetectorConsent>) -> Self {
+        self.detector_consent = consent;
         self
     }
 
@@ -728,8 +746,37 @@ impl Project {
             ));
         }
 
+        // Detectors registered by the environment's channels run for the host
+        // when the repodata of the dependencies can reference their names.
+        let host = if platform == self.host().subdir() {
+            let channel_config = self.config.global_channel_config();
+            let mut specs = Vec::new();
+            for (name, spec) in &environment.dependencies.specs {
+                if let Some(nameless) = spec
+                    .clone()
+                    .try_into_nameless_match_spec(channel_config)
+                    .into_diagnostic()?
+                {
+                    specs.push(MatchSpec::from_nameless(nameless, name.clone().into()));
+                }
+            }
+            let channel_urls: Vec<ChannelUrl> = channels
+                .iter()
+                .map(|channel| channel.base_url.clone())
+                .collect();
+            HostDetector::with_gateway(
+                self.config.clone(),
+                self.detector_consent.clone(),
+                self.authenticated_client()?.clone(),
+                self.repodata_gateway()?.clone(),
+            )
+            .detect_for_specs(&channel_urls, platform, &specs)
+            .await?
+        } else {
+            self.host().clone()
+        };
         let solve_virtual_packages =
-            Self::virtual_packages_for(&self.host, &platform).into_diagnostic()?;
+            Self::virtual_packages_for(&host, &platform).into_diagnostic()?;
 
         // Convert dependency specs to binary specs for CommandDispatcher
         let mut pixi_specs = DependencyMap::default();
@@ -747,7 +794,7 @@ impl Project {
             .map(|channel| channel.base_url.clone())
             .collect::<Vec<_>>();
 
-        let build_environment = BuildEnvironment::simple(platform, solve_virtual_packages.clone());
+        let build_environment = BuildEnvironment::simple(platform, solve_virtual_packages.to_vec());
 
         // Derive the `c_stdlib` build variants for source builds, mirroring what
         // a workspace does, so `stdlib('c')` recipes pin a deployment target that
@@ -875,8 +922,7 @@ impl Project {
         self.write_environment_file(
             env_name,
             &prefix,
-            platform,
-            solve_virtual_packages,
+            &host,
             &resolved_depends,
             source_fingerprints_for_environment(environment),
         )?;
@@ -892,15 +938,14 @@ impl Project {
         &self,
         env_name: &EnvironmentName,
         prefix: &Prefix,
-        platform: Subdir,
-        resolved_virtual_packages: Vec<GenericVirtualPackage>,
+        host: &HostDetection,
         resolved_depends: &[String],
         source_fingerprints: BTreeMap<String, u64>,
     ) -> miette::Result<()> {
-        let resolved_platform = PlatformData::new(platform, resolved_virtual_packages);
+        let resolved_platform = PlatformData::new(host.subdir(), host.capabilities().into_owned());
         let depends: Vec<&str> = resolved_depends.iter().map(String::as_str).collect();
         let minimum_supported_platform =
-            RequiredPlatform::new(platform, required_virtual_package_specs(&depends));
+            RequiredPlatform::new(host.subdir(), required_virtual_package_specs(&depends));
 
         write_environment_file(
             prefix.root(),
@@ -913,6 +958,7 @@ impl Project {
                 environment_lock_file_hash: LockedEnvironmentHash::invalid(),
                 resolved_platform: Some(resolved_platform),
                 minimum_supported_platform: Some(minimum_supported_platform),
+                detector_virtual_packages: host.detector_virtual_packages(),
                 source_fingerprints,
             },
         )?;

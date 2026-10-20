@@ -2,7 +2,7 @@ use std::{
     collections::{HashMap, HashSet},
     fmt::Debug,
     hash::{Hash, Hasher},
-    sync::Once,
+    sync::{Arc, Once},
 };
 
 use indexmap::IndexMap;
@@ -18,7 +18,7 @@ use super::{
     SolveGroup,
     errors::{UnknownTask, UnsupportedPlatformError},
 };
-use crate::{Workspace, workspace::HasWorkspaceRef};
+use crate::{Workspace, host::HostDetection, workspace::HasWorkspaceRef};
 use pixi_manifest::platform::{VirtualPackageRecords, host::host_baseline};
 
 /// Describes a single environment from a project manifest. This is used to
@@ -83,6 +83,36 @@ impl<'p> Environment<'p> {
     /// Returns the name of this environment.
     pub fn name(&self) -> &'p EnvironmentName {
         &self.environment.name
+    }
+
+    /// Host capabilities detected with this environment's effective solve channels.
+    pub fn host(&self) -> &'p HostDetection {
+        self.workspace
+            .environment_hosts
+            .get()
+            .and_then(|hosts| hosts.get(self.name()))
+            .map(Arc::as_ref)
+            .unwrap_or(&self.workspace.host)
+    }
+
+    /// Host values for reusing this prefix without rerunning its detectors.
+    pub(crate) fn host_for_cached_run(&self) -> std::borrow::Cow<'p, HostDetection> {
+        let Ok(Some(file)) = crate::environment::read_environment_file(&self.dir()) else {
+            return std::borrow::Cow::Borrowed(self.host());
+        };
+        self.host().for_cached_run(
+            &file.detector_virtual_packages,
+            file.resolved_platform
+                .iter()
+                .flat_map(|platform| platform.virtual_packages())
+                .map(|package| &package.name)
+                .chain(
+                    file.minimum_supported_platform
+                        .iter()
+                        .flat_map(|platform| platform.requirements())
+                        .filter_map(|spec| spec.name.as_exact()),
+                ),
+        )
     }
 
     /// Returns the solve group to which this environment belongs, or `None` if
@@ -173,8 +203,16 @@ impl<'p> Environment<'p> {
     /// the environment itself declares support for, and return the most
     /// preferred one.
     pub fn best_declared_platform(&self) -> Option<&'p PixiPlatform> {
-        let current = self.workspace.host().subdir();
-        let system_virtual_packages = self.workspace.host().capabilities();
+        self.best_declared_platform_with_host(self.host())
+    }
+
+    /// Selects the best declared platform using an independently detected host.
+    pub fn best_declared_platform_with_host(
+        &self,
+        host: &HostDetection,
+    ) -> Option<&'p PixiPlatform> {
+        let current = host.subdir();
+        let system_virtual_packages = host.capabilities();
         let env_platforms = self.platforms();
 
         // The candidates are the workspace platforms whose subdir matches this
@@ -267,8 +305,8 @@ impl<'p> Environment<'p> {
     /// virtual packages declared by the workspace's host-subdir platforms
     /// this machine doesn't provide so the user can see what to mock.
     pub fn unsupported_platform_error(&self) -> UnsupportedPlatformError {
-        let current = self.workspace.host().subdir();
-        let system_virtual_packages = self.workspace.host().capabilities();
+        let current = self.host().subdir();
+        let system_virtual_packages = self.host().capabilities();
         let env_platforms = self.platforms();
         let workspace = &self.workspace_manifest().workspace;
         let unsatisfied_requirements = workspace.unsatisfied_platform_requirements(

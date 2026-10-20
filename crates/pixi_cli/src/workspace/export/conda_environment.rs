@@ -435,6 +435,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .locate()
         .await?;
     let environment = workspace.environment_from_name_or_env_var(args.environment)?;
+    workspace
+        .refresh_environment_hosts_for_platform_selection(std::slice::from_ref(&environment))
+        .await?;
     let workspace_platforms = (&workspace)
         .workspace_manifest()
         .workspace
@@ -449,7 +452,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 miette::miette!("workspace does not define a platform with subdir '{subdir}'")
             })?,
         None => environment
-            .best_declared_platform()
+            .installed_or_best_declared_platform()
             .cloned()
             .ok_or_else(|| {
                 miette::miette!(

@@ -59,6 +59,12 @@ pub fn host_subdir() -> Subdir {
         .expect("pixi runs on a known conda platform")
 }
 
+/// Whether `PIXI_OVERRIDE_PLATFORM` targets a subdir other than this
+/// machine's. An unset, invalid, or native value is no foreign target.
+pub fn platform_override_is_foreign() -> bool {
+    host_subdir() != Subdir::current().expect("pixi runs on a known conda platform")
+}
+
 /// What a `CONDA_OVERRIDE_*` variable says about the virtual package it
 /// governs.
 #[derive(Clone)]

@@ -188,6 +188,19 @@ Adding a platform whose definition already exists under a *different* name is re
     Auto-detection captures your machine exactly, which is usually more specific than your packages actually need.
     After installing, `pixi info` reports each environment's **Minimum platform** (the virtual-package requirements some resolved dependency really places on the machine), so you can see which ones are safe to drop with `pixi workspace platform edit`.
 
+### Virtual package detectors
+
+Channels can register virtual package detectors: packages that report system capabilities, such as an MPI runtime or a driver installed outside the environment.
+Pixi uses their results to check whether your machine satisfies a platform's declared virtual packages.
+Detectors can extend or replace Pixi's built-in detection.
+
+Pixi runs detectors when their virtual packages are needed for the current machine, not for foreign target platforms.
+Workspace lock-file solves use the virtual packages declared in the manifest, not detected values.
+
+Detectors execute code from the channel, so Pixi asks whether to trust them before running them.
+You can save the decision in the [configuration](../reference/pixi_configuration.md#virtual-package-detectors).
+Without a terminal, detectors without a saved decision are skipped.
+
 ### Managing platforms from the CLI
 
 [`pixi workspace platform`](../reference/cli/pixi/workspace/platform/index.md) is the CLI surface for these entries:

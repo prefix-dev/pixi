@@ -37,7 +37,8 @@ use pixi_install_pypi::{
 };
 use pixi_manifest::{
     ChannelPriority, EnvironmentName, ExcludeNewerError, FeaturesExt, HasWorkspaceManifest,
-    PixiPlatform, PixiPlatformName, platform::VirtualPackageRecords,
+    PixiPlatform, PixiPlatformName,
+    platform::{VirtualPackageRecords, host::platform_override_is_foreign},
 };
 use pixi_progress::global_multi_progress;
 use pixi_record::{LockFileResolver, LockFileResolverError, PixiRecord, UnresolvedPixiRecord};
@@ -79,7 +80,7 @@ use crate::{
         self,
         reporter::SolveProgressBar,
         virtual_packages::{
-            MachineValidationError, compute_required_virtual_package_specs,
+            MachineValidationError, UnknownNames, compute_required_virtual_package_specs,
             validate_system_meets_environment_requirements,
         },
     },
@@ -465,6 +466,9 @@ impl Workspace {
             miette::bail!("lock file not up-to-date with the workspace");
         }
 
+        // Solving orders and selects platforms by what this machine provides.
+        self.refresh_environment_hosts().await?;
+
         // The environments whose conda dependencies are about to be re-solved.
         // Captured before `outdated` is moved so we can validate their requested
         // extras against the freshly solved records.
@@ -618,6 +622,10 @@ pub enum WriteLockFileError {
 /// with the lock file.
 #[derive(Debug, Error, Diagnostic)]
 pub enum UpdatePrefixError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    HostProbe(#[from] crate::host::HostProbeError),
+
     #[error("the lock file is not up-to-date with the requested environment '{0}'")]
     LockFileMissingEnv(EnvironmentName),
 
@@ -778,17 +786,27 @@ pub struct UpdatedPrefix {
     pub prefix: Prefix,
 }
 
+enum InstallTarget {
+    Explicit(PixiPlatformName),
+    Installed(PixiPlatformName),
+}
+
+impl InstallTarget {
+    fn name(&self) -> &PixiPlatformName {
+        match self {
+            Self::Explicit(name) | Self::Installed(name) => name,
+        }
+    }
+}
+
 /// A struct that holds the lock file and any potential derived data that was
 /// computed when calling `update_lock_file`.
 pub struct LockFileDerivedData<'p> {
     pub workspace: &'p Workspace,
 
-    /// Optional workspace-platform override applied to every install-side
-    /// "which platform does this environment target" lookup. Set by the
-    /// `pixi install --platform <name>` (and `pixi reinstall --platform
-    /// <name>`) flows so cross-target installs skip the host-VP
-    /// satisfaction check that would otherwise reject them.
-    pub target_platform: Option<PixiPlatformName>,
+    /// The selected install platform and whether the user explicitly chose it.
+    /// Only explicit targets bypass host requirement validation.
+    target_platform: Option<InstallTarget>,
 
     /// The lock file
     ///
@@ -871,6 +889,16 @@ impl<'p> LockFileDerivedData<'p> {
             build_caches: Default::default(),
             resolver: Default::default(),
         }
+    }
+
+    /// Select a user-requested platform, bypassing host requirement validation.
+    pub fn set_explicit_target_platform(&mut self, platform: Option<PixiPlatformName>) {
+        self.target_platform = platform.map(InstallTarget::Explicit);
+    }
+
+    /// Select an installed platform while retaining host requirement validation.
+    pub fn set_installed_target_platform(&mut self, platform: Option<PixiPlatformName>) {
+        self.target_platform = platform.map(InstallTarget::Installed);
     }
 
     /// Returns a resolver for the current lock file, building it on first
@@ -984,21 +1012,28 @@ impl<'p> LockFileDerivedData<'p> {
         let locked_environment = self.locked_env(environment)?;
         Ok(LockedEnvironmentHash::from_environment(
             locked_environment,
-            environment.named_or_best_declared_platform(self.target_platform.as_ref()),
+            environment.named_or_best_declared_platform(
+                self.target_platform.as_ref().map(InstallTarget::name),
+            ),
         ))
     }
 
-    /// The declared platform install targets for `environment`: the explicit
-    /// `--platform` override or the best declared platform; when neither
-    /// matches this machine, a declared platform whose lock-resolved minimum
-    /// requirements the machine meets (running "by accident").
+    /// The explicitly selected or installed platform, or the best declared
+    /// platform. Without a selection, fall back to a declared platform whose
+    /// lock-resolved requirements this machine meets.
     fn install_platform(&self, environment: &Environment<'p>) -> Option<&'p PixiPlatform> {
-        let target_override = self.target_platform.as_ref();
+        let target_override = self.target_platform.as_ref().map(InstallTarget::name);
         environment
             .named_or_best_declared_platform(target_override)
             .or_else(|| {
                 if target_override.is_some() {
                     return None;
+                }
+                if let Some(installed) = environment.installed_resolved_platform().filter(|p| {
+                    let declared = environment.platforms();
+                    declared.is_empty() || declared.contains(p.name())
+                }) {
+                    return Some(installed);
                 }
                 let fallback =
                     minimum_compatible_declared_platform(environment, &self.lock_file).ok();
@@ -1047,18 +1082,92 @@ impl<'p> LockFileDerivedData<'p> {
         reinstall_packages: &ReinstallPackages,
         filter: &InstallFilter,
     ) -> Result<Prefix, UpdatePrefixError> {
+        // An installed prefix that matches the lock file runs without detecting
+        // the host. Detector-provided names are unknown then and not checked.
+        if update_mode == UpdateMode::QuickValidate
+            && let Some(platform) = self.reusable_prefix_platform(environment)
+            && let Some(locked_environment) =
+                self.lock_file.environment(environment.name().as_str())
+        {
+            let hash = LockedEnvironmentHash::from_environment(locked_environment, Some(platform));
+            if let Some(prefix) = self.cached_prefix(environment, platform, &hash) {
+                if !matches!(self.target_platform, Some(InstallTarget::Explicit(_)))
+                    && !platform_override_is_foreign()
+                {
+                    validate_system_meets_environment_requirements(
+                        &self.lock_file,
+                        platform,
+                        environment.name(),
+                        &environment.host_for_cached_run(),
+                        UnknownNames::Unchecked,
+                    )
+                    .map_err(|source| {
+                        UpdatePrefixError::RequirementsUnmet {
+                            environment: environment.name().clone(),
+                            source,
+                        }
+                    })?;
+                }
+                return Ok(prefix);
+            }
+        }
+
+        self.workspace.refresh_environment_hosts().await?;
+
+        // A current prefix hash says nothing about this machine's capabilities.
+        // Validate locked requirements before either the cached or install path.
+        let selected_platform = self.install_platform(environment).ok_or_else(|| {
+            match verify_current_platform_can_run_environment(environment, Some(&self.lock_file)) {
+                Err(source) => UpdatePrefixError::PlatformUnsupported {
+                    environment: environment.name().clone(),
+                    source,
+                },
+                Ok(()) => UpdatePrefixError::NoMatchingPlatform(environment.name().clone()),
+            }
+        })?;
+
         // Check if the prefix is already up-to-date by validating the hash with the
         // environment file
         let hash = self.locked_environment_hash(environment)?;
-        if update_mode == UpdateMode::QuickValidate
-            && let Some(prefix) = self.cached_prefix(environment, &hash)
+        let cached = (update_mode == UpdateMode::QuickValidate)
+            .then(|| self.cached_prefix(environment, selected_platform, &hash))
+            .flatten();
+
+        // Explicit overrides may intentionally target a foreign machine. A
+        // current prefix keeps running where a detector could not be asked,
+        // while a new install needs every value it depends on.
+        if !matches!(self.target_platform, Some(InstallTarget::Explicit(_)))
+            && !platform_override_is_foreign()
         {
+            let unknown = if cached.is_some() {
+                UnknownNames::Unchecked
+            } else {
+                UnknownNames::Absent
+            };
+            let host = if cached.is_some() {
+                environment.host_for_cached_run()
+            } else {
+                std::borrow::Cow::Borrowed(environment.host())
+            };
+            validate_system_meets_environment_requirements(
+                &self.lock_file,
+                selected_platform,
+                environment.name(),
+                &host,
+                unknown,
+            )
+            .map_err(|source| UpdatePrefixError::RequirementsUnmet {
+                environment: environment.name().clone(),
+                source,
+            })?;
+        }
+        if let Some(prefix) = cached {
             return Ok(prefix);
         }
 
         // Get the up-to-date prefix
         let UpdatedPrefix { prefix } = self
-            .update_prefix(environment, reinstall_packages, filter)
+            .update_prefix(environment, selected_platform, reinstall_packages, filter)
             .await?;
 
         // We write an invalid hash when filtering, as we will need to do a full
@@ -1082,6 +1191,7 @@ impl<'p> LockFileDerivedData<'p> {
                 environment_lock_file_hash: hash,
                 resolved_platform,
                 minimum_supported_platform,
+                detector_virtual_packages: environment.host().detector_virtual_packages(),
                 source_fingerprints: Default::default(),
             },
         )?;
@@ -1115,9 +1225,26 @@ impl<'p> LockFileDerivedData<'p> {
         Ok(prefix)
     }
 
+    /// The platform an installed prefix can be reused for without detecting
+    /// the host: the selected platform, or the one it was installed for.
+    fn reusable_prefix_platform(&self, environment: &Environment<'p>) -> Option<&'p PixiPlatform> {
+        match self.target_platform.as_ref().map(InstallTarget::name) {
+            Some(name) => environment.named_or_best_declared_platform(Some(name)),
+            None => environment
+                .installed_resolved_platform()
+                .filter(|platform| {
+                    let declared = environment.platforms();
+                    declared.is_empty() || declared.contains(platform.name())
+                }),
+        }
+    }
+
+    /// The installed prefix of `environment` if its environment file matches
+    /// `hash`, judging source packages by the selected `platform`.
     fn cached_prefix(
         &self,
         environment: &Environment<'p>,
+        platform: &'p PixiPlatform,
         hash: &LockedEnvironmentHash,
     ) -> Option<Prefix> {
         let Ok(Some(environment_file)) = read_environment_file(&environment.dir()) else {
@@ -1137,8 +1264,7 @@ impl<'p> LockFileDerivedData<'p> {
                 .lock_file
                 .environment(environment.name().as_str())
                 .is_some_and(|env| {
-                    self.install_platform(environment)
-                        .and_then(|platform| resolve_lock_platform_for(&self.lock_file, platform))
+                    resolve_lock_platform_for(&self.lock_file, platform)
                         .and_then(|platform| env.conda_packages(platform))
                         .is_some_and(|mut packages| {
                             packages.any(|package| package.as_source().is_some())
@@ -1149,7 +1275,7 @@ impl<'p> LockFileDerivedData<'p> {
             // that is a directory, this is basically the only kind of source dependency
             // that you'll modify on a general basis.
             let contains_pypi_source_pkgs = environment
-                .pypi_dependencies(environment.best_declared_platform())
+                .pypi_dependencies(Some(platform))
                 .iter()
                 .any(|(_, req)| {
                     req.iter()
@@ -1174,6 +1300,7 @@ impl<'p> LockFileDerivedData<'p> {
     async fn update_prefix(
         &self,
         environment: &Environment<'p>,
+        best_declared_platform: &'p PixiPlatform,
         reinstall_packages: &ReinstallPackages,
         filter: &InstallFilter,
     ) -> Result<UpdatedPrefix, UpdatePrefixError> {
@@ -1185,41 +1312,6 @@ impl<'p> LockFileDerivedData<'p> {
         prefix_once_cell
             .get_or_try_init(async {
                 let start = Instant::now();
-
-                // Skip the host-VP validation when `--platform` pins a target the
-                // local machine can't satisfy -- that's the case the override exists for.
-                let target_override = self.target_platform.as_ref();
-                let best_declared_platform =
-                    self.install_platform(environment).ok_or_else(|| {
-                        // Prefer the requirement-level diagnosis (which platforms
-                        // and virtual packages are unmet) over a generic message.
-                        match verify_current_platform_can_run_environment(
-                            environment,
-                            Some(&self.lock_file),
-                        ) {
-                            Err(source) => UpdatePrefixError::PlatformUnsupported {
-                                environment: environment.name().clone(),
-                                source,
-                            },
-                            Ok(()) => {
-                                UpdatePrefixError::NoMatchingPlatform(environment.name().clone())
-                            }
-                        }
-                    })?;
-                if target_override.is_none() {
-                    validate_system_meets_environment_requirements(
-                        &self.lock_file,
-                        best_declared_platform,
-                        environment.name(),
-                        environment.workspace().host(),
-                    )
-                    .map_err(|source| {
-                        UpdatePrefixError::RequirementsUnmet {
-                            environment: environment.name().clone(),
-                            source,
-                        }
-                    })?;
-                }
 
                 let platform = best_declared_platform;
                 let locked_env = self.locked_env(environment)?;
@@ -1314,7 +1406,12 @@ impl<'p> LockFileDerivedData<'p> {
 
                 // Get the prefix with the conda packages installed.
                 let conda_result = self
-                    .conda_prefix(environment, conda_reinstall_packages, Some(ignored_conda))
+                    .conda_prefix(
+                        environment,
+                        best_declared_platform,
+                        conda_reinstall_packages,
+                        Some(ignored_conda),
+                    )
                     .await?;
                 let prefix = conda_result.prefix.clone();
                 let python_status = *conda_result.python_status.clone();
@@ -1447,6 +1544,7 @@ impl<'p> LockFileDerivedData<'p> {
     async fn conda_prefix(
         &self,
         environment: &Environment<'p>,
+        pixi_platform: &'p PixiPlatform,
         reinstall_packages: Option<HashSet<PackageName>>,
         ignore_packages: Option<HashSet<PackageName>>,
     ) -> Result<CondaPrefixUpdated, UpdatePrefixError> {
@@ -1460,14 +1558,6 @@ impl<'p> LockFileDerivedData<'p> {
             .get_or_try_init(async {
                 // Create object to update the prefix
                 let group = GroupedEnvironment::Environment(environment.clone());
-                // Mirror `update_prefix`: fall back to the minimum-compatible
-                // platform so an unsatisfied but unused system-requirement (e.g.
-                // a `cuda` requirement no locked package needs) doesn't block the
-                // install.
-                let pixi_platform = self.install_platform(environment).ok_or_else(|| {
-                    UpdatePrefixError::NoMatchingPlatform(environment.name().clone())
-                })?;
-
                 // Use cached conda_prefix_updater if available, otherwise create new
                 let cache_key = lock_file::outdated::BuildCacheKey::new(
                     environment.name().clone(),

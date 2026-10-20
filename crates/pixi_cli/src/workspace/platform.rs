@@ -645,6 +645,10 @@ async fn execute_add_auto_detected(
     feature: FeatureName,
     lock_file_usage: LockFileUsage,
 ) -> miette::Result<()> {
+    workspace_ctx
+        .workspace()
+        .refresh_environment_hosts()
+        .await?;
     let host = workspace_ctx.workspace().host();
     let subdir = host.subdir();
     let detected = host.platform().into_diagnostic()?.clone();
@@ -782,6 +786,7 @@ async fn execute_list(
         return Ok(());
     }
 
+    workspace.refresh_environment_hosts().await?;
     if args.json {
         // Same snapshot the human output renders, so the two views of one
         // command cannot disagree about the host.

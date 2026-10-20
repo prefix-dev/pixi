@@ -9,9 +9,7 @@ use pixi_manifest::{
 use pypi_modifiers::pypi_tags::{PyPITagError, get_tags_from_machine, is_python_record};
 use rattler_conda_types::ParseMatchSpecError;
 use rattler_conda_types::ParseStrictness::Lenient;
-use rattler_conda_types::{
-    GenericVirtualPackage, MatchSpec, Matches, Subdir, Version, VersionSpec,
-};
+use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Subdir, Version, VersionSpec};
 use rattler_lock::{CondaPackageData, ConversionError, LockFile, PypiPackageData};
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -112,7 +110,26 @@ pub(crate) fn unmet_requirements(
                 name.as_normalized().starts_with("__") && name.as_normalized() != "__archspec"
             })
         })
-        .filter(|spec| !system.iter().any(|provided| spec.matches(provided)))
+        .filter(|spec| {
+            !system.iter().any(|provided| {
+                // Match rattler's solver spelling without copying the host's
+                // manifest-canonical capabilities: an omitted build is `0`.
+                let build = if provided.build_string.is_empty() {
+                    "0"
+                } else {
+                    provided.build_string.as_str()
+                };
+                spec.name.matches(&provided.name)
+                    && spec
+                        .version
+                        .as_ref()
+                        .is_none_or(|version| version.matches(&provided.version))
+                    && spec
+                        .build
+                        .as_ref()
+                        .is_none_or(|required| required.matches(build))
+            })
+        })
         .cloned()
         .collect()
 }
@@ -201,12 +218,23 @@ fn get_wheels_from_pypi_package_data(pypi_packages: Vec<PypiPackageData>) -> Vec
         .collect_vec()
 }
 
+/// How host validation treats virtual packages whose value on this machine is
+/// unknown, see [`HostDetection::is_unknown`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum UnknownNames {
+    /// As absent: a new install needs every value it depends on.
+    Absent,
+    /// Not checked: an installed environment keeps running.
+    Unchecked,
+}
+
 /// Validate that current machine has all the required virtual packages for the given environment
 pub(crate) fn validate_system_meets_environment_requirements(
     lock_file: &LockFile,
     platform: &PixiPlatform,
     environment_name: &EnvironmentName,
     host: &HostDetection,
+    unknown: UnknownNames,
 ) -> Result<bool, MachineValidationError> {
     // Early out if there are no packages in the lock file
     if lock_file.is_empty() {
@@ -242,7 +270,16 @@ pub(crate) fn validate_system_meets_environment_requirements(
         .collect_vec();
 
     // Get the virtual packages required by the conda records
-    let required_virtual_packages = get_required_virtual_packages_from_depends(&all_depends)?;
+    let required_virtual_packages = get_required_virtual_packages_from_depends(&all_depends)?
+        .into_iter()
+        .filter(|spec| {
+            unknown == UnknownNames::Absent
+                || spec
+                    .name
+                    .as_exact()
+                    .is_none_or(|name| !host.is_unknown(name.as_normalized()))
+        })
+        .collect_vec();
 
     // Find the python package record (needed for wheel tag validation below).
     // This works for binary and full source packages; partial source records
@@ -297,7 +334,12 @@ pub(crate) fn validate_system_meets_environment_requirements(
 
         let wheels = get_wheels_from_pypi_package_data(pypi_packages);
 
-        let system_virtual_packages = solver_virtual_packages(host_platform);
+        let wheel_platform = if unknown == UnknownNames::Unchecked {
+            host.platform_for_cached_wheels()?
+        } else {
+            std::borrow::Cow::Borrowed(host_platform)
+        };
+        let system_virtual_packages = solver_virtual_packages(&wheel_platform);
         let uv_system_tags =
             get_tags_from_machine(&system_virtual_packages, platform, python_record)?;
 
@@ -602,13 +644,17 @@ packages:
 
     #[test]
     fn custom_lock_requirements_use_detected_versions_and_builds() {
-        let lock = lock_requiring("__test_detector_capability >=3 detected");
+        let lock = lock_requiring("__test_detector_capability >=3,<4 detected");
         let platform = PixiPlatform::from_subdir(Subdir::Linux64);
         for (provided, compatible) in [
             (None, false),
-            (Some(("2", "detected")), false),
+            (Some(("2.9", "detected")), false),
+            (Some(("3", "")), false),
+            (Some(("3", "0")), false),
             (Some(("3", "other")), false),
             (Some(("3", "detected")), true),
+            (Some(("3.5", "detected")), true),
+            (Some(("4", "detected")), false),
         ] {
             let capabilities = provided
                 .map(|(version, build)| GenericVirtualPackage {
@@ -626,6 +672,7 @@ packages:
                 &platform,
                 &EnvironmentName::default(),
                 &host,
+                UnknownNames::Absent,
             );
             if compatible {
                 assert!(result.is_ok(), "{provided:?}: {result:?}");
@@ -638,6 +685,111 @@ packages:
                     "{provided:?}: {result:?}",
                 );
             }
+        }
+    }
+
+    #[test]
+    fn default_build_lock_requirements_match_builtin_and_custom_capabilities() {
+        let platform = PixiPlatform::from_subdir(Subdir::Linux64);
+        for name in ["__cuda", "__test_detector_capability"] {
+            let lock = lock_requiring(&format!("{name} >=3,<4 0"));
+            for (provided, compatible) in [
+                (None, false),
+                (Some(("2.9", "0")), false),
+                (Some(("3", "0")), true),
+                (Some(("3.5", "")), true),
+                (Some(("4", "0")), false),
+                (Some(("3", "other")), false),
+            ] {
+                let capabilities = provided
+                    .map(|(version, build)| GenericVirtualPackage {
+                        name: name.parse().unwrap(),
+                        version: version.parse().unwrap(),
+                        build_string: build.to_string(),
+                    })
+                    .into_iter()
+                    .collect();
+                let host = HostDetection::from_platform(
+                    platform_from_detected(Subdir::Linux64, capabilities).unwrap(),
+                );
+                let result = validate_system_meets_environment_requirements(
+                    &lock,
+                    &platform,
+                    &EnvironmentName::default(),
+                    &host,
+                    UnknownNames::Absent,
+                );
+                if compatible {
+                    assert!(result.is_ok(), "{name} {provided:?}: {result:?}");
+                } else {
+                    assert!(
+                        matches!(
+                            result,
+                            Err(MachineValidationError::VirtualPackageNotFound(_))
+                        ),
+                        "{name} {provided:?}: {result:?}",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn installed_prefixes_check_builtins_and_retain_unknown_custom_names() {
+        let platform = PixiPlatform::from_subdir(Subdir::Linux64);
+        let host = HostDetection::from_platform(
+            platform_from_detected(Subdir::Linux64, Vec::new()).unwrap(),
+        );
+        for name in ["__cuda", "__glibc", "__test_detector_capability"] {
+            let lock = lock_requiring(&format!("{name} >=3"));
+            let result = validate_system_meets_environment_requirements(
+                &lock,
+                &platform,
+                &EnvironmentName::default(),
+                &host,
+                UnknownNames::Unchecked,
+            );
+            if name == "__test_detector_capability" {
+                assert!(result.is_ok(), "{result:?}");
+            } else {
+                assert!(
+                    matches!(
+                        result,
+                        Err(MachineValidationError::VirtualPackageNotFound(_))
+                    ),
+                    "{name}: {result:?}"
+                );
+            }
+            let names = std::collections::BTreeMap::from([(name.parse().unwrap(), None)]);
+            let variable = format!(
+                "CONDA_OVERRIDE_{}",
+                name.trim_start_matches("__").to_uppercase()
+            );
+            temp_env::with_var(variable, None::<&str>, || {
+                let cached = host.for_cached_run(&names, []);
+                assert!(
+                    validate_system_meets_environment_requirements(
+                        &lock,
+                        &platform,
+                        &EnvironmentName::default(),
+                        &cached,
+                        UnknownNames::Unchecked,
+                    )
+                    .is_ok(),
+                    "{name}"
+                );
+                assert!(
+                    validate_system_meets_environment_requirements(
+                        &lock,
+                        &platform,
+                        &EnvironmentName::default(),
+                        &cached,
+                        UnknownNames::Absent,
+                    )
+                    .is_err(),
+                    "a new install must validate {name}"
+                );
+            });
         }
     }
 
@@ -658,6 +810,7 @@ packages:
             &platform,
             &EnvironmentName::default(),
             &host_from_overrides(overrides),
+            UnknownNames::Absent,
         );
         assert!(result.is_ok(), "{result:?}");
 
@@ -670,6 +823,7 @@ packages:
             &platform,
             &EnvironmentName::default(),
             &host_from_overrides(overrides),
+            UnknownNames::Absent,
         );
         assert!(result.is_err());
     }
@@ -723,6 +877,7 @@ packages:
             &platform,
             &EnvironmentName::default(),
             &host_from_overrides(overrides),
+            UnknownNames::Absent,
         );
         assert!(
             matches!(
@@ -731,6 +886,106 @@ packages:
             ),
             "{result:?}"
         );
+    }
+
+    #[test]
+    fn cached_wheel_tags_retain_detector_values_without_skipping_abi_or_architecture() {
+        use crate::host::DetectedVersion;
+        use std::collections::BTreeMap;
+
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests/data/lock_files/pypi-numpy.lock");
+        let source = fs_err::read_to_string(path).unwrap();
+        let lock = LockFile::from_str_with_base_directory(&source, None).unwrap();
+        let platform = PixiPlatform::from_subdir(Subdir::Linux64);
+        let provenance = BTreeMap::from([(
+            "__glibc".parse().unwrap(),
+            Some(DetectedVersion {
+                version: "2.17".parse().unwrap(),
+                build_string: "0".to_string(),
+            }),
+        )]);
+        for builtin_version in [None, Some("2.10")] {
+            let packages = builtin_version
+                .map(|version| GenericVirtualPackage {
+                    name: "__glibc".parse().unwrap(),
+                    version: version.parse().unwrap(),
+                    build_string: "0".to_string(),
+                })
+                .into_iter()
+                .collect();
+            let host = HostDetection::from_platform(
+                platform_from_detected(Subdir::Linux64, packages).unwrap(),
+            );
+            for (value, compatible) in [
+                (None, true),
+                (Some(""), false),
+                (Some("2.10"), false),
+                (Some("2.17"), true),
+            ] {
+                temp_env::with_var("CONDA_OVERRIDE_GLIBC", value, || {
+                    let cached = host.for_cached_run(&provenance, []);
+                    let result = validate_system_meets_environment_requirements(
+                        &lock,
+                        &platform,
+                        &EnvironmentName::default(),
+                        &cached,
+                        UnknownNames::Unchecked,
+                    );
+                    assert_eq!(result.is_ok(), compatible, "{value:?}: {result:?}");
+                });
+            }
+            temp_env::with_var("CONDA_OVERRIDE_GLIBC", None::<&str>, || {
+                let cached = host.for_cached_run(&provenance, []);
+                assert!(
+                    validate_system_meets_environment_requirements(
+                        &lock,
+                        &platform,
+                        &EnvironmentName::default(),
+                        &cached,
+                        UnknownNames::Absent,
+                    )
+                    .is_err(),
+                    "new installs must use actual values"
+                );
+                assert!(
+                    validate_system_meets_environment_requirements(
+                        &lock,
+                        &platform,
+                        &EnvironmentName::default(),
+                        &host,
+                        UnknownNames::Unchecked,
+                    )
+                    .is_err(),
+                    "old metadata must not invent detector values"
+                );
+                for (old, new) in [
+                    (
+                        "cp313-cp313-manylinux_2_17_x86_64",
+                        "cp312-cp312-manylinux_2_17_x86_64",
+                    ),
+                    (
+                        "manylinux_2_17_x86_64.manylinux2014_x86_64",
+                        "manylinux_2_17_aarch64.manylinux2014_aarch64",
+                    ),
+                ] {
+                    let incompatible =
+                        LockFile::from_str_with_base_directory(&source.replace(old, new), None)
+                            .unwrap();
+                    let result = validate_system_meets_environment_requirements(
+                        &incompatible,
+                        &platform,
+                        &EnvironmentName::default(),
+                        &cached,
+                        UnknownNames::Unchecked,
+                    );
+                    assert!(
+                        matches!(result, Err(MachineValidationError::WheelTagsMismatch(_, _))),
+                        "{new}: {result:?}"
+                    );
+                }
+            });
+        }
     }
 
     #[test]
@@ -752,6 +1007,7 @@ packages:
             &platform,
             &EnvironmentName::default(),
             &host_from_overrides(overrides),
+            UnknownNames::Absent,
         );
         assert!(result.is_ok(), "{result:?}");
 
@@ -765,6 +1021,7 @@ packages:
             &platform,
             &EnvironmentName::default(),
             &host_from_overrides(overrides),
+            UnknownNames::Absent,
         );
         if Subdir::current()
             .expect("pixi runs on a known conda platform")
@@ -875,6 +1132,7 @@ packages:
             &platform,
             &EnvironmentName::default(),
             &host_from_overrides(overrides),
+            UnknownNames::Absent,
         )
         .unwrap();
     }

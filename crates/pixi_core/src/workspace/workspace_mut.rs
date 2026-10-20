@@ -250,6 +250,10 @@ impl WorkspaceMut {
         self.workspace
             .as_mut()
             .expect("workspace is not available")
+            .invalidate_environment_hosts();
+        self.workspace
+            .as_mut()
+            .expect("workspace is not available")
             .workspace
             .value
             .workspace
@@ -271,13 +275,10 @@ impl WorkspaceMut {
     /// workspace manifest both in memory and on-disk.
     #[must_use]
     pub fn manifest(&mut self) -> WorkspaceManifestMut<'_> {
+        let workspace = self.workspace.as_mut().expect("workspace is not available");
+        workspace.invalidate_environment_hosts();
         WorkspaceManifestMut {
-            workspace: &mut self
-                .workspace
-                .as_mut()
-                .expect("workspace is not available")
-                .workspace
-                .value,
+            workspace: &mut workspace.workspace.value,
             document: &mut self.workspace_manifest_document,
         }
     }
@@ -373,6 +374,7 @@ impl WorkspaceMut {
                 original.source,
             )
             .await?;
+            workspace.invalidate_environment_hosts();
         }
 
         Ok(workspace)
@@ -481,6 +483,8 @@ impl WorkspaceMut {
         if *lock_file_update_config != LockFileUsage::Update {
             return Ok((None, skipped_packages));
         }
+
+        self.workspace().refresh_environment_hosts().await?;
 
         let original_lock_file = self
             .workspace()
