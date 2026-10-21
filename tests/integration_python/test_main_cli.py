@@ -1579,6 +1579,7 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
         {
             "platform": IsStr,
             "virtual_packages": IsAnyList,
+            "virtual_package_detectors": IsAnyList,
             "version": IsStr,
             "cache_dir": IsStr,
             "cache_size": AnyThing,

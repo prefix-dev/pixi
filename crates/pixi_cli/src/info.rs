@@ -1,13 +1,26 @@
-use std::{fmt::Display, io::Write, path::PathBuf};
+use std::{
+    borrow::Cow,
+    collections::{HashMap, hash_map::Entry},
+    fmt::Display,
+    io::Write,
+    path::PathBuf,
+    sync::Arc,
+};
 
 use chrono::{DateTime, Local};
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use itertools::Itertools;
 use miette::IntoDiagnostic;
+use pixi_config::{DetectorDecision, consent_origin};
 use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
 use pixi_core::environment::{PlatformData, RequiredPlatform};
+use pixi_core::host::{
+    DenyAll, DetectedValue, DetectionSource, HostDetection, HostDetector, SkipReason, WantedNames,
+    consent_key_argument,
+};
+use pixi_core::workspace::grouped_environment::GroupedEnvironment;
 use pixi_global::{BinDir, EnvRoot};
 use pixi_manifest::platform::subdir_default_virtual_packages;
 use pixi_manifest::toml::inline_virtual_package_specs;
@@ -16,9 +29,9 @@ use pixi_manifest::{FeaturesExt, HasFeaturesIter, HasWorkspaceManifest};
 use pixi_progress::await_in_progress;
 use pixi_task::TaskName;
 use pixi_utils::reqwest::tls_backend;
-use rattler_conda_types::{GenericVirtualPackage, Subdir};
+use rattler_conda_types::GenericVirtualPackage;
 use rattler_networking::authentication_storage;
-use rattler_virtual_packages::{VirtualPackage, VirtualPackageOverrides};
+use rattler_virtual_package_detectors::merge_results;
 use serde::Serialize;
 use serde_with::{DisplayFromStr, serde_as};
 use tokio::task::spawn_blocking;
@@ -136,6 +149,8 @@ pub struct EnvironmentInfo {
     tasks: Vec<TaskName>,
     channels: Vec<String>,
     prefix: PathBuf,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    virtual_package_detection_error: Option<String>,
 }
 
 impl Display for EnvironmentInfo {
@@ -147,6 +162,9 @@ impl Display for EnvironmentInfo {
             bold.apply_to("Environment"),
             self.name.fancy_display().bold()
         )?;
+        if let Some(error) = &self.virtual_package_detection_error {
+            writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Detection error"), error)?;
+        }
         writeln!(
             f,
             "{:>WIDTH$}: {}",
@@ -298,12 +316,135 @@ impl Display for GlobalInfo {
     }
 }
 
+/// One virtual package detector the channels register, and what became of
+/// it on this machine.
+#[derive(Serialize)]
+pub struct DetectorInfo {
+    /// The registering channel's base URL without credentials.
+    origin: String,
+    /// The detector package.
+    detector: String,
+    /// `ran`, `cached`, `failed` or `skipped`.
+    state: String,
+    /// Why it failed or was skipped.
+    detail: Option<String>,
+    /// What it reported, as `__name=version=build` or `__name absent`.
+    virtual_packages: Vec<String>,
+}
+
+impl DetectorInfo {
+    /// The detectors of `host` in the order they were reported: those that
+    /// ran, then those that failed, then those that were skipped.
+    fn from_host(host: &HostDetection, config: &pixi_config::Config) -> Vec<Self> {
+        let mut ran: Vec<Self> = Vec::new();
+        for result in host.detector_results() {
+            let DetectionSource::Detector {
+                origin,
+                detector,
+                from_cache,
+                ..
+            } = &result.source
+            else {
+                continue;
+            };
+            let reported = match &result.value {
+                DetectedValue::Absent => format!("{} absent", result.name.as_normalized()),
+                DetectedValue::Present(_) => result
+                    .virtual_package()
+                    .map(|package| package.to_string())
+                    .unwrap_or_default(),
+            };
+            let origin = consent_origin(origin);
+            let origin = origin.as_str();
+            let detector = detector.as_source();
+            match ran
+                .iter_mut()
+                .find(|info| info.origin == origin && info.detector == detector)
+            {
+                Some(info) => info.virtual_packages.push(reported),
+                None => ran.push(Self {
+                    origin: origin.to_string(),
+                    detector: detector.to_string(),
+                    state: if *from_cache { "cached" } else { "ran" }.to_string(),
+                    detail: None,
+                    virtual_packages: vec![reported],
+                }),
+            }
+        }
+        let failed = host.detector_failures().iter().map(|failure| {
+            let detail = match &failure.stderr {
+                Some(stderr) if !stderr.trim().is_empty() => {
+                    format!("{}\n{}", failure.message, stderr.trim_end())
+                }
+                _ => failure.message.clone(),
+            };
+            Self {
+                origin: failure.origin.to_string(),
+                detector: failure.detector.as_source().to_string(),
+                state: "failed".to_string(),
+                detail: Some(detail),
+                virtual_packages: Vec::new(),
+            }
+        });
+        let skipped = host.skipped_detectors().iter().map(|skipped| {
+            let origin = consent_origin(&skipped.origin);
+            let detail = match &skipped.reason {
+                SkipReason::TargetIsNotHost { override_variables } => {
+                    format!(
+                        "the target platform is not this machine's; set {} to supply its virtual packages",
+                        override_variables.join(", ")
+                    )
+                }
+                SkipReason::NoWantedName => {
+                    "none of its virtual packages is needed, or all are overridden".to_string()
+                }
+                SkipReason::ConsentDenied => match config
+                    .virtual_package_detectors
+                    .consent(&origin)
+                {
+                    Some(DetectorDecision::Deny) => "denied in the configuration".to_string(),
+                    _ => format!(
+                        "no decision yet. Trust this channel with `pixi config set --shared \
+                         {} allow`, or use `--local` for this repository",
+                        consent_key_argument(&origin),
+                    ),
+                },
+            };
+            Self {
+                origin: origin.to_string(),
+                detector: skipped.detector.as_source().to_string(),
+                state: "skipped".to_string(),
+                detail: Some(detail),
+                virtual_packages: Vec::new(),
+            }
+        });
+        ran.into_iter().chain(failed).chain(skipped).collect()
+    }
+}
+
+impl Display for DetectorInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {}: {}", self.origin, self.detector, self.state)?;
+        if !self.virtual_packages.is_empty() {
+            write!(f, ", {}", self.virtual_packages.join(", "))?;
+        }
+        if let Some(detail) = &self.detail {
+            write!(f, " ({detail})")?;
+        }
+        Ok(())
+    }
+}
+
 #[serde_as]
 #[derive(Serialize)]
 pub struct Info {
     platform: String,
     #[serde_as(as = "Vec<DisplayFromStr>")]
     virtual_packages: Vec<GenericVirtualPackage>,
+    virtual_package_detectors: Vec<DetectorInfo>,
+    /// Why the host could not be detected with its detectors, if it could not.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    virtual_package_detection_error: Option<String>,
     version: String,
     tls_backend: String,
     cache_dir: Option<PathBuf>,
@@ -348,6 +489,16 @@ impl Display for Info {
             } else {
                 writeln!(f, "{:>WIDTH$}: {}", "", p)?;
             }
+        }
+        for (i, detector) in self.virtual_package_detectors.iter().enumerate() {
+            if i == 0 {
+                writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Detectors"), detector)?;
+            } else {
+                writeln!(f, "{:>WIDTH$}: {}", "", detector)?;
+            }
+        }
+        if let Some(error) = &self.virtual_package_detection_error {
+            writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Detection error"), error)?;
         }
 
         writeln!(f, "{:>WIDTH$}: {}", bold.apply_to("Cache dir"), cache_dir)?;
@@ -456,11 +607,41 @@ fn last_updated(path: impl Into<PathBuf>) -> miette::Result<String> {
     Ok(formatted_time)
 }
 
+/// Detects the host with every detector the configuration allows: those of
+/// the workspace's channels, or of the configured default channels outside a
+/// workspace. Undecided detectors are skipped without asking.
+async fn detect_host(
+    workspace: Option<&pixi_core::Workspace>,
+    config: &pixi_config::Config,
+) -> miette::Result<HostDetection> {
+    let detected = match workspace {
+        Some(workspace) => workspace
+            .detect_host_with_all_detectors()
+            .await
+            .map_err(miette::Report::new),
+        None => {
+            let channel_config = config.global_channel_config();
+            let channels = config
+                .default_channels()
+                .into_iter()
+                .map(|channel| channel.into_base_url(channel_config))
+                .collect::<Result<Vec<_>, _>>()
+                .into_diagnostic()?;
+            HostDetector::new(config.clone(), Arc::new(DenyAll), None)?
+                .detect(&channels, WantedNames::All)
+                .await
+                .map_err(miette::Report::new)
+        }
+    }?;
+    Ok(detected)
+}
+
 pub async fn execute(args: Args) -> miette::Result<()> {
     let source = args.config_source.source();
     let workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(source.clone())
         .with_search_start(args.project_config.workspace_locator_start())
+        .with_detector_consent(Arc::new(DenyAll))
         .locate()
         .await
         .ok();
@@ -495,84 +676,133 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .map(|v| v.to_string()),
     });
 
-    let environments_info: Vec<EnvironmentInfo> = workspace
+    let config = workspace
         .as_ref()
-        .map(|ws| {
-            ws.environments()
-                .iter()
-                .map(|env| {
-                    let best = env.best_declared_platform();
-                    let tasks = env
-                        .tasks(best)
-                        .ok()
-                        .map(|t| t.into_keys().cloned().collect())
-                        .unwrap_or_default();
+        .map(|p| p.config().clone())
+        .unwrap_or_else(|| pixi_config::Config::load_global_with(&source));
 
-                    let environment_size =
-                        args.extended.then(|| dir_size(env.dir()).ok()).flatten();
+    let (host, mut virtual_package_detection_error) =
+        match detect_host(workspace.as_ref(), &config).await {
+            Ok(host) => (host, None),
+            Err(error) => (HostDetection::builtin(), Some(format!("{error:?}"))),
+        };
+    let virtual_packages = match host.platform() {
+        Ok(platform) => merge_results(
+            platform.solver_virtual_package_records().into_owned(),
+            host.detector_results(),
+        ),
+        Err(error) => {
+            virtual_package_detection_error.get_or_insert_with(|| error.to_string());
+            Vec::new()
+        }
+    };
+    let virtual_package_detectors = DetectorInfo::from_host(&host, &config);
 
-                    let (resolved_platform, minimum_supported_platform) = env.installed_platforms();
-
-                    EnvironmentInfo {
-                        name: env.name().clone(),
-                        features: env
-                            .features()
-                            .map(|feature| feature.name.clone())
-                            .filter(|name| !name.is_environment())
-                            .collect(),
-                        solve_group: env
-                            .solve_group()
-                            .map(|solve_group| solve_group.name().to_string()),
-                        environment_size,
-                        dependencies: env
-                            .combined_dependencies(best)
-                            .names()
-                            .map(|p| p.as_source().to_string())
-                            .collect(),
-                        pypi_dependencies: env
-                            .pypi_dependencies(best)
-                            .into_iter()
-                            .map(|(name, _p)| name.as_source().to_string())
-                            .collect(),
-                        platforms: env
-                            .platforms()
-                            .iter()
-                            .filter_map(|name| {
-                                env.workspace_manifest()
-                                    .workspace
-                                    .platform_by_name(name)
-                                    .map(PlatformInfo::from)
-                            })
-                            .collect(),
-                        resolved_platform: resolved_platform.as_ref().map(PlatformInfo::from),
-                        minimum_supported_platform: minimum_supported_platform
-                            .as_ref()
-                            .map(PlatformInfo::from),
-                        channels: env.channels().into_iter().map(|c| c.to_string()).collect(),
-                        prefix: env.dir(),
-                        tasks,
+    let default_channels = workspace.as_ref().and_then(|ws| {
+        GroupedEnvironment::from(ws.default_environment())
+            .channel_urls(&ws.channel_config())
+            .ok()
+    });
+    let mut environments_info = Vec::new();
+    if let Some(ws) = &workspace {
+        let mut detected_scopes = HashMap::new();
+        for env in ws.environments() {
+            let channels = GroupedEnvironment::from(env.clone()).channel_urls(&ws.channel_config());
+            let (environment_host, mut detection_error) = if env.name() == &EnvironmentName::Default
+                || channels
+                    .as_ref()
+                    .is_ok_and(|channels| Some(channels) == default_channels.as_ref())
+            {
+                (
+                    Cow::Borrowed(&host),
+                    virtual_package_detection_error.clone(),
+                )
+            } else {
+                match channels {
+                    Ok(channels) => {
+                        let (host, error) = match detected_scopes.entry(channels) {
+                            Entry::Occupied(entry) => entry.into_mut(),
+                            Entry::Vacant(entry) => {
+                                let detected = ws
+                                    .detect_host_with_all_detectors_for_channels(entry.key())
+                                    .await;
+                                entry.insert(match detected {
+                                    Ok(host) => (host, None),
+                                    Err(error) => (
+                                        HostDetection::builtin(),
+                                        Some(format!("{:?}", miette::Report::new(error))),
+                                    ),
+                                })
+                            }
+                        };
+                        (Cow::Borrowed(&*host), error.clone())
                     }
-                })
-                .collect()
-        })
-        .unwrap_or_default();
+                    Err(error) => (
+                        Cow::Owned(HostDetection::builtin()),
+                        Some(error.to_string()),
+                    ),
+                }
+            };
+            if let Err(error) = environment_host.platform() {
+                detection_error.get_or_insert_with(|| error.to_string());
+            }
+            let best = env.best_declared_platform_with_host(&environment_host);
+            let tasks = env
+                .tasks(best)
+                .ok()
+                .map(|t| t.into_keys().cloned().collect())
+                .unwrap_or_default();
+            let environment_size = args.extended.then(|| dir_size(env.dir()).ok()).flatten();
+            let (resolved_platform, minimum_supported_platform) = env.installed_platforms();
+
+            environments_info.push(EnvironmentInfo {
+                name: env.name().clone(),
+                features: env
+                    .features()
+                    .map(|feature| feature.name.clone())
+                    .filter(|name| !name.is_environment())
+                    .collect(),
+                solve_group: env
+                    .solve_group()
+                    .map(|solve_group| solve_group.name().to_string()),
+                environment_size,
+                dependencies: env
+                    .combined_dependencies(best)
+                    .names()
+                    .map(|p| p.as_source().to_string())
+                    .collect(),
+                pypi_dependencies: env
+                    .pypi_dependencies(best)
+                    .into_iter()
+                    .map(|(name, _p)| name.as_source().to_string())
+                    .collect(),
+                platforms: env
+                    .platforms()
+                    .iter()
+                    .filter_map(|name| {
+                        env.workspace_manifest()
+                            .workspace
+                            .platform_by_name(name)
+                            .map(PlatformInfo::from)
+                    })
+                    .collect(),
+                resolved_platform: resolved_platform.as_ref().map(PlatformInfo::from),
+                minimum_supported_platform: minimum_supported_platform
+                    .as_ref()
+                    .map(PlatformInfo::from),
+                channels: env.channels().into_iter().map(|c| c.to_string()).collect(),
+                prefix: env.dir(),
+                tasks,
+                virtual_package_detection_error: detection_error,
+            });
+        }
+    }
 
     let global_info = Some(GlobalInfo {
         bin_dir: BinDir::from_env().await?.path().to_path_buf(),
         env_dir: EnvRoot::from_env().await?.path().to_path_buf(),
         manifest: pixi_global::Project::manifest_dir()?.join(consts::GLOBAL_MANIFEST_DEFAULT_NAME),
     });
-
-    let virtual_packages = VirtualPackage::detect(&VirtualPackageOverrides::from_env(), None)
-        .into_diagnostic()?
-        .iter()
-        .cloned()
-        .map(GenericVirtualPackage::from)
-        .collect::<Vec<_>>();
-
-    let config = workspace
-        .map(|p| p.config().clone())
-        .unwrap_or_else(|| pixi_config::Config::load_global_with(&source));
 
     let auth_file: PathBuf = if let Ok(auth_file) = std::env::var("RATTLER_AUTH_FILE") {
         auth_file.into()
@@ -585,8 +815,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     let info = Info {
-        platform: Subdir::current().unwrap_or(Subdir::NoArch).to_string(),
+        platform: host.subdir().to_string(),
         virtual_packages,
+        virtual_package_detectors,
+        virtual_package_detection_error,
         version: consts::PIXI_VERSION.to_string(),
         tls_backend: tls_backend().to_string(),
         cache_dir: Some(pixi_config::get_cache_dir()?),

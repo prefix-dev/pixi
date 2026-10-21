@@ -10,7 +10,7 @@ use pixi_api::workspace::platforms::resolve_platforms;
 use pixi_command_dispatcher::offline::exclusions_for_solve;
 use pixi_config::{self, Config, ConfigCli};
 use pixi_core::environment::list::{PackageToOutput, print_package_table};
-use pixi_core::host::HostDetection;
+use pixi_core::host::{HostDetector, WantedNames, cli_detector_consent};
 use pixi_manifest::PixiPlatformName;
 use pixi_manifest::platform::host::host_subdir;
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
@@ -23,7 +23,9 @@ use rattler::{
     install::{IndicatifReporter, Installer},
     package_cache::PackageCache,
 };
-use rattler_conda_types::{GenericVirtualPackage, MatchSpec, PackageName, Subdir};
+use rattler_conda_types::{
+    ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, Subdir, referenced_virtual_packages,
+};
 use rattler_solve::{SolverImpl, SolverTask, resolvo::Solver};
 use reqwest_middleware::ClientWithMiddleware;
 use uv_threads::initialize_rayon_once;
@@ -248,6 +250,10 @@ pub async fn create_exec_prefix(
     let gateway = config.gateway().with_client(client.clone()).finish();
 
     let channels = args.channels.resolve_from_config(config)?;
+    let channel_urls: Vec<ChannelUrl> = channels
+        .iter()
+        .map(|channel| channel.base_url.clone())
+        .collect();
 
     // Get the repodata for the specs
     let query_output = await_in_progress("fetching repodata for environment", |_| async {
@@ -266,8 +272,30 @@ pub async fn create_exec_prefix(
     }
     let repodata = query_output.repodata;
 
-    // Determine virtual packages of the platform we are targeting
-    let virtual_packages: Vec<GenericVirtualPackage> = HostDetection::builtin_for(platform)
+    // Discover registrations for the target, honoring overrides without
+    // executing detectors on a foreign platform.
+    let mut wanted = referenced_virtual_packages(
+        repodata
+            .iter()
+            .flat_map(|subdir| subdir.iter())
+            .map(|record| &record.package_record),
+    );
+    wanted.extend(
+        specs
+            .iter()
+            .filter_map(|spec| spec.name.as_exact())
+            .filter(|name| name.as_normalized().starts_with("__"))
+            .cloned(),
+    );
+    let host = HostDetector::with_gateway(
+        config.clone(),
+        cli_detector_consent(None),
+        client.clone().into(),
+        gateway.clone(),
+    )
+    .detect_for_target(&channel_urls, platform, WantedNames::Only(wanted))
+    .await?;
+    let virtual_packages: Vec<GenericVirtualPackage> = host
         .platform()
         .into_diagnostic()
         .context("failed to determine virtual packages")?

@@ -63,6 +63,7 @@ The configuration is loaded in the following order:
 The `rattler` locations are read by every rattler-based tool, so a setting placed there applies to Pixi and `rattler-build` alike.
 They accept only the options that all of these tools understand, such as `default-channels`, `mirrors`, `s3-options`, `index-config` and `concurrency`.
 Options that only Pixi knows, like `shell` or `detached-environments`, belong in a `pixi` location; in a `rattler` file Pixi ignores them and warns about it.
+`pixi config set --shared`, `unset --shared` and `edit --shared` operate on the user-level `rattler` file and refuse keys that are not shared by all tools.
 
 ### Skipping or overriding config discovery
 
@@ -479,6 +480,7 @@ The fields under `[cache]` map one-to-one to the caches pixi maintains:
 | `pypi-wheels` | uv wheel cache (`uv-cache`) | Stay shared |
 | `pypi-mapping` | conda↔PyPI name mapping | Redirect to node-local |
 | `exec-environments` | Cached `pixi exec` envs | Redirect to node-local |
+| `virtual-package-detectors` | Environments and cached reports of [virtual package detectors](../workspace/multi_platform_configuration.md#virtual-package-detectors) | Redirect to node-local |
 | `build-tool-environments` | Cached build-tool envs | Redirect to node-local |
 | `detached-environments` | Workspace envs when [`detached-environments`](#detached-environments) is `true` | Redirect to node-local |
 
@@ -535,6 +537,7 @@ that kind and uses the path verbatim.
 | `PIXI_CACHE_PYPI_WHEELS_DIR` | `cache.pypi-wheels` |
 | `PIXI_CACHE_PYPI_MAPPING_DIR` | `cache.pypi-mapping` |
 | `PIXI_CACHE_EXEC_ENVIRONMENTS_DIR` | `cache.exec-environments` |
+| `PIXI_CACHE_VIRTUAL_PACKAGE_DETECTORS_DIR` | `cache.virtual-package-detectors` |
 | `PIXI_CACHE_BUILD_TOOL_ENVIRONMENTS_DIR` | `cache.build-tool-environments` |
 | `PIXI_CACHE_DETACHED_ENVIRONMENTS_DIR` | `cache.detached-environments` |
 
@@ -554,6 +557,33 @@ debugging:
 
 For persistent behavior, prefer `[cache.netfs-redirect]` or
 `PIXI_CACHE_NETFS_REDIRECT`.
+
+### `virtual-package-detectors`
+
+Channels can register virtual package detectors: small packages whose executable reports [virtual packages](../conda_ecosystem.md#virtual-packages-describing-the-host-system).
+These identify system capabilities that packages depend on.
+One example for this could be a detector reporting which [MPI](https://en.wikipedia.org/wiki/Message_Passing_Interface) implementation and version you have on your system. 
+
+That also means, you run external and potentially untrusted code shortly before installing an environment.
+This is why Pixi asks whether to trust detectors coming from a certain channel.
+Additionally, it allows you to store your decision in your configuration, so you don't have to answer the question with every Pixi command.
+If you choose not to save it, the decision applies only to the current command, so Pixi asks again next time.
+For example, a saved decision looks like this:
+
+```toml title="config.toml"
+[virtual-package-detectors]
+# How long a detector, and separately its activation, may run. At most 300.
+timeout-seconds = 30
+
+# Decisions per registration origin, the channel's base URL.
+[virtual-package-detectors.consent]
+"https://conda.anaconda.org/conda-forge" = "allow"
+```
+
+Consent is matched against the channel's base URL without credentials or authentication tokens.
+Equivalent URLs, including spellings with or without a trailing slash, share one decision.
+Across configuration layers, a `deny` takes precedence over an `allow`.
+Setting or unsetting a channel's consent key updates all equivalent spellings in the selected file; newly saved keys do not contain credentials.
 
 ## Experimental
 

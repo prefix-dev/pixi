@@ -51,6 +51,7 @@ async fn update_platform_lock_file_and_prefix(
     no_install: bool,
     lock_file_usage: LockFileUsage,
 ) -> miette::Result<()> {
+    workspace.refresh_environment_hosts().await?;
     let default_env = workspace.default_environment();
     let no_install = no_install || default_env.best_declared_platform().is_none();
     if no_install && default_env.best_declared_platform().is_none() {
