@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 import tomli
 import tomli_w
-from dirty_equals import AnyThing, IsDict, IsList, IsStr
+from dirty_equals import AnyThing, IsDict, IsInstance, IsList, IsStr
 from inline_snapshot import snapshot
 
 from .common import (
@@ -1585,6 +1585,12 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "cache_size": AnyThing,
             "auth_dir": IsStr,
             "tls_backend": IsStr,
+            "tls_root_certs": {
+                "mode": IsStr,
+                "is_default": IsInstance(bool),
+                "env_sources": IsAnyList,
+                "env_replaces_mode": IsInstance(bool),
+            },
             "global_info": {
                 "bin_dir": IsStr,
                 "env_dir": IsStr,
