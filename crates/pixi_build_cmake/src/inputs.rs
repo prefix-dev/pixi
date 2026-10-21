@@ -32,7 +32,7 @@ use std::{
     process::{Command, Output},
 };
 
-const NINJA_BUILD_DIR: &str = "build";
+pub const NINJA_BUILD_DIR: &str = "build";
 const PIXI_CACHE_DIR: &str = ".pixi";
 const CMAKE_HOME_DIRECTORY_KEY: &str = "CMAKE_HOME_DIRECTORY:INTERNAL=";
 const CMAKE_MAKE_PROGRAM_KEY: &str = "CMAKE_MAKE_PROGRAM:FILEPATH=";
