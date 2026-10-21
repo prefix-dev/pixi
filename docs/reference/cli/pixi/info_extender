@@ -11,9 +11,5 @@ pixi info --extended
 --8<-- [end:example]
 
 --8<-- [start:description]
-Show virtual packages from built-in detection, trusted [channel detectors](../../../workspace/multi_platform_configuration.md#virtual-package-detectors), and overrides.
-Detector entries show results, cache use, failures, or skipped detection.
-This command uses saved trust decisions and never prompts.
-
 More information [here](../../../advanced/explain_info_command.md).
 --8<-- [end:description]

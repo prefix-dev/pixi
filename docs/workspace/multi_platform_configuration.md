@@ -96,10 +96,7 @@ Each inline-table entry has:
   not `x86-64-v3`). A CPU newer than the bundled database can't be named until
   Pixi ships an updated archspec; set `archspec = "0"` to declare the
   microarchitecture explicitly unknown.
-  Plain names default to virtual-package version `0`. Use
-  `archspec = "1=zen5"` to preserve an explicit version alongside the
-  microarchitecture.
-  Unlike every other virtual package, a machine does not satisfy `archspec` by
+  Unlike many other virtual packages, a machine does not satisfy `archspec` by
   carrying a high enough version.
   It satisfies it by being that microarchitecture or one the archspec database
   says is a strict superset of it, so a `zen2` host covers a platform declaring
@@ -200,22 +197,9 @@ Detectors can extend or replace Pixi's built-in detection.
 Pixi runs detectors when their virtual packages are needed for the current machine, not for foreign target platforms.
 Workspace lock-file solves use the virtual packages declared in the manifest, not detected values.
 
-Commands targeting an installed environment reuse its locked prefix without running detectors when it is up to date.
-An uninstalled sibling does not trigger detection for `pixi run -e <environment>`, `pixi shell-hook`, `pixi list`, or `pixi tree` targeting that installed environment.
-Without `-e`, task search can consider other environments and may need detection to choose their platforms.
-Installed metadata records detector-provided capabilities, including replacements for built-in names.
-On detector-free reuse, these capabilities remain unknown rather than being contradicted by built-in detection; wheel checks reuse their recorded values while still validating Python, ABI, and architecture compatibility.
-Built-in-only capabilities are still checked, including an absent CUDA driver.
-Custom capabilities that have not been probed remain unknown.
-Explicit `CONDA_OVERRIDE_*` values, including an empty value declaring absence, are always checked.
-An older prefix without detector provenance must be reinstalled before built-in replacements can be reused this way.
-
 Detectors execute code from the channel, so Pixi asks whether to trust them before running them.
 You can save the decision in the [configuration](../reference/pixi_configuration.md#virtual-package-detectors).
 Without a terminal, detectors without a saved decision are skipped.
-
-`pixi info` selects each environment's tasks and dependencies using its effective detector channels.
-Environments with the same channel scope share detection, and detection errors are shown inline instead of hiding the rest of the information.
 
 ### Managing platforms from the CLI
 
@@ -232,7 +216,6 @@ Environments with the same channel scope share detection, and detection errors a
 - `pixi workspace platform list` inspects what is declared.
 - `pixi workspace platform remove <NAME>` drops an entry.
 
-With `--auto-detect`, `--feature` selects that feature's channels and `--environment` selects the environment's effective solve-group channels.
 
 The mutating subcommands keep `pixi.lock` in sync.
 
