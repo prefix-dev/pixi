@@ -60,6 +60,25 @@ pub use interactive::InteractiveConsent;
 /// How many detectors are prepared and run at the same time.
 const DETECTOR_CONCURRENCY: usize = 4;
 
+/// The `pixi config` key of the consent for `origin`, quoted for the shell
+/// the user most likely pastes it into.
+pub fn consent_key_argument(origin: &ChannelUrl) -> String {
+    let origin = origin.as_str().trim_end_matches('/');
+    if cfg!(windows) {
+        // Double quotes work in both cmd and PowerShell, so the URL becomes a
+        // TOML literal key instead of carrying nested double quotes.
+        format!("\"virtual-package-detectors.consent.'{origin}'\"")
+    } else {
+        let key = format!(
+            "virtual-package-detectors.consent.{}",
+            toml_edit::Key::new(origin)
+        );
+        shlex::try_quote(&key)
+            .map(|quoted| quoted.into_owned())
+            .unwrap_or(key)
+    }
+}
+
 /// Uses the decisions stored in the configuration, asking `fallback` for the
 /// rest. Decisions are looked up by [`consent_origin`].
 struct StoredConsent {
@@ -457,10 +476,10 @@ impl NonInteractiveConsent {
         }
         tracing::warn!(
             "Detectors from {} do not run without your consent. Trust this channel with \
-             `pixi config set --shared 'virtual-package-detectors.consent.{}' allow`, \
+             `pixi config set --shared {} allow`, \
              or use `--local` for this repository. Set `deny` to block its detectors.",
             key,
-            toml_edit::Key::new(key.as_str().trim_end_matches('/')),
+            consent_key_argument(&key),
         );
     }
 }
@@ -1295,6 +1314,37 @@ mod tests {
                     );
                 });
             }
+        }
+    }
+
+    #[test]
+    fn consent_key_argument_is_accepted_by_config_set() {
+        let origin = ChannelUrl::from(url::Url::parse("https://prefix.dev/conda-forge").unwrap());
+        let argument = consent_key_argument(&origin);
+        // What the shell passes on after removing the outer quotes.
+        let key = &argument[1..argument.len() - 1];
+        if cfg!(windows) {
+            assert_eq!(
+                argument,
+                "\"virtual-package-detectors.consent.'https://prefix.dev/conda-forge'\""
+            );
+        } else {
+            assert_eq!(
+                argument,
+                "'virtual-package-detectors.consent.\"https://prefix.dev/conda-forge\"'"
+            );
+        }
+        // Both spellings of the key name the same origin.
+        for key in [
+            key,
+            "virtual-package-detectors.consent.'https://prefix.dev/conda-forge'",
+        ] {
+            let mut config = Config::default();
+            config.set(key, Some("allow".to_string())).unwrap();
+            assert_eq!(
+                config.virtual_package_detectors.consent(&origin),
+                Some(DetectorDecision::Allow)
+            );
         }
     }
 
