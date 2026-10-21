@@ -8898,6 +8898,8 @@
 <p>When you pass <code>--path</code> with a local <code>.conda</code> archive, Pixi copies the file into <code>PIXI_HOME/conda-files</code> and installs from that managed copy.
 Supplying any other kind of path keeps the original location unchanged.</p>
 </div>
+<p>Trusted <a href="../../../../../workspace/multi_platform_configuration/#virtual-package-detectors">virtual package detectors</a> supply host capabilities for native-platform solves.
+For a foreign <code>--platform</code>, use <code>CONDA_OVERRIDE_&lt;NAME&gt;</code> to supply detector-defined virtual packages.</p>
 <p>After using global install, you can use the package you installed anywhere on your system.</p>
 <h2 id="usage">Usage<a class="headerlink" href="#usage" title="Permanent link">#</a></h2>
 <div class="language-text highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi global install [OPTIONS] [PACKAGE]...

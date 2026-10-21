@@ -9021,7 +9021,7 @@ You can for example add a CUDA toolkit version or a glibc minimum version as a v
   not <code>x86-64-v3</code>). A CPU newer than the bundled database can't be named until
   Pixi ships an updated archspec; set <code>archspec = "0"</code> to declare the
   microarchitecture explicitly unknown.
-  Unlike every other virtual package, a machine does not satisfy <code>archspec</code> by
+  Unlike many other virtual packages, a machine does not satisfy <code>archspec</code> by
   carrying a high enough version.
   It satisfies it by being that microarchitecture or one the archspec database
   says is a strict superset of it, so a <code>zen2</code> host covers a platform declaring

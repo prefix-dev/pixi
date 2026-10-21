@@ -6330,7 +6330,7 @@ Each inline-table entry has:
   not `x86-64-v3`). A CPU newer than the bundled database can't be named until
   Pixi ships an updated archspec; set `archspec = "0"` to declare the
   microarchitecture explicitly unknown.
-  Unlike every other virtual package, a machine does not satisfy `archspec` by
+  Unlike many other virtual packages, a machine does not satisfy `archspec` by
   carrying a high enough version.
   It satisfies it by being that microarchitecture or one the archspec database
   says is a strict superset of it, so a `zen2` host covers a platform declaring
@@ -6449,6 +6449,7 @@ Without a terminal, detectors without a saved decision are skipped.
 - `pixi workspace platform move <NAME> --to-top | --to-bottom | --before <NAME> | --after <NAME>` reorders an entry; since order is selection priority, this is how you promote or demote a platform.
 - `pixi workspace platform list` inspects what is declared.
 - `pixi workspace platform remove <NAME>` drops an entry.
+
 
 The mutating subcommands keep `pixi.lock` in sync.
 
