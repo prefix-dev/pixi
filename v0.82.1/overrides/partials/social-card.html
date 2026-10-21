@@ -1,0 +1,43 @@
+{#-
+  Zensical has no counterpart to the `social` plugin of Material for MkDocs,
+  which rendered a card per page. Until it does, every page points at the same
+  card, `docs/assets/social-card.png`. Title and description are still per page.
+
+  Before touching this file, check whether Zensical has gained social card
+  support in the meantime. If it has, drop this partial, `main.html`, the
+  `extends` in `home.html` and the card asset, and configure the plugin instead.
+-#}
+{#- Zensical leaves `page.is_homepage` unset, the home page is the one without a URL -#}
+{% if not page.url %}
+  {% set title = config.site_name %}
+{% elif page.meta and page.meta.title %}
+  {% set title = page.meta.title ~ " - " ~ config.site_name %}
+{% elif page.title %}
+  {% set title = page.title | striptags ~ " - " ~ config.site_name %}
+{% else %}
+  {% set title = config.site_name %}
+{% endif %}
+{% if page.meta and page.meta.description %}
+  {% set description = page.meta.description %}
+{% else %}
+  {% set description = config.site_description %}
+{% endif %}
+{#- Under mike, `site_url` carries the version prefix and loses its trailing slash -#}
+{% set base = config.site_url | d("", true) %}
+{% set card = (base ~ "/assets/social-card.png") | replace("//assets", "/assets") %}
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="{{ config.site_name }}">
+<meta property="og:title" content="{{ title }}">
+<meta property="og:description" content="{{ description }}">
+{% if page.canonical_url %}
+  <meta property="og:url" content="{{ page.canonical_url }}">
+{% endif %}
+<meta property="og:image" content="{{ card }}">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="{{ description }}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{ title }}">
+<meta name="twitter:description" content="{{ description }}">
+<meta name="twitter:image" content="{{ card }}">
