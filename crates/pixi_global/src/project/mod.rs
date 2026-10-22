@@ -1106,6 +1106,16 @@ impl Project {
             })
             .collect_vec();
 
+        // Executables already exposed in this environment, possibly under a custom
+        // exposed name (e.g. `exposed = { custom-name = "binary" }`). Those must not be
+        // exposed a second time under their own name: doing so would add a duplicate
+        // mapping that can clash with the same expose name in another environment.
+        let exposed_executable_names: Vec<String> = environment
+            .exposed
+            .iter()
+            .map(|mapping| mapping.executable_name().to_string())
+            .collect();
+
         // Removed the removable exposed names from the manifest
         for exposed_name in &to_remove {
             self.manifest.remove_exposed_name(env_name, exposed_name)?;
@@ -1119,7 +1129,8 @@ impl Project {
                 let executable_names = execs_direct_deps
                     .into_iter()
                     .flat_map(|(_, executables)| executables)
-                    .map(|executable| executable.name);
+                    .map(|executable| executable.name)
+                    .filter(|name| !exposed_executable_names.contains(name));
                 for executable_name in executable_names {
                     let mapping = Mapping::new(
                         ExposedName::from_str(&executable_name)?,
@@ -1142,7 +1153,8 @@ impl Project {
                         }
                     })
                     .flatten()
-                    .map(|executable| executable.name);
+                    .map(|executable| executable.name)
+                    .filter(|name| !exposed_executable_names.contains(name));
 
                 for executable_name in executable_names {
                     let mapping = Mapping::new(
