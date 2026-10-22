@@ -98,6 +98,7 @@ for further details on how to use the software.
 - [General setup options:](https://pixi.prefix.dev/latest/integration/third_party/conda_deny/)
 - [Direnv](https://pixi.prefix.dev/latest/integration/third_party/direnv/)
 - [customize python binary path for pixi](https://pixi.prefix.dev/latest/integration/third_party/starship/)
+- [Tombi](https://pixi.prefix.dev/latest/integration/third_party/tombi/)
 
 ## Advanced documentation
 
