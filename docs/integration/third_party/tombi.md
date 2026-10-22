@@ -1,8 +1,7 @@
 [Tombi](https://tombi-toml.github.io/tombi) is a TOML toolkit with a formatter, linter and language server.
 It already provides schema-based validation and completion for `pixi.toml` out of the box.
 
-There is an unofficial [fork of tombi](https://github.com/pavelzw/tombi/pull/1) that adds a pixi extension, similar to tombi's Cargo extension: it shows the available versions of conda packages in your `pixi.toml` dependencies, fetched from conda-forge using [sharded repodata](https://conda.org/learn/ceps/cep-0016).
-It is intended as a stopgap until tombi supports third-party plugins (see [tombi-toml/tombi#1305](https://github.com/tombi-toml/tombi/issues/1305)).
+There is an unofficial [fork of tombi](https://github.com/pavelzw/tombi/pull/1) that adds a pixi extension, similar to tombi's Cargo extension: it shows the available versions of conda packages in your `pixi.toml` dependencies.
 
 You can install it using `pixi global`:
 
