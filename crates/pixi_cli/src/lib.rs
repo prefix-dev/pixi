@@ -592,6 +592,7 @@ mod tests {
 
         let expected = [
             "pixi add",
+            "pixi clean",
             "pixi init",
             "pixi install",
             "pixi list",
