@@ -146,6 +146,7 @@ nav = [
           { "Conda Deny" = "integration/third_party/conda_deny.md" },
           { "Direnv" = "integration/third_party/direnv.md" },
           { "Starship" = "integration/third_party/starship.md" },
+          { "Tombi" = "integration/third_party/tombi.md" },
         ]
       },
     ]
