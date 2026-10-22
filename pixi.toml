@@ -53,15 +53,18 @@ python = ">=3.14.8,<3.15"
 # Shared feature for Rust toolchain
 #
 [feature.rust.dependencies]
+rust = "==1.98.1"
+
+[feature.rust-dev.dependencies]
 rust-src = ">=1.98,<1.99"
 
 # The target dir is anchored to the workspace root so that cargo invocations
 # from subdirectories don't create stray target folders at the invocation site.
-[feature.rust.target.unix.activation]
+[feature.rust-dev.target.unix.activation]
 env.CARGO_TARGET_DIR = "$PIXI_PROJECT_ROOT/target/pixi"
 scripts = ["scripts/activate.sh"]
 
-[feature.rust.target.win.activation]
+[feature.rust-dev.target.win.activation]
 env.CARGO_TARGET_DIR = "%PIXI_PROJECT_ROOT%\\target\\pixi"
 
 #
@@ -75,7 +78,6 @@ questionary = ">=2.1.1,<3"
 rich = ">=15.0.0,<16"
 "ruamel.yaml" = ">=0.19.1,<0.20"
 tomlkit = ">=0.15.1,<0.16"
-rust = "==1.98.1"
 
 #
 # Feature for development tools and utilities
@@ -173,7 +175,7 @@ test-schema = {
 # Environment for building and releasing pixi-build-backends
 #
 [environments.backends-release]
-features = ["backends-release-deps", "python"]
+features = ["backends-release-deps", "python", "rust"]
 solve-group = "python"
 
 [environments.backends-release.activation.env]
@@ -222,6 +224,7 @@ description = "Build a backend packages"
 [environments.default]
 features = [
   "rust",
+  "rust-dev",
   "compilers",
   "python",
   "python-test-deps",
@@ -483,14 +486,11 @@ update-test-channel = {
 }
 
 #
-# Environment for release tasks
+# Environment for building and publishing release artifacts
 #
 [environments.release.dependencies]
 cargo-zigbuild = ">=0.23.4,<0.24"
 cffconvert = ">=2.0.0,<3"
-git-cliff = ">=2.14.2,<3"
-questionary = ">=2.1.1,<3"
-tbump = ">=6.9.0,<7"
 tomli = ">=2.4.1,<3"
 zig = ">=0.16.0,<0.17"
 
@@ -522,20 +522,37 @@ package-binary = {
   cmd = "python scripts/package_binary.py",
   description = "Package a built binary into an archive and stage it",
 }
-release = {
-  cmd = "python scripts/release.py",
-  description = "Run the release script",
-}
 sign-macos = {
   cmd = "python scripts/sign_macos.py",
   description = "Codesign and notarize a macOS binary",
 }
 
 #
+# Environment for preparing the release PR
+#
+[environments.release-prepare]
+features = ["rust", "python"]
+solve-group = "python"
+
+[environments.release-prepare.dependencies]
+gh = ">=2.102.0,<3"
+git = ">=2.56.0,<3"
+git-cliff = ">=2.14.2,<3"
+questionary = ">=2.1.1,<3"
+tbump = ">=6.9.0,<7"
+tomli = ">=2.4.1,<3"
+
+[environments.release-prepare.tasks]
+release = {
+  cmd = "python scripts/release.py",
+  description = "Prepare the release PR",
+}
+
+#
 # Environment for Rust building and testing
 #
 [environments.rust-test]
-features = ["rust", "compilers", "python", "dev"]
+features = ["rust", "rust-dev", "compilers", "python", "dev"]
 solve-group = "python"
 
 [environments.rust-test.dependencies]
