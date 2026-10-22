@@ -3,6 +3,9 @@ It already provides schema-based validation and completion for `pixi.toml` out o
 
 There is an unofficial [fork of tombi](https://github.com/pavelzw/tombi/pull/1) that adds a pixi extension, similar to tombi's Cargo extension: it shows the available versions of conda packages in your `pixi.toml` dependencies.
 
+![Tombi with pixi extension](../../assets/tombi-light.png#only-light)
+![Tombi with pixi extension](../../assets/tombi-dark.png#only-dark)
+
 You can install it using `pixi global`:
 
 ```bash
