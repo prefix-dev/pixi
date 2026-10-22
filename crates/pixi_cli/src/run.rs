@@ -378,15 +378,12 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
     // Sanity check of prefix location
     sanity_check_workspace(&workspace).await?;
 
-    if let Some(environment) = &explicit_environment {
-        workspace
-            .refresh_environment_hosts_for_platform_selection(std::slice::from_ref(environment))
-            .await?;
-    } else {
-        workspace
-            .refresh_environment_hosts_for_platform_selection(&workspace.environments())
-            .await?;
-    }
+    // Detect the host, the virtual packages this machine provides, only for the
+    // environment this command targets. Other environments are detected when a
+    // task runs in them.
+    workspace
+        .refresh_environment_hosts_for_platform_selection(std::slice::from_ref(&environment))
+        .await?;
 
     // `--platform` pins which declared platform the environment is installed
     // and activated for. Without it we auto-upgrade to the platform the
@@ -504,6 +501,14 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
         // don't instantiate a prefix for an alias.
         if !executable_task.task().is_executable() {
             continue;
+        }
+
+        if args.lock_and_install_config.allow_installs() {
+            workspace
+                .refresh_environment_hosts_for_platform_selection(std::slice::from_ref(
+                    &executable_task.run_environment,
+                ))
+                .await?;
         }
 
         // Classify how this machine runs the task's environment. A `--platform`
