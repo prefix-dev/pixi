@@ -10034,7 +10034,7 @@ It also makes use of `pixi shell-hook` to not rely on Pixi being installed in th
     For more examples, take a look at [pavelzw/pixi-docker-example](https://github.com/pavelzw/pixi-docker-example).
 
 ```Dockerfile
-FROM ghcr.io/prefix-dev/pixi:0.82.1 AS build
+FROM ghcr.io/prefix-dev/pixi:0.83.0 AS build
 
 # copy source code, pixi.toml and pixi.lock to the container
 WORKDIR /app
@@ -10728,7 +10728,7 @@ We created [prefix-dev/setup-pixi](https://github.com/prefix-dev/setup-pixi) to 
 ```yaml
 - uses: prefix-dev/setup-pixi@v0.11.1
   with:
-    pixi-version: v0.82.1
+    pixi-version: v0.83.0
     cache: true
     auth-host: prefix.dev
     auth-token: ${{ secrets.PREFIX_DEV_TOKEN }}
@@ -11714,7 +11714,7 @@ Then, create the following two files in the `.devcontainer` directory:
 ```dockerfile title=".devcontainer/Dockerfile"
 FROM mcr.microsoft.com/devcontainers/base:jammy
 
-ARG PIXI_VERSION=v0.82.1
+ARG PIXI_VERSION=v0.83.0
 
 RUN curl -L -o /usr/local/bin/pixi -fsSL --compressed "https://github.com/prefix-dev/pixi/releases/download/${PIXI_VERSION}/pixi-$(uname -m)-unknown-linux-musl" \
     && chmod +x /usr/local/bin/pixi \
@@ -15684,6 +15684,32 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+### [0.83.0] - 2026-10-22
+#### ✨ Highlights
+
+
+Soon channels will be able to register virtual package detectors.
+These detectors allow to introduce virtual packages that Pixi doesn't know about.
+This Pixi release introduces support for virtual package detectors.
+
+It also fixes an increase in memory usage that 0.82.1 introduced.
+
+#### Features
+
+- Ask before running detectors and show them in pixi info by @Hofer-Julian in [#7129](https://github.com/prefix-dev/pixi/pull/7129)
+
+
+#### Fixes
+
+- run: Only detect the target environment's host up front by @Hofer-Julian in [#7339](https://github.com/prefix-dev/pixi/pull/7339)
+
+
+#### Documentation
+
+- Add tombi integration page by @pavelzw in [#7338](https://github.com/prefix-dev/pixi/pull/7338)
+
+
 
 ### [0.82.1] - 2026-10-20
 #### 🔒 Security 🔒
