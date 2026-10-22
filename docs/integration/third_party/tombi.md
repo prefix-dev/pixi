@@ -13,6 +13,11 @@ You can install it using `pixi global`:
 pixi global install -c https://prefix.dev/yolo-forge -c conda-forge tombi-pavelzw
 ```
 
+!!! warning
+    This fork is not maintained by the tombi project.
+    It will be updated to newer tombi releases on a best-effort basis.
+    See [tombi-toml/tombi#2337](https://github.com/tombi-toml/tombi/issues/2337#issuecomment-6312325741) for more details.
+
 `pixi global` puts `tombi` into `~/.pixi/bin`, so it is available on your `PATH`.
 Depending on your editor, you might need to configure it to use this `tombi` instead of a bundled one.
 
@@ -48,8 +53,3 @@ Point the [Tombi extension](https://zed.dev/extensions/tombi) to the fork in you
 
 [diffle](https://diffle.app) uses `tombi lsp` for TOML files whenever `tombi` is on your `PATH`, so no configuration is needed.
 You can check which language server it picks up with `diffle lsp`.
-
-!!! warning
-    This fork is not maintained by the tombi project.
-    It will be updated to newer tombi releases on a best-effort basis.
-    See [tombi-toml/tombi#2337](https://github.com/tombi-toml/tombi/issues/2337#issuecomment-6312325741) for more details.
