@@ -5,11 +5,19 @@ build-and-publish workflow.
 
 ## 1. Open the release PR
 
-Run:
+The `release-prepare` environment supplies Rust/Cargo, Python, Git, the GitHub
+CLI, and the version/changelog tools. It shares the Rust compiler feature with
+the development and backend-release environments without enabling
+development-only activation settings.
+
+Authenticate with `pixi run -e release-prepare gh auth login` and configure your
+Git author identity before running:
 
 ```shell
 pixi run release
 ```
+
+The explicit environment form is `pixi run -e release-prepare release`.
 
 This branches from `prefix-dev/pixi@main`, bumps the version in
 `crates/pixi/Cargo.toml` and the other tracked files, regenerates the

@@ -1,13 +1,17 @@
 from __future__ import annotations
 
+import functools
 import hashlib
+import http.server
 import io
 import json
 import os
 import shlex
 import shutil
 import tarfile
+import threading
 import tomllib
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -638,6 +642,158 @@ def test_installed_environment_ignores_uninstalled_sibling_detectors(
     ):
         sandbox.run(workspace, *command)
         assert marker.read_text(encoding="utf-8").splitlines() == installed_runs, command
+
+
+@pytest.fixture
+def installed_default_with_http_sibling(
+    detector_sandbox: DetectorSandbox,
+) -> Iterator[tuple[Path, list[str], Path]]:
+    sandbox = detector_sandbox
+    base = DetectorChannel(sandbox.root / "base-channel")
+    base.package("base-package", [])
+    sibling = DetectorChannel(sandbox.root / "sibling-channel")
+    marker = sibling.detector("sibling-detect", CAPABILITY)
+    sibling.consumer("sibling-consumer", CAPABILITY, ">=3")
+    requests: list[str] = []
+
+    class Handler(http.server.SimpleHTTPRequestHandler):
+        def do_GET(self) -> None:
+            requests.append(self.path)
+            super().do_GET()
+
+        def do_HEAD(self) -> None:
+            requests.append(self.path)
+            super().do_HEAD()
+
+        def log_message(self, format: str, *args: object) -> None:
+            pass
+
+    server = http.server.ThreadingHTTPServer(
+        ("127.0.0.1", 0), functools.partial(Handler, directory=str(sibling.root))
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        sibling_url = f"http://127.0.0.1:{server.server_address[1]}/"
+        workspace = sandbox.workspace("http-siblings", [base])
+        (workspace / "pixi.toml").write_text(
+            '[workspace]\nname = "http-siblings"\n'
+            f"channels = {json.dumps([base.url])}\n"
+            "platforms = [\n"
+            f'  "{CURRENT_PLATFORM}",\n'
+            f'  {{ name = "capable", platform = "{CURRENT_PLATFORM}", {CAPABILITY} = "3.0" }},\n'
+            "]\n"
+            '\n[dependencies]\nbase-package = "*"\n'
+            '\n[tasks]\ncheck = "echo default-ready"\n'
+            'workflow = { cmd = "echo workflow-ready", '
+            'depends-on = [{ task = "child", environment = "sibling" }] }\n'
+            "\n[feature.sibling]\n"
+            f"channels = {json.dumps([sibling_url])}\n"
+            'platforms = ["capable"]\n'
+            '\n[feature.sibling.dependencies]\nsibling-consumer = "*"\n'
+            "\n[feature.sibling.target.capable.tasks]\n"
+            'child = "echo detected-child-ready"\n'
+            "\n[environments]\n"
+            f'default = {{ features = [], platforms = ["{CURRENT_PLATFORM}"] }}\n'
+            'sibling = ["sibling"]\n',
+            encoding="utf-8",
+        )
+        sandbox.run(
+            workspace,
+            "config",
+            "set",
+            "--shared",
+            f'virtual-package-detectors.consent."{sibling_url}"',
+            "allow",
+        )
+        sandbox.run(workspace, "lock")
+        assert requests, "the counting server must observe channel discovery during locking"
+        sandbox.run(workspace, "install", "--locked", "-e", "default")
+        assert (default_env_path(workspace) / "conda-meta" / "base-package-1.0-0.json").exists()
+        assert not (workspace / ".pixi" / "envs" / "sibling").exists()
+        marker.unlink(missing_ok=True)
+        requests.clear()
+        # A fresh cache makes every repodata request visible.
+        sandbox.env["PIXI_CACHE_DIR"] = str(sandbox.root / "run-cache")
+        yield workspace, requests, marker
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_frozen_implicit_executable_does_not_discover_uninstalled_sibling_channel(
+    detector_sandbox: DetectorSandbox,
+    installed_default_with_http_sibling: tuple[Path, list[str], Path],
+) -> None:
+    workspace, requests, marker = installed_default_with_http_sibling
+    lock = (workspace / "pixi.lock").read_bytes()
+    output = detector_sandbox.run(workspace, "run", "--frozen", "echo", "executable-ready")
+    assert "executable-ready" in output.stdout
+    assert requests == []
+    assert not marker.exists()
+    assert (workspace / "pixi.lock").read_bytes() == lock
+    assert (default_env_path(workspace) / "conda-meta" / "base-package-1.0-0.json").exists()
+    assert not (workspace / ".pixi" / "envs" / "sibling").exists()
+
+
+def test_frozen_inherited_task_does_not_discover_uninstalled_sibling_channel(
+    detector_sandbox: DetectorSandbox,
+    installed_default_with_http_sibling: tuple[Path, list[str], Path],
+) -> None:
+    workspace, requests, marker = installed_default_with_http_sibling
+    lock = (workspace / "pixi.lock").read_bytes()
+    output = detector_sandbox.run(workspace, "run", "--frozen", "check")
+    assert "default-ready" in output.stdout
+    assert requests == []
+    assert not marker.exists()
+    assert (workspace / "pixi.lock").read_bytes() == lock
+    assert (default_env_path(workspace) / "conda-meta" / "base-package-1.0-0.json").exists()
+    assert not (workspace / ".pixi" / "envs" / "sibling").exists()
+
+
+def test_frozen_implicit_task_selects_detector_dependent_sibling(
+    detector_sandbox: DetectorSandbox,
+    installed_default_with_http_sibling: tuple[Path, list[str], Path],
+) -> None:
+    workspace, requests, marker = installed_default_with_http_sibling
+    lock = (workspace / "pixi.lock").read_bytes()
+    output = detector_sandbox.run(workspace, "run", "--frozen", "child")
+    assert "detected-child-ready" in output.stdout
+    assert requests
+    assert marker.read_text(encoding="utf-8").splitlines() == ["run"]
+    assert (
+        workspace / ".pixi" / "envs" / "sibling" / "conda-meta" / "sibling-consumer-1.0-0.json"
+    ).exists()
+    assert (default_env_path(workspace) / "conda-meta" / "base-package-1.0-0.json").exists()
+    assert (workspace / "pixi.lock").read_bytes() == lock
+
+
+def test_frozen_cross_environment_task_detects_only_when_dependency_is_reached(
+    detector_sandbox: DetectorSandbox,
+    installed_default_with_http_sibling: tuple[Path, list[str], Path],
+) -> None:
+    sandbox = detector_sandbox
+    workspace, requests, marker = installed_default_with_http_sibling
+    lock = (workspace / "pixi.lock").read_bytes()
+    output = sandbox.run(workspace, "run", "--frozen", "--skip-deps", "workflow")
+    assert "workflow-ready" in output.stdout
+    assert "detected-child-ready" not in output.stdout
+    assert requests == []
+    assert not marker.exists()
+    assert not (workspace / ".pixi" / "envs" / "sibling").exists()
+    assert (workspace / "pixi.lock").read_bytes() == lock
+
+    output = sandbox.run(workspace, "run", "--frozen", "workflow")
+    assert "detected-child-ready" in output.stdout
+    assert "workflow-ready" in output.stdout
+    assert requests
+    assert marker.read_text(encoding="utf-8").splitlines() == ["run"]
+    assert (
+        workspace / ".pixi" / "envs" / "sibling" / "conda-meta" / "sibling-consumer-1.0-0.json"
+    ).exists()
+    assert (default_env_path(workspace) / "conda-meta" / "base-package-1.0-0.json").exists()
+    assert (workspace / "pixi.lock").read_bytes() == lock
 
 
 def info_workspace(sandbox: DetectorSandbox, channel: DetectorChannel, scope: str) -> Path:
