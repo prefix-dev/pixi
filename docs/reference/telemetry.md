@@ -65,7 +65,7 @@ own analysis.
 
 Set either environment variable to a non-empty value before installing or updating. Pixi treats
 `PIXI_NO_TELEMETRY` as its own convention and also honors the ecosystem-wide
-[`DO_NOT_TRACK`](https://consoledonottrack.com) convention. Both disable the
+[`DO_NOT_TRACK`](https://donottrack.sh) convention. Both disable the
 ping in the install scripts **and** in `pixi self-update`.
 
 === "Linux & macOS"
