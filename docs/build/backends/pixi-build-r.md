@@ -18,7 +18,7 @@ This backend automatically generates conda packages from R projects by:
 
 - **DESCRIPTION parsing**: Reads package metadata, dependencies (`Imports`, `Depends`, `LinkingTo`), and license information from the standard R `DESCRIPTION` file
 - **Automatic compiler detection**: Detects native code by checking for a `src/` directory or `LinkingTo` fields, and adds C, C++, and Fortran compilers automatically
-- **Dependency mapping**: Converts R package names to conda-forge names (e.g., `curl` becomes `r-curl`, `R6` becomes `r-r6`)
+- **Dependency mapping**: Converts R package names to conda names: CRAN packages become `r-<pkg>`, Bioconductor packages become `bioconductor-<pkg>`
 - **Cross-platform support**: Generates platform-appropriate build scripts for Linux, macOS, and Windows
 
 ## Basic Usage
@@ -199,6 +199,19 @@ Channels to use for resolving R package dependencies.
 channels = ["conda-forge", "r"]
 ```
 
+### `ignore-description-dependencies`
+
+- **Type**: `Boolean`
+- **Default**: `false`
+- **Target Merge Behavior**: `Overwrite` - Target value overrides base value
+
+When set to `true`, `pixi-build-r` does not automatically extract dependencies from the `DESCRIPTION` file. Only dependencies explicitly defined in the `pixi.toml` manifest (`host-dependencies`, `run-dependencies`) will be included in the generated recipe.
+
+```toml
+[package.build.config]
+ignore-description-dependencies = true
+```
+
 ## Dependency Handling
 
 ### Automatic Dependency Parsing
@@ -208,7 +221,33 @@ The backend reads dependencies from the `DESCRIPTION` file:
 - **`Imports`** and **`Depends`** fields are added to both host and run dependencies
 - **`LinkingTo`** fields are added to host dependencies only (compile-time headers)
 - R version constraints are converted to conda format (e.g., `(>= 1.5)` becomes `>=1.5`)
-- R package names are converted to conda names with the `r-` prefix (e.g., `dplyr` becomes `r-dplyr`)
+- CRAN package names are converted to conda names with the `r-` prefix (e.g., `dplyr` becomes `r-dplyr`)
+- Bioconductor package names are converted to conda names with the `bioconductor-` prefix (e.g., `Biobase` becomes `bioconductor-biobase`)
+- A dependency the manifest declares for all platforms, as `r-<pkg>` or `bioconductor-<pkg>`, replaces the one from `DESCRIPTION`, so the manifest can set its version. The name it uses in `host-dependencies` or `run-dependencies` applies to both
+
+### Bioconductor Support
+
+Bioconductor packages are on the `bioconda` channel, named `bioconductor-<pkg>`.
+When a dependency in `DESCRIPTION` is a Bioconductor package, `pixi-build-r` adds it as `bioconductor-<lowercase>` instead of `r-<lowercase>`.
+It knows them from a built-in list of Bioconductor's software, annotation data, experiment data and workflow packages of recent releases, generated from Bioconductor's own package lists (`pixi run update-bioconductor-packages`).
+
+These dependencies need `bioconda` among the workspace's channels:
+
+```toml
+[workspace]
+channels = ["conda-forge", "bioconda"]
+```
+
+Without it, the solve fails with no candidates for `bioconductor-<pkg>`.
+
+A Bioconductor package built from source is itself named `bioconductor-<lowercase>` when it's in the built-in list, so its key in the manifest is that name:
+
+```toml
+[dependencies]
+bioconductor-dnacopy = { git = "https://github.com/bioc/DNAcopy", branch = "RELEASE_3_22", package.build.backend.name = "pixi-build-r" }
+```
+
+If a Bioconductor package is on conda as `r-<pkg>` instead, as `SpiecEasi` is, declare it under that name in the manifest. For any other name, set `ignore-description-dependencies`, and declare the package's dependencies yourself.
 
 ### Built-in Packages
 
