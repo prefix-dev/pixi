@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.83.0] - 2026-10-22
+#### ✨ Highlights
+
+
+Soon channels will be able to register virtual package detectors.
+These detectors allow to introduce virtual packages that Pixi doesn't know about.
+This Pixi release introduces support for virtual package detectors.
+
+It also fixes an increase in memory usage that 0.82.1 introduced.
+
+#### Features
+
+- Ask before running detectors and show them in pixi info by @Hofer-Julian in [#7129](https://github.com/prefix-dev/pixi/pull/7129)
+
+
+#### Fixes
+
+- run: Only detect the target environment's host up front by @Hofer-Julian in [#7339](https://github.com/prefix-dev/pixi/pull/7339)
+
+
+#### Documentation
+
+- Add tombi integration page by @pavelzw in [#7338](https://github.com/prefix-dev/pixi/pull/7338)
+
+
+
 ### [0.82.1] - 2026-10-20
 #### 🔒 Security 🔒
 
