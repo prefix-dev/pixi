@@ -7433,6 +7433,7 @@ dependencies = [
  "async-fd-lock",
  "async-trait",
  "axum",
+ "base64 0.23.1",
  "filetime",
  "fs-err",
  "indicatif",

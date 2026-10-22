@@ -765,10 +765,6 @@ pub struct ConfigCli {
     #[arg(long, env = "PIXI_NO_REF_LINKS", help_heading = consts::CLAP_CONFIG_OPTIONS)]
     pub no_ref_links: bool,
 
-    /// Do not verify the TLS certificate of the server.
-    #[arg(long, action = ArgAction::SetTrue, help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    pub tls_no_verify: bool,
-
     /// Run without network access, using only cached data. Commands fail if
     /// data is missing from the cache. Pass `--offline=false` to override an
     /// `offline` setting from the configuration.
@@ -783,13 +779,36 @@ pub struct ConfigCli {
     )]
     pub offline: Option<bool>,
 
-    /// Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store).
-    #[arg(long, env = "PIXI_TLS_ROOT_CERTS", help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    pub tls_root_certs: Option<TlsRootCerts>,
+    #[clap(flatten)]
+    pub tls: ConfigCliTls,
 
     /// Use environment activation cache (experimental)
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
     pub use_environment_activation_cache: bool,
+}
+
+/// TLS options for commands that make HTTPS requests. Flattened into
+/// [`ConfigCli`] and into commands that only need these network settings.
+#[derive(Parser, Debug, Default, Clone)]
+pub struct ConfigCliTls {
+    /// Do not verify the TLS certificate of the server.
+    #[arg(long, action = ArgAction::SetTrue, help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    pub tls_no_verify: bool,
+
+    /// Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store).
+    #[arg(long, env = "PIXI_TLS_ROOT_CERTS", help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    pub tls_root_certs: Option<TlsRootCerts>,
+}
+
+impl From<ConfigCliTls> for Config {
+    fn from(cli: ConfigCliTls) -> Self {
+        warn_deprecated_tls_root_certs(cli.tls_root_certs, None);
+        Self {
+            tls_no_verify: cli.tls_no_verify.then_some(true),
+            tls_root_certs: cli.tls_root_certs,
+            ..Default::default()
+        }
+    }
 }
 
 #[derive(Parser, Debug, Clone, Default)]
@@ -1494,10 +1513,7 @@ fn warn_deprecated_tls_root_certs(value: Option<TlsRootCerts>, source: Option<&s
 
 impl From<ConfigCli> for Config {
     fn from(cli: ConfigCli) -> Self {
-        warn_deprecated_tls_root_certs(cli.tls_root_certs, None);
         Self {
-            tls_no_verify: if cli.tls_no_verify { Some(true) } else { None },
-            tls_root_certs: cli.tls_root_certs,
             offline: cli.offline,
             authentication_override_file: cli.auth_file,
             pypi_config: cli
@@ -1531,7 +1547,7 @@ impl From<ConfigCli> for Config {
             allow_symbolic_links: cli.no_symbolic_links.then_some(false),
             allow_hard_links: cli.no_hard_links.then_some(false),
             allow_ref_links: cli.no_ref_links.then_some(false),
-            ..Default::default()
+            ..Config::from(cli.tls)
         }
     }
 }
@@ -3241,8 +3257,10 @@ UNUSED = "unused"
     fn test_config_from_cli() {
         // Test with all CLI options enabled
         let cli = ConfigCli {
-            tls_no_verify: true,
-            tls_root_certs: Some(TlsRootCerts::System),
+            tls: ConfigCliTls {
+                tls_no_verify: true,
+                tls_root_certs: Some(TlsRootCerts::System),
+            },
             offline: Some(true),
             auth_file: None,
             pypi_keyring_provider: Some(KeyringProvider::Subprocess),
@@ -3276,8 +3294,7 @@ UNUSED = "unused"
         assert_eq!(config.pinning_strategy, Some(PinningStrategy::Semver));
 
         let cli = ConfigCli {
-            tls_no_verify: false,
-            tls_root_certs: None,
+            tls: ConfigCliTls::default(),
             offline: None,
             auth_file: Some(PathBuf::from("path.json")),
             pypi_keyring_provider: None,

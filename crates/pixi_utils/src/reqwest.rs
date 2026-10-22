@@ -17,8 +17,10 @@ use reqwest_middleware::{ClientWithMiddleware, Middleware};
 use reqwest_retry::RetryTransientMiddleware;
 use retry_policies::policies::ExponentialBackoff;
 
-#[cfg(any(feature = "native-tls", feature = "rustls"))]
-use crate::tls::Certificates;
+use itertools::Itertools;
+use serde::Serialize;
+
+use crate::tls::{CertEnvSource, Certificates};
 
 /// An error that occurs when building pixi's HTTP clients.
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
@@ -140,6 +142,63 @@ pub fn tls_backend() -> &'static str {
     #[cfg(not(feature = "native-tls"))]
     {
         "rustls"
+    }
+}
+
+/// The root certificates pixi's HTTP client trusts, taking the TLS backend
+/// default, the `tls-root-certs` setting and `SSL_CERT_FILE` / `SSL_CERT_DIR`
+/// into account.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct EffectiveTlsRootCerts {
+    /// The root store selected by `tls-root-certs`, or the backend default.
+    pub mode: pixi_config::TlsRootCerts,
+    /// Whether `mode` is the backend default because `tls-root-certs` is unset.
+    pub is_default: bool,
+    /// The environment variables whose certificates are in use.
+    pub env_sources: Vec<CertEnvSource>,
+    /// Whether the environment certificates replace the roots of `mode`
+    /// (rustls) instead of being added to them (native-tls).
+    pub env_replaces_mode: bool,
+}
+
+impl std::fmt::Display for EffectiveTlsRootCerts {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let env = self
+            .env_sources
+            .iter()
+            .map(|source| format!("{}={}", source.variable, source.value))
+            .join(", ");
+        if self.env_sources.is_empty() {
+            write!(f, "{}", self.mode)?;
+            if self.is_default {
+                write!(f, " (default)")?;
+            }
+            Ok(())
+        } else if self.env_replaces_mode {
+            write!(f, "{env} (overrides {})", self.mode)
+        } else {
+            write!(f, "{} + {env}", self.mode)
+        }
+    }
+}
+
+/// Resolve which root certificates pixi's HTTP client trusts for `config`.
+///
+/// Follows the same rules as [`reqwest_client_builder`]. The deprecated
+/// `native` and `all` modes are reported as `system`, which is how they behave.
+#[allow(deprecated)]
+pub fn effective_tls_root_certs(config: &Config) -> EffectiveTlsRootCerts {
+    let mode = match resolve_tls_root_certs(Some(config)) {
+        pixi_config::TlsRootCerts::Webpki => pixi_config::TlsRootCerts::Webpki,
+        pixi_config::TlsRootCerts::System
+        | pixi_config::TlsRootCerts::LegacyNative
+        | pixi_config::TlsRootCerts::All => pixi_config::TlsRootCerts::System,
+    };
+    EffectiveTlsRootCerts {
+        mode,
+        is_default: config.tls_root_certs().is_none(),
+        env_sources: Certificates::env_sources(),
+        env_replaces_mode: cfg!(not(feature = "native-tls")),
     }
 }
 

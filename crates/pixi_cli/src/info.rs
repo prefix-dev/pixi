@@ -28,7 +28,7 @@ use pixi_manifest::{EnvironmentName, FeatureName, PixiPlatformName};
 use pixi_manifest::{FeaturesExt, HasFeaturesIter, HasWorkspaceManifest};
 use pixi_progress::await_in_progress;
 use pixi_task::TaskName;
-use pixi_utils::reqwest::tls_backend;
+use pixi_utils::reqwest::{EffectiveTlsRootCerts, effective_tls_root_certs, tls_backend};
 use rattler_conda_types::GenericVirtualPackage;
 use rattler_networking::authentication_storage;
 use rattler_virtual_package_detectors::merge_results;
@@ -447,6 +447,7 @@ pub struct Info {
     virtual_package_detection_error: Option<String>,
     version: String,
     tls_backend: String,
+    tls_root_certs: EffectiveTlsRootCerts,
     cache_dir: Option<PathBuf>,
     cache_size: Option<String>,
     auth_dir: PathBuf,
@@ -475,6 +476,12 @@ impl Display for Info {
             "{:>WIDTH$}: {}",
             bold.apply_to("TLS backend"),
             self.tls_backend
+        )?;
+        writeln!(
+            f,
+            "{:>WIDTH$}: {}",
+            bold.apply_to("TLS root certs"),
+            self.tls_root_certs
         )?;
         writeln!(
             f,
@@ -821,6 +828,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         virtual_package_detection_error,
         version: consts::PIXI_VERSION.to_string(),
         tls_backend: tls_backend().to_string(),
+        tls_root_certs: effective_tls_root_certs(&config),
         cache_dir: Some(pixi_config::get_cache_dir()?),
         cache_size,
         auth_dir: auth_file,
