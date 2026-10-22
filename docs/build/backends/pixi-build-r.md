@@ -152,6 +152,8 @@ List of compilers to use for the build. By default, the backend auto-detects whe
 
 If either is found, compilers default to `["c", "cxx", "fortran"]`. Otherwise, no compilers are added.
 
+On Windows, R compiles packages with MinGW's `gcc`, `g++` and `gfortran`, which `r-base` depends on there. So `c`, `cxx` and `fortran` become conda-forge's MinGW compilers (`m2w64_c`, `m2w64_cxx` and `m2w64_fortran`, i.e. `gcc_win-64`, `gxx_win-64` and `gfortran_win-64`), as in conda-forge's R recipes, rather than Visual Studio and flang.
+
 ```toml
 [package.build.config]
 compilers = ["c", "cxx"]  # Override auto-detection
