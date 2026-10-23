@@ -114,35 +114,26 @@ async fn latest_version(client: &ClientWithMiddleware) -> miette::Result<Version
     // last segment of the final URL.
     let url = format!("{}/latest", consts::RELEASES_URL);
 
-    let response = match client
+    let response = client
         .head(&url)
         .header("User-Agent", user_agent())
         .send()
         .await
-    {
-        Ok(response) => response,
-        Err(err) => miette::bail!("URL: {}. Request failed: {}", url, err),
-    };
-    if !response.status().is_success() || response.url().as_str() == url {
-        miette::bail!(
-            "URL: {}. Request failed or did not redirect: {}.",
-            url,
-            response.status()
-        )
+        .into_diagnostic()
+        .wrap_err_with(|| format!("failed to fetch {url}"))?;
+    if !response.status().is_success() {
+        miette::bail!("{url} returned {}", response.status())
     }
-    let version = response
-        .url()
-        .path_segments()
-        .and_then(|mut segments| segments.next_back())
-        .ok_or_else(|| miette::miette!("Could not get version from URL {}", response.url()))?;
-
-    if version == "releases" {
-        // /latest redirect took us back to /releases instead of /vX.Y.Z
-        miette::bail!("URL '{}' does not seem to contain any releases.", url)
-    } else if let Some(version) = version.strip_prefix('v') {
-        Version::from_str(version).into_diagnostic()
-    } else {
-        miette::bail!("Tag name '{}' must start with v.", version)
+    let final_url = response.url();
+    let mut segments = final_url.path_segments().into_iter().flatten().rev();
+    match (segments.next(), segments.next()) {
+        // /latest redirect took us back to /releases instead of /tag/vX.Y.Z
+        (Some("releases"), _) => miette::bail!("{url} does not contain any releases"),
+        (Some(tag), Some("tag")) => match tag.strip_prefix('v') {
+            Some(version) => Version::from_str(version).into_diagnostic(),
+            None => miette::bail!("tag name '{tag}' must start with 'v'"),
+        },
+        _ => miette::bail!("{url} redirected to {final_url}, which is not a release tag"),
     }
 }
 
