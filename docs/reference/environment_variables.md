@@ -74,7 +74,7 @@ Pixi can also be configured via environment variables.
     </tr>
     <tr>
       <td><code>DO_NOT_TRACK</code></td>
-      <td>Same effect as <code>PIXI_NO_TELEMETRY</code>; honors the ecosystem-wide <a href="https://consoledonottrack.com"><code>DO_NOT_TRACK</code></a> convention.</td>
+      <td>Same effect as <code>PIXI_NO_TELEMETRY</code>; honors the ecosystem-wide <a href="https://donottrack.sh"><code>DO_NOT_TRACK</code></a> convention.</td>
       <td>Not set (ping enabled).</td>
     </tr>
   </tbody>
