@@ -4,6 +4,7 @@ import platform
 import shlex
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -2473,3 +2474,26 @@ def test_workspace_activation_input_validation(pixi: Path, tmp_pixi_workspace: P
         activation("env", "list", "--target", "win"),
         stdout_contains="for the given filter",
     )
+
+
+def test_clean_cache_in_pyproject_without_pixi(pixi: Path) -> None:
+    # A pyproject.toml without a [tool.pixi] section is not a pixi workspace, so
+    # cleaning the cache must fall back to the global config instead of failing.
+    # Use tempfile so that no pixi.toml is found in a parent directory.
+    with tempfile.TemporaryDirectory() as tmp_str:
+        tmp_path = Path(tmp_str)
+        tmp_path.joinpath("pyproject.toml").write_text(
+            '[project]\nname = "not-a-pixi-project"\nversion = "0.1.0"\n'
+        )
+        cache_dir = tmp_path.joinpath("pixi_cache")
+        cache_dir.mkdir()
+
+        # Reset the environment so that a workspace activated through
+        # PIXI_PROJECT_MANIFEST is not used instead.
+        verify_cli_command(
+            [pixi, "clean", "cache", "--yes"],
+            cwd=tmp_path,
+            env={"HOME": str(tmp_path), "PIXI_CACHE_DIR": str(cache_dir)},
+            reset_env=True,
+        )
+        assert not cache_dir.exists()
