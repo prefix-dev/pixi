@@ -1,0 +1,34 @@
+version: 7
+platforms:
+- name: linux-64
+environments:
+  default:
+    channels:
+    - url: https://conda.anaconda.org/conda-forge/
+    - url: https://conda.anaconda.org/conda-pypi/
+    packages:
+      linux-64:
+      - conda: https://files.pythonhosted.org/packages/py3/c/cowsay/cowsay-6.1-py3-none-any.whl
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.12.0-hab00c5b_0_cpython.conda
+packages:
+- conda: https://files.pythonhosted.org/packages/py3/c/cowsay/cowsay-6.1-py3-none-any.whl
+  name: cowsay
+  version: '6.1'
+  build: py3_none_any_0
+  subdir: noarch
+  noarch: python
+  sha256: 2ac3d0d9f6a8a3c5b1a2e2b0f1c0d7e6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1d0
+  depends:
+  - python >=3.8
+  channel: https://conda.anaconda.org/conda-pypi
+  file_name: cowsay-6.1-py3_none_any_0.whl
+  license: GPL-3.0-only
+  purls:
+  - pkg:pypi/cowsay@6.1
+  size: 25431
+- conda: https://conda.anaconda.org/conda-forge/linux-64/python-3.12.0-hab00c5b_0_cpython.conda
+  sha256: 5bf3a7d7f3f7c5a6c45c3d4e74f2c9b1dbd1e0e8e0a3c7a0b5a9a7d0f5c2e8a1
+  md5: 2fb3bd8c9fd0d6c5e8f0a9b7a3c5d1e2
+  license: Python-2.0
+  size: 32123473
+  timestamp: 1696321871976
