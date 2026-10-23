@@ -13,7 +13,8 @@ use crate::{
     common::{LockFileExt, PixiControl, isolated_config_source, logging::try_init_test_subscriber},
     setup_tracing,
 };
-use pixi_cli::publish;
+use pixi_cli::cli_config::WorkspaceConfig;
+use pixi_cli::{clean, publish};
 use pixi_core::{UpdateLockFileOptions, environment::LockFileUsage};
 use pixi_test_utils::{GitRepoFixture, MockRepoData, Package, format_diagnostic};
 
@@ -3309,6 +3310,65 @@ boost-check = {{ git = "{url}", subdirectory = "boost-check" }}
         count_build_events(&observer.events()),
         0,
         "second install must reuse the cached artifact instead of rebuilding"
+    );
+}
+
+#[tokio::test]
+async fn install_reuses_source_artifact_after_clean_build_workspaces() {
+    setup_tracing();
+
+    let (instantiator, mut observer) =
+        ObservableBackend::instantiator(PassthroughBackend::instantiator());
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(BackendOverride::from_memory(instantiator));
+
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+    write_basic_source_package_manifest(&source_dir, "1.0.0", "");
+    write_basic_source_workspace_manifest(&pixi.manifest_path(), &[]);
+
+    pixi.install().await.unwrap();
+    assert_eq!(count_build_events(&observer.events()), 1);
+
+    let pixi_dir = pixi.workspace().unwrap().pixi_dir();
+    let workspaces_dir = pixi_dir.join(consts::SOURCE_BUILD_WORKSPACES_DIR);
+    let artifacts_dir = pixi_dir.join(consts::SOURCE_BUILD_ARTIFACTS_DIR);
+    assert!(workspaces_dir.is_dir());
+    assert!(artifacts_dir.is_dir());
+
+    clean::execute(clean::Args {
+        config_source: isolated_config_source(),
+        workspace_config: WorkspaceConfig {
+            manifest_path: Some(pixi.manifest_path()),
+            ..Default::default()
+        },
+        command: None,
+        environment: None,
+        activation_cache: false,
+        build: false,
+        build_workspaces: true,
+        workspaces_registry: false,
+    })
+    .await
+    .unwrap();
+    assert!(!workspaces_dir.exists());
+    assert!(artifacts_dir.is_dir());
+
+    let prefix = pixi.default_env_path().unwrap();
+    fs::remove_dir_all(&prefix).unwrap();
+
+    pixi.install().await.unwrap();
+    assert_eq!(
+        count_build_events(&observer.events()),
+        0,
+        "reinstall must reuse the cached artifact instead of rebuilding"
+    );
+    let records: Vec<PrefixRecord> = PrefixRecord::collect_from_prefix(&prefix).unwrap();
+    assert!(
+        records
+            .iter()
+            .any(|r| r.repodata_record.package_record.name.as_normalized() == "my-package")
     );
 }
 

@@ -8,6 +8,7 @@ pixi clean cache --conda # clean only the conda cache
 pixi clean cache --mapping # clean only the mapping cache
 pixi clean cache --exec # clean only the `exec` cache
 pixi clean cache --repodata # clean only the `repodata` cache
+pixi clean cache --build-workspaces # clean only the source-build working directories
 pixi clean cache --yes # skip the confirmation prompt
 ```
 --8<-- [end:example]
