@@ -4,11 +4,11 @@ use std::io::{Seek, Write};
 use flate2::read::GzDecoder;
 use tar::Archive;
 
-use miette::IntoDiagnostic;
-use pixi_config::Config;
+use miette::{IntoDiagnostic, WrapErr};
+use pixi_config::{Config, ConfigCliTls};
 use pixi_consts::consts;
-use pixi_utils::reqwest::{build_reqwest_clients, reqwest_client_builder};
-use reqwest::redirect::Policy;
+use pixi_utils::reqwest::build_reqwest_clients;
+use reqwest_middleware::ClientWithMiddleware;
 
 use tempfile::{NamedTempFile, TempDir};
 use url::Url;
@@ -37,6 +37,9 @@ pub struct Args {
         value_parser = clap::builder::BoolishValueParser::new(),
     )]
     offline: Option<bool>,
+
+    #[clap(flatten)]
+    tls: ConfigCliTls,
 
     /// The desired version (to downgrade or upgrade to).
     #[clap(long)]
@@ -106,72 +109,44 @@ fn default_archive_name() -> Option<String> {
     }
 }
 
-async fn latest_version() -> miette::Result<Version> {
-    // Uses the public Github Releases /latest endpoint to get the latest tag from the URL
+async fn latest_version(client: &ClientWithMiddleware) -> miette::Result<Version> {
+    // GitHub redirects the /latest endpoint to /tag/vX.Y.Z, so the tag is the
+    // last segment of the final URL.
     let url = format!("{}/latest", consts::RELEASES_URL);
 
-    // Load global config to respect TLS settings (e.g., tls-root-certs = "native")
-    let config = Config::load_global();
-
-    // Create a client with a redirect policy
-    let no_redirect_client = reqwest_client_builder(Some(&config))?
-        .redirect(Policy::none())
-        .build()
-        .into_diagnostic()?; // Prevent automatic redirects
-
-    let version: String = match no_redirect_client
+    let response = client
         .head(&url)
         .header("User-Agent", user_agent())
         .send()
         .await
-    {
-        Ok(response) => {
-            if response.status().is_redirection() {
-                match response.headers().get("Location") {
-                    Some(location) => Url::parse(location.to_str().into_diagnostic()?)
-                        .into_diagnostic()?
-                        .path_segments()
-                        .ok_or_else(|| {
-                            miette::miette!("Could not get segments from Location header")
-                        })?
-                        .next_back()
-                        .ok_or_else(|| {
-                            miette::miette!("Could not get version from Location header")
-                        })?
-                        .to_string(),
-                    None => miette::bail!(
-                        "URL: {}. Redirect detected, but no 'Location' header found.",
-                        url
-                    ),
-                }
-            } else {
-                miette::bail!(
-                    "URL: {}. Request failed or did not redirect: {}.",
-                    url,
-                    response.status()
-                )
-            }
-        }
-        Err(err) => miette::bail!("URL: {}. Request failed: {}", url, err),
-    };
-    if version == "releases" {
-        // /latest redirect took us back to /releases instead of /vX.Y.Z
-        miette::bail!("URL '{}' does not seem to contain any releases.", url)
-    } else if !version.starts_with("v") {
-        miette::bail!("Tag name '{}' must start with v.", version)
-    } else {
-        Ok(Version::from_str(&version[1..]).into_diagnostic()?)
+        .into_diagnostic()
+        .wrap_err_with(|| format!("failed to fetch {url}"))?;
+    if !response.status().is_success() {
+        miette::bail!("{url} returned {}", response.status())
+    }
+    let final_url = response.url();
+    let mut segments = final_url.path_segments().into_iter().flatten().rev();
+    match (segments.next(), segments.next()) {
+        // /latest redirect took us back to /releases instead of /tag/vX.Y.Z
+        (Some("releases"), _) => miette::bail!("{url} does not contain any releases"),
+        (Some(tag), Some("tag")) => match tag.strip_prefix('v') {
+            Some(version) => Version::from_str(version).into_diagnostic(),
+            None => miette::bail!("tag name '{tag}' must start with 'v'"),
+        },
+        _ => miette::bail!("{url} redirected to {final_url}, which is not a release tag"),
     }
 }
 
-async fn fetch_release_notes(version: &Option<Version>) -> miette::Result<String> {
+async fn fetch_release_notes(
+    client: &ClientWithMiddleware,
+    version: &Option<Version>,
+) -> miette::Result<String> {
     let url = if let Some(version) = version {
         format!("{}/v{}", consts::RELEASES_API_BY_TAG, version)
     } else {
         consts::RELEASES_API_LATEST.to_string()
     };
 
-    let client = build_reqwest_clients(None, None)?.1;
     let response = client
         .get(&url)
         .header("User-Agent", user_agent())
@@ -203,18 +178,25 @@ async fn fetch_release_notes(version: &Option<Version>) -> miette::Result<String
     }
 }
 
+fn config_from_args(args: &Args) -> Config {
+    Config {
+        offline: args.offline,
+        ..Config::from(args.tls.clone())
+    }
+}
+
 /// Executes the self-update command.
 ///
 /// # Arguments
 /// * `args` - The self-update specific arguments.
 /// * `global_options` - Reference to the global CLI options.
 pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Result<()> {
+    let source = args.config_source.source();
+    let config = Config::load_global_with(&source).merge_config(config_from_args(&args));
+
     // Updating the binary always requires downloading a release from GitHub,
     // so bail out early with a clear error in offline mode.
-    if args
-        .offline
-        .unwrap_or_else(|| Config::load_global_with(&args.config_source.source()).offline())
-    {
+    if config.offline() {
         return Err(crate::offline::NetworkRequiredError {
             command: "pixi self-update",
         }
@@ -227,6 +209,10 @@ pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Resu
     {
         miette::bail!("URL: {}. Url validation failed: {}", url, err)
     }
+
+    // A single client serves every request so TLS, proxy, and auth settings
+    // are applied consistently.
+    let client = build_reqwest_clients(Some(&config), None)?.1;
 
     let is_quiet = global_options.quiet > 0;
     // Get the target version, without 'v' prefix, None for force latest version
@@ -250,7 +236,7 @@ pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Resu
             if args.force {
                 None
             } else {
-                Some(latest_version().await?)
+                Some(latest_version(&client).await?)
             }
         }
     };
@@ -265,7 +251,7 @@ pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Resu
     let fetch_release_warning = if args.no_release_note || up_to_date || is_quiet {
         None
     } else {
-        match fetch_release_notes(&target_version).await {
+        match fetch_release_notes(&client, &target_version).await {
             Ok(release_notes) => {
                 // Print release notes
                 eprintln!(
@@ -297,7 +283,7 @@ pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Resu
         if !is_quiet {
             let target_version = match target_version {
                 Some(target_version) => target_version,
-                None => latest_version().await?,
+                None => latest_version(&client).await?,
             };
             eprintln!("{}", get_dry_run_message(&current_version, &target_version));
         }
@@ -372,13 +358,13 @@ pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Resu
     // Create a temp file to download the archive
     let mut archived_tempfile = NamedTempFile::new().into_diagnostic()?;
 
-    let client = build_reqwest_clients(None, None)?.1;
     let mut res = client
         .get(&download_url)
         .header("User-Agent", user_agent())
         .send()
         .await
-        .expect("Failed to download the archive");
+        .into_diagnostic()
+        .wrap_err_with(|| format!("failed to download {download_url}"))?;
 
     if res.status() != reqwest::StatusCode::OK {
         miette::bail!(format!("URL {} returned {}", download_url, res.status()));
@@ -518,7 +504,25 @@ pub async fn execute_stub(_: Args, _: &GlobalOptions) -> miette::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use clap::Parser;
+    use pixi_config::{Config, GlobalConfigSource, TlsRootCerts};
     use std::path::PathBuf;
+
+    #[test]
+    fn accepts_tls_options() {
+        let args = super::Args::try_parse_from([
+            "self-update",
+            "--tls-root-certs",
+            "system",
+            "--tls-no-verify",
+        ])
+        .unwrap();
+        let config = Config::load_global_with(&GlobalConfigSource::None)
+            .merge_config(super::config_from_args(&args));
+
+        assert!(config.tls_no_verify());
+        assert_eq!(config.tls_root_certs(), Some(TlsRootCerts::System));
+    }
 
     #[test]
     pub fn test_unarchive_flat_structure() {
