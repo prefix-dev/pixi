@@ -41,6 +41,7 @@ pixi_build_frontend = { workspace = true }
 pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_core = { workspace = true }
+pixi_global = { workspace = true }
 pixi_manifest = { workspace = true }
 pixi_progress = { workspace = true }
 pixi_pypi_spec = { workspace = true }

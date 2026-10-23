@@ -17,7 +17,7 @@ mod shortcut;
 mod sync;
 mod tree;
 mod uninstall;
-mod update;
+pub mod update;
 mod upgrade;
 mod upgrade_all;
 

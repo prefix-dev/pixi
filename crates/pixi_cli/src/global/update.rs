@@ -16,13 +16,13 @@ use pixi_utils::prefix::Executable;
 use rattler_conda_types::PackageName;
 
 /// Updates environments in the global environment.
-#[derive(Parser, Debug, Clone)]
+#[derive(Parser, Debug, Clone, Default)]
 pub struct Args {
     /// Specifies the environments that are to be updated.
-    environments: Option<Vec<EnvironmentName>>,
+    pub environments: Option<Vec<EnvironmentName>>,
 
     #[clap(flatten)]
-    config: ConfigCli,
+    pub config: ConfigCli,
 }
 
 /// Result of the parallel install phase for a single environment.
@@ -30,6 +30,8 @@ struct EnvInstallResult {
     env_name: EnvironmentName,
     expose_type: ExposedType,
     environment_update: pixi_global::common::EnvironmentUpdate,
+    /// Why a newer version of a requested package couldn't be installed.
+    blocked_upgrade: Option<Report>,
 }
 
 /// Phase 1: Check sync, determine expose type, and update the environment.
@@ -45,7 +47,7 @@ async fn install_and_determine_expose_type(
         None
     };
 
-    let environment_update = project.install_environment(env_name).await?;
+    let (environment_update, blocked_upgrade) = project.update_environment(env_name).await?;
 
     let env_binaries = match pre_update_bins {
         Some(bins) => bins,
@@ -67,6 +69,7 @@ async fn install_and_determine_expose_type(
         env_name: env_name.clone(),
         expose_type,
         environment_update,
+        blocked_upgrade,
     })
 }
 
@@ -143,18 +146,39 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut unchanged = 0;
     let mut errors: Vec<(EnvironmentName, Report)> = Vec::new();
     for (env_name, result) in env_names.iter().zip(install_results) {
-        let outcome = match result {
-            Ok(env_result) => apply_manifest_changes(&mut project, env_result).await,
-            Err(err) => Err(err),
+        let (outcome, blocked_upgrade) = match result {
+            Ok(mut env_result) => {
+                let blocked_upgrade = env_result.blocked_upgrade.take();
+                (
+                    apply_manifest_changes(&mut project, env_result).await,
+                    blocked_upgrade,
+                )
+            }
+            Err(err) => (Err(err), None),
         };
         match outcome {
             Ok(state_changes) => {
                 for env_report in state_changes.reports_or_warn(&project).await {
-                    if !named_environments && env_report.status == Some(EnvStatus::Unchanged) {
+                    if !named_environments
+                        && blocked_upgrade.is_none()
+                        && env_report.status == Some(EnvStatus::Unchanged)
+                    {
                         unchanged += 1;
                     } else {
                         pixi_global::report::print(&env_report);
                     }
+                }
+                // The environment holds the newest solvable set, so there is
+                // nothing to revert; the update still fails so the conflict
+                // isn't hidden behind "unchanged".
+                if let Some(blocked_upgrade) = blocked_upgrade {
+                    errors.push((
+                        env_name.clone(),
+                        blocked_upgrade.wrap_err(format!(
+                            "Couldn't update environment {} to the newest version",
+                            env_name.fancy_display()
+                        )),
+                    ));
                 }
             }
             Err(err) => {
