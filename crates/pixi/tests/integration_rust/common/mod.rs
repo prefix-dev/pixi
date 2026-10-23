@@ -47,9 +47,9 @@ use thiserror::Error;
 
 use self::builders::{HasDependencyConfig, RemoveBuilder};
 use crate::common::builders::{
-    AddBuilder, BuildBuilder, GlobalInstallBuilder, InitBuilder, InstallBuilder,
-    ProjectChannelAddBuilder, ProjectChannelRemoveBuilder, ProjectEnvironmentAddBuilder,
-    TaskAddBuilder, TaskAliasBuilder, UpdateBuilder,
+    AddBuilder, BuildBuilder, GlobalInstallBuilder, GlobalUpdateBuilder, InitBuilder,
+    InstallBuilder, ProjectChannelAddBuilder, ProjectChannelRemoveBuilder,
+    ProjectEnvironmentAddBuilder, TaskAddBuilder, TaskAliasBuilder, UpdateBuilder,
 };
 
 const DEFAULT_PROJECT_CONFIG: &str = r#"
@@ -810,6 +810,17 @@ impl PixiControl {
             self.backend_override.clone(),
             self.config_cli(),
         )
+    }
+
+    /// The `PIXI_HOME` that the `pixi global` builders run against.
+    pub fn global_home(&self) -> &Path {
+        self.tmpdir.path()
+    }
+
+    /// Returns a [`GlobalUpdateBuilder`].
+    /// To execute the command and await the result, call `.await` on the return value.
+    pub fn global_update(&self) -> GlobalUpdateBuilder {
+        GlobalUpdateBuilder::new(self.tmpdir.path().to_path_buf(), self.config_cli())
     }
 
     /// Returns a [`UpdateBuilder]. To execute the command and await the result

@@ -1,3 +1,13 @@
+--8<-- [start:description]
+
+If a channel holds a newer version of a requested package that can't be
+installed, for example because one of its dependencies is only available from a
+lower-priority channel under strict channel priority, the environment is updated
+to the newest set that does solve and the command fails with the solver's
+explanation, instead of reporting the environment as unchanged.
+
+--8<-- [end:description]
+
 --8<-- [start:example]
 
 ## Examples

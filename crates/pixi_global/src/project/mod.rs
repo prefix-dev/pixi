@@ -44,7 +44,7 @@ use pixi_manifest::{
 };
 use pixi_path::AbsPathBuf;
 use pixi_reporters::TopLevelProgress;
-use pixi_spec::{BinarySpec, PathBinarySpec, ResolvedExcludeNewer};
+use pixi_spec::{BinarySpec, PathBinarySpec, PixiSpec, ResolvedExcludeNewer};
 use pixi_spec_containers::DependencyMap;
 use pixi_utils::variants::VariantConfig;
 use pixi_utils::{
@@ -53,8 +53,9 @@ use pixi_utils::{
     rlimit::try_increase_rlimit_to_sensible,
 };
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, PrefixRecord, Subdir,
-    menuinst::MenuMode, package::CondaArchiveIdentifier,
+    Channel, ChannelConfig, ChannelUrl, EqualityOperator, GenericVirtualPackage, MatchSpec,
+    Matches, PackageName, PrefixRecord, Subdir, VersionSpec, VersionWithSource, menuinst::MenuMode,
+    package::CondaArchiveIdentifier,
 };
 use rattler_networking::LazyClient;
 use rattler_repodata_gateway::Gateway;
@@ -657,6 +658,19 @@ impl Project {
         self.install_environment_with_options(env_name, false).await
     }
 
+    /// Like [`Self::install_environment`], but also reports a direct
+    /// dependency that was left behind: if the channels hold a newer version
+    /// that matches the requested spec but can't be installed, the returned
+    /// report carries the solver's explanation. The environment is still
+    /// updated to the newest solvable set. Used by `pixi global update`, where
+    /// "unchanged" would otherwise hide the conflict.
+    pub async fn update_environment(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> miette::Result<(EnvironmentUpdate, Option<miette::Report>)> {
+        self.install_environment_inner(env_name, false, true).await
+    }
+
     /// Builds the [`InlinePackage`] to thread through the command dispatcher
     /// for a CLI-supplied inline package definition, before the definition is
     /// recorded in the manifest (e.g. for package name inference). The
@@ -679,6 +693,17 @@ impl Project {
         env_name: &EnvironmentName,
         force_reinstall: bool,
     ) -> miette::Result<EnvironmentUpdate> {
+        self.install_environment_inner(env_name, force_reinstall, false)
+            .await
+            .map(|(update, _)| update)
+    }
+
+    async fn install_environment_inner(
+        &self,
+        env_name: &EnvironmentName,
+        force_reinstall: bool,
+        check_upgrades: bool,
+    ) -> miette::Result<(EnvironmentUpdate, Option<miette::Report>)> {
         let environment = self
             .environment(env_name)
             .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
@@ -811,6 +836,7 @@ impl Project {
             environment.dependencies.specs.iter().any(|(name, spec)| {
                 spec.is_source() && !environment.inline_packages.contains_key(name)
             });
+        let upgrade_solve_spec = check_upgrades.then(|| solve_spec.clone());
         let records_arc = command_dispatcher
             .engine()
             .compute(&SolvePixiEnvironmentKey::new(solve_spec))
@@ -840,6 +866,38 @@ impl Project {
                 }
             })?;
         let pixi_records: Vec<_> = (*records_arc).clone();
+
+        let mut blocked_upgrade = None;
+        if let Some(solve_spec) = upgrade_solve_spec {
+            let dependencies: Vec<(PackageName, PixiSpec)> = environment
+                .dependencies
+                .specs
+                .iter()
+                .map(|(name, spec)| (name.clone(), spec.clone()))
+                .collect();
+            let resolved: Vec<(PackageName, VersionWithSource)> = pixi_records
+                .iter()
+                .filter_map(|record| record.as_binary())
+                .map(|record| {
+                    (
+                        record.package_record.name.clone(),
+                        record.package_record.version.clone(),
+                    )
+                })
+                .collect();
+            blocked_upgrade = self
+                .check_blocked_upgrade(
+                    command_dispatcher,
+                    solve_spec,
+                    &dependencies,
+                    &specs,
+                    &resolved,
+                    &channels,
+                    platform,
+                    exclude_newer.clone(),
+                )
+                .await;
+        }
 
         // Move this to a separate function to avoid code duplication
         try_increase_rlimit_to_sensible();
@@ -900,7 +958,142 @@ impl Project {
         )?;
 
         let install_changes = get_install_changes(result.transaction);
-        Ok(EnvironmentUpdate::new(install_changes, dependencies_names))
+        Ok((
+            EnvironmentUpdate::new(install_changes, dependencies_names),
+            blocked_upgrade,
+        ))
+    }
+
+    /// Finds a direct dependency that was resolved to an older version than
+    /// the newest one in the channels that matches its spec, because that
+    /// newer version can't be installed (strict channel priority, a dependency
+    /// missing from the channels, a virtual package the machine lacks, ...).
+    /// The newer version is solved for once more, pinned, so the returned
+    /// report carries the solver's explanation of why it was left out.
+    ///
+    /// This is advisory: if the check itself fails (e.g. repodata can't be
+    /// read), it logs a warning and reports nothing.
+    #[allow(clippy::too_many_arguments)]
+    async fn check_blocked_upgrade(
+        &self,
+        command_dispatcher: &CommandDispatcher,
+        solve_spec: SolvePixiEnvironmentSpec,
+        dependencies: &[(PackageName, PixiSpec)],
+        specs: &[MatchSpec],
+        resolved: &[(PackageName, VersionWithSource)],
+        channels: &[ChannelUrl],
+        platform: Subdir,
+        exclude_newer: Option<ResolvedExcludeNewer>,
+    ) -> Option<miette::Report> {
+        // Only plain repodata specs can have a newer candidate; a URL or file
+        // name already names exactly one artifact.
+        let specs: Vec<&MatchSpec> = specs
+            .iter()
+            .filter(|spec| spec.url.is_none() && spec.file_name.is_none())
+            .collect();
+        if specs.is_empty() {
+            return None;
+        }
+        let gateway = match self.repodata_gateway() {
+            Ok(gateway) => gateway,
+            Err(err) => {
+                tracing::warn!("Couldn't check for newer versions: {err}");
+                return None;
+            }
+        };
+        let repodata = match gateway
+            .query(
+                channels.iter().cloned().map(Channel::from_url),
+                [platform, Subdir::NoArch],
+                specs.iter().map(|spec| (*spec).clone()),
+            )
+            .recursive(false)
+            .await
+        {
+            Ok(repodata) => repodata,
+            Err(err) => {
+                tracing::warn!("Couldn't check for newer versions: {err}");
+                return None;
+            }
+        };
+        let exclude_newer = exclude_newer.map(rattler_solve::ExcludeNewer::from);
+
+        for spec in specs {
+            let Some(name) = spec.name.as_exact() else {
+                continue;
+            };
+            let Some((_, resolved)) = resolved.iter().find(|(resolved, _)| resolved == name) else {
+                continue;
+            };
+            let Some(newest) = repodata
+                .repodata
+                .iter()
+                .flat_map(|repodata| repodata.iter())
+                .filter(|record| &record.package_record.name == name)
+                .filter(|record| spec.matches(*record))
+                .filter(|record| {
+                    !exclude_newer
+                        .as_ref()
+                        .is_some_and(|exclude_newer| exclude_newer.is_excluded(record))
+                })
+                .max_by(|a, b| a.package_record.version.cmp(&b.package_record.version))
+            else {
+                continue;
+            };
+            if newest.package_record.version <= *resolved {
+                continue;
+            }
+
+            // Ask the solver for exactly the newer version to learn why it
+            // was passed over.
+            let Some((_, pixi_spec)) = dependencies.iter().find(|(dep_name, _)| dep_name == name)
+            else {
+                continue;
+            };
+            let channel_config = self.global_channel_config();
+            let Ok(Some(mut nameless)) = pixi_spec
+                .clone()
+                .try_into_nameless_match_spec(channel_config)
+            else {
+                continue;
+            };
+            nameless.version = Some(VersionSpec::Exact(
+                EqualityOperator::Equals,
+                newest.package_record.version.version().clone(),
+            ));
+            let mut pinned = solve_spec.clone();
+            let mut pinned_dependencies = DependencyMap::default();
+            for (dep_name, dep_spec) in dependencies {
+                let dep_spec = if dep_name == name {
+                    PixiSpec::from_nameless_matchspec(nameless.clone(), channel_config)
+                } else {
+                    dep_spec.clone()
+                };
+                pinned_dependencies.insert(dep_name.clone(), dep_spec);
+            }
+            pinned.dependencies = pinned_dependencies;
+
+            let available = format!("{} {}", name.as_normalized(), newest.package_record.version);
+            let available = match newest.channel.as_deref() {
+                Some(channel) => format!("{available} (from {channel})"),
+                None => available,
+            };
+            let message = format!(
+                "{available} is available, but can't be installed, so {} stays at {}",
+                name.as_normalized(),
+                resolved
+            );
+            // If the pinned solve works, the default solve preferred the
+            // older version for another reason; that isn't a conflict.
+            return command_dispatcher
+                .engine()
+                .compute(&SolvePixiEnvironmentKey::new(pinned))
+                .await
+                .map_err_into_dispatcher(std::convert::identity)
+                .err()
+                .map(|err| miette::Report::from(err).wrap_err(message));
+        }
+        None
     }
 
     /// Record the resolved platform and the installed packages' requirements in

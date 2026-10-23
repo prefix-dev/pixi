@@ -790,3 +790,41 @@ impl IntoFuture for GlobalInstallBuilder {
         .boxed_local()
     }
 }
+
+/// Contains the arguments to pass to [`global::update::execute()`]. Call
+/// `.await` to call the CLI execute method and await the result at the same
+/// time.
+pub struct GlobalUpdateBuilder {
+    args: global::update::Args,
+    tmpdir: PathBuf,
+}
+
+impl GlobalUpdateBuilder {
+    pub fn new(tmpdir: PathBuf, config: pixi_config::ConfigCli) -> Self {
+        let args = global::update::Args {
+            config,
+            ..Default::default()
+        };
+        Self { args, tmpdir }
+    }
+}
+
+impl IntoFuture for GlobalUpdateBuilder {
+    type Output = miette::Result<()>;
+    type IntoFuture = Pin<Box<dyn Future<Output = Self::Output> + 'static>>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        let args = global::Args {
+            command: global::Command::Update(self.args),
+        };
+
+        temp_env::async_with_vars(
+            [
+                ("PIXI_HOME", Some(self.tmpdir.clone())),
+                ("PIXI_CACHE_DIR", Some(self.tmpdir.clone())),
+            ],
+            async { global::execute(args).await },
+        )
+        .boxed_local()
+    }
+}
