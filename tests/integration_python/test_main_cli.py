@@ -907,6 +907,150 @@ def test_config_allow_links(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_
     )
 
 
+def test_config_describe(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+    verify_cli_command([pixi, "init", "--channel", dummy_channel_1, tmp_pixi_workspace])
+
+    # The `tmp_pixi_workspace` fixture seeds a project-local config that sets
+    # several of the keys asserted on below. Remove it, and pass `--no-config`,
+    # so the output only reflects built-in defaults and what this test sets.
+    (tmp_pixi_workspace / ".pixi" / "config.toml").unlink()
+
+    verify_cli_command(
+        [pixi, "config", "list", "--describe", "--no-config", "--manifest-path", manifest_path],
+        stdout_contains=[
+            "# Type: bool",
+            "# Default: false",
+            "# tls-no-verify = false",
+            "# default-channels = []",
+            "# concurrency.solves = (available parallelism)",
+            "# s3-options.<bucket>.region = (unset)",
+        ],
+    )
+
+    verify_cli_command(
+        [
+            pixi,
+            "config",
+            "list",
+            "--describe",
+            "--no-config",
+            "tls-no-verify",
+            "--manifest-path",
+            manifest_path,
+        ],
+        stdout_contains=[
+            "# Disable TLS certificate verification",
+            "# Type: bool",
+            "# tls-no-verify = false",
+        ],
+        stdout_excludes=["default-channels", "concurrency.solves"],
+    )
+
+    verify_cli_command(
+        [
+            pixi,
+            "config",
+            "set",
+            "--manifest-path",
+            manifest_path,
+            "--local",
+            "tls-no-verify",
+            "true",
+        ]
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "config",
+            "list",
+            "--describe",
+            "--no-config",
+            "tls-no-verify",
+            "--manifest-path",
+            manifest_path,
+        ],
+        stdout_contains=["tls-no-verify = true"],
+        stdout_excludes=["# tls-no-verify ="],
+    )
+
+    result = verify_cli_command(
+        [
+            pixi,
+            "config",
+            "list",
+            "--describe",
+            "--no-config",
+            "--json",
+            "tls-no-verify",
+            "--manifest-path",
+            manifest_path,
+        ]
+    )
+    parsed = json.loads(result.stdout)
+    assert len(parsed) == 1
+    assert parsed[0]["key"] == "tls-no-verify"
+    assert parsed[0]["type"] == "bool"
+    assert parsed[0]["default"] == "false"
+    assert parsed[0]["value"] is True
+
+    # Per-bucket keys can be described by a concrete bucket name or by the
+    # placeholder shown in the listing.
+    verify_cli_command(
+        [
+            pixi,
+            "config",
+            "set",
+            "--manifest-path",
+            manifest_path,
+            "--local",
+            "s3-options",
+            '{"my-bucket": {"endpoint-url": "https://s3.example.com", "region": "eu-west-1", "addressing-style": "path"}}',
+        ]
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "config",
+            "list",
+            "--describe",
+            "--no-config",
+            "s3-options.my-bucket.region",
+            "--manifest-path",
+            manifest_path,
+        ],
+        stdout_contains=["# Region for the S3 bucket", 's3-options.my-bucket.region = "eu-west-1"'],
+    )
+    verify_cli_command(
+        [
+            pixi,
+            "config",
+            "list",
+            "--describe",
+            "--no-config",
+            "s3-options.<bucket>.region",
+            "--manifest-path",
+            manifest_path,
+        ],
+        stdout_contains=["# s3-options.<bucket>.region = (unset)"],
+    )
+
+    verify_cli_command(
+        [
+            pixi,
+            "config",
+            "list",
+            "--describe",
+            "--no-config",
+            "not-a-real-key",
+            "--manifest-path",
+            manifest_path,
+        ],
+        ExitCode.FAILURE,
+        stderr_contains="Unknown configuration key",
+    )
+
+
 def test_dont_add_broken_dep(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -> None:
     manifest_path = tmp_pixi_workspace / "pixi.toml"
 
