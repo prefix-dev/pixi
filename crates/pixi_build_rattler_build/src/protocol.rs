@@ -1509,7 +1509,6 @@ numpy:
         assert_eq!(globs, vec![String::from("custom/my_recipe.yaml")]);
     }
 
-
     #[test]
     fn test_parse_source_date_epoch() {
         assert_eq!(super::parse_source_date_epoch(None), None);
