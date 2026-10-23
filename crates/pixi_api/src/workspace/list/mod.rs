@@ -35,6 +35,9 @@ pub async fn list(
     progress: Option<&Arc<pixi_reporters::TopLevelProgress>>,
 ) -> miette::Result<Vec<Package>> {
     let environment = workspace.environment_from_name_or_env_var(environment)?;
+    workspace
+        .refresh_environment_hosts_for_platform_selection(std::slice::from_ref(&environment))
+        .await?;
 
     // Held across the solve so the package table is not written over bars that
     // have finished but are still rendered.
@@ -70,12 +73,14 @@ pub async fn list(
     };
     let platform = match resolved_platform.as_ref() {
         Some(p) => p,
-        None => environment.best_declared_platform().ok_or_else(|| {
-            miette::miette!(
-                "no platform supported by environment '{}' matches the current system",
-                environment.name()
-            )
-        })?,
+        None => environment
+            .installed_or_best_declared_platform()
+            .ok_or_else(|| {
+                miette::miette!(
+                    "no platform supported by environment '{}' matches the current system",
+                    environment.name()
+                )
+            })?,
     };
     let locked_platform = resolve_lock_platform_for(&lock_file, platform);
     let locked_environment = lock_file.environment(environment.name().as_str());

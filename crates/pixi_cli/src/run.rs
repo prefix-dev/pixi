@@ -16,7 +16,8 @@ use indicatif::ProgressDrawTarget;
 use itertools::Itertools;
 use miette::{Diagnostic, IntoDiagnostic};
 use pixi_config::{ConfigCli, ConfigCliActivation};
-use pixi_core::host::HostDetection;
+use pixi_core::host::{cli_detector_consent, probe_conda_script, probe_pep723_script};
+
 use pixi_core::{
     Workspace, WorkspaceLocator,
     environment::sanity_check_workspace,
@@ -51,7 +52,7 @@ use crate::run_script::{
 };
 use crate::shared::install_platform::resolve_install_platform;
 
-/// Runs task in the pixi environment.
+/// Run a task in an environment.
 ///
 /// This command is used to run tasks in the pixi environment.
 /// It will activate the environment and run the task in the environment.
@@ -203,13 +204,16 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
                 RemoteScriptManifest::Pep723(manifest) => manifest,
                 RemoteScriptManifest::CondaScript(manifest) => {
                     let entrypoint = manifest.metadata().entrypoint.clone();
+                    let host =
+                        probe_conda_script(&manifest, &root, &config, cli_detector_consent(None))
+                            .await?;
                     let workspace = Workspace::from_transient_conda_script(
                         manifest,
                         config,
                         root,
                         &prepared.cache_name,
                         &cache_key,
-                        HostDetection::detect().await,
+                        host,
                     )?;
                     if not_hidden {
                         global_multi_progress()
@@ -222,6 +226,8 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
                 }
             };
             let script_path = manifest.path().to_owned();
+            let host =
+                probe_pep723_script(&manifest, &root, &config, cli_detector_consent(None)).await?;
             let WithWarnings {
                 value: workspace,
                 warnings,
@@ -232,7 +238,7 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
                 script_path,
                 &prepared.cache_name,
                 &cache_key,
-                HostDetection::detect().await,
+                host,
             )?;
             for warning in warnings {
                 tracing::warn!("{warning}");
@@ -252,6 +258,13 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
             let prepared = prepare_stdin_script(contents, &root)?;
             let cache_key =
                 transient_script_cache_key(b"stdin", prepared.manifest.metadata().as_bytes());
+            let host = probe_pep723_script(
+                &prepared.manifest,
+                &root,
+                &config,
+                cli_detector_consent(None),
+            )
+            .await?;
             let WithWarnings {
                 value: workspace,
                 warnings,
@@ -262,7 +275,7 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
                 "<stdin>".into(),
                 "stdin",
                 &cache_key,
-                HostDetection::detect().await,
+                host,
             )?;
             for warning in warnings {
                 tracing::warn!("{warning}");
@@ -293,8 +306,10 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
                     global_multi_progress().set_draw_target(ProgressDrawTarget::stderr_with_hz(20));
                 }
                 let entrypoint = manifest.metadata().entrypoint.clone();
-                let workspace =
-                    Workspace::from_conda_script(manifest, config, HostDetection::detect().await)?;
+                let host =
+                    probe_conda_script(&manifest, &root, &config, cli_detector_consent(None))
+                        .await?;
+                let workspace = Workspace::from_conda_script(manifest, config, host)?;
                 let code = crate::conda_script::execute_run(workspace, entrypoint, args).await?;
                 return Ok(process_exit::exit_code_from_code(code));
             }
@@ -363,6 +378,13 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
     // Sanity check of prefix location
     sanity_check_workspace(&workspace).await?;
 
+    // Detect the host, the virtual packages this machine provides, only for the
+    // environment this command targets. Other environments are detected when a
+    // task runs in them.
+    workspace
+        .refresh_environment_hosts_for_platform_selection(std::slice::from_ref(&environment))
+        .await?;
+
     // `--platform` pins which declared platform the environment is installed
     // and activated for. Without it we auto-upgrade to the platform the
     // environment was last installed for (so users need not repeat
@@ -411,7 +433,7 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
     // Only an explicit `--platform` pins the global target; the implicit
     // auto-upgrade is resolved per-environment in the loop below, since a
     // global pin broke sibling environments with a different platform.
-    lock_file.target_platform = user_platform.clone();
+    lock_file.set_explicit_target_platform(user_platform.clone());
 
     // Spawn a task that listens for ctrl+c and resets the cursor.
     tokio::spawn(async {
@@ -479,6 +501,14 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
         // don't instantiate a prefix for an alias.
         if !executable_task.task().is_executable() {
             continue;
+        }
+
+        if args.lock_and_install_config.allow_installs() {
+            workspace
+                .refresh_environment_hosts_for_platform_selection(std::slice::from_ref(
+                    &executable_task.run_environment,
+                ))
+                .await?;
         }
 
         // Classify how this machine runs the task's environment. A `--platform`
@@ -609,9 +639,11 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
                     // No `--platform`: pin to the platform this environment was
                     // last installed for, not a sibling's bare subdir.
                     if user_platform.is_none() {
-                        lock_file.target_platform = executable_task
-                            .run_environment
-                            .installed_resolved_platform_name();
+                        lock_file.set_installed_target_platform(
+                            executable_task
+                                .run_environment
+                                .installed_resolved_platform_name(),
+                        );
                     }
 
                     // Ensure there is a valid prefix

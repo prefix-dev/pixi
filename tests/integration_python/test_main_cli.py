@@ -1723,6 +1723,7 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
         {
             "platform": IsStr,
             "virtual_packages": IsAnyList,
+            "virtual_package_detectors": IsAnyList,
             "version": IsStr,
             "cache_dir": IsStr,
             "cache_size": AnyThing,
@@ -2384,6 +2385,20 @@ dummy-a = "*"
     )
     parsed_manifest = tomli.loads(manifest_path.read_text())
     assert parsed_manifest["environments"]["test-env"] == ["test"]
+
+
+def test_workspace_feature_remove_missing(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+    verify_cli_command([pixi, "init", tmp_pixi_workspace])
+    before = manifest_path.read_text()
+
+    verify_cli_command(
+        [pixi, "workspace", "feature", "remove", "--manifest-path", manifest_path, "nosuch"],
+        ExitCode.FAILURE,
+        stderr_contains="feature 'nosuch' does not exist",
+        stderr_excludes="Removed feature",
+    )
+    assert manifest_path.read_text() == before
 
 
 def test_workspace_activation(pixi: Path, tmp_pixi_workspace: Path) -> None:

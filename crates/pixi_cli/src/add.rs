@@ -30,7 +30,7 @@ use crate::{
     has_specs::HasSpecs,
 };
 
-/// Adds dependencies to the workspace
+/// Add dependencies to the workspace
 ///
 /// The dependencies should be defined as MatchSpec for conda package, a PyPI
 /// requirement for the `--pypi` dependencies, or an absolute path to a local

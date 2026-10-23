@@ -3,6 +3,7 @@ use miette::{Context, IntoDiagnostic};
 use pixi_core::{
     WorkspaceLocator,
     environment::LockFileUsage,
+    host::{cli_detector_consent, probe_conda_script},
     lock_file::{LockFileDerivedData, UpdateLockFileOptions},
 };
 use pixi_diff::{LockFileDiff, LockFileJsonDiff};
@@ -10,7 +11,7 @@ use pixi_diff::{LockFileDiff, LockFileJsonDiff};
 use crate::cli_config::NoInstallConfig;
 use crate::cli_config::ScriptWorkspaceConfig;
 
-/// Solve environment and update the lock file without installing the
+/// Solve environments and update the lock file without installing the
 /// environments.
 #[derive(Debug, Default, Parser)]
 #[clap(arg_required_else_help = false)]
@@ -56,14 +57,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .to_owned();
         let config = pixi_config::Config::load_with(&root, &args.config_source.source())
             .merge_config(args.config.clone().into());
+        let host =
+            probe_conda_script(&manifest, &root, &config, cli_detector_consent(None)).await?;
         let pixi_manifest::WithWarnings {
             value: workspace,
             warnings,
-        } = pixi_core::Workspace::from_conda_script(
-            manifest,
-            config,
-            pixi_core::host::HostDetection::detect().await,
-        )?;
+        } = pixi_core::Workspace::from_conda_script(manifest, config, host)?;
         for warning in warnings {
             tracing::warn!("{warning}");
         }

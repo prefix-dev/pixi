@@ -5,6 +5,98 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+### [0.83.0] - 2026-10-22
+#### ✨ Highlights
+
+
+Soon channels will be able to register virtual package detectors.
+These detectors allow to introduce virtual packages that Pixi doesn't know about.
+This Pixi release introduces support for virtual package detectors.
+
+It also fixes an increase in memory usage that 0.82.1 introduced.
+
+#### Features
+
+- Ask before running detectors and show them in pixi info by @Hofer-Julian in [#7129](https://github.com/prefix-dev/pixi/pull/7129)
+
+
+#### Fixes
+
+- run: Only detect the target environment's host up front by @Hofer-Julian in [#7339](https://github.com/prefix-dev/pixi/pull/7339)
+
+
+#### Documentation
+
+- Add tombi integration page by @pavelzw in [#7338](https://github.com/prefix-dev/pixi/pull/7338)
+
+
+
+### [0.82.1] - 2026-10-20
+#### 🔒 Security 🔒
+
+This patch release contains security fixes for the incident
+described at https://emudhra.we-have-a-problem.com/.
+**All users are encouraged to upgrade to this version immediately.**
+
+The affected `webpki-root-certs` and `rustls-webpki` dependencies
+have been bumped to patched releases `1.0.10` and `0.103.16` respectively.
+
+#### Features
+
+- pixi-build-r: Add CMake and pkg-config when SystemRequirements asks for them by @roaldarbol in [#7256](https://github.com/prefix-dev/pixi/pull/7256)
+- spec: Support exemptions in the resolved exclude-newer config by @pavelzw in [#7250](https://github.com/prefix-dev/pixi/pull/7250)
+- manifest: Read exemptions from `exclude-newer` in `[workspace]` by @pavelzw in [#7246](https://github.com/prefix-dev/pixi/pull/7246)
+- Pass arbitrary virtual packages to the solver by @Hofer-Julian in [#7125](https://github.com/prefix-dev/pixi/pull/7125)
+- Configure virtual package detectors and write shared config by @Hofer-Julian in [#7127](https://github.com/prefix-dev/pixi/pull/7127)
+- Run channel-registered detectors during host detection by @Hofer-Julian in [#7128](https://github.com/prefix-dev/pixi/pull/7128)
+
+
+#### Fixes
+
+- config: Reject relative `detached-environments` paths by @lucascolley in [#7221](https://github.com/prefix-dev/pixi/pull/7221)
+- cli: Render colours in log messages instead of escape codes by @lucascolley in [#7295](https://github.com/prefix-dev/pixi/pull/7295)
+- core: Correct muddled post-link / pre-unlink script check by @lucascolley in [#7296](https://github.com/prefix-dev/pixi/pull/7296)
+- workspace: Error when removing a feature that does not exist by @lucascolley in [#7205](https://github.com/prefix-dev/pixi/pull/7205)
+- environment: Detect relocated environments again by @lucascolley in [#7306](https://github.com/prefix-dev/pixi/pull/7306)
+- tasks: Error on undefined environments in task definitions by @lucascolley in [#7284](https://github.com/prefix-dev/pixi/pull/7284)
+- core: Stop printing a panic message for build dispatch errors by @lucascolley in [#7309](https://github.com/prefix-dev/pixi/pull/7309)
+- Bump webpki-root-certs and rustls-webpki for eMudhra intermediate compromise by @wolfv in [#7326](https://github.com/prefix-dev/pixi/pull/7326)
+
+
+#### Documentation
+
+- Artifactory oidc login through pixi by @pavelzw in [#7168](https://github.com/prefix-dev/pixi/pull/7168)
+- Document auth-workload-identity inputs of setup-pixi v0.11.1 by @pavelzw in [#7264](https://github.com/prefix-dev/pixi/pull/7264)
+- [project] is the deprecated alias for [workspace], not the reverse by @ZainnQureshii in [#7086](https://github.com/prefix-dev/pixi/pull/7086)
+- Update setup-pixi docs by @pavelzw in [#7277](https://github.com/prefix-dev/pixi/pull/7277)
+- Note that conda-forge is the only default channel for pixi global by @alisterburt in [#7285](https://github.com/prefix-dev/pixi/pull/7285)
+- cli: Improve descriptions by @timhoffm in [#7288](https://github.com/prefix-dev/pixi/pull/7288)
+- Fix admonition rendering by @lucascolley in [#7310](https://github.com/prefix-dev/pixi/pull/7310)
+
+
+#### Maintenance
+
+- release: Add `rust` to `backends-release` env by @lucascolley in [#7269](https://github.com/prefix-dev/pixi/pull/7269)
+- release: Make `cargo` available in `backends-release` by @lucascolley in [#7270](https://github.com/prefix-dev/pixi/pull/7270)
+- release: Bump `pixi-build-r` to `0.2.0` by @lucascolley in [#7271](https://github.com/prefix-dev/pixi/pull/7271)
+- deps: Bump rustls and aws-smithy-json by @wolfv in [#7274](https://github.com/prefix-dev/pixi/pull/7274)
+- release: Add `release` scope to automated commit messages by @lucascolley in [#7273](https://github.com/prefix-dev/pixi/pull/7273)
+- init: Show source context for pyproject.toml read errors by @lucascolley in [#7202](https://github.com/prefix-dev/pixi/pull/7202)
+- workspace: Detect host capabilities during construction by @Hofer-Julian in [#7124](https://github.com/prefix-dev/pixi/pull/7124)
+- core: Type the activation errors by @lucascolley in [#7280](https://github.com/prefix-dev/pixi/pull/7280)
+- task: Type the task environment errors by @lucascolley in [#7289](https://github.com/prefix-dev/pixi/pull/7289)
+- core: Type the workspace accessor errors by @lucascolley in [#7290](https://github.com/prefix-dev/pixi/pull/7290)
+- core: Type the workspace registry errors by @lucascolley in [#7292](https://github.com/prefix-dev/pixi/pull/7292)
+- core: Type the environment helper errors by @lucascolley in [#7303](https://github.com/prefix-dev/pixi/pull/7303)
+- Network utilities available in rosdistro by @Timple in [#7301](https://github.com/prefix-dev/pixi/pull/7301)
+- core: Type the PyPI resolve errors by @lucascolley in [#7308](https://github.com/prefix-dev/pixi/pull/7308)
+- core: Type the lock-file load, write and prefix errors by @lucascolley in [#7312](https://github.com/prefix-dev/pixi/pull/7312)
+
+
+#### New Contributors
+* @alisterburt made their first contribution in [#7285](https://github.com/prefix-dev/pixi/pull/7285)
+* @ZainnQureshii made their first contribution in [#7086](https://github.com/prefix-dev/pixi/pull/7086)
+
 ### [0.82.0] - 2026-10-13
 #### ✨ Highlights
 

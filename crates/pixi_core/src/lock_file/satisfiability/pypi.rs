@@ -17,7 +17,7 @@ use pixi_command_dispatcher::{
 use pixi_git::url::RepositoryUrl;
 use pixi_install_pypi::LockedPypiRecord;
 use pixi_manifest::{EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform};
-use pixi_record::{LockedGitUrl, PixiRecord};
+use pixi_record::LockedGitUrl;
 use pixi_spec::Subdirectory;
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
@@ -39,7 +39,7 @@ use uv_resolver::FlatIndex;
 use uv_threads::initialize_rayon_once;
 use uv_types::HashStrategy;
 
-use super::errors::PlatformUnsat;
+use super::errors::{DuplicateEntry, PlatformUnsat};
 use super::platform::{RequirementOrigin, VerifySatisfiabilityContext};
 use super::pypi_metadata;
 use crate::{
@@ -47,7 +47,7 @@ use crate::{
         CondaPrefixUpdater, PixiRecordsByName, PypiRecordsByName,
         outdated::{BuildCacheKey, PypiEnvironmentBuildCache},
         records_by_name::LockedPypiRecordsByName,
-        resolve::build_dispatch::{LazyBuildDispatch, UvBuildDispatchParams},
+        resolve::build_dispatch::{BuildingRecords, LazyBuildDispatch, UvBuildDispatchParams},
     },
     workspace::{
         Environment, EnvironmentVars, HasWorkspaceRef, grouped_environment::GroupedEnvironment,
@@ -470,7 +470,7 @@ pub(super) async fn lock_pypi_packages(
     ctx: &VerifySatisfiabilityContext<'_>,
     locked_pixi_records: &PixiRecordsByName,
     unresolved_pypi_environment: &PypiRecordsByName,
-    building_pixi_records: Result<PixiRecordsByName, PlatformUnsat>,
+    building_pixi_records: Result<PixiRecordsByName, DuplicateEntry>,
 ) -> Result<LockedPypiRecordsByName, CommandDispatcherError<Box<PlatformUnsat>>> {
     // Reading local package metadata is independent and IO-bound, so resolve
     // records concurrently and reassemble in the original order.
@@ -506,7 +506,6 @@ pub(super) async fn lock_pypi_packages(
                                 ctx.config,
                                 ctx.environment.workspace().client()?.clone(),
                             )
-                            .map_err(miette::Report::from)
                         })
                         .map_err(|e| {
                             CommandDispatcherError::Failed(Box::new(
@@ -588,7 +587,7 @@ struct BuildMetadataContext<'a> {
     project_env_vars: &'a HashMap<EnvironmentName, EnvironmentVars>,
     command_dispatcher: CommandDispatcher,
     build_caches: &'a DashMap<BuildCacheKey, Arc<PypiEnvironmentBuildCache>>,
-    building_pixi_records: &'a Result<PixiRecordsByName, PlatformUnsat>,
+    building_pixi_records: &'a Result<PixiRecordsByName, DuplicateEntry>,
     static_metadata_cache: &'a DashMap<PathBuf, pypi_metadata::LocalPackageMetadata>,
 }
 
@@ -767,11 +766,11 @@ async fn read_local_package_metadata(
     let last_error = Arc::new(Mutex::new(None));
     // Use building_pixi_records (host platform) for installing Python and building,
     // since we can only run binaries on the host platform
-    let building_records: miette::Result<Vec<PixiRecord>> = ctx
+    let building_records: BuildingRecords = ctx
         .building_pixi_records
         .as_ref()
         .map(|r| r.records.clone())
-        .map_err(|e| miette::miette!("{}", e));
+        .map_err(|e| Box::new(e.clone()) as _);
     let lazy_build_dispatch = LazyBuildDispatch::new(
         build_params,
         conda_prefix_updater,

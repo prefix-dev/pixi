@@ -2,14 +2,20 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use async_once_cell::OnceCell as AsyncOnceCell;
-use miette::IntoDiagnostic;
-use pixi_command_dispatcher::{BuildEnvironment, CommandDispatcher, InstallPixiEnvironmentSpec};
-use pixi_manifest::{FeaturesExt, PixiPlatform};
+use miette::Diagnostic;
+use pixi_command_dispatcher::{
+    BuildEnvironment, CommandDispatcher, CommandDispatcherError, InstallPixiEnvironmentError,
+    InstallPixiEnvironmentSpec,
+};
+use pixi_manifest::{ExcludeNewerError, FeaturesExt, PixiPlatform};
 use pixi_record::{PixiRecord, UnresolvedPixiRecord};
 use pixi_spec::ResolvedExcludeNewer;
 use pixi_utils::{prefix::Prefix, variants::VariantConfig};
 use rattler::install::link_script::LinkScriptType;
-use rattler_conda_types::{ChannelUrl, GenericVirtualPackage, PackageName, RepoDataRecord};
+use rattler_conda_types::{
+    ChannelUrl, GenericVirtualPackage, PackageName, ParseChannelError, RepoDataRecord,
+};
+use thiserror::Error;
 
 use super::{
     conda_metadata::{create_history_file, create_prefix_location_file},
@@ -19,9 +25,36 @@ use crate::{
     environment::PythonStatus,
     workspace::{
         HasWorkspaceRef,
+        errors::VariantsError,
         grouped_environment::{GroupedEnvironment, GroupedEnvironmentName},
     },
 };
+
+/// Errors that can occur while building a [`CondaPrefixUpdater`].
+#[derive(Debug, Error, Diagnostic)]
+pub enum CondaPrefixUpdaterBuildError {
+    #[error(transparent)]
+    Channel(#[from] ParseChannelError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Variants(#[from] VariantsError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ExcludeNewer(#[from] ExcludeNewerError),
+}
+
+/// Errors that can occur while updating a conda prefix.
+#[derive(Debug, Error, Diagnostic)]
+pub enum CondaPrefixUpdateError {
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Install(#[from] Box<CommandDispatcherError<InstallPixiEnvironmentError>>),
+}
 
 /// The result of installing a conda prefix via [`update_prefix_conda`].
 ///
@@ -102,18 +135,16 @@ pub struct CondaPrefixUpdaterBuilder<'a> {
 impl CondaPrefixUpdaterBuilder<'_> {
     /// Builds the conda prefix updater by extracting the necessary information
     /// from the group.
-    pub fn finish(self) -> miette::Result<CondaPrefixUpdater> {
+    pub fn finish(self) -> Result<CondaPrefixUpdater, CondaPrefixUpdaterBuildError> {
         let channels = self
             .group
-            .channel_urls(&self.group.workspace().channel_config())
-            .into_diagnostic()?;
+            .channel_urls(&self.group.workspace().channel_config())?;
         let name = self.group.name();
         let prefix = self.group.prefix();
         let variant_config = self.group.workspace().variants(&self.platform)?;
         let exclude_newer = self
             .group
-            .exclude_newer_config_resolved(&self.group.channel_config())
-            .into_diagnostic()?;
+            .exclude_newer_config_resolved(&self.group.channel_config())?;
         let inline_packages = self
             .group
             .combined_inline_packages(Some(&self.platform))
@@ -190,7 +221,7 @@ impl CondaPrefixUpdater {
         pixi_records: Vec<UnresolvedPixiRecord>,
         reinstall_packages: Option<HashSet<PackageName>>,
         ignore_packages: Option<HashSet<PackageName>>,
-    ) -> miette::Result<&CondaPrefixUpdated> {
+    ) -> Result<&CondaPrefixUpdated, CondaPrefixUpdateError> {
         self.inner
             .created
             .get_or_try_init(async {
@@ -246,7 +277,7 @@ pub async fn update_prefix_conda(
     reinstall_packages: Option<HashSet<PackageName>>,
     ignore_packages: Option<HashSet<PackageName>>,
     inline_packages: HashMap<PackageName, pixi_command_dispatcher::InlinePackage>,
-) -> miette::Result<CondaPrefixInstallResult> {
+) -> Result<CondaPrefixInstallResult, CondaPrefixUpdateError> {
     // Try to increase the rlimit to a sensible value for installation.
     try_increase_rlimit_to_sensible();
 
@@ -266,16 +297,14 @@ pub async fn update_prefix_conda(
     // SourceBuildKey sees a cache miss. clear_source_build_cache is a
     // no-op on packages that were never built from source.
     for name in &force_reinstall {
-        command_dispatcher
-            .clear_source_build_cache(name)
-            .into_diagnostic()?;
+        command_dispatcher.clear_source_build_cache(name)?;
     }
 
     let result = command_dispatcher
         .install_pixi_environment(InstallPixiEnvironmentSpec {
             name,
             records: pixi_records,
-            prefix: rattler_conda_types::prefix::Prefix::create(prefix.root()).into_diagnostic()?,
+            prefix: rattler_conda_types::prefix::Prefix::create(prefix.root())?,
             installed: None,
             force_reinstall,
             ignore_packages,
@@ -286,7 +315,8 @@ pub async fn update_prefix_conda(
             variant_files: Some(variant_files),
             inline_packages,
         })
-        .await?;
+        .await
+        .map_err(Box::new)?;
 
     // Mark the location of the prefix
     create_prefix_location_file(prefix.root())?;
@@ -299,7 +329,7 @@ pub async fn update_prefix_conda(
 
         for package in result.transaction.installed_packages() {
             let rel_script_path =
-                LinkScriptType::PreUnlink.get_path(&package.package_record, &host_subdir);
+                LinkScriptType::PostLink.get_path(&package.package_record, &host_subdir);
             let post_link_script = prefix.root().join(&rel_script_path);
 
             if post_link_script.exists() {

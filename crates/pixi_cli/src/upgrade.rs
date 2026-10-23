@@ -23,9 +23,9 @@ use rattler_conda_types::{MatchSpec, PackageName, StringMatcher};
 
 use crate::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
 
-/// Checks if there are newer versions of the dependencies and upgrades them in the lock file and manifest file.
+/// Check if there are newer versions of the dependencies and upgrade them in the lock file and manifest file.
 ///
-/// `pixi upgrade` loosens the requirements for the given packages, updates the lock file and the adapts the manifest accordingly.
+/// `pixi upgrade` loosens the requirements for the given packages, updates the lock file, and adapts the manifest accordingly.
 /// By default, all features are upgraded.
 #[derive(Parser, Debug, Default)]
 pub struct Args {
@@ -78,9 +78,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
+        .with_cli_config(args.config.clone())
         .locate()
-        .await?
-        .with_cli_config(args.config.clone());
+        .await?;
 
     // One reporter for the whole command: the per-feature solves below and the
     // `--json --dry-run` solve further down share it instead of each stacking
@@ -270,6 +270,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             // without writing to disk, then revert. Reuse the already-loaded original lock file.
             let _clear_progress =
                 pixi_reporters::TopLevelProgress::clear_when_done(Some(&progress));
+            workspace.workspace().refresh_environment_hosts().await?;
             let dispatcher = workspace
                 .workspace()
                 .command_dispatcher_builder(Some(&progress))?

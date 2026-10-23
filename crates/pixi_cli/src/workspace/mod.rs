@@ -38,7 +38,7 @@ pub enum Command {
     RequiresPixi(requires_pixi::Args),
 }
 
-/// Modify the workspace configuration file through the command line.
+/// Modify the workspace configuration file.
 #[derive(Debug, Parser)]
 pub struct Args {
     #[command(subcommand)]

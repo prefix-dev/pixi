@@ -37,6 +37,8 @@ pixi config list [OPTIONS] [KEY]
 :  Operation on global configuration
 - <a id="arg---system" href="#arg---system">`--system (-s)`</a>
 :  Operation on system configuration
+- <a id="arg---shared" href="#arg---shared">`--shared`</a>
+:  Operation on the user configuration shared with other rattler-based tools, which only accepts the keys every such tool understands
 - <a id="arg---path" href="#arg---path">`--path (-p) <PATH>`</a>
 :  Path to a local configuration file
 

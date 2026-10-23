@@ -14,8 +14,7 @@ use crate::cli_config::ScriptWorkspaceConfig;
 use crate::shared::install_platform::resolve_install_platform;
 use pixi_manifest::platform::host::host_baseline;
 
-/// Install an environment, both updating the lock file and installing the
-/// environment.
+/// Install an environment.
 ///
 /// This command installs an environment, if the lock file is not up-to-date it
 /// will be updated.
@@ -118,9 +117,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
+        .with_cli_config(args.config.clone())
         .locate()
-        .await?
-        .with_cli_config(args.config.clone());
+        .await?;
 
     // Apply backend override if provided (primarily for testing)
     if let Some(backend_override) = args
@@ -161,6 +160,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // the current platform. When the user explicitly asks for an environment
     // (or the default), we still want to surface the platform error.
     if args.all {
+        workspace.refresh_environment_hosts().await?;
         let (supported, skipped): (Vec<_>, Vec<_>) = environments
             .into_iter()
             .partition(|env| env.best_declared_platform().is_some());

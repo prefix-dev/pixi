@@ -55,5 +55,8 @@ pixi global install --expose "py39=python3.9" "python=3.9.*"
     When you pass `--path` with a local `.conda` archive, Pixi copies the file into `PIXI_HOME/conda-files` and installs from that managed copy.
     Supplying any other kind of path keeps the original location unchanged.
 
+Trusted [virtual package detectors](../../../../workspace/multi_platform_configuration.md#virtual-package-detectors) supply host capabilities for native-platform solves.
+For a foreign `--platform`, use `CONDA_OVERRIDE_<NAME>` to supply detector-defined virtual packages.
+
 After using global install, you can use the package you installed anywhere on your system.
 --8<-- [end:description]

@@ -20,9 +20,9 @@ mod tests;
 pub use environment::{PypiNoBuildCheck, verify_environment_satisfiability};
 #[allow(unused_imports)]
 pub use errors::{
-    BuildOrHostEnv, EnvironmentUnsat, ExcludeNewerMismatch, IndexesMismatch, LocalMetadataMismatch,
-    PlatformUnsat, SolveGroupUnsat, SourceExcludeNewerMismatch, SourceRunDepKind,
-    SourceTreeHashMismatch,
+    BuildOrHostEnv, DuplicateEntry, EnvironmentUnsat, ExcludeNewerMismatch, IndexesMismatch,
+    LocalMetadataMismatch, PlatformUnsat, SolveGroupUnsat, SourceExcludeNewerMismatch,
+    SourceRunDepKind, SourceTreeHashMismatch,
 };
 pub(crate) use platform::resolve_lock_platform;
 #[allow(unused_imports)]
