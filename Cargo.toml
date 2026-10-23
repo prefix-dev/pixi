@@ -82,7 +82,7 @@ jsonrpsee = "=0.26.1"
 libc = { version = "0.2.170", default-features = false }
 memchr = "2.8"
 miette = { version = "7.6.0" }
-minijinja = "2.24.0"
+minijinja = "3.0.0"
 nanoid = "0.5.0"
 nix = { version = "0.31.0", default-features = false }
 once_cell = "1.20.3"
