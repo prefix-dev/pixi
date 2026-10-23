@@ -58,6 +58,45 @@ impl RattlerBuildBackendInstantiator {
     }
 }
 
+/// Parse a caller-supplied `SOURCE_DATE_EPOCH` string into a `jiff::Timestamp`.
+///
+/// Returns `None` if the input is `None`, empty, whitespace-only, or cannot be parsed
+/// into a valid Unix timestamp in seconds. In invalid cases, a warning is logged so
+/// misconfigurations can be diagnosed.
+fn parse_source_date_epoch(raw: Option<&str>) -> Option<jiff::Timestamp> {
+    let raw = raw?;
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    match trimmed.parse::<i64>() {
+        Ok(secs) => match jiff::Timestamp::from_second(secs) {
+            Ok(ts) => Some(ts),
+            Err(err) => {
+                tracing::warn!(
+                    "Ignoring out-of-range SOURCE_DATE_EPOCH={raw:?}: {err}; falling back to current time"
+                );
+                None
+            }
+        },
+        Err(err) => {
+            tracing::warn!(
+                "Ignoring malformed SOURCE_DATE_EPOCH={raw:?}: {err}; falling back to current time"
+            );
+            None
+        }
+    }
+}
+
+/// Retrieve the build timestamp to use for reproducible conda package outputs.
+///
+/// If `SOURCE_DATE_EPOCH` is present in the environment and valid, it is honored.
+/// Otherwise, falls back to `jiff::Timestamp::now()`.
+fn source_date_epoch_or_now() -> jiff::Timestamp {
+    let env_val = std::env::var("SOURCE_DATE_EPOCH").ok();
+    parse_source_date_epoch(env_val.as_deref()).unwrap_or_else(jiff::Timestamp::now)
+}
+
 #[async_trait::async_trait]
 impl Protocol for RattlerBuildBackend {
     async fn conda_outputs(
@@ -492,7 +531,7 @@ impl Protocol for RattlerBuildBackend {
                 channels: vec![],
                 channel_priority: Default::default(),
                 solve_strategy: Default::default(),
-                timestamp: jiff::Timestamp::now(),
+                timestamp: source_date_epoch_or_now(),
                 subpackages: BTreeMap::new(),
                 packaging_settings: PackagingSettings::from_args(
                     params
@@ -1470,6 +1509,19 @@ numpy:
         assert_eq!(globs, vec![String::from("custom/my_recipe.yaml")]);
     }
 
+    #[test]
+    fn test_parse_source_date_epoch() {
+        assert_eq!(super::parse_source_date_epoch(None), None);
+        assert_eq!(super::parse_source_date_epoch(Some("")), None);
+        assert_eq!(super::parse_source_date_epoch(Some("   ")), None);
+        assert_eq!(super::parse_source_date_epoch(Some("not-a-number")), None);
+
+        let parsed = super::parse_source_date_epoch(Some("315532800")).unwrap();
+        assert_eq!(parsed.as_second(), 315532800);
+
+        let parsed_trimmed = super::parse_source_date_epoch(Some("  1792542858 \n")).unwrap();
+        assert_eq!(parsed_trimmed.as_second(), 1792542858);
+    }
     #[test]
     fn test_build_input_globs_includes_extra_globs() {
         // Create a temp directory to act as the base
