@@ -59,7 +59,9 @@ mod discovery;
 ///   - Cloudsmith: `cloudsmith://<owner>/<repository>`
 ///   - S3: `s3://bucket-name`
 ///   - Quetz: `quetz://server/<channel>`
-///   - Artifactory: `artifactory://server/<channel>`
+///   - Artifactory: `artifactory://server/<channel>` or, when Artifactory
+///     is served under a path prefix (e.g. JFrog Cloud),
+///     `artifactory://server/<prefix>/<channel>`
 ///   - Local filesystem channel (with indexing):
 ///     `file:///path/to/channel` or a bare path
 ///
@@ -1200,6 +1202,36 @@ async fn upload_packages_to_channel(
     }
 }
 
+/// Split an Artifactory target URL into the server URL and the repository name.
+///
+/// The last path segment is the repository, everything before it stays part of
+/// the server URL. This matters for Artifactory instances that are served under
+/// a path prefix, like JFrog Cloud where repositories live below
+/// `https://<org>.jfrog.io/artifactory/`. The returned server URL always ends
+/// with a slash so that `Url::join` appends to it instead of replacing its last
+/// segment.
+fn split_artifactory_url(url: &Url) -> miette::Result<(Url, String)> {
+    let mut segments: Vec<&str> = url
+        .path_segments()
+        .ok_or_else(|| miette::miette!("Invalid Artifactory URL: '{url}' cannot be a base"))?
+        .filter(|segment| !segment.is_empty())
+        .collect();
+    let repository = segments
+        .pop()
+        .ok_or_else(|| miette::miette!("Invalid Artifactory URL: missing repository name"))?
+        .to_string();
+
+    let mut server_url = url.clone();
+    server_url.set_query(None);
+    server_url.set_fragment(None);
+    server_url.set_path(&format!(
+        "/{}",
+        segments.iter().map(|s| format!("{s}/")).collect::<String>()
+    ));
+
+    Ok((server_url, repository))
+}
+
 /// Rewrite a custom-scheme channel URL (`prefix://`, `quetz://`, `artifactory://`) to `https://`.
 ///
 /// `Url::set_scheme` refuses to convert between a non-special scheme and a special scheme such as
@@ -1496,14 +1528,8 @@ async fn upload_to_artifactory(
 
     tracing::info!("Uploading packages to Artifactory: {}", url);
 
-    let channel = url
-        .path_segments()
-        .and_then(|mut segments| segments.next_back())
-        .ok_or_else(|| miette::miette!("Invalid Artifactory URL: missing repository name"))?
-        .to_string();
-
-    let mut server_url = rewrite_scheme_to_https(url, "artifactory")?;
-    server_url.set_path("");
+    let url = rewrite_scheme_to_https(url, "artifactory")?;
+    let (server_url, channel) = split_artifactory_url(&url)?;
 
     let artifactory_data = ArtifactoryData::new(server_url, channel);
 
@@ -2036,5 +2062,32 @@ mod tests {
         let url = Url::parse("https://example.com/conda_dev").unwrap();
         let rewritten = rewrite_scheme_to_https(&url, "artifactory").unwrap();
         assert_eq!(rewritten, url);
+    }
+
+    #[test]
+    fn split_artifactory_url_without_prefix() {
+        let url = Url::parse("https://example.com/conda_dev").unwrap();
+        let (server, repository) = split_artifactory_url(&url).unwrap();
+        assert_eq!(server.as_str(), "https://example.com/");
+        assert_eq!(repository, "conda_dev");
+    }
+
+    #[test]
+    fn split_artifactory_url_keeps_path_prefix() {
+        let url = Url::parse("https://example.jfrog.io/artifactory/conda_dev").unwrap();
+        let (server, repository) = split_artifactory_url(&url).unwrap();
+        assert_eq!(server.as_str(), "https://example.jfrog.io/artifactory/");
+        assert_eq!(repository, "conda_dev");
+
+        let url = Url::parse("https://example.com:8443/a/b/conda_dev/").unwrap();
+        let (server, repository) = split_artifactory_url(&url).unwrap();
+        assert_eq!(server.as_str(), "https://example.com:8443/a/b/");
+        assert_eq!(repository, "conda_dev");
+    }
+
+    #[test]
+    fn split_artifactory_url_requires_repository() {
+        let url = Url::parse("https://example.com/").unwrap();
+        assert!(split_artifactory_url(&url).is_err());
     }
 }
