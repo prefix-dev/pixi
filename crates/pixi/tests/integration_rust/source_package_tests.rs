@@ -1002,7 +1002,7 @@ async fn test_publish_fails_before_build_or_upload_when_one_variant_is_unsatisfi
         build_number: None,
         build_dir: None,
         clean: false,
-        path: Some(pixi.manifest_path()),
+        path: vec![pixi.manifest_path()],
         target_channel: Some(target_url.to_string()),
         target_dir: None,
         force: false,
@@ -3449,7 +3449,7 @@ async fn test_publish_without_target_builds_but_does_not_upload() {
         build_number: None,
         build_dir: None,
         clean: false,
-        path: Some(pixi.manifest_path()),
+        path: vec![pixi.manifest_path()],
         target_channel: None,
         target_dir: None,
         force: false,
@@ -3504,7 +3504,7 @@ fn publish_args_for_test(
         build_number: None,
         build_dir: None,
         clean: false,
-        path,
+        path: path.into_iter().collect(),
         target_channel: None,
         target_dir,
         force: false,
@@ -3767,6 +3767,39 @@ async fn test_publish_with_path_rejects_source_dependencies() {
     );
 }
 
+/// `pixi publish --path` accepts several packages: source dependencies
+/// given with `--path` as well satisfy the closure rule, whether or not
+/// they set `publish = true`.
+#[tokio::test]
+async fn test_publish_with_multiple_paths_accepts_given_source_dependencies() {
+    setup_tracing();
+
+    let pixi = PixiControl::new().unwrap();
+    write_three_package_workspace(pixi.workspace_path(), None, None, None);
+
+    let publish_dir = tempfile::tempdir().unwrap();
+    let mut args = publish_args_for_test(
+        Some(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        )),
+        None,
+        Some(publish_dir.path().to_path_buf()),
+    );
+    args.path = vec![
+        pixi.workspace_path().join("core"),
+        pixi.workspace_path().join("cpp"),
+    ];
+    publish::execute(args)
+        .await
+        .expect("publishing a package together with its source dependency should succeed");
+
+    assert_eq!(
+        conda_artifact_names(publish_dir.path()),
+        vec!["core", "cpp"],
+        "both packages given with --path should be published"
+    );
+}
+
 /// `pixi publish --path <workspace root>` addresses the package in the root
 /// manifest. The relative path of that manifest to the workspace root is
 /// empty, so the guard error must name the package by its outputs instead.
@@ -3789,8 +3822,8 @@ async fn test_publish_with_workspace_root_path_names_the_package() {
 
     insta::assert_snapshot!(format_diagnostic(err.as_ref()), @"
     × package 'kit' has source run dependencies (cpp) and cannot be published on its own
-    help: A single-package publish must be self-contained. Set `publish = true` in the `[package]` section of the package and its source dependencies, then run `pixi publish` without `--path` to
-          publish them together.
+    help: The published packages must be self-contained. Pass the source dependencies with `--path` as well, or set `publish = true` in the `[package]` section of the package and its source
+          dependencies, then run `pixi publish` without `--path` to publish them together.
     ");
 }
 
@@ -4049,7 +4082,7 @@ backend.version = "0.1.0"
         build_number: None,
         build_dir: None,
         clean: false,
-        path: Some(pixi.manifest_path()),
+        path: vec![pixi.manifest_path()],
         target_channel: None,
         target_dir: None,
         force: false,
@@ -4175,7 +4208,7 @@ host-lib = "*"
         build_number: None,
         build_dir: None,
         clean: false,
-        path: Some(pixi.manifest_path()),
+        path: vec![pixi.manifest_path()],
         target_channel: None,
         target_dir: Some(target_dir.path().to_path_buf()),
         force: false,
