@@ -1899,6 +1899,92 @@ async fn test_exclude_newer_exemption_allows_vetted_release() {
 }
 
 #[tokio::test]
+async fn test_exclude_newer_exemption_keeps_lock_file_satisfied() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("foo", "1")
+            .with_timestamp("2010-12-02T02:07:43Z".parse().unwrap())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("foo", "2")
+            .with_timestamp("2020-12-02T07:00:00Z".parse().unwrap())
+            .finish(),
+    );
+
+    let channel = package_database.into_channel().await.unwrap();
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [workspace]
+    name = "test-exclude-newer-exemption-satisfiability"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+    exclude-newer = {{ cutoff = "2015-12-02T02:07:43Z", exemptions = {{ foo = "2" }} }}
+
+    [dependencies]
+    foo = "*"
+    "#,
+        channel = channel.url(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch)
+    ))
+    .unwrap();
+
+    pixi.lock().await.unwrap();
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Subdir::current().unwrap_or(Subdir::NoArch),
+        "foo ==2"
+    ));
+
+    // The locked `foo 2` is newer than the cutoff but exempt, so the lock file
+    // stays up to date.
+    let workspace = pixi.workspace().unwrap();
+    workspace
+        .update_lock_file(
+            None,
+            UpdateLockFileOptions {
+                lock_file_usage: LockFileUsage::Locked,
+                ..Default::default()
+            },
+        )
+        .await
+        .map(|_| ())
+        .expect("the lock file should be up to date");
+
+    // Dropping the exemption makes the locked package violate the cutoff.
+    pixi.update_manifest(&format!(
+        r#"
+    [workspace]
+    name = "test-exclude-newer-exemption-satisfiability"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+    exclude-newer = "2015-12-02T02:07:43Z"
+
+    [dependencies]
+    foo = "*"
+    "#,
+        channel = channel.url(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch)
+    ))
+    .unwrap();
+    let workspace = pixi.workspace().unwrap();
+    let outdated = workspace
+        .update_lock_file(
+            None,
+            UpdateLockFileOptions {
+                lock_file_usage: LockFileUsage::Locked,
+                ..Default::default()
+            },
+        )
+        .await
+        .map(|_| ());
+    assert!(outdated.is_err());
+}
+
+#[tokio::test]
 #[cfg_attr(
     any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
     ignore
