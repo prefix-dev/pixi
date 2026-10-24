@@ -459,6 +459,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspaceTarget {
 
 #[cfg(test)]
 mod test {
+    use rattler_conda_types::package::BuildString;
     use std::path::Path;
 
     use crate::{
@@ -579,7 +580,7 @@ mod test {
         let declared: Vec<String> = cuda
             .manifest_virtual_package_records()
             .iter()
-            .map(|vp| vp.to_string())
+            .map(crate::platform::format_virtual_package)
             .collect();
         assert_eq!(
             declared,
@@ -654,7 +655,7 @@ mod test {
         let unsatisfied: Vec<String> = gpu
             .unsatisfied_virtual_packages
             .iter()
-            .map(ToString::to_string)
+            .map(crate::platform::format_virtual_package)
             .collect();
         assert_eq!(unsatisfied, vec!["__cuda=12.0".to_string()]);
 
@@ -670,7 +671,7 @@ mod test {
         let requirements: Vec<String> = workspace
             .unsatisfied_platform_requirements(Subdir::Linux64, &[], &env_platforms)
             .iter()
-            .map(ToString::to_string)
+            .map(crate::platform::format_virtual_package)
             .collect();
         assert_eq!(requirements, vec!["__cuda=12.0".to_string()]);
 
@@ -679,7 +680,7 @@ mod test {
         let host_cuda = GenericVirtualPackage {
             name: "__cuda".parse().unwrap(),
             version: "12.4".parse().unwrap(),
-            build_string: "0".to_string(),
+            build_string: BuildString::new_unchecked("0"),
         };
         let diagnostics = workspace.platform_match_diagnostics(
             Subdir::Linux64,

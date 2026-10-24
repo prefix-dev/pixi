@@ -20,7 +20,10 @@ use pixi_record::{
 use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceLocationSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_variant::VariantValue;
-use rattler_conda_types::{PackageName, PackageRecord, Subdir, package::RunExportsJson};
+use rattler_conda_types::{
+    PackageName, PackageRecord, Subdir,
+    package::{BuildString, RunExportsJson},
+};
 use rattler_solve::SolveStrategy;
 
 use crate::{
@@ -425,7 +428,7 @@ async fn assemble_source_record_inner(
             .as_ref()
             .map(ToString::to_string),
         name: output.metadata.name.clone(),
-        build: output.metadata.build.clone(),
+        build: BuildString::new_unchecked(output.metadata.build.clone()),
         version: output.metadata.version.clone(),
         build_number: output.metadata.build_number,
         license: output.metadata.license.clone(),
@@ -716,7 +719,7 @@ mod tests {
         let mut package_record = PackageRecord::new(
             PackageName::new_unchecked(name),
             "1.0.0".parse::<VersionWithSource>().unwrap(),
-            "h0".into(),
+            "h0".parse().unwrap(),
         );
         package_record.subdir = subdir.into();
         UnresolvedPixiRecord::Binary(Arc::new(RepoDataRecord {

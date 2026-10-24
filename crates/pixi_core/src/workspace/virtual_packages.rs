@@ -356,7 +356,7 @@ fn describe_provided(provided: &GenericVirtualPackage) -> String {
 /// one at all.
 fn archspec_microarchitecture_of(package: &GenericVirtualPackage) -> Option<&str> {
     (package.name.as_normalized() == "__archspec")
-        .then(|| pixi_manifest::platform::archspec_microarchitecture(&package.build_string))
+        .then(|| pixi_manifest::platform::archspec_microarchitecture(package.build_string.as_str()))
         .flatten()
 }
 
@@ -622,7 +622,7 @@ mod tests {
 
     use insta::assert_debug_snapshot;
     use itertools::Itertools;
-    use rattler_conda_types::{GenericVirtualPackage, Subdir};
+    use rattler_conda_types::{GenericVirtualPackage, Subdir, package::BuildString};
 
     use super::*;
 
@@ -680,7 +680,7 @@ mod tests {
                     vec![GenericVirtualPackage {
                         name: package_name.clone(),
                         version: Version::major(1),
-                        build_string: "0".to_string(),
+                        build_string: BuildString::new_unchecked("0"),
                     }],
                 )
                 .unwrap(),
@@ -701,7 +701,7 @@ mod tests {
                                     vec![GenericVirtualPackage {
                                         name: package_name.clone(),
                                         version: Version::major(3),
-                                        build_string: "0".to_string(),
+                                        build_string: BuildString::new_unchecked("0"),
                                     }]
                                 } else {
                                     Vec::new()
@@ -1003,7 +1003,7 @@ packages: []
             vec![GenericVirtualPackage {
                 name: rattler_conda_types::PackageName::try_from("__cuda").unwrap(),
                 version: rattler_conda_types::Version::from_str("12.0").unwrap(),
-                build_string: String::new(),
+                build_string: BuildString::new_unchecked(""),
             }],
         )
         .unwrap();
@@ -1035,7 +1035,7 @@ packages: []
             vec![GenericVirtualPackage {
                 name: rattler_conda_types::PackageName::try_from("__musl").unwrap(),
                 version: rattler_conda_types::Version::from_str("1.2.4").unwrap(),
-                build_string: String::new(),
+                build_string: BuildString::new_unchecked(""),
             }],
         )
         .unwrap();
@@ -1054,7 +1054,7 @@ packages: []
         GenericVirtualPackage {
             name: rattler_conda_types::PackageName::try_from(name).unwrap(),
             version: rattler_conda_types::Version::from_str(version).unwrap(),
-            build_string: String::new(),
+            build_string: BuildString::new_unchecked(""),
         }
     }
 

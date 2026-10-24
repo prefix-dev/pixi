@@ -2974,7 +2974,10 @@ impl<'p> UpdateContext<'p> {
                 Some(rattler_lock::PlatformData {
                     name: rattler_lock::PlatformName::try_from(name.as_str()).ok()?,
                     subdir: pixi_platform.subdir(),
-                    virtual_packages: records.iter().map(|vp| vp.to_string()).collect(),
+                    virtual_packages: records
+                        .iter()
+                        .map(pixi_manifest::platform::format_virtual_package)
+                        .collect(),
                 })
             })
             .collect();

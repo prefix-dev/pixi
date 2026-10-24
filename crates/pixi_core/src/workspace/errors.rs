@@ -373,14 +373,14 @@ pub struct UnknownTask<'p> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rattler_conda_types::{PackageName, Version};
+    use rattler_conda_types::{PackageName, Version, package::BuildString};
     use std::str::FromStr;
 
     fn vp(name: &str, version: &str) -> GenericVirtualPackage {
         GenericVirtualPackage {
             name: PackageName::from_str(name).unwrap(),
             version: Version::from_str(version).unwrap(),
-            build_string: String::new(),
+            build_string: BuildString::new_unchecked(""),
         }
     }
 
@@ -668,7 +668,7 @@ mod tests {
     #[test]
     fn declared_build_string_is_reported_instead_of_an_override() {
         let mut cuda = vp("__cuda", "12");
-        cuda.build_string = "hx".to_string();
+        cuda.build_string = BuildString::new_unchecked("hx");
         let mut e = err(vec![cuda.clone()]);
         e.platform_diagnostics = vec![diagnosis("gpu", Subdir::Linux64, true, vec![cuda])];
         let display = e.to_string();
