@@ -1,0 +1,27 @@
+---
+source: crates/pixi_manifest/src/manifests/workspace.rs
+expression: "expect_parse_warnings(r#\"\n[workspace]\nname = \"foo\"\nchannels = [{ channel = \"conda-forge\", exclude-newer = \"7d\" }]\nplatforms = []\n\n[exclude-newer]\npolars = \"0d\"\n\n[pypi-exclude-newer]\nboltons = \"0d\"\n\"#)"
+---
+  ⚠ the top-level `[exclude-newer]` table of per-package cutoffs is deprecated and will be removed in a future release
+   ╭─[pixi.toml:7:1]
+ 6 │
+ 7 │ ╭─▶ [exclude-newer]
+ 8 │ ├─▶ polars = "0d"
+   · ╰──── this table will be removed
+ 9 │
+   ╰────
+  help: set a `cutoff` in `[workspace.exclude-newer]` to replace zero cutoffs with `exemptions`, the cutoffs of `polars` will stop working when the table is removed in a future release
+
+  ⚠ the top-level `[pypi-exclude-newer]` table of per-package cutoffs is deprecated in favor of the `exemptions` of `[workspace.pypi-exclude-newer]`
+    ╭─[pixi.toml:10:1]
+  9 │
+ 10 │ ╭─▶ [pypi-exclude-newer]
+ 11 │ ├─▶ boltons = "0d"
+    · ╰──── replace this with `[workspace.pypi-exclude-newer.exemptions]`
+    ╰────
+  help: move the entries to the `exemptions` of `[workspace.pypi-exclude-newer]` instead, e.g.
+
+        [workspace.pypi-exclude-newer]
+        exemptions = { boltons = "*" }
+
+        An exemption allows every release of the package regardless of its upload time.
