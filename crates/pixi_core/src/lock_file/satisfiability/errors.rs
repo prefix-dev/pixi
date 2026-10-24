@@ -9,12 +9,11 @@ use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pixi_command_dispatcher::{DevSourceMetadataError, SourceCheckoutError, SourceRecordError};
 use pixi_manifest::{ExcludeNewerError, PixiPlatformName, pypi::pypi_options::PrereleaseMode};
-use pixi_record::{ParseLockFileError, SourceMismatchError};
-use pixi_uv_conversions::AsPep508Error;
-use rattler_conda_types::{
-    MatchSpec, PackageName, ParseChannelError, ParseMatchSpecError, RepoDataRecord,
-    package::{ArchiveIdentifier, CondaArchiveType, DistArchiveIdentifier},
+use pixi_record::{
+    LockFileResolver, ParseLockFileError, SourceMismatchError, UnresolvedPixiRecord,
 };
+use pixi_uv_conversions::AsPep508Error;
+use rattler_conda_types::{MatchSpec, PackageName, ParseChannelError, ParseMatchSpecError};
 use rattler_lock::{PackageHashes, PypiIndexes};
 use rattler_solve::TimestampExclusionReason;
 use thiserror::Error;
@@ -92,9 +91,6 @@ pub enum EnvironmentUnsat {
 
     #[error(transparent)]
     ExcludeNewerMismatch(#[from] ExcludeNewerMismatch),
-
-    #[error(transparent)]
-    SourceExcludeNewerMismatch(#[from] SourceExcludeNewerMismatch),
 }
 
 /// The workspace's definition of a platform diverged from what the lockfile
@@ -152,73 +148,119 @@ fn fmt_solve_strategy(strategy: rattler_solve::SolveStrategy) -> &'static str {
 #[derive(Debug, Error)]
 pub struct ExcludeNewerMismatch {
     package: String,
+    /// Set when the package is locked in the build or host environment of a
+    /// source package rather than in the environment itself.
+    origin: Option<ExcludeNewerOrigin>,
     timestamp: jiff::Timestamp,
     exclude_newer: jiff::Timestamp,
 }
 
+/// The build or host environment of a source package in which a locked
+/// package violates the exclude-newer cutoff.
+#[derive(Debug)]
+struct ExcludeNewerOrigin {
+    env: BuildOrHostEnv,
+    source_package: String,
+}
+
 impl Display for ExcludeNewerMismatch {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "the locked package '{}'", self.package)?;
+        if let Some(origin) = &self.origin {
+            write!(
+                f,
+                " in the {}-environment of source package '{}'",
+                origin.env, origin.source_package
+            )?;
+        }
         write!(
             f,
-            "the locked package '{}' has timestamp {}, which is newer than the environment's exclude-newer cutoff {}",
-            self.package, self.timestamp, self.exclude_newer
+            " has timestamp {}, which is newer than the environment's exclude-newer cutoff {}",
+            self.timestamp, self.exclude_newer
         )
     }
 }
 
+/// Verifies that no locked conda package is newer than the exclude-newer
+/// cutoff that applies to it. Packages locked in the build and host
+/// environments of source packages are solved with the same cutoff, so they
+/// are checked as well.
+///
+/// Source packages themselves are skipped: pixi never records a timestamp for
+/// them, so exclude-newer does not apply to source packages.
 pub(super) fn verify_exclude_newer(
     exclude_newer: Option<&rattler_solve::ExcludeNewer>,
     locked_environment: &rattler_lock::Environment<'_>,
+    resolver: &LockFileResolver,
 ) -> Result<(), ExcludeNewerMismatch> {
     let Some(exclude_newer) = exclude_newer else {
         return Ok(());
     };
 
-    for (_platform, packages) in locked_environment.conda_packages_by_platform() {
+    // Build and host environments are shared between source packages, so
+    // remember which records were already checked.
+    let mut visited = HashSet::new();
+    for (_platform, packages) in locked_environment.packages_by_platform() {
         for package in packages {
-            let Some(record) = package.record() else {
+            let Some(record) = resolver.get_for_package(package) else {
+                // Pypi packages have no conda record.
                 continue;
             };
+            verify_exclude_newer_record(exclude_newer, &record, None, &mut visited)?;
+        }
+    }
 
-            // A binary package is checked the way the solver checks repodata
-            // records, so exemptions on e.g. the build string or channel
-            // apply. A source package has no channel, so channel-scoped
-            // exemptions never match it, as in the solver.
-            let binary = package.as_binary();
-            let repodata_record =
-                match binary.and_then(|binary| RepoDataRecord::try_from(binary).ok()) {
-                    Some(record) => record,
-                    None => RepoDataRecord {
-                        package_record: record.clone(),
-                        identifier: DistArchiveIdentifier::new(
-                            ArchiveIdentifier {
-                                name: record.name.as_normalized().to_string(),
-                                version: record.version.to_string(),
-                                build_string: record.build.clone(),
-                            },
-                            CondaArchiveType::Conda,
-                        ),
-                        url: Url::parse("file:///").expect("valid placeholder url"),
-                        channel: binary
-                            .and_then(|binary| binary.channel.as_ref())
-                            .map(ToString::to_string),
-                    },
-                };
+    Ok(())
+}
 
+fn verify_exclude_newer_record(
+    exclude_newer: &rattler_solve::ExcludeNewer,
+    record: &UnresolvedPixiRecord,
+    origin: Option<(BuildOrHostEnv, &PackageName)>,
+    visited: &mut HashSet<UnresolvedPixiRecord>,
+) -> Result<(), ExcludeNewerMismatch> {
+    if !visited.insert(record.clone()) {
+        return Ok(());
+    }
+
+    match record {
+        UnresolvedPixiRecord::Binary(record) => {
+            // Check the package the way the solver checks repodata records,
+            // so exemptions on e.g. the build string or channel apply.
             if let Some(TimestampExclusionReason::NewerThanCutoff { cutoff }) =
-                exclude_newer.exclusion_reason(&repodata_record)
+                exclude_newer.exclusion_reason(record)
             {
                 // Select the timestamp the same way the solver does: the index
                 // timestamp if present, the build timestamp otherwise.
-                let timestamp = record
+                let package = &record.package_record;
+                let timestamp = package
                     .indexed_timestamp
-                    .or(record.timestamp)
+                    .or(package.timestamp)
                     .expect("a record newer than the cutoff has a timestamp");
                 return Err(ExcludeNewerMismatch {
-                    package: record.name.as_source().to_string(),
+                    package: package.name.as_source().to_string(),
+                    origin: origin.map(|(env, source_package)| ExcludeNewerOrigin {
+                        env,
+                        source_package: source_package.as_source().to_string(),
+                    }),
                     timestamp: timestamp.into(),
                     exclude_newer: cutoff,
                 });
+            }
+        }
+        UnresolvedPixiRecord::Source(source) => {
+            for (env, packages) in [
+                (BuildOrHostEnv::Build, &source.build_packages),
+                (BuildOrHostEnv::Host, &source.host_packages),
+            ] {
+                for package in packages {
+                    verify_exclude_newer_record(
+                        exclude_newer,
+                        package,
+                        Some((env, source.name())),
+                        visited,
+                    )?;
+                }
             }
         }
     }
@@ -231,14 +273,6 @@ pub(super) fn verify_exclude_newer(
 #[derive(Debug, Clone, Error, Diagnostic)]
 #[error("there was a duplicate entry for '{0}'")]
 pub struct DuplicateEntry(pub String);
-
-#[derive(Debug, Error)]
-#[error(
-    "the locked source package '{package}' has timestamps that exceed the environment's exclude-newer cutoff"
-)]
-pub struct SourceExcludeNewerMismatch {
-    package: String,
-}
 
 #[derive(Debug, Error)]
 pub struct IndexesMismatch {
