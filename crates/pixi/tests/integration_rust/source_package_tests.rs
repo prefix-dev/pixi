@@ -3785,9 +3785,10 @@ async fn test_publish_with_multiple_paths_accepts_given_source_dependencies() {
         None,
         Some(publish_dir.path().to_path_buf()),
     );
+    // Dependents first: the publish reorders them so `core` goes first.
     args.path = vec![
-        pixi.workspace_path().join("core"),
         pixi.workspace_path().join("cpp"),
+        pixi.workspace_path().join("core"),
     ];
     publish::execute(args)
         .await

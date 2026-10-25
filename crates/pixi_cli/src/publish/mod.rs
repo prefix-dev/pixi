@@ -713,11 +713,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     };
 
-    // Determine which packages to publish: the ones given with `--path`, in
-    // the given order, otherwise every package in the workspace that opts in
-    // with `publish = true`, ordered so that dependencies are built and
-    // uploaded before their dependents. A workspace without a single opted-in package
-    // falls back to publishing the package at the current directory, as if
+    // Determine which packages to publish: the ones given with `--path`,
+    // otherwise every package in the workspace that opts in with
+    // `publish = true`. Either way they are ordered so that dependencies are
+    // built and uploaded before their dependents. A workspace without a
+    // single opted-in package falls back to publishing the package at the current directory, as if
     // `--path .` had been passed.
     let mut explicit_paths = args.path.clone();
     let mut workspace_set = None;
@@ -856,6 +856,61 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .into());
             }
         }
+    }
+
+    // Order the packages given with `--path` like a discovered publish set:
+    // dependencies before dependents, where a dependency is any source
+    // dependency on an output of another given package.
+    if explicit_mode && package_plans.len() > 1 {
+        let output_owners: BTreeMap<String, String> = package_plans
+            .iter()
+            .flat_map(|(manifest_source, backend_metadata)| {
+                backend_metadata.metadata.outputs.iter().map(move |output| {
+                    (
+                        output.metadata.name.as_normalized().to_string(),
+                        manifest_source.to_string(),
+                    )
+                })
+            })
+            .collect();
+        let mut dependencies: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+        for (manifest_source, backend_metadata) in &package_plans {
+            let member = manifest_source.to_string();
+            let member_deps: BTreeSet<String> = backend_metadata
+                .metadata
+                .outputs
+                .iter()
+                .flat_map(discovery::output_source_dependencies)
+                .filter_map(|(name, _)| output_owners.get(&name.to_lowercase()))
+                .filter(|owner| **owner != member)
+                .cloned()
+                .collect();
+            dependencies.insert(member, member_deps);
+        }
+        let mut plans_by_member: BTreeMap<String, _> = package_plans
+            .drain(..)
+            .map(|plan| (plan.0.to_string(), plan))
+            .collect();
+        let members: BTreeSet<String> = plans_by_member.keys().cloned().collect();
+        let ordering = discovery::dependency_order(&members, &dependencies);
+        if !ordering.cycle_members.is_empty() {
+            pixi_progress::println!(
+                "{}dependency cycle among the given packages involving {}; uploads cannot be \
+                 fully dependency-ordered, so the target may be inconsistent until every \
+                 upload finishes",
+                console::style(console::Emoji("⚠️  ", "warning: ")).yellow(),
+                ordering.cycle_members.join(", "),
+            );
+        }
+        package_plans = ordering
+            .order
+            .into_iter()
+            .map(|member| {
+                plans_by_member
+                    .remove(&member)
+                    .expect("dependency_order returns exactly the members it was given")
+            })
+            .collect();
     }
 
     if package_plans.len() > 1 {
