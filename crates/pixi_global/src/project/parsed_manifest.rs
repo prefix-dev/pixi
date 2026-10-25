@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, fmt, path::Path, str::FromStr};
+use std::{cmp::Ordering, collections::BTreeMap, fmt, path::Path, str::FromStr};
 
 use console::StyledObject;
 use fancy_display::FancyDisplay;
@@ -7,13 +7,13 @@ use itertools::{Either, Itertools};
 use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Report};
 use pixi_consts::consts;
 use pixi_manifest::{
-    InlinePackageManifest, KnownPreviewFeature, Preview, PrioritizedChannel,
+    InlinePackageManifest, KnownPreviewFlag, Preview, PrioritizedChannel,
     toml::{TomlPlatform, WorkspacePackageProperties},
     utils::package_map::{DependencyTable, UniquePackageMap},
 };
-use pixi_spec::PixiSpec;
+use pixi_spec::{ExcludeNewer, PixiSpec, TomlVersionSpecStr};
 use pixi_toml::{TomlFromStr, TomlIndexMap, TomlIndexSet, TomlWith};
-use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
+use rattler_conda_types::{NamedChannelOrUrl, PackageName, Subdir, VersionSpec};
 use serde::{Serialize, Serializer, ser::SerializeMap};
 use serde_derive::Deserialize;
 use thiserror::Error;
@@ -118,8 +118,60 @@ impl ManifestParsingError {
 pub struct ParsedManifest {
     /// The version of the manifest
     version: ManifestVersion,
+    /// The age policy that applies to every environment.
+    #[serde(rename = "exclude-newer", skip_serializing_if = "Option::is_none")]
+    pub exclude_newer: Option<GlobalExcludeNewer>,
     /// The environments the project can create.
     pub envs: IndexMap<EnvironmentName, ParsedEnvironment>,
+}
+
+/// A manifest-wide cutoff, optionally with package version exemptions.
+#[derive(Debug, Clone)]
+pub struct GlobalExcludeNewer {
+    pub cutoff: ExcludeNewer,
+    pub exemptions: BTreeMap<PackageName, VersionSpec>,
+}
+
+impl Serialize for GlobalExcludeNewer {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        if self.exemptions.is_empty() {
+            return self.cutoff.serialize(serializer);
+        }
+        let mut map = serializer.serialize_map(Some(2))?;
+        map.serialize_entry("cutoff", &self.cutoff)?;
+        map.serialize_entry("exemptions", &self.exemptions)?;
+        map.end()
+    }
+}
+
+impl<'de> toml_span::Deserialize<'de> for GlobalExcludeNewer {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        if value.as_str().is_some() {
+            return Ok(Self {
+                cutoff: TomlFromStr::<ExcludeNewer>::deserialize(value)?.into_inner(),
+                exemptions: BTreeMap::new(),
+            });
+        }
+        let mut th = TableHelper::new(value)?;
+        let cutoff = th.required::<TomlFromStr<ExcludeNewer>>("cutoff");
+        let exemptions = th
+            .optional::<TomlIndexMap<PackageName, TomlVersionSpecStr>>("exemptions")
+            .map(TomlIndexMap::into_inner)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(name, spec)| (name, spec.into_inner()))
+            .collect();
+        th.finalize(None)?;
+        Ok(Self {
+            cutoff: cutoff
+                .expect("required cutoff was checked by finalize")
+                .into_inner(),
+            exemptions,
+        })
+    }
 }
 
 /// The toml-stage of [`ParsedManifest`]: deserialized as-is from the document,
@@ -127,6 +179,7 @@ pub struct ParsedManifest {
 /// manifest's root directory as context).
 struct TomlParsedManifest {
     version: ManifestVersion,
+    exclude_newer: Option<GlobalExcludeNewer>,
     envs: IndexMap<EnvironmentName, TomlParsedEnvironment>,
 }
 
@@ -138,6 +191,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlParsedManifest {
             .optional("version")
             .map(ManifestVersion)
             .unwrap_or_default();
+        let exclude_newer = th.optional("exclude-newer");
         let envs = th
             .optional::<TomlIndexMap<_, TomlParsedEnvironment>>("envs")
             .map(TomlIndexMap::into_inner)
@@ -148,7 +202,11 @@ impl<'de> toml_span::Deserialize<'de> for TomlParsedManifest {
 
         th.finalize(None)?;
 
-        Ok(Self { version, envs })
+        Ok(Self {
+            version,
+            exclude_newer,
+            envs,
+        })
     }
 }
 
@@ -270,8 +328,8 @@ impl TomlParsedManifest {
     ) -> Result<ParsedManifest, ManifestParsingError> {
         // The global manifest has no preview mechanism; source dependencies
         // (and with them inline package definitions) are simply supported, so
-        // conversion runs with the pixi-build feature enabled.
-        let preview = Preview::from_iter([KnownPreviewFeature::PixiBuild]);
+        // conversion runs with the pixi-build preview flag enabled.
+        let preview = Preview::from_iter([KnownPreviewFlag::PixiBuild]);
 
         let mut envs = IndexMap::with_capacity(self.envs.len());
         for (env_name, env) in self.envs {
@@ -331,6 +389,7 @@ impl TomlParsedManifest {
 
         Ok(ParsedManifest {
             version: self.version,
+            exclude_newer: self.exclude_newer,
             envs,
         })
     }
@@ -366,6 +425,7 @@ where
         Self {
             envs,
             version: ManifestVersion::default(),
+            exclude_newer: None,
         }
     }
 }
@@ -389,8 +449,8 @@ where
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct ParsedEnvironment {
     pub channels: IndexSet<PrioritizedChannel>,
-    /// Platform used by the environment.
-    pub platform: Option<Platform>,
+    /// Subdir used by the environment.
+    pub platform: Option<Subdir>,
     pub dependencies: UniquePackageMap,
     /// Inline package definitions attached to source dependencies. Keyed by
     /// dependency name; the matching source spec lives in
@@ -409,7 +469,7 @@ pub struct ParsedEnvironment {
 /// as context.
 struct TomlParsedEnvironment {
     channels: IndexSet<PrioritizedChannel>,
-    platform: Option<Platform>,
+    platform: Option<Subdir>,
     dependencies: DependencyTable,
     exposed: IndexSet<Mapping>,
     shortcuts: Option<IndexSet<PackageName>>,
@@ -423,7 +483,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlParsedEnvironment {
             .optional::<TomlIndexSet<PrioritizedChannel>>("channels")
             .map(TomlIndexSet::into_inner)
             .unwrap_or_default();
-        let platform = th.optional::<TomlPlatform>("platform").map(Platform::from);
+        let platform = th.optional::<TomlPlatform>("platform").map(Subdir::from);
         let dependencies = th.optional("dependencies").unwrap_or_default();
         let exposed = th
             .optional::<TomlMapping>("exposed")
@@ -457,6 +517,14 @@ impl ParsedEnvironment {
     /// Returns the channels associated with this environment.
     pub fn channels(&self) -> IndexSet<&NamedChannelOrUrl> {
         PrioritizedChannel::sort_channels_by_priority(&self.channels).collect()
+    }
+
+    /// The channels with their priority and `exclude-newer` override, sorted
+    /// by priority.
+    pub fn prioritized_channels(&self) -> impl Iterator<Item = &PrioritizedChannel> {
+        self.channels
+            .iter()
+            .sorted_by_key(|channel| std::cmp::Reverse(channel.priority.unwrap_or(0)))
     }
 
     /// Splits the dependencies into source and binary requirements.
@@ -534,23 +602,22 @@ mod tests {
     use super::{EnvironmentName, ParsedManifest};
 
     #[test]
-    fn test_invalid_key() {
-        let examples = [
-            "[invalid]",
-            "[envs.ipython.invalid]",
-            r#"[envs."python;3".dependencies]"#,
-        ];
-        assert_snapshot!(
-            examples
-                .into_iter()
-                .map(
-                    |example| ParsedManifest::from_toml_str(example, std::path::Path::new(""))
-                        .unwrap_err()
-                        .to_string()
-                )
-                .collect::<Vec<_>>()
-                .join("\n")
-        )
+    fn test_invalid_age_policies_are_rejected() {
+        for policy in [
+            r#"[global]
+exclude-newer = "7d""#,
+            r#"exclude-newer = { python = "0d" }"#,
+            r#"exclude-newer = { exemptions = { python = "*" } }"#,
+            r#"exclude-newer = { cutoff = "7d", exemption = { python = "*" } }"#,
+            r#"exclude-newer = { cutoff = "date" }"#,
+            r#"exclude-newer = { cutoff = "7d", exemptions = { python = ">=!" } }"#,
+            r#"exclude-newer = { cutoff = "7d", exemptions = { python = 3 } }"#,
+        ] {
+            assert!(
+                ParsedManifest::from_toml_str(policy, std::path::Path::new("")).is_err(),
+                "invalid policy was accepted: {policy}"
+            );
+        }
     }
 
     #[test]

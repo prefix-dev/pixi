@@ -123,8 +123,8 @@ impl Manifests {
             ManifestKind::Pyproject => PyProjectManifest::deserialize(&mut toml)
                 .map_err(TomlError::from)
                 .and_then(|manifest| manifest.into_workspace_manifest(manifest_dir)),
-            ManifestKind::Pep723 => {
-                unreachable!("PEP 723 scripts are loaded through the script manifest adapter")
+            ManifestKind::Pep723 | ManifestKind::CondaScript => {
+                unreachable!("scripts are loaded through the script manifest adapter")
             }
         };
 
@@ -228,7 +228,7 @@ pub struct InvalidRequiresPixiError {
 }
 
 /// Result of the early `requires-pixi` check.
-enum RequiresPixiCheck {
+pub(crate) enum RequiresPixiCheck {
     /// Field is absent or the current pixi version satisfies the constraint.
     Satisfied,
     /// The current pixi version does not satisfy the constraint.
@@ -245,10 +245,15 @@ enum RequiresPixiCheck {
 
 /// Extract and check the `requires-pixi` field from a parsed TOML tree before
 /// full deserialization.
-fn check_requires_pixi_early(toml: &toml_span::Value<'_>, kind: ManifestKind) -> RequiresPixiCheck {
+pub(crate) fn check_requires_pixi_early(
+    toml: &toml_span::Value<'_>,
+    kind: ManifestKind,
+) -> RequiresPixiCheck {
     let pointer = match kind {
         ManifestKind::Pixi | ManifestKind::MojoProject => "/workspace/requires-pixi",
-        ManifestKind::Pyproject | ManifestKind::Pep723 => "/tool/pixi/workspace/requires-pixi",
+        ManifestKind::Pyproject | ManifestKind::Pep723 | ManifestKind::CondaScript => {
+            "/tool/pixi/workspace/requires-pixi"
+        }
     };
     let Some(value) = toml.pointer(pointer) else {
         return RequiresPixiCheck::Satisfied;
@@ -593,7 +598,7 @@ impl WorkspaceDiscoverer {
                         continue;
                     }
                 }
-                ManifestKind::Pep723 => {
+                ManifestKind::Pep723 | ManifestKind::CondaScript => {
                     unreachable!("workspace discovery does not infer arbitrary scripts")
                 }
             };

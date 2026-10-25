@@ -12,5 +12,14 @@ mojo build {{ bin.extra_args | join(" ")  }} "{{ bin.path }}" -o {{ library_pref
 
 {#- Build pkg -#}
 {% if pkg %}
-mojo package {{ pkg.extra_args | join(" ") }} "{{ pkg.path }}" -o {{ library_prefix }}/lib/mojo/{{ pkg.name}}.mojopkg
+# Mojo v1.0 renamed `mojo package` to `mojo precompile`; probe which subcommand the installed compiler supports
+if mojo precompile --help >/dev/null 2>&1; then
+    MOJO_PKG_CMD=precompile
+    MOJO_PKG_EXT=mojoc
+else
+    MOJO_PKG_CMD=package
+    MOJO_PKG_EXT=mojopkg
+fi
+mkdir -p {{ library_prefix }}/lib/mojo
+mojo $MOJO_PKG_CMD {{ pkg.extra_args | join(" ") }} "{{ pkg.path }}" -o {{ library_prefix }}/lib/mojo/{{ pkg.name }}.$MOJO_PKG_EXT
 {% endif %}

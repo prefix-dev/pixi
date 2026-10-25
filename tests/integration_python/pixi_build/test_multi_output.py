@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from .common import CURRENT_PLATFORM, copytree_with_local_backend, verify_cli_command, ExitCode
+from .common import CURRENT_PLATFORM, ExitCode, copytree_with_local_backend, verify_cli_command
 
 
 @pytest.mark.slow

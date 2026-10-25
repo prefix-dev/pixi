@@ -21,7 +21,7 @@ use pixi_spec::{BinarySpec, ResolvedExcludeNewer, SourceSpec, SpecConversionErro
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     Channel, ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName,
-    PackageNameMatcher, ParseMatchSpecOptions, Platform, RepodataRevision,
+    PackageNameMatcher, ParseMatchSpecOptions, RepodataRevision, Subdir,
 };
 use rattler_repodata_gateway::GatewayError;
 use rattler_solve::{ChannelPriority, SolveError, SolveStrategy};
@@ -56,7 +56,7 @@ pub struct SolveCondaSpec {
     /// Already-installed records (hints to reduce solve drift).
     pub installed: Vec<PixiRecord>,
     /// Target platform.
-    pub platform: Platform,
+    pub platform: Subdir,
     /// Channels to search.
     pub channels: Vec<ChannelUrl>,
     /// Virtual packages to pretend are installed.
@@ -274,14 +274,17 @@ impl Key for SolveCondaKey {
         let mut query = gateway
             .query(
                 spec.channels.iter().cloned().map(Channel::from_url),
-                [spec.platform, Platform::NoArch],
+                [spec.platform, Subdir::NoArch],
                 binary_match_specs
                     .into_iter()
                     .chain(constraint_match_specs)
                     .chain(source_repodata_fetch_specs)
                     .chain(dev_source_fetch_specs),
             )
-            .recursive(true);
+            .recursive(true)
+            // Without a reporter the fetched notices are dropped on the floor,
+            // so do not pay for them.
+            .channel_notices(gateway_reporter.is_some());
         if let Some(reporter) = gateway_reporter {
             query = query.with_reporter(WrappingGatewayReporter(reporter));
         }
@@ -311,7 +314,8 @@ impl Key for SolveCondaKey {
         // platforms in a manifest are never downloaded to this machine, so
         // restricting their solves would make every multi-platform lock-file
         // rewrite fail offline. They solve from cached repodata instead.
-        let restrict_to_local = ctx.global_data().offline() && spec.platform == Platform::current();
+        let restrict_to_local = ctx.global_data().offline()
+            && spec.platform == Subdir::current().unwrap_or(Subdir::NoArch);
         let excluded_candidates = crate::offline::exclusions_for_solve(
             restrict_to_local,
             ctx.global_data().package_cache(),

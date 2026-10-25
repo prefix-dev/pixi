@@ -36,7 +36,7 @@ use pixi_glob::GlobHashCache;
 use pixi_path::{AbsPathBuf, AbsPresumedDirPathBuf};
 use pixi_url::resolver::UrlResolver;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Platform};
+use rattler_conda_types::{ChannelConfig, GenericVirtualPackage, Subdir};
 use rattler_networking::LazyClient;
 use rattler_repodata_gateway::{
     ChannelConfig as RepodataChannelConfig, Gateway, MaxConcurrency, SourceConfig,
@@ -57,7 +57,7 @@ pub struct CommandDispatcherBuilder {
     max_download_concurrency: MaxConcurrency,
     limits: Limits,
     executor: Executor,
-    tool_platform: Option<(Platform, Vec<GenericVirtualPackage>)>,
+    tool_platform: Option<(Subdir, Vec<GenericVirtualPackage>)>,
     execute_link_scripts: bool,
     offline: bool,
     channel_config: Option<ChannelConfig>,
@@ -278,7 +278,7 @@ impl CommandDispatcherBuilder {
     /// current platform.
     pub fn with_tool_platform(
         self,
-        platform: Platform,
+        platform: Subdir,
         virtual_packages: Vec<GenericVirtualPackage>,
     ) -> Self {
         Self {
@@ -371,7 +371,13 @@ impl CommandDispatcherBuilder {
         // Snapshot env vars once. Reused for the sync resolves below
         // and injected via `EnvVarsKey` so compute bodies see the same
         // map.
-        let env_snapshot: Arc<HashMap<String, String>> = Arc::new(std::env::vars().collect());
+        let env_snapshot: Arc<HashMap<String, String>> = Arc::new(
+            std::env::vars_os()
+                .filter_map(|(key, value)| {
+                    Some((key.into_string().ok()?, value.into_string().ok()?))
+                })
+                .collect(),
+        );
 
         let download_client = self.download_client.unwrap_or_default();
         let package_cache =
@@ -410,9 +416,10 @@ impl CommandDispatcherBuilder {
         let url_resolver = self.url_resolver.unwrap_or_default();
 
         let tool_platform = self.tool_platform.unwrap_or_else(|| {
-            let platform = Platform::current();
+            let platform = Subdir::current().unwrap_or(Subdir::NoArch);
             let virtual_packages =
-                VirtualPackages::detect(&VirtualPackageOverrides::default()).unwrap_or_default();
+                VirtualPackages::detect(&VirtualPackageOverrides::default(), None)
+                    .unwrap_or_default();
             (
                 platform,
                 virtual_packages.into_generic_virtual_packages().collect(),

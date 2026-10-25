@@ -11,7 +11,6 @@ import sys
 from pathlib import Path
 from typing import Any
 
-
 # Library configurations
 LIBRARY_CONFIGS: dict[str, dict[str, Any]] = {
     "uv": {
@@ -57,7 +56,7 @@ def get_local_versions(local_path: str) -> dict[str, str]:
     except json.JSONDecodeError as e:
         print(f"Error parsing cargo metadata JSON: {e}")
         return {}
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"Unexpected error getting versions from {local_path}: {e}")
         return {}
 
@@ -109,7 +108,7 @@ def get_current_workspace_dependency_versions(
                 # Check if this dependency matches the pattern
                 if re.match(pattern, dep_name):
                     # Extract version from the dependency specification
-                    if dep_value.startswith('"') or dep_value.startswith("'"):
+                    if dep_value.startswith(('"', "'")):
                         # Simple string version like: foo = "1.0.0"
                         version_match = re.match(r'["\']([^"\']+)["\']', dep_value)
                         if version_match:
@@ -156,7 +155,7 @@ def update_workspace_dependency_versions(
                     new_version = versions[dep_name]
                     # Try to update the version in the dependency specification
                     # Handle both simple string versions and complex table/inline table syntax
-                    if dep_value.startswith('"') or dep_value.startswith("'"):
+                    if dep_value.startswith(('"', "'")):
                         # Simple string version like: foo = "1.0.0"
                         updated_line = f'{dep_name} = "{new_version}"'
                     elif dep_value.startswith("{"):

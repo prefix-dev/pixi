@@ -63,7 +63,7 @@ Running `pixi install` on a platform that is not configured will warn the user t
 
 ## Declaring virtual packages per platform
 
-A bare-string entry like `"linux-64"` is shorthand for "the conda subdir `linux-64` with whatever virtual packages Pixi auto-detects on the host".
+A bare-string entry like `"linux-64"` is shorthand for "the conda subdir `linux-64` with Pixi's [default declared virtual packages](./system_requirements.md#default-declared-virtual-packages)".
 You can also describe a platform as an inline table to pin the [virtual packages](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-virtual.html) the solver should treat as available.
 You can for example add a CUDA toolkit version or a glibc minimum version as a virtual package.
 
@@ -85,8 +85,8 @@ Each inline-table entry has:
 - `platform`: the conda subdir the entry targets (e.g. `linux-64`, `osx-arm64`). Required.
 - `name`: optional workspace-scoped identifier the platform is referenced by elsewhere (in `feature.<name>.platforms`, in lockfile rows, in CLI commands).
   When omitted, Pixi synthesizes a name from `platform` plus the declared virtual packages, so two entries that declare the same set in different key order share the same identifier.
-- Friendly keys for the common virtual packages: `cuda`, `archspec`, `glibc`, `linux`, `macos` (alias `osx`), `windows`.
-  Each maps onto the matching `__name` conda virtual package (`cuda` -> `__cuda`, `glibc` -> `__glibc`, `macos` -> `__osx`, etc.).
+- Friendly keys for the common virtual packages: `cuda`, `amdgpu`, `archspec`, `glibc`, `linux`, `macos` (alias `osx`), `windows`.
+  Each maps onto the matching `__name` conda virtual package (`cuda` -> `__cuda`, `amdgpu` -> `__amdgpu`, `glibc` -> `__glibc`, `macos` -> `__osx`, etc.).
 - `archspec` names a CPU microarchitecture (`x86_64_v3`, `skylake`, `m1`,
   `armv8.2a`, ...) rather than a version. The name must be one the bundled
   [archspec](https://github.com/archspec/archspec) database knows, and Pixi
@@ -96,19 +96,45 @@ Each inline-table entry has:
   not `x86-64-v3`). A CPU newer than the bundled database can't be named until
   Pixi ships an updated archspec; set `archspec = "0"` to declare the
   microarchitecture explicitly unknown.
+  Unlike many other virtual packages, a machine does not satisfy `archspec` by
+  carrying a high enough version.
+  It satisfies it by being that microarchitecture or one the archspec database
+  says is a strict superset of it, so a `zen2` host covers a platform declaring
+  `x86_64_v3` but a `haswell` host does not cover one declaring `zen2`.
+  A machine whose own microarchitecture is unknown is accepted, since Pixi can
+  neither prove nor disprove that it covers the requirement.
 - `cuda` also accepts a `{ driver, arch }` table that declares the CUDA driver
   version (`__cuda`) together with the GPU compute capability (`__cuda_arch`):
 
-    ```toml title="pixi.toml"
-    platforms = [
-      { name = "gpu", platform = "linux-64", cuda = { driver = "12.0", arch = "8.6" } },
-    ]
-    ```
+  ```toml title="pixi.toml"
+  platforms = [
+    { name = "gpu", platform = "linux-64", cuda = { driver = "12.0", arch = "8.6" } },
+  ]
+  ```
 
-    `driver` is exactly equivalent to the bare `cuda = "12.0"` form. Per the
-    conda CEP, `__cuda_arch` is meaningless without `__cuda`, so `arch` requires
-    `driver`; declaring `arch` (or a raw `__cuda_arch`) alone is rejected.
-- For virtual packages without a friendly key, a raw `__name = "version"` entry is also accepted as an escape hatch. Only the virtual packages pixi knows how to override (`__win`, `__osx`, `__linux`, `__cuda`, `__archspec`, and the libc family `__glibc`/`__musl`/`__eglibc`) take effect at detection; any other raw `__name` is stored but ignored when checking host compatibility.
+  `driver` is exactly equivalent to the bare `cuda = "12.0"` form. Per the
+  conda CEP, `__cuda_arch` is meaningless without `__cuda`, so `arch` requires
+  `driver`; declaring `arch` (or a raw `__cuda_arch`) alone is rejected.
+
+- `amdgpu = true` declares `__amdgpu`, which only states that an AMD GPU is
+  present. An AMDGPU target name (`gfx90a`, `gfx1100`, ...) additionally
+  declares the GPU architecture as `__amdgpu_arch`, which conda stores as an
+  ISA version (`gfx90a` is `9.0.10`):
+
+  ```toml title="pixi.toml"
+  platforms = [
+    { name = "rocm", platform = "linux-64", amdgpu = true },
+    { name = "mi250", platform = "linux-64", amdgpu = "gfx90a" },
+  ]
+  ```
+
+  A raw `__amdgpu_arch` takes the ISA version and is rejected without
+  `__amdgpu`.
+  Concrete AMDGPU architectures must match exactly: a higher ISA version does
+  not imply compatibility with a lower one. Unlike CUDA compute capability,
+  `amdgpu = "gfx90a"` is not a minimum architecture requirement.
+
+- For virtual packages without a friendly key, a raw `__name = "version"` entry is also accepted as an escape hatch, for example `__conda_forge_openmpi = "5.0"` for a name a channel-registered detector reports. The solver treats it as available exactly like the friendly keys, and a machine satisfies it when it provides that name with the same build string at the declared version or newer (`__amdgpu_arch` requires the exact version). Pixi's built-in detection only reports the names it knows (`__win`, `__osx`, `__linux`, `__cuda`, `__cuda_arch`, `__amdgpu`, `__amdgpu_arch`, `__archspec`, and the libc family `__glibc`/`__musl`/`__eglibc`); any other name has to come from a detector for the host check to pass.
 
 A feature's `platforms` array is a list of names that must each resolve to a workspace platform (or be a bare conda subdir, which Pixi treats as an alias for that subdir).
 This is how you bind a feature to the rich variant:
@@ -125,11 +151,15 @@ platforms = ["linux-64-cuda-12-0"]  # the synthesized name for the entry above
 ```
 
 !!! note "Platform names in `pixi.lock`"
-    Rich platforms are written to `pixi.lock` under short aliases (`p1`, `p2`,
-    ...) instead of their full names, to keep the lock file compact. Pixi maps
-    these back to the manifest entries by their contents (subdir plus declared
-    virtual packages) when the lock file is read, so the aliases never need to
-    be understood by hand. The real names stay in `pixi.toml`.
+    Platforms are written to `pixi.lock` under the same name the manifest
+    uses (explicit or synthesized), so tools that consume the lock file can
+    look up a platform by its manifest name. Renaming a platform in
+    `pixi.toml` never requires a re-solve: Pixi matches the locked entries to
+    the manifest by their contents (subdir plus declared virtual packages)
+    when the lock file is read, and the next `pixi lock` rewrites just the
+    names. Lock files from older Pixi versions that used short aliases
+    (`p1`, `p2`, ...) are matched the same way and updated on their next
+    write.
 
 ### Adding the current machine
 
@@ -156,20 +186,36 @@ Adding a platform whose definition already exists under a *different* name is re
 
 !!! tip "Trim it for portability"
     Auto-detection captures your machine exactly, which is usually more specific than your packages actually need.
-    After installing, `pixi info` reports each environment's **Minimum platform** (the virtual packages some resolved dependency really requires), so you can see which ones are safe to drop with `pixi workspace platform edit`.
+    After installing, `pixi info` reports each environment's **Minimum platform** (the virtual-package requirements some resolved dependency really places on the machine), so you can see which ones are safe to drop with `pixi workspace platform edit`.
+
+### Virtual package detectors
+
+Channels can register virtual package detectors: packages that report system capabilities, such as an MPI runtime or a driver installed outside the environment.
+Pixi uses their results to check whether your machine satisfies a platform's declared virtual packages.
+Detectors can extend or replace Pixi's built-in detection.
+
+Pixi runs detectors when their virtual packages are needed for the current machine, not for foreign target platforms.
+Workspace lock-file solves use the virtual packages declared in the manifest, not detected values.
+
+Detectors execute code from the channel, so Pixi asks whether to trust them before running them.
+You can save the decision in the [configuration](../reference/pixi_configuration.md#virtual-package-detectors).
+Without a terminal, detectors without a saved decision are skipped.
 
 ### Managing platforms from the CLI
 
 [`pixi workspace platform`](../reference/cli/pixi/workspace/platform/index.md) is the CLI surface for these entries:
 
-- `pixi workspace platform add <PLATFORM> [--cuda 12.0] [--cuda-arch 8.6] [--glibc 2.28] ...`
+- `pixi workspace platform add <PLATFORM> [--cuda 12.0] [--cuda-arch 8.6] [--amdgpu] [--amdgpu-arch gfx90a] [--glibc 2.28] ...`
   appends bare subdirs or rich platforms (or the current machine via
   `--auto-detect`, see above). `--cuda-arch` requires `--cuda` (or
   an existing `__cuda`) and serializes as `cuda = { driver, arch }`.
+  `--amdgpu-arch` also declares `__amdgpu` and serializes as `amdgpu = "gfx90a"`.
+  Other virtual packages use `__name[=version[=build_string]]` positionals, for example `__site_service=2=h1`.
 - `pixi workspace platform edit <NAME> [--cuda 12.1] [--remove-virtual-package __glibc]` mutates a custom platform's declared virtual packages.
 - `pixi workspace platform move <NAME> --to-top | --to-bottom | --before <NAME> | --after <NAME>` reorders an entry; since order is selection priority, this is how you promote or demote a platform.
 - `pixi workspace platform list` inspects what is declared.
 - `pixi workspace platform remove <NAME>` drops an entry.
+
 
 The mutating subcommands keep `pixi.lock` in sync.
 

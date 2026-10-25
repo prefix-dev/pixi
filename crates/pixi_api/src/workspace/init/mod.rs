@@ -17,7 +17,7 @@ use pixi_manifest::{
     pyproject::PyProjectManifest,
 };
 use pixi_utils::conda_environment_file::CondaEnvFile;
-use rattler_conda_types::{NamedChannelOrUrl, Platform};
+use rattler_conda_types::{NamedChannelOrUrl, Subdir};
 use same_file::is_same_file;
 use tokio::fs::OpenOptions;
 use url::Url;
@@ -186,7 +186,7 @@ fn is_init_dir_equal_to_pixi_home_parent(init_dir: &Path) -> bool {
 
 fn resolve_platforms(options: &InitOptions) -> Vec<String> {
     if options.platforms.is_empty() {
-        vec![Platform::current().to_string()]
+        vec![Subdir::current().unwrap_or(Subdir::NoArch).to_string()]
     } else {
         // Dedup so a repeated `--platform` (or one matching the current
         // platform) doesn't write a manifest the parser then rejects.
@@ -653,11 +653,15 @@ fn create_or_append_file(path: &Path, template: &str) -> std::io::Result<()> {
     let file = fs_err::read_to_string(path).unwrap_or_default();
 
     if !file.contains(template) {
-        fs::OpenOptions::new()
+        let mut f = fs::OpenOptions::new()
             .append(true)
             .create(true)
-            .open(path)?
-            .write_all(template.as_bytes())?;
+            .open(path)?;
+
+        if !file.is_empty() && !file.ends_with('\n') {
+            f.write_all(b"\n")?;
+        }
+        f.write_all(template.as_bytes())?;
     }
     Ok(())
 }
@@ -718,7 +722,7 @@ mod tests {
         // Scenario 2: File exists but doesn't contain the template.
         create_or_append_file(&file_path, "New Content").unwrap();
         assert!(read_file_content(&file_path).contains(template));
-        assert!(read_file_content(&file_path).contains("New Content"));
+        assert!(read_file_content(&file_path).contains("\nNew Content"));
 
         // Scenario 3: File exists and already contains the template.
         let original_content = read_file_content(&file_path);
@@ -727,6 +731,18 @@ mod tests {
 
         // Scenario 4: Path is a folder not a file, give an error.
         assert!(create_or_append_file(dir.path(), template).is_err());
+
+        // Scenario 5: File does not end with newline.
+        let file_path2 = dir.path().join("test_file2.txt");
+        fs_err::write(&file_path2, "data/").unwrap();
+        create_or_append_file(&file_path2, "Template Content").unwrap();
+        assert_eq!(read_file_content(&file_path2), "data/\nTemplate Content");
+
+        // Scenario 6: File already ends with a newline, no extra blank line is added.
+        let file_path3 = dir.path().join("test_file3.txt");
+        fs_err::write(&file_path3, "data/\n").unwrap();
+        create_or_append_file(&file_path3, "Template Content").unwrap();
+        assert_eq!(read_file_content(&file_path3), "data/\nTemplate Content");
 
         dir.close().unwrap();
     }

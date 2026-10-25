@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use itertools::Itertools;
 use miette::IntoDiagnostic;
@@ -22,6 +23,7 @@ mod package;
 use package::PackageExt;
 pub use package::{Package, PackageKind};
 
+#[expect(clippy::too_many_arguments)]
 pub async fn list(
     workspace: &Workspace,
     regex: Option<String>,
@@ -30,12 +32,20 @@ pub async fn list(
     explicit: bool,
     no_install: bool,
     lock_file_usage: LockFileUsage,
+    progress: Option<&Arc<pixi_reporters::TopLevelProgress>>,
 ) -> miette::Result<Vec<Package>> {
     let environment = workspace.environment_from_name_or_env_var(environment)?;
+    workspace
+        .refresh_environment_hosts_for_platform_selection(std::slice::from_ref(&environment))
+        .await?;
+
+    // Held across the solve so the package table is not written over bars that
+    // have finished but are still rendered.
+    let _clear_progress = pixi_reporters::TopLevelProgress::clear_when_done(progress);
 
     let lock_file = workspace
         .update_lock_file(
-            None,
+            progress.cloned(),
             UpdateLockFileOptions {
                 lock_file_usage,
                 no_install,
@@ -63,12 +73,14 @@ pub async fn list(
     };
     let platform = match resolved_platform.as_ref() {
         Some(p) => p,
-        None => environment.best_declared_platform().ok_or_else(|| {
-            miette::miette!(
-                "no platform supported by environment '{}' matches the current system",
-                environment.name()
-            )
-        })?,
+        None => environment
+            .installed_or_best_declared_platform()
+            .ok_or_else(|| {
+                miette::miette!(
+                    "no platform supported by environment '{}' matches the current system",
+                    environment.name()
+                )
+            })?,
     };
     let locked_platform = resolve_lock_platform_for(&lock_file, platform);
     let locked_environment = lock_file.environment(environment.name().as_str());
@@ -107,6 +119,7 @@ pub async fn list(
     let extra_build_requires = ExtraBuildRequires::default();
     let extra_build_variables = ExtraBuildVariables::default();
 
+    let hash_strategy = uv_types::HashStrategy::default();
     let mut registry_index = if let Some(python_record) = python_record {
         if environment.has_pypi_dependencies() {
             uv_context =
@@ -128,7 +141,7 @@ pub async fn list(
                 // Install-time lookups filter against the lock file digests instead
                 // (see `pixi_install_pypi::hash_verification`).
                 // A wheel whose size is listed here may still be re-fetched on install.
-                &uv_types::HashStrategy::None,
+                &hash_strategy,
                 &config_settings,
                 &package_config_settings,
                 &extra_build_requires,

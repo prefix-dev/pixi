@@ -56,7 +56,7 @@ enum LockfileUnsat {
     #[error(
         "environment '{0}' does not satisfy the requirements of the project for platform '{1}'"
     )]
-    PlatformUnsat(String, PixiPlatformName, #[source] PlatformUnsat),
+    PlatformUnsat(String, PixiPlatformName, #[source] Box<PlatformUnsat>),
 
     #[error(
         "solve group '{0}' does not satisfy the requirements of the project for platform '{1}'"
@@ -76,13 +76,14 @@ async fn verify_lock_file_satisfiability(
     // that might trigger implicit rayon initialization (e.g. uv's
     // DistributionDatabase). Without this, concurrent tests can race
     // and trigger a GlobalPoolAlreadyInitialized panic.
-    uv_configuration::initialize_rayon_once();
+    uv_threads::initialize_rayon_once();
 
     // Mirror production's load path (`Workspace::load_lock_file`): align the
-    // lockfile's platform names to the manifest by identity, so short on-disk
-    // aliases like `p1` resolve to the workspace platform names the rest of
-    // this check matches against.
-    let aligned_lock_file = crate::lock_file::platform_rename::align_platform_names(
+    // lockfile's platform names to the manifest by identity, so stale names
+    // (a manifest rename, or the legacy `pN` aliases of older pixi versions)
+    // resolve to the workspace platform names the rest of this check matches
+    // against.
+    let (aligned_lock_file, _renamed) = crate::lock_file::platform_rename::align_platform_names(
         lock_file.clone(),
         project.workspace_manifest(),
         project.root(),
@@ -94,7 +95,7 @@ async fn verify_lock_file_satisfiability(
     let temp_pixi_dir = tempfile::tempdir().unwrap();
     let command_dispatcher = {
         let command_dispatcher = project
-            .command_dispatcher_builder()
+            .command_dispatcher_builder(None)
             .unwrap()
             .with_cache_dirs(CacheDirs::new(
                 pixi_path::AbsPathBuf::new(temp_pixi_dir.path())
@@ -155,7 +156,7 @@ async fn verify_lock_file_satisfiability(
                 .await
                 .map_err(|e| match e {
                     CommandDispatcherError::Failed(e) => {
-                        LockfileUnsat::PlatformUnsat(env.name().to_string(), platform.clone(), *e)
+                        LockfileUnsat::PlatformUnsat(env.name().to_string(), platform.clone(), e)
                     }
                     CommandDispatcherError::Cancelled => {
                         panic!("operation was cancelled which should never happen here")
@@ -186,7 +187,9 @@ async fn verify_lock_file_satisfiability(
                     PlatformUnsat::CondaPackageShouldBePypi { name }
                 }
             })
-            .map_err(|e| LockfileUnsat::PlatformUnsat(env_name.to_string(), platform, e))?;
+            .map_err(|e| {
+                LockfileUnsat::PlatformUnsat(env_name.to_string(), platform, Box::new(e))
+            })?;
     }
 
     Ok(())

@@ -15,9 +15,11 @@ static CRAN_SPDX_MAP: LazyLock<HashMap<String, String>> = LazyLock::new(|| {
 
 /// R packages that are built into r-base and should not be listed as separate dependencies.
 ///
-/// This includes:
-/// - Base packages (14): ship with every R installation
-/// - Recommended packages (15): included in all binary distributions of R
+/// These are the base packages (Priority: base), which ship with every R
+/// installation. The recommended packages (Priority: recommended, e.g. `MASS`,
+/// `Matrix`, `mgcv`) are included in R's binary distributions, but conda-forge
+/// packages them separately (`r-mass`, `r-matrix`, `r-mgcv`, ...), and its
+/// `r-base` doesn't depend on them, so they are dependencies like any other.
 ///
 /// See: <https://cran.r-project.org/doc/FAQ/R-FAQ.html>
 pub const R_BUILTIN_PACKAGES: &[&str] = &[
@@ -36,23 +38,6 @@ pub const R_BUILTIN_PACKAGES: &[&str] = &[
     "tcltk",
     "tools",
     "utils",
-    // Recommended packages (Priority: recommended)
-    // These are included in all binary distributions of R
-    "KernSmooth",
-    "MASS",
-    "Matrix",
-    "boot",
-    "class",
-    "cluster",
-    "codetools",
-    "foreign",
-    "lattice",
-    "mgcv",
-    "nlme",
-    "nnet",
-    "rpart",
-    "spatial",
-    "survival",
 ];
 
 /// Check if an R package is built into r-base
@@ -209,6 +194,15 @@ pub enum MetadataError {
     Io(#[from] std::io::Error),
 }
 
+/// Whether a `SystemRequirements` field mentions any of `words` as a word,
+/// ignoring case. A hyphen belongs to a word, so `pkg-config` is one, and
+/// `libcargo-dev` isn't `cargo`.
+fn mentions_any(system_requirements: &str, words: &[&str]) -> bool {
+    system_requirements
+        .split(|c: char| !(c.is_ascii_alphanumeric() || c == '-'))
+        .any(|word| words.iter().any(|w| word.eq_ignore_ascii_case(w)))
+}
+
 /// Parsed DESCRIPTION file data
 #[derive(Debug, Clone, Default)]
 struct DescriptionData {
@@ -224,6 +218,7 @@ struct DescriptionData {
     linking_to: Option<String>,
     depends: Option<String>,
     imports: Option<String>,
+    system_requirements: Option<String>,
 }
 
 /// MetadataProvider implementation for R DESCRIPTION files
@@ -297,6 +292,7 @@ impl DescriptionMetadataProvider {
             "LinkingTo" => data.linking_to = Some(value),
             "Depends" => data.depends = Some(value),
             "Imports" => data.imports = Some(value),
+            "SystemRequirements" => data.system_requirements = Some(value),
             _ => {}
         }
     }
@@ -312,6 +308,31 @@ impl DescriptionMetadataProvider {
     /// Check if package has LinkingTo dependencies (indicates C++ code)
     pub fn has_linking_to(&self) -> Result<bool, MetadataError> {
         Ok(self.ensure_data()?.linking_to.is_some())
+    }
+
+    /// Whether the package has Rust code. CRAN asks such packages to declare
+    /// `Cargo (Rust's package manager), rustc` in `SystemRequirements`.
+    pub fn needs_rust(&self) -> Result<bool, MetadataError> {
+        self.system_requirements_mention(&["cargo", "rustc"])
+    }
+
+    /// Whether the package builds with CMake, as `SystemRequirements` says.
+    pub fn needs_cmake(&self) -> Result<bool, MetadataError> {
+        self.system_requirements_mention(&["cmake"])
+    }
+
+    /// Whether the package finds its libraries with pkg-config, as
+    /// `SystemRequirements` says.
+    pub fn needs_pkg_config(&self) -> Result<bool, MetadataError> {
+        self.system_requirements_mention(&["pkg-config", "pkgconfig"])
+    }
+
+    fn system_requirements_mention(&self, words: &[&str]) -> Result<bool, MetadataError> {
+        Ok(self
+            .ensure_data()?
+            .system_requirements
+            .as_deref()
+            .is_some_and(|requirements| mentions_any(requirements, words)))
     }
 
     /// Get LinkingTo dependencies (packages needed for C/C++ headers at compile time)
@@ -451,6 +472,70 @@ mod tests {
         let desc_path = temp_dir.path().join("DESCRIPTION");
         fs_err::write(desc_path, content).unwrap();
         temp_dir
+    }
+
+    #[test]
+    fn test_needs_rust() {
+        let temp_dir = create_test_description(
+            "Package: hellorust\nVersion: 1.2.3\nSystemRequirements: Cargo (Rust's package manager), rustc\n",
+        );
+        let provider = DescriptionMetadataProvider::new(temp_dir.path());
+        assert!(provider.needs_rust().unwrap());
+
+        let temp_dir = create_test_description(
+            "Package: other\nVersion: 1.0\nSystemRequirements: rustc >= 1.65,\n    xz\n",
+        );
+        let provider = DescriptionMetadataProvider::new(temp_dir.path());
+        assert!(provider.needs_rust().unwrap());
+
+        // Only as a word, and not without the field
+        let temp_dir = create_test_description(
+            "Package: other\nVersion: 1.0\nSystemRequirements: GNU make, libcargo-dev\n",
+        );
+        let provider = DescriptionMetadataProvider::new(temp_dir.path());
+        assert!(!provider.needs_rust().unwrap());
+
+        let temp_dir = create_test_description("Package: other\nVersion: 1.0\n");
+        let provider = DescriptionMetadataProvider::new(temp_dir.path());
+        assert!(!provider.needs_rust().unwrap());
+    }
+
+    #[test]
+    fn test_needs_cmake_and_pkg_config() {
+        // As CRAN packages write them: sundialr, xmlrectr
+        let temp_dir = create_test_description(
+            "Package: sundialr\nVersion: 0.1.6\nSystemRequirements: cmake\n",
+        );
+        let provider = DescriptionMetadataProvider::new(temp_dir.path());
+        assert!(provider.needs_cmake().unwrap());
+        assert!(!provider.needs_pkg_config().unwrap());
+
+        let temp_dir = create_test_description(
+            "Package: xmlrectr\nVersion: 0.1\nSystemRequirements: libxml2 development files, pkg-config; on Windows\n    use the matching Rtools toolchain\n",
+        );
+        let provider = DescriptionMetadataProvider::new(temp_dir.path());
+        assert!(provider.needs_pkg_config().unwrap());
+        assert!(!provider.needs_cmake().unwrap());
+
+        let temp_dir = create_test_description(
+            "Package: other\nVersion: 1.0\nSystemRequirements: CMake (>= 3.15), pkgconfig\n",
+        );
+        let provider = DescriptionMetadataProvider::new(temp_dir.path());
+        assert!(provider.needs_cmake().unwrap());
+        assert!(provider.needs_pkg_config().unwrap());
+
+        // Only as a word, and not without the field
+        let temp_dir = create_test_description(
+            "Package: other\nVersion: 1.0\nSystemRequirements: libcmake-dev, pkg\n",
+        );
+        let provider = DescriptionMetadataProvider::new(temp_dir.path());
+        assert!(!provider.needs_cmake().unwrap());
+        assert!(!provider.needs_pkg_config().unwrap());
+
+        let temp_dir = create_test_description("Package: other\nVersion: 1.0\n");
+        let provider = DescriptionMetadataProvider::new(temp_dir.path());
+        assert!(!provider.needs_cmake().unwrap());
+        assert!(!provider.needs_pkg_config().unwrap());
     }
 
     #[test]
@@ -717,9 +802,11 @@ Imports:
         #[test]
         fn test_is_builtin_package() {
             assert!(is_builtin_package("stats"));
-            assert!(is_builtin_package("MASS"));
-            assert!(is_builtin_package("mass")); // case insensitive
+            assert!(is_builtin_package("Stats")); // case insensitive
             assert!(!is_builtin_package("curl"));
+            // Recommended packages are separate packages on conda-forge
+            assert!(!is_builtin_package("MASS"));
+            assert!(!is_builtin_package("Matrix"));
             assert!(!is_builtin_package("ggplot2"));
         }
     }

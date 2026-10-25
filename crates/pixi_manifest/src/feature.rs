@@ -551,7 +551,7 @@ mod tests {
     use std::path::Path;
 
     use assert_matches::assert_matches;
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::Subdir;
 
     use super::*;
     use crate::WorkspaceManifest;
@@ -669,7 +669,7 @@ mod tests {
             &vec!["run.bat".to_string()],
             "should have selected the activation from the [activation] section"
         );
-        let linux64 = PixiPlatform::from_subdir(Platform::Linux64);
+        let linux64 = PixiPlatform::from_subdir(Subdir::Linux64);
         assert_eq!(
             manifest
                 .default_feature()

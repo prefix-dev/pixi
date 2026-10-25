@@ -10,7 +10,7 @@ use pixi_command_dispatcher::{
     PixiSolveEnvironmentSpec, PixiSolveReporter,
 };
 use pixi_compute_reporters::OperationId;
-use uv_configuration::initialize_rayon_once;
+use uv_threads::initialize_rayon_once;
 
 #[derive(Default)]
 pub struct RayonPrimer {
@@ -22,7 +22,9 @@ impl RayonPrimer {
         OperationId(self.next_id.fetch_add(1, Ordering::Relaxed))
     }
 
-    fn prime() {
+    /// Initializes uv's global rayon pool before rattler's `Installer` can
+    /// initialize it and cause uv to panic.
+    pub fn prime() {
         initialize_rayon_once();
     }
 }

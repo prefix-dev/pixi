@@ -9,7 +9,7 @@
 use pixi_cli::offline::attach_offline_hint;
 use pixi_consts::consts;
 use pixi_test_utils::{MockRepoData, Package, format_diagnostic};
-use rattler_conda_types::Platform;
+use rattler_conda_types::Subdir;
 use tempfile::TempDir;
 
 use crate::common::{LockFileExt, PixiControl};
@@ -62,7 +62,7 @@ async fn offline_add_from_local_channel_succeeds() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         "foo==1"
     ));
 }

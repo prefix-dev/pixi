@@ -2,13 +2,15 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use fs_err::create_dir_all;
-use miette::{Context, IntoDiagnostic};
-use pixi_config::{self, CacheKind, Config};
-use pixi_utils::reqwest::{LazyReqwestClient, should_use_system_certs_for_uv, uv_middlewares};
+use pixi_config::{self, CacheDirError, CacheKind, Config};
+use pixi_utils::reqwest::{
+    LazyReqwestClient, ReqwestClientError, should_use_system_certs_for_uv, uv_middlewares,
+};
 use pixi_uv_conversions::{ConversionError, to_uv_trusted_host};
 use uv_cache::Cache;
 use uv_client::{
-    BaseClientBuilder, Connectivity, ExtraMiddleware, RegistryClient, RegistryClientBuilder,
+    BaseClientBuilder, ClientBuildError, Connectivity, ExtraMiddleware, RegistryClient,
+    RegistryClientBuilder,
 };
 use uv_configuration::{Concurrency, IndexStrategy, NoSources, TrustedHost};
 use uv_dispatch::SharedState;
@@ -20,6 +22,29 @@ use uv_pep508::MarkerEnvironment;
 use uv_preview::Preview;
 use uv_types::InFlight;
 use uv_workspace::WorkspaceCache;
+
+/// An error that occurs when creating a [`UvResolutionContext`].
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum UvResolutionContextError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    CacheDir(#[from] CacheDirError),
+
+    #[error("failed to create uv cache directory")]
+    CreateCacheDir(#[source] std::io::Error),
+
+    #[error("failed to parse trusted host")]
+    TrustedHost(#[source] ConversionError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Client(#[from] ReqwestClientError),
+}
+
+/// An error that occurs when building the uv registry client.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error("failed to build the uv registry client")]
+pub struct RegistryClientBuildError(#[source] ClientBuildError);
 
 /// Objects that are needed for resolutions which can be shared between different resolutions.
 #[derive(Clone)]
@@ -137,7 +162,7 @@ fn read_http_retries_from_env() -> Option<u32> {
 ///
 /// Precedence (highest wins):
 /// 1. `UV_CONCURRENT_DOWNLOADS` / `UV_CONCURRENT_BUILDS` /
-///    `UV_CONCURRENT_INSTALLS` environment variables
+///    `UV_CONCURRENT_INSTALLS` / `UV_CONCURRENT_CACHE_READS` environment variables
 /// 2. Pixi `concurrency.downloads` config value
 /// 3. uv defaults (50 downloads, system threads for builds/installs)
 fn build_concurrency(config: &Config) -> Concurrency {
@@ -150,17 +175,19 @@ fn build_concurrency(config: &Config) -> Concurrency {
     let downloads = read_usize_env("UV_CONCURRENT_DOWNLOADS").unwrap_or(downloads);
     let builds = read_usize_env("UV_CONCURRENT_BUILDS").unwrap_or(defaults.builds);
     let installs = read_usize_env("UV_CONCURRENT_INSTALLS").unwrap_or(defaults.installs);
+    let cache_reads = read_usize_env("UV_CONCURRENT_CACHE_READS").unwrap_or(defaults.cache_reads);
 
-    Concurrency::new(downloads, builds, installs)
+    Concurrency::new(downloads, builds, installs, cache_reads)
 }
 
 impl UvResolutionContext {
-    pub fn from_config(config: &Config, client: LazyReqwestClient) -> miette::Result<Self> {
+    pub fn from_config(
+        config: &Config,
+        client: LazyReqwestClient,
+    ) -> Result<Self, UvResolutionContextError> {
         let uv_cache = config.cache_dir_for(CacheKind::PypiWheels)?;
         if !uv_cache.exists() {
-            create_dir_all(&uv_cache)
-                .into_diagnostic()
-                .context("failed to create uv cache directory")?;
+            create_dir_all(&uv_cache).map_err(UvResolutionContextError::CreateCacheDir)?;
         }
 
         let cache = Cache::from_path(uv_cache);
@@ -188,8 +215,7 @@ impl UvResolutionContext {
                     Ok(hosts)
                 },
             )
-            .into_diagnostic()
-            .context("failed to parse trusted host")?;
+            .map_err(UvResolutionContextError::TrustedHost)?;
         let http_timeout = read_http_timeout_from_env();
         let http_retries = read_http_retries_from_env();
         let concurrency = build_concurrency(config);
@@ -198,7 +224,7 @@ impl UvResolutionContext {
         // uv crates read a global `PREVIEW` static (`uv_preview::get` /
         // `uv_preview::is_enabled`) from feature-flag-gated code paths, and
         // panic if it has not been initialized. Pixi never opts in to any
-        // preview features but must still register the value so those reads
+        // preview flags but must still register the value so those reads
         // don't crash while, for instance, building a local source dist.
         let _ = uv_preview::set(preview);
 
@@ -211,8 +237,8 @@ impl UvResolutionContext {
             capabilities: IndexCapabilities::default(),
             allow_insecure_host,
             shared_state: SharedState::default(),
-            extra_middleware: ExtraMiddleware(uv_middlewares(config, client.clone())),
-            proxies: config.get_proxies().into_diagnostic()?,
+            extra_middleware: ExtraMiddleware(uv_middlewares(config, client.clone())?),
+            proxies: config.get_proxies().map_err(ReqwestClientError::Proxy)?,
             tls_no_verify: config.tls_no_verify(),
             client: client.into_client(),
             use_system_certs: should_use_system_certs_for_uv(config),
@@ -261,12 +287,12 @@ impl UvResolutionContext {
     pub fn base_client_builder<'a>(
         &self,
         allow_insecure_hosts: Vec<TrustedHost>,
-        markers: Option<&'a MarkerEnvironment>,
         connectivity: Connectivity,
     ) -> BaseClientBuilder<'a> {
         let mut builder = BaseClientBuilder::default()
             .keyring(self.keyring_provider)
             .connectivity(connectivity)
+            .cache_read_concurrency(self.concurrency.cache_reads)
             .extra_middleware(self.extra_middleware.clone());
         builder = if allow_insecure_hosts.is_empty() {
             builder
@@ -282,9 +308,6 @@ impl UvResolutionContext {
         }
         if let Some(retries) = self.http_retries {
             builder = builder.retries(retries);
-        }
-        if let Some(markers) = markers {
-            builder = builder.markers(markers);
         }
         builder
     }
@@ -305,20 +328,27 @@ impl UvResolutionContext {
         index_strategy: IndexStrategy,
         markers: Option<&MarkerEnvironment>,
         connectivity: Connectivity,
-    ) -> miette::Result<Arc<RegistryClient>> {
-        let base_client_builder =
-            self.base_client_builder(allow_insecure_hosts, markers, connectivity);
+    ) -> Result<Arc<RegistryClient>, RegistryClientBuildError> {
+        let base_client_builder = self.base_client_builder(allow_insecure_hosts, connectivity);
 
         let mut uv_client_builder =
             RegistryClientBuilder::new(base_client_builder, self.cache.clone())
                 .index_locations(index_locations.clone())
                 .index_strategy(index_strategy);
 
+        if let Some(markers) = markers {
+            uv_client_builder = uv_client_builder.markers(markers);
+        }
+
         for p in &self.proxies {
             uv_client_builder = uv_client_builder.proxy(p.clone());
         }
 
-        Ok(Arc::new(uv_client_builder.build().into_diagnostic()?))
+        Ok(Arc::new(
+            uv_client_builder
+                .build()
+                .map_err(RegistryClientBuildError)?,
+        ))
     }
 }
 
@@ -463,6 +493,42 @@ mod tests {
         // Unset → None
         with_env_vars(&[("UV_CONCURRENT_DOWNLOADS", None)], || {
             assert!(read_usize_env("UV_CONCURRENT_DOWNLOADS").is_none());
+        });
+    }
+
+    #[test]
+    fn from_config_errors() {
+        with_env_vars(&[("PIXI_CACHE_PYPI_WHEELS_DIR", None)], || {
+            let dir = tempfile::tempdir().unwrap();
+            let file = dir.path().join("file");
+            fs_err::write(&file, "").unwrap();
+
+            let config = Config {
+                cache: pixi_config::CacheConfig {
+                    pypi_wheels: Some(file.join("wheels")),
+                    ..Default::default()
+                },
+                ..Config::default()
+            };
+            let client = LazyReqwestClient::new(&config).unwrap();
+            assert!(matches!(
+                UvResolutionContext::from_config(&config, client),
+                Err(UvResolutionContextError::CreateCacheDir(_))
+            ));
+
+            let mut config = Config {
+                cache: pixi_config::CacheConfig {
+                    pypi_wheels: Some(dir.path().to_path_buf()),
+                    ..Default::default()
+                },
+                ..Config::default()
+            };
+            config.pypi_config.allow_insecure_host = vec!["example.com:notaport".to_string()];
+            let client = LazyReqwestClient::new(&config).unwrap();
+            assert!(matches!(
+                UvResolutionContext::from_config(&config, client),
+                Err(UvResolutionContextError::TrustedHost(_))
+            ));
         });
     }
 }

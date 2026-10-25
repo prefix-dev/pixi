@@ -108,6 +108,6 @@ Only present once the environment has been installed.
 
 ### Minimum platform
 
-The minimum platform the installed packages actually require: the same subdir with only the virtual packages that some installed package depends on.
+What the installed packages actually require: the same subdir with only the virtual-package requirements that some installed package depends on, shown as match specs the way the packages spell them (`__glibc >=2.17`).
 This can be weaker than the resolved platform and tells you how portable the installed environment is.
 Only present once the environment has been installed.

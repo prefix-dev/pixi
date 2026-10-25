@@ -251,3 +251,46 @@ pub(crate) async fn completions_sync_status(
 
     Ok((completions_to_remove, completions_to_add))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn completion_changes_preserve_shell_names() {
+        let root = tempfile::tempdir().unwrap();
+        let completions_dir = CompletionsDir(root.path().join("completions"));
+        for (directory, name) in [
+            ("share/bash-completion/completions", "tool"),
+            ("share/zsh/site-functions", "_tool"),
+            ("share/fish/vendor_completions.d", "tool.fish"),
+        ] {
+            let directory = root.path().join(directory);
+            fs_err::create_dir_all(&directory).unwrap();
+            fs_err::write(directory.join(name), "").unwrap();
+        }
+
+        let completions = contained_completions(root.path(), "tool", &completions_dir).unwrap();
+        assert_eq!(
+            completions
+                .iter()
+                .map(|completion| (completion.name.as_str(), completion.shell))
+                .collect_vec(),
+            [("tool", "bash"), ("tool", "zsh"), ("tool", "fish")]
+        );
+        for completion in completions {
+            let added = completion.install().await.unwrap().unwrap();
+            assert!(matches!(
+                added,
+                StateChange::AddedCompletion { name, shell }
+                    if name == "tool" && shell == completion.shell
+            ));
+            let removed = completion.remove().await.unwrap();
+            assert!(matches!(
+                removed,
+                StateChange::RemovedCompletion { name, shell }
+                    if name == "tool" && shell == completion.shell
+            ));
+        }
+    }
+}

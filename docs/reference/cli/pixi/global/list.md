@@ -51,12 +51,12 @@ pixi global list [OPTIONS] [REGEX]
 - <a id="arg---no-ref-links" href="#arg---no-ref-links">`--no-ref-links`</a>
 :  Disallow ref links (copy-on-write) during package installation
 <br>**env**: `PIXI_NO_REF_LINKS`
-- <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
-:  Do not verify the TLS certificate of the server
 - <a id="arg---offline" href="#arg---offline">`--offline=<OFFLINE>`</a>
 :  Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
 <br>**env**: `PIXI_OFFLINE`
 <br>**options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+- <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
+:  Do not verify the TLS certificate of the server
 - <a id="arg---tls-root-certs" href="#arg---tls-root-certs">`--tls-root-certs <TLS_ROOT_CERTS>`</a>
 :  Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 <br>**env**: `PIXI_TLS_ROOT_CERTS`
@@ -68,10 +68,10 @@ Lists global environments with their dependencies and exposed commands. Can also
 
 All environments:
 
-- Yellow: the binaries that are exposed.
+- Magenta: the name of the environment.
 - Green: the packages that are explicit dependencies of the environment.
-- Blue: the version of the installed package.
-- Cyan: the name of the environment.
+- Yellow: the binaries that are exposed.
+- Dim: the version of the installed package.
 
 Per environment:
 

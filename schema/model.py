@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import sys
 import json
+import sys
 from copy import deepcopy
-from pathlib import Path
-import tomli
-from typing import Annotated, Any, Literal, ClassVar, cast, override, TYPE_CHECKING
 from enum import Enum
+from pathlib import Path
+from typing import TYPE_CHECKING, Annotated, Any, ClassVar, Literal, cast, override
 
+import tomli
 from pydantic import (
     AnyHttpUrl,
     BaseModel,
@@ -128,26 +128,26 @@ class CudaTable(BaseModel):
     )
 
 
+# AMDGPU target names: decimal major, then one hex digit each for minor and stepping.
+AmdGpuTargetName = Annotated[str, StringConstraints(pattern=r"^gfx[0-9]+[0-9a-fA-F]{2}$")]
+
+
 class WorkspacePlatform(BaseModel):
     """A workspace platform: a conda subdir plus declared virtual-package
     guarantees, identified by a workspace-scoped name."""
 
-    # extra="allow" because workspace platforms accept top-level virtual-package
-    # shortcut keys (`cuda`, `archspec`, `glibc`, `linux`, `macos`/`osx`,
-    # `windows`) and forward-compatible raw `__name` keys whose value is
-    # `version` or `version=build_string`. Listing the fixed slots explicitly is
-    # enough for documentation; the open shape is preserved here.
     model_config: ClassVar[ConfigDict] = ConfigDict(
-        extra="allow",
+        extra="forbid",
         alias_generator=hyphenize,
-        # A platform entry must set at least one of `name`/`platform`; the
-        # parser rejects an empty table. The schema can't express this with
-        # required fields alone (both are optional), so spell it out.
         json_schema_extra={
+            "patternProperties": {
+                r"^__[a-z0-9][._-]?([a-z0-9]+(\.|-|_|$))*$": {"type": "string"},
+            },
+            "propertyNames": {"maxLength": 64},
             "anyOf": [
                 {"required": ["name"]},
                 {"required": ["platform"]},
-            ]
+            ],
         },
     )
 
@@ -165,6 +165,10 @@ class WorkspacePlatform(BaseModel):
     cuda: NonEmptyStr | CudaTable | None = Field(
         None,
         description="Declare a `__cuda` virtual package at the given version (e.g. `12.0`), or a `{ driver, arch }` table to also declare `__cuda_arch` (GPU compute capability).",
+    )
+    amdgpu: Literal[True] | AmdGpuTargetName | None = Field(
+        None,
+        description="Declare the presence-only `__amdgpu` virtual package with `true`, or an AMDGPU target name (e.g. `gfx90a`) to also declare its `__amdgpu_arch`.",
     )
     archspec: NonEmptyStr | None = Field(
         None,
@@ -269,6 +273,36 @@ KnownPreviewFeature = PixiBuildFeature
 #     PixiBuild: Annotated[str, Field(description="Enables building of source records")] = "pixi-build"
 
 
+class ExcludeNewerTable(StrictBaseModel):
+    """The `exclude-newer` cutoff for conda packages together with the releases that are exempt from it."""
+
+    cutoff: ExcludeNewer = Field(
+        ...,
+        examples=["2023-11-03T03:33:12Z", "2026-04-01", "7d"],
+        description="Exclude any package newer than this timestamp or duration. Can be an absolute timestamp or a relative duration accepted by humantime (for example '0d', '1 week', '2w', '1 month', '1M', '72h', '72 hours', or '1h30m').",
+    )
+    exemptions: dict[CondaPackageName, NonEmptyStr | ExcludeNewerExemptionTable] | None = Field(
+        None,
+        examples=[{"polars": "==1.43.1", "py-rattler": "*"}],
+        description='Package releases that are never excluded, regardless of their upload time. The value is a version or a match spec table, so `polars = "==1.43.1"` exempts that release only and `py-rattler = "*"` exempts every release.',
+    )
+
+
+class PypiExcludeNewerTable(StrictBaseModel):
+    """The `exclude-newer` cutoff for PyPI packages together with the packages that are exempt from it."""
+
+    cutoff: ExcludeNewer | None = Field(
+        None,
+        examples=["2023-11-03T03:33:12Z", "2026-04-01", "7d"],
+        description="Exclude any PyPI package newer than this timestamp or duration. Without a cutoff, the cutoff of `exclude-newer` applies to PyPI packages as well.",
+    )
+    exemptions: dict[PyPIPackageName, Literal["*"]] | None = Field(
+        None,
+        examples=[{"torch": "*"}],
+        description="PyPI packages that are never excluded, regardless of their upload time. Only `*`, which exempts every release of the package, is supported for now.",
+    )
+
+
 class Workspace(StrictBaseModel):
     """The project's metadata information."""
 
@@ -303,7 +337,7 @@ class Workspace(StrictBaseModel):
 - 'lowest': solve all packages to the lowest compatible version.
 - 'lowest-direct': solve direct dependencies to the lowest compatible version and transitive ones to the highest compatible version.""",
     )
-    exclude_newer: ExcludeNewer | None = Field(
+    exclude_newer: ExcludeNewer | ExcludeNewerTable | None = Field(
         None,
         examples=[
             "2023-11-03T03:33:12Z",
@@ -316,8 +350,18 @@ class Workspace(StrictBaseModel):
             "72h",
             "72 hours",
             "1h30m",
+            {"cutoff": "7d", "exemptions": {"polars": "==1.43.1", "py-rattler": "*"}},
         ],
-        description="Exclude any package newer than this timestamp or duration. Can be an absolute timestamp or a relative duration accepted by humantime (for example '0d', '1 week', '2w', '1 month', '1M', '72h', '72 hours', or '1h30m').",
+        description="Exclude any package newer than this timestamp or duration. Can be an absolute timestamp or a relative duration accepted by humantime (for example '0d', '1 week', '2w', '1 month', '1M', '72h', '72 hours', or '1h30m'), or a table with a `cutoff` and `exemptions` for vetted releases.",
+    )
+    pypi_exclude_newer: ExcludeNewer | PypiExcludeNewerTable | None = Field(
+        None,
+        examples=[
+            "2023-11-03T03:33:12Z",
+            "7d",
+            {"exemptions": {"torch": "*"}},
+        ],
+        description="Exclude any PyPI package newer than this timestamp or duration, or a table with a `cutoff` and `exemptions`. Without a `cutoff`, the cutoff of `exclude-newer` applies to PyPI packages as well.",
     )
     platforms: list[Platform | PlatformName | WorkspacePlatform] | None = Field(
         None,
@@ -385,8 +429,8 @@ class Workspace(StrictBaseModel):
 ########################
 
 
-class BinaryMatchspecTable(StrictBaseModel):
-    """A precise description of a `conda` binary package version. Excludes source-location fields."""
+class MatchspecSelectorTable(StrictBaseModel):
+    """The match spec fields that select `conda` binary package records."""
 
     version: NonEmptyStr | None = Field(
         None,
@@ -406,10 +450,6 @@ class BinaryMatchspecTable(StrictBaseModel):
     subdir: NonEmptyStr | None = Field(
         None, description="The subdir of the package, also known as platform"
     )
-    extras: list[NonEmptyStr] | None = Field(
-        None,
-        description="Optional extra dependencies to select for the package",
-    )
     flags: list[NonEmptyStr] | None = Field(
         None,
         description="Plain string flags used to select package variants",
@@ -418,13 +458,31 @@ class BinaryMatchspecTable(StrictBaseModel):
     license_family: NonEmptyStr | None = Field(
         None, description="The license family of the package"
     )
+    track_features: list[NonEmptyStr] | None = Field(
+        None, description="The track features of the package"
+    )
+
+
+class BinaryMatchspecTable(MatchspecSelectorTable):
+    """A precise description of a `conda` binary package version. Excludes source-location fields."""
+
+    extras: list[NonEmptyStr] | None = Field(
+        None,
+        description="Optional extra dependencies to select for the package",
+    )
     when: When | None = Field(
         None,
         description="The condition under which this match spec applies. Use a package string, `{ all = [...] }`, `{ any = [...] }`, or `{ package = ..., version = ..., build = ... }`.",
     )
-    track_features: list[NonEmptyStr] | None = Field(
-        None, description="The track features of the package"
-    )
+
+
+class ExcludeNewerExemptionTable(MatchspecSelectorTable):
+    """The match spec fields that select the releases exempt from `exclude-newer`."""
+
+    model_config: ClassVar[ConfigDict] = ConfigDict(json_schema_extra={"minProperties": 1})
+
+    md5: Md5Sum | None = Field(None, description="The md5 hash of the package")
+    sha256: Sha256Sum | None = Field(None, description="The sha256 hash of the package")
 
 
 class MatchspecTable(BinaryMatchspecTable):
@@ -663,6 +721,82 @@ ConditionalInheritableDependencies = (
     dict[
         CondaPackageName,
         InheritableMatchSpec | dict[CondaPackageName, InheritableMatchSpec],
+    ]
+    | None
+)
+
+
+class PinTable(StrictBaseModel):
+    """The arguments of a pin, mirroring rattler-build's `pin_compatible`/`pin_subpackage`.
+
+    Bounds that are not given fall back to the defaults: `lower-bound = "x.x.x.x.x.x"`
+    (pin to the exact resolved version) and `upper-bound = "x"` (next-major exclusive).
+    """
+
+    lower_bound: NonEmptyStr | None = Field(
+        None,
+        description="Lower bound of the pinned range: a pin expression like `x.x` (number of version segments to keep) or a literal version.",
+        examples=["x.x", "1.2.3"],
+    )
+    upper_bound: NonEmptyStr | None = Field(
+        None,
+        description="Upper bound of the pinned range: a pin expression like `x` (the segment to bump, exclusive) or a literal version.",
+        examples=["x", "9.9"],
+    )
+    exact: bool | None = Field(
+        None,
+        description="Pin the exact version and build string. Cannot be combined with the bounds or `build`.",
+    )
+    build: NonEmptyStr | None = Field(
+        None,
+        description="A build-string matcher to add to the pin, e.g. `mpi_mpich_*`.",
+    )
+
+
+class PinCompatibleSpec(StrictBaseModel):
+    """Pin to a version compatible with the one resolved in the previous environment.
+
+    Mirrors rattler-build's `pin_compatible()`: a `pin-compatible` entry in
+    `run-dependencies` resolves against the host environment, one in
+    `host-dependencies` against the build environment.
+    """
+
+    pin_compatible: Literal[True] | PinTable = Field(
+        ...,
+        description="`true` uses the default bounds; a table configures them.",
+    )
+
+
+class PinSubpackageSpec(StrictBaseModel):
+    """Pin the package itself for its consumers.
+
+    Mirrors rattler-build's `pin_subpackage()`. Only valid in the
+    `run-exports` tables, on an entry named after the package itself.
+    """
+
+    pin_subpackage: Literal[True] | PinTable = Field(
+        ...,
+        description="`true` uses the default bounds; a table configures them.",
+    )
+
+
+PinnableMatchSpec = InheritableMatchSpec | PinCompatibleSpec
+RunExportSpec = InheritableMatchSpec | PinCompatibleSpec | PinSubpackageSpec
+
+# Like `ConditionalInheritableDependencies`, but additionally accepting
+# `pin-compatible` entries (the run- and host-dependency tables) or both pin
+# kinds (the run-export buckets).
+ConditionalPinnableDependencies = (
+    dict[
+        CondaPackageName,
+        PinnableMatchSpec | dict[CondaPackageName, PinnableMatchSpec],
+    ]
+    | None
+)
+ConditionalRunExportDependencies = (
+    dict[
+        CondaPackageName,
+        RunExportSpec | dict[CondaPackageName, RunExportSpec],
     ]
     | None
 )
@@ -1059,12 +1193,12 @@ class PyPIOptions(StrictBaseModel):
         description="Packages that should NOT be isolated during the build process",
         examples=[["numpy"], True],
     )
-    index_strategy: (
-        Literal["first-index"] | Literal["unsafe-first-match"] | Literal["unsafe-best-match"] | None
-    ) = Field(
-        None,
-        description="The strategy to use when resolving packages from multiple indexes",
-        examples=["first-index", "unsafe-first-match", "unsafe-best-match"],
+    index_strategy: Literal["first-index", "unsafe-first-match", "unsafe-best-match"] | None = (
+        Field(
+            None,
+            description="The strategy to use when resolving packages from multiple indexes",
+            examples=["first-index", "unsafe-first-match", "unsafe-best-match"],
+        )
     )
     no_build: bool | list[PyPIPackageName] | None = Field(
         None,
@@ -1084,12 +1218,7 @@ class PyPIOptions(StrictBaseModel):
         examples=["true", "false"],
     )
     prerelease_mode: (
-        Literal["disallow"]
-        | Literal["allow"]
-        | Literal["if-necessary"]
-        | Literal["explicit"]
-        | Literal["if-necessary-or-explicit"]
-        | None
+        Literal["disallow", "allow", "if-necessary", "explicit", "if-necessary-or-explicit"] | None
     ) = Field(
         None,
         description="The strategy to use when considering pre-release versions",
@@ -1110,23 +1239,23 @@ class PyPIOptions(StrictBaseModel):
 class RunExports(StrictBaseModel):
     """The run-exports the package declares for its downstream consumers."""
 
-    noarch: ConditionalInheritableDependencies = Field(
+    noarch: ConditionalRunExportDependencies = Field(
         None,
         description="The only run-export bucket applied when the consuming output is `noarch`: added to the run dependencies of noarch consumers that depend on this package in `host-dependencies`.",
     )
-    strong: ConditionalInheritableDependencies = Field(
+    strong: ConditionalRunExportDependencies = Field(
         None,
         description="Added to the run dependencies of consumers that depend on this package in `build-dependencies` or `host-dependencies`.",
     )
-    weak: ConditionalInheritableDependencies = Field(
+    weak: ConditionalRunExportDependencies = Field(
         None,
         description="Added to the run dependencies of consumers that depend on this package in `host-dependencies`.",
     )
-    strong_constraints: ConditionalInheritableDependencies = Field(
+    strong_constraints: ConditionalRunExportDependencies = Field(
         None,
         description="Added to the run constraints of consumers that depend on this package in `build-dependencies` or `host-dependencies`. Constraints only restrict versions and cannot be source specs.",
     )
-    weak_constraints: ConditionalInheritableDependencies = Field(
+    weak_constraints: ConditionalRunExportDependencies = Field(
         None,
         description="Added to the run constraints of consumers that depend on this package in `host-dependencies`. Constraints only restrict versions and cannot be source specs.",
     )
@@ -1185,9 +1314,9 @@ class Package(StrictBaseModel):
 
     build: Build = Field(..., description="The build configuration of the package")
 
-    host_dependencies: ConditionalInheritableDependencies = HostDependenciesField
+    host_dependencies: ConditionalPinnableDependencies = HostDependenciesField
     build_dependencies: ConditionalInheritableDependencies = BuildDependenciesField
-    run_dependencies: ConditionalInheritableDependencies = RunDependenciesField
+    run_dependencies: ConditionalPinnableDependencies = RunDependenciesField
     extra_dependencies: ConditionalExtraDependencies = Field(
         None,
         description="Extra groups that can be requested through MatchSpec extras. Each group uses the same conda package specification syntax as run-dependencies.",
@@ -1229,7 +1358,9 @@ class SourceLocation(StrictBaseModel):
 class Build(StrictBaseModel):
     backend: BuildBackend = Field(..., description="The build backend to instantiate")
     channels: list[Channel] | None = Field(
-        None, description="The `conda` channels that are used to fetch the build backend from"
+        None,
+        deprecated=True,
+        description="The `conda` channels that are used to fetch the build backend from. Deprecated in favor of `backend.channels`",
     )
     flags: list[FlagName] | None = Field(
         None,
@@ -1237,7 +1368,9 @@ class Build(StrictBaseModel):
         examples=[["cuda", "blas_openblas"]],
     )
     additional_dependencies: Dependencies = Field(
-        None, description="Additional dependencies to install alongside the build backend"
+        None,
+        deprecated=True,
+        description="Additional dependencies to install alongside the build backend. Deprecated in favor of `backend.additional-dependencies`",
     )
     config: dict[str, Any] | None = Field(
         None, description="The configuration of the build backend"
@@ -1308,14 +1441,16 @@ class BaseManifest(BaseModel):
     constraints: InheritableDependencies = ConstraintsField
     exclude_newer: dict[CondaPackageName, ExcludeNewer] | None = Field(
         None,
-        description="Workspace-wide per-package `exclude-newer` overrides for conda packages",
+        deprecated=True,
+        description="Workspace-wide per-package `exclude-newer` overrides for conda packages. Deprecated in favor of the `exemptions` of `[workspace.exclude-newer]`",
     )
     pypi_dependencies: dict[PyPIPackageName, PyPIRequirement] | None = Field(
         None, description="The PyPI dependencies"
     )
     pypi_exclude_newer: dict[PyPIPackageName, ExcludeNewer] | None = Field(
         None,
-        description="Workspace-wide per-package `exclude-newer` overrides for PyPI packages",
+        deprecated=True,
+        description="Workspace-wide per-package `exclude-newer` overrides for PyPI packages. Deprecated in favor of the `exemptions` of `[workspace.pypi-exclude-newer]`",
     )
     dev: dict[CondaPackageName, SourceSpecTable] | None = Field(
         None,
@@ -1444,7 +1579,7 @@ class PyProjectPartial(PyProjectPixiTool):
 class SchemaJsonEncoder(json.JSONEncoder):
     """A custom schema encoder for normalizing schema to be used with TOML files."""
 
-    HEADER_ORDER: list[str] = [
+    HEADER_ORDER: ClassVar[list[str]] = [
         "$schema",
         "$id",
         "$ref",
@@ -1472,24 +1607,24 @@ class SchemaJsonEncoder(json.JSONEncoder):
         "multipleOf",
         "pattern",
     ]
-    FOOTER_ORDER: list[str] = [
+    FOOTER_ORDER: ClassVar[list[str]] = [
         "examples",
         "$defs",
     ]
-    SORT_NESTED: list[str] = [
+    SORT_NESTED: ClassVar[list[str]] = [
         "items",
     ]
-    SORT_NESTED_OBJ: list[str] = [
+    SORT_NESTED_OBJ: ClassVar[list[str]] = [
         "properties",
         "$defs",
     ]
-    SORT_NESTED_MAYBE_OBJ: list[str] = [
+    SORT_NESTED_MAYBE_OBJ: ClassVar[list[str]] = [
         "additionalProperties",
     ]
-    SORT_NESTED_OBJ_OBJ: list[str] = [
+    SORT_NESTED_OBJ_OBJ: ClassVar[list[str]] = [
         "patternProperties",
     ]
-    SORT_NESTED_ARR: list[str] = [
+    SORT_NESTED_ARR: ClassVar[list[str]] = [
         "anyOf",
         "allOf",
         "oneOf",

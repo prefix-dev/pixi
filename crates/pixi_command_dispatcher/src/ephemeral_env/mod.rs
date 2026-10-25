@@ -457,7 +457,7 @@ async fn fetch_binary_repodata(
     binary_specs: &DependencyMap<PackageName, BinarySpec>,
     build_env: &crate::BuildEnvironment,
 ) -> Result<Vec<RepoData>, EphemeralEnvError> {
-    use rattler_conda_types::{Channel, Platform};
+    use rattler_conda_types::{Channel, Subdir};
 
     let channel_config = ctx.compute(&ChannelConfigKey).await;
     let gateway = ctx.global_data().gateway().clone();
@@ -482,10 +482,13 @@ async fn fetch_binary_repodata(
     let mut query = gateway
         .query(
             spec.channels.iter().cloned().map(Channel::from_url),
-            [build_env.host_platform, Platform::NoArch],
+            [build_env.host_platform, Subdir::NoArch],
             match_specs.into_iter().chain(constraint_specs),
         )
-        .recursive(true);
+        .recursive(true)
+        // Without a reporter the fetched notices are dropped on the floor, so
+        // do not pay for them.
+        .channel_notices(gateway_reporter.is_some());
     if let Some(reporter) = gateway_reporter {
         query = query.with_reporter(WrappingGatewayReporter(reporter));
     }

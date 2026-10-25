@@ -11,11 +11,11 @@ python = ">=3.11,<3.13"
 [pypi-dependencies]
 torch = {
   version = ">=2.5.1",
-  index = "https://download.pytorch.org/whl/cu124"
+  index = "https://download.pytorch.org/whl/cu124",
 }
 torchvision = {
   version = ">=0.20.1",
-  index = "https://download.pytorch.org/whl/cu124"
+  index = "https://download.pytorch.org/whl/cu124",
 }
 
 [target.osx.pypi-dependencies]
@@ -23,6 +23,6 @@ torchvision = {
 torch = { version = ">=2.5.1", index = "https://download.pytorch.org/whl/cpu" }
 torchvision = {
   version = ">=0.20.1",
-  index = "https://download.pytorch.org/whl/cpu"
+  index = "https://download.pytorch.org/whl/cpu",
 }
 # --8<-- [end:minimal]

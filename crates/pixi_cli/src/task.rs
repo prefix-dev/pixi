@@ -24,7 +24,10 @@ use pixi_core::{
     workspace::{Environment, virtual_packages::EnvironmentRunnability},
 };
 
-use crate::{cli_config::WorkspaceConfig, cli_interface::CliInterface};
+use crate::{
+    cli_config::WorkspaceConfig,
+    cli_interface::{CliInterface, cli_context},
+};
 
 #[derive(Parser, Debug)]
 pub enum Operation {
@@ -214,6 +217,7 @@ impl From<AddArgs> for Task {
             && value.default_environment.is_none()
             && description.is_none()
             && value.args.is_none()
+            && !value.clean_env
         {
             Self::Plain(cmd_args.into())
         } else {
@@ -257,7 +261,7 @@ impl From<AliasArgs> for Task {
     }
 }
 
-/// Interact with tasks in the workspace
+/// Interact with tasks in a workspace
 #[derive(Parser, Debug)]
 #[clap(trailing_var_arg = true, arg_required_else_help = true)]
 pub struct Args {
@@ -382,26 +386,21 @@ fn print_tasks(
     }
 
     let mut stdout = std::io::stdout();
-    if let Err(error) = stdout
-        .write_all(output.as_bytes())
-        .and_then(|()| stdout.flush())
-    {
-        if error.kind() == std::io::ErrorKind::BrokenPipe {
-            std::process::exit(0);
-        }
-        return Err(error);
-    }
-
-    Ok(())
+    pixi_utils::io::ignore_broken_pipe(
+        stdout
+            .write_all(output.as_bytes())
+            .and_then(|()| stdout.flush()),
+    )
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
-        .locate()?;
+        .locate()
+        .await?;
 
-    let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
+    let workspace_ctx = cli_context(workspace.clone());
 
     match args.operation {
         Operation::Add(args) => add_task(workspace_ctx, args).await,
@@ -439,12 +438,7 @@ async fn list_tasks(
             .dedup()
             .map(|name| name.as_str())
             .join(" ");
-        writeln!(std::io::stdout(), "{unformatted}")
-            .inspect_err(|e| {
-                if e.kind() == std::io::ErrorKind::BrokenPipe {
-                    std::process::exit(0);
-                }
-            })
+        pixi_utils::io::ignore_broken_pipe(writeln!(std::io::stdout(), "{unformatted}"))
             .into_diagnostic()?;
 
         return Ok(());
@@ -508,12 +502,7 @@ fn print_tasks_json(project: &Workspace) -> miette::Result<()> {
 
     let json_string =
         serde_json::to_string_pretty(&env_feature_task_map).expect("Failed to serialize tasks");
-    writeln!(std::io::stdout(), "{json_string}")
-        .inspect_err(|e| {
-            if e.kind() == std::io::ErrorKind::BrokenPipe {
-                std::process::exit(0);
-            }
-        })
+    pixi_utils::io::ignore_broken_pipe(writeln!(std::io::stdout(), "{json_string}"))
         .into_diagnostic()?;
 
     Ok(())

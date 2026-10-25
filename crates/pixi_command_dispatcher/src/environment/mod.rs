@@ -10,7 +10,7 @@ mod registry;
 mod spec;
 mod workspace_env_ref;
 
-pub use env_ref::{DerivedEnvKind, DerivedParent, EnvironmentRef, EphemeralEnv};
+pub use env_ref::{DerivedEnvKind, DerivedParent, DerivedPlatform, EnvironmentRef, EphemeralEnv};
 pub use projections::{BuildEnvOf, ChannelsOf, ExcludeNewerOf, VariantsOf};
 pub use registry::{HasWorkspaceEnvRegistry, WorkspaceEnvRegistry};
 pub use spec::EnvironmentSpec;

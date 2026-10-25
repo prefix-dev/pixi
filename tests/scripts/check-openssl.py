@@ -1,6 +1,6 @@
-from enum import StrEnum
 import subprocess
 import sys
+from enum import StrEnum
 
 
 class Colors(StrEnum):
@@ -19,6 +19,7 @@ def check_openssl_dependency() -> None:
         ["cargo", "tree", "-i", "openssl", "--workspace"],
         capture_output=True,
         text=True,
+        check=False,
     )
 
     if (

@@ -5,7 +5,7 @@ No more requirement to use `colcon` or `catkin_tools` to build your ROS packages
 It provides seamless integration with Pixi's package management workflow while supporting ROS1 and ROS2 packages with automatic dependency resolution.
 
 !!! warning
-    `pixi-build` is a preview feature, and will change until it is stabilized.
+    `pixi-build` is a preview flag, and will change until it is stabilized.
     This is why we require users to opt in to that feature by adding "pixi-build" to `workspace.preview`.
 
     ```toml
@@ -37,7 +37,7 @@ channels = [
 platforms = ["linux-64", "osx-arm64"]
 
 [package.build]
-backend = { name = "pixi-build-ros", version = "*" }
+backend = { name = "pixi-build-ros" }
 
 [package.build.config]
 distro = "jazzy"  # or "humble", "noetic", etc.

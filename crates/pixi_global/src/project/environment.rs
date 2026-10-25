@@ -4,7 +4,7 @@ use fancy_display::FancyDisplay;
 use indexmap::IndexSet;
 use miette::Diagnostic;
 use pixi_consts::consts;
-use rattler_conda_types::{MatchSpec, PackageName, Platform, PrefixRecord};
+use rattler_conda_types::{MatchSpec, PackageName, PrefixRecord, Subdir};
 use regex::Regex;
 use serde::{self, Deserialize, Deserializer, Serialize};
 use std::collections::HashSet;
@@ -86,7 +86,7 @@ pub(crate) async fn environment_specs_in_sync(
     prefix_records: &[PrefixRecord],
     specs: &IndexSet<MatchSpec>,
     source_package_names: &HashSet<PackageName>,
-    platform: Option<Platform>,
+    platform: Option<Subdir>,
 ) -> miette::Result<bool> {
     let package_records = prefix_records
         .iter()

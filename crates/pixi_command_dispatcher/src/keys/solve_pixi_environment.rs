@@ -74,11 +74,11 @@ fn check_missing_channels(
 
             if !channels.iter().any(|c| c == &base_url) {
                 return Err(Box::new(SolvePixiEnvironmentError::MissingChannel(
-                    MissingChannelError {
+                    Box::new(MissingChannelError {
                         package: pkg.as_normalized().to_string(),
                         channel: base_url,
                         advice: None,
-                    },
+                    }),
                 )));
             }
         }

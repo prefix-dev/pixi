@@ -9,7 +9,7 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
 use ordermap::OrderSet;
-use rattler_conda_types::{ChannelUrl, Flag, NoArchType, PackageName, Platform, VersionWithSource};
+use rattler_conda_types::{ChannelUrl, Flag, NoArchType, PackageName, Subdir, VersionWithSource};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
@@ -38,13 +38,13 @@ pub struct CondaOutputsParams {
     ///
     /// This is usually the same platform as the platform on which the backend
     /// is running but when cross-compiling this could be different.
-    pub host_platform: Platform,
+    pub host_platform: Subdir,
 
     /// The platform for which any build tools will be installed.
     ///
     /// This is usually the same platform as the platform on which the backend
     /// is running but when cross-compiling this could be different.
-    pub build_platform: Platform,
+    pub build_platform: Subdir,
 
     /// The possible variants by the pixi workspace.
     pub variant_configuration: Option<BTreeMap<String, Vec<VariantValue>>>,
@@ -160,7 +160,7 @@ pub struct CondaOutputMetadata {
     pub build_number: u64,
 
     /// The subdir or platform
-    pub subdir: Platform,
+    pub subdir: Subdir,
 
     /// The license of the package
     pub license: Option<String>,
@@ -171,6 +171,10 @@ pub struct CondaOutputMetadata {
     /// Plain string flags used to select package variants.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub flags: Vec<Flag>,
+
+    /// Track features used to down-prioritize this output during solving.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub track_features: Vec<String>,
 
     /// The noarch type of the package
     pub noarch: NoArchType,

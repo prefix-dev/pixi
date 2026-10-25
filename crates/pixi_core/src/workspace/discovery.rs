@@ -1,4 +1,7 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, Report};
@@ -7,11 +10,17 @@ use pixi_consts::consts;
 use pixi_manifest::{
     ExplicitManifestError, LoadManifestsError, Manifests, TomlError, WarningWithSource,
     WithWarnings, WorkspaceDiscoveryError,
-    script::{ScriptManifest, ScriptManifestError},
-    utils::WithSourceCode,
+    script::{
+        ScriptManifest, ScriptManifestError,
+        conda::{CondaScriptError, CondaScriptManifest},
+    },
+    utils::{WithSourceCode, workspace_or_project_env},
 };
 use thiserror::Error;
 
+use crate::host::{
+    DetectorConsent, HostDetection, HostProbeError, NonInteractiveConsent, cli_detector_consent,
+};
 use crate::workspace::WorkspaceRegistry;
 use crate::workspace::{ScriptWorkspaceError, Workspace, WorkspaceRegistryError};
 
@@ -46,7 +55,7 @@ pub enum DiscoveryStart {
 
 impl DiscoveryStart {
     /// Returns the path where the search should start.
-    pub fn path(&self) -> miette::Result<PathBuf, WorkspaceLocatorError> {
+    pub fn path(&self) -> Result<PathBuf, WorkspaceLocatorError> {
         match self {
             DiscoveryStart::CurrentDir => {
                 std::env::current_dir().map_err(WorkspaceLocatorError::CurrentDir)
@@ -55,9 +64,11 @@ impl DiscoveryStart {
             DiscoveryStart::ExplicitManifest(path) => Ok(path.clone()),
             DiscoveryStart::Script(path) => Ok(path.clone()),
             DiscoveryStart::WorkspaceRegistry(name) => {
-                let registry = WorkspaceRegistry::load()
-                    .map_err(|_| WorkspaceLocatorError::MissingRegistry())?;
-                let path = registry.named_workspace(name)?;
+                let registry =
+                    WorkspaceRegistry::load().map_err(WorkspaceLocatorError::MissingRegistry)?;
+                let path = registry
+                    .named_workspace(name)
+                    .map_err(WorkspaceLocatorError::MissingWorkspace)?;
                 if !path.exists() {
                     return Err(WorkspaceLocatorError::MissingWorkspacePath {
                         name: name.to_string(),
@@ -84,6 +95,12 @@ pub struct WorkspaceLocator {
     global_config_source: GlobalConfigSource,
     /// Configuration supplied directly by the caller.
     cli_config: Config,
+    /// The host detection to use instead of detecting the machine.
+    host: Option<HostDetection>,
+    /// Decides on virtual package detectors without a stored decision. Without
+    /// one, such detectors are skipped with a warning.
+    detector_consent: Option<Arc<dyn DetectorConsent>>,
+    use_cli_detector_consent: bool,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -91,6 +108,11 @@ pub enum WorkspaceLocatorError {
     /// An IO error occurred while trying to discover the workspace.
     #[error(transparent)]
     Io(#[from] std::io::Error),
+
+    /// The host could not be detected.
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    HostDetection(#[from] HostProbeError),
 
     /// Failed to determine the current directory.
     #[error("failed to determine the current directory")]
@@ -131,11 +153,11 @@ pub enum WorkspaceLocatorError {
     ExplicitManifestError(#[from] ExplicitManifestError),
 
     #[error("unable to load the workspace registry")]
-    MissingRegistry(),
+    MissingRegistry(#[source] WorkspaceRegistryError),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    MissingWorkspace(#[from] WorkspaceRegistryError),
+    MissingWorkspace(WorkspaceRegistryError),
 
     #[error("could not find workspace '{}' at '{}'", .name, .path.display())]
     #[diagnostic(help = "clean the registry with `pixi workspace register prune`")]
@@ -155,20 +177,33 @@ pub enum WorkspaceLocatorError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
+    CondaScript(#[from] Box<CondaScriptError>),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
     ScriptWorkspace(#[from] ScriptWorkspaceError),
 
     #[error("{} does not contain a PEP 723 metadata block", path.display())]
     #[diagnostic(help("Initialize it with `pixi init --script {}`.", path.display()))]
     MissingScriptMetadata { path: PathBuf },
+
+    #[error("{} does not contain a conda-script block", path.display())]
+    #[diagnostic(help(
+        "a script of this language carries its manifest in a `/// conda-script` comment block"
+    ))]
+    MissingCondaScriptBlock { path: PathBuf },
 }
 
 impl WorkspaceLocator {
     /// Constructs a new instance tailored for finding the workspace for CLI
     /// commands.
     pub fn for_cli() -> Self {
-        Self::default()
-            .with_emit_warnings(true)
-            .with_consider_environment(true)
+        Self {
+            emit_warnings: true,
+            consider_environment: true,
+            use_cli_detector_consent: true,
+            ..Self::default()
+        }
     }
 
     /// Define where the search for the workspace should start.
@@ -238,6 +273,36 @@ impl WorkspaceLocator {
         }
     }
 
+    /// Use `host` instead of detecting the machine.
+    pub fn with_host(self, host: HostDetection) -> Self {
+        Self {
+            host: Some(host),
+            ..self
+        }
+    }
+
+    /// Decide on virtual package detectors without a stored decision with
+    /// `consent`, for example by asking the user.
+    pub fn with_detector_consent(self, consent: Arc<dyn DetectorConsent>) -> Self {
+        Self {
+            detector_consent: Some(consent),
+            ..self
+        }
+    }
+
+    /// The consent policy to detect hosts with. Only a manifest workspace
+    /// passes its `workspace_root`, so only there can a decision be saved in
+    /// the workspace configuration.
+    fn detector_consent(&self, workspace_root: Option<&Path>) -> Arc<dyn DetectorConsent> {
+        self.detector_consent.clone().unwrap_or_else(|| {
+            if self.use_cli_detector_consent {
+                cli_detector_consent(workspace_root)
+            } else {
+                Arc::new(NonInteractiveConsent::default())
+            }
+        })
+    }
+
     /// When the current version conflicts with the workspace requirement,
     /// whether to generate an error.
     pub fn with_ignore_pixi_version_check(self, ignore_pixi_version_check: bool) -> Self {
@@ -248,14 +313,14 @@ impl WorkspaceLocator {
     }
 
     /// Called to locate the workspace or error out if none could be located.
-    pub fn locate(self) -> Result<Workspace, WorkspaceLocatorError> {
+    pub async fn locate(mut self) -> Result<Workspace, WorkspaceLocatorError> {
         if matches!(self.start, DiscoveryStart::Script(_)) {
-            return self.locate_script();
+            return self.locate_script().await;
         }
 
         // Determine the search root
         let explicit_start = matches!(&self.start, DiscoveryStart::ExplicitManifest(_));
-        let discovery_start = match self.start {
+        let discovery_start = match std::mem::take(&mut self.start) {
             DiscoveryStart::ExplicitManifest(path) => {
                 pixi_manifest::DiscoveryStart::ExplicitManifest(path)
             }
@@ -267,8 +332,8 @@ impl WorkspaceLocator {
             ),
             DiscoveryStart::SearchRoot(path) => pixi_manifest::DiscoveryStart::SearchRoot(path),
             DiscoveryStart::WorkspaceRegistry(name) => {
-                let registry = WorkspaceRegistry::load()
-                    .map_err(|_| WorkspaceLocatorError::MissingRegistry())?;
+                let registry =
+                    WorkspaceRegistry::load().map_err(WorkspaceLocatorError::MissingRegistry)?;
                 let path = registry
                     .named_workspace(&name)
                     .map_err(WorkspaceLocatorError::MissingWorkspace)?;
@@ -363,28 +428,101 @@ impl WorkspaceLocator {
             );
         }
 
-        let workspace = Workspace::from_manifests(discovered_manifests, &self.global_config_source)
-            .with_cli_config(self.cli_config);
-
+        let root = discovered_manifests
+            .workspace
+            .provenance
+            .absolute_path()
+            .parent()
+            .expect("manifest path should always have a parent")
+            .to_owned();
+        let detector_consent = self.detector_consent(Some(&root));
+        let config =
+            Config::load_with(&root, &self.global_config_source).merge_config(self.cli_config);
+        let injected_host = self.host.take();
+        let retain_consent = injected_host.is_none();
+        let mut workspace = Workspace::from_manifests_with_config(
+            discovered_manifests,
+            config,
+            injected_host.unwrap_or_else(HostDetection::builtin),
+        );
+        if retain_consent {
+            workspace.retain_detector_consent(detector_consent);
+        }
         Ok(workspace)
     }
 
-    fn locate_script(self) -> Result<Workspace, WorkspaceLocatorError> {
-        let DiscoveryStart::Script(path) = self.start else {
+    async fn locate_script(mut self) -> Result<Workspace, WorkspaceLocatorError> {
+        let DiscoveryStart::Script(path) = std::mem::take(&mut self.start) else {
             unreachable!("the script selection was checked before loading")
         };
+        let injected_host = self.host.take();
+        let retain_consent = injected_host.is_none();
+
+        if let Some(script) =
+            CondaScriptManifest::detect_with_fallback(&path, false).map_err(Box::new)?
+        {
+            let root = script
+                .path()
+                .parent()
+                .expect("an absolute script path always has a parent");
+            let consent = self.detector_consent(None);
+            let config =
+                Config::load_with(root, &self.global_config_source).merge_config(self.cli_config);
+            let host = match injected_host {
+                Some(host) => host,
+                None => {
+                    crate::host::probe_conda_script(&script, root, &config, consent.clone()).await?
+                }
+            };
+            let WithWarnings {
+                value: mut workspace,
+                warnings,
+            } = Workspace::from_conda_script(script, config, host)?;
+            if retain_consent {
+                workspace.retain_script_host(consent);
+            }
+
+            if self.emit_warnings {
+                for warning in warnings {
+                    tracing::warn!("{warning}");
+                }
+            }
+
+            return Ok(workspace);
+        }
+
+        let is_python = path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| {
+                extension.eq_ignore_ascii_case("py") || extension.eq_ignore_ascii_case("pyw")
+            });
+        if !is_python {
+            return Err(WorkspaceLocatorError::MissingCondaScriptBlock { path });
+        }
+
         let script = ScriptManifest::from_path(&path)?
             .ok_or_else(|| WorkspaceLocatorError::MissingScriptMetadata { path })?;
         let root = script
             .path()
             .parent()
             .expect("an absolute script path always has a parent");
+        let consent = self.detector_consent(None);
         let config =
             Config::load_with(root, &self.global_config_source).merge_config(self.cli_config);
+        let host = match injected_host {
+            Some(host) => host,
+            None => {
+                crate::host::probe_pep723_script(&script, root, &config, consent.clone()).await?
+            }
+        };
         let WithWarnings {
-            value: workspace,
+            value: mut workspace,
             warnings,
-        } = Workspace::from_script(script, config)?;
+        } = Workspace::from_script(script, config, host)?;
+        if retain_consent {
+            workspace.retain_script_host(consent);
+        }
 
         if self.emit_warnings {
             for warning in warnings {
@@ -400,9 +538,9 @@ impl WorkspaceLocator {
         discovered_workspace: Option<Manifests>,
         emit_warnings: bool,
     ) -> Result<Option<WithWarnings<Manifests, WarningWithSource>>, WorkspaceLocatorError> {
-        let env_manifest_path = std::env::var("PIXI_PROJECT_MANIFEST")
-            .map(PathBuf::from)
-            .ok();
+        let env_manifest_path =
+            workspace_or_project_env("PIXI_WORKSPACE_MANIFEST", "PIXI_PROJECT_MANIFEST")
+                .map(PathBuf::from);
 
         // Warn the user if they are currently in a shell of another workspace.
         if let Some(workspace_manifests) = &discovered_workspace {
@@ -414,7 +552,7 @@ impl WorkspaceLocator {
                 && emit_warnings
             {
                 tracing::warn!(
-                    "Using local manifest {} rather than {} from environment variable `PIXI_PROJECT_MANIFEST`",
+                    "Using local manifest {} rather than {} from environment variable `PIXI_WORKSPACE_MANIFEST`",
                     discovered_manifest_path.display(),
                     env_manifest_path.display(),
                 );
@@ -443,33 +581,33 @@ mod test {
     use std::path::Path;
 
     use pixi_config::CacheConfig;
-    use rattler_conda_types::{NamedChannelOrUrl, Platform};
+    use rattler_conda_types::{NamedChannelOrUrl, Subdir};
     use temp_env;
     use tempfile::tempdir;
 
     use super::*;
 
-    #[test]
-    fn test_workspace_locator() {
+    #[tokio::test]
+    async fn test_workspace_locator() {
         let workspace_locator = WorkspaceLocator::default();
-        let workspace = workspace_locator.locate().unwrap();
+        let workspace = workspace_locator.locate().await.unwrap();
         let crate_root = std::env::var("CARGO_MANIFEST_DIR").unwrap();
         let project_root = Path::new(&crate_root).parent().unwrap().parent().unwrap();
         assert_eq!(workspace.root, project_root);
     }
 
-    #[test]
-    fn test_workspace_locator_cli() {
+    #[tokio::test]
+    async fn test_workspace_locator_cli() {
         // Equivalent to `pixi xxx` where xxx is any command
         let workspace_locator = WorkspaceLocator::for_cli();
-        let workspace = workspace_locator.locate().unwrap();
+        let workspace = workspace_locator.locate().await.unwrap();
         let crate_root = std::env::var("CARGO_MANIFEST_DIR").unwrap();
         let project_root = Path::new(&crate_root).parent().unwrap().parent().unwrap();
         assert_eq!(workspace.root, project_root);
     }
 
-    #[test]
-    fn script_selection_is_isolated_from_workspace_discovery_and_the_active_environment() {
+    #[tokio::test]
+    async fn script_selection_is_isolated_from_workspace_discovery_and_the_active_environment() {
         let directory = tempdir().unwrap();
         let script_directory = directory.path().join("scripts");
         let cache = directory.path().join("exec-cache");
@@ -488,7 +626,7 @@ mod test {
         )
         .unwrap();
 
-        let workspace = temp_env::with_vars(
+        let workspace = temp_env::async_with_vars(
             [
                 (
                     "PIXI_PROJECT_MANIFEST",
@@ -496,7 +634,7 @@ mod test {
                 ),
                 ("PIXI_IN_SHELL", Some("1")),
             ],
-            || {
+            async {
                 WorkspaceLocator::for_cli()
                     .with_search_start(DiscoveryStart::Script(script_path.clone()))
                     .with_cli_config(Config {
@@ -508,9 +646,11 @@ mod test {
                         ..Default::default()
                     })
                     .locate()
+                    .await
                     .unwrap()
             },
-        );
+        )
+        .await;
 
         assert_eq!(workspace.root(), script_directory);
         assert_eq!(workspace.workspace.provenance.path, script_path);
@@ -536,30 +676,32 @@ mod test {
                 .iter()
                 .map(pixi_manifest::PixiPlatform::subdir)
                 .collect::<Vec<_>>(),
-            [Platform::current()]
+            [Subdir::current().unwrap_or(Subdir::NoArch)]
         );
     }
 
-    #[test]
-    fn script_selection_never_initializes_or_rewrites_a_file() {
+    #[tokio::test]
+    async fn script_selection_never_initializes_or_rewrites_a_file() {
         let directory = tempdir().unwrap();
 
-        // A path that is not a Python file is rejected on its extension, so a
-        // value meant for another option cannot select an unrelated file.
+        // A non-Python file without a block is reported as missing its
+        // conda-script block, so a value meant for another option cannot
+        // select an unrelated file.
         let unrelated = directory.path().join("notes.txt");
-        fs_err::write(&unrelated, "not a Python script\n").unwrap();
+        fs_err::write(&unrelated, "not a script\n").unwrap();
 
         let error = WorkspaceLocator::for_cli()
             .with_script(&unrelated)
             .locate()
+            .await
             .unwrap_err();
         assert!(matches!(
             error,
-            WorkspaceLocatorError::Script(ScriptManifestError::NotAPythonScript { .. })
+            WorkspaceLocatorError::MissingCondaScriptBlock { .. }
         ));
         assert_eq!(
             fs_err::read_to_string(&unrelated).unwrap(),
-            "not a Python script\n"
+            "not a script\n"
         );
 
         // A Python file without a metadata block is reported as such, and is
@@ -570,6 +712,7 @@ mod test {
         let error = WorkspaceLocator::for_cli()
             .with_script(&uninitialized)
             .locate()
+            .await
             .unwrap_err();
         assert!(matches!(
             error,
@@ -585,20 +728,21 @@ mod test {
             WorkspaceLocator::for_cli()
                 .with_script(&missing)
                 .locate()
+                .await
                 .is_err()
         );
         assert!(!missing.exists());
     }
 
-    #[test]
-    fn test_workspace_locator_explicit() {
+    #[tokio::test]
+    async fn test_workspace_locator_explicit() {
         // Equivalent to `pixi xxx --manifest /absolute/path/to/pixi.toml`
         let crate_root = std::env::var("CARGO_MANIFEST_DIR").unwrap();
         let project_root = Path::new(&crate_root).parent().unwrap().parent().unwrap();
         let workspace_locator = WorkspaceLocator::default().with_search_start(
             DiscoveryStart::ExplicitManifest(project_root.join("pixi.toml").to_path_buf()),
         );
-        let workspace = workspace_locator.locate().unwrap();
+        let workspace = workspace_locator.locate().await.unwrap();
         assert_eq!(workspace.root, project_root);
     }
 
@@ -619,7 +763,7 @@ mod test {
 
                 let workspace_locator = WorkspaceLocator::default()
                     .with_search_start(DiscoveryStart::WorkspaceRegistry("ws".to_string()));
-                let workspace = workspace_locator.locate().unwrap();
+                let workspace = workspace_locator.locate().await.unwrap();
                 assert_eq!(workspace.root, project_root);
             },
         )
@@ -648,7 +792,7 @@ mod test {
 
                 let workspace_locator = WorkspaceLocator::default()
                     .with_search_start(DiscoveryStart::WorkspaceRegistry("ws".to_string()));
-                let result = workspace_locator.locate();
+                let result = workspace_locator.locate().await;
                 assert!(result.is_err());
 
                 let error = result.unwrap_err();
@@ -666,53 +810,57 @@ mod test {
         .await;
     }
 
-    #[test]
-    fn test_workspace_locator_registered_workspace_does_not_exist() {
+    #[tokio::test]
+    async fn test_workspace_locator_registered_workspace_does_not_exist() {
         // Equivalent to `pixi xxx --workspace idontexist`
         let temp_dir = tempdir().unwrap();
         let pixi_home_dir = temp_dir.path().join("pixi-home");
-        temp_env::with_var("PIXI_HOME", Some(pixi_home_dir.to_str().unwrap()), || {
-            let workspace_locator = WorkspaceLocator::default()
-                .with_search_start(DiscoveryStart::WorkspaceRegistry("idontexist".to_string()));
+        temp_env::async_with_vars(
+            [("PIXI_HOME", Some(pixi_home_dir.to_str().unwrap()))],
+            async {
+                let workspace_locator = WorkspaceLocator::default()
+                    .with_search_start(DiscoveryStart::WorkspaceRegistry("idontexist".to_string()));
 
-            let result = workspace_locator.locate();
-            assert!(result.is_err());
+                let result = workspace_locator.locate().await;
+                assert!(result.is_err());
 
-            let error = result.unwrap_err();
-            assert!(matches!(error, WorkspaceLocatorError::MissingWorkspace(_)));
+                let error = result.unwrap_err();
+                assert!(matches!(error, WorkspaceLocatorError::MissingWorkspace(_)));
 
-            // Check that the error message contains the suggestion
-            let error_message = error.to_string();
-            assert!(error_message.contains("could not find workspace "));
-            assert!(error_message.contains("idontexist"));
-        });
+                // Check that the error message contains the suggestion
+                let error_message = error.to_string();
+                assert!(error_message.contains("could not find workspace "));
+                assert!(error_message.contains("idontexist"));
+            },
+        )
+        .await;
     }
 
-    #[test]
-    fn test_workspace_locator_explicit_simple() {
+    #[tokio::test]
+    async fn test_workspace_locator_explicit_simple() {
         // Equivalent to `pixi xxx --manifest pixi.toml`
         let crate_root = std::env::var("CARGO_MANIFEST_DIR").unwrap();
         let project_root = Path::new(&crate_root).parent().unwrap().parent().unwrap();
         let workspace_locator = WorkspaceLocator::default().with_search_start(
             DiscoveryStart::ExplicitManifest(Path::new("../../pixi.toml").to_path_buf()),
         );
-        let workspace = workspace_locator.locate().unwrap();
+        let workspace = workspace_locator.locate().await.unwrap();
         assert_eq!(workspace.root, project_root);
     }
 
-    #[test]
-    fn test_workspace_locator_explicit_path() {
+    #[tokio::test]
+    async fn test_workspace_locator_explicit_path() {
         // Equivalent to `pixi xxx --manifest /absolute/path/to/folder`
         let crate_root = std::env::var("CARGO_MANIFEST_DIR").unwrap();
         let project_root = Path::new(&crate_root).parent().unwrap().parent().unwrap();
         let workspace_locator = WorkspaceLocator::default()
             .with_search_start(DiscoveryStart::ExplicitManifest(project_root.to_path_buf()));
-        let workspace = workspace_locator.locate().unwrap();
+        let workspace = workspace_locator.locate().await.unwrap();
         assert_eq!(workspace.root, project_root);
     }
 
-    #[test]
-    fn test_pyproject_without_pixi_error() {
+    #[tokio::test]
+    async fn test_pyproject_without_pixi_error() {
         use tempfile::TempDir;
 
         // Create a temporary directory
@@ -734,7 +882,7 @@ dependencies = []
         let workspace_locator = WorkspaceLocator::default()
             .with_search_start(DiscoveryStart::SearchRoot(temp_path.to_path_buf()));
 
-        let result = workspace_locator.locate();
+        let result = workspace_locator.locate().await;
         assert!(result.is_err());
 
         let error = result.unwrap_err();

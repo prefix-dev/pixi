@@ -19,6 +19,9 @@ Running the following command installs [`rattler-build`](https://prefix-dev.gith
 pixi global install rattler-build
 ```
 
+!!! note
+    By default, only the `conda-forge` channel is available. To install from other channels, pass `--channel`, or set [`default-channels`](../reference/pixi_configuration.md#default-channels) in your Pixi configuration.
+
 What's great about `pixi global` is that, by default, it isolates each package in its own environment, exposing only the necessary entry points.
 This means you don't have to worry about removing a package and accidentally breaking seemingly unrelated packages.
 This behavior is quite similar to that of [`pipx`](https://pipx.pypa.io/latest/installation/).
@@ -70,7 +73,7 @@ name = "cpp_math"
 version = "0.1.0"
 
 [package.build]
-backend = { name = "pixi-build-cmake", version = "*" }
+backend = { name = "pixi-build-cmake" }
 ```
 
 If the source is on your machine, you can install it like this:

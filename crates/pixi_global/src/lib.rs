@@ -4,9 +4,10 @@ pub mod completions;
 pub mod install;
 pub mod list;
 pub mod project;
+pub mod report;
 pub mod trampoline;
 
-pub use common::{BinDir, EnvChanges, EnvDir, EnvRoot, EnvState, StateChange, StateChanges};
+pub use common::{BinDir, EnvDir, EnvRoot, StateChange, StateChanges};
 use pixi_utils::executable_from_path;
 pub use project::{EnvironmentName, ExposedName, Mapping, Project};
 

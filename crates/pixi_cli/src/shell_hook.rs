@@ -22,7 +22,7 @@ use pixi_core::{
 
 use crate::cli_config::{LockAndInstallConfig, WorkspaceConfig};
 
-/// Print the pixi environment activation script.
+/// Print a pixi environment activation script.
 ///
 /// You can source the script to activate the environment without needing pixi
 /// itself.
@@ -79,7 +79,11 @@ async fn generate_activation_script(
             .unwrap_or_else(|| ShellEnum::from_env().unwrap_or_default())
     });
 
-    let activator = get_activator(environment, shell.clone())?;
+    let activator = get_activator(
+        environment,
+        shell.clone(),
+        &environment.activation_platform(),
+    )?;
 
     let path = std::env::var("PATH")
         .ok()
@@ -128,9 +132,12 @@ async fn generate_environment_json(
     force_activate: bool,
     experimental_cache: bool,
 ) -> miette::Result<String> {
+    // Resolve the platform once so the env vars and the reported scripts agree.
+    let platform = environment.activation_platform();
     let environment_variables = get_activated_environment_variables(
         environment.workspace().env_vars(),
         environment,
+        &platform,
         CurrentEnvVarBehavior::Exclude,
         Some(lock_file),
         force_activate,
@@ -139,7 +146,7 @@ async fn generate_environment_json(
     .await?;
 
     let activation_scripts: Vec<PathBuf> = environment
-        .activation_scripts(environment.best_declared_platform())
+        .activation_scripts(Some(&platform))
         .into_iter()
         .map(|s| environment.workspace().root().join(s))
         .filter(|p| p.is_file())
@@ -162,8 +169,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.project_config.workspace_locator_start())
-        .locate()?
-        .with_cli_config(config);
+        .with_cli_config(config)
+        .locate()
+        .await?;
 
     let environment = workspace.environment_from_name_or_env_var(args.environment)?;
 
@@ -205,7 +213,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::Subdir;
     #[cfg(target_family = "windows")]
     use rattler_shell::shell::CmdExe;
     #[cfg(not(target_family = "windows"))]
@@ -218,8 +226,8 @@ mod tests {
     #[tokio::test]
     async fn test_shell_hook_unix() {
         let default_shell = rattler_shell::shell::ShellEnum::default();
-        let path_var_name = default_shell.path_var(&Platform::current());
-        let project = WorkspaceLocator::default().locate().unwrap();
+        let path_var_name = default_shell.path_var(&Subdir::current().unwrap_or(Subdir::NoArch));
+        let project = WorkspaceLocator::default().locate().await.unwrap();
         let environment = project.default_environment();
 
         let script = generate_activation_script(
@@ -275,8 +283,8 @@ mod tests {
     #[tokio::test]
     async fn test_shell_hook_windows() {
         let default_shell = rattler_shell::shell::ShellEnum::default();
-        let path_var_name = default_shell.path_var(&Platform::current());
-        let project = WorkspaceLocator::default().locate().unwrap();
+        let path_var_name = default_shell.path_var(&Subdir::current().unwrap_or(Subdir::NoArch));
+        let project = WorkspaceLocator::default().locate().await.unwrap();
         let environment = project.default_environment();
 
         let script = generate_activation_script(

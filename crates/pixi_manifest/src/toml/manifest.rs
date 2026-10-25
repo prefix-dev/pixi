@@ -6,11 +6,12 @@ use std::{
 };
 
 use indexmap::{IndexMap, IndexSet};
+use itertools::Itertools;
 use miette::LabeledSpan;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::ExcludeNewer;
 use pixi_toml::{Same, TomlFromStr, TomlHashMap, TomlIndexMap, TomlWith};
-use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform, Version};
+use rattler_conda_types::{PackageName, Subdir, Version};
 use toml_span::{
     DeserError, Spanned, Value,
     de_helpers::{TableHelper, expected},
@@ -19,17 +20,19 @@ use toml_span::{
 use url::Url;
 
 use crate::{
-    Activation, Environment, EnvironmentName, Environments, Feature, FeatureName,
-    KnownPreviewFeature, PixiPlatform, PixiPlatformName, SolveGroups, SystemRequirements,
-    TargetSelector, Targets, Task, TaskName, TomlError, Warning, WithWarnings, WorkspaceManifest,
+    Activation, Environment, EnvironmentName, Environments, Feature, FeatureName, KnownPreviewFlag,
+    PixiPlatform, PixiPlatformName, SolveGroups, SystemRequirements, TargetSelector, Targets, Task,
+    TaskName, TomlError, Warning, WithWarnings, WorkspaceManifest,
     environment::EnvironmentIdx,
     error::{FeatureNotEnabled, GenericError},
     manifests::PackageManifest,
     pypi::pypi_options::PypiOptions,
+    system_requirements::virtual_packages_for_subdir,
     toml::{
         PackageDefaults, PlatformSpan, TomlFeature, TomlPackage, TomlTarget, TomlWorkspace,
         WorkspacePackageProperties, create_unsupported_selector_warning,
         environment::{TomlEnvironment, TomlEnvironmentList},
+        platform::{synthesize_name_string, system_requirements_as_platforms},
         task::TomlTask,
     },
     utils::{
@@ -117,14 +120,14 @@ impl TomlManifest {
         if !workspace
             .workspace
             .preview
-            .is_enabled(KnownPreviewFeature::PixiBuild)
+            .is_enabled(KnownPreviewFlag::PixiBuild)
         {
             return Err(FeatureNotEnabled::new(
                 format!(
-                    "[package] section is only allowed when the `{}` feature is enabled",
-                    KnownPreviewFeature::PixiBuild
+                    "[package] section is only allowed when the `{}` preview flag is enabled",
+                    KnownPreviewFlag::PixiBuild
                 ),
-                KnownPreviewFeature::PixiBuild,
+                KnownPreviewFlag::PixiBuild,
             )
             .with_opt_span(package_span)
             .into());
@@ -160,7 +163,7 @@ impl TomlManifest {
             .ok_or_else(|| TomlError::MissingField("project/workspace".into(), None))?;
 
         let preview = &workspace.value.preview;
-        let pixi_build_enabled = preview.is_enabled(KnownPreviewFeature::PixiBuild);
+        let pixi_build_enabled = preview.is_enabled(KnownPreviewFlag::PixiBuild);
 
         // Inline package definitions declared on dependencies are converted into
         // full package manifests while building the targets below, so they must
@@ -264,8 +267,20 @@ impl TomlManifest {
         if let Some(system_requirements) = &self.system_requirements
             && !system_requirements.value.is_empty()
         {
-            warnings
-                .push(Deprecation::system_requirements(system_requirements.span.clone()).into());
+            let subdirs: Vec<Subdir> = workspace
+                .value
+                .platforms
+                .value
+                .iter()
+                .map(PixiPlatform::subdir)
+                .collect();
+            warnings.push(
+                Deprecation::system_requirements(
+                    system_requirements_as_platforms(&system_requirements.value, &subdirs),
+                    system_requirements.span.clone(),
+                )
+                .into(),
+            );
         }
         let default_sysreqs = self
             .system_requirements
@@ -563,6 +578,7 @@ impl TomlManifest {
             .unwrap_or_default();
 
         migrate_system_requirements_to_platforms(&mut workspace, &mut features, &feature_sysreqs)?;
+        validate_task_environments(&features, &environments)?;
 
         let mut workspace_manifest = WorkspaceManifest {
             workspace,
@@ -580,10 +596,10 @@ impl TomlManifest {
             if !pixi_build_enabled {
                 return Err(FeatureNotEnabled::new(
                     format!(
-                        "[package] section is only allowed when the `{}` feature is enabled",
-                        KnownPreviewFeature::PixiBuild
+                        "[package] section is only allowed when the `{}` preview flag is enabled",
+                        KnownPreviewFlag::PixiBuild
                     ),
-                    KnownPreviewFeature::PixiBuild,
+                    KnownPreviewFlag::PixiBuild,
                 )
                 .with_opt_span(package_span)
                 .into());
@@ -607,6 +623,56 @@ impl TomlManifest {
 
         Ok((workspace_manifest, package_manifest, warnings))
     }
+}
+
+/// Error if a task refers to an environment that is not defined, either
+/// through `default-environment` or the `environment` of a `depends-on` entry.
+fn validate_task_environments(
+    features: &IndexMap<FeatureName, Feature>,
+    environments: &Environments,
+) -> Result<(), TomlError> {
+    let unknown_environment = |message: String| {
+        let names = environments.by_name.keys().map(EnvironmentName::as_str);
+        TomlError::from(
+            GenericError::new(message)
+                .with_help(format!("defined environments: {}", names.format(", "))),
+        )
+    };
+    for feature in features.values() {
+        let in_feature = match feature.name {
+            FeatureName::Default => String::new(),
+            _ => format!(" in {}", feature.name.user_facing()),
+        };
+        for (target, selector) in feature.targets.iter() {
+            let in_feature = match selector {
+                Some(selector) => format!("{in_feature} for target '{selector}'"),
+                None => in_feature.clone(),
+            };
+            // Sort for a deterministic error when several tasks are invalid.
+            for (task_name, task) in target.tasks.iter().sorted_by_key(|(name, _)| *name) {
+                if let Some(env) = task.default_environment()
+                    && !environments.by_name.contains_key(env)
+                {
+                    return Err(unknown_environment(format!(
+                        "task '{}'{in_feature} has default-environment '{env}', which is not defined",
+                        task_name.as_str(),
+                    )));
+                }
+                for dependency in task.depends_on() {
+                    if let Some(env) = &dependency.environment
+                        && !environments.by_name.contains_key(env)
+                    {
+                        return Err(unknown_environment(format!(
+                            "task '{}'{in_feature} depends on task '{}' in environment '{env}', which is not defined",
+                            task_name.as_str(),
+                            dependency.task_name.as_str(),
+                        )));
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Rebuild `workspace.platforms` so it owns one `PixiPlatform` per
@@ -693,7 +759,7 @@ fn extend_originals_with_referenced_subdirs(
             if originals.iter().any(|p| p.name() == name) {
                 continue;
             }
-            let subdir = Platform::from_str(name.as_str()).map_err(|e| {
+            let subdir = Subdir::from_str(name.as_str()).map_err(|e| {
                 TomlError::from(GenericError::new(format!(
                     "{} references platform '{}' which is neither declared in the workspace nor a valid conda subdir: {e}",
                     feature.name.user_facing(), name,
@@ -703,6 +769,35 @@ fn extend_originals_with_referenced_subdirs(
         }
     }
     Ok(())
+}
+
+/// The error for a feature that references an undeclared platform name.
+fn undeclared_platform_error(
+    declared: &IndexSet<PixiPlatform>,
+    feature: &Feature,
+    name: &PixiPlatformName,
+) -> TomlError {
+    let help = if declared.is_empty() {
+        "the workspace does not declare any platforms".to_string()
+    } else {
+        let names = declared.iter().map(PixiPlatform::name).format(", ");
+        // Only mention naming when no platform entry is explicitly named.
+        let suggestion = if declared.iter().all(PixiPlatform::has_derived_name) {
+            ". no platform entry sets a `name`, so those names were derived for you; \
+             add `name = \"...\"` to an entry to choose your own"
+        } else {
+            ""
+        };
+        format!("the workspace declares: {names}{suggestion}")
+    };
+    TomlError::from(
+        GenericError::new(format!(
+            "{} references platform '{}' which is not declared in the workspace",
+            feature.name.user_facing(),
+            name,
+        ))
+        .with_help(help),
+    )
 }
 
 /// Error if any name in `feature.platforms` does not resolve to a platform
@@ -716,11 +811,7 @@ fn validate_referenced_platforms(
     };
     for name in names {
         if !platforms.iter().any(|p| p.name() == name) {
-            return Err(TomlError::from(GenericError::new(format!(
-                "{} references platform '{}' which is not declared in the workspace",
-                feature.name.user_facing(),
-                name,
-            ))));
+            return Err(undeclared_platform_error(platforms, feature, name));
         }
     }
     Ok(())
@@ -737,13 +828,10 @@ fn register_referenced_originals(
         return Ok(());
     };
     for name in names {
-        let original = originals.iter().find(|p| p.name() == name).ok_or_else(|| {
-            TomlError::from(GenericError::new(format!(
-                "{} references platform '{}' which is not declared in the workspace",
-                feature.name.user_facing(),
-                name,
-            )))
-        })?;
+        let original = originals
+            .iter()
+            .find(|p| p.name() == name)
+            .ok_or_else(|| undeclared_platform_error(originals, feature, name))?;
         target.insert(original.clone());
     }
     Ok(())
@@ -759,11 +847,11 @@ fn synthesise_for_feature(
     sysreqs: &SystemRequirements,
     target: &mut IndexSet<PixiPlatform>,
 ) -> Result<(), TomlError> {
-    let subdirs: Vec<Platform> = match feature.platforms.as_ref() {
+    let subdirs: Vec<Subdir> = match feature.platforms.as_ref() {
         Some(names) => names
             .iter()
             .map(|name| {
-                Platform::from_str(name.as_str()).map_err(|e| {
+                Subdir::from_str(name.as_str()).map_err(|e| {
                     TomlError::from(GenericError::new(format!(
                         "{} references platform '{}' which is not a conda subdir: {e}",
                         feature.name.user_facing(),
@@ -778,17 +866,8 @@ fn synthesise_for_feature(
     let candidates = sysreqs.to_declared_virtual_packages();
     let mut synthesised_names: IndexSet<PixiPlatformName> = IndexSet::new();
     for subdir in subdirs {
-        let declared: Vec<GenericVirtualPackage> = candidates
-            .iter()
-            .filter(|c| {
-                crate::system_requirements::virtual_package_applies_to_subdir(
-                    c.name.as_normalized(),
-                    subdir,
-                )
-            })
-            .cloned()
-            .collect();
-        let name_str = crate::toml::platform::synthesize_name_string(subdir, &declared);
+        let declared = virtual_packages_for_subdir(&candidates, subdir);
+        let name_str = synthesize_name_string(subdir, &declared);
         // A sysreq that matches the subdir defaults collapses the name to the
         // bare subdir. Such a platform would be indistinguishable from the
         // bare subdir platform for solving and for lock-file identity
@@ -830,7 +909,7 @@ fn append_uncovered_subdirs(
     originals: &IndexSet<PixiPlatform>,
     target: &mut IndexSet<PixiPlatform>,
 ) {
-    let covered: HashSet<Platform> = target.iter().map(PixiPlatform::subdir).collect();
+    let covered: HashSet<Subdir> = target.iter().map(PixiPlatform::subdir).collect();
     for original in originals {
         if !covered.contains(&original.subdir()) {
             target.insert(original.clone());
@@ -1029,7 +1108,7 @@ mod test {
     use insta::assert_snapshot;
     use pixi_spec::PixiSpec;
     use pixi_test_utils::format_parse_error;
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::Subdir;
 
     use super::*;
     use crate::{
@@ -1052,6 +1131,33 @@ mod test {
             .expect_err("parsing should fail");
 
         format_parse_error(pixi_toml, parse_error)
+    }
+
+    #[test]
+    fn test_pin_in_workspace_dependencies_is_rejected() {
+        // Pins only make sense while building a package; the workspace
+        // dependency tables reject them at parse time.
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = []
+
+        [dependencies]
+        boltons = { pin-compatible = true }
+        "#,
+        ), @"
+         × `pin-compatible` is not allowed in `[dependencies]`
+          ╭─[pixi.toml:8:19]
+        7 │         [dependencies]
+        8 │         boltons = { pin-compatible = true }
+          ·                   ────────────┬────────────
+          ·                               ╰── pin-compatible used here
+        9 │
+          ╰────
+         help: Pins are only supported in package dependency tables
+        ");
     }
 
     #[test]
@@ -1140,7 +1246,7 @@ mod test {
     /// lock-file rename passes cannot distinguish from the bare platform.
     #[test]
     fn test_system_requirements_migration_default_matching_sysreq_uses_bare_subdir() {
-        let glibc = pixi_default_versions::default_glibc_version();
+        let glibc = rattler_virtual_packages::defaults::default_glibc_version(Subdir::Linux64);
         let workspace_manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             format!(
                 r#"
@@ -1184,8 +1290,9 @@ mod test {
     /// the same way.
     #[test]
     fn test_system_requirements_migration_linux_and_macos_defaults_use_bare_subdir() {
-        let linux = pixi_default_versions::default_linux_version();
-        let macos = pixi_default_versions::default_mac_os_version(Platform::OsxArm64);
+        let linux = rattler_virtual_packages::defaults::default_linux_version();
+        let macos = rattler_virtual_packages::defaults::default_mac_os_version(Subdir::OsxArm64)
+            .expect("osx-arm64 has a default macos version");
         for (subdir, requirement) in [
             ("linux-64", format!("linux = \"{linux}\"")),
             ("osx-arm64", format!("macos = \"{macos}\"")),
@@ -1358,32 +1465,6 @@ mod test {
     }
 
     #[test]
-    fn test_rich_workspace_feature_references_undeclared_platform_errors() {
-        // No system-requirements, so `extend_originals_with_referenced_subdirs`
-        // doesn't run for this rich-platform workspace; a feature naming a
-        // platform the workspace never declares must still be rejected.
-        let result = WorkspaceManifest::from_toml_str_with_base_dir(
-            r#"
-            [workspace]
-            name = "test"
-            channels = []
-            platforms = ["linux-64", { platform = "linux-64", cuda = "12.9" }]
-
-            [feature.gpu]
-            platforms = ["linux-64-cuda-13-0"]
-            "#,
-            Path::new(""),
-        );
-        let err = result.expect_err("undeclared feature platform must error");
-        assert!(
-            err.error
-                .to_string()
-                .contains("references platform 'linux-64-cuda-13-0' which is not declared"),
-            "unexpected error: {err:?}",
-        );
-    }
-
-    #[test]
     fn test_workspace_name_from_package() {
         let workspace_manifest = WorkspaceManifest::from_toml_str_with_base_dir(
             r#"
@@ -1526,6 +1607,189 @@ mod test {
         platforms = []
         "#,
         ));
+    }
+
+    #[test]
+    fn test_task_depends_on_unknown_environment() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [tasks]
+        foo = "bar"
+        baz = [{ task = "foo", environment = "oops" }]
+        "#,
+        ), @"
+          × task 'baz' depends on task 'foo' in environment 'oops', which is not defined
+          help: defined environments: default
+        ");
+    }
+
+    #[test]
+    fn test_alias_invalid_environment_name() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [tasks]
+        foo = "bar"
+        baz = [{ task = "foo", environment = "doesnt_exist" }]
+        "#,
+        ), @r#"
+          × Failed to parse environment name 'doesnt_exist', please use only lowercase letters, numbers and dashes
+           ╭─[pixi.toml:8:47]
+         7 │         foo = "bar"
+         8 │         baz = [{ task = "foo", environment = "doesnt_exist" }]
+           ·                                               ────────────
+         9 │
+           ╰────
+        "#);
+    }
+
+    // spellchecker:off
+    #[test]
+    fn test_alias_unknown_dependency_key() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [tasks]
+        foo = "bar"
+        baz = [{ task = "foo", enviroment = "default" }]
+        "#,
+        ), @r#"
+          × Unexpected keys, expected only 'task', 'args', 'environment'
+           ╭─[pixi.toml:8:32]
+         7 │         foo = "bar"
+         8 │         baz = [{ task = "foo", enviroment = "default" }]
+           ·                                ─────┬────
+           ·                                     ╰── 'enviroment' was not expected here
+         9 │
+           ╰────
+          help: Did you mean 'environment'?
+        "#);
+    }
+
+    #[test]
+    fn test_deprecated_depends_on_unknown_dependency_key() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [tasks]
+        foo = "bar"
+        baz = { cmd = "qux", depends_on = [{ task = "foo", enviroment = "default" }] }
+        "#,
+        ), @r#"
+          × Unexpected keys, expected only 'task', 'args', 'environment'
+           ╭─[pixi.toml:8:60]
+         7 │         foo = "bar"
+         8 │         baz = { cmd = "qux", depends_on = [{ task = "foo", enviroment = "default" }] }
+           ·                                                            ─────┬────
+           ·                                                                 ╰── 'enviroment' was not expected here
+         9 │
+           ╰────
+          help: Did you mean 'environment'?
+        "#);
+    }
+    // spellchecker:on
+
+    #[test]
+    fn test_inline_environment_task_unknown_environment() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [tasks]
+        foo = "bar"
+
+        [environments.dev.tasks]
+        baz = [{ task = "foo", environment = "oops" }]
+        "#,
+        ), @"
+          × task 'baz' in environment 'dev' depends on task 'foo' in environment 'oops', which is not defined
+          help: defined environments: default, dev
+        ");
+    }
+
+    #[test]
+    fn test_task_unknown_default_environment() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [feature.test.dependencies]
+
+        [environments]
+        test = ["test"]
+
+        [feature.test.tasks]
+        foo = { cmd = "bar", default-environment = "tset" }
+        "#,
+        ), @"
+          × task 'foo' in feature 'test' has default-environment 'tset', which is not defined
+          help: defined environments: default, test
+        ");
+    }
+
+    #[test]
+    fn test_target_task_depends_on_unknown_environment() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = ["linux-64"]
+
+        [tasks]
+        foo = "bar"
+
+        [target.linux-64.tasks]
+        baz = { cmd = "qux", depends-on = [{ task = "foo", environment = "oops" }] }
+        "#,
+        ), @"
+          × task 'baz' for target 'linux-64' depends on task 'foo' in environment 'oops', which is not defined
+          help: defined environments: default
+        ");
+    }
+
+    #[test]
+    fn test_task_known_environments() {
+        let manifest = <TomlManifest as FromTomlStr>::from_toml_str(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [feature.test.dependencies]
+
+        [environments]
+        test = ["test"]
+
+        [tasks]
+        foo = { cmd = "bar", default-environment = "test" }
+        baz = [{ task = "foo", environment = "test" }, { task = "foo", environment = "default" }]
+        "#,
+        )
+        .expect("parse toml");
+        manifest
+            .into_workspace_manifest(
+                ExternalWorkspaceProperties::default(),
+                PackageDefaults::default(),
+                Path::new(""),
+            )
+            .expect("known environments are accepted");
     }
 
     /// Parses a workspace manifest and returns both the workspace and (required)
@@ -1848,7 +2112,7 @@ mod test {
         let numpy = host_deps
             .get(&rattler_conda_types::PackageName::new_unchecked("numpy"))
             .expect("numpy in host deps");
-        let spec = numpy.iter().next().unwrap();
+        let spec = numpy.iter().next().unwrap().as_spec().unwrap();
         assert_eq!(spec.as_version_spec().unwrap().to_string(), "1.*");
     }
 
@@ -1904,7 +2168,7 @@ mod test {
     fn inline_host_dependency(
         ws: &WorkspaceManifest,
         feature: &FeatureName,
-        platform: Platform,
+        platform: Subdir,
         package: &str,
         dependency: &str,
     ) -> PixiSpec {
@@ -1927,7 +2191,41 @@ mod test {
             .iter()
             .next()
             .unwrap()
+            .as_spec()
+            .expect("expected a regular spec")
             .clone()
+    }
+
+    #[test]
+    fn test_inline_package_pin_subpackage_wrong_name_is_rejected() {
+        // The pin name rules apply to inline package definitions too: the
+        // package name is the dependency key, so a `pin-subpackage` on any
+        // other name must be rejected.
+        let source = r#"
+            [workspace]
+            channels = []
+            platforms = ['linux-64']
+            preview = ["pixi-build"]
+
+            [dependencies.numpy]
+            git = "https://github.com/numpy/numpy.git"
+            package.build.backend = { name = "pixi-build-python", version = "*" }
+            package.run-exports.weak = { otherpkg = { pin-subpackage = true } }
+            "#;
+        let manifest = <TomlManifest as FromTomlStr>::from_toml_str(source).expect("parse toml");
+        let error = manifest
+            .into_workspace_manifest(
+                ExternalWorkspaceProperties::default(),
+                PackageDefaults::default(),
+                Path::new(""),
+            )
+            .expect_err("the wrong-name self-pin must be rejected");
+        let message = error.to_string();
+        assert!(
+            message
+                .contains("`pin-subpackage` can only reference the package's own name (`numpy`)"),
+            "unexpected error: {message}"
+        );
     }
 
     #[test]
@@ -1955,7 +2253,7 @@ mod test {
         let spec = inline_host_dependency(
             &ws,
             &FeatureName::default(),
-            Platform::Linux64,
+            Subdir::Linux64,
             "numpy",
             "python",
         );
@@ -2026,7 +2324,7 @@ mod test {
         let spec = inline_host_dependency(
             &ws,
             &FeatureName::from("dev"),
-            Platform::Linux64,
+            Subdir::Linux64,
             "numpy",
             "python",
         );
@@ -2057,7 +2355,7 @@ mod test {
         let spec = inline_host_dependency(
             &ws,
             &FeatureName::default(),
-            Platform::Linux64,
+            Subdir::Linux64,
             "numpy",
             "python",
         );
@@ -2090,7 +2388,7 @@ mod test {
         let spec = inline_host_dependency(
             &ws,
             &FeatureName::default(),
-            Platform::Linux64,
+            Subdir::Linux64,
             "numpy",
             "mylib",
         );
@@ -2193,7 +2491,7 @@ mod test {
     fn feature_run_dependency(
         ws: &WorkspaceManifest,
         feature: &FeatureName,
-        platform: Platform,
+        platform: Subdir,
         dependency: &str,
     ) -> pixi_spec::PixiSpec {
         let platform = PixiPlatform::from_subdir(platform);
@@ -2212,7 +2510,7 @@ mod test {
     #[test]
     fn test_dependencies_inherit_workspace_dependency() {
         // `{ workspace = true }` in `[dependencies]` resolves against the
-        // `[workspace.dependencies]` pool without any preview feature.
+        // `[workspace.dependencies]` pool without any preview flag.
         let ws = parse_workspace(
             r#"
             [workspace]
@@ -2226,7 +2524,7 @@ mod test {
             numpy = { workspace = true }
             "#,
         );
-        let spec = feature_run_dependency(&ws, &FeatureName::default(), Platform::Linux64, "numpy");
+        let spec = feature_run_dependency(&ws, &FeatureName::default(), Subdir::Linux64, "numpy");
         assert_eq!(spec.as_version_spec().unwrap().to_string(), "1.*");
     }
 
@@ -2249,8 +2547,7 @@ mod test {
             dev = ["dev"]
             "#,
         );
-        let spec =
-            feature_run_dependency(&ws, &FeatureName::from("dev"), Platform::Linux64, "numpy");
+        let spec = feature_run_dependency(&ws, &FeatureName::from("dev"), Subdir::Linux64, "numpy");
         assert_eq!(spec.as_version_spec().unwrap().to_string(), "1.*");
     }
 
@@ -2269,7 +2566,7 @@ mod test {
             numpy = { workspace = true }
             "#,
         );
-        let spec = feature_run_dependency(&ws, &FeatureName::default(), Platform::Linux64, "numpy");
+        let spec = feature_run_dependency(&ws, &FeatureName::default(), Subdir::Linux64, "numpy");
         assert_eq!(spec.as_version_spec().unwrap().to_string(), "1.*");
     }
 
@@ -2289,7 +2586,7 @@ mod test {
             numpy = { workspace = true, build = "py311*" }
             "#,
         );
-        let spec = feature_run_dependency(&ws, &FeatureName::default(), Platform::Linux64, "numpy");
+        let spec = feature_run_dependency(&ws, &FeatureName::default(), Subdir::Linux64, "numpy");
         match spec {
             pixi_spec::PixiSpec::DetailedVersion(detailed) => {
                 assert_eq!(detailed.version.as_ref().unwrap().to_string(), "1.*");
@@ -2529,7 +2826,7 @@ mod test {
         "#,
             ),
             @r#"
-         × conda source dependencies are not allowed without enabling the 'pixi-build' preview feature
+         × conda source dependencies are not allowed without enabling the 'pixi-build' preview flag
            ╭─[pixi.toml:10:17]
          9 │         [dependencies]
         10 │         mylib = { workspace = true }
@@ -2537,7 +2834,7 @@ mod test {
            ·                           ╰── source dependency specified here
         11 │
            ╰────
-         help: Add `preview = ["pixi-build"]` to the `workspace` or `project` table of your manifest
+         help: Run `pixi workspace preview add pixi-build` to enable the preview flag
         "#
         );
     }
@@ -2667,9 +2964,45 @@ mod test {
           · ╰──── declare these on the `platforms` entries instead
         9 │
           ╰────
-         help: e.g. platforms = [{ platform = "linux-64", cuda = "12" }]
+         help: e.g. platforms = [{ name = "my-linux-64", platform = "linux-64", cuda = "12" }]
         "#
         );
+    }
+
+    /// Each entry carries only the requirements that apply to its own subdir.
+    /// `archspec` is not carried over.
+    #[test]
+    fn test_system_requirements_deprecation_warning_lists_all_requirements() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ['osx-arm64', 'linux-64']
+
+        [system-requirements]
+        cuda = "12.9"
+        macos = "13.0"
+        libc = { family = "glibc", version = "2.28" }
+        archspec = "x86_64_v3"
+        "#,
+        ));
+    }
+
+    /// A subdir nothing applies to stays a bare-string entry.
+    #[test]
+    fn test_system_requirements_deprecation_warning_skips_inapplicable_platforms() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ['win-64', 'osx-64', 'linux-64']
+
+        [system-requirements]
+        libc = { family = "glibc", version = "2.28" }
+        "#,
+        ));
     }
 
     #[test]
@@ -2698,9 +3031,75 @@ mod test {
           · ╰──── declare these on the `platforms` entries instead
         9 │
           ╰────
-         help: e.g. platforms = [{ platform = "linux-64", cuda = "12" }]
+         help: e.g. platforms = [{ name = "my-linux-64", platform = "linux-64", cuda = "12" }]
         "#
         );
+    }
+
+    /// Covers the `validate_referenced_platforms` path.
+    #[test]
+    fn test_feature_references_undeclared_platform() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = [
+            { name = "cpu-linux-64", platform = "linux-64" },
+            { name = "cuda-linux-64", platform = "linux-64", cuda = "12" },
+        ]
+
+        [feature.gpu]
+        platforms = ["linux-64-cuda"]
+
+        [environments]
+        gpu = ["gpu"]
+        "#,
+        ));
+    }
+
+    /// No entry is named, so the help suggests naming them.
+    #[test]
+    fn test_feature_references_undeclared_platform_suggests_naming() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64", { platform = "linux-64", cuda = "12.9" }]
+
+        [feature.gpu]
+        platforms = ["linux-64-cuda-13-0"]
+
+        [environments]
+        gpu = ["gpu"]
+        "#,
+        ));
+    }
+
+    /// Covers the `register_referenced_originals` path.
+    #[test]
+    fn test_feature_references_undeclared_platform_with_system_requirements() {
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = [
+            { name = "cpu-linux-64", platform = "linux-64" },
+        ]
+
+        [feature.gpu]
+        platforms = ["linux-64-cuda"]
+
+        [feature.legacy.system-requirements]
+        cuda = "12"
+
+        [environments]
+        gpu = ["gpu"]
+        legacy = ["legacy"]
+        "#,
+        ));
     }
 
     #[test]
@@ -3264,7 +3663,7 @@ mod test {
         )
         .unwrap();
 
-        let linux64 = PixiPlatform::from_subdir(Platform::Linux64);
+        let linux64 = PixiPlatform::from_subdir(Subdir::Linux64);
         let linux_deps = manifest
             .default_feature()
             .dev_dependencies(Some(&linux64))
@@ -3273,7 +3672,7 @@ mod test {
         assert_eq!(linux_deps.iter().count(), 1);
         assert!(linux_deps.contains_key("linux-pkg"));
 
-        let win64 = PixiPlatform::from_subdir(Platform::Win64);
+        let win64 = PixiPlatform::from_subdir(Subdir::Win64);
         let windows_deps = manifest
             .default_feature()
             .dev_dependencies(Some(&win64))

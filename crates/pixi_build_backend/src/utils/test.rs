@@ -8,7 +8,7 @@ use pixi_build_types::{
     },
 };
 use rattler_build_core::console_utils::LoggingOutputHandler;
-use rattler_conda_types::Platform;
+use rattler_conda_types::Subdir;
 use serde_json::Value;
 
 use crate::{
@@ -49,7 +49,7 @@ pub(crate) fn remove_empty_values(value: &mut Value) {
 pub async fn intermediate_conda_outputs<T>(
     project_model: Option<pixi_build_types::ProjectModel>,
     source_dir: Option<PathBuf>,
-    host_platform: Platform,
+    host_platform: Subdir,
     variant_configuration: Option<BTreeMap<String, Vec<VariantValue>>>,
     variant_files: Option<Vec<PathBuf>>,
 ) -> CondaOutputsResult

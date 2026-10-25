@@ -12,7 +12,7 @@ use rattler_build_recipe::stage0::{
 };
 use rattler_build_types::NormalizedKey;
 use rattler_conda_types::{
-    ChannelUrl, PackageName, Platform, SourcePackageName, Version, VersionWithSource,
+    ChannelUrl, PackageName, SourcePackageName, Subdir, Version, VersionWithSource,
 };
 use serde::de::DeserializeOwned;
 use thiserror::Error;
@@ -83,7 +83,7 @@ pub trait GenerateRecipe {
         model: &ProjectModel,
         config: &Self::Config,
         manifest_path: PathBuf,
-        host_platform: Platform,
+        host_platform: Subdir,
         python_params: Option<PythonParams>,
         variants: &HashSet<NormalizedKey>,
         channels: Vec<ChannelUrl>,
@@ -129,7 +129,7 @@ pub trait GenerateRecipe {
     /// matrices.
     fn default_variants(
         &self,
-        _host_platform: Platform,
+        _host_platform: Subdir,
     ) -> miette::Result<BTreeMap<NormalizedKey, Vec<Variable>>> {
         Ok(BTreeMap::new())
     }

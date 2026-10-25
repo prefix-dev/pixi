@@ -8,7 +8,7 @@ use pixi_record::{PixiRecord, SourceRecord};
 use pixi_spec::{BinarySpec, ResolvedExcludeNewer, SourceSpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
-    ChannelUrl, GenericVirtualPackage, MatchSpec, Platform, RepoDataRecord, Version,
+    ChannelUrl, GenericVirtualPackage, MatchSpec, RepoDataRecord, Subdir, Version,
     package::{ArchiveIdentifier, CondaArchiveType, DistArchiveIdentifier},
 };
 use rattler_repodata_gateway::RepoData;
@@ -63,7 +63,7 @@ pub struct SolveCondaEnvironmentSpec {
     pub installed: Vec<PixiRecord>,
 
     /// The platform to solve for
-    pub platform: Platform,
+    pub platform: Subdir,
 
     /// The channels to use for solving
     pub channels: Vec<ChannelUrl>,
@@ -102,7 +102,7 @@ impl Default for SolveCondaEnvironmentSpec {
             source_repodata: vec![],
             binary_repodata: vec![],
             installed: vec![],
-            platform: Platform::current(),
+            platform: Subdir::current().unwrap_or(Subdir::NoArch),
             channels: vec![],
             virtual_packages: vec![],
             strategy: SolveStrategy::default(),

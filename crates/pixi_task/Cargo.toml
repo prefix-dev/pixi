@@ -23,6 +23,7 @@ pixi_core = { workspace = true }
 pixi_glob = { workspace = true }
 pixi_manifest = { workspace = true, features = ["rattler_lock"] }
 pixi_progress = { workspace = true }
+pixi_utils = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_lock = { workspace = true }
 rayon = { workspace = true }
@@ -33,5 +34,5 @@ tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
-uv-configuration = { workspace = true }
+uv-threads = { workspace = true }
 xxhash-rust = { workspace = true }

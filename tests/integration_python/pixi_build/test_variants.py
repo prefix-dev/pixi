@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 import rattler
-import tomli_w
 import tomli
+import tomli_w
 
 from .common import CURRENT_PLATFORM, copytree_with_local_backend, verify_cli_command
 

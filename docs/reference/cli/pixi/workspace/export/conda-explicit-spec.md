@@ -63,12 +63,12 @@ pixi workspace export conda-explicit-spec [OPTIONS] <OUTPUT_DIR>
 - <a id="arg---no-ref-links" href="#arg---no-ref-links">`--no-ref-links`</a>
 :  Disallow ref links (copy-on-write) during package installation
 <br>**env**: `PIXI_NO_REF_LINKS`
-- <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
-:  Do not verify the TLS certificate of the server
 - <a id="arg---offline" href="#arg---offline">`--offline=<OFFLINE>`</a>
 :  Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
 <br>**env**: `PIXI_OFFLINE`
 <br>**options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+- <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
+:  Do not verify the TLS certificate of the server
 - <a id="arg---tls-root-certs" href="#arg---tls-root-certs">`--tls-root-certs <TLS_ROOT_CERTS>`</a>
 :  Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 <br>**env**: `PIXI_TLS_ROOT_CERTS`
@@ -92,6 +92,6 @@ pixi workspace export conda-explicit-spec [OPTIONS] <OUTPUT_DIR>
 - <a id="arg---workspace" href="#arg---workspace">`--workspace (-w) <WORKSPACE>`</a>
 :  Name of the workspace
 - <a id="arg---script" href="#arg---script">`--script (-s) <SCRIPT>`</a>
-:  The path to a Python script containing PEP 723 metadata
+:  The path to a script with an embedded manifest: a Python script containing PEP 723 metadata, or a file of any language containing a `/// conda-script` block
 
 --8<-- "docs/reference/cli/pixi/workspace/export/conda-explicit-spec_extender:example"

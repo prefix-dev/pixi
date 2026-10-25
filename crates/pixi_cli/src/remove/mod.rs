@@ -2,10 +2,7 @@ mod error;
 
 use clap::Parser;
 use indexmap::IndexMap;
-use pixi_api::{
-    WorkspaceContext,
-    workspace::{DependencyOptions, RemoveError},
-};
+use pixi_api::workspace::{DependencyOptions, RemoveError};
 use pixi_config::ConfigCli;
 use pixi_core::{DependencyType, WorkspaceLocator, environment::LockFileUsage};
 use pixi_manifest::HasWorkspaceManifest;
@@ -13,12 +10,12 @@ use pixi_manifest::HasWorkspaceManifest;
 use crate::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
 use crate::{
     cli_config::{DependencyConfig, NoInstallConfig, ScriptWorkspaceConfig},
-    cli_interface::CliInterface,
+    cli_interface::cli_context,
 };
 
 use error::DependencyRemovalError;
 
-/// Removes dependencies from the workspace.
+/// Remove dependencies from a workspace.
 ///
 ///  If the workspace manifest is a `pyproject.toml`, removing a pypi dependency
 /// with the `--pypi` flag will remove it from either
@@ -73,7 +70,7 @@ impl Args {
             Ok(())
         } else {
             Err(miette::miette!(
-                help = "A PEP 723 script has one implicit default run environment.",
+                help = "A script has one implicit default run environment.",
                 "`pixi remove --script` does not support {}",
                 unsupported.join(", ")
             ))
@@ -89,7 +86,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
         .with_cli_config(args.config.clone())
-        .locate()?;
+        .locate()
+        .await?;
+
+    if workspace.is_conda_script() && !args.dependency_config.platforms.is_empty() {
+        return Err(miette::miette!(
+            help = "restrict the dependency with a `when` condition in `[dependencies]`, or write `[tool.pixi.target.<platform>.dependencies]` by hand",
+            "`--platform` cannot edit a conda-script block"
+        ));
+    }
 
     let dependency_options = DependencyOptions {
         feature: args.dependency_config.feature_name(),
@@ -102,7 +107,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         ),
     };
 
-    let workspace_ctx = WorkspaceContext::new(CliInterface {}, workspace.clone());
+    let workspace_ctx = cli_context(workspace.clone());
 
     let dependency_type = args.dependency_config.dependency_type();
     let feature = args.dependency_config.feature_name();

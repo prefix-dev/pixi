@@ -89,12 +89,25 @@ pub enum LegacySourceEnvError {
     /// record's variants. This usually means the source's variant
     /// matrix changed since the lock file was written.
     #[error(
-        "backend produced no variant matching the locked record for `{package}` (locked variants: {variants:?})"
+        "backend produced no variant matching the locked record for `{package}` (locked variants: {})",
+        format_variants(variants)
     )]
     NoMatchingVariant {
         package: String,
         variants: BTreeMap<String, VariantValue>,
     },
+}
+
+/// Formats a variant map as `key=value` pairs for error messages.
+fn format_variants(variants: &BTreeMap<String, VariantValue>) -> String {
+    if variants.is_empty() {
+        return "none".to_string();
+    }
+    variants
+        .iter()
+        .map(|(key, value)| format!("{key}={value}"))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 impl Display for LegacySourceEnvKey {
@@ -234,5 +247,21 @@ mod tests {
         let mut produced = BTreeMap::new();
         produced.insert("python".to_string(), VariantValue::from("3.12".to_string()));
         assert!(!variants_equivalent(&locked, &produced));
+    }
+
+    #[test]
+    fn no_matching_variant_error_prints_the_variants() {
+        let mut variants = BTreeMap::new();
+        variants.insert("python".to_string(), VariantValue::from("3.12".to_string()));
+        variants.insert("numpy".to_string(), VariantValue::from("2.1".to_string()));
+        let error = LegacySourceEnvError::NoMatchingVariant {
+            package: "wusel".to_string(),
+            variants,
+        };
+
+        insta::assert_snapshot!(
+            error,
+            @"backend produced no variant matching the locked record for `wusel` (locked variants: numpy=2.1, python=3.12)"
+        );
     }
 }

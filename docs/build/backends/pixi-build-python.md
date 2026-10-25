@@ -3,7 +3,7 @@
 The `pixi-build-python` backend is designed for building Python projects using standard Python packaging tools. It provides seamless integration with Pixi's package management workflow while supporting both [PEP 517](https://peps.python.org/pep-0517/) and [PEP 518](https://peps.python.org/pep-0518/) compliant projects.
 
 !!! warning
-    `pixi-build` is a preview feature, and will change until it is stabilized.
+    `pixi-build` is a preview flag, and will change until it is stabilized.
     This is why we require users to opt in to that feature by adding "pixi-build" to `workspace.preview`.
 
     ```toml
@@ -31,10 +31,9 @@ To use the Python backend in your `pixi.toml`, add it to your package's build co
 name = "python_package"
 version = "0.1.0"
 
-[package.build]
-backend = { name = "pixi-build-python", version = "*" }
+[package.build.backend]
+name = "pixi-build-python"
 channels = ["https://prefix.dev/conda-forge"]
-
 ```
 
 ### Required Dependencies

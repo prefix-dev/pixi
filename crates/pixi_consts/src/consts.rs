@@ -16,7 +16,7 @@ pub const PYPROJECT_MANIFEST: &str = "pyproject.toml";
 pub const CONFIG_FILE: &str = "config.toml";
 pub const PIXI_VERSION: &str = match option_env!("PIXI_VERSION") {
     Some(v) => v,
-    None => "0.76.1",
+    None => "0.83.0",
 };
 pub const PREFIX_FILE_NAME: &str = "pixi_env_prefix";
 pub const ENVIRONMENTS_DIR: &str = "envs";
@@ -29,6 +29,7 @@ pub const ACTIVATION_ENV_CACHE_DIR: &str = "activation-env-v0";
 pub const PIXI_UV_INSTALLER: &str = "uv-pixi";
 pub const CONDA_PACKAGE_CACHE_DIR: &str = rattler_cache::PACKAGE_CACHE_DIR;
 pub const CONDA_REPODATA_CACHE_DIR: &str = rattler_cache::REPODATA_CACHE_DIR;
+pub const CHANNEL_NOTICES_CACHE_DIR: &str = "notices";
 // TODO: move to rattler
 pub const CONDA_META_DIR: &str = "conda-meta";
 pub const CONDA_MENU_SCHEMA_DIR: &str = "Menu";
@@ -39,6 +40,7 @@ pub const CACHED_ENVS_DIR: &str = "cached-envs-v0";
 pub const _CACHED_BUILD_ENVS_DIR: &str = "cached-build-envs-v0";
 pub const CACHED_BUILD_TOOL_ENVS_DIR: &str = "cached-build-tool-envs-v0";
 pub const CACHED_GIT_DIR: &str = "git-v0";
+pub const VIRTUAL_PACKAGE_DETECTORS_CACHE_DIR: &str = "virtual-package-detectors-v0";
 pub const CACHED_URL_DIR: &str = "url-v0";
 pub const CACHED_BUILD_BACKENDS: &str = "backends-v0";
 pub const CACHED_PACKAGES: &str = "pkgs";
@@ -123,6 +125,14 @@ pub const RELEASES_URL: &str = "https://github.com/prefix-dev/pixi/releases";
 pub const RELEASES_API_BY_TAG: &str = "https://api.github.com/repos/prefix-dev/pixi/releases/tags";
 pub const RELEASES_API_LATEST: &str =
     "https://api.github.com/repos/prefix-dev/pixi/releases/latest";
+
+/// Endpoint for the anonymous installation/update ping, sent by
+/// `pixi __install-ping` (called from the install scripts) and `pixi self-update`.
+pub const INSTALL_PING_URL: &str = "https://installation-ping.prefix.dev/a.png";
+pub const INSTALL_PING_PXID: &str = "21354c5b-2936-42bc-9d4b-9d6253815afd";
+/// Marker file in the cache directory recording that the telemetry notice was
+/// shown, so `pixi self-update` only pings after the user has seen it.
+pub const TELEMETRY_NOTICE_MARKER: &str = "telemetry-notice-shown";
 
 pub const CLAP_CONFIG_OPTIONS: &str = "Config Options";
 pub const CLAP_GIT_OPTIONS: &str = "Git Options";

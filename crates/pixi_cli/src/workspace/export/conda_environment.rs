@@ -11,7 +11,7 @@ use pixi_manifest::{
 use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, PypiPackageName, VersionOrStar};
 use rattler_conda_types::{
     ChannelConfig, EnvironmentYaml, MatchSpec, MatchSpecOrSubSection, NamedChannelOrUrl,
-    ParseStrictness, Platform,
+    ParseStrictness, Subdir,
 };
 use rattler_lock::{CondaPackageData, LockFile, LockedPackage, PypiPackageData, UrlOrPath};
 
@@ -31,7 +31,7 @@ pub struct Args {
     /// The platform to render the environment file for.
     /// Defaults to the current platform.
     #[arg(short, long)]
-    pub platform: Option<Platform>,
+    pub platform: Option<Subdir>,
 
     /// The environment to render the environment file for.
     /// Defaults to the default environment.
@@ -432,8 +432,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
-        .locate()?;
+        .locate()
+        .await?;
     let environment = workspace.environment_from_name_or_env_var(args.environment)?;
+    workspace
+        .refresh_environment_hosts_for_platform_selection(std::slice::from_ref(&environment))
+        .await?;
     let workspace_platforms = (&workspace)
         .workspace_manifest()
         .workspace
@@ -448,7 +452,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 miette::miette!("workspace does not define a platform with subdir '{subdir}'")
             })?,
         None => environment
-            .best_declared_platform()
+            .installed_or_best_declared_platform()
             .cloned()
             .ok_or_else(|| {
                 miette::miette!(
@@ -508,7 +512,7 @@ mod tests {
     fn resolve_platform(
         workspace: &Workspace,
         environment: &Environment<'_>,
-        subdir: Option<Platform>,
+        subdir: Option<Subdir>,
     ) -> PixiPlatform {
         let workspace_platforms = workspace.workspace_manifest().workspace.platforms.clone();
         match subdir {
@@ -532,7 +536,7 @@ mod tests {
         let workspace = Workspace::from_path(&path).unwrap();
         let args = Args {
             output_path: None,
-            platform: Some(Platform::Osx64),
+            platform: Some(Subdir::Osx64),
             environment: Some("default".to_string()),
             workspace_config: ScriptWorkspaceConfig::default(),
             config_source: Default::default(),
@@ -700,7 +704,7 @@ mod tests {
         let workspace = Workspace::from_path(&path).unwrap();
         let args = Args {
             output_path: None,
-            platform: Some(Platform::OsxArm64),
+            platform: Some(Subdir::OsxArm64),
             environment: Some("default".to_string()),
             workspace_config: ScriptWorkspaceConfig::default(),
             config_source: Default::default(),
@@ -740,7 +744,7 @@ mod tests {
         let workspace = Workspace::from_str(Path::new("pixi.toml"), toml).unwrap();
         let args = Args {
             output_path: None,
-            platform: Some(Platform::Osx64),
+            platform: Some(Subdir::Osx64),
             environment: Some("default".to_string()),
             workspace_config: ScriptWorkspaceConfig::default(),
             config_source: Default::default(),
@@ -794,7 +798,7 @@ mod tests {
             .environment_from_name_or_env_var(Some("default".to_string()))
             .unwrap();
 
-        for platform in [Platform::Osx64, Platform::Linux64, Platform::OsxArm64] {
+        for platform in [Subdir::Osx64, Subdir::Linux64, Subdir::OsxArm64] {
             let pp = pixi_manifest::PixiPlatform::from_subdir(platform);
             let env_yaml = build_env_yaml_from_lock_file(
                 &pp,
@@ -822,7 +826,7 @@ mod tests {
             .unwrap();
 
         // win-64 is not in the lock file for this project; expect an error.
-        let win64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Win64);
+        let win64 = pixi_manifest::PixiPlatform::from_subdir(Subdir::Win64);
         let result = build_env_yaml_from_lock_file(
             &win64,
             &environment,
@@ -841,7 +845,7 @@ mod tests {
         let env_name = "custom_env_name".to_string();
         let args = Args {
             output_path: None,
-            platform: Some(Platform::Osx64),
+            platform: Some(Subdir::Osx64),
             environment: Some("default".to_string()),
             workspace_config: ScriptWorkspaceConfig::default(),
             config_source: Default::default(),

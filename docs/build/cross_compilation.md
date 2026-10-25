@@ -3,7 +3,7 @@ In this tutorial we assume that you've read the [Building a C++ Package](cpp.md)
 If you haven't read it yet, we recommend you to do so before continuing, as the project structure and the source code will be the same as in the previous tutorial, so we may skip explicit explanations of some parts.
 
 !!! warning
-    `pixi-build` is a preview feature and will change until it is stabilized.
+    `pixi-build` is a preview flag and will change until it is stabilized.
 
 `pixi-build` has built-in cross-compilation capabilities: if the build process of a package supports it, building a package for a platform (`linux-aarch64`) different from the host platform (`linux-64`) can be done simply with `pixi publish --target-platform linux-aarch64 --target-dir output`.
 However, a typical [nanobind](https://github.com/wjakob/nanobind) project, as described in the [Building a C++ Package tutorial](cpp.md), doesn't cross-compile out of the box.
@@ -163,7 +163,7 @@ name    = "cpp_math"
 version = "0.1.0"
 
 [package.build]
-backend = { name = "pixi-build-rattler-build", version = "*" }
+backend = { name = "pixi-build-rattler-build" }
 
 [tasks]
 start = "python -c 'import cpp_math; print(cpp_math.add(1, 2))'"
@@ -328,6 +328,17 @@ For the `stub` package, output should be
 "null"
 "noarch"
 ```
+
+---
+
+## Source build dependencies
+
+The rules above are about one package. When a workspace package depends on another *source* package of the workspace, the platform that dependency is built for depends on the section it is listed in:
+
+- A source package under `host-dependencies` or `run-dependencies` is built for the target platform, like the package that depends on it.
+- A source package under `build-dependencies` runs during the build, so it is built natively for the build platform. Its own build and host environments are solved for the build platform as well.
+
+A package that is both published in its own right and a build dependency of another published package is therefore built twice during a cross-compiling `pixi publish`: once for the target platform and once for the build platform. That is expected. A backend that lists a dependency in both the build and the host section, as [`pixi-build-ros`](backends/pixi-build-ros.md) does for a `<depend>` in `package.xml`, triggers this for every such workspace sibling.
 
 ---
 

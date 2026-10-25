@@ -3,7 +3,7 @@
 The `pixi-build-r` backend is designed for building R packages using `R CMD INSTALL`. It automatically parses the `DESCRIPTION` file to extract metadata and dependencies, and detects whether native code compilation is needed.
 
 !!! warning
-    `pixi-build` is a preview feature, and will change until it is stabilized.
+    `pixi-build` is a preview flag, and will change until it is stabilized.
     This is why we require users to opt in to that feature by adding "pixi-build" to `workspace.preview`.
 
     ```toml
@@ -35,8 +35,8 @@ preview = ["pixi-build"]
 name = "r-mypackage"
 version = "1.0.0"
 
-[package.build]
-backend = { name = "pixi-build-r", version = "*" }
+[package.build.backend]
+name = "pixi-build-r"
 channels = ["https://prefix.dev/conda-forge"]
 ```
 
@@ -212,7 +212,17 @@ The backend reads dependencies from the `DESCRIPTION` file:
 
 ### Built-in Packages
 
-Packages that are included with R (such as `stats`, `utils`, `base`, `methods`, `Matrix`, `MASS`, etc.) are automatically filtered out and not added as separate dependencies.
+R's base packages (such as `stats`, `utils`, `base` and `methods`) come with `r-base`, so they are filtered out and not added as separate dependencies.
+R's recommended packages (such as `MASS`, `Matrix` and `mgcv`) are separate packages on conda-forge (`r-mass`, `r-matrix`, `r-mgcv`), so they are added like any other dependency.
+
+### Rust
+
+Packages with Rust code declare it in `SystemRequirements`, as CRAN asks: `Cargo (Rust's package manager), rustc`.
+When `SystemRequirements` mentions `cargo` or `rustc`, the backend adds `rust` to the build requirements, and on Windows also `rust-std-x86_64-pc-windows-gnu`, since R packages build their Rust code for the GNU target there.
+
+### CMake and pkg-config
+
+When `SystemRequirements` names `cmake`, the backend adds `cmake` to the build requirements, and when it names `pkg-config`, `pkg-config`, so the build doesn't depend on whichever of them is on the machine's `PATH`.
 
 ## Build Process
 
@@ -232,6 +242,7 @@ The R backend follows this build process:
 - Requires a standard R `DESCRIPTION` file in the project root
 - The `DESCRIPTION` file must use the DCF (Debian Control File) format
 - `Suggests` and `Enhances` dependencies are not automatically included
+- Bioconductor dependencies are not supported
 - License mapping from CRAN format to SPDX is best-effort
 
 ## See Also

@@ -12,7 +12,7 @@ use pixi_consts::consts;
 use pixi_manifest::{PrioritizedChannel, toml::TomlDocument};
 use pixi_toml::TomlIndexMap;
 use pixi_utils::{executable_from_path, strip_executable_extension};
-use rattler_conda_types::{NamedChannelOrUrl, PackageName, Platform};
+use rattler_conda_types::{NamedChannelOrUrl, PackageName, Subdir};
 use toml_edit::{DocumentMut, Item};
 use toml_span::{DeserError, Value};
 
@@ -280,7 +280,7 @@ impl Manifest {
     pub fn set_platform(
         &mut self,
         env_name: &EnvironmentName,
-        platform: Platform,
+        platform: Subdir,
     ) -> miette::Result<()> {
         // Ensure the environment exists
         if !self.parsed.envs.contains_key(env_name) {
@@ -1273,7 +1273,7 @@ mod tests {
     fn test_set_platform() {
         let mut manifest = Manifest::default();
         let env_name = EnvironmentName::from_str("test-env").unwrap();
-        let platform = Platform::LinuxRiscv64;
+        let platform = Subdir::LinuxRiscv64;
 
         // Add environment
         manifest.add_environment(&env_name, None).unwrap();

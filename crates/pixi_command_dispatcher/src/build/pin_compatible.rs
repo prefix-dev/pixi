@@ -10,21 +10,26 @@ use std::collections::HashMap;
 
 use pixi_build_types::PinCompatibleSpec;
 use pixi_record::PixiRecord;
-use pixi_spec::{Pin, PinError, PixiSpec};
+use pixi_spec::{BinarySpec, Pin, PinError, PixiSpec};
 use rattler_conda_types::PackageName;
 
 /// A map of resolved packages that can be referenced by `pin_compatible`.
 pub type PinCompatibilityMap<'a> = HashMap<PackageName, &'a PixiRecord>;
 
 /// Errors raised while resolving a `pin_compatible` reference.
-#[derive(Debug, Clone, thiserror::Error)]
+#[derive(Debug, Clone, thiserror::Error, miette::Diagnostic)]
 pub enum PinCompatibleError {
     /// The pin references a package that the compatibility map doesn't
     /// contain. For host deps this means the build env never resolved
     /// the package; for run deps it means neither build nor host did.
+    ///
+    /// The hint lives in the message rather than a miette `#[help]`
+    /// because this error reaches the user nested behind
+    /// `ResolveSourcePackage`, and only the top-level diagnostic's help
+    /// is rendered.
     #[error(
-        "Could not apply pin_compatible. Package '{}' is not in the compatibility environment",
-        .0.as_normalized()
+        "Could not apply pin_compatible. Package '{name}' is not in the compatibility environment: add '{name}' to `[package.host-dependencies]` for a pin in the run dependencies, or to `[package.build-dependencies]` for a pin in the host dependencies",
+        name = .0.as_normalized()
     )]
     PackageNotFound(PackageName),
 
@@ -51,6 +56,20 @@ pub fn resolve_pin_compatible(
         &record.package_record().version,
         &record.package_record().build,
     )?)
+}
+
+/// Like [`resolve_pin_compatible`], but for constraint positions where only a
+/// binary spec makes sense.
+pub fn resolve_pin_compatible_binary(
+    package_name: &PackageName,
+    spec: &PinCompatibleSpec,
+    compatibility_map: &PinCompatibilityMap<'_>,
+) -> Result<BinarySpec, PinCompatibleError> {
+    let spec = resolve_pin_compatible(package_name, spec, compatibility_map)?;
+    Ok(spec
+        .into_source_or_binary()
+        .right()
+        .expect("pin resolution always produces a version spec"))
 }
 
 #[cfg(test)]

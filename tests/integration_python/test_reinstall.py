@@ -1,7 +1,9 @@
-from .common import skip_if_current_platform_unsupported, verify_cli_command
-import pytest
-from pathlib import Path
 import shutil
+from pathlib import Path
+
+import pytest
+
+from .common import skip_if_current_platform_unsupported, verify_cli_command
 
 
 @pytest.fixture

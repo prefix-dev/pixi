@@ -15,10 +15,12 @@ use std::{
 };
 
 use itertools::Itertools;
+use pixi_toml::custom_error;
 use rattler_conda_types::{
     Version, VersionBumpError, VersionBumpType, VersionSpec,
     version_spec::{LogicalOperator, RangeOperator},
 };
+use toml_span::{DeserError, Value, de_helpers::TableHelper, value::ValueInner};
 
 use crate::{DetailedSpec, PixiSpec};
 
@@ -26,7 +28,7 @@ use crate::{DetailedSpec, PixiSpec};
 ///
 /// Mirrors `rattler_build`'s `Pin::apply` semantics (which is what
 /// the conda-build / rattler-build ecosystem expects).
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Pin {
     /// Lower bound of the resolved version range. `None` means no
     /// lower bound is added to the resulting spec.
@@ -43,7 +45,7 @@ pub struct Pin {
 }
 
 /// One side of a pin's version range.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PinBound {
     /// A pin expression like `x.x.x`. The number of `x`s controls how
     /// many version segments are kept (lower bound) or bumped (upper).
@@ -57,7 +59,7 @@ pub enum PinBound {
 /// segment count is the number of `x`s.
 ///
 /// Examples: `"x"` (segment_count=1), `"x.x.x"` (segment_count=3).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PinExpression {
     segment_count: usize,
 }
@@ -130,6 +132,24 @@ pub enum PinError {
     /// string for `exact`) failed to parse as a `StringMatcher`.
     #[error("Failed to parse build string: {0}")]
     BuildStringParse(String),
+}
+
+/// The defaults of a no-argument `pin_compatible(...)` / `pin_subpackage(...)`
+/// call in rattler-build: lower bound `x.x.x.x.x.x` (pin to the exact resolved
+/// version), upper bound `x` (next-major exclusive).
+impl Default for Pin {
+    fn default() -> Self {
+        Pin {
+            lower_bound: Some(PinBound::Expression(
+                PinExpression::new(6).expect("6 is a valid segment count"),
+            )),
+            upper_bound: Some(PinBound::Expression(
+                PinExpression::new(1).expect("1 is a valid segment count"),
+            )),
+            exact: false,
+            build: None,
+        }
+    }
 }
 
 impl Pin {
@@ -258,6 +278,78 @@ fn increment_version(version: &Version, segment_count: usize) -> Result<Version,
     Ok(bumped.with_alpha().remove_local().into_owned())
 }
 
+/// Parses a `lower-bound`/`upper-bound` value: either a pin expression
+/// (`"x"`, `"x.x"`, ...) or a literal version. Pin expressions are tried
+/// first since they only allow `x` and `.`, which never parse as a
+/// [`Version`].
+impl<'de> toml_span::Deserialize<'de> for PinBound {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let span = value.span;
+        let s = match value.take() {
+            ValueInner::String(s) => s,
+            inner => return Err(toml_span::de_helpers::expected("a string", inner, span).into()),
+        };
+        if let Ok(expr) = PinExpression::from_str(&s) {
+            return Ok(PinBound::Expression(expr));
+        }
+        match Version::from_str(&s) {
+            Ok(version) => Ok(PinBound::Version(version)),
+            Err(e) => Err(custom_error(
+                format!("'{s}' is not a valid pin expression (e.g. 'x.x') or version: {e}"),
+                span,
+            )
+            .into()),
+        }
+    }
+}
+
+/// TOML form of [`Pin`]:
+/// ```toml
+/// boltons = { pin-compatible = { lower-bound = "x.x", upper-bound = "x", build = "py*" } }
+/// ```
+/// Bounds that are not given fall back to the rattler-build defaults
+/// ([`Pin::default`]), so an empty table equals a bare
+/// `pin_compatible('boltons')` call.
+///
+/// `exact = true` must be the only key, mirroring rattler-build's jinja
+/// functions where `exact=True` rejects every other argument and clears
+/// both bounds.
+impl<'de> toml_span::Deserialize<'de> for Pin {
+    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
+        let outer_span = value.span;
+        let mut th = TableHelper::new(value)?;
+        let lower_bound = th.optional("lower-bound");
+        let upper_bound = th.optional("upper-bound");
+        let exact = th.optional("exact").unwrap_or(false);
+        let build: Option<String> = th.optional("build");
+        th.finalize(None)?;
+
+        if exact {
+            if lower_bound.is_some() || upper_bound.is_some() || build.is_some() {
+                return Err(custom_error(
+                    "`exact = true` cannot be combined with `lower-bound`, `upper-bound`, or `build`",
+                    outer_span,
+                )
+                .into());
+            }
+            return Ok(Pin {
+                lower_bound: None,
+                upper_bound: None,
+                exact: true,
+                build: None,
+            });
+        }
+
+        let defaults = Pin::default();
+        Ok(Pin {
+            lower_bound: lower_bound.or(defaults.lower_bound),
+            upper_bound: upper_bound.or(defaults.upper_bound),
+            exact: false,
+            build,
+        })
+    }
+}
+
 /// Conversions from the `pixi_build_types` wire format. Behind the
 /// `pixi_build_types` feature so this crate doesn't pick up the wire
 /// crate as a hard dependency.
@@ -298,6 +390,58 @@ mod build_types_conversions {
                 exact: value.exact,
                 build: value.build,
             })
+        }
+    }
+
+    impl From<&PinExpression> for pbt::PinExpression {
+        fn from(value: &PinExpression) -> Self {
+            pbt::PinExpression(value.to_string())
+        }
+    }
+
+    impl From<&PinBound> for pbt::PinBound {
+        fn from(value: &PinBound) -> Self {
+            match value {
+                PinBound::Expression(expr) => pbt::PinBound::Expression(expr.into()),
+                PinBound::Version(v) => pbt::PinBound::Version(v.clone()),
+            }
+        }
+    }
+
+    /// Inverse of `TryFrom<pbt::PinCompatibleSpec> for Pin`. This direction is
+    /// infallible: every [`Pin`] can be represented on the wire.
+    impl From<&Pin> for pbt::PinCompatibleSpec {
+        fn from(value: &Pin) -> Self {
+            pbt::PinCompatibleSpec {
+                lower_bound: value.lower_bound.as_ref().map(pbt::PinBound::from),
+                upper_bound: value.upper_bound.as_ref().map(pbt::PinBound::from),
+                exact: value.exact,
+                build: value.build.clone(),
+            }
+        }
+    }
+
+    impl TryFrom<pbt::PinSubpackageSpec> for Pin {
+        type Error = PinError;
+
+        fn try_from(value: pbt::PinSubpackageSpec) -> Result<Self, Self::Error> {
+            Ok(Pin {
+                lower_bound: value.lower_bound.map(PinBound::try_from).transpose()?,
+                upper_bound: value.upper_bound.map(PinBound::try_from).transpose()?,
+                exact: value.exact,
+                build: value.build,
+            })
+        }
+    }
+
+    impl From<&Pin> for pbt::PinSubpackageSpec {
+        fn from(value: &Pin) -> Self {
+            pbt::PinSubpackageSpec {
+                lower_bound: value.lower_bound.as_ref().map(pbt::PinBound::from),
+                upper_bound: value.upper_bound.as_ref().map(pbt::PinBound::from),
+                exact: value.exact,
+                build: value.build.clone(),
+            }
         }
     }
 }
@@ -364,6 +508,88 @@ mod tests {
         let v = Version::from_str("1.0.0").unwrap();
         let spec = pin.resolve(&v, "h0").unwrap();
         assert!(matches!(spec, PixiSpec::Version(VersionSpec::Any)));
+    }
+
+    /// `Pin` deserializes a *value*, but `toml_span::parse` always returns a
+    /// table at the top level. Wrap the fixture in `v = ...` and pull out the
+    /// inner value to test arbitrary value shapes.
+    fn parse_pin(input: &str) -> Result<Pin, toml_span::DeserError> {
+        let document = format!("v = {input}");
+        let mut value = toml_span::parse(&document).expect("valid TOML");
+        let toml_span::value::ValueInner::Table(mut table) = value.take() else {
+            panic!("expected a table");
+        };
+        let mut entry = table.remove("v").expect("expected a `v` key");
+        <Pin as toml_span::Deserialize>::deserialize(&mut entry)
+    }
+
+    #[test]
+    fn toml_empty_table_uses_rattler_build_defaults() {
+        let pin = parse_pin("{}").unwrap();
+        assert_eq!(pin, Pin::default());
+        let v = Version::from_str("2.0.1").unwrap();
+        let PixiSpec::Version(vs) = pin.resolve(&v, "h123").unwrap() else {
+            panic!("expected Version");
+        };
+        assert_eq!(vs.to_string(), ">=2.0.1,<3.0a0");
+    }
+
+    #[test]
+    fn toml_single_bound_keeps_other_default() {
+        let pin = parse_pin(r#"{ lower-bound = "x.x" }"#).unwrap();
+        assert_eq!(
+            pin.lower_bound,
+            Some(PinBound::Expression(PinExpression::new(2).unwrap()))
+        );
+        assert_eq!(pin.upper_bound, Pin::default().upper_bound);
+    }
+
+    #[test]
+    fn toml_build_keeps_default_bounds() {
+        let pin = parse_pin(r#"{ build = "mpi_mpich_*" }"#).unwrap();
+        assert_eq!(pin.lower_bound, Pin::default().lower_bound);
+        assert_eq!(pin.upper_bound, Pin::default().upper_bound);
+        assert_eq!(pin.build.as_deref(), Some("mpi_mpich_*"));
+    }
+
+    #[test]
+    fn toml_exact_clears_bounds() {
+        let pin = parse_pin("{ exact = true }").unwrap();
+        assert_eq!(
+            pin,
+            Pin {
+                lower_bound: None,
+                upper_bound: None,
+                exact: true,
+                build: None,
+            }
+        );
+    }
+
+    #[test]
+    fn toml_exact_rejects_other_keys() {
+        let err = parse_pin(r#"{ exact = true, lower-bound = "x.x" }"#).unwrap_err();
+        assert!(format!("{err:?}").contains("cannot be combined"));
+    }
+
+    #[test]
+    fn toml_literal_version_bound() {
+        let pin = parse_pin(r#"{ upper-bound = "9.9" }"#).unwrap();
+        assert_eq!(
+            pin.upper_bound,
+            Some(PinBound::Version(Version::from_str("9.9").unwrap()))
+        );
+    }
+
+    #[test]
+    fn toml_invalid_bound_is_rejected() {
+        let err = parse_pin(r#"{ lower-bound = "not-a-version!" }"#).unwrap_err();
+        assert!(format!("{err:?}").contains("not a valid pin expression"));
+    }
+
+    #[test]
+    fn toml_unknown_key_is_rejected() {
+        assert!(parse_pin(r#"{ lowerbound = "x.x" }"#).is_err());
     }
 
     #[test]

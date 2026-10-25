@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use rattler_conda_types::{NoArchType, PackageName, Platform, VersionWithSource};
+use rattler_conda_types::{NoArchType, PackageName, Subdir, VersionWithSource};
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 
@@ -23,7 +23,7 @@ pub struct CondaPackageMetadata {
     pub build_number: u64,
 
     /// The subdir or platform
-    pub subdir: Platform,
+    pub subdir: Subdir,
 
     /// The dependencies of the package
     #[serde(default)]

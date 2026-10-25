@@ -1023,7 +1023,7 @@ mod tests {
     use std::{path::Path, str::FromStr};
 
     use rattler_conda_types::{
-        PackageName, PackageRecord, Platform, RepoDataRecord, VersionWithSource,
+        PackageName, PackageRecord, RepoDataRecord, Subdir, VersionWithSource,
         package::DistArchiveIdentifier,
     };
     use rattler_lock::{
@@ -1245,10 +1245,10 @@ mod tests {
     /// Build a lock file string from a set of SourceRecords.
     fn build_lock_from_records(records: &[SourceRecord], workspace_root: &Path) -> String {
         // Collect all unique platforms from the records (using the package_record's subdir).
-        let platforms: std::collections::HashSet<Platform> = records
+        let platforms: std::collections::HashSet<Subdir> = records
             .iter()
             .map(|r| {
-                Platform::from_str(&r.package_record().subdir)
+                Subdir::from_str(&r.package_record().subdir)
                     .expect("failed to parse platform from subdir")
             })
             .collect();
@@ -1271,7 +1271,7 @@ mod tests {
         );
 
         for record in records {
-            let platform = Platform::from_str(&record.package_record().subdir)
+            let platform = Subdir::from_str(&record.package_record().subdir)
                 .expect("failed to parse platform from subdir");
             let conda_data =
                 CondaPackageData::from(record.clone().into_conda_source_data(workspace_root));

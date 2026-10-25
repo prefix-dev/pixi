@@ -45,7 +45,7 @@ use typed_path::Utf8NativePathBuf;
 
 use futures::FutureExt;
 use pixi_manifest::{CondaPypiMap, EnvironmentName, FeatureName, SpecType, task::Dependency};
-use rattler_conda_types::{NamedChannelOrUrl, Platform, RepoDataRecord};
+use rattler_conda_types::{NamedChannelOrUrl, RepoDataRecord, Subdir};
 use url::Url;
 
 /// Strings from an iterator
@@ -100,7 +100,7 @@ impl InitBuilder {
         self
     }
 
-    pub fn with_platforms(mut self, platforms: Vec<Platform>) -> Self {
+    pub fn with_platforms(mut self, platforms: Vec<Subdir>) -> Self {
         self.args.platforms = platforms.into_iter().map(|p| p.to_string()).collect();
         self
     }
@@ -201,7 +201,7 @@ pub trait HasDependencyConfig: Sized {
         self
     }
 
-    fn set_platforms(mut self, platforms: &[Platform]) -> Self {
+    fn set_platforms(mut self, platforms: &[Subdir]) -> Self {
         self.dependency_config()
             .platforms
             .extend(platforms.iter().copied().map(Into::into));
@@ -231,13 +231,18 @@ impl AddBuilder {
         self
     }
 
-    pub fn with_platform(mut self, platform: Platform) -> Self {
+    pub fn with_platform(mut self, platform: Subdir) -> Self {
         self.args.dependency_config.platforms.push(platform.into());
         self
     }
 
     pub fn with_git_url(mut self, url: Url) -> Self {
         self.args.dependency_config.git = Some(url);
+        self
+    }
+
+    pub fn with_path(mut self, path: impl Into<PathBuf>) -> Self {
+        self.args.path = Some(path.into());
         self
     }
 
@@ -525,7 +530,7 @@ impl InstallBuilder {
         self.args.only = Some(pkg);
         self
     }
-    pub fn with_platform(mut self, platform: Platform) -> Self {
+    pub fn with_platform(mut self, platform: Subdir) -> Self {
         self.args.platform = Some(platform.into());
         self
     }
@@ -623,7 +628,7 @@ impl UpdateBuilder {
         self
     }
 
-    pub fn with_platform(mut self, platform: Platform) -> Self {
+    pub fn with_platform(mut self, platform: Subdir) -> Self {
         self.args
             .specs
             .platforms
@@ -690,13 +695,13 @@ pub struct BuildBuilder {
 
 impl BuildBuilder {
     /// Set the target platform for the build
-    pub fn with_target_platform(mut self, platform: Platform) -> Self {
+    pub fn with_target_platform(mut self, platform: Subdir) -> Self {
         self.args.target_platform = platform;
         self
     }
 
     /// Set the build platform for the build
-    pub fn with_build_platform(mut self, platform: Platform) -> Self {
+    pub fn with_build_platform(mut self, platform: Subdir) -> Self {
         self.args.build_platform = platform;
         self
     }

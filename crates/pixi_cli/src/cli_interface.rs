@@ -1,5 +1,18 @@
 use miette::IntoDiagnostic;
-use pixi_api::Interface;
+use pixi_api::{Interface, WorkspaceContext};
+use pixi_core::Workspace;
+
+/// Builds the [`WorkspaceContext`] every CLI command works through.
+///
+/// Attaching the progress reporter here rather than at each call site is what
+/// keeps commands like `pixi add` from silently downloading gigabytes: every
+/// context method that solves reports through it without the command having to
+/// opt in. `search` is the exception, because it builds its own gateway rather
+/// than going through the command dispatcher.
+pub fn cli_context(workspace: Workspace) -> WorkspaceContext<CliInterface> {
+    WorkspaceContext::new(CliInterface {}, workspace)
+        .with_progress(pixi_reporters::TopLevelProgress::from_global())
+}
 
 #[derive(Default)]
 pub struct CliInterface {}

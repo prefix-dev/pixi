@@ -10,7 +10,7 @@ hello = "echo 'Hello, Pixi!'"
 build = { cmd = "echo 'Building the project...'" }
 build2 = {
   cmd = "echo Building the project again...",
-  description = "This is another build task."
+  description = "This is another build task.",
 }
 
 # Hidden task
@@ -26,7 +26,7 @@ all2 = [{ task = "build" }, { task = "test" }, { task = "hello" }]
 # Task with environment variables
 deploy = {
   cmd = "echo Deploying to $DEPLOY_ENV",
-  env = { DEPLOY_ENV = "production" }
+  env = { DEPLOY_ENV = "production" },
 }
 
 # Task with working directory

@@ -1,8 +1,9 @@
 """Edge-case tests for `{ workspace = true }` in environment dependency tables."""
 
 import json
-import tomli
 from pathlib import Path
+
+import tomli
 
 from .common import (
     CURRENT_PLATFORM,

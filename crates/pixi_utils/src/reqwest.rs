@@ -5,13 +5,12 @@ use std::{
     time::{Duration, Instant},
 };
 
-use miette::IntoDiagnostic;
 use pixi_auth::{get_auth_middleware, get_auth_store};
 use pixi_config::Config;
 use pixi_consts::consts;
 use rattler_networking::{
-    AuthChallengeMiddleware, GCSMiddleware, LazyClient, MirrorMiddleware, OciMiddleware,
-    OfflineMiddleware, S3Middleware, mirror_middleware::Mirror,
+    AuthChallengeMiddleware, AuthenticationStorageError, GCSMiddleware, LazyClient,
+    MirrorMiddleware, OciMiddleware, OfflineMiddleware, S3Middleware, mirror_middleware::Mirror,
 };
 use reqwest::Client;
 use reqwest_middleware::{ClientWithMiddleware, Middleware};
@@ -20,6 +19,16 @@ use retry_policies::policies::ExponentialBackoff;
 
 #[cfg(any(feature = "native-tls", feature = "rustls"))]
 use crate::tls::Certificates;
+
+/// An error that occurs when building pixi's HTTP clients.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum ReqwestClientError {
+    #[error("failed to load the authentication storage")]
+    AuthStorage(#[from] AuthenticationStorageError),
+
+    #[error("failed to configure the proxies from the pixi config")]
+    Proxy(#[source] reqwest::Error),
+}
 
 /// The default retry policy employed by pixi.
 /// TODO: At some point we might want to make this configurable.
@@ -58,9 +67,15 @@ pub fn mirror_middleware(config: &Config) -> MirrorMiddleware {
     MirrorMiddleware::from_map(internal_map)
 }
 
-pub fn oci_middleware(client: LazyReqwestClient) -> OciMiddleware {
-    let middleware = LazyClient::new(|| ClientWithMiddleware::new(client.into_client(), vec![]));
-    OciMiddleware::new(middleware)
+/// Creates OCI middleware using pixi's authentication store.
+pub fn oci_middleware(
+    client: LazyReqwestClient,
+    config: &Config,
+) -> Result<OciMiddleware, ReqwestClientError> {
+    let client = LazyClient::new(|| ClientWithMiddleware::new(client.into_client(), vec![]));
+    let auth_store = get_auth_store(config)?;
+
+    Ok(OciMiddleware::new(client).with_authentication_storage(auth_store))
 }
 
 static DEFAULT_REQWEST_USER_AGENT: LazyLock<String> =
@@ -128,7 +143,9 @@ pub fn tls_backend() -> &'static str {
     }
 }
 
-pub fn reqwest_client_builder(config: Option<&Config>) -> miette::Result<reqwest::ClientBuilder> {
+pub fn reqwest_client_builder(
+    config: Option<&Config>,
+) -> Result<reqwest::ClientBuilder, ReqwestClientError> {
     let mut builder = Client::builder()
         .pool_max_idle_per_host(DEFAULT_REQWEST_IDLE_PER_HOST)
         .user_agent(DEFAULT_REQWEST_USER_AGENT.as_str())
@@ -159,7 +176,7 @@ pub fn reqwest_client_builder(config: Option<&Config>) -> miette::Result<reqwest
     let proxies = config
         .map(|c| c.get_proxies())
         .transpose()
-        .into_diagnostic()?
+        .map_err(ReqwestClientError::Proxy)?
         .unwrap_or_default();
 
     for p in proxies {
@@ -204,7 +221,7 @@ pub fn build_reqwest_middleware_stack(
     config: &Config,
     client: &LazyReqwestClient,
     s3_config_project: Option<HashMap<String, rattler_networking::s3_middleware::S3Config>>,
-) -> miette::Result<Box<[Arc<dyn Middleware>]>> {
+) -> Result<Box<[Arc<dyn Middleware>]>, ReqwestClientError> {
     let mut result: Vec<Arc<dyn Middleware>> = Vec::new();
 
     // The offline middleware must be the very first middleware in the stack so
@@ -231,7 +248,7 @@ pub fn build_reqwest_middleware_stack(
     // The OCI middleware rewrites `oci://` requests into real registry requests
     // and is a no-op for other URL schemes. It must be installed unconditionally
     // so that `oci://` channels work even without a mirror configured.
-    result.push(Arc::new(oci_middleware(client.clone())));
+    result.push(Arc::new(oci_middleware(client.clone(), config)?));
 
     result.push(Arc::new(GCSMiddleware::default()));
 
@@ -241,12 +258,10 @@ pub fn build_reqwest_middleware_stack(
     s3_config.extend(s3_config_global);
     s3_config.extend(s3_config_project);
 
-    let store = get_auth_store(config).into_diagnostic()?;
+    let store = get_auth_store(config)?;
     result.push(Arc::new(S3Middleware::new(s3_config, store)));
 
-    result.push(Arc::new(
-        get_auth_middleware(config).expect("could not create auth middleware"),
-    ));
+    result.push(Arc::new(get_auth_middleware(config)?));
 
     // Reacts to `WWW-Authenticate` challenges
     result.push(Arc::new(AuthChallengeMiddleware::default()));
@@ -257,7 +272,7 @@ pub fn build_reqwest_middleware_stack(
 pub fn build_reqwest_clients(
     config: Option<&Config>,
     s3_config_project: Option<HashMap<String, rattler_networking::s3_middleware::S3Config>>,
-) -> miette::Result<(Client, ClientWithMiddleware)> {
+) -> Result<(Client, ClientWithMiddleware), ReqwestClientError> {
     // If we do not have a config, we will just load the global default.
     let config = if let Some(config) = config {
         Cow::Borrowed(config)
@@ -277,7 +292,7 @@ pub fn build_reqwest_clients(
 pub fn build_lazy_reqwest_clients(
     config: Option<&Config>,
     s3_config_project: Option<HashMap<String, rattler_networking::s3_middleware::S3Config>>,
-) -> miette::Result<(LazyReqwestClient, LazyClient)> {
+) -> Result<(LazyReqwestClient, LazyClient), ReqwestClientError> {
     // If we do not have a config, we will just load the global default.
     let config = if let Some(config) = config {
         Cow::Borrowed(config)
@@ -306,7 +321,7 @@ pub struct LazyReqwestClient {
 }
 
 impl LazyReqwestClient {
-    pub fn new(config: &Config) -> miette::Result<Self> {
+    pub fn new(config: &Config) -> Result<Self, ReqwestClientError> {
         let tls_no_verify = config.tls_no_verify();
         if tls_no_verify {
             tracing::warn!(
@@ -335,7 +350,15 @@ impl LazyReqwestClient {
     }
 }
 
-pub fn uv_middlewares(config: &Config, client: LazyReqwestClient) -> Vec<Arc<dyn Middleware>> {
+/// The middlewares pixi adds to the clients uv builds.
+///
+/// Fails when the authentication store cannot be created, for instance when
+/// the configured auth file is malformed, so the problem is reported instead
+/// of silently losing credentials.
+pub fn uv_middlewares(
+    config: &Config,
+    client: LazyReqwestClient,
+) -> Result<Vec<Arc<dyn Middleware>>, ReqwestClientError> {
     let mut middlewares: Vec<Arc<dyn Middleware>> = Vec::new();
 
     // Reject every request before any other middleware when in offline mode.
@@ -347,16 +370,14 @@ pub fn uv_middlewares(config: &Config, client: LazyReqwestClient) -> Vec<Arc<dyn
 
     if !config.mirror_map().is_empty() {
         middlewares.push(Arc::new(mirror_middleware(config)));
-        middlewares.push(Arc::new(oci_middleware(client.clone())));
+        middlewares.push(Arc::new(oci_middleware(client.clone(), config)?));
     }
 
     // Add authentication middleware after mirror rewriting so it can authenticate
     // against the rewritten URLs (important for mirrors that require different
     // credentials)
-    if let Ok(auth_middleware) = get_auth_middleware(config) {
-        middlewares.push(Arc::new(auth_middleware));
-    }
-    middlewares
+    middlewares.push(Arc::new(get_auth_middleware(config)?));
+    Ok(middlewares)
 }
 
 #[cfg(test)]
@@ -377,7 +398,7 @@ mod tests {
         );
 
         let client = LazyReqwestClient::new(&config).unwrap();
-        let middlewares = uv_middlewares(&config, client);
+        let middlewares = uv_middlewares(&config, client).unwrap();
 
         // Should have: mirror + OCI + auth middleware
         assert!(
@@ -393,7 +414,7 @@ mod tests {
         // This ensures existing non-mirror auth scenarios continue to work
         let config = Config::default();
         let client = LazyReqwestClient::new(&config).unwrap();
-        let middlewares = uv_middlewares(&config, client);
+        let middlewares = uv_middlewares(&config, client).unwrap();
 
         // Should have: auth middleware only
         assert_eq!(
@@ -413,7 +434,7 @@ mod tests {
             ..Default::default()
         };
         let client = LazyReqwestClient::new(&config).unwrap();
-        let middlewares = uv_middlewares(&config, client);
+        let middlewares = uv_middlewares(&config, client).unwrap();
 
         // Should have: offline + auth middleware
         assert_eq!(
@@ -421,6 +442,50 @@ mod tests {
             2,
             "Expected exactly 2 middlewares (offline, auth) when offline without mirrors, got {}",
             middlewares.len()
+        );
+    }
+
+    /// A malformed auth file must be reported, not turned into a client
+    /// that silently has no credentials.
+    #[test]
+    fn test_uv_middlewares_reports_a_malformed_auth_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let auth_file = dir.path().join("auth.json");
+        fs_err::write(&auth_file, "not json").unwrap();
+
+        let config = Config {
+            authentication_override_file: Some(auth_file),
+            ..Default::default()
+        };
+        let client = LazyReqwestClient::new(&config).unwrap();
+        assert!(
+            uv_middlewares(&config, client).is_err(),
+            "a malformed auth file must be an error"
+        );
+    }
+
+    // OciMiddleware doesn't expose its auth store, so verify it through Debug output.
+    #[test]
+    fn test_oci_middleware_uses_the_configured_auth_store() {
+        let dir = tempfile::tempdir().unwrap();
+        let auth_file = dir.path().join("auth.json");
+        fs_err::write(&auth_file, "{}").unwrap();
+
+        let config = Config {
+            authentication_override_file: Some(auth_file.clone()),
+            ..Default::default()
+        };
+        let client = LazyReqwestClient::new(&config).unwrap();
+        let middleware = oci_middleware(client, &config).unwrap();
+
+        let debug = format!("{middleware:?}");
+        assert!(
+            debug.contains("auth_storage: Some("),
+            "OCI middleware was built without an authentication store: {debug}"
+        );
+        assert!(
+            debug.contains(&format!("{auth_file:?}")),
+            "OCI middleware's store does not include the configured auth file: {debug}"
         );
     }
 }

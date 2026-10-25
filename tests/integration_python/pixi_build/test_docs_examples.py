@@ -2,6 +2,7 @@ import json
 import shutil
 import sys
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 from inline_snapshot import snapshot
@@ -23,12 +24,12 @@ pytestmark = pytest.mark.skipif(
 class TestPixiBuild:
     pixi_projects_dir: Path = repo_root().joinpath("docs/source_files/pixi_workspaces/pixi_build")
     # Workspaces that are deliberately not run here
-    excluded_projects: set[str] = {
+    excluded_projects: ClassVar[set[str]] = {
         # Requires a ROS setup that is too heavy for this test
         "ros_ws",
     }
     # Expected stdout of the 'start' task per workspace directory name
-    expected_outputs: dict[str, str] = {
+    expected_outputs: ClassVar[dict[str, str]] = {
         "advanced_cpp": snapshot("3\n"),
         "cpp": snapshot("3\n"),
         "dev": snapshot("Hello, from dev-package!\n"),

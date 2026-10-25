@@ -23,9 +23,9 @@ use rattler_conda_types::{MatchSpec, PackageName, StringMatcher};
 
 use crate::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
 
-/// Checks if there are newer versions of the dependencies and upgrades them in the lock file and manifest file.
+/// Check if there are newer versions of the dependencies and upgrade them in the lock file and manifest file.
 ///
-/// `pixi upgrade` loosens the requirements for the given packages, updates the lock file and the adapts the manifest accordingly.
+/// `pixi upgrade` loosens the requirements for the given packages, updates the lock file, and adapts the manifest accordingly.
 /// By default, all features are upgraded.
 #[derive(Parser, Debug, Default)]
 pub struct Args {
@@ -78,10 +78,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
-        .locate()?
-        .with_cli_config(args.config.clone());
+        .with_cli_config(args.config.clone())
+        .locate()
+        .await?;
 
-    let mut workspace = workspace.modify()?;
+    // One reporter for the whole command: the per-feature solves below and the
+    // `--json --dry-run` solve further down share it instead of each stacking
+    // their own set of bars onto the global multi-progress.
+    let progress = pixi_reporters::TopLevelProgress::from_global();
+    let mut workspace = workspace.modify()?.with_progress(progress.clone());
 
     let features = {
         if let Some(environment_arg) = &args.specs.environment {
@@ -263,10 +268,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         if args.dry_run {
             // Compute a combined diff by solving once against the final in-memory manifest
             // without writing to disk, then revert. Reuse the already-loaded original lock file.
-            let progress = pixi_reporters::TopLevelProgress::from_global();
-            let dispatcher = progress
-                .clone()
-                .register_with(workspace.workspace().command_dispatcher_builder()?)
+            let _clear_progress =
+                pixi_reporters::TopLevelProgress::clear_when_done(Some(&progress));
+            workspace.workspace().refresh_environment_hosts().await?;
+            let dispatcher = workspace
+                .workspace()
+                .command_dispatcher_builder(Some(&progress))?
                 .finish();
             let derived = UpdateContext::builder(workspace.workspace(), dispatcher)?
                 .with_lock_file(original_lock_file.clone())

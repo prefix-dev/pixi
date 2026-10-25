@@ -3,7 +3,7 @@
 Some `pixi-build` backends support configurable compiler selection through the `compilers` configuration option. This feature integrates with conda-forge's compiler infrastructure to provide cross-platform, ABI-compatible builds.
 
 !!! warning
-    `pixi-build` is a preview feature, and will change until it is stabilized.
+    `pixi-build` is a preview flag, and will change until it is stabilized.
     This is why we require users to opt in to that feature by adding "pixi-build" to `workspace.preview`.
 
     ```toml
@@ -157,7 +157,7 @@ Only certain `pixi-build` backends support the `compilers` configuration option.
 To configure compilers in your `pixi-build` project, you can use the `compilers` configuration option in your `pixi.toml` file. Below are some examples of how to set up compiler configurations for different scenarios.
 
 !!! note "Backend Support"
-Compiler configuration is only available in backends that have specifically implemented this feature. Not all backends support the `compilers` configuration option. Check your backend's documentation to see if it supports compiler configuration.
+    Compiler configuration is only available in backends that have specifically implemented this feature. Not all backends support the `compilers` configuration option. Check your backend's documentation to see if it supports compiler configuration.
 
 ### Basic Compiler Configuration
 

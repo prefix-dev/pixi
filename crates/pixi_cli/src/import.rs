@@ -28,7 +28,7 @@ pub enum ImportFileFormat {
     PypiTxt,
 }
 
-/// Imports a file into an environment in an existing workspace.
+/// Import a file into an environment in an existing workspace
 ///
 /// If `--format` isn't provided, `import` will try each format in turn
 #[derive(Parser, Debug, Default, Clone)]
@@ -144,8 +144,9 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(source)
         .with_search_start(workspace_config.workspace_locator_start())
-        .locate()?
-        .with_cli_config(args.config);
+        .with_cli_config(args.config)
+        .locate()
+        .await?;
 
     sanity_check_workspace(&workspace).await?;
 
@@ -231,9 +232,10 @@ async fn import(args: Args, format: &ImportFileFormat) -> miette::Result<()> {
             (conda_deps, pypi_deps)
         }
         ProcessedInput::PypiTxt => {
-            let reqs_txt = RequirementsTxt::parse(&input_file, workspace.workspace().root())
-                .await
-                .into_diagnostic()?;
+            let reqs_txt =
+                RequirementsTxt::parse(input_file.as_path(), workspace.workspace().root())
+                    .await
+                    .into_diagnostic()?;
             let pypi_deps = convert_uv_requirements_txt_to_pep508(reqs_txt)?;
 
             (vec![], pypi_deps)

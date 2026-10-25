@@ -8,16 +8,17 @@ use std::{
 use indexmap::{IndexMap, map::Entry};
 use itertools::Either;
 use pixi_build_types::ExtraGroupName;
-use pixi_spec::{BinarySpec, PixiSpec};
+use pixi_spec::PixiSpec;
 use pixi_spec_containers::DependencyMap;
 use pixi_stable_hash::StableHashBuilder;
-use rattler_conda_types::{PackageName, ParsePlatformError, Platform};
+use rattler_conda_types::{PackageName, ParseSubdirError, Subdir};
 use xxhash_rust::xxh3::Xxh3;
 
 use super::error::DependencyError;
 use crate::{
-    CondaDependencies, DependencyOverwriteBehavior, InternalDependencyBehavior, PixiPlatform,
-    PixiPlatformName, PlatformGlob, PyPiDependencies, SpecType,
+    CondaDependencies, DependencyOverwriteBehavior, InternalDependencyBehavior,
+    PackageConstraintSpec, PackageDependencySpec, PixiPlatform, PixiPlatformName, PlatformGlob,
+    PyPiDependencies, SpecType,
     activation::Activation,
     dependencies::{CondaConstraints, CondaDevDependencies},
     manifests::PackageManifest,
@@ -33,7 +34,7 @@ use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 pub struct WorkspaceTarget {
     /// Dependencies for this target.
     ///
-    /// TODO: While the pixi-build feature is not stabilized yet, a workspace
+    /// TODO: While the pixi-build preview flag is not stabilized yet, a workspace
     /// can have host- and build dependencies. When pixi-build is stabilized, we
     /// can simplify this part of the code.
     pub dependencies: HashMap<SpecType, CondaDependencies>,
@@ -110,12 +111,21 @@ impl InlinePackageManifest {
         preview: &crate::Preview,
         root_directory: &std::path::Path,
     ) -> Result<crate::WithWarnings<Self>, crate::TomlError> {
+        // The package name comes from the dependency key (an inline definition
+        // may not set `package.name`, so name resolution falls through to the
+        // defaults). Supplying it as the default makes it visible during
+        // `into_manifest` too, where the pin name rules are checked against
+        // it.
+        let package_defaults = crate::toml::PackageDefaults {
+            name: Some(dependency_name.as_normalized().to_string()),
+            ..crate::toml::PackageDefaults::default()
+        };
         let crate::WithWarnings {
             value: mut manifest,
             warnings,
         } = package.into_manifest(
             workspace_package_properties,
-            crate::toml::PackageDefaults::default(),
+            package_defaults,
             preview,
             root_directory,
         )?;
@@ -147,8 +157,10 @@ impl InlinePackageManifest {
 /// A package target describes the dependencies for a specific platform.
 #[derive(Default, Debug, Clone)]
 pub struct PackageTarget {
-    /// Dependencies for this target.
-    pub dependencies: HashMap<SpecType, DependencyMap<PackageName, PixiSpec>>,
+    /// Dependencies for this target. Only the `Run` and `Host` tables can
+    /// contain pin entries; `Build` and `RunConstraints` are validated to
+    /// plain specs at parse time.
+    pub dependencies: HashMap<SpecType, DependencyMap<PackageName, PackageDependencySpec>>,
 
     /// Extra groups declared by the package for this target.
     pub extra_dependencies: IndexMap<ExtraGroupName, DependencyMap<PackageName, PixiSpec>>,
@@ -169,15 +181,15 @@ pub struct PackageTarget {
 #[derive(Default, Debug, Clone)]
 pub struct PackageRunExports {
     /// Applied from host dependencies to run dependencies of noarch consumers.
-    pub noarch: DependencyMap<PackageName, PixiSpec>,
+    pub noarch: DependencyMap<PackageName, PackageDependencySpec>,
     /// Applied from build and host dependencies to run dependencies.
-    pub strong: DependencyMap<PackageName, PixiSpec>,
+    pub strong: DependencyMap<PackageName, PackageDependencySpec>,
     /// Applied from host dependencies to run dependencies.
-    pub weak: DependencyMap<PackageName, PixiSpec>,
+    pub weak: DependencyMap<PackageName, PackageDependencySpec>,
     /// Applied from build and host dependencies to run constraints.
-    pub strong_constraints: DependencyMap<PackageName, BinarySpec>,
+    pub strong_constraints: DependencyMap<PackageName, PackageConstraintSpec>,
     /// Applied from host dependencies to run constraints.
-    pub weak_constraints: DependencyMap<PackageName, BinarySpec>,
+    pub weak_constraints: DependencyMap<PackageName, PackageConstraintSpec>,
 }
 
 impl PackageRunExports {
@@ -211,7 +223,7 @@ impl Hash for PackageTarget {
             extra_dependencies,
             run_exports,
         } = self;
-        let collect = |spec_type: SpecType| -> Vec<(&PackageName, &PixiSpec)> {
+        let collect = |spec_type: SpecType| -> Vec<(&PackageName, &PackageDependencySpec)> {
             dependencies
                 .get(&spec_type)
                 .into_iter()
@@ -538,27 +550,27 @@ impl PackageTarget {
     pub fn dependencies(
         &self,
         spec_type: SpecType,
-    ) -> Option<&DependencyMap<PackageName, PixiSpec>> {
+    ) -> Option<&DependencyMap<PackageName, PackageDependencySpec>> {
         self.dependencies.get(&spec_type)
     }
 
     /// Returns the run dependencies of the target
-    pub fn run_dependencies(&self) -> Option<&DependencyMap<PackageName, PixiSpec>> {
+    pub fn run_dependencies(&self) -> Option<&DependencyMap<PackageName, PackageDependencySpec>> {
         self.dependencies.get(&SpecType::Run)
     }
 
     /// Returns the run constraints of the target
-    pub fn run_constraints(&self) -> Option<&DependencyMap<PackageName, PixiSpec>> {
+    pub fn run_constraints(&self) -> Option<&DependencyMap<PackageName, PackageDependencySpec>> {
         self.dependencies.get(&SpecType::RunConstraints)
     }
 
     /// Returns the host dependencies of the target
-    pub fn host_dependencies(&self) -> Option<&DependencyMap<PackageName, PixiSpec>> {
+    pub fn host_dependencies(&self) -> Option<&DependencyMap<PackageName, PackageDependencySpec>> {
         self.dependencies.get(&SpecType::Host)
     }
 
     /// Returns the build dependencies of the target
-    pub fn build_dependencies(&self) -> Option<&DependencyMap<PackageName, PixiSpec>> {
+    pub fn build_dependencies(&self) -> Option<&DependencyMap<PackageName, PackageDependencySpec>> {
         self.dependencies.get(&SpecType::Build)
     }
 
@@ -574,7 +586,7 @@ impl PackageTarget {
             .and_then(|deps| deps.get(dep_name));
 
         match (current_dependencies, exact) {
-            (Some(specs), Some(spec)) => specs.contains(spec),
+            (Some(specs), Some(spec)) => specs.contains(&PackageDependencySpec::from(spec.clone())),
             (Some(_), None) => true,
             (None, _) => false,
         }
@@ -595,11 +607,11 @@ impl PackageTarget {
         match behavior {
             InternalDependencyBehavior::Append => {
                 // Append to existing specs
-                deps.insert(dep_name.clone(), spec.clone());
+                deps.insert(dep_name.clone(), spec.clone().into());
             }
             InternalDependencyBehavior::Overwrite => {
                 // Overwrite any existing spec with the new one
-                deps.insert_overwrite(dep_name.clone(), spec.clone());
+                deps.insert_overwrite(dep_name.clone(), spec.clone().into());
             }
         }
     }
@@ -648,10 +660,10 @@ impl PackageTarget {
 /// the package manifest.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum TargetSelector {
-    // Platform specific configuration
+    // Subdir specific configuration
     Platform(PixiPlatformName),
     PlatformGlob(PlatformGlob),
-    Subdir(Platform),
+    Subdir(Subdir),
     Unix,
     Linux,
     Win,
@@ -708,8 +720,8 @@ impl From<&PixiPlatform> for TargetSelector {
     }
 }
 
-impl From<Platform> for TargetSelector {
-    fn from(value: Platform) -> Self {
+impl From<Subdir> for TargetSelector {
+    fn from(value: Subdir) -> Self {
         TargetSelector::Subdir(value)
     }
 }
@@ -718,7 +730,7 @@ impl From<Platform> for TargetSelector {
 #[derive(Debug, thiserror::Error)]
 pub enum ParseTargetSelectorError {
     #[error(transparent)]
-    Platform(#[from] ParsePlatformError),
+    Platform(#[from] ParseSubdirError),
 
     /// The key looks like an `if(...)` expression selector, which is only valid
     /// in the `[package]` dependency tables.
@@ -740,20 +752,18 @@ impl FromStr for TargetSelector {
         if let Some(selector) = family_name_to_selector(s) {
             return Ok(selector);
         }
-        if let Ok(platform) = Platform::from_str(s) {
-            return Ok(TargetSelector::Subdir(platform));
-        }
+        let subdir_error = match Subdir::from_str(s) {
+            Ok(platform) => return Ok(TargetSelector::Subdir(platform)),
+            Err(err) => err,
+        };
         if PlatformGlob::looks_like_glob(s) {
-            let glob = PlatformGlob::try_from(s).map_err(|_| ParsePlatformError {
-                string: s.to_string(),
-            })?;
-            return Ok(TargetSelector::PlatformGlob(glob));
+            return match PlatformGlob::try_from(s) {
+                Ok(glob) => Ok(TargetSelector::PlatformGlob(glob)),
+                Err(_) => Err(subdir_error.into()),
+            };
         }
         let Ok(platform) = PixiPlatformName::try_from(s) else {
-            return Err(ParsePlatformError {
-                string: s.to_string(),
-            }
-            .into());
+            return Err(subdir_error.into());
         };
         Ok(TargetSelector::Platform(platform))
     }
@@ -971,7 +981,7 @@ mod tests {
     use insta::assert_snapshot;
     use itertools::Itertools;
     use pixi_spec::PixiSpec;
-    use rattler_conda_types::{PackageName, Platform, VersionSpec};
+    use rattler_conda_types::{PackageName, Subdir, VersionSpec};
     use std::{path::Path, str::FromStr};
 
     use crate::{
@@ -1237,7 +1247,7 @@ mod tests {
         let default_feature = manifest.default_feature();
 
         // For linux-64: should only have foo = "2.0" (target overrides default)
-        let linux64 = PixiPlatform::from_subdir(Platform::Linux64);
+        let linux64 = PixiPlatform::from_subdir(Subdir::Linux64);
         let linux_deps = default_feature
             .run_dependencies(Some(&linux64))
             .expect("Should have dependencies for linux-64");
@@ -1260,7 +1270,7 @@ mod tests {
         );
 
         // For osx-arm64: should only have foo = "1.0" (default only)
-        let osx_arm64 = PixiPlatform::from_subdir(Platform::OsxArm64);
+        let osx_arm64 = PixiPlatform::from_subdir(Subdir::OsxArm64);
         let osx_deps = default_feature
             .run_dependencies(Some(&osx_arm64))
             .expect("Should have dependencies for osx-arm64");
@@ -1302,13 +1312,13 @@ mod tests {
         let selector = TargetSelector::from_str("cuda-*").unwrap();
         let cuda_win = PixiPlatform::new(
             PixiPlatformName::try_from("cuda-win-64").unwrap(),
-            Platform::Win64,
+            Subdir::Win64,
             vec![],
         )
         .unwrap();
         assert!(selector.matches(&cuda_win));
         // A bare subdir platform is not matched by `cuda-*`.
-        assert!(!selector.matches(&PixiPlatform::from_subdir(Platform::Win64)));
+        assert!(!selector.matches(&PixiPlatform::from_subdir(Subdir::Win64)));
     }
 
     /// A glob target applies to every matching rich platform, and a more
@@ -1341,7 +1351,7 @@ mod tests {
 
         let feature = manifest.default_feature();
         let foo = PackageName::from_str("foo").unwrap();
-        let resolved = |name: &str, subdir: Platform| {
+        let resolved = |name: &str, subdir: Subdir| {
             let platform = if name == subdir.as_str() {
                 PixiPlatform::from_subdir(subdir)
             } else {
@@ -1360,17 +1370,17 @@ mod tests {
 
         // `cuda-linux-64` only matches the glob → foo=2.0.
         assert_eq!(
-            resolved("cuda-linux-64", Platform::Linux64).as_deref(),
+            resolved("cuda-linux-64", Subdir::Linux64).as_deref(),
             Some("==2.0")
         );
         // `cuda-win-64` matches both; the later exact selector wins → foo=3.0.
         assert_eq!(
-            resolved("cuda-win-64", Platform::Win64).as_deref(),
+            resolved("cuda-win-64", Subdir::Win64).as_deref(),
             Some("==3.0")
         );
         // The bare `linux-64` matches neither glob nor exact → default foo=1.0.
         assert_eq!(
-            resolved("linux-64", Platform::Linux64).as_deref(),
+            resolved("linux-64", Subdir::Linux64).as_deref(),
             Some("==1.0")
         );
     }

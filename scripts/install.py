@@ -1,8 +1,8 @@
 import argparse
-from pathlib import Path
-import shutil
-import platform
 import os
+import platform
+import shutil
+from pathlib import Path
 
 DEFAULT_DESTINATION_DIR = Path(os.getenv("PIXI_HOME", Path.home() / ".pixi")) / "bin"
 

@@ -246,10 +246,10 @@ impl DevSourceMetadataSpec {
                                     crate::build::conversion::from_source_spec_v1(source.clone());
                                 PixiSpec::from(spec.resolve(source_anchor))
                             }
-                            PackageSpec::PinCompatible(_) => {
-                                // Just ignore the pin compatible dependency. Since we are also adding
-                                // the dependencies for build and host directly the pin_compatible
-                                // wouldnt have any effect anyway.
+                            PackageSpec::PinCompatible(_) | PackageSpec::PinSubpackage(_) => {
+                                // Ignore pin dependencies. Since the build and
+                                // host dependencies are also added directly, a
+                                // pin would not have any effect anyway.
                                 continue;
                             }
                         };
@@ -260,10 +260,13 @@ impl DevSourceMetadataSpec {
                     for constraint in &deps.constraints {
                         let name = PackageName::new_unchecked(constraint.name.as_str());
 
-                        // Match on ConstraintSpec enum
                         let spec = match &constraint.spec {
                             ConstraintSpec::Binary(binary) => {
-                                conversion::from_binary_spec_v1(binary.clone())
+                                conversion::from_binary_spec_v1((**binary).clone())
+                            }
+                            ConstraintSpec::PinCompatible(_) | ConstraintSpec::PinSubpackage(_) => {
+                                // Same as above: pins have no effect here.
+                                continue;
                             }
                         };
 

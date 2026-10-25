@@ -10,11 +10,12 @@ use std::{
     sync::Arc,
 };
 
+use miette::Diagnostic;
 use pypi_mapping::{
     self, ProjectDefinedChannelMapping, ProjectDefinedMapping, ProjectDefinedMappingLocation,
     PurlDerivationMode, PurlDerivationSource, PypiNames,
 };
-use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
+use rattler_conda_types::{PackageName, RepoDataRecord, Subdir};
 use rattler_lock::DEFAULT_ENVIRONMENT_NAME;
 use reqwest_middleware::ClientBuilder;
 use tempfile::TempDir;
@@ -47,7 +48,7 @@ async fn test_purl_are_added_for_pypi() {
 
     // Check if boltons has a purl
     let p = lock_file
-        .platform(&Platform::current().to_string())
+        .platform(&Subdir::current().unwrap_or(Subdir::NoArch).to_string())
         .unwrap();
     lock_file
         .default_environment()
@@ -70,7 +71,7 @@ async fn test_purl_are_added_for_pypi() {
 
     // Check if boltons has a purl
     let p = lock_file
-        .platform(&Platform::current().to_string())
+        .platform(&Subdir::current().unwrap_or(Subdir::NoArch).to_string())
         .unwrap();
     lock_file
         .default_environment()
@@ -97,12 +98,12 @@ async fn test_purl_are_added_for_pypi() {
     // Check if boltons exists only as conda dependency
     assert!(lock_file.contains_match_spec(
         DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         "boltons"
     ));
     assert!(!lock_file.contains_pypi_package(
         DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         "boltons"
     ));
 }
@@ -1531,14 +1532,10 @@ async fn test_prefix_fetch_failure_error_mentions_escape_hatches() {
         .await
         .expect_err("an offline prefix.dev lookup should fail");
 
-    let rendered = format!("{err:?}");
-    // Strip all whitespace before matching: miette wraps the help text at
-    // arbitrary points, potentially splitting tokens across lines.
-    let collapsed: String = rendered.chars().filter(|c| !c.is_whitespace()).collect();
+    let help = err.help().expect("should carry a help text").to_string();
     assert!(
-        collapsed.contains("mapping-mode=\"replace\"")
-            && collapsed.contains("conda-pypi-map=false"),
-        "the error should suggest the offline escape hatches, got: {rendered}"
+        help.contains("mapping-mode = \"replace\"") && help.contains("conda-pypi-map = false"),
+        "the error should suggest the offline escape hatches, got: {help}"
     );
 }
 
@@ -1661,12 +1658,12 @@ async fn test_custom_mapping_ignores_backwards_compatibility() {
     let mut package_database = MockRepoData::default();
     package_database.add_package(
         Package::build("python", "3.12.0")
-            .with_subdir(Platform::Linux64)
+            .with_subdir(Subdir::Linux64)
             .finish(),
     );
     package_database.add_package(
         Package::build("boltons", "24.0.0")
-            .with_subdir(Platform::Linux64)
+            .with_subdir(Subdir::Linux64)
             .finish(),
     );
     let channel = package_database.into_channel().await.unwrap();
@@ -1716,7 +1713,7 @@ async fn test_custom_mapping_ignores_backwards_compatibility() {
 
     // Get the lock file
     let lock = pixi.lock_file().await.unwrap();
-    let p = lock.platform(&Platform::Linux64.to_string()).unwrap();
+    let p = lock.platform(&Subdir::Linux64.to_string()).unwrap();
     let environment = lock.environment(DEFAULT_ENVIRONMENT_NAME).unwrap();
     let conda_packages = environment.conda_packages(p).unwrap();
 

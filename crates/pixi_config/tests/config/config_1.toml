@@ -6,7 +6,7 @@ concurrency.solves = 1
 
 [s3-options.bucket1]
 endpoint-url = "https://my-s3-host"
-force-path-style = false
+addressing-style = "virtual-host"
 region = "us-east-1"
 
 [mirrors]

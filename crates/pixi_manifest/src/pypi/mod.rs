@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use chrono::{DateTime, Utc};
 use pep508_rs::PackageName;
@@ -14,6 +14,9 @@ pub struct ResolvedPypiExcludeNewer {
 
     /// Package-specific cutoff dates that override [`Self::cutoff`].
     pub package_cutoffs: BTreeMap<PackageName, DateTime<Utc>>,
+
+    /// Packages that are never excluded, regardless of their upload time.
+    pub exempt_packages: BTreeSet<PackageName>,
 }
 
 impl ResolvedPypiExcludeNewer {
@@ -22,6 +25,7 @@ impl ResolvedPypiExcludeNewer {
         Self {
             cutoff: Some(cutoff),
             package_cutoffs: BTreeMap::new(),
+            exempt_packages: BTreeSet::new(),
         }
     }
 
@@ -31,8 +35,14 @@ impl ResolvedPypiExcludeNewer {
         self
     }
 
+    /// Exempts every release of `package` from the cutoff.
+    pub fn with_exempt_package(mut self, package: PackageName) -> Self {
+        self.exempt_packages.insert(package);
+        self
+    }
+
     /// Returns true if there is no global or package-specific cutoff configured.
     pub fn is_empty(&self) -> bool {
-        self.cutoff.is_none() && self.package_cutoffs.is_empty()
+        self.cutoff.is_none() && self.package_cutoffs.is_empty() && self.exempt_packages.is_empty()
     }
 }

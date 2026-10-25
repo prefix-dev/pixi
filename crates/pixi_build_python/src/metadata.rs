@@ -373,7 +373,7 @@ mod tests {
 
     use fs_err as fs;
     use pixi_build_backend::generated_recipe::{GenerateRecipe, MetadataProvider};
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::Subdir;
     use tempfile::TempDir;
 
     use crate::{PythonGenerator, config::PythonBackendConfig, project_fixture};
@@ -950,7 +950,7 @@ Documentation = "https://docs.example.com"
                 // when using the default here we should read values from the pyproject.toml
                 &PythonBackendConfig::default(),
                 temp_dir.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -1001,7 +1001,7 @@ requires-python = ">=3.13"
                 // when using the default here we should read values from the pyproject.toml
                 &PythonBackendConfig::default(),
                 temp_dir.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],

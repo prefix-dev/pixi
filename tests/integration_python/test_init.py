@@ -1,7 +1,7 @@
-import tomli
 from pathlib import Path
 
 import pytest
+import tomli
 from dirty_equals import IsPartialDict
 from inline_snapshot import snapshot
 
@@ -88,3 +88,17 @@ def test_pixi_init_pyproject(pixi: Path, tmp_pixi_workspace: Path) -> None:
     verify_cli_command([pixi, "init", tmp_pixi_workspace, "--format", "pyproject"])
     # Verify that install works
     verify_cli_command([pixi, "install", "--manifest-path", manifest_path])
+
+
+def test_pixi_init_gitignore_append_newline(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    gitignore_path = tmp_pixi_workspace / ".gitignore"
+    # Write some existing content without a trailing newline
+    gitignore_path.write_text("data/")
+
+    # Initialize pixi project
+    verify_cli_command([pixi, "init", "."], cwd=tmp_pixi_workspace)
+
+    # Verify that the .gitignore has the content appended on a new line
+    gitignore_content = gitignore_path.read_text()
+    assert gitignore_content.startswith("data/\n")
+    assert ".pixi/*" in gitignore_content

@@ -24,9 +24,11 @@ zmodload zsh/zpty
 zmodload zsh/datetime
 
 # Seconds to wait for each step, and how often to look while waiting. Plain
-# scalars, not `typeset -F`, so they read as `5` rather than `5.000000000` in
-# the messages below and in `sleep`.
-typeset TIMEOUT=5
+# scalars, not `typeset -F`, so they read as `20` rather than `20.000000000` in
+# the messages below and in `sleep`. A probe that works returns as soon as the
+# step is done, so the timeout only needs to be generous enough for a loaded CI
+# runner, where 5s proved too short.
+typeset TIMEOUT=20
 typeset POLL=0.05
 
 completion_dir=${1:?completion dir}
@@ -67,14 +69,18 @@ if ! await_prompt; then
     exit 1
 fi
 
-zpty -w probe "fpath=(${(q)completion_dir} \$fpath)"
-zpty -w probe "autoload -Uz compinit && compinit -u -d ${(q)workspace}/.zcompdump"
+# A single setup command produces one prompt after every step has completed.
 # Tab must insert a unique match outright instead of opening a menu, so that
 # the buffer alone tells us what was offered.
-zpty -w probe 'unsetopt auto_menu auto_list'
-zpty -w probe "report_buffer() { print -r -- \$BUFFER >! ${(q)buffer_file} }"
-zpty -w probe 'zle -N report_buffer; bindkey "^G" report_buffer'
-zpty -w probe "cd ${(q)workspace}"
+setup_commands=(
+    "fpath=(${(q)completion_dir} \$fpath)"
+    "autoload -Uz compinit && compinit -u -d ${(q)workspace}/.zcompdump"
+    'unsetopt auto_menu auto_list'
+    "report_buffer() { print -r -- \$BUFFER >! ${(q)buffer_file} }"
+    'zle -N report_buffer; bindkey "^G" report_buffer'
+    "cd ${(q)workspace}"
+)
+zpty -w probe "${(j:; :)setup_commands}"
 if ! await_prompt; then
     print -u2 "zsh-completion-probe: the probe shell did not finish setup within ${TIMEOUT}s"
     exit 1

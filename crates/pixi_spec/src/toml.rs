@@ -343,34 +343,46 @@ fn version_spec_error<T: Into<String>>(input: T) -> Option<impl Display> {
     None
 }
 
+/// An error that occurs when a TOML dependency spec has an invalid
+/// combination of fields or cannot be converted into the requested spec.
 #[derive(Error, Debug)]
 pub enum SpecError {
+    /// Git reference fields were given without a `git` location.
     #[error("`branch`, `rev`, `tag`, and `lfs` are only valid when `git` is specified")]
     NotAGitSpec,
 
+    /// More than one of `branch`, `rev` and `tag` was given.
     #[error("only one of `branch`, `rev`, or `tag` can be specified")]
     MultipleGitRefs,
 
+    /// A detailed spec without any field that identifies a package.
     #[error(
         "one of `version`, `build`, `build-number`, `file-name`, `channel`, `subdir`, `md5`, `sha256`, `git`, `url`, or `path` must be specified"
     )]
     MissingDetailedIdentifier,
 
+    /// More than one of `url`, `path` and `git` was given.
     #[error("only one of `url`, `path`, or `git` can be specified")]
     MultipleIdentifiers,
 
+    /// Two fields that cannot be combined were given.
     #[error("{0} cannot be used with {1}")]
     InvalidCombination(Cow<'static, str>, Cow<'static, str>),
 
+    /// The `when` condition is invalid.
     #[error("{message}")]
     InvalidWhen {
+        /// What is wrong with the condition.
         message: String,
+        /// A suggestion to fix the condition.
         help: Option<String>,
     },
 
+    /// The spec does not describe a binary package.
     #[error(transparent)]
     NotABinary(NotBinary),
 
+    /// The `subdirectory` field is invalid.
     #[error(transparent)]
     InvalidSubdirectory(#[from] SubdirectoryError),
 }
@@ -1837,7 +1849,7 @@ mod test {
                 .as_ref()
                 .unwrap()
                 .to_string(),
-            "(__linux or __osx)"
+            "__linux or __osx"
         );
 
         let spec: PixiSpec = serde_json::from_value(json!({
@@ -1852,7 +1864,7 @@ mod test {
                 .as_ref()
                 .unwrap()
                 .to_string(),
-            "(__unix and (__linux or __osx))"
+            "__unix and (__linux or __osx)"
         );
 
         let mut value = toml_span::parse(
@@ -1870,7 +1882,7 @@ mod test {
                 .as_ref()
                 .unwrap()
                 .to_string(),
-            "(__unix and python[version=\">=3.10\", build=\"*cuda\"])"
+            "__unix and python[version=\">=3.10\", build=\"*cuda\"]"
         );
     }
 
@@ -1883,13 +1895,13 @@ mod test {
     #[test]
     fn test_when_condition_all() {
         let input = json!({ "version": "*", "when": { "all": ["__unix", "python >=3.10"] } });
-        assert_snapshot!(parse_json_condition(input), @"(__unix and python>=3.10)");
+        assert_snapshot!(parse_json_condition(input), @"__unix and python>=3.10");
     }
 
     #[test]
     fn test_when_condition_any() {
         let input = json!({ "version": "*", "when": { "any": ["__linux", "__osx"] } });
-        assert_snapshot!(parse_json_condition(input), @"(__linux or __osx)");
+        assert_snapshot!(parse_json_condition(input), @"__linux or __osx");
     }
 
     #[test]
@@ -1898,7 +1910,7 @@ mod test {
             "version": "*",
             "when": { "all": ["__unix", { "any": ["__linux", "__osx"] }] },
         });
-        assert_snapshot!(parse_json_condition(input), @"(__unix and (__linux or __osx))");
+        assert_snapshot!(parse_json_condition(input), @"__unix and (__linux or __osx)");
     }
 
     #[test]
@@ -1977,14 +1989,14 @@ mod test {
     fn test_when_condition_toml_all_with_expanded_build_match() {
         let input = r#"version = "*"
 when = { all = ["__unix", { package = "python", version = ">=3.10", build = "*cuda" }] }"#;
-        assert_snapshot!(parse_toml_condition(input), @r###"(__unix and python[version=">=3.10", build="*cuda"])"###);
+        assert_snapshot!(parse_toml_condition(input), @r###"__unix and python[version=">=3.10", build="*cuda"]"###);
     }
 
     #[test]
     fn test_when_condition_toml_any() {
         let input = r#"version = "*"
 when = { any = ["__linux", "__osx"] }"#;
-        assert_snapshot!(parse_toml_condition(input), @"(__linux or __osx)");
+        assert_snapshot!(parse_toml_condition(input), @"__linux or __osx");
     }
 
     #[test]

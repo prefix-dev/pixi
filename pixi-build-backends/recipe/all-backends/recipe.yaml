@@ -107,7 +107,7 @@ outputs:
             - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
     requirements:
       run:
-        - pixi-build-api-version >=6,<7
+        - pixi-build-api-version >=7,<8
     tests:
       - script: pixi-build-cmake --help
       - package_contents:
@@ -144,7 +144,7 @@ outputs:
             - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
     requirements:
       run:
-        - pixi-build-api-version >=6,<7
+        - pixi-build-api-version >=7,<8
     tests:
       - script: pixi-build-mojo --help
       - package_contents:
@@ -181,7 +181,7 @@ outputs:
             - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
     requirements:
       run:
-        - pixi-build-api-version >=6,<7
+        - pixi-build-api-version >=7,<8
     tests:
       - script: pixi-build-python --help
       - package_contents:
@@ -219,7 +219,7 @@ outputs:
             - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
     requirements:
       run:
-        - pixi-build-api-version >=6,<7
+        - pixi-build-api-version >=7,<8
     tests:
       - script: pixi-build-r --help
       - package_contents:
@@ -256,7 +256,7 @@ outputs:
             - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
     requirements:
       run:
-        - pixi-build-api-version >=6,<7
+        - pixi-build-api-version >=7,<8
     tests:
       - script: pixi-build-rattler-build --help
       - package_contents:
@@ -294,7 +294,7 @@ outputs:
             - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
     requirements:
       run:
-        - pixi-build-api-version >=6,<7
+        - pixi-build-api-version >=7,<8
     tests:
       - script: pixi-build-rust --help
       - package_contents:
@@ -332,7 +332,7 @@ outputs:
             - move ${{ PREFIX }}\THIRDPARTY.yml ${{ SRC_DIR }}\THIRDPARTY.yml
     requirements:
       run:
-        - pixi-build-api-version >=6,<7
+        - pixi-build-api-version >=7,<8
     tests:
       - script: pixi-build-ros --help
       - package_contents:

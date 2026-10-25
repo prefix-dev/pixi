@@ -22,10 +22,11 @@ use pixi_command_dispatcher::{
     ComputeResultExt, CondaPackageFormat, EnvironmentRef, EnvironmentSpec, EphemeralEnv,
     keys::{ResolveSourcePackageKey, ResolveSourcePackageSpec, SourceBuildKey, SourceBuildSpec},
 };
-use pixi_config::{ConfigCli, PackageFormatAndCompression};
+use pixi_config::{ConfigCli, IndexChannelConfig, IndexConfig, PackageFormatAndCompression};
 use pixi_core::{
     Workspace, WorkspaceLocator, environment::sanity_check_workspace, workspace::DiscoveryStart,
 };
+use pixi_manifest::platform::host::apply_conda_overrides;
 use pixi_manifest::{FeaturesExt, S3Options};
 use pixi_path::AbsPathBuf;
 use pixi_progress::global_multi_progress;
@@ -33,13 +34,13 @@ use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
 use pixi_reporters::TopLevelProgress;
 use pixi_spec::SourceLocationSpec;
 use pixi_utils::variants::{VariantConfig, VariantValue};
-use rattler_conda_types::{GenericVirtualPackage, Platform};
+use rattler_conda_types::Subdir;
 use rattler_networking::{AuthenticationStorage, s3_middleware};
 use rattler_package_streaming::seek::read_package_file;
 
 mod discovery;
 
-/// Build the conda packages of a workspace and publish them to a channel.
+/// Build the conda packages of a workspace and publish them
 ///
 /// Builds every package in the workspace that opts into publishing with
 /// `publish = true` in its `[package]` section - in dependency order, so
@@ -52,7 +53,8 @@ mod discovery;
 /// passed. Use `--path` to build and publish a single package.
 ///
 /// Supported destinations for `--target-channel` (alias `--to`):
-///   - prefix.dev: `https://prefix.dev/<channel-name>`
+///   - prefix.dev: `https://prefix.dev/<channel-name>` or
+///     `https://prefix.dev/<namespace>/<channel-name>`
 ///   - anaconda.org: `https://anaconda.org/<owner>/<label>`
 ///   - Cloudsmith: `cloudsmith://<owner>/<repository>`
 ///   - S3: `s3://bucket-name`
@@ -83,12 +85,12 @@ pub struct Args {
     pub allow_source_dependencies: bool,
 
     /// The target platform to build for (defaults to the current platform)
-    #[clap(long, short, default_value_t = Platform::current())]
-    pub target_platform: Platform,
+    #[clap(long, short, default_value_t = Subdir::current().unwrap_or(Subdir::NoArch))]
+    pub target_platform: Subdir,
 
     /// The build platform to use for building (defaults to the current platform)
-    #[clap(long, default_value_t = Platform::current())]
-    pub build_platform: Platform,
+    #[clap(long, default_value_t = Subdir::current().unwrap_or(Subdir::NoArch))]
+    pub build_platform: Subdir,
 
     /// An optional prefix prepended to the auto-generated build string.
     #[clap(long)]
@@ -373,6 +375,9 @@ pub struct PublishContext {
     /// Whether pixi runs in offline mode. Uploading to a remote channel is
     /// refused in offline mode; local filesystem targets still work.
     pub offline: bool,
+
+    /// Indexing options, resolved per channel once the target is known.
+    pub index_config: IndexConfig,
 }
 
 impl PublishContext {
@@ -396,6 +401,7 @@ impl PublishContext {
             skip_existing,
             generate_attestation,
             offline: config.offline(),
+            index_config: config.index_config.clone(),
         })
     }
 }
@@ -416,7 +422,12 @@ fn merge_s3_options(
             s3_middleware::S3Config::Custom {
                 endpoint_url: opts.endpoint_url.clone(),
                 region: opts.region.clone(),
-                force_path_style: opts.force_path_style,
+                addressing_style: if opts.force_path_style {
+                    s3_middleware::S3AddressingStyle::Path
+                } else {
+                    s3_middleware::S3AddressingStyle::VirtualHost
+                },
+                credentials_provider: None,
             },
         );
     }
@@ -557,8 +568,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_global_config_source(args.config_source.source())
         .with_search_start(workspace_locator.clone())
         .with_closest_package(true)
-        .locate()?
-        .with_cli_config(args.config_cli);
+        .with_cli_config(args.config_cli)
+        .locate()
+        .await?;
     if let Some(backend_override) = args.backend_override.clone() {
         workspace = workspace.with_backend_override(backend_override);
     }
@@ -619,13 +631,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         multi_progress,
         anchor_pb,
     ));
-    let command_dispatcher = progress
-        .clone()
-        .register_with(
-            workspace
-                .command_dispatcher_builder()?
-                .with_cache_dirs(cache_dirs),
-        )
+    let command_dispatcher = workspace
+        .command_dispatcher_builder(Some(&progress))?
+        .with_cache_dirs(cache_dirs)
         .finish();
 
     // Resolve the CLI subdirs to the platforms the workspace declares for them,
@@ -651,19 +659,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         variant_files.extend(resolve_variant_config_paths(&args.variant_config, &cwd));
     }
 
-    let build_virtual_packages: Vec<GenericVirtualPackage> = workspace
+    let mut build_virtual_packages = workspace
         .default_environment()
-        .virtual_packages(&build_pixi_platform)
-        .into_iter()
-        .map(GenericVirtualPackage::from)
-        .collect();
+        .virtual_packages(&build_pixi_platform);
+    apply_conda_overrides(&mut build_virtual_packages, build_pixi_platform.subdir());
 
-    let host_virtual_packages: Vec<GenericVirtualPackage> = workspace
+    let mut host_virtual_packages = workspace
         .default_environment()
-        .virtual_packages(&target_pixi_platform)
-        .into_iter()
-        .map(GenericVirtualPackage::from)
-        .collect();
+        .virtual_packages(&target_pixi_platform);
+    apply_conda_overrides(&mut host_virtual_packages, target_pixi_platform.subdir());
 
     let build_environment = BuildEnvironment {
         host_platform: args.target_platform,
@@ -1286,6 +1290,28 @@ fn should_skip_existing(
     Ok(false)
 }
 
+/// The channel a Prefix.dev URL points at: the full path after the host, so
+/// that namespaced channels like `https://prefix.dev/<namespace>/<channel>`
+/// resolve to `<namespace>/<channel>` instead of just `<channel>`.
+fn prefix_channel_from_url(url: &Url) -> miette::Result<String> {
+    let channel = url.path().trim_matches('/');
+    if channel.is_empty() {
+        return Err(miette::miette!("Invalid Prefix URL: missing channel name"));
+    }
+    // `https://prefix.dev/channels/<channel>` is the channel's web page, not
+    // an upload target. Older versions accepted it because they only used
+    // the last path segment, so point users at the right URL.
+    if let Some(rest) = channel.strip_prefix("channels/") {
+        let mut suggestion = url.clone();
+        suggestion.set_path(rest);
+        return Err(miette::miette!(
+            help = format!("use `{suggestion}` instead"),
+            "`{url}` is a channel view page URL, not the URL used for uploads"
+        ));
+    }
+    Ok(channel.to_string())
+}
+
 /// Upload packages to a Prefix.dev server.
 async fn upload_to_prefix(
     url: &Url,
@@ -1299,11 +1325,7 @@ async fn upload_to_prefix(
 
     tracing::info!("Uploading packages to Prefix.dev: {}", url);
 
-    let channel = url
-        .path_segments()
-        .and_then(|mut segments| segments.next_back())
-        .ok_or_else(|| miette::miette!("Invalid Prefix URL: missing channel name"))?
-        .to_string();
+    let channel = prefix_channel_from_url(url)?;
 
     let mut server_url = rewrite_scheme_to_https(url, "prefix")?;
     server_url.set_path("");
@@ -1444,7 +1466,7 @@ async fn upload_to_quetz(
     package_paths: &[PathBuf],
     ctx: &PublishContext,
 ) -> miette::Result<()> {
-    use rattler_upload::upload::opt::QuetzData;
+    use rattler_upload::upload::opt::{ForceOverwrite, QuetzData};
     use rattler_upload::upload::upload_package_to_quetz;
 
     tracing::info!("Uploading packages to Quetz: {}", url);
@@ -1458,7 +1480,7 @@ async fn upload_to_quetz(
     let mut server_url = rewrite_scheme_to_https(url, "quetz")?;
     server_url.set_path("");
 
-    let quetz_data = QuetzData::new(server_url, channel, None);
+    let quetz_data = QuetzData::new(server_url, channel, None, ForceOverwrite(ctx.force));
 
     upload_package_to_quetz(&ctx.auth_storage, &package_paths.to_vec(), quetz_data).await
 }
@@ -1489,13 +1511,28 @@ async fn upload_to_artifactory(
         .await
 }
 
+/// The indexing options for `target`, a channel URL or an absolute path.
+///
+/// `IndexConfig` leaves every option unset by default, so pixi's own defaults
+/// fill the gaps: a channel published without any `index-config` is indexed
+/// exactly as it was before the key was honored.
+fn index_options(config: &IndexConfig, target: &str) -> IndexChannelConfig {
+    let mut resolved = config.resolve(target);
+    resolved.write_zst.get_or_insert(true);
+    resolved.write_shards.get_or_insert(true);
+    resolved
+}
+
 /// Upload packages to S3 and run indexing.
 async fn upload_to_s3(
     url: &Url,
     package_paths: &[PathBuf],
     ctx: &PublishContext,
 ) -> miette::Result<()> {
-    use rattler_index::{IndexS3Config, ensure_channel_initialized_s3, index_s3};
+    use rattler_index::{
+        ChannelMetadata, IndexS3Config, ensure_channel_initialized_s3,
+        index_s3_with_channel_metadata,
+    };
     use rattler_upload::upload::upload_package_to_s3;
     use std::collections::HashSet;
 
@@ -1503,11 +1540,12 @@ async fn upload_to_s3(
 
     let bucket_config = url.host_str().and_then(|bucket| ctx.s3_options.get(bucket));
 
-    let resolved_credentials = match bucket_config {
+    let credentials = match bucket_config {
         Some(s3_middleware::S3Config::Custom {
             endpoint_url,
             region,
-            force_path_style,
+            addressing_style,
+            ..
         }) => {
             // The workspace manifest or a config file pinned this bucket to a
             // specific endpoint; honor it and pull the access keys from the
@@ -1515,32 +1553,29 @@ async fn upload_to_s3(
             let s3_creds = rattler_s3::S3Credentials {
                 endpoint_url: endpoint_url.clone(),
                 region: region.clone(),
-                addressing_style: if *force_path_style {
-                    rattler_s3::S3AddressingStyle::Path
-                } else {
-                    rattler_s3::S3AddressingStyle::VirtualHost
-                },
+                addressing_style: *addressing_style,
                 access_key_id: None,
                 secret_access_key: None,
                 session_token: None,
             };
-            s3_creds.resolve(url, &ctx.auth_storage).ok_or_else(|| {
-                let bucket = url.host_str().unwrap_or("<unknown>");
-                miette::miette!(
-                    "Bucket '{bucket}' is configured in `s3-options` but no \
+            s3_creds
+                .resolve(url, &ctx.auth_storage)
+                .ok_or_else(|| {
+                    let bucket = url.host_str().unwrap_or("<unknown>");
+                    miette::miette!(
+                        "Bucket '{bucket}' is configured in `s3-options` but no \
                          credentials were found in the auth store. Run \
                          `pixi auth login s3://{bucket}` to store credentials."
-                )
-            })?
+                    )
+                })?
+                .into()
         }
-        Some(s3_middleware::S3Config::FromAWS) | None => {
-            rattler_s3::ResolvedS3Credentials::from_sdk()
-                .await
-                .map_err(|e| miette::miette!("Failed to resolve S3 credentials: {}", e))?
-        }
+        Some(s3_middleware::S3Config::FromAWS) | None => rattler_s3::S3CredentialSource::from_sdk()
+            .await
+            .map_err(|e| miette::miette!("Failed to resolve S3 credentials: {}", e))?,
     };
 
-    ensure_channel_initialized_s3(url, &resolved_credentials)
+    ensure_channel_initialized_s3(url, &credentials)
         .await
         .map_err(|e| miette::miette!("Failed to initialize S3 channel: {}", e))?;
 
@@ -1550,30 +1585,26 @@ async fn upload_to_s3(
         subdirs.insert(subdir);
     }
 
-    upload_package_to_s3(
-        url.clone(),
-        resolved_credentials.clone(),
-        package_paths,
-        ctx.force,
-    )
-    .await?;
+    upload_package_to_s3(url.clone(), credentials.clone(), package_paths, ctx.force).await?;
 
     tracing::info!("Successfully uploaded packages to S3, running indexing...");
 
+    let options = index_options(&ctx.index_config, url.as_str());
+
     for subdir in subdirs {
         let target_platform = subdir
-            .parse::<Platform>()
+            .parse::<Subdir>()
             .map_err(|e| miette::miette!("Invalid platform subdir '{}': {}", subdir, e))?;
 
         let index_config = IndexS3Config {
             channel: url.clone(),
-            credentials: resolved_credentials.clone(),
+            credentials: credentials.clone(),
             target_platform: Some(target_platform),
             repodata_patch: None,
-            write_zst: true,
-            write_shards: true,
-            repodata_revisions: vec![],
-            package_revision_assignment: Default::default(),
+            write_zst: options.write_zst.unwrap_or(true),
+            write_shards: options.write_shards.unwrap_or(true),
+            repodata_revisions: options.repodata_revisions.clone().unwrap_or_default(),
+            package_revision_assignment: options.package_revision_assignment.unwrap_or_default(),
             // `--force` may have replaced an existing artifact under its old
             // filename; only a forced index re-extracts its metadata.
             force: ctx.force,
@@ -1584,7 +1615,7 @@ async fn upload_to_s3(
             precondition_checks: rattler_index::PreconditionChecks::Enabled,
         };
 
-        index_s3(index_config)
+        index_s3_with_channel_metadata(index_config, ChannelMetadata::from_index_config(&options))
             .await
             .map_err(|e| miette::miette!("Failed to index S3 channel: {}", e))?;
     }
@@ -1598,7 +1629,10 @@ async fn upload_to_local_filesystem_channel(
     package_paths: &[PathBuf],
     ctx: &PublishContext,
 ) -> miette::Result<()> {
-    use rattler_index::{IndexFsConfig, ensure_channel_initialized_fs, index_fs};
+    use rattler_index::{
+        ChannelMetadata, IndexFsConfig, ensure_channel_initialized_fs,
+        index_fs_with_channel_metadata,
+    };
     use std::collections::HashSet;
 
     tracing::info!(
@@ -1640,19 +1674,21 @@ async fn upload_to_local_filesystem_channel(
 
     tracing::info!("Indexing local channel at {}", target_dir.display());
 
+    let options = index_options(&ctx.index_config, &target_dir.to_string_lossy());
+
     for subdir in subdirs {
         let target_platform = subdir
-            .parse::<Platform>()
+            .parse::<Subdir>()
             .map_err(|e| miette::miette!("Invalid platform subdir '{}': {}", subdir, e))?;
 
         let index_config = IndexFsConfig {
             channel: target_dir.to_path_buf(),
             target_platform: Some(target_platform),
             repodata_patch: None,
-            write_zst: true,
-            write_shards: true,
-            repodata_revisions: vec![],
-            package_revision_assignment: Default::default(),
+            write_zst: options.write_zst.unwrap_or(true),
+            write_shards: options.write_shards.unwrap_or(true),
+            repodata_revisions: options.repodata_revisions.clone().unwrap_or_default(),
+            package_revision_assignment: options.package_revision_assignment.unwrap_or_default(),
             // `--force` may have replaced an existing artifact under its old
             // filename; only a forced index re-extracts its metadata.
             force: ctx.force,
@@ -1662,7 +1698,7 @@ async fn upload_to_local_filesystem_channel(
             multi_progress: None,
         };
 
-        index_fs(index_config)
+        index_fs_with_channel_metadata(index_config, ChannelMetadata::from_index_config(&options))
             .await
             .map_err(|e| miette::miette!("Failed to index channel: {}", e))?;
     }
@@ -1676,6 +1712,64 @@ mod tests {
 
     use super::*;
     use rattler_conda_types::{compression_level::CompressionLevel, package::CondaArchiveType};
+
+    #[test]
+    fn index_options_fall_back_to_pixis_own_defaults() {
+        let options = index_options(&IndexConfig::default(), "s3://bucket");
+
+        // An unconfigured publish indexes exactly as it did before
+        // `index-config` was honored.
+        assert_eq!(options.write_zst, Some(true));
+        assert_eq!(options.write_shards, Some(true));
+        assert_eq!(options.repodata_revisions, None);
+    }
+
+    #[test]
+    fn index_options_let_the_config_turn_a_default_off() {
+        let config: IndexConfig = serde_json::from_str(
+            r#"{"write-zst": false, "s3://bucket/staging": {"base-url": "https://cdn.example"}}"#,
+        )
+        .unwrap();
+
+        let staging = index_options(&config, "s3://bucket/staging");
+        assert_eq!(staging.write_zst, Some(false));
+        assert_eq!(staging.base_url.as_deref(), Some("https://cdn.example"));
+        // Untouched by the config, so pixi's default still applies.
+        assert_eq!(staging.write_shards, Some(true));
+
+        // A channel the per-channel entry does not name keeps only the
+        // defaults.
+        let stable = index_options(&config, "s3://bucket/stable");
+        assert_eq!(stable.base_url, None);
+    }
+
+    #[test]
+    fn prefix_channel_keeps_the_namespace() {
+        let channel = |url: &str| prefix_channel_from_url(&Url::parse(url).unwrap());
+        assert_eq!(
+            channel("https://prefix.dev/my-channel").unwrap(),
+            "my-channel"
+        );
+        assert_eq!(
+            channel("https://prefix.dev/my-channel/").unwrap(),
+            "my-channel"
+        );
+        assert_eq!(
+            channel("https://prefix.dev/vslamlab/vslamlab").unwrap(),
+            "vslamlab/vslamlab"
+        );
+        assert_eq!(
+            channel("prefix://prefix.dev/vslamlab/vslamlab/").unwrap(),
+            "vslamlab/vslamlab"
+        );
+        let err = channel("https://prefix.dev/channels/my-channel").unwrap_err();
+        assert_eq!(
+            err.help().unwrap().to_string(),
+            "use `https://prefix.dev/my-channel` instead"
+        );
+        assert!(channel("https://prefix.dev").is_err());
+        assert!(channel("https://prefix.dev/").is_err());
+    }
 
     #[test]
     fn parse_variant_accepts_single_and_comma_list() {
@@ -1871,7 +1965,8 @@ mod tests {
             s3_middleware::S3Config::Custom {
                 endpoint_url: Url::parse("https://from-config.example/").unwrap(),
                 region: "us-east-1".to_string(),
-                force_path_style: false,
+                addressing_style: s3_middleware::S3AddressingStyle::VirtualHost,
+                credentials_provider: None,
             },
         );
 
@@ -1902,14 +1997,15 @@ mod tests {
         let s3_middleware::S3Config::Custom {
             endpoint_url,
             region,
-            force_path_style,
+            addressing_style,
+            ..
         } = merged.get("bucket-b").unwrap()
         else {
             panic!("bucket-b should resolve to a Custom config from the manifest");
         };
         assert_eq!(endpoint_url.as_str(), "https://from-manifest.example/");
         assert_eq!(region, "eu-central-1");
-        assert!(force_path_style);
+        assert_eq!(*addressing_style, s3_middleware::S3AddressingStyle::Path);
         assert!(merged.contains_key("bucket-c"));
     }
 

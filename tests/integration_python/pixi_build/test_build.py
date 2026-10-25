@@ -1,8 +1,8 @@
 from pathlib import Path
 
 import pytest
-import tomli_w
 import tomli
+import tomli_w
 
 from .common import (
     CURRENT_PLATFORM,
@@ -12,7 +12,6 @@ from .common import (
     copytree_with_local_backend,
     verify_cli_command,
 )
-
 
 BUILD_RUNNING_STRING = "Running build for recipe:"
 
@@ -41,6 +40,42 @@ def test_build_conda_package(
     # Ensure that exactly one conda package has been built
     built_packages = list(simple_workspace.workspace_dir.glob("*.conda"))
     assert len(built_packages) == 1
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(
+    CURRENT_PLATFORM not in {"linux-64", "win-64"},
+    reason="virtual_packages channel ships the cuda package only for linux-64 and win-64",
+)
+def test_build_honors_cuda_override(
+    pixi: Path,
+    simple_workspace: Workspace,
+    test_data: Path,
+) -> None:
+    """`CONDA_OVERRIDE_CUDA` must reach the host solve, so a machine without a
+    GPU can build a package whose host requirements need `__cuda`."""
+    channel = test_data.joinpath("channels", "channels", "virtual_packages").as_uri()
+    simple_workspace.workspace_manifest["workspace"]["channels"].insert(0, channel)
+    simple_workspace.recipe["requirements"] = {"host": ["cuda"]}
+    simple_workspace.write_files()
+
+    command = [
+        pixi,
+        "publish",
+        "--target-dir",
+        str(simple_workspace.workspace_dir),
+        "--path",
+        simple_workspace.package_dir,
+    ]
+
+    # An empty override disables `__cuda`, so this fails on a GPU machine too.
+    verify_cli_command(
+        command,
+        expected_exit_code=ExitCode.FAILURE,
+        env={"CONDA_OVERRIDE_CUDA": ""},
+        stderr_contains="__cuda",
+    )
+    verify_cli_command(command, env={"CONDA_OVERRIDE_CUDA": "12.0"})
 
 
 @pytest.mark.slow
@@ -79,36 +114,59 @@ def test_no_change_should_be_fully_cached(pixi: Path, simple_workspace: Workspac
     assert simple_workspace.find_debug_file("conda_build_v1_params.json") is None
 
 
-@pytest.mark.slow
-def test_recipe_change_trigger_metadata_invalidation(
-    pixi: Path, simple_workspace: Workspace
-) -> None:
-    simple_workspace.write_files()
+def conda_artifact_mtimes(workspace: Workspace) -> dict[Path, int]:
+    """The mtimes of every `.conda` pixi built for this workspace, keyed by path."""
+    return {
+        path: path.stat().st_mtime_ns
+        for path in sorted(workspace.workspace_dir.joinpath(".pixi").rglob("*.conda"))
+    }
 
+
+def install(pixi: Path, workspace: Workspace, expect_build: bool) -> None:
     verify_cli_command(
         [
             pixi,
             "install",
             "-v",
             "--manifest-path",
-            simple_workspace.workspace_dir,
+            workspace.workspace_dir,
         ],
-        stderr_contains=BUILD_RUNNING_STRING,
+        stderr_contains=BUILD_RUNNING_STRING if expect_build else None,
+        stderr_excludes=None if expect_build else BUILD_RUNNING_STRING,
     )
 
-    # Touch the recipe
+
+@pytest.mark.slow
+def test_touching_recipe_does_not_trigger_rebuild(pixi: Path, simple_workspace: Workspace) -> None:
+    simple_workspace.write_files()
+    install(pixi, simple_workspace, expect_build=True)
+    artifacts = conda_artifact_mtimes(simple_workspace)
+    assert artifacts, "the first install must have built a package"
+
     simple_workspace.recipe_path.touch()
 
-    verify_cli_command(
-        [
-            pixi,
-            "install",
-            "-v",
-            "--manifest-path",
-            simple_workspace.workspace_dir,
-        ],
-        stderr_contains=BUILD_RUNNING_STRING,
-    )
+    install(pixi, simple_workspace, expect_build=False)
+
+    # The cached artifacts are served as they are, not written again.
+    assert conda_artifact_mtimes(simple_workspace) == artifacts
+
+
+@pytest.mark.slow
+def test_same_size_recipe_edit_triggers_rebuild(pixi: Path, simple_workspace: Workspace) -> None:
+    """The counterpart to touching the recipe. Both a touch and this edit
+    change only the mtime and leave the size alone, so the hash is the only
+    thing that separates them. A wrong hash wiring here would silently serve
+    the previous artifact."""
+    simple_workspace.write_files()
+    install(pixi, simple_workspace, expect_build=True)
+
+    original = simple_workspace.recipe_path.read_text()
+    assert "version: 1.0.0" in original
+    edited = original.replace("version: 1.0.0", "version: 1.0.1")
+    assert len(edited) == len(original), "the edit must not change the file size"
+    simple_workspace.recipe_path.write_text(edited)
+
+    install(pixi, simple_workspace, expect_build=True)
 
 
 @pytest.mark.slow
@@ -133,7 +191,7 @@ def test_project_model_change_trigger_rebuild(pixi: Path, simple_workspace: Work
 
     # modify extra-input-globs
     simple_workspace.package_manifest["package"]["build"].setdefault(
-        "configuration", dict()
+        "configuration", {}
     ).setdefault("extra-input-globs", ["*.md"])
     simple_workspace.write_files()
     verify_cli_command(

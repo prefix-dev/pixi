@@ -23,5 +23,8 @@ pub use provenance::{
 };
 pub use source::ManifestSource;
 pub use workspace::{
-    MissingTargetError, RemoveDependencyError, WorkspaceManifest, WorkspaceManifestMut,
+    ActivationEditError, ActivationLocation, ActivationScriptsChange, AddDependencyError,
+    EnvironmentEditError, FeatureNotFoundError, InvalidVersionError, MissingTargetError,
+    PlatformEditError, RemoveChannelsError, RemoveDependencyError, SetRequiresPixiError,
+    TaskEditError, WorkspaceManifest, WorkspaceManifestMut,
 };
