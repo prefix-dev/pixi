@@ -1,6 +1,6 @@
 use std::fmt::Write;
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, SecondsFormat, Utc};
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::Diagnostic;
@@ -256,8 +256,16 @@ impl ExcludeNewerTableMigration {
                 help,
                 "move {entries} to the `exemptions` of `[workspace.{table}]` instead, e.g.\n\n[workspace.{table}]"
             );
-            if let Some(cutoff) = cutoff {
-                let _ = write!(help, "\ncutoff = \"{cutoff}\"");
+            match cutoff {
+                // The `Display` of a timestamp is not a valid cutoff.
+                Some(ExcludeNewer::Timestamp(timestamp)) => {
+                    let timestamp = timestamp.to_rfc3339_opts(SecondsFormat::AutoSi, true);
+                    let _ = write!(help, "\ncutoff = \"{timestamp}\"");
+                }
+                Some(cutoff @ ExcludeNewer::Duration(_)) => {
+                    let _ = write!(help, "\ncutoff = \"{cutoff}\"");
+                }
+                None => {}
             }
             let exemptions = exemptions
                 .iter()

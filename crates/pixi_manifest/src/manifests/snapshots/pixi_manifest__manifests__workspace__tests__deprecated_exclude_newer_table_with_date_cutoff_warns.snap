@@ -1,0 +1,18 @@
+---
+source: crates/pixi_manifest/src/manifests/workspace.rs
+expression: "expect_parse_warnings(r#\"\n[workspace]\nname = \"foo\"\nchannels = []\nplatforms = []\nexclude-newer = \"2025-01-01\"\n\n[exclude-newer]\npolars = \"0d\"\n\"#)"
+---
+  ⚠ the top-level `[exclude-newer]` table of per-package cutoffs is deprecated in favor of the `exemptions` of `[workspace.exclude-newer]`
+   ╭─[pixi.toml:8:1]
+ 7 │
+ 8 │ ╭─▶ [exclude-newer]
+ 9 │ ├─▶ polars = "0d"
+   · ╰──── replace this with `[workspace.exclude-newer.exemptions]`
+   ╰────
+  help: move the entries to the `exemptions` of `[workspace.exclude-newer]` instead, e.g.
+
+        [workspace.exclude-newer]
+        cutoff = "2025-01-02T00:00:00Z"
+        exemptions = { polars = "*" }
+
+        An exemption allows the matching releases regardless of their upload time. Narrow `"*"` down to the releases you vetted, e.g. `"1.2.3"`.

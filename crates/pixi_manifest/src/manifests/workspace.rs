@@ -6470,6 +6470,22 @@ boltons = "2025-01-01"
     }
 
     #[test]
+    fn test_deprecated_exclude_newer_table_with_date_cutoff_warns() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "2025-01-01"
+
+[exclude-newer]
+polars = "0d"
+"#
+        ));
+    }
+
+    #[test]
     fn test_deprecated_exclude_newer_table_without_cutoff_warns() {
         assert_snapshot!(expect_parse_warnings(
             r#"
