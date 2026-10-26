@@ -1,7 +1,6 @@
 use std::str::FromStr;
 
 use clap::Parser;
-use miette::IntoDiagnostic;
 use pixi_config::{Config, ConfigCli};
 use pixi_global::Project;
 use rattler_conda_types::PackageName;
@@ -88,6 +87,12 @@ pub struct UnexemptArgs {
     pub config: ConfigCli,
 }
 
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+enum ExcludeNewerError {
+    #[error(transparent)]
+    InvalidPackageName(#[from] rattler_conda_types::InvalidPackageNameError),
+}
+
 pub async fn execute(args: Args) -> miette::Result<()> {
     let config = match &args.command {
         None | Some(Command::Get) => {
@@ -132,7 +137,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Command::Unexempt(args) => {
             let mut missing = Vec::new();
             for package in &args.packages {
-                let name = PackageName::from_str(package).into_diagnostic()?;
+                let name = PackageName::from_str(package).map_err(ExcludeNewerError::from)?;
                 if !project.manifest.remove_exclude_newer_exemption(&name)? {
                     missing.push(package.as_str());
                 }

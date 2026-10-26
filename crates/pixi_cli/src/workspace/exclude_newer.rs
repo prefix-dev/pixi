@@ -1,7 +1,6 @@
 use std::str::FromStr;
 
 use clap::Parser;
-use miette::IntoDiagnostic;
 use pixi_config::ConfigCli;
 use pixi_core::{
     InstallFilter, UpdateLockFileOptions, Workspace, WorkspaceLocator,
@@ -61,6 +60,16 @@ pub enum Command {
     /// `pixi workspace exclude-newer unexempt python ruff`
     #[clap(verbatim_doc_comment)]
     Unexempt(UnexemptArgs),
+}
+
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+enum ExcludeNewerError {
+    #[error(transparent)]
+    InvalidPackageName(#[from] rattler_conda_types::InvalidPackageNameError),
+    #[error(transparent)]
+    InvalidPypiPackageName(#[from] pep508_rs::InvalidNameError),
+    #[error("failed to save the workspace manifest")]
+    Save(#[from] std::io::Error),
 }
 
 #[derive(Parser, Debug)]
@@ -183,12 +192,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             let mut missing = Vec::new();
             for package in &args.packages {
                 let removed = if pypi {
-                    let name = PypiPackageName::from_str(package).into_diagnostic()?;
+                    let name =
+                        PypiPackageName::from_str(package).map_err(ExcludeNewerError::from)?;
                     workspace
                         .manifest()
                         .remove_pypi_exclude_newer_exemption(&name)?
                 } else {
-                    let name = PackageName::from_str(package).into_diagnostic()?;
+                    let name = PackageName::from_str(package).map_err(ExcludeNewerError::from)?;
                     workspace.manifest().remove_exclude_newer_exemption(&name)?
                 };
                 if !removed {
@@ -210,7 +220,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     update_lock_file(&workspace, update).await?;
-    workspace.save().await.into_diagnostic()?;
+    workspace.save().await.map_err(ExcludeNewerError::from)?;
 
     eprintln!(
         "{}{message}",
