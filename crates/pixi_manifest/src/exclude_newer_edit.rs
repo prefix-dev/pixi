@@ -113,6 +113,9 @@ pub fn parse_conda_exemption(
 
 /// Parses a PyPI exemption, which can only be a package name.
 pub fn parse_pypi_exemption(spec: &str) -> Result<PypiPackageName, ParseExemptionError> {
+    if spec.trim().is_empty() {
+        return Err(ParseExemptionError::PypiName(spec.to_string()));
+    }
     PypiPackageName::from_str(spec).map_err(|_| {
         if spec.contains(|c: char| "=<>!~*[@; ".contains(c)) {
             ParseExemptionError::PypiVersion(spec.to_string())
@@ -623,6 +626,10 @@ Python = "*"
         assert!(matches!(
             parse_pypi_exemption("torch==2"),
             Err(ParseExemptionError::PypiVersion(_))
+        ));
+        assert!(matches!(
+            parse_pypi_exemption(""),
+            Err(ParseExemptionError::PypiName(_))
         ));
     }
 }
