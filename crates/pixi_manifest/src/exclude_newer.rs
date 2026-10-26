@@ -315,7 +315,7 @@ impl ExcludeNewerTableMigration {
             }
             let _ = write!(
                 help,
-                "per-package cutoffs other than a zero cutoff have no replacement, the cutoffs of {} will stop working when the table is removed in a future release",
+                "the per-package cutoffs of {} have no direct replacement and stop working when the table is removed. To allow newer releases of a package, add the versions you vetted to `exemptions`; to keep a package on older releases, constrain its version in the dependencies.",
                 list(&without_replacement)
             );
         }

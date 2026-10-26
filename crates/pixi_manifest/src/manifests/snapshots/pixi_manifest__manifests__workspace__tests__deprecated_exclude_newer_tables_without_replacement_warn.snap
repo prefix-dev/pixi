@@ -10,7 +10,8 @@ expression: "expect_parse_warnings(r#\"\n[workspace]\nname = \"foo\"\nchannels =
     · ╰──── this table will be removed
  10 │
     ╰────
-  help: per-package cutoffs other than a zero cutoff have no replacement, the cutoffs of `openssl` will stop working when the table is removed in a future release
+  help: the per-package cutoffs of `openssl` have no direct replacement and stop working when the table is removed. To allow newer releases of a package, add the versions you vetted to `exemptions`;
+        to keep a package on older releases, constrain its version in the dependencies.
 
   ⚠ the top-level `[pypi-exclude-newer]` table of per-package cutoffs is deprecated and will be removed in a future release
     ╭─[pixi.toml:11:1]
@@ -19,4 +20,5 @@ expression: "expect_parse_warnings(r#\"\n[workspace]\nname = \"foo\"\nchannels =
  12 │ ├─▶ boltons = "2025-01-01"
     · ╰──── this table will be removed
     ╰────
-  help: per-package cutoffs other than a zero cutoff have no replacement, the cutoffs of `boltons` will stop working when the table is removed in a future release
+  help: the per-package cutoffs of `boltons` have no direct replacement and stop working when the table is removed. To allow newer releases of a package, add the versions you vetted to `exemptions`;
+        to keep a package on older releases, constrain its version in the dependencies.
