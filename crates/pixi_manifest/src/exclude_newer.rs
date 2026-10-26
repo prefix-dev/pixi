@@ -223,8 +223,10 @@ impl ExcludeNewerTableMigration {
     ///
     /// `cutoff` and `exemptions` are the current `[workspace.{table}]`, and
     /// `other_cutoffs` tells whether anything is excluded without `cutoff`:
-    /// channel cutoffs for conda, the conda cutoff for PyPI.
+    /// channel cutoffs for conda, the conda cutoff for PyPI. `prefix` is the
+    /// prefix of the pixi tables, such as `tool.pixi`.
     pub fn new<'a>(
+        prefix: Option<&str>,
         table: &str,
         cutoff: Option<ExcludeNewer>,
         exemptions: impl IntoIterator<Item = (&'a str, toml_edit::Value)>,
@@ -241,6 +243,9 @@ impl ExcludeNewerTableMigration {
                 .join(", ")
         };
 
+        let prefix = prefix
+            .map(|prefix| format!("{prefix}."))
+            .unwrap_or_default();
         let mut help = String::new();
         let mut has_replacement = false;
         if zero_cutoffs.is_empty() {
@@ -258,7 +263,7 @@ impl ExcludeNewerTableMigration {
             // while PyPI exemptions fall back to the conda cutoff.
             let _ = write!(
                 help,
-                "set a `cutoff` in `[workspace.{table}]` to replace the zero cutoffs of {} with `exemptions`, note that it also applies to the channels without their own `exclude-newer`",
+                "set a `cutoff` in `[{prefix}workspace.{table}]` to replace the zero cutoffs of {} with `exemptions`, note that it also applies to the channels without their own `exclude-newer`",
                 list(&zero_cutoffs)
             );
         } else {
@@ -270,7 +275,7 @@ impl ExcludeNewerTableMigration {
             };
             let _ = write!(
                 help,
-                "move {entries} to the `exemptions` of `[workspace.{table}]` instead, e.g. replace the current `{table}` of `[workspace]` with\n\n[workspace.{table}]"
+                "move {entries} to the `exemptions` of `[{prefix}workspace.{table}]` instead, e.g. replace the current `{table}` of `[{prefix}workspace]` with\n\n[{prefix}workspace.{table}]"
             );
             match cutoff {
                 // The `Display` of a timestamp is not a valid cutoff.

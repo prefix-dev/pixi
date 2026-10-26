@@ -1206,12 +1206,12 @@ print("hello")
         let warnings = warnings.iter().map(ToString::to_string).collect::<Vec<_>>();
         assert_eq!(warnings.len(), 2, "{warnings:?}");
         assert!(
-            warnings[0].contains("`[exclude-newer]` table of per-package cutoffs is deprecated")
+            warnings[0]
+                .contains("`[tool.pixi.exclude-newer]` table of per-package cutoffs is deprecated")
         );
-        assert!(
-            warnings[1]
-                .contains("`[pypi-exclude-newer]` table of per-package cutoffs is deprecated")
-        );
+        assert!(warnings[1].contains(
+            "`[tool.pixi.pypi-exclude-newer]` table of per-package cutoffs is deprecated"
+        ));
     }
 
     #[test]

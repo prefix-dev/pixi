@@ -385,7 +385,10 @@ impl CondaScriptManifest {
 
         let (workspace, package, warnings) = manifest
             .into_workspace_manifest(
-                ExternalWorkspaceProperties::default(),
+                ExternalWorkspaceProperties {
+                    table_prefix: Some("tool.pixi"),
+                    ..ExternalWorkspaceProperties::default()
+                },
                 PackageDefaults::default(),
                 root,
             )
@@ -725,7 +728,7 @@ mod tests {
         assert_eq!(warnings.len(), 1);
         assert!(
             warnings[0].to_string().contains(
-                "the top-level `[exclude-newer]` table of per-package cutoffs is deprecated"
+                "the top-level `[tool.pixi.exclude-newer]` table of per-package cutoffs is deprecated"
             ),
             "{}",
             warnings[0]

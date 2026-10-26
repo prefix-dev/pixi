@@ -34,21 +34,25 @@ impl Deprecation {
     /// `[workspace.exclude-newer]` and `[workspace.pypi-exclude-newer]`, all
     /// others have no replacement.
     pub fn exclude_newer_table(
+        prefix: Option<&str>,
         table: &str,
         migration: ExcludeNewerTableMigration,
         span: Option<Range<usize>>,
     ) -> Self {
+        let prefix = prefix
+            .map(|prefix| format!("{prefix}."))
+            .unwrap_or_default();
         let (message, label) = if migration.has_replacement {
             (
                 format!(
-                    "the top-level `[{table}]` table of per-package cutoffs is deprecated in favor of the `exemptions` of `[workspace.{table}]`"
+                    "the top-level `[{prefix}{table}]` table of per-package cutoffs is deprecated in favor of the `exemptions` of `[{prefix}workspace.{table}]`"
                 ),
-                format!("replace this with `[workspace.{table}.exemptions]`"),
+                format!("replace this with `[{prefix}workspace.{table}.exemptions]`"),
             )
         } else {
             (
                 format!(
-                    "the top-level `[{table}]` table of per-package cutoffs is deprecated and will be removed in a future release"
+                    "the top-level `[{prefix}{table}]` table of per-package cutoffs is deprecated and will be removed in a future release"
                 ),
                 "this table will be removed".to_string(),
             )

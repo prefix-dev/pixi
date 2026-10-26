@@ -557,6 +557,7 @@ impl TomlManifest {
             .and_then(|p| p.value.name.as_ref())
             .and_then(|field| field.clone().value());
 
+        let table_prefix = external.table_prefix;
         let WithWarnings {
             warnings: mut workspace_warnings,
             value: mut workspace,
@@ -571,8 +572,10 @@ impl TomlManifest {
         if let Some(exclude_newer) = self.exclude_newer {
             warnings.push(
                 Deprecation::exclude_newer_table(
+                    table_prefix,
                     "exclude-newer",
                     ExcludeNewerTableMigration::new(
+                        table_prefix,
                         "exclude-newer",
                         workspace.exclude_newer.cutoff,
                         workspace
@@ -604,8 +607,10 @@ impl TomlManifest {
         if let Some(pypi_exclude_newer) = self.pypi_exclude_newer {
             warnings.push(
                 Deprecation::exclude_newer_table(
+                    table_prefix,
                     "pypi-exclude-newer",
                     ExcludeNewerTableMigration::new(
+                        table_prefix,
                         "pypi-exclude-newer",
                         workspace.pypi_exclude_newer.cutoff,
                         workspace
@@ -1150,6 +1155,9 @@ pub struct ExternalWorkspaceProperties {
     pub repository: Option<Url>,
     pub documentation: Option<Url>,
     pub features: IndexMap<FeatureName, Feature>,
+    /// The prefix of the pixi tables in the manifest, `tool.pixi` for a
+    /// `pyproject.toml`, used to name tables in warnings.
+    pub table_prefix: Option<&'static str>,
 }
 
 #[cfg(test)]
