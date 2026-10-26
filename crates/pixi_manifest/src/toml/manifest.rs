@@ -9,7 +9,7 @@ use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::LabeledSpan;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
-use pixi_spec::ExcludeNewer;
+use pixi_spec::{ExcludeNewer, PixiSpec};
 use pixi_toml::{Same, TomlFromStr, TomlHashMap, TomlIndexMap, TomlWith};
 use rattler_conda_types::{PackageName, Subdir, Version};
 use toml_span::{
@@ -576,6 +576,16 @@ impl TomlManifest {
                         "exclude-newer",
                         workspace.exclude_newer.cutoff,
                         workspace
+                            .exclude_newer
+                            .exemptions
+                            .iter()
+                            .map(|(name, spec)| {
+                                (
+                                    name.as_source(),
+                                    PixiSpec::from(spec.clone()).to_toml_value(),
+                                )
+                            }),
+                        workspace
                             .channels
                             .iter()
                             .chain(features.values().flat_map(|f| f.channels.iter().flatten()))
@@ -598,6 +608,11 @@ impl TomlManifest {
                     ExcludeNewerTableMigration::new(
                         "pypi-exclude-newer",
                         workspace.pypi_exclude_newer.cutoff,
+                        workspace
+                            .pypi_exclude_newer
+                            .exemptions
+                            .iter()
+                            .map(|(name, version)| (name.as_source(), version.to_string().into())),
                         workspace.exclude_newer.cutoff.is_some(),
                         pypi_exclude_newer
                             .value

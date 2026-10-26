@@ -6505,6 +6505,27 @@ exclude-newer = "7d"
     }
 
     #[test]
+    fn test_deprecated_exclude_newer_tables_keep_existing_exemptions() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = { cutoff = "7d", exemptions = { zlib = "1.3.1", polars = "1.0" } }
+pypi-exclude-newer = { exemptions = { requests = "*" } }
+
+[exclude-newer]
+polars = "0d"
+openssl = "0d"
+
+[pypi-exclude-newer]
+boltons = "0d"
+"#
+        ));
+    }
+
+    #[test]
     fn test_deprecated_exclude_newer_tables_without_any_cutoff_warn() {
         assert_snapshot!(expect_parse_warnings(
             r#"

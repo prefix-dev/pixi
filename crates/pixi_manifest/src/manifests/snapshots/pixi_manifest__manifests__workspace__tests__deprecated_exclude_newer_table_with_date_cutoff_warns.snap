@@ -9,7 +9,7 @@ expression: "expect_parse_warnings(r#\"\n[workspace]\nname = \"foo\"\nchannels =
  9 │ ├─▶ polars = "0d"
    · ╰──── replace this with `[workspace.exclude-newer.exemptions]`
    ╰────
-  help: move the entries to the `exemptions` of `[workspace.exclude-newer]` instead, e.g.
+  help: move the entries to the `exemptions` of `[workspace.exclude-newer]` instead, e.g. replace the current `exclude-newer` of `[workspace]` with
 
         [workspace.exclude-newer]
         cutoff = "2025-01-02T00:00:00Z"

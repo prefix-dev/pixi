@@ -221,11 +221,13 @@ impl ExcludeNewerTableMigration {
     /// per-package cutoff has no replacement and will stop working once the
     /// table is removed.
     ///
+    /// `cutoff` and `exemptions` are the current `[workspace.{table}]`, and
     /// `other_cutoffs` tells whether anything is excluded without `cutoff`:
     /// channel cutoffs for conda, the conda cutoff for PyPI.
     pub fn new<'a>(
         table: &str,
         cutoff: Option<ExcludeNewer>,
+        exemptions: impl IntoIterator<Item = (&'a str, toml_edit::Value)>,
         other_cutoffs: bool,
         overrides: impl IntoIterator<Item = (&'a str, &'a ExcludeNewer)>,
     ) -> Self {
@@ -268,7 +270,7 @@ impl ExcludeNewerTableMigration {
             };
             let _ = write!(
                 help,
-                "move {entries} to the `exemptions` of `[workspace.{table}]` instead, e.g.\n\n[workspace.{table}]"
+                "move {entries} to the `exemptions` of `[workspace.{table}]` instead, e.g. replace the current `{table}` of `[workspace]` with\n\n[workspace.{table}]"
             );
             match cutoff {
                 // The `Display` of a timestamp is not a valid cutoff.
@@ -281,9 +283,15 @@ impl ExcludeNewerTableMigration {
                 }
                 None => {}
             }
-            let exemptions = zero_cutoffs
-                .iter()
-                .map(|(package, _)| format!("{} = \"*\"", toml_edit::Key::new(*package)))
+            let exemptions = exemptions
+                .into_iter()
+                .filter(|(package, _)| !zero_cutoffs.iter().any(|(zero, _)| zero == package))
+                .chain(
+                    zero_cutoffs
+                        .iter()
+                        .map(|(package, _)| (*package, toml_edit::Value::from("*"))),
+                )
+                .map(|(package, spec)| format!("{} = {spec}", toml_edit::Key::new(package)))
                 .join(", ");
             let _ = write!(help, "\nexemptions = {{ {exemptions} }}");
             if table == "pypi-exclude-newer" {

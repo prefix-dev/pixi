@@ -11,7 +11,7 @@ expression: "expect_parse_warnings(r#\"\n[workspace]\nname = \"foo\"\nchannels =
     · ╰──── replace this with `[workspace.exclude-newer.exemptions]`
  11 │
     ╰────
-  help: move the entries with a zero cutoff to the `exemptions` of `[workspace.exclude-newer]` instead, e.g.
+  help: move the entries with a zero cutoff to the `exemptions` of `[workspace.exclude-newer]` instead, e.g. replace the current `exclude-newer` of `[workspace]` with
 
         [workspace.exclude-newer]
         cutoff = "7days"
@@ -28,7 +28,7 @@ expression: "expect_parse_warnings(r#\"\n[workspace]\nname = \"foo\"\nchannels =
  13 │ ├─▶ boltons = "0d"
     · ╰──── replace this with `[workspace.pypi-exclude-newer.exemptions]`
     ╰────
-  help: move the entries to the `exemptions` of `[workspace.pypi-exclude-newer]` instead, e.g.
+  help: move the entries to the `exemptions` of `[workspace.pypi-exclude-newer]` instead, e.g. replace the current `pypi-exclude-newer` of `[workspace]` with
 
         [workspace.pypi-exclude-newer]
         exemptions = { boltons = "*" }
