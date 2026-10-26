@@ -6486,6 +6486,25 @@ polars = "0d"
     }
 
     #[test]
+    fn test_deprecated_exclude_newer_tables_with_dotted_names_warn() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "7d"
+
+[exclude-newer]
+"ruamel.yaml" = "0d"
+
+[pypi-exclude-newer]
+"zope.interface" = "0d"
+"#
+        ));
+    }
+
+    #[test]
     fn test_deprecated_exclude_newer_table_without_cutoff_warns() {
         assert_snapshot!(expect_parse_warnings(
             r#"

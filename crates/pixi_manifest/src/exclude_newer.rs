@@ -269,7 +269,7 @@ impl ExcludeNewerTableMigration {
             }
             let exemptions = exemptions
                 .iter()
-                .map(|(package, _)| format!("{package} = \"*\""))
+                .map(|(package, _)| format!("{} = \"*\"", toml_edit::Key::new(*package)))
                 .join(", ");
             let _ = write!(help, "\nexemptions = {{ {exemptions} }}");
             if table == "pypi-exclude-newer" {
