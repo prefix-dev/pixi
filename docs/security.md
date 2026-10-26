@@ -93,7 +93,7 @@ In that example:
 
 ## 3. Respond To Advisories With Constraints And Overrides
 
-When an advisory lands, update to the fixed version first. If the fix is fresh, that can also mean temporarily relaxing `exclude-newer` so you can adopt the security release immediately. If another dependency prevents the solver from reaching the non-vulnerable version, Pixi supports [`dependency-overrides`](advanced/override.md) for PyPI packages.
+When an advisory lands, update to the fixed version first. If the fix is fresh, [exempt](reference/pixi_manifest.md#exemptions) the fixed release from `exclude-newer` after reviewing it, as shown above, so you can adopt it immediately without relaxing the cutoff for anything else. If another dependency prevents the solver from reaching the non-vulnerable version, Pixi supports [`dependency-overrides`](advanced/override.md) for PyPI packages.
 
 This is how you respond when a vulnerable version is already known, especially if transitive dependency bounds would otherwise keep you stuck on an affected release. Overrides let you force dependency requirements during resolution so the solver can select a safe version even if upstream packages have not caught up yet. They are complementary to `exclude-newer`: `exclude-newer` reduces exposure to newly uploaded artifacts, while constraints, `exclude-newer` exemptions, and overrides help you respond once a vulnerable version is already known.
 
