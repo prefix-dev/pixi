@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{path::Path, str::FromStr};
 
 use clap::Parser;
 use pixi_config::ConfigCli;
@@ -8,7 +8,7 @@ use pixi_core::{
     lock_file::{ReinstallPackages, UpdateMode},
     workspace::WorkspaceMut,
 };
-use pixi_manifest::{ExcludeNewerConfig, PypiExcludeNewerConfig};
+use pixi_manifest::{ExcludeNewerConfig, ManifestKind, PypiExcludeNewerConfig};
 use pixi_pypi_spec::PypiPackageName;
 use rattler_conda_types::PackageName;
 
@@ -253,21 +253,52 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         return Ok(());
     }
 
-    // Save the manifest before updating the lock file, so the lock file is
-    // only written once the manifest is on disk. Dropping `workspace` on an
+    // Like `pixi add`, save Python-backed manifests before updating the lock
+    // file so tools like `uv` observe the changes. Dropping `workspace` on an
     // error reverts the manifest.
-    workspace
-        .save_inner()
-        .await
-        .map_err(ExcludeNewerError::from)?;
-    update_lock_file(&workspace, update).await?;
-    workspace.save().await.map_err(ExcludeNewerError::from)?;
+    if workspace.workspace().workspace.provenance.kind == ManifestKind::Pyproject {
+        workspace
+            .save_inner()
+            .await
+            .map_err(ExcludeNewerError::from)?;
+    }
+
+    // The lock file is written before the environment is installed, so
+    // restore it if a later step fails.
+    let lock_file_path = workspace.workspace().lock_file_path();
+    let original_lock_file = fs_err::tokio::read(&lock_file_path).await.ok();
+    let result = match update_lock_file(&workspace, update).await {
+        Ok(()) => workspace
+            .save()
+            .await
+            .map(drop)
+            .map_err(|err| ExcludeNewerError::from(err).into()),
+        Err(err) => Err(err),
+    };
+    if let Err(err) = result {
+        restore_lock_file(&lock_file_path, original_lock_file).await;
+        return Err(err);
+    }
 
     eprintln!(
         "{}{message}",
         console::style(console::Emoji("✔ ", "")).green()
     );
     Ok(())
+}
+
+/// Restores the lock file to `original`, or removes it if there was none.
+async fn restore_lock_file(path: &Path, original: Option<Vec<u8>>) {
+    let result = match original {
+        Some(contents) => fs_err::tokio::write(path, contents).await,
+        None => match fs_err::tokio::remove_file(path).await {
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            result => result,
+        },
+    };
+    if let Err(err) = result {
+        tracing::error!("Failed to restore {}: {}", path.display(), err);
+    }
 }
 
 fn exclude_newer_config(workspace: &Workspace) -> (ExcludeNewerConfig, PypiExcludeNewerConfig) {
