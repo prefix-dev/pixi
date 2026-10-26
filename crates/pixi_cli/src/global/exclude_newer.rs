@@ -177,16 +177,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 &args.cutoff,
                 &channel_config,
                 |name, exemption| {
-                    project
+                    Ok(project
                         .manifest
-                        .add_exclude_newer_exemption(name, exemption)
+                        .add_exclude_newer_exemption(name, exemption)?)
                 },
             )?
         }
         Command::Unexempt(args) => {
             remove_exemptions(&args.packages, "exclude-newer", |package| {
                 let name = PackageName::from_str(package).map_err(ExcludeNewerError::from)?;
-                project.manifest.remove_exclude_newer_exemption(&name)
+                Ok::<_, miette::Report>(project.manifest.remove_exclude_newer_exemption(&name)?)
             })?;
             format!(
                 "Removed the exclude-newer exemptions of {}.",
@@ -230,7 +230,7 @@ async fn prune(args: &PruneArgs) -> miette::Result<()> {
         .with_cli_config(Config::with_cli_config(&args.config));
     let stale = project.stale_exclude_newer_exemptions(Utc::now())?;
     let Some(message) = prune_exemptions(&stale, args.dry_run, |name| {
-        project.manifest.remove_exclude_newer_exemption(name)
+        Ok(project.manifest.remove_exclude_newer_exemption(name)?)
     })?
     else {
         return Ok(());
