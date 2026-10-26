@@ -4334,7 +4334,7 @@ host-lib = "*"
     insta::assert_yaml_snapshot!(index_json, {
         ".subdir" => "[SUBDIR]",
     }, @r###"
-    build: ""
+    build: "0"
     build_number: 0
     depends:
       - "host-lib >=2.5,<3.0a0"
