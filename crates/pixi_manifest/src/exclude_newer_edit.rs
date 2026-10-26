@@ -68,6 +68,9 @@ pub enum ParseExemptionError {
         source: InvalidExemptionSpec,
     },
 
+    #[error("the exemption '{0}' cannot have a namespace, it does not select packages")]
+    Namespace(String),
+
     #[error("'{0}' is not a valid PyPI package name")]
     PypiName(String),
 
@@ -94,6 +97,9 @@ pub fn parse_conda_exemption(
         source,
     })?;
     let (name, nameless) = match_spec.into_nameless();
+    if nameless.namespace.is_some() {
+        return Err(ParseExemptionError::Namespace(spec.to_string()));
+    }
     let name = name
         .as_exact()
         .cloned()
@@ -626,6 +632,10 @@ Python = "*"
         assert!(matches!(
             parse_pypi_exemption("torch==2"),
             Err(ParseExemptionError::PypiVersion(_))
+        ));
+        assert!(matches!(
+            parse_conda_exemption("python[namespace=foo]", &channel_config),
+            Err(ParseExemptionError::Namespace(_))
         ));
         assert!(matches!(
             parse_pypi_exemption(""),
