@@ -6528,7 +6528,6 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
- "tokio-util 0.7.20",
  "toml_edit",
  "tracing",
  "tracing-subscriber",
@@ -6538,7 +6537,6 @@ dependencies = [
  "uv-pypi-types",
  "uv-requirements-txt",
  "uv-threads",
- "which",
  "zip",
 ]
 
