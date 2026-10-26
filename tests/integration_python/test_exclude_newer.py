@@ -110,9 +110,7 @@ platforms = ["{CURRENT_PLATFORM}"]
     verify_cli_command([pixi, "workspace", "exclude-newer", "exempt", "Torch", *flags])
     assert exclude_newer(manifest, "pypi-exclude-newer") == {"exemptions": {"Torch": "*"}}
 
-    verify_cli_command(
-        [pixi, "workspace", "exclude-newer", "set", "2020-01-01T00:00:00Z", *flags]
-    )
+    verify_cli_command([pixi, "workspace", "exclude-newer", "set", "2020-01-01T00:00:00Z", *flags])
     verify_cli_command(
         [pixi, "workspace", "exclude-newer", "get", "--manifest-path", manifest],
         stdout_contains='cutoff = "2020-01-01T00:00:00Z"',
