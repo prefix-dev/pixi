@@ -106,12 +106,13 @@ dependencies = { my-tool = "*", polars = "*" }
 exposed = { my-tool = "my-tool" }
 ```
 
-Exemptions use Conda version constraints: `==1.43.1` exempts that version, a range such as `>=1.43.1,<1.44` exempts matching versions, and `"*"` exempts every version of a package.
-An exemption applies to all builds of matching versions in every environment, including when the package is a transitive dependency.
+Exemptions work the same way as in the [workspace manifest](../reference/pixi_manifest.md#exemptions): `==1.43.1` exempts that version, a range such as `>=1.43.1,<1.44` exempts matching versions, and `"*"` exempts every version of a package.
+To narrow an exemption further, use a table with the same fields as a dependency, such as `{ version = "==1.43.1", build = "py312*" }`.
+An exemption applies in every environment, including when the package is a transitive dependency.
 Approving one version does not pin the dependency to that version.
 
 A channel can override the manifest-wide cutoff with its own `exclude-newer` value, as shown above.
-Version exemptions bypass both the manifest-wide and channel cutoffs.
+Exemptions bypass both the manifest-wide and channel cutoffs.
 Without a manifest-wide policy, channel cutoffs still work on their own.
 
 An environment containing a non-exempt package newer than its cutoff counts as out of sync.
