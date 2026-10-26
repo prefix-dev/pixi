@@ -310,7 +310,7 @@ For example, a conda package can combine a channel pin with an `exclude-newer` e
 
     ```toml
     [workspace]
-    exclude-newer = { cutoff = "2025-01-01", exemptions = { pytorch-cpu = "2.6.0", openssl = "*" } }
+    exclude-newer = { cutoff = "2025-01-01", exemptions = { pytorch-cpu = "==2.6.0", openssl = "*" } }
 
     [dependencies]
     pytorch-cpu = { version = "*", channel = "pytorch" }
@@ -320,7 +320,7 @@ For example, a conda package can combine a channel pin with an `exclude-newer` e
 
     ```toml
     [tool.pixi.workspace]
-    exclude-newer = { cutoff = "2025-01-01", exemptions = { pytorch-cpu = "2.6.0", openssl = "*" } }
+    exclude-newer = { cutoff = "2025-01-01", exemptions = { pytorch-cpu = "==2.6.0", openssl = "*" } }
 
     [tool.pixi.dependencies]
     pytorch-cpu = { version = "*", channel = "pytorch" }

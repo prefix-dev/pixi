@@ -73,9 +73,9 @@ cutoff = "14d"
 
 [workspace.exclude-newer.exemptions]
 # CVE-XXXX-YYYY: allow the reviewed fixed release immediately
-python = "3.12.12"
+python = "==3.12.12"
 # CVE-XXXX-YYYY: allow the reviewed fixed release immediately
-openssl = "3.5.1"
+openssl = "==3.5.1"
 
 [dependencies]
 python = "3.12.*"

@@ -414,7 +414,7 @@ Write `exclude-newer` as a table with a `cutoff` and `exemptions` for that.
 An exempted release is never excluded, regardless of its upload time.
 
 The value of an exemption is a version spec, or a table with the same fields as a [conda dependency](#dependencies-optional) from a channel, such as `version`, `build` or `channel`.
-`polars = "1.43.1"` exempts that release only, while `py-rattler = "*"` exempts every release of the package, including future ones.
+`polars = "==1.43.1"` exempts that release only, while `py-rattler = "*"` exempts every release of the package, including future ones.
 
 ```toml
 [workspace]
@@ -429,11 +429,11 @@ cutoff = "7d"
 
 [workspace.exclude-newer.exemptions]
 # CVE-XXXX-YYYY: this release contains the fix
-polars = "1.43.1"
+polars = "==1.43.1"
 # only ever built by us
 py-rattler = "*"
 # a release of a specific build string from a specific channel
-pytorch-cpu = { version = "2.10.0", build = "cpu_*", channel = "pytorch" }
+pytorch-cpu = { version = "==2.10.0", build = "cpu_*", channel = "pytorch" }
 ```
 
 A channel can override the cutoff with its own `exclude-newer` value, as shown above.
