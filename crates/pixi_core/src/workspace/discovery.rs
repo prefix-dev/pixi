@@ -484,7 +484,10 @@ impl WorkspaceLocator {
 
             if self.emit_warnings {
                 for warning in warnings {
-                    tracing::warn!("{warning}");
+                    // Script spans point into the parsed metadata rather than the
+                    // script, so render without a source snippet. We may want to
+                    // map them back and attach the script as source in future.
+                    tracing::warn!("{:?}", Report::from(warning));
                 }
             }
 
@@ -526,7 +529,10 @@ impl WorkspaceLocator {
 
         if self.emit_warnings {
             for warning in warnings {
-                tracing::warn!("{warning}");
+                // Script spans point into the parsed metadata rather than the
+                // script, so render without a source snippet. We may want to map
+                // them back and attach the script as source in future.
+                tracing::warn!("{:?}", Report::from(warning));
             }
         }
 
