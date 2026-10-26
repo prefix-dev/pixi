@@ -422,6 +422,7 @@ channels = [
   # get the most recent versions of packages you control
   { channel = "https://my.internal/channel", exclude-newer = "0d" },
   "conda-forge",
+  "pytorch",
 ]
 
 [workspace.exclude-newer]
