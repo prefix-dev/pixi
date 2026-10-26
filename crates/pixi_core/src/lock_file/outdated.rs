@@ -288,7 +288,9 @@ async fn find_unsatisfiable_targets<'p>(
         };
 
         // The locked environment exists, but does it match our project environment?
-        if let Err(unsat) = verify_environment_satisfiability(&environment, locked_environment) {
+        if let Err(unsat) =
+            verify_environment_satisfiability(&environment, locked_environment, resolver)
+        {
             tracing::info!(
                 "environment '{0}' is out of date because {unsat}",
                 environment.name().fancy_display()
@@ -334,12 +336,6 @@ async fn find_unsatisfiable_targets<'p>(
                         .disregard_locked_content
                         .conda
                         .insert(environment.clone());
-                }
-
-                EnvironmentUnsat::SourceExcludeNewerMismatch(..) => {
-                    // Source packages will be re-resolved with updated
-                    // timestamps during the update phase. No need to disregard
-                    // locked content.
                 }
 
                 EnvironmentUnsat::IndexesMismatch(_)

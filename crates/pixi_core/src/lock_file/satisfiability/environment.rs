@@ -12,6 +12,7 @@ use pixi_manifest::{
     pypi::pypi_options::NoBuild,
 };
 use pixi_pypi_spec::PixiPypiSource;
+use pixi_record::LockFileResolver;
 use pypi_modifiers::Tags;
 use rattler_conda_types::{ChannelUrl, NamedChannelOrUrl, Subdir};
 use rattler_lock::{LockedPackage, PypiIndexes, UrlOrPath};
@@ -32,6 +33,7 @@ use crate::workspace::{Environment, grouped_environment::GroupedEnvironment};
 pub fn verify_environment_satisfiability(
     environment: &Environment<'_>,
     locked_environment: rattler_lock::Environment<'_>,
+    resolver: &LockFileResolver,
 ) -> Result<(), EnvironmentUnsat> {
     let grouped_env = GroupedEnvironment::from(environment.clone());
 
@@ -252,7 +254,7 @@ pub fn verify_environment_satisfiability(
         .exclude_newer_config_resolved(&config)?
         .map(rattler_solve::ExcludeNewer::from);
 
-    if let Err(err) = verify_exclude_newer(exclude_newer.as_ref(), &locked_environment) {
+    if let Err(err) = verify_exclude_newer(exclude_newer.as_ref(), &locked_environment, resolver) {
         return Err(EnvironmentUnsat::ExcludeNewerMismatch(err));
     }
 

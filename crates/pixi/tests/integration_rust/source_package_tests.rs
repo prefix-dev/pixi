@@ -1147,6 +1147,120 @@ bar = "{override_cutoff}"
         .expect("timestamp-less pixi-build source packages should remain eligible");
 }
 
+/// The build and host environments of a source package are solved with the
+/// workspace's exclude-newer cutoff, so a locked build or host package that
+/// is newer than the cutoff makes the lock file outdated unless it is exempt.
+#[tokio::test]
+async fn test_exclude_newer_exemption_covers_source_package_build_and_host_dependencies() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("foo", "1")
+            .with_timestamp("2026-01-10T00:00:00Z".parse().unwrap())
+            .with_materialize(true)
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("bar", "1")
+            .with_timestamp("2026-01-10T00:00:00Z".parse().unwrap())
+            .with_materialize(true)
+            .finish(),
+    );
+    let channel = package_database.into_channel().await.unwrap();
+
+    let pixi = PixiControl::new()
+        .unwrap()
+        .with_backend_override(BackendOverride::from_memory(
+            PassthroughBackend::instantiator(),
+        ));
+
+    let source_dir = pixi.workspace_path().join("my-package");
+    fs::create_dir_all(&source_dir).unwrap();
+    fs::write(
+        source_dir.join("pixi.toml"),
+        r#"
+[package]
+name = "my-package"
+version = "1.0.0"
+
+[package.build]
+backend = { name = "in-memory", version = "0.1.0" }
+
+[package.host-dependencies]
+bar = "*"
+
+[package.build-dependencies]
+foo = "*"
+"#,
+    )
+    .unwrap();
+
+    let manifest = |exemptions: &str| {
+        format!(
+            r#"
+[workspace]
+channels = ["{channel}"]
+platforms = ["{platform}"]
+preview = ["pixi-build"]
+exclude-newer = {{ cutoff = "2025-01-01T00:00:00Z", exemptions = {{ {exemptions} }} }}
+
+[dependencies]
+my-package = {{ path = "./my-package" }}
+"#,
+            channel = channel.url(),
+            platform = Subdir::current().unwrap_or(Subdir::NoArch),
+        )
+    };
+
+    pixi.update_manifest(&manifest(r#"foo = "*", bar = "*""#))
+        .unwrap();
+    pixi.update_lock_file()
+        .await
+        .expect("exempt build and host dependencies should lock");
+    let lock = pixi.lock_file().await.unwrap();
+    for name in ["foo", "bar"] {
+        assert!(
+            lock.packages().iter().any(|package| package.name() == name),
+            "the lock file should record the {name} build/host dependency"
+        );
+    }
+
+    // Both locked build/host packages are newer than the cutoff but exempt,
+    // so the lock file stays up to date.
+    pixi.workspace()
+        .unwrap()
+        .update_lock_file(
+            None,
+            UpdateLockFileOptions {
+                lock_file_usage: LockFileUsage::Locked,
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("the lock file should be up to date");
+
+    // Dropping the exemption for the host dependency makes the lock file
+    // outdated.
+    pixi.update_manifest(&manifest(r#"foo = "*""#)).unwrap();
+    let outdated = pixi
+        .workspace()
+        .unwrap()
+        .update_lock_file(
+            None,
+            UpdateLockFileOptions {
+                lock_file_usage: LockFileUsage::Locked,
+                ..Default::default()
+            },
+        )
+        .await
+        .map(|_| ());
+    assert!(
+        outdated.is_err(),
+        "a non-exempt host dependency newer than the cutoff should make the lock file outdated"
+    );
+}
+
 /// Test that demonstrates using PassthroughBackend with PixiControl
 /// to test build operations without requiring actual backend processes.
 #[tokio::test]
