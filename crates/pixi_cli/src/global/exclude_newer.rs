@@ -123,8 +123,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Command::Set(args) => {
             project
                 .manifest
-                .set_exclude_newer_cutoff(Some(&args.cutoff))?;
-            format!("Set the exclude-newer cutoff to '{}'.", args.cutoff)
+                .set_exclude_newer_cutoff(Some(args.cutoff.trim()))?;
+            format!("Set the exclude-newer cutoff to '{}'.", args.cutoff.trim())
         }
         Command::Unset(_) => {
             project.manifest.set_exclude_newer_cutoff(None)?;

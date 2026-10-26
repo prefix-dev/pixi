@@ -191,11 +191,11 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Command::Set(args) => {
             let mut manifest = workspace.manifest();
             if pypi {
-                manifest.set_pypi_exclude_newer_cutoff(Some(&args.cutoff))?;
+                manifest.set_pypi_exclude_newer_cutoff(Some(args.cutoff.trim()))?;
             } else {
-                manifest.set_exclude_newer_cutoff(Some(&args.cutoff))?;
+                manifest.set_exclude_newer_cutoff(Some(args.cutoff.trim()))?;
             }
-            format!("Set the {target} cutoff to '{}'.", args.cutoff)
+            format!("Set the {target} cutoff to '{}'.", args.cutoff.trim())
         }
         Command::Unset(_) => {
             let mut manifest = workspace.manifest();
