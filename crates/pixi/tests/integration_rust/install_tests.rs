@@ -1951,7 +1951,6 @@ async fn test_exclude_newer_exemption_keeps_lock_file_satisfied() {
             },
         )
         .await
-        .map(|_| ())
         .expect("the lock file should be up to date");
 
     // Dropping the exemption makes the locked package violate the cutoff.

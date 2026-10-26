@@ -169,7 +169,7 @@ impl Display for ExcludeNewerMismatch {
         if let Some(origin) = &self.origin {
             write!(
                 f,
-                " in the {}-environment of source package '{}'",
+                " in the {} environment of source package '{}'",
                 origin.env, origin.source_package
             )?;
         }

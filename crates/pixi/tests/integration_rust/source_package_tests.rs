@@ -1238,7 +1238,6 @@ my-package = {{ path = "./my-package" }}
             },
         )
         .await
-        .map(|_| ())
         .expect("the lock file should be up to date");
 
     // Dropping the exemption for the host dependency makes the lock file
