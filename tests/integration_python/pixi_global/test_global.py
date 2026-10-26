@@ -73,7 +73,7 @@ def test_sync_injected_python_lib_is_found(pixi: Path, tmp_path: Path) -> None:
         ExitCode.FAILURE,
         env=env,
         stderr_contains=[
-            "Couldn't find executable",
+            "couldn't find executable",
             "Failed to add executables for environment",
         ],
     )
@@ -381,7 +381,7 @@ def test_expose_revert_working(pixi: Path, tmp_path: Path, dummy_channel_1: str)
         [pixi, "global", "expose", "add", "--environment=test", "dummy-b=dummy-b"],
         ExitCode.FAILURE,
         env=env,
-        stderr_contains=["Couldn't find executable dummy-b in", "test", "executables"],
+        stderr_contains=["couldn't find executable 'dummy-b' in", "test", "executables"],
     )
 
     # The TOML has been reverted to the original state

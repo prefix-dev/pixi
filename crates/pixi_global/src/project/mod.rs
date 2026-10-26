@@ -19,7 +19,9 @@ use itertools::{Either, Itertools};
 pub use manifest::{ExposedType, Manifest, Mapping};
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use once_cell::sync::OnceCell;
-pub use parsed_manifest::{ExposedName, GlobalExcludeNewer, ParsedEnvironment, ParsedManifest};
+pub use parsed_manifest::{
+    ExposedName, ExposedNameError, GlobalExcludeNewer, ParsedEnvironment, ParsedManifest,
+};
 use pixi_build_discovery::DiscoveryError;
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
@@ -1402,7 +1404,7 @@ impl Project {
                     &env_dir,
                 )
             })
-            .collect::<miette::Result<Vec<_>>>()
+            .collect::<Result<Vec<_>, _>>()
             .wrap_err(format!(
                 "Failed to add executables for environment: {env_name}"
             ))?;
@@ -1698,7 +1700,7 @@ impl Project {
                 prefix.root(),
                 &completions_dir,
             )
-            .await?;
+            .await;
 
         for completion_to_remove in completions_to_remove {
             let state_change = completion_to_remove.remove().await?;
