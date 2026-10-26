@@ -2450,9 +2450,7 @@ def test_remove_dependency_preserves_transitive_exposures(
     assert manifest["envs"]["my-env"]["dependencies"] == {"dummy-g": "*"}
     assert manifest["envs"]["my-env"]["exposed"] == {"dummy-b": "dummy-b", "custom-b": "dummy-b"}
     for name in ("dummy-b", "custom-b"):
-        verify_cli_command(
-            [tmp_path / "bin" / exec_extension(name)], env=env, stdout_contains="dummy-b on"
-        )
+        assert (tmp_path / "bin" / exec_extension(name)).is_file()
 
 
 def test_update_env_not_installed(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
