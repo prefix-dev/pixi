@@ -394,60 +394,6 @@ impl Manifest {
         Ok(())
     }
 
-    #[allow(dead_code)]
-    /// Adds a channel to the manifest
-    pub fn add_channel(
-        &mut self,
-        env_name: &EnvironmentName,
-        channel: &NamedChannelOrUrl,
-    ) -> Result<(), ManifestError> {
-        // Update self.parsed, unless the channel is already tracked (e.g. as
-        // an entry with an explicit priority).
-        let channel_name = channel.to_string();
-        let env = self
-            .parsed
-            .envs
-            .get_mut(env_name)
-            .ok_or_else(|| ManifestError::EnvironmentNotFound(env_name.clone()))?;
-        let already_tracked = env
-            .channels
-            .iter()
-            .any(|existing| existing.channel.to_string() == channel_name);
-        if !already_tracked {
-            env.channels
-                .insert(PrioritizedChannel::from(channel.clone()));
-        }
-
-        // Update self.document
-        let channels_array = self
-            .document
-            .get_or_insert_nested_table(&["envs", env_name.as_str()])?
-            .entry("channels")
-            .or_insert_with(|| toml_edit::Item::Value(toml_edit::Value::Array(Default::default())))
-            .as_array_mut()
-            .ok_or(ManifestError::ExpectedArray("channels"))?;
-
-        // Append the channel unless it is already listed, leaving the
-        // existing entries' formatting untouched. Compare normalized names so
-        // an entry that is spelled differently in the document (e.g. a URL
-        // with a trailing slash) is recognized as well.
-        let channel = channel_name;
-        let already_listed = channels_array.iter().any(|item| {
-            channel_array_element_name(item).is_some_and(|existing| {
-                let existing = NamedChannelOrUrl::from_str(existing)
-                    .map(|channel| channel.to_string())
-                    .unwrap_or_else(|_| existing.to_string());
-                existing == channel
-            })
-        });
-        if !already_listed {
-            pixi_toml_edit::push_array_element(channels_array, channel.as_str().into());
-        }
-
-        tracing::debug!("Added channel {channel} for environment {env_name} in toml document");
-        Ok(())
-    }
-
     /// Sets or removes the `exclude-newer` cutoff of the manifest.
     pub fn set_exclude_newer_cutoff(
         &mut self,
@@ -828,19 +774,6 @@ impl FromStr for Mapping {
     }
 }
 
-/// The channel a `channels` array element refers to: either a bare string or
-/// the `channel` key of an inline table entry like
-/// `{ channel = "nvidia", priority = 1 }`.
-fn channel_array_element_name(item: &toml_edit::Value) -> Option<&str> {
-    if let Some(name) = item.as_str() {
-        Some(name)
-    } else if let Some(table) = item.as_inline_table() {
-        table.get("channel").and_then(|value| value.as_str())
-    } else {
-        None
-    }
-}
-
 /// The key under which a conda package is stored in the table-like item,
 /// honoring conda package name normalization so a differently spelled key
 /// (e.g. "PyTest" vs "pytest") is found.
@@ -867,7 +800,6 @@ mod tests {
 
     use indexmap::IndexSet;
     use insta::assert_snapshot;
-    use itertools::Itertools;
     use pixi_consts::consts::DEFAULT_CHANNELS;
     use rattler_conda_types::ChannelConfig;
 
@@ -1444,48 +1376,6 @@ mod tests {
     }
 
     #[test]
-    fn test_add_channel() {
-        let mut manifest = Manifest::default();
-        let env_name = EnvironmentName::from_str("test-env").unwrap();
-        let channel = NamedChannelOrUrl::from_str("test-channel").unwrap();
-        let mut channels = Config::load_global().default_channels();
-        channels.push(channel.clone());
-
-        // Add environment
-        manifest.add_environment(&env_name, None).unwrap();
-
-        // Add channel
-        manifest.add_channel(&env_name, &channel).unwrap();
-
-        // Check document
-        let actual_channels = manifest
-            .document
-            .get_or_insert_nested_table(&["envs", env_name.as_str()])
-            .unwrap()
-            .get("channels")
-            .unwrap()
-            .as_array()
-            .unwrap()
-            .into_iter()
-            .filter_map(|v| v.as_str())
-            .collect_vec();
-        let expected_channels = channels.iter().map(|c| c.as_str()).collect_vec();
-        assert_eq!(actual_channels, expected_channels);
-
-        // Check parsed
-        let actual_channels = manifest
-            .parsed
-            .envs
-            .get(&env_name)
-            .unwrap()
-            .channels
-            .clone();
-        let expected_channels: IndexSet<PrioritizedChannel> =
-            channels.into_iter().map(From::from).collect();
-        assert_eq!(actual_channels, expected_channels);
-    }
-
-    #[test]
     fn test_remove_dependency() {
         let env_name = EnvironmentName::from_str("test-env").unwrap();
         let name = PackageName::from_str("pytest").unwrap();
@@ -1580,62 +1470,6 @@ exposed = { python = "python" }
 
         // Verify parsing works
         assert!(manifest.parsed.envs.contains_key(&env_name));
-    }
-
-    /// Adding a channel that is already listed with a trailing slash in the
-    /// manifest must not append a duplicate entry: `NamedChannelOrUrl`
-    /// normalizes the trailing slash away while the raw file contents keep
-    /// it.
-    #[test]
-    fn test_add_channel_with_trailing_slash_does_not_duplicate() {
-        let env_name = EnvironmentName::from_str("test-env").unwrap();
-        let mut manifest = Manifest::from_str(
-            Path::new("global.toml"),
-            r#"
-[envs.test-env]
-channels = ["https://repo.example.com/ch/"]
-dependencies = { python = "*" }
-exposed = { python = "python" }
-"#,
-        )
-        .unwrap();
-
-        let channel = NamedChannelOrUrl::from_str("https://repo.example.com/ch/").unwrap();
-        manifest.add_channel(&env_name, &channel).unwrap();
-
-        let channels = manifest.document.to_string();
-        let count = channels.matches("repo.example.com").count();
-        assert_eq!(count, 1, "channel was duplicated:\n{}", manifest.document);
-    }
-
-    /// Adding a channel that the document already lists as an inline table
-    /// entry like `{ channel = "nvidia", priority = 1 }` must not append a
-    /// duplicate entry with a conflicting priority.
-    #[test]
-    fn test_add_channel_with_inline_table_entry_does_not_duplicate() {
-        let env_name = EnvironmentName::from_str("cuda-tools").unwrap();
-        let mut manifest = Manifest::from_str(
-            Path::new("global.toml"),
-            r#"
-[envs.cuda-tools]
-channels = [{ channel = "nvidia", priority = 1 }]
-dependencies = { cuda-nvcc = "*" }
-exposed = { nvcc = "nvcc" }
-"#,
-        )
-        .unwrap();
-
-        let channel = NamedChannelOrUrl::from_str("nvidia").unwrap();
-        manifest.add_channel(&env_name, &channel).unwrap();
-
-        let document = manifest.document.to_string();
-        let count = document.matches("nvidia").count();
-        assert_eq!(count, 1, "channel was duplicated:\n{}", manifest.document);
-        assert_eq!(
-            manifest.parsed.envs.get(&env_name).unwrap().channels.len(),
-            1,
-            "parsed channels diverge from the document"
-        );
     }
 
     /// Removing a dependency must find the entry in the document even when
