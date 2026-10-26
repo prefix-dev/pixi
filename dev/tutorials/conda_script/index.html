@@ -9242,8 +9242,7 @@ Pixi reads <code>[tool.pixi]</code> the same way as in a <code>pyproject.toml</c
 <li><code>[tool.pixi.dependencies]</code> holds conda specs in pixi's native syntax, including <a href="../../build/dependency_types/">source dependencies</a>, which need the <code>pixi-build</code> preview declared under <code>[tool.pixi.workspace]</code>.</li>
 <li><code>[tool.pixi.pypi-dependencies]</code> holds PyPI packages.</li>
 <li><code>[tool.pixi.constraints]</code>, <code>[tool.pixi.activation]</code> and <code>[tool.pixi.target.&lt;platform&gt;]</code> hold constraints, activation settings and platform-specific dependencies.</li>
-<li><code>[tool.pixi.exclude-newer]</code> and <code>[tool.pixi.pypi-exclude-newer]</code> override the cutoff date per package.</li>
-<li><code>[tool.pixi.workspace]</code> holds resolver options: <code>platforms</code>, <code>channel-priority</code>, <code>solve-strategy</code>, <code>exclude-newer</code>, <code>conda-pypi-map</code>, <code>pypi-options</code>, <code>preview</code> and <code>requires-pixi</code>.
+<li><code>[tool.pixi.workspace]</code> holds resolver options: <code>platforms</code>, <code>channel-priority</code>, <code>solve-strategy</code>, <code>exclude-newer</code>, <code>pypi-exclude-newer</code>, <code>conda-pypi-map</code>, <code>pypi-options</code>, <code>preview</code> and <code>requires-pixi</code>.
   Channels stay in the block's <code>channels</code>, so <code>tool.pixi.workspace.channels</code> is rejected.</li>
 </ul>
 <p>A script without <code>platforms</code> resolves for the machine it runs on.

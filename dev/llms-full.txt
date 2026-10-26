@@ -1807,7 +1807,8 @@ Pixi reads those fields and extends them with a focused subset of
 `tool.pixi`:
 
 - `tool.pixi.workspace` configures channels, platforms, and resolver options
-  such as `exclude-newer`, `channel-priority` or `solve-strategy`.
+  such as `exclude-newer`, `pypi-exclude-newer`, `channel-priority` or
+  `solve-strategy`.
 - `tool.pixi.dependencies` lists Conda packages.
 - `tool.pixi.pypi-dependencies` represents PyPI requirements that need
   Pixi-specific fields, such as an index or editable installation.
@@ -1815,8 +1816,6 @@ Pixi reads those fields and extends them with a focused subset of
   activation settings.
 - `tool.pixi.target.<platform>` holds platform-specific dependencies,
   constraints, and activation settings.
-- `tool.pixi.exclude-newer` and `tool.pixi.pypi-exclude-newer` override the
-  cutoff date per package.
 
 Every other key under `tool.pixi` is rejected with an error pointing at it,
 since a script has one implicit environment and no features, tasks or
@@ -2755,8 +2754,7 @@ Pixi reads `[tool.pixi]` the same way as in a `pyproject.toml`, restricted to wh
 - `[tool.pixi.dependencies]` holds conda specs in pixi's native syntax, including [source dependencies](../build/dependency_types.md), which need the `pixi-build` preview declared under `[tool.pixi.workspace]`.
 - `[tool.pixi.pypi-dependencies]` holds PyPI packages.
 - `[tool.pixi.constraints]`, `[tool.pixi.activation]` and `[tool.pixi.target.<platform>]` hold constraints, activation settings and platform-specific dependencies.
-- `[tool.pixi.exclude-newer]` and `[tool.pixi.pypi-exclude-newer]` override the cutoff date per package.
-- `[tool.pixi.workspace]` holds resolver options: `platforms`, `channel-priority`, `solve-strategy`, `exclude-newer`, `conda-pypi-map`, `pypi-options`, `preview` and `requires-pixi`.
+- `[tool.pixi.workspace]` holds resolver options: `platforms`, `channel-priority`, `solve-strategy`, `exclude-newer`, `pypi-exclude-newer`, `conda-pypi-map`, `pypi-options`, `preview` and `requires-pixi`.
   Channels stay in the block's `channels`, so `tool.pixi.workspace.channels` is rejected.
 
 A script without `platforms` resolves for the machine it runs on.
@@ -4098,7 +4096,7 @@ equivalent is [`[workspace].exclude-newer`](../reference/pixi_manifest.md#exclud
 
 Pixi applies this cutoff across both conda and PyPI resolution.
 
-If you want to override the cutoff for a specific package, uv uses
+If you want to let a specific package through the cutoff, uv uses
 [`exclude-newer-package`](https://docs.astral.sh/uv/reference/settings/#exclude-newer-package):
 
 ```toml title="pyproject.toml"
@@ -4107,56 +4105,44 @@ exclude-newer = "2025-01-01"
 exclude-newer-package = { tqdm = "2025-02-01" }
 ```
 
-In Pixi, the equivalent depends on which ecosystem the package comes from:
+In Pixi, exemptions take the place of per-package cutoffs, and where to set them depends on which ecosystem the package comes from:
 
-- For a conda package, set it in [`[exclude-newer]`](../reference/pixi_manifest.md#exclude-newer-optional).
-- For a PyPI package, set it in [`[pypi-exclude-newer]`](../reference/pixi_manifest.md#exclude-newer-optional).
+- For a conda package, add it to the `exemptions` of [`[workspace.exclude-newer]`](../reference/pixi_manifest.md#exclude-newer-optional). An exemption names the releases that are allowed through, e.g. a version, so you do not have to lower the cutoff for every future release.
+- For a PyPI package, add it to the `exemptions` of [`[workspace.pypi-exclude-newer]`](../reference/pixi_manifest.md#exclude-newer-optional). PyPI exemptions only support `"*"` for now, which exempts every release of the package.
 
-For example, a conda package can combine a channel pin with a package-specific `exclude-newer`
-override:
+For example, a conda package can combine a channel pin with an `exclude-newer` exemption:
 
 === "pixi.toml"
 
     ```toml
     [workspace]
-    exclude-newer = "2025-01-01"
+    exclude-newer = { cutoff = "2025-01-01", exemptions = { pytorch-cpu = "==2.6.0", openssl = "*" } }
 
     [dependencies]
     pytorch-cpu = { version = "*", channel = "pytorch" }
-
-    [exclude-newer]
-    pytorch-cpu = "2025-02-01"
-    openssl = "2024-12-01"
     ```
 
 === "pyproject.toml"
 
     ```toml
     [tool.pixi.workspace]
-    exclude-newer = "2025-01-01"
+    exclude-newer = { cutoff = "2025-01-01", exemptions = { pytorch-cpu = "==2.6.0", openssl = "*" } }
 
     [tool.pixi.dependencies]
     pytorch-cpu = { version = "*", channel = "pytorch" }
-
-    [tool.pixi.exclude-newer]
-    pytorch-cpu = "2025-02-01"
-    openssl = "2024-12-01"
     ```
 
-And a PyPI package uses the same pattern, but with PyPI-specific tables:
+And a PyPI package uses the same pattern with `pypi-exclude-newer`:
 
 === "pixi.toml"
 
     ```toml
     [workspace]
     exclude-newer = "2025-01-01"
+    pypi-exclude-newer = { exemptions = { tqdm = "*" } }
 
     [pypi-dependencies]
-    torch = { version = "*", index = "https://download.pytorch.org/whl/cu124" }
-
-    [pypi-exclude-newer]
-    torch = "2025-02-01"
-    tqdm = "2025-02-01"
+    tqdm = "*"
     ```
 
 === "pyproject.toml"
@@ -4164,37 +4150,10 @@ And a PyPI package uses the same pattern, but with PyPI-specific tables:
     ```toml
     [tool.pixi.workspace]
     exclude-newer = "2025-01-01"
+    pypi-exclude-newer = { exemptions = { tqdm = "*" } }
 
     [tool.pixi.pypi-dependencies]
-    torch = { version = "*", index = "https://download.pytorch.org/whl/cu124" }
-
-    [tool.pixi.pypi-exclude-newer]
-    torch = "2025-02-01"
-    tqdm = "2025-02-01"
-    ```
-
-Unlike uv, Pixi can also override `exclude-newer` on a per-channel level:
-
-=== "pixi.toml"
-
-    ```toml
-    [workspace]
-    exclude-newer = "7d"
-    channels = [
-      { channel = "my-internal-channel", exclude-newer = "0d" },
-      "conda-forge",
-    ]
-    ```
-
-=== "pyproject.toml"
-
-    ```toml
-    [tool.pixi.workspace]
-    exclude-newer = "7d"
-    channels = [
-      { channel = "my-internal-channel", exclude-newer = "0d" },
-      "conda-forge",
-    ]
+    tqdm = "*"
     ```
 
 ### Lockfiles
@@ -6871,13 +6830,13 @@ steer transitive dependencies without adding a new direct dependency.
 The difference is that conda constraints add an extra bound, while PyPI dependency overrides replace
 the requirement used for that package during PyPI resolution.
 
-Package-specific `exclude-newer` values are configured separately from both mechanisms:
+Package-specific `exclude-newer` exemptions are configured separately from both mechanisms:
 
-- use [`[exclude-newer]`](../reference/pixi_manifest.md#exclude-newer-optional) for conda packages
-- use [`[pypi-exclude-newer]`](../reference/pixi_manifest.md#exclude-newer-optional) for PyPI packages
+- use the `exemptions` of [`[workspace.exclude-newer]`](../reference/pixi_manifest.md#exclude-newer-optional) for conda packages
+- use the `exemptions` of [`[workspace.pypi-exclude-newer]`](../reference/pixi_manifest.md#exclude-newer-optional) for PyPI packages
 
 PyPI still does not have a conda-style per-channel cutoff. When you use a separate package index,
-pin the package with `index = "..."` and set its cutoff in `[pypi-exclude-newer]`.
+pin the package with `index = "..."` and exempt it in `[workspace.pypi-exclude-newer]`.
 
 ### Pinned package conflicts
 
@@ -7462,12 +7421,13 @@ dependencies = { my-tool = "*", polars = "*" }
 exposed = { my-tool = "my-tool" }
 ```
 
-Exemptions use Conda version constraints: `==1.43.1` exempts that version, a range such as `>=1.43.1,<1.44` exempts matching versions, and `"*"` exempts every version of a package.
-An exemption applies to all builds of matching versions in every environment, including when the package is a transitive dependency.
+Exemptions work the same way as in the [workspace manifest](../reference/pixi_manifest.md#exemptions): `==1.43.1` exempts that version, a range such as `>=1.43.1,<1.44` exempts matching versions, and `"*"` exempts every version of a package.
+To narrow an exemption further, use a table with the same fields as a dependency, such as `{ version = "==1.43.1", build = "py312*" }`.
+An exemption applies in every environment, including when the package is a transitive dependency.
 Approving one version does not pin the dependency to that version.
 
 A channel can override the manifest-wide cutoff with its own `exclude-newer` value, as shown above.
-Version exemptions bypass both the manifest-wide and channel cutoffs.
+Exemptions bypass both the manifest-wide and channel cutoffs.
 Without a manifest-wide policy, channel cutoffs still work on their own.
 
 An environment containing a non-exempt package newer than its cutoff counts as out of sync.
@@ -14285,7 +14245,7 @@ When specified on the workspace this will exclude any package from consideration
 This is useful to reproduce installations regardless of new package releases, or to reduce the risk of
 installing recently published (and potentially compromised) packages.
 
-The value may be specified in the following formats:
+The cutoff may be specified in the following formats:
 
 * As an [RFC 3339](https://www.rfc-editor.org/rfc/rfc3339.html) timestamp (e.g. `2023-10-01T00:00:00Z`)
 * As a date in `YYYY-MM-DD` format (e.g. `2026-03-30`). This is interpreted as the start of the following day in UTC, so `2026-03-30` means `2026-03-31T00:00:00Z`.
@@ -14293,47 +14253,82 @@ The value may be specified in the following formats:
 
 When using a relative duration, the lock file will be re-solved when a package is not included in the cutoff date.
 
-Both PyPi and conda packages are considered.
+Both PyPI and conda packages are considered.
 
-For conda packages, the workspace-level cutoff can be overridden per package in the
-[`[exclude-newer]`](#exclude-newer-optional) table.
+```toml
+[workspace]
+exclude-newer = "7d"
+```
 
-For PyPI packages, the workspace-level cutoff can be overridden per package in the
-[`[pypi-exclude-newer]`](#exclude-newer-optional) table.
+#### Exemptions
 
-This is especially useful when a package is pinned to a separate `channel` or `index` and needs a
-different cutoff than the rest of the workspace.
+Some releases need to get through the cutoff immediately, for example an urgent security fix that you have reviewed, or a package you publish yourself.
+Instead of lowering the cutoff for every future release of such a package, exempt the releases you vetted.
+Write `exclude-newer` as a table with a `cutoff` and `exemptions` for that.
+An exempted release is never excluded, regardless of its upload time.
+
+The value of an exemption is a version spec, or a table with the same fields as a [conda dependency](#dependencies-optional) from a channel, such as `version`, `build` or `channel`.
+`polars = "==1.43.1"` exempts that release only, while `py-rattler = "*"` exempts every release of the package, including future ones.
+
+```toml
+[workspace]
+channels = [
+  # get the most recent versions of packages you control
+  { channel = "https://my.internal/channel", exclude-newer = "0d" },
+  "conda-forge",
+  "pytorch",
+]
+
+[workspace.exclude-newer]
+cutoff = "7d"
+
+[workspace.exclude-newer.exemptions]
+# CVE-XXXX-YYYY: this release contains the fix
+polars = "==1.43.1"
+# only ever built by us
+py-rattler = "*"
+# a release of a specific build string from a specific channel
+pytorch-cpu = { version = "==2.10.0", build = "cpu_*", channel = "pytorch" }
+```
+
+A channel can override the cutoff with its own `exclude-newer` value, as shown above.
+Exemptions take precedence over the channel cutoff, which in turn takes precedence over the workspace cutoff.
+
+#### PyPI packages
+
+The cutoff of `exclude-newer` applies to PyPI packages as well.
+Use `pypi-exclude-newer` to give PyPI packages their own `cutoff`, or to exempt PyPI packages from the cutoff.
+Without a `cutoff` of its own, `pypi-exclude-newer` falls back to the cutoff of `exclude-newer`.
+
+PyPI exemptions only support `"*"` for now, which exempts every release of the package.
+This is especially useful when a package is pinned to a separate `index` that you trust, or that does not provide upload times (see the note below).
+
+```toml
+[workspace]
+exclude-newer = "7d"
+pypi-exclude-newer = { exemptions = { torch = "*" } }
+
+[pypi-dependencies]
+torch = { version = ">=2.10.0", index = "https://download.pytorch.org/whl/cu124" }
+```
+
+!!! warning "Deprecated: top-level `[exclude-newer]` and `[pypi-exclude-newer]` tables"
+    The top-level `[exclude-newer]` and `[pypi-exclude-newer]` tables of per-package cutoffs are deprecated and will be removed.
+    Replace a per-package cutoff of `"0d"` with a `"*"` exemption, or narrow it down to the releases you vetted.
+    Other per-package cutoffs have no direct replacement: to allow newer releases of a package, exempt the versions you vetted, and to keep a package on older releases, constrain its version in the dependencies.
 
 !!! note "Satisfiability checks with `exclude-newer`"
     For conda packages, pixi stores the package timestamp in `pixi.lock` and can use it during
     lock file satisfiability checks. That means changing `exclude-newer` can trigger a re-solve
-    when a locked conda package is newer than the configured cutoff.
+    when a locked conda package is newer than the configured cutoff and not exempt.
 
     For PyPI packages, pixi does not currently store upload timestamps in `pixi.lock`. As a
-    result, changes to `exclude-newer` or `[pypi-exclude-newer]` do not trigger the same
+    result, changes to `exclude-newer` or `pypi-exclude-newer` do not trigger the same
     lock file satisfiability check for already locked PyPI packages. Run `pixi update` to
     re-resolve PyPI packages and ensure the lock file respects the configured cutoff.
 
-```toml
-[workspace]
-exclude-newer = "2025-01-01"
-
-[dependencies]
-pytorch-cpu = { version = ">=2.10.0", channel = "pytorch" }
-
-[exclude-newer]
-pytorch-cpu = "0d"
-openssl = "0d"
-
-[pypi-dependencies]
-torch = { version = ">=2.10.0", index = "https://download.pytorch.org/whl/cu124" }
-
-[pypi-exclude-newer]
-torch = "0d"
-```
-
 !!! note
-    Note that for Pypi package indexes the package index must support the `upload-time` field as specified in [`PEP 700`](https://peps.python.org/pep-0700/).
+    Note that for PyPI package indexes the package index must support the `upload-time` field as specified in [`PEP 700`](https://peps.python.org/pep-0700/).
     If the field is not present for a given distribution, the distribution will be treated as unavailable. PyPI provides `upload-time` for all packages.
 
 ### `build-variants` (optional)

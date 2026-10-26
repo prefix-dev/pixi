@@ -9112,11 +9112,12 @@ To allow a reviewed release before it reaches that age, use a table with <code>c
 </span><span id="__span-3-10"><a id="__codelineno-3-10" name="__codelineno-3-10" href="#__codelineno-3-10"></a><span class="n">dependencies</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">my-tool</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">polars</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span><span class="w"> </span><span class="p">}</span>
 </span><span id="__span-3-11"><a id="__codelineno-3-11" name="__codelineno-3-11" href="#__codelineno-3-11"></a><span class="n">exposed</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">my-tool</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;my-tool&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
-<p>Exemptions use Conda version constraints: <code>==1.43.1</code> exempts that version, a range such as <code>&gt;=1.43.1,&lt;1.44</code> exempts matching versions, and <code>"*"</code> exempts every version of a package.
-An exemption applies to all builds of matching versions in every environment, including when the package is a transitive dependency.
+<p>Exemptions work the same way as in the <a href="../../reference/pixi_manifest/#exemptions">workspace manifest</a>: <code>==1.43.1</code> exempts that version, a range such as <code>&gt;=1.43.1,&lt;1.44</code> exempts matching versions, and <code>"*"</code> exempts every version of a package.
+To narrow an exemption further, use a table with the same fields as a dependency, such as <code>{ version = "==1.43.1", build = "py312*" }</code>.
+An exemption applies in every environment, including when the package is a transitive dependency.
 Approving one version does not pin the dependency to that version.</p>
 <p>A channel can override the manifest-wide cutoff with its own <code>exclude-newer</code> value, as shown above.
-Version exemptions bypass both the manifest-wide and channel cutoffs.
+Exemptions bypass both the manifest-wide and channel cutoffs.
 Without a manifest-wide policy, channel cutoffs still work on their own.</p>
 <p>An environment containing a non-exempt package newer than its cutoff counts as out of sync.
 Tightening the cutoff or removing an exemption re-solves it on the next <code>pixi global sync</code>, potentially downgrading packages.

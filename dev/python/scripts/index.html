@@ -9054,7 +9054,8 @@ without a separate <code>pixi.toml</code>, <code>pyproject.toml</code>, or lock 
 <code>tool.pixi</code>:</p>
 <ul>
 <li><code>tool.pixi.workspace</code> configures channels, platforms, and resolver options
-  such as <code>exclude-newer</code>, <code>channel-priority</code> or <code>solve-strategy</code>.</li>
+  such as <code>exclude-newer</code>, <code>pypi-exclude-newer</code>, <code>channel-priority</code> or
+  <code>solve-strategy</code>.</li>
 <li><code>tool.pixi.dependencies</code> lists Conda packages.</li>
 <li><code>tool.pixi.pypi-dependencies</code> represents PyPI requirements that need
   Pixi-specific fields, such as an index or editable installation.</li>
@@ -9062,8 +9063,6 @@ without a separate <code>pixi.toml</code>, <code>pyproject.toml</code>, or lock 
   activation settings.</li>
 <li><code>tool.pixi.target.&lt;platform&gt;</code> holds platform-specific dependencies,
   constraints, and activation settings.</li>
-<li><code>tool.pixi.exclude-newer</code> and <code>tool.pixi.pypi-exclude-newer</code> override the
-  cutoff date per package.</li>
 </ul>
 <p>Every other key under <code>tool.pixi</code> is rejected with an error pointing at it,
 since a script has one implicit environment and no features, tasks or
