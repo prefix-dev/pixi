@@ -446,7 +446,7 @@ Use `pypi-exclude-newer` to give PyPI packages their own `cutoff`, or to exempt 
 Without a `cutoff` of its own, `pypi-exclude-newer` falls back to the cutoff of `exclude-newer`.
 
 PyPI exemptions only support `"*"` for now, which exempts every release of the package.
-This is especially useful when a package is pinned to a separate `index` and needs a different cutoff than the rest of the workspace.
+This is especially useful when a package is pinned to a separate `index` that you trust, or that does not provide upload times (see the note below).
 
 ```toml
 [workspace]
