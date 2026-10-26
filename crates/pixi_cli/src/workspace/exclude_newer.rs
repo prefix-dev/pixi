@@ -111,7 +111,8 @@ where
 #[derive(Parser, Debug)]
 pub struct UpdateArgs {
     /// Edit `pypi-exclude-newer`, which applies to PyPI packages, instead of
-    /// `exclude-newer`
+    /// `exclude-newer`. Locked PyPI packages are not re-solved, run
+    /// `pixi update` for that
     #[clap(long)]
     pub pypi: bool,
 
@@ -277,9 +278,10 @@ fn exclude_newer_config(workspace: &Workspace) -> (ExcludeNewerConfig, PypiExclu
     )
 }
 
-/// Updates the lock file, so a stricter cutoff takes effect right away. Like
-/// `pixi add`, the default environment is only installed when it is the only
-/// environment of the workspace.
+/// Updates the lock file, so a stricter cutoff takes effect right away for
+/// conda packages. Locked PyPI packages carry no upload time, so they are not
+/// re-solved. Like `pixi add`, the default environment is only installed when
+/// it is the only environment of the workspace.
 async fn update_lock_file(workspace: &WorkspaceMut, update: &UpdateArgs) -> miette::Result<()> {
     let progress = workspace.progress().cloned();
     let workspace = workspace.workspace();

@@ -20,7 +20,7 @@ pixi workspace exclude-newer set [OPTIONS] <CUTOFF>
 
 ## Options
 - <a id="arg---pypi" href="#arg---pypi">`--pypi`</a>
-:  Edit `pypi-exclude-newer`, which applies to PyPI packages, instead of `exclude-newer`
+:  Edit `pypi-exclude-newer`, which applies to PyPI packages, instead of `exclude-newer`. Locked PyPI packages are not re-solved, run `pixi update` for that
 
 ## Config Options
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
