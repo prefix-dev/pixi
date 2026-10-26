@@ -112,13 +112,6 @@ pub(crate) fn unmet_requirements(
         })
         .filter(|spec| {
             !system.iter().any(|provided| {
-                // Match rattler's solver spelling without copying the host's
-                // manifest-canonical capabilities: an omitted build is `0`.
-                let build = if provided.build_string.is_empty() {
-                    "0"
-                } else {
-                    provided.build_string.as_str()
-                };
                 spec.name.matches(&provided.name)
                     && spec
                         .version
@@ -127,7 +120,7 @@ pub(crate) fn unmet_requirements(
                     && spec
                         .build
                         .as_ref()
-                        .is_none_or(|required| required.matches(build))
+                        .is_none_or(|required| required.matches(provided.build_string.as_str()))
             })
         })
         .cloned()
@@ -528,7 +521,7 @@ packages:
             vec![GenericVirtualPackage {
                 name: rattler_conda_types::PackageName::try_from("__cuda").unwrap(),
                 version: rattler_conda_types::Version::from_str(v).unwrap(),
-                build_string: BuildString::new_unchecked(""),
+                build_string: BuildString::new_unchecked("0"),
             }]
         };
 
@@ -557,12 +550,12 @@ packages:
         let gpu = GenericVirtualPackage {
             name: PackageName::try_from("__amdgpu").unwrap(),
             version: Version::major(0),
-            build_string: BuildString::new_unchecked(""),
+            build_string: BuildString::new_unchecked("0"),
         };
         let arch = |version: &str| GenericVirtualPackage {
             name: PackageName::try_from("__amdgpu_arch").unwrap(),
             version: Version::from_str(version).unwrap(),
-            build_string: BuildString::new_unchecked(""),
+            build_string: BuildString::new_unchecked("0"),
         };
 
         assert_eq!(unmet_requirements(&specs, &[]), specs);
@@ -589,12 +582,12 @@ packages:
             GenericVirtualPackage {
                 name: PackageName::try_from("__amdgpu").unwrap(),
                 version: Version::major(0),
-                build_string: BuildString::new_unchecked(""),
+                build_string: BuildString::new_unchecked("0"),
             },
             GenericVirtualPackage {
                 name: PackageName::try_from("__amdgpu_arch").unwrap(),
                 version: Version::from_str("9.4.2").unwrap(),
-                build_string: BuildString::new_unchecked(""),
+                build_string: BuildString::new_unchecked("0"),
             },
         ];
         for raw in ["__amdgpu", "__amdgpu_arch", "__amdgpu_arch >=9.0.10,<10"] {
@@ -699,7 +692,7 @@ packages:
                 (None, false),
                 (Some(("2.9", "0")), false),
                 (Some(("3", "0")), true),
-                (Some(("3.5", "")), true),
+                (Some(("3.5", "0")), true),
                 (Some(("4", "0")), false),
                 (Some(("3", "other")), false),
             ] {
@@ -1048,17 +1041,17 @@ packages:
         let libc = GenericVirtualPackage {
             name: "__glibc".parse().unwrap(),
             version: "2.17".parse().unwrap(),
-            build_string: BuildString::new_unchecked(""),
+            build_string: BuildString::new_unchecked("0"),
         };
         let cuda = GenericVirtualPackage {
             name: "__cuda".parse().unwrap(),
             version: "11.8".parse().unwrap(),
-            build_string: BuildString::new_unchecked(""),
+            build_string: BuildString::new_unchecked("0"),
         };
         let osx = GenericVirtualPackage {
             name: "__osx".parse().unwrap(),
             version: "10.14".parse().unwrap(),
-            build_string: BuildString::new_unchecked(""),
+            build_string: BuildString::new_unchecked("0"),
         };
         let system_virtual_packages = vec![libc, cuda, osx];
 

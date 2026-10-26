@@ -1753,7 +1753,7 @@ mod tests {
                 vec![GenericVirtualPackage {
                     name: PackageName::from_str("__scope_capability").unwrap(),
                     version: Version::from_str("3").unwrap(),
-                    build_string: BuildString::new_unchecked(""),
+                    build_string: BuildString::new_unchecked("0"),
                 }],
             )
             .unwrap(),
@@ -2856,11 +2856,7 @@ print("hello")
         let Some(recorded) = host.customised_virtual_packages().first().cloned() else {
             return;
         };
-        let build = if recorded.build_string.is_empty() {
-            "0"
-        } else {
-            recorded.build_string.as_str()
-        };
+        let build = recorded.build_string.as_str();
         let lock_source = format!(
             r#"version: 7
 platforms:

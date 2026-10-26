@@ -380,7 +380,7 @@ mod tests {
         GenericVirtualPackage {
             name: PackageName::from_str(name).unwrap(),
             version: Version::from_str(version).unwrap(),
-            build_string: BuildString::new_unchecked(""),
+            build_string: BuildString::new_unchecked("0"),
         }
     }
 

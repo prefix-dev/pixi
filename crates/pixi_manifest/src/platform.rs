@@ -760,7 +760,7 @@ pub fn subdir_default_virtual_packages(subdir: Subdir) -> Vec<GenericVirtualPack
         GenericVirtualPackage {
             name: PackageName::try_from(name).expect("static virtual-package name"),
             version,
-            build_string: BuildString::new_unchecked(""),
+            build_string: BuildString::new_unchecked("0"),
         }
     }
 
@@ -832,8 +832,8 @@ fn normalize_manifest_record(gvp: &mut GenericVirtualPackage) {
         if gvp.version == Version::major(1) {
             gvp.version = Version::major(0);
         }
-    } else if gvp.build_string == "0" {
-        gvp.build_string = BuildString::new_unchecked("");
+    } else if gvp.build_string.is_empty() {
+        gvp.build_string = BuildString::new_unchecked("0");
     }
 }
 
@@ -846,11 +846,7 @@ pub(crate) fn solver_record(gvp: &GenericVirtualPackage) -> GenericVirtualPackag
         } else {
             gvp.version.clone()
         },
-        build_string: if gvp.build_string.is_empty() {
-            BuildString::new_unchecked("0")
-        } else {
-            gvp.build_string.clone()
-        },
+        build_string: gvp.build_string.clone(),
     }
 }
 
@@ -914,8 +910,8 @@ pub fn candidate_subdirs(current: Subdir) -> Vec<Subdir> {
 /// Returns `true` when `system` provides the capability `required` names.
 ///
 /// Versioned virtual packages are satisfied by the same name and build string
-/// at a version at least as high. Empty build strings and `"0"` are the same
-/// default build. `__amdgpu_arch` requires an exact version because AMD GPU
+/// at a version at least as high. An empty build string, which only appears
+/// in data written before CEP26, is the same default build as `"0"`. `__amdgpu_arch` requires an exact version because AMD GPU
 /// code objects are architecture-specific. `__archspec` compares
 /// microarchitectures through the archspec database.
 pub fn capability_satisfied_by(
@@ -938,7 +934,8 @@ pub fn capability_satisfied_by(
     })
 }
 
-/// Whether a build string is the default build, spelled empty or `"0"`.
+/// Whether a build string is the default build `"0"`, or the empty spelling
+/// pixi used for it before CEP26.
 pub fn is_default_build_string(build_string: &str) -> bool {
     build_string.is_empty() || build_string == "0"
 }
@@ -1120,14 +1117,16 @@ pub fn parse_versioned_virtual_package(
     name: PackageName,
     value: &str,
 ) -> Result<GenericVirtualPackage, String> {
-    let (version_str, build_string) = value.split_once('=').unwrap_or((value, ""));
+    let (version_str, build_string) = value.split_once('=').unwrap_or((value, "0"));
     let version = Version::from_str(version_str)
         .map_err(|e| format!("'{value}' is not a valid version and build string: {e}"))?;
     validate_virtual_package(&name, version_str, build_string)?;
+    let build_string = BuildString::from_str(build_string)
+        .map_err(|e| format!("'{value}' is not a valid version and build string: {e}"))?;
     Ok(GenericVirtualPackage {
         name,
         version,
-        build_string: BuildString::new_unchecked(build_string),
+        build_string,
     })
 }
 
@@ -1161,13 +1160,12 @@ fn is_known_archspec_name(name: &str) -> bool {
 }
 
 /// Format a virtual package the way it's stored in `pixi.lock` -- either
-/// `__name=version` or `__name=version=build_string`. Unlike
-/// `GenericVirtualPackage::Display`, an empty build string is omitted, which
-/// keeps the entries pixi writes identical to the ones it wrote before rattler
-/// started printing the build string unconditionally. The inverse is
-/// [`parse_locked_virtual_package`].
+/// `__name=version` or `__name=version=build_string`. The default build `"0"`
+/// is omitted, which keeps the entries pixi writes identical to the ones it
+/// wrote before rattler started printing the build string unconditionally.
+/// The inverse is [`parse_locked_virtual_package`].
 pub fn format_virtual_package(gvp: &GenericVirtualPackage) -> String {
-    if gvp.build_string.is_empty() {
+    if is_default_build_string(gvp.build_string.as_str()) {
         format!("{}={}", gvp.name.as_normalized(), gvp.version)
     } else {
         format!(
@@ -1181,15 +1179,22 @@ pub fn format_virtual_package(gvp: &GenericVirtualPackage) -> String {
 
 /// Parse a virtual-package entry the way it's stored in `pixi.lock` -- either
 /// `__name=version` or `__name=version=build_string` -- back into a
-/// [`GenericVirtualPackage`]. The lock-file serializer writes the same shape
-/// through [`format_virtual_package`]. Returns `None` if the input doesn't
-/// have the expected `=`-separated form (we don't trust pixi to repair a
-/// malformed lock-file entry from the satisfiability path).
+/// [`GenericVirtualPackage`]. An omitted or empty build string is the default
+/// build `"0"`, so `__unix=0` and `__unix=0=0` parse to the same record. The
+/// lock-file serializer writes the same shape through
+/// [`format_virtual_package`]. Returns `None` if the input doesn't have the
+/// expected `=`-separated form (we don't trust pixi to repair a malformed
+/// lock-file entry from the satisfiability path).
 pub fn parse_locked_virtual_package(raw: &str) -> Option<GenericVirtualPackage> {
     let mut parts = raw.splitn(3, '=');
     let name_str = parts.next()?;
     let version_str = parts.next()?;
-    let build_string = BuildString::new_unchecked(parts.next().unwrap_or(""));
+    // Like rattler's deserializer, keep recorded build strings unvalidated:
+    // they were accepted when written.
+    let build_string = match parts.next() {
+        None | Some("") => BuildString::new_unchecked("0"),
+        Some(build) => BuildString::new_unchecked(build),
+    };
     let name = PackageName::try_from(name_str).ok()?;
     let version = Version::from_str(version_str).ok()?;
     Some(GenericVirtualPackage {
@@ -1278,7 +1283,7 @@ mod tests {
         GenericVirtualPackage {
             name: PackageName::try_from(name).unwrap(),
             version: Version::from_str(version).unwrap(),
-            build_string: BuildString::new_unchecked(""),
+            build_string: BuildString::new_unchecked("0"),
         }
     }
 
@@ -1432,7 +1437,7 @@ mod tests {
                 GenericVirtualPackage {
                     name: PackageName::try_from("__conda_forge_openmpi").unwrap(),
                     version: Version::from_str("5.0.10").unwrap(),
-                    build_string: BuildString::new_unchecked(""),
+                    build_string: BuildString::new_unchecked("0"),
                 },
                 GenericVirtualPackage {
                     name: PackageName::try_from("__site_service").unwrap(),
@@ -1594,7 +1599,7 @@ mod tests {
             .iter()
             .find(|record| record.name.as_normalized() == "__cuda")
             .unwrap();
-        assert!(cuda.build_string.is_empty());
+        assert_eq!(cuda.build_string, "0");
         assert!(detected.has_same_definition(&expected));
     }
 
@@ -1644,6 +1649,32 @@ mod tests {
         // Nothing plausible: rejected without a misleading suggestion.
         let error = validate_archspec_name("totally-bogus").unwrap_err();
         assert!(!error.contains("did you mean"), "{error}");
+    }
+
+    #[test]
+    fn parse_versioned_virtual_package_follows_cep26() {
+        let cuda = || PackageName::try_from("__cuda").unwrap();
+        let package = parse_versioned_virtual_package(cuda(), "12").unwrap();
+        assert_eq!(package.build_string, "0");
+        let package = parse_versioned_virtual_package(cuda(), "12=h1_2.x+y").unwrap();
+        assert_eq!(package.build_string, "h1_2.x+y");
+        for invalid in ["12=", "12=a b", "12=a-b", "12=a=b"] {
+            let error = parse_versioned_virtual_package(cuda(), invalid).unwrap_err();
+            assert!(error.contains("build string"), "{invalid}: {error}");
+        }
+    }
+
+    #[test]
+    fn locked_virtual_packages_round_trip_with_default_build() {
+        let parsed = parse_locked_virtual_package("__cuda=12").unwrap();
+        assert_eq!(parsed.build_string, "0");
+        for raw in ["__cuda=12=0", "__cuda=12="] {
+            assert_eq!(parse_locked_virtual_package(raw).unwrap(), parsed, "{raw}");
+        }
+        assert_eq!(format_virtual_package(&parsed), "__cuda=12");
+
+        let archspec = parse_locked_virtual_package("__archspec=0=zen2").unwrap();
+        assert_eq!(format_virtual_package(&archspec), "__archspec=0=zen2");
     }
 
     #[test]

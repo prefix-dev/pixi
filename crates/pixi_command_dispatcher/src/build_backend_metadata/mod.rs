@@ -4,12 +4,16 @@ use once_cell::sync::Lazy;
 use pixi_build_types::procedures::conda_outputs::CondaOutputsParams;
 use pixi_record::{CanonicalSourceLocation, PinnedBuildSourceSpec, PinnedSourceSpec, VariantValue};
 use pixi_spec::{ResolvedExcludeNewer, SourceAnchor, SourceLocationSpec};
-use rattler_conda_types::ChannelUrl;
+use rattler_conda_types::{
+    ChannelUrl,
+    package::{BuildString, BuildStringError},
+};
 use std::time::SystemTime;
 use std::{
     collections::{BTreeMap, HashSet},
     hash::Hash,
     path::PathBuf,
+    str::FromStr,
     sync::{Arc, Mutex},
 };
 use thiserror::Error;
@@ -456,6 +460,25 @@ impl BuildBackendMetadataInner {
         })
     }
 
+    /// Validates that every output carries a CEP26-conformant build string,
+    /// so a malformed backend reply fails here instead of ending up in the
+    /// lock file.
+    #[allow(clippy::result_large_err)]
+    fn validate_build_strings(
+        outputs: &[pixi_build_types::procedures::conda_outputs::CondaOutput],
+    ) -> Result<(), BuildBackendMetadataError> {
+        for output in outputs {
+            BuildString::from_str(&output.metadata.build).map_err(|source| {
+                BuildBackendMetadataError::InvalidBuildString {
+                    package: output.metadata.name.as_source().to_string(),
+                    build: output.metadata.build.clone(),
+                    source,
+                }
+            })?;
+        }
+        Ok(())
+    }
+
     /// Validates that outputs with the same name have unique variants.
     #[allow(clippy::result_large_err)]
     fn validate_unique_variants(
@@ -577,6 +600,7 @@ impl BuildBackendMetadataInner {
         if backend_guard.api_version().supports_unique_variants() {
             Self::validate_unique_variants(&outputs.outputs)?;
         }
+        Self::validate_build_strings(&outputs.outputs)?;
 
         for output in &outputs.outputs {
             tracing::debug!(
@@ -1208,6 +1232,14 @@ pub enum BuildBackendMetadataError {
     )]
     DuplicateVariants { package: String, duplicates: String },
 
+    #[error("the build backend returned an invalid build string '{build}' for package '{package}'")]
+    InvalidBuildString {
+        package: String,
+        build: String,
+        #[source]
+        source: BuildStringError,
+    },
+
     #[error("could not compute hash of input files")]
     GlobHash(Arc<pixi_glob::GlobHashError>),
 
@@ -1302,6 +1334,25 @@ mod tests {
             run_exports: CondaOutputRunExports::default(),
             input_globs: None,
             input_glob_sets: None,
+        }
+    }
+
+    #[test]
+    fn test_validate_build_strings_rejects_non_cep26_builds() {
+        let mut output = create_test_output("mypackage", BTreeMap::new());
+        assert!(BuildBackendMetadataInner::validate_build_strings(&[output.clone()]).is_ok());
+
+        for build in ["", "py-3", "a b"] {
+            output.metadata.build = build.to_string();
+            let result = BuildBackendMetadataInner::validate_build_strings(&[output.clone()]);
+            assert!(
+                matches!(
+                    &result,
+                    Err(BuildBackendMetadataError::InvalidBuildString { package, build: b, .. })
+                        if package == "mypackage" && b == build
+                ),
+                "{build:?}: {result:?}"
+            );
         }
     }
 

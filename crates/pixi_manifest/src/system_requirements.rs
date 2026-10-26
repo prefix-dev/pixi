@@ -174,7 +174,7 @@ fn make_virtual_package(conda_name: &str, version: Version) -> GenericVirtualPac
     GenericVirtualPackage {
         name: PackageName::try_from(conda_name).expect("static virtual-package name is valid"),
         version,
-        build_string: BuildString::new_unchecked(""),
+        build_string: BuildString::new_unchecked("0"),
     }
 }
 

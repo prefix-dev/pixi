@@ -150,15 +150,20 @@ pub fn verify_environment_satisfiability(
             .filter(|gvp| !pixi_manifest::platform::is_subdir_default(gvp, workspace_subdir))
             .map(pixi_manifest::platform::format_virtual_package)
             .collect();
+        // Re-format parsed entries so `__unix=0` and `__unix=0=0` compare
+        // equal; unreadable entries stay as written and never match.
         let locked_vps: Vec<String> = locked
             .virtual_packages
             .iter()
-            .filter(|raw| {
-                pixi_manifest::platform::parse_locked_virtual_package(raw)
-                    .map(|gvp| !pixi_manifest::platform::is_subdir_default(&gvp, workspace_subdir))
-                    .unwrap_or(true)
-            })
-            .cloned()
+            .filter_map(
+                |raw| match pixi_manifest::platform::parse_locked_virtual_package(raw) {
+                    Some(gvp) => {
+                        (!pixi_manifest::platform::is_subdir_default(&gvp, workspace_subdir))
+                            .then(|| pixi_manifest::platform::format_virtual_package(&gvp))
+                    }
+                    None => Some(raw.clone()),
+                },
+            )
             .collect();
         let same_subdir = workspace_subdir == locked.subdir;
         // Compare VPs as multisets: lockfile ordering is not part of the

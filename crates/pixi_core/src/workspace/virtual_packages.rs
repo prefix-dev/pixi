@@ -1003,7 +1003,7 @@ packages: []
             vec![GenericVirtualPackage {
                 name: rattler_conda_types::PackageName::try_from("__cuda").unwrap(),
                 version: rattler_conda_types::Version::from_str("12.0").unwrap(),
-                build_string: BuildString::new_unchecked(""),
+                build_string: BuildString::new_unchecked("0"),
             }],
         )
         .unwrap();
@@ -1035,7 +1035,7 @@ packages: []
             vec![GenericVirtualPackage {
                 name: rattler_conda_types::PackageName::try_from("__musl").unwrap(),
                 version: rattler_conda_types::Version::from_str("1.2.4").unwrap(),
-                build_string: BuildString::new_unchecked(""),
+                build_string: BuildString::new_unchecked("0"),
             }],
         )
         .unwrap();
@@ -1054,7 +1054,7 @@ packages: []
         GenericVirtualPackage {
             name: rattler_conda_types::PackageName::try_from(name).unwrap(),
             version: rattler_conda_types::Version::from_str(version).unwrap(),
-            build_string: BuildString::new_unchecked(""),
+            build_string: BuildString::new_unchecked("0"),
         }
     }
 

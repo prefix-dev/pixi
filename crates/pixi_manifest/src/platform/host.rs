@@ -866,7 +866,7 @@ mod tests {
                 GenericVirtualPackage {
                     name: "__glibc".parse().unwrap(),
                     version: "2.39".parse().unwrap(),
-                    build_string: BuildString::new_unchecked(""),
+                    build_string: BuildString::new_unchecked("0"),
                 },
             ]
         );

@@ -3862,7 +3862,7 @@ platforms = ["linux-64", "osx-64"]
             let cuda = rattler_conda_types::GenericVirtualPackage {
                 name: PackageName::try_from("__cuda").unwrap(),
                 version: Version::from_str("12").unwrap(),
-                build_string: BuildString::new_unchecked(""),
+                build_string: BuildString::new_unchecked("0"),
             };
             PixiPlatform::new_with_defaults(
                 PixiPlatformName::try_from(name).unwrap(),
@@ -6746,7 +6746,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
             vec![rattler_conda_types::GenericVirtualPackage {
                 name: rattler_conda_types::PackageName::try_from("__cuda").unwrap(),
                 version: Version::from_str("12.4").unwrap(),
-                build_string: BuildString::new_unchecked(""),
+                build_string: BuildString::new_unchecked("0"),
             }],
         )
         .expect("rich platform with name != subdir");
@@ -6859,7 +6859,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
         rattler_conda_types::GenericVirtualPackage {
             name: rattler_conda_types::PackageName::try_from(name).unwrap(),
             version: Version::from_str(version).unwrap(),
-            build_string: BuildString::new_unchecked(""),
+            build_string: BuildString::new_unchecked("0"),
         }
     }
 

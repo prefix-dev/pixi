@@ -417,7 +417,12 @@ impl From<&PixiPlatform> for PlatformData {
 
 impl Display for PlatformData {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write_platform(f, self.subdir, &self.virtual_packages)
+        let entries: Vec<String> = self
+            .virtual_packages
+            .iter()
+            .map(pixi_manifest::platform::format_virtual_package)
+            .collect();
+        write_platform(f, self.subdir, &entries)
     }
 }
 
@@ -549,7 +554,7 @@ fn legacy_requirement(package: &GenericVirtualPackage) -> MatchSpec {
     MatchSpec {
         name: PackageNameMatcher::Exact(package.name.clone()),
         version,
-        build: (!package.build_string.is_empty())
+        build: (!pixi_manifest::platform::is_default_build_string(package.build_string.as_str()))
             .then(|| StringMatcher::Exact(package.build_string.to_string())),
         ..MatchSpec::default()
     }
@@ -1133,7 +1138,7 @@ mod tests {
         let linux = GenericVirtualPackage {
             name: PackageName::from_str("__linux").unwrap(),
             version: Version::from_str(version).unwrap(),
-            build_string: BuildString::new_unchecked(""),
+            build_string: BuildString::new_unchecked("0"),
         };
         PixiPlatform::new(
             PixiPlatformName::try_from("linux-box").unwrap(),
@@ -1175,7 +1180,7 @@ mod tests {
         let gvp = |name: &str, version: &str| GenericVirtualPackage {
             name: PackageName::from_str(name).unwrap(),
             version: Version::from_str(version).unwrap(),
-            build_string: BuildString::new_unchecked(""),
+            build_string: BuildString::new_unchecked("0"),
         };
         let make = |packages: Vec<GenericVirtualPackage>| {
             PixiPlatform::new(
@@ -1202,7 +1207,7 @@ mod tests {
         let cuda = GenericVirtualPackage {
             name: PackageName::from_str("__cuda").unwrap(),
             version: Version::from_str("12").unwrap(),
-            build_string: BuildString::new_unchecked(""),
+            build_string: BuildString::new_unchecked("0"),
         };
         let platform = PixiPlatform::new(
             PixiPlatformName::try_from("gpu-box").unwrap(),
@@ -1224,6 +1229,42 @@ mod tests {
         assert!(restored.virtual_packages.contains(&cuda));
     }
 
+    /// Markers written before pixi adopted CEP26 omit the default build. They
+    /// must still read back as the records the manifest declares, otherwise
+    /// the installed platform is no longer recognised after an upgrade.
+    #[test]
+    fn platform_data_reads_markers_without_default_builds() {
+        let restored: PlatformData =
+            serde_json::from_str(r#"{"subdir":"linux-64","virtual_packages":["__cuda=12"]}"#)
+                .unwrap();
+        let declared = pixi_manifest::platform::parse_versioned_virtual_package(
+            PackageName::from_str("__cuda").unwrap(),
+            "12",
+        )
+        .unwrap();
+        assert_eq!(restored.virtual_packages(), [declared].as_slice());
+    }
+
+    #[test]
+    fn platform_data_display_omits_default_builds() {
+        let data = PlatformData::new(
+            Subdir::Linux64,
+            vec![
+                GenericVirtualPackage {
+                    name: "__cuda".parse().unwrap(),
+                    version: Version::from_str("12").unwrap(),
+                    build_string: BuildString::new_unchecked("0"),
+                },
+                GenericVirtualPackage {
+                    name: "__archspec".parse().unwrap(),
+                    version: Version::major(0),
+                    build_string: BuildString::new_unchecked("zen2"),
+                },
+            ],
+        );
+        assert_eq!(data.to_string(), "linux-64 [__cuda=12, __archspec=0=zen2]");
+    }
+
     #[test]
     fn platform_data_preserves_source_records() {
         let records = vec![
@@ -1240,7 +1281,7 @@ mod tests {
             GenericVirtualPackage {
                 name: "__vendor".parse().unwrap(),
                 version: Version::major(7),
-                build_string: BuildString::new_unchecked(""),
+                build_string: BuildString::new_unchecked("0"),
             },
         ];
         let declared = PixiPlatform::new(

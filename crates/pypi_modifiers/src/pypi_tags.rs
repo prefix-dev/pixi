@@ -476,7 +476,7 @@ mod tests {
             vec![GenericVirtualPackage {
                 name: "__osx".parse().unwrap(),
                 version: "12.0".parse().unwrap(),
-                build_string: BuildString::new_unchecked(""),
+                build_string: BuildString::new_unchecked("0"),
             }],
         )
         .unwrap();
@@ -489,7 +489,7 @@ mod tests {
             vec![GenericVirtualPackage {
                 name: "__osx".parse().unwrap(),
                 version: "15".parse().unwrap(),
-                build_string: BuildString::new_unchecked(""),
+                build_string: BuildString::new_unchecked("0"),
             }],
         )
         .unwrap();
@@ -711,7 +711,7 @@ mod tests {
         GenericVirtualPackage {
             name: PackageName::try_from(name).unwrap(),
             version: Version::from_str(version).unwrap(),
-            build_string: BuildString::new_unchecked(""),
+            build_string: BuildString::new_unchecked("0"),
         }
     }
 

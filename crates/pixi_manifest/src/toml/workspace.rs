@@ -586,13 +586,13 @@ mod test {
             declared,
             vec![
                 "__cuda=12.0".to_string(),
-                "__unix=0=0".to_string(),
+                "__unix=0".to_string(),
                 "__linux=4.18".to_string(),
                 "__glibc=2.28".to_string(),
                 "__archspec=0=x86_64".to_string(),
             ],
             "rich platforms materialise the subdir defaults alongside the declared __cuda; \
-             `__unix=0=0` reflects rattler's version=0, build_string=\"0\" shape",
+             the default build `0` is omitted",
         );
 
         // Subdir entries (`linux-64`, `osx-arm64` with name == subdir)

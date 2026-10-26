@@ -1102,7 +1102,7 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
                 // Create IndexJson from project model for on-the-fly package generation
                 let index_json = IndexJson {
                     arch: None,
-                    build: BuildString::new_unchecked(""),
+                    build: BuildString::new_unchecked("0"),
                     build_number: 0,
                     constrains: vec![],
                     depends: vec![],

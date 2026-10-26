@@ -143,7 +143,7 @@ impl VirtualPackageArgs {
                 GenericVirtualPackage {
                     name: virtual_package_name("__amdgpu"),
                     version: zero_version(),
-                    build_string: BuildString::new_unchecked(""),
+                    build_string: BuildString::new_unchecked("0"),
                 },
             )?;
         }
@@ -156,7 +156,7 @@ impl VirtualPackageArgs {
                 GenericVirtualPackage {
                     name: virtual_package_name("__amdgpu_arch"),
                     version,
-                    build_string: BuildString::new_unchecked(""),
+                    build_string: BuildString::new_unchecked("0"),
                 },
             )?;
         }
@@ -1433,9 +1433,14 @@ mod tests {
     }
 
     #[test]
-    fn parse_raw_virtual_package_keeps_trailing_segments_in_build_string() {
-        let package = parse_raw_virtual_package("__foo=1=special=build").unwrap();
-        assert_eq!(package.build_string, "special=build");
+    fn parse_raw_virtual_package_rejects_invalid_build_strings() {
+        for spec in ["__foo=1=special=build", "__foo=1=a-b", "__foo=1="] {
+            let error = parse_raw_virtual_package(spec).unwrap_err();
+            assert!(
+                error.to_string().contains("build string"),
+                "{spec}: {error}"
+            );
+        }
     }
 
     #[test]
@@ -1443,7 +1448,7 @@ mod tests {
         let package = parse_raw_virtual_package("__site_service").unwrap();
         assert_eq!(package.name.as_normalized(), "__site_service");
         assert_eq!(package.version.to_string(), "0");
-        assert!(package.build_string.is_empty());
+        assert_eq!(package.build_string, "0");
     }
 
     #[test]

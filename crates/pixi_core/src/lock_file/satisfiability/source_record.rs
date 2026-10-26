@@ -921,6 +921,7 @@ fn build_full_source_record_from_output(
             .as_ref()
             .map(ToString::to_string),
         name: output.metadata.name.clone(),
+        // Validated when the backend returned its outputs.
         build: BuildString::new_unchecked(output.metadata.build.clone()),
         version: output.metadata.version.clone(),
         build_number: output.metadata.build_number,
