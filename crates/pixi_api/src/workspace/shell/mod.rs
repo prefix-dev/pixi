@@ -1,6 +1,5 @@
-use std::{collections::HashMap, io::Write, path::PathBuf, process::ExitCode};
+use std::{collections::HashMap, io::Write, path::PathBuf, sync::Arc};
 
-use clap::Parser;
 use miette::IntoDiagnostic;
 use rattler_conda_types::Subdir;
 use rattler_shell::{
@@ -9,48 +8,30 @@ use rattler_shell::{
 };
 use which::which;
 
-use pixi_config::{ConfigCli, ConfigCliActivation, ConfigCliPrompt};
 use pixi_core::{
-    UpdateLockFileOptions, WorkspaceLocator,
+    UpdateLockFileOptions, Workspace,
     activation::CurrentEnvVarBehavior,
-    environment::{InstallFilter, get_update_lock_file_and_prefix},
+    environment::{InstallFilter, LockFileUsage, get_update_lock_file_and_prefix},
     lock_file::{ReinstallPackages, UpdateMode},
     prompt,
-    workspace::get_activated_environment_variables,
+    workspace::{EnvironmentFromNameError, get_activated_environment_variables},
 };
+use pixi_manifest::EnvironmentName;
+use serde::{Deserialize, Serialize};
 
-use crate::cli_config::{LockAndInstallConfig, WorkspaceConfig};
 #[cfg(target_family = "unix")]
 use pixi_pty::unix::PtySession;
 
 use pixi_utils::prefix::Prefix;
 
-/// Start a shell in a pixi environment.
-///
-/// Run `exit` to leave the shell.
-#[derive(Parser, Debug)]
-pub struct Args {
-    #[clap(flatten)]
-    pub config_source: pixi_config::ConfigSourceCli,
-
-    #[clap(flatten)]
-    workspace_config: WorkspaceConfig,
-
-    #[clap(flatten)]
-    pub lock_and_install_config: LockAndInstallConfig,
-
-    #[clap(flatten)]
-    config: ConfigCli,
-
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct ShellOptions {
     /// The environment to activate in the shell
-    #[arg(long, short)]
-    environment: Option<String>,
+    pub environment: Option<EnvironmentName>,
 
-    #[clap(flatten)]
-    prompt_config: ConfigCliPrompt,
+    pub lock_file_usage: LockFileUsage,
 
-    #[clap(flatten)]
-    activation_config: ConfigCliActivation,
+    pub no_install: bool,
 }
 
 /// Set up Ctrl-C handler to ignore it (the child process should react on CTRL-C)
@@ -324,30 +305,27 @@ async fn start_nu_shell(
     Ok(process.wait().into_diagnostic()?.code())
 }
 
-pub async fn execute(args: Args) -> miette::Result<ExitCode> {
-    let config = args
-        .activation_config
-        .merge_config(args.prompt_config.into())
-        .merge_config(args.config.clone().into());
-
-    let workspace = WorkspaceLocator::for_cli()
-        .with_global_config_source(args.config_source.source())
-        .with_search_start(args.workspace_config.workspace_locator_start())
-        .with_cli_config(config)
-        .locate()
-        .await?;
-
-    let environment = workspace.environment_from_name_or_env_var(args.environment)?;
+pub async fn shell(
+    workspace: &Workspace,
+    options: ShellOptions,
+    progress: Option<&Arc<pixi_reporters::TopLevelProgress>>,
+) -> miette::Result<i32> {
+    let environment = match options.environment {
+        Some(name) => workspace
+            .environment(&name)
+            .ok_or(EnvironmentFromNameError::Unknown(name))?,
+        None => workspace.default_environment(),
+    };
 
     // Make sure environment is up-to-date, default to install, users can avoid this with frozen or locked.
     #[allow(unused_variables)]
     let (lock_file_data, prefix) = get_update_lock_file_and_prefix(
         &environment,
-        Some(pixi_reporters::TopLevelProgress::from_global()),
+        progress.cloned(),
         UpdateMode::QuickValidate,
         UpdateLockFileOptions {
-            lock_file_usage: args.lock_and_install_config.lock_file_usage()?,
-            no_install: args.lock_and_install_config.no_install(),
+            lock_file_usage: options.lock_file_usage,
+            no_install: options.no_install,
             max_concurrent_solves: workspace.config().max_concurrent_solves(),
             ..Default::default()
         },
@@ -462,11 +440,11 @@ pub async fn execute(args: Args) -> miette::Result<ExitCode> {
     };
 
     match res {
-        Ok(Some(code)) => Ok(crate::process_exit::exit_code_from_code(code)),
-        Ok(None) => Ok(ExitCode::SUCCESS),
+        Ok(Some(code)) => Ok(code),
+        Ok(None) => Ok(0),
         Err(error) => {
             eprintln!("Error starting shell: {error}");
-            Ok(ExitCode::FAILURE)
+            Ok(1)
         }
     }
 }

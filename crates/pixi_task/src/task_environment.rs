@@ -1,3 +1,5 @@
+use std::future::Future;
+
 use miette::Diagnostic;
 use pixi_core::{
     Workspace,
@@ -18,7 +20,10 @@ pub enum FindTaskSource<'p> {
 pub type TaskAndEnvironment<'p> = (Environment<'p>, &'p Task);
 
 pub trait TaskDisambiguation<'p> {
-    fn disambiguate(&self, task: &AmbiguousTask<'p>) -> Option<TaskAndEnvironment<'p>>;
+    fn disambiguate(
+        &self,
+        task: &AmbiguousTask<'p>,
+    ) -> impl Future<Output = Option<TaskAndEnvironment<'p>>>;
 }
 
 #[derive(Default)]
@@ -26,16 +31,16 @@ pub struct NoDisambiguation;
 pub struct DisambiguateFn<Fn>(Fn);
 
 impl<'p> TaskDisambiguation<'p> for NoDisambiguation {
-    fn disambiguate(&self, _task: &AmbiguousTask<'p>) -> Option<TaskAndEnvironment<'p>> {
+    async fn disambiguate(&self, _task: &AmbiguousTask<'p>) -> Option<TaskAndEnvironment<'p>> {
         None
     }
 }
 
-impl<'p, F: Fn(&AmbiguousTask<'p>) -> Option<TaskAndEnvironment<'p>>> TaskDisambiguation<'p>
+impl<'p, F: AsyncFn(&AmbiguousTask<'p>) -> Option<TaskAndEnvironment<'p>>> TaskDisambiguation<'p>
     for DisambiguateFn<F>
 {
-    fn disambiguate(&self, task: &AmbiguousTask<'p>) -> Option<TaskAndEnvironment<'p>> {
-        self.0(task)
+    async fn disambiguate(&self, task: &AmbiguousTask<'p>) -> Option<TaskAndEnvironment<'p>> {
+        (self.0)(task).await
     }
 }
 
@@ -143,7 +148,9 @@ pub(crate) fn default_search_platform<'p>(env: &Environment<'p>) -> Option<&'p P
 impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
     /// Returns a new `SearchEnvironments` with the given disambiguation
     /// function.
-    pub fn with_disambiguate_fn<F: Fn(&AmbiguousTask<'p>) -> Option<TaskAndEnvironment<'p>>>(
+    pub fn with_disambiguate_fn<
+        F: AsyncFn(&AmbiguousTask<'p>) -> Option<TaskAndEnvironment<'p>>,
+    >(
         self,
         func: F,
     ) -> SearchEnvironments<'p, DisambiguateFn<F>> {
@@ -167,7 +174,7 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
 
     /// Finds the task with the given name or returns an error that explains why
     /// the task could not be found.
-    pub(crate) fn find_task(
+    pub(crate) async fn find_task(
         &self,
         name: TaskName,
         source: FindTaskSource<'p>,
@@ -267,7 +274,7 @@ impl<'p, D: TaskDisambiguation<'p>> SearchEnvironments<'p, D> {
                     environments: tasks,
                 };
 
-                match self.disambiguate.disambiguate(&ambiguous_task) {
+                match self.disambiguate.disambiguate(&ambiguous_task).await {
                     Some(env) => Ok(env),
                     None => Err(FindTaskError::AmbiguousTask(ambiguous_task.into())),
                 }
@@ -286,8 +293,8 @@ mod tests {
     /// this machine must still be found: each environment resolves its own
     /// search platform (falling back to its first declared platform), rather
     /// than inheriting the caller's.
-    #[test]
-    fn test_find_task_in_foreign_platform_environment() {
+    #[tokio::test]
+    async fn test_find_task_in_foreign_platform_environment() {
         let manifest_str = r#"
             [project]
             name = "foo"
@@ -307,12 +314,13 @@ mod tests {
         let search = SearchEnvironments::from_opt_env(&project, None, None);
         let (env, _task) = search
             .find_task("flash".into(), FindTaskSource::CmdArgs, None)
+            .await
             .expect("task in a foreign-platform environment should be found");
         assert_eq!(env.name().as_str(), "riscv");
     }
 
-    #[test]
-    fn test_find_task_default_defined() {
+    #[tokio::test]
+    async fn test_find_task_default_defined() {
         let manifest_str = r#"
             [project]
             name = "foo"
@@ -329,13 +337,15 @@ mod tests {
         let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
         let env = project.default_environment();
         let search = SearchEnvironments::from_opt_env(&project, None, env.best_declared_platform());
-        let result = search.find_task("test".into(), FindTaskSource::CmdArgs, None);
+        let result = search
+            .find_task("test".into(), FindTaskSource::CmdArgs, None)
+            .await;
         assert!(result.is_ok());
         assert!(result.unwrap().0.name().is_default());
     }
 
-    #[test]
-    fn test_find_task_dual_defined() {
+    #[tokio::test]
+    async fn test_find_task_dual_defined() {
         let manifest_str = r#"
             [project]
             name = "foo"
@@ -353,12 +363,14 @@ mod tests {
         "#;
         let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
         let search = SearchEnvironments::from_opt_env(&project, None, None);
-        let result = search.find_task("test".into(), FindTaskSource::CmdArgs, None);
+        let result = search
+            .find_task("test".into(), FindTaskSource::CmdArgs, None)
+            .await;
         assert!(matches!(result, Err(FindTaskError::AmbiguousTask(_))));
     }
 
-    #[test]
-    fn test_find_task_explicit_defined() {
+    #[tokio::test]
+    async fn test_find_task_explicit_defined() {
         let manifest_str = r#"
             [project]
             name = "foo"
@@ -382,18 +394,22 @@ mod tests {
         "#;
         let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
         let search = SearchEnvironments::from_opt_env(&project, None, None);
-        let result = search.find_task("test".into(), FindTaskSource::CmdArgs, None);
+        let result = search
+            .find_task("test".into(), FindTaskSource::CmdArgs, None)
+            .await;
         assert!(matches!(result, Err(FindTaskError::AmbiguousTask(_))));
 
         // With explicit environment
         let search =
             SearchEnvironments::from_opt_env(&project, Some(project.default_environment()), None);
-        let result = search.find_task("test".into(), FindTaskSource::CmdArgs, None);
+        let result = search
+            .find_task("test".into(), FindTaskSource::CmdArgs, None)
+            .await;
         assert!(result.unwrap().0.name().is_default());
     }
 
-    #[test]
-    fn test_find_non_default_feature_task() {
+    #[tokio::test]
+    async fn test_find_non_default_feature_task() {
         let manifest_str = r#"
             [project]
             name = "foo"
@@ -417,7 +433,9 @@ mod tests {
         "#;
         let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
         let search = SearchEnvironments::from_opt_env(&project, None, None);
-        let result = search.find_task("test".into(), FindTaskSource::CmdArgs, None);
+        let result = search
+            .find_task("test".into(), FindTaskSource::CmdArgs, None)
+            .await;
         assert!(result.unwrap().0.name().is_default());
 
         // With explicit environment
@@ -426,12 +444,14 @@ mod tests {
             Some(project.environment("prod").unwrap()),
             None,
         );
-        let result = search.find_task("test".into(), FindTaskSource::CmdArgs, None);
+        let result = search
+            .find_task("test".into(), FindTaskSource::CmdArgs, None)
+            .await;
         assert!(matches!(result, Err(FindTaskError::MissingTask(_))));
     }
 
-    #[test]
-    fn test_find_ambiguous_task() {
+    #[tokio::test]
+    async fn test_find_ambiguous_task() {
         let manifest_str = r#"
             [project]
             name = "foo"
@@ -449,14 +469,16 @@ mod tests {
         "#;
         let project = Workspace::from_str(Path::new("pixi.toml"), manifest_str).unwrap();
         let search = SearchEnvironments::from_opt_env(&project, None, None);
-        let result = search.find_task("bla".into(), FindTaskSource::CmdArgs, None);
+        let result = search
+            .find_task("bla".into(), FindTaskSource::CmdArgs, None)
+            .await;
         // Ambiguous task because it is the same name and code but it is defined in
         // different environments
         assert!(matches!(result, Err(FindTaskError::AmbiguousTask(_))));
     }
 
-    #[test]
-    fn test_default_environment_preferred_when_multiple_envs() {
+    #[tokio::test]
+    async fn test_default_environment_preferred_when_multiple_envs() {
         let manifest_str = r#"
             [workspace]
             channels = []
@@ -490,7 +512,7 @@ mod tests {
         // Build a SearchEnvironments that will prefer a candidate environment
         // whose task declares a `default-environment` matching the env name.
         let search = SearchEnvironments::from_opt_env(&project, None, None).with_disambiguate_fn(
-            |amb: &AmbiguousTask| {
+            async |amb: &AmbiguousTask| {
                 amb.environments
                     .iter()
                     .find(|(env, task)| {
@@ -507,12 +529,13 @@ mod tests {
         // When resolving `test3` we expect the it to pick `three`.
         let result = search
             .find_task("test3".into(), FindTaskSource::CmdArgs, None)
+            .await
             .expect("should pick default environment");
         assert_eq!(result.0.name().as_str(), "three");
     }
 
-    #[test]
-    fn test_explicit_environment_overrides_task_default_environment() {
+    #[tokio::test]
+    async fn test_explicit_environment_overrides_task_default_environment() {
         let manifest_str = r#"
             [project]
             name = "foo"
@@ -537,13 +560,15 @@ mod tests {
         // though the task has a `default-environment` set to `three`.
         let explicit_env = project.environment("two").unwrap();
         let search = SearchEnvironments::from_opt_env(&project, Some(explicit_env), None);
-        let result = search.find_task("test3".into(), FindTaskSource::CmdArgs, None);
+        let result = search
+            .find_task("test3".into(), FindTaskSource::CmdArgs, None)
+            .await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap().0.name().as_str(), "two");
     }
 
-    #[test]
-    fn test_top_level_task_default_environment_is_used() {
+    #[tokio::test]
+    async fn test_top_level_task_default_environment_is_used() {
         let manifest_str = r#"
             [workspace]
             channels = []
@@ -567,6 +592,7 @@ mod tests {
         // we expect the resolved environment to be `test` rather than the default.
         let result = search
             .find_task("test".into(), FindTaskSource::CmdArgs, None)
+            .await
             .expect("should resolve to an environment");
         assert_eq!(result.0.name().as_str(), "test");
     }

@@ -20,6 +20,7 @@ use crate::interface::Interface;
 use crate::workspace::add::GitOptions;
 use crate::workspace::{
     ChannelOptions, DependencyOptions, InitOptions, Package, ReinstallOptions, RemoveError,
+    RunOptions, ShellOptions,
 };
 
 pub struct DefaultContext<I: Interface> {
@@ -547,6 +548,20 @@ impl<I: Interface> WorkspaceContext<I> {
             self.progress.as_ref(),
         )
         .await
+    }
+
+    pub async fn run(&self, options: RunOptions) -> miette::Result<i32> {
+        crate::workspace::run::run(
+            &self.interface,
+            &self.workspace,
+            options,
+            self.progress.as_ref(),
+        )
+        .await
+    }
+
+    pub async fn shell(&self, options: ShellOptions) -> miette::Result<i32> {
+        crate::workspace::shell::shell(&self.workspace, options, self.progress.as_ref()).await
     }
 
     pub async fn list_tasks(

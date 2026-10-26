@@ -115,7 +115,6 @@ rattler_repodata_gateway = { workspace = true }
 
 [target."cfg(unix)".dependencies]
 libc = { workspace = true, default-features = false }
-pixi_pty = { path = "../pixi_pty" }
 
 [features]
 default = []

@@ -31,6 +31,21 @@ impl Interface for CliInterface {
             .into_diagnostic()
     }
 
+    async fn select(&self, msg: &str, options: &[String]) -> miette::Result<Option<usize>> {
+        let theme = dialoguer::theme::ColorfulTheme {
+            active_item_style: console::Style::new().for_stderr().magenta(),
+            ..dialoguer::theme::ColorfulTheme::default()
+        };
+
+        Ok(dialoguer::Select::with_theme(&theme)
+            .with_prompt(msg)
+            .report(false)
+            .items(options)
+            .default(0)
+            .interact_opt()
+            .unwrap_or(None))
+    }
+
     async fn info(&self, msg: &str) {
         eprintln!("{msg}");
     }
