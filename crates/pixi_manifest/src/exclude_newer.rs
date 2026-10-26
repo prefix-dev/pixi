@@ -217,36 +217,50 @@ impl ExcludeNewerTableMigration {
     /// to the `exemptions` of `[workspace.{table}]`.
     ///
     /// A zero cutoff such as `0d` lifts the cutoff for every release of the
-    /// package, which is exactly what the wildcard exemption `"*"` does. Any
-    /// other per-package cutoff has no replacement and will stop working once
-    /// the table is removed.
+    /// package, which is what the wildcard exemption `"*"` does. Any other
+    /// per-package cutoff has no replacement and will stop working once the
+    /// table is removed.
+    ///
+    /// `other_cutoffs` tells whether anything is excluded without `cutoff`:
+    /// channel cutoffs for conda, the conda cutoff for PyPI.
     pub fn new<'a>(
         table: &str,
         cutoff: Option<ExcludeNewer>,
+        other_cutoffs: bool,
         overrides: impl IntoIterator<Item = (&'a str, &'a ExcludeNewer)>,
     ) -> Self {
-        let (exemptions, without_replacement): (Vec<_>, Vec<_>) = overrides
+        let (zero_cutoffs, without_replacement): (Vec<_>, Vec<_>) = overrides
             .into_iter()
             .partition(|(_, cutoff)| matches!(cutoff, ExcludeNewer::Duration(d) if d.is_zero()));
-
-        // Conda exemptions require a cutoff in `[workspace.exclude-newer]`,
-        // while PyPI exemptions fall back to it.
-        if table == "exclude-newer" && cutoff.is_none() && !exemptions.is_empty() {
-            let packages = exemptions
+        let list = |packages: &[(&str, _)]| {
+            packages
                 .iter()
-                .chain(&without_replacement)
                 .map(|(package, _)| format!("`{package}`"))
-                .join(", ");
-            return Self {
-                has_replacement: false,
-                help: format!(
-                    "set a `cutoff` in `[workspace.{table}]` to replace zero cutoffs with `exemptions`, the cutoffs of {packages} will stop working when the table is removed in a future release"
-                ),
-            };
-        }
+                .join(", ")
+        };
 
         let mut help = String::new();
-        if !exemptions.is_empty() {
+        let mut has_replacement = false;
+        if zero_cutoffs.is_empty() {
+            // There is nothing to move to the exemptions.
+        } else if cutoff.is_none() && !other_cutoffs {
+            // Nothing is excluded apart from the per-package cutoffs, so a
+            // zero cutoff lifts nothing.
+            let _ = write!(
+                help,
+                "the zero cutoffs of {} have no effect without a cutoff, remove them",
+                list(&zero_cutoffs)
+            );
+        } else if cutoff.is_none() && table == "exclude-newer" {
+            // Conda exemptions require a cutoff in `[workspace.exclude-newer]`,
+            // while PyPI exemptions fall back to the conda cutoff.
+            let _ = write!(
+                help,
+                "set a `cutoff` in `[workspace.{table}]` to replace the zero cutoffs of {} with `exemptions`, note that it also applies to the channels without their own `exclude-newer`",
+                list(&zero_cutoffs)
+            );
+        } else {
+            has_replacement = true;
             let entries = if without_replacement.is_empty() {
                 "the entries"
             } else {
@@ -267,7 +281,7 @@ impl ExcludeNewerTableMigration {
                 }
                 None => {}
             }
-            let exemptions = exemptions
+            let exemptions = zero_cutoffs
                 .iter()
                 .map(|(package, _)| format!("{} = \"*\"", toml_edit::Key::new(*package)))
                 .join(", ");
@@ -286,18 +300,15 @@ impl ExcludeNewerTableMigration {
             if !help.is_empty() {
                 help.push_str("\n\n");
             }
-            let packages = without_replacement
-                .iter()
-                .map(|(package, _)| format!("`{package}`"))
-                .join(", ");
             let _ = write!(
                 help,
-                "per-package cutoffs other than a zero cutoff have no replacement, the cutoffs of {packages} will stop working when the table is removed in a future release"
+                "per-package cutoffs other than a zero cutoff have no replacement, the cutoffs of {} will stop working when the table is removed in a future release",
+                list(&without_replacement)
             );
         }
 
         Self {
-            has_replacement: !exemptions.is_empty(),
+            has_replacement,
             help,
         }
     }

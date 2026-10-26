@@ -6505,6 +6505,25 @@ exclude-newer = "7d"
     }
 
     #[test]
+    fn test_deprecated_exclude_newer_tables_without_any_cutoff_warn() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+
+[exclude-newer]
+polars = "0d"
+openssl = "30d"
+
+[pypi-exclude-newer]
+boltons = "0d"
+"#
+        ));
+    }
+
+    #[test]
     fn test_deprecated_exclude_newer_table_without_cutoff_warns() {
         assert_snapshot!(expect_parse_warnings(
             r#"

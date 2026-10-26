@@ -10,18 +10,13 @@ expression: "expect_parse_warnings(r#\"\n[workspace]\nname = \"foo\"\nchannels =
    · ╰──── this table will be removed
  9 │
    ╰────
-  help: set a `cutoff` in `[workspace.exclude-newer]` to replace zero cutoffs with `exemptions`, the cutoffs of `polars` will stop working when the table is removed in a future release
+  help: set a `cutoff` in `[workspace.exclude-newer]` to replace the zero cutoffs of `polars` with `exemptions`, note that it also applies to the channels without their own `exclude-newer`
 
-  ⚠ the top-level `[pypi-exclude-newer]` table of per-package cutoffs is deprecated in favor of the `exemptions` of `[workspace.pypi-exclude-newer]`
+  ⚠ the top-level `[pypi-exclude-newer]` table of per-package cutoffs is deprecated and will be removed in a future release
     ╭─[pixi.toml:10:1]
   9 │
  10 │ ╭─▶ [pypi-exclude-newer]
  11 │ ├─▶ boltons = "0d"
-    · ╰──── replace this with `[workspace.pypi-exclude-newer.exemptions]`
+    · ╰──── this table will be removed
     ╰────
-  help: move the entries to the `exemptions` of `[workspace.pypi-exclude-newer]` instead, e.g.
-
-        [workspace.pypi-exclude-newer]
-        exemptions = { boltons = "*" }
-
-        An exemption allows every release of the package regardless of its upload time.
+  help: the zero cutoffs of `boltons` have no effect without a cutoff, remove them

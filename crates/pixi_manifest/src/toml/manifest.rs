@@ -575,6 +575,11 @@ impl TomlManifest {
                     ExcludeNewerTableMigration::new(
                         "exclude-newer",
                         workspace.exclude_newer.cutoff,
+                        workspace
+                            .channels
+                            .iter()
+                            .chain(features.values().flat_map(|f| f.channels.iter().flatten()))
+                            .any(|channel| channel.exclude_newer.is_some()),
                         exclude_newer
                             .value
                             .iter()
@@ -593,6 +598,7 @@ impl TomlManifest {
                     ExcludeNewerTableMigration::new(
                         "pypi-exclude-newer",
                         workspace.pypi_exclude_newer.cutoff,
+                        workspace.exclude_newer.cutoff.is_some(),
                         pypi_exclude_newer
                             .value
                             .iter()
