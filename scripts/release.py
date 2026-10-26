@@ -213,7 +213,7 @@ def main() -> None:
     run(["cargo", "update", "pixi"])
 
     print("Committing...")
-    run(["git", "commit", "--all", "--message", f"chore: bump version to v{version}"])
+    run(["git", "commit", "--all", "--message", f"chore(release): bump version to v{version}"])
 
     print("Opening pull request...")
     run(
@@ -226,7 +226,7 @@ def main() -> None:
             "--base",
             "main",
             "--title",
-            f"chore: bump version to v{version}",
+            f"chore(release): bump version to v{version}",
             "--body",
             changelog_section(version),
         ]
