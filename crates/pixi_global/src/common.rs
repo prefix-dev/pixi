@@ -274,8 +274,14 @@ pub enum StateChange {
     UpdatedEnvironment(EnvironmentUpdate),
     InstalledShortcut(String),
     UninstalledShortcut(String),
-    AddedCompletion(String),
-    RemovedCompletion(String),
+    AddedCompletion {
+        name: String,
+        shell: String,
+    },
+    RemovedCompletion {
+        name: String,
+        shell: String,
+    },
 }
 
 #[must_use]
@@ -348,7 +354,15 @@ impl StateChanges {
         let mut reports = Vec::with_capacity(env_names.len());
         for env_name in env_names {
             let changes = &self.changes[&env_name];
-            reports.push(build_report(project, &env_name, changes).await?);
+            reports.push(
+                build_report(
+                    project,
+                    &env_name,
+                    changes,
+                    tracing::enabled!(tracing::Level::INFO),
+                )
+                .await?,
+            );
         }
         Ok(reports)
     }
@@ -492,6 +506,7 @@ async fn build_report(
     project: &super::Project,
     env_name: &EnvironmentName,
     changes: &[StateChange],
+    verbose: bool,
 ) -> miette::Result<EnvReport> {
     // Keyed by name so that an item is reported once with its net effect: a
     // `--force-reinstall` unexposes and re-exposes the same executable, and all
@@ -500,7 +515,7 @@ async fn build_report(
     let mut dependencies: BTreeMap<String, Item> = BTreeMap::new();
     let mut exposed: BTreeMap<String, Item> = BTreeMap::new();
     let mut shortcuts: BTreeMap<String, Item> = BTreeMap::new();
-    let mut completions: BTreeMap<String, Item> = BTreeMap::new();
+    let mut completions: BTreeMap<(String, String), Marker> = BTreeMap::new();
     // The last environment-level change wins: `--force-reinstall` removes the
     // environment and creates it again, and that reads as an install.
     let mut environment_change = None;
@@ -555,11 +570,11 @@ async fn build_report(
             StateChange::UninstalledShortcut(name) => {
                 shortcuts.insert(name.clone(), Item::plain(Marker::Removed, name.clone()));
             }
-            StateChange::AddedCompletion(name) => {
-                completions.insert(name.clone(), Item::plain(Marker::Added, name.clone()));
+            StateChange::AddedCompletion { name, shell } => {
+                completions.insert((name.clone(), shell.clone()), Marker::Added);
             }
-            StateChange::RemovedCompletion(name) => {
-                completions.insert(name.clone(), Item::plain(Marker::Removed, name.clone()));
+            StateChange::RemovedCompletion { name, shell } => {
+                completions.insert((name.clone(), shell.clone()), Marker::Removed);
             }
         }
     }
@@ -576,14 +591,33 @@ async fn build_report(
     push_row(&mut rows, Label::Dependencies, dependencies);
     push_row(&mut rows, Label::Exposed, exposed);
     push_row(&mut rows, Label::Shortcuts, shortcuts);
-    push_row(&mut rows, Label::Completions, completions);
+    if verbose && !completions.is_empty() {
+        let mut items = Vec::new();
+        for marker in [Marker::Added, Marker::Removed] {
+            let changes = completions
+                .iter()
+                .filter(|(_, change)| **change == marker)
+                .map(|((name, shell), _)| (name.clone(), shell.clone()))
+                .collect();
+            items.extend(
+                group_completion_changes(changes)
+                    .into_iter()
+                    .map(|(name, shells)| Item::plain(marker, format!("{name} ({shells})"))),
+            );
+        }
+        rows.push(Row::new(Label::Completions, items));
+    }
 
     let status = match environment_change {
         Some(status) => status,
         // The dependency that was lifted into the header and the packages that
         // came along with it still count as changes, even though they left no
         // row behind.
-        None if rows.is_empty() && own_dependency.is_none() && !transitive_change => {
+        None if rows.is_empty()
+            && own_dependency.is_none()
+            && !transitive_change
+            && completions.is_empty() =>
+        {
             EnvStatus::Unchanged
         }
         None => EnvStatus::Updated,
@@ -600,6 +634,21 @@ async fn build_report(
     };
 
     Ok(EnvReport::new(env_name.as_str(), version, Some(status)).with_rows(rows))
+}
+
+fn group_completion_changes(completions: Vec<(String, String)>) -> Vec<(String, String)> {
+    let mut by_executable: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for (name, shell) in completions {
+        by_executable.entry(name).or_default().push(shell);
+    }
+    by_executable
+        .into_iter()
+        .map(|(name, mut shells)| {
+            shells.sort();
+            shells.dedup();
+            (name, shells.join(", "))
+        })
+        .collect()
 }
 
 impl std::ops::BitOrAssign for StateChanges {
@@ -872,6 +921,70 @@ mod tests {
 
     use super::*;
     use crate::trampoline::Configuration;
+
+    #[rstest]
+    #[case(false)]
+    #[case(true)]
+    #[tokio::test]
+    async fn completion_report_respects_verbosity(#[case] verbose: bool) {
+        let root = tempdir().unwrap();
+        let project = crate::Project::from_str(
+            &root.path().join("pixi-global.toml"),
+            "version = 1",
+            EnvRoot::new(root.path().to_owned()).unwrap(),
+            BinDir::new(root.path().to_owned()).unwrap(),
+        )
+        .unwrap();
+        let env_name = EnvironmentName::from_str("tool").unwrap();
+        let changes = [
+            StateChange::RemovedCompletion {
+                name: "tool".to_string(),
+                shell: "fish".to_string(),
+            },
+            StateChange::AddedCompletion {
+                name: "tool".to_string(),
+                shell: "fish".to_string(),
+            },
+            StateChange::AddedCompletion {
+                name: "tool".to_string(),
+                shell: "bash".to_string(),
+            },
+            StateChange::AddedCompletion {
+                name: "tool".to_string(),
+                shell: "fish".to_string(),
+            },
+            StateChange::AddedCompletion {
+                name: "tool".to_string(),
+                shell: "zsh".to_string(),
+            },
+            StateChange::RemovedCompletion {
+                name: "tool".to_string(),
+                shell: "zsh".to_string(),
+            },
+            StateChange::AddedCompletion {
+                name: "other".to_string(),
+                shell: "bash".to_string(),
+            },
+        ];
+        let report = build_report(&project, &env_name, &changes, verbose)
+            .await
+            .unwrap();
+        assert_eq!(report.status, Some(EnvStatus::Updated));
+        if verbose {
+            assert_eq!(report.rows.len(), 1);
+            assert_eq!(report.rows[0].label, Label::Completions);
+            assert_eq!(
+                report.rows[0].items,
+                vec![
+                    Item::plain(Marker::Added, "other (bash)"),
+                    Item::plain(Marker::Added, "tool (bash, fish)"),
+                    Item::plain(Marker::Removed, "tool (zsh)"),
+                ]
+            );
+        } else {
+            assert!(report.rows.is_empty());
+        }
+    }
 
     #[tokio::test]
     async fn test_create() {
