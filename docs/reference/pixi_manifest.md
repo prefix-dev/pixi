@@ -457,6 +457,11 @@ pypi-exclude-newer = { exemptions = { torch = "*" } }
 torch = { version = ">=2.10.0", index = "https://download.pytorch.org/whl/cu124" }
 ```
 
+!!! warning "Deprecated: top-level `[exclude-newer]` and `[pypi-exclude-newer]` tables"
+    The top-level `[exclude-newer]` and `[pypi-exclude-newer]` tables of per-package cutoffs are deprecated and will be removed.
+    Replace a per-package cutoff of `"0d"` with a `"*"` exemption, or narrow it down to the releases you vetted.
+    Other per-package cutoffs have no direct replacement: to allow newer releases of a package, exempt the versions you vetted, and to keep a package on older releases, constrain its version in the dependencies.
+
 !!! note "Satisfiability checks with `exclude-newer`"
     For conda packages, pixi stores the package timestamp in `pixi.lock` and can use it during
     lock file satisfiability checks. That means changing `exclude-newer` can trigger a re-solve
