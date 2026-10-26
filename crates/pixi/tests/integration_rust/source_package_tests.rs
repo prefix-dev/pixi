@@ -3013,8 +3013,8 @@ async fn verify_locked(pixi: &PixiControl) -> miette::Result<()> {
                 ..UpdateLockFileOptions::default()
             },
         )
-        .await
-        .map(|_| ())
+        .await?;
+    Ok(())
 }
 
 /// `--locked` must succeed without touching the lock file.
