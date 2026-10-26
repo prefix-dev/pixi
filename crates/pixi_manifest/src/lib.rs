@@ -47,7 +47,8 @@ pub use exclude_newer::{
     resolve_exclude_newer, resolve_pypi_exclude_newer,
 };
 pub use exclude_newer_edit::{
-    ExcludeNewerEditError, ParseExemptionError, parse_conda_exemption, parse_pypi_exemption,
+    ExcludeNewerEditError, ParseExemptionError, entry_as_written, parse_conda_exemption,
+    parse_pypi_exemption,
 };
 pub use feature::{Feature, FeatureName};
 pub use features_ext::{ChannelPriorityCombinationError, FeaturesExt};

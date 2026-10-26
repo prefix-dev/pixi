@@ -131,6 +131,24 @@ pub fn parse_pypi_exemption(spec: &str) -> Result<PypiPackageName, ParseExemptio
     })
 }
 
+/// Converts an `exclude-newer` or `pypi-exclude-newer` entry to a single
+/// line value as written, dropping comments and formatting.
+pub fn entry_as_written(item: &Item) -> Option<Value> {
+    fn normalise(value: &mut Value) {
+        value.decor_mut().clear();
+        if let Value::InlineTable(table) = value {
+            table.set_dotted(false);
+            for (_, value) in table.iter_mut() {
+                normalise(value);
+            }
+            table.fmt();
+        }
+    }
+    let mut value = item.clone().into_value().ok()?;
+    normalise(&mut value);
+    Some(value)
+}
+
 impl ExcludeNewerConfig {
     /// Sets or removes the cutoff in both the configuration and `parent`, the
     /// TOML table that holds the `exclude-newer` key.

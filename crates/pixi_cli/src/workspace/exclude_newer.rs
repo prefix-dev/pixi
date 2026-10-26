@@ -8,7 +8,7 @@ use pixi_core::{
     lock_file::{ReinstallPackages, UpdateMode},
     workspace::WorkspaceMut,
 };
-use pixi_manifest::{ExcludeNewerConfig, ManifestKind, PypiExcludeNewerConfig};
+use pixi_manifest::{ManifestDocument, ManifestKind, entry_as_written};
 use pixi_pypi_spec::PypiPackageName;
 use rattler_conda_types::PackageName;
 
@@ -165,8 +165,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let update = match &args.command {
         None | Some(Command::Get) => {
             let workspace = locator.locate().await?;
-            print_config(&workspace);
-            return Ok(());
+            return print_config(&workspace);
         }
         Some(Command::Set(SetArgs { update, .. }))
         | Some(Command::Unset(update))
@@ -178,8 +177,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .locate()
         .await?;
     let channel_config = workspace.channel_config();
-    let original = exclude_newer_config(&workspace);
     let mut workspace = workspace.modify()?;
+    let original = workspace.document().render().ok();
     let pypi = update.pypi;
     let target = if pypi {
         "pypi-exclude-newer"
@@ -248,7 +247,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     };
 
-    if exclude_newer_config(workspace.workspace()) == original {
+    if workspace.document().render().ok() == original {
         eprintln!("The {target} configuration is unchanged.");
         return Ok(());
     }
@@ -301,14 +300,6 @@ async fn restore_lock_file(path: &Path, original: Option<Vec<u8>>) {
     }
 }
 
-fn exclude_newer_config(workspace: &Workspace) -> (ExcludeNewerConfig, PypiExcludeNewerConfig) {
-    let config = &workspace.workspace.value.workspace;
-    (
-        config.exclude_newer.clone(),
-        config.pypi_exclude_newer.clone(),
-    )
-}
-
 /// Updates the lock file, so a stricter cutoff takes effect right away for
 /// conda packages. Locked PyPI packages carry no upload time, so they are not
 /// re-solved. Like `pixi add`, the default environment is only installed when
@@ -333,45 +324,17 @@ async fn update_lock_file(workspace: &WorkspaceMut, update: &UpdateArgs) -> miet
     Ok(())
 }
 
-fn print_config(workspace: &Workspace) {
-    let config = &workspace.workspace.value.workspace;
-    if config.exclude_newer.is_empty() && config.pypi_exclude_newer.is_empty() {
+fn print_config(workspace: &Workspace) -> miette::Result<()> {
+    let document = ManifestDocument::from_provenance(&workspace.workspace.provenance)?;
+    let entries = ["exclude-newer", "pypi-exclude-newer"]
+        .into_iter()
+        .filter_map(|key| Some((key, entry_as_written(document.workspace_entry(key)?)?)))
+        .collect::<Vec<_>>();
+    if entries.is_empty() {
         eprintln!("No exclude-newer configured.");
-        return;
     }
-    if !config.exclude_newer.is_empty() {
-        println!(
-            "exclude-newer = {}",
-            conda_toml_value(&config.exclude_newer)
-        );
+    for (key, value) in entries {
+        println!("{key} = {value}");
     }
-    if !config.pypi_exclude_newer.is_empty() {
-        println!(
-            "pypi-exclude-newer = {}",
-            pypi_toml_value(&config.pypi_exclude_newer)
-        );
-    }
-}
-
-pub(crate) fn conda_toml_value(config: &ExcludeNewerConfig) -> toml_edit::Value {
-    serde::Serialize::serialize(config, toml_edit::ser::ValueSerializer::new())
-        .expect("conversion to toml cannot fail")
-}
-
-fn pypi_toml_value(config: &PypiExcludeNewerConfig) -> toml_edit::Value {
-    let mut table = toml_edit::InlineTable::new();
-    if let Some(cutoff) = &config.cutoff {
-        let cutoff = serde::Serialize::serialize(cutoff, toml_edit::ser::ValueSerializer::new())
-            .expect("conversion to toml cannot fail");
-        table.insert("cutoff", cutoff);
-    }
-    if !config.exemptions.is_empty() {
-        let exemptions = config
-            .exemptions
-            .keys()
-            .map(|name| (name.as_source(), toml_edit::Value::from("*")))
-            .collect::<toml_edit::InlineTable>();
-        table.insert("exemptions", exemptions.into());
-    }
-    table.into()
+    Ok(())
 }

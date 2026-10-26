@@ -122,3 +122,25 @@ platforms = ["{CURRENT_PLATFORM}"]
     )
     verify_cli_command([pixi, "workspace", "exclude-newer", "unexempt", "torch", *flags])
     assert exclude_newer(manifest, "pypi-exclude-newer") is None
+
+
+def test_exclude_newer_cutoff_as_written(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Cutoffs are compared and shown as written, not as the instant they mean."""
+    manifest = tmp_pixi_workspace / "pixi.toml"
+    manifest.write_text(f"""
+[workspace]
+name = "test"
+channels = []
+platforms = ["{CURRENT_PLATFORM}"]
+exclude-newer = "7d" # one week
+""")
+    flags: list[str | Path] = ["--manifest-path", manifest]
+    verify_cli_command(
+        [pixi, "workspace", "exclude-newer", *flags], stdout_contains='exclude-newer = "7d"'
+    )
+    verify_cli_command(
+        [pixi, "workspace", "exclude-newer", "set", "7d", "--no-install", *flags],
+        stderr_contains="unchanged",
+    )
+    verify_cli_command([pixi, "workspace", "exclude-newer", "set", "168h", "--no-install", *flags])
+    assert 'exclude-newer = "168h" # one week' in manifest.read_text()

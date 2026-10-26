@@ -1265,6 +1265,19 @@ impl ManifestDocument {
         }
     }
 
+    /// Returns the entry under `key` of the `[workspace]` table (or
+    /// `[tool.pixi.workspace]` in a `pyproject.toml`) as written.
+    pub fn workspace_entry(&self, key: &str) -> Option<&Item> {
+        let table_name = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_table(Some(self.detect_table_name()));
+        let mut item = self.manifest().as_item();
+        for table_key in table_name.as_keys() {
+            item = item.get(table_key)?;
+        }
+        item.get(key)
+    }
+
     /// Returns the `[workspace]` table (or `[tool.pixi.workspace]` in a
     /// `pyproject.toml`), which holds workspace-wide keys like
     /// `exclude-newer`.

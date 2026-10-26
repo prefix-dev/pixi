@@ -3,11 +3,12 @@ use std::str::FromStr;
 use clap::Parser;
 use pixi_config::{Config, ConfigCli};
 use pixi_global::Project;
+use pixi_manifest::entry_as_written;
 use rattler_conda_types::PackageName;
 
 use crate::{
     global::sync,
-    workspace::exclude_newer::{ExcludeNewerError, conda_toml_value, remove_exemptions},
+    workspace::exclude_newer::{ExcludeNewerError, remove_exemptions},
 };
 
 /// Manage the `exclude-newer` configuration of the global manifest.
@@ -98,11 +99,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let update = match &args.command {
         None | Some(Command::Get) => {
             let project = Project::discover_or_create().await?;
-            let exclude_newer = &project.manifest.parsed.exclude_newer;
-            if exclude_newer.is_empty() {
-                eprintln!("No exclude-newer configured.");
-            } else {
-                println!("exclude-newer = {}", conda_toml_value(exclude_newer));
+            match project
+                .manifest
+                .document
+                .as_table()
+                .get("exclude-newer")
+                .and_then(entry_as_written)
+            {
+                Some(value) => println!("exclude-newer = {value}"),
+                None => eprintln!("No exclude-newer configured."),
             }
             return Ok(());
         }
@@ -150,7 +155,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     };
 
-    if project.manifest.parsed.exclude_newer == original.manifest.parsed.exclude_newer {
+    if project.manifest.document.to_string() == original.manifest.document.to_string() {
         eprintln!("The exclude-newer configuration is unchanged.");
         return Ok(());
     }
