@@ -8,7 +8,7 @@ use pixi_global::report::EnvStatus;
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]
-    config: ConfigCli,
+    pub(crate) config: ConfigCli,
 }
 
 /// Sync global manifest with installed environments

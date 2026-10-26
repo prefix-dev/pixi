@@ -7,6 +7,7 @@ mod environment;
 mod environments;
 mod error;
 mod exclude_newer;
+mod exclude_newer_edit;
 mod feature;
 mod features_ext;
 mod has_features_iter;
@@ -44,6 +45,9 @@ pub use error::{DependencyError, GenericError, TomlError, UnknownFeature};
 pub use exclude_newer::{
     ExcludeNewerConfig, ExcludeNewerError, ExcludeNewerTableMigration, PypiExcludeNewerConfig,
     resolve_exclude_newer, resolve_pypi_exclude_newer,
+};
+pub use exclude_newer_edit::{
+    ExcludeNewerEditError, ParseExemptionError, parse_conda_exemption, parse_pypi_exemption,
 };
 pub use feature::{Feature, FeatureName};
 pub use features_ext::{ChannelPriorityCombinationError, FeaturesExt};

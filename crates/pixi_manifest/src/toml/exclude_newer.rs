@@ -177,7 +177,7 @@ fn parse_conda_exemptions(
 /// An exemption of `[workspace.exclude-newer]` that cannot select repodata
 /// records.
 #[derive(Debug, thiserror::Error)]
-enum InvalidExemptionSpec {
+pub enum InvalidExemptionSpec {
     #[error("an exclude-newer exemption cannot have `extras`, they do not select packages")]
     Extras,
 
@@ -201,7 +201,12 @@ enum InvalidExemptionSpec {
 /// Converts the TOML spec of an exemption into a binary spec, rejecting the
 /// fields that cannot select repodata records.
 fn binary_exemption_spec(spec: TomlSpec) -> Result<BinarySpec, InvalidExemptionSpec> {
-    let spec = spec.into_binary_spec()?;
+    validate_exemption_spec(spec.into_binary_spec()?)
+}
+
+/// Checks that a binary spec can be used as an exemption, rejecting the fields
+/// that cannot select repodata records.
+pub fn validate_exemption_spec(spec: BinarySpec) -> Result<BinarySpec, InvalidExemptionSpec> {
     match spec {
         BinarySpec::Version(_) => Ok(spec),
         BinarySpec::DetailedVersion(detailed) => {

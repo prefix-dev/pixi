@@ -87,6 +87,13 @@ In that example:
 - packages from the internal channel are not delayed;
 - the fixed releases of `openssl` and `python` are allowed through immediately, even if they are fresh, while every other release of those packages keeps the delay.
 
+To let a reviewed fix through, exempt it and update the package:
+
+```shell
+pixi workspace exclude-newer exempt openssl==3.5.1
+pixi update openssl
+```
+
 !!! tip "CEP for `upload_timestamp` in repodata"
     There is also an in-progress proposal, [conda/ceps#154](https://github.com/conda/ceps/pull/154), to include upload timestamps in `repodata.json`. If adopted, that would let tools consume channel-provided upload times directly and harden this workflow against spoofed timestamp entries from conda-forge itself.
     Once this CEP is implemented, Pixi will switch the behavior of `exclude-newer` to use the `upload_timestamp` instead of the `timestamp`.

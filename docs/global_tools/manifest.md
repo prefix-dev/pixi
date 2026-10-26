@@ -119,6 +119,16 @@ An environment containing a non-exempt package newer than its cutoff counts as o
 Tightening the cutoff or removing an exemption re-solves it on the next `pixi global sync`, potentially downgrading packages.
 If no allowed version satisfies the dependencies, the sync fails.
 
+[`pixi global exclude-newer`](../reference/cli/pixi/global/exclude-newer/index.md) edits the cutoff and the exemptions from the command line and syncs the environments afterwards:
+
+```shell
+pixi global exclude-newer set 7d
+pixi global exclude-newer exempt polars==1.43.1 my-tool
+pixi global exclude-newer unexempt my-tool
+```
+
+An exemption doesn't update the environments to the newer releases on its own, run `pixi global update` to pick them up.
+
 
 ## Dependencies
 

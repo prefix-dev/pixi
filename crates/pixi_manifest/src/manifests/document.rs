@@ -1265,6 +1265,19 @@ impl ManifestDocument {
         }
     }
 
+    /// Returns the `[workspace]` table (or `[tool.pixi.workspace]` in a
+    /// `pyproject.toml`), which holds workspace-wide keys like
+    /// `exclude-newer`.
+    pub fn workspace_table_mut(&mut self) -> Result<&mut Table, TomlError> {
+        let table_name = TableName::new()
+            .with_prefix(self.table_prefix())
+            .with_table(Some(self.detect_table_name()));
+        self.manifest_mut()
+            .get_or_insert_nested_item(&table_name.as_keys())?
+            .as_table_mut()
+            .ok_or_else(|| TomlError::table_error(table_name.to_string().as_str(), "manifest"))
+    }
+
     /// Unsets/Sets the pixi version requirement of the project
     pub fn set_requires_pixi(&mut self, version: Option<&str>) -> Result<(), TomlError> {
         // For both 'pyproject.toml' and 'pixi.toml' manifest,

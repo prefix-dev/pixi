@@ -11,6 +11,7 @@ pub mod channel;
 pub mod dependencies;
 pub mod description;
 pub mod environment;
+pub mod exclude_newer;
 pub mod export;
 pub mod feature;
 pub mod name;
@@ -30,6 +31,7 @@ pub enum Command {
     Platform(platform::Args),
     Version(version::Args),
     Environment(environment::Args),
+    ExcludeNewer(exclude_newer::Args),
     Feature(feature::Args),
     Export(export::Args),
     Name(name::Args),
@@ -57,6 +59,7 @@ pub async fn execute(cmd: Args) -> miette::Result<ExitCode> {
         Command::Platform(args) => platform::execute(args).await,
         Command::Version(args) => version::execute(args).await,
         Command::Environment(args) => environment::execute(args).await,
+        Command::ExcludeNewer(args) => exclude_newer::execute(args).await,
         Command::Feature(args) => feature::execute(args).await,
         Command::Export(cmd) => export::execute(cmd).await,
         Command::Name(args) => name::execute(args).await,
