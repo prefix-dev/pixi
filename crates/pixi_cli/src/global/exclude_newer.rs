@@ -5,13 +5,16 @@ use pixi_config::{Config, ConfigCli};
 use pixi_global::Project;
 use rattler_conda_types::PackageName;
 
-use crate::{global::sync, workspace::exclude_newer::conda_toml_value};
+use crate::{
+    global::sync,
+    workspace::exclude_newer::{ExcludeNewerError, conda_toml_value, remove_exemptions},
+};
 
 /// Manage the `exclude-newer` configuration of the global manifest.
 ///
 /// Packages uploaded after the cutoff are excluded from the solve of every
 /// global environment, except for the exempted releases. The environments are
-/// synced after every change.
+/// synced after every change, which is reverted if the sync fails.
 #[derive(Parser, Debug)]
 pub struct Args {
     /// The subcommand to execute, shows the configuration when omitted
@@ -32,7 +35,7 @@ pub enum Command {
     /// Remove the cutoff.
     ///
     /// The cutoff cannot be removed while it has exemptions.
-    Unset(ConfigArgs),
+    Unset(UpdateArgs),
     /// Exempt package releases from the cutoff.
     ///
     /// Exemptions are match specs, a bare package name exempts every release.
@@ -51,7 +54,11 @@ pub enum Command {
 }
 
 #[derive(Parser, Debug)]
-pub struct ConfigArgs {
+pub struct UpdateArgs {
+    /// Only edit the manifest, without syncing the environments
+    #[clap(long)]
+    pub no_sync: bool,
+
     #[clap(flatten)]
     pub config: ConfigCli,
 }
@@ -63,7 +70,7 @@ pub struct SetArgs {
     pub cutoff: String,
 
     #[clap(flatten)]
-    pub config: ConfigCli,
+    pub update: UpdateArgs,
 }
 
 #[derive(Parser, Debug)]
@@ -74,7 +81,7 @@ pub struct ExemptArgs {
     pub specs: Vec<String>,
 
     #[clap(flatten)]
-    pub config: ConfigCli,
+    pub update: UpdateArgs,
 }
 
 #[derive(Parser, Debug)]
@@ -84,17 +91,11 @@ pub struct UnexemptArgs {
     pub packages: Vec<String>,
 
     #[clap(flatten)]
-    pub config: ConfigCli,
-}
-
-#[derive(Debug, thiserror::Error, miette::Diagnostic)]
-enum ExcludeNewerError {
-    #[error(transparent)]
-    InvalidPackageName(#[from] rattler_conda_types::InvalidPackageNameError),
+    pub update: UpdateArgs,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let config = match &args.command {
+    let update = match &args.command {
         None | Some(Command::Get) => {
             let project = Project::discover_or_create().await?;
             let exclude_newer = &project.manifest.parsed.exclude_newer;
@@ -105,16 +106,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
             return Ok(());
         }
-        Some(Command::Set(SetArgs { config, .. }))
-        | Some(Command::Unset(ConfigArgs { config }))
-        | Some(Command::Exempt(ExemptArgs { config, .. }))
-        | Some(Command::Unexempt(UnexemptArgs { config, .. })) => config.clone(),
+        Some(Command::Set(SetArgs { update, .. }))
+        | Some(Command::Unset(update))
+        | Some(Command::Exempt(ExemptArgs { update, .. }))
+        | Some(Command::Unexempt(UnexemptArgs { update, .. })) => update,
     };
-    let mut project = Project::discover_or_create()
+    let config = update.config.clone();
+    let no_sync = update.no_sync;
+    let original = Project::discover_or_create()
         .await?
         .with_cli_config(Config::with_cli_config(&config));
+    let mut project = original.clone();
 
-    let message = match args.command.expect("handled above") {
+    let message = match args.command.as_ref().expect("handled above") {
         Command::Get => unreachable!("handled above"),
         Command::Set(args) => {
             project
@@ -135,20 +139,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             format!("Exempted {} from exclude-newer.", args.specs.join(", "))
         }
         Command::Unexempt(args) => {
-            let mut missing = Vec::new();
-            for package in &args.packages {
+            remove_exemptions(&args.packages, "exclude-newer", |package| {
                 let name = PackageName::from_str(package).map_err(ExcludeNewerError::from)?;
-                if !project.manifest.remove_exclude_newer_exemption(&name)? {
-                    missing.push(package.as_str());
-                }
-            }
-            if !missing.is_empty() {
-                miette::bail!(
-                    "{} {} not exempt from exclude-newer",
-                    missing.join(", "),
-                    if missing.len() == 1 { "is" } else { "are" }
-                );
-            }
+                project.manifest.remove_exclude_newer_exemption(&name)
+            })?;
             format!(
                 "Removed the exclude-newer exemptions of {}.",
                 args.packages.join(", ")
@@ -156,12 +150,33 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     };
 
+    if project.manifest.parsed.exclude_newer == original.manifest.parsed.exclude_newer {
+        eprintln!("The exclude-newer configuration is unchanged.");
+        return Ok(());
+    }
+
     project.manifest.save().await?;
+
+    // A stricter cutoff can take the environments out of sync. If they can't
+    // be synced with the new configuration, restore the original manifest and
+    // sync back to it.
+    if !no_sync
+        && let Err(err) = sync::execute(sync::Args {
+            config: config.clone(),
+        })
+        .await
+    {
+        original.manifest.save().await?;
+        if let Err(revert_err) = sync::execute(sync::Args { config }).await {
+            tracing::warn!("Reverting of the operation failed");
+            tracing::info!("Reversion error: {:?}", revert_err);
+        }
+        return Err(err.wrap_err("Couldn't update the exclude-newer configuration"));
+    }
+
     eprintln!(
         "{}{message}",
         console::style(console::Emoji("✔ ", "")).green()
     );
-
-    // A stricter cutoff can take the environments out of sync.
-    sync::execute(sync::Args { config }).await
+    Ok(())
 }

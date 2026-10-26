@@ -13,6 +13,10 @@ Remove the cutoff
 pixi global exclude-newer unset [OPTIONS]
 ```
 
+## Options
+- <a id="arg---no-sync" href="#arg---no-sync">`--no-sync`</a>
+:  Only edit the manifest, without syncing the environments
+
 ## Config Options
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
 :  Path to the file containing the authentication token

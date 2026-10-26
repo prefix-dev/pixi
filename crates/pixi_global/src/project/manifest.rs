@@ -404,10 +404,12 @@ impl Manifest {
             .parsed
             .exclude_newer
             .remove_exemption(self.document.as_table_mut(), name)?;
-        tracing::debug!(
-            "Removed exclude-newer exemption for {} from toml document",
-            name.as_source()
-        );
+        if removed {
+            tracing::debug!(
+                "Removed exclude-newer exemption for {} from toml document",
+                name.as_source()
+            );
+        }
         Ok(removed)
     }
 

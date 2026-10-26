@@ -63,13 +63,49 @@ pub enum Command {
 }
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
-enum ExcludeNewerError {
+pub(crate) enum ExcludeNewerError {
     #[error(transparent)]
     InvalidPackageName(#[from] rattler_conda_types::InvalidPackageNameError),
     #[error(transparent)]
     InvalidPypiPackageName(#[from] pep508_rs::InvalidNameError),
-    #[error("failed to save the workspace manifest")]
+    #[error(
+        "{} {} not exempt from {target}",
+        .packages.join(", "),
+        if .packages.len() == 1 { "is" } else { "are" }
+    )]
+    NotExempt {
+        packages: Vec<String>,
+        target: &'static str,
+    },
+    #[error("failed to save the manifest")]
     Save(#[from] std::io::Error),
+}
+
+/// Removes the exemptions of `packages` with `remove`, which returns false if
+/// a package was not exempt. Fails with the packages that were not exempt.
+pub(crate) fn remove_exemptions<E>(
+    packages: &[String],
+    target: &'static str,
+    mut remove: impl FnMut(&str) -> Result<bool, E>,
+) -> Result<(), E>
+where
+    E: From<ExcludeNewerError>,
+{
+    let mut missing = Vec::new();
+    for package in packages {
+        if !remove(package)? {
+            missing.push(package.clone());
+        }
+    }
+    if missing.is_empty() {
+        Ok(())
+    } else {
+        Err(ExcludeNewerError::NotExempt {
+            packages: missing,
+            target,
+        }
+        .into())
+    }
 }
 
 #[derive(Parser, Debug)]
@@ -141,6 +177,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .locate()
         .await?;
     let channel_config = workspace.channel_config();
+    let original = exclude_newer_config(&workspace);
     let mut workspace = workspace.modify()?;
     let pypi = update.pypi;
     let target = if pypi {
@@ -189,29 +226,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             format!("Exempted {} from {target}.", names.join(", "))
         }
         Command::Unexempt(args) => {
-            let mut missing = Vec::new();
-            for package in &args.packages {
-                let removed = if pypi {
+            remove_exemptions(&args.packages, target, |package| {
+                if pypi {
                     let name =
                         PypiPackageName::from_str(package).map_err(ExcludeNewerError::from)?;
-                    workspace
-                        .manifest()
-                        .remove_pypi_exclude_newer_exemption(&name)?
+                    Ok::<_, miette::Report>(
+                        workspace
+                            .manifest()
+                            .remove_pypi_exclude_newer_exemption(&name)?,
+                    )
                 } else {
                     let name = PackageName::from_str(package).map_err(ExcludeNewerError::from)?;
-                    workspace.manifest().remove_exclude_newer_exemption(&name)?
-                };
-                if !removed {
-                    missing.push(package.as_str());
+                    Ok(workspace.manifest().remove_exclude_newer_exemption(&name)?)
                 }
-            }
-            if !missing.is_empty() {
-                miette::bail!(
-                    "{} {} not exempt from {target}",
-                    missing.join(", "),
-                    if missing.len() == 1 { "is" } else { "are" }
-                );
-            }
+            })?;
             format!(
                 "Removed the {target} exemptions of {}.",
                 args.packages.join(", ")
@@ -219,6 +247,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     };
 
+    if exclude_newer_config(workspace.workspace()) == original {
+        eprintln!("The {target} configuration is unchanged.");
+        return Ok(());
+    }
+
+    // Save the manifest before updating the lock file, so the lock file is
+    // only written once the manifest is on disk. Dropping `workspace` on an
+    // error reverts the manifest.
+    workspace
+        .save_inner()
+        .await
+        .map_err(ExcludeNewerError::from)?;
     update_lock_file(&workspace, update).await?;
     workspace.save().await.map_err(ExcludeNewerError::from)?;
 
@@ -229,17 +269,28 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     Ok(())
 }
 
-/// Updates the lock file of the default environment, so a stricter cutoff
-/// takes effect right away.
+fn exclude_newer_config(workspace: &Workspace) -> (ExcludeNewerConfig, PypiExcludeNewerConfig) {
+    let config = &workspace.workspace.value.workspace;
+    (
+        config.exclude_newer.clone(),
+        config.pypi_exclude_newer.clone(),
+    )
+}
+
+/// Updates the lock file, so a stricter cutoff takes effect right away. Like
+/// `pixi add`, the default environment is only installed when it is the only
+/// environment of the workspace.
 async fn update_lock_file(workspace: &WorkspaceMut, update: &UpdateArgs) -> miette::Result<()> {
+    let progress = workspace.progress().cloned();
+    let workspace = workspace.workspace();
     get_update_lock_file_and_prefix(
-        &workspace.workspace().default_environment(),
-        workspace.progress().cloned(),
+        &workspace.default_environment(),
+        progress,
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage: update.lock_file_update_config.lock_file_usage()?,
-            no_install: update.no_install_config.no_install,
-            max_concurrent_solves: workspace.workspace().config().max_concurrent_solves(),
+            no_install: update.no_install_config.no_install || workspace.environments().len() != 1,
+            max_concurrent_solves: workspace.config().max_concurrent_solves(),
             ..Default::default()
         },
         ReinstallPackages::default(),
@@ -276,8 +327,10 @@ pub(crate) fn conda_toml_value(config: &ExcludeNewerConfig) -> toml_edit::Value 
 
 fn pypi_toml_value(config: &PypiExcludeNewerConfig) -> toml_edit::Value {
     let mut table = toml_edit::InlineTable::new();
-    if let Some(cutoff) = config.cutoff {
-        table.insert("cutoff", cutoff.to_string().into());
+    if let Some(cutoff) = &config.cutoff {
+        let cutoff = serde::Serialize::serialize(cutoff, toml_edit::ser::ValueSerializer::new())
+            .expect("conversion to toml cannot fail");
+        table.insert("cutoff", cutoff);
     }
     if !config.exemptions.is_empty() {
         let exemptions = config

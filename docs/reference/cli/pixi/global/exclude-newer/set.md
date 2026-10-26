@@ -18,6 +18,10 @@ pixi global exclude-newer set [OPTIONS] <CUTOFF>
 :  The cutoff: an RFC 3339 timestamp, a date like `2026-01-01`, or a duration relative to the time of the solve like `7d`
 <br>**required**: `true`
 
+## Options
+- <a id="arg---no-sync" href="#arg---no-sync">`--no-sync`</a>
+:  Only edit the manifest, without syncing the environments
+
 ## Config Options
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
 :  Path to the file containing the authentication token

@@ -3040,13 +3040,25 @@ exposed = {{ dummy-b = "dummy-b" }}
 """)
     verify_cli_command([pixi, "global", "sync"], env=env)
 
-    # Every package in dummy_channel_1 was uploaded in 2025. The cutoff is
-    # saved, but the environment cannot be synced anymore.
+    verify_cli_command(
+        [pixi, "global", "exclude-newer", "unset"],
+        env=env,
+        stderr_contains="unchanged",
+    )
+
+    # Every package in dummy_channel_1 was uploaded in 2025, so the
+    # environment cannot be synced and the manifest is reverted.
     verify_cli_command(
         [pixi, "global", "exclude-newer", "set", "2020-01-01"],
         ExitCode.FAILURE,
         env=env,
         stderr_contains="uploaded after the cutoff date",
+    )
+    assert "exclude-newer" not in tomli.loads(manifest.read_text())
+
+    verify_cli_command(
+        [pixi, "global", "exclude-newer", "set", "2020-01-01", "--no-sync"],
+        env=env,
     )
     assert tomli.loads(manifest.read_text())["exclude-newer"] == "2020-01-01"
 
@@ -3077,6 +3089,14 @@ exposed = {{ dummy-b = "dummy-b" }}
         ExitCode.FAILURE,
         env=env,
         stderr_contains="uploaded after the cutoff date",
+    )
+    assert tomli.loads(manifest.read_text())["exclude-newer"] == {
+        "cutoff": "2020-01-01",
+        "exemptions": {"dummy-b": "*"},
+    }
+
+    verify_cli_command(
+        [pixi, "global", "exclude-newer", "unexempt", "dummy-b", "--no-sync"], env=env
     )
     assert tomli.loads(manifest.read_text())["exclude-newer"] == "2020-01-01"
 

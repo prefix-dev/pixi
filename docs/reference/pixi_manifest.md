@@ -452,11 +452,6 @@ pixi workspace exclude-newer exempt 'pytorch::pytorch-cpu==2.10.0[build=cpu_*]'
 pixi workspace exclude-newer unexempt py-rattler
 ```
 
-An exemption only allows newer releases, it doesn't update the lock file to them.
-Run `pixi update polars` to pick up the exempted release.
-Removing an exemption, on the other hand, re-solves the lock file right away when a locked package is no longer allowed.
-The cutoff can't be removed while exemptions are configured, remove the exemptions first.
-
 #### PyPI packages
 
 The cutoff of `exclude-newer` applies to PyPI packages as well.

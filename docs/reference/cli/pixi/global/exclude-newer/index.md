@@ -26,7 +26,7 @@ pixi global exclude-newer [COMMAND]
 ## Description
 Manage the `exclude-newer` configuration of the global manifest.
 
-Packages uploaded after the cutoff are excluded from the solve of every global environment, except for the exempted releases. The environments are synced after every change.
+Packages uploaded after the cutoff are excluded from the solve of every global environment, except for the exempted releases. The environments are synced after every change, which is reverted if the sync fails.
 
 
 --8<-- "docs/reference/cli/pixi/global/exclude-newer_extender:example"

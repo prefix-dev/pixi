@@ -19,6 +19,10 @@ pixi global exclude-newer unexempt [OPTIONS] <PACKAGE>...
 <br>May be provided more than once.
 <br>**required**: `true`
 
+## Options
+- <a id="arg---no-sync" href="#arg---no-sync">`--no-sync`</a>
+:  Only edit the manifest, without syncing the environments
+
 ## Config Options
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
 :  Path to the file containing the authentication token

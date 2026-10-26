@@ -353,8 +353,9 @@ impl WorkspaceMut {
     /// without consuming the instance.
     ///
     /// This is useful if an operation needs to save the changes but still needs
-    /// to continue the modification.
-    async fn save_inner(&mut self) -> Result<(), std::io::Error> {
+    /// to continue the modification. The changes are reverted when the
+    /// instance is dropped without calling [`Self::save`].
+    pub async fn save_inner(&mut self) -> Result<(), std::io::Error> {
         let manifest_path = self.workspace().workspace.provenance.path.clone();
         let new_contents = self
             .workspace_manifest_document

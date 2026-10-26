@@ -40,6 +40,9 @@ pub enum ExcludeNewerEditError {
     #[diagnostic(help("remove the exemptions first with `exclude-newer unexempt`"))]
     ExemptionsRequireCutoff,
 
+    #[error("'{0}' must be a cutoff or a table with a cutoff and exemptions")]
+    MalformedEntry(String),
+
     #[error(transparent)]
     #[diagnostic(transparent)]
     Toml(#[from] TomlError),
@@ -166,10 +169,11 @@ impl ExcludeNewerConfig {
         parent: &mut Table,
         name: &PackageName,
     ) -> Result<bool, ExcludeNewerEditError> {
-        if self.exemptions.shift_remove(name).is_none() {
+        if !self.exemptions.contains_key(name) {
             return Ok(false);
         }
         remove_exemption(parent, CONDA_KEY, |key| conda_key_matches(key, name))?;
+        self.exemptions.shift_remove(name);
         Ok(true)
     }
 }
@@ -214,10 +218,11 @@ impl PypiExcludeNewerConfig {
         parent: &mut Table,
         name: &PypiPackageName,
     ) -> Result<bool, ExcludeNewerEditError> {
-        if self.exemptions.shift_remove(name).is_none() {
+        if !self.exemptions.contains_key(name) {
             return Ok(false);
         }
         remove_exemption(parent, PYPI_KEY, |key| pypi_key_matches(key, name))?;
+        self.exemptions.shift_remove(name);
         Ok(true)
     }
 }
@@ -241,18 +246,22 @@ enum Shape {
     Table,
 }
 
-fn shape(parent: &Table, key: &str) -> Result<Shape, TomlError> {
+fn shape(parent: &Table, key: &str) -> Result<Shape, ExcludeNewerEditError> {
     match parent.get(key) {
         None | Some(Item::None) => Ok(Shape::Missing),
         Some(Item::Value(Value::String(_))) => Ok(Shape::Cutoff),
         Some(Item::Table(_)) | Some(Item::Value(Value::InlineTable(_))) => Ok(Shape::Table),
-        Some(_) => Err(TomlError::table_error(key, "workspace")),
+        Some(_) => Err(ExcludeNewerEditError::MalformedEntry(key.to_string())),
     }
 }
 
 /// Sets or removes the cutoff of the `key` entry of `parent`. A cutoff without
 /// exemptions is written as a bare string.
-fn set_cutoff(parent: &mut Table, key: &str, cutoff: Option<&str>) -> Result<(), TomlError> {
+fn set_cutoff(
+    parent: &mut Table,
+    key: &str,
+    cutoff: Option<&str>,
+) -> Result<(), ExcludeNewerEditError> {
     match (shape(parent, key)?, cutoff) {
         (Shape::Missing, None) => {}
         (Shape::Missing | Shape::Cutoff, Some(cutoff)) => {
@@ -267,7 +276,7 @@ fn set_cutoff(parent: &mut Table, key: &str, cutoff: Option<&str>) -> Result<(),
                 Some(cutoff) => upsert_entry(item, "cutoff", cutoff.into()),
                 None => remove_entry(item, "cutoff").map(|_| ()),
             }
-            .map_err(|_| TomlError::table_error(key, "workspace"))?;
+            .map_err(|_| ExcludeNewerEditError::MalformedEntry(key.to_string()))?;
             collapse(parent, key);
         }
     }
@@ -283,8 +292,9 @@ fn upsert_exemption(
     name: &str,
     matches: impl Fn(&str) -> bool,
     value: Value,
-) -> Result<(), TomlError> {
-    let exemptions_error = || TomlError::table_error("exemptions", key);
+) -> Result<(), ExcludeNewerEditError> {
+    let exemptions_error =
+        || ExcludeNewerEditError::from(TomlError::table_error("exemptions", key));
     match shape(parent, key)? {
         Shape::Missing => {
             let mut table = InlineTable::new();
