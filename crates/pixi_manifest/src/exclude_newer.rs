@@ -1,5 +1,8 @@
-use chrono::{DateTime, Utc};
+use std::fmt::Write;
+
+use chrono::{DateTime, SecondsFormat, Utc};
 use indexmap::IndexMap;
+use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_pypi_spec::{PypiPackageName, VersionOrStar};
 use pixi_spec::{
@@ -131,6 +134,7 @@ pub fn resolve_exclude_newer<'a>(
             .with_channel_cutoff(channel_key, channel_exclude_newer.cutoff());
     }
 
+    #[allow(deprecated)]
     for (name, package_exclude_newer) in package_overrides {
         let config = exclude_newer
             .get_or_insert_with(|| ResolvedExcludeNewer::from_datetime(DateTime::<Utc>::MAX_UTC));
@@ -174,6 +178,7 @@ pub fn resolve_pypi_exclude_newer<'a>(
         .map(|cutoff| ResolvedPypiExcludeNewer::from_datetime(cutoff.cutoff()))
         .unwrap_or_default();
 
+    #[allow(deprecated)]
     for (name, package_exclude_newer) in package_overrides {
         exclude_newer = exclude_newer
             .with_package_cutoff(name.as_normalized().clone(), package_exclude_newer.cutoff());
@@ -192,4 +197,132 @@ pub fn resolve_pypi_exclude_newer<'a>(
     }
 
     exclude_newer
+}
+
+/// The migration of a deprecated top-level `[exclude-newer]` or
+/// `[pypi-exclude-newer]` table of per-package cutoffs, for use in the
+/// deprecation warning.
+#[derive(Debug, Clone)]
+pub struct ExcludeNewerTableMigration {
+    /// Whether any of the entries can be replaced by an exemption.
+    pub has_replacement: bool,
+
+    /// The help text that suggests the replacement, or announces the removal
+    /// of the entries without one.
+    pub help: String,
+}
+
+impl ExcludeNewerTableMigration {
+    /// Builds the migration of the deprecated per-package cutoffs of `table`
+    /// to the `exemptions` of `[workspace.{table}]`.
+    ///
+    /// A zero cutoff such as `0d` lifts the cutoff for every release of the
+    /// package, which is what the wildcard exemption `"*"` does. Any other
+    /// per-package cutoff has no replacement and will stop working once the
+    /// table is removed.
+    ///
+    /// `cutoff` and `exemptions` are the current `[workspace.{table}]`, and
+    /// `other_cutoffs` tells whether anything is excluded without `cutoff`:
+    /// channel cutoffs for conda, the conda cutoff for PyPI. `prefix` is the
+    /// prefix of the pixi tables, such as `tool.pixi`.
+    pub fn new<'a>(
+        prefix: Option<&str>,
+        table: &str,
+        cutoff: Option<ExcludeNewer>,
+        exemptions: impl IntoIterator<Item = (&'a str, toml_edit::Value)>,
+        other_cutoffs: bool,
+        overrides: impl IntoIterator<Item = (&'a str, &'a ExcludeNewer)>,
+    ) -> Self {
+        let (zero_cutoffs, without_replacement): (Vec<_>, Vec<_>) = overrides
+            .into_iter()
+            .partition(|(_, cutoff)| matches!(cutoff, ExcludeNewer::Duration(d) if d.is_zero()));
+        let list = |packages: &[(&str, _)]| {
+            packages
+                .iter()
+                .map(|(package, _)| format!("`{package}`"))
+                .join(", ")
+        };
+
+        let prefix = prefix
+            .map(|prefix| format!("{prefix}."))
+            .unwrap_or_default();
+        let mut help = String::new();
+        let mut has_replacement = false;
+        if zero_cutoffs.is_empty() {
+            // There is nothing to move to the exemptions.
+        } else if cutoff.is_none() && !other_cutoffs {
+            // Nothing is excluded apart from the per-package cutoffs, so a
+            // zero cutoff lifts nothing.
+            let _ = write!(
+                help,
+                "the zero cutoffs of {} have no effect without a cutoff, remove them",
+                list(&zero_cutoffs)
+            );
+        } else if cutoff.is_none() && table == "exclude-newer" {
+            // Conda exemptions require a cutoff in `[workspace.exclude-newer]`,
+            // while PyPI exemptions fall back to the conda cutoff.
+            let _ = write!(
+                help,
+                "set a `cutoff` in `[{prefix}workspace.{table}]` to replace the zero cutoffs of {} with `exemptions`, note that it also applies to the channels without their own `exclude-newer`",
+                list(&zero_cutoffs)
+            );
+        } else {
+            has_replacement = true;
+            let entries = if without_replacement.is_empty() {
+                "the entries"
+            } else {
+                "the entries with a zero cutoff"
+            };
+            let _ = write!(
+                help,
+                "move {entries} to the `exemptions` of `[{prefix}workspace.{table}]` instead, e.g. replace the current `{table}` of `[{prefix}workspace]` with\n\n[{prefix}workspace.{table}]"
+            );
+            match cutoff {
+                // The `Display` of a timestamp is not a valid cutoff.
+                Some(ExcludeNewer::Timestamp(timestamp)) => {
+                    let timestamp = timestamp.to_rfc3339_opts(SecondsFormat::AutoSi, true);
+                    let _ = write!(help, "\ncutoff = \"{timestamp}\"");
+                }
+                Some(cutoff @ ExcludeNewer::Duration(_)) => {
+                    let _ = write!(help, "\ncutoff = \"{cutoff}\"");
+                }
+                None => {}
+            }
+            let exemptions = exemptions
+                .into_iter()
+                .filter(|(package, _)| !zero_cutoffs.iter().any(|(zero, _)| zero == package))
+                .chain(
+                    zero_cutoffs
+                        .iter()
+                        .map(|(package, _)| (*package, toml_edit::Value::from("*"))),
+                )
+                .map(|(package, spec)| format!("{} = {spec}", toml_edit::Key::new(package)))
+                .join(", ");
+            let _ = write!(help, "\nexemptions = {{ {exemptions} }}");
+            if table == "pypi-exclude-newer" {
+                help.push_str(
+                    "\n\nAn exemption allows every release of the package regardless of its upload time.",
+                );
+            } else {
+                help.push_str(
+                    "\n\nAn exemption allows the matching releases regardless of their upload time. Narrow `\"*\"` down to the releases you vetted, e.g. `\"1.2.3\"`.",
+                );
+            }
+        }
+        if !without_replacement.is_empty() {
+            if !help.is_empty() {
+                help.push_str("\n\n");
+            }
+            let _ = write!(
+                help,
+                "the per-package cutoffs of {} have no direct replacement and stop working when the table is removed. To allow newer releases of a package, add the versions you vetted to `exemptions`; to keep a package on older releases, constrain its version in the dependencies.",
+                list(&without_replacement)
+            );
+        }
+
+        Self {
+            has_replacement,
+            help,
+        }
+    }
 }

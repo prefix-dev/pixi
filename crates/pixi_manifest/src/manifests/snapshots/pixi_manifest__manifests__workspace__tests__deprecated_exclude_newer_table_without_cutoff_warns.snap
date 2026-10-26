@@ -1,0 +1,22 @@
+---
+source: crates/pixi_manifest/src/manifests/workspace.rs
+expression: "expect_parse_warnings(r#\"\n[workspace]\nname = \"foo\"\nchannels = [{ channel = \"conda-forge\", exclude-newer = \"7d\" }]\nplatforms = []\n\n[exclude-newer]\npolars = \"0d\"\n\n[pypi-exclude-newer]\nboltons = \"0d\"\n\"#)"
+---
+  ⚠ the top-level `[exclude-newer]` table of per-package cutoffs is deprecated and will be removed in a future release
+   ╭─[pixi.toml:7:1]
+ 6 │
+ 7 │ ╭─▶ [exclude-newer]
+ 8 │ ├─▶ polars = "0d"
+   · ╰──── this table will be removed
+ 9 │
+   ╰────
+  help: set a `cutoff` in `[workspace.exclude-newer]` to replace the zero cutoffs of `polars` with `exemptions`, note that it also applies to the channels without their own `exclude-newer`
+
+  ⚠ the top-level `[pypi-exclude-newer]` table of per-package cutoffs is deprecated and will be removed in a future release
+    ╭─[pixi.toml:10:1]
+  9 │
+ 10 │ ╭─▶ [pypi-exclude-newer]
+ 11 │ ├─▶ boltons = "0d"
+    · ╰──── this table will be removed
+    ╰────
+  help: the zero cutoffs of `boltons` have no effect without a cutoff, remove them

@@ -9,7 +9,7 @@ use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::LabeledSpan;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
-use pixi_spec::ExcludeNewer;
+use pixi_spec::{ExcludeNewer, PixiSpec};
 use pixi_toml::{Same, TomlFromStr, TomlHashMap, TomlIndexMap, TomlWith};
 use rattler_conda_types::{PackageName, Subdir, Version};
 use toml_span::{
@@ -20,9 +20,9 @@ use toml_span::{
 use url::Url;
 
 use crate::{
-    Activation, Environment, EnvironmentName, Environments, Feature, FeatureName, KnownPreviewFlag,
-    PixiPlatform, PixiPlatformName, SolveGroups, SystemRequirements, TargetSelector, Targets, Task,
-    TaskName, TomlError, Warning, WithWarnings, WorkspaceManifest,
+    Activation, Environment, EnvironmentName, Environments, ExcludeNewerTableMigration, Feature,
+    FeatureName, KnownPreviewFlag, PixiPlatform, PixiPlatformName, SolveGroups, SystemRequirements,
+    TargetSelector, Targets, Task, TaskName, TomlError, Warning, WithWarnings, WorkspaceManifest,
     environment::EnvironmentIdx,
     error::{FeatureNotEnabled, GenericError},
     manifests::PackageManifest,
@@ -557,6 +557,7 @@ impl TomlManifest {
             .and_then(|p| p.value.name.as_ref())
             .and_then(|field| field.clone().value());
 
+        let table_prefix = external.table_prefix;
         let WithWarnings {
             warnings: mut workspace_warnings,
             value: mut workspace,
@@ -568,14 +569,67 @@ impl TomlManifest {
             root_directory,
         )?;
         warnings.append(&mut workspace_warnings);
-        workspace.exclude_newer_package_overrides = self
-            .exclude_newer
-            .map(PixiSpanned::into_inner)
-            .unwrap_or_default();
-        workspace.pypi_exclude_newer_package_overrides = self
-            .pypi_exclude_newer
-            .map(PixiSpanned::into_inner)
-            .unwrap_or_default();
+        if let Some(exclude_newer) = self.exclude_newer {
+            warnings.push(
+                Deprecation::exclude_newer_table(
+                    table_prefix,
+                    "exclude-newer",
+                    ExcludeNewerTableMigration::new(
+                        table_prefix,
+                        "exclude-newer",
+                        workspace.exclude_newer.cutoff,
+                        workspace
+                            .exclude_newer
+                            .exemptions
+                            .iter()
+                            .map(|(name, spec)| {
+                                (
+                                    name.as_source(),
+                                    PixiSpec::from(spec.clone()).to_toml_value(),
+                                )
+                            }),
+                        workspace
+                            .channels
+                            .iter()
+                            .chain(features.values().flat_map(|f| f.channels.iter().flatten()))
+                            .any(|channel| channel.exclude_newer.is_some()),
+                        exclude_newer
+                            .value
+                            .iter()
+                            .map(|(name, cutoff)| (name.as_source(), cutoff)),
+                    ),
+                    exclude_newer.span.clone(),
+                )
+                .into(),
+            );
+            workspace.exclude_newer_package_overrides = exclude_newer.value;
+        }
+        if let Some(pypi_exclude_newer) = self.pypi_exclude_newer {
+            warnings.push(
+                Deprecation::exclude_newer_table(
+                    table_prefix,
+                    "pypi-exclude-newer",
+                    ExcludeNewerTableMigration::new(
+                        table_prefix,
+                        "pypi-exclude-newer",
+                        workspace.pypi_exclude_newer.cutoff,
+                        workspace
+                            .pypi_exclude_newer
+                            .exemptions
+                            .iter()
+                            .map(|(name, version)| (name.as_source(), version.to_string().into())),
+                        workspace.exclude_newer.cutoff.is_some(),
+                        pypi_exclude_newer
+                            .value
+                            .iter()
+                            .map(|(name, cutoff)| (name.as_source(), cutoff)),
+                    ),
+                    pypi_exclude_newer.span.clone(),
+                )
+                .into(),
+            );
+            workspace.pypi_exclude_newer_package_overrides = pypi_exclude_newer.value;
+        }
 
         migrate_system_requirements_to_platforms(&mut workspace, &mut features, &feature_sysreqs)?;
         validate_task_environments(&features, &environments)?;
@@ -1101,6 +1155,9 @@ pub struct ExternalWorkspaceProperties {
     pub repository: Option<Url>,
     pub documentation: Option<Url>,
     pub features: IndexMap<FeatureName, Feature>,
+    /// The prefix of the pixi tables in the manifest, `tool.pixi` for a
+    /// `pyproject.toml`, used to name tables in warnings.
+    pub table_prefix: Option<&'static str>,
 }
 
 #[cfg(test)]

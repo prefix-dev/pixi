@@ -6431,6 +6431,138 @@ exemptions = { torch = "*" }
     }
 
     #[test]
+    fn test_deprecated_exclude_newer_tables_warn() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "7d"
+
+[exclude-newer]
+polars = "0d"
+openssl = "2025-01-01"
+
+[pypi-exclude-newer]
+boltons = "0d"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_tables_without_replacement_warn() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "7d"
+
+[exclude-newer]
+openssl = "30d"
+
+[pypi-exclude-newer]
+boltons = "2025-01-01"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_table_with_date_cutoff_warns() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "2025-01-01"
+
+[exclude-newer]
+polars = "0d"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_tables_with_dotted_names_warn() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "7d"
+
+[exclude-newer]
+"ruamel.yaml" = "0d"
+
+[pypi-exclude-newer]
+"zope.interface" = "0d"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_tables_keep_existing_exemptions() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = { cutoff = "7d", exemptions = { zlib = "1.3.1", polars = "1.0" } }
+pypi-exclude-newer = { exemptions = { requests = "*" } }
+
+[exclude-newer]
+polars = "0d"
+openssl = "0d"
+
+[pypi-exclude-newer]
+boltons = "0d"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_tables_without_any_cutoff_warn() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+
+[exclude-newer]
+polars = "0d"
+openssl = "30d"
+
+[pypi-exclude-newer]
+boltons = "0d"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_table_without_cutoff_warns() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = [{ channel = "conda-forge", exclude-newer = "7d" }]
+platforms = []
+
+[exclude-newer]
+polars = "0d"
+
+[pypi-exclude-newer]
+boltons = "0d"
+"#
+        ));
+    }
+
+    #[test]
     fn test_exclude_newer_config_applies_exemptions() {
         let contents = r#"
 [workspace]
