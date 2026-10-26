@@ -74,7 +74,8 @@ use super::{
 use crate::{
     EnvDir,
     common::{
-        channel_url_to_prioritized_channel, expose_scripts_sync_status, find_package_records,
+        GlobalDirError, channel_url_to_prioritized_channel, expose_scripts_sync_status,
+        find_package_records,
     },
     find_executables, find_executables_for_many_records,
     install::{create_executable_trampolines, script_exec_mapping},
@@ -564,7 +565,7 @@ impl Project {
     }
 
     /// Returns the EnvDir with the environment name.
-    pub async fn environment_dir(&self, name: &EnvironmentName) -> miette::Result<EnvDir> {
+    pub async fn environment_dir(&self, name: &EnvironmentName) -> Result<EnvDir, GlobalDirError> {
         EnvDir::from_env_root(self.env_root.clone(), name).await
     }
 
