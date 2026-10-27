@@ -509,22 +509,27 @@ mod tests {
 
     #[test]
     fn exempt_with_cutoff() {
-        let exempt_until = |source: &str, spec: &str| {
+        let exempt_until = |source: &str, spec: &str, cutoff: &str| {
             let (mut config, mut document) = conda(source);
             let (name, spec) =
                 parse_conda_exemption(spec, &ChannelConfig::default_with_root_dir("/".into()))
                     .unwrap();
+            let ExcludeNewer::Timestamp(cutoff) = cutoff.parse().unwrap() else {
+                panic!("expected an absolute cutoff");
+            };
             let exemption = ExcludeNewerExemption {
                 spec,
-                cutoff: Some("2026-10-27T14:03:11Z".parse().unwrap()),
+                cutoff: Some(cutoff),
             };
             config
                 .add_exemption(document.as_table_mut(), name, exemption)
                 .unwrap();
             document.to_string()
         };
-        assert_snapshot!(exempt_until("exclude-newer = \"7d\"\n", "openssl==3.2.1"), @r#"exclude-newer = { cutoff = "7d", exemptions = { openssl = { version = "==3.2.1", cutoff = "2026-10-27T14:03:11Z" } } }"#);
-        assert_snapshot!(exempt_until("exclude-newer = \"7d\"\n", "conda-forge::ruff[build=h*]"), @r#"exclude-newer = { cutoff = "7d", exemptions = { ruff = { build = "h*", channel = "conda-forge", cutoff = "2026-10-27T14:03:11Z" } } }"#);
+        assert_snapshot!(exempt_until("exclude-newer = \"7d\"\n", "openssl==3.2.1", "2026-10-27T14:03:11Z"), @r#"exclude-newer = { cutoff = "7d", exemptions = { openssl = { version = "==3.2.1", cutoff = "2026-10-27T14:03:11Z" } } }"#);
+        assert_snapshot!(exempt_until("exclude-newer = \"7d\"\n", "conda-forge::ruff[build=h*]", "2026-10-27T14:03:11Z"), @r#"exclude-newer = { cutoff = "7d", exemptions = { ruff = { build = "h*", channel = "conda-forge", cutoff = "2026-10-27T14:03:11Z" } } }"#);
+        // A date is written as it was given
+        assert_snapshot!(exempt_until("exclude-newer = \"7d\"\n", "openssl==3.2.1", "2026-10-12"), @r#"exclude-newer = { cutoff = "7d", exemptions = { openssl = { version = "==3.2.1", cutoff = "2026-10-12" } } }"#);
     }
 
     #[test]

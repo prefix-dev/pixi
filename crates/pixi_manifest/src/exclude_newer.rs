@@ -1,6 +1,6 @@
 use std::fmt::Write;
 
-use chrono::{DateTime, SecondsFormat, Utc};
+use chrono::{DateTime, NaiveTime, SecondsFormat, Utc};
 use indexmap::IndexMap;
 use itertools::Itertools;
 use miette::Diagnostic;
@@ -93,8 +93,15 @@ impl ExcludeNewerExemption {
     }
 }
 
-/// Formats an absolute cutoff the way it is written to the manifest.
+/// Formats an absolute cutoff the way it is written to the manifest. A cutoff
+/// at midnight UTC is written as the date of the day before, which is how a
+/// date is parsed.
 pub fn format_cutoff(cutoff: DateTime<Utc>) -> String {
+    if cutoff.time() == NaiveTime::MIN
+        && let Some(day) = cutoff.date_naive().pred_opt()
+    {
+        return day.format("%Y-%m-%d").to_string();
+    }
     cutoff.to_rfc3339_opts(SecondsFormat::AutoSi, true)
 }
 

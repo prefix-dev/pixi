@@ -116,8 +116,9 @@ pub(crate) enum ExcludeNewerError {
 #[derive(Parser, Debug)]
 pub(crate) struct ExemptionCutoffArgs {
     /// Only exempt the releases published up to this point in time: `now`,
-    /// an RFC 3339 timestamp, or a date like `2026-01-01`. Defaults to `now`
-    /// for specs with a version, e.g. `openssl==3.2.1`
+    /// an RFC 3339 timestamp, or a date like `2026-01-01`, which includes the
+    /// whole day in UTC. Defaults to `now` for specs with a version, e.g.
+    /// `openssl==3.2.1`
     #[arg(long, value_name = "CUTOFF")]
     pub cutoff: Option<String>,
 
