@@ -508,7 +508,7 @@ fn compute_build_string(
         let mut build = base_build.clone();
         build
             .append(format!("_{variant_hash}"))
-            .expect("index.json build string with variant hash is not a valid build string");
+            .expect("index.json build string with variant hash is a valid build string");
         build
     }
 }
