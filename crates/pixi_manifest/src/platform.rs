@@ -1130,7 +1130,7 @@ pub fn parse_versioned_virtual_package(
         .map_err(|e| format!("'{value}' is not a valid version and build string: {e}"))?;
     validate_virtual_package(&name, version_str, build_string)?;
     let build_string = BuildString::from_str(build_string)
-        .map_err(|e| format!("'{value}' is not a valid version and build string: {e}"))?;
+        .map_err(|e| format!("'{build_string}' is not a valid build string: {e}"))?;
     Ok(GenericVirtualPackage {
         name,
         version,
