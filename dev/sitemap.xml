@@ -277,6 +277,24 @@
         <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/global/edit/</loc>
       </url>
       <url>
+        <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/global/exclude-newer/</loc>
+      </url>
+      <url>
+        <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/global/exclude-newer/exempt/</loc>
+      </url>
+      <url>
+        <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/global/exclude-newer/get/</loc>
+      </url>
+      <url>
+        <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/global/exclude-newer/set/</loc>
+      </url>
+      <url>
+        <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/global/exclude-newer/unexempt/</loc>
+      </url>
+      <url>
+        <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/global/exclude-newer/unset/</loc>
+      </url>
+      <url>
         <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/global/expose/</loc>
       </url>
       <url>
@@ -482,6 +500,24 @@
       </url>
       <url>
         <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/environment/remove/</loc>
+      </url>
+      <url>
+        <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/exclude-newer/</loc>
+      </url>
+      <url>
+        <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/exclude-newer/exempt/</loc>
+      </url>
+      <url>
+        <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/exclude-newer/get/</loc>
+      </url>
+      <url>
+        <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/exclude-newer/set/</loc>
+      </url>
+      <url>
+        <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/exclude-newer/unexempt/</loc>
+      </url>
+      <url>
+        <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/exclude-newer/unset/</loc>
       </url>
       <url>
         <loc>https://pixi.prefix.dev/latest/reference/cli/pixi/workspace/export/</loc>
