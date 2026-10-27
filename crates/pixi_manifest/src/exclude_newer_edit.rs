@@ -263,7 +263,7 @@ fn conda_key_matches(key: &str, name: &PackageName) -> bool {
 }
 
 fn pypi_key_matches(key: &str, name: &PypiPackageName) -> bool {
-    PypiPackageName::from_str(key).is_ok_and(|key| key.as_normalized() == name.as_normalized())
+    PypiPackageName::from_str(key).is_ok_and(|key| &key == name)
 }
 
 /// How the `exclude-newer` key is written in the TOML document.
