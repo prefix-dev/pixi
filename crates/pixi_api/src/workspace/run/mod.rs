@@ -81,6 +81,11 @@ pub async fn run<I: Interface>(
     options: RunOptions,
     progress: Option<&Arc<pixi_reporters::TopLevelProgress>>,
 ) -> miette::Result<i32> {
+    // Fail before resolving the lock file, there is nothing to run
+    if options.task.iter().all(|arg| arg.trim().is_empty()) {
+        miette::bail!("no task or command provided");
+    }
+
     let explicit_environment = explicit_environment(workspace, options.environment.as_ref())?;
     let environment = explicit_environment
         .clone()
