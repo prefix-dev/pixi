@@ -1,6 +1,6 @@
 use std::{path::Path, str::FromStr};
 
-use chrono::{DateTime, SubsecRound, Utc};
+use chrono::{DateTime, SubsecRound, TimeDelta, Utc};
 use clap::Parser;
 use itertools::Itertools;
 use pixi_config::ConfigCli;
@@ -169,10 +169,17 @@ fn has_version(spec: &BinarySpec) -> bool {
     version.is_some_and(|version| *version != VersionSpec::Any)
 }
 
-/// Returns the current time, truncated to seconds so it reads well in the
-/// manifest.
+/// Returns the current time, rounded up to seconds so it reads well in the
+/// manifest. Rounding down would leave out releases published earlier in the
+/// same second.
 fn now() -> DateTime<Utc> {
-    Utc::now().trunc_subsecs(0)
+    let now = Utc::now();
+    let seconds = now.trunc_subsecs(0);
+    if seconds < now {
+        seconds + TimeDelta::seconds(1)
+    } else {
+        seconds
+    }
 }
 
 /// Describes an exempted spec for the success message.
