@@ -2942,7 +2942,7 @@ dependencies = [
  "itertools 0.15.0",
  "percent-encoding",
  "thiserror 2.0.21",
- "typed-path",
+ "typed-path 0.12.3",
  "url",
 ]
 
@@ -6158,7 +6158,7 @@ dependencies = [
  "toml_edit",
  "tracing",
  "tracing-subscriber",
- "typed-path",
+ "typed-path 0.13.0",
  "url",
  "uv-cache",
  "uv-installer",
@@ -6642,7 +6642,7 @@ dependencies = [
  "toml_edit",
  "tracing",
  "tracing-subscriber",
- "typed-path",
+ "typed-path 0.13.0",
  "url",
  "uv-pep508",
  "uv-pypi-types",
@@ -6720,7 +6720,7 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "tracing",
- "typed-path",
+ "typed-path 0.13.0",
  "url",
  "which",
  "xxhash-rust",
@@ -6807,7 +6807,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
- "typed-path",
+ "typed-path 0.13.0",
  "url",
 ]
 
@@ -6936,7 +6936,7 @@ dependencies = [
  "toml_edit",
  "tracing",
  "tracing-test",
- "typed-path",
+ "typed-path 0.13.0",
  "url",
  "uv-build-frontend",
  "uv-cache",
@@ -7139,7 +7139,7 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "tracing",
- "typed-path",
+ "typed-path 0.13.0",
  "url",
  "uv-cache",
  "uv-cache-info",
@@ -7231,7 +7231,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror 2.0.21",
- "typed-path",
+ "typed-path 0.13.0",
 ]
 
 [[package]]
@@ -7301,7 +7301,7 @@ dependencies = [
  "serde_with",
  "thiserror 2.0.21",
  "tracing",
- "typed-path",
+ "typed-path 0.13.0",
  "url",
  "xxhash-rust",
 ]
@@ -7394,7 +7394,7 @@ dependencies = [
  "toml-span",
  "toml_edit",
  "tracing",
- "typed-path",
+ "typed-path 0.13.0",
  "url",
 ]
 
@@ -7620,7 +7620,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "tracing",
- "typed-path",
+ "typed-path 0.13.0",
  "url",
  "uv-configuration",
  "uv-distribution-filename",
@@ -8678,7 +8678,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "tracing",
- "typed-path",
+ "typed-path 0.12.3",
  "url",
 ]
 
@@ -8872,7 +8872,7 @@ dependencies = [
  "serde_yaml",
  "thiserror 2.0.21",
  "tracing",
- "typed-path",
+ "typed-path 0.12.3",
  "url",
  "xxhash-rust",
 ]
@@ -12222,6 +12222,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e28f89b80c87b8fb0cf04ab448d5dd0dd0ade2f8891bae878de66a75a28600e"
 
 [[package]]
+name = "typed-path"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ce898823d8cd0f028662d2f349694b1af0a5cc9be83f1d213a00d3147445e1e"
+
+[[package]]
 name = "typeid"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -15100,7 +15106,7 @@ dependencies = [
  "flate2",
  "indexmap 2.14.2",
  "memchr",
- "typed-path",
+ "typed-path 0.12.3",
  "zopfli",
 ]
 
@@ -15116,7 +15122,7 @@ dependencies = [
  "memchr",
  "nix 0.31.3",
  "time",
- "typed-path",
+ "typed-path 0.12.3",
  "zopfli",
 ]
 
