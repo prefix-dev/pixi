@@ -787,7 +787,8 @@ pub fn subdir_default_virtual_packages(subdir: Subdir) -> Vec<GenericVirtualPack
         defaults.push(GenericVirtualPackage {
             name: PackageName::try_from("__archspec").expect("static virtual-package name"),
             version: Version::major(0),
-            build_string: BuildString::new_unchecked(spec.as_str()),
+            build_string: BuildString::from_str(spec.as_str())
+                .expect("archspec microarchitecture names are valid build strings"),
         });
     }
 
@@ -1026,6 +1027,13 @@ pub fn validate_archspec_name(name: &str) -> Result<(), String> {
             "'{name}' is not a known archspec microarchitecture"
         )),
     }
+}
+
+/// Validate a declared `__archspec` microarchitecture name like
+/// [`validate_archspec_name`] and return it as the `__archspec` build string.
+pub fn parse_archspec_build_string(name: &str) -> Result<BuildString, String> {
+    validate_archspec_name(name)?;
+    BuildString::from_str(name).map_err(|e| format!("'{name}' is not a valid build string: {e}"))
 }
 
 /// Validate the value of a raw `__name = "version[=build]"` entry. Every

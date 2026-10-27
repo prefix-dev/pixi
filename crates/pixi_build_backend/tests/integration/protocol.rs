@@ -213,7 +213,7 @@ async fn test_conda_outputs_build_string_prefix() {
     );
     // Default build string should contain a hash (starts with 'h')
     assert!(
-        default_build.contains('h'),
+        default_build.as_str().contains('h'),
         "default build string should contain a hash, got: {default_build}"
     );
 

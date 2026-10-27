@@ -12,8 +12,7 @@ use pixi_record::{PinnedBuildSourceSpec, PixiRecord, SourceRecordData};
 use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceLocationSpec, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
-    MatchSpec, Matches, NamelessMatchSpec, PackageName,
-    package::{BuildString, RunExportsJson},
+    MatchSpec, Matches, NamelessMatchSpec, PackageName, package::RunExportsJson,
 };
 use std::collections::HashSet;
 
@@ -922,7 +921,7 @@ fn build_full_source_record_from_output(
             .map(ToString::to_string),
         name: output.metadata.name.clone(),
         // Validated when the backend returned its outputs.
-        build: BuildString::new_unchecked(output.metadata.build.clone()),
+        build: output.metadata.build.clone(),
         version: output.metadata.version.clone(),
         build_number: output.metadata.build_number,
         license: output.metadata.license.clone(),
@@ -1107,7 +1106,7 @@ mod tests {
                     .parse::<rattler_conda_types::Version>()
                     .unwrap()
                     .into(),
-                build: "h0_0".to_string(),
+                build: "h0_0".parse().unwrap(),
                 build_number: 0,
                 subdir: Subdir::Linux64,
                 license: None,

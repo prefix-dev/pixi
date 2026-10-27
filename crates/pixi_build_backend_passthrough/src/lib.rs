@@ -120,7 +120,7 @@ impl InMemoryBackend for PassthroughBackend {
         // Check if there are real variants (not just target_platform)
         let has_real_variants = variant.keys().any(|k| k != "target_platform");
         let build_string =
-            compute_build_string(self.index_json.build.as_str(), &variant, has_real_variants);
+            compute_build_string(&self.index_json.build, &variant, has_real_variants);
 
         let output_dir = params
             .output_directory
@@ -162,7 +162,7 @@ impl InMemoryBackend for PassthroughBackend {
                 // Create a modified index_json with augmented fields from project_model
                 // This must match what conda_outputs returns in CondaOutputMetadata
                 let mut modified_index_json = self.index_json.clone();
-                modified_index_json.build = BuildString::new_unchecked(build_string.clone());
+                modified_index_json.build = build_string.clone();
                 modified_index_json.subdir = Some(subdir.to_string());
                 if let Some(name) = &self.project_model.name {
                     modified_index_json.name =
@@ -226,7 +226,7 @@ impl InMemoryBackend for PassthroughBackend {
             input_glob_sets: None,
             name: self.index_json.name.as_normalized().to_owned(),
             version: self.index_json.version.clone(),
-            build: build_string,
+            build: build_string.to_string(),
             subdir,
         })
     }
@@ -492,19 +492,24 @@ fn generate_variant_combinations(
 /// the build string is augmented with a hash of the variant to ensure unique
 /// package identities.
 fn compute_build_string(
-    base_build: &str,
+    base_build: &BuildString,
     variant: &BTreeMap<String, VariantValue>,
     has_real_variants: bool,
-) -> String {
+) -> BuildString {
     if !has_real_variants {
-        base_build.to_string()
+        return base_build.clone();
+    }
+    let variant_hash = compute_variant_hash(variant);
+    if base_build.is_empty() {
+        variant_hash
+            .parse()
+            .expect("a hex hash is a valid build string")
     } else {
-        let variant_hash = compute_variant_hash(variant);
-        if base_build.is_empty() {
-            variant_hash
-        } else {
-            format!("{base_build}_{variant_hash}")
-        }
+        let mut build = base_build.clone();
+        build
+            .append(format!("_{variant_hash}"))
+            .expect("index.json build string with variant hash is not a valid build string");
+        build
     }
 }
 
@@ -605,7 +610,7 @@ fn create_output(
         .or_else(|| Some(index_json.version.version()))
         .cloned()
         .unwrap_or_else(|| Version::major(0));
-    let output_build = compute_build_string(index_json.build.as_str(), &variant, has_real_variants);
+    let output_build = compute_build_string(&index_json.build, &variant, has_real_variants);
 
     CondaOutput {
         build_dependencies: Some(extract_dependencies(
@@ -639,8 +644,11 @@ fn create_output(
         // source dependencies are emitted as source specs, mirroring real
         // backends' `local_source_packages` mapping.
         run_exports: {
-            let mut run_exports =
-                model_run_exports(&project_model.targets, &output_version, &output_build);
+            let mut run_exports = model_run_exports(
+                &project_model.targets,
+                &output_version,
+                output_build.as_str(),
+            );
             if let Some(extra) = package_run_exports
                 .or_else(|| run_exports_config.get(name.as_source()))
                 .map(|re| convert_run_exports_json(re, &model_source_specs(&project_model.targets)))

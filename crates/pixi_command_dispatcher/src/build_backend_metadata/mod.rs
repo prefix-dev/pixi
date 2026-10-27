@@ -468,10 +468,10 @@ impl BuildBackendMetadataInner {
         outputs: &[pixi_build_types::procedures::conda_outputs::CondaOutput],
     ) -> Result<(), BuildBackendMetadataError> {
         for output in outputs {
-            BuildString::from_str(&output.metadata.build).map_err(|source| {
+            BuildString::from_str(output.metadata.build.as_str()).map_err(|source| {
                 BuildBackendMetadataError::InvalidBuildString {
                     package: output.metadata.name.as_source().to_string(),
-                    build: output.metadata.build.clone(),
+                    build: output.metadata.build.to_string(),
                     source,
                 }
             })?;
@@ -1311,7 +1311,7 @@ mod tests {
             metadata: CondaOutputMetadata {
                 name: PackageName::try_from(name).unwrap(),
                 version: Version::major(1).into(),
-                build: "0".to_string(),
+                build: "0".parse().unwrap(),
                 build_number: 0,
                 subdir: Subdir::NoArch,
                 license: None,
@@ -1343,7 +1343,7 @@ mod tests {
         assert!(BuildBackendMetadataInner::validate_build_strings(&[output.clone()]).is_ok());
 
         for build in ["", "py-3", "a b"] {
-            output.metadata.build = build.to_string();
+            output.metadata.build = BuildString::new_unchecked(build);
             let result = BuildBackendMetadataInner::validate_build_strings(&[output.clone()]);
             assert!(
                 matches!(

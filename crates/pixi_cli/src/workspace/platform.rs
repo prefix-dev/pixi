@@ -164,7 +164,7 @@ impl VirtualPackageArgs {
             if value.is_empty() {
                 miette::bail!("--archspec requires a non-empty microarchitecture string");
             }
-            pixi_manifest::platform::validate_archspec_name(&value)
+            let build_string = pixi_manifest::platform::parse_archspec_build_string(&value)
                 .map_err(|message| miette::miette!("{message}"))?;
             push_unique(
                 &mut specs,
@@ -172,7 +172,7 @@ impl VirtualPackageArgs {
                 GenericVirtualPackage {
                     name: virtual_package_name("__archspec"),
                     version: zero_version(),
-                    build_string: BuildString::new_unchecked(value),
+                    build_string,
                 },
             )?;
         }

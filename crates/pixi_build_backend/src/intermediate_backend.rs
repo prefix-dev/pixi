@@ -479,11 +479,23 @@ where
 
             let noarch = recipe.build().noarch.unwrap_or(NoArchType::none());
 
+            let build_string = discovered_output
+                .build_string
+                .parse()
+                .into_diagnostic()
+                .with_context(|| {
+                    format!(
+                        "invalid build string '{}' for output '{}'",
+                        discovered_output.build_string,
+                        recipe.package().name().as_source()
+                    )
+                })?;
+
             outputs.push(CondaOutput {
                 metadata: CondaOutputMetadata {
                     name: recipe.package().name().clone(),
                     version: recipe.package().version().clone(),
-                    build: discovered_output.build_string.clone(),
+                    build: build_string,
                     build_number,
                     subdir: discovered_output.target_platform,
                     license: recipe.about.license.clone().map(|l| l.to_string()),

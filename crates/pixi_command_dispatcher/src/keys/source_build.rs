@@ -696,7 +696,7 @@ async fn compute_inner(
             backend,
             name: output.metadata.name.clone(),
             version: output.metadata.version.clone(),
-            build: output.metadata.build.clone(),
+            build: output.metadata.build.to_string(),
             subdir: output.metadata.subdir.to_string(),
             work_directory,
             channels: spec.channels.clone(),

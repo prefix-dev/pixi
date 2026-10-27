@@ -455,15 +455,18 @@ fn build_friendly_virtual_package(
                     line_info: None,
                 });
             }
-            crate::platform::validate_archspec_name(microarch).map_err(|message| Error {
-                kind: ErrorKind::Custom(message.into()),
-                span: raw.span,
-                line_info: None,
-            })?;
+            let build_string =
+                crate::platform::parse_archspec_build_string(microarch).map_err(|message| {
+                    Error {
+                        kind: ErrorKind::Custom(message.into()),
+                        span: raw.span,
+                        line_info: None,
+                    }
+                })?;
             Ok(GenericVirtualPackage {
                 name: package_name,
                 version,
-                build_string: BuildString::new_unchecked(microarch),
+                build_string,
             })
         }
         VirtualPackageValueKind::Presence => {
