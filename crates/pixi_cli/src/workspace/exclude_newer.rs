@@ -1,6 +1,8 @@
 use std::{path::Path, str::FromStr};
 
+use chrono::{DateTime, SubsecRound, Utc};
 use clap::Parser;
+use itertools::Itertools;
 use pixi_config::ConfigCli;
 use pixi_core::{
     InstallFilter, UpdateLockFileOptions, Workspace, WorkspaceLocator,
@@ -8,9 +10,12 @@ use pixi_core::{
     lock_file::{ReinstallPackages, UpdateMode},
     workspace::WorkspaceMut,
 };
-use pixi_manifest::{ManifestDocument, ManifestKind, entry_as_written};
+use pixi_manifest::{
+    ExcludeNewerExemption, FeaturesExt, ManifestDocument, ManifestKind, entry_as_written,
+};
 use pixi_pypi_spec::PypiPackageName;
-use rattler_conda_types::PackageName;
+use pixi_spec::{BinarySpec, ExcludeNewer};
+use rattler_conda_types::{PackageName, VersionSpec};
 
 use crate::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
 
@@ -52,8 +57,12 @@ pub enum Command {
     /// Exemptions are match specs, a bare package name exempts every release.
     /// An existing exemption of the same package is replaced.
     ///
+    /// An exemption with a version only exempts the releases that are already
+    /// published, so e.g. a later build of an exempt version is not exempt.
+    ///
     /// Example:
-    /// `pixi workspace exclude-newer exempt 'python=3.13.*' conda-forge::ruff`
+    /// `pixi workspace exclude-newer exempt openssl==3.2.1 conda-forge::ruff`
+    /// `pixi workspace exclude-newer exempt openssl==3.2.1 --cutoff 2026-10-12`
     #[clap(verbatim_doc_comment)]
     Exempt(ExemptArgs),
     /// Remove the exemptions of packages.
@@ -62,6 +71,15 @@ pub enum Command {
     /// `pixi workspace exclude-newer unexempt python ruff`
     #[clap(verbatim_doc_comment)]
     Unexempt(UnexemptArgs),
+    /// Remove the exemptions that no longer exempt anything.
+    ///
+    /// An exemption with a cutoff is stale once the cutoff of every channel
+    /// it applies to is at or past the cutoff of the exemption.
+    ///
+    /// Example:
+    /// `pixi workspace exclude-newer prune --dry-run`
+    #[clap(verbatim_doc_comment)]
+    Prune(PruneArgs),
 }
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
@@ -81,6 +99,80 @@ pub(crate) enum ExcludeNewerError {
     },
     #[error("failed to save the manifest")]
     Save(#[from] std::io::Error),
+    #[error("'{0}' is not a valid exemption cutoff")]
+    #[diagnostic(help(
+        "use `now`, an RFC 3339 timestamp, or a date like `2026-01-01`, durations are not supported"
+    ))]
+    InvalidExemptionCutoff(String),
+    #[error("PyPI exemptions do not support a cutoff")]
+    PypiExemptionCutoff,
+}
+
+/// The cutoff of new exemptions.
+#[derive(Parser, Debug)]
+pub(crate) struct ExemptionCutoffArgs {
+    /// Only exempt the releases published up to this point in time: `now`,
+    /// an RFC 3339 timestamp, or a date like `2026-01-01`. Defaults to `now`
+    /// for specs with a version, e.g. `openssl==3.2.1`
+    #[arg(long, value_name = "CUTOFF")]
+    pub cutoff: Option<String>,
+
+    /// Exempt every matching release, including the ones published in the
+    /// future
+    #[arg(long, conflicts_with = "cutoff")]
+    pub no_cutoff: bool,
+}
+
+impl ExemptionCutoffArgs {
+    /// Returns the cutoff of an exemption for `spec`, resolving `now` to the
+    /// current time.
+    pub(crate) fn cutoff_for(
+        &self,
+        spec: &BinarySpec,
+        now: DateTime<Utc>,
+    ) -> Result<Option<DateTime<Utc>>, ExcludeNewerError> {
+        if self.no_cutoff {
+            return Ok(None);
+        }
+        match self.cutoff.as_deref() {
+            Some("now") => Ok(Some(now)),
+            Some(cutoff) => match ExcludeNewer::from_str(cutoff) {
+                Ok(ExcludeNewer::Timestamp(cutoff)) => Ok(Some(cutoff)),
+                Ok(ExcludeNewer::Duration(_)) | Err(_) => Err(
+                    ExcludeNewerError::InvalidExemptionCutoff(cutoff.to_string()),
+                ),
+            },
+            // A bare name or `*` trusts the package entirely, any other
+            // version only the releases that were vetted.
+            None => Ok(has_version(spec).then_some(now)),
+        }
+    }
+}
+
+fn has_version(spec: &BinarySpec) -> bool {
+    let version = match spec {
+        BinarySpec::Version(version) => Some(version),
+        BinarySpec::DetailedVersion(detailed) => detailed.version.as_ref(),
+        BinarySpec::Url(_) | BinarySpec::Path(_) => None,
+    };
+    version.is_some_and(|version| *version != VersionSpec::Any)
+}
+
+/// Returns the current time, truncated to seconds so it reads well in the
+/// manifest.
+pub(crate) fn now() -> DateTime<Utc> {
+    Utc::now().trunc_subsecs(0)
+}
+
+/// Describes an exempted spec for the success message.
+pub(crate) fn describe_exemption(spec: &str, cutoff: Option<DateTime<Utc>>) -> String {
+    match cutoff {
+        Some(cutoff) => format!(
+            "{spec} (published up to {})",
+            pixi_manifest::format_cutoff(cutoff)
+        ),
+        None => spec.to_string(),
+    }
 }
 
 /// Removes the exemptions of `packages` with `remove`, which returns false if
@@ -119,6 +211,12 @@ pub struct UpdateArgs {
     pub pypi: bool,
 
     #[clap(flatten)]
+    pub lock: LockUpdateArgs,
+}
+
+#[derive(Parser, Debug)]
+pub struct LockUpdateArgs {
+    #[clap(flatten)]
     pub no_install_config: NoInstallConfig,
 
     #[clap(flatten)]
@@ -146,6 +244,9 @@ pub struct ExemptArgs {
     pub specs: Vec<String>,
 
     #[clap(flatten)]
+    pub(crate) cutoff: ExemptionCutoffArgs,
+
+    #[clap(flatten)]
     pub update: UpdateArgs,
 }
 
@@ -159,12 +260,22 @@ pub struct UnexemptArgs {
     pub update: UpdateArgs,
 }
 
+#[derive(Parser, Debug)]
+pub struct PruneArgs {
+    /// Only show the stale exemptions, without removing them
+    #[clap(long)]
+    pub dry_run: bool,
+
+    #[clap(flatten)]
+    pub lock: LockUpdateArgs,
+}
+
 pub async fn execute(args: Args) -> miette::Result<()> {
     let locator = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start());
 
-    let update = match &args.command {
+    let (lock, pypi) = match &args.command {
         None | Some(Command::Get) => {
             let workspace = locator.locate().await?;
             return print_config(&workspace);
@@ -172,16 +283,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Some(Command::Set(SetArgs { update, .. }))
         | Some(Command::Unset(update))
         | Some(Command::Exempt(ExemptArgs { update, .. }))
-        | Some(Command::Unexempt(UnexemptArgs { update, .. })) => update,
+        | Some(Command::Unexempt(UnexemptArgs { update, .. })) => (&update.lock, update.pypi),
+        Some(Command::Prune(PruneArgs { lock, .. })) => (lock, false),
     };
     let workspace = locator
-        .with_cli_config(update.config.clone())
+        .with_cli_config(lock.config.clone())
         .locate()
         .await?;
     let channel_config = workspace.channel_config();
+    let stale = match &args.command {
+        Some(Command::Prune(_)) => stale_exemptions(&workspace)?,
+        _ => Vec::new(),
+    };
     let mut workspace = workspace.modify()?;
     let original = workspace.document().render().ok();
-    let pypi = update.pypi;
     let target = if pypi {
         "pypi-exclude-newer"
     } else {
@@ -209,6 +324,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             format!("Removed the {target} cutoff.")
         }
         Command::Exempt(args) => {
+            if pypi && args.cutoff.cutoff.is_some() {
+                return Err(ExcludeNewerError::PypiExemptionCutoff.into());
+            }
+            let now = now();
             let mut names = Vec::with_capacity(args.specs.len());
             for spec in &args.specs {
                 if pypi {
@@ -218,11 +337,17 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                         .manifest()
                         .add_pypi_exclude_newer_exemption(name)?;
                 } else {
-                    names.push(spec.clone());
-                    let (name, spec) = pixi_manifest::parse_conda_exemption(spec, &channel_config)?;
-                    workspace
-                        .manifest()
-                        .add_exclude_newer_exemption(name, spec)?;
+                    let (name, binary) =
+                        pixi_manifest::parse_conda_exemption(spec, &channel_config)?;
+                    let cutoff = args.cutoff.cutoff_for(&binary, now)?;
+                    names.push(describe_exemption(spec, cutoff));
+                    workspace.manifest().add_exclude_newer_exemption(
+                        name,
+                        ExcludeNewerExemption {
+                            spec: binary,
+                            cutoff,
+                        },
+                    )?;
                 }
             }
             format!("Exempted {} from {target}.", names.join(", "))
@@ -247,6 +372,21 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 args.packages.join(", ")
             )
         }
+        Command::Prune(args) => {
+            let names = stale.iter().map(PackageName::as_source).join(", ");
+            if stale.is_empty() {
+                eprintln!("There are no stale {target} exemptions.");
+                return Ok(());
+            }
+            if args.dry_run {
+                eprintln!("Would remove the stale {target} exemptions of {names}.");
+                return Ok(());
+            }
+            for name in &stale {
+                workspace.manifest().remove_exclude_newer_exemption(name)?;
+            }
+            format!("Removed the stale {target} exemptions of {names}.")
+        }
     };
 
     if workspace.document().render().ok() == original {
@@ -268,7 +408,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // restore it if a later step fails.
     let lock_file_path = workspace.workspace().lock_file_path();
     let original_lock_file = fs_err::tokio::read(&lock_file_path).await.ok();
-    let result = match update_lock_file(&workspace, update).await {
+    let result = match update_lock_file(&workspace, lock).await {
         Ok(()) => workspace
             .save()
             .await
@@ -302,11 +442,29 @@ async fn restore_lock_file(path: &Path, original: Option<Vec<u8>>) {
     }
 }
 
+/// Returns the exemptions of `exclude-newer` that are stale for every
+/// environment of the workspace.
+fn stale_exemptions(workspace: &Workspace) -> miette::Result<Vec<PackageName>> {
+    let config = &workspace.workspace.value.workspace;
+    let environments = workspace.environments();
+    let channels = environments
+        .iter()
+        .flat_map(|environment| environment.prioritized_channels().into_values())
+        .collect::<Vec<_>>();
+    Ok(pixi_manifest::stale_exemptions(
+        &config.exclude_newer,
+        channels,
+        &workspace.channel_config(),
+        &config.exclude_newer_package_overrides,
+        Utc::now(),
+    )?)
+}
+
 /// Updates the lock file, so a stricter cutoff takes effect right away for
 /// conda packages. Locked PyPI packages carry no upload time, so they are not
 /// re-solved. Like `pixi add`, the default environment is only installed when
 /// it is the only environment of the workspace.
-async fn update_lock_file(workspace: &WorkspaceMut, update: &UpdateArgs) -> miette::Result<()> {
+async fn update_lock_file(workspace: &WorkspaceMut, update: &LockUpdateArgs) -> miette::Result<()> {
     let progress = workspace.progress().cloned();
     let workspace = workspace.workspace();
     get_update_lock_file_and_prefix(

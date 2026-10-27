@@ -16,7 +16,7 @@ use rattler_conda_types::{
 use toml_edit::{InlineTable, Item, Table, TableLike, Value};
 
 use crate::{
-    ExcludeNewerConfig, PypiExcludeNewerConfig, TomlError,
+    ExcludeNewerConfig, ExcludeNewerExemption, PypiExcludeNewerConfig, TomlError,
     toml::{InvalidExemptionSpec, validate_exemption_spec},
 };
 
@@ -172,12 +172,12 @@ impl ExcludeNewerConfig {
         &mut self,
         parent: &mut Table,
         name: PackageName,
-        spec: BinarySpec,
+        exemption: ExcludeNewerExemption,
     ) -> Result<(), ExcludeNewerEditError> {
         if self.cutoff.is_none() {
             return Err(ExcludeNewerEditError::MissingCutoff);
         }
-        let value = PixiSpec::from(spec.clone()).to_toml_value();
+        let value = exemption.to_toml_value();
         upsert_exemption(
             parent,
             CONDA_KEY,
@@ -185,7 +185,7 @@ impl ExcludeNewerConfig {
             |key| conda_key_matches(key, &name),
             value,
         )?;
-        self.exemptions.insert(name, spec);
+        self.exemptions.insert(name, exemption);
         Ok(())
     }
 
@@ -478,7 +478,7 @@ mod tests {
         let (name, spec) =
             parse_conda_exemption(spec, &ChannelConfig::default_with_root_dir("/".into())).unwrap();
         config
-            .add_exemption(document.as_table_mut(), name, spec)
+            .add_exemption(document.as_table_mut(), name, spec.into())
             .unwrap();
         document.to_string()
     }
@@ -505,6 +505,26 @@ mod tests {
     fn exempt_bare_name_and_detailed_spec() {
         assert_snapshot!(exempt("exclude-newer = { cutoff = \"7d\", exemptions = { python = \"*\" } }\n", "conda-forge::ruff[build=h*]"), @r#"exclude-newer = { cutoff = "7d", exemptions = { python = "*", ruff = { build = "h*", channel = "conda-forge" } } }"#);
         assert_snapshot!(exempt("exclude-newer = { cutoff = \"7d\" }\n", "polars"), @r#"exclude-newer = { cutoff = "7d", exemptions = { polars = "*" } }"#);
+    }
+
+    #[test]
+    fn exempt_with_cutoff() {
+        let exempt_until = |source: &str, spec: &str| {
+            let (mut config, mut document) = conda(source);
+            let (name, spec) =
+                parse_conda_exemption(spec, &ChannelConfig::default_with_root_dir("/".into()))
+                    .unwrap();
+            let exemption = ExcludeNewerExemption {
+                spec,
+                cutoff: Some("2026-10-27T14:03:11Z".parse().unwrap()),
+            };
+            config
+                .add_exemption(document.as_table_mut(), name, exemption)
+                .unwrap();
+            document.to_string()
+        };
+        assert_snapshot!(exempt_until("exclude-newer = \"7d\"\n", "openssl==3.2.1"), @r#"exclude-newer = { cutoff = "7d", exemptions = { openssl = { version = "==3.2.1", cutoff = "2026-10-27T14:03:11Z" } } }"#);
+        assert_snapshot!(exempt_until("exclude-newer = \"7d\"\n", "conda-forge::ruff[build=h*]"), @r#"exclude-newer = { cutoff = "7d", exemptions = { ruff = { build = "h*", channel = "conda-forge", cutoff = "2026-10-27T14:03:11Z" } } }"#);
     }
 
     #[test]
@@ -549,7 +569,7 @@ python = "*"
             .add_exemption(
                 document.as_table_mut(),
                 "python".parse().unwrap(),
-                BinarySpec::any(),
+                BinarySpec::any().into(),
             )
             .unwrap_err();
         assert!(matches!(err, ExcludeNewerEditError::MissingCutoff));

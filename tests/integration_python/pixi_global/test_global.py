@@ -3104,6 +3104,62 @@ exposed = {{ dummy-b = "dummy-b" }}
     assert "exclude-newer" not in tomli.loads(manifest.read_text())
 
 
+def test_exclude_newer_exemption_cutoff_cli(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
+    """Exemptions with a cutoff only exempt the releases published up to it."""
+    env = {"PIXI_HOME": str(tmp_path)}
+    manifests = tmp_path.joinpath("manifests")
+    manifests.mkdir()
+    manifest = manifests.joinpath("pixi-global.toml")
+    manifest.write_text(f"""
+version = {MANIFEST_VERSION}
+exclude-newer = "2020-01-01"
+
+[envs.test]
+channels = ["{dummy_channel_1}"]
+dependencies = {{ dummy-b = "*" }}
+exposed = {{ dummy-b = "dummy-b" }}
+""")
+
+    # Every package in dummy_channel_1 was uploaded in 2025, after the cutoff
+    # of the exemption, so the manifest is reverted.
+    verify_cli_command(
+        [pixi, "global", "exclude-newer", "exempt", "dummy-b", "--cutoff", "2020-06-01"],
+        ExitCode.FAILURE,
+        env=env,
+    )
+    assert tomli.loads(manifest.read_text())["exclude-newer"] == "2020-01-01"
+
+    verify_cli_command(
+        [pixi, "global", "exclude-newer", "exempt", "dummy-b==0.1.0"],
+        env=env,
+        stderr_contains="Exempted dummy-b==0.1.0 (published up to ",
+    )
+    exemption = tomli.loads(manifest.read_text())["exclude-newer"]["exemptions"]["dummy-b"]
+    assert exemption["version"] == "==0.1.0"
+    assert "cutoff" in exemption
+    verify_cli_command([pixi, "global", "list"], env=env, stderr_excludes="not in sync")
+
+    verify_cli_command(
+        [pixi, "global", "exclude-newer", "prune"],
+        env=env,
+        stderr_contains="There are no stale exclude-newer exemptions",
+    )
+    verify_cli_command([pixi, "global", "exclude-newer", "set", "2100-01-01"], env=env)
+    verify_cli_command(
+        [pixi, "global", "exclude-newer", "prune", "--dry-run"],
+        env=env,
+        stderr_contains="Would remove the stale exclude-newer exemptions of dummy-b",
+    )
+    verify_cli_command(
+        [pixi, "global", "exclude-newer", "prune"],
+        env=env,
+        stderr_contains="Removed the stale exclude-newer exemptions of dummy-b",
+    )
+    assert tomli.loads(manifest.read_text())["exclude-newer"] == "2100-01-01"
+
+
 def test_exclude_newer_invalid_value(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     env = {"PIXI_HOME": str(tmp_path)}
     manifests = tmp_path.joinpath("manifests")

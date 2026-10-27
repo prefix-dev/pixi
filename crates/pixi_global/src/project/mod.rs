@@ -40,7 +40,7 @@ use pixi_core::workspace::stdlib_variants::{StdlibVersionPin, derive_stdlib_vari
 use pixi_manifest::platform::host::{host_subdir, platform_from_detected};
 use pixi_manifest::{
     ExcludeNewerError, InlinePackageManifest, PixiPlatform, PrioritizedChannel, WorkspaceManifest,
-    resolve_exclude_newer,
+    resolve_exclude_newer, stale_exemptions,
 };
 use pixi_path::AbsPathBuf;
 use pixi_reporters::TopLevelProgress;
@@ -605,6 +605,23 @@ impl Project {
             channels,
             self.global_channel_config(),
             std::iter::empty(),
+        )
+    }
+
+    /// Returns the exemptions of `exclude-newer` that are stale at `now` for
+    /// every environment.
+    pub fn stale_exclude_newer_exemptions(
+        &self,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Vec<PackageName>, ExcludeNewerError> {
+        stale_exemptions(
+            &self.manifest.parsed.exclude_newer,
+            self.environments()
+                .values()
+                .flat_map(|environment| &environment.channels),
+            self.global_channel_config(),
+            std::iter::empty(),
+            now,
         )
     }
 

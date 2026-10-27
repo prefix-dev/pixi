@@ -437,19 +437,34 @@ polars = "==1.43.1"
 py-rattler = "*"
 # a release of a specific build string from a specific channel
 pytorch-cpu = { version = "==2.10.0", build = "cpu_*", channel = "pytorch" }
+# only the builds of this release that were published when it was reviewed
+openssl = { version = "==3.2.1", cutoff = "2026-10-12T08:00:00Z" }
 ```
 
 A channel can override the cutoff with its own `exclude-newer` value, as shown above.
 Exemptions take precedence over the channel cutoff, which in turn takes precedence over the workspace cutoff.
 
+An exemption without a `cutoff` also lets through matching releases that are published later, e.g. a new build of `polars ==1.43.1`.
+Give an exemption a `cutoff` to only exempt the matching releases that were published up to that point in time, such as the time you reviewed them.
+The cutoff of an exemption is an RFC 3339 timestamp or a date, durations are not supported.
+Releases after it are subject to the channel and workspace cutoffs as usual, so they are allowed once they are old enough.
+
+Once the cutoff of every channel has passed the cutoff of an exemption, the exemption no longer exempts anything.
+[`pixi workspace exclude-newer prune`](cli/pixi/workspace/exclude-newer/prune.md) removes these stale exemptions.
+
 [`pixi workspace exclude-newer exempt`](cli/pixi/workspace/exclude-newer/exempt.md) adds exemptions without editing the manifest by hand.
 It takes the same specs as `pixi add`, so a bare package name exempts every release.
+An exemption with a version gets the current time as its `cutoff`, use `--cutoff` to pick a different one or `--no-cutoff` to exempt future releases as well.
 Exempting a package again replaces its exemption, and [`pixi workspace exclude-newer unexempt`](cli/pixi/workspace/exclude-newer/unexempt.md) removes it.
 
 ```shell
+# exempts the releases of polars 1.43.1 published until now, and every release of py-rattler
 pixi workspace exclude-newer exempt polars==1.43.1 py-rattler
-pixi workspace exclude-newer exempt 'pytorch::pytorch-cpu==2.10.0[build=cpu_*]'
+pixi workspace exclude-newer exempt openssl==3.2.1 --cutoff 2026-10-12
+pixi workspace exclude-newer exempt 'pytorch::pytorch-cpu==2.10.0[build=cpu_*]' --no-cutoff
 pixi workspace exclude-newer unexempt py-rattler
+# remove the exemptions whose cutoff all channels have passed
+pixi workspace exclude-newer prune
 ```
 
 #### PyPI packages

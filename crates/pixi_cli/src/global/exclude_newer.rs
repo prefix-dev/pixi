@@ -1,14 +1,18 @@
 use std::str::FromStr;
 
+use chrono::Utc;
 use clap::Parser;
+use itertools::Itertools;
 use pixi_config::{Config, ConfigCli};
 use pixi_global::Project;
-use pixi_manifest::entry_as_written;
+use pixi_manifest::{ExcludeNewerExemption, entry_as_written};
 use rattler_conda_types::PackageName;
 
 use crate::{
     global::sync,
-    workspace::exclude_newer::{ExcludeNewerError, remove_exemptions},
+    workspace::exclude_newer::{
+        ExcludeNewerError, ExemptionCutoffArgs, describe_exemption, now, remove_exemptions,
+    },
 };
 
 /// Manage the `exclude-newer` configuration of the global manifest.
@@ -42,8 +46,12 @@ pub enum Command {
     /// Exemptions are match specs, a bare package name exempts every release.
     /// An existing exemption of the same package is replaced.
     ///
+    /// An exemption with a version only exempts the releases that are already
+    /// published, so e.g. a later build of an exempt version is not exempt.
+    ///
     /// Example:
-    /// `pixi global exclude-newer exempt 'python=3.13.*' conda-forge::ruff`
+    /// `pixi global exclude-newer exempt openssl==3.2.1 conda-forge::ruff`
+    /// `pixi global exclude-newer exempt openssl==3.2.1 --cutoff 2026-10-12`
     #[clap(verbatim_doc_comment)]
     Exempt(ExemptArgs),
     /// Remove the exemptions of packages.
@@ -52,6 +60,15 @@ pub enum Command {
     /// `pixi global exclude-newer unexempt python ruff`
     #[clap(verbatim_doc_comment)]
     Unexempt(UnexemptArgs),
+    /// Remove the exemptions that no longer exempt anything.
+    ///
+    /// An exemption with a cutoff is stale once the cutoff of every channel
+    /// it applies to is at or past the cutoff of the exemption.
+    ///
+    /// Example:
+    /// `pixi global exclude-newer prune --dry-run`
+    #[clap(verbatim_doc_comment)]
+    Prune(PruneArgs),
 }
 
 #[derive(Parser, Debug)]
@@ -82,6 +99,9 @@ pub struct ExemptArgs {
     pub specs: Vec<String>,
 
     #[clap(flatten)]
+    pub(crate) cutoff: ExemptionCutoffArgs,
+
+    #[clap(flatten)]
     pub update: UpdateArgs,
 }
 
@@ -90,6 +110,16 @@ pub struct UnexemptArgs {
     /// The packages whose exemptions are removed
     #[arg(required = true, num_args = 1.., value_name = "PACKAGE")]
     pub packages: Vec<String>,
+
+    #[clap(flatten)]
+    pub update: UpdateArgs,
+}
+
+#[derive(Parser, Debug)]
+pub struct PruneArgs {
+    /// Only show the stale exemptions, without removing them
+    #[clap(long)]
+    pub dry_run: bool,
 
     #[clap(flatten)]
     pub update: UpdateArgs,
@@ -114,7 +144,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Some(Command::Set(SetArgs { update, .. }))
         | Some(Command::Unset(update))
         | Some(Command::Exempt(ExemptArgs { update, .. }))
-        | Some(Command::Unexempt(UnexemptArgs { update, .. })) => update,
+        | Some(Command::Unexempt(UnexemptArgs { update, .. }))
+        | Some(Command::Prune(PruneArgs { update, .. })) => update,
     };
     let config = update.config.clone();
     let no_sync = update.no_sync;
@@ -137,11 +168,21 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         Command::Exempt(args) => {
             let channel_config = project.config().global_channel_config().clone();
+            let now = now();
+            let mut names = Vec::with_capacity(args.specs.len());
             for spec in &args.specs {
-                let (name, spec) = pixi_manifest::parse_conda_exemption(spec, &channel_config)?;
-                project.manifest.add_exclude_newer_exemption(name, spec)?;
+                let (name, binary) = pixi_manifest::parse_conda_exemption(spec, &channel_config)?;
+                let cutoff = args.cutoff.cutoff_for(&binary, now)?;
+                names.push(describe_exemption(spec, cutoff));
+                project.manifest.add_exclude_newer_exemption(
+                    name,
+                    ExcludeNewerExemption {
+                        spec: binary,
+                        cutoff,
+                    },
+                )?;
             }
-            format!("Exempted {} from exclude-newer.", args.specs.join(", "))
+            format!("Exempted {} from exclude-newer.", names.join(", "))
         }
         Command::Unexempt(args) => {
             remove_exemptions(&args.packages, "exclude-newer", |package| {
@@ -152,6 +193,22 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 "Removed the exclude-newer exemptions of {}.",
                 args.packages.join(", ")
             )
+        }
+        Command::Prune(args) => {
+            let stale = project.stale_exclude_newer_exemptions(Utc::now())?;
+            let names = stale.iter().map(PackageName::as_source).join(", ");
+            if stale.is_empty() {
+                eprintln!("There are no stale exclude-newer exemptions.");
+                return Ok(());
+            }
+            if args.dry_run {
+                eprintln!("Would remove the stale exclude-newer exemptions of {names}.");
+                return Ok(());
+            }
+            for name in &stale {
+                project.manifest.remove_exclude_newer_exemption(name)?;
+            }
+            format!("Removed the stale exclude-newer exemptions of {names}.")
         }
     };
 

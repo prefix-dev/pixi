@@ -10,7 +10,7 @@ use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::SourceCode;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
-use pixi_spec::{BinarySpec, PixiSpec};
+use pixi_spec::PixiSpec;
 use rattler_conda_types::{
     NamedChannelOrUrl, PackageName, ParseStrictness::Strict, ParseVersionError,
     ParseVersionSpecError, Subdir, Version, VersionSpec,
@@ -19,9 +19,10 @@ use toml_edit::Value;
 
 use crate::{
     Activation, AddDependencyOutcome, DependencyOverwriteBehavior, ExcludeNewerEditError,
-    GetFeatureError, KnownPreviewFlag, PixiPlatform, PixiPlatformError, PixiPlatformName,
-    PlatformEdit, PlatformMove, Preview, PrioritizedChannel, PypiDependencyLocation, SpecType,
-    TargetSelector, Task, TaskName, TomlError, WorkspaceTarget, consts,
+    ExcludeNewerExemption, GetFeatureError, KnownPreviewFlag, PixiPlatform, PixiPlatformError,
+    PixiPlatformName, PlatformEdit, PlatformMove, Preview, PrioritizedChannel,
+    PypiDependencyLocation, SpecType, TargetSelector, Task, TaskName, TomlError, WorkspaceTarget,
+    consts,
     environment::{Environment, EnvironmentName, NewEnvironment},
     environments::Environments,
     error::{DependencyError, GenericError, UnknownFeature},
@@ -1964,17 +1965,18 @@ impl WorkspaceManifestMut<'_> {
             .set_cutoff(self.document.workspace_table_mut()?, cutoff)
     }
 
-    /// Exempts the releases of `name` that match `spec` from the
-    /// `exclude-newer` cutoff, replacing an existing exemption of the package.
+    /// Exempts the releases of `name` that match the spec of `exemption`
+    /// from the `exclude-newer` cutoff, replacing an existing exemption of the
+    /// package.
     pub fn add_exclude_newer_exemption(
         &mut self,
         name: PackageName,
-        spec: BinarySpec,
+        exemption: ExcludeNewerExemption,
     ) -> Result<(), ExcludeNewerEditError> {
         self.workspace.workspace.exclude_newer.add_exemption(
             self.document.workspace_table_mut()?,
             name,
-            spec,
+            exemption,
         )
     }
 
@@ -6663,7 +6665,7 @@ exclude-newer = { cutoff = "2015-12-02T02:07:43Z", exemptions = { polars = "1.43
             resolved
                 .exemptions()
                 .iter()
-                .map(ToString::to_string)
+                .map(|exemption| exemption.spec.to_string())
                 .sorted()
                 .collect::<Vec<_>>(),
             ["numpy *", "polars ==1.43.1"]

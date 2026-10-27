@@ -1,5 +1,6 @@
 use std::{collections::HashMap, str::FromStr};
 
+use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
 use itertools::Itertools;
 use pixi_pypi_spec::{PypiPackageName, VersionOrStar};
@@ -12,7 +13,7 @@ use toml_span::{
     value::ValueInner,
 };
 
-use crate::{ExcludeNewerConfig, PypiExcludeNewerConfig};
+use crate::{ExcludeNewerConfig, ExcludeNewerExemption, PypiExcludeNewerConfig};
 
 /// The TOML layout of `[workspace.exclude-newer]`.
 ///
@@ -118,10 +119,10 @@ fn check_duplicate_exemption<N: std::hash::Hash + Eq + Clone>(
 
 /// Parses the `exemptions` table of `[workspace.exclude-newer]`. Every entry
 /// is a package name mapped to a version string or a table with match spec
-/// fields, like a dependency.
+/// fields, like a dependency, and an optional absolute `cutoff`.
 fn parse_conda_exemptions(
     value: &mut Value<'_>,
-) -> Result<IndexMap<PackageName, BinarySpec>, DeserError> {
+) -> Result<IndexMap<PackageName, ExcludeNewerExemption>, DeserError> {
     let table = match value.take() {
         ValueInner::Table(table) => table,
         other => return Err(expected("a table of exemptions", other, value.span).into()),
@@ -147,6 +148,13 @@ fn parse_conda_exemptions(
         }
 
         let span = entry.span;
+        let cutoff = match take_exemption_cutoff(&mut entry) {
+            Ok(cutoff) => cutoff,
+            Err(err) => {
+                errors.errors.push(err);
+                continue;
+            }
+        };
         let spec = match TomlSpec::deserialize_from_value(&mut entry) {
             Ok(spec) => spec,
             Err(err) => {
@@ -157,7 +165,16 @@ fn parse_conda_exemptions(
 
         match binary_exemption_spec(spec) {
             Ok(spec) => {
-                exemptions.insert(name, spec);
+                exemptions.insert(name, ExcludeNewerExemption { spec, cutoff });
+            }
+            Err(InvalidExemptionSpec::Empty) if cutoff.is_some() => {
+                errors.errors.push(toml_span::Error {
+                    kind: ErrorKind::Custom(
+                        "an exclude-newer exemption table must specify at least one match spec field besides `cutoff`, use `version = \"*\"` to exempt every release up to the cutoff".into(),
+                    ),
+                    span,
+                    line_info: None,
+                })
             }
             Err(err) => errors.errors.push(toml_span::Error {
                 kind: ErrorKind::Custom(err.to_string().into()),
@@ -171,6 +188,36 @@ fn parse_conda_exemptions(
         Ok(exemptions)
     } else {
         Err(errors)
+    }
+}
+
+/// Removes the `cutoff` of an exemption table from `entry` and parses it,
+/// leaving the match spec fields behind.
+fn take_exemption_cutoff(entry: &mut Value<'_>) -> Result<Option<DateTime<Utc>>, toml_span::Error> {
+    let mut table = match entry.take() {
+        ValueInner::Table(table) => table,
+        other => {
+            entry.set(other);
+            return Ok(None);
+        }
+    };
+    let value = table.remove("cutoff");
+    entry.set(ValueInner::Table(table));
+    let Some(mut value) = value else {
+        return Ok(None);
+    };
+    let span = value.span;
+    let error = |message: String| toml_span::Error {
+        kind: ErrorKind::Custom(message.into()),
+        span,
+        line_info: None,
+    };
+    let cutoff = value.take_string(None)?;
+    match ExcludeNewer::from_str(&cutoff).map_err(error)? {
+        ExcludeNewer::Timestamp(cutoff) => Ok(Some(cutoff)),
+        ExcludeNewer::Duration(_) => Err(error(format!(
+            "the cutoff of an exclude-newer exemption must be a date or a timestamp, not a duration like `{cutoff}`"
+        ))),
     }
 }
 
@@ -388,6 +435,46 @@ exclude-newer = { cutoff = "2025-01-01", exemptions = { polars = "1.43.1", py-ra
         }
         "#
         );
+    }
+
+    #[test]
+    fn test_exemption_with_cutoff() {
+        let config = parse_conda(
+            r#"
+exclude-newer = { cutoff = "7d", exemptions = { openssl = { version = "==3.2.1", cutoff = "2026-10-12T08:00:00Z" }, polars = { version = "*", channel = "conda-forge", cutoff = "2026-10-12" } } }
+"#,
+        )
+        .unwrap();
+        assert_snapshot!(
+            serde_json::to_string_pretty(&config.exemptions).unwrap(),
+            @r#"
+        {
+          "openssl": {
+            "version": "==3.2.1",
+            "cutoff": "2026-10-12T08:00:00Z"
+          },
+          "polars": {
+            "version": "*",
+            "channel": "conda-forge",
+            "cutoff": "2026-10-13T00:00:00Z"
+          }
+        }
+        "#
+        );
+    }
+
+    #[test]
+    fn test_exemption_with_relative_cutoff() {
+        let input = r#"exclude-newer = { cutoff = "7d", exemptions = { openssl = { version = "==3.2.1", cutoff = "1d" } } }"#;
+        let err = parse_conda(input).unwrap_err();
+        assert_snapshot!(render_error(input, err));
+    }
+
+    #[test]
+    fn test_exemption_with_only_cutoff() {
+        let input = r#"exclude-newer = { cutoff = "7d", exemptions = { openssl = { cutoff = "2026-10-12" } } }"#;
+        let err = parse_conda(input).unwrap_err();
+        assert_snapshot!(render_error(input, err));
     }
 
     #[test]
