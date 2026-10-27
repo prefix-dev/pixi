@@ -618,7 +618,7 @@ impl Project {
             &self.manifest.parsed.exclude_newer,
             self.environments()
                 .values()
-                .flat_map(|environment| &environment.channels),
+                .map(|environment| &environment.channels),
             self.global_channel_config(),
             std::iter::empty(),
             now,

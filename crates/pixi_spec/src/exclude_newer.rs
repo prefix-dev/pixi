@@ -158,6 +158,30 @@ impl ResolvedExcludeNewer {
     pub fn exemptions(&self) -> &[ResolvedExemption] {
         &self.exemptions
     }
+
+    /// Returns the cutoff that applies to `package` from `channel`, the same
+    /// way the solver picks it: the package cutoff, then the channel cutoff,
+    /// then the default cutoff.
+    pub fn cutoff_for(&self, package: &PackageName, channel: &ChannelUrl) -> DateTime<Utc> {
+        self.package_cutoffs
+            .get(package)
+            .or_else(|| self.channel_cutoffs.get(channel))
+            .copied()
+            .unwrap_or(self.cutoff)
+    }
+
+    /// Returns the earliest cutoff that applies to `package` from any channel,
+    /// including the channels without a cutoff of their own.
+    pub fn earliest_cutoff_for(&self, package: &PackageName) -> DateTime<Utc> {
+        match self.package_cutoffs.get(package) {
+            Some(cutoff) => *cutoff,
+            None => self
+                .channel_cutoffs
+                .values()
+                .copied()
+                .fold(self.cutoff, DateTime::min),
+        }
+    }
 }
 
 /// Validates an exemption the way the solver does, so that converting a

@@ -2,16 +2,16 @@ use std::str::FromStr;
 
 use chrono::Utc;
 use clap::Parser;
-use itertools::Itertools;
 use pixi_config::{Config, ConfigCli};
 use pixi_global::Project;
-use pixi_manifest::{ExcludeNewerExemption, entry_as_written};
+use pixi_manifest::entry_as_written;
 use rattler_conda_types::PackageName;
 
 use crate::{
     global::sync,
     workspace::exclude_newer::{
-        ExcludeNewerError, ExemptionCutoffArgs, describe_exemption, now, remove_exemptions,
+        ExcludeNewerError, ExemptionCutoffArgs, add_exemptions, print_success, prune_exemptions,
+        remove_exemptions,
     },
 };
 
@@ -64,6 +64,9 @@ pub enum Command {
     ///
     /// An exemption with a cutoff is stale once the cutoff of every channel
     /// it applies to is at or past the cutoff of the exemption.
+    ///
+    /// Removing a stale exemption doesn't change the solve, so the
+    /// environments are not synced.
     ///
     /// Example:
     /// `pixi global exclude-newer prune --dry-run`
@@ -122,7 +125,7 @@ pub struct PruneArgs {
     pub dry_run: bool,
 
     #[clap(flatten)]
-    pub update: UpdateArgs,
+    pub config: ConfigCli,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -144,8 +147,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         Some(Command::Set(SetArgs { update, .. }))
         | Some(Command::Unset(update))
         | Some(Command::Exempt(ExemptArgs { update, .. }))
-        | Some(Command::Unexempt(UnexemptArgs { update, .. }))
-        | Some(Command::Prune(PruneArgs { update, .. })) => update,
+        | Some(Command::Unexempt(UnexemptArgs { update, .. })) => update,
+        Some(Command::Prune(args)) => return prune(args).await,
     };
     let config = update.config.clone();
     let no_sync = update.no_sync;
@@ -155,7 +158,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let mut project = original.clone();
 
     let message = match args.command.as_ref().expect("handled above") {
-        Command::Get => unreachable!("handled above"),
+        Command::Get | Command::Prune(_) => unreachable!("handled above"),
         Command::Set(args) => {
             project
                 .manifest
@@ -168,21 +171,16 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
         Command::Exempt(args) => {
             let channel_config = project.config().global_channel_config().clone();
-            let now = now();
-            let mut names = Vec::with_capacity(args.specs.len());
-            for spec in &args.specs {
-                let (name, binary) = pixi_manifest::parse_conda_exemption(spec, &channel_config)?;
-                let cutoff = args.cutoff.cutoff_for(&binary, now)?;
-                names.push(describe_exemption(spec, cutoff));
-                project.manifest.add_exclude_newer_exemption(
-                    name,
-                    ExcludeNewerExemption {
-                        spec: binary,
-                        cutoff,
-                    },
-                )?;
-            }
-            format!("Exempted {} from exclude-newer.", names.join(", "))
+            add_exemptions(
+                &args.specs,
+                &args.cutoff,
+                &channel_config,
+                |name, exemption| {
+                    project
+                        .manifest
+                        .add_exclude_newer_exemption(name, exemption)
+                },
+            )?
         }
         Command::Unexempt(args) => {
             remove_exemptions(&args.packages, "exclude-newer", |package| {
@@ -193,22 +191,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 "Removed the exclude-newer exemptions of {}.",
                 args.packages.join(", ")
             )
-        }
-        Command::Prune(args) => {
-            let stale = project.stale_exclude_newer_exemptions(Utc::now())?;
-            let names = stale.iter().map(PackageName::as_source).join(", ");
-            if stale.is_empty() {
-                eprintln!("There are no stale exclude-newer exemptions.");
-                return Ok(());
-            }
-            if args.dry_run {
-                eprintln!("Would remove the stale exclude-newer exemptions of {names}.");
-                return Ok(());
-            }
-            for name in &stale {
-                project.manifest.remove_exclude_newer_exemption(name)?;
-            }
-            format!("Removed the stale exclude-newer exemptions of {names}.")
         }
     };
 
@@ -236,9 +218,23 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         return Err(err.wrap_err("Couldn't update the exclude-newer configuration"));
     }
 
-    eprintln!(
-        "{}{message}",
-        console::style(console::Emoji("✔ ", "")).green()
-    );
+    print_success(&message);
+    Ok(())
+}
+
+/// Removes the stale exemptions of `exclude-newer` from the manifest.
+async fn prune(args: &PruneArgs) -> miette::Result<()> {
+    let mut project = Project::discover_or_create()
+        .await?
+        .with_cli_config(Config::with_cli_config(&args.config));
+    let stale = project.stale_exclude_newer_exemptions(Utc::now())?;
+    let Some(message) = prune_exemptions(&stale, args.dry_run, |name| {
+        project.manifest.remove_exclude_newer_exemption(name)
+    })?
+    else {
+        return Ok(());
+    };
+    project.manifest.save().await?;
+    print_success(&message);
     Ok(())
 }

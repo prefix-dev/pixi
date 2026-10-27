@@ -160,6 +160,11 @@ dummy-b = "*"
         ExitCode.FAILURE,
         stderr_contains="PyPI exemptions do not support a cutoff",
     )
+    verify_cli_command(
+        [pixi, "workspace", "exclude-newer", "exempt", "dummy-b", "--no-cutoff", "--pypi", *flags],
+        ExitCode.FAILURE,
+        stderr_contains="PyPI exemptions do not support a cutoff",
+    )
 
     # A spec with a version defaults to a cutoff of now, a bare name to none
     verify_cli_command(
@@ -201,7 +206,7 @@ dummy-b = "*"
     )
     assert "dummy-b" in cast(dict[str, Any], exclude_newer(manifest))["exemptions"]
     verify_cli_command(
-        [pixi, "workspace", "exclude-newer", "prune", "--frozen", *flags],
+        [pixi, "workspace", "exclude-newer", "prune", *flags],
         stderr_contains="Removed the stale exclude-newer exemptions of dummy-b",
     )
     # The exemption without a cutoff is never stale

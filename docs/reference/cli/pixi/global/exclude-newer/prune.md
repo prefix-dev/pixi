@@ -16,8 +16,6 @@ pixi global exclude-newer prune [OPTIONS]
 ## Options
 - <a id="arg---dry-run" href="#arg---dry-run">`--dry-run`</a>
 :  Only show the stale exemptions, without removing them
-- <a id="arg---no-sync" href="#arg---no-sync">`--no-sync`</a>
-:  Only edit the manifest, without syncing the environments
 
 ## Config Options
 - <a id="arg---auth-file" href="#arg---auth-file">`--auth-file <AUTH_FILE>`</a>
@@ -60,6 +58,9 @@ Remove the exemptions that no longer exempt anything.
 
 An exemption with a cutoff is stale once the cutoff of every channel
 it applies to is at or past the cutoff of the exemption.
+
+Removing a stale exemption doesn't change the solve, so the
+environments are not synced.
 
 Example:
 `pixi global exclude-newer prune --dry-run`

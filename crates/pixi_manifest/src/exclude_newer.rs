@@ -237,9 +237,27 @@ pub fn resolve_exclude_newer<'a>(
     channel_config: &ChannelConfig,
     package_overrides: impl IntoIterator<Item = (&'a PackageName, &'a ExcludeNewer)>,
 ) -> Result<Option<ResolvedExcludeNewer>, ExcludeNewerError> {
+    resolve_exclude_newer_at(
+        config,
+        channels,
+        channel_config,
+        package_overrides,
+        Utc::now(),
+    )
+}
+
+/// Like [`resolve_exclude_newer`], with relative cutoffs resolved as if the
+/// current time were `now`.
+fn resolve_exclude_newer_at<'a>(
+    config: &ExcludeNewerConfig,
+    channels: impl IntoIterator<Item = &'a PrioritizedChannel>,
+    channel_config: &ChannelConfig,
+    package_overrides: impl IntoIterator<Item = (&'a PackageName, &'a ExcludeNewer)>,
+    now: DateTime<Utc>,
+) -> Result<Option<ResolvedExcludeNewer>, ExcludeNewerError> {
     let mut exclude_newer = config
         .cutoff
-        .map(|cutoff| ResolvedExcludeNewer::from_datetime(cutoff.cutoff()));
+        .map(|cutoff| ResolvedExcludeNewer::from_datetime(cutoff.cutoff_at(now)));
 
     for channel in channels {
         let Some(channel_exclude_newer) = channel.exclude_newer else {
@@ -251,7 +269,7 @@ pub fn resolve_exclude_newer<'a>(
             .get_or_insert_with(|| ResolvedExcludeNewer::from_datetime(DateTime::<Utc>::MAX_UTC));
         *config = config
             .clone()
-            .with_channel_cutoff(channel_key, channel_exclude_newer.cutoff());
+            .with_channel_cutoff(channel_key, channel_exclude_newer.cutoff_at(now));
     }
 
     #[allow(deprecated)]
@@ -260,7 +278,7 @@ pub fn resolve_exclude_newer<'a>(
             .get_or_insert_with(|| ResolvedExcludeNewer::from_datetime(DateTime::<Utc>::MAX_UTC));
         *config = config
             .clone()
-            .with_package_cutoff(name.clone(), package_exclude_newer.cutoff());
+            .with_package_cutoff(name.clone(), package_exclude_newer.cutoff_at(now));
     }
 
     // Exemptions only matter when something is excluded in the first place.
@@ -291,70 +309,68 @@ fn exemption_match_spec(
 }
 
 /// Returns the exemptions of `config` that are stale at `now`: exemptions
-/// with a cutoff that do not exempt anything, because the cutoff of every
-/// channel they can apply to is already at or past the cutoff of the
-/// exemption.
+/// with a cutoff that do not exempt anything, because every cutoff they can
+/// apply to is already at or past the cutoff of the exemption.
 ///
-/// `channels` are all channels the exemptions can apply to, e.g. the channels
-/// of every environment, and `package_overrides` are the per-package cutoffs
-/// of the deprecated top-level `[exclude-newer]` table. Relative cutoffs only
-/// move forward in time, so a stale exemption stays stale unless the
-/// configuration changes.
-pub fn stale_exemptions<'a>(
+/// `environments` are the channels of every environment the exemptions apply
+/// to. Each environment is resolved like for its solves, see
+/// [`resolve_exclude_newer`]. This includes the default cutoff, which applies
+/// to the channels of e.g. build backends that are not channels of the
+/// environment. `package_overrides` are the per-package cutoffs of the
+/// deprecated top-level `[exclude-newer]` table. Relative cutoffs only move
+/// forward in time, so a stale exemption stays stale unless the configuration
+/// changes.
+pub fn stale_exemptions<'a, Channels>(
     config: &ExcludeNewerConfig,
-    channels: impl IntoIterator<Item = &'a PrioritizedChannel>,
+    environments: impl IntoIterator<Item = Channels>,
     channel_config: &ChannelConfig,
-    package_overrides: impl IntoIterator<Item = (&'a PackageName, &'a ExcludeNewer)>,
+    package_overrides: impl IntoIterator<Item = (&'a PackageName, &'a ExcludeNewer)> + Clone,
     now: DateTime<Utc>,
-) -> Result<Vec<PackageName>, ExcludeNewerError> {
-    let default_cutoff = config
-        .cutoff
-        .map_or(DateTime::<Utc>::MAX_UTC, |cutoff| cutoff.cutoff_at(now));
-    let channel_cutoffs = channels
+) -> Result<Vec<PackageName>, ExcludeNewerError>
+where
+    Channels: IntoIterator<Item = &'a PrioritizedChannel>,
+{
+    let mut resolved = environments
         .into_iter()
-        .map(|channel| {
-            let url = channel.channel.clone().into_base_url(channel_config)?;
-            let cutoff = channel
-                .exclude_newer
-                .map_or(default_cutoff, |cutoff| cutoff.cutoff_at(now));
-            Ok((url, cutoff))
+        .map(|channels| {
+            resolve_exclude_newer_at(
+                config,
+                channels,
+                channel_config,
+                package_overrides.clone(),
+                now,
+            )
         })
-        .collect::<Result<Vec<_>, ParseChannelError>>()?;
-    let package_overrides = package_overrides
-        .into_iter()
-        .map(|(name, cutoff)| (name, cutoff.cutoff_at(now)))
-        .collect::<std::collections::HashMap<_, _>>();
+        .collect::<Result<Vec<_>, _>>()?;
+    // Without environments, the exemptions apply to the ones added later.
+    if resolved.is_empty() {
+        resolved.push(resolve_exclude_newer_at(
+            config,
+            [],
+            channel_config,
+            package_overrides,
+            now,
+        )?);
+    }
 
     let mut stale = Vec::new();
     for (name, exemption) in &config.exemptions {
         if exemption.cutoff.is_none() {
             continue;
         }
-        // The deprecated per-package cutoffs take precedence over the
-        // channel cutoffs.
-        let effective_cutoff = match package_overrides.get(name) {
-            Some(cutoff) => *cutoff,
-            None => {
-                let spec = exemption_match_spec(name, exemption, channel_config)?;
-                match spec.channel {
-                    // An exemption for a channel that is not used yet applies
-                    // once the channel is added, with the default cutoff
-                    // unless the channel gets a cutoff of its own.
-                    Some(channel) => channel_cutoffs
-                        .iter()
-                        .filter(|(url, _)| *url == channel.base_url)
-                        .map(|(_, cutoff)| *cutoff)
-                        .min()
-                        .unwrap_or(default_cutoff),
-                    None => channel_cutoffs
-                        .iter()
-                        .map(|(_, cutoff)| *cutoff)
-                        .min()
-                        .unwrap_or(default_cutoff),
-                }
-            }
-        };
-        if exemption.is_stale(effective_cutoff) {
+        let spec = exemption_match_spec(name, exemption, channel_config)?;
+        let is_stale = resolved.iter().all(|resolved| {
+            // Without a resolved configuration nothing is excluded.
+            let Some(resolved) = resolved else {
+                return false;
+            };
+            let effective_cutoff = match &spec.channel {
+                Some(channel) => resolved.cutoff_for(name, &channel.base_url),
+                None => resolved.earliest_cutoff_for(name),
+            };
+            exemption.is_stale(effective_cutoff)
+        });
+        if is_stale {
             stale.push(name.clone());
         }
     }
@@ -559,9 +575,16 @@ mod tests {
     }
 
     fn stale(config: &ExcludeNewerConfig, channels: &[PrioritizedChannel]) -> Vec<String> {
+        stale_in_environments(config, &[channels])
+    }
+
+    fn stale_in_environments(
+        config: &ExcludeNewerConfig,
+        environments: &[&[PrioritizedChannel]],
+    ) -> Vec<String> {
         stale_exemptions(
             config,
-            channels,
+            environments.iter().copied(),
             &ChannelConfig::default_with_root_dir("/".into()),
             [],
             "2026-10-27T00:00:00Z".parse().unwrap(),
@@ -649,5 +672,45 @@ mod tests {
             ),
             Vec::<String>::new()
         );
+    }
+
+    #[test]
+    fn test_stale_exemptions_default_cutoff() {
+        let config = ExcludeNewerConfig {
+            // 2026-09-27T00:00:00Z
+            cutoff: Some(ExcludeNewer::from_str("30d").unwrap()),
+            exemptions: IndexMap::from_iter([(
+                "openssl".parse().unwrap(),
+                exemption("==3.2.1", Some("2026-10-22T00:00:00Z")),
+            )]),
+        };
+        // The default cutoff still applies to the channels of e.g. build
+        // backends, so the exemption is not stale even though the cutoff of
+        // every channel of the environment is past it.
+        assert_eq!(
+            stale(&config, &[channel("conda-forge", Some("1d"))]),
+            Vec::<String>::new()
+        );
+    }
+
+    #[test]
+    fn test_stale_exemptions_of_environments() {
+        let config = ExcludeNewerConfig {
+            cutoff: None,
+            exemptions: IndexMap::from_iter([(
+                "polars".parse().unwrap(),
+                exemption("conda-forge::==1", Some("2026-10-19T00:00:00Z")),
+            )]),
+        };
+        let recent = [channel("conda-forge", Some("2026-10-20T00:00:00Z"))];
+        let old = [channel("conda-forge", Some("2026-10-18T00:00:00Z"))];
+        assert_eq!(stale(&config, &recent), ["polars"]);
+        // An exemption is only stale once it is stale for every environment.
+        assert_eq!(
+            stale_in_environments(&config, &[&recent, &old]),
+            Vec::<String>::new()
+        );
+        // Without a cutoff nothing is excluded, so nothing is stale.
+        assert_eq!(stale(&config, &[]), Vec::<String>::new());
     }
 }

@@ -53,22 +53,14 @@ pixi workspace exclude-newer prune [OPTIONS]
 - <a id="arg---use-environment-activation-cache" href="#arg---use-environment-activation-cache">`--use-environment-activation-cache`</a>
 :  Use environment activation cache (experimental)
 
-## Update Options
-- <a id="arg---no-install" href="#arg---no-install">`--no-install`</a>
-:  Don't modify the environment, only modify the lock file
-<br>**env**: `PIXI_NO_INSTALL`
-- <a id="arg---frozen" href="#arg---frozen">`--frozen`</a>
-:  Install the environment as defined in the lock file, doesn't update lock file if it isn't up-to-date with the manifest file
-<br>**env**: `PIXI_FROZEN`
-- <a id="arg---locked" href="#arg---locked">`--locked`</a>
-:  Check if lock file is up-to-date before installing the environment, aborts when lock file isn't up-to-date with the manifest file
-<br>**env**: `PIXI_LOCKED`
-
 ## Description
 Remove the exemptions that no longer exempt anything.
 
 An exemption with a cutoff is stale once the cutoff of every channel
 it applies to is at or past the cutoff of the exemption.
+
+Removing a stale exemption doesn't change the solve, so the lock file
+is not updated.
 
 Example:
 `pixi workspace exclude-newer prune --dry-run`

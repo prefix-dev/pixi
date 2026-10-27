@@ -15,7 +15,7 @@ use pixi_manifest::{
 };
 use pixi_pypi_spec::PypiPackageName;
 use pixi_spec::{BinarySpec, ExcludeNewer};
-use rattler_conda_types::{PackageName, VersionSpec};
+use rattler_conda_types::{ChannelConfig, PackageName, VersionSpec};
 
 use crate::cli_config::{LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig};
 
@@ -76,6 +76,9 @@ pub enum Command {
     /// An exemption with a cutoff is stale once the cutoff of every channel
     /// it applies to is at or past the cutoff of the exemption.
     ///
+    /// Removing a stale exemption doesn't change the solve, so the lock file
+    /// is not updated.
+    ///
     /// Example:
     /// `pixi workspace exclude-newer prune --dry-run`
     #[clap(verbatim_doc_comment)]
@@ -105,6 +108,7 @@ pub(crate) enum ExcludeNewerError {
     ))]
     InvalidExemptionCutoff(String),
     #[error("PyPI exemptions do not support a cutoff")]
+    #[diagnostic(help("remove `--cutoff` and `--no-cutoff`"))]
     PypiExemptionCutoff,
 }
 
@@ -124,6 +128,11 @@ pub(crate) struct ExemptionCutoffArgs {
 }
 
 impl ExemptionCutoffArgs {
+    /// Returns whether `--cutoff` or `--no-cutoff` was passed.
+    fn is_set(&self) -> bool {
+        self.cutoff.is_some() || self.no_cutoff
+    }
+
     /// Returns the cutoff of an exemption for `spec`, resolving `now` to the
     /// current time.
     pub(crate) fn cutoff_for(
@@ -160,12 +169,12 @@ fn has_version(spec: &BinarySpec) -> bool {
 
 /// Returns the current time, truncated to seconds so it reads well in the
 /// manifest.
-pub(crate) fn now() -> DateTime<Utc> {
+fn now() -> DateTime<Utc> {
     Utc::now().trunc_subsecs(0)
 }
 
 /// Describes an exempted spec for the success message.
-pub(crate) fn describe_exemption(spec: &str, cutoff: Option<DateTime<Utc>>) -> String {
+fn describe_exemption(spec: &str, cutoff: Option<DateTime<Utc>>) -> String {
     match cutoff {
         Some(cutoff) => format!(
             "{spec} (published up to {})",
@@ -173,6 +182,63 @@ pub(crate) fn describe_exemption(spec: &str, cutoff: Option<DateTime<Utc>>) -> S
         ),
         None => spec.to_string(),
     }
+}
+
+/// Exempts the conda `specs` with `add`, with the cutoff of `cutoff`.
+/// Returns the success message.
+pub(crate) fn add_exemptions(
+    specs: &[String],
+    cutoff: &ExemptionCutoffArgs,
+    channel_config: &ChannelConfig,
+    mut add: impl FnMut(PackageName, ExcludeNewerExemption) -> miette::Result<()>,
+) -> miette::Result<String> {
+    let now = now();
+    let mut names = Vec::with_capacity(specs.len());
+    for spec in specs {
+        let (name, binary) = pixi_manifest::parse_conda_exemption(spec, channel_config)?;
+        let cutoff = cutoff.cutoff_for(&binary, now)?;
+        names.push(describe_exemption(spec, cutoff));
+        add(
+            name,
+            ExcludeNewerExemption {
+                spec: binary,
+                cutoff,
+            },
+        )?;
+    }
+    Ok(format!("Exempted {} from exclude-newer.", names.join(", ")))
+}
+
+/// Removes the `stale` exemptions with `remove`, or only reports them on a
+/// dry run. Returns the success message if any exemption was removed.
+pub(crate) fn prune_exemptions(
+    stale: &[PackageName],
+    dry_run: bool,
+    mut remove: impl FnMut(&PackageName) -> miette::Result<bool>,
+) -> miette::Result<Option<String>> {
+    let names = stale.iter().map(PackageName::as_source).join(", ");
+    if stale.is_empty() {
+        eprintln!("There are no stale exclude-newer exemptions.");
+        return Ok(None);
+    }
+    if dry_run {
+        eprintln!("Would remove the stale exclude-newer exemptions of {names}.");
+        return Ok(None);
+    }
+    for name in stale {
+        remove(name)?;
+    }
+    Ok(Some(format!(
+        "Removed the stale exclude-newer exemptions of {names}."
+    )))
+}
+
+/// Prints the success message of a command.
+pub(crate) fn print_success(message: &str) {
+    eprintln!(
+        "{}{message}",
+        console::style(console::Emoji("✔ ", "")).green()
+    );
 }
 
 /// Removes the exemptions of `packages` with `remove`, which returns false if
@@ -267,7 +333,7 @@ pub struct PruneArgs {
     pub dry_run: bool,
 
     #[clap(flatten)]
-    pub lock: LockUpdateArgs,
+    pub config: ConfigCli,
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
@@ -284,17 +350,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         | Some(Command::Unset(update))
         | Some(Command::Exempt(ExemptArgs { update, .. }))
         | Some(Command::Unexempt(UnexemptArgs { update, .. })) => (&update.lock, update.pypi),
-        Some(Command::Prune(PruneArgs { lock, .. })) => (lock, false),
+        Some(Command::Prune(args)) => return prune(locator, args).await,
     };
     let workspace = locator
         .with_cli_config(lock.config.clone())
         .locate()
         .await?;
     let channel_config = workspace.channel_config();
-    let stale = match &args.command {
-        Some(Command::Prune(_)) => stale_exemptions(&workspace)?,
-        _ => Vec::new(),
-    };
     let mut workspace = workspace.modify()?;
     let original = workspace.document().render().ok();
     let target = if pypi {
@@ -304,7 +366,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     let message = match args.command.as_ref().expect("handled above") {
-        Command::Get => unreachable!("handled above"),
+        Command::Get | Command::Prune(_) => unreachable!("handled above"),
         Command::Set(args) => {
             let mut manifest = workspace.manifest();
             if pypi {
@@ -323,35 +385,30 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             }
             format!("Removed the {target} cutoff.")
         }
-        Command::Exempt(args) => {
-            if pypi && args.cutoff.cutoff.is_some() {
+        Command::Exempt(args) if pypi => {
+            if args.cutoff.is_set() {
                 return Err(ExcludeNewerError::PypiExemptionCutoff.into());
             }
-            let now = now();
             let mut names = Vec::with_capacity(args.specs.len());
             for spec in &args.specs {
-                if pypi {
-                    let name = pixi_manifest::parse_pypi_exemption(spec)?;
-                    names.push(name.as_source().to_string());
-                    workspace
-                        .manifest()
-                        .add_pypi_exclude_newer_exemption(name)?;
-                } else {
-                    let (name, binary) =
-                        pixi_manifest::parse_conda_exemption(spec, &channel_config)?;
-                    let cutoff = args.cutoff.cutoff_for(&binary, now)?;
-                    names.push(describe_exemption(spec, cutoff));
-                    workspace.manifest().add_exclude_newer_exemption(
-                        name,
-                        ExcludeNewerExemption {
-                            spec: binary,
-                            cutoff,
-                        },
-                    )?;
-                }
+                let name = pixi_manifest::parse_pypi_exemption(spec)?;
+                names.push(name.as_source().to_string());
+                workspace
+                    .manifest()
+                    .add_pypi_exclude_newer_exemption(name)?;
             }
             format!("Exempted {} from {target}.", names.join(", "))
         }
+        Command::Exempt(args) => add_exemptions(
+            &args.specs,
+            &args.cutoff,
+            &channel_config,
+            |name, exemption| {
+                Ok(workspace
+                    .manifest()
+                    .add_exclude_newer_exemption(name, exemption)?)
+            },
+        )?,
         Command::Unexempt(args) => {
             remove_exemptions(&args.packages, target, |package| {
                 if pypi {
@@ -371,21 +428,6 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 "Removed the {target} exemptions of {}.",
                 args.packages.join(", ")
             )
-        }
-        Command::Prune(args) => {
-            let names = stale.iter().map(PackageName::as_source).join(", ");
-            if stale.is_empty() {
-                eprintln!("There are no stale {target} exemptions.");
-                return Ok(());
-            }
-            if args.dry_run {
-                eprintln!("Would remove the stale {target} exemptions of {names}.");
-                return Ok(());
-            }
-            for name in &stale {
-                workspace.manifest().remove_exclude_newer_exemption(name)?;
-            }
-            format!("Removed the stale {target} exemptions of {names}.")
         }
     };
 
@@ -421,10 +463,26 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         return Err(err);
     }
 
-    eprintln!(
-        "{}{message}",
-        console::style(console::Emoji("✔ ", "")).green()
-    );
+    print_success(&message);
+    Ok(())
+}
+
+/// Removes the stale exemptions of `exclude-newer` from the manifest.
+async fn prune(locator: WorkspaceLocator, args: &PruneArgs) -> miette::Result<()> {
+    let workspace = locator
+        .with_cli_config(args.config.clone())
+        .locate()
+        .await?;
+    let stale = stale_exemptions(&workspace)?;
+    let mut workspace = workspace.modify()?;
+    let Some(message) = prune_exemptions(&stale, args.dry_run, |name| {
+        Ok(workspace.manifest().remove_exclude_newer_exemption(name)?)
+    })?
+    else {
+        return Ok(());
+    };
+    workspace.save().await.map_err(ExcludeNewerError::from)?;
+    print_success(&message);
     Ok(())
 }
 
@@ -449,11 +507,11 @@ fn stale_exemptions(workspace: &Workspace) -> miette::Result<Vec<PackageName>> {
     let environments = workspace.environments();
     let channels = environments
         .iter()
-        .flat_map(|environment| environment.prioritized_channels().into_values())
+        .map(|environment| environment.prioritized_channels())
         .collect::<Vec<_>>();
     Ok(pixi_manifest::stale_exemptions(
         &config.exclude_newer,
-        channels,
+        channels.iter().map(|channels| channels.values().copied()),
         &workspace.channel_config(),
         &config.exclude_newer_package_overrides,
         Utc::now(),
