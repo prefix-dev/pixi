@@ -325,7 +325,7 @@ fn upsert_exemption(
     match shape(parent, key)? {
         Shape::Missing => {
             let mut table = InlineTable::new();
-            table.insert("exemptions", single_entry_table(name, value).into());
+            table.insert("exemptions", InlineTable::from_iter([(name, value)]).into());
             upsert_table_entry(parent, key, table.into());
         }
         Shape::Cutoff => {
@@ -337,7 +337,7 @@ fn upsert_exemption(
             cutoff.decor_mut().clear();
             let mut table = InlineTable::new();
             table.insert("cutoff", cutoff);
-            table.insert("exemptions", single_entry_table(name, value).into());
+            table.insert("exemptions", InlineTable::from_iter([(name, value)]).into());
             upsert_table_entry(parent, key, table.into());
         }
         Shape::Table => match parent.get_mut(key).expect("checked by `shape`") {
@@ -355,14 +355,15 @@ fn upsert_exemption(
                 }
                 // Dotted keys can't hold a section, so they get an inline
                 // table like the other inline layouts.
-                (true, None) => {
-                    upsert_table_entry(table, "exemptions", single_entry_table(name, value).into())
-                }
+                (true, None) => upsert_table_entry(
+                    table,
+                    "exemptions",
+                    InlineTable::from_iter([(name, value)]).into(),
+                ),
                 // A `[exclude-newer]` section gets an `[exclude-newer.exemptions]`
                 // section, the layout used in the documentation.
                 (false, None) => {
-                    let mut exemptions = Table::new();
-                    exemptions.insert(name, Item::Value(value));
+                    let exemptions = Table::from_iter([(name, Item::Value(value))]);
                     table.insert("exemptions", Item::Table(exemptions));
                 }
             },
@@ -383,7 +384,7 @@ fn upsert_exemption(
                 None => upsert_inline_table_entry(
                     table,
                     "exemptions",
-                    single_entry_table(name, value).into(),
+                    InlineTable::from_iter([(name, value)]).into(),
                 ),
             },
             _ => unreachable!("checked by `shape`"),
@@ -459,12 +460,6 @@ fn collapse(parent: &mut Table, key: &str) {
         // comments.
         upsert_table_entry(parent, key, cutoff);
     }
-}
-
-fn single_entry_table(key: &str, value: Value) -> InlineTable {
-    let mut table = InlineTable::new();
-    table.insert(key, value);
-    table
 }
 
 #[cfg(test)]
