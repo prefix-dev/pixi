@@ -1481,6 +1481,100 @@ async fn test_exclude_newer_pypi_zero_package_cutoff_keeps_unknown_timestamps() 
     );
 }
 
+/// The cutoff of an extra index can be lifted, so an index without upload
+/// times can be used together with a workspace cutoff.
+///
+/// Regression test for https://github.com/prefix-dev/pixi/issues/6158
+#[tokio::test]
+async fn test_exclude_newer_per_extra_index() {
+    setup_tracing();
+
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
+
+    let mut package_db = MockRepoData::default();
+    package_db.add_package(
+        Package::build("python", "3.12.0")
+            .with_subdir(platform)
+            .with_timestamp("2010-12-02T02:07:43Z".parse().unwrap())
+            .finish(),
+    );
+    let channel = package_db.into_channel().await.unwrap();
+
+    let index = PyPIDatabase::new()
+        .with(
+            PyPIPackage::new("bar", "1.0.0")
+                .with_timestamp("2010-12-02T02:07:43Z".parse().unwrap()),
+        )
+        .with(
+            PyPIPackage::new("bar", "2.0.0")
+                .with_timestamp("2020-12-02T07:00:00Z".parse().unwrap()),
+        )
+        .into_simple_index()
+        .unwrap();
+    let internal_index = PyPIDatabase::new()
+        .with(PyPIPackage::new("internal", "1.0.0"))
+        .into_simple_index()
+        .unwrap();
+
+    let manifest = |extra_index: &str| {
+        format!(
+            r#"
+            [workspace]
+            name = "test-exclude-newer-per-extra-index"
+            platforms = ["{platform}"]
+            channels = ["{channel_url}"]
+            exclude-newer = "2015-12-02T02:07:43Z"
+            conda-pypi-map = false
+
+            [dependencies]
+            python = "==3.12.0"
+
+            [pypi-dependencies]
+            bar = "*"
+            internal = "*"
+
+            [pypi-options]
+            index-url = "{index_url}"
+            extra-index-urls = [{extra_index}]
+            "#,
+            channel_url = channel.url(),
+            index_url = index.index_url(),
+        )
+    };
+
+    // Without an override, the releases of the internal index have no upload
+    // time and are excluded.
+    let pixi =
+        PixiControl::from_manifest(&manifest(&format!("\"{}\"", internal_index.index_url())))
+            .unwrap();
+    let err = pixi
+        .update_lock_file()
+        .await
+        .expect_err("releases without an upload time should be excluded");
+    assert!(
+        format!("{err:?}").contains("no versions of internal"),
+        "expected the solve to fail on `internal`, got:\n{err:?}"
+    );
+
+    for exclude_newer in ["false", "\"0d\""] {
+        let pixi = PixiControl::from_manifest(&manifest(&format!(
+            "{{ url = \"{}\", exclude-newer = {exclude_newer} }}",
+            internal_index.index_url()
+        )))
+        .unwrap();
+        let lock_file = pixi.update_lock_file().await.unwrap();
+        assert_eq!(
+            lock_file.get_pypi_package_version("default", platform, "internal"),
+            Some("1.0.0".into())
+        );
+        // The cutoff still applies to the packages of the other index.
+        assert_eq!(
+            lock_file.get_pypi_package_version("default", platform, "bar"),
+            Some("1.0.0".into())
+        );
+    }
+}
+
 #[tokio::test]
 #[cfg_attr(not(feature = "online_tests"), ignore)]
 async fn test_allow_insecure_host() {

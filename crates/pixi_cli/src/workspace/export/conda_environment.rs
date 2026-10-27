@@ -207,7 +207,7 @@ fn build_env_yaml(
         }
         if let Some(ref extra_index_urls) = pypi_options.extra_index_urls {
             for extra_index_url in extra_index_urls {
-                pip_dependencies.insert(0, format!("--extra-index-url {extra_index_url}"));
+                pip_dependencies.insert(0, format!("--extra-index-url {}", extra_index_url.url));
             }
         }
         if let Some(ref index_url) = pypi_options.index_url {
@@ -378,7 +378,7 @@ fn build_env_yaml_from_lock_file(
         }
         if let Some(ref extra_index_urls) = pypi_options.extra_index_urls {
             for extra_index_url in extra_index_urls {
-                pip_dependencies.insert(0, format!("--extra-index-url {extra_index_url}"));
+                pip_dependencies.insert(0, format!("--extra-index-url {}", extra_index_url.url));
             }
         }
         if let Some(ref index_url) = pypi_options.index_url {
