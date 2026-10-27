@@ -1949,9 +1949,7 @@ impl WorkspaceManifestMut<'_> {
         };
         Ok(self.document.set_requires_pixi(version)?)
     }
-}
 
-impl WorkspaceManifestMut<'_> {
     /// Sets or removes the `exclude-newer` cutoff of the workspace.
     ///
     /// This function modifies both the workspace and the TOML document. Use
