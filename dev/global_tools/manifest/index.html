@@ -4751,6 +4751,8 @@
       
         
       
+        
+      
     
     
     
@@ -4922,6 +4924,33 @@
     
   
   unexempt
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/global/exclude-newer/prune/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  prune
 
     
   </span>
@@ -7873,6 +7902,8 @@
       
         
       
+        
+      
     
     
     
@@ -8044,6 +8075,33 @@
     
   
   unexempt
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/cli/pixi/workspace/exclude-newer/prune/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  prune
 
     
   </span>
@@ -9548,6 +9606,7 @@ To allow a reviewed release before it reaches that age, use a table with <code>c
 </span></code></pre></div>
 <p>Exemptions work the same way as in the <a href="../../reference/pixi_manifest/#exemptions">workspace manifest</a>: <code>==1.43.1</code> exempts that version, a range such as <code>&gt;=1.43.1,&lt;1.44</code> exempts matching versions, and <code>"*"</code> exempts every version of a package.
 To narrow an exemption further, use a table with the same fields as a dependency, such as <code>{ version = "==1.43.1", build = "py312*" }</code>.
+Add a <code>cutoff</code> to the table, such as <code>{ version = "==1.43.1", cutoff = "2026-10-12T08:00:00Z" }</code>, to only exempt the matching releases that were published up to that point in time.
 An exemption applies in every environment, including when the package is a transitive dependency.
 Approving one version does not pin the dependency to that version.</p>
 <p>A channel can override the manifest-wide cutoff with its own <code>exclude-newer</code> value, as shown above.
@@ -9560,7 +9619,10 @@ If no allowed version satisfies the dependencies, the sync fails.</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-4-1"><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>pixi<span class="w"> </span>global<span class="w"> </span>exclude-newer<span class="w"> </span><span class="nb">set</span><span class="w"> </span>7d
 </span><span id="__span-4-2"><a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>pixi<span class="w"> </span>global<span class="w"> </span>exclude-newer<span class="w"> </span>exempt<span class="w"> </span><span class="nv">polars</span><span class="o">==</span><span class="m">1</span>.43.1<span class="w"> </span>my-tool
 </span><span id="__span-4-3"><a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>pixi<span class="w"> </span>global<span class="w"> </span>exclude-newer<span class="w"> </span>unexempt<span class="w"> </span>my-tool
+</span><span id="__span-4-4"><a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>pixi<span class="w"> </span>global<span class="w"> </span>exclude-newer<span class="w"> </span>prune
 </span></code></pre></div>
+<p>Like <code>pixi workspace exclude-newer exempt</code>, an exemption with a version gets the current time as its <code>cutoff</code> unless you pass <code>--cutoff</code> or <code>--no-cutoff</code>.
+<code>pixi global exclude-newer prune</code> removes the exemptions whose cutoff the cutoffs of all channels have passed.</p>
 <p>An exemption doesn't update the environments to the newer releases on its own, run <code>pixi global update</code> to pick them up.</p>
 <h2 id="dependencies">Dependencies<a class="headerlink" href="#dependencies" title="Permanent link">#</a></h2>
 <p>Dependencies are the Conda packages that will be installed into your environment. For example, running:

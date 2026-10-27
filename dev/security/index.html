@@ -4721,6 +4721,8 @@
       
         
       
+        
+      
     
     
     
@@ -4892,6 +4894,33 @@
     
   
   unexempt
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cli/pixi/global/exclude-newer/prune/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  prune
 
     
   </span>
@@ -7843,6 +7872,8 @@
       
         
       
+        
+      
     
     
     
@@ -8014,6 +8045,33 @@
     
   
   unexempt
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/cli/pixi/workspace/exclude-newer/prune/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  prune
 
     
   </span>
@@ -9391,9 +9449,9 @@ After upgrading to a Pixi version with PyPI checksum enforcement, PyPI wheels ca
 </span><span id="__span-1-12"><a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>
 </span><span id="__span-1-13"><a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a><span class="k">[workspace.exclude-newer.exemptions]</span>
 </span><span id="__span-1-14"><a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a><span class="c1"># CVE-XXXX-YYYY: allow the reviewed fixed release immediately</span>
-</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;==3.12.12&quot;</span>
+</span><span id="__span-1-15"><a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;==3.12.12&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">cutoff</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;2026-10-27T14:03:11Z&quot;</span><span class="w"> </span><span class="p">}</span>
 </span><span id="__span-1-16"><a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a><span class="c1"># CVE-XXXX-YYYY: allow the reviewed fixed release immediately</span>
-</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="n">openssl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;==3.5.1&quot;</span>
+</span><span id="__span-1-17"><a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a><span class="n">openssl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;==3.5.1&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">cutoff</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;2026-10-27T14:03:11Z&quot;</span><span class="w"> </span><span class="p">}</span>
 </span><span id="__span-1-18"><a id="__codelineno-1-18" name="__codelineno-1-18" href="#__codelineno-1-18"></a>
 </span><span id="__span-1-19"><a id="__codelineno-1-19" name="__codelineno-1-19" href="#__codelineno-1-19"></a><span class="k">[dependencies]</span>
 </span><span id="__span-1-20"><a id="__codelineno-1-20" name="__codelineno-1-20" href="#__codelineno-1-20"></a><span class="n">python</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;3.12.*&quot;</span>
@@ -9402,12 +9460,15 @@ After upgrading to a Pixi version with PyPI checksum enforcement, PyPI wheels ca
 <ul>
 <li>all packages are delayed by 14 days by default;</li>
 <li>packages from the internal channel are not delayed;</li>
-<li>the fixed releases of <code>openssl</code> and <code>python</code> are allowed through immediately, even if they are fresh, while every other release of those packages keeps the delay.</li>
+<li>the fixed releases of <code>openssl</code> and <code>python</code> that were published when they were reviewed are allowed through immediately, even if they are fresh, while every other release of those packages keeps the delay.
+  A build of the same version that is published later, e.g. by a compromised account, also keeps the delay.</li>
 </ul>
 <p>To let a reviewed fix through, exempt it and update the package:</p>
 <div class="language-shell highlight"><pre><span></span><code><span id="__span-2-1"><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>pixi<span class="w"> </span>workspace<span class="w"> </span>exclude-newer<span class="w"> </span>exempt<span class="w"> </span><span class="nv">openssl</span><span class="o">==</span><span class="m">3</span>.5.1
 </span><span id="__span-2-2"><a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>pixi<span class="w"> </span>update<span class="w"> </span>openssl
 </span></code></pre></div>
+<p>The exemption gets the current time as its cutoff.
+Once that cutoff is older than 14 days, the exemption has no effect anymore and <code>pixi workspace exclude-newer prune</code> removes it.</p>
 <div class="admonition tip">
 <p class="admonition-title">CEP for <code>upload_timestamp</code> in repodata</p>
 <p>There is also an in-progress proposal, <a href="https://github.com/conda/ceps/pull/154">conda/ceps#154</a>, to include upload timestamps in <code>repodata.json</code>. If adopted, that would let tools consume channel-provided upload times directly and harden this workflow against spoofed timestamp entries from conda-forge itself.

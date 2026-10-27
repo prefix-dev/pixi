@@ -5275,6 +5275,8 @@
       
         
       
+        
+      
     
     
     
@@ -5446,6 +5448,33 @@
     
   
   unexempt
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/pixi/global/exclude-newer/prune/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  prune
 
     
   </span>
@@ -8397,6 +8426,8 @@
       
         
       
+        
+      
     
     
     
@@ -8568,6 +8599,33 @@
     
   
   unexempt
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/pixi/workspace/exclude-newer/prune/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  prune
 
     
   </span>
@@ -10878,15 +10936,28 @@ An exempted release is never excluded, regardless of its upload time.</p>
 </span><span id="__span-28-16"><a id="__codelineno-28-16" name="__codelineno-28-16" href="#__codelineno-28-16"></a><span class="n">py-rattler</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;*&quot;</span>
 </span><span id="__span-28-17"><a id="__codelineno-28-17" name="__codelineno-28-17" href="#__codelineno-28-17"></a><span class="c1"># a release of a specific build string from a specific channel</span>
 </span><span id="__span-28-18"><a id="__codelineno-28-18" name="__codelineno-28-18" href="#__codelineno-28-18"></a><span class="n">pytorch-cpu</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;==2.10.0&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">build</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;cpu_*&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">channel</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;pytorch&quot;</span><span class="w"> </span><span class="p">}</span>
+</span><span id="__span-28-19"><a id="__codelineno-28-19" name="__codelineno-28-19" href="#__codelineno-28-19"></a><span class="c1"># only the builds of this release that were published when it was reviewed</span>
+</span><span id="__span-28-20"><a id="__codelineno-28-20" name="__codelineno-28-20" href="#__codelineno-28-20"></a><span class="n">openssl</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="n">version</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;==3.2.1&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">cutoff</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;2026-10-12T08:00:00Z&quot;</span><span class="w"> </span><span class="p">}</span>
 </span></code></pre></div>
 <p>A channel can override the cutoff with its own <code>exclude-newer</code> value, as shown above.
 Exemptions take precedence over the channel cutoff, which in turn takes precedence over the workspace cutoff.</p>
+<p>An exemption without a <code>cutoff</code> also lets through matching releases that are published later, e.g. a new build of <code>polars ==1.43.1</code>.
+Give an exemption a <code>cutoff</code> to only exempt the matching releases that were published up to that point in time, such as the time you reviewed them.
+The cutoff of an exemption is an RFC 3339 timestamp or a date, durations are not supported.
+Releases after it are subject to the channel and workspace cutoffs as usual, so they are allowed once they are old enough.</p>
+<p>Once the cutoff of every channel has passed the cutoff of an exemption, the exemption no longer exempts anything.
+<a href="../cli/pixi/workspace/exclude-newer/prune/"><code>pixi workspace exclude-newer prune</code></a> removes these stale exemptions.</p>
 <p><a href="../cli/pixi/workspace/exclude-newer/exempt/"><code>pixi workspace exclude-newer exempt</code></a> adds exemptions without editing the manifest by hand.
 It takes the same specs as <code>pixi add</code>, so a bare package name exempts every release.
+An exemption with a version gets the current time as its <code>cutoff</code>, use <code>--cutoff</code> to pick a different one or <code>--no-cutoff</code> to exempt future releases as well.
 Exempting a package again replaces its exemption, and <a href="../cli/pixi/workspace/exclude-newer/unexempt/"><code>pixi workspace exclude-newer unexempt</code></a> removes it.</p>
-<div class="language-shell highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a>pixi<span class="w"> </span>workspace<span class="w"> </span>exclude-newer<span class="w"> </span>exempt<span class="w"> </span><span class="nv">polars</span><span class="o">==</span><span class="m">1</span>.43.1<span class="w"> </span>py-rattler
-</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a>pixi<span class="w"> </span>workspace<span class="w"> </span>exclude-newer<span class="w"> </span>exempt<span class="w"> </span><span class="s1">&#39;pytorch::pytorch-cpu==2.10.0[build=cpu_*]&#39;</span>
-</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a>pixi<span class="w"> </span>workspace<span class="w"> </span>exclude-newer<span class="w"> </span>unexempt<span class="w"> </span>py-rattler
+<div class="language-shell highlight"><pre><span></span><code><span id="__span-29-1"><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># exempts the releases of polars 1.43.1 published until now, and every release of py-rattler</span>
+</span><span id="__span-29-2"><a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a>pixi<span class="w"> </span>workspace<span class="w"> </span>exclude-newer<span class="w"> </span>exempt<span class="w"> </span><span class="nv">polars</span><span class="o">==</span><span class="m">1</span>.43.1<span class="w"> </span>py-rattler
+</span><span id="__span-29-3"><a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a>pixi<span class="w"> </span>workspace<span class="w"> </span>exclude-newer<span class="w"> </span>exempt<span class="w"> </span><span class="nv">openssl</span><span class="o">==</span><span class="m">3</span>.2.1<span class="w"> </span>--cutoff<span class="w"> </span><span class="m">2026</span>-10-12
+</span><span id="__span-29-4"><a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a>pixi<span class="w"> </span>workspace<span class="w"> </span>exclude-newer<span class="w"> </span>exempt<span class="w"> </span><span class="s1">&#39;pytorch::pytorch-cpu==2.10.0[build=cpu_*]&#39;</span><span class="w"> </span>--no-cutoff
+</span><span id="__span-29-5"><a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a>pixi<span class="w"> </span>workspace<span class="w"> </span>exclude-newer<span class="w"> </span>unexempt<span class="w"> </span>py-rattler
+</span><span id="__span-29-6"><a id="__codelineno-29-6" name="__codelineno-29-6" href="#__codelineno-29-6"></a><span class="c1"># remove the exemptions whose cutoff all channels have passed</span>
+</span><span id="__span-29-7"><a id="__codelineno-29-7" name="__codelineno-29-7" href="#__codelineno-29-7"></a>pixi<span class="w"> </span>workspace<span class="w"> </span>exclude-newer<span class="w"> </span>prune
 </span></code></pre></div>
 <h4 id="pypi-packages">PyPI packages<a class="headerlink" href="#pypi-packages" title="Permanent link">#</a></h4>
 <p>The cutoff of <code>exclude-newer</code> applies to PyPI packages as well.

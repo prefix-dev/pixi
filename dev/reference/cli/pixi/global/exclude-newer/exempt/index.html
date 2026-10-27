@@ -4601,6 +4601,8 @@
       
         
       
+        
+      
     
     
     
@@ -4876,6 +4878,33 @@
     
   
   unexempt
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../prune/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  prune
 
     
   </span>
@@ -7827,6 +7856,8 @@
       
         
       
+        
+      
     
     
     
@@ -7998,6 +8029,33 @@
     
   
   unexempt
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+                
+              
+                
+                  
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../workspace/exclude-newer/prune/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+  prune
 
     
   </span>
@@ -9313,6 +9371,18 @@
 <ul>
 <li>
 <dl>
+<dt><a id="arg---cutoff" href="#arg---cutoff"><code>--cutoff &lt;CUTOFF&gt;</code></a></dt>
+<dd>Only exempt the releases published up to this point in time: <code>now</code>, an RFC 3339 timestamp, or a date like <code>2026-01-01</code>, which includes the whole day in UTC. Defaults to <code>now</code> for specs with a version, e.g. <code>openssl==3.2.1</code></dd>
+</dl>
+</li>
+<li>
+<dl>
+<dt><a id="arg---no-cutoff" href="#arg---no-cutoff"><code>--no-cutoff</code></a></dt>
+<dd>Exempt every matching release, including the ones published in the future</dd>
+</dl>
+</li>
+<li>
+<dl>
 <dt><a id="arg---no-sync" href="#arg---no-sync"><code>--no-sync</code></a></dt>
 <dd>Only edit the manifest, without syncing the environments</dd>
 </dl>
@@ -9410,9 +9480,13 @@
 <h2 id="description">Description<a class="headerlink" href="#description" title="Permanent link">#</a></h2>
 <p>Exempt package releases from the cutoff.</p>
 <p>Exemptions are match specs, a bare package name exempts every release.
-An existing exemption of the same package is replaced.</p>
+An existing exemption of the same package is replaced, with a warning
+if that moves its cutoff later.</p>
+<p>An exemption with a version only exempts the releases that are already
+published, so e.g. a later build of an exempt version is not exempt.</p>
 <p>Example:
-<code>pixi global exclude-newer exempt 'python=3.13.*' conda-forge::ruff</code></p>
+<code>pixi global exclude-newer exempt openssl==3.2.1 conda-forge::ruff</code>
+<code>pixi global exclude-newer exempt openssl==3.2.1 --cutoff 2026-10-12</code></p>
 
 
 
