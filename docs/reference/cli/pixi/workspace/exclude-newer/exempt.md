@@ -20,6 +20,10 @@ pixi workspace exclude-newer exempt [OPTIONS] <SPEC>...
 <br>**required**: `true`
 
 ## Options
+- <a id="arg---cutoff" href="#arg---cutoff">`--cutoff <CUTOFF>`</a>
+:  Only exempt the releases published up to this point in time: `now`, an RFC 3339 timestamp, or a date like `2026-01-01`, which includes the whole day in UTC. Defaults to `now` for specs with a version, e.g. `openssl==3.2.1`
+- <a id="arg---no-cutoff" href="#arg---no-cutoff">`--no-cutoff`</a>
+:  Exempt every matching release, including the ones published in the future
 - <a id="arg---pypi" href="#arg---pypi">`--pypi`</a>
 :  Edit `pypi-exclude-newer`, which applies to PyPI packages, instead of `exclude-newer`. Locked PyPI packages are not re-solved, run `pixi update` for that
 
@@ -74,10 +78,15 @@ pixi workspace exclude-newer exempt [OPTIONS] <SPEC>...
 Exempt package releases from the cutoff.
 
 Exemptions are match specs, a bare package name exempts every release.
-An existing exemption of the same package is replaced.
+An existing exemption of the same package is replaced, with a warning
+if that moves its cutoff later.
+
+An exemption with a version only exempts the releases that are already
+published, so e.g. a later build of an exempt version is not exempt.
 
 Example:
-`pixi workspace exclude-newer exempt 'python=3.13.*' conda-forge::ruff`
+`pixi workspace exclude-newer exempt openssl==3.2.1 conda-forge::ruff`
+`pixi workspace exclude-newer exempt openssl==3.2.1 --cutoff 2026-10-12`
 
 
 --8<-- "docs/reference/cli/pixi/workspace/exclude-newer/exempt_extender:example"

@@ -9,8 +9,7 @@ use indexmap::IndexSet;
 use miette::IntoDiagnostic;
 use pixi_config::Config;
 use pixi_consts::consts;
-use pixi_manifest::{PrioritizedChannel, toml::TomlDocument};
-use pixi_spec::BinarySpec;
+use pixi_manifest::{ExcludeNewerExemption, PrioritizedChannel, toml::TomlDocument};
 use pixi_toml::TomlIndexMap;
 use pixi_utils::{executable_from_path, strip_executable_extension};
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Subdir};
@@ -382,17 +381,18 @@ impl Manifest {
         Ok(())
     }
 
-    /// Exempts the releases of `name` that match `spec` from the
-    /// `exclude-newer` cutoff, replacing an existing exemption of the package.
+    /// Exempts the releases of `name` that match the spec of `exemption`
+    /// from the `exclude-newer` cutoff, replacing an existing exemption of the
+    /// package.
     pub fn add_exclude_newer_exemption(
         &mut self,
         name: PackageName,
-        spec: BinarySpec,
+        exemption: ExcludeNewerExemption,
     ) -> miette::Result<()> {
         let source = name.as_source().to_string();
         self.parsed
             .exclude_newer
-            .add_exemption(self.document.as_table_mut(), name, spec)?;
+            .add_exemption(self.document.as_table_mut(), name, exemption)?;
         tracing::debug!("Added exclude-newer exemption for {source} to toml document");
         Ok(())
     }

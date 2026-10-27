@@ -16,7 +16,7 @@ use rattler_conda_types::{
 use toml_edit::{InlineTable, Item, Table, TableLike, Value};
 
 use crate::{
-    ExcludeNewerConfig, PypiExcludeNewerConfig, TomlError,
+    ExcludeNewerConfig, ExcludeNewerExemption, PypiExcludeNewerConfig, TomlError,
     toml::{InvalidExemptionSpec, validate_exemption_spec},
 };
 
@@ -172,12 +172,26 @@ impl ExcludeNewerConfig {
         &mut self,
         parent: &mut Table,
         name: PackageName,
-        spec: BinarySpec,
+        exemption: ExcludeNewerExemption,
     ) -> Result<(), ExcludeNewerEditError> {
         if self.cutoff.is_none() {
             return Err(ExcludeNewerEditError::MissingCutoff);
         }
-        let value = PixiSpec::from(spec.clone()).to_toml_value();
+        // Replacing an exemption with a later cutoff exempts releases that may
+        // not have been vetted.
+        if let Some(old) = self.exemptions.get(&name).and_then(|old| old.cutoff)
+            && exemption.cutoff.is_none_or(|new| new > old)
+        {
+            let new = exemption
+                .cutoff
+                .map_or_else(|| "no cutoff".to_string(), crate::format_cutoff);
+            tracing::warn!(
+                "moved the exclude-newer exemption cutoff of {} from {} to {new}",
+                name.as_source(),
+                crate::format_cutoff(old)
+            );
+        }
+        let value = exemption.to_toml_value();
         upsert_exemption(
             parent,
             CONDA_KEY,
@@ -185,7 +199,7 @@ impl ExcludeNewerConfig {
             |key| conda_key_matches(key, &name),
             value,
         )?;
-        self.exemptions.insert(name, spec);
+        self.exemptions.insert(name, exemption);
         Ok(())
     }
 
@@ -478,7 +492,7 @@ mod tests {
         let (name, spec) =
             parse_conda_exemption(spec, &ChannelConfig::default_with_root_dir("/".into())).unwrap();
         config
-            .add_exemption(document.as_table_mut(), name, spec)
+            .add_exemption(document.as_table_mut(), name, spec.into())
             .unwrap();
         document.to_string()
     }
@@ -505,6 +519,31 @@ mod tests {
     fn exempt_bare_name_and_detailed_spec() {
         assert_snapshot!(exempt("exclude-newer = { cutoff = \"7d\", exemptions = { python = \"*\" } }\n", "conda-forge::ruff[build=h*]"), @r#"exclude-newer = { cutoff = "7d", exemptions = { python = "*", ruff = { build = "h*", channel = "conda-forge" } } }"#);
         assert_snapshot!(exempt("exclude-newer = { cutoff = \"7d\" }\n", "polars"), @r#"exclude-newer = { cutoff = "7d", exemptions = { polars = "*" } }"#);
+    }
+
+    #[test]
+    fn exempt_with_cutoff() {
+        let exempt_until = |source: &str, spec: &str, cutoff: &str| {
+            let (mut config, mut document) = conda(source);
+            let (name, spec) =
+                parse_conda_exemption(spec, &ChannelConfig::default_with_root_dir("/".into()))
+                    .unwrap();
+            let ExcludeNewer::Timestamp(cutoff) = cutoff.parse().unwrap() else {
+                panic!("expected an absolute cutoff");
+            };
+            let exemption = ExcludeNewerExemption {
+                spec,
+                cutoff: Some(cutoff),
+            };
+            config
+                .add_exemption(document.as_table_mut(), name, exemption)
+                .unwrap();
+            document.to_string()
+        };
+        assert_snapshot!(exempt_until("exclude-newer = \"7d\"\n", "openssl==3.2.1", "2026-10-27T14:03:11Z"), @r#"exclude-newer = { cutoff = "7d", exemptions = { openssl = { version = "==3.2.1", cutoff = "2026-10-27T14:03:11Z" } } }"#);
+        assert_snapshot!(exempt_until("exclude-newer = \"7d\"\n", "conda-forge::ruff[build=h*]", "2026-10-27T14:03:11Z"), @r#"exclude-newer = { cutoff = "7d", exemptions = { ruff = { build = "h*", channel = "conda-forge", cutoff = "2026-10-27T14:03:11Z" } } }"#);
+        // A date is written as it was given
+        assert_snapshot!(exempt_until("exclude-newer = \"7d\"\n", "openssl==3.2.1", "2026-10-12"), @r#"exclude-newer = { cutoff = "7d", exemptions = { openssl = { version = "==3.2.1", cutoff = "2026-10-12" } } }"#);
     }
 
     #[test]
@@ -549,7 +588,7 @@ python = "*"
             .add_exemption(
                 document.as_table_mut(),
                 "python".parse().unwrap(),
-                BinarySpec::any(),
+                BinarySpec::any().into(),
             )
             .unwrap_err();
         assert!(matches!(err, ExcludeNewerEditError::MissingCutoff));

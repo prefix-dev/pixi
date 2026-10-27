@@ -211,6 +211,7 @@ nav = [
                   { "unset" = "reference/cli/pixi/global/exclude-newer/unset.md" },
                   { "exempt" = "reference/cli/pixi/global/exclude-newer/exempt.md" },
                   { "unexempt" = "reference/cli/pixi/global/exclude-newer/unexempt.md" },
+                  { "prune" = "reference/cli/pixi/global/exclude-newer/prune.md" },
                 ]
               },
               { "install" = "reference/cli/pixi/global/install.md" },
@@ -358,6 +359,7 @@ nav = [
                   { "unset" = "reference/cli/pixi/workspace/exclude-newer/unset.md" },
                   { "exempt" = "reference/cli/pixi/workspace/exclude-newer/exempt.md" },
                   { "unexempt" = "reference/cli/pixi/workspace/exclude-newer/unexempt.md" },
+                  { "prune" = "reference/cli/pixi/workspace/exclude-newer/prune.md" },
                 ]
               },
               {

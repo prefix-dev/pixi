@@ -9,7 +9,7 @@ use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::LabeledSpan;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
-use pixi_spec::{ExcludeNewer, PixiSpec};
+use pixi_spec::ExcludeNewer;
 use pixi_toml::{Same, TomlFromStr, TomlHashMap, TomlIndexMap, TomlWith};
 use rattler_conda_types::{PackageName, Subdir, Version};
 use toml_span::{
@@ -582,12 +582,7 @@ impl TomlManifest {
                             .exclude_newer
                             .exemptions
                             .iter()
-                            .map(|(name, spec)| {
-                                (
-                                    name.as_source(),
-                                    PixiSpec::from(spec.clone()).to_toml_value(),
-                                )
-                            }),
+                            .map(|(name, exemption)| (name.as_source(), exemption.to_toml_value())),
                         workspace
                             .channels
                             .iter()

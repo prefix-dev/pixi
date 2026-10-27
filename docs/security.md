@@ -73,9 +73,9 @@ cutoff = "14d"
 
 [workspace.exclude-newer.exemptions]
 # CVE-XXXX-YYYY: allow the reviewed fixed release immediately
-python = "==3.12.12"
+python = { version = "==3.12.12", cutoff = "2026-10-27T14:03:11Z" }
 # CVE-XXXX-YYYY: allow the reviewed fixed release immediately
-openssl = "==3.5.1"
+openssl = { version = "==3.5.1", cutoff = "2026-10-27T14:03:11Z" }
 
 [dependencies]
 python = "3.12.*"
@@ -85,7 +85,8 @@ In that example:
 
 - all packages are delayed by 14 days by default;
 - packages from the internal channel are not delayed;
-- the fixed releases of `openssl` and `python` are allowed through immediately, even if they are fresh, while every other release of those packages keeps the delay.
+- the fixed releases of `openssl` and `python` that were published when they were reviewed are allowed through immediately, even if they are fresh, while every other release of those packages keeps the delay.
+  A build of the same version that is published later, e.g. by a compromised account, also keeps the delay.
 
 To let a reviewed fix through, exempt it and update the package:
 
@@ -93,6 +94,9 @@ To let a reviewed fix through, exempt it and update the package:
 pixi workspace exclude-newer exempt openssl==3.5.1
 pixi update openssl
 ```
+
+The exemption gets the current time as its cutoff.
+Once that cutoff is older than 14 days, the exemption has no effect anymore and `pixi workspace exclude-newer prune` removes it.
 
 !!! tip "CEP for `upload_timestamp` in repodata"
     There is also an in-progress proposal, [conda/ceps#154](https://github.com/conda/ceps/pull/154), to include upload timestamps in `repodata.json`. If adopted, that would let tools consume channel-provided upload times directly and harden this workflow against spoofed timestamp entries from conda-forge itself.
