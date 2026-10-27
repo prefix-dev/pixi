@@ -96,7 +96,7 @@ pixi update openssl
 ```
 
 The exemption gets the current time as its cutoff.
-Once the fixed release is older than 14 days, the exemption has no effect anymore and `pixi workspace exclude-newer prune` removes it.
+Once that cutoff is older than 14 days, the exemption has no effect anymore and `pixi workspace exclude-newer prune` removes it.
 
 !!! tip "CEP for `upload_timestamp` in repodata"
     There is also an in-progress proposal, [conda/ceps#154](https://github.com/conda/ceps/pull/154), to include upload timestamps in `repodata.json`. If adopted, that would let tools consume channel-provided upload times directly and harden this workflow against spoofed timestamp entries from conda-forge itself.
