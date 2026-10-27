@@ -1941,6 +1941,26 @@ dependencies:
             [str(tmp_pixi_workspace / "export_test")],
             "pixi workspace export conda-explicit-spec",
         ),
+        (
+            ["workspace", "exclude-newer", "set"],
+            ["7d"],
+            "pixi workspace exclude-newer set",
+        ),
+        (
+            ["workspace", "exclude-newer", "exempt"],
+            ["python"],
+            "pixi workspace exclude-newer exempt",
+        ),
+        (
+            ["workspace", "exclude-newer", "unexempt"],
+            ["python"],
+            "pixi workspace exclude-newer unexempt",
+        ),
+        (
+            ["workspace", "exclude-newer", "unset"],
+            [],
+            "pixi workspace exclude-newer unset",
+        ),
         # Upgrade commands
         (["upgrade"], [], "pixi upgrade"),
         # Pixi publish (builds and uploads)

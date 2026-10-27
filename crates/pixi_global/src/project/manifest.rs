@@ -10,6 +10,7 @@ use miette::IntoDiagnostic;
 use pixi_config::Config;
 use pixi_consts::consts;
 use pixi_manifest::{PrioritizedChannel, toml::TomlDocument};
+use pixi_spec::BinarySpec;
 use pixi_toml::TomlIndexMap;
 use pixi_utils::{executable_from_path, strip_executable_extension};
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Subdir};
@@ -370,6 +371,46 @@ impl Manifest {
 
         tracing::debug!("Added channel {channel} for environment {env_name} in toml document");
         Ok(())
+    }
+
+    /// Sets or removes the `exclude-newer` cutoff of the manifest.
+    pub fn set_exclude_newer_cutoff(&mut self, cutoff: Option<&str>) -> miette::Result<()> {
+        self.parsed
+            .exclude_newer
+            .set_cutoff(self.document.as_table_mut(), cutoff)?;
+        tracing::debug!("Set exclude-newer cutoff to {cutoff:?} in toml document");
+        Ok(())
+    }
+
+    /// Exempts the releases of `name` that match `spec` from the
+    /// `exclude-newer` cutoff, replacing an existing exemption of the package.
+    pub fn add_exclude_newer_exemption(
+        &mut self,
+        name: PackageName,
+        spec: BinarySpec,
+    ) -> miette::Result<()> {
+        let source = name.as_source().to_string();
+        self.parsed
+            .exclude_newer
+            .add_exemption(self.document.as_table_mut(), name, spec)?;
+        tracing::debug!("Added exclude-newer exemption for {source} to toml document");
+        Ok(())
+    }
+
+    /// Removes the `exclude-newer` exemption of `name`. Returns false if the
+    /// package was not exempt.
+    pub fn remove_exclude_newer_exemption(&mut self, name: &PackageName) -> miette::Result<bool> {
+        let removed = self
+            .parsed
+            .exclude_newer
+            .remove_exemption(self.document.as_table_mut(), name)?;
+        if removed {
+            tracing::debug!(
+                "Removed exclude-newer exemption for {} from toml document",
+                name.as_source()
+            );
+        }
+        Ok(removed)
     }
 
     /// Matches an exposed name to its corresponding environment name.

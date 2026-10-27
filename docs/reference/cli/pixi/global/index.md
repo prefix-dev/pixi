@@ -18,6 +18,7 @@ pixi global <COMMAND>
 |---------|-------------|
 | [`add`](add.md) | Adds dependencies to an environment |
 | [`edit`](edit.md) | Edit the global manifest file |
+| [`exclude-newer`](exclude-newer/index.md) | Manage the `exclude-newer` configuration of the global manifest |
 | [`install`](install.md) | Installs the defined packages in a globally accessible location and exposes their command line applications. |
 | [`uninstall`](uninstall.md) | Uninstalls environments from the global environment. |
 | [`remove`](remove.md) | Removes dependencies from an environment |

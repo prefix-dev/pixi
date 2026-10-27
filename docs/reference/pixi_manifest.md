@@ -406,6 +406,8 @@ Both PyPI and conda packages are considered.
 exclude-newer = "7d"
 ```
 
+Use [`pixi workspace exclude-newer set`](cli/pixi/workspace/exclude-newer/set.md) to set the cutoff from the command line, and [`pixi workspace exclude-newer unset`](cli/pixi/workspace/exclude-newer/unset.md) to remove it.
+
 #### Exemptions
 
 Some releases need to get through the cutoff immediately, for example an urgent security fix that you have reviewed, or a package you publish yourself.
@@ -440,6 +442,16 @@ pytorch-cpu = { version = "==2.10.0", build = "cpu_*", channel = "pytorch" }
 A channel can override the cutoff with its own `exclude-newer` value, as shown above.
 Exemptions take precedence over the channel cutoff, which in turn takes precedence over the workspace cutoff.
 
+[`pixi workspace exclude-newer exempt`](cli/pixi/workspace/exclude-newer/exempt.md) adds exemptions without editing the manifest by hand.
+It takes the same specs as `pixi add`, so a bare package name exempts every release.
+Exempting a package again replaces its exemption, and [`pixi workspace exclude-newer unexempt`](cli/pixi/workspace/exclude-newer/unexempt.md) removes it.
+
+```shell
+pixi workspace exclude-newer exempt polars==1.43.1 py-rattler
+pixi workspace exclude-newer exempt 'pytorch::pytorch-cpu==2.10.0[build=cpu_*]'
+pixi workspace exclude-newer unexempt py-rattler
+```
+
 #### PyPI packages
 
 The cutoff of `exclude-newer` applies to PyPI packages as well.
@@ -448,6 +460,7 @@ Without a `cutoff` of its own, `pypi-exclude-newer` falls back to the cutoff of 
 
 PyPI exemptions only support `"*"` for now, which exempts every release of the package.
 This is especially useful when a package is pinned to a separate `index` that you trust, or that does not provide upload times (see the note below).
+Pass `--pypi` to the `pixi workspace exclude-newer` commands to edit `pypi-exclude-newer`, e.g. `pixi workspace exclude-newer exempt --pypi torch`.
 
 ```toml
 [workspace]

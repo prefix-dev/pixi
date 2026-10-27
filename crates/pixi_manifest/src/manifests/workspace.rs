@@ -10,18 +10,18 @@ use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::SourceCode;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
-use pixi_spec::PixiSpec;
+use pixi_spec::{BinarySpec, PixiSpec};
 use rattler_conda_types::{
-    NamedChannelOrUrl, ParseStrictness::Strict, ParseVersionError, ParseVersionSpecError, Subdir,
-    Version, VersionSpec,
+    NamedChannelOrUrl, PackageName, ParseStrictness::Strict, ParseVersionError,
+    ParseVersionSpecError, Subdir, Version, VersionSpec,
 };
 use toml_edit::Value;
 
 use crate::{
-    Activation, AddDependencyOutcome, DependencyOverwriteBehavior, GetFeatureError,
-    KnownPreviewFlag, PixiPlatform, PixiPlatformError, PixiPlatformName, PlatformEdit,
-    PlatformMove, Preview, PrioritizedChannel, PypiDependencyLocation, SpecType, TargetSelector,
-    Task, TaskName, TomlError, WorkspaceTarget, consts,
+    Activation, AddDependencyOutcome, DependencyOverwriteBehavior, ExcludeNewerEditError,
+    GetFeatureError, KnownPreviewFlag, PixiPlatform, PixiPlatformError, PixiPlatformName,
+    PlatformEdit, PlatformMove, Preview, PrioritizedChannel, PypiDependencyLocation, SpecType,
+    TargetSelector, Task, TaskName, TomlError, WorkspaceTarget, consts,
     environment::{Environment, EnvironmentName, NewEnvironment},
     environments::Environments,
     error::{DependencyError, GenericError, UnknownFeature},
@@ -1948,6 +1948,81 @@ impl WorkspaceManifestMut<'_> {
             None => None,
         };
         Ok(self.document.set_requires_pixi(version)?)
+    }
+
+    /// Sets or removes the `exclude-newer` cutoff of the workspace.
+    ///
+    /// This function modifies both the workspace and the TOML document. Use
+    /// `ManifestProvenance::save` to persist the changes to disk.
+    pub fn set_exclude_newer_cutoff(
+        &mut self,
+        cutoff: Option<&str>,
+    ) -> Result<(), ExcludeNewerEditError> {
+        self.workspace
+            .workspace
+            .exclude_newer
+            .set_cutoff(self.document.workspace_table_mut()?, cutoff)
+    }
+
+    /// Exempts the releases of `name` that match `spec` from the
+    /// `exclude-newer` cutoff, replacing an existing exemption of the package.
+    pub fn add_exclude_newer_exemption(
+        &mut self,
+        name: PackageName,
+        spec: BinarySpec,
+    ) -> Result<(), ExcludeNewerEditError> {
+        self.workspace.workspace.exclude_newer.add_exemption(
+            self.document.workspace_table_mut()?,
+            name,
+            spec,
+        )
+    }
+
+    /// Removes the `exclude-newer` exemption of `name`. Returns false if the
+    /// package was not exempt.
+    pub fn remove_exclude_newer_exemption(
+        &mut self,
+        name: &PackageName,
+    ) -> Result<bool, ExcludeNewerEditError> {
+        self.workspace
+            .workspace
+            .exclude_newer
+            .remove_exemption(self.document.workspace_table_mut()?, name)
+    }
+
+    /// Sets or removes the `pypi-exclude-newer` cutoff of the workspace.
+    pub fn set_pypi_exclude_newer_cutoff(
+        &mut self,
+        cutoff: Option<&str>,
+    ) -> Result<(), ExcludeNewerEditError> {
+        self.workspace
+            .workspace
+            .pypi_exclude_newer
+            .set_cutoff(self.document.workspace_table_mut()?, cutoff)
+    }
+
+    /// Exempts every release of the PyPI package `name` from the
+    /// `pypi-exclude-newer` cutoff.
+    pub fn add_pypi_exclude_newer_exemption(
+        &mut self,
+        name: PypiPackageName,
+    ) -> Result<(), ExcludeNewerEditError> {
+        self.workspace
+            .workspace
+            .pypi_exclude_newer
+            .add_exemption(self.document.workspace_table_mut()?, name)
+    }
+
+    /// Removes the `pypi-exclude-newer` exemption of `name`. Returns false if
+    /// the package was not exempt.
+    pub fn remove_pypi_exclude_newer_exemption(
+        &mut self,
+        name: &PypiPackageName,
+    ) -> Result<bool, ExcludeNewerEditError> {
+        self.workspace
+            .workspace
+            .pypi_exclude_newer
+            .remove_exemption(self.document.workspace_table_mut()?, name)
     }
 }
 
