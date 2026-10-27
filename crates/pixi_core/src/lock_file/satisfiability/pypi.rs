@@ -5,7 +5,7 @@ use std::{
     str::FromStr,
     sync::{Arc, Mutex},
 };
-use uv_redacted::DisplaySafeUrl;
+use uv_redacted::SafeUrl;
 
 use dashmap::DashMap;
 use futures::TryStreamExt;
@@ -191,7 +191,7 @@ pub(crate) fn pypi_satisfies_requirement(
                 locked_data.as_wheel().and_then(|w| w.index_url.as_ref()),
             ) {
                 (Some(required_index), Some(locked_url)) => {
-                    let required_url: Url = required_index.url.url().clone().into();
+                    let required_url = required_index.url.url().clone().into_unsafe_url();
                     // When a package is resolved from a local directory / file:// index,
                     // rattler_lock stores its location as a Path and strips index_url during
                     // deserialization (defaulting it to default_index). If the locked package
@@ -268,7 +268,7 @@ pub(crate) fn pypi_satisfies_requirement(
                     .strip_prefix("direct+")
                     .and_then(|str| Url::parse(str).ok())
                     .unwrap_or(locked_url.clone());
-                let locked_url = DisplaySafeUrl::from_url(locked_url);
+                let locked_url = SafeUrl::from_url(locked_url);
 
                 // Compare the URLs ignoring any userinfo (credentials). We redact
                 // credentials (e.g. `__token__` -> `****`) when writing the direct
@@ -304,7 +304,8 @@ pub(crate) fn pypi_satisfies_requirement(
                     if let Ok(pinned_git_spec) = LockedGitUrl::new(url.clone()).to_pinned_git_spec()
                     {
                         let pinned_repository = RepositoryUrl::new(&pinned_git_spec.git);
-                        let specified_repository = RepositoryUrl::new(git_url);
+                        let specified_repository =
+                            RepositoryUrl::new(&git_url.clone().into_unsafe_url());
 
                         let repo_is_same = pinned_repository == specified_repository;
                         if !repo_is_same {
@@ -727,7 +728,7 @@ async fn read_local_package_metadata(
     .with_index_strategy(index_strategy)
     .with_capabilities(ctx.uv_context.capabilities.clone())
     .with_workspace_cache(ctx.uv_context.workspace_cache.clone())
-    .with_shared_state(ctx.uv_context.shared_state.fork())
+    .with_shared_state(ctx.uv_context.shared_state.fork().into_inner())
     .with_no_sources(ctx.uv_context.no_sources.clone())
     .with_concurrency(ctx.uv_context.concurrency.clone())
     .with_cache_config_settings(&cache_config_settings);
@@ -884,7 +885,7 @@ mod tests {
     use rattler_lock::{PypiPackageData, UrlOrPath, Verbatim};
     use url::Url;
     use uv_distribution_types::RequirementSource;
-    use uv_redacted::DisplaySafeUrl;
+    use uv_redacted::SafeUrl;
 
     use super::super::platform::RequirementOrigin;
     use super::super::{PlatformUnsat, PypiNoBuildCheck};
@@ -1540,7 +1541,7 @@ mod tests {
 
         let index =
             uv_distribution_types::IndexMetadata::from(uv_distribution_types::IndexUrl::from(
-                uv_pep508::VerbatimUrl::from_url(DisplaySafeUrl::parse(index_url).unwrap()),
+                uv_pep508::VerbatimUrl::from_url(SafeUrl::parse(index_url).unwrap()),
             ));
         uv_distribution_types::Requirement {
             name: UvPackageName::from_str(name).unwrap(),

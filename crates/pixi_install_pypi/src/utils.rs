@@ -3,7 +3,7 @@ use std::{borrow::Cow, io::BufReader, path::Path, str::FromStr, time::Duration};
 use url::Url;
 use uv_cache_info::{CacheInfo, CacheInfoError};
 use uv_distribution_types::InstalledDist;
-use uv_pypi_types::DirectUrl;
+use uv_pypi_types::{DirectUrl, read_direct_url_json};
 
 /// Read the `INSTALLER` file from an installed distribution's `.dist-info`
 /// directory, returning its trimmed contents (e.g. `"uv"`, `"pip"`).
@@ -37,8 +37,8 @@ pub(crate) fn read_direct_url(path: &Path) -> std::io::Result<Option<DirectUrl>>
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(err) => return Err(err),
     };
-    let direct_url = serde_json::from_reader::<_, DirectUrl>(BufReader::new(file))
-        .map_err(std::io::Error::other)?;
+    let (direct_url, _) =
+        read_direct_url_json(BufReader::new(file)).map_err(std::io::Error::other)?;
     Ok(Some(direct_url))
 }
 

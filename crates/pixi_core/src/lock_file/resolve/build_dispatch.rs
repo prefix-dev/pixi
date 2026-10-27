@@ -47,7 +47,7 @@ use uv_distribution_types::{
 };
 use uv_distribution_types::{ExtraBuildVariables, Requirement};
 use uv_install_wheel::LinkMode;
-use uv_python::{Interpreter, InterpreterError, PythonEnvironment};
+use uv_python_interpreter::{Interpreter, InterpreterError, PythonEnvironment};
 use uv_resolver::{ExcludeNewer, FlatIndex};
 use uv_types::{BuildArena, BuildContext, BuildStack, HashStrategy, ResolvedRequirements};
 use uv_workspace::WorkspaceCache;
@@ -292,7 +292,7 @@ pub enum LazyBuildDispatchError {
     #[error(transparent)]
     ConversionError(#[from] pixi_uv_conversions::ConversionError),
     #[error(transparent)]
-    Uv(#[from] BuildDispatchError),
+    Uv(Box<BuildDispatchError>),
     #[error(transparent)]
     UvFrontend(#[from] uv_build_frontend::Error),
     #[error("failed to query interpreter in instantiated prefix")]
@@ -301,6 +301,12 @@ pub enum LazyBuildDispatchError {
         "missing python interpreter from conda prefix: {prefix},\nUse `pixi add python` to install the latest python interpreter."
     )]
     PythonMissingError { prefix: String },
+}
+
+impl From<BuildDispatchError> for LazyBuildDispatchError {
+    fn from(err: BuildDispatchError) -> Self {
+        Self::Uv(Box::new(err))
+    }
 }
 
 impl uv_errors::Hinted for LazyBuildDispatchError {}
@@ -492,7 +498,13 @@ impl<'a> LazyBuildDispatch<'a> {
 impl BuildContext for LazyBuildDispatch<'_> {
     type SourceDistBuilder = SourceBuild;
 
-    async fn interpreter(&self) -> &uv_python::Interpreter {
+    fn tar_backend(&self) -> uv_static::TarBackend {
+        // Matches what `BuildDispatch::new` selects, without forcing
+        // initialization of the lazy dispatch.
+        uv_static::TarBackend::from_env()
+    }
+
+    async fn interpreter(&self) -> &uv_python_interpreter::Interpreter {
         // In most cases the interpreter should be initialized, because one of the other
         // trait methods will have been called
         // But in case it is not, we will initialize it here
@@ -546,6 +558,7 @@ impl BuildContext for LazyBuildDispatch<'_> {
     async fn resolve<'a>(
         &'a self,
         requirements: &'a [Requirement],
+        hash_override: Option<&'a HashStrategy>,
         build_stack: &'a BuildStack,
     ) -> Result<ResolvedRequirements, impl IsBuildBackendError> {
         // Box the inner uv future. uv re-enters this trait recursively when an
@@ -553,9 +566,9 @@ impl BuildContext for LazyBuildDispatch<'_> {
         // → resolve → install → process_request`), so flattening the
         // state machine here keeps the cumulative stack frame bounded.
         let dispatch = self.get_or_try_init().await?;
-        Box::pin(dispatch.resolve(requirements, build_stack))
+        Box::pin(dispatch.resolve(requirements, hash_override, build_stack))
             .await
-            .map_err(LazyBuildDispatchError::Uv)
+            .map_err(LazyBuildDispatchError::from)
     }
 
     async fn install<'a>(
@@ -567,7 +580,7 @@ impl BuildContext for LazyBuildDispatch<'_> {
         let dispatch = self.get_or_try_init().await?;
         Box::pin(dispatch.install(resolution, venv, build_stack))
             .await
-            .map_err(LazyBuildDispatchError::Uv)
+            .map_err(LazyBuildDispatchError::from)
     }
 
     async fn setup_build<'a>(

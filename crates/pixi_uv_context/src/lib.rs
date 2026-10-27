@@ -13,7 +13,7 @@ use uv_client::{
     RegistryClientBuilder,
 };
 use uv_configuration::{Concurrency, IndexStrategy, NoSources, TrustedHost};
-use uv_dispatch::SharedState;
+use uv_dispatch::UniversalState;
 use uv_distribution_types::{
     ExtraBuildRequires, ExtraBuildVariables, IndexCapabilities, IndexLocations,
     PackageConfigSettings,
@@ -56,7 +56,7 @@ pub struct UvResolutionContext {
     pub no_sources: NoSources,
     pub capabilities: IndexCapabilities,
     pub allow_insecure_host: Vec<TrustedHost>,
-    pub shared_state: SharedState,
+    pub shared_state: UniversalState,
     pub extra_middleware: ExtraMiddleware,
     pub proxies: Vec<reqwest::Proxy>,
     pub tls_no_verify: bool,
@@ -236,7 +236,7 @@ impl UvResolutionContext {
             no_sources: NoSources::None,
             capabilities: IndexCapabilities::default(),
             allow_insecure_host,
-            shared_state: SharedState::default(),
+            shared_state: UniversalState::default(),
             extra_middleware: ExtraMiddleware(uv_middlewares(config, client.clone())?),
             proxies: config.get_proxies().map_err(ReqwestClientError::Proxy)?,
             tls_no_verify: config.tls_no_verify(),

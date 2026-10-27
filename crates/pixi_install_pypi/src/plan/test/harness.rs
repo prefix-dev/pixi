@@ -16,9 +16,10 @@ use uv_distribution_filename::WheelFilename;
 use uv_distribution_types::{
     InstalledDirectUrlDist, InstalledDist, InstalledDistKind, InstalledRegistryDist,
 };
-use uv_pypi_types::DirectUrl::VcsUrl;
-use uv_pypi_types::{ArchiveInfo, DirectUrl, ParsedGitDirectoryUrl, VcsInfo, VcsKind};
-use uv_redacted::DisplaySafeUrl;
+use uv_pypi_types::{
+    ArchiveInfo, DirectUrl, ParsedGitDirectoryUrl, VcsInfo, VcsKind, read_direct_url_json,
+};
+use uv_redacted::{SafeUrl, policy::Stripped};
 
 use uv_distribution_types::{BuiltDist, CachedRegistryDist, SourceDist};
 
@@ -57,7 +58,7 @@ impl InstalledDistBuilder {
         let directory_url = Url::from_file_path(&source_path).unwrap();
 
         let direct_url = DirectUrl::LocalDirectory {
-            url: directory_url.to_string(),
+            url: SafeUrl::from_url(directory_url.clone()).with_policy(Stripped),
             dir_info: uv_pypi_types::DirInfo {
                 editable: Some(editable),
             },
@@ -68,7 +69,7 @@ impl InstalledDistBuilder {
             name,
             version,
             direct_url: Box::new(direct_url.clone()),
-            url: DisplaySafeUrl::from_url(directory_url),
+            url: SafeUrl::from_url(directory_url),
             editable,
             path: install_path.into(),
             cache_info: None,
@@ -92,7 +93,7 @@ impl InstalledDistBuilder {
             uv_pep440::Version::from_str(version.as_ref()).expect("cannot parse pep440 version");
 
         let direct_url = DirectUrl::ArchiveUrl {
-            url: url.to_string(),
+            url: SafeUrl::from_url(url.clone()).with_policy(Stripped),
             // `ArchiveInfo` has no public constructor.
             archive_info: serde_json::from_str::<ArchiveInfo>("{}")
                 .expect("a literal empty ArchiveInfo should deserialize"),
@@ -103,7 +104,7 @@ impl InstalledDistBuilder {
             name,
             version,
             direct_url: Box::new(direct_url.clone()),
-            url: DisplaySafeUrl::from_url(url),
+            url: SafeUrl::from_url(url),
             editable: false,
             path: install_path.into(),
             cache_info: None,
@@ -133,30 +134,34 @@ impl InstalledDistBuilder {
         let url = git_url.without_git_prefix().clone();
 
         // Parse git url and extract git commit, use this as the commit_id
-        let parsed_git_url = ParsedGitDirectoryUrl::try_from(DisplaySafeUrl::from_url(url.clone()))
+        let parsed_git_url = ParsedGitDirectoryUrl::try_from(SafeUrl::from_url(url.clone()))
             .expect("should parse git url");
 
-        let direct_url = VcsUrl {
-            url: url.to_string(),
-            subdirectory: None,
-            vcs_info: VcsInfo {
-                vcs: VcsKind::Git,
-                commit_id: parsed_git_url.url.precise().map(|s| s.to_string()),
-                requested_revision: parsed_git_url
-                    .url
-                    .reference()
-                    .as_str()
-                    .map(ToString::to_string),
-                git_lfs,
-            },
-            path: git_path,
+        let vcs_info = VcsInfo {
+            vcs: VcsKind::Git,
+            commit_id: parsed_git_url.url.precise().map(|s| s.to_string()),
+            requested_revision: parsed_git_url
+                .url
+                .reference()
+                .as_str()
+                .map(ToString::to_string),
+            git_lfs,
         };
+        // `VcsUrl` has no public constructor taking arbitrary `VcsInfo`, so
+        // round-trip through the `direct_url.json` representation.
+        let json = serde_json::json!({
+            "url": url.to_string(),
+            "vcs_info": vcs_info,
+            "path": git_path,
+        });
+        let (direct_url, _) =
+            read_direct_url_json(json.to_string().as_bytes()).expect("should parse direct url");
 
         let installed_direct_url = InstalledDirectUrlDist {
             name,
             version,
             direct_url: Box::new(direct_url.clone()),
-            url: DisplaySafeUrl::from_url(url),
+            url: SafeUrl::from_url(url),
             path: install_path.into(),
             editable: false,
             cache_info: None,
