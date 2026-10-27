@@ -177,6 +177,20 @@ impl ExcludeNewerConfig {
         if self.cutoff.is_none() {
             return Err(ExcludeNewerEditError::MissingCutoff);
         }
+        // Replacing an exemption with a later cutoff exempts releases that may
+        // not have been vetted.
+        if let Some(old) = self.exemptions.get(&name).and_then(|old| old.cutoff)
+            && exemption.cutoff.is_none_or(|new| new > old)
+        {
+            let new = exemption
+                .cutoff
+                .map_or_else(|| "no cutoff".to_string(), crate::format_cutoff);
+            tracing::warn!(
+                "moved the exclude-newer exemption cutoff of {} from {} to {new}",
+                name.as_source(),
+                crate::format_cutoff(old)
+            );
+        }
         let value = exemption.to_toml_value();
         upsert_exemption(
             parent,

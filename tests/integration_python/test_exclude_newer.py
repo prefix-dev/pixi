@@ -190,6 +190,26 @@ dummy-b = "*"
         stdout_contains=f'dummy-b = {{ version = "==0.1.0", cutoff = "{cutoff}" }}',
     )
 
+    # Moving the cutoff of an exemption later warns, moving it earlier doesn't
+    moved = "moved the exclude-newer exemption cutoff of dummy-b"
+    for args, stderr in [(["--no-cutoff"], moved), (["--cutoff", cutoff], None)]:
+        verify_cli_command(
+            [
+                pixi,
+                "workspace",
+                "exclude-newer",
+                "exempt",
+                "dummy-b==0.1.0",
+                *args,
+                "--no-install",
+                *flags,
+            ],
+            stderr_contains=stderr,
+            stderr_excludes=None if stderr else moved,
+        )
+    exemptions = cast(dict[str, Any], exclude_newer(manifest))["exemptions"]
+    assert exemptions["dummy-b"]["cutoff"] == cutoff
+
     # Nothing is stale while the workspace cutoff is before the exemption cutoff
     verify_cli_command(
         [pixi, "workspace", "exclude-newer", "prune", *flags],
