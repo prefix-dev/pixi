@@ -32,7 +32,7 @@ use tempfile::{TempDir, tempdir};
 use tokio::{fs, task::JoinSet};
 use url::Url;
 use uv_normalize::PackageName;
-use uv_python::PythonEnvironment;
+use uv_python_interpreter::PythonEnvironment;
 use uv_threads::initialize_rayon_once;
 
 use crate::common::pypi_index::PyPIPackage;
@@ -345,8 +345,8 @@ fn create_uv_environment(prefix: &Path, cache: &uv_cache::Cache) -> PythonEnviro
     };
 
     // Current interpreter and venv
-    let interpreter = uv_python::Interpreter::query(python, cache).unwrap();
-    uv_python::PythonEnvironment::from_interpreter(interpreter)
+    let interpreter = uv_python_interpreter::Interpreter::query(python, cache).unwrap();
+    uv_python_interpreter::PythonEnvironment::from_interpreter(interpreter)
 }
 
 // Helper to check if a pypi package is installed.

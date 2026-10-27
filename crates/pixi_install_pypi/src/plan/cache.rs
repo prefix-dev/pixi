@@ -230,7 +230,7 @@ impl<'a> DistCache<'a> for CachedWheels<'a> {
                 }
                 match source_dist {
                     SourceDist::Registry(sdist) => {
-                        let cached = self.registry.source(sdist, no_build, no_binary);
+                        let cached = self.registry.source(sdist, no_build);
 
                         if let Some(distribution) = cached {
                             Ok(Some(CachedDist::Registry(distribution.clone())))

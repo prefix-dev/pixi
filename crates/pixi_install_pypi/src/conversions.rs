@@ -28,7 +28,9 @@ fn index_url_from_lock(index: Option<&Url>) -> IndexUrl {
     let url = index
         .cloned()
         .unwrap_or_else(|| consts::DEFAULT_PYPI_INDEX_URL.clone());
-    IndexUrl::from(uv_pep508::VerbatimUrl::from(url))
+    IndexUrl::from(uv_pep508::VerbatimUrl::from(
+        uv_redacted::SafeUrl::from_url(url),
+    ))
 }
 
 /// Converts our locked data to a file
@@ -39,7 +41,7 @@ pub fn locked_data_to_file(
     requires_python: Option<pep440_rs::VersionSpecifiers>,
 ) -> Result<uv_distribution_types::File, ConversionError> {
     let url = uv_distribution_types::FileLocation::AbsoluteUrl(UrlString::from(
-        uv_redacted::DisplaySafeUrl::from_url(url.clone()),
+        uv_redacted::SafeUrl::from_url(url.clone()),
     ));
 
     // Convert PackageHashes to uv hashes
@@ -105,18 +107,22 @@ pub fn convert_to_dist(
                     pkg_name,
                     VerbatimParsedUrl {
                         parsed_url: ParsedUrl::GitDirectory(parsed_git_url),
-                        verbatim: uv_pep508::VerbatimUrl::from(url_without_direct.into_owned()),
+                        verbatim: uv_pep508::VerbatimUrl::from_url(uv_redacted::SafeUrl::from_url(
+                            url_without_direct.into_owned(),
+                        )),
                     },
                 )?
             } else {
                 Dist::from_url(
                     pkg_name,
                     VerbatimParsedUrl {
-                        parsed_url: ParsedUrl::try_from(uv_redacted::DisplaySafeUrl::from_url(
+                        parsed_url: ParsedUrl::try_from(uv_redacted::SafeUrl::from_url(
                             url_without_direct.clone().into_owned(),
                         ))
                         .map_err(Box::new)?,
-                        verbatim: uv_pep508::VerbatimUrl::from(url_without_direct.into_owned()),
+                        verbatim: uv_pep508::VerbatimUrl::from_url(uv_redacted::SafeUrl::from_url(
+                            url_without_direct.into_owned(),
+                        )),
                     },
                 )?
             }

@@ -46,6 +46,7 @@ uv-distribution-filename = { workspace = true }
 uv-distribution-types = { workspace = true }
 uv-normalize = { workspace = true }
 uv-pep508 = { workspace = true }
+uv-redacted = { workspace = true }
 uv-types = { workspace = true }
 
 [dev-dependencies]

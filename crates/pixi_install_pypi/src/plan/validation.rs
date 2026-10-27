@@ -111,64 +111,51 @@ pub(crate) fn need_reinstall(
                     dir_info,
                     subdirectory: _,
                 } => {
-                    // Recreate file url
-                    let result = Url::parse(&url);
-                    match result {
-                        Ok(url) => {
-                            // Convert the locked location, which can be a path or a url, to a url
-                            let locked_url = match &required_pkg.location {
-                                // Fine if it is already a url
-                                UrlOrPath::Url(url) => url.clone(),
-                                // Do some path mangling if it is actually a path to get it into a url
-                                UrlOrPath::Path(path) => {
-                                    let path = PathBuf::from(path.as_str());
-                                    // Because the path we are comparing to is absolute we need to convert
-                                    let path = if path.is_absolute() {
-                                        path
-                                    } else {
-                                        // Relative paths will be relative to the lock file directory
-                                        lock_file_dir.join(path)
-                                    };
-                                    // Okay, now convert to a file path, if we cant do that we need to re-install
-                                    match Url::from_file_path(path.clone()) {
-                                        Ok(url) => url,
-                                        Err(_) => {
-                                            return Ok(ValidateCurrentInstall::Reinstall(
-                                                NeedReinstall::UnableToConvertLockedPath {
-                                                    path: path.display().to_string(),
-                                                },
-                                            ));
-                                        }
-                                    }
-                                }
+                    let url = url.into_unsafe_url();
+                    // Convert the locked location, which can be a path or a url, to a url
+                    let locked_url = match &required_pkg.location {
+                        // Fine if it is already a url
+                        UrlOrPath::Url(url) => url.clone(),
+                        // Do some path mangling if it is actually a path to get it into a url
+                        UrlOrPath::Path(path) => {
+                            let path = PathBuf::from(path.as_str());
+                            // Because the path we are comparing to is absolute we need to convert
+                            let path = if path.is_absolute() {
+                                path
+                            } else {
+                                // Relative paths will be relative to the lock file directory
+                                lock_file_dir.join(path)
                             };
-
-                            // Check if the urls are different
-                            if url == locked_url {
-                                // Okay so these are the same, but we need to check if the cache is newer
-                                // than the source directory
-                                if !check_url_freshness(&url, installed_dist)? {
+                            // Okay, now convert to a file path, if we cant do that we need to re-install
+                            match Url::from_file_path(path.clone()) {
+                                Ok(url) => url,
+                                Err(_) => {
                                     return Ok(ValidateCurrentInstall::Reinstall(
-                                        NeedReinstall::SourceDirectoryNewerThanCache,
+                                        NeedReinstall::UnableToConvertLockedPath {
+                                            path: path.display().to_string(),
+                                        },
                                     ));
                                 }
-                            } else {
-                                return Ok(ValidateCurrentInstall::Reinstall(
-                                    NeedReinstall::UrlMismatch {
-                                        installed_url: url.to_string(),
-                                        locked_url: required_pkg
-                                            .location
-                                            .as_url()
-                                            .map(|u| u.to_string()),
-                                    },
-                                ));
                             }
                         }
-                        Err(_) => {
+                    };
+
+                    // Check if the urls are different
+                    if url == locked_url {
+                        // Okay so these are the same, but we need to check if the cache is newer
+                        // than the source directory
+                        if !check_url_freshness(&url, installed_dist)? {
                             return Ok(ValidateCurrentInstall::Reinstall(
-                                NeedReinstall::UnableToParseFileUrl { url },
+                                NeedReinstall::SourceDirectoryNewerThanCache,
                             ));
                         }
+                    } else {
+                        return Ok(ValidateCurrentInstall::Reinstall(
+                            NeedReinstall::UrlMismatch {
+                                installed_url: url.to_string(),
+                                locked_url: required_pkg.location.as_url().map(|u| u.to_string()),
+                            },
+                        ));
                     }
                     if dir_info.editable.unwrap_or_default() != dist_is_editable(required_dist) {
                         return Ok(ValidateCurrentInstall::Reinstall(
@@ -214,17 +201,7 @@ pub(crate) fn need_reinstall(
                         }
                     };
 
-                    // Try to parse both urls
-                    let installed_url = url.parse::<Url>();
-
-                    // Same here
-                    let installed_url = if let Ok(installed_url) = installed_url {
-                        installed_url
-                    } else {
-                        return Ok(ValidateCurrentInstall::Reinstall(
-                            NeedReinstall::UnableToParseInstalledDistUrl { url },
-                        ));
-                    };
+                    let installed_url = url.into_unsafe_url();
 
                     if locked_url == installed_url {
                         // Check cache freshness
@@ -249,15 +226,14 @@ pub(crate) fn need_reinstall(
                 }
                 uv_pypi_types::DirectUrl::VcsUrl {
                     url,
-                    vcs_info,
                     subdirectory: _,
                     path: None,
                 } => {
+                    let vcs_info = url.vcs_info().clone();
                     // Check if the installed git url is the same as the locked git url
                     // if this fails, it should be an error, because then installed url is not a git url
-                    let installed_git_url = ParsedGitDirectoryUrl::try_from(
-                        uv_redacted::DisplaySafeUrl::from_url(Url::parse(url.as_str())?),
-                    )?;
+                    let installed_git_url =
+                        ParsedGitDirectoryUrl::try_from(url.url().as_url().clone())?;
 
                     // Try to parse the locked git url, this can be any url, so this may fail
                     // in practice it always seems to succeed, even with a non-git url
@@ -270,9 +246,9 @@ pub(crate) fn need_reinstall(
                                     .map_err(|e| NeedsReinstallError::PixiGitUrl(e.to_string()))
                             } else {
                                 // it is not a git url, so we fallback to use the url as is
-                                ParsedGitDirectoryUrl::try_from(
-                                    uv_redacted::DisplaySafeUrl::from_url(url.clone()),
-                                )
+                                ParsedGitDirectoryUrl::try_from(uv_redacted::SafeUrl::from_url(
+                                    url.clone(),
+                                ))
                                 .map_err(|e: uv_pypi_types::ParsedUrlError| e.into())
                             }
                         }
@@ -286,10 +262,22 @@ pub(crate) fn need_reinstall(
                     match locked_git_url {
                         Ok(locked_git_url) => {
                             // Check the repository base url with the locked url
-                            let installed_repository_url =
-                                RepositoryUrl::new(installed_git_url.url.repository());
-                            let locked_repository_url =
-                                RepositoryUrl::new(locked_git_url.url.repository());
+                            let installed_repository_url = RepositoryUrl::new(
+                                &installed_git_url
+                                    .url
+                                    .repository()
+                                    .as_url()
+                                    .clone()
+                                    .into_unsafe_url(),
+                            );
+                            let locked_repository_url = RepositoryUrl::new(
+                                &locked_git_url
+                                    .url
+                                    .repository()
+                                    .as_url()
+                                    .clone()
+                                    .into_unsafe_url(),
+                            );
                             if locked_repository_url != installed_repository_url {
                                 // This happens when this is not a git url
                                 return Ok(ValidateCurrentInstall::Reinstall(

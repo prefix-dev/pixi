@@ -27,8 +27,8 @@ use uv_distribution_types::{
 };
 use uv_normalize::{InvalidNameError, PackageName};
 use uv_pep508::{VerbatimUrl, VerbatimUrlError};
-use uv_python::PythonEnvironment;
-use uv_redacted::DisplaySafeUrl;
+use uv_python_interpreter::PythonEnvironment;
+use uv_redacted::SafeUrl;
 
 use crate::{ConversionError, VersionError, WorkspaceAnchor};
 
@@ -134,7 +134,7 @@ pub fn pypi_options_to_index_locations(
     let index = options
         .index_url
         .clone()
-        .map(DisplaySafeUrl::from_url)
+        .map(SafeUrl::from_url)
         .map(VerbatimUrl::from_url)
         .map(IndexUrl::from)
         .map(Index::from_index_url)
@@ -147,7 +147,7 @@ pub fn pypi_options_to_index_locations(
         .into_iter()
         .flat_map(|urls| {
             urls.into_iter()
-                .map(DisplaySafeUrl::from_url)
+                .map(SafeUrl::from_url)
                 .map(VerbatimUrl::from_url)
                 .map(IndexUrl::from)
                 .map(Index::from_extra_index_url)
@@ -161,7 +161,7 @@ pub fn pypi_options_to_index_locations(
                 FindLinksUrlOrPath::Path(relative) => VerbatimUrl::from_path(&relative, base_path)
                     .map_err(|e| ConvertFlatIndexLocationError::VerbatimUrlError(e, relative)),
                 FindLinksUrlOrPath::Url(url) => {
-                    Ok(VerbatimUrl::from_url(DisplaySafeUrl::from_url(url.clone())))
+                    Ok(VerbatimUrl::from_url(SafeUrl::from_url(url.clone())))
                 }
             })
             .collect::<Result<Vec<_>, _>>()?
@@ -198,7 +198,7 @@ pub fn locked_indexes_to_index_locations(
         .indexes
         .first()
         .cloned()
-        .map(DisplaySafeUrl::from_url)
+        .map(SafeUrl::from_url)
         .map(VerbatimUrl::from_url)
         .map(IndexUrl::from)
         .map(Index::from_index_url)
@@ -208,7 +208,7 @@ pub fn locked_indexes_to_index_locations(
         .iter()
         .skip(1)
         .cloned()
-        .map(DisplaySafeUrl::from_url)
+        .map(SafeUrl::from_url)
         .map(VerbatimUrl::from_url)
         .map(IndexUrl::from)
         .map(Index::from_extra_index_url);
@@ -222,7 +222,7 @@ pub fn locked_indexes_to_index_locations(
                 })
             }
             rattler_lock::FindLinksUrlOrPath::Url(url) => {
-                Ok(VerbatimUrl::from_url(DisplaySafeUrl::from_url(url.clone())))
+                Ok(VerbatimUrl::from_url(SafeUrl::from_url(url.clone())))
             }
         })
         .collect::<Result<Vec<_>, _>>()?
@@ -342,6 +342,7 @@ pub fn into_uv_git_sha(git_sha: PixiGitSha) -> uv_git_types::GitOid {
 
 pub fn into_pixi_reference(git_reference: uv_git_types::GitReference) -> PixiReference {
     match git_reference {
+        uv_git_types::GitReference::Commit(commit) => PixiReference::Rev(commit.to_string()),
         uv_git_types::GitReference::Branch(branch) => PixiReference::Branch(branch.to_string()),
         uv_git_types::GitReference::Tag(tag) => PixiReference::Tag(tag.to_string()),
         uv_git_types::GitReference::BranchOrTag(rev) => PixiReference::Rev(rev.to_string()),
@@ -398,7 +399,7 @@ pub fn into_pinned_git_spec(
     // (lowercased + `.git`-stripped) form that would corrupt the lockfile
     // (prefix-dev/pixi#6185). `decode_windows_drive_letter` undoes uv's
     // percent-encoded drive letters so the lockfile shows `file:///D:/...`.
-    let repository: url::Url = (**dist.git.url()).clone();
+    let repository = dist.git.url().clone().into_unsafe_url();
     PinnedGitSpec::new(decode_windows_drive_letter(&repository), pinned_checkout)
 }
 
@@ -575,7 +576,8 @@ pub fn to_requirements_relative_to<'req>(
                         .or_else(|| url.given().map(str::to_owned));
                     verbatim_url = given.map(|g| {
                         pep508_rs::VersionOrUrl::Url(
-                            pep508_rs::VerbatimUrl::from_url((*url.to_url()).clone()).with_given(g),
+                            pep508_rs::VerbatimUrl::from_url(url.to_url().into_unsafe_url())
+                                .with_given(g),
                         )
                     });
                     write!(package_string, " @ {url}")?;
@@ -859,10 +861,10 @@ mod tests {
     fn test_configure_insecure_hosts_for_tls_bypass_enabled() {
         // Create test index locations
         let index_url = IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
-            DisplaySafeUrl::parse("https://pypi.org/simple/").unwrap(),
+            SafeUrl::parse("https://pypi.org/simple/").unwrap(),
         ));
         let extra_index_url = IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
-            DisplaySafeUrl::parse("https://test-index.example.com/simple/").unwrap(),
+            SafeUrl::parse("https://test-index.example.com/simple/").unwrap(),
         ));
 
         let indexes = vec![
@@ -891,7 +893,7 @@ mod tests {
     fn test_configure_insecure_hosts_for_tls_bypass_disabled() {
         // Create test index locations
         let index_url = IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
-            DisplaySafeUrl::parse("https://pypi.org/simple/").unwrap(),
+            SafeUrl::parse("https://pypi.org/simple/").unwrap(),
         ));
         let indexes = vec![Index::from_index_url(index_url)];
         let index_locations = IndexLocations::new(indexes, vec![], false);
@@ -912,7 +914,7 @@ mod tests {
     fn test_configure_insecure_hosts_for_tls_bypass_preserves_existing() {
         // Create test index locations
         let index_url = IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
-            DisplaySafeUrl::parse("https://pypi.org/simple/").unwrap(),
+            SafeUrl::parse("https://pypi.org/simple/").unwrap(),
         ));
         let indexes = vec![Index::from_index_url(index_url)];
         let index_locations = IndexLocations::new(indexes, vec![], false);
@@ -939,7 +941,7 @@ mod tests {
     fn test_configure_insecure_hosts_for_flat_index_hosts() {
         // Flat index hosted on a custom domain should be added when tls_no_verify is enabled
         let flat_index = Index::from_find_links(IndexUrl::from(uv_pep508::VerbatimUrl::from_url(
-            DisplaySafeUrl::parse("https://packages.example.org/simple/").unwrap(),
+            SafeUrl::parse("https://packages.example.org/simple/").unwrap(),
         )));
         let index_locations = IndexLocations::new(vec![], vec![flat_index], true);
 
@@ -998,7 +1000,9 @@ mod tests {
                 specifier: uv_pep440::VersionSpecifiers::empty(),
                 index: Some(IndexMetadata {
                     url: IndexUrl::Url(Arc::new(uv_pep508::VerbatimUrl::from_url(
-                        DisplaySafeUrl::parse("https://pypi.nvidia.com/simple/").unwrap(),
+                        SafeUrl::parse("https://pypi.nvidia.com/simple/")
+                            .unwrap()
+                            .with_policy(uv_redacted::policy::Stripped),
                     ))),
                     format: IndexFormat::Simple,
                 }),
@@ -1166,7 +1170,7 @@ mod tests {
         use uv_pep508::VerbatimUrl;
 
         let original = "https://github.com/VaasuDevanS/cowsay-python.git";
-        let safe_url = DisplaySafeUrl::parse(original).unwrap();
+        let safe_url = SafeUrl::parse(original).unwrap();
         let commit = GitOid::from_str("dcf7236f0b5ece9ed56e91271486e560526049cf").unwrap();
 
         let git_url = UvGitUrl::from_commit(

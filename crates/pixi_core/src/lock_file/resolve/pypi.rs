@@ -465,8 +465,7 @@ pub async fn resolve_pypi(
                 let uv_reference = into_uv_git_reference(pixi_git_ref);
                 let uv_sha = into_uv_git_sha(pinned_git_spec.source.commit);
 
-                let display_safe_url =
-                    uv_redacted::DisplaySafeUrl::from_url(pinned_git_spec.git.clone());
+                let display_safe_url = uv_redacted::SafeUrl::from_url(pinned_git_spec.git.clone());
 
                 let repository_url = RepositoryUrl::new(display_safe_url);
                 let reference = RepositoryReference {
@@ -654,7 +653,7 @@ pub async fn resolve_pypi(
     // The BuildDispatch might resolve or install when building wheels which will be
     // mostly with build isolation. In that case we want to use fresh
     // non-tampered requests.
-    .with_shared_state(context.shared_state.fork())
+    .with_shared_state(context.shared_state.fork().into_inner())
     .with_no_sources(context.no_sources.clone())
     .with_concurrency(context.concurrency.clone())
     .with_link_mode(link_mode)
@@ -1158,7 +1157,7 @@ async fn lock_pypi_packages(
                                 metadata,
                                 url_or_path,
                                 hash,
-                                Some((*best_wheel.index).clone()),
+                                Some((*best_wheel.index).clone().into_unsafe_url()),
                             )?);
                         }
                         BuiltDist::DirectUrl(dist) => {
@@ -1254,7 +1253,7 @@ async fn lock_pypi_packages(
                                 get_url_or_path(&reg.index, &reg.file.url, abs_project_root)
                                     .map_err(LockPypiPackagesError::RegistrySdistLocation)?,
                                 hash,
-                                Some((*reg.index).clone()),
+                                Some((*reg.index).clone().into_unsafe_url()),
                                 &anchor,
                             )?);
                         }
