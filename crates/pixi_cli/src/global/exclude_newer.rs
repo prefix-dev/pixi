@@ -33,7 +33,7 @@ pub enum Command {
     /// `pixi global exclude-newer set 7d`
     #[clap(verbatim_doc_comment)]
     Set(SetArgs),
-    /// Remove the cutoff.
+    /// Remove the cutoff, packages uploaded after it are no longer excluded.
     ///
     /// The cutoff cannot be removed while it has exemptions.
     Unset(UpdateArgs),

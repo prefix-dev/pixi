@@ -41,9 +41,11 @@ pub enum Command {
     /// `pixi workspace exclude-newer set 7d`
     #[clap(verbatim_doc_comment)]
     Set(SetArgs),
-    /// Remove the cutoff.
+    /// Remove the cutoff, packages uploaded after it are no longer excluded.
     ///
     /// The cutoff of `exclude-newer` cannot be removed while it has exemptions.
+    /// Without a `pypi-exclude-newer` cutoff, PyPI packages fall back to the
+    /// cutoff of `exclude-newer`.
     Unset(UpdateArgs),
     /// Exempt package releases from the cutoff.
     ///

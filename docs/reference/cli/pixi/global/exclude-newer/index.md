@@ -18,7 +18,7 @@ pixi global exclude-newer [COMMAND]
 |---------|-------------|
 | [`get`](get.md) | Show the `exclude-newer` configuration |
 | [`set`](set.md) | Set the cutoff, packages uploaded after it are excluded from the solve. |
-| [`unset`](unset.md) | Remove the cutoff |
+| [`unset`](unset.md) | Remove the cutoff, packages uploaded after it are no longer excluded |
 | [`exempt`](exempt.md) | Exempt package releases from the cutoff. |
 | [`unexempt`](unexempt.md) | Remove the exemptions of packages. |
 
