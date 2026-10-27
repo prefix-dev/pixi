@@ -1957,6 +1957,11 @@ dependencies:
             "pixi workspace exclude-newer unexempt",
         ),
         (
+            ["workspace", "exclude-newer", "prune"],
+            [],
+            "pixi workspace exclude-newer prune",
+        ),
+        (
             ["workspace", "exclude-newer", "unset"],
             [],
             "pixi workspace exclude-newer unset",

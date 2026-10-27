@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any, cast
 
 import tomli
 
@@ -174,7 +175,7 @@ dummy-b = "*"
         ],
         stderr_contains="Exempted dummy-b==0.1.0 (published up to ",
     )
-    exemptions = exclude_newer(manifest)["exemptions"]  # type: ignore[index]
+    exemptions = cast(dict[str, Any], exclude_newer(manifest))["exemptions"]
     assert exemptions["dummy-a"] == "*"
     assert exemptions["dummy-b"]["version"] == "==0.1.0"
     cutoff = exemptions["dummy-b"]["cutoff"]
@@ -198,7 +199,7 @@ dummy-b = "*"
         [pixi, "workspace", "exclude-newer", "prune", "--dry-run", *flags],
         stderr_contains="Would remove the stale exclude-newer exemptions of dummy-b",
     )
-    assert "dummy-b" in exclude_newer(manifest)["exemptions"]  # type: ignore[index]
+    assert "dummy-b" in cast(dict[str, Any], exclude_newer(manifest))["exemptions"]
     verify_cli_command(
         [pixi, "workspace", "exclude-newer", "prune", "--frozen", *flags],
         stderr_contains="Removed the stale exclude-newer exemptions of dummy-b",
