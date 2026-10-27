@@ -323,20 +323,12 @@ fn upsert_exemption(
     let exemptions_error =
         || ExcludeNewerEditError::from(TomlError::table_error("exemptions", key));
     match shape(parent, key)? {
-        Shape::Missing => {
+        Shape::Missing | Shape::Cutoff => {
             let mut table = InlineTable::new();
-            table.insert("exemptions", InlineTable::from_iter([(name, value)]).into());
-            upsert_table_entry(parent, key, table.into());
-        }
-        Shape::Cutoff => {
-            let mut cutoff = parent
-                .get(key)
-                .and_then(Item::as_value)
-                .cloned()
-                .expect("checked by `shape`");
-            cutoff.decor_mut().clear();
-            let mut table = InlineTable::new();
-            table.insert("cutoff", cutoff);
+            if let Some(mut cutoff) = parent.get(key).and_then(Item::as_value).cloned() {
+                cutoff.decor_mut().clear();
+                table.insert("cutoff", cutoff);
+            }
             table.insert("exemptions", InlineTable::from_iter([(name, value)]).into());
             upsert_table_entry(parent, key, table.into());
         }
