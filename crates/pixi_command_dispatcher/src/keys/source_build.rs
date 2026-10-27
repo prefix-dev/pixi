@@ -696,7 +696,7 @@ async fn compute_inner(
             backend,
             name: output.metadata.name.clone(),
             version: output.metadata.version.clone(),
-            build: output.metadata.build.clone(),
+            build: output.metadata.build.to_string(),
             subdir: output.metadata.subdir.to_string(),
             work_directory,
             channels: spec.channels.clone(),
@@ -1152,7 +1152,7 @@ mod immutable_identifier_tests {
     use pixi_record::{
         FullSourceRecordData, PinnedGitCheckout, PinnedGitSpec, PinnedSourceSpec, SourceRecordData,
     };
-    use rattler_conda_types::{GenericVirtualPackage, PackageName, Subdir};
+    use rattler_conda_types::{GenericVirtualPackage, PackageName, Subdir, package::BuildString};
 
     use super::*;
 
@@ -1162,7 +1162,7 @@ mod immutable_identifier_tests {
             "1.0.0"
                 .parse::<rattler_conda_types::VersionWithSource>()
                 .unwrap(),
-            "h0".into(),
+            "h0".parse().unwrap(),
         );
         package_record.subdir = "linux-64".into();
         Arc::new(UnresolvedSourceRecord {
@@ -1301,7 +1301,7 @@ mod immutable_identifier_tests {
         virtual_packages.build_environment.host_virtual_packages = vec![GenericVirtualPackage {
             name: PackageName::from_str("__cuda").unwrap(),
             version: "12.4".parse().unwrap(),
-            build_string: "0".to_string(),
+            build_string: BuildString::new_unchecked("0"),
         }];
         assert_ne!(
             baseline,
@@ -1359,7 +1359,7 @@ mod tests {
         let mut package_record = PackageRecord::new(
             PackageName::new_unchecked(name),
             "1.0.0".parse::<VersionWithSource>().unwrap(),
-            "h0".into(),
+            "h0".parse().unwrap(),
         );
         package_record.subdir = subdir.into();
         RepoDataRecord {

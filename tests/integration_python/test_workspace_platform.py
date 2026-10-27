@@ -1165,7 +1165,7 @@ def test_implicit_script_lock_preserves_solver_records(
     rows = yaml.safe_load(lock.read_text())["platforms"]
     records = {record for row in rows for record in row["virtual-packages"]}
     assert "__archspec=1=x86_64_v3" in records
-    assert "__cuda=12.4=0" in records
+    assert "__cuda=12.4" in records
 
     original = lock.read_bytes()
     verify_cli_command([*command, "--check", "--dry-run"], env=env)

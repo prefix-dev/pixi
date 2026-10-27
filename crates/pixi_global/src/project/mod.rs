@@ -1995,7 +1995,7 @@ mod tests {
     use pixi_utils::variants::VariantValue;
     use rattler_conda_types::{
         NamedChannelOrUrl, PackageRecord, RepoDataRecord, Subdir, VersionWithSource,
-        package::DistArchiveIdentifier,
+        package::BuildString, package::DistArchiveIdentifier,
     };
     use tempfile::tempdir;
     use url::Url;
@@ -2232,7 +2232,7 @@ mod tests {
         let mut package_record = PackageRecord::new(
             "python".parse().unwrap(),
             VersionWithSource::from_str("3.9.7").unwrap(),
-            "build_string".to_string(),
+            "build_string".parse().unwrap(),
         );
 
         // Set platform to something different than current
@@ -2286,7 +2286,7 @@ mod tests {
         GenericVirtualPackage {
             name: name.parse().unwrap(),
             version: version.parse().unwrap(),
-            build_string: "0".to_string(),
+            build_string: BuildString::new_unchecked("0"),
         }
     }
 

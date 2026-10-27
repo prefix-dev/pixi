@@ -3,7 +3,7 @@
 
 use chrono::{DateTime, Utc};
 use miette::IntoDiagnostic;
-use rattler_conda_types::package::ArchiveIdentifier;
+use rattler_conda_types::package::{ArchiveIdentifier, BuildString};
 use rattler_conda_types::{
     ChannelInfo, PackageName, PackageRecord, PackageUrl, RepoData, Subdir, VersionWithSource,
     package::{
@@ -243,7 +243,7 @@ impl Package {
             identifier: ArchiveIdentifier {
                 name: self.package_record.name.as_source().to_string(),
                 version: self.package_record.version.to_string(),
-                build_string: self.package_record.build.clone(),
+                build_string: self.package_record.build.to_string(),
             },
             archive_type: self.archive_type.into(),
         }
@@ -377,7 +377,7 @@ impl PackageBuilder {
         Package {
             package_record: PackageRecord {
                 arch: None,
-                build,
+                build: BuildString::new_unchecked(build),
                 build_number,
                 constrains: vec![],
                 depends: self.depends,

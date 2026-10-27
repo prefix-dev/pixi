@@ -660,7 +660,7 @@ mod tests {
         let mut pr = PackageRecord::new(
             PackageName::from_str(name).unwrap(),
             VersionWithSource::from_str(version).unwrap(),
-            "h0".into(),
+            "h0".parse().unwrap(),
         );
         pr.subdir = "linux-64".into();
         pr.run_exports = Some(run_exports);
