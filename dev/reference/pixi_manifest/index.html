@@ -10113,7 +10113,7 @@ Pixi solves the dependencies for all these platforms and puts them in the lock f
 <li><code>platform</code>: the conda subdir the entry targets (e.g. <code>linux-64</code>, <code>osx-arm64</code>). Required unless <code>name</code> itself parses as a subdir.</li>
 <li><code>name</code>: workspace-scoped identifier used by <code>feature.&lt;name&gt;.platforms</code>, lockfile rows, and the CLI. Defaults to a name auto-derived from <code>platform</code> plus the declared virtual packages.</li>
 <li>Built-in virtual-package keys: <code>cuda</code>, <code>amdgpu</code>, <code>archspec</code>, <code>glibc</code>, <code>linux</code>, <code>macos</code> (alias <code>osx</code>), <code>windows</code>.</li>
-<li>Other virtual packages require a <code>__</code>-prefixed key and a <code>"version"</code> or <code>"version=build_string"</code> value, for example <code>__site_service = "2=h1"</code>.</li>
+<li>Other virtual packages require a <code>__</code>-prefixed key and a <code>"version"</code> or <code>"version=build_string"</code> value, for example <code>__site_service = "2=h1"</code>. Without a build string, the virtual package has the default build <code>0</code>. A build string may only contain ASCII letters, digits, <code>_</code>, <code>.</code> and <code>+</code>, as CEP 26 requires.</li>
 </ul>
 <p>Bare-string entries (<code>"linux-64"</code>) keep their original meaning: solve for that subdir against Pixi's <a href="../../workspace/system_requirements/#default-declared-virtual-packages">default declared virtual packages</a>.</p>
 <p>See <a href="../../workspace/multi_platform_configuration/#declaring-virtual-packages-per-platform">Declaring virtual packages per platform</a> for binding features to specific rich entries.</p>
