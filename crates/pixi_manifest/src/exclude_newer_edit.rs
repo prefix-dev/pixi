@@ -335,13 +335,10 @@ fn upsert_exemption(
         Shape::Table => match parent.get_mut(key).expect("checked by `shape`") {
             Item::Table(table) => match (table.is_dotted(), table.get_mut("exemptions")) {
                 (_, Some(exemptions)) => {
-                    let existing = exemptions
-                        .as_table_like()
-                        .ok_or_else(exemptions_error)?
-                        .iter()
-                        .map(|(key, _)| key)
-                        .find(|key| matches(key))
-                        .map(str::to_string);
+                    let existing = find_key(
+                        exemptions.as_table_like().ok_or_else(exemptions_error)?,
+                        &matches,
+                    );
                     upsert_entry(exemptions, existing.as_deref().unwrap_or(name), value)
                         .map_err(|_| exemptions_error())?;
                 }
@@ -361,11 +358,7 @@ fn upsert_exemption(
             },
             Item::Value(Value::InlineTable(table)) => match table.get_mut("exemptions") {
                 Some(Value::InlineTable(exemptions)) => {
-                    let existing = exemptions
-                        .iter()
-                        .map(|(key, _)| key)
-                        .find(|key| matches(key))
-                        .map(str::to_string);
+                    let existing = find_key(exemptions, &matches);
                     upsert_inline_table_entry(
                         exemptions,
                         existing.as_deref().unwrap_or(name),
@@ -392,17 +385,13 @@ fn remove_exemption(
     matches: impl Fn(&str) -> bool,
 ) -> Result<(), TomlError> {
     let exemptions_error = || TomlError::table_error("exemptions", key);
-    let find = |table: &dyn TableLike| {
-        table
-            .iter()
-            .map(|(key, _)| key)
-            .find(|key| matches(key))
-            .map(str::to_string)
-    };
     match parent.get_mut(key) {
         Some(Item::Table(table)) => {
             if let Some(exemptions) = table.get_mut("exemptions") {
-                let existing = find(exemptions.as_table_like().ok_or_else(exemptions_error)?);
+                let existing = find_key(
+                    exemptions.as_table_like().ok_or_else(exemptions_error)?,
+                    &matches,
+                );
                 if let Some(existing) = existing {
                     remove_entry(exemptions, &existing).map_err(|_| exemptions_error())?;
                 }
@@ -410,7 +399,7 @@ fn remove_exemption(
         }
         Some(Item::Value(Value::InlineTable(table))) => {
             if let Some(Value::InlineTable(exemptions)) = table.get_mut("exemptions")
-                && let Some(existing) = find(exemptions)
+                && let Some(existing) = find_key(exemptions, &matches)
             {
                 remove_inline_table_entry(exemptions, &existing);
             }
@@ -419,6 +408,15 @@ fn remove_exemption(
     }
     collapse(parent, key);
     Ok(())
+}
+
+/// Returns the key of `table` that `matches`.
+fn find_key(table: &dyn TableLike, matches: impl Fn(&str) -> bool) -> Option<String> {
+    table
+        .iter()
+        .map(|(key, _)| key)
+        .find(|key| matches(key))
+        .map(str::to_string)
 }
 
 /// Tidies up the `key` table of `parent` after an edit: drops empty
