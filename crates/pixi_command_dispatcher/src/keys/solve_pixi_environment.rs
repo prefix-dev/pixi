@@ -18,6 +18,7 @@ use std::{
 
 use derive_more::Display;
 use futures::stream::{FuturesUnordered, StreamExt};
+use itertools::Itertools;
 use ordermap::OrderMap;
 use pixi_compute_engine::{ComputeCtx, Demand, Key, ParallelBuilder};
 use pixi_compute_reporters::OperationId;
@@ -697,7 +698,9 @@ async fn process_dev_sources(
         let metadata = res.map_err(SolvePixiEnvironmentError::DevSourceMetadataError)?;
         records.extend(metadata.records.iter().cloned());
     }
-    Ok(records)
+    // Dev sources requested under different names of the same source share
+    // records.
+    Ok(records.into_iter().unique().collect())
 }
 
 /// Stable ordering for variant maps. `VariantValue` is not `Ord`, so

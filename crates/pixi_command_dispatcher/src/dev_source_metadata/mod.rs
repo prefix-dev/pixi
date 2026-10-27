@@ -1,3 +1,4 @@
+use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::hash::Hash;
 use std::sync::Arc;
@@ -171,12 +172,23 @@ impl Key for DevSourceMetadataKey {
             build_backend_metadata.source.manifest_source().clone(),
         ));
 
-        // Create a DevSourceRecord for each output that matches the requested package.
-        let records: Vec<DevSourceRecord> = build_backend_metadata
-            .metadata
-            .outputs
+        // Same-source outputs the requested one depends on are part of the
+        // dev source rather than packages to build, e.g. the output a
+        // metapackage re-exports.
+        let outputs = &build_backend_metadata.metadata.outputs;
+        let selected_names = select_dev_output_names(
+            &spec.package_name,
+            outputs.iter().map(|output| {
+                (
+                    output.metadata.name.clone(),
+                    output_dependency_names(output).collect(),
+                )
+            }),
+        );
+
+        let records: Vec<DevSourceRecord> = outputs
             .iter()
-            .filter(|output| output.metadata.name == spec.package_name)
+            .filter(|output| selected_names.contains(&output.metadata.name))
             .map(|output| {
                 DevSourceMetadataSpec::create_dev_source_record(
                     output,
@@ -205,6 +217,43 @@ impl Key for DevSourceMetadataKey {
             records,
         }))
     }
+}
+
+/// The names of the outputs that make up the dev source `requested`: the
+/// requested output and every output of the same source it transitively
+/// depends on. `outputs` yields each output's name and dependency names.
+fn select_dev_output_names(
+    requested: &PackageName,
+    outputs: impl IntoIterator<Item = (PackageName, Vec<PackageName>)>,
+) -> HashSet<PackageName> {
+    let mut dependencies: HashMap<PackageName, Vec<PackageName>> = HashMap::new();
+    for (name, deps) in outputs {
+        dependencies.entry(name).or_default().extend(deps);
+    }
+
+    let mut selected = HashSet::new();
+    let mut pending = vec![requested.clone()];
+    while let Some(name) = pending.pop() {
+        if let Some(deps) = dependencies.get(&name)
+            && selected.insert(name)
+        {
+            pending.extend(deps.iter().cloned());
+        }
+    }
+    selected
+}
+
+/// Names of all build, host and run dependencies of an output.
+fn output_dependency_names(
+    output: &pixi_build_types::procedures::conda_outputs::CondaOutput,
+) -> impl Iterator<Item = PackageName> + '_ {
+    output
+        .build_dependencies
+        .iter()
+        .chain(output.host_dependencies.iter())
+        .chain(std::iter::once(&output.run_dependencies))
+        .flat_map(|deps| deps.depends.iter())
+        .map(|depend| PackageName::new_unchecked(depend.name.as_str()))
 }
 
 impl DevSourceMetadataSpec {
@@ -307,5 +356,58 @@ impl DevSourceMetadataSpec {
             dependencies: all_dependencies,
             constraints: all_constraints,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn name(name: &str) -> PackageName {
+        PackageName::new_unchecked(name)
+    }
+
+    fn output(output: &str, deps: &[&str]) -> (PackageName, Vec<PackageName>) {
+        (name(output), deps.iter().map(|dep| name(dep)).collect())
+    }
+
+    fn selected(requested: &str, outputs: Vec<(PackageName, Vec<PackageName>)>) -> Vec<String> {
+        let mut names: Vec<String> = select_dev_output_names(&name(requested), outputs)
+            .into_iter()
+            .map(|name| name.as_source().to_string())
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn selects_the_same_source_outputs_it_depends_on() {
+        let outputs = vec![
+            output("libfoo", &["cmake", "zlib"]),
+            output("foo-python", &["libfoo", "python"]),
+            output("foo-docs", &[]),
+        ];
+        assert_eq!(
+            selected("foo-python", outputs.clone()),
+            vec!["foo-python", "libfoo"]
+        );
+        assert_eq!(selected("libfoo", outputs), vec!["libfoo"]);
+    }
+
+    #[test]
+    fn selection_is_transitive_and_handles_cycles() {
+        let outputs = vec![
+            output("a", &["b"]),
+            output("b", &["c"]),
+            output("c", &["a", "zlib"]),
+            output("unrelated", &[]),
+        ];
+        assert_eq!(selected("a", outputs), vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn unknown_request_selects_nothing() {
+        let outputs = vec![output("a", &[])];
+        assert!(selected("missing", outputs).is_empty());
     }
 }
