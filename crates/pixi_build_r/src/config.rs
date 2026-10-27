@@ -34,6 +34,11 @@ pub struct RBackendConfig {
     /// Defaults to ["conda-forge"] if not specified
     #[serde(default)]
     pub channels: Option<Vec<String>>,
+
+    /// Ignore dependencies declared in the DESCRIPTION file.
+    /// If true, only dependencies explicitly declared in the pixi manifest are used.
+    #[serde(default)]
+    pub ignore_description_dependencies: Option<bool>,
 }
 
 impl BackendConfig for RBackendConfig {
@@ -67,6 +72,9 @@ impl BackendConfig for RBackendConfig {
                 .channels
                 .clone()
                 .or_else(|| self.channels.clone()),
+            ignore_description_dependencies: target_config
+                .ignore_description_dependencies
+                .or(self.ignore_description_dependencies),
         })
     }
 }
@@ -116,6 +124,7 @@ mod tests {
             extra_input_globs: vec!["**/*.R".to_string()],
             compilers: Some(vec!["c".to_string()]),
             channels: Some(vec!["conda-forge".to_string()]),
+            ..Default::default()
         };
 
         let target_config = RBackendConfig {
@@ -125,6 +134,7 @@ mod tests {
             extra_input_globs: vec![],
             compilers: Some(vec!["c".to_string(), "cxx".to_string()]),
             channels: None,
+            ..Default::default()
         };
 
         let merged = base_config
@@ -147,5 +157,34 @@ mod tests {
 
         // Base channels should be used (target is None)
         assert_eq!(merged.channels, Some(vec!["conda-forge".to_string()]));
+    }
+
+    #[test]
+    fn test_deserialize_ignore_description_dependencies() {
+        let json_data = json!({ "ignore-description-dependencies": true });
+        let config: RBackendConfig = serde_json::from_value(json_data).unwrap();
+        assert_eq!(config.ignore_description_dependencies, Some(true));
+    }
+
+    #[test]
+    fn test_merge_with_target_config_ignore_description_dependencies() {
+        let base_config = RBackendConfig {
+            ignore_description_dependencies: Some(false),
+            ..Default::default()
+        };
+        let target_config = RBackendConfig {
+            ignore_description_dependencies: Some(true),
+            ..Default::default()
+        };
+        let merged = base_config
+            .merge_with_target_config(&target_config)
+            .unwrap();
+        assert_eq!(merged.ignore_description_dependencies, Some(true));
+
+        // The base's value when the target doesn't set it
+        let merged = base_config
+            .merge_with_target_config(&RBackendConfig::default())
+            .unwrap();
+        assert_eq!(merged.ignore_description_dependencies, Some(false));
     }
 }

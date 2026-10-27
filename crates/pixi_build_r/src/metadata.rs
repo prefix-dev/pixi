@@ -1,4 +1,8 @@
-use std::{collections::HashMap, path::PathBuf, sync::LazyLock};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+    sync::LazyLock,
+};
 
 use miette::Diagnostic;
 use once_cell::unsync::OnceCell;
@@ -12,6 +16,31 @@ static CRAN_SPDX_MAP: LazyLock<HashMap<String, String>> = LazyLock::new(|| {
     let json_str = include_str!("../license_mapping/cran_spdx_licenses.json");
     serde_json::from_str(json_str).expect("Failed to parse cran_spdx_licenses.json")
 });
+
+/// The list of Bioconductor packages, as `scripts/update_bioconductor_packages.py`
+/// writes it from Bioconductor's own package lists.
+#[derive(serde::Deserialize)]
+struct BioconductorPackages {
+    packages: Vec<String>,
+}
+
+/// Bioconductor packages (software, annotation data, experiment data and
+/// workflows of recent releases), lowercased. Their conda packages use the
+/// `bioconductor-` prefix instead of `r-`.
+static BIOCONDUCTOR_PACKAGES: LazyLock<HashSet<String>> = LazyLock::new(|| {
+    let json_str = include_str!("../bioconductor_mapping/bioconductor_packages.json");
+    let list: BioconductorPackages =
+        serde_json::from_str(json_str).expect("Failed to parse bioconductor_packages.json");
+    list.packages
+        .into_iter()
+        .map(|s| s.to_lowercase())
+        .collect()
+});
+
+/// Check if an R package is a known Bioconductor package.
+pub fn is_bioconductor_package(name: &str) -> bool {
+    BIOCONDUCTOR_PACKAGES.contains(&name.to_lowercase())
+}
 
 /// R packages that are built into r-base and should not be listed as separate dependencies.
 ///
@@ -164,17 +193,22 @@ pub fn parse_r_dependencies(deps_str: &str) -> Vec<RDependency> {
 
 /// Convert R package name to conda package name
 ///
-/// R packages in conda typically use lowercase with 'r-' prefix:
-/// - "curl" -> "r-curl"
-/// - "jsonlite" -> "r-jsonlite"
-/// - "R6" -> "r-r6"
+/// Converts R package names according to conda packaging conventions:
+/// - "R" -> "r-base"
+/// - Bioconductor packages -> `bioconductor-<lowercase>` (e.g. "Biobase" -> "bioconductor-biobase")
+/// - CRAN / other R packages -> `r-<lowercase>` (e.g. "curl" -> "r-curl", "jsonlite" -> "r-jsonlite")
 pub fn r_package_to_conda(name: &str) -> String {
     // Special case: "R" refers to the R language itself, which is r-base
     if name == "R" {
         return "r-base".to_string();
     }
 
-    format!("r-{}", name.to_lowercase())
+    let lower = name.to_lowercase();
+    if is_bioconductor_package(&lower) {
+        format!("bioconductor-{lower}")
+    } else {
+        format!("r-{lower}")
+    }
 }
 
 /// Convert R version constraint to conda version constraint
@@ -539,6 +573,20 @@ mod tests {
     }
 
     #[test]
+    fn test_is_bioconductor_package() {
+        // Software, annotation data and experiment data packages
+        assert!(is_bioconductor_package("limma"));
+        assert!(is_bioconductor_package("org.Hs.eg.db"));
+        assert!(is_bioconductor_package("GO.db"));
+        assert!(is_bioconductor_package("GenomeInfoDbData"));
+        assert!(is_bioconductor_package("airway"));
+        // Case-insensitive, and not CRAN packages
+        assert!(is_bioconductor_package("BIOBASE"));
+        assert!(!is_bioconductor_package("dplyr"));
+        assert!(!is_bioconductor_package("openssl"));
+    }
+
+    #[test]
     fn test_parse_basic_description() {
         let content = r#"Package: testpkg
 Version: 1.0.0
@@ -567,20 +615,36 @@ License: GPL-3
 
     #[test]
     fn test_name_is_conda_normalized() {
-        // The provided name must match what dependents require: a mixed-case
-        // DESCRIPTION `Package:` such as `Rhdf5lib` becomes `r-rhdf5lib`, the
-        // same value `r_package_to_conda` produces for a dependency on it. This
-        // is what makes source->source R dependencies resolvable.
-        let content = r#"Package: Rhdf5lib
+        // Bioconductor packages become bioconductor-<lowercase>
+        let content_bioc = r#"Package: Rhdf5lib
 Version: 1.0.0
 "#;
-        let temp_dir = create_test_description(content);
-        let mut provider = DescriptionMetadataProvider::new(temp_dir.path());
+        let temp_dir_bioc = create_test_description(content_bioc);
+        let mut provider_bioc = DescriptionMetadataProvider::new(temp_dir_bioc.path());
 
-        assert_eq!(provider.name().unwrap(), Some("r-rhdf5lib".to_string()));
         assert_eq!(
-            provider.name().unwrap(),
+            provider_bioc.name().unwrap(),
+            Some("bioconductor-rhdf5lib".to_string())
+        );
+        assert_eq!(
+            provider_bioc.name().unwrap(),
             Some(r_package_to_conda("Rhdf5lib"))
+        );
+
+        // CRAN packages become r-<lowercase>
+        let content_cran = r#"Package: RColorBrewer
+Version: 1.1-3
+"#;
+        let temp_dir_cran = create_test_description(content_cran);
+        let mut provider_cran = DescriptionMetadataProvider::new(temp_dir_cran.path());
+
+        assert_eq!(
+            provider_cran.name().unwrap(),
+            Some("r-rcolorbrewer".to_string())
+        );
+        assert_eq!(
+            provider_cran.name().unwrap(),
+            Some(r_package_to_conda("RColorBrewer"))
         );
     }
 
