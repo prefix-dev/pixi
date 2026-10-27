@@ -401,10 +401,18 @@ pub fn resolve_pypi_exclude_newer<'a>(
         .map(|cutoff| ResolvedPypiExcludeNewer::from_datetime(cutoff.cutoff()))
         .unwrap_or_default();
 
-    #[allow(deprecated)]
     for (name, package_exclude_newer) in package_overrides {
-        exclude_newer = exclude_newer
-            .with_package_cutoff(name.as_normalized().clone(), package_exclude_newer.cutoff());
+        // A zero cutoff such as `0d` lifts the cutoff for the package, which
+        // is what an exemption does. As an exemption, it also keeps releases
+        // without an upload time, which a cutoff of now would exclude.
+        exclude_newer = if matches!(package_exclude_newer, ExcludeNewer::Duration(d) if d.is_zero())
+        {
+            exclude_newer.with_exempt_package(name.as_normalized().clone())
+        } else {
+            #[allow(deprecated)]
+            exclude_newer
+                .with_package_cutoff(name.as_normalized().clone(), package_exclude_newer.cutoff())
+        };
     }
 
     for (name, version) in &config.exemptions {
@@ -719,5 +727,34 @@ mod tests {
         );
         // Without a cutoff nothing is excluded, so nothing is stale.
         assert_eq!(stale(&config, &[]), Vec::<String>::new());
+    }
+
+    #[test]
+    fn test_resolve_pypi_zero_package_cutoff_is_exemption() {
+        let config = PypiExcludeNewerConfig {
+            cutoff: Some(ExcludeNewer::from_str("2026-10-20T00:00:00Z").unwrap()),
+            exemptions: IndexMap::new(),
+        };
+        let zero: PypiPackageName = "zero".parse().unwrap();
+        let dated: PypiPackageName = "dated".parse().unwrap();
+        let overrides = [
+            (zero.clone(), ExcludeNewer::from_str("0d").unwrap()),
+            (
+                dated.clone(),
+                ExcludeNewer::from_str("2026-10-25T00:00:00Z").unwrap(),
+            ),
+        ];
+
+        let resolved =
+            resolve_pypi_exclude_newer(&config, None, overrides.iter().map(|(n, c)| (n, c)));
+
+        assert_eq!(
+            resolved.exempt_packages.iter().collect::<Vec<_>>(),
+            [zero.as_normalized()]
+        );
+        assert_eq!(
+            resolved.package_cutoffs.keys().collect::<Vec<_>>(),
+            [dated.as_normalized()]
+        );
     }
 }
