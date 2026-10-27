@@ -1985,7 +1985,7 @@ fn duplicate_definition_error(
     } else {
         let vps = customised
             .iter()
-            .map(ToString::to_string)
+            .map(crate::platform::format_virtual_package)
             .collect::<Vec<_>>()
             .join(", ");
         format!("subdir '{}' with virtual packages {vps}", existing.subdir())
@@ -3895,6 +3895,11 @@ platforms = ["linux-64", "osx-64"]
         assert!(
             help.contains("reuse the existing platform 'gpu-a'"),
             "{help}"
+        );
+        let message = err.to_string();
+        assert!(
+            message.contains("with virtual packages __cuda=12)"),
+            "{message}"
         );
 
         // Re-adding the identical platform (same name + definition) is a no-op.
