@@ -213,10 +213,15 @@ fn take_exemption_cutoff(entry: &mut Value<'_>) -> Result<Option<DateTime<Utc>>,
         line_info: None,
     };
     let cutoff = value.take_string(None)?;
-    match ExcludeNewer::from_str(&cutoff).map_err(error)? {
-        ExcludeNewer::Timestamp(cutoff) => Ok(Some(cutoff)),
-        ExcludeNewer::Duration(_) => Err(error(format!(
+    // The generic error of `ExcludeNewer` suggests durations, which are not
+    // allowed here, and e.g. `now` is only accepted by the CLI.
+    match ExcludeNewer::from_str(&cutoff) {
+        Ok(ExcludeNewer::Timestamp(cutoff)) => Ok(Some(cutoff)),
+        Ok(ExcludeNewer::Duration(_)) => Err(error(format!(
             "the cutoff of an exclude-newer exemption must be a date or a timestamp, not a duration like `{cutoff}`"
+        ))),
+        Err(_) => Err(error(format!(
+            "the cutoff of an exclude-newer exemption must be a date like `2026-10-12` or an RFC 3339 timestamp, not `{cutoff}`"
         ))),
     }
 }
@@ -466,6 +471,13 @@ exclude-newer = { cutoff = "7d", exemptions = { openssl = { version = "==3.2.1",
     #[test]
     fn test_exemption_with_relative_cutoff() {
         let input = r#"exclude-newer = { cutoff = "7d", exemptions = { openssl = { version = "==3.2.1", cutoff = "1d" } } }"#;
+        let err = parse_conda(input).unwrap_err();
+        assert_snapshot!(render_error(input, err));
+    }
+
+    #[test]
+    fn test_exemption_with_invalid_cutoff() {
+        let input = r#"exclude-newer = { cutoff = "7d", exemptions = { openssl = { version = "==3.2.1", cutoff = "now" } } }"#;
         let err = parse_conda(input).unwrap_err();
         assert_snapshot!(render_error(input, err));
     }
