@@ -41,7 +41,9 @@ use rattler_build_recipe::{stage1::Source as RecipeSource, variant_render::Rende
 use rattler_build_variant_config::VariantConfig;
 use rattler_conda_types::NoArchType;
 use rattler_conda_types::{
-    RepodataRevision, Subdir, compression_level::CompressionLevel, package::CondaArchiveType,
+    RepodataRevision, Subdir,
+    compression_level::CompressionLevel,
+    package::{BuildString, CondaArchiveType},
 };
 use tracing::warn;
 pub struct RattlerBuildBackendInstantiator {
@@ -191,7 +193,7 @@ impl Protocol for RattlerBuildBackend {
 
             let build_string = discovered_output
                 .build_string
-                .parse()
+                .parse::<BuildString>()
                 .into_diagnostic()
                 .with_context(|| {
                     format!(

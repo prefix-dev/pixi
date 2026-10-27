@@ -34,7 +34,9 @@ use rattler_build_types::NormalizedKey;
 use rattler_build_variant_config::VariantConfig;
 use rattler_conda_types::NoArchType;
 use rattler_conda_types::{
-    RepodataRevision, Subdir, compression_level::CompressionLevel, package::CondaArchiveType,
+    RepodataRevision, Subdir,
+    compression_level::CompressionLevel,
+    package::{BuildString, CondaArchiveType},
 };
 
 use serde::Deserialize;
@@ -481,7 +483,7 @@ where
 
             let build_string = discovered_output
                 .build_string
-                .parse()
+                .parse::<BuildString>()
                 .into_diagnostic()
                 .with_context(|| {
                     format!(
