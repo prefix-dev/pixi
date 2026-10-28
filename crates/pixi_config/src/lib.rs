@@ -2501,6 +2501,29 @@ impl Config {
             "exclude-newer" => {
                 // A table is given as JSON like the other complex values,
                 // anything else is a cutoff such as `7d`.
+                //
+                // The value is not validated here, which has two problems:
+                // - A cutoff or exemption that doesn't parse, e.g. `7days` or
+                //   `{"cutoff": "7d", "exemptions": {"ruff": ">>>"}}`, is
+                //   stored, and only fails later when `pixi init`,
+                //   `pixi exec` or `pixi global` parse it. That parser lives
+                //   in `pixi_manifest`, which this crate doesn't depend on.
+                // - An unknown key in the table, e.g. `{"cutoff": "7d",
+                //   "bogus": 1}`, is dropped silently. Unknown fields of an
+                //   exemption are kept by `rattler_config` and fail later
+                //   like an invalid exemption.
+                //
+                // Ideally both are fixed in `rattler_config`, which owns the
+                // key. Its `ExcludeNewerConfig` would parse the cutoff (a
+                // timestamp, a date or a duration) and the exemptions (match
+                // spec fields) when it is deserialized, keeping the strings as
+                // written for tools that write them into a manifest, and its
+                // table would have `#[serde(deny_unknown_fields)]`. Then
+                // `set` and loading a config file would both reject an
+                // invalid value. Loading would also have to reject only the
+                // key: a config file that fails to parse is currently skipped
+                // as a whole with a logged error, whereas other unknown keys
+                // are ignored with a warning.
                 self.exclude_newer = value
                     .map(|v| {
                         if v.trim_start().starts_with('{') {
