@@ -138,4 +138,17 @@ mod tests {
         );
         assert_ne!(a.name(None), b.name(None));
     }
+
+    // Regression test for https://github.com/prefix-dev/pixi/issues/7165.
+    #[test]
+    fn name_changes_when_zero_component_moves() {
+        for (a, b) in [
+            ("maturin==1.0.1", "maturin==1.1.0"),
+            ("maturin==13.0.1", "maturin==13.1.0"),
+        ] {
+            let ha = EnvironmentHash::new(vec![spec(a)], vec![], Subdir::Linux64, false);
+            let hb = EnvironmentHash::new(vec![spec(b)], vec![], Subdir::Linux64, false);
+            assert_ne!(ha.name(None), hb.name(None), "{a} vs {b}");
+        }
+    }
 }
