@@ -683,9 +683,15 @@ impl Manifest {
     /// Saves the manifest to the file system
     pub async fn save(&self) -> miette::Result<()> {
         let contents = {
-            // Ensure that version is always set when saving
+            // Ensure that version is always set when saving, as the first key
             let mut document = self.document.clone();
-            document.get_or_insert("version", ManifestVersion::default().into());
+            let table = document.as_table_mut();
+            if !table.contains_key("version") {
+                table.insert("version", ManifestVersion::default().into());
+                table.sort_values_by(|a, _, b, _| {
+                    (a.get() != "version").cmp(&(b.get() != "version"))
+                });
+            }
             document.to_string()
         };
 

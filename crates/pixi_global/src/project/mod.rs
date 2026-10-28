@@ -426,12 +426,6 @@ impl Project {
         let exclude_newer = ExcludeNewerConfig::from_toml_value("exclude-newer", &value)
             .wrap_err("invalid `exclude-newer` in the pixi configuration")?;
 
-        // `save` adds the version if it is missing, which would put it after
-        // `exclude-newer`.
-        self.manifest.document.get_or_insert(
-            "version",
-            parsed_manifest::ManifestVersion::default().into(),
-        );
         self.manifest.set_exclude_newer(&value, exclude_newer)?;
         Ok(true)
     }
