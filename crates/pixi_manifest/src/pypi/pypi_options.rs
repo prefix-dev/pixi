@@ -4,7 +4,7 @@ use indexmap::IndexMap;
 use indexmap::IndexSet;
 use pep508_rs::PackageName;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
-use pixi_spec::IndexExcludeNewer;
+use pixi_spec::ExcludeNewer;
 use serde::{Serialize, Serializer, ser::SerializeSeq};
 use thiserror::Error;
 use url::Url;
@@ -160,8 +160,9 @@ pub struct PypiExtraIndex {
     /// The extra index URL.
     pub url: Url,
     /// Overrides the workspace-level `exclude-newer` cutoff for packages served
-    /// from this index only. `None` inherits the global cutoff.
-    pub exclude_newer: Option<IndexExcludeNewer>,
+    /// from this index only. `None` inherits the global cutoff, and a zero
+    /// duration such as `0d` lifts the cutoff for this index.
+    pub exclude_newer: Option<ExcludeNewer>,
 }
 
 impl PypiExtraIndex {

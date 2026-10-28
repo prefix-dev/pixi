@@ -507,7 +507,7 @@ torch = { version = ">=2.10.0", index = "https://download.pytorch.org/whl/cu124"
 
     If an extra index does not expose `upload-time`, such as a private mirror, you can lift the cutoff for that index with a
     per-index override on [`extra-index-urls`](#alternative-registries):
-    `{ url = "https://internal/simple", exclude-newer = false }`.
+    `{ url = "https://internal/simple", exclude-newer = "0d" }`.
 
 ### `build-variants` (optional)
 
@@ -689,8 +689,9 @@ Often you might want to use an alternative or extra index for your workspace. Th
    are preferred over the `index-url`. These are merged across features into an environment.
    Each entry may be a plain URL string, or an inline table `{ url = "...", exclude-newer = ... }`
    that overrides the workspace-level [`exclude-newer`](#exclude-newer-optional) for packages served
-   from that index only. Use `exclude-newer = false` (or `"0d"`) to disable the cutoff for an index, for
-   example a private mirror that does not expose `upload-time` metadata. Exemptions in
+   from that index only. Use `exclude-newer = "0d"` to lift the cutoff for an index, for example
+   a private mirror that does not expose `upload-time` metadata. Unlike other cutoffs, this also keeps
+   releases without an upload time. Exemptions in
    [`pypi-exclude-newer`](#exclude-newer-optional) take precedence over the cutoff of an index.
 - `find-links`: which can either be a path `{path = './links'}` or a url `{url = 'https://example.com/links'}`.
    This is similar to the `--find-links` option in `pip`. These are merged across features into an
@@ -704,7 +705,7 @@ index-url = "https://pypi.org/simple"
 extra-index-urls = [
     "https://example.com/simple",
     # No exclude-newer cutoff for this index (it does not expose `upload-time`):
-    { url = "https://internal.example.com/simple", exclude-newer = false },
+    { url = "https://internal.example.com/simple", exclude-newer = "0d" },
     # A custom cutoff for this index only:
     { url = "https://other.example.com/simple", exclude-newer = "2025-01-01" },
 ]

@@ -1,7 +1,7 @@
 use std::{path::PathBuf, str::FromStr};
 
 use indexmap::IndexSet;
-use pixi_spec::{ExcludeNewer, IndexExcludeNewer};
+use pixi_spec::ExcludeNewer;
 use pixi_toml::{TomlEnum, TomlFromStr, TomlIndexMap};
 use toml_span::{
     DeserError, ErrorKind, Value,
@@ -15,39 +15,6 @@ use crate::pypi::pypi_options::{
     PypiOptions,
 };
 
-/// Helper for deserializing a per-index `exclude-newer` value, which can be
-/// either `false` (to disable the cutoff) or a date/duration/timestamp string.
-struct TomlIndexExcludeNewer(IndexExcludeNewer);
-
-impl<'de> toml_span::Deserialize<'de> for TomlIndexExcludeNewer {
-    fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
-        match value.take() {
-            ValueInner::Boolean(false) => Ok(Self(IndexExcludeNewer::Disabled)),
-            ValueInner::Boolean(true) => Err(DeserError::from(toml_span::Error {
-                kind: ErrorKind::Custom(
-                    "`exclude-newer = true` is not valid; use a date, duration, or `false`".into(),
-                ),
-                span: value.span,
-                line_info: None,
-            })),
-            ValueInner::String(str) => {
-                let exclude_newer = ExcludeNewer::from_str(&str).map_err(|e| toml_span::Error {
-                    kind: ErrorKind::Custom(e.into()),
-                    span: value.span,
-                    line_info: None,
-                })?;
-                Ok(Self(IndexExcludeNewer::ExcludeNewer(exclude_newer)))
-            }
-            other => Err(expected(
-                "a date, duration, or timestamp string, or `false`",
-                other,
-                value.span,
-            )
-            .into()),
-        }
-    }
-}
-
 /// Layout of an extra index url in a toml file.
 ///
 /// Supports the following formats:
@@ -55,7 +22,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlIndexExcludeNewer {
 /// ```toml
 /// extra-index-urls = [
 ///     "https://pypi.org/simple",
-///     { url = "https://internal/simple", exclude-newer = false },
+///     { url = "https://internal/simple", exclude-newer = "0d" },
 ///     { url = "https://other/simple", exclude-newer = "2025-01-01" },
 /// ]
 /// ```
@@ -77,8 +44,8 @@ impl<'de> toml_span::Deserialize<'de> for PypiExtraIndex {
                 let mut th = TableHelper::new(&mut Value::with_span(inner, value.span))?;
                 let url = th.required::<TomlFromStr<_>>("url")?.into_inner();
                 let exclude_newer = th
-                    .optional::<TomlIndexExcludeNewer>("exclude-newer")
-                    .map(|x| x.0);
+                    .optional::<TomlFromStr<ExcludeNewer>>("exclude-newer")
+                    .map(TomlFromStr::into_inner);
                 th.finalize(None)?;
                 Ok(PypiExtraIndex { url, exclude_newer })
             }
@@ -388,7 +355,7 @@ mod test {
             extra-index-urls = [
                 "https://pypi.org/simple",
                 { url = "https://internal/simple" },
-                { url = "https://internal/simple", exclude-newer = false },
+                { url = "https://internal/simple", exclude-newer = "0d" },
                 { url = "https://other/simple", exclude-newer = "2025-01-01" },
             ]
         "#;
@@ -400,19 +367,20 @@ mod test {
             PypiExtraIndex::from_url("https://pypi.org/simple".parse().unwrap())
         );
         assert_eq!(extra[1].exclude_newer, None);
-        assert_eq!(extra[2].exclude_newer, Some(IndexExcludeNewer::Disabled));
+        assert_eq!(
+            extra[2].exclude_newer,
+            Some(ExcludeNewer::from_str("0d").unwrap())
+        );
         assert_eq!(
             extra[3].exclude_newer,
-            Some(IndexExcludeNewer::ExcludeNewer(
-                ExcludeNewer::from_str("2025-01-01").unwrap()
-            ))
+            Some(ExcludeNewer::from_str("2025-01-01").unwrap())
         );
     }
 
     #[test]
-    fn test_extra_index_exclude_newer_true_is_error() {
+    fn test_extra_index_exclude_newer_bool_is_error() {
         let input =
-            r#"extra-index-urls = [{ url = "https://internal/simple", exclude-newer = true }]"#;
+            r#"extra-index-urls = [{ url = "https://internal/simple", exclude-newer = false }]"#;
         assert_snapshot!(format_parse_error(
             input,
             PypiOptions::from_toml_str(input).unwrap_err()
@@ -421,7 +389,7 @@ mod test {
 
     #[test]
     fn test_extra_index_missing_url_is_error() {
-        let input = r#"extra-index-urls = [{ exclude-newer = false }]"#;
+        let input = r#"extra-index-urls = [{ exclude-newer = "0d" }]"#;
         assert_snapshot!(format_parse_error(
             input,
             PypiOptions::from_toml_str(input).unwrap_err()

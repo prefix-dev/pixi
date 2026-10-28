@@ -18,7 +18,7 @@ use pixi_record::{
     CondaEnvironmentFingerprint, LockedGitUrl, LockedGitUrlError, PinnedGitCheckout, PinnedGitSpec,
     PixiRecord,
 };
-use pixi_spec::{ExcludeNewer, GitReference as PixiReference, IndexExcludeNewer};
+use pixi_spec::{ExcludeNewer, GitReference as PixiReference};
 use std::{collections::HashSet, fmt::Write};
 use uv_configuration::BuildOptions;
 use uv_configuration::TrustedHost;
@@ -817,28 +817,22 @@ fn to_exclude_newer_timestamp(
 
 /// Converts a per-index `exclude-newer` override to uv's [`ExcludeNewerOverride`].
 ///
-/// `None` means the index inherits the global cutoff; `Disabled` disables the
-/// cutoff for that index; a value resolves any relative duration to an absolute
-/// timestamp (mirroring the global/per-package path).
+/// `None` means the index inherits the global cutoff, and a cutoff resolves any
+/// relative duration to an absolute timestamp (mirroring the global/per-package
+/// path).
 ///
-/// A zero cutoff such as `0d` disables the cutoff as well. As a cutoff of now,
-/// it would still exclude every release without an upload time.
+/// A zero cutoff such as `0d` disables the cutoff for the index. As a cutoff of
+/// now, it would still exclude every release without an upload time.
 fn to_index_exclude_newer_override(
-    exclude_newer: Option<IndexExcludeNewer>,
+    exclude_newer: Option<ExcludeNewer>,
 ) -> Option<ExcludeNewerOverride> {
-    match exclude_newer {
-        None => None,
-        Some(IndexExcludeNewer::Disabled) => Some(ExcludeNewerOverride::Disabled),
-        Some(IndexExcludeNewer::ExcludeNewer(ExcludeNewer::Duration(duration)))
-            if duration.is_zero() =>
-        {
+    match exclude_newer? {
+        ExcludeNewer::Duration(duration) if duration.is_zero() => {
             Some(ExcludeNewerOverride::Disabled)
         }
-        Some(IndexExcludeNewer::ExcludeNewer(exclude_newer)) => {
-            Some(ExcludeNewerOverride::Enabled(Box::new(
-                to_exclude_newer_timestamp(exclude_newer.cutoff()),
-            )))
-        }
+        exclude_newer => Some(ExcludeNewerOverride::Enabled(Box::new(
+            to_exclude_newer_timestamp(exclude_newer.cutoff()),
+        ))),
     }
 }
 
@@ -1266,20 +1260,12 @@ mod tests {
             extra_index_urls: Some(vec![
                 PypiExtraIndex::from_url("https://inherit/simple".parse().unwrap()),
                 PypiExtraIndex {
-                    url: "https://disabled/simple".parse().unwrap(),
-                    exclude_newer: Some(IndexExcludeNewer::Disabled),
-                },
-                PypiExtraIndex {
                     url: "https://zero/simple".parse().unwrap(),
-                    exclude_newer: Some(IndexExcludeNewer::ExcludeNewer(
-                        ExcludeNewer::from_str("0d").unwrap(),
-                    )),
+                    exclude_newer: Some(ExcludeNewer::from_str("0d").unwrap()),
                 },
                 PypiExtraIndex {
                     url: "https://custom/simple".parse().unwrap(),
-                    exclude_newer: Some(IndexExcludeNewer::ExcludeNewer(
-                        ExcludeNewer::from_str("2025-01-01").unwrap(),
-                    )),
+                    exclude_newer: Some(ExcludeNewer::from_str("2025-01-01").unwrap()),
                 },
             ]),
             ..Default::default()
@@ -1297,12 +1283,7 @@ mod tests {
 
         // No override -> inherits the global cutoff.
         assert_eq!(exclude_newer_for("inherit"), None);
-        // `false` -> disabled for this index.
-        assert_eq!(
-            exclude_newer_for("disabled"),
-            Some(ExcludeNewerOverride::Disabled)
-        );
-        // A zero cutoff -> disabled as well.
+        // A zero cutoff -> disabled for this index.
         assert_eq!(
             exclude_newer_for("zero"),
             Some(ExcludeNewerOverride::Disabled)

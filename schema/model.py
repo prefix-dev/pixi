@@ -1176,11 +1176,11 @@ class ExtraIndexInlineTable(StrictBaseModel):
         description="The extra index URL",
         examples=["https://pypi.org/simple"],
     )
-    exclude_newer: ExcludeNewer | Literal[False] | None = Field(
+    exclude_newer: ExcludeNewer | None = Field(
         None,
         description="Override the workspace-level `exclude-newer` cutoff for this index only; "
-        "`false` or a zero duration such as `0d` disables the cutoff entirely (useful for indexes that do not expose upload times)",
-        examples=["2025-01-01", False],
+        "a zero duration such as `0d` lifts the cutoff entirely, including for releases without an upload time",
+        examples=["2025-01-01", "0d"],
     )
 
 
@@ -1217,7 +1217,7 @@ class PyPIOptions(StrictBaseModel):
         "Each entry may be a URL string or an inline table with a per-index `exclude-newer` override.",
         examples=[
             ["https://pypi.org/simple"],
-            [{"url": "https://internal/simple", "exclude-newer": False}],
+            [{"url": "https://internal/simple", "exclude-newer": "0d"}],
         ],
     )
     find_links: list[FindLinksPath | FindLinksURL] | None = Field(

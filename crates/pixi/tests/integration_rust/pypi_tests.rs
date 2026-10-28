@@ -1556,23 +1556,21 @@ async fn test_exclude_newer_per_extra_index() {
         "expected the solve to fail on `internal`, got:\n{err:?}"
     );
 
-    for exclude_newer in ["false", "\"0d\""] {
-        let pixi = PixiControl::from_manifest(&manifest(&format!(
-            "{{ url = \"{}\", exclude-newer = {exclude_newer} }}",
-            internal_index.index_url()
-        )))
-        .unwrap();
-        let lock_file = pixi.update_lock_file().await.unwrap();
-        assert_eq!(
-            lock_file.get_pypi_package_version("default", platform, "internal"),
-            Some("1.0.0".into())
-        );
-        // The cutoff still applies to the packages of the other index.
-        assert_eq!(
-            lock_file.get_pypi_package_version("default", platform, "bar"),
-            Some("1.0.0".into())
-        );
-    }
+    let pixi = PixiControl::from_manifest(&manifest(&format!(
+        "{{ url = \"{}\", exclude-newer = \"0d\" }}",
+        internal_index.index_url()
+    )))
+    .unwrap();
+    let lock_file = pixi.update_lock_file().await.unwrap();
+    assert_eq!(
+        lock_file.get_pypi_package_version("default", platform, "internal"),
+        Some("1.0.0".into())
+    );
+    // The cutoff still applies to the packages of the other index.
+    assert_eq!(
+        lock_file.get_pypi_package_version("default", platform, "bar"),
+        Some("1.0.0".into())
+    );
 }
 
 #[tokio::test]
