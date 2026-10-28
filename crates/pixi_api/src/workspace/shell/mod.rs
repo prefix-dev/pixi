@@ -279,7 +279,6 @@ async fn start_nu_shell(
     let mut shell_script = ShellScript::new(shell, Subdir::current().unwrap_or(Subdir::NoArch));
     for (key, value) in env {
         if key == "PATH" {
-            // split path with PATHSEP
             let paths = std::env::split_paths(value).collect::<Vec<_>>();
             shell_script
                 .set_path(&paths, PathModificationBehavior::Replace)

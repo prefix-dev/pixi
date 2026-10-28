@@ -163,7 +163,6 @@ pub async fn run<I: Interface>(
     let task_graph = build_task_graph(interface, workspace, explicit_environment, &options).await?;
     tracing::debug!("Task graph: {}", task_graph);
 
-    // Print dry-run message if dry-run mode is enabled
     if options.dry_run {
         pixi_progress::println!(
             "{}{}\n\n",
@@ -232,7 +231,6 @@ pub async fn run<I: Interface>(
             && (!executable_task.task().is_custom() || options.display_command.is_some())
         {
             if task_idx > 0 {
-                // Add a newline between task outputs
                 pixi_progress::println!();
             }
 
@@ -348,7 +346,6 @@ pub async fn run<I: Interface>(
                     )?;
                 }
 
-                // Clear the current progress reports.
                 if let Some(progress) = &progress {
                     progress.on_clear();
                 }
