@@ -166,6 +166,24 @@ impl ExcludeNewerConfig {
         Ok(())
     }
 
+    /// Replaces the configuration with `config`, and the `exclude-newer`
+    /// entry of `parent` with `value`, the TOML that `config` was parsed from.
+    /// The cutoffs and exemptions are written as in `value`, e.g. `7d` instead
+    /// of the duration it parses into.
+    pub fn replace(
+        &mut self,
+        parent: &mut Table,
+        value: &str,
+        config: ExcludeNewerConfig,
+    ) -> Result<(), ExcludeNewerEditError> {
+        let mut value = Value::from_str(value)
+            .map_err(|_| ExcludeNewerEditError::MalformedEntry(CONDA_KEY.to_string()))?;
+        value.decor_mut().clear();
+        upsert_table_entry(parent, CONDA_KEY, value);
+        *self = config;
+        Ok(())
+    }
+
     /// Adds an exemption, or replaces the exemption of the same package, in
     /// both the configuration and `parent`.
     pub fn add_exemption(
@@ -505,6 +523,21 @@ mod tests {
                 .unwrap()
         );
         document.to_string()
+    }
+
+    #[test]
+    fn replace_writes_the_value_as_given() {
+        let value = r#"{ cutoff = "7d", exemptions = { ruff = { version = ">=0.1", cutoff = "2026-10-12T05:00:00+02:00" } } }"#;
+        let (expected, _) = conda(&format!("exclude-newer = {value}\n"));
+        let (mut config, mut document) = conda("name = \"x\"\n");
+        config
+            .replace(document.as_table_mut(), value, expected.clone())
+            .unwrap();
+        assert_eq!(config, expected);
+        assert_snapshot!(document.to_string(), @r#"
+        name = "x"
+        exclude-newer = { cutoff = "7d", exemptions = { ruff = { version = ">=0.1", cutoff = "2026-10-12T05:00:00+02:00" } } }
+        "#);
     }
 
     #[test]

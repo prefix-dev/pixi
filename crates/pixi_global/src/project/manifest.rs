@@ -9,7 +9,9 @@ use indexmap::IndexSet;
 use miette::IntoDiagnostic;
 use pixi_config::Config;
 use pixi_consts::consts;
-use pixi_manifest::{ExcludeNewerExemption, PrioritizedChannel, toml::TomlDocument};
+use pixi_manifest::{
+    ExcludeNewerConfig, ExcludeNewerExemption, PrioritizedChannel, toml::TomlDocument,
+};
 use pixi_toml::TomlIndexMap;
 use pixi_utils::{executable_from_path, strip_executable_extension};
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Subdir};
@@ -378,6 +380,20 @@ impl Manifest {
             .exclude_newer
             .set_cutoff(self.document.as_table_mut(), cutoff)?;
         tracing::debug!("Set exclude-newer cutoff to {cutoff:?} in toml document");
+        Ok(())
+    }
+
+    /// Replaces the `exclude-newer` of the manifest with `config`, written as
+    /// `value`, the TOML that `config` was parsed from.
+    pub fn set_exclude_newer(
+        &mut self,
+        value: &str,
+        config: ExcludeNewerConfig,
+    ) -> miette::Result<()> {
+        self.parsed
+            .exclude_newer
+            .replace(self.document.as_table_mut(), value, config)?;
+        tracing::debug!("Set exclude-newer to {value} in toml document");
         Ok(())
     }
 

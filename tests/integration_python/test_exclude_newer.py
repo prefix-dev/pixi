@@ -296,16 +296,18 @@ def test_config_exclude_newer_init(pixi: Path, tmp_path: Path) -> None:
     """`pixi init` writes the `exclude-newer` of the configuration."""
     env = {"PIXI_HOME": str(tmp_path / "home")}
     (tmp_path / "home").mkdir()
+    exemption = '{ version = ">=0.1", cutoff = "2026-10-12T05:00:00+02:00" }'
     (tmp_path / "home" / "config.toml").write_text(
-        '[exclude-newer]\ncutoff = "7d"\nexemptions = { dummy-b = "*" }\n'
+        f'[exclude-newer]\ncutoff = "7d"\nexemptions = {{ dummy-b = "*", dummy-a = {exemption} }}\n'
     )
 
     workspace = tmp_path / "workspace"
     verify_cli_command([pixi, "init", workspace], env=env)
-    assert exclude_newer(workspace / "pixi.toml") == {
-        "cutoff": "7d",
-        "exemptions": {"dummy-b": "*"},
-    }
+    # Everything is written as configured, including the exemptions.
+    assert (
+        f'exclude-newer = {{ cutoff = "7d", exemptions = {{ dummy-b = "*", dummy-a = {exemption} }} }}'
+        in (workspace / "pixi.toml").read_text()
+    )
 
 
 def test_config_exclude_newer_exec(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:

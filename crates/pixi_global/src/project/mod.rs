@@ -422,11 +422,9 @@ impl Project {
         let Some(configured) = self.config.exclude_newer.clone() else {
             return Ok(false);
         };
-        let exclude_newer = ExcludeNewerConfig::from_toml_value(
-            "exclude-newer",
-            &pixi_config::exclude_newer_to_toml(&configured),
-        )
-        .wrap_err("invalid `exclude-newer` in the pixi configuration")?;
+        let value = pixi_config::exclude_newer_to_toml(&configured);
+        let exclude_newer = ExcludeNewerConfig::from_toml_value("exclude-newer", &value)
+            .wrap_err("invalid `exclude-newer` in the pixi configuration")?;
 
         // `save` adds the version if it is missing, which would put it after
         // `exclude-newer`.
@@ -434,13 +432,7 @@ impl Project {
             "version",
             parsed_manifest::ManifestVersion::default().into(),
         );
-        // The cutoff is written as configured, e.g. `7d` instead of the
-        // duration it parses into.
-        self.manifest
-            .set_exclude_newer_cutoff(Some(&configured.cutoff))?;
-        for (name, exemption) in exclude_newer.exemptions {
-            self.manifest.add_exclude_newer_exemption(name, exemption)?;
-        }
+        self.manifest.set_exclude_newer(&value, exclude_newer)?;
         Ok(true)
     }
 

@@ -111,8 +111,8 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
     // and exemptions are overwritten, which makes its lock file stale. Only a
     // workspace that `pixi init` created should get it.
     let workspace = match exclude_newer {
-        Some((cutoff, exclude_newer)) => {
-            write_configured_exclude_newer(workspace, cutoff, exclude_newer).await?
+        Some((value, exclude_newer)) => {
+            write_configured_exclude_newer(workspace, &value, exclude_newer).await?
         }
         None => workspace,
     };
@@ -138,44 +138,37 @@ pub enum ConfiguredExcludeNewerError {
     Save(#[source] std::io::Error),
 }
 
-/// Returns the cutoff of the `exclude-newer` of the configuration as written,
-/// and the parsed configuration, if it is set.
-fn configured_exclude_newer(config: &Config) -> miette::Result<Option<(&str, ExcludeNewerConfig)>> {
+/// Returns the `exclude-newer` of the configuration as written, and parsed,
+/// if it is set.
+fn configured_exclude_newer(
+    config: &Config,
+) -> miette::Result<Option<(String, ExcludeNewerConfig)>> {
     config
         .exclude_newer
         .as_ref()
         .map(|configured| {
-            let parsed = ExcludeNewerConfig::from_toml_value(
-                "exclude-newer",
-                &pixi_config::exclude_newer_to_toml(configured),
-            )
-            .wrap_err("invalid `exclude-newer` in the pixi configuration")?;
-            Ok((configured.cutoff.as_str(), parsed))
+            let value = pixi_config::exclude_newer_to_toml(configured);
+            let parsed = ExcludeNewerConfig::from_toml_value("exclude-newer", &value)
+                .wrap_err("invalid `exclude-newer` in the pixi configuration")?;
+            Ok((value, parsed))
         })
         .transpose()
 }
 
-/// Writes the `exclude-newer` of the configuration into the `exclude-newer`
-/// of a new workspace.
+/// Writes the `exclude-newer` of the configuration, `value` as written and
+/// `exclude_newer` as parsed, into the `exclude-newer` of a new workspace.
 async fn write_configured_exclude_newer(
     workspace: Workspace,
-    cutoff: &str,
+    value: &str,
     exclude_newer: ExcludeNewerConfig,
 ) -> miette::Result<Workspace> {
     let mut workspace = workspace
         .modify()
         .map_err(ConfiguredExcludeNewerError::from)?;
-    let mut manifest = workspace.manifest();
-    // The cutoff is written as configured, e.g. `7d` instead of the duration
-    // it parses into.
-    manifest
-        .set_exclude_newer_cutoff(Some(cutoff))
+    workspace
+        .manifest()
+        .set_exclude_newer(value, exclude_newer)
         .map_err(ConfiguredExcludeNewerError::from)?;
-    for (name, exemption) in exclude_newer.exemptions {
-        manifest
-            .add_exclude_newer_exemption(name, exemption)
-            .map_err(ConfiguredExcludeNewerError::from)?;
-    }
     Ok(workspace
         .save()
         .await
