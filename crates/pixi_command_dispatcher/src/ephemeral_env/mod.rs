@@ -96,12 +96,10 @@ impl Hash for EphemeralEnvSpec {
         // solved with an earlier resolution still satisfies the cutoff, as
         // its packages only get older, the same way a prefix solved without
         // a cutoff is reused when newer packages are published.
-        match exclude_newer {
-            Some(exclude_newer) => {
-                true.hash(state);
-                exclude_newer.hash_configured(state);
-            }
-            None => false.hash(state),
+        // Hashed like `Option::hash`, so keys without a cutoff are unchanged.
+        mem::discriminant(exclude_newer).hash(state);
+        if let Some(exclude_newer) = exclude_newer {
+            exclude_newer.hash_configured(state);
         }
         // Neither SolveStrategy nor ChannelPriority implement Hash;
         // use the enum discriminant (both are C-like enums, so the

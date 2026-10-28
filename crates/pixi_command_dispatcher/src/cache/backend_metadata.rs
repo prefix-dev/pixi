@@ -118,12 +118,10 @@ impl MetadataCacheKey<BuildBackendMetadataCache> for BuildBackendMetadataCacheKe
         // Hash the cutoffs as configured, like the prefix of the backend
         // environment does, so a relative cutoff such as `14d` does not
         // create a new cache entry on every invocation.
-        match &self.exclude_newer {
-            Some(exclude_newer) => {
-                true.hash(&mut hasher);
-                exclude_newer.hash_configured(&mut hasher);
-            }
-            None => false.hash(&mut hasher),
+        // Hashed like `Option::hash`, so keys without a cutoff are unchanged.
+        std::mem::discriminant(&self.exclude_newer).hash(&mut hasher);
+        if let Some(exclude_newer) = &self.exclude_newer {
+            exclude_newer.hash_configured(&mut hasher);
         }
 
         self.build_environment.build_platform.hash(&mut hasher);
