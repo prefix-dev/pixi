@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 from typing import Any, cast
 
@@ -311,7 +312,20 @@ def test_default_exclude_newer_exec(pixi: Path, tmp_path: Path, dummy_channel_1:
     """`pixi exec` solves with the `default-exclude-newer` of the configuration."""
     env = {"PIXI_HOME": str(tmp_path)}
     config = tmp_path / "config.toml"
-    command: list[str | Path] = [pixi, "exec", "--channel", dummy_channel_1, "--list", "dummy-g"]
+    # The dummy packages ship no executable that runs on Windows, so install
+    # dummy-g as a spec and run a command that exists on every platform.
+    noop = ["cmd", "/c", "exit 0"] if sys.platform.startswith("win") else ["true"]
+    command: list[str | Path] = [
+        pixi,
+        "exec",
+        "--channel",
+        dummy_channel_1,
+        "--list",
+        "--spec",
+        "dummy-g",
+        "--",
+        *noop,
+    ]
 
     # Every package in dummy_channel_1 was uploaded in 2025.
     config.write_text('default-exclude-newer = "2020-01-01"\n')
