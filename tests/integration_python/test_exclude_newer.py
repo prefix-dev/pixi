@@ -352,6 +352,7 @@ def test_config_exclude_newer_global(pixi: Path, tmp_path: Path, dummy_channel_1
         [pixi, "global", "install", "--channel", dummy_channel_1, "dummy-b"], env=env
     )
     manifest = tomli.loads((tmp_path / "manifests" / "pixi-global.toml").read_text())
+    assert list(manifest)[:2] == ["version", "exclude-newer"]
     assert manifest["exclude-newer"] == {
         "cutoff": "2020-01-01",
         "exemptions": {"dummy-b": "*"},

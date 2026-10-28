@@ -428,6 +428,12 @@ impl Project {
         )
         .wrap_err("invalid `exclude-newer` in the pixi configuration")?;
 
+        // `save` adds the version if it is missing, which would put it after
+        // `exclude-newer`.
+        self.manifest.document.get_or_insert(
+            "version",
+            parsed_manifest::ManifestVersion::default().into(),
+        );
         // The cutoff is written as configured, e.g. `7d` instead of the
         // duration it parses into.
         self.manifest
