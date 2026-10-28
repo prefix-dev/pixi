@@ -154,12 +154,43 @@ impl JsonRpcBackend {
         workspace_scratch_directory: Option<PathBuf>,
         tool: Tool,
     ) -> Result<Self, InitializeError> {
+        Self::setup_with_verbosity(
+            source_dir,
+            manifest_path,
+            workspace_root,
+            checkout_root,
+            package_manifest,
+            configuration,
+            target_configuration,
+            cache_dir,
+            workspace_scratch_directory,
+            tool,
+            crate::tool::BackendVerbosity::default(),
+        )
+        .await
+    }
+
+    /// Set up a new protocol instance with explicit backend verbosity.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn setup_with_verbosity(
+        source_dir: PathBuf,
+        manifest_path: PathBuf,
+        workspace_root: PathBuf,
+        checkout_root: Option<PathBuf>,
+        package_manifest: Option<ProjectModel>,
+        configuration: Option<serde_json::Value>,
+        target_configuration: Option<OrderMap<TargetSelector, serde_json::Value>>,
+        cache_dir: Option<PathBuf>,
+        workspace_scratch_directory: Option<PathBuf>,
+        tool: Tool,
+        backend_verbosity: crate::tool::BackendVerbosity,
+    ) -> Result<Self, InitializeError> {
         debug_assert!(source_dir.is_absolute());
         debug_assert!(manifest_path.is_absolute());
         debug_assert!(workspace_root.is_absolute());
         debug_assert!(checkout_root.as_ref().is_none_or(|p| p.is_absolute()));
         // Spawn the tool and capture stdin/stdout.
-        let command = tool.command();
+        let command = tool.command_with_verbosity(backend_verbosity);
         let program_name = command.get_program().to_string_lossy().into_owned();
         let mut process = match tokio::process::Command::from(command)
             .stdout(std::process::Stdio::piped())
