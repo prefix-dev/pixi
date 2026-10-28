@@ -1485,6 +1485,38 @@ async fn upload_to_quetz(
     upload_package_to_quetz(&ctx.auth_storage, &package_paths.to_vec(), quetz_data).await
 }
 
+/// Split an Artifactory channel URL into the base URL and the repository name.
+///
+/// The repository is the last path segment; anything before it (e.g. the
+/// `/artifactory/` context path) stays in the base URL, so packages are uploaded
+/// to `<base>/<repository>/<subdir>/<file>`: the same location the channel is
+/// read from.
+fn artifactory_server_and_channel(url: &Url) -> miette::Result<(Url, String)> {
+    let mut server_url = rewrite_scheme_to_https(url, "artifactory")?;
+    let mut segments: Vec<String> = server_url
+        .path_segments()
+        .map(|segments| {
+            segments
+                .filter(|segment| !segment.is_empty())
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default();
+    let channel = segments
+        .pop()
+        .ok_or_else(|| miette::miette!("Invalid Artifactory URL: missing repository name"))?;
+
+    let prefix: String = segments
+        .iter()
+        .map(|segment| format!("{segment}/"))
+        .collect();
+    server_url.set_path(&format!("/{prefix}"));
+    server_url.set_query(None);
+    server_url.set_fragment(None);
+
+    Ok((server_url, channel))
+}
+
 /// Upload packages to an Artifactory server.
 async fn upload_to_artifactory(
     url: &Url,
@@ -1496,15 +1528,7 @@ async fn upload_to_artifactory(
 
     tracing::info!("Uploading packages to Artifactory: {}", url);
 
-    let channel = url
-        .path_segments()
-        .and_then(|mut segments| segments.next_back())
-        .ok_or_else(|| miette::miette!("Invalid Artifactory URL: missing repository name"))?
-        .to_string();
-
-    let mut server_url = rewrite_scheme_to_https(url, "artifactory")?;
-    server_url.set_path("");
-
+    let (server_url, channel) = artifactory_server_and_channel(url)?;
     let artifactory_data = ArtifactoryData::new(server_url, channel);
 
     upload_package_to_artifactory(&ctx.auth_storage, &package_paths.to_vec(), artifactory_data)
@@ -2029,6 +2053,36 @@ mod tests {
             let rewritten = rewrite_scheme_to_https(&url, scheme).unwrap();
             assert_eq!(rewritten.as_str(), "https://example.com:8443/conda_dev");
         }
+    }
+
+    #[test]
+    fn artifactory_url_splits_into_base_and_repository() {
+        for (raw, expected_server, expected_channel) in [
+            (
+                "artifactory://files.example.com/conda-internal",
+                "https://files.example.com/",
+                "conda-internal",
+            ),
+            (
+                "artifactory://my-org.jfrog.io/artifactory/channel-1/",
+                "https://my-org.jfrog.io/artifactory/",
+                "channel-1",
+            ),
+            (
+                "artifactory://my-org.jfrog.io:8443/artifactory/channel-1",
+                "https://my-org.jfrog.io:8443/artifactory/",
+                "channel-1",
+            ),
+        ] {
+            let (server, channel) =
+                artifactory_server_and_channel(&Url::parse(raw).unwrap()).unwrap();
+            assert_eq!(server.as_str(), expected_server, "{raw}");
+            assert_eq!(channel, expected_channel, "{raw}");
+        }
+        assert!(
+            artifactory_server_and_channel(&Url::parse("artifactory://example.com/").unwrap())
+                .is_err()
+        );
     }
 
     #[test]
