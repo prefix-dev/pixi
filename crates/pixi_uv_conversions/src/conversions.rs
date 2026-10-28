@@ -181,8 +181,12 @@ pub fn pypi_options_to_index_locations(
 }
 
 /// Convert locked indexes to IndexLocations
+///
+/// The lock file only stores the URLs of the indexes, so the per-index
+/// `exclude-newer` overrides are taken from `extra_index_urls` of the manifest.
 pub fn locked_indexes_to_index_locations(
     indexes: &rattler_lock::PypiIndexes,
+    extra_index_urls: &[PypiExtraIndex],
     base_path: &Path,
 ) -> Result<IndexLocations, ConvertFlatIndexLocationError> {
     // Check if the base path is absolute
@@ -202,15 +206,17 @@ pub fn locked_indexes_to_index_locations(
         .map(IndexUrl::from)
         .map(Index::from_index_url)
         .into_iter();
-    let extra_indexes = indexes
-        .indexes
-        .iter()
-        .skip(1)
-        .cloned()
-        .map(SafeUrl::from_url)
-        .map(VerbatimUrl::from_url)
-        .map(IndexUrl::from)
-        .map(Index::from_extra_index_url);
+    let extra_indexes = indexes.indexes.iter().skip(1).map(|url| {
+        let index_url = IndexUrl::from(VerbatimUrl::from_url(SafeUrl::from_url(url.clone())));
+        let mut index = Index::from_extra_index_url(index_url);
+        index.exclude_newer = to_index_exclude_newer_override(
+            extra_index_urls
+                .iter()
+                .find(|extra_index| &extra_index.url == url)
+                .and_then(|extra_index| extra_index.exclude_newer),
+        );
+        index
+    });
     let flat_indexes = indexes
         .find_links
         .iter()
@@ -1272,26 +1278,40 @@ mod tests {
         };
 
         let base_path = std::env::temp_dir();
-        let index_locations = pypi_options_to_index_locations(&options, &base_path).unwrap();
-
-        let exclude_newer_for = |needle: &str| {
-            index_locations
-                .indexes()
-                .find(|index| index.url().to_string().contains(needle))
-                .and_then(|index| index.exclude_newer.clone())
+        let extra_index_urls = options.extra_index_urls.clone().unwrap();
+        // The lock file only stores the URLs, so installing takes the overrides
+        // from the manifest.
+        let locked_indexes = rattler_lock::PypiIndexes {
+            indexes: std::iter::once("https://pypi.org/simple".parse().unwrap())
+                .chain(extra_index_urls.iter().map(|index| index.url.clone()))
+                .collect(),
+            find_links: Vec::new(),
         };
 
-        // No override -> inherits the global cutoff.
-        assert_eq!(exclude_newer_for("inherit"), None);
-        // A zero cutoff -> disabled for this index.
-        assert_eq!(
-            exclude_newer_for("zero"),
-            Some(ExcludeNewerOverride::Disabled)
-        );
-        // A value -> enabled with the resolved cutoff for this index.
-        assert!(matches!(
-            exclude_newer_for("custom"),
-            Some(ExcludeNewerOverride::Enabled(_))
-        ));
+        for index_locations in [
+            pypi_options_to_index_locations(&options, &base_path).unwrap(),
+            locked_indexes_to_index_locations(&locked_indexes, &extra_index_urls, &base_path)
+                .unwrap(),
+        ] {
+            let exclude_newer_for = |needle: &str| {
+                index_locations
+                    .indexes()
+                    .find(|index| index.url().to_string().contains(needle))
+                    .and_then(|index| index.exclude_newer.clone())
+            };
+
+            // No override -> inherits the global cutoff.
+            assert_eq!(exclude_newer_for("inherit"), None);
+            // A zero cutoff -> disabled for this index.
+            assert_eq!(
+                exclude_newer_for("zero"),
+                Some(ExcludeNewerOverride::Disabled)
+            );
+            // A value -> enabled with the resolved cutoff for this index.
+            assert!(matches!(
+                exclude_newer_for("custom"),
+                Some(ExcludeNewerOverride::Enabled(_))
+            ));
+        }
     }
 }
