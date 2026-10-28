@@ -315,7 +315,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use std::path::Path;
+    use std::{collections::HashMap, path::Path};
 
     use rattler_lock::LockFile;
     use tempfile::tempdir;
@@ -349,6 +349,52 @@ mod tests {
                     format!("test_render_conda_explicit_spec_{env_name}_{platform_name}"),
                     fs_err::read_to_string(file_path).unwrap()
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn test_render_conda_explicit_spec_sha256() {
+        let path = Path::new(env!("CARGO_WORKSPACE_DIR"))
+            .join("tests/data/mock-projects/test-project-export/pixi.lock");
+        let lock_file = LockFile::from_path(&path).unwrap();
+
+        let output_dir = tempdir().unwrap();
+
+        for (env_name, env) in lock_file.environments() {
+            for platform in env.platforms() {
+                let platform_name = platform.name();
+                render_env_platform(output_dir.path(), env_name, &env, platform, true, true)
+                    .unwrap();
+
+                let expected: HashMap<String, String> = env
+                    .packages(platform)
+                    .unwrap()
+                    .filter_map(|package| match package {
+                        LockedPackage::Conda(CondaPackageData::Binary(p)) => {
+                            let record = RepoDataRecord::try_from(*p.clone()).unwrap();
+                            let sha256 = hex::encode(record.package_record.sha256.unwrap());
+                            Some((record.url.to_string(), sha256))
+                        }
+                        _ => None,
+                    })
+                    .collect();
+
+                let file_path = output_dir
+                    .path()
+                    .join(format!("{env_name}_{platform_name}_conda_spec.txt"));
+                let mut seen = 0;
+                for line in fs_err::read_to_string(file_path).unwrap().lines() {
+                    let Some((url, hash)) = line.split_once('#') else {
+                        continue;
+                    };
+                    if !url.contains("://") {
+                        continue;
+                    }
+                    assert_eq!(expected.get(url), Some(&hash.to_string()), "{line}");
+                    seen += 1;
+                }
+                assert_eq!(seen, expected.len());
             }
         }
     }
