@@ -14,7 +14,7 @@ use pixi_consts::consts;
 use pixi_core::{Workspace, workspace::WorkspaceMut};
 use pixi_manifest::{
     CondaPypiMap, CondaPypiMapEntry, CondaPypiMapSpec, CondaPypiMappingMode, ExcludeNewerConfig,
-    FeatureName, pyproject::PyProjectManifest,
+    ExcludeNewerEditError, FeatureName, LoadManifestsError, pyproject::PyProjectManifest,
 };
 use pixi_utils::conda_environment_file::CondaEnvFile;
 use rattler_conda_types::{NamedChannelOrUrl, Subdir};
@@ -109,6 +109,22 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
     Ok(workspace)
 }
 
+/// An error that occurs while writing the `default-exclude-newer` of the
+/// configuration into a new workspace.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum DefaultExcludeNewerError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    LoadWorkspace(#[from] LoadManifestsError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Edit(#[from] ExcludeNewerEditError),
+
+    #[error("failed to save the manifest")]
+    Save(#[source] std::io::Error),
+}
+
 /// Writes the `default-exclude-newer` of the configuration into the
 /// `exclude-newer` of a new workspace.
 async fn write_default_exclude_newer(
@@ -122,17 +138,24 @@ async fn write_default_exclude_newer(
         ExcludeNewerConfig::from_toml_value("default-exclude-newer", &default.to_toml())
             .wrap_err("invalid `default-exclude-newer` in the pixi configuration")?;
 
-    let mut workspace = workspace.modify().into_diagnostic()?;
+    let mut workspace = workspace.modify().map_err(DefaultExcludeNewerError::from)?;
     let mut manifest = workspace.manifest();
     // The cutoff is written as configured, e.g. `7d` instead of the duration
     // it parses into.
     if let Some(cutoff) = default.cutoff() {
-        manifest.set_exclude_newer_cutoff(Some(&cutoff))?;
+        manifest
+            .set_exclude_newer_cutoff(Some(&cutoff))
+            .map_err(DefaultExcludeNewerError::from)?;
     }
     for (name, exemption) in exclude_newer.exemptions {
-        manifest.add_exclude_newer_exemption(name, exemption)?;
+        manifest
+            .add_exclude_newer_exemption(name, exemption)
+            .map_err(DefaultExcludeNewerError::from)?;
     }
-    workspace.save().await.into_diagnostic()
+    Ok(workspace
+        .save()
+        .await
+        .map_err(DefaultExcludeNewerError::Save)?)
 }
 
 async fn calculate_strategy<I: Interface>(
