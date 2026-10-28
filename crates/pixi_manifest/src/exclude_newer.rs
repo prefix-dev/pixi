@@ -6,8 +6,8 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use pixi_pypi_spec::{PypiPackageName, VersionOrStar};
 use pixi_spec::{
-    BinarySpec, DetailedSpec, ExcludeNewer, InvalidExemptionError, PixiSpec, ResolvedExcludeNewer,
-    SpecConversionError,
+    BinarySpec, ConfiguredCutoffs, DetailedSpec, ExcludeNewer, InvalidExemptionError, PixiSpec,
+    ResolvedExcludeNewer, SpecConversionError,
 };
 use rattler_conda_types::{ChannelConfig, MatchSpec, PackageName, ParseChannelError};
 use serde::ser::SerializeMap;
@@ -265,6 +265,10 @@ fn resolve_exclude_newer_at<'a>(
     let mut exclude_newer = config
         .cutoff
         .map(|cutoff| ResolvedExcludeNewer::from_datetime(cutoff.cutoff_at(now)));
+    let mut configured = ConfiguredCutoffs {
+        cutoff: config.cutoff,
+        ..ConfiguredCutoffs::default()
+    };
 
     for channel in channels {
         let Some(channel_exclude_newer) = channel.exclude_newer else {
@@ -272,6 +276,9 @@ fn resolve_exclude_newer_at<'a>(
         };
 
         let channel_key = channel.channel.clone().into_base_url(channel_config)?;
+        configured
+            .channel_cutoffs
+            .insert(channel_key.clone(), channel_exclude_newer);
         let config = exclude_newer
             .get_or_insert_with(|| ResolvedExcludeNewer::from_datetime(DateTime::<Utc>::MAX_UTC));
         *config = config
@@ -281,6 +288,9 @@ fn resolve_exclude_newer_at<'a>(
 
     #[allow(deprecated)]
     for (name, package_exclude_newer) in package_overrides {
+        configured
+            .package_cutoffs
+            .insert(name.clone(), *package_exclude_newer);
         let config = exclude_newer
             .get_or_insert_with(|| ResolvedExcludeNewer::from_datetime(DateTime::<Utc>::MAX_UTC));
         *config = config
@@ -290,6 +300,7 @@ fn resolve_exclude_newer_at<'a>(
 
     // Exemptions only matter when something is excluded in the first place.
     if let Some(mut resolved) = exclude_newer.take() {
+        resolved = resolved.with_configured_cutoffs(configured);
         for (name, exemption) in &config.exemptions {
             let spec = exemption_match_spec(name, exemption, channel_config)?;
             resolved = resolved.with_exemption_until(spec, exemption.cutoff)?;
@@ -727,6 +738,49 @@ mod tests {
         );
         // Without a cutoff nothing is excluded, so nothing is stale.
         assert_eq!(stale(&config, &[]), Vec::<String>::new());
+    }
+
+    /// Relative cutoffs resolve to a different time on every invocation,
+    /// which must not change the configured hash that on-disk cache keys use.
+    #[test]
+    fn test_configured_hash_is_stable_for_relative_cutoffs() {
+        use std::hash::{DefaultHasher, Hash, Hasher};
+
+        let config = ExcludeNewerConfig {
+            cutoff: Some(ExcludeNewer::from_str("14d").unwrap()),
+            exemptions: IndexMap::from_iter([(
+                "polars".parse().unwrap(),
+                exemption("==1", Some("2026-10-19T00:00:00Z")),
+            )]),
+        };
+        let channels = [channel("conda-forge", Some("7d"))];
+        let configured_hash = |config: &ExcludeNewerConfig, now: &str| {
+            let resolved = resolve_exclude_newer_at(
+                config,
+                &channels,
+                &ChannelConfig::default_with_root_dir("/".into()),
+                [],
+                now.parse().unwrap(),
+            )
+            .unwrap()
+            .unwrap();
+            let mut hasher = DefaultHasher::new();
+            resolved.hash_configured(&mut hasher);
+            let mut resolved_hasher = DefaultHasher::new();
+            resolved.hash(&mut resolved_hasher);
+            (hasher.finish(), resolved_hasher.finish())
+        };
+
+        let (early, early_resolved) = configured_hash(&config, "2026-10-01T00:00:00Z");
+        let (late, late_resolved) = configured_hash(&config, "2026-10-28T00:00:00Z");
+        assert_ne!(early_resolved, late_resolved);
+        assert_eq!(early, late);
+
+        let other = ExcludeNewerConfig {
+            cutoff: Some(ExcludeNewer::from_str("7d").unwrap()),
+            ..config.clone()
+        };
+        assert_ne!(early, configured_hash(&other, "2026-10-01T00:00:00Z").0);
     }
 
     #[test]

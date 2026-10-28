@@ -115,7 +115,16 @@ impl MetadataCacheKey<BuildBackendMetadataCache> for BuildBackendMetadataCacheKe
     fn key(&self) -> CacheKeyString<BuildBackendMetadataCache> {
         let mut hasher = DefaultHasher::new();
         self.channel_urls.hash(&mut hasher);
-        self.exclude_newer.hash(&mut hasher);
+        // Hash the cutoffs as configured, like the prefix of the backend
+        // environment does, so a relative cutoff such as `14d` does not
+        // create a new cache entry on every invocation.
+        match &self.exclude_newer {
+            Some(exclude_newer) => {
+                true.hash(&mut hasher);
+                exclude_newer.hash_configured(&mut hasher);
+            }
+            None => false.hash(&mut hasher),
+        }
 
         self.build_environment.build_platform.hash(&mut hasher);
         let mut build_virtual_packages = self.build_environment.build_virtual_packages.clone();
