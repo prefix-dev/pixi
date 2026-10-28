@@ -1271,8 +1271,8 @@ mod tests {
             ..Default::default()
         };
 
-        let base_path = std::path::Path::new("/abs/path");
-        let index_locations = pypi_options_to_index_locations(&options, base_path).unwrap();
+        let base_path = std::env::temp_dir();
+        let index_locations = pypi_options_to_index_locations(&options, &base_path).unwrap();
 
         let exclude_newer_for = |needle: &str| {
             index_locations
