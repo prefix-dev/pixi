@@ -321,7 +321,7 @@ impl PypiOptions {
         )?;
 
         // Ordered lists, deduplicated
-        let extra_indexes = merge_list_dedup(&self.extra_index_urls, &other.extra_index_urls);
+        let extra_indexes = merge_extra_indexes(&self.extra_index_urls, &other.extra_index_urls)?;
         let flat_indexes = merge_list_dedup(&self.find_links, &other.find_links);
 
         // Union-like fields
@@ -356,10 +356,11 @@ impl PypiOptions {
     ///   union of both sides.
     /// - `dependency_overrides`: `other` keys override `self` keys.
     ///
-    /// Unlike [`Self::union`], this never errors on conflicting single-value
-    /// fields; `other` simply overrides `self`.
-    pub fn overlay(&self, other: &PypiOptions) -> PypiOptions {
-        PypiOptions {
+    /// Unlike [`Self::union`], this doesn't error on conflicting single-value
+    /// fields; `other` simply overrides `self`. It only errors on an extra
+    /// index that is listed with different cutoffs.
+    pub fn overlay(&self, other: &PypiOptions) -> Result<PypiOptions, PypiOptionsMergeError> {
+        Ok(PypiOptions {
             index_url: other.index_url.clone().or_else(|| self.index_url.clone()),
             index_strategy: other
                 .index_strategy
@@ -369,7 +370,7 @@ impl PypiOptions {
             skip_wheel_filename_check: other
                 .skip_wheel_filename_check
                 .or(self.skip_wheel_filename_check),
-            extra_index_urls: merge_list_dedup(&self.extra_index_urls, &other.extra_index_urls),
+            extra_index_urls: merge_extra_indexes(&self.extra_index_urls, &other.extra_index_urls)?,
             find_links: merge_list_dedup(&self.find_links, &other.find_links),
             no_build_isolation: self.no_build_isolation.union(&other.no_build_isolation),
             no_build: self.no_build.union(&other.no_build),
@@ -378,7 +379,7 @@ impl PypiOptions {
                 &other.dependency_overrides,
                 &self.dependency_overrides,
             ),
-        }
+        })
     }
 }
 
@@ -485,6 +486,31 @@ impl From<rattler_lock::PypiPrereleaseMode> for PrereleaseMode {
     }
 }
 
+/// Merges two lists of extra indexes, deduplicated by URL in the order they
+/// are provided. The same URL with different cutoffs is ambiguous, so it is an
+/// error.
+fn merge_extra_indexes(
+    a: &Option<Vec<PypiExtraIndex>>,
+    b: &Option<Vec<PypiExtraIndex>>,
+) -> Result<Option<Vec<PypiExtraIndex>>, PypiOptionsMergeError> {
+    if a.is_none() && b.is_none() {
+        return Ok(None);
+    }
+    let mut merged: Vec<PypiExtraIndex> = Vec::new();
+    for index in a.iter().chain(b).flatten() {
+        match merged.iter().find(|existing| existing.url == index.url) {
+            Some(existing) if existing.exclude_newer != index.exclude_newer => {
+                return Err(PypiOptionsMergeError::ConflictingExtraIndexCutoffs {
+                    url: index.url.to_string(),
+                });
+            }
+            Some(_) => {}
+            None => merged.push(index.clone()),
+        }
+    }
+    Ok(Some(merged))
+}
+
 #[derive(Error, Debug)]
 pub enum PypiOptionsMergeError {
     #[error(
@@ -503,6 +529,8 @@ pub enum PypiOptionsMergeError {
         "multiple skip-wheel-filename-check values are not supported, found both {first} and {second} across multiple pypi options"
     )]
     MultipleSkipWheelFilenameCheck { first: bool, second: bool },
+    #[error("extra index {url} is listed with different exclude-newer cutoffs")]
+    ConflictingExtraIndexCutoffs { url: String },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -574,6 +602,8 @@ impl FromIterator<pep508_rs::PackageName> for NoBuildIsolation {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use url::Url;
 
     use super::{PypiOptions, *};
@@ -733,6 +763,31 @@ mod tests {
                 pkg3.clone()
             ]))
         );
+    }
+
+    #[test]
+    fn test_extra_indexes_deduplicated_by_url() {
+        let plain = PypiExtraIndex::from_url(Url::parse("https://internal/simple").unwrap());
+        let zero = PypiExtraIndex {
+            exclude_newer: Some(ExcludeNewer::from_str("0d").unwrap()),
+            ..plain.clone()
+        };
+        let options = |index: &PypiExtraIndex| PypiOptions {
+            extra_index_urls: Some(vec![index.clone()]),
+            ..Default::default()
+        };
+
+        let merged = options(&zero).union(&options(&zero)).unwrap();
+        assert_eq!(merged.extra_index_urls, Some(vec![zero.clone()]));
+
+        assert!(matches!(
+            options(&plain).union(&options(&zero)),
+            Err(PypiOptionsMergeError::ConflictingExtraIndexCutoffs { .. })
+        ));
+        assert!(matches!(
+            options(&plain).overlay(&options(&zero)),
+            Err(PypiOptionsMergeError::ConflictingExtraIndexCutoffs { .. })
+        ));
     }
 
     #[test]

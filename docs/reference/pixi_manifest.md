@@ -693,6 +693,7 @@ Often you might want to use an alternative or extra index for your workspace. Th
    a private mirror that does not expose `upload-time` metadata. Unlike other cutoffs, this also keeps
    releases without an upload time. Exemptions in
    [`pypi-exclude-newer`](#exclude-newer-optional) take precedence over the cutoff of an index.
+   Listing the same index with different cutoffs in one environment is an error.
 - `find-links`: which can either be a path `{path = './links'}` or a url `{url = 'https://example.com/links'}`.
    This is similar to the `--find-links` option in `pip`. These are merged across features into an
    environment.
