@@ -1,5 +1,10 @@
 use std::{
-    collections::BTreeSet, collections::HashMap, path::Path, process::ExitCode, str::FromStr,
+    collections::BTreeSet,
+    collections::HashMap,
+    hash::{DefaultHasher, Hasher},
+    path::Path,
+    process::ExitCode,
+    str::FromStr,
 };
 
 use clap::{Parser, ValueHint};
@@ -210,21 +215,30 @@ pub async fn create_exec_prefix(
 
     // The `exclude-newer` of the configuration applies to `pixi exec`, which
     // has no manifest of its own.
-    let configured_exclude_newer = config
+    let exclude_newer = config
         .exclude_newer
         .as_ref()
-        .map(pixi_config::exclude_newer_to_toml);
-    let exclude_newer = configured_exclude_newer
-        .as_deref()
-        .map(|toml| {
-            ExcludeNewerConfig::from_toml_value("exclude-newer", toml)
-                .wrap_err("invalid `exclude-newer` in the pixi configuration")
+        .map(|exclude_newer| {
+            let toml = pixi_config::exclude_newer_to_toml(exclude_newer);
+            let exclude_newer = ExcludeNewerConfig::from_toml_value("exclude-newer", &toml)?;
+            resolve_exclude_newer(&exclude_newer, [], config.global_channel_config(), [])
+                .into_diagnostic()
         })
-        .transpose()?;
+        .transpose()
+        .wrap_err("invalid `exclude-newer` in the pixi configuration")?
+        .flatten();
+
+    // Hash the cutoffs as configured, like the backend metadata cache does,
+    // so a relative cutoff such as `7d` keeps reusing the same environment.
+    let exclude_newer_hash = exclude_newer.as_ref().map(|exclude_newer| {
+        let mut hasher = DefaultHasher::new();
+        exclude_newer.hash_configured(&mut hasher);
+        hasher.finish()
+    });
 
     let environment_hash =
         EnvironmentHash::new(specs.clone(), channels, platform, config.offline())
-            .with_exclude_newer(configured_exclude_newer);
+            .with_exclude_newer_hash(exclude_newer_hash);
 
     let dir_prefix = exec_dir_prefix(
         &specs,
@@ -338,14 +352,7 @@ pub async fn create_exec_prefix(
     .into_diagnostic()
     .context("failed to read the package cache")?;
 
-    let exclude_newer = exclude_newer
-        .map(|exclude_newer| {
-            resolve_exclude_newer(&exclude_newer, [], config.global_channel_config(), [])
-                .wrap_err("invalid `exclude-newer` in the pixi configuration")
-        })
-        .transpose()?
-        .flatten()
-        .map(rattler_solve::ExcludeNewer::from);
+    let exclude_newer = exclude_newer.map(rattler_solve::ExcludeNewer::from);
 
     // Solve the environment
     tracing::info!(

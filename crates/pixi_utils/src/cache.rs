@@ -13,10 +13,11 @@ pub struct EnvironmentHash {
     /// can pick older versions, and the prefix is reused across runs: without
     /// it a restricted environment would be served to later online ones.
     pub offline: bool,
-    /// The `exclude-newer` configuration the environment was solved with, as
-    /// configured. A relative cutoff such as `7d` is kept as written, so the
-    /// environment is reused across runs: its packages only get older.
-    pub exclude_newer: Option<String>,
+    /// Hash of the `exclude-newer` configuration the environment was solved
+    /// with, as configured rather than as resolved. A relative cutoff such as
+    /// `7d` hashes the same on every run, so the environment is reused: its
+    /// packages only get older.
+    pub exclude_newer_hash: Option<u64>,
 }
 
 impl Hash for EnvironmentHash {
@@ -26,7 +27,7 @@ impl Hash for EnvironmentHash {
             channels,
             platform,
             offline,
-            exclude_newer,
+            exclude_newer_hash,
         } = self;
         specs.hash(state);
         channels.hash(state);
@@ -34,8 +35,8 @@ impl Hash for EnvironmentHash {
         offline.hash(state);
         // Only hashed when set, so the environments solved without a cutoff
         // keep their names.
-        if let Some(exclude_newer) = exclude_newer {
-            exclude_newer.hash(state);
+        if let Some(exclude_newer_hash) = exclude_newer_hash {
+            exclude_newer_hash.hash(state);
         }
     }
 }
@@ -55,14 +56,14 @@ impl EnvironmentHash {
             channels,
             platform,
             offline,
-            exclude_newer: None,
+            exclude_newer_hash: None,
         }
     }
 
-    /// Sets the `exclude-newer` configuration the environment is solved
-    /// with, see [`Self::exclude_newer`].
-    pub fn with_exclude_newer(mut self, exclude_newer: Option<String>) -> Self {
-        self.exclude_newer = exclude_newer;
+    /// Sets the hash of the `exclude-newer` configuration the environment is
+    /// solved with, see [`Self::exclude_newer_hash`].
+    pub fn with_exclude_newer_hash(mut self, exclude_newer_hash: Option<u64>) -> Self {
+        self.exclude_newer_hash = exclude_newer_hash;
         self
     }
 
@@ -115,13 +116,13 @@ mod tests {
     #[test]
     fn name_depends_on_exclude_newer() {
         let without = EnvironmentHash::new(vec![spec("foo")], vec![], Subdir::Linux64, false);
-        let with = |cutoff: &str| {
+        let with = |exclude_newer_hash: u64| {
             EnvironmentHash::new(vec![spec("foo")], vec![], Subdir::Linux64, false)
-                .with_exclude_newer(Some(cutoff.to_string()))
+                .with_exclude_newer_hash(Some(exclude_newer_hash))
         };
-        assert_ne!(without.name(None), with("\"7d\"").name(None));
-        assert_ne!(with("\"7d\"").name(None), with("\"14d\"").name(None));
-        assert_eq!(with("\"7d\"").name(None), with("\"7d\"").name(None));
+        assert_ne!(without.name(None), with(1).name(None));
+        assert_ne!(with(1).name(None), with(2).name(None));
+        assert_eq!(with(1).name(None), with(1).name(None));
     }
 
     #[test]
