@@ -395,11 +395,17 @@ impl Project {
                     );
             } else {
                 tracing::debug!("Create an empty global manifest.");
-                tokio_fs::File::create(&manifest_path)
-                    .await
-                    .into_diagnostic()?;
-                let mut project = Self::from_path(&manifest_path, env_root, bin_dir)?;
-                project.write_configured_exclude_newer().await?;
+                // Nothing is written before the `exclude-newer` of the
+                // configuration is parsed, so an invalid configuration doesn't
+                // leave behind a manifest that never gets it.
+                let mut project = Self::from_str(&manifest_path, "", env_root, bin_dir)?;
+                if project.add_configured_exclude_newer()? {
+                    project.manifest.save().await?;
+                } else {
+                    tokio_fs::File::create(&manifest_path)
+                        .await
+                        .into_diagnostic()?;
+                }
                 return Ok(project);
             }
         }
@@ -407,14 +413,14 @@ impl Project {
         Self::from_path(&manifest_path, env_root, bin_dir)
     }
 
-    /// Writes the `exclude-newer` of the configuration into the
-    /// `exclude-newer` of a new manifest.
+    /// Adds the `exclude-newer` of the configuration to the `exclude-newer`
+    /// of a new manifest, without saving it. Returns whether it is set.
     ///
     /// A manifest created from an existing installation doesn't get it, as its
     /// environments were installed without the cutoff.
-    async fn write_configured_exclude_newer(&mut self) -> miette::Result<()> {
+    fn add_configured_exclude_newer(&mut self) -> miette::Result<bool> {
         let Some(configured) = self.config.exclude_newer.clone() else {
-            return Ok(());
+            return Ok(false);
         };
         let exclude_newer = ExcludeNewerConfig::from_toml_value(
             "exclude-newer",
@@ -429,7 +435,7 @@ impl Project {
         for (name, exemption) in exclude_newer.exemptions {
             self.manifest.add_exclude_newer_exemption(name, exemption)?;
         }
-        self.manifest.save().await
+        Ok(true)
     }
 
     async fn try_from_existing_installation(

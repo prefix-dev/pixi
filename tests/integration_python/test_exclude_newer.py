@@ -364,3 +364,24 @@ def test_config_exclude_newer_global(pixi: Path, tmp_path: Path, dummy_channel_1
         env=env,
         stderr_contains="uploaded after the cutoff date",
     )
+
+
+def test_config_exclude_newer_invalid_global(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
+    """An invalid `exclude-newer` in the configuration doesn't leave behind a
+    global manifest that never gets it."""
+    env = {"PIXI_HOME": str(tmp_path)}
+    config = tmp_path / "config.toml"
+    config.write_text('exclude-newer = "garbage"\n')
+    command: list[str | Path] = [pixi, "global", "install", "--channel", dummy_channel_1, "dummy-b"]
+
+    verify_cli_command(command, ExitCode.FAILURE, env=env)
+    manifest = tmp_path / "manifests" / "pixi-global.toml"
+    assert not manifest.exists()
+
+    config.write_text('exclude-newer = "2020-01-01"\n')
+    verify_cli_command(
+        command, ExitCode.FAILURE, env=env, stderr_contains="uploaded after the cutoff date"
+    )
+    assert tomli.loads(manifest.read_text())["exclude-newer"] == "2020-01-01"
