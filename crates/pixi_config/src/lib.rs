@@ -1086,8 +1086,6 @@ impl PyPIConfig {
     }
 }
 
-// `ExcludeNewerConfig` now lives in `rattler_config`. Re-exported so
-// downstream crates can keep importing it from `pixi_config`.
 pub use rattler_config::config::exclude_newer::ExcludeNewerConfig;
 
 /// Returns the `exclude-newer` of the configuration as TOML, as it would be
