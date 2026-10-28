@@ -74,15 +74,23 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .environment
             .map(|e| EnvironmentName::from_str(e.as_str()))
             .transpose()?;
-        let mut environments = context.list_environments(args.regex).await?;
-        if let Some(env_name) = env_name {
-            environments.retain(|env| env.name == env_name);
-            if environments.is_empty() {
+        // Check the environment before the regex filters it out, so a regex
+        // that doesn't match it prints an empty list rather than failing
+        if let Some(env_name) = &env_name {
+            let exists = context
+                .project()
+                .environment(env_name)
+                .is_some_and(|env| !env.dependencies.specs.is_empty());
+            if !exists {
                 return Err(miette!(
                     "environment {} not found",
                     env_name.fancy_display()
                 ));
             }
+        }
+        let mut environments = context.list_environments(args.regex).await?;
+        if let Some(env_name) = env_name {
+            environments.retain(|env| env.name == env_name);
         }
         return print_environments_json(&environments);
     }
