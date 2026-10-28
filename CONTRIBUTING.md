@@ -20,7 +20,7 @@ Please also follow this rule when responding to comments from other humans, keep
 We use a vouch system to mitigate spam. If you would like to suggest changes to the codebase, please first:
 
 1. [Open a discussion in the "Vouch Request"](https://github.com/prefix-dev/pixi/discussions/new?category=vouch-request) category describing what you want to change and why. Follow the template, keep it concise. Write in your own voice, don't have an AI write this.
-2. A maintainer will comment `!vouch` if approved.
+2. A maintainer will comment `vouch` if approved.
 
 If you aren't vouched, any pull requests you open will be automatically closed.
 

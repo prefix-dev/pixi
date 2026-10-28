@@ -1,0 +1,70 @@
+name: Vouch Manage
+
+# The registry's Octo STS policy authorizes this workflow by its file name
+# on the default branch.
+on: # zizmor: ignore[dangerous-triggers]
+  discussion_comment:
+    types:
+      - created
+
+permissions: {}
+
+jobs:
+  manage:
+    if: >-
+      github.repository == 'prefix-dev/pixi' &&
+      github.event.comment.user.type == 'User' &&
+      github.event.discussion.category.slug == 'vouch-request' &&
+      (contains(github.event.comment.body, 'vouch') ||
+       contains(github.event.comment.body, 'denounce'))
+    runs-on: ubuntu-latest
+    # Other repositories write the registry too, so this only avoids conflicts
+    # between pixi's own commands. Queue them instead of replacing pending runs.
+    concurrency:
+      group: vouch-registry
+      queue: max
+    permissions:
+      contents: read
+      discussions: write
+      id-token: write # Octo STS
+    env:
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: pixi
+          persist-credentials: false
+      - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
+        with:
+          manifest-path: pixi/pixi.toml
+          environments: vouch
+          cache: false
+
+      - name: Obtain registry token
+        id: octo-sts
+        uses: octo-sts/action@f603d3be9d8dd9871a265776e625a27b00effe05 # v1.1.1
+        with:
+          scope: prefix-dev/vouched
+          identity: pixi-vouch
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: prefix-dev/vouched
+          path: vouched
+          token: ${{ steps.octo-sts.outputs.token }}
+          persist-credentials: false
+      - name: Manage contributor
+        working-directory: vouched
+        env:
+          DISCUSSION_NUMBER: ${{ github.event.discussion.number }}
+          COMMENT_NODE_ID: ${{ github.event.comment.node_id }}
+          REGISTRY_TOKEN: ${{ steps.octo-sts.outputs.token }}
+          GIT_CONFIG_COUNT: "1"
+          GIT_CONFIG_KEY_0: http.https://github.com/.extraheader
+        run: |
+          GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$REGISTRY_TOKEN" | base64 --wrap=0)"
+          export GIT_CONFIG_VALUE_0
+          pixi run --locked --manifest-path "$GITHUB_WORKSPACE/pixi/pixi.toml" \
+            --environment vouch vouch gh-manage-by-discussion \
+            "$DISCUSSION_NUMBER" "$COMMENT_NODE_ID" \
+            --repo "$GITHUB_REPOSITORY" --vouched-file VOUCHED.td --dry-run=false

@@ -1,0 +1,40 @@
+name: Vouch Check PR
+
+# `pull_request_target` is needed to close pull requests from forks. The
+# workflow only runs code from the default branch, never from the pull request.
+on: # zizmor: ignore[dangerous-triggers]
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+
+permissions: {}
+
+jobs:
+  check:
+    if: github.repository == 'prefix-dev/pixi'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: vouch-check-pr-${{ github.event.pull_request.number }}
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - uses: prefix-dev/setup-pixi@ad1da6449d9e506fd127fd67ab2d054a769f6a94 # v0.11.2
+        with:
+          environments: vouch
+          cache: false
+      - name: Check pull request author
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          pixi run --locked --environment vouch vouch gh-check-pr "$PR_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --vouched-repo prefix-dev/vouched \
+            --vouched-file VOUCHED.td \
+            --require-vouch=true --auto-close=true --dry-run=false
