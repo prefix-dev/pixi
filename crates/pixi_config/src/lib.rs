@@ -2524,6 +2524,25 @@ impl Config {
                 // key: a config file that fails to parse is currently skipped
                 // as a whole with a logged error, whereas other unknown keys
                 // are ignored with a warning.
+                //
+                // Nested keys such as `exclude-newer.cutoff` or
+                // `exclude-newer.exemptions.ruff` are not supported. Ideally
+                // this arm would match them too and hand the edit to
+                // `rattler_config`, which owns the key: move the value into a
+                // `ConfigBase::<NoExtension>`, call its `set` with the full
+                // key, and take the value back. Its `set` already resolves
+                // dotted keys, including quoted segments for package names
+                // that contain dots, e.g. `exemptions."python.app"`, and
+                // rejects an exemption added to a bare cutoff. Two things are
+                // needed on top:
+                // - `pixi config set` writes the file by copying the edited
+                //   key out of the serialized configuration, but a value
+                //   without exemptions serializes as a bare cutoff, so
+                //   `exclude-newer.cutoff` would not be found and would be
+                //   unset. It has to copy the whole `exclude-newer` value.
+                // - `rattler_config` compares exemption names as written when
+                //   editing, so setting `exemptions.Ruff` next to `ruff` fails
+                //   as a duplicate rather than replacing it.
                 self.exclude_newer = value
                     .map(|v| {
                         if v.trim_start().starts_with('{') {
