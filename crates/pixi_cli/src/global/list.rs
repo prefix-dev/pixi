@@ -74,24 +74,36 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .environment
             .map(|e| EnvironmentName::from_str(e.as_str()))
             .transpose()?;
-        // Check the environment before the regex filters it out, so a regex
-        // that doesn't match it prints an empty list rather than failing
-        if let Some(env_name) = &env_name {
-            let exists = context
-                .project()
-                .environment(env_name)
-                .is_some_and(|env| !env.dependencies.specs.is_empty());
-            if !exists {
-                return Err(miette!(
-                    "environment {} not found",
-                    env_name.fancy_display()
-                ));
+        let environments = match env_name {
+            // Only read the requested environment. It is checked before the
+            // regex, so a regex that doesn't match it prints an empty list
+            // rather than failing
+            Some(env_name) => {
+                let exists = context
+                    .project()
+                    .environment(&env_name)
+                    .is_some_and(|env| !env.dependencies.specs.is_empty());
+                if !exists {
+                    return Err(miette!(
+                        "environment {} not found",
+                        env_name.fancy_display()
+                    ));
+                }
+
+                let matches = match &args.regex {
+                    Some(regex) => regex::Regex::new(regex)
+                        .into_diagnostic()?
+                        .is_match(env_name.as_str()),
+                    None => true,
+                };
+                if matches {
+                    vec![context.get_environment(&env_name).await?]
+                } else {
+                    Vec::new()
+                }
             }
-        }
-        let mut environments = context.list_environments(args.regex).await?;
-        if let Some(env_name) = env_name {
-            environments.retain(|env| env.name == env_name);
-        }
+            None => context.list_environments(args.regex).await?,
+        };
         return print_environments_json(&environments);
     }
 
