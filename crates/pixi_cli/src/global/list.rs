@@ -5,7 +5,7 @@ use fancy_display::FancyDisplay;
 use human_bytes::human_bytes;
 use indexmap::IndexSet;
 use itertools::Itertools;
-use miette::{IntoDiagnostic, miette};
+use miette::IntoDiagnostic;
 use pixi_api::global::{
     EnvironmentName, GlobalDependency, GlobalEnvironment, GlobalExposedMapping, Project,
     report::{self, EnvReport, Item, Label, Marker, Row},
@@ -75,31 +75,19 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .map(|e| EnvironmentName::from_str(e.as_str()))
             .transpose()?;
         let environments = match env_name {
-            // Only read the requested environment. It is checked before the
-            // regex, so a regex that doesn't match it prints an empty list
-            // rather than failing
             Some(env_name) => {
-                let exists = context
-                    .project()
-                    .environment(&env_name)
-                    .is_some_and(|env| !env.dependencies.specs.is_empty());
-                if !exists {
-                    return Err(miette!(
-                        "environment {} not found",
-                        env_name.fancy_display()
-                    ));
-                }
-
-                let matches = match &args.regex {
-                    Some(regex) => regex::Regex::new(regex)
-                        .into_diagnostic()?
-                        .is_match(env_name.as_str()),
-                    None => true,
-                };
-                if matches {
-                    vec![context.get_environment(&env_name).await?]
-                } else {
-                    Vec::new()
+                let environment = context.get_environment(&env_name).await?;
+                // The regex filters environment names, so the result is either this
+                // one environment or an empty list
+                match &args.regex {
+                    Some(regex)
+                        if !regex::Regex::new(regex)
+                            .into_diagnostic()?
+                            .is_match(env_name.as_str()) =>
+                    {
+                        Vec::new()
+                    }
+                    _ => vec![environment],
                 }
             }
             None => context.list_environments(args.regex).await?,
