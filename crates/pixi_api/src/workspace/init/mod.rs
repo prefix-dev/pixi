@@ -102,6 +102,11 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
         }
     };
 
+    // This also writes the `exclude-newer` of the configuration into an
+    // existing workspace: when `pyproject.toml` already has a pixi table,
+    // `extend_pyproject` returns the existing workspace, and its own cutoff
+    // and exemptions are overwritten, which makes its lock file stale. Only a
+    // workspace that `pixi init` created should get it.
     let workspace = write_configured_exclude_newer(workspace, &config).await?;
 
     create_scm_files(&options, &dir);
@@ -341,6 +346,8 @@ async fn extend_pyproject<I: Interface>(
     // Early exit if 'pyproject.toml' already contains a '[tool.pixi.workspace]' table
     if pyproject.has_pixi_table() {
         interface.info("Nothing to do here: 'pyproject.toml' already contains a '[tool.pixi.workspace]' section.").await;
+        // The `exclude-newer` of the configuration is still written into this
+        // workspace, see `init`.
         let workspace = Workspace::from_path(&manifest_path)?;
         return Ok(workspace);
     }
@@ -1299,5 +1306,51 @@ mod tests {
         assert!(!outcome.pyproject_exists);
         assert_eq!(outcome.mojo_exists, pre_existing_mojo);
         assert!(outcome.pixi_exists);
+    }
+
+    /// Writes `exclude-newer` into the configuration of `dir`.
+    fn write_config_exclude_newer(dir: &Path, exclude_newer: &str) {
+        fs_err::create_dir_all(dir.join(consts::PIXI_DIR)).unwrap();
+        fs_err::write(
+            dir.join(consts::PIXI_DIR).join(consts::CONFIG_FILE),
+            format!("exclude-newer = {exclude_newer}\n"),
+        )
+        .unwrap();
+    }
+
+    fn init_options(path: &Path, format: ManifestFormat) -> InitOptions {
+        InitOptions {
+            path: path.to_path_buf(),
+            env_file: None,
+            format: Some(format),
+            channels: None,
+            platforms: vec![],
+            scm: None,
+            conda_pypi_mapping: None,
+        }
+    }
+
+    /// Fails: `pixi init` overwrites the `exclude-newer` of an existing
+    /// pyproject workspace, see `init`.
+    #[tokio::test]
+    async fn test_init_keeps_exclude_newer_of_existing_pyproject_workspace() {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        write_config_exclude_newer(tmp_dir.path(), r#""7d""#);
+        let pyproject = tmp_dir.path().join(consts::PYPROJECT_MANIFEST);
+        let content = "[project]\nname = \"existing\"\nversion = \"0.1.0\"\n\n\
+            [tool.pixi.workspace]\nchannels = []\nplatforms = []\nexclude-newer = \"30d\"\n";
+        fs_err::write(&pyproject, content).unwrap();
+
+        let interface = MockInterface {
+            confirm_response: true,
+        };
+        init(
+            &interface,
+            init_options(tmp_dir.path(), ManifestFormat::Pyproject),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(fs_err::read_to_string(&pyproject).unwrap(), content);
     }
 }
