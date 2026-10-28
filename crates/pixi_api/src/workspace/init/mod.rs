@@ -807,6 +807,9 @@ mod tests {
         async fn confirm(&self, _msg: &str) -> miette::Result<bool> {
             Ok(self.confirm_response)
         }
+        async fn select(&self, _msg: &str, _options: &[String]) -> miette::Result<Option<usize>> {
+            Ok(None)
+        }
         async fn error(&self, _msg: &str) {}
         async fn info(&self, _msg: &str) {}
         async fn success(&self, _msg: &str) {}

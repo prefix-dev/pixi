@@ -2,6 +2,7 @@ use std::{collections::HashMap, ffi::OsString, path::Path};
 
 use deno_task_shell::KillSignal;
 use miette::{IntoDiagnostic, NamedSource, Report};
+use pixi_api::workspace::run_future_forwarding_signals;
 use pixi_core::{
     Workspace,
     environment::sanity_check_workspace,
@@ -17,10 +18,7 @@ use pixi_script_shell::{ShellContext, execute_sequence, parse_sequence};
 use pixi_task::get_task_env;
 use tracing::Level;
 
-use crate::{
-    run::{Args, run_future_forwarding_signals},
-    shared::install_platform::resolve_install_platform,
-};
+use crate::{run::Args, shared::install_platform::resolve_install_platform};
 
 /// Reads the `conda-script` block of a local `--script` file.
 ///
