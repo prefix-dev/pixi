@@ -263,3 +263,62 @@ impl BuildBackendMetadataCacheEntry {
             .collect()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use chrono::{DateTime, Utc};
+    use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
+    use pixi_spec::{ConfiguredCutoffs, ExcludeNewer};
+    use typed_path::Utf8TypedPathBuf;
+
+    use super::*;
+    use crate::build::PinnedSourceCodeLocation;
+
+    fn key(exclude_newer: Option<ResolvedExcludeNewer>) -> String {
+        let source = PinnedSourceCodeLocation::new(
+            PinnedSourceSpec::Path(PinnedPathSpec {
+                path: Utf8TypedPathBuf::from("./pkg"),
+            }),
+            None,
+        );
+        BuildBackendMetadataCacheKey {
+            channel_urls: Vec::new(),
+            build_environment: BuildEnvironment::default(),
+            exclude_newer,
+            enabled_protocols: EnabledProtocols {
+                enable_rattler_build: true,
+                enable_ros: true,
+                enable_pixi: true,
+            },
+            source: source.into(),
+            inline_content_hash: None,
+        }
+        .key()
+        .to_string()
+    }
+
+    fn relative(now: &str, duration: &str) -> ResolvedExcludeNewer {
+        let cutoff = ExcludeNewer::from_str(duration).unwrap();
+        let now: DateTime<Utc> = now.parse().unwrap();
+        ResolvedExcludeNewer::from_datetime(cutoff.cutoff_at(now)).with_configured_cutoffs(
+            ConfiguredCutoffs {
+                cutoff: Some(cutoff),
+                ..ConfiguredCutoffs::default()
+            },
+        )
+    }
+
+    /// Regression test for https://github.com/prefix-dev/pixi/issues/6617:
+    /// the backend metadata must be reused across invocations with a
+    /// relative cutoff.
+    #[test]
+    fn key_ignores_when_a_relative_cutoff_was_resolved() {
+        let early = key(Some(relative("2026-10-01T00:00:00Z", "14d")));
+        let late = key(Some(relative("2026-10-28T12:34:56Z", "14d")));
+        assert_eq!(early, late);
+        assert_ne!(early, key(Some(relative("2026-10-01T00:00:00Z", "7d"))));
+        assert_ne!(early, key(None));
+    }
+}
