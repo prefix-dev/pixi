@@ -12,7 +12,12 @@ use pixi_spec::{
 use rattler_conda_types::{ChannelConfig, MatchSpec, PackageName, ParseChannelError};
 use serde::ser::SerializeMap;
 
-use crate::{PrioritizedChannel, pypi::ResolvedPypiExcludeNewer};
+use toml_span::de_helpers::TableHelper;
+
+use crate::{
+    PrioritizedChannel, TomlError, pypi::ResolvedPypiExcludeNewer, toml::TomlExcludeNewer,
+    utils::WithSourceCode,
+};
 
 /// The `exclude-newer` configuration of a workspace for conda packages.
 ///
@@ -147,6 +152,30 @@ impl serde::Serialize for ExcludeNewerExemption {
 }
 
 impl ExcludeNewerConfig {
+    /// Parses an `exclude-newer` value written outside of a manifest, such as
+    /// the `default-exclude-newer` of the pixi configuration. `value` is the
+    /// TOML of the value, e.g. `"7d"` or
+    /// `{ cutoff = "7d", exemptions = { ruff = "*" } }`, and is parsed the same
+    /// way as the `exclude-newer` of a workspace. `name` names the source of
+    /// the value in errors.
+    pub fn from_toml_value(name: &'static str, value: &str) -> miette::Result<Self> {
+        let source = format!("{name} = {value}");
+        let parsed = toml_span::parse(&source)
+            .map_err(TomlError::from)
+            .and_then(|mut document| {
+                let mut th = TableHelper::new(&mut document)?;
+                let config = th.required::<TomlExcludeNewer>(name)?;
+                th.finalize(None)?;
+                Ok(config.into_inner())
+            });
+        parsed.map_err(|error| {
+            miette::Report::new(WithSourceCode {
+                error,
+                source: miette::NamedSource::new(name, source),
+            })
+        })
+    }
+
     /// Creates a configuration that consists of a cutoff only.
     pub fn from_cutoff(cutoff: ExcludeNewer) -> Self {
         Self {

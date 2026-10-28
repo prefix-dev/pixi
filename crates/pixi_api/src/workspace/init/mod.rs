@@ -13,8 +13,8 @@ use pixi_config::{Config, S3OptionsMap, get_default_author, pixi_home};
 use pixi_consts::consts;
 use pixi_core::{Workspace, workspace::WorkspaceMut};
 use pixi_manifest::{
-    CondaPypiMap, CondaPypiMapEntry, CondaPypiMapSpec, CondaPypiMappingMode, FeatureName,
-    pyproject::PyProjectManifest,
+    CondaPypiMap, CondaPypiMapEntry, CondaPypiMapSpec, CondaPypiMappingMode, ExcludeNewerConfig,
+    FeatureName, pyproject::PyProjectManifest,
 };
 use pixi_utils::conda_environment_file::CondaEnvFile;
 use rattler_conda_types::{NamedChannelOrUrl, Subdir};
@@ -102,9 +102,37 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
         }
     };
 
+    let workspace = write_default_exclude_newer(workspace, &config).await?;
+
     create_scm_files(&options, &dir);
 
     Ok(workspace)
+}
+
+/// Writes the `default-exclude-newer` of the configuration into the
+/// `exclude-newer` of a new workspace.
+async fn write_default_exclude_newer(
+    workspace: Workspace,
+    config: &Config,
+) -> miette::Result<Workspace> {
+    let Some(default) = &config.default_exclude_newer else {
+        return Ok(workspace);
+    };
+    let exclude_newer =
+        ExcludeNewerConfig::from_toml_value("default-exclude-newer", &default.to_toml())
+            .wrap_err("invalid `default-exclude-newer` in the pixi configuration")?;
+
+    let mut workspace = workspace.modify().into_diagnostic()?;
+    let mut manifest = workspace.manifest();
+    // The cutoff is written as configured, e.g. `7d` instead of the duration
+    // it parses into.
+    if let Some(cutoff) = default.cutoff() {
+        manifest.set_exclude_newer_cutoff(Some(&cutoff))?;
+    }
+    for (name, exemption) in exclude_newer.exemptions {
+        manifest.add_exclude_newer_exemption(name, exemption)?;
+    }
+    workspace.save().await.into_diagnostic()
 }
 
 async fn calculate_strategy<I: Interface>(

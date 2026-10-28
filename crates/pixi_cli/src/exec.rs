@@ -11,8 +11,8 @@ use pixi_command_dispatcher::offline::exclusions_for_solve;
 use pixi_config::{self, Config, ConfigCli};
 use pixi_core::environment::list::{PackageToOutput, print_package_table};
 use pixi_core::host::{HostDetector, WantedNames, cli_detector_consent};
-use pixi_manifest::PixiPlatformName;
 use pixi_manifest::platform::host::host_subdir;
+use pixi_manifest::{ExcludeNewerConfig, PixiPlatformName, resolve_exclude_newer};
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 use pixi_utils::prefix::Prefix;
 use pixi_utils::{
@@ -207,8 +207,19 @@ pub async fn create_exec_prefix(
         .map(|c| c.base_url.to_string())
         .collect();
 
+    // The `default-exclude-newer` of the configuration applies to `pixi exec`,
+    // which has no manifest of its own.
+    let default_exclude_newer = config.default_exclude_newer.as_ref();
+    let exclude_newer = default_exclude_newer
+        .map(|default| {
+            ExcludeNewerConfig::from_toml_value("default-exclude-newer", &default.to_toml())
+                .wrap_err("invalid `default-exclude-newer` in the pixi configuration")
+        })
+        .transpose()?;
+
     let environment_hash =
-        EnvironmentHash::new(specs.clone(), channels, platform, config.offline());
+        EnvironmentHash::new(specs.clone(), channels, platform, config.offline())
+            .with_exclude_newer(default_exclude_newer.map(|default| default.to_toml()));
 
     let dir_prefix = exec_dir_prefix(
         &specs,
@@ -313,6 +324,16 @@ pub async fn create_exec_prefix(
     .into_diagnostic()
     .context("failed to read the package cache")?;
 
+    let exclude_newer = exclude_newer
+        .map(|exclude_newer| {
+            resolve_exclude_newer(&exclude_newer, [], &config.global_channel_config(), [])
+                .into_diagnostic()
+                .wrap_err("invalid `default-exclude-newer` in the pixi configuration")
+        })
+        .transpose()?
+        .flatten()
+        .map(rattler_solve::ExcludeNewer::from);
+
     // Solve the environment
     tracing::info!(
         "creating environment in {}",
@@ -326,6 +347,7 @@ pub async fn create_exec_prefix(
             specs: specs.clone(),
             virtual_packages: virtual_packages.clone(),
             excluded_candidates: excluded_candidates.clone(),
+            exclude_newer: exclude_newer.clone(),
             ..SolverTask::from_iter(&repodata.clone())
         })
     });
@@ -350,6 +372,7 @@ pub async fn create_exec_prefix(
                     specs: specs[..specs.len() - 1].to_vec(),
                     virtual_packages: virtual_packages.clone(),
                     excluded_candidates: excluded_candidates.clone(),
+                    exclude_newer: exclude_newer.clone(),
                     ..SolverTask::from_iter(&repodata.clone())
                 })
             })

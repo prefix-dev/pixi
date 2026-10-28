@@ -289,3 +289,63 @@ exclude-newer = "7d" # one week
     )
     verify_cli_command([pixi, "workspace", "exclude-newer", "set", "168h", "--no-install", *flags])
     assert 'exclude-newer = "168h" # one week' in manifest.read_text()
+
+
+def test_default_exclude_newer_init(pixi: Path, tmp_path: Path) -> None:
+    """`pixi init` writes the `default-exclude-newer` of the configuration."""
+    env = {"PIXI_HOME": str(tmp_path / "home")}
+    (tmp_path / "home").mkdir()
+    (tmp_path / "home" / "config.toml").write_text(
+        '[default-exclude-newer]\ncutoff = "7d"\nexemptions = { dummy-b = "*" }\n'
+    )
+
+    workspace = tmp_path / "workspace"
+    verify_cli_command([pixi, "init", workspace], env=env)
+    assert exclude_newer(workspace / "pixi.toml") == {
+        "cutoff": "7d",
+        "exemptions": {"dummy-b": "*"},
+    }
+
+
+def test_default_exclude_newer_exec(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    """`pixi exec` solves with the `default-exclude-newer` of the configuration."""
+    env = {"PIXI_HOME": str(tmp_path)}
+    config = tmp_path / "config.toml"
+    command: list[str | Path] = [pixi, "exec", "--channel", dummy_channel_1, "--list", "dummy-b"]
+
+    # Every package in dummy_channel_1 was uploaded in 2025.
+    config.write_text('default-exclude-newer = "2020-01-01"\n')
+    verify_cli_command(
+        command, ExitCode.FAILURE, env=env, stderr_contains="uploaded after the cutoff date"
+    )
+
+    config.write_text(
+        'default-exclude-newer = { cutoff = "2020-01-01", exemptions = { dummy-b = "*" } }\n'
+    )
+    verify_cli_command(command, env=env, stdout_contains="dummy-b")
+
+
+def test_default_exclude_newer_global(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    """A new global manifest starts from the `default-exclude-newer` of the
+    configuration."""
+    env = {"PIXI_HOME": str(tmp_path)}
+    (tmp_path / "config.toml").write_text(
+        'default-exclude-newer = { cutoff = "2020-01-01", exemptions = { dummy-b = "*" } }\n'
+    )
+
+    verify_cli_command(
+        [pixi, "global", "install", "--channel", dummy_channel_1, "dummy-b"], env=env
+    )
+    manifest = tomli.loads((tmp_path / "manifests" / "pixi-global.toml").read_text())
+    assert manifest["exclude-newer"] == {
+        "cutoff": "2020-01-01",
+        "exemptions": {"dummy-b": "*"},
+    }
+
+    # The cutoff applies to the packages that are not exempted.
+    verify_cli_command(
+        [pixi, "global", "install", "--channel", dummy_channel_1, "dummy-g"],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="uploaded after the cutoff date",
+    )
