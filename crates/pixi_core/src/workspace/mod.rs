@@ -1925,6 +1925,7 @@ packages: []
         "#;
 
         let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir_path = dunce::canonicalize(temp_dir.path()).unwrap();
         for (manifest, lock_file) in [
             (consts::WORKSPACE_MANIFEST, consts::PROJECT_LOCK_FILE),
             (consts::MOJOPROJECT_MANIFEST, consts::PROJECT_LOCK_FILE),
@@ -1932,8 +1933,8 @@ packages: []
             ("pixi-ci.toml", "pixi-ci.lock"),
         ] {
             let workspace =
-                Workspace::from_str(&temp_dir.path().join(manifest), WORKSPACE_STR).unwrap();
-            let expected = temp_dir.path().join(lock_file);
+                Workspace::from_str(&temp_dir_path.join(manifest), WORKSPACE_STR).unwrap();
+            let expected = temp_dir_path.join(lock_file);
             assert_eq!(workspace.lock_file_path(), expected, "{manifest}");
             assert_eq!(
                 workspace.persistent_lock_file_path(),
