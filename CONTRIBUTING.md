@@ -2,7 +2,7 @@
 
 We welcome contributions to Pixi in the form of discussions, issues, and pull requests! There are a few rules to follow when making contributions that are important to keep in mind.
 
-We are very active on our [Discord Server][discord].
+We are very active on [our Discord Server][discord].
 If you want quick feedback, please contact us there!
 
 ## The Golden Rule
