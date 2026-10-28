@@ -15,5 +15,6 @@ Summary:
 
 
 ### Checklist:
+- [ ] I've discussed the proposed changes with a maintainer.
 - [ ] I understand the purpose of my changes and how they interact with the greater system.
 - [ ] User-facing changes are documented and prose in the documentation has been written/edited/reviewed by hand.
