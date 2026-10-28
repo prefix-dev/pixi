@@ -16,6 +16,7 @@ use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{Channel, MatchSpec, NamedChannelOrUrl, PackageName, Subdir};
 
+use crate::global::GlobalEnvironment;
 use crate::interface::Interface;
 use crate::workspace::add::GitOptions;
 use crate::workspace::{
@@ -44,6 +45,38 @@ impl<I: Interface> DefaultContext<I> {
     ) -> miette::Result<crate::workspace::search::SearchResult> {
         crate::workspace::search::search(None, config, matchspec, channels, platforms, fuzzy_limit)
             .await
+    }
+}
+
+pub struct GlobalContext<I: Interface> {
+    _interface: I,
+    project: pixi_global::Project,
+}
+
+impl<I: Interface> GlobalContext<I> {
+    pub fn new(interface: I, project: pixi_global::Project) -> Self {
+        Self {
+            _interface: interface,
+            project,
+        }
+    }
+
+    pub fn project(&self) -> &pixi_global::Project {
+        &self.project
+    }
+
+    pub async fn list_environments(
+        &self,
+        regex: Option<String>,
+    ) -> miette::Result<Vec<GlobalEnvironment>> {
+        crate::global::list::list(&self.project, regex).await
+    }
+
+    pub async fn get_environment(
+        &self,
+        name: &pixi_global::EnvironmentName,
+    ) -> miette::Result<GlobalEnvironment> {
+        crate::global::list::get(&self.project, name).await
     }
 }
 

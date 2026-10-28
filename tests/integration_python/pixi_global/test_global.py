@@ -2562,7 +2562,7 @@ def test_tree_nonexistent_environment(pixi: Path, tmp_path: Path) -> None:
         [pixi, "global", "tree", "--environment", "nonexistent"],
         ExitCode.FAILURE,
         env=env,
-        stderr_contains="Environment not found",
+        stderr_contains="Environment nonexistent not found",
     )
 
 

@@ -1,3 +1,4 @@
+use crate::cli_interface::cli_global_context;
 use crate::shared::tree::{
     Dependency, Package, PackageSource, build_reverse_dependency_map, print_dependency_tree,
     print_inverted_dependency_tree,
@@ -7,9 +8,7 @@ use clap::Parser;
 use console::Color;
 use itertools::Itertools;
 use miette::Context;
-use pixi_consts::consts;
-use pixi_global::common::find_package_records;
-use pixi_global::{EnvRoot, EnvironmentName, Project};
+use pixi_api::global::{EnvironmentName, Project};
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -39,23 +38,15 @@ pub struct Args {
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let project = Project::discover_or_create().await?;
+    let context = cli_global_context(project);
     let stdout = std::io::stdout();
     let mut handle = stdout.lock();
     let env_name = EnvironmentName::from_str(args.environment.as_str())?;
-    let environment = project
-        .environment(&env_name)
-        .wrap_err("Environment not found")?;
-    // Contains all the dependencies under conda-meta
-    let records = find_package_records(
-        &EnvRoot::from_env()
-            .await?
-            .path()
-            .join(env_name.as_str())
-            .join(consts::CONDA_META_DIR),
-    )
-    .await?;
+    let environment = context.get_environment(&env_name).await?;
 
-    let packages: HashMap<String, Package> = records
+    // Contains all the dependencies under conda-meta
+    let packages: HashMap<String, Package> = environment
+        .records
         .iter()
         .map(|record| {
             let name = record
@@ -97,13 +88,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         })
         .collect();
 
-    let direct_deps = HashSet::from_iter(
-        environment
-            .dependencies
-            .specs
-            .iter()
-            .map(|(name, _)| name.as_normalized().to_string()),
-    );
+    let direct_deps =
+        HashSet::from_iter(environment.dependencies.iter().map(|dep| dep.name.clone()));
     if args.invert {
         print_inverted_dependency_tree(
             &mut handle,

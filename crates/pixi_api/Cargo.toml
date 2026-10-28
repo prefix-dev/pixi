@@ -14,7 +14,7 @@ dunce = { workspace = true }
 fancy_display = { workspace = true }
 fs-err = { workspace = true }
 hex = { workspace = true }
-indexmap = { workspace = true }
+indexmap = { workspace = true, features = ["serde"] }
 itertools = { workspace = true }
 miette = { workspace = true }
 minijinja = { workspace = true }
@@ -22,6 +22,7 @@ pep508_rs = { workspace = true }
 pixi_config = { workspace = true }
 pixi_consts = { workspace = true }
 pixi_core = { workspace = true }
+pixi_global = { workspace = true }
 pixi_install_pypi = { workspace = true }
 pixi_manifest = { workspace = true }
 pixi_pypi_spec = { workspace = true }

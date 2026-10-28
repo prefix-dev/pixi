@@ -453,10 +453,7 @@ fn install_change_item(name: &str, change: &InstallChange) -> Item {
 /// Whether the environment holds a single dependency named after the
 /// environment itself, the case where its version goes into the header instead
 /// of a `dependencies` row.
-pub(crate) fn is_single_package_environment(
-    project: &super::Project,
-    env_name: &EnvironmentName,
-) -> bool {
+pub fn is_single_package_environment(project: &super::Project, env_name: &EnvironmentName) -> bool {
     project.environment(env_name).is_some_and(|environment| {
         environment.dependencies.specs.len() == 1
             && environment
@@ -472,7 +469,7 @@ pub(crate) fn is_single_package_environment(
 ///
 /// Records are named `<package>-<version>-<build>.json`, so only the files that
 /// could belong to this package are parsed rather than the whole prefix.
-pub(crate) async fn installed_version(
+pub async fn installed_version(
     project: &super::Project,
     env_name: &EnvironmentName,
 ) -> Result<Option<String>, CondaMetaError> {

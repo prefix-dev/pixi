@@ -10,7 +10,7 @@ use pixi_manifest::HasWorkspaceManifest;
 use crate::{cli_config::LockFileUpdateConfig, has_specs::HasSpecs};
 use crate::{
     cli_config::{DependencyConfig, NoInstallConfig, ScriptWorkspaceConfig},
-    cli_interface::cli_context,
+    cli_interface::cli_workspace_context,
 };
 
 use error::DependencyRemovalError;
@@ -107,7 +107,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         ),
     };
 
-    let workspace_ctx = cli_context(workspace.clone());
+    let workspace_ctx = cli_workspace_context(workspace.clone());
 
     let dependency_type = args.dependency_config.dependency_type();
     let feature = args.dependency_config.feature_name();
