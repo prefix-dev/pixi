@@ -239,12 +239,14 @@ mod tests {
         .unwrap();
         assert!(script.contains(&format!("export {path_var_name}=")));
         assert!(script.contains("export CONDA_PREFIX="));
+        assert!(script.contains("__pixi_watch_lock"));
 
         let script = generate_activation_script(Some(ShellEnum::Zsh(Zsh)), &environment, &project)
             .await
             .unwrap();
         assert!(script.contains(&format!("export {path_var_name}=")));
         assert!(script.contains("export CONDA_PREFIX="));
+        assert!(script.contains("__pixi_watch_lock"));
 
         let script =
             generate_activation_script(Some(ShellEnum::Fish(Fish)), &environment, &project)
@@ -252,6 +254,7 @@ mod tests {
                 .unwrap();
         assert!(script.contains(&format!("set -gx {path_var_name} ")));
         assert!(script.contains("set -gx CONDA_PREFIX "));
+        assert!(script.contains("__pixi_watch_lock"));
 
         let script =
             generate_activation_script(Some(ShellEnum::Xonsh(Xonsh)), &environment, &project)
@@ -270,6 +273,7 @@ mod tests {
         .unwrap();
         assert!(script.contains(&format!("${{Env:{path_var_name}}}")));
         assert!(script.contains("${Env:CONDA_PREFIX}"));
+        assert!(script.contains("__pixi_watch_lock"));
 
         let script =
             generate_activation_script(Some(ShellEnum::NuShell(NuShell)), &environment, &project)
@@ -296,6 +300,7 @@ mod tests {
         .unwrap();
         assert!(script.contains(&format!("${{Env:{path_var_name}}}")));
         assert!(script.contains("${Env:CONDA_PREFIX}"));
+        assert!(script.contains("__pixi_watch_lock"));
 
         let script =
             generate_activation_script(Some(ShellEnum::CmdExe(CmdExe)), &environment, &project)
