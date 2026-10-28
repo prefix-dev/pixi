@@ -89,32 +89,34 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
 
     let strategy = calculate_strategy(&options, &dir, interface).await?;
 
-    let workspace = match strategy {
+    let (workspace, created) = match strategy {
         InitStrategy::FromEnvFile {
             env_file,
             manifest_path,
-        } => init_from_env_file(interface, manifest_path, &env_file, &config, render_ctx).await?,
+        } => (
+            init_from_env_file(interface, manifest_path, &env_file, &config, render_ctx).await?,
+            true,
+        ),
         InitStrategy::ExtendPyproject { manifest_path } => {
             extend_pyproject(interface, manifest_path, render_ctx).await?
         }
-        InitStrategy::NewPyproject { manifest_path } => {
-            create_new_pyproject(interface, manifest_path, render_ctx).await?
-        }
-        InitStrategy::NewPixi { manifest_path } | InitStrategy::NewMojo { manifest_path } => {
-            init_standard_manifest(interface, manifest_path, render_ctx).await?
-        }
+        InitStrategy::NewPyproject { manifest_path } => (
+            create_new_pyproject(interface, manifest_path, render_ctx).await?,
+            true,
+        ),
+        InitStrategy::NewPixi { manifest_path } | InitStrategy::NewMojo { manifest_path } => (
+            init_standard_manifest(interface, manifest_path, render_ctx).await?,
+            true,
+        ),
     };
 
-    // This also writes the `exclude-newer` of the configuration into an
-    // existing workspace: when `pyproject.toml` already has a pixi table,
-    // `extend_pyproject` returns the existing workspace, and its own cutoff
-    // and exemptions are overwritten, which makes its lock file stale. Only a
-    // workspace that `pixi init` created should get it.
+    // Only a workspace that `pixi init` created gets the `exclude-newer` of
+    // the configuration, an existing one keeps its own.
     let workspace = match exclude_newer {
-        Some((value, exclude_newer)) => {
+        Some((value, exclude_newer)) if created => {
             write_configured_exclude_newer(workspace, &value, exclude_newer).await?
         }
-        None => workspace,
+        _ => workspace,
     };
 
     create_scm_files(&options, &dir);
@@ -348,7 +350,7 @@ async fn extend_pyproject<I: Interface>(
     interface: &I,
     manifest_path: PathBuf,
     render_ctx: RenderContext,
-) -> miette::Result<Workspace> {
+) -> miette::Result<(Workspace, bool)> {
     // Inject a tool.pixi.workspace section into an existing pyproject.toml file if
     // there is one without '[tool.pixi.workspace]'
     let pyproject: PyProjectManifest = PyProjectManifest::from_path(&manifest_path)?;
@@ -356,10 +358,8 @@ async fn extend_pyproject<I: Interface>(
     // Early exit if 'pyproject.toml' already contains a '[tool.pixi.workspace]' table
     if pyproject.has_pixi_table() {
         interface.info("Nothing to do here: 'pyproject.toml' already contains a '[tool.pixi.workspace]' section.").await;
-        // The `exclude-newer` of the configuration is still written into this
-        // workspace, see `init`.
         let workspace = Workspace::from_path(&manifest_path)?;
-        return Ok(workspace);
+        return Ok((workspace, false));
     }
 
     let (name, pixi_name) = match pyproject.name() {
@@ -425,7 +425,7 @@ async fn extend_pyproject<I: Interface>(
         }
     }
 
-    Ok(Workspace::from_path(&manifest_path)?)
+    Ok((Workspace::from_path(&manifest_path)?, true))
 }
 
 fn get_pypi_safe_name(name: &str) -> String {

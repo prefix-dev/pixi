@@ -309,6 +309,23 @@ def test_config_exclude_newer_init(pixi: Path, tmp_path: Path) -> None:
         in (workspace / "pixi.toml").read_text()
     )
 
+    # An existing workspace keeps its own `exclude-newer`.
+    existing = tmp_path / "existing"
+    existing.mkdir()
+    pyproject = f"""\
+[project]
+name = "existing"
+version = "0.1.0"
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["{CURRENT_PLATFORM}"]
+exclude-newer = "14d"
+"""
+    (existing / "pyproject.toml").write_text(pyproject)
+    verify_cli_command([pixi, "init", "--format", "pyproject", existing], env=env)
+    assert (existing / "pyproject.toml").read_text() == pyproject
+
 
 def test_config_exclude_newer_exec(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     """`pixi exec` solves with the `exclude-newer` of the configuration."""
