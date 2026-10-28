@@ -10993,7 +10993,7 @@ re-resolve PyPI packages and ensure the lock file respects the configured cutoff
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>Note that for PyPI package indexes the package index must support the <code>upload-time</code> field as specified in <a href="https://peps.python.org/pep-0700/"><code>PEP 700</code></a>.
-If the field is not present for a given distribution, the distribution will be treated as unavailable. PyPI provides <code>upload-time</code> for all packages.</p>
+If the field is not present for a given distribution, the distribution will be treated as unavailable, unless its package is exempted. PyPI provides <code>upload-time</code> for all packages.</p>
 </div>
 <h3 id="build-variants-optional"><code>build-variants</code> (optional)<a class="headerlink" href="#build-variants-optional" title="Permanent link">#</a></h3>
 <div class="admonition warning">
