@@ -503,7 +503,7 @@ torch = { version = ">=2.10.0", index = "https://download.pytorch.org/whl/cu124"
 
 !!! note
     Note that for PyPI package indexes the package index must support the `upload-time` field as specified in [`PEP 700`](https://peps.python.org/pep-0700/).
-    If the field is not present for a given distribution, the distribution will be treated as unavailable. PyPI provides `upload-time` for all packages.
+    If the field is not present for a given distribution, the distribution will be treated as unavailable, unless its package is exempted. PyPI provides `upload-time` for all packages.
 
 ### `build-variants` (optional)
 
