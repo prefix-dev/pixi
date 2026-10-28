@@ -25,8 +25,8 @@ use std::{fmt::Display, path::PathBuf, str::FromStr};
 pub use detailed::DetailedSpec;
 pub use dev_source::DevSourceSpec;
 pub use exclude_newer::{
-    ExcludeNewer, InvalidExemptionError, ResolvedExcludeNewer, ResolvedExemption,
-    to_saturating_jiff_timestamp,
+    ConfiguredCutoffs, ExcludeNewer, InvalidExemptionError, ResolvedExcludeNewer,
+    ResolvedExemption, to_saturating_jiff_timestamp,
 };
 pub use git::{GitLocationSpec, GitReference, GitReferenceError, GitSpec};
 use itertools::Either;

@@ -1,7 +1,11 @@
 use chrono::{DateTime, Days, NaiveDate, NaiveTime, Utc};
 use rattler_conda_types::{ChannelUrl, MatchSpec, PackageName};
 pub use rattler_solve::InvalidExemptionError;
-use std::{collections::BTreeMap, str::FromStr};
+use std::{
+    collections::BTreeMap,
+    hash::{Hash, Hasher},
+    str::FromStr,
+};
 
 /// Specifies how to exclude newer packages from the solve.
 ///
@@ -49,6 +53,26 @@ pub struct ResolvedExcludeNewer {
 
     /// Whether to include packages that don't have a timestamp.
     pub include_unknown_timestamp: bool,
+
+    /// The cutoffs as configured, before relative cutoffs were resolved
+    /// against the current time. See [`Self::hash_configured`].
+    #[serde(skip)]
+    configured: Option<ConfiguredCutoffs>,
+}
+
+/// The cutoffs of a [`ResolvedExcludeNewer`] as configured, with relative
+/// cutoffs kept as durations.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+pub struct ConfiguredCutoffs {
+    /// The configured default cutoff, if any.
+    pub cutoff: Option<ExcludeNewer>,
+
+    /// The configured channel-specific cutoffs.
+    pub channel_cutoffs: BTreeMap<ChannelUrl, ExcludeNewer>,
+
+    /// The configured package-specific cutoffs of the deprecated top-level
+    /// `[exclude-newer]` table.
+    pub package_cutoffs: BTreeMap<PackageName, ExcludeNewer>,
 }
 
 /// Records matching [`Self::spec`] are exempt from the cutoff of a
@@ -102,6 +126,32 @@ impl ResolvedExcludeNewer {
             // TODO: After https://github.com/conda/ceps/pull/154 we might need to rethink this
             // https://github.com/prefix-dev/pixi/pull/5848/changes#r3051252281
             include_unknown_timestamp: true,
+            configured: None,
+        }
+    }
+
+    /// Records the cutoffs this configuration was resolved from, which
+    /// [`Self::hash_configured`] hashes instead of the resolved cutoffs.
+    pub fn with_configured_cutoffs(mut self, configured: ConfiguredCutoffs) -> Self {
+        self.configured = Some(configured);
+        self
+    }
+
+    /// Hashes the configuration as configured instead of as resolved, for
+    /// cache keys that must be stable across invocations.
+    ///
+    /// A relative cutoff such as `14d` resolves to a different time on every
+    /// invocation, so a key that hashes the resolved cutoffs would never hit
+    /// the cache. Falls back to hashing the resolved cutoffs when the
+    /// configured cutoffs are unknown.
+    pub fn hash_configured<H: Hasher>(&self, state: &mut H) {
+        match &self.configured {
+            Some(configured) => {
+                configured.hash(state);
+                self.exemptions.hash(state);
+                self.include_unknown_timestamp.hash(state);
+            }
+            None => self.hash(state),
         }
     }
 
