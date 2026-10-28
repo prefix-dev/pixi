@@ -1,6 +1,11 @@
 use miette::IntoDiagnostic;
-use pixi_api::{Interface, WorkspaceContext};
+use pixi_api::{GlobalContext, Interface, WorkspaceContext, global::Project};
 use pixi_core::Workspace;
+
+/// Builds the [`GlobalContext`] every `pixi global` command works through.
+pub fn cli_global_context(project: Project) -> GlobalContext<CliInterface> {
+    GlobalContext::new(CliInterface {}, project)
+}
 
 /// Builds the [`WorkspaceContext`] every CLI command works through.
 ///

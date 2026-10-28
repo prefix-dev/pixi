@@ -1,7 +1,8 @@
+pub mod global;
 pub mod workspace;
 
 mod context;
-pub use context::{DefaultContext, WorkspaceContext};
+pub use context::{DefaultContext, GlobalContext, WorkspaceContext};
 
 mod interface;
 pub use interface::Interface;
