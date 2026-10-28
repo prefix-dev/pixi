@@ -10994,6 +10994,9 @@ re-resolve PyPI packages and ensure the lock file respects the configured cutoff
 <p class="admonition-title">Note</p>
 <p>Note that for PyPI package indexes the package index must support the <code>upload-time</code> field as specified in <a href="https://peps.python.org/pep-0700/"><code>PEP 700</code></a>.
 If the field is not present for a given distribution, the distribution will be treated as unavailable, unless its package is exempted. PyPI provides <code>upload-time</code> for all packages.</p>
+<p>If an extra index does not expose <code>upload-time</code>, such as a private mirror, you can lift the cutoff for that index with a
+per-index override on <a href="#alternative-registries"><code>extra-index-urls</code></a>:
+<code>{ url = "https://internal/simple", exclude-newer = "0d" }</code>.</p>
 </div>
 <h3 id="build-variants-optional"><code>build-variants</code> (optional)<a class="headerlink" href="#build-variants-optional" title="Permanent link">#</a></h3>
 <div class="admonition warning">
@@ -11142,7 +11145,14 @@ The order is determined by the order in the toml file. Where the <code>extra-ind
 <li><code>index-url</code>: replaces the main index url. If this is not set the default index used is <code>https://pypi.org/simple</code>.
    <strong>Only one</strong> <code>index-url</code> can be defined per environment.</li>
 <li><code>extra-index-urls</code>: adds an extra index url. The urls are used in the order they are defined. And
-   are preferred over the <code>index-url</code>. These are merged across features into an environment.</li>
+   are preferred over the <code>index-url</code>. These are merged across features into an environment.
+   Each entry may be a plain URL string, or an inline table <code>{ url = "...", exclude-newer = ... }</code>
+   that overrides the workspace-level <a href="#exclude-newer-optional"><code>exclude-newer</code></a> for packages served
+   from that index only. Use <code>exclude-newer = "0d"</code> to lift the cutoff for an index, for example
+   a private mirror that does not expose <code>upload-time</code> metadata. Unlike other cutoffs, this also keeps
+   releases without an upload time. Exemptions in
+   <a href="#exclude-newer-optional"><code>pypi-exclude-newer</code></a> take precedence over the cutoff of an index.
+   Listing the same index with different cutoffs in one environment is an error.</li>
 <li><code>find-links</code>: which can either be a path <code>{path = './links'}</code> or a url <code>{url = 'https://example.com/links'}</code>.
    This is similar to the <code>--find-links</code> option in <code>pip</code>. These are merged across features into an
    environment.</li>
@@ -11150,9 +11160,21 @@ The order is determined by the order in the toml file. Where the <code>extra-ind
 <p>An example:</p>
 <div class="language-toml highlight"><pre><span></span><code><span id="__span-38-1"><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="k">[pypi-options]</span>
 </span><span id="__span-38-2"><a id="__codelineno-38-2" name="__codelineno-38-2" href="#__codelineno-38-2"></a><span class="n">index-url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">&quot;https://pypi.org/simple&quot;</span>
-</span><span id="__span-38-3"><a id="__codelineno-38-3" name="__codelineno-38-3" href="#__codelineno-38-3"></a><span class="n">extra-index-urls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;https://example.com/simple&quot;</span><span class="p">]</span>
-</span><span id="__span-38-4"><a id="__codelineno-38-4" name="__codelineno-38-4" href="#__codelineno-38-4"></a><span class="n">find-links</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[{</span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s1">&#39;./links&#39;</span><span class="p">}]</span>
+</span><span id="__span-38-3"><a id="__codelineno-38-3" name="__codelineno-38-3" href="#__codelineno-38-3"></a><span class="n">extra-index-urls</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span>
+</span><span id="__span-38-4"><a id="__codelineno-38-4" name="__codelineno-38-4" href="#__codelineno-38-4"></a><span class="w">    </span><span class="s2">&quot;https://example.com/simple&quot;</span><span class="p">,</span>
+</span><span id="__span-38-5"><a id="__codelineno-38-5" name="__codelineno-38-5" href="#__codelineno-38-5"></a><span class="w">    </span><span class="c1"># No exclude-newer cutoff for this index (it does not expose `upload-time`):</span>
+</span><span id="__span-38-6"><a id="__codelineno-38-6" name="__codelineno-38-6" href="#__codelineno-38-6"></a><span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="n">url</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;https://internal.example.com/simple&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">exclude-newer</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;0d&quot;</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-38-7"><a id="__codelineno-38-7" name="__codelineno-38-7" href="#__codelineno-38-7"></a><span class="w">    </span><span class="c1"># A custom cutoff for this index only:</span>
+</span><span id="__span-38-8"><a id="__codelineno-38-8" name="__codelineno-38-8" href="#__codelineno-38-8"></a><span class="w">    </span><span class="p">{</span><span class="w"> </span><span class="n">url</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;https://other.example.com/simple&quot;</span><span class="p">,</span><span class="w"> </span><span class="n">exclude-newer</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s2">&quot;2025-01-01&quot;</span><span class="w"> </span><span class="p">},</span>
+</span><span id="__span-38-9"><a id="__codelineno-38-9" name="__codelineno-38-9" href="#__codelineno-38-9"></a><span class="p">]</span>
+</span><span id="__span-38-10"><a id="__codelineno-38-10" name="__codelineno-38-10" href="#__codelineno-38-10"></a><span class="n">find-links</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[{</span><span class="n">path</span><span class="w"> </span><span class="p">=</span><span class="w"> </span><span class="s1">&#39;./links&#39;</span><span class="p">}]</span>
 </span></code></pre></div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Changing a per-index <code>exclude-newer</code> does not invalidate already locked PyPI packages (see the
+satisfiability note under <a href="#exclude-newer-optional"><code>exclude-newer</code></a>). Run <code>pixi update</code> to
+re-resolve PyPI packages after changing it.</p>
+</div>
 <p>There are some <a href="https://github.com/prefix-dev/pixi/tree/main/examples/pypi-custom-registry">examples</a> in the Pixi repository, that make use of this feature.</p>
 <div class="admonition tip">
 <p class="admonition-title">Authentication Methods</p>
