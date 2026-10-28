@@ -88,12 +88,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         })
         .collect();
 
-    let direct_deps = HashSet::from_iter(
-        environment
-            .dependencies
-            .iter()
-            .map(|dep| dep.name.as_normalized().to_string()),
-    );
+    let direct_deps =
+        HashSet::from_iter(environment.dependencies.iter().map(|dep| dep.name.clone()));
     if args.invert {
         print_inverted_dependency_tree(
             &mut handle,

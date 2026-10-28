@@ -20,7 +20,7 @@ pub struct GlobalExposedMapping {
 /// A dependency of a global environment with its installed version.
 #[derive(Debug, Clone, Serialize)]
 pub struct GlobalDependency {
-    pub name: PackageName,
+    pub name: String,
     pub version: Option<String>,
 }
 
@@ -73,7 +73,7 @@ async fn environment(
                         .to_string()
                 });
             GlobalDependency {
-                name: name.clone(),
+                name: name.as_normalized().to_string(),
                 version,
             }
         })

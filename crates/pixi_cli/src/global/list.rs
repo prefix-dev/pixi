@@ -171,7 +171,7 @@ fn dependencies_row(environment: &GlobalEnvironment) -> Option<Row> {
     if !environment
         .dependencies
         .iter()
-        .any(|dep| dep.name.as_normalized() != environment.name.as_str())
+        .any(|dep| dep.name != environment.name.as_str())
     {
         return None;
     }
@@ -179,8 +179,8 @@ fn dependencies_row(environment: &GlobalEnvironment) -> Option<Row> {
     let items = environment
         .dependencies
         .iter()
-        .sorted_by_key(|dep| dep.name.as_normalized())
-        .map(|dep| Item::package(Marker::None, dep.name.as_normalized(), dep.version.clone()))
+        .sorted_by_key(|dep| dep.name.as_str())
+        .map(|dep| Item::package(Marker::None, dep.name.as_str(), dep.version.clone()))
         .collect();
 
     Some(Row::new(Label::Dependencies, items))
@@ -260,10 +260,9 @@ fn print_specific_global_environment(
         .map(|record| {
             PackageToOutput::new(
                 &record.repodata_record.package_record,
-                environment
-                    .dependencies
-                    .iter()
-                    .any(|dep| dep.name == record.repodata_record.package_record.name),
+                environment.dependencies.iter().any(|dep| {
+                    dep.name == record.repodata_record.package_record.name.as_normalized()
+                }),
             )
         })
         .collect_vec();
