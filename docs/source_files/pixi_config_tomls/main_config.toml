@@ -2,10 +2,10 @@
 default-channels = ["conda-forge"]
 # --8<-- [end:default-channels]
 
-# --8<-- [start:default-exclude-newer]
-# Either a cutoff, e.g. `default-exclude-newer = "7d"`, or a cutoff with exemptions.
-default-exclude-newer = { cutoff = "7d", exemptions = { ruff = "*" } }
-# --8<-- [end:default-exclude-newer]
+# --8<-- [start:exclude-newer]
+# Either a cutoff, e.g. `exclude-newer = "7d"`, or a cutoff with exemptions.
+exclude-newer = { cutoff = "7d", exemptions = { ruff = "*" } }
+# --8<-- [end:exclude-newer]
 
 # --8<-- [start:tls-no-verify]
 tls-no-verify = false

@@ -399,7 +399,7 @@ impl Project {
                     .await
                     .into_diagnostic()?;
                 let mut project = Self::from_path(&manifest_path, env_root, bin_dir)?;
-                project.write_default_exclude_newer().await?;
+                project.write_configured_exclude_newer().await?;
                 return Ok(project);
             }
         }
@@ -407,24 +407,25 @@ impl Project {
         Self::from_path(&manifest_path, env_root, bin_dir)
     }
 
-    /// Writes the `default-exclude-newer` of the configuration into the
+    /// Writes the `exclude-newer` of the configuration into the
     /// `exclude-newer` of a new manifest.
     ///
     /// A manifest created from an existing installation doesn't get it, as its
     /// environments were installed without the cutoff.
-    async fn write_default_exclude_newer(&mut self) -> miette::Result<()> {
-        let Some(default) = self.config.default_exclude_newer.clone() else {
+    async fn write_configured_exclude_newer(&mut self) -> miette::Result<()> {
+        let Some(configured) = self.config.exclude_newer.clone() else {
             return Ok(());
         };
-        let exclude_newer =
-            ExcludeNewerConfig::from_toml_value("default-exclude-newer", &default.to_toml())
-                .wrap_err("invalid `default-exclude-newer` in the pixi configuration")?;
+        let exclude_newer = ExcludeNewerConfig::from_toml_value(
+            "exclude-newer",
+            &pixi_config::exclude_newer_to_toml(&configured),
+        )
+        .wrap_err("invalid `exclude-newer` in the pixi configuration")?;
 
         // The cutoff is written as configured, e.g. `7d` instead of the
         // duration it parses into.
-        if let Some(cutoff) = default.cutoff() {
-            self.manifest.set_exclude_newer_cutoff(Some(&cutoff))?;
-        }
+        self.manifest
+            .set_exclude_newer_cutoff(Some(&configured.cutoff))?;
         for (name, exemption) in exclude_newer.exemptions {
             self.manifest.add_exclude_newer_exemption(name, exemption)?;
         }

@@ -153,7 +153,7 @@ impl serde::Serialize for ExcludeNewerExemption {
 
 impl ExcludeNewerConfig {
     /// Parses an `exclude-newer` value written outside of a manifest, such as
-    /// the `default-exclude-newer` of the pixi configuration. `value` is the
+    /// the `exclude-newer` of the pixi configuration. `value` is the
     /// TOML of the value, e.g. `"7d"` or
     /// `{ cutoff = "7d", exemptions = { ruff = "*" } }`, and is parsed the same
     /// way as the `exclude-newer` of a workspace. `name` names the source of

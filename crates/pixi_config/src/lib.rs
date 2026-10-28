@@ -1086,42 +1086,17 @@ impl PyPIConfig {
     }
 }
 
-/// The `exclude-newer` configuration that new workspaces, `pixi exec` and a
-/// new global manifest start from.
-///
-/// Holds the value as written, e.g. `"7d"` or
-/// `{ cutoff = "7d", exemptions = { ruff = "*" } }`. It has the shape of the
-/// `exclude-newer` of a workspace and is parsed like it where it is used,
-/// see `pixi_manifest::ExcludeNewerConfig::from_toml_value`.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-#[serde(transparent)]
-pub struct DefaultExcludeNewer(toml::Value);
+// `ExcludeNewerConfig` now lives in `rattler_config`. Re-exported so
+// downstream crates can keep importing it from `pixi_config`.
+pub use rattler_config::config::exclude_newer::ExcludeNewerConfig;
 
-// The value is a cutoff or a table of strings, never a float.
-impl Eq for DefaultExcludeNewer {}
-
-impl DefaultExcludeNewer {
-    /// Creates a default that consists of a cutoff only, e.g. `7d`.
-    pub fn from_cutoff(cutoff: impl Into<String>) -> Self {
-        Self(toml::Value::String(cutoff.into()))
-    }
-
-    /// Returns the value as TOML, as it would be written in a manifest.
-    pub fn to_toml(&self) -> String {
-        self.0.to_string()
-    }
-
-    /// Returns the cutoff as written, e.g. `7d`, if there is one.
-    pub fn cutoff(&self) -> Option<String> {
-        let cutoff = match &self.0 {
-            toml::Value::Table(table) => table.get("cutoff")?,
-            value => value,
-        };
-        match cutoff {
-            toml::Value::String(cutoff) => Some(cutoff.clone()),
-            cutoff => Some(cutoff.to_string()),
-        }
-    }
+/// Returns the `exclude-newer` of the configuration as TOML, as it would be
+/// written in a manifest, e.g. `"7d"` or
+/// `{ cutoff = "7d", exemptions = { ruff = "*" } }`.
+pub fn exclude_newer_to_toml(exclude_newer: &ExcludeNewerConfig) -> String {
+    toml::Value::try_from(exclude_newer)
+        .expect("an exclude-newer configuration is always valid TOML")
+        .to_string()
 }
 
 /// The strategy for that will be used for pinning a version of a package.
@@ -1287,7 +1262,7 @@ pub struct Config {
     /// workspaces, `pixi global` into a new global manifest, and that
     /// `pixi exec` solves with. It never applies to an existing workspace.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub default_exclude_newer: Option<DefaultExcludeNewer>,
+    pub exclude_newer: Option<ExcludeNewerConfig>,
 
     #[serde(skip)]
     #[serde(alias = "loaded_from")] // BREAK: remove to stop supporting snake_case alias
@@ -1428,7 +1403,7 @@ impl Default for Config {
             s3_options: S3OptionsMap::default(),
             detached_environments: None,
             pinning_strategy: None,
-            default_exclude_newer: None,
+            exclude_newer: None,
             shell: ShellConfig::default(),
             experimental: ExperimentalConfig::default(),
             virtual_package_detectors: VirtualPackageDetectorsConfig::default(),
@@ -1492,6 +1467,7 @@ impl From<CommonConfig> for Config {
             allow_symbolic_links: common.allow_symbolic_links,
             allow_hard_links: common.allow_hard_links,
             allow_ref_links: common.allow_ref_links,
+            exclude_newer: common.exclude_newer,
             virtual_package_detectors: normalize_detector_consent(common.virtual_package_detectors),
             ..Default::default()
         }
@@ -2190,8 +2166,8 @@ impl Config {
             "concurrency.downloads",
             "concurrency.solves",
             "default-channels",
-            "default-exclude-newer",
             "detached-environments",
+            "exclude-newer",
             "experimental",
             "experimental.conda-script",
             "experimental.use-environment-activation-cache",
@@ -2287,7 +2263,7 @@ impl Config {
             ),
             detached_environments: other.detached_environments.or(self.detached_environments),
             pinning_strategy: other.pinning_strategy.or(self.pinning_strategy),
-            default_exclude_newer: other.default_exclude_newer.or(self.default_exclude_newer),
+            exclude_newer: other.exclude_newer.or(self.exclude_newer),
             shell: self.shell.merge(other.shell),
             experimental: self.experimental.merge(other.experimental),
             virtual_package_detectors: merge_virtual_package_detectors(
@@ -2522,20 +2498,16 @@ impl Config {
                     detached.validate()?;
                 }
             }
-            "default-exclude-newer" => {
+            "exclude-newer" => {
                 // A table is given as JSON like the other complex values,
                 // anything else is a cutoff such as `7d`.
-                self.default_exclude_newer = value
+                self.exclude_newer = value
                     .map(|v| {
                         if v.trim_start().starts_with('{') {
-                            serde_json::from_str::<serde_json::Value>(&v)
+                            serde_json::from_str::<ExcludeNewerConfig>(&v)
                                 .map_err(invalid_value(key))
-                                .and_then(|json| {
-                                    toml::Value::try_from(json).map_err(invalid_value(key))
-                                })
-                                .map(DefaultExcludeNewer)
                         } else {
-                            Ok(DefaultExcludeNewer::from_cutoff(v))
+                            Ok(ExcludeNewerConfig::from_cutoff(v))
                         }
                     })
                     .transpose()?;
@@ -3251,48 +3223,49 @@ UNUSED = "unused"
     }
 
     #[test]
-    fn test_config_parse_default_exclude_newer() {
-        let (config, unused) = Config::from_toml(r#"default-exclude-newer = "7d""#, None).unwrap();
+    fn test_config_parse_exclude_newer() {
+        let (config, unused) = Config::from_toml(r#"exclude-newer = "7d""#, None).unwrap();
         assert!(unused.is_empty());
-        assert_eq!(config.default_exclude_newer.unwrap().to_toml(), r#""7d""#);
+        assert_eq!(
+            exclude_newer_to_toml(&config.exclude_newer.unwrap()),
+            r#""7d""#
+        );
 
         let toml = r#"
-            [default-exclude-newer]
+            [exclude-newer]
             cutoff = "7d"
             exemptions = { ruff = "*" }
         "#;
         let (config, unused) = Config::from_toml(toml, None).unwrap();
         assert!(unused.is_empty());
         assert_eq!(
-            config.default_exclude_newer.unwrap().to_toml(),
+            exclude_newer_to_toml(&config.exclude_newer.unwrap()),
             r#"{ cutoff = "7d", exemptions = { ruff = "*" } }"#
         );
     }
 
     #[test]
-    fn test_set_default_exclude_newer() {
+    fn test_set_exclude_newer() {
         let mut config = Config::default();
-        config
-            .set("default-exclude-newer", Some("7d".to_string()))
-            .unwrap();
+        config.set("exclude-newer", Some("7d".to_string())).unwrap();
         assert_eq!(
-            config.default_exclude_newer,
-            Some(DefaultExcludeNewer::from_cutoff("7d"))
+            config.exclude_newer,
+            Some(ExcludeNewerConfig::from_cutoff("7d"))
         );
 
         config
             .set(
-                "default-exclude-newer",
+                "exclude-newer",
                 Some(r#"{"cutoff": "7d", "exemptions": {"ruff": "*"}}"#.to_string()),
             )
             .unwrap();
         assert_eq!(
-            config.default_exclude_newer.as_ref().unwrap().to_toml(),
+            exclude_newer_to_toml(config.exclude_newer.as_ref().unwrap()),
             r#"{ cutoff = "7d", exemptions = { ruff = "*" } }"#
         );
 
-        config.set("default-exclude-newer", None).unwrap();
-        assert_eq!(config.default_exclude_newer, None);
+        config.set("exclude-newer", None).unwrap();
+        assert_eq!(config.exclude_newer, None);
     }
 
     /// Assert that usage of `~` in `detached_environments` is correctly expanded
@@ -3840,7 +3813,7 @@ UNUSED = "unused"
                 Vec::default(),
             )]),
             pinning_strategy: Some(PinningStrategy::NoPin),
-            default_exclude_newer: Some(DefaultExcludeNewer::from_cutoff("7d")),
+            exclude_newer: Some(ExcludeNewerConfig::from_cutoff("7d")),
             experimental: ExperimentalConfig {
                 use_environment_activation_cache: Some(true),
                 conda_script: None,

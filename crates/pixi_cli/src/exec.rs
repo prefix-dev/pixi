@@ -207,19 +207,23 @@ pub async fn create_exec_prefix(
         .map(|c| c.base_url.to_string())
         .collect();
 
-    // The `default-exclude-newer` of the configuration applies to `pixi exec`,
-    // which has no manifest of its own.
-    let default_exclude_newer = config.default_exclude_newer.as_ref();
-    let exclude_newer = default_exclude_newer
-        .map(|default| {
-            ExcludeNewerConfig::from_toml_value("default-exclude-newer", &default.to_toml())
-                .wrap_err("invalid `default-exclude-newer` in the pixi configuration")
+    // The `exclude-newer` of the configuration applies to `pixi exec`, which
+    // has no manifest of its own.
+    let configured_exclude_newer = config
+        .exclude_newer
+        .as_ref()
+        .map(pixi_config::exclude_newer_to_toml);
+    let exclude_newer = configured_exclude_newer
+        .as_deref()
+        .map(|toml| {
+            ExcludeNewerConfig::from_toml_value("exclude-newer", toml)
+                .wrap_err("invalid `exclude-newer` in the pixi configuration")
         })
         .transpose()?;
 
     let environment_hash =
         EnvironmentHash::new(specs.clone(), channels, platform, config.offline())
-            .with_exclude_newer(default_exclude_newer.map(|default| default.to_toml()));
+            .with_exclude_newer(configured_exclude_newer);
 
     let dir_prefix = exec_dir_prefix(
         &specs,
@@ -327,7 +331,7 @@ pub async fn create_exec_prefix(
     let exclude_newer = exclude_newer
         .map(|exclude_newer| {
             resolve_exclude_newer(&exclude_newer, [], config.global_channel_config(), [])
-                .wrap_err("invalid `default-exclude-newer` in the pixi configuration")
+                .wrap_err("invalid `exclude-newer` in the pixi configuration")
         })
         .transpose()?
         .flatten()

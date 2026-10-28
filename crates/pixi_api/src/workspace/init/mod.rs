@@ -102,17 +102,17 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
         }
     };
 
-    let workspace = write_default_exclude_newer(workspace, &config).await?;
+    let workspace = write_configured_exclude_newer(workspace, &config).await?;
 
     create_scm_files(&options, &dir);
 
     Ok(workspace)
 }
 
-/// An error that occurs while writing the `default-exclude-newer` of the
+/// An error that occurs while writing the `exclude-newer` of the
 /// configuration into a new workspace.
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
-pub enum DefaultExcludeNewerError {
+pub enum ConfiguredExcludeNewerError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     LoadWorkspace(#[from] LoadManifestsError),
@@ -125,37 +125,39 @@ pub enum DefaultExcludeNewerError {
     Save(#[source] std::io::Error),
 }
 
-/// Writes the `default-exclude-newer` of the configuration into the
-/// `exclude-newer` of a new workspace.
-async fn write_default_exclude_newer(
+/// Writes the `exclude-newer` of the configuration into the `exclude-newer`
+/// of a new workspace.
+async fn write_configured_exclude_newer(
     workspace: Workspace,
     config: &Config,
 ) -> miette::Result<Workspace> {
-    let Some(default) = &config.default_exclude_newer else {
+    let Some(configured) = &config.exclude_newer else {
         return Ok(workspace);
     };
-    let exclude_newer =
-        ExcludeNewerConfig::from_toml_value("default-exclude-newer", &default.to_toml())
-            .wrap_err("invalid `default-exclude-newer` in the pixi configuration")?;
+    let exclude_newer = ExcludeNewerConfig::from_toml_value(
+        "exclude-newer",
+        &pixi_config::exclude_newer_to_toml(configured),
+    )
+    .wrap_err("invalid `exclude-newer` in the pixi configuration")?;
 
-    let mut workspace = workspace.modify().map_err(DefaultExcludeNewerError::from)?;
+    let mut workspace = workspace
+        .modify()
+        .map_err(ConfiguredExcludeNewerError::from)?;
     let mut manifest = workspace.manifest();
     // The cutoff is written as configured, e.g. `7d` instead of the duration
     // it parses into.
-    if let Some(cutoff) = default.cutoff() {
-        manifest
-            .set_exclude_newer_cutoff(Some(&cutoff))
-            .map_err(DefaultExcludeNewerError::from)?;
-    }
+    manifest
+        .set_exclude_newer_cutoff(Some(&configured.cutoff))
+        .map_err(ConfiguredExcludeNewerError::from)?;
     for (name, exemption) in exclude_newer.exemptions {
         manifest
             .add_exclude_newer_exemption(name, exemption)
-            .map_err(DefaultExcludeNewerError::from)?;
+            .map_err(ConfiguredExcludeNewerError::from)?;
     }
     Ok(workspace
         .save()
         .await
-        .map_err(DefaultExcludeNewerError::Save)?)
+        .map_err(ConfiguredExcludeNewerError::Save)?)
 }
 
 async fn calculate_strategy<I: Interface>(

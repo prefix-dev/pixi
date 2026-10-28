@@ -292,12 +292,12 @@ exclude-newer = "7d" # one week
     assert 'exclude-newer = "168h" # one week' in manifest.read_text()
 
 
-def test_default_exclude_newer_init(pixi: Path, tmp_path: Path) -> None:
-    """`pixi init` writes the `default-exclude-newer` of the configuration."""
+def test_config_exclude_newer_init(pixi: Path, tmp_path: Path) -> None:
+    """`pixi init` writes the `exclude-newer` of the configuration."""
     env = {"PIXI_HOME": str(tmp_path / "home")}
     (tmp_path / "home").mkdir()
     (tmp_path / "home" / "config.toml").write_text(
-        '[default-exclude-newer]\ncutoff = "7d"\nexemptions = { dummy-b = "*" }\n'
+        '[exclude-newer]\ncutoff = "7d"\nexemptions = { dummy-b = "*" }\n'
     )
 
     workspace = tmp_path / "workspace"
@@ -308,8 +308,8 @@ def test_default_exclude_newer_init(pixi: Path, tmp_path: Path) -> None:
     }
 
 
-def test_default_exclude_newer_exec(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
-    """`pixi exec` solves with the `default-exclude-newer` of the configuration."""
+def test_config_exclude_newer_exec(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    """`pixi exec` solves with the `exclude-newer` of the configuration."""
     env = {"PIXI_HOME": str(tmp_path)}
     config = tmp_path / "config.toml"
     # The dummy packages ship no executable that runs on Windows, so install
@@ -328,24 +328,24 @@ def test_default_exclude_newer_exec(pixi: Path, tmp_path: Path, dummy_channel_1:
     ]
 
     # Every package in dummy_channel_1 was uploaded in 2025.
-    config.write_text('default-exclude-newer = "2020-01-01"\n')
+    config.write_text('exclude-newer = "2020-01-01"\n')
     verify_cli_command(
         command, ExitCode.FAILURE, env=env, stderr_contains="uploaded after the cutoff date"
     )
 
     # dummy-g depends on dummy-b.
     config.write_text(
-        'default-exclude-newer = { cutoff = "2020-01-01", exemptions = { dummy-g = "*", dummy-b = "*" } }\n'
+        'exclude-newer = { cutoff = "2020-01-01", exemptions = { dummy-g = "*", dummy-b = "*" } }\n'
     )
     verify_cli_command(command, env=env, stdout_contains=["dummy-g", "dummy-b"])
 
 
-def test_default_exclude_newer_global(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
-    """A new global manifest starts from the `default-exclude-newer` of the
+def test_config_exclude_newer_global(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
+    """A new global manifest starts from the `exclude-newer` of the
     configuration."""
     env = {"PIXI_HOME": str(tmp_path)}
     (tmp_path / "config.toml").write_text(
-        'default-exclude-newer = { cutoff = "2020-01-01", exemptions = { dummy-b = "*" } }\n'
+        'exclude-newer = { cutoff = "2020-01-01", exemptions = { dummy-b = "*" } }\n'
     )
 
     verify_cli_command(
