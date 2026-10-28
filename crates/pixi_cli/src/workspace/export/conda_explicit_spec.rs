@@ -74,15 +74,19 @@ fn build_explicit_spec<'a>(
     for cp in conda_packages {
         let prec = &cp.package_record;
         let hash = if sha256 {
-            hex::encode(prec.sha256.ok_or(miette::miette!(
-                "Package {} does not contain a sha256 hash",
-                prec.name.as_normalized()
-            ))?)
+            hex::encode(prec.sha256.ok_or_else(|| {
+                miette::miette!(
+                    "package {} does not contain a sha256 hash",
+                    prec.name.as_normalized()
+                )
+            })?)
         } else {
-            hex::encode(prec.md5.ok_or(miette::miette!(
-                "Package {} does not contain an md5 hash",
-                prec.name.as_normalized()
-            ))?)
+            hex::encode(prec.md5.ok_or_else(|| {
+                miette::miette!(
+                    "package {} does not contain an md5 hash",
+                    prec.name.as_normalized()
+                )
+            })?)
         };
 
         let mut url = cp.url.clone();
