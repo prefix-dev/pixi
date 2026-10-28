@@ -32,7 +32,7 @@ pixi workspace export conda-explicit-spec [OPTIONS] <OUTPUT_DIR>
 :  Source dependencies are not supported in the conda explicit spec file
 <br>**default**: `false`
 - <a id="arg---sha256" href="#arg---sha256">`--sha256`</a>
-:  Emit sha256 hashes instead of md5
+:  Emit sha256 hashes instead of md5. Installing the result requires conda >=24.9 or mamba >=2.1
 <br>**default**: `false`
 
 ## Config Options

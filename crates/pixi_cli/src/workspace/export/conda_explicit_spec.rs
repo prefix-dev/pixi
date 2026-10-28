@@ -50,7 +50,7 @@ pub struct Args {
     #[arg(long, default_value = "false")]
     pub ignore_source_errors: bool,
 
-    /// Emit sha256 hashes instead of md5.
+    /// Emit sha256 hashes instead of md5. Installing the result requires conda >=24.9 or mamba >=2.1.
     #[arg(long, default_value = "false")]
     pub sha256: bool,
 
