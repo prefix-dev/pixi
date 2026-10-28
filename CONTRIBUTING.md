@@ -19,7 +19,7 @@ Please also follow this rule when responding to comments from other humans, keep
 
 We use a vouch system to mitigate spam. If you would like to suggest changes to the codebase, please first:
 
-1. Open a [discussion in the "Vouch Request"](<FILL ME>) category describing what you want to change and why. Follow the template, keep it concise. Write in your own voice, don't have an AI write this.
+1. [Open a discussion in the "Vouch Request"](https://github.com/prefix-dev/pixi/discussions/new?category=vouch-request) category describing what you want to change and why. Follow the template, keep it concise. Write in your own voice, don't have an AI write this.
 2. A maintainer will comment `!vouch` if approved.
 
 If you aren't vouched, any pull requests you open will be automatically closed.
@@ -29,7 +29,7 @@ If you aren't vouched, any pull requests you open will be automatically closed.
 1. Make sure you are vouched.
 2. If there's no issue yet for the changes you would like to make, create one.
 3. Contact maintainers on the issue or via [our Discord Server][discord] to indicate your willingness to contribute a pull request.
-4. If a maintainer indicates that a pull request would be welcome, make your changes and submit the pull request according to the [template](TODO).
+4. If a maintainer indicates that a pull request would be welcome, make your changes and submit the pull request according to the [template](./.github/pull_request_template.md).
 
 ## Implementing changes
 
