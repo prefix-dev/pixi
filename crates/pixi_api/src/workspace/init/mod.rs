@@ -82,6 +82,9 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
     validate_init_directory(&dir, interface).await?;
 
     let config = Config::load(&dir);
+    // Parsed before anything is written, so an invalid configuration doesn't
+    // leave a half-created workspace behind.
+    let exclude_newer = configured_exclude_newer(&config)?;
     let render_ctx = build_render_context(&dir, &options, &config);
 
     let strategy = calculate_strategy(&options, &dir, interface).await?;
@@ -107,7 +110,12 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
     // `extend_pyproject` returns the existing workspace, and its own cutoff
     // and exemptions are overwritten, which makes its lock file stale. Only a
     // workspace that `pixi init` created should get it.
-    let workspace = write_configured_exclude_newer(workspace, &config).await?;
+    let workspace = match exclude_newer {
+        Some((cutoff, exclude_newer)) => {
+            write_configured_exclude_newer(workspace, cutoff, exclude_newer).await?
+        }
+        None => workspace,
+    };
 
     create_scm_files(&options, &dir);
 
@@ -130,21 +138,30 @@ pub enum ConfiguredExcludeNewerError {
     Save(#[source] std::io::Error),
 }
 
+/// Returns the cutoff of the `exclude-newer` of the configuration as written,
+/// and the parsed configuration, if it is set.
+fn configured_exclude_newer(config: &Config) -> miette::Result<Option<(&str, ExcludeNewerConfig)>> {
+    config
+        .exclude_newer
+        .as_ref()
+        .map(|configured| {
+            let parsed = ExcludeNewerConfig::from_toml_value(
+                "exclude-newer",
+                &pixi_config::exclude_newer_to_toml(configured),
+            )
+            .wrap_err("invalid `exclude-newer` in the pixi configuration")?;
+            Ok((configured.cutoff.as_str(), parsed))
+        })
+        .transpose()
+}
+
 /// Writes the `exclude-newer` of the configuration into the `exclude-newer`
 /// of a new workspace.
 async fn write_configured_exclude_newer(
     workspace: Workspace,
-    config: &Config,
+    cutoff: &str,
+    exclude_newer: ExcludeNewerConfig,
 ) -> miette::Result<Workspace> {
-    let Some(configured) = &config.exclude_newer else {
-        return Ok(workspace);
-    };
-    let exclude_newer = ExcludeNewerConfig::from_toml_value(
-        "exclude-newer",
-        &pixi_config::exclude_newer_to_toml(configured),
-    )
-    .wrap_err("invalid `exclude-newer` in the pixi configuration")?;
-
     let mut workspace = workspace
         .modify()
         .map_err(ConfiguredExcludeNewerError::from)?;
@@ -152,7 +169,7 @@ async fn write_configured_exclude_newer(
     // The cutoff is written as configured, e.g. `7d` instead of the duration
     // it parses into.
     manifest
-        .set_exclude_newer_cutoff(Some(&configured.cutoff))
+        .set_exclude_newer_cutoff(Some(cutoff))
         .map_err(ConfiguredExcludeNewerError::from)?;
     for (name, exemption) in exclude_newer.exemptions {
         manifest
@@ -1352,5 +1369,23 @@ mod tests {
         .unwrap();
 
         assert_eq!(fs_err::read_to_string(&pyproject).unwrap(), content);
+    }
+
+    #[tokio::test]
+    async fn test_init_with_invalid_config_exclude_newer_writes_nothing() {
+        let tmp_dir = tempfile::tempdir().unwrap();
+        write_config_exclude_newer(tmp_dir.path(), r#""garbage""#);
+
+        let interface = MockInterface {
+            confirm_response: true,
+        };
+        let result = init(
+            &interface,
+            init_options(tmp_dir.path(), ManifestFormat::Pixi),
+        )
+        .await;
+
+        assert!(result.is_err());
+        assert!(!tmp_dir.path().join(consts::WORKSPACE_MANIFEST).exists());
     }
 }
