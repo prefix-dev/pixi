@@ -14,7 +14,7 @@ pub fn cli_global_context(project: Project) -> GlobalContext<CliInterface> {
 /// context method that solves reports through it without the command having to
 /// opt in. `search` is the exception, because it builds its own gateway rather
 /// than going through the command dispatcher.
-pub fn cli_context(workspace: Workspace) -> WorkspaceContext<CliInterface> {
+pub fn cli_workspace_context(workspace: Workspace) -> WorkspaceContext<CliInterface> {
     WorkspaceContext::new(CliInterface {}, workspace)
         .with_progress(pixi_reporters::TopLevelProgress::from_global())
 }

@@ -25,7 +25,7 @@ use rattler_conda_types::{
 
 use crate::{
     cli_config::{ScriptWorkspaceConfig, script_lock_file_usage},
-    cli_interface::{CliInterface, cli_context},
+    cli_interface::{CliInterface, cli_workspace_context},
 };
 
 /// Commands to manage workspace platforms.
@@ -509,7 +509,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         args.workspace_config.script.is_some(),
         workspace.lock_file_path().is_file(),
     )?;
-    let workspace_ctx = cli_context(workspace.clone());
+    let workspace_ctx = cli_workspace_context(workspace.clone());
 
     // Keep mutation state off the enclosing CLI dispatch futures.
     match args.command {

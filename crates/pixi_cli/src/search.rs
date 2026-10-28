@@ -21,7 +21,7 @@ use url::Url;
 
 use crate::{
     cli_config::{ChannelsConfig, WorkspaceConfig},
-    cli_interface::{CliInterface, cli_context},
+    cli_interface::{CliInterface, cli_workspace_context},
 };
 
 /// Search for conda packages
@@ -169,7 +169,7 @@ pub async fn execute_impl<W: Write>(
 
     let result = if let Some(workspace) = workspace {
         await_in_progress("searching packages...", |_| async {
-            cli_context(workspace)
+            cli_workspace_context(workspace)
                 .search(matchspec, channels, platforms, fuzzy_limit)
                 .await
         })

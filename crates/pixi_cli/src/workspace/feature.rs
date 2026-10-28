@@ -8,7 +8,7 @@ use miette::IntoDiagnostic;
 use pixi_core::WorkspaceLocator;
 use pixi_manifest::{Feature, FeatureName};
 
-use crate::{cli_config::WorkspaceConfig, cli_interface::cli_context};
+use crate::{cli_config::WorkspaceConfig, cli_interface::cli_workspace_context};
 
 /// Commands to manage workspace features.
 #[derive(Parser, Debug)]
@@ -55,7 +55,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .locate()
         .await?;
 
-    let workspace_ctx = cli_context(workspace);
+    let workspace_ctx = cli_workspace_context(workspace);
 
     match args.command {
         Command::List(list_args) => {
@@ -125,7 +125,7 @@ mod tests {
             "#,
         )
         .unwrap();
-        let workspace_ctx = cli_context(workspace);
+        let workspace_ctx = cli_workspace_context(workspace);
 
         let features = workspace_ctx.list_features().await;
 

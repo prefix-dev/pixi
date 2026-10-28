@@ -6,7 +6,7 @@ use pixi_core::lock_file::{ReinstallEnvironment, ReinstallPackages};
 use pixi_manifest::PixiPlatformName;
 
 use crate::cli_config::WorkspaceConfig;
-use crate::cli_interface::cli_context;
+use crate::cli_interface::cli_workspace_context;
 use crate::shared::install_platform::resolve_install_platform;
 
 /// Re-install an environment.
@@ -84,7 +84,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         target_platform,
     };
 
-    let workspace_ctx = cli_context(workspace);
+    let workspace_ctx = cli_workspace_context(workspace);
     workspace_ctx.reinstall(options, lock_file_usage).await?;
 
     Ok(())
