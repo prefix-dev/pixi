@@ -505,6 +505,10 @@ torch = { version = ">=2.10.0", index = "https://download.pytorch.org/whl/cu124"
     Note that for PyPI package indexes the package index must support the `upload-time` field as specified in [`PEP 700`](https://peps.python.org/pep-0700/).
     If the field is not present for a given distribution, the distribution will be treated as unavailable, unless its package is exempted. PyPI provides `upload-time` for all packages.
 
+    If an extra index does not expose `upload-time`, such as a private mirror, you can lift the cutoff for that index with a
+    per-index override on [`extra-index-urls`](#alternative-registries):
+    `{ url = "https://internal/simple", exclude-newer = "0d" }`.
+
 ### `build-variants` (optional)
 
 !!! warning "Preview Flag"
@@ -683,6 +687,13 @@ Often you might want to use an alternative or extra index for your workspace. Th
    **Only one** `index-url` can be defined per environment.
 - `extra-index-urls`: adds an extra index url. The urls are used in the order they are defined. And
    are preferred over the `index-url`. These are merged across features into an environment.
+   Each entry may be a plain URL string, or an inline table `{ url = "...", exclude-newer = ... }`
+   that overrides the workspace-level [`exclude-newer`](#exclude-newer-optional) for packages served
+   from that index only. Use `exclude-newer = "0d"` to lift the cutoff for an index, for example
+   a private mirror that does not expose `upload-time` metadata. Unlike other cutoffs, this also keeps
+   releases without an upload time. Exemptions in
+   [`pypi-exclude-newer`](#exclude-newer-optional) take precedence over the cutoff of an index.
+   Listing the same index with different cutoffs in one environment is an error.
 - `find-links`: which can either be a path `{path = './links'}` or a url `{url = 'https://example.com/links'}`.
    This is similar to the `--find-links` option in `pip`. These are merged across features into an
    environment.
@@ -692,9 +703,20 @@ An example:
 ```toml
 [pypi-options]
 index-url = "https://pypi.org/simple"
-extra-index-urls = ["https://example.com/simple"]
+extra-index-urls = [
+    "https://example.com/simple",
+    # No exclude-newer cutoff for this index (it does not expose `upload-time`):
+    { url = "https://internal.example.com/simple", exclude-newer = "0d" },
+    # A custom cutoff for this index only:
+    { url = "https://other.example.com/simple", exclude-newer = "2025-01-01" },
+]
 find-links = [{path = './links'}]
 ```
+
+!!! note
+    Changing a per-index `exclude-newer` does not invalidate already locked PyPI packages (see the
+    satisfiability note under [`exclude-newer`](#exclude-newer-optional)). Run `pixi update` to
+    re-resolve PyPI packages after changing it.
 
 There are some [examples](https://github.com/prefix-dev/pixi/tree/main/examples/pypi-custom-registry) in the Pixi repository, that make use of this feature.
 

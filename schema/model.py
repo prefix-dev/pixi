@@ -1169,6 +1169,24 @@ class FindLinksURL(StrictBaseModel):
     )
 
 
+class ExtraIndexInlineTable(StrictBaseModel):
+    """An extra PyPI index with an optional per-index `exclude-newer` override."""
+
+    url: NonEmptyStr = Field(
+        description="The extra index URL",
+        examples=["https://pypi.org/simple"],
+    )
+    exclude_newer: ExcludeNewer | None = Field(
+        None,
+        description="Override the workspace-level `exclude-newer` cutoff for this index only; "
+        "a zero duration such as `0d` lifts the cutoff entirely, including for releases without an upload time",
+        examples=["2025-01-01", "0d"],
+    )
+
+
+ExtraIndex = NonEmptyStr | ExtraIndexInlineTable
+
+
 class S3Options(StrictBaseModel):
     """Options related to S3 for this project"""
 
@@ -1193,10 +1211,14 @@ class PyPIOptions(StrictBaseModel):
         description="PyPI registry that should be used as the primary index",
         examples=["https://pypi.org/simple"],
     )
-    extra_index_urls: list[NonEmptyStr] | None = Field(
+    extra_index_urls: list[ExtraIndex] | None = Field(
         None,
-        description="Additional PyPI registries that should be used as extra indexes",
-        examples=[["https://pypi.org/simple"]],
+        description="Additional PyPI registries that should be used as extra indexes. "
+        "Each entry may be a URL string or an inline table with a per-index `exclude-newer` override.",
+        examples=[
+            ["https://pypi.org/simple"],
+            [{"url": "https://internal/simple", "exclude-newer": "0d"}],
+        ],
     )
     find_links: list[FindLinksPath | FindLinksURL] | None = Field(
         None,

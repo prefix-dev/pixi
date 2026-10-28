@@ -369,7 +369,25 @@ impl TomlManifest {
             .environments
             .map(PixiSpanned::into_inner)
             .unwrap_or_default();
+        let check_pypi_options = |used_features: &[&Feature]| {
+            let feature_options = used_features
+                .iter()
+                .filter_map(|feature| feature.pypi_options())
+                .try_fold(PypiOptions::default(), |acc, opts| acc.union(opts))?;
+            workspace
+                .value
+                .pypi_options
+                .clone()
+                .unwrap_or_default()
+                .overlay(&feature_options)
+        };
         if !toml_environments.contains_key(&EnvironmentName::Default) {
+            if let Err(err) = check_pypi_options(&[features
+                .get(&FeatureName::Default)
+                .expect("default feature must exist")])
+            {
+                return Err(TomlError::from(GenericError::new(err.to_string())));
+            }
             environments.environments.push(Some(Environment::default()));
             environments
                 .by_name
@@ -504,14 +522,9 @@ impl TomlManifest {
             // Check that there are no conflicts in pypi options between features.
             // The workspace-level pypi-options act as an always-applied base
             // and are intentionally allowed to be overridden by feature-level
-            // options, so they are not part of this conflict check; we only
-            // verify that the features included in this environment do not
-            // disagree with each other on any single-assignment field.
-            if let Err(err) = used_features
-                .iter()
-                .filter_map(|feature| feature.pypi_options())
-                .try_fold(PypiOptions::default(), |acc, opts| acc.union(opts))
-            {
+            // options on single-assignment fields, but not on the cutoff of
+            // an extra index.
+            if let Err(err) = check_pypi_options(&used_features) {
                 return Err(TomlError::from(
                     GenericError::new(err.to_string())
                         .with_opt_span(features_span.map(Into::into))
@@ -1548,6 +1561,40 @@ mod test {
         platforms = []
 
         [feature.foobar.run-dependencies]
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_extra_index_with_conflicting_cutoffs() {
+        // Between features of an environment.
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [pypi-options]
+        extra-index-urls = ["https://internal/simple"]
+
+        [feature.f.pypi-options]
+        extra-index-urls = [{ url = "https://internal/simple", exclude-newer = "0d" }]
+
+        [environments]
+        f = ["f"]
+        "#,
+        ));
+
+        // Between the workspace and the default environment.
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+        pypi-options = { extra-index-urls = ["https://internal/simple"] }
+
+        [pypi-options]
+        extra-index-urls = [{ url = "https://internal/simple", exclude-newer = "0d" }]
         "#,
         ));
     }
