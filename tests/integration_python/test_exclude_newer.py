@@ -311,7 +311,7 @@ def test_default_exclude_newer_exec(pixi: Path, tmp_path: Path, dummy_channel_1:
     """`pixi exec` solves with the `default-exclude-newer` of the configuration."""
     env = {"PIXI_HOME": str(tmp_path)}
     config = tmp_path / "config.toml"
-    command: list[str | Path] = [pixi, "exec", "--channel", dummy_channel_1, "--list", "dummy-b"]
+    command: list[str | Path] = [pixi, "exec", "--channel", dummy_channel_1, "--list", "dummy-g"]
 
     # Every package in dummy_channel_1 was uploaded in 2025.
     config.write_text('default-exclude-newer = "2020-01-01"\n')
@@ -319,10 +319,11 @@ def test_default_exclude_newer_exec(pixi: Path, tmp_path: Path, dummy_channel_1:
         command, ExitCode.FAILURE, env=env, stderr_contains="uploaded after the cutoff date"
     )
 
+    # dummy-g depends on dummy-b.
     config.write_text(
-        'default-exclude-newer = { cutoff = "2020-01-01", exemptions = { dummy-b = "*" } }\n'
+        'default-exclude-newer = { cutoff = "2020-01-01", exemptions = { dummy-g = "*", dummy-b = "*" } }\n'
     )
-    verify_cli_command(command, env=env, stdout_contains="dummy-b")
+    verify_cli_command(command, env=env, stdout_contains=["dummy-g", "dummy-b"])
 
 
 def test_default_exclude_newer_global(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:

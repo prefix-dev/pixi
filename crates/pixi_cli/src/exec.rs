@@ -326,7 +326,7 @@ pub async fn create_exec_prefix(
 
     let exclude_newer = exclude_newer
         .map(|exclude_newer| {
-            resolve_exclude_newer(&exclude_newer, [], &config.global_channel_config(), [])
+            resolve_exclude_newer(&exclude_newer, [], config.global_channel_config(), [])
                 .wrap_err("invalid `default-exclude-newer` in the pixi configuration")
         })
         .transpose()?
