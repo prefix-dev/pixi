@@ -20,7 +20,9 @@ use retry_policies::policies::ExponentialBackoff;
 use itertools::Itertools;
 use serde::Serialize;
 
-use crate::tls::{CertEnvSource, Certificates};
+use crate::tls::CertEnvSource;
+#[cfg(any(feature = "native-tls", feature = "rustls"))]
+use crate::tls::Certificates;
 
 /// An error that occurs when building pixi's HTTP clients.
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
@@ -182,13 +184,19 @@ impl std::fmt::Display for EffectiveTlsRootCerts {
     }
 }
 
-/// Resolve which root certificates pixi's HTTP client trusts for `config`.
+/// Resolve which root certificates pixi's HTTP client trusts for the
+/// `configured` `tls-root-certs` value, or for the backend default when it is
+/// `None`, given the environment certificates from
+/// [`Certificates::env_sources`].
 ///
 /// Follows the same rules as [`reqwest_client_builder`]. The deprecated
 /// `native` and `all` modes are reported as `system`, which is how they behave.
 #[allow(deprecated)]
-pub fn effective_tls_root_certs(config: &Config) -> EffectiveTlsRootCerts {
-    let mode = match resolve_tls_root_certs(Some(config)) {
+pub fn effective_tls_root_certs(
+    configured: Option<pixi_config::TlsRootCerts>,
+    env_sources: Vec<CertEnvSource>,
+) -> EffectiveTlsRootCerts {
+    let mode = match configured.unwrap_or_else(default_tls_root_certs) {
         pixi_config::TlsRootCerts::Webpki => pixi_config::TlsRootCerts::Webpki,
         pixi_config::TlsRootCerts::System
         | pixi_config::TlsRootCerts::LegacyNative
@@ -196,8 +204,8 @@ pub fn effective_tls_root_certs(config: &Config) -> EffectiveTlsRootCerts {
     };
     EffectiveTlsRootCerts {
         mode,
-        is_default: config.tls_root_certs().is_none(),
-        env_sources: Certificates::env_sources(),
+        is_default: configured.is_none(),
+        env_sources,
         env_replaces_mode: cfg!(not(feature = "native-tls")),
     }
 }

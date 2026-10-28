@@ -5,22 +5,18 @@
 //! concurrently.
 
 use base64::{Engine, engine::general_purpose::STANDARD};
-use pixi_config::{Config, TlsRootCerts};
-use pixi_utils::reqwest::{default_tls_root_certs, effective_tls_root_certs};
+use pixi_config::TlsRootCerts;
+use pixi_utils::{
+    reqwest::{default_tls_root_certs, effective_tls_root_certs},
+    tls::Certificates,
+};
 
 const NO_CERT_ENV: [(&str, Option<&str>); 2] = [("SSL_CERT_FILE", None), ("SSL_CERT_DIR", None)];
-
-fn config_with(mode: Option<TlsRootCerts>) -> Config {
-    Config {
-        tls_root_certs: mode,
-        ..Config::default()
-    }
-}
 
 #[test]
 fn unset_mode_uses_the_backend_default() {
     temp_env::with_vars(NO_CERT_ENV, || {
-        let effective = effective_tls_root_certs(&config_with(None));
+        let effective = effective_tls_root_certs(None, Certificates::env_sources());
         assert_eq!(effective.mode, default_tls_root_certs());
         assert!(effective.is_default);
         assert!(effective.env_sources.is_empty());
@@ -32,7 +28,7 @@ fn unset_mode_uses_the_backend_default() {
 fn deprecated_modes_are_reported_as_system() {
     temp_env::with_vars(NO_CERT_ENV, || {
         for mode in [TlsRootCerts::LegacyNative, TlsRootCerts::All] {
-            let effective = effective_tls_root_certs(&config_with(Some(mode)));
+            let effective = effective_tls_root_certs(Some(mode), Certificates::env_sources());
             assert_eq!(effective.mode, TlsRootCerts::System);
             assert!(!effective.is_default);
         }
@@ -54,7 +50,8 @@ fn valid_ssl_cert_file_is_reported() {
     temp_env::with_vars(
         [("SSL_CERT_FILE", Some(path)), ("SSL_CERT_DIR", None)],
         || {
-            let effective = effective_tls_root_certs(&config_with(Some(TlsRootCerts::Webpki)));
+            let effective =
+                effective_tls_root_certs(Some(TlsRootCerts::Webpki), Certificates::env_sources());
             assert_eq!(effective.mode, TlsRootCerts::Webpki);
             assert_eq!(effective.env_sources.len(), 1);
             assert_eq!(effective.env_sources[0].variable, "SSL_CERT_FILE");
@@ -77,7 +74,8 @@ fn missing_ssl_cert_file_is_ignored() {
             ("SSL_CERT_DIR", None),
         ],
         || {
-            let effective = effective_tls_root_certs(&config_with(Some(TlsRootCerts::System)));
+            let effective =
+                effective_tls_root_certs(Some(TlsRootCerts::System), Certificates::env_sources());
             assert!(effective.env_sources.is_empty());
         },
     );

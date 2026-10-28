@@ -1575,6 +1575,12 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
     # The resolved and minimum supported platforms depend on the host that runs
     # this test, so only assert their structure instead of a hardcoded platform.
     IsPlatformInfo = IsDict(name=IsStr, subdir=IsStr, virtual_packages=IsAnyList)
+    IsTlsRootCerts = IsDict(
+        mode=IsStr,
+        is_default=IsInstance(bool),
+        env_sources=IsAnyList,
+        env_replaces_mode=IsInstance(bool),
+    )
     assert info_data == snapshot(
         {
             "platform": IsStr,
@@ -1585,16 +1591,11 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "cache_size": AnyThing,
             "auth_dir": IsStr,
             "tls_backend": IsStr,
-            "tls_root_certs": {
-                "mode": IsStr,
-                "is_default": IsInstance(bool),
-                "env_sources": IsAnyList,
-                "env_replaces_mode": IsInstance(bool),
-            },
             "global_info": {
                 "bin_dir": IsStr,
                 "env_dir": IsStr,
                 "manifest": IsStr,
+                "tls_root_certs": IsTlsRootCerts,
             },
             "project_info": {
                 "name": "test",
@@ -1602,6 +1603,7 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
                 "last_updated": IsStr,
                 "pixi_folder_size": IsStr,
                 "version": None,
+                "tls_root_certs": IsTlsRootCerts,
             },
             "environments_info": [
                 {
