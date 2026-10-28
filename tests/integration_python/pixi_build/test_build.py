@@ -79,6 +79,40 @@ def test_build_honors_cuda_override(
 
 
 @pytest.mark.slow
+def test_publish_honors_exclude_newer(
+    pixi: Path,
+    simple_workspace: Workspace,
+    dummy_channel_1: str,
+) -> None:
+    """`pixi publish` builds with the `exclude-newer` of the workspace, like
+    the build of a source dependency does."""
+    simple_workspace.recipe["requirements"] = {"host": ["dummy-b"]}
+    command = [
+        pixi,
+        "publish",
+        "--target-dir",
+        str(simple_workspace.workspace_dir),
+        "--path",
+        simple_workspace.package_dir,
+    ]
+
+    # Every package in dummy_channel_1 was uploaded in 2025. The cutoff is set
+    # on that channel only, so it doesn't affect the build backend.
+    channels = simple_workspace.workspace_manifest["workspace"]["channels"]
+    channels.insert(0, {"channel": dummy_channel_1, "exclude-newer": "2020-01-01"})
+    simple_workspace.write_files()
+    verify_cli_command(
+        command,
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="uploaded after the cutoff date",
+    )
+
+    channels[0] = dummy_channel_1
+    simple_workspace.write_files()
+    verify_cli_command(command)
+
+
+@pytest.mark.slow
 def test_no_change_should_be_fully_cached(pixi: Path, simple_workspace: Workspace) -> None:
     simple_workspace.write_files()
     verify_cli_command(
