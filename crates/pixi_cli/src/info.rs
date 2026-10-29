@@ -49,6 +49,9 @@ pub struct Args {
     #[clap(flatten)]
     pub config_source: pixi_config::ConfigSourceCli,
 
+    #[clap(flatten)]
+    pub tls: ConfigCliTls,
+
     /// Show cache and environment size
     #[arg(long)]
     extended: bool,
@@ -655,20 +658,15 @@ async fn detect_host(
 
 pub async fn execute(args: Args) -> miette::Result<()> {
     let source = args.config_source.source();
+    let tls_config = pixi_config::Config::from(args.tls);
     let workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(source.clone())
         .with_search_start(args.project_config.workspace_locator_start())
+        .with_cli_config(tls_config.clone())
         .with_detector_consent(Arc::new(DenyAll))
         .locate()
         .await
         .ok();
-
-    // The global config already includes `PIXI_TLS_ROOT_CERTS`, but a workspace
-    // `.pixi/config.toml` is merged on top of it. Commands in a workspace read
-    // the variable again through their CLI arguments, which they apply last.
-    // `pixi info` has no TLS arguments, so apply the variable itself.
-    let mut env_tls = ConfigCliTls::default();
-    env_tls.update_from(std::env::args().take(0));
     let tls_env_sources = Certificates::env_sources();
 
     let (pixi_folder_size, cache_size) = if args.extended {
@@ -700,7 +698,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .clone()
             .map(|v| v.to_string()),
         tls_root_certs: effective_tls_root_certs(
-            env_tls.tls_root_certs.or(p.config().tls_root_certs()),
+            p.config().tls_root_certs(),
             tls_env_sources.clone(),
         ),
     });
@@ -708,7 +706,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let config = workspace
         .as_ref()
         .map(|p| p.config().clone())
-        .unwrap_or_else(|| pixi_config::Config::load_global_with(&source));
+        .unwrap_or_else(|| {
+            pixi_config::Config::load_global_with(&source).merge_config(tls_config.clone())
+        });
 
     let (host, mut virtual_package_detection_error) =
         match detect_host(workspace.as_ref(), &config).await {
@@ -830,10 +830,12 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Commands outside a workspace only use the global config. The workspace
     // locator already loaded it and reported its warnings, so reload it quietly.
     let global_config = match &workspace {
-        Some(_) => Cow::Owned(tracing::subscriber::with_default(
-            tracing::subscriber::NoSubscriber::default(),
-            || pixi_config::Config::load_global_with(&source),
-        )),
+        Some(_) => Cow::Owned(
+            tracing::subscriber::with_default(tracing::subscriber::NoSubscriber::default(), || {
+                pixi_config::Config::load_global_with(&source)
+            })
+            .merge_config(tls_config),
+        ),
         None => Cow::Borrowed(&config),
     };
     let global_info = Some(GlobalInfo {
