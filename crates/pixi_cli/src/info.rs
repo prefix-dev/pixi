@@ -827,17 +827,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     }
 
-    // Commands outside a workspace only use the global config. The workspace
-    // locator already loaded it and reported its warnings, so reload it quietly.
-    let global_config = match &workspace {
-        Some(_) => Cow::Owned(
-            tracing::subscriber::with_default(tracing::subscriber::NoSubscriber::default(), || {
-                pixi_config::Config::load_global_with(&source)
-            })
-            .merge_config(tls_config),
-        ),
-        None => Cow::Borrowed(&config),
-    };
+    // `pixi global` always reads the default config locations: it ignores a
+    // workspace's `.pixi/config.toml` as well as `--config-file` and
+    // `--no-config`. Load that config quietly, problems in it are reported by
+    // the commands that use it.
+    let global_config =
+        tracing::subscriber::with_default(tracing::subscriber::NoSubscriber::default(), || {
+            pixi_config::Config::load_global()
+        })
+        .merge_config(tls_config);
     let global_info = Some(GlobalInfo {
         bin_dir: BinDir::from_env().await?.path().to_path_buf(),
         env_dir: EnvRoot::from_env().await?.path().to_path_buf(),
