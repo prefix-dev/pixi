@@ -1086,7 +1086,7 @@ impl PyPIConfig {
     }
 }
 
-pub use rattler_config::config::exclude_newer::ExcludeNewerConfig;
+pub use rattler_config::config::exclude_newer::{ExcludeNewerConfig, InvalidExcludeNewerError};
 
 /// Returns the `exclude-newer` of the configuration as TOML, as it would be
 /// written in a manifest, e.g. `"7d"` or
@@ -3284,7 +3284,7 @@ UNUSED = "unused"
             .unwrap();
         assert_eq!(
             exclude_newer_to_toml(config.exclude_newer.as_ref().unwrap()),
-            r#"{ cutoff = "7d", exemptions = { Ruff = { version = "==1" } } }"#
+            r#"{ cutoff = "7d", exemptions = { Ruff = "==1" } }"#
         );
 
         for (key, value) in [

@@ -1,7 +1,7 @@
 use std::{
     collections::BTreeSet,
     collections::HashMap,
-    hash::{DefaultHasher, Hasher},
+    hash::{DefaultHasher, Hash, Hasher},
     path::Path,
     process::ExitCode,
     str::FromStr,
@@ -16,8 +16,8 @@ use pixi_command_dispatcher::offline::exclusions_for_solve;
 use pixi_config::{self, Config, ConfigCli};
 use pixi_core::environment::list::{PackageToOutput, print_package_table};
 use pixi_core::host::{HostDetector, WantedNames, cli_detector_consent};
+use pixi_manifest::PixiPlatformName;
 use pixi_manifest::platform::host::host_subdir;
-use pixi_manifest::{ExcludeNewerConfig, PixiPlatformName, resolve_exclude_newer};
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 use pixi_utils::prefix::Prefix;
 use pixi_utils::{
@@ -194,6 +194,11 @@ pub async fn execute(args: Args) -> miette::Result<ExitCode> {
     Ok(process_exit::exit_code_from_status(status))
 }
 
+/// The `exclude-newer` of the configuration can't be applied.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error("invalid `exclude-newer` in the pixi configuration")]
+struct InvalidConfiguredExcludeNewer(#[source] pixi_config::InvalidExcludeNewerError);
+
 /// Creates a prefix for the `pixi exec` command.
 pub async fn create_exec_prefix(
     args: &Args,
@@ -218,25 +223,16 @@ pub async fn create_exec_prefix(
     let exclude_newer = config
         .exclude_newer
         .as_ref()
-        .map(|exclude_newer| -> miette::Result<_> {
-            let toml = pixi_config::exclude_newer_to_toml(exclude_newer);
-            let exclude_newer = ExcludeNewerConfig::from_toml_value("exclude-newer", &toml)?;
-            Ok(resolve_exclude_newer(
-                &exclude_newer,
-                [],
-                config.global_channel_config(),
-                [],
-            )?)
-        })
+        .map(rattler_solve::ExcludeNewer::try_from)
         .transpose()
-        .wrap_err("invalid `exclude-newer` in the pixi configuration")?
-        .flatten();
+        .map_err(InvalidConfiguredExcludeNewer)?;
 
-    // Hash the cutoffs as configured, like the backend metadata cache does,
-    // so a relative cutoff such as `7d` keeps reusing the same environment.
-    let exclude_newer_hash = exclude_newer.as_ref().map(|exclude_newer| {
+    // Hash the configuration as configured, like the backend metadata cache
+    // does, so a relative cutoff such as `7d` keeps reusing the same
+    // environment. The exemptions are hashed as parsed by `rattler_config`.
+    let exclude_newer_hash = config.exclude_newer.as_ref().map(|exclude_newer| {
         let mut hasher = DefaultHasher::new();
-        exclude_newer.hash_configured(&mut hasher);
+        pixi_config::exclude_newer_to_toml(exclude_newer).hash(&mut hasher);
         hasher.finish()
     });
 
@@ -355,8 +351,6 @@ pub async fn create_exec_prefix(
     .await
     .into_diagnostic()
     .context("failed to read the package cache")?;
-
-    let exclude_newer = exclude_newer.map(rattler_solve::ExcludeNewer::from);
 
     // Solve the environment
     tracing::info!(
