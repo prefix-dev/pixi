@@ -398,6 +398,13 @@ impl Project {
                 // Nothing is written before the `exclude-newer` of the
                 // configuration is parsed, so an invalid configuration doesn't
                 // leave behind a manifest that never gets it.
+                // Canonicalized like `from_path` does, so that paths relative
+                // to the manifest resolve the same once it is read back.
+                let manifest_path = dunce::canonicalize(&manifest_dir).into_diagnostic()?.join(
+                    manifest_path
+                        .file_name()
+                        .expect("the manifest path has a file name"),
+                );
                 let mut project = Self::from_str(&manifest_path, "", env_root, bin_dir)?;
                 if project.add_configured_exclude_newer()? {
                     project.manifest.save().await?;
