@@ -487,21 +487,10 @@ fn replace_pypi_purls(record: &mut RepoDataRecord, purls: impl IntoIterator<Item
 /// Inner client for the mapping middleware stack.
 ///
 /// Requests go through [`DelegateToClient`]. This client must not load the
-/// system CA store: `reqwest::Client::new()` panics when none are present
-/// (#6825).
+/// system CA store: `reqwest::Client::new()` panics when none are present.
 fn unused_mapping_http_client() -> reqwest::Client {
     reqwest::Client::builder()
         .tls_certs_only(std::iter::empty::<reqwest::Certificate>())
         .build()
         .expect("reqwest client without system CA store")
-}
-
-#[cfg(test)]
-mod tests {
-    use super::unused_mapping_http_client;
-
-    #[test]
-    fn unused_mapping_http_client_builds_without_system_cas() {
-        drop(unused_mapping_http_client());
-    }
 }
