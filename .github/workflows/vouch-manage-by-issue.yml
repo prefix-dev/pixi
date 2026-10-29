@@ -2,7 +2,7 @@ name: Vouch Manage
 
 # The registry's Octo STS policy authorizes this workflow by its file name
 # on the default branch.
-on: # zizmor: ignore[dangerous-triggers]
+on:
   discussion_comment:
     types:
       - created
