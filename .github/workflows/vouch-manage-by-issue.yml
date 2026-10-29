@@ -53,18 +53,13 @@ jobs:
           repository: prefix-dev/vouched
           path: vouched
           token: ${{ steps.octo-sts.outputs.token }}
-          persist-credentials: false
+          persist-credentials: true
       - name: Manage contributor
         working-directory: vouched
         env:
           DISCUSSION_NUMBER: ${{ github.event.discussion.number }}
           COMMENT_NODE_ID: ${{ github.event.comment.node_id }}
-          REGISTRY_TOKEN: ${{ steps.octo-sts.outputs.token }}
-          GIT_CONFIG_COUNT: "1"
-          GIT_CONFIG_KEY_0: http.https://github.com/.extraheader
         run: |
-          GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$REGISTRY_TOKEN" | base64 --wrap=0)"
-          export GIT_CONFIG_VALUE_0
           pixi run --locked --manifest-path "$GITHUB_WORKSPACE/pixi/pixi.toml" \
             --environment vouch vouch gh-manage-by-discussion \
             "$DISCUSSION_NUMBER" "$COMMENT_NODE_ID" \

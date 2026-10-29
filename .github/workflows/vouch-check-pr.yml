@@ -2,6 +2,7 @@ name: Vouch Check PR
 
 # `pull_request_target` is needed to close pull requests from forks. The
 # workflow only runs code from the default branch, never from the pull request.
+# A repository Actions policy allows `pull_request_target` for this file path.
 on: # zizmor: ignore[dangerous-triggers]
   pull_request_target:
     types:
