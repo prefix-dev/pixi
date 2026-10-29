@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet, hash_map::Entry},
     ffi::OsStr,
     fmt::{Debug, Formatter},
     hash::{Hash, Hasher},
@@ -12,7 +12,6 @@ pub use environment::EnvironmentName;
 use fancy_display::FancyDisplay;
 use fs::tokio as tokio_fs;
 use fs_err as fs;
-use futures::stream::StreamExt;
 use indexmap::{IndexMap, IndexSet};
 use is_executable::IsExecutable;
 use itertools::{Either, Itertools};
@@ -193,10 +192,15 @@ impl ExposedData {
     /// the environment name, platform, channel, and package information, by
     /// reading the associated `conda-meta` directory.
     /// or it looks into the trampoline manifest to extract the metadata.
-    pub async fn from_exposed_path(
+    ///
+    /// The parsed `conda-meta` of each environment is kept in
+    /// `installed_environments`, so that it's only read once per environment
+    /// instead of once per exposed executable.
+    async fn from_exposed_path(
         bin: &GlobalExecutable,
         env_root: &EnvRoot,
         channel_config: &ChannelConfig,
+        installed_environments: &mut HashMap<EnvironmentName, InstalledEnvironment>,
     ) -> miette::Result<Self> {
         let exposed = bin.exposed_name();
         let executable_path = bin.executable().await?;
@@ -215,28 +219,26 @@ impl ExposedData {
             .and_then(|env| EnvironmentName::from_str(env).into_diagnostic())?;
 
         let conda_meta = env_path.join(consts::CONDA_META_DIR);
-        let env_dir = EnvDir::from_env_root(env_root.clone(), &env_name).await?;
-        let prefix = Prefix::new(env_dir.path());
+        let environment = match installed_environments.entry(env_name.clone()) {
+            Entry::Occupied(entry) => entry.into_mut(),
+            Entry::Vacant(entry) => entry.insert(
+                InstalledEnvironment::from_conda_meta(
+                    env_root,
+                    &env_name,
+                    &conda_meta,
+                    channel_config,
+                )
+                .await?,
+            ),
+        };
 
-        let (platform, channel, package) =
-            package_from_conda_meta(&conda_meta, &executable, &prefix, channel_config).await?;
+        let record = environment.find_package(&executable).ok_or_else(|| {
+            miette::miette!("Couldn't find {executable} in {}", conda_meta.display())
+        })?;
+        let (platform, channel, package) = convert_record_to_metadata(record, channel_config)?;
 
         let mut channels = vec![channel];
-
-        // Find all channels used to create the environment
-        let all_channels = prefix
-            .find_installed_packages()?
-            .iter()
-            .map(|prefix_record| prefix_record.repodata_record.channel.clone())
-            .collect::<HashSet<_>>();
-
-        for channel in all_channels.into_iter().flatten() {
-            tracing::debug!("Channel: {} found in environment: {}", channel, env_name);
-            channels.push(channel_url_to_prioritized_channel(
-                &channel,
-                channel_config,
-            )?);
-        }
+        channels.extend(environment.channels.iter().cloned());
 
         Ok(ExposedData {
             env_name,
@@ -293,30 +295,72 @@ fn convert_record_to_metadata(
     Ok((platform, channel, package_name))
 }
 
-/// Extracts package metadata from the `conda-meta` directory for a given
-/// executable.
-///
-/// This function reads the `conda-meta` directory to find the package metadata
-/// associated with the specified executable. It returns the platform, channel,
-/// and package name of the executable.
-async fn package_from_conda_meta(
-    conda_meta: &Path,
-    executable: &str,
-    prefix: &Prefix,
-    channel_config: &ChannelConfig,
-) -> miette::Result<(Option<Subdir>, PrioritizedChannel, PackageName)> {
-    let records = find_package_records(conda_meta).await?;
+/// The package records of an installed environment, read from its
+/// `conda-meta` directory.
+struct InstalledEnvironment {
+    prefix: Prefix,
+    records: Vec<PrefixRecord>,
+    /// The executable names provided by each record, determined on first use
+    /// because that requires checking every file of the package.
+    executables: Vec<Option<HashSet<String>>>,
+    /// All channels used to create the environment.
+    channels: Vec<PrioritizedChannel>,
+}
 
-    for prefix_record in records {
-        if find_executables(prefix, &prefix_record)
+impl InstalledEnvironment {
+    async fn from_conda_meta(
+        env_root: &EnvRoot,
+        env_name: &EnvironmentName,
+        conda_meta: &Path,
+        channel_config: &ChannelConfig,
+    ) -> miette::Result<Self> {
+        let env_dir = EnvDir::from_env_root(env_root.clone(), env_name).await?;
+        let prefix = Prefix::new(env_dir.path());
+        let records = find_package_records(conda_meta).await?;
+
+        let channels = records
             .iter()
-            .any(|exe_path| executable_from_path(exe_path) == executable)
-        {
-            return convert_record_to_metadata(&prefix_record, channel_config);
-        }
+            .map(|prefix_record| prefix_record.repodata_record.channel.clone())
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .flatten()
+            .map(|channel| {
+                tracing::debug!("Channel: {} found in environment: {}", channel, env_name);
+                channel_url_to_prioritized_channel(&channel, channel_config)
+            })
+            .collect::<miette::Result<_>>()?;
+
+        Ok(Self {
+            prefix,
+            executables: vec![None; records.len()],
+            records,
+            channels,
+        })
     }
 
-    miette::bail!("Couldn't find {executable} in {}", conda_meta.display())
+    /// Returns the first package record that provides the given executable.
+    fn find_package(&mut self, executable: &str) -> Option<&PrefixRecord> {
+        let Self {
+            prefix,
+            records,
+            executables,
+            ..
+        } = self;
+        records
+            .iter()
+            .zip(executables.iter_mut())
+            .find_map(|(record, record_executables)| {
+                record_executables
+                    .get_or_insert_with(|| {
+                        find_executables(prefix, record)
+                            .iter()
+                            .map(|path| executable_from_path(path))
+                            .collect()
+                    })
+                    .contains(executable)
+                    .then_some(record)
+            })
+    }
 }
 
 impl Project {
@@ -410,31 +454,30 @@ impl Project {
         bin_dir: BinDir,
     ) -> miette::Result<Self> {
         let config = Config::load(env_root.path());
+        let channel_config = config.global_channel_config();
 
-        let exposed_binaries: Vec<ExposedData> = bin_dir
-            .executables()
-            .await?
-            .into_iter()
-            .map(|bin| {
-                let env_root = env_root.clone();
-                let config = config.clone();
-                async move {
-                    ExposedData::from_exposed_path(&bin, &env_root, config.global_channel_config())
-                        .await
-                }
-            })
-            .collect::<futures::stream::FuturesOrdered<_>>()
-            .filter_map(|result| async {
-                match result {
-                    Ok(data) => Some(data),
-                    Err(e) => {
-                        tracing::warn!("{e}");
-                        None
+        // This reads the package metadata of every environment, which can take a
+        // while for large installations, so show that something is happening.
+        let exposed_binaries =
+            pixi_progress::await_in_progress("recreating global manifest", |_| async {
+                let mut installed_environments = HashMap::new();
+                let mut exposed_binaries = Vec::new();
+                for bin in bin_dir.executables().await? {
+                    match ExposedData::from_exposed_path(
+                        &bin,
+                        &env_root,
+                        channel_config,
+                        &mut installed_environments,
+                    )
+                    .await
+                    {
+                        Ok(data) => exposed_binaries.push(data),
+                        Err(e) => tracing::warn!("{e}"),
                     }
                 }
+                Ok::<_, miette::Report>(exposed_binaries)
             })
-            .collect()
-            .await;
+            .await?;
 
         let parsed_manifest = ParsedManifest::from(exposed_binaries);
         let toml_pretty = toml_edit::ser::to_string_pretty(&parsed_manifest).into_diagnostic()?;
@@ -2297,6 +2340,129 @@ mod tests {
                 .into()
         );
         assert_eq!(package, "python".parse().unwrap());
+    }
+
+    /// Recreating the manifest attributes every exposed executable to the
+    /// package providing it, also when an environment exposes executables of
+    /// several packages.
+    #[tokio::test]
+    async fn test_try_from_existing_installation() {
+        let tempdir = tempdir().unwrap();
+        let env_root = EnvRoot::new(tempdir.path().to_path_buf()).unwrap();
+        let bin_dir = BinDir::new(tempdir.path().to_path_buf()).unwrap();
+        let channel = "https://prefix.dev/test-channel";
+
+        let packages: [(&str, &str, &[&str]); 3] = [
+            ("test", "package-a", &["a1", "a2"]),
+            ("test", "package-b", &["b"]),
+            ("other", "package-c", &["c"]),
+        ];
+        for (env, package, executables) in packages {
+            let env_dir = env_root.path().join(env);
+            let mut files = vec![PathBuf::from(format!("share/{package}.txt"))];
+            for executable in executables {
+                let relative_path = if cfg!(windows) {
+                    PathBuf::from(format!("bin/{executable}.exe"))
+                } else {
+                    PathBuf::from(format!("bin/{executable}"))
+                };
+                let path = env_dir.join(&relative_path);
+                fs::create_dir_all(path.parent().unwrap()).unwrap();
+                fs::File::create(&path).unwrap();
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+                }
+                files.push(relative_path);
+
+                // Expose `a2` under a different name
+                let exposed_name = if *executable == "a2" {
+                    "renamed-a2"
+                } else {
+                    *executable
+                };
+                Trampoline::new(
+                    ExposedName::from_str(exposed_name).unwrap(),
+                    bin_dir.path().to_path_buf(),
+                    Configuration::new(path, String::new(), HashMap::new()),
+                )
+                .save()
+                .await
+                .unwrap();
+            }
+
+            let repodata_record = RepoDataRecord {
+                package_record: PackageRecord::new(
+                    package.parse().unwrap(),
+                    VersionWithSource::from_str("1.0").unwrap(),
+                    "0".to_string(),
+                ),
+                identifier: DistArchiveIdentifier::try_from_filename(&format!(
+                    "{package}-1.0-0.conda"
+                ))
+                .unwrap(),
+                url: Url::from_str(&format!("{channel}/noarch/{package}-1.0-0.conda")).unwrap(),
+                channel: Some(channel.to_string()),
+            };
+            let mut prefix_record = PrefixRecord::from_repodata_record(repodata_record, vec![]);
+            prefix_record.files = files;
+            let conda_meta = env_dir.join(consts::CONDA_META_DIR);
+            fs::create_dir_all(&conda_meta).unwrap();
+            prefix_record
+                .write_to_path(conda_meta.join(prefix_record.file_name()), false)
+                .unwrap();
+        }
+
+        let manifest_path = tempdir.path().join("manifests/pixi-global.toml");
+        fs::create_dir_all(manifest_path.parent().unwrap()).unwrap();
+        let project = Project::try_from_existing_installation(&manifest_path, env_root, bin_dir)
+            .await
+            .unwrap();
+
+        let environments = project
+            .environments()
+            .iter()
+            .map(|(name, env)| {
+                let dependencies = env
+                    .dependencies
+                    .specs
+                    .keys()
+                    .map(|p| p.as_source().to_string());
+                let exposed = env
+                    .exposed
+                    .iter()
+                    .map(|m| format!("{}={}", m.exposed_name(), m.executable_relname()));
+                (
+                    name.to_string(),
+                    (
+                        dependencies.sorted().collect_vec(),
+                        exposed.sorted().collect_vec(),
+                    ),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        assert_eq!(
+            environments,
+            BTreeMap::from([
+                (
+                    "other".to_string(),
+                    (vec!["package-c".to_string()], vec!["c=c".to_string()])
+                ),
+                (
+                    "test".to_string(),
+                    (
+                        vec!["package-a".to_string(), "package-b".to_string()],
+                        vec![
+                            "a1=a1".to_string(),
+                            "b=b".to_string(),
+                            "renamed-a2=a2".to_string()
+                        ]
+                    )
+                ),
+            ])
+        );
+        assert!(manifest_path.is_file());
     }
 
     fn gvp(name: &str, version: &str) -> GenericVirtualPackage {
