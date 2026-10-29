@@ -2505,10 +2505,14 @@ impl Config {
                 // edits the keys inside it, e.g. `exclude-newer.exemptions.ruff`.
                 // A table is given as JSON like the other complex values,
                 // anything else is a cutoff such as `7d`.
-                let mut rattler_config = rattler_config::config::ConfigBase::<
-                    rattler_config::config::NoExtension,
-                >::default();
-                rattler_config.exclude_newer = self.exclude_newer.clone();
+                let mut rattler_config =
+                    rattler_config::config::ConfigBase::<rattler_config::config::NoExtension> {
+                        common: rattler_config::config::CommonConfig {
+                            exclude_newer: self.exclude_newer.clone(),
+                            ..Default::default()
+                        },
+                        ..Default::default()
+                    };
                 rattler_config
                     .set(key, value)
                     .map_err(|source| match source {

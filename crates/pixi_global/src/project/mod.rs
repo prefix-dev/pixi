@@ -101,6 +101,15 @@ pub enum CommandDispatcherError {
     BackendOverride(#[source] Box<dyn Diagnostic + Send + Sync>),
 }
 
+/// The directory of the global manifest could not be canonicalized.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error("failed to canonicalize the global manifest directory '{}'", .path.display())]
+pub struct CanonicalizeManifestDirError {
+    path: PathBuf,
+    #[source]
+    source: std::io::Error,
+}
+
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 pub enum InferPackageNameError {
     #[error("only source specifications are supported")]
@@ -400,11 +409,16 @@ impl Project {
                 // leave behind a manifest that never gets it.
                 // Canonicalized like `from_path` does, so that paths relative
                 // to the manifest resolve the same once it is read back.
-                let manifest_path = dunce::canonicalize(&manifest_dir).into_diagnostic()?.join(
-                    manifest_path
-                        .file_name()
-                        .expect("the manifest path has a file name"),
-                );
+                let manifest_path = dunce::canonicalize(&manifest_dir)
+                    .map_err(|source| CanonicalizeManifestDirError {
+                        path: manifest_dir.clone(),
+                        source,
+                    })?
+                    .join(
+                        manifest_path
+                            .file_name()
+                            .expect("the manifest path has a file name"),
+                    );
                 let mut project = Self::from_str(&manifest_path, "", env_root, bin_dir)?;
                 if project.add_configured_exclude_newer()? {
                     project.manifest.save().await?;
