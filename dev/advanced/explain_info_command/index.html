@@ -3601,6 +3601,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#tls-root-certs" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        TLS root certs
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#cache-size" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -9466,6 +9477,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#tls-root-certs" class="md-nav__link">
+    <span class="md-ellipsis">
+      <span class="md-typeset">
+        TLS root certs
+      </span>
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#cache-size" class="md-nav__link">
     <span class="md-ellipsis">
       <span class="md-typeset">
@@ -9686,6 +9708,13 @@ In that case, if Pixi cannot find the <code>__cuda</code> virtual package on you
 Checkout the <a href="../../workspace/environment/#caching-packages">cache documentation</a> for more information.</p>
 <h3 id="auth-storage">Auth storage<a class="headerlink" href="#auth-storage" title="Permanent link">#</a></h3>
 <p>Check the <a href="../../deployment/authentication/">authentication documentation</a></p>
+<h3 id="tls-root-certs">TLS root certs<a class="headerlink" href="#tls-root-certs" title="Permanent link">#</a></h3>
+<p>The root certificates Pixi trusts for HTTPS connections.
+This is shown in both the <code>Global</code> and the <code>Workspace</code> section.
+The <code>Global</code> section shows what <code>pixi global</code> uses, which always reads the default configuration locations: it ignores a workspace's <code>.pixi/config.toml</code>, <code>--config-file</code> and <code>--no-config</code>.
+Both take the build's default, the <a href="../../reference/pixi_configuration/#tls-root-certs"><code>tls-root-certs</code></a> setting, the <code>--tls-root-certs</code> flag or <code>PIXI_TLS_ROOT_CERTS</code>, and the <code>SSL_CERT_FILE</code> and <code>SSL_CERT_DIR</code> environment variables into account.
+For example, <code>webpki (default)</code> means the bundled Mozilla roots are used because nothing else is configured, and <code>SSL_CERT_FILE=/etc/ssl/ca.pem (overrides system)</code> means the certificates from that file replace the system store.
+PyPI requests use the same certificates, unless <a href="../../reference/pixi_configuration/#pypi-config"><code>pypi-config.allow-insecure-host</code></a> is set: uv then builds its own HTTP client, which picks its root certificates separately and may not match this line.</p>
 <h3 id="cache-size">Cache size<a class="headerlink" href="#cache-size" title="Permanent link">#</a></h3>
 <p>[requires <code>--extended</code>]</p>
 <p>The size of the previously mentioned "Cache dir" in Mebibytes.</p>
