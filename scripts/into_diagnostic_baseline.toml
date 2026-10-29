@@ -10,6 +10,5 @@ pixi_build_ros = 3
 pixi_build_rust = 1
 pixi_cli = 198
 pixi_core = 1
-pixi_global = 13
 pixi_test_utils = 5
 trampoline = 7

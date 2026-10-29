@@ -96,7 +96,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     }
                     Err(err) => {
                         report_failed_environment(env_name);
-                        errors.push((env_name.clone(), err));
+                        errors.push((env_name.clone(), miette::Report::new(err)));
                     }
                 }
             }
