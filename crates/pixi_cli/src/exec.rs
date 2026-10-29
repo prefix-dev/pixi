@@ -218,11 +218,15 @@ pub async fn create_exec_prefix(
     let exclude_newer = config
         .exclude_newer
         .as_ref()
-        .map(|exclude_newer| {
+        .map(|exclude_newer| -> miette::Result<_> {
             let toml = pixi_config::exclude_newer_to_toml(exclude_newer);
             let exclude_newer = ExcludeNewerConfig::from_toml_value("exclude-newer", &toml)?;
-            resolve_exclude_newer(&exclude_newer, [], config.global_channel_config(), [])
-                .into_diagnostic()
+            Ok(resolve_exclude_newer(
+                &exclude_newer,
+                [],
+                config.global_channel_config(),
+                [],
+            )?)
         })
         .transpose()
         .wrap_err("invalid `exclude-newer` in the pixi configuration")?

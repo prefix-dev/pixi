@@ -310,7 +310,6 @@ def test_config_exclude_newer_init(pixi: Path, tmp_path: Path) -> None:
     )
 
 
-
 def test_config_exclude_newer_exec(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     """`pixi exec` solves with the `exclude-newer` of the configuration."""
     env = {"PIXI_HOME": str(tmp_path)}
