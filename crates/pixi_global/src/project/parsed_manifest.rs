@@ -1,10 +1,15 @@
-use std::{cmp::Ordering, fmt, path::Path, str::FromStr};
+use std::{
+    cmp::Ordering,
+    fmt,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use console::StyledObject;
 use fancy_display::FancyDisplay;
 use indexmap::{IndexMap, IndexSet};
 use itertools::{Either, Itertools};
-use miette::{Context, Diagnostic, IntoDiagnostic, LabeledSpan, NamedSource, Report};
+use miette::{Diagnostic, NamedSource, SourceSpan};
 use pixi_consts::consts;
 use pixi_manifest::{
     ExcludeNewerConfig, InlinePackageManifest, KnownPreviewFlag, Preview, PrioritizedChannel,
@@ -13,6 +18,7 @@ use pixi_manifest::{
 };
 use pixi_spec::PixiSpec;
 use pixi_toml::{TomlFromStr, TomlIndexMap, TomlIndexSet, TomlWith};
+use pixi_utils::diagnostic::Cause;
 use rattler_conda_types::{NamedChannelOrUrl, PackageName, Subdir};
 use serde::{Serialize, Serializer, ser::SerializeMap};
 use serde_derive::Deserialize;
@@ -39,43 +45,66 @@ impl From<ManifestVersion> for toml_edit::Item {
     }
 }
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug, Clone, Diagnostic)]
 pub enum ManifestParsingError {
     #[error(transparent)]
     Error(#[from] toml_edit::TomlError),
     #[error(transparent)]
     TomlError(#[from] toml_span::Error),
-    #[error(
-        "The 'version' of the manifest is too low: '{0}', the supported version is '{GLOBAL_MANIFEST_VERSION}', please update the manifest"
-    )]
+    #[error("the manifest version '{0}' is too low")]
+    #[diagnostic(help(
+        "the supported version is '{GLOBAL_MANIFEST_VERSION}', update the manifest"
+    ))]
     VersionTooLow(i64, #[source] toml_span::Error),
-    #[error(
-        "The 'version' of the manifest is too high: '{0}', the supported version is '{GLOBAL_MANIFEST_VERSION}', please update `pixi` to support the new manifest version"
-    )]
+    #[error("the manifest version '{0}' is too high")]
+    #[diagnostic(help(
+        "the supported version is '{GLOBAL_MANIFEST_VERSION}', update `pixi` to support the new manifest version"
+    ))]
     VersionTooHigh(i64, #[source] toml_span::Error),
 }
 
+/// The global manifest failed to parse.
+#[derive(Error, Debug, Diagnostic)]
+pub enum ManifestParseError {
+    #[error("failed to parse the global manifest '{}'", .path.display())]
+    Spanned {
+        path: PathBuf,
+        #[source_code]
+        source_code: NamedSource<String>,
+        #[label("{message}")]
+        span: SourceSpan,
+        message: String,
+    },
+
+    #[error("failed to parse the global manifest '{}'", .path.display())]
+    #[diagnostic(forward(source))]
+    Invalid {
+        path: PathBuf,
+        #[source]
+        source: Cause<ManifestParsingError>,
+    },
+}
+
 impl ManifestParsingError {
-    pub fn to_fancy<T>(
-        &self,
+    /// Attaches the manifest path, and the contents when the error has a span.
+    pub fn into_parse_error(
+        self,
         file_name: &str,
         contents: impl Into<String>,
         path: &Path,
-    ) -> Result<T, Report> {
+    ) -> ManifestParseError {
         if let Some(span) = self.span() {
-            Err(miette::miette!(
-                labels = vec![LabeledSpan::at(span, self.message())],
-                "Failed to parse global manifest: {}",
-                console::style(path.display()).bold()
-            )
-            .with_source_code(NamedSource::new(file_name, contents.into())))
+            ManifestParseError::Spanned {
+                path: path.to_path_buf(),
+                source_code: NamedSource::new(file_name, contents.into()),
+                span: span.into(),
+                message: self.message(),
+            }
         } else {
-            Err(self.clone()).into_diagnostic().with_context(|| {
-                format!(
-                    "Failed to parse global manifest: '{}'",
-                    console::style(path.display()).bold()
-                )
-            })
+            ManifestParseError::Invalid {
+                path: path.to_path_buf(),
+                source: Cause::new(self),
+            }
         }
     }
 

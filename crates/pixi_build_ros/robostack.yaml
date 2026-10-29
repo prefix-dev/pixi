@@ -587,6 +587,8 @@ msgpack:
   robostack: [msgpack-python]
 muparser:
   robostack: [muparser]
+nanobind-dev:
+  robostack: [nanobind]
 netpbm:
   robostack:
     linux-aarch64: []
@@ -955,6 +957,8 @@ python3-typeguard:
   robostack: [typeguard]
 python3-types-pyyaml:
   robostack: [types-pyyaml]
+python3-typing-extensions:
+  robostack: [typing_extensions]
 python3-ultralytics-pip:
   robostack: [ultralytics]
 python3-unidiff:

@@ -6,11 +6,11 @@ use std::{
 
 use fancy_display::FancyDisplay;
 use indexmap::IndexSet;
-use miette::IntoDiagnostic;
 use pixi_config::Config;
 use pixi_consts::consts;
 use pixi_manifest::{
-    ExcludeNewerConfig, ExcludeNewerExemption, PrioritizedChannel, toml::TomlDocument,
+    ExcludeNewerConfig, ExcludeNewerEditError, ExcludeNewerExemption, PrioritizedChannel,
+    TomlError, toml::TomlDocument,
 };
 use pixi_toml::TomlIndexMap;
 use pixi_utils::{executable_from_path, strip_executable_extension};
@@ -21,9 +21,83 @@ use toml_span::{DeserError, Value};
 use super::{
     EnvironmentName, ExposedName,
     global_spec::GlobalSpec,
-    parsed_manifest::{ManifestParsingError, ManifestVersion, ParsedManifest},
+    parsed_manifest::{
+        ExposedNameError, ManifestParseError, ManifestParsingError, ManifestVersion, ParsedManifest,
+    },
 };
 use crate::project::ParsedEnvironment;
+
+/// An error from loading, editing or saving the global manifest.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum ManifestError {
+    #[error("failed to resolve the global manifest path '{}'", .path.display())]
+    Canonicalize {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("failed to read the global manifest")]
+    Read(#[source] std::io::Error),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Parse(#[from] Box<ManifestParseError>),
+
+    #[error("failed to save the global manifest '{}'", .path.display())]
+    Save {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Toml(#[from] TomlError),
+
+    #[error("environment '{0}' doesn't exist")]
+    EnvironmentNotFound(EnvironmentName),
+
+    #[error("environment '{0}' already exists")]
+    EnvironmentAlreadyExists(EnvironmentName),
+
+    #[error("dependency '{}' not found in environment '{environment}'", .name.as_normalized())]
+    DependencyNotFound {
+        name: PackageName,
+        environment: EnvironmentName,
+    },
+
+    #[error("inline package definition for '{}' requires a source spec", .name.as_normalized())]
+    #[diagnostic(help("the spec is `{spec}`"))]
+    InlineRequiresSourceSpec { name: PackageName, spec: String },
+
+    #[error("exposed name '{0}' not found in any environment")]
+    ExposedNameNotFound(ExposedName),
+
+    #[error("exposed name '{name}' doesn't exist in environment '{environment}'")]
+    ExposedNameNotInEnvironment {
+        name: ExposedName,
+        environment: EnvironmentName,
+    },
+
+    #[error("exposed name '{0}' already exists")]
+    ExposedNameAlreadyExists(ExposedName),
+
+    #[error("shortcut '{}' doesn't exist", .0.as_normalized())]
+    ShortcutNotFound(PackageName),
+
+    #[error("shortcut '{}' already exists", .0.as_normalized())]
+    ShortcutAlreadyExists(PackageName),
+
+    #[error("environment '{0}' has no shortcuts")]
+    NoShortcuts(EnvironmentName),
+
+    #[error("expected a table for {0}")]
+    ExpectedTable(&'static str),
+
+    #[error("expected an array for {0}")]
+    ExpectedArray(&'static str),
+}
 
 /// Handles the global project's manifest file.
 /// This struct is responsible for reading, parsing, editing, and saving the
@@ -44,14 +118,21 @@ pub struct Manifest {
 
 impl Manifest {
     /// Creates a new manifest from a path
-    pub fn from_path(path: impl AsRef<Path>) -> miette::Result<Self> {
-        let manifest_path = dunce::canonicalize(path.as_ref()).into_diagnostic()?;
-        let contents = fs_err::read_to_string(path.as_ref()).into_diagnostic()?;
+    pub fn from_path(path: impl AsRef<Path>) -> Result<Self, ManifestError> {
+        let manifest_path =
+            dunce::canonicalize(path.as_ref()).map_err(|source| ManifestError::Canonicalize {
+                path: path.as_ref().to_path_buf(),
+                source,
+            })?;
+        let contents = fs_err::read_to_string(path.as_ref()).map_err(ManifestError::Read)?;
         Self::from_str(manifest_path.as_ref(), contents)
     }
 
     /// Creates a new manifest from a string
-    pub fn from_str(manifest_path: &Path, contents: impl Into<String>) -> miette::Result<Self> {
+    pub fn from_str(
+        manifest_path: &Path,
+        contents: impl Into<String>,
+    ) -> Result<Self, ManifestError> {
         let contents = contents.into();
         let root_directory = manifest_path.parent().unwrap_or(Path::new(""));
         let parsed = ParsedManifest::from_toml_str(&contents, root_directory);
@@ -63,11 +144,14 @@ impl Manifest {
                 .map_err(ManifestParsingError::from)
         }) {
             Ok(result) => result,
-            Err(e) => e.to_fancy(
-                consts::GLOBAL_MANIFEST_DEFAULT_NAME,
-                &contents,
-                manifest_path,
-            )?,
+            Err(e) => {
+                return Err(Box::new(e.into_parse_error(
+                    consts::GLOBAL_MANIFEST_DEFAULT_NAME,
+                    &contents,
+                    manifest_path,
+                ))
+                .into());
+            }
         };
 
         let manifest = Self {
@@ -85,14 +169,14 @@ impl Manifest {
         &mut self,
         env_name: &EnvironmentName,
         channels: Option<Vec<NamedChannelOrUrl>>,
-    ) -> miette::Result<()> {
+    ) -> Result<(), ManifestError> {
         let channels = channels
             .filter(|c| !c.is_empty())
             .unwrap_or_else(|| Config::load_global().default_channels());
 
         // Update self.parsed
         if self.parsed.envs.get(env_name).is_some() {
-            miette::bail!("Environment {} already exists.", env_name.fancy_display());
+            return Err(ManifestError::EnvironmentAlreadyExists(env_name.clone()));
         }
         self.parsed.envs.insert(
             env_name.clone(),
@@ -102,8 +186,7 @@ impl Manifest {
         // Update self.document
         let channels_array = self
             .document
-            .get_or_insert_toml_array_mut(&["envs", env_name.as_str()], "channels")
-            .map_err(|e| miette::miette!("Failed to get channels array: {}", e))?;
+            .get_or_insert_toml_array_mut(&["envs", env_name.as_str()], "channels")?;
         for channel in channels {
             channels_array.push(channel.as_str());
         }
@@ -116,19 +199,18 @@ impl Manifest {
     }
 
     /// Removes a specific environment from the manifest
-    pub fn remove_environment(&mut self, env_name: &EnvironmentName) -> miette::Result<()> {
+    pub fn remove_environment(&mut self, env_name: &EnvironmentName) -> Result<(), ManifestError> {
         // Update self.parsed
-        self.parsed.envs.shift_remove(env_name).ok_or_else(|| {
-            miette::miette!("Environment {} doesn't exist.", env_name.fancy_display())
-        })?;
+        self.parsed
+            .envs
+            .shift_remove(env_name)
+            .ok_or_else(|| ManifestError::EnvironmentNotFound(env_name.clone()))?;
 
         // Update self.document
         self.document
             .get_or_insert_nested_table(&["envs"])?
             .remove(env_name.as_str())
-            .ok_or_else(|| {
-                miette::miette!("Environment {} doesn't exist.", env_name.fancy_display())
-            })?;
+            .ok_or_else(|| ManifestError::EnvironmentNotFound(env_name.clone()))?;
 
         tracing::debug!(
             "Removed environment {} from toml document",
@@ -142,7 +224,7 @@ impl Manifest {
         &mut self,
         env_name: &EnvironmentName,
         named_spec: &GlobalSpec,
-    ) -> miette::Result<()> {
+    ) -> Result<(), ManifestError> {
         let name = named_spec.name();
         let spec = named_spec.spec();
 
@@ -153,11 +235,10 @@ impl Manifest {
             None => spec.to_toml_value(),
             Some(inline) => {
                 let toml_edit::Value::InlineTable(mut table) = spec.to_toml_value() else {
-                    miette::bail!(
-                        "an inline package definition requires a source spec, but the spec of '{}' is `{}`",
-                        name.as_normalized(),
-                        spec.to_toml_value()
-                    );
+                    return Err(ManifestError::InlineRequiresSourceSpec {
+                        name: name.clone(),
+                        spec: spec.to_toml_value().to_string(),
+                    });
                 };
                 table.insert("package", inline.to_toml_value());
                 toml_edit::Value::InlineTable(table)
@@ -165,7 +246,7 @@ impl Manifest {
         };
 
         if !self.parsed.envs.contains_key(env_name) {
-            miette::bail!("Environment {} doesn't exist.", env_name.fancy_display());
+            return Err(ManifestError::EnvironmentNotFound(env_name.clone()));
         }
 
         // Look up the existing key so a non-normalized spelling in the
@@ -204,7 +285,12 @@ impl Manifest {
                     self.parsed = parsed;
                 }
                 Err(e) => {
-                    return e.to_fancy(consts::GLOBAL_MANIFEST_DEFAULT_NAME, &contents, &self.path);
+                    return Err(Box::new(e.into_parse_error(
+                        consts::GLOBAL_MANIFEST_DEFAULT_NAME,
+                        &contents,
+                        &self.path,
+                    ))
+                    .into());
                 }
             }
         } else {
@@ -241,20 +327,21 @@ impl Manifest {
         &mut self,
         env_name: &EnvironmentName,
         name: &PackageName,
-    ) -> miette::Result<PackageName> {
+    ) -> Result<PackageName, ManifestError> {
         // Update self.parsed
-        let parsed_env = self.parsed.envs.get_mut(env_name).ok_or_else(|| {
-            miette::miette!("Environment {} doesn't exist.", env_name.fancy_display())
-        })?;
+        let parsed_env = self
+            .parsed
+            .envs
+            .get_mut(env_name)
+            .ok_or_else(|| ManifestError::EnvironmentNotFound(env_name.clone()))?;
         parsed_env
             .dependencies
             .specs
             .swap_remove(name)
-            .ok_or(miette::miette!(
-                "Dependency {} not found in {}",
-                console::style(name.as_normalized()).green(),
-                env_name.fancy_display()
-            ))?;
+            .ok_or_else(|| ManifestError::DependencyNotFound {
+                name: name.clone(),
+                environment: env_name.clone(),
+            })?;
         parsed_env.inline_packages.swap_remove(name);
 
         // Update self.document
@@ -268,7 +355,7 @@ impl Manifest {
         let key =
             existing_package_key(item, name).unwrap_or_else(|| name.as_normalized().to_string());
         pixi_toml_edit::remove_entry(item, &key)
-            .map_err(|_| miette::miette!("expected a table for dependencies"))?;
+            .map_err(|_| ManifestError::ExpectedTable("dependencies"))?;
 
         tracing::debug!(
             "Removed dependency {} to toml document for environment {}",
@@ -283,19 +370,12 @@ impl Manifest {
         &mut self,
         env_name: &EnvironmentName,
         platform: Subdir,
-    ) -> miette::Result<()> {
-        // Ensure the environment exists
-        if !self.parsed.envs.contains_key(env_name) {
-            miette::bail!("Environment {} doesn't exist", env_name.fancy_display());
-        }
-
+    ) -> Result<(), ManifestError> {
         // Update self.parsed
         self.parsed
             .envs
             .get_mut(env_name)
-            .ok_or_else(|| {
-                miette::miette!("Can't find environment {} yet", env_name.fancy_display())
-            })?
+            .ok_or_else(|| ManifestError::EnvironmentNotFound(env_name.clone()))?
             .platform
             .replace(platform);
 
@@ -315,67 +395,11 @@ impl Manifest {
         Ok(())
     }
 
-    #[allow(dead_code)]
-    /// Adds a channel to the manifest
-    pub fn add_channel(
-        &mut self,
-        env_name: &EnvironmentName,
-        channel: &NamedChannelOrUrl,
-    ) -> miette::Result<()> {
-        // Ensure the environment exists
-        if !self.parsed.envs.contains_key(env_name) {
-            miette::bail!("Environment {} doesn't exist", env_name.fancy_display());
-        }
-
-        // Update self.parsed, unless the channel is already tracked (e.g. as
-        // an entry with an explicit priority).
-        let channel_name = channel.to_string();
-        let env = self
-            .parsed
-            .envs
-            .get_mut(env_name)
-            .ok_or_else(|| miette::miette!("This should be impossible"))?;
-        let already_tracked = env
-            .channels
-            .iter()
-            .any(|existing| existing.channel.to_string() == channel_name);
-        if !already_tracked {
-            env.channels
-                .insert(PrioritizedChannel::from(channel.clone()));
-        }
-
-        // Update self.document
-        let channels_array = self
-            .document
-            .get_or_insert_nested_table(&["envs", env_name.as_str()])?
-            .entry("channels")
-            .or_insert_with(|| toml_edit::Item::Value(toml_edit::Value::Array(Default::default())))
-            .as_array_mut()
-            .ok_or_else(|| miette::miette!("Expected an array for channels"))?;
-
-        // Append the channel unless it is already listed, leaving the
-        // existing entries' formatting untouched. Compare normalized names so
-        // an entry that is spelled differently in the document (e.g. a URL
-        // with a trailing slash) is recognized as well.
-        let channel = channel_name;
-        let already_listed = channels_array.iter().any(|item| {
-            channel_array_element_name(item).is_some_and(|existing| {
-                let existing = NamedChannelOrUrl::from_str(existing)
-                    .map(|channel| channel.to_string())
-                    .unwrap_or_else(|_| existing.to_string());
-                existing == channel
-            })
-        });
-        if !already_listed {
-            pixi_toml_edit::push_array_element(channels_array, channel.as_str().into());
-        }
-
-        tracing::debug!("Added channel {channel} for environment {env_name} in toml document");
-        Ok(())
-    }
-
     /// Sets or removes the `exclude-newer` cutoff of the manifest.
-    pub fn set_exclude_newer_cutoff(&mut self, cutoff: Option<&str>) -> miette::Result<()> {
+    pub fn set_exclude_newer_cutoff(
+        &mut self,
+        cutoff: Option<&str>,
+    ) -> Result<(), ExcludeNewerEditError> {
         self.parsed
             .exclude_newer
             .set_cutoff(self.document.as_table_mut(), cutoff)?;
@@ -404,7 +428,7 @@ impl Manifest {
         &mut self,
         name: PackageName,
         exemption: ExcludeNewerExemption,
-    ) -> miette::Result<()> {
+    ) -> Result<(), ExcludeNewerEditError> {
         let source = name.as_source().to_string();
         self.parsed
             .exclude_newer
@@ -415,7 +439,10 @@ impl Manifest {
 
     /// Removes the `exclude-newer` exemption of `name`. Returns false if the
     /// package was not exempt.
-    pub fn remove_exclude_newer_exemption(&mut self, name: &PackageName) -> miette::Result<bool> {
+    pub fn remove_exclude_newer_exemption(
+        &mut self,
+        name: &PackageName,
+    ) -> Result<bool, ExcludeNewerEditError> {
         let removed = self
             .parsed
             .exclude_newer
@@ -433,7 +460,7 @@ impl Manifest {
     pub fn match_exposed_name_to_environment(
         &self,
         exposed_name: &ExposedName,
-    ) -> miette::Result<EnvironmentName> {
+    ) -> Result<EnvironmentName, ManifestError> {
         for (env_name, env) in &self.parsed.envs {
             for mapping in &env.exposed {
                 if mapping.exposed_name == *exposed_name {
@@ -441,10 +468,7 @@ impl Manifest {
                 }
             }
         }
-        Err(miette::miette!(
-            "Exposed name {} not found in any environment",
-            exposed_name.fancy_display()
-        ))
+        Err(ManifestError::ExposedNameNotFound(exposed_name.clone()))
     }
 
     /// Checks if an exposed name already exists in other environments
@@ -466,25 +490,24 @@ impl Manifest {
         &mut self,
         env_name: &EnvironmentName,
         mapping: &Mapping,
-    ) -> miette::Result<()> {
+    ) -> Result<(), ManifestError> {
         // Ensure the environment exists
         if !self.parsed.envs.contains_key(env_name) {
-            miette::bail!("Environment {} doesn't exist", env_name.fancy_display());
+            return Err(ManifestError::EnvironmentNotFound(env_name.clone()));
         }
 
         // Ensure exposed name is unique
         if self.exposed_name_already_exists_in_other_envs(env_name, &mapping.exposed_name) {
-            miette::bail!(
-                "Exposed name {} already exists",
-                mapping.exposed_name.fancy_display()
-            );
+            return Err(ManifestError::ExposedNameAlreadyExists(
+                mapping.exposed_name.clone(),
+            ));
         }
 
         // Update self.parsed
         self.parsed
             .envs
             .get_mut(env_name)
-            .ok_or_else(|| miette::miette!("This should be impossible"))?
+            .expect("environment existence was checked above")
             .exposed
             .insert(mapping.clone());
 
@@ -504,16 +527,12 @@ impl Manifest {
         &mut self,
         env_name: &EnvironmentName,
         exposed_name: &ExposedName,
-    ) -> miette::Result<()> {
-        // Ensure the environment exists
-        if !self.parsed.envs.contains_key(env_name) {
-            miette::bail!("Environment {} doesn't exist", env_name.fancy_display());
-        }
+    ) -> Result<(), ManifestError> {
         let environment = self
             .parsed
             .envs
             .get_mut(env_name)
-            .ok_or_else(|| miette::miette!("[envs.{env_name}] needs to exist"))?;
+            .ok_or_else(|| ManifestError::EnvironmentNotFound(env_name.clone()))?;
 
         // Remove exposed_name from parsed environment
         environment
@@ -525,8 +544,11 @@ impl Manifest {
             self.document
                 .get_or_insert_nested_item(&["envs", env_name.as_str(), "exposed"])?;
         pixi_toml_edit::remove_entry(item, exposed_name.as_ref())
-            .map_err(|_| miette::miette!("expected a table for exposed names"))?
-            .ok_or_else(|| miette::miette!("The exposed name {exposed_name} doesn't exist"))?;
+            .map_err(|_| ManifestError::ExpectedTable("exposed names"))?
+            .ok_or_else(|| ManifestError::ExposedNameNotInEnvironment {
+                name: exposed_name.clone(),
+                environment: env_name.clone(),
+            })?;
 
         tracing::debug!("Removed exposed mapping {exposed_name} from toml document");
         Ok(())
@@ -536,11 +558,13 @@ impl Manifest {
     pub fn remove_all_exposed_mappings(
         &mut self,
         env_name: &EnvironmentName,
-    ) -> miette::Result<()> {
+    ) -> Result<(), ManifestError> {
         // Ensure the environment exists
-        let env = self.parsed.envs.get_mut(env_name).ok_or_else(|| {
-            miette::miette!("Environment {} doesn't exist", env_name.fancy_display())
-        })?;
+        let env = self
+            .parsed
+            .envs
+            .get_mut(env_name)
+            .ok_or_else(|| ManifestError::EnvironmentNotFound(env_name.clone()))?;
 
         // Clear the exposed mappings
         env.exposed.clear();
@@ -576,18 +600,15 @@ impl Manifest {
         &mut self,
         env_name: &EnvironmentName,
         shortcut: &PackageName,
-    ) -> miette::Result<()> {
+    ) -> Result<(), ManifestError> {
         // Ensure the environment exists
         if !self.parsed.envs.contains_key(env_name) {
-            miette::bail!("Environment {} doesn't exist", env_name.fancy_display());
+            return Err(ManifestError::EnvironmentNotFound(env_name.clone()));
         }
 
         // Ensure shortcut is unique
         if self.shortcut_already_exists_in_other_envs(env_name, shortcut) {
-            miette::bail!(
-                "Shortcut {} already exists",
-                console::style(shortcut.as_normalized()).green()
-            );
+            return Err(ManifestError::ShortcutAlreadyExists(shortcut.clone()));
         }
 
         // Update self.parsed
@@ -595,7 +616,7 @@ impl Manifest {
             .parsed
             .envs
             .get_mut(env_name)
-            .ok_or_else(|| miette::miette!("This should be impossible"))?;
+            .expect("environment existence was checked above");
         env.shortcuts
             .get_or_insert_default()
             .insert(shortcut.clone());
@@ -607,7 +628,7 @@ impl Manifest {
             .entry("shortcuts")
             .or_insert_with(|| toml_edit::Item::Value(toml_edit::Value::Array(Default::default())))
             .as_array_mut()
-            .ok_or_else(|| miette::miette!("Expected an array for shortcuts"))?;
+            .ok_or(ManifestError::ExpectedArray("shortcuts"))?;
 
         // Append the shortcut unless it is already listed, leaving the
         // existing entries' formatting untouched.
@@ -632,21 +653,17 @@ impl Manifest {
         &mut self,
         shortcut: &PackageName,
         env_name: &EnvironmentName,
-    ) -> miette::Result<()> {
-        // Ensure the environment exists
-        if !self.parsed.envs.contains_key(env_name) {
-            miette::bail!("Environment {} doesn't exist", env_name.fancy_display());
-        }
+    ) -> Result<(), ManifestError> {
         let environment = self
             .parsed
             .envs
             .get_mut(env_name)
-            .ok_or_else(|| miette::miette!("[envs.{env_name}] needs to exist"))?;
+            .ok_or_else(|| ManifestError::EnvironmentNotFound(env_name.clone()))?;
 
         // Remove shortcut from parsed environment
         if let Some(shortcuts) = environment.shortcuts.as_mut() {
             if !shortcuts.contains(shortcut) {
-                miette::bail!("The shortcut {} doesn't exist", shortcut.as_normalized());
+                return Err(ManifestError::ShortcutNotFound(shortcut.clone()));
             }
 
             shortcuts.swap_remove(shortcut);
@@ -660,17 +677,14 @@ impl Manifest {
         let shortcuts_array = self
             .document
             .get_mut_toml_array(&["envs", env_name.as_str()], "shortcuts")?
-            .ok_or_else(|| miette::miette!("No shortcuts found for environment {}", env_name))?;
+            .ok_or_else(|| ManifestError::NoShortcuts(env_name.clone()))?;
 
         let shortcut_str = shortcut.as_normalized();
         if !shortcuts_array
             .iter()
             .any(|item| item.as_str() == Some(shortcut_str))
         {
-            return Err(miette::miette!(
-                "The shortcut '{}' doesn't exist",
-                shortcut_str
-            ));
+            return Err(ManifestError::ShortcutNotFound(shortcut.clone()));
         }
         pixi_toml_edit::retain_array_elements(shortcuts_array, |item| {
             item.as_str() != Some(shortcut_str)
@@ -681,7 +695,7 @@ impl Manifest {
     }
 
     /// Saves the manifest to the file system
-    pub async fn save(&self) -> miette::Result<()> {
+    pub async fn save(&self) -> Result<(), ManifestError> {
         let contents = {
             // Ensure that version is always set when saving, as the first key
             let mut document = self.document.clone();
@@ -697,7 +711,10 @@ impl Manifest {
 
         pixi_utils::atomic_write::atomic_write(&self.path, contents)
             .await
-            .into_diagnostic()?;
+            .map_err(|source| ManifestError::Save {
+                path: self.path.clone(),
+                source,
+            })?;
         Ok(())
     }
 }
@@ -763,7 +780,7 @@ impl fmt::Display for Mapping {
 }
 
 impl FromStr for Mapping {
-    type Err = miette::Error;
+    type Err = ExposedNameError;
 
     fn from_str(input: &str) -> Result<Self, Self::Err> {
         // If we can't parse exposed_name=executable_relname, assume input=input
@@ -775,19 +792,6 @@ impl FromStr for Mapping {
         let exposed_name = ExposedName::from_str(exposed_name.as_str())?;
 
         Ok(Mapping::new(exposed_name, executable_relname.to_string()))
-    }
-}
-
-/// The channel a `channels` array element refers to: either a bare string or
-/// the `channel` key of an inline table entry like
-/// `{ channel = "nvidia", priority = 1 }`.
-fn channel_array_element_name(item: &toml_edit::Value) -> Option<&str> {
-    if let Some(name) = item.as_str() {
-        Some(name)
-    } else if let Some(table) = item.as_inline_table() {
-        table.get("channel").and_then(|value| value.as_str())
-    } else {
-        None
     }
 }
 
@@ -817,7 +821,6 @@ mod tests {
 
     use indexmap::IndexSet;
     use insta::assert_snapshot;
-    use itertools::Itertools;
     use pixi_consts::consts::DEFAULT_CHANNELS;
     use rattler_conda_types::ChannelConfig;
 
@@ -1006,7 +1009,10 @@ mod tests {
 
         // Removing an exposed name that doesn't exist should return an error
         let result = manifest.remove_exposed_name(&env_name, &exposed_name);
-        assert!(result.is_err())
+        assert!(matches!(
+            result,
+            Err(ManifestError::EnvironmentNotFound(name)) if name == env_name
+        ));
     }
 
     #[test]
@@ -1106,7 +1112,33 @@ mod tests {
         let result = manifest.remove_environment(&env_name);
 
         // This should fail
-        assert!(result.is_err());
+        assert!(matches!(
+            result,
+            Err(ManifestError::EnvironmentNotFound(name)) if name == env_name
+        ));
+    }
+
+    #[test]
+    fn test_parse_errors() {
+        use miette::Diagnostic;
+
+        let path = Path::new("pixi-global.toml");
+
+        // A syntax error points at its location in the manifest
+        let err = Manifest::from_str(path, "[envs").unwrap_err();
+        let ManifestError::Parse(err) = err else {
+            panic!("expected a parse error, got {err:?}");
+        };
+        assert!(matches!(*err, ManifestParseError::Spanned { .. }));
+        assert_eq!(err.labels().unwrap().count(), 1);
+
+        // An unsupported version keeps its help
+        let err = Manifest::from_str(path, "version = 99\nunknown = 1").unwrap_err();
+        let ManifestError::Parse(err) = err else {
+            panic!("expected a parse error, got {err:?}");
+        };
+        assert!(matches!(*err, ManifestParseError::Invalid { .. }));
+        assert!(err.help().unwrap().to_string().contains("update `pixi`"));
     }
 
     #[test]
@@ -1365,48 +1397,6 @@ mod tests {
     }
 
     #[test]
-    fn test_add_channel() {
-        let mut manifest = Manifest::default();
-        let env_name = EnvironmentName::from_str("test-env").unwrap();
-        let channel = NamedChannelOrUrl::from_str("test-channel").unwrap();
-        let mut channels = Config::load_global().default_channels();
-        channels.push(channel.clone());
-
-        // Add environment
-        manifest.add_environment(&env_name, None).unwrap();
-
-        // Add channel
-        manifest.add_channel(&env_name, &channel).unwrap();
-
-        // Check document
-        let actual_channels = manifest
-            .document
-            .get_or_insert_nested_table(&["envs", env_name.as_str()])
-            .unwrap()
-            .get("channels")
-            .unwrap()
-            .as_array()
-            .unwrap()
-            .into_iter()
-            .filter_map(|v| v.as_str())
-            .collect_vec();
-        let expected_channels = channels.iter().map(|c| c.as_str()).collect_vec();
-        assert_eq!(actual_channels, expected_channels);
-
-        // Check parsed
-        let actual_channels = manifest
-            .parsed
-            .envs
-            .get(&env_name)
-            .unwrap()
-            .channels
-            .clone();
-        let expected_channels: IndexSet<PrioritizedChannel> =
-            channels.into_iter().map(From::from).collect();
-        assert_eq!(actual_channels, expected_channels);
-    }
-
-    #[test]
     fn test_remove_dependency() {
         let env_name = EnvironmentName::from_str("test-env").unwrap();
         let name = PackageName::from_str("pytest").unwrap();
@@ -1501,62 +1491,6 @@ exposed = { python = "python" }
 
         // Verify parsing works
         assert!(manifest.parsed.envs.contains_key(&env_name));
-    }
-
-    /// Adding a channel that is already listed with a trailing slash in the
-    /// manifest must not append a duplicate entry: `NamedChannelOrUrl`
-    /// normalizes the trailing slash away while the raw file contents keep
-    /// it.
-    #[test]
-    fn test_add_channel_with_trailing_slash_does_not_duplicate() {
-        let env_name = EnvironmentName::from_str("test-env").unwrap();
-        let mut manifest = Manifest::from_str(
-            Path::new("global.toml"),
-            r#"
-[envs.test-env]
-channels = ["https://repo.example.com/ch/"]
-dependencies = { python = "*" }
-exposed = { python = "python" }
-"#,
-        )
-        .unwrap();
-
-        let channel = NamedChannelOrUrl::from_str("https://repo.example.com/ch/").unwrap();
-        manifest.add_channel(&env_name, &channel).unwrap();
-
-        let channels = manifest.document.to_string();
-        let count = channels.matches("repo.example.com").count();
-        assert_eq!(count, 1, "channel was duplicated:\n{}", manifest.document);
-    }
-
-    /// Adding a channel that the document already lists as an inline table
-    /// entry like `{ channel = "nvidia", priority = 1 }` must not append a
-    /// duplicate entry with a conflicting priority.
-    #[test]
-    fn test_add_channel_with_inline_table_entry_does_not_duplicate() {
-        let env_name = EnvironmentName::from_str("cuda-tools").unwrap();
-        let mut manifest = Manifest::from_str(
-            Path::new("global.toml"),
-            r#"
-[envs.cuda-tools]
-channels = [{ channel = "nvidia", priority = 1 }]
-dependencies = { cuda-nvcc = "*" }
-exposed = { nvcc = "nvcc" }
-"#,
-        )
-        .unwrap();
-
-        let channel = NamedChannelOrUrl::from_str("nvidia").unwrap();
-        manifest.add_channel(&env_name, &channel).unwrap();
-
-        let document = manifest.document.to_string();
-        let count = document.matches("nvidia").count();
-        assert_eq!(count, 1, "channel was duplicated:\n{}", manifest.document);
-        assert_eq!(
-            manifest.parsed.envs.get(&env_name).unwrap().channels.len(),
-            1,
-            "parsed channels diverge from the document"
-        );
     }
 
     /// Removing a dependency must find the entry in the document even when

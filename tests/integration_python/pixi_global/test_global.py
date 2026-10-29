@@ -358,7 +358,7 @@ def test_expose_basic(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
         [pixi, "global", "expose", "remove", "dummy1", "dummy3", "dummy2"],
         ExitCode.FAILURE,
         env=env,
-        stderr_contains="Exposed name dummy2 not found in any environment",
+        stderr_contains="exposed name 'dummy2' not found in any environment",
     )
     assert not dummy1.is_file()
     assert not dummy3.is_file()
@@ -445,7 +445,7 @@ exposed = {{ dummy-2 = "dummy-a" }}
         [pixi, "global", "expose", "add", "--environment", "one", "dummy-2=dummy-b"],
         ExitCode.FAILURE,
         env=env,
-        stderr_contains="Exposed name dummy-2 already exists",
+        stderr_contains="exposed name 'dummy-2' already exists",
     )
 
     # This should work, since it just overwrites the existing `dummy-2` mapping
@@ -493,7 +493,7 @@ def test_install_duplicated_expose_allow_for_same_env(
         ],
         ExitCode.FAILURE,
         env=env,
-        stderr_contains="Exposed name dummy already exists",
+        stderr_contains="exposed name 'dummy' already exists",
     )
 
     # This should work, since it just overwrites the existing properties of environment `dummy-a`
@@ -2351,7 +2351,7 @@ def test_remove_dependency(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> 
         [pixi, "global", "remove", "--environment", "my-env", "dummy-a"],
         ExitCode.FAILURE,
         env=env,
-        stderr_contains=["Dependency", "dummy-a", "not", "my-env"],
+        stderr_contains=["dependency 'dummy-a' not found in environment 'my-env'"],
     )
 
     # Remove package from non-existing environment

@@ -16,10 +16,12 @@ use futures::stream::StreamExt;
 use indexmap::{IndexMap, IndexSet};
 use is_executable::IsExecutable;
 use itertools::{Either, Itertools};
-pub use manifest::{ExposedType, Manifest, Mapping};
+pub use manifest::{ExposedType, Manifest, ManifestError, Mapping};
 use miette::{Context, Diagnostic, IntoDiagnostic};
 use once_cell::sync::OnceCell;
-pub use parsed_manifest::{ExposedName, ExposedNameError, ParsedEnvironment, ParsedManifest};
+pub use parsed_manifest::{
+    ExposedName, ExposedNameError, ManifestParseError, ParsedEnvironment, ParsedManifest,
+};
 use pixi_build_discovery::DiscoveryError;
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
@@ -1347,8 +1349,7 @@ impl Project {
             &specs,
             &source_package_names,
             environment.platform,
-        )
-        .await?;
+        );
         if !specs_in_sync {
             tracing::debug!("Environment out of sync because package specifications don't match");
             return Ok(false);
