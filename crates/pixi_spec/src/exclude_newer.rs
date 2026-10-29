@@ -356,6 +356,8 @@ impl<'de> serde::Deserialize<'de> for ExcludeNewer {
     }
 }
 
+// TODO: `rattler_config` parses the same cutoffs with its own, private parser.
+// Once it exposes it, use it here so the two can't drift apart.
 fn parse_exclude_newer_str(s: &str) -> Result<ExcludeNewer, String> {
     if let Ok(duration) = s.parse::<humantime::Duration>() {
         return Ok(ExcludeNewer::Duration(duration.into()));

@@ -177,6 +177,13 @@ impl TryFrom<&rattler_config::config::exclude_newer::ExcludeNewerConfig> for Exc
     fn try_from(
         config: &rattler_config::config::exclude_newer::ExcludeNewerConfig,
     ) -> Result<Self, Self::Error> {
+        // TODO: `rattler_config` has already parsed the cutoffs, but only
+        // keeps them as written, so they are parsed again here with pixi's
+        // own parser. The two parsers accept the same cutoffs today, but they
+        // are separate implementations that can drift apart, which is why
+        // the `Cutoff` and `ExemptionCutoff` errors exist. Once
+        // `rattler_config` exposes its parsed cutoffs, e.g. a public `Cutoff`
+        // with `FromStr`, convert from them instead.
         let cutoff =
             ExcludeNewer::from_str(&config.cutoff).map_err(ConfiguredExcludeNewerError::Cutoff)?;
         // `rattler_config` resolves the channel of an exemption with the
