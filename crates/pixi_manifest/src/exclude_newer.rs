@@ -1,4 +1,4 @@
-use std::fmt::Write;
+use std::{fmt::Write, str::FromStr};
 
 use chrono::{DateTime, NaiveTime, SecondsFormat, Utc};
 use indexmap::IndexMap;
@@ -12,11 +12,10 @@ use pixi_spec::{
 use rattler_conda_types::{ChannelConfig, MatchSpec, PackageName, ParseChannelError};
 use serde::ser::SerializeMap;
 
-use toml_span::de_helpers::TableHelper;
-
 use crate::{
-    PrioritizedChannel, TomlError, pypi::ResolvedPypiExcludeNewer, toml::TomlExcludeNewer,
-    utils::WithSourceCode,
+    PrioritizedChannel,
+    pypi::ResolvedPypiExcludeNewer,
+    toml::{InvalidExemptionSpec, validate_exemption_spec},
 };
 
 /// The `exclude-newer` configuration of a workspace for conda packages.
@@ -151,31 +150,82 @@ impl serde::Serialize for ExcludeNewerExemption {
     }
 }
 
-impl ExcludeNewerConfig {
-    /// Parses an `exclude-newer` value written outside of a manifest, such as
-    /// the `exclude-newer` of the pixi configuration. `value` is the
-    /// TOML of the value, e.g. `"7d"` or
-    /// `{ cutoff = "7d", exemptions = { ruff = "*" } }`, and is parsed the same
-    /// way as the `exclude-newer` of a workspace. `name` names the source of
-    /// the value in errors.
-    pub fn from_toml_value(name: &'static str, value: &str) -> miette::Result<Self> {
-        let source = format!("{name} = {value}");
-        let parsed = toml_span::parse(&source)
-            .map_err(TomlError::from)
-            .and_then(|mut document| {
-                let mut th = TableHelper::new(&mut document)?;
-                let config = th.required::<TomlExcludeNewer>(name)?;
-                th.finalize(None)?;
-                Ok(config.into_inner())
-            });
-        parsed.map_err(|error| {
-            miette::Report::new(WithSourceCode {
-                error,
-                source: miette::NamedSource::new(name, source),
+/// An `exclude-newer` of the shared rattler configuration that is not valid
+/// in a pixi manifest.
+#[derive(Debug, thiserror::Error, Diagnostic)]
+pub enum ConfiguredExcludeNewerError {
+    #[error("invalid cutoff: {0}")]
+    Cutoff(String),
+
+    #[error("invalid cutoff of the exemption for `{}`: {reason}", .name.as_source())]
+    ExemptionCutoff { name: PackageName, reason: String },
+
+    #[error("invalid exemption for `{}`", .name.as_source())]
+    Exemption {
+        name: PackageName,
+        #[source]
+        source: InvalidExemptionSpec,
+    },
+}
+
+impl TryFrom<&rattler_config::config::exclude_newer::ExcludeNewerConfig> for ExcludeNewerConfig {
+    type Error = ConfiguredExcludeNewerError;
+
+    /// Converts the `exclude-newer` of the shared rattler configuration,
+    /// applying the same rules as to the `exclude-newer` of a manifest.
+    fn try_from(
+        config: &rattler_config::config::exclude_newer::ExcludeNewerConfig,
+    ) -> Result<Self, Self::Error> {
+        let cutoff =
+            ExcludeNewer::from_str(&config.cutoff).map_err(ConfiguredExcludeNewerError::Cutoff)?;
+        // `rattler_config` resolves the channel of an exemption with the
+        // default channel configuration, so its name is resolved with it too.
+        let channel_config =
+            ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap_or_default());
+        let exemptions = config
+            .exemptions
+            .iter()
+            .map(|(name, exemption)| {
+                let exemption_error = |source| ConfiguredExcludeNewerError::Exemption {
+                    name: name.clone(),
+                    source,
+                };
+                let spec = match PixiSpec::from_nameless_matchspec(
+                    exemption.spec.clone(),
+                    &channel_config,
+                ) {
+                    PixiSpec::Version(version) => BinarySpec::Version(version),
+                    PixiSpec::DetailedVersion(detailed) => BinarySpec::DetailedVersion(detailed),
+                    PixiSpec::UrlBinary(url) => url.into(),
+                    _ => return Err(exemption_error(InvalidExemptionSpec::NotBinary)),
+                };
+                let spec = validate_exemption_spec(spec).map_err(exemption_error)?;
+                let cutoff = exemption
+                    .cutoff
+                    .as_deref()
+                    .map(|cutoff| match ExcludeNewer::from_str(cutoff) {
+                        Ok(ExcludeNewer::Timestamp(cutoff)) => Ok(cutoff),
+                        Ok(ExcludeNewer::Duration(_)) => Err(format!(
+                            "`{cutoff}` is a duration, but the cutoff of an exemption must be a point in time"
+                        )),
+                        Err(reason) => Err(reason),
+                    })
+                    .transpose()
+                    .map_err(|reason| ConfiguredExcludeNewerError::ExemptionCutoff {
+                        name: name.clone(),
+                        reason,
+                    })?;
+                Ok((name.clone(), ExcludeNewerExemption { spec, cutoff }))
             })
+            .collect::<Result<_, _>>()?;
+        Ok(Self {
+            cutoff: Some(cutoff),
+            exemptions,
         })
     }
+}
 
+impl ExcludeNewerConfig {
     /// Creates a configuration that consists of a cutoff only.
     pub fn from_cutoff(cutoff: ExcludeNewer) -> Self {
         Self {
@@ -838,6 +888,75 @@ mod tests {
         assert_eq!(
             resolved.package_cutoffs.keys().collect::<Vec<_>>(),
             [dated.as_normalized()]
+        );
+    }
+
+    /// Parses `toml`, the value of `exclude-newer` in the shared rattler
+    /// configuration.
+    fn configured(toml: &str) -> rattler_config::config::exclude_newer::ExcludeNewerConfig {
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "kebab-case")]
+        struct Document {
+            exclude_newer: rattler_config::config::exclude_newer::ExcludeNewerConfig,
+        }
+        toml_edit::de::from_str::<Document>(&format!("exclude-newer = {toml}"))
+            .unwrap()
+            .exclude_newer
+    }
+
+    #[test]
+    fn test_from_configured_exclude_newer() {
+        let config = ExcludeNewerConfig::try_from(&configured(
+            r#"{ cutoff = "7d", exemptions = { ruff = ">=0.5", polars = { version = "==1.43.1", build = "py3*", channel = "conda-forge", cutoff = "2026-10-12" } } }"#,
+        ))
+        .unwrap();
+        assert_eq!(
+            config.cutoff,
+            Some(ExcludeNewer::Duration(std::time::Duration::from_secs(
+                7 * 24 * 60 * 60
+            )))
+        );
+        assert_eq!(
+            config.exemptions[&PackageName::new_unchecked("ruff")],
+            ExcludeNewerExemption {
+                spec: BinarySpec::Version(
+                    rattler_conda_types::VersionSpec::from_str(
+                        ">=0.5",
+                        rattler_conda_types::ParseStrictness::Strict
+                    )
+                    .unwrap()
+                ),
+                cutoff: None,
+            }
+        );
+        let polars = &config.exemptions[&PackageName::new_unchecked("polars")];
+        let BinarySpec::DetailedVersion(spec) = &polars.spec else {
+            panic!("expected a detailed spec, got {:?}", polars.spec);
+        };
+        assert_eq!(spec.version.as_ref().unwrap().to_string(), "==1.43.1");
+        assert_eq!(spec.build.as_ref().unwrap().to_string(), "py3*");
+        assert_eq!(spec.channel.as_ref().unwrap().to_string(), "conda-forge");
+        assert_eq!(
+            polars.cutoff.map(format_cutoff).as_deref(),
+            Some("2026-10-12")
+        );
+    }
+
+    #[test]
+    fn test_from_configured_exclude_newer_rejects_url_exemption() {
+        let error = ExcludeNewerConfig::try_from(&configured(
+            r#"{ cutoff = "7d", exemptions = { ruff = { url = "https://example.com/ruff" } } }"#,
+        ))
+        .unwrap_err();
+        assert!(
+            matches!(
+                error,
+                ConfiguredExcludeNewerError::Exemption {
+                    source: InvalidExemptionSpec::NotBinary,
+                    ..
+                }
+            ),
+            "{error:?}"
         );
     }
 }

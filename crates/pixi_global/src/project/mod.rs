@@ -444,7 +444,7 @@ impl Project {
             return Ok(false);
         };
         let value = pixi_config::exclude_newer_to_toml(&configured);
-        let exclude_newer = ExcludeNewerConfig::from_toml_value("exclude-newer", &value)
+        let exclude_newer = ExcludeNewerConfig::try_from(&configured)
             .wrap_err("invalid `exclude-newer` in the pixi configuration")?;
 
         self.manifest.set_exclude_newer(&value, exclude_newer)?;

@@ -7087,6 +7087,7 @@ dependencies = [
  "pixi_toml_edit",
  "pyproject-toml",
  "rattler_conda_types",
+ "rattler_config",
  "rattler_lock",
  "rattler_solve",
  "rattler_virtual_packages",

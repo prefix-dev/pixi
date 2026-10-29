@@ -140,8 +140,8 @@ pub enum ConfiguredExcludeNewerError {
     Save(#[source] std::io::Error),
 }
 
-/// Returns the `exclude-newer` of the configuration as written, and parsed,
-/// if it is set.
+/// Returns the `exclude-newer` of the configuration as written, and converted
+/// into the `exclude-newer` of a manifest, if it is set.
 fn configured_exclude_newer(
     config: &Config,
 ) -> miette::Result<Option<(String, ExcludeNewerConfig)>> {
@@ -150,7 +150,7 @@ fn configured_exclude_newer(
         .as_ref()
         .map(|configured| {
             let value = pixi_config::exclude_newer_to_toml(configured);
-            let parsed = ExcludeNewerConfig::from_toml_value("exclude-newer", &value)
+            let parsed = ExcludeNewerConfig::try_from(configured)
                 .wrap_err("invalid `exclude-newer` in the pixi configuration")?;
             Ok((value, parsed))
         })
@@ -158,7 +158,7 @@ fn configured_exclude_newer(
 }
 
 /// Writes the `exclude-newer` of the configuration, `value` as written and
-/// `exclude_newer` as parsed, into the `exclude-newer` of a new workspace.
+/// `exclude_newer` as converted, into the `exclude-newer` of a new workspace.
 async fn write_configured_exclude_newer(
     workspace: Workspace,
     value: &str,
