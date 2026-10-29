@@ -2166,6 +2166,10 @@ impl Config {
             "default-channels",
             "detached-environments",
             "exclude-newer",
+            "exclude-newer.cutoff",
+            "exclude-newer.exemptions",
+            "exclude-newer.exemptions.<package>",
+            "exclude-newer.exemptions.<package>.<field>",
             "experimental",
             "experimental.conda-script",
             "experimental.use-environment-activation-cache",
@@ -2496,61 +2500,25 @@ impl Config {
                     detached.validate()?;
                 }
             }
-            "exclude-newer" => {
+            key if key == "exclude-newer" || key.starts_with("exclude-newer.") => {
+                // `rattler_config` owns the key: it validates the value and
+                // edits the keys inside it, e.g. `exclude-newer.exemptions.ruff`.
                 // A table is given as JSON like the other complex values,
                 // anything else is a cutoff such as `7d`.
-                //
-                // The value is not validated here, which has two problems:
-                // - A cutoff or exemption that doesn't parse, e.g. `7days` or
-                //   `{"cutoff": "7d", "exemptions": {"ruff": ">>>"}}`, is
-                //   stored, and only fails later when `pixi init`,
-                //   `pixi exec` or `pixi global` parse it. That parser lives
-                //   in `pixi_manifest`, which this crate doesn't depend on.
-                // - An unknown key in the table, e.g. `{"cutoff": "7d",
-                //   "bogus": 1}`, is dropped silently. Unknown fields of an
-                //   exemption are kept by `rattler_config` and fail later
-                //   like an invalid exemption.
-                //
-                // Ideally both are fixed in `rattler_config`, which owns the
-                // key. Its `ExcludeNewerConfig` would parse the cutoff (a
-                // timestamp, a date or a duration) and the exemptions (match
-                // spec fields) when it is deserialized, keeping the strings as
-                // written for tools that write them into a manifest, and its
-                // table would have `#[serde(deny_unknown_fields)]`. Then
-                // `set` and loading a config file would both reject an
-                // invalid value. Loading would also have to reject only the
-                // key: a config file that fails to parse is currently skipped
-                // as a whole with a logged error, whereas other unknown keys
-                // are ignored with a warning.
-                //
-                // Nested keys such as `exclude-newer.cutoff` or
-                // `exclude-newer.exemptions.ruff` are not supported. Ideally
-                // this arm would match them too and hand the edit to
-                // `rattler_config`, which owns the key: move the value into a
-                // `ConfigBase::<NoExtension>`, call its `set` with the full
-                // key, and take the value back. Its `set` already resolves
-                // dotted keys, including quoted segments for package names
-                // that contain dots, e.g. `exemptions."python.app"`, and
-                // rejects an exemption added to a bare cutoff. Two things are
-                // needed on top:
-                // - `pixi config set` writes the file by copying the edited
-                //   key out of the serialized configuration, but a value
-                //   without exemptions serializes as a bare cutoff, so
-                //   `exclude-newer.cutoff` would not be found and would be
-                //   unset. It has to copy the whole `exclude-newer` value.
-                // - `rattler_config` compares exemption names as written when
-                //   editing, so setting `exemptions.Ruff` next to `ruff` fails
-                //   as a duplicate rather than replacing it.
-                self.exclude_newer = value
-                    .map(|v| {
-                        if v.trim_start().starts_with('{') {
-                            serde_json::from_str::<ExcludeNewerConfig>(&v)
-                                .map_err(invalid_value(key))
-                        } else {
-                            Ok(ExcludeNewerConfig::from_cutoff(v))
-                        }
-                    })
-                    .transpose()?;
+                let mut rattler_config = rattler_config::config::ConfigBase::<
+                    rattler_config::config::NoExtension,
+                >::default();
+                rattler_config.exclude_newer = self.exclude_newer.clone();
+                rattler_config
+                    .set(key, value)
+                    .map_err(|source| match source {
+                        rattler_config::edit::ConfigEditError::UnknownKey { .. } => err,
+                        source => SetConfigError::InvalidValue {
+                            key: key.to_string(),
+                            source: Box::new(source),
+                        },
+                    })?;
+                self.exclude_newer = rattler_config.common.exclude_newer;
             }
             "pinning-strategy" => {
                 self.pinning_strategy = value
@@ -3303,6 +3271,35 @@ UNUSED = "unused"
             exclude_newer_to_toml(config.exclude_newer.as_ref().unwrap()),
             r#"{ cutoff = "7d", exemptions = { ruff = "*" } }"#
         );
+
+        config
+            .set(
+                "exclude-newer.exemptions.Ruff.version",
+                Some("==1".to_string()),
+            )
+            .unwrap();
+        assert_eq!(
+            exclude_newer_to_toml(config.exclude_newer.as_ref().unwrap()),
+            r#"{ cutoff = "7d", exemptions = { Ruff = { version = "==1" } } }"#
+        );
+
+        for (key, value) in [
+            ("exclude-newer", "yesterday"),
+            ("exclude-newer", r#"{"cutoff": "7d", "bogus": 1}"#),
+            ("exclude-newer.exemptions.ruff", ">>>"),
+        ] {
+            assert!(
+                matches!(
+                    config.set(key, Some(value.to_string())),
+                    Err(SetConfigError::InvalidValue { .. } | SetConfigError::UnknownKey { .. })
+                ),
+                "{key} = {value}"
+            );
+        }
+        assert!(matches!(
+            config.set("exclude-newer.bogus", Some("*".to_string())),
+            Err(SetConfigError::UnknownKey { .. })
+        ));
 
         config.set("exclude-newer", None).unwrap();
         assert_eq!(config.exclude_newer, None);

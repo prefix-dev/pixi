@@ -573,6 +573,20 @@ async fn alter_config(
                 }
             }
         }
+        // A key inside `exclude-newer` is edited by `rattler_config`, which
+        // matches exemptions by their normalized package name. The whole
+        // value is written back, as a cutoff without exemptions is written
+        // on its own, e.g. `exclude-newer = "7d"`.
+        AlterMode::Set | AlterMode::Unset if key.starts_with("exclude-newer.") => {
+            config.set(key, value)?;
+            transplant_config_key(
+                &config,
+                &mut toml_doc,
+                "exclude-newer",
+                &AlterMode::Set,
+                common_args.shared,
+            )?;
+        }
         AlterMode::Set => {
             // Run set on Config object for validation
             config.set(key, value)?;
@@ -1064,6 +1078,54 @@ mod tests {
             );
             assert!(!context.read_config().contains("secret"));
         }
+    }
+
+    #[tokio::test]
+    async fn exclude_newer_keys_are_edited_inside_the_value() {
+        let context = TestContext::setup(Some("exclude-newer = \"7d\"\n"));
+        let edit = |key: &'static str, value: Option<&'static str>| {
+            let common_args = context.common_args.clone();
+            async move {
+                let mode = if value.is_some() {
+                    AlterMode::Set
+                } else {
+                    AlterMode::Unset
+                };
+                alter_config(&common_args, key, value.map(str::to_string), mode).await
+            }
+        };
+
+        // An exemption is added to a bare cutoff.
+        edit("exclude-newer.exemptions.ruff", Some("*"))
+            .await
+            .unwrap();
+        assert_eq!(
+            context.read_config(),
+            "exclude-newer = { cutoff = \"7d\", exemptions = { ruff = \"*\" } }\n"
+        );
+
+        // An exemption written in a different case replaces it.
+        edit("exclude-newer.exemptions.Ruff", Some("==1"))
+            .await
+            .unwrap();
+        assert_eq!(
+            context.read_config(),
+            "exclude-newer = { cutoff = \"7d\", exemptions = { Ruff = \"==1\" } }\n"
+        );
+
+        // The cutoff is kept when the last exemption is removed.
+        edit("exclude-newer.cutoff", Some("14d")).await.unwrap();
+        edit("exclude-newer.exemptions.ruff", None).await.unwrap();
+        assert_eq!(context.read_config(), "exclude-newer = \"14d\"\n");
+
+        // Invalid values are rejected and leave the file unchanged.
+        edit("exclude-newer.cutoff", Some("yesterday"))
+            .await
+            .unwrap_err();
+        edit("exclude-newer.exemptions.ruff.bogus", Some("*"))
+            .await
+            .unwrap_err();
+        assert_eq!(context.read_config(), "exclude-newer = \"14d\"\n");
     }
 
     #[tokio::test]

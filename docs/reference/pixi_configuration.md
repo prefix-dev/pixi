@@ -128,6 +128,7 @@ It is shared with other rattler-based tools, so it can also be set in a `rattler
     To add a cutoff to an existing workspace, use [`pixi workspace exclude-newer set`](./cli/pixi/workspace/exclude-newer/set.md), or set [`exclude-newer`](./pixi_manifest.md#exclude-newer-optional) in its manifest.
 
     With `pixi config set`, a table is given as JSON, e.g. `pixi config set exclude-newer '{"cutoff": "7d", "exemptions": {"ruff": "*"}}'`.
+    Keys inside it can also be set and unset on their own, e.g. `pixi config set exclude-newer.exemptions.ruff '*'` or `pixi config unset exclude-newer.exemptions.ruff`.
 
 ### `shell`
 
