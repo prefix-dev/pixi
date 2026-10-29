@@ -2505,6 +2505,10 @@ impl Config {
                 // edits the keys inside it, e.g. `exclude-newer.exemptions.ruff`.
                 // A table is given as JSON like the other complex values,
                 // anything else is a cutoff such as `7d`.
+                //
+                // `rattler_config` only edits keys on a whole `ConfigBase`, and
+                // pixi's `Config` isn't one, so the value is moved into an
+                // otherwise empty one, edited there, and moved back.
                 let mut rattler_config =
                     rattler_config::config::ConfigBase::<rattler_config::config::NoExtension> {
                         common: rattler_config::config::CommonConfig {
