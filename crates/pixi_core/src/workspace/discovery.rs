@@ -91,6 +91,8 @@ pub struct WorkspaceLocator {
     ignore_unused_feature_warnings: bool,
     consider_environment: bool,
     ignore_pixi_version_check: bool,
+    /// Skip config files that fail to load instead of failing.
+    lenient_config: bool,
     /// Source for the global (system + user-level) config layer.
     global_config_source: GlobalConfigSource,
     /// Configuration supplied directly by the caller.
@@ -113,6 +115,10 @@ pub enum WorkspaceLocatorError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     HostDetection(#[from] HostProbeError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Config(#[from] pixi_config::ConfigError),
 
     /// Failed to determine the current directory.
     #[error("failed to determine the current directory")]
@@ -203,6 +209,24 @@ impl WorkspaceLocator {
             consider_environment: true,
             use_cli_detector_consent: true,
             ..Self::default()
+        }
+    }
+
+    /// Skip config files that fail to load instead of failing, so `pixi
+    /// config` can still repair them.
+    pub fn with_lenient_config(self, lenient_config: bool) -> Self {
+        Self {
+            lenient_config,
+            ..self
+        }
+    }
+
+    /// Loads the config of the workspace at `root`.
+    fn load_config(&self, root: &Path) -> Result<Config, pixi_config::ConfigError> {
+        if self.lenient_config {
+            Ok(Config::load_with(root, &self.global_config_source))
+        } else {
+            Config::try_load_with(root, &self.global_config_source)
         }
     }
 
@@ -436,8 +460,7 @@ impl WorkspaceLocator {
             .expect("manifest path should always have a parent")
             .to_owned();
         let detector_consent = self.detector_consent(Some(&root));
-        let config =
-            Config::load_with(&root, &self.global_config_source).merge_config(self.cli_config);
+        let config = self.load_config(&root)?.merge_config(self.cli_config);
         let injected_host = self.host.take();
         let retain_consent = injected_host.is_none();
         let mut workspace = Workspace::from_manifests_with_config(
@@ -466,8 +489,7 @@ impl WorkspaceLocator {
                 .parent()
                 .expect("an absolute script path always has a parent");
             let consent = self.detector_consent(None);
-            let config =
-                Config::load_with(root, &self.global_config_source).merge_config(self.cli_config);
+            let config = self.load_config(root)?.merge_config(self.cli_config);
             let host = match injected_host {
                 Some(host) => host,
                 None => {
@@ -511,8 +533,7 @@ impl WorkspaceLocator {
             .parent()
             .expect("an absolute script path always has a parent");
         let consent = self.detector_consent(None);
-        let config =
-            Config::load_with(root, &self.global_config_source).merge_config(self.cli_config);
+        let config = self.load_config(root)?.merge_config(self.cli_config);
         let host = match injected_host {
             Some(host) => host,
             None => {

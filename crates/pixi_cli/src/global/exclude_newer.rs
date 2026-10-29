@@ -155,7 +155,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let no_sync = update.no_sync;
     let original = Project::discover_or_create()
         .await?
-        .with_cli_config(Config::with_cli_config(&config));
+        .with_cli_config(Config::try_with_cli_config(&config)?);
     let mut project = original.clone();
 
     let message = match args.command.as_ref().expect("handled above") {
@@ -227,7 +227,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 async fn prune(args: &PruneArgs) -> miette::Result<()> {
     let mut project = Project::discover_or_create()
         .await?
-        .with_cli_config(Config::with_cli_config(&args.config));
+        .with_cli_config(Config::try_with_cli_config(&args.config)?);
     let stale = project.stale_exclude_newer_exemptions(Utc::now())?;
     let Some(message) = prune_exemptions(&stale, args.dry_run, |name| {
         Ok(project.manifest.remove_exclude_newer_exemption(name)?)

@@ -141,7 +141,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 | WorkspaceLocatorError::MissingWorkspace(_)
                 | WorkspaceLocatorError::MissingWorkspacePath { .. }
                 | WorkspaceLocatorError::MissingRegistry(_),
-            ) => pixi_config::Config::load_global(),
+            ) => pixi_config::Config::try_load_global()?,
             Err(err) => return Err(err.into()),
         };
         clean_cache(cache_args, &config).await?;
