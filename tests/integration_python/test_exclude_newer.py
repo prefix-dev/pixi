@@ -310,6 +310,39 @@ def test_config_exclude_newer_init(pixi: Path, tmp_path: Path) -> None:
     )
 
 
+def test_config_exclude_newer_url_exemption(pixi: Path, tmp_path: Path, channels: Path) -> None:
+    """`pixi exec` and `pixi init` accept the same exemption of a package
+    archive, as `rattler_config` owns the rules."""
+    channel = channels / "dummy_channel_1"
+    [archive] = (channel / CURRENT_PLATFORM).glob("dummy-a-*.conda")
+    env = {"PIXI_HOME": str(tmp_path), "PIXI_CACHE_DIR": str(tmp_path / "cache")}
+    # Every package in dummy_channel_1 was uploaded in 2025, dummy-a depends
+    # on dummy-c.
+    (tmp_path / "config.toml").write_text(
+        'exclude-newer = { cutoff = "2020-01-01", exemptions = '
+        f'{{ dummy-c = "*", dummy-a = {{ url = "{archive.as_uri()}" }} }} }}\n'
+    )
+    noop = ["cmd", "/c", "exit 0"] if sys.platform.startswith("win") else ["true"]
+    verify_cli_command(
+        [pixi, "exec", "--channel", channel.as_uri(), "--spec", "dummy-a", "--", *noop],
+        env=env,
+    )
+
+    workspace = tmp_path / "workspace"
+    verify_cli_command(
+        [pixi, "init", workspace, "--channel", channel.as_uri(), "--platform", CURRENT_PLATFORM],
+        env=env,
+    )
+    manifest = workspace / "pixi.toml"
+    verify_cli_command([pixi, "add", "--manifest-path", manifest, "dummy-a"], env=env)
+    verify_cli_command(
+        [pixi, "add", "--manifest-path", manifest, "dummy-b"],
+        ExitCode.FAILURE,
+        env=env,
+        stderr_contains="uploaded after the cutoff date",
+    )
+
+
 def test_config_exclude_newer_exec(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
     """`pixi exec` solves with the `exclude-newer` of the configuration."""
     env = {"PIXI_HOME": str(tmp_path)}

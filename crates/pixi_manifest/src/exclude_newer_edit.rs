@@ -700,9 +700,11 @@ Python = "*"
     fn parse_exemptions() {
         let channel_config = ChannelConfig::default_with_root_dir("/".into());
         assert!(parse_conda_exemption("python[extras=[foo]]", &channel_config).is_err());
-        assert!(
-            parse_conda_exemption("https://example.com/foo-1-0.conda", &channel_config).is_err()
-        );
+        // A package archive can be exempted, like in `rattler_config`.
+        let (name, spec) =
+            parse_conda_exemption("https://example.com/foo-1-0.conda", &channel_config).unwrap();
+        assert_eq!(name.as_source(), "foo");
+        assert!(matches!(spec, BinarySpec::Url(_)), "{spec:?}");
         assert!(parse_pypi_exemption("torch").is_ok());
         assert!(matches!(
             parse_pypi_exemption("torch==2"),

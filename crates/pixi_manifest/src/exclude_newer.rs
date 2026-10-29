@@ -121,32 +121,33 @@ impl serde::Serialize for ExcludeNewerExemption {
         S: serde::Serializer,
     {
         #[derive(serde::Serialize)]
-        struct WithCutoff<'a> {
+        struct WithCutoff<'a, T> {
             #[serde(flatten)]
-            spec: &'a DetailedSpec,
+            spec: &'a T,
             cutoff: ExcludeNewer,
         }
 
         let Some(cutoff) = self.cutoff else {
             return self.spec.serialize(serializer);
         };
-        let detailed = match &self.spec {
-            BinarySpec::Version(version) => DetailedSpec {
-                version: Some(version.clone()),
-                ..DetailedSpec::default()
-            },
-            BinarySpec::DetailedVersion(detailed) => (**detailed).clone(),
-            BinarySpec::Url(_) | BinarySpec::Path(_) => {
-                return Err(serde::ser::Error::custom(
-                    "an exclude-newer exemption must be a version or a match spec table",
-                ));
+        let cutoff = ExcludeNewer::Timestamp(cutoff);
+        match &self.spec {
+            BinarySpec::Version(version) => WithCutoff {
+                spec: &DetailedSpec {
+                    version: Some(version.clone()),
+                    ..DetailedSpec::default()
+                },
+                cutoff,
             }
-        };
-        WithCutoff {
-            spec: &detailed,
-            cutoff: ExcludeNewer::Timestamp(cutoff),
+            .serialize(serializer),
+            BinarySpec::DetailedVersion(detailed) => WithCutoff {
+                spec: &**detailed,
+                cutoff,
+            }
+            .serialize(serializer),
+            BinarySpec::Url(url) => WithCutoff { spec: url, cutoff }.serialize(serializer),
+            BinarySpec::Path(path) => WithCutoff { spec: path, cutoff }.serialize(serializer),
         }
-        .serialize(serializer)
     }
 }
 
@@ -171,8 +172,8 @@ pub enum ConfiguredExcludeNewerError {
 impl TryFrom<&rattler_config::config::exclude_newer::ExcludeNewerConfig> for ExcludeNewerConfig {
     type Error = ConfiguredExcludeNewerError;
 
-    /// Converts the `exclude-newer` of the shared rattler configuration,
-    /// applying the same rules as to the `exclude-newer` of a manifest.
+    /// Converts the `exclude-newer` of the shared rattler configuration, which
+    /// `rattler_config` has already validated.
     fn try_from(
         config: &rattler_config::config::exclude_newer::ExcludeNewerConfig,
     ) -> Result<Self, Self::Error> {
@@ -197,6 +198,11 @@ impl TryFrom<&rattler_config::config::exclude_newer::ExcludeNewerConfig> for Exc
                     PixiSpec::Version(version) => BinarySpec::Version(version),
                     PixiSpec::DetailedVersion(detailed) => BinarySpec::DetailedVersion(detailed),
                     PixiSpec::UrlBinary(url) => url.into(),
+                    // TODO: `rattler_config` accepts a `url` that is not a
+                    // package archive, e.g. `https://example.com/ruff`. It
+                    // never matches a record, so the exemption does nothing,
+                    // and pixi reads it as a source spec that a manifest
+                    // can't hold. `rattler_config` should reject it.
                     _ => return Err(exemption_error(InvalidExemptionSpec::NotBinary)),
                 };
                 let spec = validate_exemption_spec(spec).map_err(exemption_error)?;
@@ -942,6 +948,26 @@ mod tests {
         );
     }
 
+    #[test]
+    fn test_from_configured_exclude_newer_url_exemption() {
+        let url = "https://conda.anaconda.org/conda-forge/noarch/ruff-0.1-0.conda";
+        let config = ExcludeNewerConfig::try_from(&configured(&format!(
+            r#"{{ cutoff = "7d", exemptions = {{ ruff = {{ url = "{url}", cutoff = "2026-10-12" }} }} }}"#
+        )))
+        .unwrap();
+        let ruff = &config.exemptions[&PackageName::new_unchecked("ruff")];
+        let BinarySpec::Url(spec) = &ruff.spec else {
+            panic!("expected a url spec, got {:?}", ruff.spec);
+        };
+        assert_eq!(spec.url.as_str(), url);
+        assert_eq!(
+            ruff.to_toml_value().to_string(),
+            format!(r#"{{ url = "{url}", cutoff = "2026-10-12" }}"#)
+        );
+    }
+
+    /// A `url` that is not a package archive can't be exempted, see the TODO
+    /// in the conversion.
     #[test]
     fn test_from_configured_exclude_newer_rejects_url_exemption() {
         let error = ExcludeNewerConfig::try_from(&configured(

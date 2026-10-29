@@ -237,7 +237,7 @@ pub enum InvalidExemptionSpec {
     Condition,
 
     #[error(
-        "an exclude-newer exemption must be a version or a table with match spec fields such as `version`, `build` or `channel`"
+        "an exclude-newer exemption must be a version, a table with match spec fields such as `version`, `build` or `channel`, or a package archive"
     )]
     NotBinary,
 
@@ -258,6 +258,13 @@ fn binary_exemption_spec(spec: TomlSpec) -> Result<BinarySpec, InvalidExemptionS
 
 /// Checks that a binary spec can be used as an exemption, rejecting the fields
 /// that cannot select repodata records.
+///
+/// `rattler_solve` and `rattler_config` own these rules, this only repeats
+/// them so the manifest reports them with a span.
+/// TODO: `rattler_solve::ExcludeNewer::with_exemption` rejects extras and
+/// conditions, and `rattler_config` rejects an empty exemption table, but
+/// neither exposes the check on its own. Once rattler has a public check for
+/// an exemption spec, call it here instead.
 pub fn validate_exemption_spec(spec: BinarySpec) -> Result<BinarySpec, InvalidExemptionSpec> {
     match spec {
         BinarySpec::Version(_) => Ok(spec),
@@ -285,7 +292,9 @@ pub fn validate_exemption_spec(spec: BinarySpec) -> Result<BinarySpec, InvalidEx
                 _ => Ok(BinarySpec::DetailedVersion(detailed)),
             }
         }
-        BinarySpec::Url(_) | BinarySpec::Path(_) => Err(InvalidExemptionSpec::NotBinary),
+        // An exemption of a package archive, like the `url` of an exemption
+        // in `rattler_config`. A path is the `file://` URL of the archive.
+        BinarySpec::Url(_) | BinarySpec::Path(_) => Ok(spec),
     }
 }
 
@@ -436,6 +445,27 @@ exclude-newer = { cutoff = "2025-01-01", exemptions = { polars = "1.43.1", py-ra
             "version": "2.*",
             "build": "py313*",
             "channel": "conda-forge"
+          }
+        }
+        "#
+        );
+    }
+
+    #[test]
+    fn test_url_exemption() {
+        let config = parse_conda(
+            r#"
+exclude-newer = { cutoff = "7d", exemptions = { ruff = { url = "https://conda.anaconda.org/conda-forge/noarch/ruff-0.1-0.conda", cutoff = "2026-10-12" } } }
+"#,
+        )
+        .unwrap();
+        assert_snapshot!(
+            serde_json::to_string_pretty(&config.exemptions).unwrap(),
+            @r#"
+        {
+          "ruff": {
+            "url": "https://conda.anaconda.org/conda-forge/noarch/ruff-0.1-0.conda",
+            "cutoff": "2026-10-13T00:00:00Z"
           }
         }
         "#
