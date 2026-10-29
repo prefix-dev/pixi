@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 import tomli
 import tomli_w
-from dirty_equals import AnyThing, IsDict, IsList, IsStr
+from dirty_equals import AnyThing, IsDict, IsInstance, IsList, IsStr
 from inline_snapshot import snapshot
 
 from .common import (
@@ -1575,6 +1575,12 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
     # The resolved and minimum supported platforms depend on the host that runs
     # this test, so only assert their structure instead of a hardcoded platform.
     IsPlatformInfo = IsDict(name=IsStr, subdir=IsStr, virtual_packages=IsAnyList)
+    IsTlsRootCerts = IsDict(
+        mode=IsStr,
+        is_default=IsInstance(bool),
+        env_sources=IsAnyList,
+        env_replaces_mode=IsInstance(bool),
+    )
     assert info_data == snapshot(
         {
             "platform": IsStr,
@@ -1589,6 +1595,7 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
                 "bin_dir": IsStr,
                 "env_dir": IsStr,
                 "manifest": IsStr,
+                "tls_root_certs": IsTlsRootCerts,
             },
             "project_info": {
                 "name": "test",
@@ -1596,6 +1603,7 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
                 "last_updated": IsStr,
                 "pixi_folder_size": IsStr,
                 "version": None,
+                "tls_root_certs": IsTlsRootCerts,
             },
             "environments_info": [
                 {
@@ -1630,6 +1638,54 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "config_locations": IsAnyList,
         }
     )
+
+
+def test_info_global_tls_root_certs_ignores_config_file(pixi: Path, tmp_path: Path) -> None:
+    """`pixi global` doesn't read `PIXI_CONFIG_FILE`, so the global TLS root
+    certs reported by `pixi info` must not follow it either."""
+    env = isolated_config_env(tmp_path)
+    (Path(env["PIXI_HOME"]) / "config.toml").write_text('tls-root-certs = "webpki"\n')
+    config_file = tmp_path / "custom.toml"
+    config_file.write_text('tls-root-certs = "system"\n')
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "pixi.toml").write_text(
+        '[workspace]\nname = "test"\nchannels = []\nplatforms = []\n'
+    )
+
+    result = verify_cli_command(
+        [pixi, "info", "--json"],
+        env=env | {"PIXI_CONFIG_FILE": str(config_file)},
+        cwd=workspace,
+    )
+    info_data = json.loads(result.stdout)
+
+    # Workspace commands read `PIXI_CONFIG_FILE` instead of the searched files.
+    assert info_data["project_info"]["tls_root_certs"]["mode"] == "system"
+    # `pixi global` only reads the searched files.
+    assert info_data["global_info"]["tls_root_certs"]["mode"] == "webpki"
+
+
+def test_info_tls_root_certs_env_overrides_workspace_config(pixi: Path, tmp_path: Path) -> None:
+    """`PIXI_TLS_ROOT_CERTS` overrides a workspace's `.pixi/config.toml` for
+    workspace commands, so `pixi info` must report it in the workspace too."""
+    env = isolated_config_env(tmp_path)
+    workspace = tmp_path / "workspace"
+    workspace.joinpath(".pixi").mkdir(parents=True)
+    (workspace / "pixi.toml").write_text(
+        '[workspace]\nname = "test"\nchannels = []\nplatforms = []\n'
+    )
+    (workspace / ".pixi" / "config.toml").write_text('tls-root-certs = "webpki"\n')
+
+    result = verify_cli_command(
+        [pixi, "info", "--json"],
+        env=env | {"PIXI_TLS_ROOT_CERTS": "system"},
+        cwd=workspace,
+    )
+    info_data = json.loads(result.stdout)
+
+    assert info_data["project_info"]["tls_root_certs"]["mode"] == "system"
+    assert info_data["global_info"]["tls_root_certs"]["mode"] == "system"
 
 
 @pytest.mark.skipif(
