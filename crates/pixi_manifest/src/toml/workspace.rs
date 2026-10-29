@@ -723,7 +723,7 @@ mod test {
             .and_then(|w| w.into_workspace(ExternalWorkspaceProperties::default(), path))
             .unwrap_err();
         assert_snapshot!(format_parse_error(input, parse_error), @r#"
-         × `date` is neither a valid duration, date (input contains invalid characters), nor timestamp (premature end of input)
+         × invalid cutoff `date`, expected an RFC 3339 timestamp, a date, or a duration (for example, 7d)
           ╭─[pixi.toml:4:26]
         3 │         platforms = []
         4 │         exclude-newer = "date"

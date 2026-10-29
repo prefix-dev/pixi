@@ -112,7 +112,7 @@ pub fn parse_conda_exemption(
         .into_source_or_binary()
         .right()
         .ok_or(InvalidExemptionSpec::NotBinary)
-        .and_then(validate_exemption_spec)
+        .and_then(|spec| validate_exemption_spec(&name, spec))
         .map_err(invalid)?;
     Ok((name, binary))
 }

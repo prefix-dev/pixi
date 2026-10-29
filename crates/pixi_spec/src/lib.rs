@@ -26,7 +26,7 @@ pub use detailed::DetailedSpec;
 pub use dev_source::DevSourceSpec;
 pub use exclude_newer::{
     ConfiguredCutoffs, ExcludeNewer, InvalidExemptionError, ResolvedExcludeNewer,
-    ResolvedExemption, to_saturating_jiff_timestamp,
+    ResolvedExemption, from_jiff_timestamp, to_saturating_jiff_timestamp,
 };
 pub use git::{GitLocationSpec, GitReference, GitReferenceError, GitSpec};
 use itertools::Either;

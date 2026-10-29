@@ -1,4 +1,4 @@
-use std::{fmt::Write, str::FromStr};
+use std::fmt::Write;
 
 use chrono::{DateTime, NaiveTime, SecondsFormat, Utc};
 use indexmap::IndexMap;
@@ -7,7 +7,7 @@ use miette::Diagnostic;
 use pixi_pypi_spec::{PypiPackageName, VersionOrStar};
 use pixi_spec::{
     BinarySpec, ConfiguredCutoffs, DetailedSpec, ExcludeNewer, InvalidExemptionError, PixiSpec,
-    ResolvedExcludeNewer, SpecConversionError,
+    ResolvedExcludeNewer, SpecConversionError, from_jiff_timestamp,
 };
 use rattler_conda_types::{ChannelConfig, MatchSpec, PackageName, ParseChannelError};
 use serde::ser::SerializeMap;
@@ -155,12 +155,6 @@ impl serde::Serialize for ExcludeNewerExemption {
 /// in a pixi manifest.
 #[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum ConfiguredExcludeNewerError {
-    #[error("invalid cutoff: {0}")]
-    Cutoff(String),
-
-    #[error("invalid cutoff of the exemption for `{}`: {reason}", .name.as_source())]
-    ExemptionCutoff { name: PackageName, reason: String },
-
     #[error("invalid exemption for `{}`", .name.as_source())]
     Exemption {
         name: PackageName,
@@ -177,15 +171,7 @@ impl TryFrom<&rattler_config::config::exclude_newer::ExcludeNewerConfig> for Exc
     fn try_from(
         config: &rattler_config::config::exclude_newer::ExcludeNewerConfig,
     ) -> Result<Self, Self::Error> {
-        // TODO: `rattler_config` has already parsed the cutoffs, but only
-        // keeps them as written, so they are parsed again here with pixi's
-        // own parser. The two parsers accept the same cutoffs today, but they
-        // are separate implementations that can drift apart, which is why
-        // the `Cutoff` and `ExemptionCutoff` errors exist. Once
-        // `rattler_config` exposes its parsed cutoffs, e.g. a public `Cutoff`
-        // with `FromStr`, convert from them instead.
-        let cutoff =
-            ExcludeNewer::from_str(&config.cutoff).map_err(ConfiguredExcludeNewerError::Cutoff)?;
+        let cutoff = ExcludeNewer::from(config.cutoff.value());
         // `rattler_config` resolves the channel of an exemption with the
         // default channel configuration, so its name is resolved with it too.
         let channel_config =
@@ -205,29 +191,15 @@ impl TryFrom<&rattler_config::config::exclude_newer::ExcludeNewerConfig> for Exc
                     PixiSpec::Version(version) => BinarySpec::Version(version),
                     PixiSpec::DetailedVersion(detailed) => BinarySpec::DetailedVersion(detailed),
                     PixiSpec::UrlBinary(url) => url.into(),
-                    // TODO: `rattler_config` accepts a `url` that is not a
-                    // package archive, e.g. `https://example.com/ruff`. It
-                    // never matches a record, so the exemption does nothing,
-                    // and pixi reads it as a source spec that a manifest
-                    // can't hold. `rattler_config` should reject it.
+                    // `rattler_config` rejects a `url` that is not a package
+                    // archive, which is what pixi reads as a source spec.
                     _ => return Err(exemption_error(InvalidExemptionSpec::NotBinary)),
                 };
-                let spec = validate_exemption_spec(spec).map_err(exemption_error)?;
+                let spec = validate_exemption_spec(name, spec).map_err(exemption_error)?;
                 let cutoff = exemption
                     .cutoff
-                    .as_deref()
-                    .map(|cutoff| match ExcludeNewer::from_str(cutoff) {
-                        Ok(ExcludeNewer::Timestamp(cutoff)) => Ok(cutoff),
-                        Ok(ExcludeNewer::Duration(_)) => Err(format!(
-                            "`{cutoff}` is a duration, but the cutoff of an exemption must be a point in time"
-                        )),
-                        Err(reason) => Err(reason),
-                    })
-                    .transpose()
-                    .map_err(|reason| ConfiguredExcludeNewerError::ExemptionCutoff {
-                        name: name.clone(),
-                        reason,
-                    })?;
+                    .as_ref()
+                    .map(|cutoff| from_jiff_timestamp(cutoff.timestamp()));
                 Ok((name.clone(), ExcludeNewerExemption { spec, cutoff }))
             })
             .collect::<Result<_, _>>()?;
@@ -973,23 +945,25 @@ mod tests {
         );
     }
 
-    /// A `url` that is not a package archive can't be exempted, see the TODO
-    /// in the conversion.
+    /// A `url` that is not a package archive can't be exempted, which
+    /// `rattler_config` already rejects.
     #[test]
-    fn test_from_configured_exclude_newer_rejects_url_exemption() {
-        let error = ExcludeNewerConfig::try_from(&configured(
-            r#"{ cutoff = "7d", exemptions = { ruff = { url = "https://example.com/ruff" } } }"#,
-        ))
+    fn test_configured_exclude_newer_rejects_url_exemption() {
+        #[derive(Debug, serde::Deserialize)]
+        #[serde(rename_all = "kebab-case")]
+        struct Document {
+            #[expect(dead_code)]
+            exclude_newer: rattler_config::config::exclude_newer::ExcludeNewerConfig,
+        }
+        let error = toml_edit::de::from_str::<Document>(
+            r#"exclude-newer = { cutoff = "7d", exemptions = { ruff = { url = "https://example.com/ruff" } } }"#,
+        )
         .unwrap_err();
         assert!(
-            matches!(
-                error,
-                ConfiguredExcludeNewerError::Exemption {
-                    source: InvalidExemptionSpec::NotBinary,
-                    ..
-                }
-            ),
-            "{error:?}"
+            error
+                .to_string()
+                .contains("the `url` of an exemption must point to a package archive"),
+            "{error}"
         );
     }
 }

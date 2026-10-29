@@ -4,9 +4,12 @@ use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
 use itertools::Itertools;
 use pixi_pypi_spec::{PypiPackageName, VersionOrStar};
-use pixi_spec::{BinarySpec, DetailedSpec, ExcludeNewer, SpecError, TomlSpec};
+use pixi_spec::{BinarySpec, DetailedSpec, ExcludeNewer, SpecConversionError, SpecError, TomlSpec};
 use pixi_toml::TomlFromStr;
-use rattler_conda_types::PackageName;
+use rattler_conda_types::{ChannelConfig, PackageName};
+use rattler_config::config::exclude_newer::{
+    InvalidExemptionSpecError, validate_exemption_spec as validate_rattler_exemption_spec,
+};
 use toml_span::{
     DeserError, Deserialize, ErrorKind, Span, Value,
     de_helpers::{TableHelper, expected},
@@ -163,7 +166,7 @@ fn parse_conda_exemptions(
             }
         };
 
-        match binary_exemption_spec(spec) {
+        match binary_exemption_spec(&name, spec) {
             Ok(spec) => {
                 exemptions.insert(name, ExcludeNewerExemption { spec, cutoff });
             }
@@ -230,12 +233,6 @@ fn take_exemption_cutoff(entry: &mut Value<'_>) -> Result<Option<DateTime<Utc>>,
 /// records.
 #[derive(Debug, thiserror::Error)]
 pub enum InvalidExemptionSpec {
-    #[error("an exclude-newer exemption cannot have `extras`, they do not select packages")]
-    Extras,
-
-    #[error("an exclude-newer exemption cannot have `when`, it does not select packages")]
-    Condition,
-
     #[error(
         "an exclude-newer exemption must be a version, a table with match spec fields such as `version`, `build` or `channel`, or a package archive"
     )]
@@ -246,40 +243,49 @@ pub enum InvalidExemptionSpec {
     )]
     Empty,
 
+    /// The exemption breaks one of the rules of `rattler_config`, e.g. it has
+    /// `extras` or a `when`, which don't select packages.
+    #[error(transparent)]
+    Rattler(rattler_config::config::exclude_newer::InvalidExemptionSpecError),
+
     #[error(transparent)]
     Spec(#[from] SpecError),
+
+    #[error(transparent)]
+    Conversion(#[from] SpecConversionError),
 }
 
-/// Converts the TOML spec of an exemption into a binary spec, rejecting the
-/// fields that cannot select repodata records.
-fn binary_exemption_spec(spec: TomlSpec) -> Result<BinarySpec, InvalidExemptionSpec> {
-    validate_exemption_spec(spec.into_binary_spec()?)
+/// Converts the TOML spec of an exemption of `name` into a binary spec,
+/// rejecting the fields that cannot select repodata records.
+fn binary_exemption_spec(
+    name: &PackageName,
+    spec: TomlSpec,
+) -> Result<BinarySpec, InvalidExemptionSpec> {
+    validate_exemption_spec(name, spec.into_binary_spec()?)
 }
 
-/// Checks that a binary spec can be used as an exemption, rejecting the fields
-/// that cannot select repodata records.
-///
-/// `rattler_solve` and `rattler_config` own these rules, this only repeats
-/// them so the manifest reports them with a span.
-/// TODO: `rattler_solve::ExcludeNewer::with_exemption` rejects extras and
-/// conditions, and `rattler_config` rejects an empty exemption table, but
-/// neither exposes the check on its own. Once rattler has a public check for
-/// an exemption spec, call it here instead.
-pub fn validate_exemption_spec(spec: BinarySpec) -> Result<BinarySpec, InvalidExemptionSpec> {
+/// Checks that a binary spec can be used as an exemption of `name`, rejecting
+/// the fields that cannot select repodata records. The rules are those of
+/// `rattler_config`, this only applies them to pixi's spec, so the manifest
+/// reports them with a span.
+pub fn validate_exemption_spec(
+    name: &PackageName,
+    spec: BinarySpec,
+) -> Result<BinarySpec, InvalidExemptionSpec> {
     match spec {
         BinarySpec::Version(_) => Ok(spec),
         BinarySpec::DetailedVersion(detailed) => {
-            if detailed.extras.is_some() {
-                return Err(InvalidExemptionSpec::Extras);
-            }
-            if detailed.condition.is_some() {
-                return Err(InvalidExemptionSpec::Condition);
-            }
-            // An empty table would match every release, so a typo would
-            // silently exempt the package entirely.
-            if *detailed == DetailedSpec::default() {
-                return Err(InvalidExemptionSpec::Empty);
-            }
+            // The channel doesn't affect the rules, so it is resolved with the
+            // default configuration.
+            let channel_config =
+                ChannelConfig::default_with_root_dir(std::env::current_dir().unwrap_or_default());
+            let nameless = (*detailed)
+                .clone()
+                .try_into_nameless_match_spec(&channel_config)?;
+            validate_rattler_exemption_spec(name, &nameless).map_err(|err| match err {
+                InvalidExemptionSpecError::Empty => InvalidExemptionSpec::Empty,
+                err => InvalidExemptionSpec::Rattler(err),
+            })?;
             // A bare version string parses into a detailed spec that only
             // carries a version. Keep it as the plain version it was written
             // as.

@@ -3266,7 +3266,7 @@ UNUSED = "unused"
         config.set("exclude-newer", Some("7d".to_string())).unwrap();
         assert_eq!(
             config.exclude_newer,
-            Some(ExcludeNewerConfig::from_cutoff("7d"))
+            Some(ExcludeNewerConfig::from_cutoff("7d".parse().unwrap()))
         );
 
         config
@@ -3859,7 +3859,7 @@ UNUSED = "unused"
                 Vec::default(),
             )]),
             pinning_strategy: Some(PinningStrategy::NoPin),
-            exclude_newer: Some(ExcludeNewerConfig::from_cutoff("7d")),
+            exclude_newer: Some(ExcludeNewerConfig::from_cutoff("7d".parse().unwrap())),
             experimental: ExperimentalConfig {
                 use_environment_activation_cache: Some(true),
                 conda_script: None,
