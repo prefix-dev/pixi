@@ -3300,9 +3300,10 @@ UNUSED = "unused"
                 "{key} = {value}"
             );
         }
+        // `rattler_config` rejects unknown keys inside `exclude-newer`.
         assert!(matches!(
             config.set("exclude-newer.bogus", Some("*".to_string())),
-            Err(SetConfigError::UnknownKey { .. })
+            Err(SetConfigError::InvalidValue { .. })
         ));
 
         config.set("exclude-newer", None).unwrap();
