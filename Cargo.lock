@@ -6452,6 +6452,7 @@ dependencies = [
  "clap",
  "clap_complete",
  "clap_complete_nushell",
+ "colorchoice",
  "comfy-table",
  "console",
  "console-subscriber",
