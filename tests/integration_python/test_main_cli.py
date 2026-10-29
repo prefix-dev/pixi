@@ -1640,6 +1640,32 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
     )
 
 
+def test_info_global_tls_root_certs_ignores_config_file(pixi: Path, tmp_path: Path) -> None:
+    """`pixi global` doesn't read `PIXI_CONFIG_FILE`, so the global TLS root
+    certs reported by `pixi info` must not follow it either."""
+    env = isolated_config_env(tmp_path)
+    (Path(env["PIXI_HOME"]) / "config.toml").write_text('tls-root-certs = "webpki"\n')
+    config_file = tmp_path / "custom.toml"
+    config_file.write_text('tls-root-certs = "system"\n')
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "pixi.toml").write_text(
+        '[workspace]\nname = "test"\nchannels = []\nplatforms = []\n'
+    )
+
+    result = verify_cli_command(
+        [pixi, "info", "--json"],
+        env=env | {"PIXI_CONFIG_FILE": str(config_file)},
+        cwd=workspace,
+    )
+    info_data = json.loads(result.stdout)
+
+    # Workspace commands read `PIXI_CONFIG_FILE` instead of the searched files.
+    assert info_data["project_info"]["tls_root_certs"]["mode"] == "system"
+    # `pixi global` only reads the searched files.
+    assert info_data["global_info"]["tls_root_certs"]["mode"] == "webpki"
+
+
 @pytest.mark.skipif(
     platform.system() == "Windows",
     reason="fish, zsh and nushell are not available on Windows",
