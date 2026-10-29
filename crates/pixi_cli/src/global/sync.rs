@@ -34,7 +34,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Remove broken files
     if let Err(err) = project.remove_broken_files().await {
-        tracing::warn!("Couldn't remove broken files\n{err:?}")
+        tracing::warn!(
+            "Couldn't remove broken files\n{:?}",
+            miette::Report::new(err)
+        )
     }
 
     // Phase 1: install all environments in parallel, sharing one dispatcher.

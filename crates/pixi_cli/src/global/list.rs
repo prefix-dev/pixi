@@ -62,7 +62,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .environment
             .map(|e| EnvironmentName::from_str(e.as_str()))
             .transpose()?;
-        return list_global_environments_json(&project, env_name.as_ref(), args.regex).await;
+        return Ok(list_global_environments_json(&project, env_name.as_ref(), args.regex).await?);
     }
 
     if let Some(environment) = args.environment {

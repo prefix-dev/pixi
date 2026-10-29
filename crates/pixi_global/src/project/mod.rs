@@ -9,6 +9,7 @@ use std::{
 };
 
 pub use environment::EnvironmentName;
+use environment::ParseEnvironmentNameError;
 use fancy_display::FancyDisplay;
 use fs::tokio as tokio_fs;
 use fs_err as fs;
@@ -48,10 +49,11 @@ use pixi_path::AbsPathBuf;
 use pixi_reporters::TopLevelProgress;
 use pixi_spec::{BinarySpec, PathBinarySpec, ResolvedExcludeNewer};
 use pixi_spec_containers::DependencyMap;
+use pixi_utils::diagnostic::Cause;
 use pixi_utils::variants::VariantConfig;
 use pixi_utils::{
     executable_from_path,
-    prefix::{Executable, Prefix},
+    prefix::{Executable, Prefix, PrefixError},
     rlimit::try_increase_rlimit_to_sensible,
 };
 use rattler_conda_types::{
@@ -64,7 +66,7 @@ use tokio::sync::Semaphore;
 use toml_edit::DocumentMut;
 use xxhash_rust::xxh3::Xxh3;
 
-use self::trampoline::{Configuration, ConfigurationParseError, Trampoline};
+use self::trampoline::{Configuration, ConfigurationParseError, Trampoline, TrampolineError};
 use super::{
     BinDir, EnvRoot, StateChange, StateChanges,
     common::{EnvironmentUpdate, get_install_changes, shortcuts_sync_status},
@@ -74,8 +76,8 @@ use super::{
 use crate::{
     EnvDir,
     common::{
-        GlobalDirError, channel_url_to_prioritized_channel, expose_scripts_sync_status,
-        find_package_records,
+        CondaMetaError, GlobalDirError, ParseChannelUrlError, channel_url_to_prioritized_channel,
+        expose_scripts_sync_status, find_package_records,
     },
     find_executables, find_executables_for_many_records,
     install::{create_executable_trampolines, script_exec_mapping},
@@ -122,6 +124,110 @@ pub enum InferPackageNameError {
         .package_names.first().map(String::as_str).unwrap_or_default()
     ))]
     MultiplePackageOutputs { package_names: Vec<String> },
+}
+
+/// No directory to put the global manifest in could be determined.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error("couldn't determine the global manifest directory")]
+pub struct ManifestDirError;
+
+/// An error from discovering or creating the global project.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum DiscoverProjectError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ManifestDir(#[from] ManifestDirError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    GlobalDir(#[from] GlobalDirError),
+
+    #[error(transparent)]
+    Io(std::io::Error),
+
+    #[error("failed to create the global manifest from the existing installation")]
+    #[diagnostic(forward(0))]
+    Migrate(#[source] Cause<MigrateInstallationError>),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Manifest(#[from] ManifestError),
+}
+
+/// An error from creating the global manifest from an existing installation.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum MigrateInstallationError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    GlobalDir(#[from] GlobalDirError),
+
+    #[error("failed to serialize the global manifest")]
+    Serialize(#[source] toml_edit::ser::Error),
+
+    #[error("failed to parse the serialized global manifest")]
+    Parse(#[source] toml_edit::TomlError),
+
+    #[error(transparent)]
+    Write(std::io::Error),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Manifest(#[from] ManifestError),
+}
+
+/// An error from reading the metadata of an exposed executable while
+/// migrating an old installation.
+///
+/// Logged with `{e}`, so wrapped errors stay transparent to keep their
+/// detail on the one line.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+enum ExposedDataError {
+    #[error(transparent)]
+    Trampoline(#[from] TrampolineError),
+
+    #[error("couldn't find the environment directory of '{}' in '{}'", .executable.display(), .env_root.display())]
+    MissingEnvDir {
+        executable: PathBuf,
+        env_root: PathBuf,
+    },
+
+    #[error("environment directory '{}' has no valid name", .0.display())]
+    InvalidEnvDir(PathBuf),
+
+    #[error(transparent)]
+    EnvironmentName(#[from] ParseEnvironmentNameError),
+
+    #[error(transparent)]
+    GlobalDir(#[from] GlobalDirError),
+
+    #[error(transparent)]
+    CondaMeta(#[from] CondaMetaError),
+
+    #[error(transparent)]
+    Prefix(#[from] PrefixError),
+
+    #[error(transparent)]
+    ParseChannelUrl(#[from] ParseChannelUrlError),
+
+    #[error("prefix record of '{}' has no channel", .0.as_normalized())]
+    MissingChannel(PackageName),
+
+    #[error("no package in '{}' provides '{executable}'", .conda_meta.display())]
+    ExecutableNotFound {
+        executable: String,
+        conda_meta: PathBuf,
+    },
+}
+
+/// An error from removing broken exposed executables.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum RemoveBrokenFilesError {
+    #[error(transparent)]
+    Io(std::io::Error),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Trampoline(#[from] TrampolineError),
 }
 
 pub(crate) const MANIFESTS_DIR: &str = "manifests";
@@ -199,7 +305,7 @@ impl ExposedData {
         bin: &GlobalExecutable,
         env_root: &EnvRoot,
         channel_config: &ChannelConfig,
-    ) -> miette::Result<Self> {
+    ) -> Result<Self, ExposedDataError> {
         let exposed = bin.exposed_name();
         let executable_path = bin.executable().await?;
 
@@ -208,13 +314,8 @@ impl ExposedData {
         let env_name = env_path
             .file_name()
             .and_then(OsStr::to_str)
-            .ok_or_else(|| {
-                miette::miette!(
-                    "executable path's grandparent '{}' has no file name",
-                    executable_path.display()
-                )
-            })
-            .and_then(|env| EnvironmentName::from_str(env).into_diagnostic())?;
+            .ok_or_else(|| ExposedDataError::InvalidEnvDir(env_path.clone()))
+            .and_then(|env| Ok(EnvironmentName::from_str(env)?))?;
 
         let conda_meta = env_path.join(consts::CONDA_META_DIR);
         let env_dir = EnvDir::from_env_root(env_root.clone(), &env_name).await?;
@@ -251,7 +352,10 @@ impl ExposedData {
     }
 }
 
-fn determine_env_path(executable_path: &Path, env_root: &Path) -> miette::Result<PathBuf> {
+fn determine_env_path(
+    executable_path: &Path,
+    env_root: &Path,
+) -> Result<PathBuf, ExposedDataError> {
     let mut current_path = executable_path;
 
     while let Some(parent) = current_path.parent() {
@@ -261,11 +365,10 @@ fn determine_env_path(executable_path: &Path, env_root: &Path) -> miette::Result
         current_path = parent;
     }
 
-    miette::bail!(
-        "Couldn't determine environment path: no parent of '{}' has '{}' as its direct parent",
-        executable_path.display(),
-        env_root.display()
-    )
+    Err(ExposedDataError::MissingEnvDir {
+        executable: executable_path.to_owned(),
+        env_root: env_root.to_owned(),
+    })
 }
 
 /// Converts a `PrefixRecord` into package metadata, including platform,
@@ -273,7 +376,7 @@ fn determine_env_path(executable_path: &Path, env_root: &Path) -> miette::Result
 fn convert_record_to_metadata(
     prefix_record: &PrefixRecord,
     channel_config: &ChannelConfig,
-) -> miette::Result<(Option<Subdir>, PrioritizedChannel, PackageName)> {
+) -> Result<(Option<Subdir>, PrioritizedChannel, PackageName), ExposedDataError> {
     let platform = match Subdir::from_str(&prefix_record.repodata_record.package_record.subdir) {
         Ok(Subdir::NoArch) => None,
         Ok(platform) if platform == host_subdir() => None,
@@ -284,10 +387,7 @@ fn convert_record_to_metadata(
     let package_name = prefix_record.repodata_record.package_record.name.clone();
 
     let Some(channel_str) = prefix_record.repodata_record.channel.as_deref() else {
-        miette::bail!(
-            "missing channel in prefix record for {}",
-            package_name.as_source()
-        )
+        return Err(ExposedDataError::MissingChannel(package_name));
     };
 
     let channel = channel_url_to_prioritized_channel(channel_str, channel_config)?;
@@ -306,7 +406,7 @@ async fn package_from_conda_meta(
     executable: &str,
     prefix: &Prefix,
     channel_config: &ChannelConfig,
-) -> miette::Result<(Option<Subdir>, PrioritizedChannel, PackageName)> {
+) -> Result<(Option<Subdir>, PrioritizedChannel, PackageName), ExposedDataError> {
     let records = find_package_records(conda_meta).await?;
 
     for prefix_record in records {
@@ -318,7 +418,10 @@ async fn package_from_conda_meta(
         }
     }
 
-    miette::bail!("Couldn't find {executable} in {}", conda_meta.display())
+    Err(ExposedDataError::ExecutableNotFound {
+        executable: executable.to_owned(),
+        conda_meta: conda_meta.to_owned(),
+    })
 }
 
 impl Project {
@@ -360,7 +463,7 @@ impl Project {
         content: &str,
         env_root: EnvRoot,
         bin_dir: BinDir,
-    ) -> miette::Result<Self> {
+    ) -> Result<Self, ManifestError> {
         let manifest = Manifest::from_str(manifest_path, content)?;
         Ok(Self::from_manifest(manifest, env_root, bin_dir))
     }
@@ -369,7 +472,7 @@ impl Project {
     /// `~/.pixi/manifests/pixi-global.toml`. If the manifest doesn't exist
     /// yet, and the function will try to create one from the existing
     /// installation. If that one fails, an empty one will be created.
-    pub async fn discover_or_create() -> miette::Result<Self> {
+    pub async fn discover_or_create() -> Result<Self, DiscoverProjectError> {
         let manifest_dir = Self::manifest_dir()?;
         let manifest_path = Self::default_manifest_path()?;
         // Prompt user if the manifest is empty and the user wants to create one
@@ -384,7 +487,7 @@ impl Project {
             );
             tokio_fs::create_dir_all(&manifest_dir)
                 .await
-                .into_diagnostic()?;
+                .map_err(DiscoverProjectError::Io)?;
 
             if !env_root.directories().await?.is_empty() {
                 tracing::debug!(
@@ -392,25 +495,23 @@ impl Project {
                 );
                 return Self::try_from_existing_installation(&manifest_path, env_root, bin_dir)
                     .await
-                    .wrap_err_with(
-                        || "Failed to create global manifest from existing installation",
-                    );
+                    .map_err(|e| DiscoverProjectError::Migrate(Cause::new(e)));
             } else {
                 tracing::debug!("Create an empty global manifest.");
                 tokio_fs::File::create(&manifest_path)
                     .await
-                    .into_diagnostic()?;
+                    .map_err(DiscoverProjectError::Io)?;
             }
         }
 
-        Self::from_path(&manifest_path, env_root, bin_dir)
+        Ok(Self::from_path(&manifest_path, env_root, bin_dir)?)
     }
 
     async fn try_from_existing_installation(
         manifest_path: &Path,
         env_root: EnvRoot,
         bin_dir: BinDir,
-    ) -> miette::Result<Self> {
+    ) -> Result<Self, MigrateInstallationError> {
         let config = Config::load(env_root.path());
 
         let exposed_binaries: Vec<ExposedData> = bin_dir
@@ -439,8 +540,11 @@ impl Project {
             .await;
 
         let parsed_manifest = ParsedManifest::from(exposed_binaries);
-        let toml_pretty = toml_edit::ser::to_string_pretty(&parsed_manifest).into_diagnostic()?;
-        let mut document: DocumentMut = toml_pretty.parse().into_diagnostic()?;
+        let toml_pretty = toml_edit::ser::to_string_pretty(&parsed_manifest)
+            .map_err(MigrateInstallationError::Serialize)?;
+        let mut document: DocumentMut = toml_pretty
+            .parse()
+            .map_err(MigrateInstallationError::Parse)?;
 
         // Ensure that the manifest uses inline tables for "dependencies" and "exposed"
         if let Some(envs) = document
@@ -463,12 +567,12 @@ impl Project {
         let toml = document.to_string();
         tokio_fs::write(&manifest_path, &toml)
             .await
-            .into_diagnostic()?;
-        Self::from_str(manifest_path, &toml, env_root, bin_dir)
+            .map_err(MigrateInstallationError::Write)?;
+        Ok(Self::from_str(manifest_path, &toml, env_root, bin_dir)?)
     }
 
     /// Get default dir for the pixi global manifest
-    pub fn manifest_dir() -> miette::Result<PathBuf> {
+    pub fn manifest_dir() -> Result<PathBuf, ManifestDirError> {
         // Potential directories, with the highest priority coming first
         let potential_dirs = [
             pixi_home(),
@@ -487,14 +591,11 @@ impl Project {
         }
 
         // If not, return the first option
-        potential_dirs
-            .first()
-            .cloned()
-            .ok_or_else(|| miette::miette!("Couldn't obtain global manifest directory"))
+        potential_dirs.first().cloned().ok_or(ManifestDirError)
     }
 
     /// Get the default path to the global manifest file
-    pub fn default_manifest_path() -> miette::Result<PathBuf> {
+    pub fn default_manifest_path() -> Result<PathBuf, ManifestDirError> {
         Self::manifest_dir().map(|dir| dir.join(consts::GLOBAL_MANIFEST_DEFAULT_NAME))
     }
 
@@ -503,7 +604,7 @@ impl Project {
         manifest_path: &Path,
         env_root: EnvRoot,
         bin_dir: BinDir,
-    ) -> miette::Result<Self> {
+    ) -> Result<Self, ManifestError> {
         let manifest = Manifest::from_path(manifest_path)?;
         Ok(Project::from_manifest(manifest, env_root, bin_dir))
     }
@@ -1510,32 +1611,44 @@ impl Project {
     }
 
     /// Delete scripts in the bin folder that are broken
-    pub async fn remove_broken_files(&self) -> miette::Result<()> {
+    pub async fn remove_broken_files(&self) -> Result<(), RemoveBrokenFilesError> {
         // Get all the files in the global binary directory
         // If there's a trampoline that couldn't be correctly parsed, remove it
         let root_path = self.bin_dir.path();
-        let mut entries = tokio_fs::read_dir(&root_path).await.into_diagnostic()?;
+        let mut entries = tokio_fs::read_dir(&root_path)
+            .await
+            .map_err(RemoveBrokenFilesError::Io)?;
 
-        while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .map_err(RemoveBrokenFilesError::Io)?
+        {
             let path = entry.path();
             if path.is_file() && path.is_executable() && Trampoline::is_trampoline(&path).await? {
                 let exposed_name = Trampoline::name(&path)?;
                 match Configuration::from_root_path(root_path, &exposed_name).await {
                     Ok(_) => (),
                     Err(ConfigurationParseError::ReadError(config_path, err)) => {
-                        tracing::warn!("Couldn't read {}\n{err:?}", config_path.display());
+                        tracing::warn!("Couldn't read {}\n{err}", config_path.display());
                         tracing::warn!("Removing the trampoline at {}", path.display());
-                        tokio_fs::remove_file(path).await.into_diagnostic()?;
+                        tokio_fs::remove_file(path)
+                            .await
+                            .map_err(RemoveBrokenFilesError::Io)?;
                     }
                     Err(ConfigurationParseError::ParseError(config_path, err)) => {
-                        tracing::warn!("Couldn't parse {}\n{err:?}", config_path.display());
+                        tracing::warn!("Couldn't parse {}\n{err}", config_path.display());
                         tracing::warn!(
                             "Removing the trampoline at {} and configuration at {}",
                             path.display(),
                             config_path.display()
                         );
-                        tokio_fs::remove_file(path).await.into_diagnostic()?;
-                        tokio_fs::remove_file(config_path).await.into_diagnostic()?;
+                        tokio_fs::remove_file(path)
+                            .await
+                            .map_err(RemoveBrokenFilesError::Io)?;
+                        tokio_fs::remove_file(config_path)
+                            .await
+                            .map_err(RemoveBrokenFilesError::Io)?;
                     }
                 }
             }
