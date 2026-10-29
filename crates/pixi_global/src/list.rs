@@ -4,7 +4,6 @@ use fancy_display::FancyDisplay;
 use human_bytes::human_bytes;
 use indexmap::{IndexMap, IndexSet};
 use itertools::Itertools;
-use miette::{IntoDiagnostic, miette};
 use pixi_consts::consts;
 use pixi_core::environment::list::{PackageToOutput, print_package_table};
 use pixi_spec::PixiSpec;
@@ -13,10 +12,28 @@ use serde::Serialize;
 
 use super::{
     EnvironmentName, Mapping, Project,
-    project::ParsedEnvironment,
+    project::{ManifestError, ParsedEnvironment},
     report::{self, EnvReport, Item, Label, Marker, Row},
 };
-use crate::common::{self, find_package_records};
+use crate::common::{self, CondaMetaError, find_package_records};
+
+/// An error from listing the global environments.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum ListError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Manifest(#[from] ManifestError),
+
+    #[error("invalid regex")]
+    Regex(#[source] regex::Error),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    CondaMeta(#[from] CondaMetaError),
+
+    #[error("failed to write to stdout")]
+    Stdout(#[source] std::io::Error),
+}
 
 /// JSON-serializable representation of an exposed mapping.
 #[derive(Serialize)]
@@ -47,7 +64,7 @@ pub async fn list_global_environments_json(
     project: &Project,
     environment: Option<&EnvironmentName>,
     regex: Option<String>,
-) -> miette::Result<()> {
+) -> Result<(), ListError> {
     let mut project_envs = project.environments().clone();
     project_envs.sort_by(|a, _, b, _| a.to_string().cmp(&b.to_string()));
 
@@ -56,15 +73,12 @@ pub async fn list_global_environments_json(
     if let Some(env_name) = environment {
         project_envs.retain(|name, _| name == env_name);
         if project_envs.is_empty() {
-            return Err(miette!(
-                "environment {} not found",
-                env_name.fancy_display()
-            ));
+            return Err(ManifestError::EnvironmentNotFound(env_name.clone()).into());
         }
     }
 
     if let Some(regex) = regex {
-        let regex = regex::Regex::new(&regex).into_diagnostic()?;
+        let regex = regex::Regex::new(&regex).map_err(ListError::Regex)?;
         project_envs.retain(|env_name, _| regex.is_match(env_name.as_str()));
     }
 
@@ -118,15 +132,13 @@ pub async fn list_global_environments_json(
 
     let json_string =
         serde_json::to_string_pretty(&environments).expect("cannot serialize environments to JSON");
-    pixi_utils::io::ignore_broken_pipe(writeln!(std::io::stdout(), "{json_string}"))
-        .into_diagnostic()?;
-
-    Ok(())
+    write_stdout(&json_string)
 }
 
 /// Write a line to stdout, treating a closed pipe as a normal end of output.
-fn write_stdout(line: &str) -> miette::Result<()> {
-    pixi_utils::io::ignore_broken_pipe(writeln!(std::io::stdout(), "{line}")).into_diagnostic()
+fn write_stdout(line: &str) -> Result<(), ListError> {
+    pixi_utils::io::ignore_broken_pipe(writeln!(std::io::stdout(), "{line}"))
+        .map_err(ListError::Stdout)
 }
 
 fn format_mapping(mapping: &Mapping) -> Item {
@@ -202,7 +214,7 @@ async fn state_report(
     project: &Project,
     env_name: &EnvironmentName,
     environment: &ParsedEnvironment,
-) -> miette::Result<EnvReport> {
+) -> Result<EnvReport, ListError> {
     let conda_meta = project
         .env_root
         .path()
@@ -236,11 +248,11 @@ pub async fn list_specific_global_environment(
     environment_name: &EnvironmentName,
     sort_by_size: bool,
     regex: Option<String>,
-) -> miette::Result<()> {
+) -> Result<(), ListError> {
     let env = project
         .environments()
         .get(environment_name)
-        .ok_or_else(|| miette!("Environment {} not found", environment_name.fancy_display()))?;
+        .ok_or_else(|| ManifestError::EnvironmentNotFound(environment_name.clone()))?;
 
     let records = find_package_records(
         &project
@@ -303,7 +315,7 @@ pub async fn list_specific_global_environment(
 
     // Filter according to the regex
     if let Some(ref regex) = regex {
-        let regex = regex::Regex::new(regex).into_diagnostic()?;
+        let regex = regex::Regex::new(regex).map_err(ListError::Regex)?;
         packages_to_output.retain(|package| regex.is_match(package.name.as_normalized()));
     }
 
@@ -314,7 +326,8 @@ pub async fn list_specific_global_environment(
         packages_to_output.sort_by(|a, b| a.name.cmp(&b.name));
     }
 
-    print_package_table(packages_to_output).into_diagnostic()?;
+    pixi_utils::io::ignore_broken_pipe(print_package_table(packages_to_output))
+        .map_err(ListError::Stdout)?;
 
     Ok(())
 }
@@ -323,7 +336,7 @@ pub async fn list_specific_global_environment(
 pub async fn list_all_global_environments(
     project: &Project,
     regex: Option<String>,
-) -> miette::Result<()> {
+) -> Result<(), ListError> {
     let mut project_envs = project.environments().clone();
     project_envs.sort_by(|a, _, b, _| a.to_string().cmp(&b.to_string()));
 
@@ -340,7 +353,7 @@ pub async fn list_all_global_environments(
     });
 
     if let Some(regex) = regex {
-        let regex = regex::Regex::new(&regex).into_diagnostic()?;
+        let regex = regex::Regex::new(&regex).map_err(ListError::Regex)?;
         project_envs.retain(|env_name, _| regex.is_match(env_name.as_str()));
     }
 

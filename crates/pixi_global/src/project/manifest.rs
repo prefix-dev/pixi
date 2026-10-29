@@ -413,7 +413,7 @@ impl Manifest {
         &mut self,
         value: &str,
         config: ExcludeNewerConfig,
-    ) -> miette::Result<()> {
+    ) -> Result<(), ExcludeNewerEditError> {
         self.parsed
             .exclude_newer
             .replace(self.document.as_table_mut(), value, config)?;

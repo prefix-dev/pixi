@@ -411,6 +411,15 @@ pre-commit-install-minimal = {
 }
 
 #
+# Environment for the vouch workflows
+#
+[environments.vouch]
+platforms = ["linux-64"]
+
+[environments.vouch.dependencies]
+vouch = ">=1.5.0,<2"
+
+#
 # Environment for Python integration tests with pytest
 #
 [environments.python-test]
