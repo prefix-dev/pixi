@@ -74,7 +74,7 @@ def test_sync_injected_python_lib_is_found(pixi: Path, tmp_path: Path) -> None:
         env=env,
         stderr_contains=[
             "couldn't find executable",
-            "Failed to add executables for environment",
+            "failed to add the executables of environment 'test'",
         ],
     )
 
@@ -1534,7 +1534,7 @@ def test_update_reports_a_failure_and_carries_on(
         expected_exit_code=ExitCode.FAILURE,
         stderr_contains=[
             "(failed)    does-not-exist",
-            "not found in manifest",
+            "environment 'does-not-exist' doesn't exist",
             "(unchanged) dummy-a 0.1.0",
         ],
         strip_ansi=True,
@@ -1832,7 +1832,7 @@ exposed = {{ dummy-c = "dummy-c" }}
         [pixi, "global", "uninstall", "dummy-a"],
         ExitCode.FAILURE,
         env=env,
-        stderr_contains=["(failed)    dummy-a", "Environment dummy-a doesn't exist"],
+        stderr_contains=["(failed)    dummy-a", "environment 'dummy-a' doesn't exist"],
         strip_ansi=True,
     )
 
@@ -1878,7 +1878,7 @@ def test_uninstall_only_reverts_failing(pixi: Path, tmp_path: Path, dummy_channe
         [pixi, "global", "uninstall", "dummy-a", "dummy-c"],
         ExitCode.FAILURE,
         env=env,
-        stderr_contains="Environment dummy-c doesn't exist",
+        stderr_contains="environment 'dummy-c' doesn't exist",
     )
 
     # dummy-a has been removed but dummy-b is still there
@@ -1910,7 +1910,7 @@ def test_uninstall_continues_past_missing_env(
         [pixi, "global", "uninstall", "dummy-a", missing_env, "dummy-b"],
         ExitCode.FAILURE,
         env=env,
-        stderr_contains=f"Environment {missing_env} doesn't exist",
+        stderr_contains=f"environment '{missing_env}' doesn't exist",
     )
 
     # Both existing environments are removed despite the error in between
