@@ -14,6 +14,7 @@ jobs:
     if: >-
       github.repository == 'prefix-dev/pixi' &&
       github.event.comment.user.type == 'User' &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association) &&
       github.event.discussion.category.slug == 'vouch-request' &&
       (contains(github.event.comment.body, 'vouch') ||
        contains(github.event.comment.body, 'denounce'))
