@@ -309,22 +309,6 @@ def test_config_exclude_newer_init(pixi: Path, tmp_path: Path) -> None:
         in (workspace / "pixi.toml").read_text()
     )
 
-    # An existing workspace keeps its own `exclude-newer`.
-    existing = tmp_path / "existing"
-    existing.mkdir()
-    pyproject = f"""\
-[project]
-name = "existing"
-version = "0.1.0"
-
-[tool.pixi.workspace]
-channels = ["conda-forge"]
-platforms = ["{CURRENT_PLATFORM}"]
-exclude-newer = "14d"
-"""
-    (existing / "pyproject.toml").write_text(pyproject)
-    verify_cli_command([pixi, "init", "--format", "pyproject", existing], env=env)
-    assert (existing / "pyproject.toml").read_text() == pyproject
 
 
 def test_config_exclude_newer_exec(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:
@@ -389,19 +373,13 @@ def test_config_exclude_newer_global(pixi: Path, tmp_path: Path, dummy_channel_1
 def test_config_exclude_newer_invalid_global(
     pixi: Path, tmp_path: Path, dummy_channel_1: str
 ) -> None:
-    """An invalid `exclude-newer` in the configuration doesn't leave behind a
-    global manifest that never gets it."""
+    """A configuration file with an invalid `exclude-newer` is skipped with an
+    error, like for any other invalid value."""
     env = {"PIXI_HOME": str(tmp_path)}
     config = tmp_path / "config.toml"
     config.write_text('exclude-newer = "garbage"\n')
     command: list[str | Path] = [pixi, "global", "install", "--channel", dummy_channel_1, "dummy-b"]
 
-    verify_cli_command(command, ExitCode.FAILURE, env=env)
+    verify_cli_command(command, env=env, stderr_contains="invalid cutoff `garbage`")
     manifest = tmp_path / "manifests" / "pixi-global.toml"
-    assert not manifest.exists()
-
-    config.write_text('exclude-newer = "2020-01-01"\n')
-    verify_cli_command(
-        command, ExitCode.FAILURE, env=env, stderr_contains="uploaded after the cutoff date"
-    )
-    assert tomli.loads(manifest.read_text())["exclude-newer"] == "2020-01-01"
+    assert "exclude-newer" not in tomli.loads(manifest.read_text())

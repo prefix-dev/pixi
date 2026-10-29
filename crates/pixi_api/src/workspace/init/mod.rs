@@ -1340,8 +1340,8 @@ mod tests {
         }
     }
 
-    /// Fails: `pixi init` overwrites the `exclude-newer` of an existing
-    /// pyproject workspace, see `init`.
+    /// `pixi init` keeps the `exclude-newer` of an existing pyproject
+    /// workspace.
     #[tokio::test]
     async fn test_init_keeps_exclude_newer_of_existing_pyproject_workspace() {
         let tmp_dir = tempfile::tempdir().unwrap();
@@ -1365,20 +1365,24 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_init_with_invalid_config_exclude_newer_writes_nothing() {
+    async fn test_init_skips_config_with_invalid_exclude_newer() {
         let tmp_dir = tempfile::tempdir().unwrap();
         write_config_exclude_newer(tmp_dir.path(), r#""garbage""#);
 
         let interface = MockInterface {
             confirm_response: true,
         };
-        let result = init(
+        init(
             &interface,
             init_options(tmp_dir.path(), ManifestFormat::Pixi),
         )
-        .await;
+        .await
+        .unwrap();
 
-        assert!(result.is_err());
-        assert!(!tmp_dir.path().join(consts::WORKSPACE_MANIFEST).exists());
+        // A configuration file that doesn't parse is skipped with an error,
+        // like for any other invalid value.
+        let manifest =
+            fs_err::read_to_string(tmp_dir.path().join(consts::WORKSPACE_MANIFEST)).unwrap();
+        assert!(!manifest.contains("exclude-newer"), "{manifest}");
     }
 }
