@@ -1666,6 +1666,28 @@ def test_info_global_tls_root_certs_ignores_config_file(pixi: Path, tmp_path: Pa
     assert info_data["global_info"]["tls_root_certs"]["mode"] == "webpki"
 
 
+def test_info_tls_root_certs_env_overrides_workspace_config(pixi: Path, tmp_path: Path) -> None:
+    """`PIXI_TLS_ROOT_CERTS` overrides a workspace's `.pixi/config.toml` for
+    workspace commands, so `pixi info` must report it in the workspace too."""
+    env = isolated_config_env(tmp_path)
+    workspace = tmp_path / "workspace"
+    workspace.joinpath(".pixi").mkdir(parents=True)
+    (workspace / "pixi.toml").write_text(
+        '[workspace]\nname = "test"\nchannels = []\nplatforms = []\n'
+    )
+    (workspace / ".pixi" / "config.toml").write_text('tls-root-certs = "webpki"\n')
+
+    result = verify_cli_command(
+        [pixi, "info", "--json"],
+        env=env | {"PIXI_TLS_ROOT_CERTS": "system"},
+        cwd=workspace,
+    )
+    info_data = json.loads(result.stdout)
+
+    assert info_data["project_info"]["tls_root_certs"]["mode"] == "system"
+    assert info_data["global_info"]["tls_root_certs"]["mode"] == "system"
+
+
 @pytest.mark.skipif(
     platform.system() == "Windows",
     reason="fish, zsh and nushell are not available on Windows",
