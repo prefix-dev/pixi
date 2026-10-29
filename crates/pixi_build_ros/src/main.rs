@@ -18,7 +18,9 @@ use pixi_build_backend::generated_recipe::{GenerateRecipe, GeneratedRecipe, Pyth
 use pixi_build_backend::intermediate_backend::IntermediateBackendInstantiator;
 use pixi_build_backend::tools::BackendIdentifier;
 use rattler_build_jinja::{JinjaTemplate, Variable};
-use rattler_build_recipe::stage0::{Item, Script, SerializableMatchSpec, Value};
+use rattler_build_recipe::stage0::{
+    Item, Script, SerializableMatchSpec, SingleOutputRecipe, Value,
+};
 use rattler_build_types::NormalizedKey;
 use rattler_conda_types::{ChannelUrl, Subdir};
 
@@ -37,6 +39,7 @@ pub struct RosGenerator {}
 #[async_trait::async_trait]
 impl GenerateRecipe for RosGenerator {
     type Config = RosBackendConfig;
+    type Recipe = SingleOutputRecipe;
 
     #[tracing::instrument(
         name = "ros_generate_recipe",
