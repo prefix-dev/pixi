@@ -114,7 +114,7 @@ workspace is discovered. This defaults to only `conda-forge`.
 ### `exclude-newer`
 
 The `exclude-newer` configuration that new manifests start from.
-`pixi init` writes it into the [`exclude-newer`](./pixi_manifest.md#exclude-newer-optional) of a new workspace, `pixi global` into the `exclude-newer` of a new global manifest, and `pixi exec` solves its environments with it.
+`pixi init` writes it into the [`exclude-newer`](./pixi_manifest.md#exclude-newer-optional) of a new workspace or script, `pixi global` into the `exclude-newer` of a new global manifest, and `pixi exec` solves its environments with it.
 It takes the same values as `exclude-newer` in a manifest: a cutoff such as `"7d"` or a date, or a table with a `cutoff` and `exemptions`.
 It is shared with other rattler-based tools, so it can also be set in a `rattler` location.
 

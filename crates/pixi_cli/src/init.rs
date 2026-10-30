@@ -9,6 +9,7 @@ use std::{
 use clap::{Parser, ValueEnum, ValueHint};
 use miette::IntoDiagnostic;
 use pixi_api::{Interface, WorkspaceContext, workspace::InitOptions};
+use pixi_config::Config;
 use pixi_manifest::{
     CondaPypiMap, CondaPypiMapEntry,
     script::{
@@ -263,6 +264,9 @@ async fn initialize_script(
         .map(|channel| channel.to_string())
         .collect::<Vec<_>>();
 
+    let exclude_newer = configured_script_exclude_newer(&path)?;
+    let exclude_newer = exclude_newer.as_ref();
+
     match format {
         Some(ManifestFormat::Pep723) if !is_python => Err(miette::miette!(
             help = "PEP 723 blocks only exist in Python files, ending in `.py` or `.pyw`",
@@ -270,10 +274,10 @@ async fn initialize_script(
             path.display()
         )),
         Some(ManifestFormat::Pep723) | None if is_python => {
-            initialize_pep723_script(path, &channels).await
+            initialize_pep723_script(path, &channels, exclude_newer).await
         }
         Some(ManifestFormat::CondaScript) | None => {
-            initialize_conda_script(path, &extension, &channels).await
+            initialize_conda_script(path, &extension, &channels, exclude_newer).await
         }
         Some(format) => Err(miette::miette!(
             help = format!(
@@ -286,7 +290,36 @@ async fn initialize_script(
     }
 }
 
-async fn initialize_pep723_script(path: PathBuf, channels: &[String]) -> miette::Result<()> {
+/// The `exclude-newer` of the configuration a script would run with, which a
+/// new script starts from, like a new workspace.
+fn configured_script_exclude_newer(path: &Path) -> miette::Result<Option<toml_edit::Value>> {
+    // The parent of a bare file name is empty, i.e. the current directory.
+    let root = path.parent().unwrap_or(Path::new(""));
+    let config = Config::try_load(root)?;
+    config
+        .exclude_newer
+        .as_ref()
+        .map(|configured| {
+            // Converted to check that the manifest of the script accepts it.
+            pixi_manifest::ExcludeNewerConfig::try_from(configured)
+                .map_err(InvalidConfiguredExcludeNewer)?;
+            Ok(pixi_config::exclude_newer_to_toml(configured)
+                .parse()
+                .expect("an exclude-newer configuration is always a valid TOML value"))
+        })
+        .transpose()
+}
+
+/// The `exclude-newer` of the configuration can't be written into a script.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error("invalid `exclude-newer` in the pixi configuration")]
+struct InvalidConfiguredExcludeNewer(#[source] pixi_manifest::ConfiguredExcludeNewerError);
+
+async fn initialize_pep723_script(
+    path: PathBuf,
+    channels: &[String],
+    exclude_newer: Option<&toml_edit::Value>,
+) -> miette::Result<()> {
     let path = std::path::absolute(path).into_diagnostic()?;
     // A file with a conda-script block must not get a PEP 723 block on top;
     // the two kinds cannot coexist in one file.
@@ -297,7 +330,7 @@ async fn initialize_pep723_script(path: PathBuf, channels: &[String]) -> miette:
             path.display()
         ));
     }
-    let script = ScriptManifest::initialize(&path, channels)?;
+    let script = ScriptManifest::initialize(&path, channels, exclude_newer)?;
 
     CliInterface::default()
         .success(&format!(
@@ -312,6 +345,7 @@ async fn initialize_conda_script(
     path: PathBuf,
     extension: &str,
     channels: &[String],
+    exclude_newer: Option<&toml_edit::Value>,
 ) -> miette::Result<()> {
     let Some(template) = template_for_extension(extension) else {
         return Err(miette::miette!(
@@ -324,7 +358,7 @@ async fn initialize_conda_script(
         ));
     };
 
-    let script = CondaScriptManifest::initialize(&path, template, channels)?;
+    let script = CondaScriptManifest::initialize(&path, template, channels, exclude_newer)?;
 
     CliInterface::default()
         .success(&format!(

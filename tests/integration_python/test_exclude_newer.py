@@ -338,6 +338,11 @@ def test_config_exclude_newer_init(pixi: Path, tmp_path: Path) -> None:
         in (workspace / "pixi.toml").read_text()
     )
 
+    # A script starts from it too.
+    for script in [tmp_path / "script.py", tmp_path / "script.R"]:
+        verify_cli_command([pixi, "init", "--script", script], env=env)
+        assert '# exclude-newer = { cutoff = "7d", exemptions = {' in script.read_text()
+
 
 def test_config_exclude_newer_url_exemption(pixi: Path, tmp_path: Path, channels: Path) -> None:
     """`pixi exec` and `pixi init` accept the same exemption of a package
