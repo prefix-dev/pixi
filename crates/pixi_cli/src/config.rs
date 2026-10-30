@@ -580,6 +580,17 @@ async fn alter_config(
         // matches exemptions by their normalized package name. The whole
         // value is written back, as a cutoff without exemptions is written
         // on its own, e.g. `exclude-newer = "7d"`.
+        // TODO: writing back the whole value drops the comments and layout
+        // inside `exclude-newer`, e.g. a `[exclude-newer.exemptions]` table
+        // becomes an inline table. `rattler_config` edits a `toml::Table`
+        // serialized from the parsed config, so it never sees them. Keeping
+        // them needs the edit to apply to the `toml_edit` document instead:
+        // either `rattler_config` exposes its edit rules (expanding a bare
+        // cutoff into a table, matching exemptions by normalized name,
+        // expanding a version-only exemption when a field of it is edited,
+        // collapsing back to a bare cutoff) for a `toml_edit::Item`, or
+        // pixi reimplements them here, then validates the edited document
+        // with `rattler_config` like now.
         // An invalid file is not loaded, so writing back its `exclude-newer`
         // would remove all of it rather than the key.
         AlterMode::Set | AlterMode::Unset if loaded && key.starts_with("exclude-newer.") => {
