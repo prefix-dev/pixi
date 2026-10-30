@@ -1,17 +1,39 @@
 use std::collections::HashMap;
 
 use indexmap::{IndexMap, IndexSet};
-use miette::IntoDiagnostic;
+use miette::Diagnostic;
 use pixi_core::{Workspace, workspace::WorkspaceMut};
 use pixi_manifest::{
-    EnvironmentName, Feature, FeatureName, HasFeaturesIter, PrioritizedChannel, TargetSelector,
-    Task, TaskName,
+    EnvironmentEditError, EnvironmentName, Feature, FeatureName, HasFeaturesIter,
+    LoadManifestsError, PrioritizedChannel, TargetSelector, Task, TaskName,
 };
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::PackageName;
 
-use crate::{Interface, workspace::workspace::environment};
+use thiserror::Error;
+
+use crate::workspace::workspace::{SaveManifestError, environment, save};
+use crate::{Interface, InterfaceError};
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum RemoveFeatureError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    LoadWorkspace(#[from] LoadManifestsError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Interface(#[from] InterfaceError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Edit(#[from] EnvironmentEditError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Save(#[from] SaveManifestError),
+}
 
 pub async fn list_features(workspace: &Workspace) -> IndexMap<FeatureName, Feature> {
     workspace
@@ -100,7 +122,7 @@ pub async fn remove_feature<I: Interface>(
     interface: &I,
     mut workspace: WorkspaceMut,
     feature: &FeatureName,
-) -> miette::Result<Vec<EnvironmentName>> {
+) -> Result<Vec<EnvironmentName>, RemoveFeatureError> {
     // Check which environments use this feature
     let environments_using_feature: Vec<String> = environment::list(workspace.workspace())
         .await
@@ -133,7 +155,7 @@ pub async fn remove_feature<I: Interface>(
 
     // Remove the feature
     let modified_envs = workspace.manifest().remove_feature(feature)?;
-    workspace.save().await.into_diagnostic()?;
+    save(workspace).await?;
 
     interface
         .success(&format!("Removed feature {feature}"))
