@@ -16,7 +16,7 @@ mod provenance;
 mod source;
 mod workspace;
 
-pub use document::ManifestDocument;
+pub use document::{ManifestDocument, ManifestDocumentError, ManifestRenderError};
 pub use package::PackageManifest;
 pub use provenance::{
     AssociateProvenance, ManifestKind, ManifestProvenance, ProvenanceError, WithProvenance,

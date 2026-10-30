@@ -179,7 +179,7 @@ pub enum PypiDependencyLocation {
 
 use console::StyledObject;
 use fancy_display::FancyDisplay;
-pub use manifests::ManifestDocument;
+pub use manifests::{ManifestDocument, ManifestDocumentError, ManifestRenderError};
 use pixi_consts::consts;
 
 /// Converts a slice of `PixiPlatformName`s to a non-empty `Vec` of
