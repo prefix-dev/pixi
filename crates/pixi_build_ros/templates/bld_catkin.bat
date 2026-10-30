@@ -5,6 +5,9 @@ setlocal
 :: Rattler-build will not set the SRC_DIR anymore so we set it through templating
 set "SRC_DIR=@SRC_DIR@"
 
+if not defined ROS_CMAKE_BUILD_TYPE set "ROS_CMAKE_BUILD_TYPE=Release"
+set "BUILD_TYPE=%ROS_CMAKE_BUILD_TYPE%"
+
 set "PYTHONPATH=%LIBRARY_PREFIX%\lib\site-packages;%SP_DIR%"
 
 :: MSVC is preferred.
@@ -37,7 +40,8 @@ cmake ^
     -G "Ninja" ^
     --compile-no-warning-as-error ^
     -DCMAKE_INSTALL_PREFIX=%LIBRARY_PREFIX% ^
-    -DCMAKE_BUILD_TYPE=Release ^
+    -DCMAKE_BUILD_TYPE=%BUILD_TYPE% ^
+    -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL ^
     -DCMAKE_INSTALL_SYSTEM_RUNTIME_LIBS_SKIP=ON ^
     -DBUILD_SHARED_LIBS=ON ^
     -DPYTHON_EXECUTABLE=%PYTHON% ^
@@ -51,19 +55,19 @@ cmake ^
 if errorlevel 1 exit 1
 
 if "%PKG_NAME%" == "ros-@DISTRO@-eigenpy" (
-    cmake --build . --config Release --target all --parallel 1
+    cmake --build . --config %BUILD_TYPE% --target all --parallel 1
     if errorlevel 1 exit 1
 ) else (
-    cmake --build . --config Release --target all
+    cmake --build . --config %BUILD_TYPE% --target all
     if errorlevel 1 exit 1
 )
 
 if "%SKIP_TESTING%" == "OFF" (
-    cmake --build . --config Release --target run_tests
+    cmake --build . --config %BUILD_TYPE% --target run_tests
     if errorlevel 1 exit 1
 )
 
-cmake --build . --config Release --target install
+cmake --build . --config %BUILD_TYPE% --target install
 if errorlevel 1 exit 1
 
 if "%PKG_NAME%" == "ros-@DISTRO@-catkin" (

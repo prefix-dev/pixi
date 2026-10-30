@@ -130,6 +130,26 @@ Outputs:
 hello world my_cmake_ros_pkg package
 ```
 
+### Debug builds
+CMake based packages (`ament_cmake`, `cmake` and `catkin`) come in two variants: a `Release` build and a `Debug` build.
+The debug build carries the `debug` flag, so you can select it with `flags`:
+
+```toml title="ros_ws/pixi.toml"
+[dependencies]
+ros-jazzy-my-cmake-ros-pkg = { path = "src/my_cmake_ros_pkg", flags = ["debug"] }
+```
+
+Without a flag, the release build is used.
+The debug build sets `CMAKE_BUILD_TYPE=Debug` and swaps the compiler flags for the debug flags (`DEBUG_CFLAGS`, `DEBUG_CXXFLAGS`, `DEBUG_CPPFLAGS`) that the conda-forge compiler packages set.
+
+The build types come from the `cmake_build_type` variant.
+You can override it in your workspace, for example to add a `RelWithDebInfo` build, which gets the `relwithdebinfo` flag:
+
+```toml title="ros_ws/pixi.toml"
+[workspace.build-variants]
+cmake_build_type = ["Release", "Debug", "RelWithDebInfo"]
+```
+
 ## Building a ROS conda package
 With the package(s) added to the workspace, you can now build them.
 

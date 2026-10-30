@@ -24,7 +24,10 @@ use rattler_build_recipe::stage0::{
 use rattler_build_types::NormalizedKey;
 use rattler_conda_types::{ChannelUrl, Subdir};
 
-use crate::build_script::render_build_script;
+use crate::build_script::{
+    CMAKE_BUILD_TYPE_ENV, CMAKE_BUILD_TYPE_KEY, add_cmake_build_type_variant, render_build_script,
+    uses_cmake,
+};
 use crate::config::{PackageMappingSource, extract_distro_from_channels_list};
 use crate::distro::Distro;
 use crate::metadata::parse_and_render;
@@ -311,6 +314,10 @@ impl GenerateRecipe for RosGenerator {
             "ROS_VERSION".to_string(),
             Value::new_concrete(distro.version.as_env_value().to_string(), None),
         );
+        if uses_cmake(&build_type) {
+            let build_type_env = add_cmake_build_type_variant(&mut generated_recipe.recipe.build);
+            script_env.insert(CMAKE_BUILD_TYPE_ENV.to_string(), build_type_env);
+        }
         if let Some(user_env) = &config.env {
             for (k, v) in user_env {
                 script_env.insert(k.clone(), Value::new_concrete(v.clone(), None));
@@ -373,7 +380,12 @@ impl GenerateRecipe for RosGenerator {
         &self,
         host_platform: Subdir,
     ) -> miette::Result<BTreeMap<NormalizedKey, Vec<Variable>>> {
-        Ok(default_compiler_variants(host_platform))
+        let mut variants = default_compiler_variants(host_platform);
+        variants.insert(
+            NormalizedKey::from(CMAKE_BUILD_TYPE_KEY),
+            vec!["Release".into(), "Debug".into()],
+        );
+        Ok(variants)
     }
 }
 
@@ -1268,6 +1280,73 @@ mod tests {
         assert!(
             run_deps.iter().any(|d| d == "ros-noetic-ros-custom2-msgs"),
             "Expected ros-noetic-ros-custom2-msgs in run deps: {run_deps:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_cmake_build_type_variants() {
+        use pixi_build_backend::protocol::ProtocolInstantiator;
+        use pixi_build_types::procedures::{
+            conda_outputs::CondaOutputsParams, initialize::InitializeParams,
+        };
+        use rattler_build_core::console_utils::LoggingOutputHandler;
+
+        let temp = tempfile::tempdir().unwrap();
+        write_minimal_package_xml(temp.path(), "my_pkg", &[]);
+
+        let (backend, _) = IntermediateBackendInstantiator::<RosGenerator>::new(
+            BackendIdentifier::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")),
+            LoggingOutputHandler::default(),
+            Arc::default(),
+        )
+        .initialize(InitializeParams {
+            workspace_directory: None,
+            checkout_root: None,
+            source_directory: Some(temp.path().to_path_buf()),
+            manifest_path: temp.path().join("pixi.toml"),
+            project_model: Some(project_fixture!({ "name": "my_pkg", "version": "0.0.1" })),
+            configuration: Some(serde_json::json!({ "distro": "jazzy" })),
+            target_configuration: None,
+            cache_directory: None,
+            workspace_scratch_directory: None,
+        })
+        .await
+        .unwrap();
+
+        let outputs = backend
+            .conda_outputs(CondaOutputsParams {
+                channels: vec![],
+                host_platform: Subdir::Linux64,
+                build_platform: Subdir::Linux64,
+                variant_configuration: None,
+                variant_files: None,
+                work_directory: temp.path().to_path_buf(),
+            })
+            .await
+            .unwrap();
+
+        let mut by_build_type = outputs
+            .outputs
+            .iter()
+            .map(|output| {
+                let build_type = output.metadata.variant[CMAKE_BUILD_TYPE_KEY].to_string();
+                let flags: Vec<_> = output
+                    .metadata
+                    .flags
+                    .iter()
+                    .map(|f| f.to_string())
+                    .collect();
+                (build_type, flags, output.metadata.track_features.len())
+            })
+            .collect::<Vec<_>>();
+        by_build_type.sort();
+
+        assert_eq!(
+            by_build_type,
+            vec![
+                ("Debug".to_string(), vec!["debug".to_string()], 1),
+                ("Release".to_string(), vec![], 0),
+            ]
         );
     }
 
