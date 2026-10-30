@@ -14,7 +14,7 @@ use pixi_manifest::{
 use pixi_pypi_spec::PixiPypiSource;
 use pixi_record::LockFileResolver;
 use pypi_modifiers::Tags;
-use rattler_conda_types::{ChannelUrl, NamedChannelOrUrl, Subdir};
+use rattler_conda_types::{ChannelUrl, NamedChannelOrUrl};
 use rattler_lock::{LockedPackage, PypiIndexes, UrlOrPath};
 use url::Url;
 use uv_distribution_filename::{DistExtension, ExtensionError, SourceDistExtension, WheelFilename};
@@ -206,7 +206,11 @@ pub fn verify_environment_satisfiability(
 
         // Actually check all pypi packages in one iteration
         for (lock_platform, package_it) in locked_environment.pypi_packages_by_platform() {
-            let platform = lock_platform.subdir();
+            // A subdir is not a unique platform identity: several rich
+            // platforms can share one subdir while declaring different
+            // virtual packages, and therefore different wheel tags. Key on
+            // the lock platform name, which is unique per platform.
+            let platform = lock_platform.name().to_owned();
             for package_data in package_it {
                 let record = UnresolvedPypiRecord::from(package_data.clone());
                 let pypi_source = pypi_dependencies
@@ -214,7 +218,7 @@ pub fn verify_environment_satisfiability(
                     .and_then(|specs| specs.last())
                     .map(|spec| &spec.source);
                 no_build_check.check(&record, pypi_source)?;
-                pypi_wheel_tags_check.check(platform, &record)?;
+                pypi_wheel_tags_check.check(&platform, &record)?;
             }
         }
     }
@@ -267,7 +271,10 @@ pub fn verify_environment_satisfiability(
 }
 
 struct PypiWheelTagsCheck {
-    platform_wheel_tags: HashMap<Subdir, Tags>,
+    /// Wheel tags per lock platform name. The name, not the subdir, is the
+    /// identity here: rich platforms can share a subdir with different virtual
+    // packages and therefore different tags.
+    platform_wheel_tags: HashMap<String, Tags>,
 }
 
 impl PypiWheelTagsCheck {
@@ -280,11 +287,8 @@ impl PypiWheelTagsCheck {
             locked_environment
                 .packages_by_platform()
                 .filter_map(|(lock_platform, packages)| {
-                    // Try the lockfile's platform name first; if it doesn't
-                    // appear in the workspace (post-`[system-requirements]`
-                    // migration the bare-subdir name is replaced by a
-                    // synthetic one), pick any workspace platform that shares
-                    // the subdir.
+                    // Keep the lock platform name: it is the unique key for the
+                    // tag cache, and it is what the check below looks up.
                     let pixi_platform = PixiPlatformName::try_from(lock_platform.name().as_str())
                         .ok()
                         .and_then(|name| workspace.workspace.platform_by_name(&name))
@@ -295,24 +299,27 @@ impl PypiWheelTagsCheck {
                                 .iter()
                                 .find(|p| p.subdir() == lock_platform.subdir())
                         })?;
-                    Some((pixi_platform, packages))
+                    Some((lock_platform.name().to_string(), pixi_platform, packages))
                 })
-                .flat_map(|(pixi_platform, packages)| {
-                    packages.map(move |package| (pixi_platform, package))
+                .flat_map(|(lock_platform_name, pixi_platform, packages)| {
+                    packages
+                        .map(move |package| (lock_platform_name.clone(), pixi_platform, package))
                 })
-                .filter_map(|(pixi_platform, package)| match package {
-                    LockedPackage::Conda(rattler_lock::CondaPackageData::Binary(package)) => {
-                        Some((pixi_platform, package))
-                    }
-                    _ => None,
-                })
-                .filter(move |(_, package)| {
+                .filter_map(
+                    |(lock_platform_name, pixi_platform, package)| match package {
+                        LockedPackage::Conda(rattler_lock::CondaPackageData::Binary(package)) => {
+                            Some((lock_platform_name, pixi_platform, package))
+                        }
+                        _ => None,
+                    },
+                )
+                .filter(|(_, _, package)| {
                     pypi_modifiers::pypi_tags::is_python_record(&package.package_record)
                 })
-                .filter_map(|(pixi_platform, package)| {
+                .filter_map(|(lock_platform_name, pixi_platform, package)| {
                     pypi_modifiers::pypi_tags::get_pypi_tags(pixi_platform, &package.package_record)
                         .ok()
-                        .map(|tags| (pixi_platform.subdir(), tags))
+                        .map(|tags| (lock_platform_name, tags))
                 })
                 .collect::<HashMap<_, _>>()
         };
@@ -324,14 +331,14 @@ impl PypiWheelTagsCheck {
 
     pub fn check(
         &self,
-        platform: Subdir,
+        platform: &str,
         package_data: &UnresolvedPypiRecord,
     ) -> Result<(), EnvironmentUnsat> {
         let package_data = package_data.as_package_data();
         let Some(package_file_name) = package_data.location().file_name() else {
             return Ok(());
         };
-        let Some(platform_tags) = self.platform_wheel_tags.get(&platform) else {
+        let Some(platform_tags) = self.platform_wheel_tags.get(platform) else {
             return Ok(());
         };
         let Ok(wheel) = WheelFilename::from_str(package_file_name) else {
