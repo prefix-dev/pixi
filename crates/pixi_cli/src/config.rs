@@ -469,11 +469,11 @@ async fn alter_config(
     } else {
         Config::from_path(&to)
     };
-    let mut config = match loaded {
-        Ok(config) => config,
-        Err(ConfigError::FileNotFound(_)) => Config::default(),
+    let (mut config, loaded) = match loaded {
+        Ok(config) => (config, true),
+        Err(ConfigError::FileNotFound(_)) => (Config::default(), true),
         // `unset` only edits the document, so it can remove an invalid value
-        Err(_) if matches!(mode, AlterMode::Unset) => Config::default(),
+        Err(_) if matches!(mode, AlterMode::Unset) => (Config::default(), false),
         Err(e) => return Err(e.into()),
     };
 
@@ -580,7 +580,9 @@ async fn alter_config(
         // matches exemptions by their normalized package name. The whole
         // value is written back, as a cutoff without exemptions is written
         // on its own, e.g. `exclude-newer = "7d"`.
-        AlterMode::Set | AlterMode::Unset if key.starts_with("exclude-newer.") => {
+        // An invalid file is not loaded, so writing back its `exclude-newer`
+        // would remove all of it rather than the key.
+        AlterMode::Set | AlterMode::Unset if loaded && key.starts_with("exclude-newer.") => {
             config.set(key, value)?;
             transplant_config_key(
                 &config,
@@ -1129,6 +1131,25 @@ mod tests {
             .await
             .unwrap_err();
         assert_eq!(context.read_config(), "exclude-newer = \"14d\"\n");
+    }
+
+    #[tokio::test]
+    async fn invalid_exclude_newer_exemption_is_unset_alone() {
+        let context = TestContext::setup(Some(
+            "exclude-newer = { cutoff = \"7d\", exemptions = { ruff = \"*\", bad = \"\" } }\n",
+        ));
+        alter_config(
+            &context.common_args,
+            "exclude-newer.exemptions.bad",
+            None,
+            AlterMode::Unset,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            context.read_config(),
+            "exclude-newer = { cutoff = \"7d\", exemptions = { ruff = \"*\"} }\n"
+        );
     }
 
     #[tokio::test]
