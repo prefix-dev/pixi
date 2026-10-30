@@ -91,9 +91,6 @@ def test_pixi_init_pyproject(pixi: Path, tmp_pixi_workspace: Path) -> None:
     verify_cli_command([pixi, "install", "--manifest-path", manifest_path])
 
 
-@pytest.mark.skipif(
-    hasattr(os, "geteuid") and os.geteuid() == 0, reason="root can write read-only files"
-)
 def test_pixi_init_pyproject_read_only(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest_path = tmp_pixi_workspace / "pyproject.toml"
     manifest_path.write_text('[project]\nname = "foo"\n')
