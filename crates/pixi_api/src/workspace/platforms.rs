@@ -15,7 +15,7 @@
 //! just use the returned `Vec` and leave the manifest alone.
 
 use indexmap::IndexSet;
-use pixi_manifest::{PixiPlatform, PixiPlatformName};
+use pixi_manifest::{PixiPlatform, PixiPlatformName, PlatformEditError};
 use rattler_conda_types::Subdir;
 
 /// Resolve each requested platform name against the workspace's declared
@@ -30,7 +30,7 @@ use rattler_conda_types::Subdir;
 pub fn resolve_platforms(
     workspace_platforms: &IndexSet<PixiPlatform>,
     names: &[PixiPlatformName],
-) -> miette::Result<Vec<PixiPlatform>> {
+) -> Result<Vec<PixiPlatform>, PlatformEditError> {
     names
         .iter()
         .map(|name| {
@@ -40,7 +40,7 @@ pub fn resolve_platforms(
             name.as_str()
                 .parse::<Subdir>()
                 .map(PixiPlatform::from_subdir)
-                .map_err(|_| miette::miette!("workspace does not define a platform named '{name}'"))
+                .map_err(|_| PlatformEditError::NotFound(name.clone()))
         })
         .collect()
 }

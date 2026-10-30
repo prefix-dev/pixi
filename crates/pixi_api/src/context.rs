@@ -19,10 +19,10 @@ use rattler_conda_types::{Channel, MatchSpec, NamedChannelOrUrl, PackageName, Su
 use crate::interface::Interface;
 use crate::workspace::add::GitOptions;
 use crate::workspace::{
-    ChannelError, ChannelOptions, DependencyOptions, EditActivationError, EnvironmentError,
-    InitError, InitOptions, Package, PlatformError, PreviewFlagsError, ReinstallOptions,
-    RemoveError, RemoveFeatureError, RunOptions, SetDescriptionError, SetNameError, ShellError,
-    ShellOptions,
+    AddError, ChannelError, ChannelOptions, DependencyOptions, EditActivationError,
+    EnvironmentError, InitError, InitOptions, Package, PlatformError, PreviewFlagsError,
+    ReinstallOptions, RemoveError, RemoveFeatureError, RunOptions, SetDescriptionError,
+    SetNameError, ShellError, ShellOptions,
 };
 
 pub struct DefaultContext<I: Interface> {
@@ -481,7 +481,7 @@ impl<I: Interface> WorkspaceContext<I> {
         spec_type: SpecType,
         dep_options: DependencyOptions,
         git_options: GitOptions,
-    ) -> miette::Result<(Option<UpdateDeps>, Vec<SkippedPackage>)> {
+    ) -> Result<(Option<UpdateDeps>, Vec<SkippedPackage>), AddError> {
         Box::pin(crate::workspace::add::add_conda_dep(
             self.workspace_mut()?,
             specs,
@@ -497,7 +497,7 @@ impl<I: Interface> WorkspaceContext<I> {
         pypi_deps: PypiDeps,
         editable: bool,
         options: DependencyOptions,
-    ) -> miette::Result<(Option<UpdateDeps>, Vec<SkippedPackage>)> {
+    ) -> Result<(Option<UpdateDeps>, Vec<SkippedPackage>), AddError> {
         Box::pin(crate::workspace::add::add_pypi_dep(
             self.workspace_mut()?,
             pypi_deps,
