@@ -138,6 +138,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             Ok(workspace) => workspace.config().clone(),
             Err(
                 WorkspaceLocatorError::WorkspaceNotFound(_)
+                | WorkspaceLocatorError::PyprojectWithoutPixi(_)
                 | WorkspaceLocatorError::MissingWorkspace(_)
                 | WorkspaceLocatorError::MissingWorkspacePath { .. }
                 | WorkspaceLocatorError::MissingRegistry(_),
