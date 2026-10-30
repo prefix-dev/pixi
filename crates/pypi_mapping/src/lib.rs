@@ -220,9 +220,6 @@ impl PurlDerivationClient {
 
         let wrapped_client = LazyClient::new(move || {
             let client = client.client().clone();
-            // DelegateToClient performs the request. The inner reqwest client is
-            // unused for I/O; Client::new() still loads system CAs and panics on
-            // hosts without a CA store even when tls-root-certs = "webpki" (#6825).
             ClientBuilder::new(unused_mapping_http_client())
                 .with(retry_strategy)
                 .with(cache_strategy)
