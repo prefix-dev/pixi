@@ -9682,7 +9682,8 @@
 <li>
 <dl>
 <dt><a id="arg---path" href="#arg---path"><code>--path &lt;PATH&gt;</code></a></dt>
-<dd>The path to a directory containing a package manifest, or to a specific manifest file</dd>
+<dd>The path to a directory containing a package manifest, or to a specific manifest file
+<br>May be provided more than once.</dd>
 </dl>
 </li>
 <li>
@@ -9857,7 +9858,7 @@ copies them into a local directory (<code>--target-dir</code>). Every source
 dependency of a published package must itself opt into publishing; the
 publish fails otherwise. When no package opts in, the package at the
 current directory is published instead, as if <code>--path .</code> had been
-passed. Use <code>--path</code> to build and publish a single package.</p>
+passed. Use <code>--path</code> to build and publish specific packages.</p>
 <p>Supported destinations for <code>--target-channel</code> (alias <code>--to</code>):</p>
 <ul>
 <li>prefix.dev: <code>https://prefix.dev/&lt;channel-name&gt;</code> or
