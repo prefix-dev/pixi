@@ -877,6 +877,8 @@ python3-pydantic:
   robostack: [pydantic]
 python3-pydot:
   robostack: [pydot]
+python3-pygnssutils-pip:
+  robostack: [pygnssutils]
 python3-pygraphviz:
   robostack: [pygraphviz]
 python3-pykdl:
@@ -949,6 +951,8 @@ python3-tornado:
   robostack: [tornado]
 python3-torchvision-pip:
   robostack: [torchvision]
+python3-tqdm:
+  robostack: [tqdm]
 python3-transforms3d:
   robostack: [transforms3d]
 python3-twisted:

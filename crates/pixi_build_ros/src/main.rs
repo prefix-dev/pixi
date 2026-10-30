@@ -19,7 +19,8 @@ use pixi_build_backend::intermediate_backend::IntermediateBackendInstantiator;
 use pixi_build_backend::tools::BackendIdentifier;
 use rattler_build_jinja::{JinjaTemplate, Variable};
 use rattler_build_recipe::stage0::{
-    Item, Script, SerializableMatchSpec, SingleOutputRecipe, Value,
+    Conditional, Item, JinjaExpression, NestedItemList, Script, SerializableMatchSpec,
+    SingleOutputRecipe, Value,
 };
 use rattler_build_types::NormalizedKey;
 use rattler_conda_types::{ChannelUrl, Subdir};
@@ -272,6 +273,10 @@ impl GenerateRecipe for RosGenerator {
         build_items.push(Item::Value(Value::new_template(c_compiler, None)));
         build_items.push(Item::Value(Value::new_template(cxx_compiler, None)));
 
+        // The host python cannot run on the build machine when
+        // cross-compiling, e.g. for `ament_python` packages.
+        build_items.push(cross_python_build_item());
+
         // Add host dependencies
         let host_dep_names = ["python", "numpy", "pip", "pkg-config", "setuptools"];
         for dep in &host_dep_names {
@@ -375,6 +380,22 @@ impl GenerateRecipe for RosGenerator {
     ) -> miette::Result<BTreeMap<NormalizedKey, Vec<Variable>>> {
         Ok(default_compiler_variants(host_platform))
     }
+}
+
+/// `cross-python` for the target platform, only when cross-compiling.
+///
+/// Its activation replaces the host prefix's python with one that runs on
+/// the build machine, so `$PYTHON` keeps working in the build scripts.
+fn cross_python_build_item() -> Item<SerializableMatchSpec> {
+    let cross_python = JinjaTemplate::new("cross-python_${{ target_platform }}".to_string())
+        .expect("valid jinja template");
+    Item::Conditional(Conditional {
+        condition: JinjaExpression::new("build_platform != target_platform".to_string())
+            .expect("valid jinja expression"),
+        then: NestedItemList::single(Item::Value(Value::new_template(cross_python, None))),
+        else_value: None,
+        condition_span: None,
+    })
 }
 
 #[tokio::main]
@@ -594,6 +615,8 @@ mod tests {
           - coreutils
           - "${{ compiler('c') }}"
           - "${{ compiler('cxx') }}"
+          - if: build_platform != target_platform
+            then: "cross-python_${{ target_platform }}"
         host:
           - ros-jazzy-ament-cmake
           - ros-jazzy-example-interfaces

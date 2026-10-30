@@ -1,9 +1,33 @@
 use indexmap::IndexMap;
-use miette::IntoDiagnostic;
+use miette::Diagnostic;
 use pixi_core::{Workspace, workspace::WorkspaceMut};
-use pixi_manifest::{FeatureName, HasWorkspaceManifest, TargetSelector};
+use pixi_manifest::{
+    ActivationEditError, FeatureName, HasWorkspaceManifest, LoadManifestsError, TargetSelector,
+    TomlError,
+};
+use thiserror::Error;
 
 use crate::Interface;
+use crate::workspace::workspace::{SaveManifestError, save};
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum EditActivationError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    LoadWorkspace(#[from] LoadManifestsError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Toml(#[from] TomlError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Edit(#[from] ActivationEditError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Save(#[from] SaveManifestError),
+}
 
 /// The activation content of a single feature/target combination in the
 /// manifest.
@@ -53,7 +77,7 @@ pub async fn add_scripts<I: Interface>(
     prepend: bool,
     target: Option<TargetSelector>,
     feature_name: FeatureName,
-) -> miette::Result<()> {
+) -> Result<(), EditActivationError> {
     let warnings = script_warnings(workspace.workspace(), &scripts, target.as_ref());
 
     let change = workspace.manifest().add_activation_scripts(
@@ -63,7 +87,7 @@ pub async fn add_scripts<I: Interface>(
         &feature_name,
     )?;
 
-    workspace.save().await.into_diagnostic()?;
+    save(workspace).await?;
 
     let location = location_suffix(target.as_ref(), &feature_name);
     for script in &change.added {
@@ -100,14 +124,14 @@ pub async fn remove_scripts<I: Interface>(
     scripts: Vec<String>,
     target: Option<TargetSelector>,
     feature_name: FeatureName,
-) -> miette::Result<()> {
+) -> Result<(), EditActivationError> {
     workspace.manifest().remove_activation_scripts(
         scripts.clone(),
         target.as_ref(),
         &feature_name,
     )?;
 
-    workspace.save().await.into_diagnostic()?;
+    save(workspace).await?;
 
     let location = location_suffix(target.as_ref(), &feature_name);
     for script in &scripts {
@@ -127,12 +151,12 @@ pub async fn set_env<I: Interface>(
     variables: Vec<(String, String)>,
     target: Option<TargetSelector>,
     feature_name: FeatureName,
-) -> miette::Result<()> {
+) -> Result<(), EditActivationError> {
     workspace
         .manifest()
         .set_activation_env(variables.clone(), target.as_ref(), &feature_name)?;
 
-    workspace.save().await.into_diagnostic()?;
+    save(workspace).await?;
 
     let location = location_suffix(target.as_ref(), &feature_name);
     for (key, value) in &variables {
@@ -153,12 +177,12 @@ pub async fn remove_env<I: Interface>(
     keys: Vec<String>,
     target: Option<TargetSelector>,
     feature_name: FeatureName,
-) -> miette::Result<()> {
+) -> Result<(), EditActivationError> {
     workspace
         .manifest()
         .remove_activation_env(keys.clone(), target.as_ref(), &feature_name)?;
 
-    workspace.save().await.into_diagnostic()?;
+    save(workspace).await?;
 
     let location = location_suffix(target.as_ref(), &feature_name);
     for key in &keys {
