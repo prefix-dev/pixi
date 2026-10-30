@@ -81,7 +81,7 @@ pub async fn init<I: Interface>(interface: &I, options: InitOptions) -> miette::
     let dir = dunce::canonicalize(&options.path).into_diagnostic()?;
     validate_init_directory(&dir, interface).await?;
 
-    let config = Config::load(&dir);
+    let config = Config::try_load(&dir)?;
     let render_ctx = build_render_context(&dir, &options, &config);
 
     let strategy = calculate_strategy(&options, &dir, interface).await?;

@@ -82,7 +82,7 @@ pub struct Args {
 
 /// CLI entry point for `pixi exec`
 pub async fn execute(args: Args) -> miette::Result<ExitCode> {
-    let config = Config::with_cli_config(&args.config);
+    let config = Config::try_with_cli_config(&args.config)?;
     let cache_dir = pixi_config::get_cache_dir().context("failed to determine cache directory")?;
 
     // `pixi exec` runs without a workspace, so the resolver only has the

@@ -617,6 +617,75 @@ def test_config_shared_layer(pixi: Path, tmp_path: Path) -> None:
     )
 
 
+def test_invalid_config_is_a_hard_error(pixi: Path, tmp_path: Path) -> None:
+    """A config file that fails to parse stops every command that loads it,
+    instead of being skipped with its settings silently dropped."""
+    env = isolated_config_env(tmp_path)
+    config = Path(env["PIXI_HOME"]) / "config.toml"
+    config.write_text("default-channels = 5\n")
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "pixi.toml").write_text(
+        '[workspace]\nname = "test"\nchannels = []\nplatforms = []\n'
+    )
+
+    def fails(command: list[Path | str], broken: Path = config) -> None:
+        verify_cli_command(
+            command,
+            env=env,
+            cwd=workspace,
+            expected_exit_code=ExitCode.FAILURE,
+            stderr_contains=[str(broken), "pixi config unset"],
+        )
+
+    new_workspace = tmp_path / "new"
+    fails([pixi, "init", new_workspace])
+    assert not (new_workspace / "pixi.toml").exists()
+    fails([pixi, "exec", "python", "--version"])
+    fails([pixi, "global", "list"])
+    fails([pixi, "workspace", "name", "get"])
+    # `--no-config` skips the broken file.
+    verify_cli_command(
+        [pixi, "workspace", "name", "--no-config", "get"],
+        env=env,
+        cwd=workspace,
+        stdout_contains="test",
+    )
+
+    # So does a broken workspace config file.
+    config.unlink()
+    local_config = workspace / ".pixi" / "config.toml"
+    local_config.parent.mkdir()
+    local_config.write_text('tls-no-verify = "maybe"\n')
+    fails([pixi, "workspace", "name", "get"], Path(".pixi", "config.toml"))
+
+
+def test_invalid_config_can_be_repaired(pixi: Path, tmp_path: Path) -> None:
+    """`pixi config` still loads a broken config file, so it can fix it."""
+    env = isolated_config_env(tmp_path)
+    config = Path(env["PIXI_HOME"]) / "config.toml"
+    config.write_text("default-channels = 5\nshell.change-ps1 = false\n")
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "pixi.toml").write_text(
+        '[workspace]\nname = "test"\nchannels = []\nplatforms = []\n'
+    )
+    local_config = workspace / ".pixi" / "config.toml"
+    local_config.parent.mkdir()
+    local_config.write_text('tls-no-verify = "maybe"\n')
+
+    verify_cli_command([pixi, "config", "list"], env=env, cwd=workspace)
+    verify_cli_command(
+        [pixi, "config", "unset", "--local", "tls-no-verify"], env=env, cwd=workspace
+    )
+    verify_cli_command(
+        [pixi, "config", "unset", "--global", "default-channels"], env=env, cwd=workspace
+    )
+    assert tomli.loads(local_config.read_text()) == {}
+    assert tomli.loads(config.read_text()) == {"shell": {"change-ps1": False}}
+    verify_cli_command([pixi, "workspace", "name", "get"], env=env, cwd=workspace)
+
+
 def test_config_list_honors_the_config_source_flags(pixi: Path, tmp_path: Path) -> None:
     """`config list` can be pointed at one file or told to skip discovery."""
     env = isolated_config_env(tmp_path)

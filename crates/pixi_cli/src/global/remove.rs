@@ -42,7 +42,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             args.packages.join(" ")
         );
     };
-    let config = Config::with_cli_config(&args.config);
+    let config = Config::try_with_cli_config(&args.config)?;
     let project_original = Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());

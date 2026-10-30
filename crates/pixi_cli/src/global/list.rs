@@ -52,7 +52,7 @@ pub enum GlobalSortBy {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let config = Config::with_cli_config(&args.config);
+    let config = Config::try_with_cli_config(&args.config)?;
     let project = Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());

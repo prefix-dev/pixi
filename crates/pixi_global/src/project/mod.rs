@@ -687,7 +687,11 @@ async fn package_from_conda_meta(
 
 impl Project {
     /// Constructs a new instance from an internal manifest representation
-    pub(crate) fn from_manifest(manifest: Manifest, env_root: EnvRoot, bin_dir: BinDir) -> Self {
+    pub(crate) fn from_manifest(
+        manifest: Manifest,
+        env_root: EnvRoot,
+        bin_dir: BinDir,
+    ) -> Result<Self, ManifestError> {
         let root = manifest
             .path
             .parent()
@@ -696,12 +700,12 @@ impl Project {
 
         // Load the global config and ensure
         // that the root_dir is relative to the manifest directory
-        let mut config = Config::load_global();
+        let mut config = Config::try_load_global()?;
         config.channel_config.root_dir = root.clone();
 
         let client = OnceCell::new();
         let repodata_gateway = OnceCell::new();
-        Self {
+        Ok(Self {
             root,
             manifest,
             config,
@@ -715,7 +719,7 @@ impl Project {
             backend_override: None,
             host: OnceCell::new(),
             detector_consent: cli_detector_consent(None),
-        }
+        })
     }
 
     /// Constructs a project from a manifest.
@@ -726,7 +730,7 @@ impl Project {
         bin_dir: BinDir,
     ) -> Result<Self, ManifestError> {
         let manifest = Manifest::from_str(manifest_path, content)?;
-        Ok(Self::from_manifest(manifest, env_root, bin_dir))
+        Self::from_manifest(manifest, env_root, bin_dir)
     }
 
     /// Discovers the project manifest file in path at
@@ -773,7 +777,7 @@ impl Project {
         env_root: EnvRoot,
         bin_dir: BinDir,
     ) -> Result<Self, MigrateInstallationError> {
-        let config = Config::load(env_root.path());
+        let config = Config::try_load(env_root.path()).map_err(ManifestError::from)?;
 
         let exposed_binaries: Vec<ExposedData> = bin_dir
             .executables()
@@ -867,7 +871,7 @@ impl Project {
         bin_dir: BinDir,
     ) -> Result<Self, ManifestError> {
         let manifest = Manifest::from_path(manifest_path)?;
-        Ok(Project::from_manifest(manifest, env_root, bin_dir))
+        Project::from_manifest(manifest, env_root, bin_dir)
     }
 
     /// Merge config with existing config project
@@ -2458,7 +2462,7 @@ mod tests {
         let bin_dir = BinDir::from_env().await.unwrap();
 
         let manifest = Manifest::from_str(&manifest_path, SIMPLE_MANIFEST).unwrap();
-        let project = Project::from_manifest(manifest, env_root, bin_dir);
+        let project = Project::from_manifest(manifest, env_root, bin_dir).unwrap();
         assert_eq!(project.root, manifest_path.parent().unwrap());
     }
 
@@ -2603,7 +2607,8 @@ mod tests {
             manifest,
             env_root.clone(),
             BinDir::new(env_root.path().parent().unwrap().to_path_buf()).unwrap(),
-        );
+        )
+        .unwrap();
 
         // Call the prune method with a list of environments to keep (env1 and env3) but
         // not env4
