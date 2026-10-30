@@ -202,6 +202,19 @@ impl TryFrom<&rattler_config::config::exclude_newer::ExcludeNewerConfig> for Exc
                 ) {
                     PixiSpec::Version(version) => BinarySpec::Version(version),
                     PixiSpec::DetailedVersion(detailed) => BinarySpec::DetailedVersion(detailed),
+                    // TODO: `rattler_config` accepts other match spec fields
+                    // next to a `url`, e.g. `{ url = "…/ruff-0.1-0.conda",
+                    // version = "==0.1" }`. They are dropped here, and pixi's
+                    // manifest rejects them, so `pixi init` and `pixi global`
+                    // write an exemption that the manifest can't parse, while
+                    // `pixi exec` solves with it. `validate_exemption_spec` of
+                    // `rattler_config` should reject a `url` with any field
+                    // but `md5` and `sha256`: a `url` names one archive, so
+                    // other fields are redundant or make the exemption match
+                    // nothing, like the `url` of a file that isn't a package
+                    // archive, which it rejects already. The configuration
+                    // would then be rejected when it loads, for every command
+                    // and tool.
                     PixiSpec::UrlBinary(url) => url.into(),
                     // `rattler_config` rejects a `url` that is not a package
                     // archive, which is what pixi reads as a source spec.
