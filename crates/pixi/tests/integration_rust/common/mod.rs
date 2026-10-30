@@ -570,6 +570,7 @@ impl PixiControl {
                 limit: 5,
                 limit_packages: 10,
                 json: false,
+                ignore_cache: false,
                 channels: ChannelsConfig::default(),
                 config: self.config_cli(),
             },

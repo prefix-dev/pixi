@@ -42,9 +42,18 @@ impl<I: Interface> DefaultContext<I> {
         channels: IndexSet<Channel>,
         platforms: Vec<Subdir>,
         fuzzy_limit: Option<usize>,
+        ignore_cache: bool,
     ) -> miette::Result<crate::workspace::search::SearchResult> {
-        crate::workspace::search::search(None, config, matchspec, channels, platforms, fuzzy_limit)
-            .await
+        crate::workspace::search::search(
+            None,
+            config,
+            matchspec,
+            channels,
+            platforms,
+            fuzzy_limit,
+            ignore_cache,
+        )
+        .await
     }
 }
 
@@ -631,6 +640,7 @@ impl<I: Interface> WorkspaceContext<I> {
         channels: IndexSet<Channel>,
         platforms: Vec<Subdir>,
         fuzzy_limit: Option<usize>,
+        ignore_cache: bool,
     ) -> miette::Result<crate::workspace::search::SearchResult> {
         crate::workspace::search::search(
             Some(&self.workspace),
@@ -639,6 +649,7 @@ impl<I: Interface> WorkspaceContext<I> {
             channels,
             platforms,
             fuzzy_limit,
+            ignore_cache,
         )
         .await
     }
