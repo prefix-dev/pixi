@@ -19,8 +19,8 @@ use rattler_conda_types::{Channel, MatchSpec, NamedChannelOrUrl, PackageName, Su
 use crate::interface::Interface;
 use crate::workspace::add::GitOptions;
 use crate::workspace::{
-    ChannelOptions, DependencyOptions, InitOptions, Package, ReinstallOptions, RemoveError,
-    RunOptions, ShellError, ShellOptions,
+    ChannelOptions, DependencyOptions, InitError, InitOptions, Package, ReinstallOptions,
+    RemoveError, RunOptions, ShellError, ShellOptions,
 };
 
 pub struct DefaultContext<I: Interface> {
@@ -89,7 +89,7 @@ impl<I: Interface> WorkspaceContext<I> {
         }
     }
 
-    pub async fn init(interface: I, options: InitOptions) -> miette::Result<Workspace> {
+    pub async fn init(interface: I, options: InitOptions) -> Result<Workspace, InitError> {
         crate::workspace::init::init(&interface, options).await
     }
 
