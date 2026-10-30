@@ -410,11 +410,14 @@ impl WorkspaceMut {
         let mut workspace = self.workspace.take().expect("workspace is not available");
         if let Some(original) = self.original.take() {
             workspace.workspace.value = original.manifest;
-            pixi_utils::atomic_write::atomic_write(
-                &workspace.workspace.provenance.path,
-                original.source,
-            )
-            .await?;
+            // Like `Drop`, only touch the file if the changes were written.
+            if self.modified {
+                pixi_utils::atomic_write::atomic_write(
+                    &workspace.workspace.provenance.path,
+                    original.source,
+                )
+                .await?;
+            }
             workspace.invalidate_environment_hosts();
         }
 
@@ -942,5 +945,27 @@ impl Drop for WorkspaceMut {
                 );
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Reverting changes that were never saved must not write the manifest.
+    #[tokio::test]
+    async fn revert_without_save_leaves_manifest_alone() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp.path().join("pixi.toml");
+        fs_err::write(
+            &path,
+            "[workspace]\nname = \"test\"\nchannels = []\nplatforms = []\n",
+        )
+        .unwrap();
+        let workspace = Workspace::from_path(&path).unwrap().modify().unwrap();
+
+        fs_err::remove_file(&path).unwrap();
+        workspace.revert().await.unwrap();
+        assert!(!path.exists());
     }
 }

@@ -2,7 +2,7 @@ use indexmap::IndexMap;
 use miette::Diagnostic;
 use pixi_core::{
     InstallFilter, UpdateLockFileOptions,
-    environment::{LockFileUsage, get_update_lock_file_and_prefix},
+    environment::{LockFileAndPrefixesError, LockFileUsage, get_update_lock_file_and_prefix},
     lock_file::{ReinstallPackages, UpdateMode},
     workspace::{PypiDeps, WorkspaceMut},
 };
@@ -12,17 +12,18 @@ use pixi_manifest::{
 use rattler_conda_types::{MatchSpec, PackageName};
 use thiserror::Error;
 
-use crate::workspace::DependencyOptions;
+use crate::workspace::{
+    DependencyOptions,
+    workspace::{SaveManifestError, save},
+};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum RemoveError {
-    #[error("dependency `{name}` was not found")]
+    #[error("dependency '{name}' was not found")]
     NotFound { name: String },
 
-    #[error(
-        "Cannot remove Python while PyPI dependencies exist. Please remove these PyPI dependencies first: {}",
-        .pypi_deps.join(", ")
-    )]
+    #[error("cannot remove 'python' while PyPI dependencies exist")]
+    #[diagnostic(help("Remove these PyPI dependencies first: {}.", .pypi_deps.join(", ")))]
     PythonHasPypiDependencies { pypi_deps: Vec<String> },
 
     #[error(transparent)]
@@ -34,12 +35,13 @@ pub enum RemoveError {
     #[diagnostic(transparent)]
     Manifest(RemoveDependencyError),
 
-    #[error("failed to save the manifest")]
-    Save(#[source] std::io::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Save(#[from] SaveManifestError),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LockFileUpdate(Box<dyn Diagnostic + Send + Sync + 'static>),
+    LockFileAndPrefixes(#[from] LockFileAndPrefixesError),
 }
 
 impl From<RemoveDependencyError> for RemoveError {
@@ -86,7 +88,7 @@ pub async fn remove_conda_deps(
         )?;
     }
     let progress = workspace.progress().cloned();
-    let workspace = workspace.save().await.map_err(RemoveError::Save)?;
+    let workspace = save(workspace).await?;
 
     // TODO: update all environments touched by this feature defined.
     // updating prefix after removing from toml
@@ -104,8 +106,7 @@ pub async fn remove_conda_deps(
             ReinstallPackages::default(),
             &InstallFilter::default(),
         )
-        .await
-        .map_err(|e| RemoveError::LockFileUpdate(e.into()))?;
+        .await?;
     }
 
     Ok(())
@@ -123,7 +124,7 @@ pub async fn remove_pypi_deps(
     }
 
     let progress = workspace.progress().cloned();
-    let workspace = workspace.save().await.map_err(RemoveError::Save)?;
+    let workspace = save(workspace).await?;
 
     // TODO: update all environments touched by this feature defined.
     // updating prefix after removing from toml
@@ -141,8 +142,7 @@ pub async fn remove_pypi_deps(
             ReinstallPackages::default(),
             &InstallFilter::default(),
         )
-        .await
-        .map_err(|e| RemoveError::LockFileUpdate(e.into()))?;
+        .await?;
     }
 
     Ok(())
@@ -213,7 +213,13 @@ requests = "*"
 
         insta::assert_snapshot!(
             format_diagnostic(&err),
-            @"  × Cannot remove Python while PyPI dependencies exist. Please remove these PyPI dependencies first: requests"
+            @"
+          × cannot remove 'python' while PyPI dependencies exist
+          help: Remove these PyPI dependencies first: requests.
+        "
+        );
+        assert!(
+            matches!(err, RemoveError::PythonHasPypiDependencies { pypi_deps } if pypi_deps == ["requests"])
         );
     }
 
@@ -242,7 +248,7 @@ ruff = "*"
 
         insta::assert_snapshot!(
             format_diagnostic(&err),
-            @"  × dependency `fizzbuzz` was not found"
+            @"  × dependency 'fizzbuzz' was not found"
         );
         assert!(matches!(err, RemoveError::NotFound { name } if name == "fizzbuzz"));
     }
