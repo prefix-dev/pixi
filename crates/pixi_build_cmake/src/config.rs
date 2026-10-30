@@ -23,6 +23,10 @@ pub struct CMakeBackendConfig {
     /// List of compilers to use (e.g., ["c", "cxx", "cuda"])
     /// If not specified, a default will be used
     pub compilers: Option<Vec<String>>,
+    /// List of build variant keys to export as `-D<KEY>=<VALUE>` arguments to CMake.
+    /// Can also be `["*"]` to export all non-system variants.
+    #[serde(default)]
+    pub variants_as_cmake_args: Option<Vec<String>>,
 }
 
 impl BackendConfig for CMakeBackendConfig {
@@ -58,6 +62,10 @@ impl BackendConfig for CMakeBackendConfig {
                 .compilers
                 .clone()
                 .or_else(|| self.compilers.clone()),
+            variants_as_cmake_args: target_config
+                .variants_as_cmake_args
+                .clone()
+                .or_else(|| self.variants_as_cmake_args.clone()),
         })
     }
 }
@@ -88,6 +96,7 @@ mod tests {
             debug_dir: Some(PathBuf::from("/base/debug")),
             extra_input_globs: vec!["*.base".to_string()],
             compilers: Some(vec!["cxx".to_string()]),
+            variants_as_cmake_args: Some(vec!["BASE_FLAG".to_string()]),
         };
 
         let mut target_env = indexmap::IndexMap::new();
@@ -100,6 +109,7 @@ mod tests {
             debug_dir: None,
             extra_input_globs: vec!["*.target".to_string()],
             compilers: Some(vec!["c".to_string(), "cuda".to_string()]),
+            variants_as_cmake_args: Some(vec!["TARGET_FLAG".to_string()]),
         };
 
         let merged = base_config
@@ -131,6 +141,12 @@ mod tests {
             merged.compilers,
             Some(vec!["c".to_string(), "cuda".to_string()])
         );
+
+        // variants_as_cmake_args should be completely overridden by target
+        assert_eq!(
+            merged.variants_as_cmake_args,
+            Some(vec!["TARGET_FLAG".to_string()])
+        );
     }
 
     #[test]
@@ -144,6 +160,7 @@ mod tests {
             debug_dir: Some(PathBuf::from("/base/debug")),
             extra_input_globs: vec!["*.base".to_string()],
             compilers: Some(vec!["cxx".to_string()]),
+            variants_as_cmake_args: Some(vec!["FLAG".to_string()]),
         };
 
         let empty_target_config = CMakeBackendConfig::default();
@@ -158,5 +175,9 @@ mod tests {
         assert_eq!(merged.debug_dir, Some(PathBuf::from("/base/debug")));
         assert_eq!(merged.extra_input_globs, vec!["*.base".to_string()]);
         assert_eq!(merged.compilers, Some(vec!["cxx".to_string()]));
+        assert_eq!(
+            merged.variants_as_cmake_args,
+            Some(vec!["FLAG".to_string()])
+        );
     }
 }
