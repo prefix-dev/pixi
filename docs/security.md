@@ -66,25 +66,37 @@ channels = [
   # get most recent versions of packages you control
   { channel = "https://prefix.dev/my-internal-channel", exclude-newer = "0d" },
 ]
-exclude-newer = "14d"
 platforms = ["linux-64", "osx-arm64", "win-64"]
 
-[dependencies]
-# CVE-XXXX-YYYY: allow the fresh fixed build immediately
-python = "3.12.*"
+[workspace.exclude-newer]
+cutoff = "14d"
 
-[exclude-newer]
-# CVE-XXXX-YYYY: allow the fresh fixed build immediately
-python = "0d"
-# CVE-XXXX-YYYY: allow the fresh fixed build immediately
-openssl = "0d"
+[workspace.exclude-newer.exemptions]
+# CVE-XXXX-YYYY: allow the reviewed fixed release immediately
+python = { version = "==3.12.12", cutoff = "2026-10-27T14:03:11Z" }
+# CVE-XXXX-YYYY: allow the reviewed fixed release immediately
+openssl = { version = "==3.5.1", cutoff = "2026-10-27T14:03:11Z" }
+
+[dependencies]
+python = "3.12.*"
 ```
 
 In that example:
 
 - all packages are delayed by 14 days by default;
 - packages from the internal channel are not delayed;
-- `openssl` and `python` are allowed through immediately, even if the fixed build is fresh.
+- the fixed releases of `openssl` and `python` that were published when they were reviewed are allowed through immediately, even if they are fresh, while every other release of those packages keeps the delay.
+  A build of the same version that is published later, e.g. by a compromised account, also keeps the delay.
+
+To let a reviewed fix through, exempt it and update the package:
+
+```shell
+pixi workspace exclude-newer exempt openssl==3.5.1
+pixi update openssl
+```
+
+The exemption gets the current time as its cutoff.
+Once that cutoff is older than 14 days, the exemption has no effect anymore and `pixi workspace exclude-newer prune` removes it.
 
 !!! tip "CEP for `upload_timestamp` in repodata"
     There is also an in-progress proposal, [conda/ceps#154](https://github.com/conda/ceps/pull/154), to include upload timestamps in `repodata.json`. If adopted, that would let tools consume channel-provided upload times directly and harden this workflow against spoofed timestamp entries from conda-forge itself.
@@ -92,9 +104,9 @@ In that example:
 
 ## 3. Respond To Advisories With Constraints And Overrides
 
-When an advisory lands, update to the fixed version first. If the fix is fresh, that can also mean temporarily relaxing `exclude-newer` so you can adopt the security release immediately. If another dependency prevents the solver from reaching the non-vulnerable version, Pixi supports [`dependency-overrides`](advanced/override.md) for PyPI packages.
+When an advisory lands, update to the fixed version first. If the fix is fresh, [exempt](reference/pixi_manifest.md#exemptions) the fixed release from `exclude-newer` after reviewing it, as shown above, so you can adopt it immediately without relaxing the cutoff for anything else. If another dependency prevents the solver from reaching the non-vulnerable version, Pixi supports [`dependency-overrides`](advanced/override.md) for PyPI packages.
 
-This is how you respond when a vulnerable version is already known, especially if transitive dependency bounds would otherwise keep you stuck on an affected release. Overrides let you force dependency requirements during resolution so the solver can select a safe version even if upstream packages have not caught up yet. They are complementary to `exclude-newer`: `exclude-newer` reduces exposure to newly uploaded artifacts, while constraints, the `[exclude-newer]` tables, and overrides help you respond once a vulnerable version is already known.
+This is how you respond when a vulnerable version is already known, especially if transitive dependency bounds would otherwise keep you stuck on an affected release. Overrides let you force dependency requirements during resolution so the solver can select a safe version even if upstream packages have not caught up yet. They are complementary to `exclude-newer`: `exclude-newer` reduces exposure to newly uploaded artifacts, while constraints, `exclude-newer` exemptions, and overrides help you respond once a vulnerable version is already known.
 
 !!! note "PyPI-only for now"
     We are planning to support a similar feature like this for Conda packages as well. For more information, see [pixi#4891](https://github.com/prefix-dev/pixi/issues/4891).

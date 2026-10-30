@@ -12,7 +12,7 @@ use pixi_build_backend::{
     tools::BackendIdentifier,
 };
 use rattler_build_jinja::Variable;
-use rattler_build_recipe::stage0::{Script, Value};
+use rattler_build_recipe::stage0::{Script, SingleOutputRecipe, Value};
 use rattler_build_types::NormalizedKey;
 use rattler_conda_types::{ChannelUrl, Subdir};
 use std::collections::HashSet;
@@ -25,6 +25,7 @@ pub struct MojoGenerator {}
 #[async_trait::async_trait]
 impl GenerateRecipe for MojoGenerator {
     type Config = MojoBackendConfig;
+    type Recipe = SingleOutputRecipe;
 
     async fn generate_recipe(
         &self,

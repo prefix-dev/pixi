@@ -52,7 +52,7 @@ pub enum GlobalSortBy {
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let config = Config::with_cli_config(&args.config);
+    let config = Config::try_with_cli_config(&args.config)?;
     let project = Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
@@ -62,7 +62,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .environment
             .map(|e| EnvironmentName::from_str(e.as_str()))
             .transpose()?;
-        return list_global_environments_json(&project, env_name.as_ref(), args.regex).await;
+        return Ok(list_global_environments_json(&project, env_name.as_ref(), args.regex).await?);
     }
 
     if let Some(environment) = args.environment {

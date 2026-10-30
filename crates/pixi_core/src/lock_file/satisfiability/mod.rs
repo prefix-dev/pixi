@@ -21,8 +21,8 @@ pub use environment::{PypiNoBuildCheck, verify_environment_satisfiability};
 #[allow(unused_imports)]
 pub use errors::{
     BuildOrHostEnv, DuplicateEntry, EnvironmentUnsat, ExcludeNewerMismatch, IndexesMismatch,
-    LocalMetadataMismatch, PlatformUnsat, SolveGroupUnsat, SourceExcludeNewerMismatch,
-    SourceRunDepKind, SourceTreeHashMismatch,
+    LocalMetadataMismatch, PlatformUnsat, SolveGroupUnsat, SourceRunDepKind,
+    SourceTreeHashMismatch,
 };
 pub(crate) use platform::resolve_lock_platform;
 #[allow(unused_imports)]

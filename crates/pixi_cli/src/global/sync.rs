@@ -8,12 +8,12 @@ use pixi_global::report::EnvStatus;
 #[derive(Parser, Debug)]
 pub struct Args {
     #[clap(flatten)]
-    config: ConfigCli,
+    pub(crate) config: ConfigCli,
 }
 
 /// Sync global manifest with installed environments
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let config = Config::with_cli_config(&args.config);
+    let config = Config::try_with_cli_config(&args.config)?;
     let project = pixi_global::Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
@@ -34,7 +34,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     // Remove broken files
     if let Err(err) = project.remove_broken_files().await {
-        tracing::warn!("Couldn't remove broken files\n{err:?}")
+        tracing::warn!(
+            "Couldn't remove broken files\n{:?}",
+            miette::Report::new(err)
+        )
     }
 
     // Phase 1: install all environments in parallel, sharing one dispatcher.
@@ -93,7 +96,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     }
                     Err(err) => {
                         report_failed_environment(env_name);
-                        errors.push((env_name.clone(), err));
+                        errors.push((env_name.clone(), miette::Report::new(err)));
                     }
                 }
             }

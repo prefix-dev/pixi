@@ -31,6 +31,9 @@ pixi workspace export conda-explicit-spec [OPTIONS] <OUTPUT_DIR>
 - <a id="arg---ignore-source-errors" href="#arg---ignore-source-errors">`--ignore-source-errors`</a>
 :  Source dependencies are not supported in the conda explicit spec file
 <br>**default**: `false`
+- <a id="arg---sha256" href="#arg---sha256">`--sha256`</a>
+:  Emit sha256 hashes instead of md5. Installing the result requires conda >=24.9 or mamba >=2.1
+<br>**default**: `false`
 
 ## Config Options
 - <a id="arg---no-config" href="#arg---no-config">`--no-config`</a>
@@ -63,12 +66,12 @@ pixi workspace export conda-explicit-spec [OPTIONS] <OUTPUT_DIR>
 - <a id="arg---no-ref-links" href="#arg---no-ref-links">`--no-ref-links`</a>
 :  Disallow ref links (copy-on-write) during package installation
 <br>**env**: `PIXI_NO_REF_LINKS`
-- <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
-:  Do not verify the TLS certificate of the server
 - <a id="arg---offline" href="#arg---offline">`--offline=<OFFLINE>`</a>
 :  Run without network access, using only cached data. Commands fail if data is missing from the cache. Pass `--offline=false` to override an `offline` setting from the configuration
 <br>**env**: `PIXI_OFFLINE`
 <br>**options**: `y`, `yes`, `t`, `true`, `on`, `1`, `n`, `no`, `f`, `false`, `off`, `0`
+- <a id="arg---tls-no-verify" href="#arg---tls-no-verify">`--tls-no-verify`</a>
+:  Do not verify the TLS certificate of the server
 - <a id="arg---tls-root-certs" href="#arg---tls-root-certs">`--tls-root-certs <TLS_ROOT_CERTS>`</a>
 :  Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store)
 <br>**env**: `PIXI_TLS_ROOT_CERTS`

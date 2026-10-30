@@ -26,7 +26,9 @@ pub use build_backend::{BackendSpec, TomlPackageBuild};
 pub use channel::TomlPrioritizedChannel;
 pub use document::TomlDocument;
 pub use environment::{TomlEnvironment, TomlEnvironmentList};
-pub use exclude_newer::{TomlExcludeNewer, TomlPypiExcludeNewer};
+pub use exclude_newer::{
+    InvalidExemptionSpec, TomlExcludeNewer, TomlPypiExcludeNewer, validate_exemption_spec,
+};
 pub use feature::TomlFeature;
 use itertools::Itertools;
 pub use manifest::ExternalWorkspaceProperties;

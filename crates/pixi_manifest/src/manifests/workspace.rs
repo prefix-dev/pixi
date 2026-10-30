@@ -12,16 +12,17 @@ use miette::SourceCode;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{
-    NamedChannelOrUrl, ParseStrictness::Strict, ParseVersionError, ParseVersionSpecError, Subdir,
-    Version, VersionSpec,
+    NamedChannelOrUrl, PackageName, ParseStrictness::Strict, ParseVersionError,
+    ParseVersionSpecError, Subdir, Version, VersionSpec,
 };
 use toml_edit::Value;
 
 use crate::{
-    Activation, AddDependencyOutcome, DependencyOverwriteBehavior, GetFeatureError,
-    KnownPreviewFlag, PixiPlatform, PixiPlatformError, PixiPlatformName, PlatformEdit,
-    PlatformMove, Preview, PrioritizedChannel, PypiDependencyLocation, SpecType, TargetSelector,
-    Task, TaskName, TomlError, WorkspaceTarget, consts,
+    Activation, AddDependencyOutcome, DependencyOverwriteBehavior, ExcludeNewerEditError,
+    ExcludeNewerExemption, GetFeatureError, KnownPreviewFlag, PixiPlatform, PixiPlatformError,
+    PixiPlatformName, PlatformEdit, PlatformMove, Preview, PrioritizedChannel,
+    PypiDependencyLocation, SpecType, TargetSelector, Task, TaskName, TomlError, WorkspaceTarget,
+    consts,
     environment::{Environment, EnvironmentName, NewEnvironment},
     environments::Environments,
     error::{DependencyError, GenericError, UnknownFeature},
@@ -1949,6 +1950,82 @@ impl WorkspaceManifestMut<'_> {
         };
         Ok(self.document.set_requires_pixi(version)?)
     }
+
+    /// Sets or removes the `exclude-newer` cutoff of the workspace.
+    ///
+    /// This function modifies both the workspace and the TOML document. Use
+    /// `ManifestProvenance::save` to persist the changes to disk.
+    pub fn set_exclude_newer_cutoff(
+        &mut self,
+        cutoff: Option<&str>,
+    ) -> Result<(), ExcludeNewerEditError> {
+        self.workspace
+            .workspace
+            .exclude_newer
+            .set_cutoff(self.document.workspace_table_mut()?, cutoff)
+    }
+
+    /// Exempts the releases of `name` that match the spec of `exemption`
+    /// from the `exclude-newer` cutoff, replacing an existing exemption of the
+    /// package.
+    pub fn add_exclude_newer_exemption(
+        &mut self,
+        name: PackageName,
+        exemption: ExcludeNewerExemption,
+    ) -> Result<(), ExcludeNewerEditError> {
+        self.workspace.workspace.exclude_newer.add_exemption(
+            self.document.workspace_table_mut()?,
+            name,
+            exemption,
+        )
+    }
+
+    /// Removes the `exclude-newer` exemption of `name`. Returns false if the
+    /// package was not exempt.
+    pub fn remove_exclude_newer_exemption(
+        &mut self,
+        name: &PackageName,
+    ) -> Result<bool, ExcludeNewerEditError> {
+        self.workspace
+            .workspace
+            .exclude_newer
+            .remove_exemption(self.document.workspace_table_mut()?, name)
+    }
+
+    /// Sets or removes the `pypi-exclude-newer` cutoff of the workspace.
+    pub fn set_pypi_exclude_newer_cutoff(
+        &mut self,
+        cutoff: Option<&str>,
+    ) -> Result<(), ExcludeNewerEditError> {
+        self.workspace
+            .workspace
+            .pypi_exclude_newer
+            .set_cutoff(self.document.workspace_table_mut()?, cutoff)
+    }
+
+    /// Exempts every release of the PyPI package `name` from the
+    /// `pypi-exclude-newer` cutoff.
+    pub fn add_pypi_exclude_newer_exemption(
+        &mut self,
+        name: PypiPackageName,
+    ) -> Result<(), ExcludeNewerEditError> {
+        self.workspace
+            .workspace
+            .pypi_exclude_newer
+            .add_exemption(self.document.workspace_table_mut()?, name)
+    }
+
+    /// Removes the `pypi-exclude-newer` exemption of `name`. Returns false if
+    /// the package was not exempt.
+    pub fn remove_pypi_exclude_newer_exemption(
+        &mut self,
+        name: &PypiPackageName,
+    ) -> Result<bool, ExcludeNewerEditError> {
+        self.workspace
+            .workspace
+            .pypi_exclude_newer
+            .remove_exemption(self.document.workspace_table_mut()?, name)
+    }
 }
 
 /// The channel a `channels` array element refers to: either a bare string or
@@ -1985,7 +2062,7 @@ fn duplicate_definition_error(
     } else {
         let vps = customised
             .iter()
-            .map(ToString::to_string)
+            .map(crate::platform::format_virtual_package)
             .collect::<Vec<_>>()
             .join(", ");
         format!("subdir '{}' with virtual packages {vps}", existing.subdir())
@@ -2338,6 +2415,7 @@ mod tests {
         MatchSpec, NamedChannelOrUrl, PackageName, ParseStrictness,
         ParseStrictness::{Lenient, Strict},
         Subdir, Version, VersionSpec,
+        package::BuildString,
     };
     use rstest::rstest;
     use toml_edit::DocumentMut;
@@ -3815,7 +3893,7 @@ platforms = ["linux-64", "osx-64"]
             rattler_conda_types::GenericVirtualPackage {
                 name: PackageName::try_from(name).unwrap(),
                 version: Version::from_str(version).unwrap(),
-                build_string: build.to_string(),
+                build_string: BuildString::new_unchecked(build),
             }
         }
         // `"0"` build strings mirror what rattler's detection emits for
@@ -3861,7 +3939,7 @@ platforms = ["linux-64", "osx-64"]
             let cuda = rattler_conda_types::GenericVirtualPackage {
                 name: PackageName::try_from("__cuda").unwrap(),
                 version: Version::from_str("12").unwrap(),
-                build_string: String::new(),
+                build_string: BuildString::new_unchecked("0"),
             };
             PixiPlatform::new_with_defaults(
                 PixiPlatformName::try_from(name).unwrap(),
@@ -3894,6 +3972,11 @@ platforms = ["linux-64", "osx-64"]
         assert!(
             help.contains("reuse the existing platform 'gpu-a'"),
             "{help}"
+        );
+        let message = err.to_string();
+        assert!(
+            message.contains("with virtual packages __cuda=12)"),
+            "{message}"
         );
 
         // Re-adding the identical platform (same name + definition) is a no-op.
@@ -6431,6 +6514,138 @@ exemptions = { torch = "*" }
     }
 
     #[test]
+    fn test_deprecated_exclude_newer_tables_warn() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "7d"
+
+[exclude-newer]
+polars = "0d"
+openssl = "2025-01-01"
+
+[pypi-exclude-newer]
+boltons = "0d"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_tables_without_replacement_warn() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "7d"
+
+[exclude-newer]
+openssl = "30d"
+
+[pypi-exclude-newer]
+boltons = "2025-01-01"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_table_with_date_cutoff_warns() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "2025-01-01"
+
+[exclude-newer]
+polars = "0d"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_tables_with_dotted_names_warn() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "7d"
+
+[exclude-newer]
+"ruamel.yaml" = "0d"
+
+[pypi-exclude-newer]
+"zope.interface" = "0d"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_tables_keep_existing_exemptions() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = { cutoff = "7d", exemptions = { zlib = "1.3.1", polars = "1.0" } }
+pypi-exclude-newer = { exemptions = { requests = "*" } }
+
+[exclude-newer]
+polars = "0d"
+openssl = "0d"
+
+[pypi-exclude-newer]
+boltons = "0d"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_tables_without_any_cutoff_warn() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+
+[exclude-newer]
+polars = "0d"
+openssl = "30d"
+
+[pypi-exclude-newer]
+boltons = "0d"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_table_without_cutoff_warns() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = [{ channel = "conda-forge", exclude-newer = "7d" }]
+platforms = []
+
+[exclude-newer]
+polars = "0d"
+
+[pypi-exclude-newer]
+boltons = "0d"
+"#
+        ));
+    }
+
+    #[test]
     fn test_exclude_newer_config_applies_exemptions() {
         let contents = r#"
 [workspace]
@@ -6450,7 +6665,7 @@ exclude-newer = { cutoff = "2015-12-02T02:07:43Z", exemptions = { polars = "1.43
             resolved
                 .exemptions()
                 .iter()
-                .map(ToString::to_string)
+                .map(|exemption| exemption.spec.to_string())
                 .sorted()
                 .collect::<Vec<_>>(),
             ["numpy *", "polars ==1.43.1"]
@@ -6613,7 +6828,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
             vec![rattler_conda_types::GenericVirtualPackage {
                 name: rattler_conda_types::PackageName::try_from("__cuda").unwrap(),
                 version: Version::from_str("12.4").unwrap(),
-                build_string: String::new(),
+                build_string: BuildString::new_unchecked("0"),
             }],
         )
         .expect("rich platform with name != subdir");
@@ -6726,7 +6941,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
         rattler_conda_types::GenericVirtualPackage {
             name: rattler_conda_types::PackageName::try_from(name).unwrap(),
             version: Version::from_str(version).unwrap(),
-            build_string: String::new(),
+            build_string: BuildString::new_unchecked("0"),
         }
     }
 
@@ -6886,7 +7101,7 @@ platforms = [
                         rattler_conda_types::GenericVirtualPackage {
                             name: rattler_conda_types::PackageName::try_from("__archspec").unwrap(),
                             version: Version::major(0),
-                            build_string: "x86_64_v3".to_string(),
+                            build_string: BuildString::new_unchecked("x86_64_v3"),
                         },
                     ],
                     ..Default::default()

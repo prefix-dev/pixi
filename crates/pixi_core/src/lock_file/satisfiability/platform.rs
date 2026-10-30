@@ -105,9 +105,15 @@ pub fn resolve_lock_platform_for<'lock>(
             records
         }
     };
-    let declared: Vec<String> = records.iter().map(|gvp| gvp.to_string()).collect();
-    let locked: &[String] = candidate.virtual_packages();
-    let matches = locked.is_empty() || declared.iter().all(|d| locked.iter().any(|l| l == d));
+    // Compare parsed records: `__unix=0` and `__unix=0=0` both spell the
+    // default build.
+    let locked: Vec<_> = candidate
+        .virtual_packages()
+        .iter()
+        .filter_map(|raw| pixi_manifest::platform::parse_locked_virtual_package(raw))
+        .collect();
+    let matches =
+        candidate.virtual_packages().is_empty() || records.iter().all(|d| locked.contains(d));
     matches.then_some(candidate)
 }
 
@@ -1546,7 +1552,7 @@ impl MatchesMatchspec for GenericVirtualPackage {
         }
 
         if let Some(build) = &spec.build
-            && !build.matches(&self.build_string)
+            && !build.matches(self.build_string.as_str())
         {
             return false;
         }
@@ -1683,6 +1689,28 @@ mod tests {
             resolve_lock_platform_for(&lock, &platform).is_none(),
             "a row whose recorded VPs miss the declared requirement must not resolve",
         );
+    }
+
+    /// A subdir row that spells the default build explicitly (`__unix=0=0`)
+    /// or omits it (`__osx=12.0`) records the same virtual packages, so both
+    /// resolve for the platform.
+    #[test]
+    fn resolves_subdir_row_regardless_of_default_build_spelling() {
+        use pixi_manifest::platform::VirtualPackageRecords;
+
+        let platform = migrated_osx_arm64();
+        let (VirtualPackageRecords::Manifest(records) | VirtualPackageRecords::Detected(records)) =
+            platform.records();
+        let explicit = records.iter().map(ToString::to_string).collect();
+        let omitted = records
+            .iter()
+            .map(pixi_manifest::platform::format_virtual_package)
+            .collect();
+
+        for vps in [explicit, omitted] {
+            let lock = lockfile_with("osx-arm64", Subdir::OsxArm64, vps);
+            assert!(resolve_lock_platform_for(&lock, &platform).is_some());
+        }
     }
 
     /// Pre-v7 lock files don't record indexes; the set is empty.

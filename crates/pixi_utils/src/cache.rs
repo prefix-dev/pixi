@@ -1,6 +1,7 @@
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::hash::{Hash, Hasher};
 
 use rattler_conda_types::{MatchSpec, Subdir};
+use xxhash_rust::xxh3::Xxh3;
 
 /// Hash identifying a cached `pixi exec` environment by its specs, channels
 /// and platform. The executed command is intentionally not part of the hash.
@@ -37,7 +38,7 @@ impl EnvironmentHash {
     /// Directory name for the cached environment: `{prefix}-{hash}` when a
     /// prefix is given, otherwise just `{hash}`.
     pub fn name(&self, prefix: Option<&str>) -> String {
-        let mut hasher = DefaultHasher::new();
+        let mut hasher = Xxh3::new();
         self.hash(&mut hasher);
         let hash = hasher.finish();
         match prefix {
@@ -71,6 +72,18 @@ mod tests {
             strip(h.name(Some("sh"))),
             strip(h.name(Some("voms-proxy-init"))),
         );
+    }
+
+    // The name is a directory on disk, so it must not change between builds.
+    #[test]
+    fn name_is_stable() {
+        let h = EnvironmentHash::new(
+            vec![spec("python")],
+            vec!["conda-forge".into()],
+            Subdir::Linux64,
+            false,
+        );
+        assert_eq!(h.name(Some("python")), "python-5a7a16265bfee075");
     }
 
     #[test]
@@ -137,5 +150,18 @@ mod tests {
             false,
         );
         assert_ne!(a.name(None), b.name(None));
+    }
+
+    // Regression test for https://github.com/prefix-dev/pixi/issues/7165.
+    #[test]
+    fn name_changes_when_zero_component_moves() {
+        for (a, b) in [
+            ("maturin==1.0.1", "maturin==1.1.0"),
+            ("maturin==13.0.1", "maturin==13.1.0"),
+        ] {
+            let ha = EnvironmentHash::new(vec![spec(a)], vec![], Subdir::Linux64, false);
+            let hb = EnvironmentHash::new(vec![spec(b)], vec![], Subdir::Linux64, false);
+            assert_ne!(ha.name(None), hb.name(None), "{a} vs {b}");
+        }
     }
 }

@@ -19,7 +19,7 @@ use pixi_manifest::{
     },
 };
 use rattler_conda_types::{
-    GenericVirtualPackage, PackageName, Subdir, Version,
+    GenericVirtualPackage, PackageName, Subdir, Version, package::BuildString,
     virtual_package_detector::VirtualPackageName,
 };
 
@@ -143,7 +143,7 @@ impl VirtualPackageArgs {
                 GenericVirtualPackage {
                     name: virtual_package_name("__amdgpu"),
                     version: zero_version(),
-                    build_string: String::new(),
+                    build_string: BuildString::new_unchecked("0"),
                 },
             )?;
         }
@@ -156,7 +156,7 @@ impl VirtualPackageArgs {
                 GenericVirtualPackage {
                     name: virtual_package_name("__amdgpu_arch"),
                     version,
-                    build_string: String::new(),
+                    build_string: BuildString::new_unchecked("0"),
                 },
             )?;
         }
@@ -164,7 +164,7 @@ impl VirtualPackageArgs {
             if value.is_empty() {
                 miette::bail!("--archspec requires a non-empty microarchitecture string");
             }
-            pixi_manifest::platform::validate_archspec_name(&value)
+            let build_string = pixi_manifest::platform::parse_archspec_build_string(&value)
                 .map_err(|message| miette::miette!("{message}"))?;
             push_unique(
                 &mut specs,
@@ -172,7 +172,7 @@ impl VirtualPackageArgs {
                 GenericVirtualPackage {
                     name: virtual_package_name("__archspec"),
                     version: zero_version(),
-                    build_string: value,
+                    build_string,
                 },
             )?;
         }
@@ -1414,7 +1414,10 @@ mod tests {
             ..Default::default()
         };
         let specs = args.into_specs(Subdir::Linux64, &[]).unwrap();
-        let rendered: Vec<String> = specs.iter().map(ToString::to_string).collect();
+        let rendered: Vec<String> = specs
+            .iter()
+            .map(pixi_manifest::platform::format_virtual_package)
+            .collect();
         assert_eq!(rendered, ["__cuda=12.0=h1", "__glibc=2.28"]);
 
         let args = VirtualPackageArgs {
@@ -1430,9 +1433,14 @@ mod tests {
     }
 
     #[test]
-    fn parse_raw_virtual_package_keeps_trailing_segments_in_build_string() {
-        let package = parse_raw_virtual_package("__foo=1=special=build").unwrap();
-        assert_eq!(package.build_string, "special=build");
+    fn parse_raw_virtual_package_rejects_invalid_build_strings() {
+        for spec in ["__foo=1=special=build", "__foo=1=a-b", "__foo=1="] {
+            let error = parse_raw_virtual_package(spec).unwrap_err();
+            assert!(
+                error.to_string().contains("build string"),
+                "{spec}: {error}"
+            );
+        }
     }
 
     #[test]
@@ -1440,7 +1448,7 @@ mod tests {
         let package = parse_raw_virtual_package("__site_service").unwrap();
         assert_eq!(package.name.as_normalized(), "__site_service");
         assert_eq!(package.version.to_string(), "0");
-        assert!(package.build_string.is_empty());
+        assert_eq!(package.build_string, "0");
     }
 
     #[test]

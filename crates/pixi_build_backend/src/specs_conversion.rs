@@ -125,6 +125,12 @@ fn jinja_string(value: &str) -> String {
     format!("\"{escaped}\"")
 }
 
+/// `${{ pin_subpackage(name, exact=True) }}`, pinning another output of the
+/// same recipe to the exact build.
+pub fn pin_subpackage_exact(name: &str) -> miette::Result<Item<SerializableMatchSpec>> {
+    pin_template_item("pin_subpackage", name, None, None, true, None)
+}
+
 /// Render a wire pin spec as the `${{ pin_compatible(...) }}` /
 /// `${{ pin_subpackage(...) }}` jinja call a hand-written recipe would use,
 /// so rattler-build's own evaluation applies the pin.

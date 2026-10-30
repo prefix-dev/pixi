@@ -12,7 +12,7 @@ use pixi_consts::consts;
 use pixi_git::credentials::store_credentials_from_url;
 pub use pixi_install_pypi::{ContinuePyPIPrefixUpdate, on_python_interpreter_change};
 use pixi_manifest::{
-    FeaturesExt, PixiPlatform, PixiPlatformName,
+    EnvironmentName, FeaturesExt, PixiPlatform, PixiPlatformName,
     platform::{VirtualPackageRecords, candidate_subdirs},
 };
 use pixi_progress::await_in_progress;
@@ -42,8 +42,8 @@ use crate::workspace;
 use crate::{
     Workspace,
     lock_file::{
-        LockFileDerivedData, ReinstallPackages, UpdateLockFileOptions, UpdateMode,
-        resolve_lock_platform_for,
+        LockFileDerivedData, ReinstallPackages, UpdateLockFileError, UpdateLockFileOptions,
+        UpdateMode, UpdatePrefixError, resolve_lock_platform_for,
     },
     workspace::{Environment, HasWorkspaceRef, grouped_environment::GroupedEnvironment},
 };
@@ -417,7 +417,12 @@ impl From<&PixiPlatform> for PlatformData {
 
 impl Display for PlatformData {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write_platform(f, self.subdir, &self.virtual_packages)
+        let entries: Vec<String> = self
+            .virtual_packages
+            .iter()
+            .map(pixi_manifest::platform::format_virtual_package)
+            .collect();
+        write_platform(f, self.subdir, &entries)
     }
 }
 
@@ -549,8 +554,8 @@ fn legacy_requirement(package: &GenericVirtualPackage) -> MatchSpec {
     MatchSpec {
         name: PackageNameMatcher::Exact(package.name.clone()),
         version,
-        build: (!package.build_string.is_empty())
-            .then(|| StringMatcher::Exact(package.build_string.clone())),
+        build: (!pixi_manifest::platform::is_default_build_string(package.build_string.as_str()))
+            .then(|| StringMatcher::Exact(package.build_string.to_string())),
         ..MatchSpec::default()
     }
 }
@@ -882,7 +887,7 @@ pub async fn get_update_lock_file_and_prefix<'env>(
     update_lock_file_options: UpdateLockFileOptions,
     reinstall_packages: ReinstallPackages,
     filter: &InstallFilter,
-) -> miette::Result<(LockFileDerivedData<'env>, Prefix)> {
+) -> Result<(LockFileDerivedData<'env>, Prefix), LockFileAndPrefixesError> {
     let (lock_file, prefixes) = get_lock_file_and_prefixes(
         std::slice::from_ref(environment),
         None,
@@ -900,6 +905,36 @@ pub async fn get_update_lock_file_and_prefix<'env>(
             .next()
             .expect("must be at least one prefix"),
     ))
+}
+
+/// An error that can occur while updating the lock file and the prefixes of
+/// a set of environments.
+#[derive(Debug, Error, Diagnostic)]
+pub enum LockFileAndPrefixesError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    HostProbe(#[from] crate::host::HostProbeError),
+
+    #[error("no environments provided to install")]
+    NoEnvironments,
+
+    #[error("platform '{platform}' is not part of environment '{environment}'")]
+    PlatformNotInEnvironment {
+        platform: PixiPlatformName,
+        environment: EnvironmentName,
+    },
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    SanityCheck(#[from] SanityCheckError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    UpdateLockFile(#[from] UpdateLockFileError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    UpdatePrefix(#[from] UpdatePrefixError),
 }
 
 /// Chooses how installation obtains lock data.
@@ -926,9 +961,9 @@ pub async fn get_lock_file_and_prefixes<'env>(
     lock_file_source: LockFileSource,
     reinstall_packages: ReinstallPackages,
     filter: &InstallFilter,
-) -> miette::Result<(LockFileDerivedData<'env>, Vec<Prefix>)> {
+) -> Result<(LockFileDerivedData<'env>, Vec<Prefix>), LockFileAndPrefixesError> {
     if environments.is_empty() {
-        return Err(miette::miette!("No environments provided to install."));
+        return Err(LockFileAndPrefixesError::NoEnvironments);
     }
 
     let workspace = environments[0].workspace();
@@ -948,11 +983,10 @@ pub async fn get_lock_file_and_prefixes<'env>(
                 .is_none()
             && let Some(name) = target_platform
         {
-            return Err(miette::miette!(
-                "platform '{}' is not part of environment '{}'",
-                name,
-                env.name(),
-            ));
+            return Err(LockFileAndPrefixesError::PlatformNotInEnvironment {
+                platform: name.clone(),
+                environment: env.name().clone(),
+            });
         }
         if !no_install {
             env.emit_emulation_warning();
@@ -1036,7 +1070,7 @@ pub type PerGroupAndPlatform<'p, T> = PerGroup<'p, HashMap<PixiPlatformName, T>>
 mod tests {
     use std::str::FromStr;
 
-    use rattler_conda_types::{PackageName, Version};
+    use rattler_conda_types::{PackageName, Version, package::BuildString};
 
     use super::*;
 
@@ -1104,7 +1138,7 @@ mod tests {
         let linux = GenericVirtualPackage {
             name: PackageName::from_str("__linux").unwrap(),
             version: Version::from_str(version).unwrap(),
-            build_string: String::new(),
+            build_string: BuildString::new_unchecked("0"),
         };
         PixiPlatform::new(
             PixiPlatformName::try_from("linux-box").unwrap(),
@@ -1146,7 +1180,7 @@ mod tests {
         let gvp = |name: &str, version: &str| GenericVirtualPackage {
             name: PackageName::from_str(name).unwrap(),
             version: Version::from_str(version).unwrap(),
-            build_string: String::new(),
+            build_string: BuildString::new_unchecked("0"),
         };
         let make = |packages: Vec<GenericVirtualPackage>| {
             PixiPlatform::new(
@@ -1173,7 +1207,7 @@ mod tests {
         let cuda = GenericVirtualPackage {
             name: PackageName::from_str("__cuda").unwrap(),
             version: Version::from_str("12").unwrap(),
-            build_string: String::new(),
+            build_string: BuildString::new_unchecked("0"),
         };
         let platform = PixiPlatform::new(
             PixiPlatformName::try_from("gpu-box").unwrap(),
@@ -1195,23 +1229,59 @@ mod tests {
         assert!(restored.virtual_packages.contains(&cuda));
     }
 
+    /// Markers written before pixi adopted CEP26 omit the default build. They
+    /// must still read back as the records the manifest declares, otherwise
+    /// the installed platform is no longer recognised after an upgrade.
+    #[test]
+    fn platform_data_reads_markers_without_default_builds() {
+        let restored: PlatformData =
+            serde_json::from_str(r#"{"subdir":"linux-64","virtual_packages":["__cuda=12"]}"#)
+                .unwrap();
+        let declared = pixi_manifest::platform::parse_versioned_virtual_package(
+            PackageName::from_str("__cuda").unwrap(),
+            "12",
+        )
+        .unwrap();
+        assert_eq!(restored.virtual_packages(), [declared].as_slice());
+    }
+
+    #[test]
+    fn platform_data_display_omits_default_builds() {
+        let data = PlatformData::new(
+            Subdir::Linux64,
+            vec![
+                GenericVirtualPackage {
+                    name: "__cuda".parse().unwrap(),
+                    version: Version::from_str("12").unwrap(),
+                    build_string: BuildString::new_unchecked("0"),
+                },
+                GenericVirtualPackage {
+                    name: "__archspec".parse().unwrap(),
+                    version: Version::major(0),
+                    build_string: BuildString::new_unchecked("zen2"),
+                },
+            ],
+        );
+        assert_eq!(data.to_string(), "linux-64 [__cuda=12, __archspec=0=zen2]");
+    }
+
     #[test]
     fn platform_data_preserves_source_records() {
         let records = vec![
             GenericVirtualPackage {
                 name: "__archspec".parse().unwrap(),
                 version: Version::major(1),
-                build_string: "zen2".to_string(),
+                build_string: BuildString::new_unchecked("zen2"),
             },
             GenericVirtualPackage {
                 name: "__unix".parse().unwrap(),
                 version: Version::major(0),
-                build_string: "0".to_string(),
+                build_string: BuildString::new_unchecked("0"),
             },
             GenericVirtualPackage {
                 name: "__vendor".parse().unwrap(),
                 version: Version::major(7),
-                build_string: String::new(),
+                build_string: BuildString::new_unchecked("0"),
             },
         ];
         let declared = PixiPlatform::new(

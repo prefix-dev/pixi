@@ -50,7 +50,7 @@ mod discovery;
 /// dependency of a published package must itself opt into publishing; the
 /// publish fails otherwise. When no package opts in, the package at the
 /// current directory is published instead, as if `--path .` had been
-/// passed. Use `--path` to build and publish a single package.
+/// passed. Use `--path` to build and publish specific packages.
 ///
 /// Supported destinations for `--target-channel` (alias `--to`):
 ///   - prefix.dev: `https://prefix.dev/<channel-name>` or
@@ -110,15 +110,17 @@ pub struct Args {
 
     /// The path to a directory containing a package manifest, or to a specific manifest file.
     ///
-    /// When given, only that package is built and published - whether or not
-    /// it sets `publish = true`. The package must be self-contained:
-    /// publishing it alone fails if any of its run dependencies is a source
-    /// dependency. Build and host source dependencies are only consumed
+    /// When given, only these packages are built and published - whether or
+    /// not they set `publish = true`. Accepts multiple paths, either repeated
+    /// (`--path a --path b`) or space-separated (`--path a b`). The given
+    /// packages must be self-contained together: publishing fails if any of
+    /// their run dependencies is a source dependency that is not one of the
+    /// given packages. Build and host source dependencies are only consumed
     /// while building and are fine.
     ///
     /// Supported manifest files: `package.xml`, `recipe.yaml`, `pixi.toml`, `pyproject.toml`, or `mojoproject.toml`.
-    #[arg(long)]
-    pub path: Option<PathBuf>,
+    #[arg(long, num_args = 1..)]
+    pub path: Vec<PathBuf>,
 
     /// The target channel to publish packages to. Accepts a URL (prefix.dev, anaconda.org, cloudsmith://, s3://, quetz://, artifactory://) or a local filesystem path / `file://` URL for an indexed local channel.
     ///
@@ -562,7 +564,7 @@ impl fmt::Display for UrlOrPath {
 pub async fn execute(args: Args) -> miette::Result<()> {
     // === Phase 1: Build the packages (same logic as `pixi build`) ===
 
-    let workspace_locator = determine_discovery_start(&args.path).await?;
+    let workspace_locator = determine_discovery_start(&args.path.first().cloned()).await?;
 
     let mut workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
@@ -711,15 +713,15 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     };
 
-    // Determine which packages to publish: a single one when `--path` is
-    // given, otherwise every package in the workspace that opts in with
-    // `publish = true`, ordered so that dependencies are built and uploaded
-    // before their dependents. A workspace without a single opted-in package
-    // falls back to publishing the package at the current directory, as if
+    // Determine which packages to publish: the ones given with `--path`,
+    // otherwise every package in the workspace that opts in with
+    // `publish = true`. Either way they are ordered so that dependencies are
+    // built and uploaded before their dependents. A workspace without a
+    // single opted-in package falls back to publishing the package at the current directory, as if
     // `--path .` had been passed.
-    let mut single_package_path = args.path.clone();
+    let mut explicit_paths = args.path.clone();
     let mut workspace_set = None;
-    if single_package_path.is_none() {
+    if explicit_paths.is_empty() {
         workspace_set =
             discovery::resolve_publish_set(&workspace, &command_dispatcher, &make_metadata_spec)
                 .await?;
@@ -729,29 +731,34 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                  directory",
                 console::style(console::Emoji("ℹ️  ", "")).blue(),
             );
-            single_package_path = Some(PathBuf::from("."));
+            explicit_paths.push(PathBuf::from("."));
         }
     }
-    let single_package_mode = single_package_path.is_some();
-    let (package_sources, cycle_members) = match (&single_package_path, workspace_set) {
-        (Some(path), _) => {
-            validate_package_manifest(path).await?;
-            let package_manifest_path_canonical = dunce::canonicalize(path)
-                .into_diagnostic()
-                .with_context(|| {
+    let explicit_mode = !explicit_paths.is_empty();
+    let (package_sources, cycle_members) = match workspace_set {
+        Some(resolved) => (resolved.packages, resolved.cycle_members),
+        None => {
+            let mut sources = Vec::with_capacity(explicit_paths.len());
+            for path in &explicit_paths {
+                validate_package_manifest(path).await?;
+                let package_manifest_path_canonical = dunce::canonicalize(path)
+                    .into_diagnostic()
+                    .with_context(|| {
                     format!("failed to canonicalize manifest path '{}'", path.display())
                 })?;
-            let manifest_path_spec =
-                pathdiff::diff_paths(&package_manifest_path_canonical, workspace.root())
-                    .unwrap_or_else(|| package_manifest_path_canonical.clone());
-            let manifest_source: PinnedSourceSpec = PinnedPathSpec {
-                path: manifest_path_spec.to_string_lossy().into_owned().into(),
+                let manifest_path_spec =
+                    pathdiff::diff_paths(&package_manifest_path_canonical, workspace.root())
+                        .unwrap_or_else(|| package_manifest_path_canonical.clone());
+                let manifest_source: PinnedSourceSpec = PinnedPathSpec {
+                    path: manifest_path_spec.to_string_lossy().into_owned().into(),
+                }
+                .into();
+                if !sources.contains(&manifest_source) {
+                    sources.push(manifest_source);
+                }
             }
-            .into();
-            (vec![manifest_source], Vec::new())
+            (sources, Vec::new())
         }
-        (None, Some(resolved)) => (resolved.packages, resolved.cycle_members),
-        (None, None) => unreachable!("an empty workspace set switches to single-package mode"),
     };
 
     if !cycle_members.is_empty() {
@@ -790,13 +797,18 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         );
     }
 
-    // A single-package publish is a batch of one, so the closure rule demands
-    // that its run dependencies name no source packages beyond its own
-    // outputs: nothing else in the batch could satisfy them on the target.
+    // The packages given with `--path` form the batch, so the closure rule
+    // demands that their run dependencies name no source packages beyond the
+    // outputs of the batch: nothing else could satisfy them on the target.
     // Build and host source dependencies are only consumed while building
     // and are fine, as are dependencies on sibling outputs (e.g. through
     // `pin_subpackage`), which are published together with the package.
-    if single_package_mode && !args.allow_source_dependencies {
+    if explicit_mode && !args.allow_source_dependencies {
+        let batch_output_names: BTreeSet<String> = package_plans
+            .iter()
+            .flat_map(|(_, backend_metadata)| backend_metadata.metadata.outputs.iter())
+            .map(|output| output.metadata.name.as_normalized().to_string())
+            .collect();
         for (_, backend_metadata) in &package_plans {
             let output_names: BTreeSet<String> = backend_metadata
                 .metadata
@@ -810,7 +822,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .iter()
                 .flat_map(discovery::output_source_run_dependencies)
                 .map(|(name, _)| name)
-                .filter(|name| !output_names.contains(&name.to_lowercase()))
+                .filter(|name| !batch_output_names.contains(&name.to_lowercase()))
                 .collect();
             if !source_dependencies.is_empty() {
                 let packages = output_names
@@ -835,10 +847,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     )
                 };
                 return Err(miette::diagnostic!(
-                    help = "A single-package publish must be self-contained. Set \
-                            `publish = true` in the `[package]` section of the package and \
-                            its source dependencies, then run `pixi publish` without `--path` \
-                            to publish them together.",
+                    help = "The published packages must be self-contained. Pass the source \
+                            dependencies with `--path` as well, or set `publish = true` in the \
+                            `[package]` section of the package and its source dependencies, \
+                            then run `pixi publish` without `--path` to publish them together.",
                     "{message}",
                 )
                 .into());
@@ -846,11 +858,71 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         }
     }
 
+    // Order the packages given with `--path` like a discovered publish set:
+    // dependencies before dependents, where a dependency is any source
+    // dependency on an output of another given package.
+    if explicit_mode && package_plans.len() > 1 {
+        let output_owners: BTreeMap<String, String> = package_plans
+            .iter()
+            .flat_map(|(manifest_source, backend_metadata)| {
+                backend_metadata.metadata.outputs.iter().map(move |output| {
+                    (
+                        output.metadata.name.as_normalized().to_string(),
+                        manifest_source.to_string(),
+                    )
+                })
+            })
+            .collect();
+        let mut dependencies: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+        for (manifest_source, backend_metadata) in &package_plans {
+            let member = manifest_source.to_string();
+            let member_deps: BTreeSet<String> = backend_metadata
+                .metadata
+                .outputs
+                .iter()
+                .flat_map(discovery::output_source_dependencies)
+                .filter_map(|(name, _)| output_owners.get(&name.to_lowercase()))
+                .filter(|owner| **owner != member)
+                .cloned()
+                .collect();
+            dependencies.insert(member, member_deps);
+        }
+        let mut plans_by_member: BTreeMap<String, _> = package_plans
+            .drain(..)
+            .map(|plan| (plan.0.to_string(), plan))
+            .collect();
+        let members: BTreeSet<String> = plans_by_member.keys().cloned().collect();
+        let ordering = discovery::dependency_order(&members, &dependencies);
+        if !ordering.cycle_members.is_empty() {
+            pixi_progress::println!(
+                "{}dependency cycle among the given packages involving {}; uploads cannot be \
+                 fully dependency-ordered, so the target may be inconsistent until every \
+                 upload finishes",
+                console::style(console::Emoji("⚠️  ", "warning: ")).yellow(),
+                ordering.cycle_members.join(", "),
+            );
+        }
+        package_plans = ordering
+            .order
+            .into_iter()
+            .map(|member| {
+                plans_by_member
+                    .remove(&member)
+                    .expect("dependency_order returns exactly the members it was given")
+            })
+            .collect();
+    }
+
     if package_plans.len() > 1 {
         pixi_progress::println!(
-            "\n{}Publishing {} workspace packages that set `publish = true`",
+            "\n{}Publishing {} {}",
             console::style(console::Emoji("🔍 ", "")).cyan(),
             package_plans.len(),
+            if explicit_mode {
+                "packages given with `--path`"
+            } else {
+                "workspace packages that set `publish = true`"
+            },
         );
     }
 
@@ -1485,6 +1557,38 @@ async fn upload_to_quetz(
     upload_package_to_quetz(&ctx.auth_storage, &package_paths.to_vec(), quetz_data).await
 }
 
+/// Split an Artifactory channel URL into the base URL and the repository name.
+///
+/// The repository is the last path segment; anything before it (e.g. the
+/// `/artifactory/` context path) stays in the base URL, so packages are uploaded
+/// to `<base>/<repository>/<subdir>/<file>`: the same location the channel is
+/// read from.
+fn artifactory_server_and_channel(url: &Url) -> miette::Result<(Url, String)> {
+    let mut server_url = rewrite_scheme_to_https(url, "artifactory")?;
+    let mut segments: Vec<String> = server_url
+        .path_segments()
+        .map(|segments| {
+            segments
+                .filter(|segment| !segment.is_empty())
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default();
+    let channel = segments
+        .pop()
+        .ok_or_else(|| miette::miette!("Invalid Artifactory URL: missing repository name"))?;
+
+    let prefix: String = segments
+        .iter()
+        .map(|segment| format!("{segment}/"))
+        .collect();
+    server_url.set_path(&format!("/{prefix}"));
+    server_url.set_query(None);
+    server_url.set_fragment(None);
+
+    Ok((server_url, channel))
+}
+
 /// Upload packages to an Artifactory server.
 async fn upload_to_artifactory(
     url: &Url,
@@ -1496,15 +1600,7 @@ async fn upload_to_artifactory(
 
     tracing::info!("Uploading packages to Artifactory: {}", url);
 
-    let channel = url
-        .path_segments()
-        .and_then(|mut segments| segments.next_back())
-        .ok_or_else(|| miette::miette!("Invalid Artifactory URL: missing repository name"))?
-        .to_string();
-
-    let mut server_url = rewrite_scheme_to_https(url, "artifactory")?;
-    server_url.set_path("");
-
+    let (server_url, channel) = artifactory_server_and_channel(url)?;
     let artifactory_data = ArtifactoryData::new(server_url, channel);
 
     upload_package_to_artifactory(&ctx.auth_storage, &package_paths.to_vec(), artifactory_data)
@@ -2029,6 +2125,36 @@ mod tests {
             let rewritten = rewrite_scheme_to_https(&url, scheme).unwrap();
             assert_eq!(rewritten.as_str(), "https://example.com:8443/conda_dev");
         }
+    }
+
+    #[test]
+    fn artifactory_url_splits_into_base_and_repository() {
+        for (raw, expected_server, expected_channel) in [
+            (
+                "artifactory://files.example.com/conda-internal",
+                "https://files.example.com/",
+                "conda-internal",
+            ),
+            (
+                "artifactory://my-org.jfrog.io/artifactory/channel-1/",
+                "https://my-org.jfrog.io/artifactory/",
+                "channel-1",
+            ),
+            (
+                "artifactory://my-org.jfrog.io:8443/artifactory/channel-1",
+                "https://my-org.jfrog.io:8443/artifactory/",
+                "channel-1",
+            ),
+        ] {
+            let (server, channel) =
+                artifactory_server_and_channel(&Url::parse(raw).unwrap()).unwrap();
+            assert_eq!(server.as_str(), expected_server, "{raw}");
+            assert_eq!(channel, expected_channel, "{raw}");
+        }
+        assert!(
+            artifactory_server_and_channel(&Url::parse("artifactory://example.com/").unwrap())
+                .is_err()
+        );
     }
 
     #[test]

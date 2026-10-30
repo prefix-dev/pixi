@@ -90,7 +90,17 @@ impl Hash for EphemeralEnvSpec {
         dependencies.hash(state);
         constraints.hash(state);
         channels.hash(state);
-        exclude_newer.hash(state);
+        // The prefix is shared across invocations, so hash the cutoffs as
+        // configured: a relative cutoff such as `14d` resolves to a different
+        // time on every invocation and would never hit the cache. A prefix
+        // solved with an earlier resolution still satisfies the cutoff, as
+        // its packages only get older, the same way a prefix solved without
+        // a cutoff is reused when newer packages are published.
+        // Hashed like `Option::hash`, so keys without a cutoff are unchanged.
+        mem::discriminant(exclude_newer).hash(state);
+        if let Some(exclude_newer) = exclude_newer {
+            exclude_newer.hash_configured(state);
+        }
         // Neither SolveStrategy nor ChannelPriority implement Hash;
         // use the enum discriminant (both are C-like enums, so the
         // discriminant fully captures identity).
@@ -520,4 +530,66 @@ fn split_into_binary(
         }
     }
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use chrono::{DateTime, Utc};
+    use pixi_spec::{ConfiguredCutoffs, ExcludeNewer};
+
+    use super::*;
+
+    fn spec(exclude_newer: Option<ResolvedExcludeNewer>) -> EphemeralEnvSpec {
+        let mut dependencies = DependencyMap::default();
+        dependencies.insert(
+            PackageName::from_str("pixi-build-python").unwrap(),
+            PixiSpec::Version(rattler_conda_types::VersionSpec::Any),
+        );
+        EphemeralEnvSpec {
+            dependencies,
+            constraints: DependencyMap::default(),
+            channels: Vec::new(),
+            exclude_newer,
+            strategy: SolveStrategy::default(),
+            channel_priority: ChannelPriority::default(),
+        }
+    }
+
+    /// `14d` resolved at `now`, as the manifest resolves it.
+    fn relative(now: &str, duration: &str) -> ResolvedExcludeNewer {
+        let cutoff = ExcludeNewer::from_str(duration).unwrap();
+        let now: DateTime<Utc> = now.parse().unwrap();
+        ResolvedExcludeNewer::from_datetime(cutoff.cutoff_at(now)).with_configured_cutoffs(
+            ConfiguredCutoffs {
+                cutoff: Some(cutoff),
+                ..ConfiguredCutoffs::default()
+            },
+        )
+    }
+
+    /// Regression test for https://github.com/prefix-dev/pixi/issues/6617:
+    /// a relative cutoff resolves to a different time on every invocation,
+    /// which must not change the prefix of the backend environment.
+    #[test]
+    fn cache_key_ignores_when_a_relative_cutoff_was_resolved() {
+        let early = spec(Some(relative("2026-10-01T00:00:00Z", "14d")));
+        let late = spec(Some(relative("2026-10-28T12:34:56Z", "14d")));
+        assert_eq!(early.cache_key(), late.cache_key());
+
+        // A different configuration is a different environment.
+        let other = spec(Some(relative("2026-10-01T00:00:00Z", "7d")));
+        assert_ne!(early.cache_key(), other.cache_key());
+        assert_ne!(early.cache_key(), spec(None).cache_key());
+    }
+
+    #[test]
+    fn cache_key_distinguishes_absolute_cutoffs() {
+        let absolute = |cutoff: &str| ResolvedExcludeNewer::from_datetime(cutoff.parse().unwrap());
+        assert_ne!(
+            spec(Some(absolute("2026-10-01T00:00:00Z"))).cache_key(),
+            spec(Some(absolute("2026-10-02T00:00:00Z"))).cache_key()
+        );
+    }
 }

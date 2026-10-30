@@ -351,6 +351,7 @@ mod tests {
     use rattler_conda_types::Subdir;
 
     use super::*;
+    use crate::InterfaceError;
 
     struct MockInterface;
 
@@ -358,8 +359,15 @@ mod tests {
         async fn is_cli(&self) -> bool {
             false
         }
-        async fn confirm(&self, _msg: &str) -> miette::Result<bool> {
+        async fn confirm(&self, _msg: &str) -> Result<bool, InterfaceError> {
             Ok(true)
+        }
+        async fn select(
+            &self,
+            _msg: &str,
+            _options: &[String],
+        ) -> Result<Option<usize>, InterfaceError> {
+            Ok(None)
         }
         async fn error(&self, _msg: &str) {}
         async fn info(&self, _msg: &str) {}

@@ -47,7 +47,7 @@ pixi = { path = "." }
 # Shared feature for Python
 #
 [feature.python.dependencies]
-python = ">=3.14.8,<3.15"
+python = ">=3.15.0,<3.16"
 
 #
 # Shared feature for Rust toolchain
@@ -77,14 +77,14 @@ py-rattler = ">=0.25.0,<0.26"
 questionary = ">=2.1.1,<3"
 rich = ">=15.0.0,<16"
 "ruamel.yaml" = ">=0.19.1,<0.20"
-tomlkit = ">=0.15.1,<0.16"
+tomlkit = ">=0.15.2,<0.16"
 
 #
 # Feature for development tools and utilities
 #
 [feature.dev.dependencies]
 cargo-edit = ">=0.13.13,<0.14"
-cargo-nextest = ">=0.9.146,<0.10"
+cargo-nextest = ">=0.9.148,<0.10"
 git-lfs = ">=3.8.0,<4"
 
 [feature.dev.tasks]
@@ -126,9 +126,9 @@ update-rattler = {
 #
 [feature.python-test-deps.dependencies]
 dirty-equals = ">=0.11,<0.12"
-filelock = ">=4.0.12,<5"
+filelock = ">=4.2.4,<5"
 git = ">=2.56.0,<3"
-inline-snapshot = ">=0.36.0,<0.37"
+inline-snapshot = ">=0.36.1,<0.37"
 py-rattler = ">=0.25.0,<0.26"
 pytest = ">=9.1.1,<10"
 pytest-rerunfailures = ">=16.6.1,<17"
@@ -137,7 +137,7 @@ pytest-xdist = ">=3.8.0,<4"
 pyyaml = ">=6.0.3,<7"
 rattler-build = ">=0.75.0,<0.76"
 rich = ">=15.0.0,<16"
-tomli = ">=2.4.1,<3"
+tomli = ">=2.5.0,<3"
 tomli-w = ">=1.2.0,<2"
 types-pyyaml = ">=6.0.12.20260906,<7"
 
@@ -150,13 +150,13 @@ python-build = ">=1.6.1,<2"
 #
 [feature.schema.dependencies]
 jsonschema = ">=4.26.0,<5"
-jsonschema-rs = ">=0.58.6,<0.59"
-pydantic = ">=2.13.5,<3"
+jsonschema-rs = ">=0.59.0,<0.60"
+pydantic = ">=2.14.1,<3"
 pytest = ">=9.1.1,<10"
 pytest-timeout = ">=2.4.0,<3"
 python-fastjsonschema = ">=2.22.2,<3"
 pyyaml = ">=6.0.3,<7"
-tomli = ">=2.4.1,<3"
+tomli = ">=2.5.0,<3"
 
 [feature.schema.tasks]
 generate-schema = {
@@ -182,7 +182,7 @@ solve-group = "python"
 RUSTC_WRAPPER = "sccache"
 
 [environments.backends-release.dependencies]
-gh = ">=2.102.0,<3"
+gh = ">=2.102.1,<3"
 rattler-build = ">=0.75.0,<0.76"
 sccache = ">=0.18.0,<0.19"
 
@@ -240,12 +240,12 @@ cargo-deny = ">=0.20.2,<0.21"
 cargo-shear = ">=1.13.4,<2"
 dprint = ">=0.50.0,<0.51"
 go-shfmt = ">=3.14.1,<4"
-ruff = ">=0.16.10,<0.17"
+ruff = ">=0.17.1,<0.18"
 shellcheck = ">=0.11.0,<0.12"
-tombi = ">=1.8.4,<2"
-ty = ">=0.0.85,<0.0.86"
+tombi = ">=1.9.6,<2"
+ty = ">=0.0.90,<0.0.91"
 typos = ">=1.51.1,<2"
-zizmor = ">=1.30.1,<2"
+zizmor = ">=1.31.1,<2"
 
 [environments.default.tasks]
 actionlint = {
@@ -327,8 +327,8 @@ solve-group = "python"
 
 [environments.docs.dependencies]
 mdx_truly_sane_lists = ">=1.3,<2"
-tomli = ">=2.4.1,<3"
-zensical = ">=0.0.67,<0.0.69"
+tomli = ">=2.5.0,<3"
+zensical = ">=0.0.71,<0.0.72"
 
 [environments.docs.pypi-dependencies]
 # Fork of mike with Zensical support, not released on PyPI
@@ -382,7 +382,7 @@ stage-docs-files = {
 #
 # Required as it runs pixi tasks itself, so we don't want it to have a dependencies on itself.
 [environments.lefthook.dependencies]
-lefthook = ">=2.1.17,<3"
+lefthook = ">=2.2.1,<3"
 
 [environments.lefthook.tasks]
 lefthook = {
@@ -409,6 +409,15 @@ pre-commit-install-minimal = {
   cmd = "lefthook install pre-commit",
   description = "Install only pre-commit hook",
 }
+
+#
+# Environment for the vouch workflows
+#
+[environments.vouch]
+platforms = ["linux-64"]
+
+[environments.vouch.dependencies]
+vouch = ">=1.5.0,<2"
 
 #
 # Environment for Python integration tests with pytest
@@ -491,8 +500,8 @@ update-test-channel = {
 [environments.release.dependencies]
 cargo-zigbuild = ">=0.23.4,<0.24"
 cffconvert = ">=2.0.0,<3"
-tomli = ">=2.4.1,<3"
-zig = ">=0.16.0,<0.17"
+tomli = ">=2.5.0,<3"
+zig = ">=0.17.0,<0.18"
 
 [environments.release.target.win-64.dependencies]
 cargo-wix = ">=0.3.9,<0.4"
@@ -535,12 +544,12 @@ features = ["rust", "python"]
 solve-group = "python"
 
 [environments.release-prepare.dependencies]
-gh = ">=2.102.0,<3"
+gh = ">=2.102.1,<3"
 git = ">=2.56.0,<3"
 git-cliff = ">=2.14.2,<3"
 questionary = ">=2.1.1,<3"
 tbump = ">=6.9.0,<7"
-tomli = ">=2.4.1,<3"
+tomli = ">=2.5.0,<3"
 
 [environments.release-prepare.tasks]
 release = {

@@ -203,6 +203,17 @@ nav = [
               "reference/cli/pixi/global/index.md",
               { "add" = "reference/cli/pixi/global/add.md" },
               { "edit" = "reference/cli/pixi/global/edit.md" },
+              {
+                "exclude-newer" = [
+                  "reference/cli/pixi/global/exclude-newer/index.md",
+                  { "get" = "reference/cli/pixi/global/exclude-newer/get.md" },
+                  { "set" = "reference/cli/pixi/global/exclude-newer/set.md" },
+                  { "unset" = "reference/cli/pixi/global/exclude-newer/unset.md" },
+                  { "exempt" = "reference/cli/pixi/global/exclude-newer/exempt.md" },
+                  { "unexempt" = "reference/cli/pixi/global/exclude-newer/unexempt.md" },
+                  { "prune" = "reference/cli/pixi/global/exclude-newer/prune.md" },
+                ]
+              },
               { "install" = "reference/cli/pixi/global/install.md" },
               { "uninstall" = "reference/cli/pixi/global/uninstall.md" },
               { "remove" = "reference/cli/pixi/global/remove.md" },
@@ -338,6 +349,17 @@ nav = [
                   { "add" = "reference/cli/pixi/workspace/environment/add.md" },
                   { "list" = "reference/cli/pixi/workspace/environment/list.md" },
                   { "remove" = "reference/cli/pixi/workspace/environment/remove.md" },
+                ]
+              },
+              {
+                "exclude-newer" = [
+                  "reference/cli/pixi/workspace/exclude-newer/index.md",
+                  { "get" = "reference/cli/pixi/workspace/exclude-newer/get.md" },
+                  { "set" = "reference/cli/pixi/workspace/exclude-newer/set.md" },
+                  { "unset" = "reference/cli/pixi/workspace/exclude-newer/unset.md" },
+                  { "exempt" = "reference/cli/pixi/workspace/exclude-newer/exempt.md" },
+                  { "unexempt" = "reference/cli/pixi/workspace/exclude-newer/unexempt.md" },
+                  { "prune" = "reference/cli/pixi/workspace/exclude-newer/prune.md" },
                 ]
               },
               {

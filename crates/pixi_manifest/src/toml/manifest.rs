@@ -20,9 +20,9 @@ use toml_span::{
 use url::Url;
 
 use crate::{
-    Activation, Environment, EnvironmentName, Environments, Feature, FeatureName, KnownPreviewFlag,
-    PixiPlatform, PixiPlatformName, SolveGroups, SystemRequirements, TargetSelector, Targets, Task,
-    TaskName, TomlError, Warning, WithWarnings, WorkspaceManifest,
+    Activation, Environment, EnvironmentName, Environments, ExcludeNewerTableMigration, Feature,
+    FeatureName, KnownPreviewFlag, PixiPlatform, PixiPlatformName, SolveGroups, SystemRequirements,
+    TargetSelector, Targets, Task, TaskName, TomlError, Warning, WithWarnings, WorkspaceManifest,
     environment::EnvironmentIdx,
     error::{FeatureNotEnabled, GenericError},
     manifests::PackageManifest,
@@ -369,7 +369,25 @@ impl TomlManifest {
             .environments
             .map(PixiSpanned::into_inner)
             .unwrap_or_default();
+        let check_pypi_options = |used_features: &[&Feature]| {
+            let feature_options = used_features
+                .iter()
+                .filter_map(|feature| feature.pypi_options())
+                .try_fold(PypiOptions::default(), |acc, opts| acc.union(opts))?;
+            workspace
+                .value
+                .pypi_options
+                .clone()
+                .unwrap_or_default()
+                .overlay(&feature_options)
+        };
         if !toml_environments.contains_key(&EnvironmentName::Default) {
+            if let Err(err) = check_pypi_options(&[features
+                .get(&FeatureName::Default)
+                .expect("default feature must exist")])
+            {
+                return Err(TomlError::from(GenericError::new(err.to_string())));
+            }
             environments.environments.push(Some(Environment::default()));
             environments
                 .by_name
@@ -504,14 +522,9 @@ impl TomlManifest {
             // Check that there are no conflicts in pypi options between features.
             // The workspace-level pypi-options act as an always-applied base
             // and are intentionally allowed to be overridden by feature-level
-            // options, so they are not part of this conflict check; we only
-            // verify that the features included in this environment do not
-            // disagree with each other on any single-assignment field.
-            if let Err(err) = used_features
-                .iter()
-                .filter_map(|feature| feature.pypi_options())
-                .try_fold(PypiOptions::default(), |acc, opts| acc.union(opts))
-            {
+            // options on single-assignment fields, but not on the cutoff of
+            // an extra index.
+            if let Err(err) = check_pypi_options(&used_features) {
                 return Err(TomlError::from(
                     GenericError::new(err.to_string())
                         .with_opt_span(features_span.map(Into::into))
@@ -557,6 +570,7 @@ impl TomlManifest {
             .and_then(|p| p.value.name.as_ref())
             .and_then(|field| field.clone().value());
 
+        let table_prefix = external.table_prefix;
         let WithWarnings {
             warnings: mut workspace_warnings,
             value: mut workspace,
@@ -568,14 +582,62 @@ impl TomlManifest {
             root_directory,
         )?;
         warnings.append(&mut workspace_warnings);
-        workspace.exclude_newer_package_overrides = self
-            .exclude_newer
-            .map(PixiSpanned::into_inner)
-            .unwrap_or_default();
-        workspace.pypi_exclude_newer_package_overrides = self
-            .pypi_exclude_newer
-            .map(PixiSpanned::into_inner)
-            .unwrap_or_default();
+        if let Some(exclude_newer) = self.exclude_newer {
+            warnings.push(
+                Deprecation::exclude_newer_table(
+                    table_prefix,
+                    "exclude-newer",
+                    ExcludeNewerTableMigration::new(
+                        table_prefix,
+                        "exclude-newer",
+                        workspace.exclude_newer.cutoff,
+                        workspace
+                            .exclude_newer
+                            .exemptions
+                            .iter()
+                            .map(|(name, exemption)| (name.as_source(), exemption.to_toml_value())),
+                        workspace
+                            .channels
+                            .iter()
+                            .chain(features.values().flat_map(|f| f.channels.iter().flatten()))
+                            .any(|channel| channel.exclude_newer.is_some()),
+                        exclude_newer
+                            .value
+                            .iter()
+                            .map(|(name, cutoff)| (name.as_source(), cutoff)),
+                    ),
+                    exclude_newer.span.clone(),
+                )
+                .into(),
+            );
+            workspace.exclude_newer_package_overrides = exclude_newer.value;
+        }
+        if let Some(pypi_exclude_newer) = self.pypi_exclude_newer {
+            warnings.push(
+                Deprecation::exclude_newer_table(
+                    table_prefix,
+                    "pypi-exclude-newer",
+                    ExcludeNewerTableMigration::new(
+                        table_prefix,
+                        "pypi-exclude-newer",
+                        workspace.pypi_exclude_newer.cutoff,
+                        workspace
+                            .pypi_exclude_newer
+                            .exemptions
+                            .iter()
+                            .map(|(name, version)| (name.as_source(), version.to_string().into())),
+                        workspace.exclude_newer.cutoff.is_some(),
+                        pypi_exclude_newer
+                            .value
+                            .iter()
+                            .map(|(name, cutoff)| (name.as_source(), cutoff)),
+                    ),
+                    pypi_exclude_newer.span.clone(),
+                )
+                .into(),
+            );
+            workspace.pypi_exclude_newer_package_overrides = pypi_exclude_newer.value;
+        }
 
         migrate_system_requirements_to_platforms(&mut workspace, &mut features, &feature_sysreqs)?;
         validate_task_environments(&features, &environments)?;
@@ -1101,6 +1163,9 @@ pub struct ExternalWorkspaceProperties {
     pub repository: Option<Url>,
     pub documentation: Option<Url>,
     pub features: IndexMap<FeatureName, Feature>,
+    /// The prefix of the pixi tables in the manifest, `tool.pixi` for a
+    /// `pyproject.toml`, used to name tables in warnings.
+    pub table_prefix: Option<&'static str>,
 }
 
 #[cfg(test)]
@@ -1496,6 +1561,40 @@ mod test {
         platforms = []
 
         [feature.foobar.run-dependencies]
+        "#,
+        ));
+    }
+
+    #[test]
+    fn test_extra_index_with_conflicting_cutoffs() {
+        // Between features of an environment.
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [pypi-options]
+        extra-index-urls = ["https://internal/simple"]
+
+        [feature.f.pypi-options]
+        extra-index-urls = [{ url = "https://internal/simple", exclude-newer = "0d" }]
+
+        [environments]
+        f = ["f"]
+        "#,
+        ));
+
+        // Between the workspace and the default environment.
+        assert_snapshot!(expect_parse_failure(
+            r#"
+        [workspace]
+        channels = []
+        platforms = []
+        pypi-options = { extra-index-urls = ["https://internal/simple"] }
+
+        [pypi-options]
+        extra-index-urls = [{ url = "https://internal/simple", exclude-newer = "0d" }]
         "#,
         ));
     }

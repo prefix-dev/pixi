@@ -23,6 +23,7 @@ pixi workspace [OPTIONS] <COMMAND>
 | [`platform`](platform/index.md) | Commands to manage workspace platforms |
 | [`version`](version/index.md) | Commands to manage workspace version |
 | [`environment`](environment/index.md) | Commands to manage workspace environments |
+| [`exclude-newer`](exclude-newer/index.md) | Commands to manage the `exclude-newer` configuration of the workspace |
 | [`feature`](feature/index.md) | Commands to manage workspace features |
 | [`export`](export/index.md) | Commands to export workspaces to other formats |
 | [`name`](name/index.md) | Commands to manage workspace name |

@@ -7,6 +7,7 @@ mod environment;
 mod environments;
 mod error;
 mod exclude_newer;
+mod exclude_newer_edit;
 mod feature;
 mod features_ext;
 mod has_features_iter;
@@ -42,11 +43,16 @@ pub use discovery::{
 pub use environment::{Environment, EnvironmentName, NewEnvironment, ParseEnvironmentNameError};
 pub use error::{DependencyError, GenericError, TomlError, UnknownFeature};
 pub use exclude_newer::{
-    ExcludeNewerConfig, ExcludeNewerError, PypiExcludeNewerConfig, resolve_exclude_newer,
-    resolve_pypi_exclude_newer,
+    ExcludeNewerConfig, ExcludeNewerError, ExcludeNewerExemption, ExcludeNewerTableMigration,
+    PypiExcludeNewerConfig, format_cutoff, resolve_exclude_newer, resolve_pypi_exclude_newer,
+    stale_exemptions,
+};
+pub use exclude_newer_edit::{
+    ExcludeNewerEditError, ParseExemptionError, entry_as_written, parse_conda_exemption,
+    parse_pypi_exemption,
 };
 pub use feature::{Feature, FeatureName};
-pub use features_ext::FeaturesExt;
+pub use features_ext::{ChannelPriorityCombinationError, FeaturesExt};
 pub use has_features_iter::HasFeaturesIter;
 pub use has_manifest_ref::HasWorkspaceManifest;
 use itertools::Itertools;

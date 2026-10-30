@@ -69,6 +69,16 @@ ExcludeNewer = Annotated[
     ),
 ]
 
+AbsoluteExcludeNewer = Annotated[
+    str,
+    StringConstraints(
+        # Matches either:
+        # - An RFC 3339 timestamp, e.g. YYYY-MM-DDTHH:MM:SSZ or with fractional seconds
+        # - A date, e.g. YYYY-MM-DD
+        pattern=r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})|\d{4}-\d{2}-\d{2})$"
+    ),
+]
+
 
 def hyphenize(field: str):
     return field.replace("_", "-")
@@ -483,6 +493,11 @@ class ExcludeNewerExemptionTable(MatchspecSelectorTable):
 
     md5: Md5Sum | None = Field(None, description="The md5 hash of the package")
     sha256: Sha256Sum | None = Field(None, description="The sha256 hash of the package")
+    cutoff: AbsoluteExcludeNewer | None = Field(
+        None,
+        description="Only exempt the matching releases published up to this point in time, an RFC 3339 timestamp or a date. Later releases, e.g. a new build of an exempt version, are subject to the cutoff as usual.",
+        examples=["2026-10-12T08:00:00Z", "2026-10-12"],
+    )
 
 
 class MatchspecTable(BinaryMatchspecTable):
@@ -1154,6 +1169,24 @@ class FindLinksURL(StrictBaseModel):
     )
 
 
+class ExtraIndexInlineTable(StrictBaseModel):
+    """An extra PyPI index with an optional per-index `exclude-newer` override."""
+
+    url: NonEmptyStr = Field(
+        description="The extra index URL",
+        examples=["https://pypi.org/simple"],
+    )
+    exclude_newer: ExcludeNewer | None = Field(
+        None,
+        description="Override the workspace-level `exclude-newer` cutoff for this index only; "
+        "a zero duration such as `0d` lifts the cutoff entirely, including for releases without an upload time",
+        examples=["2025-01-01", "0d"],
+    )
+
+
+ExtraIndex = NonEmptyStr | ExtraIndexInlineTable
+
+
 class S3Options(StrictBaseModel):
     """Options related to S3 for this project"""
 
@@ -1178,10 +1211,14 @@ class PyPIOptions(StrictBaseModel):
         description="PyPI registry that should be used as the primary index",
         examples=["https://pypi.org/simple"],
     )
-    extra_index_urls: list[NonEmptyStr] | None = Field(
+    extra_index_urls: list[ExtraIndex] | None = Field(
         None,
-        description="Additional PyPI registries that should be used as extra indexes",
-        examples=[["https://pypi.org/simple"]],
+        description="Additional PyPI registries that should be used as extra indexes. "
+        "Each entry may be a URL string or an inline table with a per-index `exclude-newer` override.",
+        examples=[
+            ["https://pypi.org/simple"],
+            [{"url": "https://internal/simple", "exclude-newer": "0d"}],
+        ],
     )
     find_links: list[FindLinksPath | FindLinksURL] | None = Field(
         None,

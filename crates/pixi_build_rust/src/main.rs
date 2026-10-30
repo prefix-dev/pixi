@@ -15,7 +15,9 @@ use pixi_build_backend::{
     intermediate_backend::IntermediateBackendInstantiator,
     tools::BackendIdentifier,
 };
-use rattler_build_recipe::stage0::{Item, Script, SerializableMatchSpec, Value};
+use rattler_build_recipe::stage0::{
+    Item, Script, SerializableMatchSpec, SingleOutputRecipe, Value,
+};
 use rattler_conda_types::{ChannelUrl, Subdir};
 use std::collections::HashSet;
 use std::{
@@ -30,6 +32,7 @@ pub struct RustGenerator {}
 #[async_trait::async_trait]
 impl GenerateRecipe for RustGenerator {
     type Config = RustBackendConfig;
+    type Recipe = SingleOutputRecipe;
 
     async fn generate_recipe(
         &self,

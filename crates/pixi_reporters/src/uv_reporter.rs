@@ -211,14 +211,14 @@ impl uv_installer::PrepareReporter for UvReporter {
         self.finish(id);
     }
 
-    fn on_checkout_start(&self, url: &uv_redacted::DisplaySafeUrl, _rev: &str) -> usize {
+    fn on_checkout_start(&self, url: &uv_redacted::SafeUrl, _rev: &str) -> usize {
         if url.scheme().eq("ssh") {
             self.on_checkout_start_warning_pb();
         }
         self.start(format!("cloning {url}"))
     }
 
-    fn on_checkout_complete(&self, url: &uv_redacted::DisplaySafeUrl, _rev: &str, index: usize) {
+    fn on_checkout_complete(&self, url: &uv_redacted::SafeUrl, _rev: &str, index: usize) {
         if url.scheme().eq("ssh") {
             self.on_checkout_complete_warning_pb();
         }
@@ -264,14 +264,14 @@ impl uv_resolver::ResolverReporter for UvReporter {
         self.finish(id);
     }
 
-    fn on_checkout_start(&self, url: &uv_redacted::DisplaySafeUrl, _rev: &str) -> usize {
+    fn on_checkout_start(&self, url: &uv_redacted::SafeUrl, _rev: &str) -> usize {
         if url.scheme().eq("ssh") {
             self.on_checkout_start_warning_pb();
         }
         self.start(format!("cloning {url}"))
     }
 
-    fn on_checkout_complete(&self, url: &uv_redacted::DisplaySafeUrl, _rev: &str, index: usize) {
+    fn on_checkout_complete(&self, url: &uv_redacted::SafeUrl, _rev: &str, index: usize) {
         if url.scheme().eq("ssh") {
             self.on_checkout_complete_warning_pb();
         }
@@ -303,14 +303,14 @@ impl uv_distribution::Reporter for UvReporter {
         self.finish(id);
     }
 
-    fn on_checkout_start(&self, url: &uv_redacted::DisplaySafeUrl, _rev: &str) -> usize {
+    fn on_checkout_start(&self, url: &uv_redacted::SafeUrl, _rev: &str) -> usize {
         if url.scheme().eq("ssh") {
             self.on_checkout_start_warning_pb();
         }
         self.start(format!("cloning {url}"))
     }
 
-    fn on_checkout_complete(&self, url: &uv_redacted::DisplaySafeUrl, _rev: &str, index: usize) {
+    fn on_checkout_complete(&self, url: &uv_redacted::SafeUrl, _rev: &str, index: usize) {
         if url.scheme().eq("ssh") {
             self.on_checkout_complete_warning_pb();
         }

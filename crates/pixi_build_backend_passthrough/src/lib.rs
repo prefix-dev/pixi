@@ -32,7 +32,7 @@ use pixi_build_types::{
 };
 use rattler_conda_types::{
     PackageName, Subdir, Version, VersionSpec,
-    package::{IndexJson, PathType, PathsEntry, PathsJson, RunExportsJson},
+    package::{BuildString, IndexJson, PathType, PathsEntry, PathsJson, RunExportsJson},
 };
 use serde::Deserialize;
 
@@ -226,7 +226,7 @@ impl InMemoryBackend for PassthroughBackend {
             input_glob_sets: None,
             name: self.index_json.name.as_normalized().to_owned(),
             version: self.index_json.version.clone(),
-            build: build_string,
+            build: build_string.to_string(),
             subdir,
         })
     }
@@ -492,19 +492,24 @@ fn generate_variant_combinations(
 /// the build string is augmented with a hash of the variant to ensure unique
 /// package identities.
 fn compute_build_string(
-    base_build: &str,
+    base_build: &BuildString,
     variant: &BTreeMap<String, VariantValue>,
     has_real_variants: bool,
-) -> String {
+) -> BuildString {
     if !has_real_variants {
-        base_build.to_string()
+        return base_build.clone();
+    }
+    let variant_hash = compute_variant_hash(variant);
+    if base_build.is_empty() {
+        variant_hash
+            .parse()
+            .expect("a hex hash is a valid build string")
     } else {
-        let variant_hash = compute_variant_hash(variant);
-        if base_build.is_empty() {
-            variant_hash
-        } else {
-            format!("{base_build}_{variant_hash}")
-        }
+        let mut build = base_build.clone();
+        build
+            .append(format!("_{variant_hash}"))
+            .expect("index.json build string with variant hash is a valid build string");
+        build
     }
 }
 
@@ -639,8 +644,11 @@ fn create_output(
         // source dependencies are emitted as source specs, mirroring real
         // backends' `local_source_packages` mapping.
         run_exports: {
-            let mut run_exports =
-                model_run_exports(&project_model.targets, &output_version, &output_build);
+            let mut run_exports = model_run_exports(
+                &project_model.targets,
+                &output_version,
+                output_build.as_str(),
+            );
             if let Some(extra) = package_run_exports
                 .or_else(|| run_exports_config.get(name.as_source()))
                 .map(|re| convert_run_exports_json(re, &model_source_specs(&project_model.targets)))
@@ -1102,7 +1110,7 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
                 // Create IndexJson from project model for on-the-fly package generation
                 let index_json = IndexJson {
                     arch: None,
-                    build: String::new(),
+                    build: BuildString::new_unchecked("0"),
                     build_number: 0,
                     constrains: vec![],
                     depends: vec![],

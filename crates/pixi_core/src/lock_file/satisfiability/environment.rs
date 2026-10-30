@@ -12,6 +12,7 @@ use pixi_manifest::{
     pypi::pypi_options::NoBuild,
 };
 use pixi_pypi_spec::PixiPypiSource;
+use pixi_record::LockFileResolver;
 use pypi_modifiers::Tags;
 use rattler_conda_types::{ChannelUrl, NamedChannelOrUrl, Subdir};
 use rattler_lock::{LockedPackage, PypiIndexes, UrlOrPath};
@@ -32,6 +33,7 @@ use crate::workspace::{Environment, grouped_environment::GroupedEnvironment};
 pub fn verify_environment_satisfiability(
     environment: &Environment<'_>,
     locked_environment: rattler_lock::Environment<'_>,
+    resolver: &LockFileResolver,
 ) -> Result<(), EnvironmentUnsat> {
     let grouped_env = GroupedEnvironment::from(environment.clone());
 
@@ -146,17 +148,22 @@ pub fn verify_environment_satisfiability(
         let expected_vps: Vec<String> = records
             .iter()
             .filter(|gvp| !pixi_manifest::platform::is_subdir_default(gvp, workspace_subdir))
-            .map(|vp| vp.to_string())
+            .map(pixi_manifest::platform::format_virtual_package)
             .collect();
+        // Re-format parsed entries so `__unix=0` and `__unix=0=0` compare
+        // equal; unreadable entries stay as written and never match.
         let locked_vps: Vec<String> = locked
             .virtual_packages
             .iter()
-            .filter(|raw| {
-                pixi_manifest::platform::parse_locked_virtual_package(raw)
-                    .map(|gvp| !pixi_manifest::platform::is_subdir_default(&gvp, workspace_subdir))
-                    .unwrap_or(true)
-            })
-            .cloned()
+            .filter_map(
+                |raw| match pixi_manifest::platform::parse_locked_virtual_package(raw) {
+                    Some(gvp) => {
+                        (!pixi_manifest::platform::is_subdir_default(&gvp, workspace_subdir))
+                            .then(|| pixi_manifest::platform::format_virtual_package(&gvp))
+                    }
+                    None => Some(raw.clone()),
+                },
+            )
             .collect();
         let same_subdir = workspace_subdir == locked.subdir;
         // Compare VPs as multisets: lockfile ordering is not part of the
@@ -252,7 +259,7 @@ pub fn verify_environment_satisfiability(
         .exclude_newer_config_resolved(&config)?
         .map(rattler_solve::ExcludeNewer::from);
 
-    if let Err(err) = verify_exclude_newer(exclude_newer.as_ref(), &locked_environment) {
+    if let Err(err) = verify_exclude_newer(exclude_newer.as_ref(), &locked_environment, resolver) {
         return Err(EnvironmentUnsat::ExcludeNewerMismatch(err));
     }
 

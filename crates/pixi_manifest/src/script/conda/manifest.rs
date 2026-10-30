@@ -385,7 +385,10 @@ impl CondaScriptManifest {
 
         let (workspace, package, warnings) = manifest
             .into_workspace_manifest(
-                ExternalWorkspaceProperties::default(),
+                ExternalWorkspaceProperties {
+                    table_prefix: Some("tool.pixi"),
+                    ..ExternalWorkspaceProperties::default()
+                },
                 PackageDefaults::default(),
                 root,
             )
@@ -696,7 +699,7 @@ mod tests {
     }
 
     #[test]
-    fn per_package_exclude_newer_table_still_works() {
+    fn deprecated_exclude_newer_table_still_works_with_a_warning() {
         let manifest = parse(
             r#"# /// conda-script
 # channels = ["conda-forge"]
@@ -713,7 +716,7 @@ mod tests {
         .unwrap()
         .unwrap();
 
-        let (workspace, _) = manifest
+        let (workspace, warnings) = manifest
             .into_workspace_manifest(None, manifest.path().parent().unwrap())
             .unwrap();
         assert!(
@@ -721,6 +724,14 @@ mod tests {
                 .workspace
                 .exclude_newer_package_overrides
                 .contains_key(&PackageName::new_unchecked("zlib"))
+        );
+        assert_eq!(warnings.len(), 1);
+        assert!(
+            warnings[0].to_string().contains(
+                "the top-level `[tool.pixi.exclude-newer]` table of per-package cutoffs is deprecated"
+            ),
+            "{}",
+            warnings[0]
         );
     }
 

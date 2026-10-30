@@ -34,7 +34,9 @@ use rattler_build_types::NormalizedKey;
 use rattler_build_variant_config::VariantConfig;
 use rattler_conda_types::NoArchType;
 use rattler_conda_types::{
-    RepodataRevision, Subdir, compression_level::CompressionLevel, package::CondaArchiveType,
+    RepodataRevision, Subdir,
+    compression_level::CompressionLevel,
+    package::{BuildString, CondaArchiveType},
 };
 
 use serde::Deserialize;
@@ -45,7 +47,7 @@ use crate::{
     dependencies::{
         convert_constraint_dependencies, convert_dependencies, convert_input_variant_configuration,
     },
-    generated_recipe::{BackendConfig, GenerateRecipe, PythonParams},
+    generated_recipe::{BackendConfig, GenerateRecipe, IntoRecipe, PythonParams},
     protocol::{Protocol, ProtocolInstantiator},
     source::Source,
     specs_conversion::{
@@ -54,7 +56,7 @@ use crate::{
     },
     tools::{BackendIdentifier, OneOrMultipleOutputs, output_directory},
     traits::targets::TargetSelector as _,
-    v3::generated_recipe_uses_v3,
+    v3::recipe_uses_v3,
 };
 
 use fs_err::tokio as tokio_fs;
@@ -295,7 +297,8 @@ where
                 self.workspace_directory.clone(),
                 self.checkout_root.clone(),
             )
-            .await?;
+            .await?
+            .map_recipe(IntoRecipe::into_recipe);
 
         // Convert the recipe to source code.
         // TODO(baszalmstra): In the future it would be great if we could just
@@ -318,7 +321,7 @@ where
             named_source.code.to_string(),
         );
 
-        let repodata_revision = if generated_recipe_uses_v3(&generated_recipe.recipe) {
+        let repodata_revision = if recipe_uses_v3(&generated_recipe.recipe) {
             RepodataRevision::V3
         } else {
             RepodataRevision::Legacy
@@ -387,9 +390,18 @@ where
         //
         // By default, this includes all the outputs in the recipe. These should all be
         // build from source, in particular from the current source.
+        let self_source_path = self.generate_recipe.self_source_path(&recipe_path);
         let local_source_packages: HashMap<String, SourcePackageSpec> = discovered_outputs
             .iter()
-            .map(|output| (output.name.clone(), PathSpec { path: ".".into() }.into()))
+            .map(|output| {
+                (
+                    output.name.clone(),
+                    PathSpec {
+                        path: self_source_path.clone(),
+                    }
+                    .into(),
+                )
+            })
             .collect();
 
         let mut subpackages = HashMap::new();
@@ -479,11 +491,23 @@ where
 
             let noarch = recipe.build().noarch.unwrap_or(NoArchType::none());
 
+            let build_string = discovered_output
+                .build_string
+                .parse::<BuildString>()
+                .into_diagnostic()
+                .with_context(|| {
+                    format!(
+                        "invalid build string '{}' for output '{}'",
+                        discovered_output.build_string,
+                        recipe.package().name().as_source()
+                    )
+                })?;
+
             outputs.push(CondaOutput {
                 metadata: CondaOutputMetadata {
                     name: recipe.package().name().clone(),
                     version: recipe.package().version().clone(),
-                    build: discovered_output.build_string.clone(),
+                    build: build_string,
                     build_number,
                     subdir: discovered_output.target_platform,
                     license: recipe.about.license.clone().map(|l| l.to_string()),
@@ -693,7 +717,8 @@ where
                 self.workspace_directory.clone(),
                 self.checkout_root.clone(),
             )
-            .await?;
+            .await?
+            .map_recipe(IntoRecipe::into_recipe);
 
         // Convert the recipe to source code.
         // TODO(baszalmstra): In the future it would be great if we could just
@@ -713,7 +738,7 @@ where
             recipe_code.to_string(),
         );
 
-        let repodata_revision = if generated_recipe_uses_v3(&recipe.recipe) {
+        let repodata_revision = if recipe_uses_v3(&recipe.recipe) {
             RepodataRevision::V3
         } else {
             RepodataRevision::Legacy

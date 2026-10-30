@@ -8,6 +8,7 @@ use pixi_global::{EnvironmentName, report::EnvReport};
 
 mod add;
 mod edit;
+mod exclude_newer;
 mod expose;
 mod global_specs;
 pub mod install;
@@ -26,6 +27,7 @@ pub enum Command {
     #[clap(visible_alias = "a")]
     Add(add::Args),
     Edit(edit::Args),
+    ExcludeNewer(exclude_newer::Args),
     #[clap(visible_alias = "i")]
     Install(install::Args),
     Uninstall(uninstall::Args),
@@ -65,6 +67,7 @@ pub async fn execute(cmd: Args) -> miette::Result<()> {
     match cmd.command {
         Command::Add(args) => add::execute(args).await?,
         Command::Edit(args) => edit::execute(args).await?,
+        Command::ExcludeNewer(args) => exclude_newer::execute(args).await?,
         Command::Install(args) => install::execute(args).await?,
         Command::Uninstall(args) => uninstall::execute(args).await?,
         Command::Remove(args) => remove::execute(args).await?,

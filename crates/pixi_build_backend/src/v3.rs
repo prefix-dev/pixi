@@ -1,10 +1,27 @@
 use rattler_build_recipe::stage0::{
-    ConditionalList, Item, Requirements, SerializableMatchSpec, SingleOutputRecipe,
+    ConditionalList, Item, Output, Recipe, Requirements, SerializableMatchSpec, SingleOutputRecipe,
 };
 use rattler_conda_types::{MatchSpec, ParseMatchSpecOptions, ParseStrictness, RepodataRevision};
 
 pub fn generated_recipe_uses_v3(recipe: &SingleOutputRecipe) -> bool {
     !recipe.build.flags.is_empty() || requirements_use_v3(&recipe.requirements)
+}
+
+/// Whether the recipe needs repodata v3. For a multi-output recipe this is the
+/// case if the top-level build or any of its outputs does.
+pub fn recipe_uses_v3(recipe: &Recipe) -> bool {
+    match recipe {
+        Recipe::SingleOutput(recipe) => generated_recipe_uses_v3(recipe),
+        Recipe::MultiOutput(recipe) => {
+            !recipe.build.flags.is_empty()
+                || recipe.outputs.iter().any(|output| match output {
+                    Output::Package(output) => {
+                        !output.build.flags.is_empty() || requirements_use_v3(&output.requirements)
+                    }
+                    Output::Staging(output) => requirements_use_v3(&output.requirements),
+                })
+        }
+    }
 }
 
 fn requirements_use_v3(requirements: &Requirements) -> bool {
@@ -189,5 +206,41 @@ build:
 "#;
 
         assert!(recipe_source_uses_v3(source));
+    }
+
+    fn parse_recipe(source: &str) -> Recipe {
+        let source = rattler_build_recipe::source_code::Source::from_string(
+            "recipe.yaml".to_string(),
+            source.to_string(),
+        );
+        rattler_build_recipe::parse_recipe_with_config(&source, Default::default()).unwrap()
+    }
+
+    #[test]
+    fn multi_output_recipe_uses_v3_if_any_output_does() {
+        let plain = r#"
+recipe:
+  version: 0.1.0
+outputs:
+  - package:
+      name: example
+  - package:
+      name: example-cuda
+"#;
+        assert!(!recipe_uses_v3(&parse_recipe(plain)));
+
+        let flagged = r#"
+recipe:
+  version: 0.1.0
+outputs:
+  - package:
+      name: example
+  - package:
+      name: example-cuda
+    build:
+      flags:
+        - cuda
+"#;
+        assert!(recipe_uses_v3(&parse_recipe(flagged)));
     }
 }
