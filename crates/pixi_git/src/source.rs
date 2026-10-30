@@ -5,11 +5,12 @@ use rattler_networking::LazyClient;
 /// can be checked out locally.
 use std::{
     borrow::Cow,
-    hash::{DefaultHasher, Hash, Hasher},
+    hash::{Hash, Hasher},
     path::{Path, PathBuf},
     sync::Arc,
 };
 use tracing::instrument;
+use xxhash_rust::xxh3::Xxh3;
 
 use crate::{
     GitError, GitUrl, Reporter,
@@ -287,7 +288,7 @@ impl Fetch {
 }
 
 pub fn cache_digest(url: &RepositoryUrl) -> String {
-    let mut hasher = DefaultHasher::new();
+    let mut hasher = Xxh3::new();
     url.hash(&mut hasher);
     let hash = hasher.finish();
     format!("{hash:x}")
@@ -314,6 +315,14 @@ mod tests {
             None => unsafe { std::env::remove_var(PIXI_GIT_LFS_ENV) },
         }
         out
+    }
+
+    // The digest names a directory on disk, so it must not change between
+    // builds.
+    #[test]
+    fn cache_digest_is_stable() {
+        let url = RepositoryUrl::new(&"https://github.com/prefix-dev/pixi".parse().unwrap());
+        assert_eq!(cache_digest(&url), "218bc8dbef9a0fe8");
     }
 
     #[test]

@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
     process::{Command, Stdio},
     str::FromStr,
-    sync::{LazyLock, Mutex},
+    sync::{LazyLock, Mutex, OnceLock},
 };
 
 use clap::{ArgAction, Parser};
@@ -153,6 +153,45 @@ static NETFS_REDIRECT_WARNED: LazyLock<Mutex<HashSet<CacheKind>>> =
 /// honor workspace-level `[cache.*]` overrides must be resolved through
 /// [`Config::cache_dir_for`] instead.
 static GLOBAL_CACHE_CONFIG: LazyLock<CacheConfig> = LazyLock::new(|| Config::load_global().cache);
+
+/// Merges the config files at `locations`, lowest precedence first, skipping
+/// missing ones. A file that fails to load is an error, or, if `lenient`, is
+/// logged and skipped.
+fn merge_locations(locations: Vec<ConfigLocation>, lenient: bool) -> Result<Config, ConfigError> {
+    let mut config = Config::default();
+    for location in locations {
+        let loaded = match location.layer {
+            ConfigLayer::Shared => Config::from_shared_path(&location.path),
+            ConfigLayer::Tool => Config::from_path(&location.path),
+        };
+        match loaded {
+            Ok(c) => config = config.merge_config(c),
+            Err(ConfigError::FileNotFound(_)) => (),
+            Err(e) if lenient => log_skipped(e),
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(config)
+}
+
+/// Logs a config file that failed to load and is skipped.
+fn log_skipped(error: ConfigError) {
+    tracing::error!("{:?}", miette::Report::new(error));
+}
+
+/// Layers env-derived CLI defaults on top, so process-env changes still apply.
+fn with_env_defaults(file_layers: Config) -> Config {
+    let mut default_cli = ConfigCli::default();
+    default_cli.update_from(std::env::args().take(0));
+    file_layers.merge_config(default_cli.into())
+}
+
+/// The path of the project-local config file of `project_root`.
+fn local_config_path(project_root: &Path) -> PathBuf {
+    project_root
+        .join(consts::PIXI_DIR)
+        .join(consts::CONFIG_FILE)
+}
 
 /// Describes where the system + user-level config layer comes from. Built from
 /// [`ConfigSourceCli`] (which mirrors `--no-config` / `--config-file`) and
@@ -1718,13 +1757,17 @@ pub use rattler_config::config::build::{BuildConfig, PackageFormatAndCompression
 pub enum ConfigError {
     #[error("no file was found at {0}")]
     FileNotFound(PathBuf),
-    #[error("failed to read config from '{0}'")]
-    ReadError(std::io::Error),
-    #[error("failed to parse config of {1}: {0}")]
-    ParseError(ParseConfigError, PathBuf),
-    #[error("validation error of {1}: {0}")]
-    ValidationError(ConfigValidationError, PathBuf),
+    #[error("failed to read config file")]
+    ReadError(#[source] std::io::Error),
+    #[error("failed to parse config file '{}'", .1.display())]
+    #[diagnostic(help("{FIX_CONFIG_HELP}"))]
+    ParseError(#[source] ParseConfigError, PathBuf),
+    #[error("invalid config file '{}'", .1.display())]
+    #[diagnostic(help("{FIX_CONFIG_HELP}"))]
+    ValidationError(#[source] ConfigValidationError, PathBuf),
 }
+
+const FIX_CONFIG_HELP: &str = "fix the file with `pixi config edit`, or remove the invalid key with `pixi config unset <key>`";
 
 #[derive(thiserror::Error, miette::Diagnostic, Debug)]
 pub enum ConfigValidationError {
@@ -2013,25 +2056,14 @@ impl Config {
     }
 
     /// Load the system-wide config layer: the shared file with the pixi file
-    /// merged on top, see [`system_config_locations`].
+    /// merged on top, see [`system_config_locations`]. Files that fail to
+    /// load are logged and skipped.
     ///
     /// # Returns
     ///
     /// The loaded system config
     pub fn load_system() -> Config {
-        let mut config = Config::default();
-        for location in system_config_locations() {
-            let loaded = match location.layer {
-                ConfigLayer::Shared => Config::from_shared_path(&location.path),
-                ConfigLayer::Tool => Config::from_path(&location.path),
-            };
-            match loaded {
-                Ok(c) => config = config.merge_config(c),
-                Err(ConfigError::FileNotFound(_)) => (), // it's fine that no file is there
-                Err(e) => tracing::error!("{e}"),
-            }
-        }
-        config
+        merge_locations(system_config_locations(), true).unwrap_or_default()
     }
 
     /// Validate the config file.
@@ -2060,89 +2092,97 @@ impl Config {
     ///   because the underlying files are env-independent.
     ///
     /// The project-local `<project>/.pixi/config.toml` layer that
-    /// [`Config::load_with`] adds on top is unaffected.
-    pub fn load_global_with(source: &GlobalConfigSource) -> Config {
+    /// [`Config::try_load_with`] adds on top is unaffected.
+    ///
+    /// # Errors
+    ///
+    /// Any config file that exists but fails to load.
+    pub fn try_load_global_with(source: &GlobalConfigSource) -> Result<Config, ConfigError> {
         // Cache only the default search-the-disk layers; non-default sources
         // (--no-config / --config-file) are per-invocation and can vary.
-        static SEARCH_LAYERS: LazyLock<Config> = LazyLock::new(|| {
-            let mut config = Config::default();
-            for location in config_search_locations() {
-                let loaded = match location.layer {
-                    ConfigLayer::Shared => Config::from_shared_path(&location.path),
-                    ConfigLayer::Tool => Config::from_path(&location.path),
-                };
-                match loaded {
-                    Ok(c) => config = config.merge_config(c),
-                    Err(ConfigError::FileNotFound(_)) => (),
-                    Err(e) => tracing::error!(
-                        "Failed to load global config '{}' with error: {}",
-                        location.path.display(),
-                        e
-                    ),
-                }
-            }
-            config
-        });
+        static SEARCH_LAYERS: OnceLock<Config> = OnceLock::new();
 
         let file_layers = match source {
             GlobalConfigSource::None => Config::default(),
-            GlobalConfigSource::File(path) => match Config::from_path(path) {
-                Ok(c) => c,
-                Err(e) => {
-                    tracing::error!(
-                        "Failed to load config file '{}' (from --config-file / \
-                         PIXI_CONFIG_FILE): {}",
-                        path.display(),
-                        e
-                    );
-                    Config::default()
+            GlobalConfigSource::File(path) => Config::from_path(path)?,
+            GlobalConfigSource::Search => match SEARCH_LAYERS.get() {
+                Some(config) => config.clone(),
+                None => {
+                    let config = merge_locations(config_search_locations(), false)?;
+                    SEARCH_LAYERS.get_or_init(|| config).clone()
                 }
             },
-            GlobalConfigSource::Search => SEARCH_LAYERS.clone(),
         };
+        Ok(with_env_defaults(file_layers))
+    }
 
-        // Layer env-derived CLI defaults so process-env changes still apply.
-        let mut default_cli = ConfigCli::default();
-        default_cli.update_from(std::env::args().take(0));
-        file_layers.merge_config(default_cli.into())
+    /// Like [`Config::try_load_global_with`], but files that fail to load are
+    /// logged and skipped, so `pixi config` can still repair them.
+    pub fn load_global_with(source: &GlobalConfigSource) -> Config {
+        let file_layers = match source {
+            GlobalConfigSource::None => Config::default(),
+            GlobalConfigSource::File(path) => Config::from_path(path).unwrap_or_else(|e| {
+                log_skipped(e);
+                Config::default()
+            }),
+            GlobalConfigSource::Search => {
+                merge_locations(config_search_locations(), true).unwrap_or_default()
+            }
+        };
+        with_env_defaults(file_layers)
     }
 
     /// Load the global config layer using the default search behavior.
+    pub fn try_load_global() -> Result<Config, ConfigError> {
+        Self::try_load_global_with(&GlobalConfigSource::Search)
+    }
+
+    /// Like [`Config::try_load_global`], but files that fail to load are
+    /// logged and skipped.
     pub fn load_global() -> Config {
         Self::load_global_with(&GlobalConfigSource::Search)
     }
 
     /// Load the global config and layer the given cli config on top of it.
-    pub fn with_cli_config(cli: &ConfigCli) -> Config {
-        let config = Config::load_global();
-        config.merge_config(cli.clone().into())
+    pub fn try_with_cli_config(cli: &ConfigCli) -> Result<Config, ConfigError> {
+        Ok(Self::try_load_global()?.merge_config(cli.clone().into()))
     }
 
     /// Loads global configuration and merges `<project>/.pixi/config.toml` on top.
-    pub fn load_with(project_root: &Path, source: &GlobalConfigSource) -> Config {
-        let mut config = Self::load_global_with(source);
-        let local_config_path = project_root
-            .join(consts::PIXI_DIR)
-            .join(consts::CONFIG_FILE);
-
-        match Self::from_path(&local_config_path) {
-            Ok(local) => {
-                config = config.merge_config(local);
-            }
-            Err(e) => tracing::debug!(
-                "Failed to load local config: {} (error: {})",
-                local_config_path.display(),
-                e
-            ),
+    ///
+    /// # Errors
+    ///
+    /// Any config file that exists but fails to load.
+    pub fn try_load_with(
+        project_root: &Path,
+        source: &GlobalConfigSource,
+    ) -> Result<Config, ConfigError> {
+        let config = Self::try_load_global_with(source)?;
+        match Self::from_path(&local_config_path(project_root)) {
+            Ok(local) => Ok(config.merge_config(local)),
+            Err(ConfigError::FileNotFound(_)) => Ok(config),
+            Err(e) => Err(e),
         }
+    }
 
-        config
+    /// Like [`Config::try_load_with`], but files that fail to load are logged
+    /// and skipped.
+    pub fn load_with(project_root: &Path, source: &GlobalConfigSource) -> Config {
+        let config = Self::load_global_with(source);
+        match Self::from_path(&local_config_path(project_root)) {
+            Ok(local) => config.merge_config(local),
+            Err(ConfigError::FileNotFound(_)) => config,
+            Err(e) => {
+                log_skipped(e);
+                config
+            }
+        }
     }
 
     /// Load the config from the given path (project root) using the default
     /// global search.
-    pub fn load(project_root: &Path) -> Config {
-        Self::load_with(project_root, &GlobalConfigSource::Search)
+    pub fn try_load(project_root: &Path) -> Result<Config, ConfigError> {
+        Self::try_load_with(project_root, &GlobalConfigSource::Search)
     }
 
     // Get all possible keys of the configuration
@@ -2997,11 +3037,7 @@ impl Config {
             match Config::from_shared_path(&path) {
                 Ok(loaded) => config = config.merge_config(loaded),
                 Err(ConfigError::FileNotFound(_)) => (),
-                Err(e) => tracing::error!(
-                    "Failed to load shared config '{}' with error: {}",
-                    path.display(),
-                    e
-                ),
+                Err(e) => log_skipped(e),
             }
         }
         config

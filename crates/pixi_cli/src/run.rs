@@ -178,7 +178,7 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
         Some(RunScriptInput::Remote(url)) => {
             validate_transient_script_lock_file_usage(requested_lock_file_usage)?;
             let root = std::env::current_dir().into_diagnostic()?;
-            let config = pixi_config::Config::load_with(&root, &global_config_source)
+            let config = pixi_config::Config::try_load_with(&root, &global_config_source)?
                 .merge_config(cli_config);
             let prepared = prepare_remote_script(url, &config, &root, args.experimental).await?;
             let cache_key =
@@ -232,7 +232,7 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
         Some(RunScriptInput::Stdin) => {
             validate_transient_script_lock_file_usage(requested_lock_file_usage)?;
             let root = std::env::current_dir().into_diagnostic()?;
-            let config = pixi_config::Config::load_with(&root, &global_config_source)
+            let config = pixi_config::Config::try_load_with(&root, &global_config_source)?
                 .merge_config(cli_config);
             let mut contents = Vec::new();
             std::io::stdin()
@@ -272,7 +272,7 @@ pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
                 .parent()
                 .expect("an absolute script path always has a parent")
                 .to_owned();
-            let config = pixi_config::Config::load_with(&root, &global_config_source)
+            let config = pixi_config::Config::try_load_with(&root, &global_config_source)?
                 .merge_config(cli_config.clone());
             // The configuration option opts in for every run, so the flag is
             // only needed when it is unset.

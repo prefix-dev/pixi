@@ -55,7 +55,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .parent()
             .expect("an absolute script path always has a parent")
             .to_owned();
-        let config = pixi_config::Config::load_with(&root, &args.config_source.source())
+        let config = pixi_config::Config::try_load_with(&root, &args.config_source.source())?
             .merge_config(args.config.clone().into());
         let host =
             probe_conda_script(&manifest, &root, &config, cli_detector_consent(None)).await?;

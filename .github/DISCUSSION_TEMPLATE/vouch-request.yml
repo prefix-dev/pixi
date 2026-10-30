@@ -4,18 +4,11 @@ body:
       value: |
         To mitigate spam, Pixi only accepts pull requests from vouched contributors, see [CONTRIBUTING.md](https://github.com/prefix-dev/pixi/blob/main/CONTRIBUTING.md).
         If you are already vouched for another prefix-dev project such as [rattler](https://github.com/conda/rattler), you don't need to request it again.
-        Keep it short and write it yourself, not with an AI.
         A vouch is not approval of a specific change: still agree on it with a maintainer before opening a pull request.
-  - type: textarea
-    id: change
-    attributes:
-      label: What do you want to change?
-      description: Link the issue if there is one.
-    validations:
-      required: true
+        If you don't get a response within a week, please ping us on [Discord](https://discord.gg/kKV8ZxyzY4).
   - type: textarea
     id: motivation
     attributes:
-      label: Why?
+      label: Please briefly introduce yourself and why you want to contribute. Do not use an AI for this.
     validations:
       required: true

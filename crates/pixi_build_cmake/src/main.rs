@@ -12,7 +12,9 @@ use pixi_build_backend::{
     tools::BackendIdentifier,
 };
 use rattler_build_jinja::Variable;
-use rattler_build_recipe::stage0::{Item, Script, SerializableMatchSpec, Value};
+use rattler_build_recipe::stage0::{
+    Item, Script, SerializableMatchSpec, SingleOutputRecipe, Value,
+};
 use rattler_build_types::NormalizedKey;
 use rattler_conda_types::{ChannelUrl, Subdir};
 use std::collections::HashSet;
@@ -45,6 +47,7 @@ fn fallback_input_globs() -> BTreeSet<String> {
 #[async_trait::async_trait]
 impl GenerateRecipe for CMakeGenerator {
     type Config = CMakeBackendConfig;
+    type Recipe = SingleOutputRecipe;
 
     async fn generate_recipe(
         &self,

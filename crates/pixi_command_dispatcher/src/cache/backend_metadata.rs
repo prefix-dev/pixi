@@ -32,11 +32,12 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, BinaryHeap};
 use std::{
     collections::BTreeMap,
-    hash::{DefaultHasher, Hash, Hasher},
+    hash::{Hash, Hasher},
     path::{Path, PathBuf},
     sync::Arc,
 };
 use thiserror::Error;
+use xxhash_rust::xxh3::Xxh3;
 
 // Re-export WriteResult with the correct type
 pub type WriteResult = CommonWriteResult<BuildBackendMetadataCacheEntry>;
@@ -113,7 +114,7 @@ impl MetadataCacheKey<BuildBackendMetadataCache> for BuildBackendMetadataCacheKe
     /// Computes a unique semi-human-readable string representation of the key.
     /// This is what is used as the cache file name.
     fn key(&self) -> CacheKeyString<BuildBackendMetadataCache> {
-        let mut hasher = DefaultHasher::new();
+        let mut hasher = Xxh3::new();
         self.channel_urls.hash(&mut hasher);
         // Hash the cutoffs as configured, like the prefix of the backend
         // environment does, so a relative cutoff such as `14d` does not

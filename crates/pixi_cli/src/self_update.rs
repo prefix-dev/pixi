@@ -192,7 +192,7 @@ fn config_from_args(args: &Args) -> Config {
 /// * `global_options` - Reference to the global CLI options.
 pub async fn execute(args: Args, global_options: &GlobalOptions) -> miette::Result<()> {
     let source = args.config_source.source();
-    let config = Config::load_global_with(&source).merge_config(config_from_args(&args));
+    let config = Config::try_load_global_with(&source)?.merge_config(config_from_args(&args));
 
     // Updating the binary always requires downloading a release from GitHub,
     // so bail out early with a clear error in offline mode.

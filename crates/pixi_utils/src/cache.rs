@@ -1,6 +1,7 @@
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::hash::{Hash, Hasher};
 
 use rattler_conda_types::{MatchSpec, Subdir};
+use xxhash_rust::xxh3::Xxh3;
 
 /// Hash identifying a cached `pixi exec` environment by its specs, channels
 /// and platform. The executed command is intentionally not part of the hash.
@@ -70,7 +71,7 @@ impl EnvironmentHash {
     /// Directory name for the cached environment: `{prefix}-{hash}` when a
     /// prefix is given, otherwise just `{hash}`.
     pub fn name(&self, prefix: Option<&str>) -> String {
-        let mut hasher = DefaultHasher::new();
+        let mut hasher = Xxh3::new();
         self.hash(&mut hasher);
         let hash = hasher.finish();
         match prefix {
@@ -104,6 +105,18 @@ mod tests {
             strip(h.name(Some("sh"))),
             strip(h.name(Some("voms-proxy-init"))),
         );
+    }
+
+    // The name is a directory on disk, so it must not change between builds.
+    #[test]
+    fn name_is_stable() {
+        let h = EnvironmentHash::new(
+            vec![spec("python")],
+            vec!["conda-forge".into()],
+            Subdir::Linux64,
+            false,
+        );
+        assert_eq!(h.name(Some("python")), "python-5a7a16265bfee075");
     }
 
     #[test]

@@ -4,7 +4,7 @@ mod context;
 pub use context::{DefaultContext, WorkspaceContext};
 
 mod interface;
-pub use interface::Interface;
+pub use interface::{Interface, InterfaceError};
 
 // Reexport for pixi_api consumers
 pub use pep508_rs as pep508;

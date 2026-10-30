@@ -37,6 +37,10 @@ pub enum ManifestError {
         source: std::io::Error,
     },
 
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Config(Box<pixi_config::ConfigError>),
+
     #[error("failed to read the global manifest")]
     Read(#[source] std::io::Error),
 
@@ -97,6 +101,12 @@ pub enum ManifestError {
 
     #[error("expected an array for {0}")]
     ExpectedArray(&'static str),
+}
+
+impl From<pixi_config::ConfigError> for ManifestError {
+    fn from(error: pixi_config::ConfigError) -> Self {
+        Self::Config(Box::new(error))
+    }
 }
 
 /// Handles the global project's manifest file.
@@ -170,9 +180,10 @@ impl Manifest {
         env_name: &EnvironmentName,
         channels: Option<Vec<NamedChannelOrUrl>>,
     ) -> Result<(), ManifestError> {
-        let channels = channels
-            .filter(|c| !c.is_empty())
-            .unwrap_or_else(|| Config::load_global().default_channels());
+        let channels = match channels.filter(|c| !c.is_empty()) {
+            Some(channels) => channels,
+            None => Config::try_load_global()?.default_channels(),
+        };
 
         // Update self.parsed
         if self.parsed.envs.get(env_name).is_some() {
