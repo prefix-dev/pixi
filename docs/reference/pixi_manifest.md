@@ -415,7 +415,7 @@ Instead of lowering the cutoff for every future release of such a package, exemp
 Write `exclude-newer` as a table with a `cutoff` and `exemptions` for that.
 An exempted release is never excluded, regardless of its upload time.
 
-The value of an exemption is a version spec, or a table with the same fields as a [conda dependency](#dependencies-optional) from a channel, such as `version`, `build` or `channel`, or the `url` or `path` of a package archive.
+The value of an exemption is a version spec, or a table with the same fields as a [conda dependency](#dependencies-optional) from a channel, such as `version`, `build` or `channel`, or the `url` of a package archive.
 `polars = "==1.43.1"` exempts that release only, while `py-rattler = "*"` exempts every release of the package, including future ones.
 
 ```toml

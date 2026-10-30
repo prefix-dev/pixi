@@ -233,6 +233,10 @@ pub enum InvalidExemptionSpec {
     )]
     Empty,
 
+    /// `rattler_config` only exempts a package archive by its `url`.
+    #[error("an exclude-newer exemption must use a `url` instead of a `path`")]
+    Path,
+
     /// The exemption breaks one of the rules of `rattler_config`, e.g. it has
     /// `extras` or a `when`, which don't select packages.
     #[error(transparent)]
@@ -289,8 +293,9 @@ pub fn validate_exemption_spec(
             }
         }
         // An exemption of a package archive, like the `url` of an exemption
-        // in `rattler_config`. A path is the `file://` URL of the archive.
-        BinarySpec::Url(_) | BinarySpec::Path(_) => Ok(spec),
+        // in `rattler_config`.
+        BinarySpec::Url(_) => Ok(spec),
+        BinarySpec::Path(_) => Err(InvalidExemptionSpec::Path),
     }
 }
 
@@ -580,8 +585,7 @@ scikit_learn = "*"
 
     #[test]
     fn test_exemption_with_path() {
-        let input =
-            r#"exclude-newer = { cutoff = "7d", exemptions = { polars = { path = "./polars" } } }"#;
+        let input = r#"exclude-newer = { cutoff = "7d", exemptions = { polars = { path = "./polars-1.0-0.conda" } } }"#;
         let err = parse_conda(input).unwrap_err();
         assert_snapshot!(render_error(input, err));
     }
