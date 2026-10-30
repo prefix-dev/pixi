@@ -583,7 +583,11 @@ async fn alter_config(
         // An invalid file is not loaded, so writing back its `exclude-newer`
         // would remove all of it rather than the key.
         AlterMode::Set | AlterMode::Unset if loaded && key.starts_with("exclude-newer.") => {
+            let before = config.exclude_newer.clone();
             config.set(key, value)?;
+            if matches!(mode, AlterMode::Unset) && config.exclude_newer == before {
+                miette::bail!("Key '{}' not found in configuration file", key);
+            }
             transplant_config_key(
                 &config,
                 &mut toml_doc,
@@ -1128,6 +1132,12 @@ mod tests {
             .await
             .unwrap_err();
         edit("exclude-newer.exemptions.ruff.bogus", Some("*"))
+            .await
+            .unwrap_err();
+        assert_eq!(context.read_config(), "exclude-newer = \"14d\"\n");
+
+        // Unsetting an exemption that isn't there fails like any missing key.
+        edit("exclude-newer.exemptions.numpy", None)
             .await
             .unwrap_err();
         assert_eq!(context.read_config(), "exclude-newer = \"14d\"\n");
