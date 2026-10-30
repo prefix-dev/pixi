@@ -1,10 +1,9 @@
 use std::path::PathBuf;
 
-use futures::TryFutureExt;
+use futures::FutureExt;
 use indexmap::IndexMap;
 use miette::Diagnostic;
 use pixi_core::{
-    Workspace,
     environment::{SanityCheckError, sanity_check_workspace},
     workspace::{PypiDeps, SkippedPackage, UpdateDependenciesError, UpdateDeps, WorkspaceMut},
 };
@@ -56,11 +55,14 @@ pub enum AddError {
     #[diagnostic(transparent)]
     Save(#[from] SaveManifestError),
 
+    /// Restoring the manifest after `update` failed also failed.
     #[error("failed to restore '{}'", .path.display())]
     RestoreManifest {
         path: PathBuf,
         #[source]
         source: std::io::Error,
+        #[related]
+        update: Vec<UpdateDependenciesError>,
     },
 }
 
@@ -160,24 +162,29 @@ pub async fn add_conda_dep(
             save(workspace).await?;
             result
         }
-        Err(e) => {
-            revert(workspace).await?;
-            return Err(e.into());
-        }
+        Err(e) => return Err(revert(workspace, e).await),
     };
 
     Ok((update_deps, skipped))
 }
 
-/// Reverts `workspace`, naming the manifest in the error since the io error
-/// doesn't always carry the path.
+/// Reverts `workspace` after `update` failed, keeping `update` if reverting
+/// fails too.
 ///
 /// Not `async`, for the same reason as [`save`].
-fn revert(workspace: WorkspaceMut) -> impl Future<Output = Result<Workspace, AddError>> {
+fn revert(
+    workspace: WorkspaceMut,
+    update: UpdateDependenciesError,
+) -> impl Future<Output = AddError> {
     let path = workspace.workspace().workspace.provenance.path.clone();
-    workspace
-        .revert()
-        .map_err(move |source| AddError::RestoreManifest { path, source })
+    workspace.revert().map(move |result| match result {
+        Ok(_) => update.into(),
+        Err(source) => AddError::RestoreManifest {
+            path,
+            source,
+            update: vec![update],
+        },
+    })
 }
 
 fn manifest_path_string(path: &std::path::Path) -> String {
@@ -228,10 +235,7 @@ pub async fn add_pypi_dep(
             save(workspace).await?;
             result
         }
-        Err(e) => {
-            revert(workspace).await?;
-            return Err(e.into());
-        }
+        Err(e) => return Err(revert(workspace, e).await),
     };
 
     Ok((update_deps, skipped))
@@ -239,7 +243,7 @@ pub async fn add_pypi_dep(
 
 #[cfg(test)]
 mod tests {
-    use pixi_core::environment::LockFileUsage;
+    use pixi_core::{Workspace, environment::LockFileUsage};
     use pixi_manifest::PixiPlatformName;
     use pixi_spec::GitReference;
     use rattler_conda_types::{ParseMatchSpecOptions, RepodataRevision};
