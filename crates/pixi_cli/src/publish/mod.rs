@@ -122,6 +122,10 @@ pub struct Args {
     #[arg(long, num_args = 1..)]
     pub path: Vec<PathBuf>,
 
+    /// The environment to build and publish from.
+    #[arg(long, short)]
+    pub environment: Option<String>,
+
     /// The target channel to publish packages to. Accepts a URL (prefix.dev, anaconda.org, cloudsmith://, s3://, quetz://, artifactory://) or a local filesystem path / `file://` URL for an indexed local channel.
     ///
     /// Mutually exclusive with `--target-dir`.
@@ -579,6 +583,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     sanity_check_workspace(&workspace).await?;
 
+    let environment = workspace.environment_from_name_or_env_var(args.environment.clone())?;
+
     // `--force` requests an overwrite, so existing packages must not be
     // skipped even though skipping is the default.
     let skip_existing = !args.no_skip_existing && !args.force;
@@ -661,14 +667,10 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         variant_files.extend(resolve_variant_config_paths(&args.variant_config, &cwd));
     }
 
-    let mut build_virtual_packages = workspace
-        .default_environment()
-        .virtual_packages(&build_pixi_platform);
+    let mut build_virtual_packages = environment.virtual_packages(&build_pixi_platform);
     apply_conda_overrides(&mut build_virtual_packages, build_pixi_platform.subdir());
 
-    let mut host_virtual_packages = workspace
-        .default_environment()
-        .virtual_packages(&target_pixi_platform);
+    let mut host_virtual_packages = environment.virtual_packages(&target_pixi_platform);
     apply_conda_overrides(&mut host_virtual_packages, target_pixi_platform.subdir());
 
     let build_environment = BuildEnvironment {
@@ -679,8 +681,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     };
 
     let channel_config = workspace.channel_config();
-    let channels = workspace
-        .default_environment()
+    let channels = environment
         .channel_urls(&channel_config)
         .into_diagnostic()?;
 
