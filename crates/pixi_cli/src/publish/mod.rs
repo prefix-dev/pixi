@@ -684,8 +684,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .channel_urls(&channel_config)
         .into_diagnostic()?;
 
-    // When running `pixi publish`, the exclude_newer config is ignored;
-    // it only matters when using the package as a source dependency.
+    // Build with the `exclude-newer` of the workspace, the same cutoff that
+    // applies when the package is built as a source dependency of the
+    // workspace.
+    let exclude_newer = workspace
+        .default_environment()
+        .exclude_newer_config_resolved(&channel_config)?;
+
     let make_env_ref = |manifest_source: &PinnedSourceSpec| {
         EnvironmentRef::Ephemeral(EphemeralEnv::new(
             manifest_source.to_string(),
@@ -696,7 +701,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                     variant_configuration: variant_configuration.clone(),
                     variant_files: variant_files.clone(),
                 },
-                exclude_newer: None,
+                exclude_newer: exclude_newer.clone(),
                 channel_priority: Default::default(),
             },
         ))
@@ -1095,7 +1100,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         let build_spec = SourceBuildSpec {
             record: Arc::new(record.into()),
             channels: channels.clone(),
-            exclude_newer: None,
+            exclude_newer: exclude_newer.clone(),
             build_environment: build_environment.clone(),
             build_profile: BuildProfile::Release,
             variant_configuration: Some(variant_configuration.clone()),

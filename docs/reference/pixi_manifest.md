@@ -400,6 +400,7 @@ The cutoff may be specified in the following formats:
 When using a relative duration, the lock file will be re-solved when a package is not included in the cutoff date.
 
 Both PyPI and conda packages are considered.
+The cutoff also applies to the build and host dependencies when packages of the workspace are built, both as source dependencies and with `pixi publish`.
 
 ```toml
 [workspace]
