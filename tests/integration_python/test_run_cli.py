@@ -1398,7 +1398,7 @@ def test_task_minijinja_title_filter(pixi: Path, tmp_pixi_workspace: Path) -> No
     manifest_path.write_text(tomli_w.dumps(manifest_content))
 
     verify_cli_command(
-        [pixi, "run", "--manifest-path", manifest_path, "title-filter", '"hello world"'],
+        [pixi, "run", "--manifest-path", manifest_path, "title-filter", "hello world"],
         stdout_contains="Hello World",
     )
 
