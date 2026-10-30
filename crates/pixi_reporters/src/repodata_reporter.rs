@@ -524,6 +524,7 @@ struct TrackedDownload {
     finished: Option<Instant>,
     total_bytes: Option<usize>,
     bytes_downloaded: usize,
+    cleared: bool,
 }
 
 impl RepodataReporter {
@@ -547,25 +548,24 @@ impl RepodataReporter {
 
 impl RepodataReporterInner {
     pub fn clear(&mut self) {
-        let downloads = self.downloads.read();
-        if downloads.is_empty() {
-            return;
-        }
-
-        // Downloads in flight hold an index into `downloads`, so dropping the
-        // entries under them would panic the next progress callback. Leave the
-        // bar up and let a later clear take care of it.
-        if downloads.iter().any(|download| download.finished.is_none()) {
-            drop(downloads);
-            self.update();
-            return;
+        let mut downloads = self.downloads.write();
+        let has_active_downloads = downloads.iter().any(|download| !download.cleared);
+        if downloads.iter().all(|download| download.finished.is_some()) {
+            downloads.clear();
+        } else {
+            // Preserve callback indices without letting late callbacks redraw the bar.
+            for download in downloads.iter_mut() {
+                download.cleared = true;
+            }
         }
         drop(downloads);
-        self.downloads.write().clear();
+        if !has_active_downloads {
+            return;
+        }
 
         // A finished bar can never be shown again, so swap in a fresh hidden
         // one and restore the title for whatever phase comes next.
-        self.title = Some(self.pb.prefix());
+        self.title.get_or_insert_with(|| self.pb.prefix());
         let new_pb = self
             .multi_progress
             .insert_after(&self.pb, ProgressBar::hidden());
@@ -588,19 +588,18 @@ impl RepodataReporterInner {
 
     pub fn update(&mut self) {
         let downloads = self.downloads.read();
-        if !downloads.iter().any(|d| d.bytes_downloaded > 0) {
+        let mut downloads = downloads.iter().filter(|download| !download.cleared);
+        if !downloads.clone().any(|d| d.bytes_downloaded > 0) {
             // Dont do anything if no downloads have been started.
             return;
         }
 
-        let bytes_downloaded = downloads.iter().map(|d| d.bytes_downloaded).sum::<usize>();
+        let bytes_downloaded = downloads.clone().map(|d| d.bytes_downloaded).sum::<usize>();
         let total_bytes = downloads
-            .iter()
+            .clone()
             .map(|d| d.total_bytes.unwrap_or(d.bytes_downloaded))
             .sum::<usize>();
-        let pending_downloads = downloads
-            .iter()
-            .any(|d| d.finished.is_none() && d.bytes_downloaded > 0);
+        let pending_downloads = downloads.any(|d| d.finished.is_none() && d.bytes_downloaded > 0);
 
         // Set the style of the progress bar.
         let verbose = tracing::event_enabled!(tracing::Level::INFO);
@@ -637,6 +636,7 @@ impl RepodataReporterInner {
             finished: None,
             total_bytes: None,
             bytes_downloaded: 0,
+            cleared: false,
         });
         drop(downloads);
         self.update();
@@ -683,7 +683,7 @@ impl RepodataReporterInner {
 fn total_duration(items: &[TrackedDownload], now: Instant) -> Duration {
     let mut intervals: Vec<(Instant, Instant)> = items
         .iter()
-        .filter(|d| d.bytes_downloaded > 0)
+        .filter(|d| !d.cleared && d.bytes_downloaded > 0)
         .map(|item| (item.started, item.finished.unwrap_or(now)))
         .collect();
 
@@ -786,19 +786,115 @@ impl DownloadReporter for RepodataReporter {
 
 #[cfg(test)]
 mod tests {
+    use std::time::Instant;
+
+    use indicatif::{MultiProgress, ProgressDrawTarget};
     use jiff::Timestamp;
+    use pixi_progress::ProgressBarPlacement;
     use rattler_conda_types::{ChannelNotice, ChannelNoticeLevel, ChannelUrl};
-    use rattler_repodata_gateway::ChannelNoticeResult;
+    use rattler_repodata_gateway::{ChannelNoticeResult, DownloadReporter};
     use unicode_width::UnicodeWidthStr;
 
     use super::{
-        MAX_MESSAGE_LINES, ViewedNotice, ViewedNotices, format_channel_notice,
+        MAX_MESSAGE_LINES, RepodataReporter, ViewedNotice, ViewedNotices, format_channel_notice,
         format_relative_time, notice_message_lines, prune_viewed_channel_notices,
         push_wrapped_notice_line, read_viewed_channel_notices_from, redact_channel_url,
         should_display, write_viewed_channel_notices_to,
     };
 
     const WIDTH: usize = 88;
+
+    fn repodata_reporter() -> RepodataReporter {
+        RepodataReporter::new(
+            MultiProgress::with_draw_target(ProgressDrawTarget::hidden()),
+            ProgressBarPlacement::Bottom,
+            "fetching repodata".to_owned(),
+        )
+    }
+
+    #[test]
+    fn repodata_clear_hides_in_flight_downloads_and_ignores_late_callbacks() {
+        let reporter = repodata_reporter();
+        let url = url::Url::parse("https://example.com/repodata.json").unwrap();
+        let first = reporter.on_download_start(&url);
+        reporter.on_download_progress(&url, first, 10, Some(100));
+        let second = reporter.on_download_start(&url);
+        let old_pb = reporter.inner.read().pb.clone();
+
+        reporter.clear();
+        assert!(old_pb.is_finished());
+        reporter.clear();
+        reporter.on_download_progress(&url, first, 20, Some(100));
+        reporter.on_download_complete(&url, first);
+        assert_eq!(
+            reporter.inner.read().title.as_deref(),
+            Some("fetching repodata")
+        );
+        assert_eq!(reporter.inner.read().pb.position(), 0);
+
+        let next = reporter.on_download_start(&url);
+        reporter.on_download_progress(&url, next, 3, Some(30));
+        reporter.on_download_progress(&url, second, 50, Some(100));
+        reporter.on_download_complete(&url, second);
+        {
+            let inner = reporter.inner.read();
+            assert_eq!(inner.pb.prefix(), "fetching repodata");
+            assert_eq!(inner.pb.position(), 3);
+            assert_eq!(inner.pb.length(), Some(30));
+            let downloads = inner.downloads.read();
+            let now = Instant::now();
+            assert_eq!(
+                super::total_duration(&downloads, now),
+                now.duration_since(downloads[next].started)
+            );
+        }
+
+        reporter.on_download_complete(&url, next);
+        let pb = reporter.inner.read().pb.clone();
+        reporter.clear();
+        assert!(pb.is_finished());
+        assert!(reporter.inner.read().downloads.read().is_empty());
+    }
+
+    #[test]
+    fn repodata_clear_before_first_byte_preserves_title() {
+        let reporter = repodata_reporter();
+        let url = url::Url::parse("https://example.com/repodata.json").unwrap();
+        let first = reporter.on_download_start(&url);
+
+        reporter.clear();
+        reporter.on_download_complete(&url, first);
+        reporter.clear();
+
+        let next = reporter.on_download_start(&url);
+        reporter.on_download_progress(&url, next, 3, Some(30));
+        assert_eq!(reporter.inner.read().pb.prefix(), "fetching repodata");
+        assert_eq!(reporter.inner.read().pb.position(), 3);
+        reporter.on_download_complete(&url, next);
+        reporter.clear();
+    }
+
+    #[test]
+    fn repodata_clear_finished_downloads_allows_reuse() {
+        let reporter = repodata_reporter();
+        let url = url::Url::parse("https://example.com/repodata.json").unwrap();
+        let first = reporter.on_download_start(&url);
+        reporter.on_download_progress(&url, first, 10, Some(10));
+        reporter.on_download_complete(&url, first);
+        let old_pb = reporter.inner.read().pb.clone();
+
+        reporter.clear();
+        reporter.clear();
+        assert!(old_pb.is_finished());
+
+        let next = reporter.on_download_start(&url);
+        reporter.on_download_progress(&url, next, 3, Some(30));
+        assert_eq!(reporter.inner.read().pb.prefix(), "fetching repodata");
+        assert_eq!(reporter.inner.read().pb.position(), 3);
+        assert_eq!(reporter.inner.read().pb.length(), Some(30));
+        reporter.on_download_complete(&url, next);
+        reporter.clear();
+    }
 
     fn at(timestamp: &str) -> Timestamp {
         timestamp.parse().expect("valid timestamp")
