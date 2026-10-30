@@ -2,9 +2,9 @@ use clap::Parser;
 use itertools::Itertools;
 use miette::Context;
 use pixi_config::{Config, ConfigCli};
-use pixi_global::{EnvironmentName, ExposedName, Project, StateChanges};
+use pixi_global::project::ExposedType;
+use pixi_global::{EnvironmentName, Project, StateChanges};
 use rattler_conda_types::MatchSpec;
-use std::str::FromStr;
 
 use crate::global::revert_environment_after_error;
 use crate::has_specs::HasSpecs;
@@ -69,34 +69,13 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .map(|removed_name| removed_dependencies.push(removed_name))?;
         }
 
-        // Figure out which package the exposed binaries belong to
-        let prefix = project.environment_prefix(env_name).await?;
-
-        for spec in specs {
-            {
-                let name = spec.name.as_exact().expect("package name must be exact");
-                // If the package is not existent, don't try to remove executables
-                if let Ok(record) = prefix.find_designated_package(name).await {
-                    prefix
-                        .find_executables(&[record])
-                        .into_iter()
-                        .filter_map(|executable| {
-                            ExposedName::from_str(executable.name.as_str()).ok()
-                        })
-                        .for_each(|exposed_name| {
-                            project
-                                .manifest
-                                .remove_exposed_name(env_name, &exposed_name)
-                                .ok();
-                        });
-                }
-            }
-        }
-
-        // Sync environment
-        let state_changes = project
-            .sync_environment(env_name, Some(removed_dependencies))
+        let mut state_changes = project
+            .sync_environment_install(env_name, Some(removed_dependencies))
             .await?;
+        project
+            .sync_exposed_names(env_name, ExposedType::Nothing)
+            .await?;
+        state_changes |= project.sync_environment_expose(env_name).await?;
         project.clear_progress();
 
         project.manifest.save().await?;
