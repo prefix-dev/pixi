@@ -16,8 +16,8 @@ use uv_distribution_filename::DistFilename;
 use uv_distribution_types::{
     CachedDist, ConfigSettings, IsBuildBackendError, Requirement, SourceDist,
 };
-use uv_python::PythonEnvironment;
-use uv_types::{BuildArena, BuildContext, BuildStack, ResolvedRequirements};
+use uv_python_interpreter::PythonEnvironment;
+use uv_types::{BuildArena, BuildContext, BuildStack, HashStrategy, ResolvedRequirements};
 
 /// Wraps a [`BuildDispatch`], overriding only the config settings uv uses for the
 /// build cache key. See the module docs.
@@ -45,7 +45,11 @@ impl<'ctx> BuildContext for CacheScopedBuildContext<'ctx> {
         &self.cache_config_settings
     }
 
-    async fn interpreter(&self) -> &uv_python::Interpreter {
+    fn tar_backend(&self) -> uv_static::TarBackend {
+        self.inner.tar_backend()
+    }
+
+    async fn interpreter(&self) -> &uv_python_interpreter::Interpreter {
         self.inner.interpreter().await
     }
 
@@ -80,9 +84,12 @@ impl<'ctx> BuildContext for CacheScopedBuildContext<'ctx> {
     async fn resolve<'a>(
         &'a self,
         requirements: &'a [Requirement],
+        hash_override: Option<&'a HashStrategy>,
         build_stack: &'a BuildStack,
     ) -> Result<ResolvedRequirements, impl IsBuildBackendError> {
-        self.inner.resolve(requirements, build_stack).await
+        self.inner
+            .resolve(requirements, hash_override, build_stack)
+            .await
     }
 
     async fn install<'a>(
@@ -100,6 +107,7 @@ impl<'ctx> BuildContext for CacheScopedBuildContext<'ctx> {
         source: &'a Path,
         subdirectory: Option<&'a Path>,
         install_path: &'a Path,
+        stop_discovery_at: Option<&'a Path>,
         version_id: Option<&'a str>,
         dist: Option<&'a SourceDist>,
         sources: &'a NoSources,
@@ -112,6 +120,7 @@ impl<'ctx> BuildContext for CacheScopedBuildContext<'ctx> {
                 source,
                 subdirectory,
                 install_path,
+                stop_discovery_at,
                 version_id,
                 dist,
                 sources,

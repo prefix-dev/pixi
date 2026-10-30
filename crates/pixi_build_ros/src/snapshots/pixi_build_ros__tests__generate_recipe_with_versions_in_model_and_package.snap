@@ -16,7 +16,6 @@ build:
   always_copy_files: []
   always_include_files: []
   merge_build_and_host_envs: false
-  files: []
   dynamic_linking:
     rpaths: []
     binary_relocation: true
@@ -73,6 +72,7 @@ requirements:
     - numpy
     - pip
     - pkg-config
+    - setuptools
     - ros-distro-mutex
   run:
     - "asio >=9.0,<10.0.0"

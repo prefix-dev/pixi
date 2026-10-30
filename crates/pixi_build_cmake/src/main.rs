@@ -12,9 +12,11 @@ use pixi_build_backend::{
     tools::BackendIdentifier,
 };
 use rattler_build_jinja::Variable;
-use rattler_build_recipe::stage0::{Item, Script, SerializableMatchSpec, Value};
+use rattler_build_recipe::stage0::{
+    Item, Script, SerializableMatchSpec, SingleOutputRecipe, Value,
+};
 use rattler_build_types::NormalizedKey;
-use rattler_conda_types::{ChannelUrl, Platform};
+use rattler_conda_types::{ChannelUrl, Subdir};
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::{
@@ -45,13 +47,14 @@ fn fallback_input_globs() -> BTreeSet<String> {
 #[async_trait::async_trait]
 impl GenerateRecipe for CMakeGenerator {
     type Config = CMakeBackendConfig;
+    type Recipe = SingleOutputRecipe;
 
     async fn generate_recipe(
         &self,
         model: &pixi_build_types::ProjectModel,
         config: &Self::Config,
         manifest_path: PathBuf,
-        _host_platform: Platform,
+        _host_platform: Subdir,
         _python_params: Option<PythonParams>,
         variants: &HashSet<NormalizedKey>,
         _channels: Vec<ChannelUrl>,
@@ -110,7 +113,7 @@ impl GenerateRecipe for CMakeGenerator {
         }
 
         let build_script = BuildScriptContext {
-            build_platform: if Platform::current().is_windows() {
+            build_platform: if Subdir::current().unwrap_or(Subdir::NoArch).is_windows() {
                 BuildPlatform::Windows
             } else {
                 BuildPlatform::Unix
@@ -120,7 +123,12 @@ impl GenerateRecipe for CMakeGenerator {
         }
         .render();
 
-        generated_recipe.recipe.build.script = Script::from_content(build_script)
+        *generated_recipe
+            .recipe
+            .build
+            .plan
+            .script_mut()
+            .expect("generated recipes use script mode") = Script::from_content(build_script)
             .with_env(
                 config
                     .env
@@ -156,7 +164,7 @@ impl GenerateRecipe for CMakeGenerator {
 
     fn default_variants(
         &self,
-        host_platform: Platform,
+        host_platform: Subdir,
     ) -> miette::Result<BTreeMap<NormalizedKey, Vec<Variable>>> {
         Ok(default_compiler_variants(host_platform))
     }
@@ -241,7 +249,7 @@ mod tests {
                 &project_model,
                 &CMakeBackendConfig::default(),
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -287,7 +295,7 @@ mod tests {
                     ..Default::default()
                 },
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -299,7 +307,7 @@ mod tests {
             .await
             .expect("Failed to generate recipe");
 
-        insta::assert_yaml_snapshot!(generated_recipe.recipe.build.script,
+        insta::assert_yaml_snapshot!(generated_recipe.recipe.build.plan.script().unwrap(),
         {
             ".content" => "[ ... script ... ]",
         });
@@ -320,7 +328,7 @@ mod tests {
                 &project_model,
                 &CMakeBackendConfig::default(),
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -373,7 +381,7 @@ mod tests {
                 &project_model,
                 &CMakeBackendConfig::default(),
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -435,8 +443,8 @@ mod tests {
             .0
             .conda_outputs(CondaOutputsParams {
                 channels: vec![],
-                host_platform: Platform::Win64,
-                build_platform: Platform::Win64,
+                host_platform: Subdir::Win64,
+                build_platform: Subdir::Win64,
                 variant_configuration: None,
                 variant_files: None,
                 work_directory: current_dir,
@@ -458,7 +466,7 @@ mod tests {
             "version": "0.1.0",
         });
 
-        for platform in [Platform::Linux64, Platform::Win64] {
+        for platform in [Subdir::Linux64, Subdir::Win64] {
             let factory = IntermediateBackendInstantiator::<CMakeGenerator>::new(
                 BackendIdentifier::new(env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION")),
                 LoggingOutputHandler::default(),
@@ -528,7 +536,7 @@ mod tests {
         let result = intermediate_conda_outputs::<CMakeGenerator>(
             Some(project_model),
             Some(temp_dir.path().to_path_buf()),
-            Platform::Linux64,
+            Subdir::Linux64,
             Some(variant_configuration),
             None,
         )
@@ -580,7 +588,7 @@ mod tests {
         let result = intermediate_conda_outputs::<CMakeGenerator>(
             Some(project_model),
             Some(temp_dir.path().to_path_buf()),
-            Platform::Linux64,
+            Subdir::Linux64,
             None,
             Some(vec![variant_file]),
         )
@@ -614,7 +622,7 @@ mod tests {
                     ..Default::default()
                 },
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -676,7 +684,7 @@ mod tests {
                     ..Default::default()
                 },
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::default(),
                 vec![],
@@ -728,7 +736,7 @@ mod tests {
                     ..Default::default()
                 },
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::from_iter([NormalizedKey("c_stdlib".into())]),
                 vec![],

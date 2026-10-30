@@ -22,7 +22,7 @@ use std::{
 };
 use thiserror::Error;
 use tokio::task::JoinError;
-use uv_configuration::initialize_rayon_once;
+use uv_threads::initialize_rayon_once;
 use xxhash_rust::xxh3::Xxh3;
 
 #[derive(Debug, Error)]

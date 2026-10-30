@@ -8,8 +8,8 @@ use pixi_record::{PixiRecord, SourceRecord};
 use pixi_spec::{BinarySpec, ResolvedExcludeNewer, SourceSpec};
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
-    ChannelUrl, GenericVirtualPackage, MatchSpec, Platform, RepoDataRecord, Version,
-    package::{ArchiveIdentifier, CondaArchiveType, DistArchiveIdentifier},
+    ChannelUrl, GenericVirtualPackage, MatchSpec, RepoDataRecord, Subdir, Version,
+    package::{ArchiveIdentifier, BuildString, CondaArchiveType, DistArchiveIdentifier},
 };
 use rattler_repodata_gateway::RepoData;
 use rattler_solve::{ChannelPriority, SolveStrategy, SolverImpl};
@@ -63,7 +63,7 @@ pub struct SolveCondaEnvironmentSpec {
     pub installed: Vec<PixiRecord>,
 
     /// The platform to solve for
-    pub platform: Platform,
+    pub platform: Subdir,
 
     /// The channels to use for solving
     pub channels: Vec<ChannelUrl>,
@@ -83,6 +83,12 @@ pub struct SolveCondaEnvironmentSpec {
     /// Exclude packages newer than the configured default and per-channel cutoffs.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exclude_newer: Option<ResolvedExcludeNewer>,
+
+    /// Records the solver may not select, mapped to the reason why. Populated
+    /// in offline mode with everything that is not available without network
+    /// access. See [`crate::offline`].
+    #[serde(skip)]
+    pub excluded_candidates: HashMap<Url, Arc<str>>,
 }
 
 impl Default for SolveCondaEnvironmentSpec {
@@ -96,12 +102,13 @@ impl Default for SolveCondaEnvironmentSpec {
             source_repodata: vec![],
             binary_repodata: vec![],
             installed: vec![],
-            platform: Platform::current(),
+            platform: Subdir::current().unwrap_or(Subdir::NoArch),
             channels: vec![],
             virtual_packages: vec![],
             strategy: SolveStrategy::default(),
             channel_priority: ChannelPriority::default(),
             exclude_newer: None,
+            excluded_candidates: HashMap::new(),
         }
     }
 }
@@ -304,6 +311,7 @@ impl SolveCondaEnvironmentSpec {
                 exclude_newer,
                 strategy: self.strategy,
                 constraints: constrains_match_specs,
+                excluded_candidates: self.excluded_candidates,
                 ..rattler_solve::SolverTask::from_iter(solvable_records)
             };
 
@@ -364,7 +372,7 @@ fn unique_url(source: &SourceRecord) -> Url {
     url.query_pairs_mut()
         .append_pair("name", source.package_record().name.as_source())
         .append_pair("version", &source.package_record().version.as_str())
-        .append_pair("build", &source.package_record().build)
+        .append_pair("build", source.package_record().build.as_str())
         .append_pair("subdir", &source.package_record().subdir);
 
     url
@@ -389,7 +397,7 @@ fn unique_dev_source_url(dev_source: &pixi_record::DevSourceRecord) -> Url {
 
 /// Generates a unique build string for a dev source record based on its variants.
 /// Uses a hash of the variants to ensure uniqueness when multiple variants exist.
-fn dev_source_build_string(dev_source: &pixi_record::DevSourceRecord) -> String {
+fn dev_source_build_string(dev_source: &pixi_record::DevSourceRecord) -> BuildString {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
 
@@ -398,6 +406,8 @@ fn dev_source_build_string(dev_source: &pixi_record::DevSourceRecord) -> String 
     dev_source.variants.hash(&mut hasher);
     let hash = hasher.finish();
     format!("{hash:x}")
+        .parse()
+        .expect("a hex hash is a valid build string")
 }
 
 #[derive(Debug, thiserror::Error)]

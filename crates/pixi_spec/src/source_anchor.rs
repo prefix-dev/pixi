@@ -1,4 +1,4 @@
-use crate::{GitLocationSpec, PathSpec, SourceLocationSpec, SourceSpec, Subdirectory};
+use crate::{GitLocationSpec, PathSpec, SourceLocationSpec, SourceSpec, Subdirectory, UrlSpec};
 use pixi_consts::consts::KNOWN_MANIFEST_FILES;
 use pixi_path::normalize;
 use typed_path::Utf8TypedPath;
@@ -93,34 +93,111 @@ impl SourceAnchor {
                     path: relative_path,
                 })
             }
-            SourceLocationSpec::Url(_) => {
-                unimplemented!("Cannot resolve relative paths for URL sources")
+            SourceLocationSpec::Url(url_spec) => {
+                // A relative path inside a url archive resolves within the
+                // same archive by joining it onto the base's subdirectory,
+                // mirroring the git case below.
+                SourceLocationSpec::Url(UrlSpec {
+                    subdirectory: join_subdirectory(&url_spec.subdirectory, path),
+                    ..url_spec.clone()
+                })
             }
             SourceLocationSpec::Git(GitLocationSpec {
                 git,
                 rev,
                 subdirectory,
-            }) => {
-                let base_subdir = subdirectory.as_path().to_string_lossy();
-                let relative_subdir = normalize::normalize_typed(
-                    Utf8TypedPath::from(base_subdir.as_ref())
-                        .join(path)
-                        .to_path(),
-                );
-                // Convert to Subdirectory (defaults to empty if normalization results in empty)
-                let subdir_str = relative_subdir.to_string();
-                let subdirectory = if subdir_str.is_empty() {
-                    Subdirectory::default()
-                } else {
-                    Subdirectory::try_from(subdir_str).unwrap_or_default()
-                };
-                SourceLocationSpec::Git(GitLocationSpec {
-                    git: git.clone(),
-                    rev: rev.clone(),
-                    subdirectory,
-                })
-            }
+                lfs,
+            }) => SourceLocationSpec::Git(GitLocationSpec {
+                git: git.clone(),
+                rev: rev.clone(),
+                subdirectory: join_subdirectory(subdirectory, path),
+                lfs: *lfs,
+            }),
         }
+    }
+
+    /// Inverse of [`SourceAnchor::resolve_location`]: express `target` (a
+    /// location already resolved relative to the workspace root, as pinned
+    /// source locations are) such that `self.resolve_location(result)`
+    /// yields `target` again. Locations that resolve as identity (URL, git,
+    /// absolute or `~`-prefixed paths) are returned unchanged. Returns
+    /// `None` when the target cannot be expressed relative to this anchor.
+    pub fn relativize_location(&self, target: SourceLocationSpec) -> Option<SourceLocationSpec> {
+        let SourceLocationSpec::Path(PathSpec { path: target_path }) = &target else {
+            // URL and git locations resolve as identity.
+            return Some(target);
+        };
+        if target_path.to_path().is_absolute() || target_path.starts_with("~") {
+            return Some(target);
+        }
+        let base = match self {
+            // Workspace-anchored resolution only normalizes the path.
+            SourceAnchor::Workspace => return Some(target),
+            SourceAnchor::Source(SourceLocationSpec::Path(PathSpec { path })) => path.to_path(),
+            // A relative path cannot be expressed against a git or URL base.
+            SourceAnchor::Source(_) => return None,
+        };
+        let base_dir = if is_known_manifest_file(base) {
+            base.parent().unwrap_or(base)
+        } else {
+            base
+        };
+
+        // Both sides are workspace-root-relative and normalized: peel the
+        // common prefix, climb out of what remains of the base, then descend
+        // into the remainder of the target.
+        let base_components: Vec<&str> = base_dir.components().map(|c| c.as_str()).collect();
+        let target_path = target_path.to_path();
+        let target_components: Vec<&str> = target_path.components().map(|c| c.as_str()).collect();
+        let common = base_components
+            .iter()
+            .zip(target_components.iter())
+            .take_while(|(a, b)| a == b)
+            .count();
+        if base_components[common..].contains(&"..") {
+            // Cannot climb out of an unknown ancestor.
+            return None;
+        }
+        let mut parts: Vec<&str> = vec![".."; base_components.len() - common];
+        parts.extend(&target_components[common..]);
+        let rel = if parts.is_empty() {
+            String::from(".")
+        } else {
+            parts.join("/")
+        };
+        Some(SourceLocationSpec::Path(PathSpec {
+            path: typed_path::Utf8TypedPathBuf::from(rel),
+        }))
+    }
+}
+
+/// Joins a relative path onto an archive subdirectory, normalizing the
+/// result. Falls back to the archive root when the joined path escapes it.
+///
+/// The subdirectory is rendered with `/` separators component by component;
+/// `Subdirectory` stores a platform `PathBuf`, and its native rendering on
+/// Windows would make the whole base a single component of the unix-flavored
+/// typed path.
+fn join_subdirectory(
+    subdirectory: &Subdirectory,
+    path: typed_path::Utf8TypedPathBuf,
+) -> Subdirectory {
+    let base_subdir = subdirectory
+        .as_path()
+        .components()
+        .filter_map(|component| component.as_os_str().to_str())
+        .collect::<Vec<_>>()
+        .join("/");
+    let relative_subdir = normalize::normalize_typed(
+        Utf8TypedPath::from(base_subdir.as_str())
+            .join(path)
+            .to_path(),
+    );
+    let subdir_str = relative_subdir.to_string();
+    if subdir_str.is_empty() {
+        Subdirectory::default()
+    } else {
+        Subdirectory::try_from(subdir_str).unwrap_or_default()
     }
 }
 
@@ -134,4 +211,121 @@ fn is_known_manifest_file(path: Utf8TypedPath<'_>) -> bool {
     path.file_name()
         .map(|name| KNOWN_MANIFEST_FILES.contains(&name))
         .unwrap_or(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn path_location(path: &str) -> SourceLocationSpec {
+        SourceLocationSpec::Path(PathSpec { path: path.into() })
+    }
+
+    #[test]
+    fn relativize_location_roundtrips_through_resolve() {
+        let cases = [
+            // (anchor, workspace-relative target, expected relative)
+            ("package_a/pixi.toml", "package_b", "../package_b"),
+            ("package_a", "package_b", "../package_b"),
+            ("package_a", "package_a/nested", "nested"),
+            ("package_a", "package_a", "."),
+            ("nested/package_a", "libs/package_b", "../../libs/package_b"),
+        ];
+        for (anchor_path, target, expected) in cases {
+            let anchor = SourceAnchor::from(path_location(anchor_path));
+            let relativized = anchor
+                .relativize_location(path_location(target))
+                .unwrap_or_else(|| {
+                    panic!("{target} must be expressible relative to {anchor_path}")
+                });
+            assert_eq!(
+                relativized,
+                path_location(expected),
+                "relativize({anchor_path}, {target})"
+            );
+            assert_eq!(
+                anchor.resolve_location(relativized),
+                path_location(target),
+                "resolve(relativize) must roundtrip for ({anchor_path}, {target})"
+            );
+        }
+    }
+
+    #[test]
+    fn resolve_location_joins_relative_path_onto_url_subdirectory() {
+        let url_anchor = SourceAnchor::from(SourceLocationSpec::Url(UrlSpec {
+            url: "https://example.com/archive.tar.gz".parse().unwrap(),
+            md5: None,
+            sha256: None,
+            subdirectory: Subdirectory::try_from(String::from("packages/a")).unwrap(),
+        }));
+        let resolved = url_anchor.resolve_location(path_location("../b"));
+        let SourceLocationSpec::Url(url) = resolved else {
+            panic!("expected a url location");
+        };
+        assert_eq!(url.url.as_str(), "https://example.com/archive.tar.gz");
+        // Compare components; the platform separator of the inner `PathBuf`
+        // differs between unix and windows.
+        let components: Vec<_> = url
+            .subdirectory
+            .as_path()
+            .components()
+            .filter_map(|component| component.as_os_str().to_str())
+            .collect();
+        assert_eq!(components, ["packages", "b"]);
+    }
+
+    /// A relative path that escapes the archive root cannot be represented
+    /// as a subdirectory; the join falls back to the archive root instead of
+    /// panicking or producing a bogus `..` component.
+    #[test]
+    fn resolve_location_escaping_url_subdirectory_falls_back_to_archive_root() {
+        let url_anchor = SourceAnchor::from(SourceLocationSpec::Url(UrlSpec {
+            url: "https://example.com/archive.tar.gz".parse().unwrap(),
+            md5: None,
+            sha256: None,
+            subdirectory: Subdirectory::try_from(String::from("a")).unwrap(),
+        }));
+        let resolved = url_anchor.resolve_location(path_location("../../outside"));
+        let SourceLocationSpec::Url(url) = resolved else {
+            panic!("expected a url location");
+        };
+        let components: Vec<_> = url
+            .subdirectory
+            .as_path()
+            .components()
+            .filter_map(|component| component.as_os_str().to_str())
+            .collect();
+        assert!(
+            !components.contains(&".."),
+            "an escaping path must not leave `..` in the subdirectory, got {components:?}"
+        );
+    }
+
+    #[test]
+    fn relativize_location_passes_identity_locations_through() {
+        let anchor = SourceAnchor::from(path_location("package_a"));
+        let absolute = path_location("/abs/package_b");
+        assert_eq!(anchor.relativize_location(absolute.clone()), Some(absolute));
+
+        let git = SourceLocationSpec::Git(GitLocationSpec {
+            git: "https://github.com/example/repo".parse().unwrap(),
+            rev: None,
+            subdirectory: Subdirectory::default(),
+            lfs: None,
+        });
+        assert_eq!(anchor.relativize_location(git.clone()), Some(git));
+
+        // A relative path cannot be expressed against a git anchor.
+        let git_anchor = SourceAnchor::from(SourceLocationSpec::Git(GitLocationSpec {
+            git: "https://github.com/example/repo".parse().unwrap(),
+            rev: None,
+            subdirectory: Subdirectory::default(),
+            lfs: None,
+        }));
+        assert_eq!(
+            git_anchor.relativize_location(path_location("package_b")),
+            None
+        );
+    }
 }

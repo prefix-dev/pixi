@@ -115,8 +115,7 @@ impl InstallPlanner {
             // Check if we require the package to be installed
             let pkg_and_dist = required_dists_map.get(dist.name());
             // Get the installer name
-            let installer = dist
-                .read_installer()
+            let installer = crate::utils::read_installer(dist)
                 // Empty string if no installer or any other error
                 .map_or(String::new(), |f| f.unwrap_or_default());
 
@@ -205,9 +204,8 @@ impl InstallPlanner {
         for dist in site_packages.iter() {
             let dist_data = required_dists_map.get(dist.name());
             let pkg = dist_data.map(|r| &r.record);
-            let installer = dist
-                .read_installer()
-                .map_or(String::new(), |f| f.unwrap_or_default());
+            let installer =
+                crate::utils::read_installer(dist).map_or(String::new(), |f| f.unwrap_or_default());
 
             // If this package is in the ignore list, never consider it extraneous
             if self.ignored_extraneous.contains(dist.name()) {

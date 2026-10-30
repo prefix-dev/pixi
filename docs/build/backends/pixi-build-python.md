@@ -3,7 +3,7 @@
 The `pixi-build-python` backend is designed for building Python projects using standard Python packaging tools. It provides seamless integration with Pixi's package management workflow while supporting both [PEP 517](https://peps.python.org/pep-0517/) and [PEP 518](https://peps.python.org/pep-0518/) compliant projects.
 
 !!! warning
-    `pixi-build` is a preview feature, and will change until it is stabilized.
+    `pixi-build` is a preview flag, and will change until it is stabilized.
     This is why we require users to opt in to that feature by adding "pixi-build" to `workspace.preview`.
 
     ```toml
@@ -31,10 +31,9 @@ To use the Python backend in your `pixi.toml`, add it to your package's build co
 name = "python_package"
 version = "0.1.0"
 
-[package.build]
-backend = { name = "pixi-build-python", version = "*" }
+[package.build.backend]
+name = "pixi-build-python"
 channels = ["https://prefix.dev/conda-forge"]
-
 ```
 
 ### Required Dependencies
@@ -47,8 +46,8 @@ The backend automatically includes the following build tools:
 You can add these to your [`host-dependencies`](https://pixi.sh/latest/build/dependency_types/) if you need specific versions:
 
 ```toml
-[package.build-dependencies]
-python = "3.11"
+[package.host-dependencies]
+python = "3.14.*"
 ```
 
 The backend will be automatically selected by the automatic PyPI dependency mapping feature if you have `pyproject.toml` in your source directory.
@@ -57,6 +56,11 @@ Otherwise, you need to explicitly add it to your package definition in the `[hos
 [package.host-dependencies]
 hatchling = "*"
 ```
+
+!!! note "Where to constrain the Python version"
+    Specify the Python version restriction in `[package.host-dependencies]`, not in `[package.build-dependencies]`. The backend always adds `python` to both the host and run requirements; a spec you provide in `[package.host-dependencies]` intersects with it in the solver, so the constraint is honored and also propagated to the run requirements of the built package.
+
+    The version is also taken from `project.requires-python` in `pyproject.toml` when present. That value is ignored when [`ignore-pyproject-manifest`](#ignore-pyproject-manifest) is set to `true`; in that case set the version in `[package.host-dependencies]` instead.
 
 ## Configuration Options
 
@@ -113,6 +117,8 @@ env = { PYTHONPATH = "/base/path", COMMON_VAR = "base" }
 env = { COMMON_VAR = "windows", WIN_SPECIFIC = "value" }
 # Result for win-64: { PYTHONPATH = "/base/path", COMMON_VAR = "windows", WIN_SPECIFIC = "value" }
 ```
+
+--8<-- "docs/partials/build-config-env-expansion.md"
 
 ### `debug-dir`
 
@@ -487,6 +493,18 @@ The installer is chosen with the [`installer`](#installer) configuration option 
 [package.build.config]
 installer = "pip"
 ```
+
+### `uv` Cache Location
+
+Build scripts run with a cleaned environment, so `uv` cannot pick up `UV_CACHE_DIR` on its own.
+The backend therefore sets it explicitly, using the first of:
+
+1. `UV_CACHE_DIR` in [`env`](#env), which is useful to give a single package its own cache
+2. `UV_CACHE_DIR` in the environment `pixi` itself runs in
+3. `uv-cache` inside the pixi cache directory, which follows `PIXI_CACHE_DIR` and `RATTLER_CACHE_DIR`
+
+Without this the cache would land in the throwaway build directory on Unix, starting empty on every build.
+On Windows it would land in the default user-wide location, even when the pixi caches have been moved elsewhere.
 
 # Editable Installations
 

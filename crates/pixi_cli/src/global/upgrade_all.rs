@@ -1,6 +1,6 @@
 use clap::Parser;
 use pixi_config::ConfigCli;
-use rattler_conda_types::Platform;
+use rattler_conda_types::Subdir;
 
 use crate::cli_config::ChannelsConfig;
 
@@ -15,8 +15,8 @@ pub struct Args {
     config: ConfigCli,
 
     /// The platform to install the package for.
-    #[clap(long, default_value_t = Platform::current())]
-    platform: Platform,
+    #[clap(long, default_value_t = Subdir::current().unwrap_or(Subdir::NoArch))]
+    platform: Subdir,
 }
 
 pub async fn execute(_args: Args) -> miette::Result<()> {

@@ -2,12 +2,14 @@ use std::{
     collections::{BTreeMap, HashSet},
     ffi::OsStr,
     fmt::{Debug, Formatter},
+    hash::{Hash, Hasher},
     path::{Path, PathBuf},
     str::FromStr,
     sync::Arc,
 };
 
 pub use environment::EnvironmentName;
+use environment::ParseEnvironmentNameError;
 use fancy_display::FancyDisplay;
 use fs::tokio as tokio_fs;
 use fs_err as fs;
@@ -15,61 +17,81 @@ use futures::stream::StreamExt;
 use indexmap::{IndexMap, IndexSet};
 use is_executable::IsExecutable;
 use itertools::{Either, Itertools};
-pub use manifest::{ExposedType, Manifest, Mapping};
-use miette::{Context, Diagnostic, IntoDiagnostic};
+pub use manifest::{ExposedType, Manifest, ManifestError, Mapping};
+use miette::Diagnostic;
 use once_cell::sync::OnceCell;
-pub use parsed_manifest::{ExposedName, ParsedEnvironment, ParsedManifest};
+pub use parsed_manifest::{
+    ExposedName, ExposedNameError, ManifestParseError, ParsedEnvironment, ParsedManifest,
+};
+use pixi_build_discovery::DiscoveryError;
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{
-    BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher, ComputeResultExt,
-    EnvironmentRef, EnvironmentSpec, EphemeralEnv, InstallPixiEnvironmentSpec, Limits,
-    SourceCheckoutExt,
+    BuildBackendMetadataSpec, BuildEnvironment, CommandDispatcher,
+    CommandDispatcherError as DispatcherError, ComputeResultExt, EnvironmentRef, EnvironmentSpec,
+    EphemeralEnv, InlinePackage, InstallPixiEnvironmentError, InstallPixiEnvironmentSpec, Limits,
+    SolvePixiEnvironmentError, SourceCheckoutExt,
     keys::{SolvePixiEnvironmentKey, SolvePixiEnvironmentSpec},
 };
 use pixi_config::{Config, RunPostLinkScripts, default_channel_config, pixi_home};
 use pixi_consts::consts::{self};
 use pixi_core::environment::{
-    EnvironmentFile, LockedEnvironmentHash, PlatformData, write_environment_file,
+    EnvironmentFile, EnvironmentFileError, LockedEnvironmentHash, PlatformData, RequiredPlatform,
+    write_environment_file,
 };
-use pixi_core::lock_file::virtual_packages::minimal_required_virtual_packages;
+use pixi_core::host::{
+    DetectorConsent, HostDetectError, HostDetection, HostDetector, HostUndetected,
+    cli_detector_consent,
+};
+use pixi_core::lock_file::virtual_packages::required_virtual_package_specs;
 use pixi_core::repodata::Repodata;
-use pixi_manifest::PrioritizedChannel;
+use pixi_core::workspace::stdlib_variants::{StdlibVersionPin, derive_stdlib_variants};
+use pixi_manifest::platform::host::{host_subdir, platform_from_detected};
+use pixi_manifest::{
+    ExcludeNewerError, InlinePackageManifest, PixiPlatform, PrioritizedChannel, WorkspaceManifest,
+    resolve_exclude_newer, stale_exemptions,
+};
 use pixi_path::AbsPathBuf;
 use pixi_reporters::TopLevelProgress;
-use pixi_spec::{BinarySpec, PathBinarySpec};
+use pixi_spec::{BinarySpec, PathBinarySpec, ResolvedExcludeNewer, SpecConversionError};
 use pixi_spec_containers::DependencyMap;
+use pixi_utils::diagnostic::Cause;
 use pixi_utils::variants::VariantConfig;
 use pixi_utils::{
     executable_from_path,
-    prefix::{Executable, Prefix},
+    prefix::{Executable, Prefix, PrefixError},
     rlimit::try_increase_rlimit_to_sensible,
 };
 use rattler_conda_types::{
-    ChannelConfig, GenericVirtualPackage, MatchSpec, PackageName, Platform, PrefixRecord,
-    menuinst::MenuMode, package::CondaArchiveIdentifier,
+    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, ParseChannelError,
+    PrefixRecord, Subdir, menuinst::MenuMode, package::CondaArchiveIdentifier,
 };
+use rattler_menuinst::MenuInstError;
 use rattler_networking::LazyClient;
 use rattler_repodata_gateway::Gateway;
-use rattler_virtual_packages::{
-    DetectVirtualPackageError, VirtualPackage, VirtualPackageOverrides,
-};
 use tokio::sync::Semaphore;
 use toml_edit::DocumentMut;
+use xxhash_rust::xxh3::Xxh3;
 
-use self::trampoline::{Configuration, ConfigurationParseError, Trampoline};
+use self::trampoline::{Configuration, ConfigurationParseError, Trampoline, TrampolineError};
 use super::{
     BinDir, EnvRoot, StateChange, StateChanges,
     common::{EnvironmentUpdate, get_install_changes, shortcuts_sync_status},
     install::find_binary_by_name,
     trampoline::{self, GlobalExecutable},
 };
+#[cfg(unix)]
+use crate::completions::CompletionsError;
 use crate::{
     EnvDir,
     common::{
+        CondaMetaError, GlobalDirError, ParseChannelUrlError, UnavailableShortcutsError,
         channel_url_to_prioritized_channel, expose_scripts_sync_status, find_package_records,
     },
     find_executables, find_executables_for_many_records,
-    install::{create_executable_trampolines, script_exec_mapping},
+    install::{
+        CreateTrampolinesError, ExecutableNotFoundError, create_executable_trampolines,
+        script_exec_mapping,
+    },
     project::environment::environment_specs_in_sync,
 };
 
@@ -77,8 +99,10 @@ mod environment;
 mod global_spec;
 mod manifest;
 mod parsed_manifest;
-pub use global_spec::{FromMatchSpecError, GlobalSpec};
-use pixi_utils::reqwest::{LazyReqwestClient, build_lazy_reqwest_clients};
+pub use global_spec::{
+    FromMatchSpecError, GlobalSpec, InlinePackageValue, InlinePackageValueError,
+};
+use pixi_utils::reqwest::{LazyReqwestClient, ReqwestClientError, build_lazy_reqwest_clients};
 
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 pub enum CommandDispatcherError {
@@ -96,20 +120,375 @@ pub enum CommandDispatcherError {
 pub enum InferPackageNameError {
     #[error("only source specifications are supported")]
     UnsupportedSpecType,
-    #[error(
-        "git package name inference is not yet supported. Please specify the package name explicitly"
-    )]
-    GitNotSupported,
     #[error("failed to get command dispatcher")]
     CommandDispatcher(#[from] CommandDispatcherError),
     #[error("failed to get build backend metadata for package name inference")]
     BuildBackendMetadata(#[source] Box<dyn Diagnostic + Send + Sync>),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ExcludeNewer(#[from] ExcludeNewerError),
     #[error("no package outputs found in the specified path/repository")]
     NoPackageOutputs,
-    #[error(
-        "multiple package outputs found: {package_names}. Please specify the package name explicitly"
-    )]
-    MultiplePackageOutputs { package_names: String },
+    #[error("multiple package outputs found: {}", .package_names.join(", "))]
+    #[diagnostic(help(
+        "Specify which package(s) to install by naming them explicitly, e.g. `pixi global install {} ...`",
+        .package_names.first().map(String::as_str).unwrap_or_default()
+    ))]
+    MultiplePackageOutputs { package_names: Vec<String> },
+}
+
+/// No directory to put the global manifest in could be determined.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error("couldn't determine the global manifest directory")]
+pub struct ManifestDirError;
+
+/// An error from discovering or creating the global project.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum DiscoverProjectError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ManifestDir(#[from] ManifestDirError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    GlobalDir(#[from] GlobalDirError),
+
+    #[error(transparent)]
+    Io(std::io::Error),
+
+    #[error("failed to create the global manifest from the existing installation")]
+    #[diagnostic(forward(0))]
+    Migrate(#[source] Cause<MigrateInstallationError>),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Manifest(#[from] ManifestError),
+}
+
+/// An error from creating the global manifest from an existing installation.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum MigrateInstallationError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    GlobalDir(#[from] GlobalDirError),
+
+    #[error("failed to serialize the global manifest")]
+    Serialize(#[source] toml_edit::ser::Error),
+
+    #[error("failed to parse the serialized global manifest")]
+    Parse(#[source] toml_edit::TomlError),
+
+    #[error(transparent)]
+    Write(std::io::Error),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Manifest(#[from] ManifestError),
+}
+
+/// An error from reading the metadata of an exposed executable while
+/// migrating an old installation.
+///
+/// Logged with `{e}`, so wrapped errors stay transparent to keep their
+/// detail on the one line.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+enum ExposedDataError {
+    #[error(transparent)]
+    Trampoline(#[from] TrampolineError),
+
+    #[error("couldn't find the environment directory of '{}' in '{}'", .executable.display(), .env_root.display())]
+    MissingEnvDir {
+        executable: PathBuf,
+        env_root: PathBuf,
+    },
+
+    #[error("environment directory '{}' has no valid name", .0.display())]
+    InvalidEnvDir(PathBuf),
+
+    #[error(transparent)]
+    EnvironmentName(#[from] ParseEnvironmentNameError),
+
+    #[error(transparent)]
+    GlobalDir(#[from] GlobalDirError),
+
+    #[error(transparent)]
+    CondaMeta(#[from] CondaMetaError),
+
+    #[error(transparent)]
+    Prefix(#[from] PrefixError),
+
+    #[error(transparent)]
+    ParseChannelUrl(#[from] ParseChannelUrlError),
+
+    #[error("prefix record of '{}' has no channel", .0.as_normalized())]
+    MissingChannel(PackageName),
+
+    #[error("no package in '{}' provides '{executable}'", .conda_meta.display())]
+    ExecutableNotFound {
+        executable: String,
+        conda_meta: PathBuf,
+    },
+}
+
+/// An error from removing broken exposed executables.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum RemoveBrokenFilesError {
+    #[error(transparent)]
+    Io(std::io::Error),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Trampoline(#[from] TrampolineError),
+}
+
+/// An error from installing a global environment.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum InstallEnvironmentError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Manifest(#[from] ManifestError),
+
+    #[error(transparent)]
+    Channel(#[from] ParseChannelError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ExcludeNewer(#[from] ExcludeNewerError),
+
+    #[error("can't build source dependency '{}' of environment '{environment}' for '{platform}' on '{current}'", .package.as_normalized())]
+    #[diagnostic(help(
+        "Cross-platform source builds are not supported. Remove `platform = \"{platform}\"` from the environment, or install the package from a channel instead of from source."
+    ))]
+    CrossPlatformSource {
+        environment: EnvironmentName,
+        package: PackageName,
+        platform: Subdir,
+        current: Subdir,
+    },
+
+    #[error(transparent)]
+    SpecConversion(#[from] SpecConversionError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Client(#[from] ReqwestClientError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    HostDetect(#[from] HostDetectError),
+
+    #[error(transparent)]
+    Host(#[from] HostUndetected),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    CommandDispatcher(#[from] CommandDispatcherError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Solve(Box<SolveEnvironmentError>),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    GlobalDir(#[from] GlobalDirError),
+
+    #[error("failed to clear the source build cache of '{}'", .package.as_normalized())]
+    ClearSourceBuildCache {
+        package: PackageName,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error(transparent)]
+    CreatePrefix(std::io::Error),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Install(Box<InstallPackagesError>),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    EnvironmentFile(#[from] EnvironmentFileError),
+}
+
+/// A failed solve of a global environment.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error("failed to solve environment '{environment}'")]
+pub struct SolveEnvironmentError {
+    environment: EnvironmentName,
+    #[source]
+    #[diagnostic_source]
+    source: DispatcherError<SolvePixiEnvironmentError>,
+    /// Set when a source dependency without an inline package definition
+    /// has no manifest that backend discovery can use.
+    #[help]
+    help: Option<&'static str>,
+}
+
+/// A failed installation of the packages of a global environment.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error("failed to install environment '{environment}'")]
+pub struct InstallPackagesError {
+    environment: EnvironmentName,
+    #[source]
+    #[diagnostic_source]
+    source: DispatcherError<InstallPixiEnvironmentError>,
+}
+
+/// An error from checking whether an environment is in sync with the
+/// manifest.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum EnvironmentInSyncError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Manifest(#[from] ManifestError),
+
+    #[error(transparent)]
+    SpecConversion(#[from] SpecConversionError),
+
+    #[error("couldn't convert the spec of '{}' to a match spec", .0.as_normalized())]
+    NotABinarySpec(PackageName),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    GlobalDir(#[from] GlobalDirError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Prefix(#[from] PrefixError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ExcludeNewer(#[from] ExcludeNewerError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    UnavailableShortcuts(#[from] UnavailableShortcutsError),
+}
+
+/// An error from finding or exposing the executables of an environment, or
+/// from syncing its completions.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum ExposeError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Manifest(#[from] ManifestError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    GlobalDir(#[from] GlobalDirError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Prefix(#[from] PrefixError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Trampoline(#[from] TrampolineError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ExposedName(#[from] ExposedNameError),
+
+    #[error("failed to add the executables of environment '{environment}'")]
+    #[diagnostic(forward(source))]
+    ExecutableNotFound {
+        environment: EnvironmentName,
+        #[source]
+        source: Cause<ExecutableNotFoundError>,
+    },
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    CreateTrampolines(#[from] CreateTrampolinesError),
+
+    #[cfg(unix)]
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Completions(#[from] CompletionsError),
+}
+
+/// An error from installing or removing the shortcuts of an environment.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum ShortcutsError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Manifest(#[from] ManifestError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    GlobalDir(#[from] GlobalDirError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Prefix(#[from] PrefixError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    UnavailableShortcuts(#[from] UnavailableShortcutsError),
+
+    #[error("failed to install the shortcuts of '{}'", .package.as_normalized())]
+    Install {
+        package: PackageName,
+        #[source]
+        source: MenuInstError,
+    },
+
+    #[error("failed to remove the shortcuts of '{}'", .package.as_normalized())]
+    Remove {
+        package: PackageName,
+        #[source]
+        source: MenuInstError,
+    },
+}
+
+/// An error from removing an environment from the manifest or the
+/// installation.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum RemoveEnvironmentError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Manifest(#[from] ManifestError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    GlobalDir(#[from] GlobalDirError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Shortcuts(#[from] ShortcutsError),
+
+    #[error(transparent)]
+    Io(std::io::Error),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Trampoline(#[from] TrampolineError),
+
+    #[cfg(unix)]
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Completions(#[from] CompletionsError),
+}
+
+/// An error from syncing an environment with the manifest.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum SyncEnvironmentError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    InSync(#[from] EnvironmentInSyncError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Install(#[from] InstallEnvironmentError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Expose(#[from] ExposeError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Shortcuts(#[from] ShortcutsError),
 }
 
 pub(crate) const MANIFESTS_DIR: &str = "manifests";
@@ -149,6 +528,10 @@ pub struct Project {
     top_level_progress: OnceCell<Arc<pixi_reporters::TopLevelProgress>>,
     /// Optional backend override for testing purposes
     backend_override: Option<BackendOverride>,
+    /// What this machine provides, detected on first use.
+    host: OnceCell<HostDetection>,
+    /// Decides on virtual package detectors without a stored decision.
+    detector_consent: Arc<dyn DetectorConsent>,
 }
 
 impl Debug for Project {
@@ -164,7 +547,7 @@ impl Debug for Project {
 #[derive(Debug)]
 struct ExposedData {
     env_name: EnvironmentName,
-    platform: Option<Platform>,
+    platform: Option<Subdir>,
     channels: Vec<PrioritizedChannel>,
     package: PackageName,
     exposed: ExposedName,
@@ -183,7 +566,7 @@ impl ExposedData {
         bin: &GlobalExecutable,
         env_root: &EnvRoot,
         channel_config: &ChannelConfig,
-    ) -> miette::Result<Self> {
+    ) -> Result<Self, ExposedDataError> {
         let exposed = bin.exposed_name();
         let executable_path = bin.executable().await?;
 
@@ -192,13 +575,8 @@ impl ExposedData {
         let env_name = env_path
             .file_name()
             .and_then(OsStr::to_str)
-            .ok_or_else(|| {
-                miette::miette!(
-                    "executable path's grandparent '{}' has no file name",
-                    executable_path.display()
-                )
-            })
-            .and_then(|env| EnvironmentName::from_str(env).into_diagnostic())?;
+            .ok_or_else(|| ExposedDataError::InvalidEnvDir(env_path.clone()))
+            .and_then(|env| Ok(EnvironmentName::from_str(env)?))?;
 
         let conda_meta = env_path.join(consts::CONDA_META_DIR);
         let env_dir = EnvDir::from_env_root(env_root.clone(), &env_name).await?;
@@ -235,7 +613,10 @@ impl ExposedData {
     }
 }
 
-fn determine_env_path(executable_path: &Path, env_root: &Path) -> miette::Result<PathBuf> {
+fn determine_env_path(
+    executable_path: &Path,
+    env_root: &Path,
+) -> Result<PathBuf, ExposedDataError> {
     let mut current_path = executable_path;
 
     while let Some(parent) = current_path.parent() {
@@ -245,11 +626,10 @@ fn determine_env_path(executable_path: &Path, env_root: &Path) -> miette::Result
         current_path = parent;
     }
 
-    miette::bail!(
-        "Couldn't determine environment path: no parent of '{}' has '{}' as its direct parent",
-        executable_path.display(),
-        env_root.display()
-    )
+    Err(ExposedDataError::MissingEnvDir {
+        executable: executable_path.to_owned(),
+        env_root: env_root.to_owned(),
+    })
 }
 
 /// Converts a `PrefixRecord` into package metadata, including platform,
@@ -257,10 +637,10 @@ fn determine_env_path(executable_path: &Path, env_root: &Path) -> miette::Result
 fn convert_record_to_metadata(
     prefix_record: &PrefixRecord,
     channel_config: &ChannelConfig,
-) -> miette::Result<(Option<Platform>, PrioritizedChannel, PackageName)> {
-    let platform = match Platform::from_str(&prefix_record.repodata_record.package_record.subdir) {
-        Ok(Platform::NoArch) => None,
-        Ok(platform) if platform == Platform::current() => None,
+) -> Result<(Option<Subdir>, PrioritizedChannel, PackageName), ExposedDataError> {
+    let platform = match Subdir::from_str(&prefix_record.repodata_record.package_record.subdir) {
+        Ok(Subdir::NoArch) => None,
+        Ok(platform) if platform == host_subdir() => None,
         Err(_) => None,
         Ok(p) => Some(p),
     };
@@ -268,10 +648,7 @@ fn convert_record_to_metadata(
     let package_name = prefix_record.repodata_record.package_record.name.clone();
 
     let Some(channel_str) = prefix_record.repodata_record.channel.as_deref() else {
-        miette::bail!(
-            "missing channel in prefix record for {}",
-            package_name.as_source()
-        )
+        return Err(ExposedDataError::MissingChannel(package_name));
     };
 
     let channel = channel_url_to_prioritized_channel(channel_str, channel_config)?;
@@ -290,7 +667,7 @@ async fn package_from_conda_meta(
     executable: &str,
     prefix: &Prefix,
     channel_config: &ChannelConfig,
-) -> miette::Result<(Option<Platform>, PrioritizedChannel, PackageName)> {
+) -> Result<(Option<Subdir>, PrioritizedChannel, PackageName), ExposedDataError> {
     let records = find_package_records(conda_meta).await?;
 
     for prefix_record in records {
@@ -302,12 +679,19 @@ async fn package_from_conda_meta(
         }
     }
 
-    miette::bail!("Couldn't find {executable} in {}", conda_meta.display())
+    Err(ExposedDataError::ExecutableNotFound {
+        executable: executable.to_owned(),
+        conda_meta: conda_meta.to_owned(),
+    })
 }
 
 impl Project {
     /// Constructs a new instance from an internal manifest representation
-    pub(crate) fn from_manifest(manifest: Manifest, env_root: EnvRoot, bin_dir: BinDir) -> Self {
+    pub(crate) fn from_manifest(
+        manifest: Manifest,
+        env_root: EnvRoot,
+        bin_dir: BinDir,
+    ) -> Result<Self, ManifestError> {
         let root = manifest
             .path
             .parent()
@@ -316,12 +700,12 @@ impl Project {
 
         // Load the global config and ensure
         // that the root_dir is relative to the manifest directory
-        let mut config = Config::load_global();
+        let mut config = Config::try_load_global()?;
         config.channel_config.root_dir = root.clone();
 
         let client = OnceCell::new();
         let repodata_gateway = OnceCell::new();
-        Self {
+        Ok(Self {
             root,
             manifest,
             config,
@@ -333,7 +717,9 @@ impl Project {
             command_dispatcher: OnceCell::new(),
             top_level_progress: OnceCell::new(),
             backend_override: None,
-        }
+            host: OnceCell::new(),
+            detector_consent: cli_detector_consent(None),
+        })
     }
 
     /// Constructs a project from a manifest.
@@ -342,16 +728,16 @@ impl Project {
         content: &str,
         env_root: EnvRoot,
         bin_dir: BinDir,
-    ) -> miette::Result<Self> {
+    ) -> Result<Self, ManifestError> {
         let manifest = Manifest::from_str(manifest_path, content)?;
-        Ok(Self::from_manifest(manifest, env_root, bin_dir))
+        Self::from_manifest(manifest, env_root, bin_dir)
     }
 
     /// Discovers the project manifest file in path at
     /// `~/.pixi/manifests/pixi-global.toml`. If the manifest doesn't exist
     /// yet, and the function will try to create one from the existing
     /// installation. If that one fails, an empty one will be created.
-    pub async fn discover_or_create() -> miette::Result<Self> {
+    pub async fn discover_or_create() -> Result<Self, DiscoverProjectError> {
         let manifest_dir = Self::manifest_dir()?;
         let manifest_path = Self::default_manifest_path()?;
         // Prompt user if the manifest is empty and the user wants to create one
@@ -366,7 +752,7 @@ impl Project {
             );
             tokio_fs::create_dir_all(&manifest_dir)
                 .await
-                .into_diagnostic()?;
+                .map_err(DiscoverProjectError::Io)?;
 
             if !env_root.directories().await?.is_empty() {
                 tracing::debug!(
@@ -374,26 +760,24 @@ impl Project {
                 );
                 return Self::try_from_existing_installation(&manifest_path, env_root, bin_dir)
                     .await
-                    .wrap_err_with(
-                        || "Failed to create global manifest from existing installation",
-                    );
+                    .map_err(|e| DiscoverProjectError::Migrate(Cause::new(e)));
             } else {
                 tracing::debug!("Create an empty global manifest.");
                 tokio_fs::File::create(&manifest_path)
                     .await
-                    .into_diagnostic()?;
+                    .map_err(DiscoverProjectError::Io)?;
             }
         }
 
-        Self::from_path(&manifest_path, env_root, bin_dir)
+        Ok(Self::from_path(&manifest_path, env_root, bin_dir)?)
     }
 
     async fn try_from_existing_installation(
         manifest_path: &Path,
         env_root: EnvRoot,
         bin_dir: BinDir,
-    ) -> miette::Result<Self> {
-        let config = Config::load(env_root.path());
+    ) -> Result<Self, MigrateInstallationError> {
+        let config = Config::try_load(env_root.path()).map_err(ManifestError::from)?;
 
         let exposed_binaries: Vec<ExposedData> = bin_dir
             .executables()
@@ -421,8 +805,11 @@ impl Project {
             .await;
 
         let parsed_manifest = ParsedManifest::from(exposed_binaries);
-        let toml_pretty = toml_edit::ser::to_string_pretty(&parsed_manifest).into_diagnostic()?;
-        let mut document: DocumentMut = toml_pretty.parse().into_diagnostic()?;
+        let toml_pretty = toml_edit::ser::to_string_pretty(&parsed_manifest)
+            .map_err(MigrateInstallationError::Serialize)?;
+        let mut document: DocumentMut = toml_pretty
+            .parse()
+            .map_err(MigrateInstallationError::Parse)?;
 
         // Ensure that the manifest uses inline tables for "dependencies" and "exposed"
         if let Some(envs) = document
@@ -445,12 +832,12 @@ impl Project {
         let toml = document.to_string();
         tokio_fs::write(&manifest_path, &toml)
             .await
-            .into_diagnostic()?;
-        Self::from_str(manifest_path, &toml, env_root, bin_dir)
+            .map_err(MigrateInstallationError::Write)?;
+        Ok(Self::from_str(manifest_path, &toml, env_root, bin_dir)?)
     }
 
     /// Get default dir for the pixi global manifest
-    pub fn manifest_dir() -> miette::Result<PathBuf> {
+    pub fn manifest_dir() -> Result<PathBuf, ManifestDirError> {
         // Potential directories, with the highest priority coming first
         let potential_dirs = [
             pixi_home(),
@@ -469,14 +856,11 @@ impl Project {
         }
 
         // If not, return the first option
-        potential_dirs
-            .first()
-            .cloned()
-            .ok_or_else(|| miette::miette!("Couldn't obtain global manifest directory"))
+        potential_dirs.first().cloned().ok_or(ManifestDirError)
     }
 
     /// Get the default path to the global manifest file
-    pub fn default_manifest_path() -> miette::Result<PathBuf> {
+    pub fn default_manifest_path() -> Result<PathBuf, ManifestDirError> {
         Self::manifest_dir().map(|dir| dir.join(consts::GLOBAL_MANIFEST_DEFAULT_NAME))
     }
 
@@ -485,9 +869,9 @@ impl Project {
         manifest_path: &Path,
         env_root: EnvRoot,
         bin_dir: BinDir,
-    ) -> miette::Result<Self> {
+    ) -> Result<Self, ManifestError> {
         let manifest = Manifest::from_path(manifest_path)?;
-        Ok(Project::from_manifest(manifest, env_root, bin_dir))
+        Project::from_manifest(manifest, env_root, bin_dir)
     }
 
     /// Merge config with existing config project
@@ -496,6 +880,19 @@ impl Project {
         C: Into<Config>,
     {
         self.config = self.config.merge_config(config.into());
+        self
+    }
+
+    /// What this machine provides, with pixi's built-in detection. Detectors
+    /// registered by an environment's channels run when it is installed.
+    pub fn host(&self) -> &HostDetection {
+        self.host.get_or_init(HostDetection::builtin)
+    }
+
+    /// Decide on virtual package detectors without a stored decision with
+    /// `consent`, for example by asking the user.
+    pub fn with_detector_consent(mut self, consent: Arc<dyn DetectorConsent>) -> Self {
+        self.detector_consent = consent;
         self
     }
 
@@ -534,24 +931,27 @@ impl Project {
     }
 
     /// Returns the EnvDir with the environment name.
-    pub async fn environment_dir(&self, name: &EnvironmentName) -> miette::Result<EnvDir> {
+    pub async fn environment_dir(&self, name: &EnvironmentName) -> Result<EnvDir, GlobalDirError> {
         EnvDir::from_env_root(self.env_root.clone(), name).await
     }
 
     /// Returns the prefix of the environment with the given name.
-    pub async fn environment_prefix(&self, env_name: &EnvironmentName) -> miette::Result<Prefix> {
+    pub async fn environment_prefix(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> Result<Prefix, GlobalDirError> {
         Ok(Prefix::new(self.environment_dir(env_name).await?.path()))
     }
 
     /// Create an authenticated reqwest client for this project
     /// use authentication from `rattler_networking`
-    pub fn authenticated_client(&self) -> miette::Result<&LazyClient> {
+    pub fn authenticated_client(&self) -> Result<&LazyClient, ReqwestClientError> {
         Ok(&self.lazy_client_and_authenticated_client()?.1)
     }
 
     fn lazy_client_and_authenticated_client(
         &self,
-    ) -> miette::Result<&(LazyReqwestClient, rattler_networking::LazyClient)> {
+    ) -> Result<&(LazyReqwestClient, rattler_networking::LazyClient), ReqwestClientError> {
         self.client
             .get_or_try_init(|| build_lazy_reqwest_clients(Some(self.config()), None))
     }
@@ -564,46 +964,101 @@ impl Project {
         self.config.global_channel_config()
     }
 
-    /// The virtual packages to solve an environment against. For the current
-    /// platform these are detected from the machine, honoring any
-    /// `CONDA_OVERRIDE_*` variables (e.g. `CONDA_OVERRIDE_CUDA=12.0`) so the
-    /// solve respects run constraints on virtual packages. For any other
-    /// platform the machine can't be inspected, so the list is empty.
-    fn virtual_packages_for(
-        platform: &Platform,
-    ) -> Result<Vec<GenericVirtualPackage>, DetectVirtualPackageError> {
-        if platform
-            .only_platform()
-            .map(|p| p == Platform::current().only_platform().unwrap_or(""))
-            .unwrap_or(false)
-        {
-            Ok(
-                VirtualPackage::detect(&VirtualPackageOverrides::from_env())?
-                    .iter()
-                    .cloned()
-                    .map(GenericVirtualPackage::from)
-                    .collect(),
-            )
-        } else {
-            Ok(vec![])
+    /// Resolves the manifest's `exclude-newer` cutoff together with the
+    /// overrides of the given channels and the exemptions into absolute
+    /// cutoffs.
+    fn resolved_exclude_newer<'a>(
+        &'a self,
+        channels: impl IntoIterator<Item = &'a PrioritizedChannel>,
+    ) -> Result<Option<ResolvedExcludeNewer>, ExcludeNewerError> {
+        resolve_exclude_newer(
+            &self.manifest.parsed.exclude_newer,
+            channels,
+            self.global_channel_config(),
+            std::iter::empty(),
+        )
+    }
+
+    /// Returns the exemptions of `exclude-newer` that are stale at `now` for
+    /// every environment.
+    pub fn stale_exclude_newer_exemptions(
+        &self,
+        now: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Vec<PackageName>, ExcludeNewerError> {
+        stale_exemptions(
+            &self.manifest.parsed.exclude_newer,
+            self.environments()
+                .values()
+                .map(|environment| &environment.channels),
+            self.global_channel_config(),
+            std::iter::empty(),
+            now,
+        )
+    }
+
+    /// The build variants to build source packages with for `platform`.
+    ///
+    /// A workspace derives `c_stdlib`/`c_stdlib_version` build variants from
+    /// its system requirements so that `stdlib('c')` recipes pin a
+    /// minimum OS/libc target (e.g. `macosx_deployment_target 13.*`).
+    /// `pixi global` has no system-requirements table, so we derive the same
+    /// pair from the device's detected virtual packages (`virtual_packages`,
+    /// e.g. the host's `__osx`/`__glibc`). Unlike the workspace flow, we pass
+    /// [`StdlibVersionPin::AtMost`]: a global install is local to this machine,
+    /// so the target is bound with `<=` the device's exact version and the
+    /// solve picks the highest published provider candidate it can build
+    /// against. (The workspace flow keeps an exact pin to preserve build hashes
+    /// and lock-file stability; that constraint doesn't apply here.)
+    fn build_variants(
+        platform: Subdir,
+        virtual_packages: &[GenericVirtualPackage],
+        channels: &[ChannelUrl],
+    ) -> VariantConfig {
+        let device_platform = platform_from_detected(platform, virtual_packages.to_vec())
+            .unwrap_or_else(|_| PixiPlatform::from_subdir(platform));
+        let variant_configuration =
+            derive_stdlib_variants(&device_platform, channels, StdlibVersionPin::AtMost)
+                .into_iter()
+                .map(|(key, value)| (key, vec![value]))
+                .collect();
+        VariantConfig {
+            variant_configuration,
+            variant_files: Vec::new(),
         }
     }
 
     pub async fn install_environment(
         &self,
         env_name: &EnvironmentName,
-    ) -> miette::Result<EnvironmentUpdate> {
+    ) -> Result<EnvironmentUpdate, InstallEnvironmentError> {
         self.install_environment_with_options(env_name, false).await
+    }
+
+    /// Builds the [`InlinePackage`] to thread through the command dispatcher
+    /// for a CLI-supplied inline package definition, before the definition is
+    /// recorded in the manifest (e.g. for package name inference). The
+    /// synthesized workspace manifest carries the channels the backend's
+    /// dependencies fall back to.
+    fn inline_package_for_channels(
+        &self,
+        inline: &InlinePackageManifest,
+        channels: impl IntoIterator<Item = PrioritizedChannel>,
+    ) -> InlinePackage {
+        InlinePackage {
+            manifest: Arc::new(inline.manifest.clone()),
+            workspace: Arc::new(workspace_manifest_with_channels(channels)),
+            content_hash: inline.content_hash,
+        }
     }
 
     pub async fn install_environment_with_options(
         &self,
         env_name: &EnvironmentName,
         force_reinstall: bool,
-    ) -> miette::Result<EnvironmentUpdate> {
+    ) -> Result<EnvironmentUpdate, InstallEnvironmentError> {
         let environment = self
             .environment(env_name)
-            .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
+            .ok_or_else(|| ManifestError::EnvironmentNotFound(env_name.clone()))?;
         let channels = environment
             .channels()
             .into_iter()
@@ -612,11 +1067,52 @@ impl Project {
                     .clone()
                     .into_channel(self.config.global_channel_config())
             })
-            .collect::<Result<Vec<_>, _>>()
-            .into_diagnostic()?;
+            .collect::<Result<Vec<_>, _>>()?;
 
-        let platform = environment.platform.unwrap_or_else(Platform::current);
-        let solve_virtual_packages = Self::virtual_packages_for(&platform).into_diagnostic()?;
+        let exclude_newer = self.resolved_exclude_newer(&environment.channels)?;
+
+        let platform = environment.platform.unwrap_or_else(host_subdir);
+
+        // Source dependencies are built on this machine, so they can only
+        // target the platform we are running on.
+        if platform != Subdir::current().unwrap_or(Subdir::NoArch)
+            && let Some(source_package) = environment
+                .dependencies
+                .specs
+                .iter()
+                .find(|(_, spec)| spec.is_source())
+                .map(|(name, _)| name)
+        {
+            return Err(InstallEnvironmentError::CrossPlatformSource {
+                environment: env_name.clone(),
+                package: source_package.clone(),
+                platform,
+                current: Subdir::current().unwrap_or(Subdir::NoArch),
+            });
+        }
+
+        // Discover registrations for the target, honoring overrides without
+        // executing detectors on a foreign platform.
+        let channel_config = self.config.global_channel_config();
+        let mut specs = Vec::new();
+        for (name, spec) in &environment.dependencies.specs {
+            if let Some(nameless) = spec.clone().try_into_nameless_match_spec(channel_config)? {
+                specs.push(MatchSpec::from_nameless(nameless, name.clone().into()));
+            }
+        }
+        let channel_urls: Vec<ChannelUrl> = channels
+            .iter()
+            .map(|channel| channel.base_url.clone())
+            .collect();
+        let host = HostDetector::with_gateway(
+            self.config.clone(),
+            self.detector_consent.clone(),
+            self.authenticated_client()?.clone(),
+            self.repodata_gateway()?.clone(),
+        )
+        .detect_for_specs(&channel_urls, platform, &specs)
+        .await?;
+        let solve_virtual_packages = host.platform()?.solver_virtual_package_records();
 
         // Convert dependency specs to binary specs for CommandDispatcher
         let mut pixi_specs = DependencyMap::default();
@@ -634,7 +1130,18 @@ impl Project {
             .map(|channel| channel.base_url.clone())
             .collect::<Vec<_>>();
 
-        let build_environment = BuildEnvironment::simple(platform, solve_virtual_packages.clone());
+        let build_environment = BuildEnvironment::simple(platform, solve_virtual_packages.to_vec());
+
+        // Derive the `c_stdlib` build variants for source builds, mirroring what
+        // a workspace does, so `stdlib('c')` recipes pin a deployment target that
+        // matches the device this install targets (see `build_variants`).
+        let variant_config = Self::build_variants(platform, &solve_virtual_packages, &channels);
+
+        // Inline package definitions from the manifest, threaded into the
+        // solve and install so backend discovery uses them instead of reading
+        // a manifest from the source checkout.
+        let inline_packages = inline_packages_for_environment(environment);
+
         // Create solve spec (compute-engine keys path).
         let solve_spec = SolvePixiEnvironmentSpec {
             dependencies: pixi_specs,
@@ -649,19 +1156,52 @@ impl Project {
                 EnvironmentSpec {
                     channels: channels.clone(),
                     build_environment: build_environment.clone(),
-                    variants: VariantConfig::default(),
-                    exclude_newer: None,
+                    variants: variant_config.clone(),
+                    exclude_newer: exclude_newer.clone(),
                     channel_priority: Default::default(),
                 },
             )),
+            inline_packages: Arc::new(inline_packages.clone()),
         };
 
         // Solve via SolvePixiEnvironmentKey (new keys path).
+        //
+        // A source dependency without an inline package definition relies on
+        // the source providing its own manifest. When it doesn't, backend
+        // discovery fails; point the user at `--build-backend` in that case,
+        // but not for unrelated solve errors (unsatisfiable specs, network
+        // failures, ...).
+        let has_source_without_inline =
+            environment.dependencies.specs.iter().any(|(name, spec)| {
+                spec.is_source() && !environment.inline_packages.contains_key(name)
+            });
         let records_arc = command_dispatcher
             .engine()
             .compute(&SolvePixiEnvironmentKey::new(solve_spec))
             .await
-            .map_err_into_dispatcher(std::convert::identity)?;
+            .map_err_into_dispatcher(std::convert::identity)
+            .map_err(|err| {
+                // A missing or package-less manifest is the case
+                // `--build-backend` exists for; other discovery failures
+                // (disabled protocols, invalid manifests, ...) are not.
+                let missing_manifest = matches!(
+                    &err,
+                    DispatcherError::Failed(solve_err) if matches!(
+                        solve_err.discovery_error(),
+                        Some(
+                            DiscoveryError::FailedToDiscover { .. }
+                                | DiscoveryError::NotAPackage(_)
+                        )
+                    )
+                );
+                InstallEnvironmentError::Solve(Box::new(SolveEnvironmentError {
+                    environment: env_name.clone(),
+                    source: err,
+                    help: (has_source_without_inline && missing_manifest).then_some(
+                        "If the source doesn't provide a pixi package manifest, specify how to build it with `--build-backend`, e.g. `--build-backend pixi-build-rust`.",
+                    ),
+                }))
+            })?;
         let pixi_records: Vec<_> = (*records_arc).clone();
 
         // Move this to a separate function to avoid code duplication
@@ -684,7 +1224,10 @@ impl Project {
             for name in &dependencies_names {
                 command_dispatcher
                     .clear_source_build_cache(name)
-                    .into_diagnostic()?;
+                    .map_err(|source| InstallEnvironmentError::ClearSourceBuildCache {
+                        package: name.clone(),
+                        source,
+                    })?;
             }
         }
 
@@ -701,48 +1244,52 @@ impl Project {
                 name: env_name.to_string(),
                 records: pixi_records.into_iter().map(Into::into).collect(),
                 prefix: rattler_conda_types::prefix::Prefix::create(prefix.root())
-                    .into_diagnostic()?,
+                    .map_err(InstallEnvironmentError::CreatePrefix)?,
                 build_environment,
-                exclude_newer: None,
+                exclude_newer,
                 channels,
                 installed: None,
                 ignore_packages: None,
                 force_reinstall: force_reinstall_packages,
-                variant_configuration: None,
-                variant_files: None,
+                variant_configuration: Some(variant_config.variant_configuration),
+                variant_files: Some(variant_config.variant_files),
+                inline_packages: inline_packages.into_iter().collect(),
             })
-            .await?;
+            .await
+            .map_err(|source| {
+                InstallEnvironmentError::Install(Box::new(InstallPackagesError {
+                    environment: env_name.clone(),
+                    source,
+                }))
+            })?;
 
         self.write_environment_file(
             env_name,
             &prefix,
-            platform,
-            solve_virtual_packages,
+            &host,
             &resolved_depends,
+            source_fingerprints_for_environment(environment),
         )?;
 
         let install_changes = get_install_changes(result.transaction);
         Ok(EnvironmentUpdate::new(install_changes, dependencies_names))
     }
 
-    /// Record the resolved and minimum-supported platforms in the environment's
-    /// `conda-meta/pixi` marker file, mirroring what non-global environments
-    /// write. The resolved platform is the subdir plus the virtual packages the
-    /// solve ran against (machine detection honoring `CONDA_OVERRIDE_*`); the
-    /// minimum-supported platform keeps only the virtual packages some installed
-    /// record actually depends on.
+    /// Record the resolved platform and the installed packages' requirements in
+    /// the environment's `conda-meta/pixi` marker file, mirroring what non-global
+    /// environments write.
     fn write_environment_file(
         &self,
         env_name: &EnvironmentName,
         prefix: &Prefix,
-        platform: Platform,
-        resolved_virtual_packages: Vec<GenericVirtualPackage>,
+        host: &HostDetection,
         resolved_depends: &[String],
-    ) -> miette::Result<()> {
-        let resolved_platform = PlatformData::new(platform, resolved_virtual_packages);
+        source_fingerprints: BTreeMap<String, u64>,
+    ) -> Result<(), EnvironmentFileError> {
+        let resolved_platform = PlatformData::new(host.subdir(), host.capabilities().into_owned());
         let depends: Vec<&str> = resolved_depends.iter().map(String::as_str).collect();
         let minimum_supported_platform =
-            PlatformData::new(platform, minimal_required_virtual_packages(&depends));
+            RequiredPlatform::new(host.subdir(), required_virtual_package_specs(&depends));
 
         write_environment_file(
             prefix.root(),
@@ -755,6 +1302,8 @@ impl Project {
                 environment_lock_file_hash: LockedEnvironmentHash::invalid(),
                 resolved_platform: Some(resolved_platform),
                 minimum_supported_platform: Some(minimum_supported_platform),
+                detector_virtual_packages: host.detector_virtual_packages(),
+                source_fingerprints,
             },
         )?;
         Ok(())
@@ -764,11 +1313,11 @@ impl Project {
     pub async fn remove_environment(
         &mut self,
         env_name: &EnvironmentName,
-    ) -> miette::Result<StateChanges> {
+    ) -> Result<StateChanges, RemoveEnvironmentError> {
         // Check if the environment exists in the manifest first, before creating any
         // directories
         if !self.manifest.parsed.envs.contains_key(env_name) {
-            miette::bail!("Environment {} doesn't exist.", env_name.fancy_display());
+            return Err(ManifestError::EnvironmentNotFound(env_name.clone()).into());
         }
 
         let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
@@ -785,7 +1334,7 @@ impl Project {
         // Remove the environment
         tokio_fs::remove_dir_all(env_dir.path())
             .await
-            .into_diagnostic()?;
+            .map_err(RemoveEnvironmentError::Io)?;
 
         // Get all removable binaries related to the environment
         let (to_remove, _to_add) =
@@ -814,11 +1363,14 @@ impl Project {
 
     /// Find all binaries related to the environment and remove those that are
     /// not listed as exposed.
-    pub async fn prune_exposed(&self, env_name: &EnvironmentName) -> miette::Result<StateChanges> {
+    pub async fn prune_exposed(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> Result<StateChanges, ExposeError> {
         let mut state_changes = StateChanges::default();
         let environment = self
             .environment(env_name)
-            .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
+            .ok_or_else(|| ManifestError::EnvironmentNotFound(env_name.clone()))?;
         let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
 
         // Get all removable binaries related to the environment
@@ -841,7 +1393,7 @@ impl Project {
     pub async fn executables_of_all_dependencies(
         &self,
         env_name: &EnvironmentName,
-    ) -> miette::Result<Vec<Executable>> {
+    ) -> Result<Vec<Executable>, ExposeError> {
         let env_dir = EnvDir::from_env_root(self.env_root.clone(), env_name).await?;
         let prefix = Prefix::new(env_dir.path());
 
@@ -857,10 +1409,10 @@ impl Project {
     pub async fn executables_of_direct_dependencies(
         &self,
         env_name: &EnvironmentName,
-    ) -> miette::Result<IndexMap<PackageName, Vec<Executable>>> {
+    ) -> Result<IndexMap<PackageName, Vec<Executable>>, ExposeError> {
         let parsed_env = self
             .environment(env_name)
-            .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
+            .ok_or_else(|| ManifestError::EnvironmentNotFound(env_name.clone()))?;
 
         let package_names: Vec<_> = parsed_env.dependencies.specs.keys().cloned().collect();
 
@@ -898,14 +1450,14 @@ impl Project {
         &mut self,
         env_name: &EnvironmentName,
         expose_type: ExposedType,
-    ) -> miette::Result<()> {
+    ) -> Result<(), ExposeError> {
         // Get env executables
         let execs_all = self.executables_of_all_dependencies(env_name).await?;
 
         // Get the parsed environment
         let environment = self
             .environment(env_name)
-            .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
+            .ok_or_else(|| ManifestError::EnvironmentNotFound(env_name.clone()))?;
 
         // Find the exposed names that are no longer there and remove them
         let to_remove = environment
@@ -990,7 +1542,10 @@ impl Project {
     ///
     /// Validated the specs in the installed environment.
     /// And verifies only and all required exposed binaries are in the bin dir.
-    pub async fn environment_in_sync(&self, env_name: &EnvironmentName) -> miette::Result<bool> {
+    pub async fn environment_in_sync(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> Result<bool, EnvironmentInSyncError> {
         self.environment_in_sync_internal(env_name, false).await
     }
 
@@ -999,11 +1554,10 @@ impl Project {
         &self,
         env_name: &EnvironmentName,
         is_update_operation: bool,
-    ) -> miette::Result<bool> {
-        let environment = self.environment(env_name).ok_or(miette::miette!(
-            "Environment {} not found in manifest.",
-            env_name.fancy_display()
-        ))?;
+    ) -> Result<bool, EnvironmentInSyncError> {
+        let environment = self
+            .environment(env_name)
+            .ok_or_else(|| ManifestError::EnvironmentNotFound(env_name.clone()))?;
 
         // Split the environment into source and binary requirements
         let (source_specs, binary_specs) = environment.split_into_source_and_binary_requirements();
@@ -1014,16 +1568,13 @@ impl Project {
             .map(|(name, spec)| {
                 let match_spec = MatchSpec::from_nameless(
                     spec.clone()
-                        .try_into_nameless_match_spec(&default_channel_config())
-                        .into_diagnostic()?
-                        .ok_or_else(|| {
-                            miette::miette!("Couldn't convert {spec:?} to nameless match spec.")
-                        })?,
+                        .try_into_nameless_match_spec(&default_channel_config())?
+                        .ok_or_else(|| EnvironmentInSyncError::NotABinarySpec(name.clone()))?,
                     name.clone().into(),
                 );
                 Ok(match_spec)
             })
-            .collect::<Result<IndexSet<MatchSpec>, miette::Report>>()?;
+            .collect::<Result<IndexSet<MatchSpec>, EnvironmentInSyncError>>()?;
 
         let source_package_names = source_specs.specs.keys().cloned().collect::<HashSet<_>>();
 
@@ -1043,15 +1594,78 @@ impl Project {
         let env_dir =
             EnvDir::from_path(self.env_root.clone().path().join(env_name.clone().as_str()));
 
+        // Source dependencies are matched by name against the prefix, so an
+        // edit to a source spec (git rev, path, inline `package.*` table)
+        // wouldn't otherwise register as out of sync. Compare the fingerprints
+        // recorded at install time against the ones the current manifest
+        // implies. A missing record (older pixi, or never installed) counts as
+        // out of sync, which triggers a one-time rebuild.
+        if !source_package_names.is_empty() {
+            let expected_fingerprints = source_fingerprints_for_environment(environment);
+            let recorded_fingerprints = match pixi_core::environment::read_environment_file(
+                env_dir.path(),
+            ) {
+                Ok(env_file) => env_file
+                    .map(|env_file| env_file.source_fingerprints)
+                    .unwrap_or_default(),
+                Err(e) => {
+                    tracing::debug!(
+                        "Failed to read environment file of environment {}, treating source dependency fingerprints as missing: {e}",
+                        env_name.fancy_display()
+                    );
+                    Default::default()
+                }
+            };
+
+            if expected_fingerprints != recorded_fingerprints {
+                tracing::debug!(
+                    "Environment {} out of sync because source dependency fingerprints changed",
+                    env_name.fancy_display()
+                );
+                return Ok(false);
+            }
+        }
+
         let prefix = self.environment_prefix(env_name).await?;
         let prefix_records = prefix.find_installed_packages()?;
+
+        // Installed packages that the current cutoff would exclude mark the
+        // environment out of sync, so tightening `exclude-newer` triggers a
+        // re-solve on the next sync.
+        if let Some(exclude_newer) = self.resolved_exclude_newer(&environment.channels)? {
+            let exclude_newer = rattler_solve::ExcludeNewer::from(exclude_newer);
+            for record in &prefix_records {
+                let package = &record.repodata_record.package_record;
+                let channel = record.repodata_record.channel.as_deref();
+
+                // A package built on this machine records its build time as
+                // timestamp, while the solve only ever sees metadata that
+                // carries none and therefore never excludes it. Such a record
+                // has no channel, and so does a binary package pinned by url,
+                // which the solve does apply the cutoff to. Only an
+                // environment without source dependencies rules the first case
+                // out.
+                if channel.is_none() && !source_package_names.is_empty() {
+                    continue;
+                }
+
+                if exclude_newer.is_excluded(&record.repodata_record) {
+                    tracing::debug!(
+                        "Environment {} out of sync because {} is newer than the exclude-newer cutoff",
+                        env_name.fancy_display(),
+                        package.name.as_source()
+                    );
+                    return Ok(false);
+                }
+            }
+        }
+
         let specs_in_sync = environment_specs_in_sync(
             &prefix_records,
             &specs,
             &source_package_names,
             environment.platform,
-        )
-        .await?;
+        );
         if !specs_in_sync {
             tracing::debug!("Environment out of sync because package specifications don't match");
             return Ok(false);
@@ -1097,7 +1711,7 @@ impl Project {
     }
 
     /// Check if all environments are in sync with the manifest
-    pub async fn environments_in_sync(&self) -> miette::Result<bool> {
+    pub async fn environments_in_sync(&self) -> Result<bool, EnvironmentInSyncError> {
         let mut in_sync = true;
         for (env_name, _parsed_environment) in self.environments() {
             if !self.environment_in_sync(env_name).await? {
@@ -1119,7 +1733,7 @@ impl Project {
     pub async fn expose_executables_from_environment(
         &self,
         env_name: &EnvironmentName,
-    ) -> miette::Result<StateChanges> {
+    ) -> Result<StateChanges, ExposeError> {
         let mut state_changes = StateChanges::default();
 
         // First clean up binaries that are not listed as exposed
@@ -1132,7 +1746,7 @@ impl Project {
 
         let environment = self
             .environment(env_name)
-            .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
+            .ok_or_else(|| ManifestError::EnvironmentNotFound(env_name.clone()))?;
 
         let exposed: HashSet<&str> = environment
             .exposed
@@ -1158,10 +1772,11 @@ impl Project {
                     &env_dir,
                 )
             })
-            .collect::<miette::Result<Vec<_>>>()
-            .wrap_err(format!(
-                "Failed to add executables for environment: {env_name}"
-            ))?;
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|source| ExposeError::ExecutableNotFound {
+                environment: env_name.clone(),
+                source: Cause::new(source),
+            })?;
 
         tracing::debug!(
             "Exposing executables for environment {}",
@@ -1179,7 +1794,7 @@ impl Project {
         &self,
         env_name: &EnvironmentName,
         removed_packages: Option<Vec<PackageName>>,
-    ) -> miette::Result<StateChanges> {
+    ) -> Result<StateChanges, SyncEnvironmentError> {
         let mut state_changes = self
             .sync_environment_install(env_name, removed_packages)
             .await?;
@@ -1197,7 +1812,7 @@ impl Project {
         &self,
         env_name: &EnvironmentName,
         removed_packages: Option<Vec<PackageName>>,
-    ) -> miette::Result<StateChanges> {
+    ) -> Result<StateChanges, SyncEnvironmentError> {
         let mut state_changes = StateChanges::new_with_env(env_name.clone());
         if self.environment_in_sync(env_name).await? {
             tracing::debug!(
@@ -1205,6 +1820,18 @@ impl Project {
                 env_name.fancy_display()
             );
         } else {
+            // Creating an environment reads as an install rather than an
+            // update, whether it was `install` or a `sync` acting on a manifest
+            // entry whose prefix is missing.
+            if !self
+                .env_root
+                .path()
+                .join(env_name.as_str())
+                .join(consts::CONDA_META_DIR)
+                .exists()
+            {
+                state_changes.insert_change(env_name, StateChange::AddedEnvironment);
+            }
             tracing::debug!(
                 "Environment {} specs not up to date with global manifest",
                 env_name.fancy_display()
@@ -1231,7 +1858,7 @@ impl Project {
     pub async fn sync_environment_expose(
         &self,
         env_name: &EnvironmentName,
-    ) -> miette::Result<StateChanges> {
+    ) -> Result<StateChanges, SyncEnvironmentError> {
         let mut state_changes = StateChanges::new_with_env(env_name.clone());
 
         // Expose executables
@@ -1247,32 +1874,44 @@ impl Project {
     }
 
     /// Delete scripts in the bin folder that are broken
-    pub async fn remove_broken_files(&self) -> miette::Result<()> {
+    pub async fn remove_broken_files(&self) -> Result<(), RemoveBrokenFilesError> {
         // Get all the files in the global binary directory
         // If there's a trampoline that couldn't be correctly parsed, remove it
         let root_path = self.bin_dir.path();
-        let mut entries = tokio_fs::read_dir(&root_path).await.into_diagnostic()?;
+        let mut entries = tokio_fs::read_dir(&root_path)
+            .await
+            .map_err(RemoveBrokenFilesError::Io)?;
 
-        while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .map_err(RemoveBrokenFilesError::Io)?
+        {
             let path = entry.path();
             if path.is_file() && path.is_executable() && Trampoline::is_trampoline(&path).await? {
                 let exposed_name = Trampoline::name(&path)?;
                 match Configuration::from_root_path(root_path, &exposed_name).await {
                     Ok(_) => (),
                     Err(ConfigurationParseError::ReadError(config_path, err)) => {
-                        tracing::warn!("Couldn't read {}\n{err:?}", config_path.display());
+                        tracing::warn!("Couldn't read {}\n{err}", config_path.display());
                         tracing::warn!("Removing the trampoline at {}", path.display());
-                        tokio_fs::remove_file(path).await.into_diagnostic()?;
+                        tokio_fs::remove_file(path)
+                            .await
+                            .map_err(RemoveBrokenFilesError::Io)?;
                     }
                     Err(ConfigurationParseError::ParseError(config_path, err)) => {
-                        tracing::warn!("Couldn't parse {}\n{err:?}", config_path.display());
+                        tracing::warn!("Couldn't parse {}\n{err}", config_path.display());
                         tracing::warn!(
                             "Removing the trampoline at {} and configuration at {}",
                             path.display(),
                             config_path.display()
                         );
-                        tokio_fs::remove_file(path).await.into_diagnostic()?;
-                        tokio_fs::remove_file(config_path).await.into_diagnostic()?;
+                        tokio_fs::remove_file(path)
+                            .await
+                            .map_err(RemoveBrokenFilesError::Io)?;
+                        tokio_fs::remove_file(config_path)
+                            .await
+                            .map_err(RemoveBrokenFilesError::Io)?;
                     }
                 }
             }
@@ -1281,7 +1920,7 @@ impl Project {
     }
 
     /// Delete all non required environments
-    pub async fn prune_old_environments(&self) -> miette::Result<StateChanges> {
+    pub async fn prune_old_environments(&self) -> Result<StateChanges, RemoveEnvironmentError> {
         let env_set: HashSet<&EnvironmentName> = self.environments().keys().collect();
 
         let mut state_changes = StateChanges::default();
@@ -1304,7 +1943,7 @@ impl Project {
                     // Remove the conda environment
                     tokio_fs::remove_dir_all(&env_path)
                         .await
-                        .into_diagnostic()?;
+                        .map_err(RemoveEnvironmentError::Io)?;
                     // Get all removable binaries related to the environment
                     let (to_remove, _to_add) = expose_scripts_sync_status(
                         &self.bin_dir,
@@ -1325,11 +1964,14 @@ impl Project {
     }
 
     /// Install shortcuts of a specific environment
-    pub async fn sync_shortcuts(&self, env_name: &EnvironmentName) -> miette::Result<StateChanges> {
+    pub async fn sync_shortcuts(
+        &self,
+        env_name: &EnvironmentName,
+    ) -> Result<StateChanges, ShortcutsError> {
         let mut state_changes = StateChanges::default();
         let environment = self
             .environment(env_name)
-            .ok_or_else(|| miette::miette!("Environment {} not found", env_name.fancy_display()))?;
+            .ok_or_else(|| ManifestError::EnvironmentNotFound(env_name.clone()))?;
 
         let prefix = self.environment_prefix(env_name).await?;
         let prefix_records = prefix.find_installed_packages()?;
@@ -1346,10 +1988,16 @@ impl Project {
             rattler_menuinst::install_menuitems_for_record(
                 prefix.root(),
                 &record,
-                environment.platform.unwrap_or(Platform::current()),
+                environment
+                    .platform
+                    .or(Subdir::current())
+                    .unwrap_or(Subdir::NoArch),
                 MenuMode::User,
             )
-            .into_diagnostic()?;
+            .map_err(|source| ShortcutsError::Install {
+                package: record.name().clone(),
+                source,
+            })?;
 
             state_changes.insert_change(
                 env_name,
@@ -1369,8 +2017,12 @@ impl Project {
                 "Uninstalling menuitems for record: {}",
                 record.name().as_normalized()
             );
-            rattler_menuinst::remove_menuitems_for_record(prefix.root(), record.clone())
-                .into_diagnostic()?;
+            rattler_menuinst::remove_menuitems_for_record(prefix.root(), record.clone()).map_err(
+                |source| ShortcutsError::Remove {
+                    package: record.name().clone(),
+                    source,
+                },
+            )?;
 
             state_changes.insert_change(
                 env_name,
@@ -1392,7 +2044,7 @@ impl Project {
     pub async fn remove_shortcuts(
         &self,
         env_name: &EnvironmentName,
-    ) -> miette::Result<StateChanges> {
+    ) -> Result<StateChanges, ShortcutsError> {
         let mut state_changes = StateChanges::default();
 
         // Find menu items in the prefix
@@ -1401,8 +2053,12 @@ impl Project {
 
         // Remove menu items
         for record in prefix_records {
-            rattler_menuinst::remove_menu_items(&record.installed_system_menus)
-                .into_diagnostic()?;
+            rattler_menuinst::remove_menu_items(&record.installed_system_menus).map_err(
+                |source| ShortcutsError::Remove {
+                    package: record.name().clone(),
+                    source,
+                },
+            )?;
             tracing::info!("Uninstalled menu items for: '{}'", record.file_name());
             state_changes.insert_change(
                 env_name,
@@ -1416,13 +2072,12 @@ impl Project {
     pub async fn sync_completions(
         &self,
         env_name: &EnvironmentName,
-    ) -> miette::Result<StateChanges> {
+    ) -> Result<StateChanges, ExposeError> {
         let mut state_changes = StateChanges::default();
 
-        let environment = self.environment(env_name).ok_or(miette::miette!(
-            "Environment {} not found in manifest.",
-            env_name.fancy_display()
-        ))?;
+        let environment = self
+            .environment(env_name)
+            .ok_or_else(|| ManifestError::EnvironmentNotFound(env_name.clone()))?;
         let prefix = self.environment_prefix(env_name).await?;
         let execs_all = self
             .executables_of_all_dependencies(env_name)
@@ -1439,7 +2094,7 @@ impl Project {
                 prefix.root(),
                 &completions_dir,
             )
-            .await?;
+            .await;
 
         for completion_to_remove in completions_to_remove {
             let state_change = completion_to_remove.remove().await?;
@@ -1461,7 +2116,7 @@ impl Project {
     pub async fn sync_completions(
         &self,
         _env_name: &EnvironmentName,
-    ) -> miette::Result<StateChanges> {
+    ) -> Result<StateChanges, ExposeError> {
         let state_changes = StateChanges::default();
         Ok(state_changes)
     }
@@ -1489,12 +2144,19 @@ impl Project {
 
         self.command_dispatcher.get_or_try_init(|| {
             let cache_dir_path = pixi_config::get_cache_dir()
-                .map(|cache_dir| cache_dir.join(BUILD_DIR))
                 .map_err(|e| CommandDispatcherError::CacheDirectory(e.into()))?;
             let cache_dir = AbsPathBuf::new(cache_dir_path)
                 .expect("cache dir is not absolute")
                 .into_assume_dir();
-            let cache_dirs = pixi_command_dispatcher::CacheDirs::new(cache_dir);
+            // Root the dispatcher at the shared cache directory, so global
+            // environments use the same package and build-backend caches as
+            // every other command; a package cached by a workspace install
+            // counts as locally available for an offline global solve. The
+            // workspace-scoped caches (source builds and their metadata) have
+            // no workspace to live in here and stay under `bld`.
+            let build_dir = cache_dir.join(BUILD_DIR).into_assume_dir();
+            let cache_dirs =
+                pixi_command_dispatcher::CacheDirs::new(cache_dir).with_workspace(build_dir);
 
             let root_dir = AbsPathBuf::new(self.root.clone())
                 .expect("root dir is not absolute")
@@ -1534,6 +2196,7 @@ impl Project {
                         .with_allow_symbolic_links(self.config.allow_symbolic_links)
                         .with_allow_hard_links(self.config.allow_hard_links)
                         .with_allow_ref_links(self.config.allow_ref_links)
+                        .with_offline(self.config.offline())
                         .execute_link_scripts(match self.config.run_post_link_scripts() {
                             RunPostLinkScripts::Insecure => true,
                             RunPostLinkScripts::False => false,
@@ -1543,11 +2206,20 @@ impl Project {
         })
     }
 
-    /// Infer the package name from a SourceSpec by examining build outputs
+    /// Infer the package name from a SourceSpec by examining build outputs.
+    /// When `inline` is set, backend discovery uses the inline package
+    /// definition instead of reading a manifest from the checkout.
+    /// `channels` are the channels of the environment the package is
+    /// destined for; the backend and its dependencies are solved against
+    /// them, subject to the manifest's `exclude-newer` cutoff and the
+    /// channel overrides.
     async fn infer_package_name_from_source_spec(
         &self,
         source_spec: pixi_spec::SourceSpec,
+        inline: Option<InlinePackage>,
+        channels: &[PrioritizedChannel],
     ) -> Result<PackageName, InferPackageNameError> {
+        let exclude_newer = self.resolved_exclude_newer(channels)?;
         let command_dispatcher = self.command_dispatcher()?;
         let checkout = command_dispatcher
             .engine()
@@ -1559,11 +2231,14 @@ impl Project {
         let pinned_source_spec = checkout.pinned;
 
         // Create the metadata spec
-        let channels = self
-            .config()
-            .default_channels()
+        let channels = channels
             .iter()
-            .filter_map(|c| c.clone().into_base_url(self.global_channel_config()).ok())
+            .filter_map(|c| {
+                c.channel
+                    .clone()
+                    .into_base_url(self.global_channel_config())
+                    .ok()
+            })
             .collect();
         let metadata_spec = BuildBackendMetadataSpec {
             manifest_source: pinned_source_spec.clone(),
@@ -1574,12 +2249,13 @@ impl Project {
                     channels,
                     build_environment: pixi_command_dispatcher::BuildEnvironment::default(),
                     variants: VariantConfig::default(),
-                    exclude_newer: None,
+                    exclude_newer,
                     channel_priority: Default::default(),
                 },
             )),
             build_string_prefix: None,
             build_number: None,
+            inline,
         };
 
         // Get the metadata using the command dispatcher
@@ -1589,31 +2265,38 @@ impl Project {
             .await
             .map_err(|e| InferPackageNameError::BuildBackendMetadata(Box::new(e)))?;
 
-        // Get the available outputs and use exactly_one to handle the single output
-        // case
-        let packages = metadata.metadata.output_names();
+        // Get the available output names. Several outputs may share one name
+        // (e.g. variant builds of the same package); those describe a single
+        // package, so dedupe before deciding whether the source is ambiguous.
+        let packages: IndexSet<PackageName> =
+            metadata.metadata.output_names().into_iter().collect();
 
         match packages.len() {
             0 => Err(InferPackageNameError::NoPackageOutputs),
             1 => Ok(packages[0].clone()),
-            _ => {
-                let package_names: Vec<_> = packages.iter().map(|p| p.as_source()).collect();
-                Err(InferPackageNameError::MultiplePackageOutputs {
-                    package_names: package_names.join(", "),
-                })
-            }
+            _ => Err(InferPackageNameError::MultiplePackageOutputs {
+                package_names: packages.iter().map(|p| p.as_source().to_string()).collect(),
+            }),
         }
     }
 
     /// Infer the package name from a PixiSpec (path or git) by examining build
-    /// outputs
+    /// outputs. When `inline` carries an inline package definition, backend
+    /// discovery uses it instead of reading a manifest from the source
+    /// checkout. `channels` are the channels of the environment the package
+    /// is destined for.
     pub async fn infer_package_name_from_spec(
         &self,
         pixi_spec: &pixi_spec::PixiSpec,
+        inline: Option<&InlinePackageManifest>,
+        channels: &[PrioritizedChannel],
     ) -> Result<PackageName, InferPackageNameError> {
         match pixi_spec.clone().into_source_or_binary() {
             Either::Left(source_spec) => {
-                self.infer_package_name_from_source_spec(source_spec).await
+                let inline = inline
+                    .map(|inline| self.inline_package_for_channels(inline, channels.to_vec()));
+                self.infer_package_name_from_source_spec(source_spec, inline, channels)
+                    .await
             }
             Either::Right(binary_spec) => match binary_spec {
                 BinarySpec::Path(PathBinarySpec { path }) => path
@@ -1627,9 +2310,77 @@ impl Project {
     }
 }
 
+/// Synthesizes the minimal [`WorkspaceManifest`] that inline package
+/// definitions need: there is no real workspace behind a global environment,
+/// and backend discovery only consults the workspace's channels (as the
+/// fallback for the build backend's own dependencies when the definition
+/// doesn't pin `build.backend.channels`).
+fn workspace_manifest_with_channels(
+    channels: impl IntoIterator<Item = PrioritizedChannel>,
+) -> WorkspaceManifest {
+    let mut workspace_manifest = WorkspaceManifest::default();
+    workspace_manifest.workspace.channels = channels.into_iter().collect();
+    workspace_manifest
+}
+
+/// Computes a fingerprint for each source dependency in the environment: a
+/// hash of the source spec together with any inline package definition's
+/// content hash. `pixi global sync` compares these against the ones recorded
+/// at install time to detect when a source dependency's *specification*
+/// changed (e.g. an edited git `rev` or inline `package.*` table). Binary
+/// dependencies are matched against the prefix directly and are not included.
+fn source_fingerprints_for_environment(environment: &ParsedEnvironment) -> BTreeMap<String, u64> {
+    environment
+        .dependencies
+        .specs
+        .iter()
+        .filter(|(_, spec)| spec.is_source())
+        .map(|(name, spec)| {
+            let mut hasher = Xxh3::new();
+            // The source spec's TOML form is a stable, complete rendering of
+            // the source location (git url + rev, path, ...).
+            spec.to_toml_value().to_string().hash(&mut hasher);
+            // Fold in the inline package definition, if any, via its content
+            // hash so edits to `package.*` invalidate the fingerprint.
+            if let Some(inline) = environment.inline_packages.get(name) {
+                inline.content_hash.as_u64().hash(&mut hasher);
+            }
+            (name.as_normalized().to_string(), hasher.finish())
+        })
+        .collect()
+}
+
+/// Converts an environment's inline package definitions into the
+/// [`InlinePackage`]s the command dispatcher threads through solve, metadata
+/// and build keys.
+fn inline_packages_for_environment(
+    environment: &ParsedEnvironment,
+) -> BTreeMap<PackageName, InlinePackage> {
+    if environment.inline_packages.is_empty() {
+        return BTreeMap::new();
+    }
+    let workspace = Arc::new(workspace_manifest_with_channels(
+        environment.channels.iter().cloned(),
+    ));
+    environment
+        .inline_packages
+        .iter()
+        .map(|(name, inline)| {
+            (
+                name.clone(),
+                InlinePackage {
+                    manifest: Arc::new(inline.manifest.clone()),
+                    workspace: workspace.clone(),
+                    content_hash: inline.content_hash,
+                },
+            )
+        })
+        .collect()
+}
+
 impl Repodata for Project {
     /// Returns the [`Gateway`] used by this project.
-    fn repodata_gateway(&self) -> miette::Result<&Gateway> {
+    fn repodata_gateway(&self) -> Result<&Gateway, ReqwestClientError> {
         self.repodata_gateway.get_or_try_init(|| {
             let client = self.authenticated_client()?.clone();
             let concurrent_downloads = self.concurrent_downloads_semaphore();
@@ -1648,9 +2399,10 @@ mod tests {
     use std::{collections::HashMap, io::Write};
 
     use itertools::Itertools;
+    use pixi_utils::variants::VariantValue;
     use rattler_conda_types::{
-        NamedChannelOrUrl, PackageRecord, Platform, RepoDataRecord, VersionWithSource,
-        package::DistArchiveIdentifier,
+        NamedChannelOrUrl, PackageRecord, RepoDataRecord, Subdir, VersionWithSource,
+        package::BuildString, package::DistArchiveIdentifier,
     };
     use tempfile::tempdir;
     use url::Url;
@@ -1710,7 +2462,7 @@ mod tests {
         let bin_dir = BinDir::from_env().await.unwrap();
 
         let manifest = Manifest::from_str(&manifest_path, SIMPLE_MANIFEST).unwrap();
-        let project = Project::from_manifest(manifest, env_root, bin_dir);
+        let project = Project::from_manifest(manifest, env_root, bin_dir).unwrap();
         assert_eq!(project.root, manifest_path.parent().unwrap());
     }
 
@@ -1855,7 +2607,8 @@ mod tests {
             manifest,
             env_root.clone(),
             BinDir::new(env_root.path().parent().unwrap().to_path_buf()).unwrap(),
-        );
+        )
+        .unwrap();
 
         // Call the prune method with a list of environments to keep (env1 and env3) but
         // not env4
@@ -1887,11 +2640,11 @@ mod tests {
         let mut package_record = PackageRecord::new(
             "python".parse().unwrap(),
             VersionWithSource::from_str("3.9.7").unwrap(),
-            "build_string".to_string(),
+            "build_string".parse().unwrap(),
         );
 
         // Set platform to something different than current
-        package_record.subdir = Platform::LinuxRiscv32.to_string();
+        package_record.subdir = Subdir::LinuxRiscv32.to_string();
 
         let repodata_record = RepoDataRecord {
             package_record: package_record.clone(),
@@ -1914,7 +2667,7 @@ mod tests {
             NamedChannelOrUrl::from_str("test-channel").unwrap().into()
         );
         assert_eq!(package, "python".parse().unwrap());
-        assert_eq!(platform, Some(Platform::LinuxRiscv32));
+        assert_eq!(platform, Some(Subdir::LinuxRiscv32));
 
         // Test with different from default channel alias
         let repodata_record = RepoDataRecord {
@@ -1937,16 +2690,52 @@ mod tests {
         assert_eq!(package, "python".parse().unwrap());
     }
 
-    /// A platform on a different OS than the local machine can't be inspected
-    /// for virtual packages, so the solve gets an empty list rather than this
-    /// machine's detected packages.
+    fn gvp(name: &str, version: &str) -> GenericVirtualPackage {
+        GenericVirtualPackage {
+            name: name.parse().unwrap(),
+            version: version.parse().unwrap(),
+            build_string: BuildString::new_unchecked("0"),
+        }
+    }
+
+    /// Source builds derive their `c_stdlib` variant from the device's detected
+    /// virtual packages, emitted as a `<=` bound: a host reporting
+    /// `__osx = 15.7.1` targets `macosx_deployment_target <=15.7.1`, so the
+    /// solve picks the highest published deployment target the device can build
+    /// against rather than pinning the exact -- and unpublished -- host version.
     #[test]
-    fn test_virtual_packages_for_non_current_platform_is_empty() {
-        let other = if Platform::current().only_platform() == Some("win") {
-            Platform::Linux64
-        } else {
-            Platform::Win64
-        };
-        assert!(Project::virtual_packages_for(&other).unwrap().is_empty());
+    fn test_build_variants_use_device_virtual_packages() {
+        let channels = vec![ChannelUrl::from(
+            Url::parse("https://conda.anaconda.org/conda-forge").unwrap(),
+        )];
+        let device = vec![gvp("__osx", "15.7.1")];
+        let variants =
+            Project::build_variants(Subdir::OsxArm64, &device, &channels).variant_configuration;
+
+        assert_eq!(
+            variants.get("c_stdlib"),
+            Some(&vec![VariantValue::String(
+                "macosx_deployment_target".to_string()
+            )])
+        );
+        assert_eq!(
+            variants.get("c_stdlib_version"),
+            Some(&vec![VariantValue::String("<=15.7.1".to_string())])
+        );
+    }
+
+    /// The derived providers are conda-forge packages, so an environment that
+    /// doesn't build against conda-forge contributes no variants.
+    #[test]
+    fn test_build_variants_empty_without_conda_forge() {
+        let channels = vec![ChannelUrl::from(
+            Url::parse("https://prefix.dev/my-channel").unwrap(),
+        )];
+        let device = vec![gvp("__osx", "15.0")];
+        assert!(
+            Project::build_variants(Subdir::OsxArm64, &device, &channels)
+                .variant_configuration
+                .is_empty()
+        );
     }
 }

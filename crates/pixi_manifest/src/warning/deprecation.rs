@@ -4,6 +4,8 @@ use miette::{Diagnostic, LabeledSpan, Severity, SourceSpan};
 use thiserror::Error;
 use toml_span::Span;
 
+use crate::ExcludeNewerTableMigration;
+
 /// A deprecation message for a field.
 #[derive(Debug, Error)]
 #[error("{message}")]
@@ -26,9 +28,56 @@ impl Deprecation {
         }
     }
 
+    /// Deprecation of the top-level `[exclude-newer]` and
+    /// `[pypi-exclude-newer]` tables of per-package cutoffs. Entries with a
+    /// zero cutoff are replaced by the `exemptions` of
+    /// `[workspace.exclude-newer]` and `[workspace.pypi-exclude-newer]`, all
+    /// others have no replacement.
+    pub fn exclude_newer_table(
+        prefix: Option<&str>,
+        table: &str,
+        migration: ExcludeNewerTableMigration,
+        span: Option<Range<usize>>,
+    ) -> Self {
+        let prefix = prefix
+            .map(|prefix| format!("{prefix}."))
+            .unwrap_or_default();
+        let (message, label) = if migration.has_replacement {
+            (
+                format!(
+                    "the top-level `[{prefix}{table}]` table of per-package cutoffs is deprecated in favor of the `exemptions` of `[{prefix}workspace.{table}]`"
+                ),
+                format!("replace this with `[{prefix}workspace.{table}.exemptions]`"),
+            )
+        } else {
+            (
+                format!(
+                    "the top-level `[{prefix}{table}]` table of per-package cutoffs is deprecated and will be removed in a future release"
+                ),
+                "this table will be removed".to_string(),
+            )
+        };
+        let labels = span
+            .map(|span| {
+                vec![LabeledSpan::new_primary_with_span(
+                    Some(label),
+                    SourceSpan::new(span.start.into(), span.end - span.start),
+                )]
+            })
+            .unwrap_or_default();
+        Self {
+            message: message.into(),
+            labels,
+            help: Some(migration.help.into()),
+        }
+    }
+
     /// Deprecation of the legacy `[system-requirements]` table in favor of
     /// virtual packages declared on the `platforms` entries.
-    pub fn system_requirements(span: Option<Range<usize>>) -> Self {
+    ///
+    /// `help` carries the replacement, built by
+    /// [`crate::toml::platform::system_requirements_as_platforms`].
+    pub fn system_requirements(help: String, span: Option<Range<usize>>) -> Self {
         let labels = span
             .map(|span| {
                 vec![LabeledSpan::new_primary_with_span(
@@ -42,7 +91,7 @@ impl Deprecation {
                 "the `[system-requirements]` table is deprecated in favor of virtual packages on `platforms`"
                     .into(),
             labels,
-            help: Some(r#"e.g. platforms = [{ platform = "linux-64", cuda = "12" }]"#.into()),
+            help: Some(format!("e.g. {help}").into()),
         }
     }
 

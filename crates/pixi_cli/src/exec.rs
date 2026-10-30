@@ -1,29 +1,38 @@
-use std::{collections::BTreeSet, collections::HashMap, path::Path, str::FromStr};
+use std::{
+    collections::BTreeSet, collections::HashMap, path::Path, process::ExitCode, str::FromStr,
+};
 
 use clap::{Parser, ValueHint};
 use indexmap::IndexSet;
 use itertools::Itertools;
 use miette::{Context, IntoDiagnostic};
 use pixi_api::workspace::platforms::resolve_platforms;
+use pixi_command_dispatcher::offline::exclusions_for_solve;
 use pixi_config::{self, Config, ConfigCli};
 use pixi_core::environment::list::{PackageToOutput, print_package_table};
+use pixi_core::host::{HostDetector, WantedNames, cli_detector_consent};
 use pixi_manifest::PixiPlatformName;
+use pixi_manifest::platform::host::host_subdir;
 use pixi_progress::{await_in_progress, global_multi_progress, wrap_in_progress};
 use pixi_utils::prefix::Prefix;
-use pixi_utils::{EnvironmentHash, EnvironmentLock, reqwest::build_reqwest_clients};
+use pixi_utils::{
+    EnvironmentHash, EnvironmentLock, reqwest::build_reqwest_clients,
+    rlimit::try_increase_rlimit_to_sensible,
+};
 use rattler::{
     install::{IndicatifReporter, Installer},
     package_cache::PackageCache,
 };
-use rattler_conda_types::{GenericVirtualPackage, MatchSpec, PackageName, Platform};
+use rattler_conda_types::{
+    ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, Subdir, referenced_virtual_packages,
+};
 use rattler_solve::{SolverImpl, SolverTask, resolvo::Solver};
-use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use reqwest_middleware::ClientWithMiddleware;
-use uv_configuration::initialize_rayon_once;
+use uv_threads::initialize_rayon_once;
 
 use crate::{cli_config::ChannelsConfig, match_spec_or_path::MatchSpecOrPath, process_exit};
 
-/// Run a command and install it in a temporary environment.
+/// Run a command in a temporary environment.
 ///
 /// Remove the temporary environments with `pixi clean cache --exec`.
 #[derive(Parser, Debug)]
@@ -50,7 +59,7 @@ pub struct Args {
     /// current machine's subdir. Accepts a workspace platform name or a
     /// bare conda subdir (e.g. `linux-64`); `pixi exec` runs outside any
     /// workspace so the value resolves to a conda subdir either way.
-    #[clap(long, short)]
+    #[clap(long, short, value_name = "SUBDIR", value_hint = ValueHint::Other)]
     pub platform: Option<PixiPlatformName>,
 
     /// If specified a new environment is always created even if one already
@@ -72,8 +81,8 @@ pub struct Args {
 }
 
 /// CLI entry point for `pixi exec`
-pub async fn execute(args: Args) -> miette::Result<()> {
-    let config = Config::with_cli_config(&args.config);
+pub async fn execute(args: Args) -> miette::Result<ExitCode> {
+    let config = Config::try_with_cli_config(&args.config)?;
     let cache_dir = pixi_config::get_cache_dir().context("failed to determine cache directory")?;
 
     // `pixi exec` runs without a workspace, so the resolver only has the
@@ -85,7 +94,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             .next()
             .expect("resolve_platforms preserves length")
             .subdir(),
-        None => Platform::current(),
+        None => host_subdir(),
     };
 
     let mut command_iter = args.command.iter();
@@ -175,15 +184,14 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .with_context(|| format!("failed to execute '{}'", command))?;
 
     // Mirror the child's exit (including signal deaths like SIGSEGV) so the
-    // parent shell sees the same outcome it would if the child had run
-    // directly.
-    process_exit::exit_with_status(status);
+    // parent shell sees the same outcome it would if the child had run directly.
+    Ok(process_exit::exit_code_from_status(status))
 }
 
 /// Creates a prefix for the `pixi exec` command.
 pub async fn create_exec_prefix(
     args: &Args,
-    platform: Platform,
+    platform: Subdir,
     specs: &[MatchSpec],
     cache_dir: &Path,
     config: &Config,
@@ -199,7 +207,8 @@ pub async fn create_exec_prefix(
         .map(|c| c.base_url.to_string())
         .collect();
 
-    let environment_hash = EnvironmentHash::new(specs.clone(), channels, platform);
+    let environment_hash =
+        EnvironmentHash::new(specs.clone(), channels, platform, config.offline());
 
     let dir_prefix = exec_dir_prefix(
         &specs,
@@ -241,26 +250,68 @@ pub async fn create_exec_prefix(
     let gateway = config.gateway().with_client(client.clone()).finish();
 
     let channels = args.channels.resolve_from_config(config)?;
+    let channel_urls: Vec<ChannelUrl> = channels
+        .iter()
+        .map(|channel| channel.base_url.clone())
+        .collect();
 
     // Get the repodata for the specs
-    let repodata = await_in_progress("fetching repodata for environment", |_| async {
+    let query_output = await_in_progress("fetching repodata for environment", |_| async {
         gateway
-            .query(channels, [platform, Platform::NoArch], specs.clone())
+            .query(channels, [platform, Subdir::NoArch], specs.clone())
             .recursive(true)
+            .channel_notices(true)
             .execute()
             .await
             .into_diagnostic()
     })
     .await
     .context("failed to get repodata")?;
+    for notice in &query_output.notices {
+        pixi_reporters::queue_channel_notice(notice);
+    }
+    let repodata = query_output.repodata;
 
-    // Determine virtual packages of the current platform
-    let virtual_packages: Vec<GenericVirtualPackage> =
-        VirtualPackages::detect(&VirtualPackageOverrides::from_env())
-            .into_diagnostic()
-            .context("failed to determine virtual packages")?
-            .into_generic_virtual_packages()
-            .collect();
+    // Discover registrations for the target, honoring overrides without
+    // executing detectors on a foreign platform.
+    let mut wanted = referenced_virtual_packages(
+        repodata
+            .iter()
+            .flat_map(|subdir| subdir.iter())
+            .map(|record| &record.package_record),
+    );
+    wanted.extend(
+        specs
+            .iter()
+            .filter_map(|spec| spec.name.as_exact())
+            .filter(|name| name.as_normalized().starts_with("__"))
+            .cloned(),
+    );
+    let host = HostDetector::with_gateway(
+        config.clone(),
+        cli_detector_consent(None),
+        client.clone().into(),
+        gateway.clone(),
+    )
+    .detect_for_target(&channel_urls, platform, WantedNames::Only(wanted))
+    .await?;
+    let virtual_packages: Vec<GenericVirtualPackage> = host
+        .platform()
+        .into_diagnostic()
+        .context("failed to determine virtual packages")?
+        .solver_virtual_package_records()
+        .into_owned();
+
+    // `pixi exec` solves outside the command dispatcher, so it has to build
+    // the offline exclusions itself rather than inheriting them.
+    let excluded_candidates = exclusions_for_solve(
+        config.offline(),
+        &PackageCache::new(cache_dir.join(pixi_consts::consts::CONDA_PACKAGE_CACHE_DIR)),
+        repodata.iter().flat_map(|repo_data| repo_data.iter()),
+    )
+    .await
+    .into_diagnostic()
+    .context("failed to read the package cache")?;
 
     // Solve the environment
     tracing::info!(
@@ -274,6 +325,7 @@ pub async fn create_exec_prefix(
         Solver.solve(SolverTask {
             specs: specs.clone(),
             virtual_packages: virtual_packages.clone(),
+            excluded_candidates: excluded_candidates.clone(),
             ..SolverTask::from_iter(&repodata.clone())
         })
     });
@@ -297,6 +349,7 @@ pub async fn create_exec_prefix(
                 Solver.solve(SolverTask {
                     specs: specs[..specs.len() - 1].to_vec(),
                     virtual_packages: virtual_packages.clone(),
+                    excluded_candidates: excluded_candidates.clone(),
                     ..SolverTask::from_iter(&repodata.clone())
                 })
             })
@@ -314,6 +367,9 @@ pub async fn create_exec_prefix(
     // Force the initialization of the rayon thread pool to avoid implicit creation
     // by the Installer.
     initialize_rayon_once();
+
+    // Try to increase the rlimit to a sensible value for installation.
+    try_increase_rlimit_to_sensible();
 
     // Mark the prefix dirty for the duration of the install so a crash
     // is detected next time.
@@ -457,7 +513,7 @@ fn guess_package_spec(command: &str) -> MatchSpec {
 async fn run_activation(
     prefix: &Prefix,
 ) -> miette::Result<std::collections::HashMap<String, String>> {
-    wrap_in_progress("running activation", move || prefix.run_activation()).await
+    Ok(wrap_in_progress("running activation", move || prefix.run_activation()).await?)
 }
 
 fn to_exec_match_specs(specs: &[MatchSpecOrPath]) -> miette::Result<Vec<MatchSpec>> {

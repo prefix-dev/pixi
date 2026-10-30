@@ -48,7 +48,9 @@ impl Display for DependencyRemovalError {
             self.name,
             Slot::from(self.dependency_type).table_name()
         )?;
-        if !self.feature.is_default() {
+        if let Some(environment) = self.feature.environment_name() {
+            write!(f, " of environment `{environment}`")?;
+        } else if !self.feature.is_default() {
             write!(f, " of feature `{}`", self.feature)?;
         }
         Ok(())
@@ -169,7 +171,7 @@ fn walk_dependencies<'a>(
     platforms: &[PixiPlatformName],
 ) -> impl Iterator<Item = DepEntry<'a>> + 'a {
     let platform_opts = to_platform_options(manifest, platforms);
-    manifest.features.iter().flat_map(move |(feat_name, feat)| {
+    manifest.all_features().flat_map(move |(feat_name, feat)| {
         platform_opts
             .clone()
             .into_iter()
@@ -222,6 +224,23 @@ fn is_exact_match(
 }
 
 fn format_exact_location(name: &str, slot: Slot, feature: &FeatureName) -> String {
+    // Content defined inline on an environment is addressed via
+    // `--environment` rather than `--feature`.
+    if let Some(environment_name) = feature.environment_name() {
+        let mut parts = vec!["pixi".to_string(), "remove".to_string()];
+        if let Some(flag) = slot.cli_flag() {
+            parts.push(flag.to_string());
+        }
+        parts.push("--environment".to_string());
+        parts.push(environment_name.to_string());
+        parts.push(name.to_string());
+        return format!(
+            "`{name}` is a {} entry of environment `{}`; try `{}`",
+            slot.table_name(),
+            consts::ENVIRONMENT_STYLE.apply_to(environment_name),
+            parts.join(" "),
+        );
+    }
     let feature_part = if feature.is_default() {
         "the default feature".to_string()
     } else {
@@ -322,7 +341,7 @@ pandas = "*"
                 &manifest,
                 "polars",
                 DependencyType::CondaDependency(SpecType::Run),
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
                 &[],
             ),
             @r"
@@ -341,7 +360,7 @@ pandas = "*"
                 &manifest,
                 "ruff",
                 DependencyType::PypiDependency,
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
                 &[],
             ),
             @r"
@@ -360,7 +379,7 @@ pandas = "*"
                 &manifest,
                 "openssl",
                 DependencyType::CondaDependency(SpecType::Run),
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
                 &[],
             ),
             @r"
@@ -379,7 +398,7 @@ pandas = "*"
                 &manifest,
                 "cmake",
                 DependencyType::CondaDependency(SpecType::Run),
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
                 &[],
             ),
             @r"
@@ -399,7 +418,7 @@ pandas = "*"
                 &manifest,
                 "numpy",
                 DependencyType::CondaDependency(SpecType::Run),
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
                 &[],
             ),
             @r"
@@ -419,7 +438,7 @@ pandas = "*"
                 &manifest,
                 "polrs",
                 DependencyType::PypiDependency,
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
                 &[],
             ),
             @r"
@@ -438,7 +457,7 @@ pandas = "*"
                 &manifest,
                 "fizzbuzz",
                 DependencyType::CondaDependency(SpecType::Run),
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
                 &[],
             ),
             @"  × dependency `fizzbuzz` was not found in dependencies"
@@ -481,6 +500,39 @@ pandas = "*"
             @r"
           × dependency `pandas` was not found in dependencies of feature `dev`
           help: `pandas` is a pypi-dependencies entry in feature `dev`; try `pixi remove --pypi --feature dev pandas`
+        "
+        );
+    }
+
+    #[test]
+    fn missing_dep_lives_inline_on_environment() {
+        // `pixi remove git` when git is only defined inline on an
+        // environment. The help points at the `--environment` flag.
+        let manifest = parse(
+            r#"
+[workspace]
+name = "test"
+channels = []
+platforms = ["linux-64"]
+
+[dependencies]
+ruff = "*"
+
+[environments.dev.dependencies]
+git = "*"
+"#,
+        );
+        insta::assert_snapshot!(
+            render(
+                &manifest,
+                "git",
+                DependencyType::CondaDependency(SpecType::Run),
+                &FeatureName::Default,
+                &[],
+            ),
+            @r"
+          × dependency `git` was not found in dependencies
+          help: `git` is a dependencies entry of environment `dev`; try `pixi remove --environment dev git`
         "
         );
     }

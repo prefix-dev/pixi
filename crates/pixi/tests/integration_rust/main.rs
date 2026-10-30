@@ -10,6 +10,7 @@ mod install_filter_tests;
 mod install_tests;
 mod lock_tests;
 mod lock_v6_platform_tests;
+mod offline_tests;
 mod project_tests;
 mod pypi_tests;
 mod search_tests;
@@ -19,6 +20,9 @@ mod task_tests;
 mod test_activation;
 mod update_tests;
 mod upgrade_tests;
+mod virtual_package_detector_cli_tests;
+mod virtual_package_detector_host_review_tests;
+mod virtual_package_detector_tests;
 
 /// Setup tracing for the test suite.
 /// This function initializes the tracing subscriber with the environment

@@ -1,0 +1,16 @@
+[workspace]
+channels = ["https://prefix.dev/conda-forge"]
+name = "sysreq-platform-restriction-composition"
+platforms = ["linux-64"]
+
+[system-requirements]
+libc = "2.17"
+
+[dependencies]
+_r-mutex = "*"
+
+[feature.x86-only]
+platforms = ["linux-64"]
+
+[environments]
+restricted = { features = ["x86-only"] }

@@ -13,7 +13,7 @@ use uv_normalize::{InvalidNameError, PackageName};
 use uv_pep440::VersionSpecifiers;
 use uv_pep508::VerbatimUrl;
 use uv_pypi_types::{ParsedDirectoryUrl, ParsedPathUrl, ParsedUrl, VerbatimParsedUrl};
-use uv_redacted::DisplaySafeUrl;
+use uv_redacted::SafeUrl;
 
 use crate::{
     ConversionError, GitUrlWithPrefix, into_uv_git_reference, to_uv_marker_tree,
@@ -101,7 +101,7 @@ pub fn as_uv_req(
             specifier: manifest_version_to_version_specifiers(version)?,
             index: index.clone().map(|url| {
                 uv_distribution_types::IndexMetadata::from(uv_distribution_types::IndexUrl::from(
-                    VerbatimUrl::from_url(DisplaySafeUrl::from_url(url)),
+                    VerbatimUrl::from_url(SafeUrl::from_url(url)),
                 ))
             }),
             conflict: None,
@@ -112,12 +112,13 @@ pub fn as_uv_req(
                     git,
                     rev,
                     subdirectory,
+                    lfs,
                     matchspec: _,
                 },
         } => {
             let git_url = GitUrlWithPrefix::from(git);
 
-            RequirementSource::Git {
+            RequirementSource::GitDirectory {
                 // Url is already a git url, should look like:
                 // - 'ssh://git@github.com/user/repo'
                 // - 'https://github.com/user/repo'
@@ -133,7 +134,7 @@ pub fn as_uv_req(
                         .and_then(|s| s.map(uv_git_types::GitOid::from_str))
                         .transpose()
                         .expect("could not parse sha"),
-                    uv_git_types::GitLfs::Disabled,
+                    crate::to_uv_git_lfs(*lfs),
                 )?,
                 subdirectory: if subdirectory.is_empty() {
                     None
@@ -154,7 +155,7 @@ pub fn as_uv_req(
                         url: git.to_string(),
                     })?;
 
-                    VerbatimUrl::from_url(DisplaySafeUrl::from_url(created_url))
+                    VerbatimUrl::from_url(SafeUrl::from_url(created_url))
                 },
             }
         }
@@ -175,7 +176,7 @@ pub fn as_uv_req(
                 RequirementSource::Directory {
                     install_path: canonicalized.into_boxed_path(),
                     // Editability is applied at install time from the manifest
-                    // (`is_editable_from_manifest`). Leaving it unspecified
+                    // (`editable_from_manifest`). Leaving it unspecified
                     // avoids uv "conflicting URLs" errors across solve-group
                     // environments and transitive `[tool.uv.sources]` (#6121).
                     editable: None,
@@ -203,7 +204,7 @@ pub fn as_uv_req(
             // So that we can normalize the URL for comparison.
             let mut location_url = url.clone();
             location_url.set_fragment(None);
-            let verbatim_url = VerbatimUrl::from_url(DisplaySafeUrl::from_url(url.clone()));
+            let verbatim_url = VerbatimUrl::from_url(SafeUrl::from_url(url.clone()));
 
             RequirementSource::Url {
                 subdirectory: if subdirectory.is_empty() {
@@ -211,7 +212,7 @@ pub fn as_uv_req(
                 } else {
                     Some(subdirectory.as_path().to_path_buf().into_boxed_path())
                 },
-                location: DisplaySafeUrl::from_url(location_url),
+                location: SafeUrl::from_url(location_url).with_policy(uv_redacted::policy::Raw),
                 url: verbatim_url,
                 ext: DistExtension::from_path(url.path())?,
             }
@@ -227,6 +228,7 @@ pub fn as_uv_req(
             .collect(),
         marker: to_uv_marker_tree(req.env_markers()).expect("marker conversion failed"),
         groups: Default::default(),
+        scope: Default::default(),
         source,
         origin: None,
     })
@@ -256,7 +258,7 @@ pub fn pep508_requirement_to_uv_requirement(
                             Ok(ext) => ParsedUrl::Path(ParsedPathUrl::from_source(
                                 PathBuf::from(path.as_str()).into_boxed_path(),
                                 ext,
-                                DisplaySafeUrl::from_url(verbatim_url.to_url()),
+                                SafeUrl::from_url(verbatim_url.to_url()),
                             )),
                             Err(_) => {
                                 // If no extension, treat as a directory
@@ -264,14 +266,14 @@ pub fn pep508_requirement_to_uv_requirement(
                                     PathBuf::from(path.as_str()).into_boxed_path(),
                                     Some(false), // Set editable to false, might require post-processing on the result
                                     Some(false), // we do not support virtual packages yet
-                                    DisplaySafeUrl::from_url(verbatim_url.to_url()),
+                                    SafeUrl::from_url(verbatim_url.to_url()),
                                 ))
                             }
                         };
 
                         VerbatimParsedUrl {
                             parsed_url,
-                            verbatim: uv_pep508::VerbatimUrl::from_url(DisplaySafeUrl::from_url(
+                            verbatim: uv_pep508::VerbatimUrl::from_url(SafeUrl::from_url(
                                 verbatim_url.raw().clone(),
                             ))
                             .with_given(verbatim_url.given().expect("should have given string")),
@@ -279,9 +281,9 @@ pub fn pep508_requirement_to_uv_requirement(
                     }
                     // It is a URL
                     UrlOrPath::Url(u) => VerbatimParsedUrl {
-                        parsed_url: ParsedUrl::try_from(DisplaySafeUrl::from_url(u.clone()))
+                        parsed_url: ParsedUrl::try_from(SafeUrl::from_url(u.clone()))
                             .expect("cannot convert to url"),
-                        verbatim: uv_pep508::VerbatimUrl::from_url(DisplaySafeUrl::from_url(u)),
+                        verbatim: uv_pep508::VerbatimUrl::from_url(SafeUrl::from_url(u)),
                     },
                 };
 
@@ -315,7 +317,7 @@ pub fn pep508_requirement_to_uv_requirement(
 #[cfg(test)]
 mod tests {
     use pep508_rs::MarkerTree;
-    use uv_redacted::DisplaySafeUrl;
+    use uv_redacted::SafeUrl;
 
     use super::*;
 
@@ -368,14 +370,14 @@ mod tests {
         });
         let uv_req = as_uv_req(&pypi_req, "test", Path::new("")).unwrap();
 
-        let expected_uv_req = RequirementSource::Git {
+        let expected_uv_req = RequirementSource::GitDirectory {
             git: uv_git_types::GitUrl::from_fields(
-                DisplaySafeUrl::parse("ssh://git@github.com/user/test.git").unwrap(),
+                SafeUrl::parse("ssh://git@github.com/user/test.git").unwrap(),
                 uv_git_types::GitReference::BranchOrTagOrCommit("d099af3b1028b00c232d8eda28a997984ae5848b".to_string()),
                 Some(uv_git_types::GitOid::from_str("d099af3b1028b00c232d8eda28a997984ae5848b").unwrap()),
                 uv_git_types::GitLfs::Disabled).unwrap(),
             subdirectory: Default::default(),
-            url: VerbatimUrl::from_url(DisplaySafeUrl::parse("git+ssh://git@github.com/user/test.git@d099af3b1028b00c232d8eda28a997984ae5848b").unwrap()),
+            url: VerbatimUrl::from_url(SafeUrl::parse("git+ssh://git@github.com/user/test.git@d099af3b1028b00c232d8eda28a997984ae5848b").unwrap()),
         };
 
         assert_eq!(
@@ -395,9 +397,9 @@ mod tests {
             ),
         });
         let uv_req = as_uv_req(&pypi_req, "test", Path::new("")).unwrap();
-        let expected_uv_req = RequirementSource::Git {
+        let expected_uv_req = RequirementSource::GitDirectory {
             git: uv_git_types::GitUrl::from_fields(
-                DisplaySafeUrl::parse("https://github.com/user/test.git").unwrap(),
+                SafeUrl::parse("https://github.com/user/test.git").unwrap(),
                 uv_git_types::GitReference::BranchOrTagOrCommit(
                     "d099af3b1028b00c232d8eda28a997984ae5848b".to_string(),
                 ),
@@ -410,7 +412,7 @@ mod tests {
             .unwrap(),
             subdirectory: Default::default(),
             url: VerbatimUrl::from_url(
-                DisplaySafeUrl::parse(
+                SafeUrl::parse(
                     "git+https://github.com/user/test.git@d099af3b1028b00c232d8eda28a997984ae5848b",
                 )
                 .unwrap(),

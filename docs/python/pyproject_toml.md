@@ -1,7 +1,7 @@
 We support the use of the `pyproject.toml` as our manifest file in pixi.
 This allows the user to keep one file with all configuration.
 The `pyproject.toml` file is a standard for Python projects.
-We don't advise to use the `pyproject.toml` file for anything else than python projects, the `pixi.toml` is better suited for other types of projects.
+We don't advise to use the `pyproject.toml` file for anything else than Python projects, the `pixi.toml` is better suited for other types of projects.
 
 ## Initial setup of the `pyproject.toml` file
 
@@ -15,10 +15,10 @@ If you do not have an existing `pyproject.toml` file , you can run `pixi init --
 
 ## Python dependency
 
-The `pyproject.toml` file supports the `requires_python` field.
+The `pyproject.toml` file supports the `requires-python` field.
 Pixi understands that field and automatically adds the version to the dependencies.
 
-This is an example of a `pyproject.toml` file with the `requires_python` field, which will be used as the python dependency:
+This is an example of a `pyproject.toml` file with the `requires-python` field, which will be used as the Python dependency:
 
 ```toml title="pyproject.toml"
 [project]

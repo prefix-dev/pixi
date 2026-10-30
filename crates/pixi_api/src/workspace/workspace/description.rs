@@ -13,7 +13,7 @@ pub async fn set<I: Interface>(
     description: &str,
 ) -> miette::Result<()> {
     // Set the description
-    workspace.manifest().set_description(description)?;
+    workspace.manifest().set_description(description);
 
     // Save the manifest on disk
     let _ = workspace.save().await.into_diagnostic()?;

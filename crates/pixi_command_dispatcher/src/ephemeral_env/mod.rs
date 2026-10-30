@@ -35,7 +35,8 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use xxhash_rust::xxh3::Xxh3;
 
-use crate::SolveCondaEnvironmentSpec;
+use pixi_compute_network::HasOffline;
+
 use crate::cache::markers::BuildBackendsDir;
 use crate::compute_data::{HasGateway, HasGatewayReporter, HasInstantiateBackendReporter};
 use crate::injected_config::{ChannelConfigKey, ToolBuildEnvironmentKey};
@@ -43,6 +44,7 @@ use crate::install_binary::install_binary_records;
 use crate::reporter::{InstantiateBackendReporter, WrappingGatewayReporter};
 use crate::solve_binary::SolveCondaExt;
 use crate::solve_conda::SolveCondaEnvironmentError;
+use crate::{SolveCondaEnvironmentSpec, compute_data::HasPackageCache};
 use pixi_compute_cache_dirs::CacheDirsExt;
 use pixi_compute_reporters::OperationId;
 
@@ -88,7 +90,17 @@ impl Hash for EphemeralEnvSpec {
         dependencies.hash(state);
         constraints.hash(state);
         channels.hash(state);
-        exclude_newer.hash(state);
+        // The prefix is shared across invocations, so hash the cutoffs as
+        // configured: a relative cutoff such as `14d` resolves to a different
+        // time on every invocation and would never hit the cache. A prefix
+        // solved with an earlier resolution still satisfies the cutoff, as
+        // its packages only get older, the same way a prefix solved without
+        // a cutoff is reused when newer packages are published.
+        // Hashed like `Option::hash`, so keys without a cutoff are unchanged.
+        mem::discriminant(exclude_newer).hash(state);
+        if let Some(exclude_newer) = exclude_newer {
+            exclude_newer.hash_configured(state);
+        }
         // Neither SolveStrategy nor ChannelPriority implement Hash;
         // use the enum discriminant (both are C-like enums, so the
         // discriminant fully captures identity).
@@ -203,6 +215,9 @@ pub enum EphemeralEnvError {
 
     #[error("failed to install the environment at {0}")]
     Install(PathBuf, #[source] Arc<InstallerError>),
+
+    #[error("failed to read the package cache")]
+    CacheIndex(#[source] Arc<std::io::Error>),
 }
 
 impl Key for EphemeralEnvKey {
@@ -221,7 +236,16 @@ impl Key for EphemeralEnvKey {
         // pixi-build-cmake / pixi-build-python — even when the
         // prefix on disk was already provisioned by a previous run.
         //
-        let cache_key = spec.cache_key();
+        // An offline solve can pick older packages than an online one would.
+        // The prefix is content-addressed and shared across processes, so the
+        // two must not land on the same key: otherwise the restricted result
+        // would be served to later online runs, which would silently keep
+        // using an older backend.
+        let offline = ctx.global_data().offline();
+        let cache_key = match offline {
+            true => format!("{}-local", spec.cache_key()),
+            false => spec.cache_key(),
+        };
         let prefix_path = ctx.cache_dir::<BuildBackendsDir>().await.join(&cache_key);
         if let Some(cached) = read_cached_marker(prefix_path.as_std_path()).await {
             return Ok(Arc::new(cached));
@@ -242,6 +266,21 @@ impl Key for EphemeralEnvKey {
             .map_err(Arc::new)?;
 
         // 4. Build a binary-only SolveCondaEnvironmentSpec and solve.
+        //
+        // Backend environments go through the same solver as everything else,
+        // so offline mode restricts them too. This is only reached on a cold
+        // backend: a previously provisioned one returns from the marker fast
+        // path above without solving at all.
+        let excluded_candidates = crate::offline::exclusions_for_solve(
+            offline,
+            ctx.global_data().package_cache(),
+            binary_repodata
+                .iter()
+                .flat_map(|repo_data| repo_data.iter()),
+        )
+        .await
+        .map_err(|err| Arc::new(EphemeralEnvError::CacheIndex(Arc::new(err))))?;
+
         let solve_spec = SolveCondaEnvironmentSpec {
             name: None,
             source_specs: DependencyMap::default(),
@@ -257,6 +296,7 @@ impl Key for EphemeralEnvKey {
             strategy: spec.strategy,
             channel_priority: spec.channel_priority,
             exclude_newer: spec.exclude_newer.clone(),
+            excluded_candidates,
         };
         let records = ctx
             .solve_conda(solve_spec)
@@ -427,7 +467,7 @@ async fn fetch_binary_repodata(
     binary_specs: &DependencyMap<PackageName, BinarySpec>,
     build_env: &crate::BuildEnvironment,
 ) -> Result<Vec<RepoData>, EphemeralEnvError> {
-    use rattler_conda_types::{Channel, Platform};
+    use rattler_conda_types::{Channel, Subdir};
 
     let channel_config = ctx.compute(&ChannelConfigKey).await;
     let gateway = ctx.global_data().gateway().clone();
@@ -452,15 +492,19 @@ async fn fetch_binary_repodata(
     let mut query = gateway
         .query(
             spec.channels.iter().cloned().map(Channel::from_url),
-            [build_env.host_platform, Platform::NoArch],
+            [build_env.host_platform, Subdir::NoArch],
             match_specs.into_iter().chain(constraint_specs),
         )
-        .recursive(true);
+        .recursive(true)
+        // Without a reporter the fetched notices are dropped on the floor, so
+        // do not pay for them.
+        .channel_notices(gateway_reporter.is_some());
     if let Some(reporter) = gateway_reporter {
         query = query.with_reporter(WrappingGatewayReporter(reporter));
     }
     query
         .await
+        .map(|output| output.repodata)
         .map_err(|e| EphemeralEnvError::Gateway(Arc::new(e)))
 }
 
@@ -486,4 +530,66 @@ fn split_into_binary(
         }
     }
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use chrono::{DateTime, Utc};
+    use pixi_spec::{ConfiguredCutoffs, ExcludeNewer};
+
+    use super::*;
+
+    fn spec(exclude_newer: Option<ResolvedExcludeNewer>) -> EphemeralEnvSpec {
+        let mut dependencies = DependencyMap::default();
+        dependencies.insert(
+            PackageName::from_str("pixi-build-python").unwrap(),
+            PixiSpec::Version(rattler_conda_types::VersionSpec::Any),
+        );
+        EphemeralEnvSpec {
+            dependencies,
+            constraints: DependencyMap::default(),
+            channels: Vec::new(),
+            exclude_newer,
+            strategy: SolveStrategy::default(),
+            channel_priority: ChannelPriority::default(),
+        }
+    }
+
+    /// `14d` resolved at `now`, as the manifest resolves it.
+    fn relative(now: &str, duration: &str) -> ResolvedExcludeNewer {
+        let cutoff = ExcludeNewer::from_str(duration).unwrap();
+        let now: DateTime<Utc> = now.parse().unwrap();
+        ResolvedExcludeNewer::from_datetime(cutoff.cutoff_at(now)).with_configured_cutoffs(
+            ConfiguredCutoffs {
+                cutoff: Some(cutoff),
+                ..ConfiguredCutoffs::default()
+            },
+        )
+    }
+
+    /// Regression test for https://github.com/prefix-dev/pixi/issues/6617:
+    /// a relative cutoff resolves to a different time on every invocation,
+    /// which must not change the prefix of the backend environment.
+    #[test]
+    fn cache_key_ignores_when_a_relative_cutoff_was_resolved() {
+        let early = spec(Some(relative("2026-10-01T00:00:00Z", "14d")));
+        let late = spec(Some(relative("2026-10-28T12:34:56Z", "14d")));
+        assert_eq!(early.cache_key(), late.cache_key());
+
+        // A different configuration is a different environment.
+        let other = spec(Some(relative("2026-10-01T00:00:00Z", "7d")));
+        assert_ne!(early.cache_key(), other.cache_key());
+        assert_ne!(early.cache_key(), spec(None).cache_key());
+    }
+
+    #[test]
+    fn cache_key_distinguishes_absolute_cutoffs() {
+        let absolute = |cutoff: &str| ResolvedExcludeNewer::from_datetime(cutoff.parse().unwrap());
+        assert_ne!(
+            spec(Some(absolute("2026-10-01T00:00:00Z"))).cache_key(),
+            spec(Some(absolute("2026-10-02T00:00:00Z"))).cache_key()
+        );
+    }
 }

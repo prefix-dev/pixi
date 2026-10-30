@@ -10,11 +10,12 @@ use std::{
     sync::Arc,
 };
 
+use miette::Diagnostic;
 use pypi_mapping::{
     self, ProjectDefinedChannelMapping, ProjectDefinedMapping, ProjectDefinedMappingLocation,
     PurlDerivationMode, PurlDerivationSource, PypiNames,
 };
-use rattler_conda_types::{PackageName, Platform, RepoDataRecord};
+use rattler_conda_types::{PackageName, RepoDataRecord, Subdir};
 use rattler_lock::DEFAULT_ENVIRONMENT_NAME;
 use reqwest_middleware::ClientBuilder;
 use tempfile::TempDir;
@@ -37,7 +38,7 @@ use pixi_test_utils::{MockRepoData, Package};
 async fn test_purl_are_added_for_pypi() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     pixi.init().await.unwrap();
     // Add and update lock file with this version of python.
     // Pin to a version that is present in the prefix.dev hash mapping so the
@@ -47,7 +48,7 @@ async fn test_purl_are_added_for_pypi() {
 
     // Check if boltons has a purl
     let p = lock_file
-        .platform(&Platform::current().to_string())
+        .platform(&Subdir::current().unwrap_or(Subdir::NoArch).to_string())
         .unwrap();
     lock_file
         .default_environment()
@@ -70,7 +71,7 @@ async fn test_purl_are_added_for_pypi() {
 
     // Check if boltons has a purl
     let p = lock_file
-        .platform(&Platform::current().to_string())
+        .platform(&Subdir::current().unwrap_or(Subdir::NoArch).to_string())
         .unwrap();
     lock_file
         .default_environment()
@@ -97,12 +98,12 @@ async fn test_purl_are_added_for_pypi() {
     // Check if boltons exists only as conda dependency
     assert!(lock_file.contains_match_spec(
         DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         "boltons"
     ));
     assert!(!lock_file.contains_pypi_package(
         DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         "boltons"
     ));
 }
@@ -112,7 +113,7 @@ async fn test_purl_are_added_for_pypi() {
 async fn test_purl_are_missing_for_non_conda_forge() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     pixi.init().await.unwrap();
 
     let project = pixi.workspace().unwrap();
@@ -132,6 +133,7 @@ async fn test_purl_are_missing_for_non_conda_forge() {
             .config()
             .cache_dir_for(pixi_config::CacheKind::PypiMapping)
             .unwrap(),
+        false,
     )
     .finish();
     mapping_client
@@ -191,6 +193,7 @@ async fn test_purl_are_generated_using_custom_mapping() {
             .config()
             .cache_dir_for(pixi_config::CacheKind::PypiMapping)
             .unwrap(),
+        false,
     )
     .finish();
     mapping_client
@@ -250,6 +253,7 @@ async fn test_multiple_pypi_names_generate_multiple_purls() {
             .config()
             .cache_dir_for(pixi_config::CacheKind::PypiMapping)
             .unwrap(),
+        false,
     )
     .finish();
     mapping_client
@@ -276,7 +280,7 @@ async fn test_multiple_pypi_names_generate_multiple_purls() {
 async fn test_compressed_mapping_catch_not_pandoc_not_a_python_package() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     pixi.init().await.unwrap();
 
     let project = pixi.workspace().unwrap();
@@ -298,6 +302,7 @@ async fn test_compressed_mapping_catch_not_pandoc_not_a_python_package() {
             .config()
             .cache_dir_for(pixi_config::CacheKind::PypiMapping)
             .unwrap(),
+        false,
     )
     .finish();
     mapping_client
@@ -315,7 +320,7 @@ async fn test_compressed_mapping_catch_not_pandoc_not_a_python_package() {
 async fn test_dont_record_not_present_package_as_purl() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     pixi.init().await.unwrap();
 
     let project = pixi.workspace().unwrap();
@@ -351,6 +356,7 @@ async fn test_dont_record_not_present_package_as_purl() {
             .config()
             .cache_dir_for(pixi_config::CacheKind::PypiMapping)
             .unwrap(),
+        false,
     )
     .finish();
     mapping_client
@@ -468,6 +474,7 @@ async fn test_we_record_not_present_package_as_purl_for_custom_mapping() {
             .config()
             .cache_dir_for(pixi_config::CacheKind::PypiMapping)
             .unwrap(),
+        false,
     )
     .finish();
     mapping_client
@@ -580,6 +587,7 @@ async fn test_same_name_heuristic_can_be_enabled_for_any_channel() {
             .config()
             .cache_dir_for(pixi_config::CacheKind::PypiMapping)
             .unwrap(),
+        false,
     )
     .finish();
     mapping_client
@@ -638,6 +646,7 @@ async fn test_custom_mapping_channel_with_suffix() {
             .config()
             .cache_dir_for(pixi_config::CacheKind::PypiMapping)
             .unwrap(),
+        false,
     )
     .finish();
     mapping_client
@@ -702,6 +711,7 @@ async fn test_repo_data_record_channel_with_suffix() {
             .config()
             .cache_dir_for(pixi_config::CacheKind::PypiMapping)
             .unwrap(),
+        false,
     )
     .finish();
     mapping_client
@@ -765,6 +775,7 @@ async fn test_path_channel() {
             .config()
             .cache_dir_for(pixi_config::CacheKind::PypiMapping)
             .unwrap(),
+        false,
     )
     .finish();
     mapping_client
@@ -850,6 +861,7 @@ async fn test_file_url_as_mapping_location() {
             .config()
             .cache_dir_for(pixi_config::CacheKind::PypiMapping)
             .unwrap(),
+        false,
     )
     .finish();
     mapping_client
@@ -887,7 +899,7 @@ fn offline_mapping_client(
     let blocked_client = ClientBuilder::from_client(client.client().clone())
         .with(OfflineMiddleware)
         .build();
-    pypi_mapping::PurlDerivationClient::builder(blocked_client.into(), cache_dir).finish()
+    pypi_mapping::PurlDerivationClient::builder(blocked_client.into(), cache_dir, true).finish()
 }
 
 fn conda_forge_record(name: &str) -> RepoDataRecord {
@@ -1217,7 +1229,8 @@ async fn test_overlay_mapping_miss_falls_through_to_prefix() {
     conda-pypi-map = { conda-forge = { mapping = { some-other-package = "other" } } }
     "#,
     )
-    .unwrap();
+    .unwrap()
+    .with_network_access();
 
     let project = pixi.workspace().unwrap();
     let client = project.authenticated_client().unwrap();
@@ -1227,6 +1240,7 @@ async fn test_overlay_mapping_miss_falls_through_to_prefix() {
             .config()
             .cache_dir_for(pixi_config::CacheKind::PypiMapping)
             .unwrap(),
+        false,
     )
     .finish();
 
@@ -1279,7 +1293,8 @@ async fn test_mapping_for_other_channel_keeps_same_name_heuristic() {
     "#,
         absolute_custom_mapping_path()
     ))
-    .unwrap();
+    .unwrap()
+    .with_network_access();
 
     let project = pixi.workspace().unwrap();
     let client = project.authenticated_client().unwrap();
@@ -1289,6 +1304,7 @@ async fn test_mapping_for_other_channel_keeps_same_name_heuristic() {
             .config()
             .cache_dir_for(pixi_config::CacheKind::PypiMapping)
             .unwrap(),
+        false,
     )
     .finish();
 
@@ -1334,7 +1350,7 @@ fn online_mapping_client(
     cache_dir: std::path::PathBuf,
 ) -> pypi_mapping::PurlDerivationClient {
     let client = project.authenticated_client().unwrap().clone();
-    pypi_mapping::PurlDerivationClient::builder(client, cache_dir).finish()
+    pypi_mapping::PurlDerivationClient::builder(client, cache_dir, false).finish()
 }
 
 /// Start a minimal localhost HTTP server that serves the conda-pypi mapping
@@ -1376,6 +1392,7 @@ fn serve_cacheable_mapping(first_body: &'static str, later_body: &'static str) -
 /// working offline. Caching is handled entirely by the `http-cache` middleware
 /// (`CacheMode::Default`) using the server's `Cache-Control`; we no longer keep
 /// a separate copy.
+#[cfg_attr(not(feature = "online_tests"), ignore)]
 #[tokio::test]
 async fn test_remote_mapping_reused_from_cache_offline() {
     setup_tracing();
@@ -1390,8 +1407,11 @@ async fn test_remote_mapping_reused_from_cache_offline() {
     // cache on disk.
     let cache_dir = TempDir::new().unwrap();
 
-    // 1. Seed the on-disk HTTP cache with one online fetch.
-    let seeding = PixiControl::from_manifest(&manifest).unwrap();
+    // 1. Seed the on-disk HTTP cache with one online fetch. The fetch goes to
+    // a local mock server, so opt out of the harness-level offline default.
+    let seeding = PixiControl::from_manifest(&manifest)
+        .unwrap()
+        .with_network_access();
     let seeding_project = seeding.workspace().unwrap();
     let online = online_mapping_client(&seeding_project, cache_dir.path().to_path_buf());
     let mut packages = vec![conda_forge_record("pixi-something-new")];
@@ -1421,7 +1441,9 @@ async fn test_remote_mapping_reused_from_cache_offline() {
     // the network: if it did reach the server it would get `live-second`
     // instead of the cached `from-cache`. This is the offline-tolerance
     // guarantee — a freshly cached mapping needs no network on later solves.
-    let second_pixi = PixiControl::from_manifest(&manifest).unwrap();
+    let second_pixi = PixiControl::from_manifest(&manifest)
+        .unwrap()
+        .with_network_access();
     let second_project = second_pixi.workspace().unwrap();
     let second = online_mapping_client(&second_project, cache_dir.path().to_path_buf());
     let mut packages = vec![conda_forge_record("pixi-something-new")];
@@ -1510,14 +1532,10 @@ async fn test_prefix_fetch_failure_error_mentions_escape_hatches() {
         .await
         .expect_err("an offline prefix.dev lookup should fail");
 
-    let rendered = format!("{err:?}");
-    // Strip all whitespace before matching: miette wraps the help text at
-    // arbitrary points, potentially splitting tokens across lines.
-    let collapsed: String = rendered.chars().filter(|c| !c.is_whitespace()).collect();
+    let help = err.help().expect("should carry a help text").to_string();
     assert!(
-        collapsed.contains("mapping-mode=\"replace\"")
-            && collapsed.contains("conda-pypi-map=false"),
-        "the error should suggest the offline escape hatches, got: {rendered}"
+        help.contains("mapping-mode = \"replace\"") && help.contains("conda-pypi-map = false"),
+        "the error should suggest the offline escape hatches, got: {help}"
     );
 }
 
@@ -1565,6 +1583,7 @@ async fn test_empty_mapping_keeps_legacy_same_name_heuristic() {
             .config()
             .cache_dir_for(pixi_config::CacheKind::PypiMapping)
             .unwrap(),
+        true,
     )
     .finish();
     mapping_client
@@ -1639,12 +1658,12 @@ async fn test_custom_mapping_ignores_backwards_compatibility() {
     let mut package_database = MockRepoData::default();
     package_database.add_package(
         Package::build("python", "3.12.0")
-            .with_subdir(Platform::Linux64)
+            .with_subdir(Subdir::Linux64)
             .finish(),
     );
     package_database.add_package(
         Package::build("boltons", "24.0.0")
-            .with_subdir(Platform::Linux64)
+            .with_subdir(Subdir::Linux64)
             .finish(),
     );
     let channel = package_database.into_channel().await.unwrap();
@@ -1694,7 +1713,7 @@ async fn test_custom_mapping_ignores_backwards_compatibility() {
 
     // Get the lock file
     let lock = pixi.lock_file().await.unwrap();
-    let p = lock.platform(&Platform::Linux64.to_string()).unwrap();
+    let p = lock.platform(&Subdir::Linux64.to_string()).unwrap();
     let environment = lock.environment(DEFAULT_ENVIRONMENT_NAME).unwrap();
     let conda_packages = environment.conda_packages(p).unwrap();
 
@@ -1761,6 +1780,7 @@ async fn test_missing_mapping_file_error_includes_path() {
             .config()
             .cache_dir_for(pixi_config::CacheKind::PypiMapping)
             .unwrap(),
+        false,
     )
     .finish();
     let result = mapping_client

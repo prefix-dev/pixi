@@ -12,7 +12,7 @@ use pixi_build_frontend::BackendOverride;
 use pixi_cli::run::{self, Args};
 use pixi_cli::{
     LockFileUsageConfig,
-    cli_config::{LockAndInstallConfig, LockFileUpdateConfig, WorkspaceConfig},
+    cli_config::{LockAndInstallConfig, LockFileUpdateConfig, ScriptWorkspaceConfig},
 };
 use pixi_config::{Config, DetachedEnvironments};
 use pixi_consts::consts;
@@ -25,17 +25,15 @@ use pixi_core::{
 };
 use pixi_manifest::{FeatureName, FeaturesExt};
 use pixi_record::PixiRecord;
-use rattler_conda_types::{Platform, RepoDataRecord};
-// Only used by the linux-gated `cuda_arch_selects_matching_build` test below.
-#[cfg(target_os = "linux")]
+use rattler_conda_types::{RepoDataRecord, Subdir};
 use rattler_lock::LockedPackage;
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use tempfile::{TempDir, tempdir};
 use tokio::{fs, task::JoinSet};
 use url::Url;
-use uv_configuration::initialize_rayon_once;
 use uv_normalize::PackageName;
-use uv_python::PythonEnvironment;
+use uv_python_interpreter::PythonEnvironment;
+use uv_threads::initialize_rayon_once;
 
 use crate::common::pypi_index::PyPIPackage;
 use crate::common::{
@@ -57,7 +55,7 @@ use pixi_test_utils::{MockRepoData, Package};
 async fn install_run_python() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     pixi.init().await.unwrap();
     pixi.add("python==3.11.0").with_install(true).await.unwrap();
 
@@ -65,7 +63,7 @@ async fn install_run_python() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         "python==3.11.0"
     ));
 
@@ -138,12 +136,12 @@ async fn test_incremental_lock_file() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         "foo ==1"
     ));
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         "bar ==1"
     ));
 
@@ -167,7 +165,7 @@ async fn test_incremental_lock_file() {
     assert!(
         lock.contains_match_spec(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "foo ==2"
         ),
         "expected `foo` to be on version 2 because we changed the requirement"
@@ -175,7 +173,7 @@ async fn test_incremental_lock_file() {
     assert!(
         lock.contains_match_spec(
             consts::DEFAULT_ENVIRONMENT_NAME,
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
             "bar ==1"
         ),
         "expected `bar` to remain locked to version 1."
@@ -191,7 +189,7 @@ async fn test_incremental_lock_file() {
 async fn install_locked_with_config() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     pixi.init().await.unwrap();
 
     // Overwrite install location to a target directory
@@ -237,7 +235,7 @@ async fn install_locked_with_config() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         python_version
     ));
 
@@ -249,7 +247,7 @@ async fn install_locked_with_config() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         "python==3.9.0"
     ));
 
@@ -271,10 +269,7 @@ async fn install_locked_with_config() {
     let result = pixi
         .run(Args {
             task: vec!["which_python".to_string()],
-            workspace_config: WorkspaceConfig {
-                manifest_path: None,
-                ..Default::default()
-            },
+            workspace_config: ScriptWorkspaceConfig::default(),
             ..Default::default()
         })
         .await
@@ -297,7 +292,7 @@ async fn install_locked_with_config() {
 async fn install_frozen() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     pixi.init().await.unwrap();
     // Add and update lock file with this version of python
     pixi.add("python==3.9.1").await.unwrap();
@@ -315,7 +310,7 @@ async fn install_frozen() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         "python==3.9.1"
     ));
 
@@ -350,8 +345,8 @@ fn create_uv_environment(prefix: &Path, cache: &uv_cache::Cache) -> PythonEnviro
     };
 
     // Current interpreter and venv
-    let interpreter = uv_python::Interpreter::query(python, cache).unwrap();
-    uv_python::PythonEnvironment::from_interpreter(interpreter)
+    let interpreter = uv_python_interpreter::Interpreter::query(python, cache).unwrap();
+    uv_python_interpreter::PythonEnvironment::from_interpreter(interpreter)
 }
 
 // Helper to check if a pypi package is installed.
@@ -381,7 +376,7 @@ async fn install_frozen_skip() {
 
     // Create a project with a local python dependency 'no-build-editable'
     // and a local conda dependency 'simple-package'
-    let current_platform = Platform::current();
+    let current_platform = Subdir::current().unwrap_or(Subdir::NoArch);
     let manifest = format!(
         r#"
         [workspace]
@@ -402,6 +397,7 @@ async fn install_frozen_skip() {
     // a published `pixi-build-api-version`.
     let pixi = PixiControl::from_manifest(&manifest)
         .expect("cannot instantiate pixi project")
+        .with_network_access()
         .with_backend_override(BackendOverride::from_memory(
             PassthroughBackend::instantiator(),
         ));
@@ -453,7 +449,7 @@ async fn install_frozen_skip() {
 async fn pypi_reinstall_python() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     pixi.init().await.unwrap();
     // Add and update lock file with this version of python
     pixi.add("python==3.11").await.unwrap();
@@ -466,7 +462,7 @@ async fn pypi_reinstall_python() {
         .unwrap();
     assert!(pixi.lock_file().await.unwrap().contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         "python==3.11"
     ));
 
@@ -488,7 +484,7 @@ async fn pypi_reinstall_python() {
     pixi.add("python==3.12").with_install(true).await.unwrap();
     assert!(pixi.lock_file().await.unwrap().contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         "python==3.12"
     ));
 
@@ -514,7 +510,7 @@ async fn pypi_reinstall_python() {
 async fn pypi_add_remove() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     pixi.init().await.unwrap();
     // Add and update lock file with this version of python
     pixi.add("python==3.11").with_install(true).await.unwrap();
@@ -560,7 +556,7 @@ async fn test_channels_changed() {
     package_database_b.add_package(Package::build("bar", "1").finish());
     let channel_b = package_database_b.into_channel().await.unwrap();
 
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
     let pixi = PixiControl::from_manifest(&format!(
         r#"
     [project]
@@ -581,7 +577,7 @@ async fn test_channels_changed() {
     assert!(lock_file.contains_match_spec(consts::DEFAULT_ENVIRONMENT_NAME, platform, "bar ==2"));
 
     // Switch the channel around
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
     pixi.update_manifest(&format!(
         r#"
     [project]
@@ -624,7 +620,7 @@ async fn install_conda_meta_history() {
 async fn minimal_lock_file_update_pypi() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     pixi.init().await.unwrap();
 
     // Add and update lock file with this version of python
@@ -641,7 +637,7 @@ async fn minimal_lock_file_update_pypi() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_pep508_requirement(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         pep508_rs::Requirement::from_str("click==7.1.2").unwrap()
     ));
 
@@ -658,7 +654,7 @@ async fn minimal_lock_file_update_pypi() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_pep508_requirement(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         pep508_rs::Requirement::from_str("click==7.1.2").unwrap()
     ));
 }
@@ -675,7 +671,7 @@ async fn minimal_lock_file_update_pypi() {
 async fn test_installer_name() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     pixi.init().await.unwrap();
 
     // Add and update lock file with this version of python
@@ -869,7 +865,7 @@ async fn test_v6_local_archive_path_upgrade() {
 async fn test_no_build_isolation() {
     setup_tracing();
 
-    let current_platform = Platform::current();
+    let current_platform = Subdir::current().unwrap_or(Subdir::NoArch);
     let setup_py = r#"
 from setuptools import setup, find_packages
 # custom import
@@ -918,7 +914,9 @@ setup(
     "#,
     );
 
-    let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+    let pixi = PixiControl::from_manifest(&manifest)
+        .expect("cannot instantiate pixi project")
+        .with_network_access();
 
     let project_path = pixi.workspace_path();
     // Write setup.py to a my-pkg folder
@@ -961,7 +959,7 @@ setup(
 async fn test_no_build_isolation_with_dependencies() {
     setup_tracing();
 
-    let current_platform = Platform::current();
+    let current_platform = Subdir::current().unwrap_or(Subdir::NoArch);
 
     // Create pyproject.toml for package-tdjager (will be installed with build isolation)
     let pyproject_toml_a = r#"
@@ -1017,7 +1015,9 @@ dependencies = []
         "#,
     );
 
-    let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+    let pixi = PixiControl::from_manifest(&manifest)
+        .expect("cannot instantiate pixi project")
+        .with_network_access();
 
     let project_path = pixi.workspace_path();
 
@@ -1106,7 +1106,7 @@ setup(
 async fn test_setuptools_override_failure() {
     setup_tracing();
 
-    let current_platform = Platform::current();
+    let current_platform = Subdir::current().unwrap_or(Subdir::NoArch);
     let workspace_root = PathBuf::from(env!("CARGO_WORKSPACE_DIR"));
     let pkg_source = workspace_root.join("tests/data/setuptools-override-repro");
     let pkg_path = pkg_source.to_str().unwrap().replace('\\', "/");
@@ -1134,7 +1134,9 @@ async fn test_setuptools_override_failure() {
         "#
     );
 
-    let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+    let pixi = PixiControl::from_manifest(&manifest)
+        .expect("cannot instantiate pixi project")
+        .with_network_access();
 
     let tmp_dir = tempdir().unwrap();
     let tmp_dir_path = tmp_dir.path();
@@ -1161,10 +1163,10 @@ async fn test_setuptools_override_failure() {
 async fn test_many_linux_wheel_tag() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     #[cfg(not(target_os = "linux"))]
     pixi.init_with_platforms(vec![
-        Platform::current().to_string(),
+        Subdir::current().unwrap_or(Subdir::NoArch).to_string(),
         "linux-64".to_string(),
     ])
     .await
@@ -1242,7 +1244,7 @@ async fn test_ensure_gitignore_file_creation() {
 async fn pypi_prefix_is_not_created_when_whl() {
     setup_tracing();
 
-    let pixi = PixiControl::new().unwrap();
+    let pixi = PixiControl::new().unwrap().with_network_access();
     pixi.init().await.unwrap();
 
     // Add and update lock file with this version of python
@@ -1261,7 +1263,7 @@ async fn pypi_prefix_is_not_created_when_whl() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_pep508_requirement(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         pep508_rs::Requirement::from_str("boltons==24.1.0").unwrap()
     ));
 
@@ -1286,12 +1288,12 @@ async fn conda_pypi_override_correct_per_platform() {
     let mut package_db = MockRepoData::default();
     package_db.add_package(
         Package::build("python", "3.12.0")
-            .with_subdir(Platform::NoArch)
+            .with_subdir(Subdir::NoArch)
             .finish(),
     );
     package_db.add_package(
         Package::build("boltons", "1.0.0")
-            .with_subdir(Platform::NoArch)
+            .with_subdir(Subdir::NoArch)
             .with_pypi_purl("boltons")
             .finish(),
     );
@@ -1305,10 +1307,10 @@ async fn conda_pypi_override_correct_per_platform() {
 
     let pixi = PixiControl::new().unwrap();
     pixi.init_with_platforms(vec![
-        Platform::OsxArm64.to_string(),
-        Platform::Linux64.to_string(),
-        Platform::Win64.to_string(),
-        Platform::Osx64.to_string(),
+        Subdir::OsxArm64.to_string(),
+        Subdir::Linux64.to_string(),
+        Subdir::Win64.to_string(),
+        Subdir::Osx64.to_string(),
     ])
     .with_local_channel(channel.url().to_file_path().unwrap())
     .await
@@ -1326,7 +1328,7 @@ async fn conda_pypi_override_correct_per_platform() {
 
     // Add a conda package that is only available on linux
     pixi.add("boltons")
-        .with_platform(Platform::Linux64)
+        .with_platform(Subdir::Linux64)
         .with_install(false)
         .await
         .unwrap();
@@ -1342,24 +1344,24 @@ async fn conda_pypi_override_correct_per_platform() {
     // Check that the conda package is only available on linux
     assert!(lock.contains_conda_package(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::Linux64,
+        Subdir::Linux64,
         "boltons"
     ));
     // Sanity check that the conda package is not available on osxarm64
     assert!(!lock.contains_conda_package(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::OsxArm64,
+        Subdir::OsxArm64,
         "boltons"
     ));
     // Check that the PyPI package is available on osxarm64 only
     assert!(lock.contains_pep508_requirement(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::OsxArm64,
+        Subdir::OsxArm64,
         pep508_rs::Requirement::from_str("boltons").unwrap(),
     ));
     assert!(!lock.contains_pep508_requirement(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::Linux64,
+        Subdir::Linux64,
         pep508_rs::Requirement::from_str("boltons").unwrap(),
     ));
 }
@@ -1372,8 +1374,8 @@ async fn conda_pypi_override_correct_per_platform() {
 async fn test_multiple_prefix_update() {
     setup_tracing();
 
-    let current_platform = Platform::current();
-    let virtual_packages = VirtualPackages::detect(&VirtualPackageOverrides::default())
+    let current_platform = Subdir::current().unwrap_or(Subdir::NoArch);
+    let virtual_packages = VirtualPackages::detect(&VirtualPackageOverrides::default(), None)
         .unwrap()
         .into_generic_virtual_packages()
         .collect();
@@ -1389,7 +1391,8 @@ async fn test_multiple_prefix_update() {
         )
         .as_str(),
     )
-    .unwrap();
+    .unwrap()
+    .with_network_access();
 
     let project = pixi.workspace().unwrap();
 
@@ -1453,7 +1456,7 @@ async fn test_multiple_prefix_update() {
     let name = group.name();
     let prefix = group.prefix();
 
-    let command_dispatcher = project.command_dispatcher_builder().unwrap().finish();
+    let command_dispatcher = project.command_dispatcher_builder(None).unwrap().finish();
 
     let current_pixi_platform = pixi_manifest::PixiPlatform::from_subdir(current_platform);
     let variant_config = group
@@ -1470,6 +1473,7 @@ async fn test_multiple_prefix_update() {
         variant_config,
         None,
         command_dispatcher,
+        Default::default(),
     );
 
     let pixi_records = Vec::from([
@@ -1522,7 +1526,10 @@ async fn test_multiple_prefix_update() {
 
 /// Should download a package from an S3 bucket and install it
 #[tokio::test]
-#[cfg_attr(not(feature = "slow_integration_tests"), ignore)]
+#[cfg_attr(
+    any(not(feature = "online_tests"), not(feature = "slow_integration_tests")),
+    ignore
+)]
 async fn install_s3() {
     setup_tracing();
 
@@ -1574,10 +1581,12 @@ async fn install_s3() {
     [dependencies]
     my-webserver = {{ version = "0.1.0", build = "pyh4616a5c_0" }}
     "#,
-        platform = Platform::current(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch),
     );
 
-    let pixi = PixiControl::from_manifest(&manifest).expect("cannot instantiate pixi project");
+    let pixi = PixiControl::from_manifest(&manifest)
+        .expect("cannot instantiate pixi project")
+        .with_network_access();
 
     temp_env::async_with_vars(
         [(
@@ -1632,7 +1641,7 @@ async fn test_exclude_newer() {
     foo = "*"
     "#,
         channel_a = channel.url(),
-        platform = Platform::current()
+        platform = Subdir::current().unwrap_or(Subdir::NoArch)
     ))
     .unwrap();
 
@@ -1641,7 +1650,7 @@ async fn test_exclude_newer() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         "foo ==2"
     ));
 
@@ -1658,7 +1667,7 @@ async fn test_exclude_newer() {
     foo = "*"
     "#,
         channel_a = channel.url(),
-        platform = Platform::current()
+        platform = Subdir::current().unwrap_or(Subdir::NoArch)
     ))
     .unwrap();
 
@@ -1667,7 +1676,7 @@ async fn test_exclude_newer() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         "foo ==1"
     ));
 }
@@ -1704,7 +1713,7 @@ async fn test_exclude_newer_per_package_dependency_override() {
     foo = "0d"
     "#,
         channel = channel.url(),
-        platform = Platform::current()
+        platform = Subdir::current().unwrap_or(Subdir::NoArch)
     ))
     .unwrap();
 
@@ -1713,7 +1722,7 @@ async fn test_exclude_newer_per_package_dependency_override() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         "foo ==2"
     ));
 }
@@ -1742,7 +1751,7 @@ async fn test_exclude_newer_url_channel_override() {
     foo = "*"
     "#,
         channel = channel.url(),
-        platform = Platform::current()
+        platform = Subdir::current().unwrap_or(Subdir::NoArch)
     ))
     .unwrap();
 
@@ -1751,7 +1760,7 @@ async fn test_exclude_newer_url_channel_override() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         "foo ==2"
     ));
 }
@@ -1794,7 +1803,7 @@ async fn test_exclude_newer_per_package_constraint_override() {
     bar = "0d"
     "#,
         channel = channel.url(),
-        platform = Platform::current()
+        platform = Subdir::current().unwrap_or(Subdir::NoArch)
     ))
     .unwrap();
 
@@ -1803,9 +1812,175 @@ async fn test_exclude_newer_per_package_constraint_override() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         "bar ==2"
     ));
+}
+
+#[tokio::test]
+async fn test_exclude_newer_exemption_allows_vetted_release() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("foo", "1")
+            .with_timestamp("2010-12-02T02:07:43Z".parse().unwrap())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("foo", "2")
+            .with_timestamp("2020-12-02T07:00:00Z".parse().unwrap())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("foo", "3")
+            .with_timestamp("2020-12-02T07:00:00Z".parse().unwrap())
+            .finish(),
+    );
+
+    // Only the vetted release `foo 2` is exempt from the cutoff, so the even
+    // newer `foo 3` stays excluded.
+    let channel = package_database.into_channel().await.unwrap();
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [workspace]
+    name = "test-exclude-newer-exemption"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+
+    [workspace.exclude-newer]
+    cutoff = "2015-12-02T02:07:43Z"
+    exemptions = {{ foo = "2" }}
+
+    [dependencies]
+    foo = "*"
+    "#,
+        channel = channel.url(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch)
+    ))
+    .unwrap();
+
+    pixi.lock().await.unwrap();
+
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Subdir::current().unwrap_or(Subdir::NoArch),
+        "foo ==2"
+    ));
+
+    // A wildcard exemption lets every release of the package through. The
+    // locked `foo 2` stays valid under the wider exemption, so a fresh
+    // workspace is needed to observe the new pick.
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [workspace]
+    name = "test-exclude-newer-wildcard-exemption"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+    exclude-newer = {{ cutoff = "2015-12-02T02:07:43Z", exemptions = {{ foo = "*" }} }}
+
+    [dependencies]
+    foo = "*"
+    "#,
+        channel = channel.url(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch)
+    ))
+    .unwrap();
+
+    pixi.lock().await.unwrap();
+
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Subdir::current().unwrap_or(Subdir::NoArch),
+        "foo ==3"
+    ));
+}
+
+#[tokio::test]
+async fn test_exclude_newer_exemption_keeps_lock_file_satisfied() {
+    setup_tracing();
+
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("foo", "1")
+            .with_timestamp("2010-12-02T02:07:43Z".parse().unwrap())
+            .finish(),
+    );
+    package_database.add_package(
+        Package::build("foo", "2")
+            .with_timestamp("2020-12-02T07:00:00Z".parse().unwrap())
+            .finish(),
+    );
+
+    let channel = package_database.into_channel().await.unwrap();
+    let pixi = PixiControl::from_manifest(&format!(
+        r#"
+    [workspace]
+    name = "test-exclude-newer-exemption-satisfiability"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+    exclude-newer = {{ cutoff = "2015-12-02T02:07:43Z", exemptions = {{ foo = "2" }} }}
+
+    [dependencies]
+    foo = "*"
+    "#,
+        channel = channel.url(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch)
+    ))
+    .unwrap();
+
+    pixi.lock().await.unwrap();
+    let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_match_spec(
+        consts::DEFAULT_ENVIRONMENT_NAME,
+        Subdir::current().unwrap_or(Subdir::NoArch),
+        "foo ==2"
+    ));
+
+    // The locked `foo 2` is newer than the cutoff but exempt, so the lock file
+    // stays up to date.
+    let workspace = pixi.workspace().unwrap();
+    workspace
+        .update_lock_file(
+            None,
+            UpdateLockFileOptions {
+                lock_file_usage: LockFileUsage::Locked,
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("the lock file should be up to date");
+
+    // Dropping the exemption makes the locked package violate the cutoff.
+    pixi.update_manifest(&format!(
+        r#"
+    [workspace]
+    name = "test-exclude-newer-exemption-satisfiability"
+    channels = ["{channel}"]
+    platforms = ["{platform}"]
+    exclude-newer = "2015-12-02T02:07:43Z"
+
+    [dependencies]
+    foo = "*"
+    "#,
+        channel = channel.url(),
+        platform = Subdir::current().unwrap_or(Subdir::NoArch)
+    ))
+    .unwrap();
+    let workspace = pixi.workspace().unwrap();
+    let outdated = workspace
+        .update_lock_file(
+            None,
+            UpdateLockFileOptions {
+                lock_file_usage: LockFileUsage::Locked,
+                ..Default::default()
+            },
+        )
+        .await
+        .map(|_| ());
+    assert!(outdated.is_err());
 }
 
 #[tokio::test]
@@ -1830,16 +2005,17 @@ async fn test_exclude_newer_pypi() {
     [pypi-dependencies]
     boltons = "*"
     "#,
-        platform = Platform::current()
+        platform = Subdir::current().unwrap_or(Subdir::NoArch)
     ))
-    .unwrap();
+    .unwrap()
+    .with_network_access();
 
     // Create the lock file
     pixi.lock().await.unwrap();
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_pep508_requirement(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         "boltons ==20.2.1".parse().unwrap()
     ));
 }
@@ -1865,7 +2041,7 @@ async fn test_uv_skip_wheel_filename_check() {
     )
     .unwrap();
 
-    let current_platform = Platform::current();
+    let current_platform = Subdir::current().unwrap_or(Subdir::NoArch);
     let wheel_path = canonicalize(
         wheels_dir
             .path()
@@ -1892,8 +2068,9 @@ async fn test_uv_skip_wheel_filename_check() {
     "#
     );
 
-    let pixi =
-        PixiControl::from_manifest(&manifest_env_var).expect("cannot instantiate pixi project");
+    let pixi = PixiControl::from_manifest(&manifest_env_var)
+        .expect("cannot instantiate pixi project")
+        .with_network_access();
 
     // Installation should succeed with UV_SKIP_WHEEL_FILENAME_CHECK=1
     temp_env::async_with_vars([("UV_SKIP_WHEEL_FILENAME_CHECK", Some("1"))], async {
@@ -1931,8 +2108,9 @@ async fn test_uv_skip_wheel_filename_check() {
     "#
     );
 
-    let pixi_option =
-        PixiControl::from_manifest(&manifest_pypi_option).expect("cannot instantiate pixi project");
+    let pixi_option = PixiControl::from_manifest(&manifest_pypi_option)
+        .expect("cannot instantiate pixi project")
+        .with_network_access();
 
     // Installation should succeed with pypi-option
     pixi_option
@@ -1968,8 +2146,9 @@ async fn test_uv_skip_wheel_filename_check() {
     "#
     );
 
-    let pixi_precedence =
-        PixiControl::from_manifest(&manifest_precedence).expect("cannot instantiate pixi project");
+    let pixi_precedence = PixiControl::from_manifest(&manifest_precedence)
+        .expect("cannot instantiate pixi project")
+        .with_network_access();
 
     // Installation should succeed because env var overrides pypi-option
     temp_env::async_with_vars([("UV_SKIP_WHEEL_FILENAME_CHECK", Some("1"))], async {
@@ -1996,13 +2175,13 @@ async fn test_uv_skip_wheel_filename_check() {
 async fn install_all_skips_unsupported_environments() {
     setup_tracing();
 
-    let current_platform = Platform::current();
+    let current_platform = Subdir::current().unwrap_or(Subdir::NoArch);
     // Pick a platform from a different OS family so that no `best_declared_platform`
     // fallback (e.g. osx-arm64 -> osx-64) accidentally rescues the env.
     let other_platform = if current_platform.is_linux() {
-        Platform::Osx64
+        Subdir::Osx64
     } else {
-        Platform::Linux64
+        Subdir::Linux64
     };
 
     let mut db = MockRepoData::default();
@@ -2201,8 +2380,62 @@ cuda-arch = "*"
             .map(|record| record.build.clone())
             .unwrap_or_else(|| panic!("cuda-arch should be locked for {platform_name}"));
         assert!(
-            build.starts_with(expected_build),
+            build.as_str().starts_with(expected_build),
             "{platform_name} resolved cuda-arch build {build}, expected {expected_build}"
+        );
+    }
+}
+
+/// A declared `__amdgpu_arch` must reach the solver and select the build for
+/// exactly that AMDGPU ISA version. The local `virtual_packages` channel ships
+/// two noarch `amdgpu-arch` builds requiring `__amdgpu` plus an exact
+/// `__amdgpu_arch` (`gfx90a` ==9.0.10, `gfx1100` ==11.0.0). Both spellings are
+/// covered -- the raw `__amdgpu`/`__amdgpu_arch` keys and the friendly
+/// `amdgpu = "<target>"` key.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn amdgpu_arch_selects_matching_build() {
+    let channel_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../tests/data/channels/channels/virtual_packages");
+    let channel_path = fs_err::canonicalize(channel_path).expect("canonicalize channel path");
+    let channel_url = Url::from_directory_path(&channel_path).expect("valid file url");
+
+    let manifest = format!(
+        r#"
+[workspace]
+name = "amdgpu-arch-routing"
+channels = ["{channel_url}"]
+platforms = [
+    {{ name = "mi250", platform = "linux-64", __amdgpu = "0", __amdgpu_arch = "9.0.10" }},
+    {{ name = "rdna3", platform = "linux-64", amdgpu = "gfx1100" }},
+]
+
+[dependencies]
+amdgpu-arch = "*"
+"#
+    );
+
+    let pixi = PixiControl::from_manifest(&manifest).unwrap();
+    let lock_file = pixi.update_lock_file().await.unwrap();
+    let env = lock_file
+        .environment("default")
+        .expect("default environment should be locked");
+
+    for (platform_name, expected_build) in [("mi250", "gfx90a"), ("rdna3", "gfx1100")] {
+        let platform = lock_file
+            .platform(platform_name)
+            .unwrap_or_else(|| panic!("platform {platform_name} should be in the lock file"));
+        let build = env
+            .packages(platform)
+            .into_iter()
+            .flatten()
+            .filter_map(LockedPackage::as_conda)
+            .find(|package| package.name().as_normalized() == "amdgpu-arch")
+            .and_then(|package| package.record())
+            .map(|record| record.build.clone())
+            .unwrap_or_else(|| panic!("amdgpu-arch should be locked for {platform_name}"));
+        assert!(
+            build.as_str().starts_with(expected_build),
+            "{platform_name} resolved amdgpu-arch build {build}, expected {expected_build}"
         );
     }
 }

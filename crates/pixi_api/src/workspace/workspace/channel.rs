@@ -17,7 +17,7 @@ use crate::Interface;
 #[derive(Deserialize, Serialize, Debug, Default)]
 pub struct ChannelOptions {
     pub channels: Vec<NamedChannelOrUrl>,
-    pub feature: Option<String>,
+    pub feature: FeatureName,
     pub no_install: bool,
     pub lock_file_usage: LockFileUsage,
 }
@@ -45,14 +45,14 @@ pub async fn add<I: Interface>(
     // Add the channels to the manifest
     workspace.manifest().add_channels(
         prioritized_channels(&options.channels, priority),
-        &feature_name(&options.feature),
+        &options.feature,
         prepend,
     )?;
 
     // TODO: Update all environments touched by the features defined.
     get_update_lock_file_and_prefix(
         &workspace.workspace().default_environment(),
-        None,
+        workspace.progress().cloned(),
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage: options.lock_file_usage,
@@ -89,13 +89,13 @@ pub async fn remove<I: Interface>(
     // Remove the channels from the manifest
     workspace.manifest().remove_channels(
         prioritized_channels(&options.channels, priority),
-        &feature_name(&options.feature),
+        &options.feature,
     )?;
 
     // Try to update the lock file without the removed channels
     get_update_lock_file_and_prefix(
         &workspace.workspace().default_environment(),
-        None,
+        workspace.progress().cloned(),
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage: options.lock_file_usage,
@@ -130,13 +130,13 @@ pub async fn set<I: Interface>(
     // Set the channels in the manifest (this replaces all existing channels)
     workspace.manifest().set_channels(
         prioritized_channels(&options.channels, None),
-        &feature_name(&options.feature),
+        &options.feature,
     )?;
 
     // Update the lock file with the new channel configuration
     get_update_lock_file_and_prefix(
         &workspace.workspace().default_environment(),
-        None,
+        workspace.progress().cloned(),
         UpdateMode::Revalidate,
         UpdateLockFileOptions {
             lock_file_usage: options.lock_file_usage,
@@ -162,12 +162,6 @@ pub async fn set<I: Interface>(
     .await?;
 
     Ok(())
-}
-
-fn feature_name(feature: &Option<String>) -> FeatureName {
-    feature
-        .clone()
-        .map_or_else(FeatureName::default, FeatureName::from)
 }
 
 fn prioritized_channels(

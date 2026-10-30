@@ -21,7 +21,7 @@ use pixi_spec::{BinarySpec, ResolvedExcludeNewer, SourceSpec, SpecConversionErro
 use pixi_spec_containers::DependencyMap;
 use rattler_conda_types::{
     Channel, ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName,
-    PackageNameMatcher, ParseMatchSpecOptions, Platform, RepodataRevision,
+    PackageNameMatcher, ParseMatchSpecOptions, RepodataRevision, Subdir,
 };
 use rattler_repodata_gateway::GatewayError;
 use rattler_solve::{ChannelPriority, SolveError, SolveStrategy};
@@ -30,11 +30,12 @@ use tracing::instrument;
 
 use crate::{
     SolveCondaEnvironmentSpec, SourceMetadata,
-    compute_data::{HasGateway, HasGatewayReporter},
+    compute_data::{HasGateway, HasGatewayReporter, HasPackageCache},
     reporter::WrappingGatewayReporter,
     solve_binary::SolveCondaExt,
     solve_conda::SolveCondaEnvironmentError,
 };
+use pixi_compute_network::HasOffline;
 use pixi_compute_reporters::OperationId;
 
 /// Input to [`SolveCondaKey`]. All fields participate in the Key's
@@ -55,7 +56,7 @@ pub struct SolveCondaSpec {
     /// Already-installed records (hints to reduce solve drift).
     pub installed: Vec<PixiRecord>,
     /// Target platform.
-    pub platform: Platform,
+    pub platform: Subdir,
     /// Channels to search.
     pub channels: Vec<ChannelUrl>,
     /// Virtual packages to pretend are installed.
@@ -180,6 +181,9 @@ pub enum SolveCondaKeyError {
 
     #[error(transparent)]
     Gateway(Arc<GatewayError>),
+
+    #[error("failed to read the package cache")]
+    CacheIndex(#[source] Arc<std::io::Error>),
 }
 
 impl From<SolveCondaEnvironmentError> for SolveCondaKeyError {
@@ -270,18 +274,21 @@ impl Key for SolveCondaKey {
         let mut query = gateway
             .query(
                 spec.channels.iter().cloned().map(Channel::from_url),
-                [spec.platform, Platform::NoArch],
+                [spec.platform, Subdir::NoArch],
                 binary_match_specs
                     .into_iter()
                     .chain(constraint_match_specs)
                     .chain(source_repodata_fetch_specs)
                     .chain(dev_source_fetch_specs),
             )
-            .recursive(true);
+            .recursive(true)
+            // Without a reporter the fetched notices are dropped on the floor,
+            // so do not pay for them.
+            .channel_notices(gateway_reporter.is_some());
         if let Some(reporter) = gateway_reporter {
             query = query.with_reporter(WrappingGatewayReporter(reporter));
         }
-        let binary_repodata = query.await?;
+        let binary_repodata = query.await?.repodata;
         // `binary_repodata.len()` returns the number of subdir buckets,
         // not the number of records. Sum across them to get the real
         // count the solver is about to chew through.
@@ -301,6 +308,24 @@ impl Key for SolveCondaKey {
 
         // Build the full solve spec and hand off to ctx.solve_conda
         // (semaphore + reporter lifecycle).
+        // In offline mode the solver may only pick packages that can be
+        // installed without network access. That guarantee is only
+        // meaningful for the platform pixi runs on: packages for the other
+        // platforms in a manifest are never downloaded to this machine, so
+        // restricting their solves would make every multi-platform lock-file
+        // rewrite fail offline. They solve from cached repodata instead.
+        let restrict_to_local = ctx.global_data().offline()
+            && spec.platform == Subdir::current().unwrap_or(Subdir::NoArch);
+        let excluded_candidates = crate::offline::exclusions_for_solve(
+            restrict_to_local,
+            ctx.global_data().package_cache(),
+            binary_repodata
+                .iter()
+                .flat_map(|repo_data| repo_data.iter()),
+        )
+        .await
+        .map_err(|err| SolveCondaKeyError::CacheIndex(Arc::new(err)))?;
+
         let conda_spec = SolveCondaEnvironmentSpec {
             name: None,
             source_specs: spec.source_specs.clone(),
@@ -316,6 +341,7 @@ impl Key for SolveCondaKey {
             strategy: spec.strategy,
             channel_priority: spec.channel_priority,
             exclude_newer: spec.exclude_newer.clone(),
+            excluded_candidates,
         };
 
         let solve_started = std::time::Instant::now();

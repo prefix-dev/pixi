@@ -26,7 +26,7 @@ uv is a fast Python package manager, but it's limited to the PyPI ecosystem. Pix
 | Removing a dependency     | `uv remove numpy`                 | `pixi remove numpy` (conda) or `pixi remove --pypi numpy` (PyPI)                         |
 | Installing/syncing        | `uv sync`                         | `pixi install`                                                                            |
 | Running a command         | `uv run python main.py`           | `pixi run python main.py`                                                                 |
-| Running a standalone script | `uv run script.py` (PEP 723)   | `pixi exec` via [shebang](../advanced/shebang.md)                                        |
+| Running a standalone script | `uv run script.py` (PEP 723)   | `pixi run --script script.py` ([PEP 723 scripts](../python/scripts.md))                   |
 | Running a task            | _(no built-in task runner)_       | `pixi run my_task`                                                                        |
 | Locking dependencies      | `uv lock`                         | `pixi lock` (also runs automatically on `pixi add` / `pixi install`)                     |
 | Installing Python         | `uv python install 3.12`          | `pixi add python=3.12` (managed as a regular dependency)                                  |
@@ -73,11 +73,8 @@ uv uses `pyproject.toml` for project configuration and `uv.toml` for tool-level 
     numpy = ">=1.26"
     pandas = ">=2.0"
 
-    [feature.test.dependencies]
+    [environments.test.dependencies]
     pytest = ">=8.0"
-
-    [environments]
-    test = ["test"]
     ```
 
 === "Pixi (pyproject.toml)"
@@ -137,16 +134,16 @@ See [Multi Environment](../workspace/multi_environment.md).
 
 ### Dependency groups and extras
 
-uv uses [PEP 735 dependency groups](https://peps.python.org/pep-0735/) and optional dependencies (extras) to organize dependencies. Pixi uses **features**, composable sets of dependencies that map to environments:
+uv uses [PEP 735 dependency groups](https://peps.python.org/pep-0735/) and optional dependencies (extras) to organize dependencies. Pixi uses **environments**, which define their dependencies directly, and **features**, composable sets of dependencies that can be shared between environments:
 
 | uv                           | Pixi                                                                |
 |------------------------------|---------------------------------------------------------------------|
-| `[dependency-groups]`        | `[feature.<name>.dependencies]`                                     |
+| `[dependency-groups]`        | `[environments.<name>.dependencies]`                                |
 | `[project.optional-dependencies]` | `[feature.<name>.dependencies]` mapped to environments          |
 | `uv sync --group dev`       | `pixi install -e dev`                                               |
 | `uv sync --all-groups`      | `pixi install --all`                                                |
 
-Features are more flexible than dependency groups: they can include conda dependencies, platform-specific packages, system requirements, and activation scripts.
+Environments and features are more flexible than dependency groups: they can include conda dependencies, platform-specific packages, tasks, and activation scripts.
 
 ### Workspaces
 
@@ -157,7 +154,7 @@ Both tools support multi-package workspaces. uv defines workspace members with a
 members = ["packages/*"]
 ```
 
-Pixi takes a different approach: you reference local packages as path dependencies directly in the workspace manifest. Any subdirectory with its own `pixi.toml` (containing a `[package]` section) can be pulled in this way:
+Pixi's environments work similarly: you reference local packages as path dependencies directly in the workspace manifest. Any subdirectory with its own `pixi.toml` (containing a `[package]` section) can be pulled in this way:
 
 ```toml title="pixi.toml"
 [workspace]
@@ -166,6 +163,14 @@ platforms = ["linux-64", "osx-arm64", "win-64"]
 
 [dependencies]
 my_lib = { path = "packages/my_lib" }
+```
+
+For publishing, each package opts in individually: a workspace-wide `pixi publish` builds and uploads every package that sets `publish = true` in its `[package]` section:
+
+```toml title="packages/my_lib/pixi.toml"
+[package]
+name = "my_lib"
+publish = true
 ```
 
 Both tools share a single lock file across the workspace. See [Building Multiple Packages](../build/workspace.md).
@@ -180,18 +185,26 @@ uv supports [PEP 723 inline script metadata](https://peps.python.org/pep-0723/) 
 # dependencies = ["requests"]
 # ///
 import requests
+
 print(requests.get("https://example.com").status_code)
 ```
 
-Pixi has a similar capability via [shebang scripts](../advanced/shebang.md) using `pixi exec`, which creates a temporary environment with the specified dependencies:
+Pixi reads the same portable metadata and can extend it with Conda packages,
+channels, platforms, and an optional adjacent lock file:
 
-```python title="pixi shebang script"
-#!/usr/bin/env -S pixi exec --spec requests --spec python=3.12 -- python
-import requests
-print(requests.get("https://example.com").status_code)
+```console
+$ pixi init --script script.py
+$ pixi add --script script.py --pypi requests
+$ pixi add --script script.py openssl
+$ pixi run --script script.py
+$ pixi update --script script.py
 ```
 
-This works on Linux and macOS. A more complete scripting feature is under discussion in [#3751](https://github.com/prefix-dev/pixi/issues/3751).
+PyPI dependencies that fit standard PEP 723 remain portable between uv and
+Pixi. Pixi-specific metadata lives under `tool.pixi`, so uv ignores the Conda
+dependency while preserving it. See [Standalone Python
+scripts](../python/scripts.md) for resolution updates, locking, channel and
+platform management, dependency trees, and export.
 
 ### Tasks
 
@@ -277,7 +290,7 @@ equivalent is [`[workspace].exclude-newer`](../reference/pixi_manifest.md#exclud
 
 Pixi applies this cutoff across both conda and PyPI resolution.
 
-If you want to override the cutoff for a specific package, uv uses
+If you want to let a specific package through the cutoff, uv uses
 [`exclude-newer-package`](https://docs.astral.sh/uv/reference/settings/#exclude-newer-package):
 
 ```toml title="pyproject.toml"
@@ -286,56 +299,44 @@ exclude-newer = "2025-01-01"
 exclude-newer-package = { tqdm = "2025-02-01" }
 ```
 
-In Pixi, the equivalent depends on which ecosystem the package comes from:
+In Pixi, exemptions take the place of per-package cutoffs, and where to set them depends on which ecosystem the package comes from:
 
-- For a conda package, set it in [`[exclude-newer]`](../reference/pixi_manifest.md#exclude-newer-optional).
-- For a PyPI package, set it in [`[pypi-exclude-newer]`](../reference/pixi_manifest.md#exclude-newer-optional).
+- For a conda package, add it to the `exemptions` of [`[workspace.exclude-newer]`](../reference/pixi_manifest.md#exclude-newer-optional). An exemption names the releases that are allowed through, e.g. a version, so you do not have to lower the cutoff for every future release.
+- For a PyPI package, add it to the `exemptions` of [`[workspace.pypi-exclude-newer]`](../reference/pixi_manifest.md#exclude-newer-optional). PyPI exemptions only support `"*"` for now, which exempts every release of the package.
 
-For example, a conda package can combine a channel pin with a package-specific `exclude-newer`
-override:
+For example, a conda package can combine a channel pin with an `exclude-newer` exemption:
 
 === "pixi.toml"
 
     ```toml
     [workspace]
-    exclude-newer = "2025-01-01"
+    exclude-newer = { cutoff = "2025-01-01", exemptions = { pytorch-cpu = "==2.6.0", openssl = "*" } }
 
     [dependencies]
     pytorch-cpu = { version = "*", channel = "pytorch" }
-
-    [exclude-newer]
-    pytorch-cpu = "2025-02-01"
-    openssl = "2024-12-01"
     ```
 
 === "pyproject.toml"
 
     ```toml
     [tool.pixi.workspace]
-    exclude-newer = "2025-01-01"
+    exclude-newer = { cutoff = "2025-01-01", exemptions = { pytorch-cpu = "==2.6.0", openssl = "*" } }
 
     [tool.pixi.dependencies]
     pytorch-cpu = { version = "*", channel = "pytorch" }
-
-    [tool.pixi.exclude-newer]
-    pytorch-cpu = "2025-02-01"
-    openssl = "2024-12-01"
     ```
 
-And a PyPI package uses the same pattern, but with PyPI-specific tables:
+And a PyPI package uses the same pattern with `pypi-exclude-newer`:
 
 === "pixi.toml"
 
     ```toml
     [workspace]
     exclude-newer = "2025-01-01"
+    pypi-exclude-newer = { exemptions = { tqdm = "*" } }
 
     [pypi-dependencies]
-    torch = { version = "*", index = "https://download.pytorch.org/whl/cu124" }
-
-    [pypi-exclude-newer]
-    torch = "2025-02-01"
-    tqdm = "2025-02-01"
+    tqdm = "*"
     ```
 
 === "pyproject.toml"
@@ -343,37 +344,10 @@ And a PyPI package uses the same pattern, but with PyPI-specific tables:
     ```toml
     [tool.pixi.workspace]
     exclude-newer = "2025-01-01"
+    pypi-exclude-newer = { exemptions = { tqdm = "*" } }
 
     [tool.pixi.pypi-dependencies]
-    torch = { version = "*", index = "https://download.pytorch.org/whl/cu124" }
-
-    [tool.pixi.pypi-exclude-newer]
-    torch = "2025-02-01"
-    tqdm = "2025-02-01"
-    ```
-
-Unlike uv, Pixi can also override `exclude-newer` on a per-channel level:
-
-=== "pixi.toml"
-
-    ```toml
-    [workspace]
-    exclude-newer = "7d"
-    channels = [
-      { channel = "my-internal-channel", exclude-newer = "0d" },
-      "conda-forge",
-    ]
-    ```
-
-=== "pyproject.toml"
-
-    ```toml
-    [tool.pixi.workspace]
-    exclude-newer = "7d"
-    channels = [
-      { channel = "my-internal-channel", exclude-newer = "0d" },
-      "conda-forge",
-    ]
+    tqdm = "*"
     ```
 
 ### Lockfiles

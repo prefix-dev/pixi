@@ -18,7 +18,7 @@ impl PackageToOutput {
         Self {
             name: record.name.clone(),
             version: record.version.version().clone(),
-            build: Some(record.build.clone()),
+            build: Some(record.build.to_string()),
             size_bytes: record.size,
             is_explicit,
         }
@@ -65,6 +65,5 @@ pub fn print_package_table(packages: Vec<PackageToOutput>) -> Result<(), std::io
         )?;
     }
 
-    writeln!(writer, "\n")?;
     writer.flush()
 }

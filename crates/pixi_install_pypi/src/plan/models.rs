@@ -59,8 +59,6 @@ pub(crate) enum NeedReinstall {
         required_editable: bool,
         installed_editable: bool,
     },
-    /// Somehow unable to parse the installed dist url
-    UnableToParseInstalledDistUrl { url: String },
     /// Archive is newer than the cache
     ArchiveDistNewerThanCache,
     /// The git archive is still path, could be caused by an old source install
@@ -69,6 +67,11 @@ pub(crate) enum NeedReinstall {
     GitRevMismatch {
         installed_rev: String,
         locked_rev: String,
+    },
+    /// The Git LFS state is different from the locked version
+    GitLfsMismatch {
+        installed_lfs: bool,
+        locked_lfs: bool,
     },
     /// Unable to parse the installed git url
     UnableToParseGitUrl { url: String },
@@ -121,9 +124,6 @@ impl std::fmt::Display for NeedReinstall {
                     "Editable status changed, editable status is: {locked_editable} installed editable is: {installed_editable}"
                 )
             }
-            NeedReinstall::UnableToParseInstalledDistUrl { url } => {
-                write!(f, "Unable to parse installed dist url: {url}")
-            }
             NeedReinstall::ArchiveDistNewerThanCache => {
                 write!(f, "Archive dist is newer than the cache")
             }
@@ -134,6 +134,13 @@ impl std::fmt::Display for NeedReinstall {
             } => write!(
                 f,
                 "Git commits mismatch, installed commit: {installed_commit}, locked commit: {locked_commit}"
+            ),
+            NeedReinstall::GitLfsMismatch {
+                installed_lfs,
+                locked_lfs,
+            } => write!(
+                f,
+                "Git LFS state mismatch, installed with LFS: {installed_lfs}, locked with LFS: {locked_lfs}"
             ),
             NeedReinstall::UnableToParseGitUrl { url } => {
                 write!(f, "Unable to parse git url: {url}")

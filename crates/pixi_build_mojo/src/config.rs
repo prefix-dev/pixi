@@ -305,7 +305,7 @@ impl MojoBinConfig {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct MojoPkgConfig {
-    /// Name to give the mojo package (.mojopkg suffix will be added).
+    /// Name to give the Mojo package (`.mojoc` for current compilers, `.mojopkg` for legacy compilers).
     ///
     /// This will default to the name of the project, any dashes will
     /// be replaced with `_`.

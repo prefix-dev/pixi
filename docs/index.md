@@ -130,7 +130,7 @@ To install `pixi`, run:
         ```
     3. **Create your script:**
         ```py title="hello.py"
-        --8<-- "docs/source_files/pixi_workspaces/introduction/deps_add/hello.py"
+        --8 < --"docs/source_files/pixi_workspaces/introduction/deps_add/hello.py"
         ```
     5. **Add a task:**
         ```

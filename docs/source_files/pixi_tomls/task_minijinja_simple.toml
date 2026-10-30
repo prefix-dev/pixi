@@ -1,8 +1,8 @@
-
 [workspace]
 channels = ["conda-forge"]
 name = "workspace-name"
 platforms = ["linux-64"]
+
 # --8<-- [start:tasks]
 [tasks]
 greet = { cmd = "echo Hello, {{ name }}!", args = ["name"] }

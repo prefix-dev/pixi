@@ -240,7 +240,7 @@ This results in the package being added to the `dependency-groups` following the
 test = ["pytest"]
 ```
 
-After we have added the `dependency-groups` to the `pyproject.toml`, Pixi sees these as a [`feature`](../reference/pixi_manifest.md/#the-feature-and-environments-tables), which can contain a collection of `dependencies`, `tasks`, `channels`, and more.
+After we have added the `dependency-groups` to the `pyproject.toml`, Pixi sees these as a [`feature`](../reference/pixi_manifest.md#the-feature-and-environments-tables), which can contain a collection of `dependencies`, `tasks`, `channels`, and more.
 
 We now set up the `default` environment as well as the `test` environment.
 Notice how the `test` environment is set up using the `test` feature.
@@ -295,8 +295,10 @@ We will add a new function to the `src/pixi_py/__init__.py` file:
 ```python
 from rich import print
 
+
 def hello():
     return "Hello, [bold magenta]World[/bold magenta]!", ":vampire:"
+
 
 def say_hello():
     print(*hello())
@@ -345,6 +347,7 @@ Giving us the following project structure:
 
 ```python
 from pixi_py import hello
+
 
 def test_pixi_py():
     assert hello() == ("Hello, [bold magenta]World[/bold magenta]!", ":vampire:")

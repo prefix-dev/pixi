@@ -1,8 +1,8 @@
 import argparse
-from pathlib import Path
-import shutil
-import platform
 import os
+import platform
+import shutil
+from pathlib import Path
 
 DEFAULT_DESTINATION_DIR = Path(os.getenv("PIXI_HOME", Path.home() / ".pixi")) / "bin"
 
@@ -32,9 +32,11 @@ def main() -> None:
 
     rel_or_deb = "release" if not args.debug else "debug"
 
-    built_executable_path = Path(os.environ["CARGO_TARGET_DIR"]).joinpath(
-        rel_or_deb, executable_extension("pixi")
-    )
+    cargo_target_dir = Path(os.environ["CARGO_TARGET_DIR"])
+    if cargo_build_target := os.getenv("CARGO_BUILD_TARGET"):
+        cargo_target_dir /= cargo_build_target
+
+    built_executable_path = cargo_target_dir.joinpath(rel_or_deb, executable_extension("pixi"))
     destination_path = args.dest.joinpath(executable_extension(args.name))
 
     print(f"Copying ({rel_or_deb}) the executable to {destination_path}")

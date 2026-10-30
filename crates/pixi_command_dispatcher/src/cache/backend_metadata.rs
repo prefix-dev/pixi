@@ -16,12 +16,14 @@ use crate::build::CanonicalSourceCodeLocation;
 use crate::input_hash::{
     BackendBinaryFingerprint, BackendSpecHash, ConfigurationHash, ProjectModelHash,
 };
+use crate::input_snapshot::InputSnapshot;
 use rattler_conda_types::PackageName;
 
 use crate::BuildEnvironment;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use pixi_build_discovery::EnabledProtocols;
 use pixi_build_types::procedures::conda_outputs::CondaOutput;
+use pixi_manifest::InlineContentHash;
 use pixi_path::AbsPathBuf;
 use pixi_record::VariantValue;
 use pixi_spec::ResolvedExcludeNewer;
@@ -30,11 +32,12 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeSet, BinaryHeap};
 use std::{
     collections::BTreeMap,
-    hash::{DefaultHasher, Hash, Hasher},
+    hash::{Hash, Hasher},
     path::{Path, PathBuf},
     sync::Arc,
 };
 use thiserror::Error;
+use xxhash_rust::xxh3::Xxh3;
 
 // Re-export WriteResult with the correct type
 pub type WriteResult = CommonWriteResult<BuildBackendMetadataCacheEntry>;
@@ -77,6 +80,12 @@ pub struct BuildBackendMetadataCacheKey {
 
     /// The pinned source location
     pub source: CanonicalSourceCodeLocation,
+
+    /// Content hash of the inline package definition, if any. The
+    /// inline manifest replaces on-disk discovery, so the same source location
+    /// with a different inline table must not share a cache entry; editing the
+    /// table changes this hash and forces a rebuild.
+    pub inline_content_hash: Option<InlineContentHash>,
 }
 
 impl BuildBackendMetadataCache {
@@ -105,9 +114,16 @@ impl MetadataCacheKey<BuildBackendMetadataCache> for BuildBackendMetadataCacheKe
     /// Computes a unique semi-human-readable string representation of the key.
     /// This is what is used as the cache file name.
     fn key(&self) -> CacheKeyString<BuildBackendMetadataCache> {
-        let mut hasher = DefaultHasher::new();
+        let mut hasher = Xxh3::new();
         self.channel_urls.hash(&mut hasher);
-        self.exclude_newer.hash(&mut hasher);
+        // Hash the cutoffs as configured, like the prefix of the backend
+        // environment does, so a relative cutoff such as `14d` does not
+        // create a new cache entry on every invocation.
+        // Hashed like `Option::hash`, so keys without a cutoff are unchanged.
+        std::mem::discriminant(&self.exclude_newer).hash(&mut hasher);
+        if let Some(exclude_newer) = &self.exclude_newer {
+            exclude_newer.hash_configured(&mut hasher);
+        }
 
         self.build_environment.build_platform.hash(&mut hasher);
         let mut build_virtual_packages = self.build_environment.build_virtual_packages.clone();
@@ -120,6 +136,7 @@ impl MetadataCacheKey<BuildBackendMetadataCache> for BuildBackendMetadataCacheKe
         host_virtual_packages.hash(&mut hasher);
 
         self.enabled_protocols.hash(&mut hasher);
+        self.inline_content_hash.hash(&mut hasher);
         let source_dir = self.source.cache_unique_key();
         CacheKeyString::new(format!(
             "{source_dir}/{}-{}",
@@ -211,7 +228,14 @@ pub struct BuildBackendMetadataCacheEntry {
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub input_files: BTreeSet<pixi_path::AbsPathBuf>,
 
-    /// The timestamp of when the metadata was computed.
+    /// Validation state for the input and variant files. Size and mtime are
+    /// compared first; contents are hashed only when the mtime moved.
+    #[serde(default, skip_serializing_if = "InputSnapshot::is_empty")]
+    pub(crate) input_file_states: InputSnapshot,
+
+    /// The timestamp of when the metadata was computed. Files without a
+    /// recorded state (entries written before fingerprints existed) count as
+    /// unchanged while their mtime stays at or before this.
     pub timestamp: std::time::SystemTime,
 
     /// The outputs as reported by the build backend.
@@ -228,10 +252,6 @@ impl VersionedCacheEntry<BuildBackendMetadataCache> for BuildBackendMetadataCach
     fn cache_version(&self) -> u64 {
         self.cache_version
     }
-
-    fn set_cache_version(&mut self, version: u64) {
-        self.cache_version = version;
-    }
 }
 
 impl BuildBackendMetadataCacheEntry {
@@ -242,5 +262,64 @@ impl BuildBackendMetadataCacheEntry {
             .iter()
             .map(|output| output.metadata.name.clone())
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use chrono::{DateTime, Utc};
+    use pixi_record::{PinnedPathSpec, PinnedSourceSpec};
+    use pixi_spec::{ConfiguredCutoffs, ExcludeNewer};
+    use typed_path::Utf8TypedPathBuf;
+
+    use super::*;
+    use crate::build::PinnedSourceCodeLocation;
+
+    fn key(exclude_newer: Option<ResolvedExcludeNewer>) -> String {
+        let source = PinnedSourceCodeLocation::new(
+            PinnedSourceSpec::Path(PinnedPathSpec {
+                path: Utf8TypedPathBuf::from("./pkg"),
+            }),
+            None,
+        );
+        BuildBackendMetadataCacheKey {
+            channel_urls: Vec::new(),
+            build_environment: BuildEnvironment::default(),
+            exclude_newer,
+            enabled_protocols: EnabledProtocols {
+                enable_rattler_build: true,
+                enable_ros: true,
+                enable_pixi: true,
+            },
+            source: source.into(),
+            inline_content_hash: None,
+        }
+        .key()
+        .to_string()
+    }
+
+    fn relative(now: &str, duration: &str) -> ResolvedExcludeNewer {
+        let cutoff = ExcludeNewer::from_str(duration).unwrap();
+        let now: DateTime<Utc> = now.parse().unwrap();
+        ResolvedExcludeNewer::from_datetime(cutoff.cutoff_at(now)).with_configured_cutoffs(
+            ConfiguredCutoffs {
+                cutoff: Some(cutoff),
+                ..ConfiguredCutoffs::default()
+            },
+        )
+    }
+
+    /// Regression test for https://github.com/prefix-dev/pixi/issues/6617:
+    /// the backend metadata must be reused across invocations with a
+    /// relative cutoff.
+    #[test]
+    fn key_ignores_when_a_relative_cutoff_was_resolved() {
+        let early = key(Some(relative("2026-10-01T00:00:00Z", "14d")));
+        let late = key(Some(relative("2026-10-28T12:34:56Z", "14d")));
+        assert_eq!(early, late);
+        assert_ne!(early, key(Some(relative("2026-10-01T00:00:00Z", "7d"))));
+        assert_ne!(early, key(None));
     }
 }

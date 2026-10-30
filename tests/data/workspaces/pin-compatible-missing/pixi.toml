@@ -1,0 +1,8 @@
+[workspace]
+channels = []
+name = "pin-compatible-missing"
+platforms = []
+preview = ["pixi-build"]
+
+[dependencies]
+package_a = { path = "package_a" }

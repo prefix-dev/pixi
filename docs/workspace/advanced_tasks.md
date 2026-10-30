@@ -27,7 +27,7 @@ say-hello = { cmd = ["echo", "hello world"], description = "Greet the world." }
 build = { cmd = ["ninja", "-C", ".build"], depends-on = ["configure"] }
 
 # Using environment variables
-run = "python main.py $PIXI_PROJECT_ROOT"
+run = "python main.py $PIXI_WORKSPACE_ROOT"
 set = "export VAR=hello && echo $VAR"
 
 # Cross platform file operations
@@ -113,7 +113,8 @@ pixi run style
 
 ### Environment specification for task dependencies
 
-You can specify the environment to use for a dependent task:
+You can specify the environment to use for a dependent task.
+The environment must be defined in the workspace, otherwise Pixi reports an error when it loads the manifest:
 
 ```toml title="pixi.toml"
 --8<-- "docs/source_files/pixi_tomls/tasks_depends_on.toml:tasks"
@@ -367,10 +368,23 @@ In addition to task arguments, Pixi automatically provides a `pixi` object in th
 | `pixi.manifest_path` | Absolute path to the manifest file | `/path/to/project/pixi.toml` |
 | `pixi.version` | The version of pixi being used | `0.59.0` |
 | `pixi.init_cwd` | The current working directory when pixi was invoked | `/path/to/cwd` |
-| `pixi.is_win` | Boolean flag indicating if the platform is Windows | `true` or `false` |
-| `pixi.is_unix` | Boolean flag indicating if the platform is Unix-like | `true` or `false` |
-| `pixi.is_linux` | Boolean flag indicating if the platform is Linux | `true` or `false` |
-| `pixi.is_osx` | Boolean flag indicating if the platform is macOS | `true` or `false` |
+| `pixi.is_win` | Boolean flag indicating if the platform is Windows | `True` or `False` |
+| `pixi.is_unix` | Boolean flag indicating if the platform is Unix-like | `True` or `False` |
+| `pixi.is_linux` | Boolean flag indicating if the platform is Linux | `True` or `False` |
+| `pixi.is_osx` | Boolean flag indicating if the platform is macOS | `True` or `False` |
+
+!!! warning "Booleans render as `True` and `False`"
+    Booleans follow Jinja2 spelling, so interpolating one with `{{ pixi.is_win }}`
+    writes `True` or `False`, and `{{ none }}` writes `None`. Branch with
+    `{% if %}` rather than comparing the rendered text, and add `| lower` when a
+    task needs the lowercase spelling a shell expects:
+
+    ```toml title="pixi.toml"
+    [tasks]
+    configure = "cmake -DWIN={{ pixi.is_win | lower }}"
+    ```
+
+    Earlier Pixi versions rendered `true` and `false` here.
 
 These variables are particularly useful for creating platform-specific or environment-aware tasks:
 
@@ -468,6 +482,7 @@ See [the environment variable priority documentation](../reference/environment_v
 and how those ways interact with each other.
 
 Notes on environment variables in tasks:
+
 - Values set via `tasks.<name>.env` are interpreted by `deno_task_shell` when the task runs. Shell-style expansions like `env = { VAR = "$FOO" }` therefore work the same on all operating systems.
 - Templating is allowed in env variables, when you have something like `{ cmd="pytest", env={ BACKEND="{{ backend }}" }, args=[{arg="backend", default="numpy"}] }`. The arg `{{ backend }}` value is interpreted by the `backend` values passed in.
 
@@ -647,24 +662,17 @@ build = { cmd = "build", description = "Build everything" }
 test = { cmd = "test", description = "Run all tests" }
 ```
 
-Now, the command `pixi task list` will not only list all task names but also
-the their descriptions.
+Now, the command `pixi task list` will not only list all task names but also their descriptions.
 
 ```shell
 pixi task list
-Tasks that can run on this machine:
------------------------------------
-build (by design), echo (by design), test (by design)
 Task   Description
 build  Build everything
 echo   Friendly greeting to a Pixi user
 test   Run all tests
 ```
 
-Each task is annotated with how the current machine runs its environment:
-*by design* when the machine satisfies the platform the environment was
-resolved for, or *by accident* when it only meets the resolved packages'
-minimum requirements.
+Tasks whose environment cannot run on the current machine are shown dimmed.
 
 This list can be very helpful to quickly find the right tasks.
 
@@ -676,8 +684,7 @@ Tasks can get quite long:
 echo-arg = { cmd = "echo {{ ARGUMENT }}", args = [{"arg" = "ARGUMENT", "default" = "hello"}], description = "Display the given argument" }
 ```
 
-While it is possible to add line breaks inside the task in your `pixi.toml` to
-make the task more readable:
+While it is possible to add line breaks inside the task in your `pixi.toml` to make the task more readable:
 
 ```toml title="pixi.toml"
 echo-arg = {
@@ -687,9 +694,7 @@ echo-arg = {
 }
 ```
 
-it will not work in `pyproject.toml` because it supports only TOML 1.0,
-that doesn't allow line breaks inside the task specification.
-Other tools can't parse the `pyproject.toml` anymore.
+it will not work in `pyproject.toml` because it supports only TOML 1.0, that doesn't allow line breaks inside the task specification. Other tools can't parse the `pyproject.toml` anymore.
 So if you use an editable dependency:
 
 ```toml title="pyproject.toml"
@@ -700,7 +705,7 @@ myproject = { path = ".", editable = true }
 Pixi will use your build system and reports an error:
 
 ```shell
-Error:   × Failed to update PyPI packages for environment 'default'
+Error:   × failed to update PyPI packages for environment 'default'
   ├─▶ Failed to prepare distributions
   ├─▶ Failed to build `proj1 @ file:///.../proj1`
   ├─▶ The build backend returned an error

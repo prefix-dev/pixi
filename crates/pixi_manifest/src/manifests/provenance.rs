@@ -57,6 +57,8 @@ impl ManifestProvenance {
             ManifestKind::Pixi => Ok(ManifestSource::PixiToml(contents)),
             ManifestKind::Pyproject => Ok(ManifestSource::PyProjectToml(contents)),
             ManifestKind::MojoProject => Ok(ManifestSource::MojoProjectToml(contents)),
+            ManifestKind::Pep723 => Ok(ManifestSource::Pep723(contents)),
+            ManifestKind::CondaScript => Ok(ManifestSource::CondaScript(contents)),
         }
     }
 
@@ -85,6 +87,8 @@ pub enum ManifestKind {
     Pixi,
     Pyproject,
     MojoProject,
+    Pep723,
+    CondaScript,
 }
 
 impl ManifestKind {
@@ -104,6 +108,7 @@ impl ManifestKind {
             ManifestKind::Pixi => consts::WORKSPACE_MANIFEST,
             ManifestKind::Pyproject => consts::PYPROJECT_MANIFEST,
             ManifestKind::MojoProject => consts::MOJOPROJECT_MANIFEST,
+            ManifestKind::Pep723 | ManifestKind::CondaScript => "<script>",
         }
     }
 

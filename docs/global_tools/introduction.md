@@ -19,6 +19,9 @@ Running the following command installs [`rattler-build`](https://prefix-dev.gith
 pixi global install rattler-build
 ```
 
+!!! note
+    By default, only the `conda-forge` channel is available. To install from other channels, pass `--channel`, or set [`default-channels`](../reference/pixi_configuration.md#default-channels) in your Pixi configuration.
+
 What's great about `pixi global` is that, by default, it isolates each package in its own environment, exposing only the necessary entry points.
 This means you don't have to worry about removing a package and accidentally breaking seemingly unrelated packages.
 This behavior is quite similar to that of [`pipx`](https://pipx.pypa.io/latest/installation/).
@@ -70,7 +73,7 @@ name = "cpp_math"
 version = "0.1.0"
 
 [package.build]
-backend = { name = "pixi-build-cmake", version = "*" }
+backend = { name = "pixi-build-cmake" }
 ```
 
 If the source is on your machine, you can install it like this:
@@ -129,6 +132,15 @@ In this case, we have to specify which output we want to install:
 ```shell
 pixi global install --path /path/to/package foobar
 ```
+
+So far the source always came with a package manifest.
+If it doesn't have one, like in an ordinary Rust, Python or C++ repository, you can name the build backend on the command line:
+
+```shell
+pixi global install --git https://github.com/BurntSushi/xsv.git --build-backend pixi-build-rust
+```
+
+This records an inline package definition in the global manifest, which is described under [source dependencies](manifest.md#source-dependencies).
 
 ## Shell Completions
 
@@ -248,6 +260,8 @@ platforms = ["osx-64"]
 dependencies = { python = "*" }
 # ...
 ```
+
+Environments that contain a source dependency can only target the current platform, since they are built on your machine.
 
 ## Packaging
 

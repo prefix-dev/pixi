@@ -1,6 +1,6 @@
 use crate::common::{LockFileExt, PixiControl};
 use pixi_test_utils::{MockRepoData, Package};
-use rattler_conda_types::Platform;
+use rattler_conda_types::Subdir;
 use tempfile::TempDir;
 
 /// Test that `pixi lock --dry-run` doesn't modify the lock file on disk
@@ -12,12 +12,12 @@ async fn test_lock_dry_run_doesnt_modify_lock_file() {
     // Add mock packages
     package_database.add_package(
         Package::build("python", "3.11.0")
-            .with_subdir(Platform::current())
+            .with_subdir(Subdir::current().unwrap_or(Subdir::NoArch))
             .finish(),
     );
     package_database.add_package(
         Package::build("numpy", "1.24.0")
-            .with_subdir(Platform::current())
+            .with_subdir(Subdir::current().unwrap_or(Subdir::NoArch))
             .finish(),
     );
 
@@ -40,7 +40,7 @@ async fn test_lock_dry_run_doesnt_modify_lock_file() {
 
     // Get the original lock file
     let original_lock_file = pixi.lock_file().await.unwrap();
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
 
     // Verify python is in the original lock file
     assert!(
@@ -96,12 +96,12 @@ async fn test_lock_dry_run_implies_no_install() {
     // Add mock packages
     package_database.add_package(
         Package::build("python", "3.11.0")
-            .with_subdir(Platform::current())
+            .with_subdir(Subdir::current().unwrap_or(Subdir::NoArch))
             .finish(),
     );
     package_database.add_package(
         Package::build("numpy", "1.24.0")
-            .with_subdir(Platform::current())
+            .with_subdir(Subdir::current().unwrap_or(Subdir::NoArch))
             .finish(),
     );
 
@@ -143,5 +143,60 @@ async fn test_lock_dry_run_implies_no_install() {
     assert!(
         !env_path.exists(),
         "Environment should not be created with --dry-run"
+    );
+}
+
+/// `pixi lock --check` must never create a lockfile when one is missing (#7081).
+#[tokio::test]
+async fn test_lock_check_does_not_create_missing_lock_file() {
+    let mut package_database = MockRepoData::default();
+    package_database.add_package(
+        Package::build("python", "3.11.0")
+            .with_subdir(Subdir::current().unwrap_or(Subdir::NoArch))
+            .finish(),
+    );
+
+    let channel_dir = TempDir::new().unwrap();
+    package_database
+        .write_repodata(channel_dir.path())
+        .await
+        .unwrap();
+
+    let pixi = PixiControl::new().unwrap();
+    pixi.init()
+        .with_local_channel(channel_dir.path())
+        .await
+        .unwrap();
+
+    // Ensure there is no lockfile on disk.
+    let lock_path = pixi.workspace_path().join("pixi.lock");
+    let _ = fs_err::remove_file(&lock_path);
+    assert!(
+        !lock_path.exists(),
+        "precondition: pixi.lock must be absent"
+    );
+
+    // First --check should fail and must not create the lockfile.
+    let err = pixi.lock().with_check(true).await.unwrap_err();
+    assert!(
+        err.to_string().contains("lock file not up-to-date")
+            || format!("{err:?}").contains("lock file not up-to-date"),
+        "unexpected error: {err:?}"
+    );
+    assert!(
+        !lock_path.exists(),
+        "pixi.lock must not be created by the first --check"
+    );
+
+    // Second --check must still fail the same way — proving the first run did not write a lock.
+    let err = pixi.lock().with_check(true).await.unwrap_err();
+    assert!(
+        err.to_string().contains("lock file not up-to-date")
+            || format!("{err:?}").contains("lock file not up-to-date"),
+        "unexpected error: {err:?}"
+    );
+    assert!(
+        !lock_path.exists(),
+        "pixi.lock must not be created by the second --check"
     );
 }

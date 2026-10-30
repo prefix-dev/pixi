@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://pixi.sh/v0.71.1/schema/manifest/pyproject/schema.json",
+  "$id": "https://pixi.sh/v0.83.0/schema/manifest/pyproject/schema.json",
   "title": "`pyproject.toml` manifest file for `pixi`",
   "description": "A `pyproject.toml` with `[tool.pixi]`.",
   "type": "object",
@@ -62,7 +62,8 @@
       "properties": {
         "additional-dependencies": {
           "title": "Additional-Dependencies",
-          "description": "Additional dependencies to install alongside the build backend",
+          "deprecated": true,
+          "description": "Additional dependencies to install alongside the build backend. Deprecated in favor of `backend.additional-dependencies`",
           "type": "object",
           "additionalProperties": {
             "anyOf": [
@@ -97,7 +98,8 @@
         },
         "channels": {
           "title": "Channels",
-          "description": "The `conda` channels that are used to fetch the build backend from",
+          "deprecated": true,
+          "description": "The `conda` channels that are used to fetch the build backend from. Deprecated in favor of `backend.channels`",
           "type": "array",
           "items": {
             "anyOf": [
@@ -334,7 +336,7 @@
         },
         "workspace": {
           "title": "Workspace",
-          "description": "Inherit the backend version from `[workspace.dependencies]` using `name` as the lookup key. `version` is mutually exclusive with `workspace`.",
+          "description": "Inherit the backend version from `[workspace.dependencies]` using `name` as the lookup key. `version`, `path`, `git` and `url` are mutually exclusive with `workspace`.",
           "type": "boolean",
           "const": true
         }
@@ -397,6 +399,7 @@
       "type": "string",
       "enum": [
         "disabled",
+        "flexible",
         "strict"
       ]
     },
@@ -548,69 +551,22 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "features": {
-          "title": "Features",
-          "description": "The features that define the environment",
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1
-          }
-        },
-        "no-default-feature": {
-          "title": "No-Default-Feature",
-          "description": "Whether to add the default feature to this environment",
-          "type": "boolean",
-          "default": false
-        },
-        "solve-group": {
-          "title": "Solve-Group",
-          "description": "The group name for environments that should be solved together",
-          "type": "string",
-          "minLength": 1
-        }
-      }
-    },
-    "Feature": {
-      "title": "Feature",
-      "description": "A composable aspect of the project which can contribute dependencies and tasks to an environment",
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
         "activation": {
           "$ref": "#/$defs/Activation",
-          "description": "The scripts used on the activation of environments using this feature"
-        },
-        "build-dependencies": {
-          "title": "Build-Dependencies",
-          "description": "The build `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
-          "type": "object",
-          "additionalProperties": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "$ref": "#/$defs/MatchspecTable"
-              }
-            ]
-          },
-          "propertyNames": {
-            "minLength": 1
-          }
+          "description": "The scripts used on the activation of this environment"
         },
         "channel-priority": {
           "$ref": "#/$defs/ChannelPriority",
-          "description": "The type of channel priority that is used in the solve.\n- 'strict': only take the package from the channel it exist in first.\n- 'disabled': group all dependencies together as if there is no channel difference.",
+          "description": "The type of channel priority that is used in the solve.\n- 'strict': only take the package from the channel it exist in first.\n- 'flexible': exhaust the candidates of higher-priority channels before falling back to the next channel, regardless of the version.\n- 'disabled': group all dependencies together as if there is no channel difference.",
           "examples": [
             "strict",
+            "flexible",
             "disabled"
           ]
         },
         "channels": {
           "title": "Channels",
-          "description": "The `conda` channels that can be considered when solving environments containing this feature",
+          "description": "The `conda` channels that can be considered when solving this environment",
           "type": "array",
           "items": {
             "anyOf": [
@@ -678,6 +634,428 @@
             "minLength": 1
           }
         },
+        "features": {
+          "title": "Features",
+          "description": "The features that define the environment",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "no-default-feature": {
+          "title": "No-Default-Feature",
+          "description": "Whether to add the default feature to this environment",
+          "type": "boolean",
+          "default": false
+        },
+        "platforms": {
+          "title": "Platforms",
+          "description": "The platforms that this environment supports. Each entry is either a conda subdir or the name of a workspace platform.",
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/Platform"
+              },
+              {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-zA-Z][a-zA-Z0-9-]*[a-zA-Z0-9]$|^[a-zA-Z]$"
+              }
+            ]
+          }
+        },
+        "pypi-dependencies": {
+          "title": "Pypi-Dependencies",
+          "description": "The PyPI dependencies of this environment",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/PyPIVersion"
+              },
+              {
+                "$ref": "#/$defs/PyPIGitBranchRequirement"
+              },
+              {
+                "$ref": "#/$defs/PyPIGitTagRequirement"
+              },
+              {
+                "$ref": "#/$defs/PyPIGitRevRequirement"
+              },
+              {
+                "$ref": "#/$defs/PyPIPathRequirement"
+              },
+              {
+                "$ref": "#/$defs/PyPIUrlRequirement"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
+        "pypi-options": {
+          "$ref": "#/$defs/PyPIOptions",
+          "description": "Options related to PyPI indexes for this environment"
+        },
+        "solve-group": {
+          "title": "Solve-Group",
+          "description": "The group name for environments that should be solved together",
+          "type": "string",
+          "minLength": 1
+        },
+        "solve-strategy": {
+          "$ref": "#/$defs/SolveStrategy",
+          "description": "The strategy that is used in the solve.\n- 'highest': solve all packages to the highest compatible version.\n- 'lowest': solve all packages to the lowest compatible version.\n- 'lowest-direct': solve direct dependencies to the lowest compatible version and transitive ones to the highest compatible version.",
+          "examples": [
+            "lowest",
+            "lowest-direct",
+            "highest"
+          ]
+        },
+        "target": {
+          "title": "Target",
+          "description": "Machine-specific aspects of this environment",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/Target"
+          },
+          "propertyNames": {
+            "minLength": 1
+          },
+          "examples": [
+            {
+              "linux": {
+                "dependencies": {
+                  "python": "3.8"
+                }
+              }
+            }
+          ]
+        },
+        "tasks": {
+          "title": "Tasks",
+          "description": "The tasks provided by this environment",
+          "type": "object",
+          "patternProperties": {
+            "^[^\\s\\$]+$": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/TaskInlineTable"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/DependsOn"
+                  }
+                },
+                {
+                  "type": "string",
+                  "minLength": 1
+                }
+              ]
+            }
+          },
+          "propertyNames": {
+            "description": "A valid task name.",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "ExcludeNewerExemptionTable": {
+      "title": "ExcludeNewerExemptionTable",
+      "description": "The match spec fields that select the releases exempt from `exclude-newer`.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "build": {
+          "title": "Build",
+          "description": "The build string of the package",
+          "type": "string",
+          "minLength": 1
+        },
+        "build-number": {
+          "title": "Build-Number",
+          "description": "The build number of the package, can be a spec like `>=1` or `<=10` or `1`",
+          "type": "string",
+          "minLength": 1
+        },
+        "channel": {
+          "title": "Channel",
+          "description": "The channel the packages needs to be fetched from",
+          "type": "string",
+          "minLength": 1,
+          "examples": [
+            "conda-forge",
+            "pytorch",
+            "https://prefix.dev/conda-forge"
+          ]
+        },
+        "cutoff": {
+          "title": "Cutoff",
+          "description": "Only exempt the matching releases published up to this point in time, an RFC 3339 timestamp or a date. Later releases, e.g. a new build of an exempt version, are subject to the cutoff as usual.",
+          "type": "string",
+          "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})|\\d{4}-\\d{2}-\\d{2})$",
+          "examples": [
+            "2026-10-12T08:00:00Z",
+            "2026-10-12"
+          ]
+        },
+        "file-name": {
+          "title": "File-Name",
+          "description": "The file name of the package",
+          "type": "string",
+          "minLength": 1
+        },
+        "flags": {
+          "title": "Flags",
+          "description": "Plain string flags used to select package variants",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "license": {
+          "title": "License",
+          "description": "The license of the package",
+          "type": "string",
+          "minLength": 1
+        },
+        "license-family": {
+          "title": "License-Family",
+          "description": "The license family of the package",
+          "type": "string",
+          "minLength": 1
+        },
+        "md5": {
+          "title": "Md5",
+          "description": "The md5 hash of the package",
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{32}$"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "description": "The sha256 hash of the package",
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
+        "subdir": {
+          "title": "Subdir",
+          "description": "The subdir of the package, also known as platform",
+          "type": "string",
+          "minLength": 1
+        },
+        "track-features": {
+          "title": "Track-Features",
+          "description": "The track features of the package",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "version": {
+          "title": "Version",
+          "description": "The version of the package in [MatchSpec](https://github.com/conda/conda/blob/078e7ee79381060217e1ec7f9b0e9cf80ecc8f3f/conda/models/match_spec.py) format",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "minProperties": 1
+    },
+    "ExcludeNewerTable": {
+      "title": "ExcludeNewerTable",
+      "description": "The `exclude-newer` cutoff for conda packages together with the releases that are exempt from it.",
+      "type": "object",
+      "required": [
+        "cutoff"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "cutoff": {
+          "title": "Cutoff",
+          "description": "Exclude any package newer than this timestamp or duration. Can be an absolute timestamp or a relative duration accepted by humantime (for example '0d', '1 week', '2w', '1 month', '1M', '72h', '72 hours', or '1h30m').",
+          "type": "string",
+          "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})|\\d{4}-\\d{2}-\\d{2}|(\\d+\\s*[A-Za-z]+\\s*)+)$",
+          "examples": [
+            "2023-11-03T03:33:12Z",
+            "2026-04-01",
+            "7d"
+          ]
+        },
+        "exemptions": {
+          "title": "Exemptions",
+          "description": "Package releases that are never excluded, regardless of their upload time. The value is a version or a match spec table, so `polars = \"==1.43.1\"` exempts that release only and `py-rattler = \"*\"` exempts every release.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/ExcludeNewerExemptionTable"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          },
+          "examples": [
+            {
+              "polars": "==1.43.1",
+              "py-rattler": "*"
+            }
+          ]
+        }
+      }
+    },
+    "ExtraIndexInlineTable": {
+      "title": "ExtraIndexInlineTable",
+      "description": "An extra PyPI index with an optional per-index `exclude-newer` override.",
+      "type": "object",
+      "required": [
+        "url"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "exclude-newer": {
+          "title": "Exclude-Newer",
+          "description": "Override the workspace-level `exclude-newer` cutoff for this index only; a zero duration such as `0d` lifts the cutoff entirely, including for releases without an upload time",
+          "type": "string",
+          "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})|\\d{4}-\\d{2}-\\d{2}|(\\d+\\s*[A-Za-z]+\\s*)+)$",
+          "examples": [
+            "2025-01-01",
+            "0d"
+          ]
+        },
+        "url": {
+          "title": "Url",
+          "description": "The extra index URL",
+          "type": "string",
+          "minLength": 1,
+          "examples": [
+            "https://pypi.org/simple"
+          ]
+        }
+      }
+    },
+    "Feature": {
+      "title": "Feature",
+      "description": "A composable aspect of the project which can contribute dependencies and tasks to an environment",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "activation": {
+          "$ref": "#/$defs/Activation",
+          "description": "The scripts used on the activation of environments using this feature"
+        },
+        "build-dependencies": {
+          "title": "Build-Dependencies",
+          "description": "The build `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/InheritableMatchspecTable"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
+        "channel-priority": {
+          "$ref": "#/$defs/ChannelPriority",
+          "description": "The type of channel priority that is used in the solve.\n- 'strict': only take the package from the channel it exist in first.\n- 'flexible': exhaust the candidates of higher-priority channels before falling back to the next channel, regardless of the version.\n- 'disabled': group all dependencies together as if there is no channel difference.",
+          "examples": [
+            "strict",
+            "flexible",
+            "disabled"
+          ]
+        },
+        "channels": {
+          "title": "Channels",
+          "description": "The `conda` channels that can be considered when solving environments containing this feature",
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "string",
+                "format": "uri",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/ChannelInlineTable"
+              }
+            ]
+          }
+        },
+        "constraints": {
+          "title": "Constraints",
+          "description": "The `conda` version constraints. These constrain the versions of packages that may be installed without explicitly requiring them. If the package is installed as a dependency of another package, it must satisfy these constraints.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/InheritableMatchspecTable"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
+        "dependencies": {
+          "title": "Dependencies",
+          "description": "The `conda` dependencies, consisting of a package name and a requirement in [MatchSpec](https://github.com/conda/conda/blob/078e7ee79381060217e1ec7f9b0e9cf80ecc8f3f/conda/models/match_spec.py) format",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/InheritableMatchspecTable"
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
+        "dev": {
+          "title": "Dev",
+          "description": "Source packages whose dependencies should be installed without building the package itself. Useful for development environments.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/SourceSpecTable"
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
         "host-dependencies": {
           "title": "Host-Dependencies",
           "description": "The host `conda` dependencies, used in the build process. See https://pixi.sh/latest/build/dependency_types/ for more information.",
@@ -689,7 +1067,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -856,7 +1234,7 @@
     },
     "InheritableMatchspecTable": {
       "title": "InheritableMatchspecTable",
-      "description": "A spec that may inherit from `[workspace.dependencies]`.\n\nSetting `workspace = true` pulls the version (and any other unset fields)\nfrom the matching `[workspace.dependencies]` entry. Members may layer any\nnon-version attribute on top; restating `version` alongside `workspace =\ntrue` is an error.",
+      "description": "A spec that may inherit from `[workspace.dependencies]`.\n\nSetting `workspace = true` pulls the version (and any other unset fields)\nfrom the matching `[workspace.dependencies]` entry. Members may layer\nfurther attributes on top; restating `version` or the source location\n(`path`, `git`, `url`) alongside `workspace = true` is an error.",
       "type": "object",
       "additionalProperties": false,
       "properties": {
@@ -919,6 +1297,11 @@
           "type": "string",
           "minLength": 1
         },
+        "lfs": {
+          "title": "Lfs",
+          "description": "If `true` Git LFS objects are fetched during the checkout",
+          "type": "boolean"
+        },
         "license": {
           "title": "License",
           "description": "The license of the package",
@@ -936,6 +1319,19 @@
           "description": "The md5 hash of the package",
           "type": "string",
           "pattern": "^[a-fA-F0-9]{32}$"
+        },
+        "package": {
+          "$ref": "#/$defs/Package",
+          "description": "An inline package definition for this source dependency, instead of a separate `pixi.toml`. The package name is taken from the dependency key and the source is taken from this spec, so `name` and `build.source` are not set here.",
+          "examples": [
+            {
+              "build": {
+                "backend": {
+                  "name": "pixi-build-rust"
+                }
+              }
+            }
+          ]
         },
         "path": {
           "title": "Path",
@@ -1015,7 +1411,7 @@
         },
         "workspace": {
           "title": "Workspace",
-          "description": "Inherit this spec from `[workspace.dependencies]`. Other fields on this table layer on top of the workspace base; `version` is mutually exclusive with `workspace`.",
+          "description": "Inherit this spec from `[workspace.dependencies]`. Other fields on this table layer on top of the workspace base; `version`, `path`, `git` and `url` are mutually exclusive with `workspace`.",
           "type": "boolean",
           "const": true
         }
@@ -1116,6 +1512,11 @@
           "type": "string",
           "minLength": 1
         },
+        "lfs": {
+          "title": "Lfs",
+          "description": "If `true` Git LFS objects are fetched during the checkout",
+          "type": "boolean"
+        },
         "license": {
           "title": "License",
           "description": "The license of the package",
@@ -1133,6 +1534,19 @@
           "description": "The md5 hash of the package",
           "type": "string",
           "pattern": "^[a-fA-F0-9]{32}$"
+        },
+        "package": {
+          "$ref": "#/$defs/Package",
+          "description": "An inline package definition for this source dependency, instead of a separate `pixi.toml`. The package name is taken from the dependency key and the source is taken from this spec, so `name` and `build.source` are not set here.",
+          "examples": [
+            {
+              "build": {
+                "backend": {
+                  "name": "pixi-build-rust"
+                }
+              }
+            }
+          ]
         },
         "path": {
           "title": "Path",
@@ -1389,6 +1803,9 @@
                 "$ref": "#/$defs/InheritableMatchspecTable"
               },
               {
+                "$ref": "#/$defs/PinCompatibleSpec"
+              },
+              {
                 "type": "object",
                 "additionalProperties": {
                   "anyOf": [
@@ -1398,6 +1815,9 @@
                     },
                     {
                       "$ref": "#/$defs/InheritableMatchspecTable"
+                    },
+                    {
+                      "$ref": "#/$defs/PinCompatibleSpec"
                     }
                   ]
                 },
@@ -1454,6 +1874,11 @@
               "$ref": "#/$defs/WorkspaceInheritance"
             }
           ]
+        },
+        "publish": {
+          "title": "Publish",
+          "description": "Whether a workspace-wide `pixi publish` publishes this package. Packages that do not opt in with `publish = true` are left out of the publish set.",
+          "type": "boolean"
         },
         "readme": {
           "title": "Readme",
@@ -1532,6 +1957,9 @@
                 "$ref": "#/$defs/InheritableMatchspecTable"
               },
               {
+                "$ref": "#/$defs/PinCompatibleSpec"
+              },
+              {
                 "type": "object",
                 "additionalProperties": {
                   "anyOf": [
@@ -1541,6 +1969,9 @@
                     },
                     {
                       "$ref": "#/$defs/InheritableMatchspecTable"
+                    },
+                    {
+                      "$ref": "#/$defs/PinCompatibleSpec"
                     }
                   ]
                 },
@@ -1553,6 +1984,17 @@
           "propertyNames": {
             "minLength": 1
           }
+        },
+        "run-exports": {
+          "$ref": "#/$defs/RunExports",
+          "description": "The run-exports this package declares for its consumers, mirroring the conda run-exports mechanism. See https://pixi.sh/latest/build/dependency_types/ for more information.",
+          "examples": [
+            {
+              "weak": {
+                "libfoo": ">=1,<2"
+              }
+            }
+          ]
         },
         "version": {
           "title": "Version",
@@ -1571,6 +2013,93 @@
             {
               "workspace": true
             }
+          ]
+        }
+      }
+    },
+    "PinCompatibleSpec": {
+      "title": "PinCompatibleSpec",
+      "description": "Pin to a version compatible with the one resolved in the previous environment.\n\nMirrors rattler-build's `pin_compatible()`: a `pin-compatible` entry in\n`run-dependencies` resolves against the host environment, one in\n`host-dependencies` against the build environment.",
+      "type": "object",
+      "required": [
+        "pin-compatible"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "pin-compatible": {
+          "title": "Pin-Compatible",
+          "description": "`true` uses the default bounds; a table configures them.",
+          "anyOf": [
+            {
+              "type": "boolean",
+              "const": true
+            },
+            {
+              "$ref": "#/$defs/PinTable"
+            }
+          ]
+        }
+      }
+    },
+    "PinSubpackageSpec": {
+      "title": "PinSubpackageSpec",
+      "description": "Pin the package itself for its consumers.\n\nMirrors rattler-build's `pin_subpackage()`. Only valid in the\n`run-exports` tables, on an entry named after the package itself.",
+      "type": "object",
+      "required": [
+        "pin-subpackage"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "pin-subpackage": {
+          "title": "Pin-Subpackage",
+          "description": "`true` uses the default bounds; a table configures them.",
+          "anyOf": [
+            {
+              "type": "boolean",
+              "const": true
+            },
+            {
+              "$ref": "#/$defs/PinTable"
+            }
+          ]
+        }
+      }
+    },
+    "PinTable": {
+      "title": "PinTable",
+      "description": "The arguments of a pin, mirroring rattler-build's `pin_compatible`/`pin_subpackage`.\n\nBounds that are not given fall back to the defaults: `lower-bound = \"x.x.x.x.x.x\"`\n(pin to the exact resolved version) and `upper-bound = \"x\"` (next-major exclusive).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "build": {
+          "title": "Build",
+          "description": "A build-string matcher to add to the pin, e.g. `mpi_mpich_*`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "exact": {
+          "title": "Exact",
+          "description": "Pin the exact version and build string. Cannot be combined with the bounds or `build`.",
+          "type": "boolean"
+        },
+        "lower-bound": {
+          "title": "Lower-Bound",
+          "description": "Lower bound of the pinned range: a pin expression like `x.x` (number of version segments to keep) or a literal version.",
+          "type": "string",
+          "minLength": 1,
+          "examples": [
+            "x.x",
+            "1.2.3"
+          ]
+        },
+        "upper-bound": {
+          "title": "Upper-Bound",
+          "description": "Upper bound of the pinned range: a pin expression like `x` (the segment to bump, exclusive) or a literal version.",
+          "type": "string",
+          "minLength": 1,
+          "examples": [
+            "x",
+            "9.9"
           ]
         }
       }
@@ -1628,6 +2157,11 @@
           "type": "string",
           "minLength": 1
         },
+        "lfs": {
+          "title": "Lfs",
+          "description": "If `true` Git LFS objects are fetched during the checkout",
+          "type": "boolean"
+        },
         "subdirectory": {
           "title": "Subdirectory",
           "description": "The subdirectory in the repo, a path from the root of the repo.",
@@ -1655,6 +2189,11 @@
           "description": "The `git` URL to the repo e.g https://github.com/prefix-dev/pixi",
           "type": "string",
           "minLength": 1
+        },
+        "lfs": {
+          "title": "Lfs",
+          "description": "If `true` Git LFS objects are fetched during the checkout",
+          "type": "boolean"
         },
         "rev": {
           "title": "Rev",
@@ -1689,6 +2228,11 @@
           "description": "The `git` URL to the repo e.g https://github.com/prefix-dev/pixi",
           "type": "string",
           "minLength": 1
+        },
+        "lfs": {
+          "title": "Lfs",
+          "description": "If `true` Git LFS objects are fetched during the checkout",
+          "type": "boolean"
         },
         "subdirectory": {
           "title": "Subdirectory",
@@ -1751,15 +2295,28 @@
         },
         "extra-index-urls": {
           "title": "Extra-Index-Urls",
-          "description": "Additional PyPI registries that should be used as extra indexes",
+          "description": "Additional PyPI registries that should be used as extra indexes. Each entry may be a URL string or an inline table with a per-index `exclude-newer` override.",
           "type": "array",
           "items": {
-            "type": "string",
-            "minLength": 1
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/ExtraIndexInlineTable"
+              }
+            ]
           },
           "examples": [
             [
               "https://pypi.org/simple"
+            ],
+            [
+              {
+                "exclude-newer": "0d",
+                "url": "https://internal/simple"
+              }
             ]
           ]
         },
@@ -1786,19 +2343,11 @@
         "index-strategy": {
           "title": "Index-Strategy",
           "description": "The strategy to use when resolving packages from multiple indexes",
-          "anyOf": [
-            {
-              "type": "string",
-              "const": "first-index"
-            },
-            {
-              "type": "string",
-              "const": "unsafe-first-match"
-            },
-            {
-              "type": "string",
-              "const": "unsafe-best-match"
-            }
+          "type": "string",
+          "enum": [
+            "first-index",
+            "unsafe-first-match",
+            "unsafe-best-match"
           ],
           "examples": [
             "first-index",
@@ -1880,27 +2429,13 @@
         "prerelease-mode": {
           "title": "Prerelease-Mode",
           "description": "The strategy to use when considering pre-release versions",
-          "anyOf": [
-            {
-              "type": "string",
-              "const": "disallow"
-            },
-            {
-              "type": "string",
-              "const": "allow"
-            },
-            {
-              "type": "string",
-              "const": "if-necessary"
-            },
-            {
-              "type": "string",
-              "const": "explicit"
-            },
-            {
-              "type": "string",
-              "const": "if-necessary-or-explicit"
-            }
+          "type": "string",
+          "enum": [
+            "disallow",
+            "allow",
+            "if-necessary",
+            "explicit",
+            "if-necessary-or-explicit"
           ],
           "examples": [
             "disallow",
@@ -2024,7 +2559,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -2043,7 +2578,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -2062,7 +2597,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -2104,7 +2639,8 @@
         },
         "exclude_newer": {
           "title": "Exclude Newer",
-          "description": "Workspace-wide per-package `exclude-newer` overrides for conda packages",
+          "deprecated": true,
+          "description": "Workspace-wide per-package `exclude-newer` overrides for conda packages. Deprecated in favor of the `exemptions` of `[workspace.exclude-newer]`",
           "type": "object",
           "additionalProperties": {
             "type": "string",
@@ -2136,7 +2672,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -2193,7 +2729,8 @@
         },
         "pypi_exclude_newer": {
           "title": "Pypi Exclude Newer",
-          "description": "Workspace-wide per-package `exclude-newer` overrides for PyPI packages",
+          "deprecated": true,
+          "description": "Workspace-wide per-package `exclude-newer` overrides for PyPI packages. Deprecated in favor of the `exemptions` of `[workspace.pypi-exclude-newer]`",
           "type": "object",
           "additionalProperties": {
             "type": "string",
@@ -2296,6 +2833,290 @@
         "pixi": {
           "$ref": "#/$defs/PyProjectPixiTool",
           "description": "`pixi` configuration"
+        }
+      }
+    },
+    "PypiExcludeNewerTable": {
+      "title": "PypiExcludeNewerTable",
+      "description": "The `exclude-newer` cutoff for PyPI packages together with the packages that are exempt from it.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cutoff": {
+          "title": "Cutoff",
+          "description": "Exclude any PyPI package newer than this timestamp or duration. Without a cutoff, the cutoff of `exclude-newer` applies to PyPI packages as well.",
+          "type": "string",
+          "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})|\\d{4}-\\d{2}-\\d{2}|(\\d+\\s*[A-Za-z]+\\s*)+)$",
+          "examples": [
+            "2023-11-03T03:33:12Z",
+            "2026-04-01",
+            "7d"
+          ]
+        },
+        "exemptions": {
+          "title": "Exemptions",
+          "description": "PyPI packages that are never excluded, regardless of their upload time. Only `*`, which exempts every release of the package, is supported for now.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "const": "*"
+          },
+          "propertyNames": {
+            "minLength": 1
+          },
+          "examples": [
+            {
+              "torch": "*"
+            }
+          ]
+        }
+      }
+    },
+    "RunExports": {
+      "title": "RunExports",
+      "description": "The run-exports the package declares for its downstream consumers.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "noarch": {
+          "title": "Noarch",
+          "description": "The only run-export bucket applied when the consuming output is `noarch`: added to the run dependencies of noarch consumers that depend on this package in `host-dependencies`.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/InheritableMatchspecTable"
+              },
+              {
+                "$ref": "#/$defs/PinCompatibleSpec"
+              },
+              {
+                "$ref": "#/$defs/PinSubpackageSpec"
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "$ref": "#/$defs/InheritableMatchspecTable"
+                    },
+                    {
+                      "$ref": "#/$defs/PinCompatibleSpec"
+                    },
+                    {
+                      "$ref": "#/$defs/PinSubpackageSpec"
+                    }
+                  ]
+                },
+                "propertyNames": {
+                  "minLength": 1
+                }
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
+        "strong": {
+          "title": "Strong",
+          "description": "Added to the run dependencies of consumers that depend on this package in `build-dependencies` or `host-dependencies`.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/InheritableMatchspecTable"
+              },
+              {
+                "$ref": "#/$defs/PinCompatibleSpec"
+              },
+              {
+                "$ref": "#/$defs/PinSubpackageSpec"
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "$ref": "#/$defs/InheritableMatchspecTable"
+                    },
+                    {
+                      "$ref": "#/$defs/PinCompatibleSpec"
+                    },
+                    {
+                      "$ref": "#/$defs/PinSubpackageSpec"
+                    }
+                  ]
+                },
+                "propertyNames": {
+                  "minLength": 1
+                }
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
+        "strong-constraints": {
+          "title": "Strong-Constraints",
+          "description": "Added to the run constraints of consumers that depend on this package in `build-dependencies` or `host-dependencies`. Constraints only restrict versions and cannot be source specs.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/InheritableMatchspecTable"
+              },
+              {
+                "$ref": "#/$defs/PinCompatibleSpec"
+              },
+              {
+                "$ref": "#/$defs/PinSubpackageSpec"
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "$ref": "#/$defs/InheritableMatchspecTable"
+                    },
+                    {
+                      "$ref": "#/$defs/PinCompatibleSpec"
+                    },
+                    {
+                      "$ref": "#/$defs/PinSubpackageSpec"
+                    }
+                  ]
+                },
+                "propertyNames": {
+                  "minLength": 1
+                }
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
+        "weak": {
+          "title": "Weak",
+          "description": "Added to the run dependencies of consumers that depend on this package in `host-dependencies`.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/InheritableMatchspecTable"
+              },
+              {
+                "$ref": "#/$defs/PinCompatibleSpec"
+              },
+              {
+                "$ref": "#/$defs/PinSubpackageSpec"
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "$ref": "#/$defs/InheritableMatchspecTable"
+                    },
+                    {
+                      "$ref": "#/$defs/PinCompatibleSpec"
+                    },
+                    {
+                      "$ref": "#/$defs/PinSubpackageSpec"
+                    }
+                  ]
+                },
+                "propertyNames": {
+                  "minLength": 1
+                }
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
+        },
+        "weak-constraints": {
+          "title": "Weak-Constraints",
+          "description": "Added to the run constraints of consumers that depend on this package in `host-dependencies`. Constraints only restrict versions and cannot be source specs.",
+          "type": "object",
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "$ref": "#/$defs/InheritableMatchspecTable"
+              },
+              {
+                "$ref": "#/$defs/PinCompatibleSpec"
+              },
+              {
+                "$ref": "#/$defs/PinSubpackageSpec"
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
+                    },
+                    {
+                      "$ref": "#/$defs/InheritableMatchspecTable"
+                    },
+                    {
+                      "$ref": "#/$defs/PinCompatibleSpec"
+                    },
+                    {
+                      "$ref": "#/$defs/PinSubpackageSpec"
+                    }
+                  ]
+                },
+                "propertyNames": {
+                  "minLength": 1
+                }
+              }
+            ]
+          },
+          "propertyNames": {
+            "minLength": 1
+          }
         }
       }
     },
@@ -2559,7 +3380,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -2578,7 +3399,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -2597,7 +3418,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -2627,7 +3448,7 @@
                 "minLength": 1
               },
               {
-                "$ref": "#/$defs/MatchspecTable"
+                "$ref": "#/$defs/InheritableMatchspecTable"
               }
             ]
           },
@@ -3125,9 +3946,10 @@
         },
         "channel-priority": {
           "$ref": "#/$defs/ChannelPriority",
-          "description": "The type of channel priority that is used in the solve.\n- 'strict': only take the package from the channel it exist in first.\n- 'disabled': group all dependencies together as if there is no channel difference.",
+          "description": "The type of channel priority that is used in the solve.\n- 'strict': only take the package from the channel it exist in first.\n- 'flexible': exhaust the candidates of higher-priority channels before falling back to the next channel, regardless of the version.\n- 'disabled': group all dependencies together as if there is no channel difference.",
           "examples": [
             "strict",
+            "flexible",
             "disabled"
           ]
         },
@@ -3228,9 +4050,16 @@
         },
         "exclude-newer": {
           "title": "Exclude-Newer",
-          "description": "Exclude any package newer than this timestamp or duration. Can be an absolute timestamp or a relative duration accepted by humantime (for example '0d', '1 week', '2w', '1 month', '1M', '72h', '72 hours', or '1h30m').",
-          "type": "string",
-          "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})|\\d{4}-\\d{2}-\\d{2}|(\\d+\\s*[A-Za-z]+\\s*)+)$",
+          "description": "Exclude any package newer than this timestamp or duration. Can be an absolute timestamp or a relative duration accepted by humantime (for example '0d', '1 week', '2w', '1 month', '1M', '72h', '72 hours', or '1h30m'), or a table with a `cutoff` and `exemptions` for vetted releases.",
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})|\\d{4}-\\d{2}-\\d{2}|(\\d+\\s*[A-Za-z]+\\s*)+)$"
+            },
+            {
+              "$ref": "#/$defs/ExcludeNewerTable"
+            }
+          ],
           "examples": [
             "2023-11-03T03:33:12Z",
             "2026-04-01",
@@ -3241,7 +4070,14 @@
             "1M",
             "72h",
             "72 hours",
-            "1h30m"
+            "1h30m",
+            {
+              "cutoff": "7d",
+              "exemptions": {
+                "polars": "==1.43.1",
+                "py-rattler": "*"
+              }
+            }
           ]
         },
         "homepage": {
@@ -3310,6 +4146,28 @@
             },
             {
               "type": "boolean"
+            }
+          ]
+        },
+        "pypi-exclude-newer": {
+          "title": "Pypi-Exclude-Newer",
+          "description": "Exclude any PyPI package newer than this timestamp or duration, or a table with a `cutoff` and `exemptions`. Without a `cutoff`, the cutoff of `exclude-newer` applies to PyPI packages as well.",
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})|\\d{4}-\\d{2}-\\d{2}|(\\d+\\s*[A-Za-z]+\\s*)+)$"
+            },
+            {
+              "$ref": "#/$defs/PypiExcludeNewerTable"
+            }
+          ],
+          "examples": [
+            "2023-11-03T03:33:12Z",
+            "7d",
+            {
+              "exemptions": {
+                "torch": "*"
+              }
             }
           ]
         },
@@ -3399,11 +4257,25 @@
       "title": "WorkspacePlatform",
       "description": "A workspace platform: a conda subdir plus declared virtual-package\nguarantees, identified by a workspace-scoped name.",
       "type": "object",
-      "additionalProperties": true,
+      "additionalProperties": false,
       "properties": {
+        "amdgpu": {
+          "title": "Amdgpu",
+          "description": "Declare the presence-only `__amdgpu` virtual package with `true`, or an AMDGPU target name (e.g. `gfx90a`) to also declare its `__amdgpu_arch`.",
+          "anyOf": [
+            {
+              "type": "boolean",
+              "const": true
+            },
+            {
+              "type": "string",
+              "pattern": "^gfx[0-9]+[0-9a-fA-F]{2}$"
+            }
+          ]
+        },
         "archspec": {
           "title": "Archspec",
-          "description": "Declare a `__archspec` virtual package with the given microarchitecture, e.g. `x86-64-v3`.",
+          "description": "Declare a `__archspec` virtual package with the given microarchitecture, e.g. `x86_64_v3`.",
           "type": "string",
           "minLength": 1
         },
@@ -3471,6 +4343,11 @@
           "minLength": 1
         }
       },
+      "patternProperties": {
+        "^__[a-z0-9][._-]?([a-z0-9]+(\\.|-|_|$))*$": {
+          "type": "string"
+        }
+      },
       "anyOf": [
         {
           "required": [
@@ -3482,7 +4359,10 @@
             "platform"
           ]
         }
-      ]
+      ],
+      "propertyNames": {
+        "maxLength": 64
+      }
     },
     "WorkspaceTarget": {
       "title": "WorkspaceTarget",

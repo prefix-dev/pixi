@@ -19,7 +19,7 @@ use pixi_git::resolver::GitResolver;
 use pixi_glob::GlobHashCache;
 use pixi_url::UrlResolver;
 use rattler::package_cache::PackageCache;
-use rattler_conda_types::{GenericVirtualPackage, Platform};
+use rattler_conda_types::{GenericVirtualPackage, Subdir};
 use rattler_networking::LazyClient;
 use rattler_repodata_gateway::Gateway;
 use tokio::sync::Semaphore;
@@ -124,7 +124,7 @@ pub(crate) struct CommandDispatcherData {
     /// The platform (and virtual packages) to use for tools that should run on
     /// the current system. Usually this is the current platform, but it can
     /// be a different platform.
-    pub tool_platform: (Platform, Vec<GenericVirtualPackage>),
+    pub tool_platform: (Subdir, Vec<GenericVirtualPackage>),
 
     /// True if execution of link scripts is enabled.
     pub execute_link_scripts: bool,
@@ -320,7 +320,7 @@ impl CommandDispatcher {
     }
 
     /// Returns the platform and virtual packages used for tool environments.
-    pub fn tool_platform(&self) -> (Platform, &[GenericVirtualPackage]) {
+    pub fn tool_platform(&self) -> (Subdir, &[GenericVirtualPackage]) {
         (self.data.tool_platform.0, &self.data.tool_platform.1)
     }
 
@@ -342,6 +342,22 @@ impl CommandDispatcher {
     /// Returns whether ref links (copy-on-write) are allowed during package installation.
     pub fn allow_ref_links(&self) -> Option<bool> {
         self.data.allow_ref_links
+    }
+
+    /// Solves an environment whose repodata and host capabilities are already
+    /// known, using the normal solve concurrency limit and reporters.
+    pub async fn solve_conda_environment(
+        &self,
+        spec: crate::SolveCondaEnvironmentSpec,
+    ) -> Result<
+        Vec<pixi_record::PixiRecord>,
+        CommandDispatcherError<crate::SolveCondaEnvironmentError>,
+    > {
+        use crate::solve_binary::SolveCondaExt;
+        self.engine
+            .with_ctx(async |ctx| ctx.solve_conda(spec).await)
+            .await
+            .map_err_into_dispatcher(std::convert::identity)
     }
 
     /// Returns the metadata of the source spec.
@@ -389,6 +405,7 @@ impl CommandDispatcher {
     /// installs all required packages into the target prefix. It handles
     /// both binary packages (from conda repositories) and source packages
     /// (built from source code).
+    #[allow(clippy::result_large_err)] // matches install_inner's unboxed error contract
     pub async fn install_pixi_environment(
         &self,
         spec: InstallPixiEnvironmentSpec,

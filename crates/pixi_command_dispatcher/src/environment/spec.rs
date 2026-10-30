@@ -54,5 +54,6 @@ fn channel_priority_discriminant(priority: &ChannelPriority) -> u8 {
     match priority {
         ChannelPriority::Strict => 0,
         ChannelPriority::Disabled => 1,
+        ChannelPriority::Flexible => 2,
     }
 }

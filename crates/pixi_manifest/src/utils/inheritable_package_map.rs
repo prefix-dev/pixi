@@ -12,18 +12,20 @@ use toml_span::{
 };
 
 use crate::{
-    TomlError,
+    PackageDependencySpec, TomlError,
     error::GenericError,
     target::{key_looks_conditional, parse_if_expression},
     utils::package_map::UniquePackageMap,
 };
 
-/// Entry in a `[package.*-dependencies]` table that may inherit from
+/// Entry in a dependency table that may inherit from
 /// `[workspace.dependencies]`.
 #[derive(Debug)]
 pub enum InheritableSpec {
-    Direct(PixiSpec),
-    /// Inherited from the workspace pool. `overrides.version` is always `None`.
+    Direct(Box<PackageDependencySpec>),
+    /// Inherited from the workspace pool. The overrides never carry a
+    /// `version` or a source location (`path`, `git`, `url`); those fields
+    /// are owned by the workspace entry.
     Inherited {
         marker_span: Range<usize>,
         overrides: Box<TomlSpec>,
@@ -48,19 +50,74 @@ impl InheritablePackageMap {
         self.specs.is_empty()
     }
 
+    /// Convert into a plain [`UniquePackageMap`], rejecting any entry that
+    /// declares workspace inheritance or uses a pin spec. Used by tables that
+    /// never resolve against a `[workspace.dependencies]` pool, none of which
+    /// support pins.
+    pub fn into_direct(self) -> Result<UniquePackageMap, DeserError> {
+        let mut out = UniquePackageMap::default();
+        for (name, spec) in self.specs {
+            let value_span = self.value_spans.get(&name);
+            let spec = match spec {
+                InheritableSpec::Direct(spec) => match *spec {
+                    PackageDependencySpec::Spec(spec) => spec,
+                    PackageDependencySpec::PinSubpackage(_)
+                    | PackageDependencySpec::PinCompatible(_) => {
+                        let span = value_span
+                            .map(|span| Span {
+                                start: span.start,
+                                end: span.end,
+                            })
+                            .unwrap_or_default();
+                        return Err(toml_span::Error {
+                            kind: toml_span::ErrorKind::Custom(
+                                "`pin-subpackage` and `pin-compatible` are only supported in package dependency tables".into(),
+                            ),
+                            span,
+                            line_info: None,
+                        }
+                        .into());
+                    }
+                },
+                InheritableSpec::Inherited { marker_span, .. }
+                | InheritableSpec::NotWorkspace { marker_span } => {
+                    return Err(toml_span::Error {
+                        kind: toml_span::ErrorKind::Custom(
+                            "`workspace` inheritance is not supported in this table".into(),
+                        ),
+                        span: Span {
+                            start: marker_span.start,
+                            end: marker_span.end,
+                        },
+                        line_info: None,
+                    }
+                    .into());
+                }
+            };
+            if let Some(span) = self.name_spans.get(&name) {
+                out.name_spans.insert(name.clone(), span.clone());
+            }
+            if let Some(span) = self.value_spans.get(&name) {
+                out.value_spans.insert(name.clone(), span.clone());
+            }
+            out.specs.insert(name, spec);
+        }
+        Ok(out)
+    }
+
     /// Resolve every entry against the pool. Source specs require the
     /// `pixi-build` preview, matching the non-inheritable tables.
     pub fn resolve(
         self,
         workspace_deps: &IndexMap<PackageName, TomlSpec>,
         is_pixi_build_enabled: bool,
-    ) -> Result<UniquePackageMap, TomlError> {
-        let mut out = UniquePackageMap::default();
+    ) -> Result<ResolvedPackageMap, TomlError> {
+        let mut out = ResolvedPackageMap::default();
         for (name, spec) in self.specs {
             let name_span = self.name_spans.get(&name).cloned();
             let value_span = self.value_spans.get(&name).cloned();
             let resolved = match spec {
-                InheritableSpec::Direct(spec) => spec,
+                InheritableSpec::Direct(spec) => *spec,
                 InheritableSpec::NotWorkspace { marker_span } => {
                     return Err(GenericError::new("`workspace` cannot be false")
                         .with_help("Remove the `workspace = false` entry; inheritance from the workspace is opt-in.")
@@ -72,7 +129,7 @@ impl InheritablePackageMap {
                     overrides,
                 } => {
                     let base = lookup_workspace_base(workspace_deps, &name, &marker_span)?;
-                    finalize_inherited(base, *overrides, &marker_span)?
+                    PackageDependencySpec::Spec(finalize_inherited(base, *overrides, &marker_span)?)
                 }
             };
             if let Some(span) = name_span.clone() {
@@ -88,17 +145,256 @@ impl InheritablePackageMap {
         {
             return Err(TomlError::Generic(
                 GenericError::new(
-                    "conda source dependencies are not allowed without enabling the 'pixi-build' preview feature",
+                    "conda source dependencies are not allowed without enabling the 'pixi-build' preview flag",
                 )
                 .with_opt_span(out.value_spans.get(package_name).cloned())
                 .with_span_label("source dependency specified here")
                 .with_help(
-                    "Add `preview = [\"pixi-build\"]` to the `workspace` or `project` table of your manifest",
+                    "Run `pixi workspace preview add pixi-build` to enable the preview flag",
                 ),
             ));
         }
         Ok(out)
     }
+}
+
+/// A package-level dependency map once workspace inheritance has been
+/// resolved: every entry is a concrete [`PackageDependencySpec`] (a regular
+/// spec, a `pin-subpackage` pin, or a `pin-compatible` pin - workspace
+/// inheritance only ever resolves to a regular spec, since
+/// `[workspace.dependencies]` is `PixiSpec`-typed and cannot carry a pin
+/// entry).
+#[derive(Default, Debug)]
+pub struct ResolvedPackageMap {
+    pub specs: IndexMap<PackageName, PackageDependencySpec>,
+    pub name_spans: IndexMap<PackageName, Range<usize>>,
+    pub value_spans: IndexMap<PackageName, Range<usize>>,
+}
+
+impl ResolvedPackageMap {
+    /// Convert into a [`UniquePackageMap`], rejecting pin entries. Used by
+    /// the workspace-level dependency tables, which never support pins.
+    pub fn try_into_unique(self, section: &str, help: &str) -> Result<UniquePackageMap, TomlError> {
+        for (name, spec) in &self.specs {
+            let pin_kind = match spec {
+                PackageDependencySpec::Spec(_) => continue,
+                PackageDependencySpec::PinSubpackage(_) => "pin-subpackage",
+                PackageDependencySpec::PinCompatible(_) => "pin-compatible",
+            };
+            return Err(pin_not_allowed_error(
+                pin_kind,
+                section,
+                help,
+                self.value_spans.get(name).cloned(),
+            ));
+        }
+        Ok(UniquePackageMap {
+            specs: self
+                .specs
+                .into_iter()
+                .filter_map(|(name, spec)| match spec {
+                    PackageDependencySpec::Spec(spec) => Some((name, spec)),
+                    _ => None,
+                })
+                .collect(),
+            name_spans: self.name_spans,
+            value_spans: self.value_spans,
+        })
+    }
+
+    /// Extract the specs of a table where pins are not supported at all
+    /// (`[package.build-dependencies]`, `[package.run-constraints]`,
+    /// `[package.extra-dependencies]`).
+    ///
+    /// `section` names the table in the error; `help` explains why pins make
+    /// no sense there.
+    pub fn into_pixi_specs(
+        self,
+        section: &str,
+        help: &str,
+    ) -> Result<IndexMap<PackageName, PixiSpec>, TomlError> {
+        let mut out = IndexMap::with_capacity(self.specs.len());
+        for (name, spec) in self.specs {
+            let spec = match spec {
+                PackageDependencySpec::Spec(spec) => spec,
+                PackageDependencySpec::PinSubpackage(_) => {
+                    return Err(pin_not_allowed_error(
+                        "pin-subpackage",
+                        section,
+                        help,
+                        self.value_spans.get(&name).cloned(),
+                    ));
+                }
+                PackageDependencySpec::PinCompatible(_) => {
+                    return Err(pin_not_allowed_error(
+                        "pin-compatible",
+                        section,
+                        help,
+                        self.value_spans.get(&name).cloned(),
+                    ));
+                }
+            };
+            out.insert(name, spec);
+        }
+        Ok(out)
+    }
+
+    /// Extract the specs of a run- or host-dependency table:
+    /// `pin-compatible` is allowed (except on the package's own name),
+    /// `pin-subpackage` is not.
+    pub fn into_dependency_specs(
+        self,
+        section: &str,
+        package_name: Option<&PackageName>,
+    ) -> Result<IndexMap<PackageName, PackageDependencySpec>, TomlError> {
+        for (name, spec) in &self.specs {
+            match spec {
+                PackageDependencySpec::Spec(_) => {}
+                PackageDependencySpec::PinSubpackage(_) => {
+                    return Err(pin_not_allowed_error(
+                        "pin-subpackage",
+                        section,
+                        "`pin-subpackage` pins the package itself for its consumers and is only supported in the `[package.run-exports]` tables",
+                        self.value_spans.get(name).cloned(),
+                    ));
+                }
+                PackageDependencySpec::PinCompatible(_) => {
+                    if package_name.is_some_and(|package_name| name == package_name) {
+                        return Err(TomlError::Generic(
+                            GenericError::new(
+                                "`pin-compatible` cannot reference the package's own name"
+                                    .to_string(),
+                            )
+                            .with_opt_span(self.value_spans.get(name).cloned())
+                            .with_span_label("pin-compatible used here")
+                            .with_help(
+                                "`pin-compatible` pins a dependency to the version it resolved to in the build or host environment, and a package is never part of its own; use `pin-subpackage` in `[package.run-exports]` to pin the package itself for consumers",
+                            ),
+                        ));
+                    }
+                }
+            }
+        }
+        Ok(self.specs)
+    }
+
+    /// Extract the specs of a run-export dependency bucket
+    /// (`noarch`/`strong`/`weak`): both pin kinds are allowed.
+    /// `pin-subpackage` must reference the package's own name and
+    /// `pin-compatible` must not.
+    pub fn into_run_export_specs(
+        self,
+        package_name: Option<&PackageName>,
+    ) -> Result<IndexMap<PackageName, PackageDependencySpec>, TomlError> {
+        for (name, spec) in &self.specs {
+            self.validate_run_export_pin(name, spec, package_name)?;
+        }
+        Ok(self.specs)
+    }
+
+    /// Extract the specs of a run-export constraint bucket
+    /// (`strong-constraints`/`weak-constraints`): both pin kinds are allowed
+    /// with the same name rules as the dependency buckets, and regular specs
+    /// must be binary.
+    pub fn into_run_export_constraints(
+        self,
+        package_name: Option<&PackageName>,
+    ) -> Result<IndexMap<PackageName, crate::PackageConstraintSpec>, TomlError> {
+        use itertools::Either;
+
+        let mut out = IndexMap::with_capacity(self.specs.len());
+        for (name, spec) in &self.specs {
+            self.validate_run_export_pin(name, spec, package_name)?;
+        }
+        for (name, spec) in self.specs {
+            let value_span = self.value_spans.get(&name).cloned();
+            let constraint = match spec {
+                PackageDependencySpec::Spec(spec) => match spec.into_source_or_binary() {
+                    Either::Right(binary) => crate::PackageConstraintSpec::Binary(binary),
+                    Either::Left(_) => {
+                        return Err(GenericError::new(
+                            "source specs are not supported in run-export constraints",
+                        )
+                        .with_opt_span(value_span)
+                        .with_span_label("source spec specified here")
+                        .with_help(
+                            "A constraint only restricts the version of a package that is installed for another reason; use a version spec instead",
+                        )
+                        .into());
+                    }
+                },
+                PackageDependencySpec::PinSubpackage(pin) => {
+                    crate::PackageConstraintSpec::PinSubpackage(pin)
+                }
+                PackageDependencySpec::PinCompatible(pin) => {
+                    crate::PackageConstraintSpec::PinCompatible(pin)
+                }
+            };
+            out.insert(name, constraint);
+        }
+        Ok(out)
+    }
+
+    /// The name rules for pins in run-export buckets: `pin-subpackage` pins
+    /// the package itself, `pin-compatible` pins a dependency.
+    fn validate_run_export_pin(
+        &self,
+        name: &PackageName,
+        spec: &PackageDependencySpec,
+        package_name: Option<&PackageName>,
+    ) -> Result<(), TomlError> {
+        // Without a resolved package name (packages may be unnamed) the
+        // name rules cannot be checked.
+        let Some(package_name) = package_name else {
+            return Ok(());
+        };
+        let own_name = package_name.as_source();
+        match spec {
+            PackageDependencySpec::Spec(_) => Ok(()),
+            PackageDependencySpec::PinSubpackage(_) if name != package_name => {
+                Err(TomlError::Generic(
+                    GenericError::new(format!(
+                        "`pin-subpackage` can only reference the package's own name (`{own_name}`), not `{}`",
+                        name.as_source()
+                    ))
+                    .with_opt_span(self.value_spans.get(name).cloned())
+                    .with_span_label("pin-subpackage used here")
+                    .with_help(format!(
+                        "Use `{own_name} = {{ pin-subpackage = ... }}` to pin this package for its consumers, or `{} = {{ pin-compatible = ... }}` to pin a dependency to the version it resolved to",
+                        name.as_source()
+                    )),
+                ))
+            }
+            PackageDependencySpec::PinCompatible(_) if name == package_name => {
+                Err(TomlError::Generic(
+                    GenericError::new(format!(
+                        "`pin-compatible` cannot reference the package's own name (`{own_name}`)"
+                    ))
+                    .with_opt_span(self.value_spans.get(name).cloned())
+                    .with_span_label("pin-compatible used here")
+                    .with_help(format!(
+                        "Use `{own_name} = {{ pin-subpackage = ... }}` to pin this package for its consumers",
+                    )),
+                ))
+            }
+            _ => Ok(()),
+        }
+    }
+}
+
+/// A spanned "this pin kind is not allowed here" manifest error.
+fn pin_not_allowed_error(
+    pin_kind: &str,
+    section: &str,
+    help: &str,
+    span: Option<Range<usize>>,
+) -> TomlError {
+    TomlError::Generic(
+        GenericError::new(format!("`{pin_kind}` is not allowed in `{section}`"))
+            .with_opt_span(span)
+            .with_span_label(format!("{pin_kind} used here"))
+            .with_help(help.to_string()),
+    )
 }
 
 /// Resolve `{ name, workspace = true, ... }` build-backend entries.
@@ -317,21 +613,24 @@ impl<'de> toml_span::Deserialize<'de> for ConditionalInheritablePackageMap {
     }
 }
 
-fn parse_inheritable_entry(value: &mut Value<'_>) -> Result<InheritableSpec, DeserError> {
+pub(crate) fn parse_inheritable_entry(
+    value: &mut Value<'_>,
+) -> Result<InheritableSpec, DeserError> {
     let outer_span = value.span;
     match value.take() {
         ValueInner::String(s) => {
             let mut tmp = Value::with_span(ValueInner::String(s), outer_span);
             let spec = <PixiSpec as toml_span::Deserialize>::deserialize(&mut tmp)?;
-            Ok(InheritableSpec::Direct(spec))
+            Ok(InheritableSpec::Direct(Box::new(spec.into())))
         }
         ValueInner::Table(mut table) => {
             if let Some(ws_val) = table.remove("workspace") {
                 parse_workspace_marker(ws_val, table, outer_span)
             } else {
                 let mut tmp = Value::with_span(ValueInner::Table(table), outer_span);
-                let spec = <PixiSpec as toml_span::Deserialize>::deserialize(&mut tmp)?;
-                Ok(InheritableSpec::Direct(spec))
+                let spec =
+                    <PackageDependencySpec as toml_span::Deserialize>::deserialize(&mut tmp)?;
+                Ok(InheritableSpec::Direct(Box::new(spec)))
             }
         }
         other => Err(expected("a string or a table", other, outer_span).into()),
@@ -365,30 +664,29 @@ fn parse_workspace_marker<'de>(
         });
     }
 
-    // workspace = true: remaining keys are TomlSpec overrides; `version` is rejected.
-    let version_key_span = remaining
-        .iter()
-        .find(|(k, _)| k.name == "version")
-        .map(|(k, _)| k.span);
+    // workspace = true: remaining keys are TomlSpec overrides. The fields
+    // that identify the dependency stay owned by the workspace entry: the
+    // version and the source location. Rejecting them keeps an inherited
+    // entry from being silently repointed at a different version or source.
+    for owned_field in ["version", "path", "git", "url"] {
+        if let Some((key, _)) = remaining.iter().find(|(k, _)| k.name == owned_field) {
+            return Err(toml_span::Error {
+                kind: toml_span::ErrorKind::Custom(
+                    format!("`{owned_field}` is mutually exclusive with `workspace`").into(),
+                ),
+                span: key.span,
+                line_info: None,
+            }
+            .into());
+        }
+    }
 
-    let mut overrides = if remaining.is_empty() {
+    let overrides = if remaining.is_empty() {
         TomlSpec::empty()
     } else {
         let mut tmp = Value::with_span(ValueInner::Table(remaining), outer_span);
         <TomlSpec as toml_span::Deserialize>::deserialize(&mut tmp)?
     };
-
-    if overrides.version.is_some() {
-        return Err(toml_span::Error {
-            kind: toml_span::ErrorKind::Custom(
-                "`version` is mutual exclusive with `workspace`".into(),
-            ),
-            span: version_key_span.unwrap_or(marker_span),
-            line_info: None,
-        }
-        .into());
-    }
-    overrides.version = None;
 
     Ok(InheritableSpec::Inherited {
         marker_span: marker_span.start..marker_span.end,
@@ -486,6 +784,30 @@ mod test {
     }
 
     #[test]
+    fn rejects_source_location_overrides_on_inherited_entry() {
+        // The source location is owned by the workspace entry; an inherited
+        // entry cannot be repointed at a different path, git repo or url.
+        for (field, input) in [
+            ("path", r#"mylib = { workspace = true, path = "./lib" }"#),
+            (
+                "git",
+                r#"mylib = { workspace = true, git = "https://github.com/user/repo.git" }"#,
+            ),
+            (
+                "url",
+                r#"mylib = { workspace = true, url = "https://example.com/pkg.conda" }"#,
+            ),
+        ] {
+            let err = InheritablePackageMap::from_toml_str(input).expect_err("must reject");
+            let msg = format!("{:?}", err);
+            assert!(
+                msg.contains(field) && msg.contains("workspace"),
+                "unexpected error for `{field}`: {msg}",
+            );
+        }
+    }
+
+    #[test]
     fn parses_workspace_false_as_not_workspace_variant() {
         let input = r#"numpy = { workspace = false }"#;
         let parsed = InheritablePackageMap::from_toml_str(input).unwrap();
@@ -506,7 +828,14 @@ mod test {
             .specs
             .get(&PackageName::from_str("numpy").unwrap())
             .unwrap();
-        assert_eq!(spec.as_version_spec().unwrap().to_string(), "1.*",);
+        assert_eq!(
+            spec.as_spec()
+                .unwrap()
+                .as_version_spec()
+                .unwrap()
+                .to_string(),
+            "1.*",
+        );
     }
 
     #[test]
@@ -539,8 +868,8 @@ mod test {
             .specs
             .get(&PackageName::from_str("numpy").unwrap())
             .unwrap();
-        match spec {
-            PixiSpec::DetailedVersion(detailed) => {
+        match spec.as_spec() {
+            Some(PixiSpec::DetailedVersion(detailed)) => {
                 assert_eq!(detailed.version.as_ref().unwrap().to_string(), "1.*");
                 assert!(detailed.channel.is_some());
             }
@@ -562,8 +891,8 @@ mod test {
             .specs
             .get(&PackageName::from_str("boltons").unwrap())
             .unwrap();
-        match spec {
-            PixiSpec::DetailedVersion(detailed) => {
+        match spec.as_spec() {
+            Some(PixiSpec::DetailedVersion(detailed)) => {
                 assert_eq!(detailed.version.as_ref().unwrap().to_string(), ">=24");
                 assert!(
                     detailed.channel.is_some(),
@@ -586,6 +915,13 @@ mod test {
             .specs
             .get(&PackageName::from_str("numpy").unwrap())
             .unwrap();
-        assert_eq!(spec.as_version_spec().unwrap().to_string(), "==2.0");
+        assert_eq!(
+            spec.as_spec()
+                .unwrap()
+                .as_version_spec()
+                .unwrap()
+                .to_string(),
+            "==2.0"
+        );
     }
 }

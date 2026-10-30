@@ -1,11 +1,17 @@
 //! Compute-engine Key that spawns a build-backend handle for a source
-//! checkout. Discovers the backend via [`DiscoveredBackendKey`], applies
+//! checkout. Discovers the backend via
+//! [`DiscoveredBackendKey`](crate::discovered_backend::DiscoveredBackendKey), applies
 //! [`BackendOverrideKey`](crate::BackendOverrideKey) through
 //! [`ResolvedBackendCommandKey`], then dispatches to an in-memory
 //! instantiator, a system command, or a solved ephemeral build env. Keyed
 //! on (source path, manifest anchor, build source dir, exclude_newer).
 
-use std::{fmt, hash::Hash, path::PathBuf, sync::Arc};
+use std::{
+    fmt,
+    hash::{Hash, Hasher},
+    path::PathBuf,
+    sync::Arc,
+};
 
 use miette::Diagnostic;
 use pixi_build_discovery::{
@@ -35,11 +41,13 @@ use rattler_shell::{
 };
 use thiserror::Error;
 use tokio::sync::Mutex;
+use xxhash_rust::xxh3::Xxh3;
 
+use crate::InlinePackage;
 use crate::compute_data::HasInstantiateBackendReporter;
-use crate::discovered_backend::DiscoveredBackendKey;
 use crate::ephemeral_env::{EphemeralEnvError, EphemeralEnvKey, EphemeralEnvSpec};
 use crate::injected_config::ToolBuildEnvironmentKey;
+use crate::inline_package::discover_backend;
 use crate::reporter::InstantiateBackendReporter;
 use crate::resolved_backend_command::{ResolvedBackendCommand, ResolvedBackendCommandKey};
 use pixi_compute_cache_dirs::CacheDirsKey;
@@ -107,6 +115,12 @@ pub struct InstantiateBackendKey {
     /// User-supplied overrides applied to the discovered project model
     /// before backend initialization.
     pub project_model_overrides: ProjectModelOverrides,
+
+    /// Inline package definition for this source. When set, the
+    /// backend is built from this manifest instead of on-disk discovery. Part
+    /// of the key identity via its content hash, so distinct inline definitions
+    /// at the same path spawn distinct backends.
+    pub inline: Option<InlinePackage>,
 }
 
 impl InstantiateBackendKey {
@@ -129,6 +143,7 @@ impl InstantiateBackendKey {
             build_source_dir,
             exclude_newer,
             project_model_overrides: ProjectModelOverrides::default(),
+            inline: None,
         }
     }
 
@@ -136,6 +151,13 @@ impl InstantiateBackendKey {
     /// backend's `initialize` call.
     pub fn with_project_model_overrides(mut self, overrides: ProjectModelOverrides) -> Self {
         self.project_model_overrides = overrides;
+        self
+    }
+
+    /// Attach an inline package definition so the backend is built
+    /// from it instead of discovering a manifest on disk.
+    pub fn with_inline(mut self, inline: Option<InlinePackage>) -> Self {
+        self.inline = inline;
         self
     }
 }
@@ -182,6 +204,17 @@ pub enum InstantiateBackendError {
     Canonicalize(PathBuf, #[source] Arc<std::io::Error>),
 }
 
+impl InstantiateBackendError {
+    /// Returns the backend discovery failure this error ultimately stems
+    /// from, if any.
+    pub fn discovery_error(&self) -> Option<&DiscoveryError> {
+        match self {
+            InstantiateBackendError::Discovery(err) => Some(err),
+            _ => None,
+        }
+    }
+}
+
 /// Handle to a spawned backend. Wrapped in a [`Mutex`] because the
 /// JSON-RPC transport serializes request/response over one stdio pipe
 /// and the `InMemoryBackend` trait object is not `Sync`.
@@ -193,11 +226,12 @@ impl Key for InstantiateBackendKey {
     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
         // Discover the backend for this source path. Discovery runs
         // before the reporter lifecycle is queued so the `on_queued`
-        // event can carry the resolved backend name.
-        let discovered = ctx
-            .compute(&DiscoveredBackendKey::new(&self.source_path))
+        // event can carry the resolved backend name. An inline package
+        // definition bypasses on-disk discovery.
+        let discovered = discover_backend(ctx, &self.source_path, self.inline.as_ref())
             .await
-            .map_err(|e| Arc::new(InstantiateBackendError::Discovery(e)))?;
+            .map_err(InstantiateBackendError::Discovery)
+            .map_err(Arc::new)?;
 
         // Resolve the backend spec with the manifest anchor.
         let BackendSpec::JsonRpc(resolved_spec) = discovered
@@ -471,7 +505,8 @@ fn ephemeral_env_spec_for(
 ///
 /// Identifying the backend for cache-keying purposes goes through the
 /// same dependency-resolution pipeline as a real instantiation
-/// ([`DiscoveredBackendKey`] → [`ResolvedBackendCommandKey`] →
+/// ([`DiscoveredBackendKey`](crate::discovered_backend::DiscoveredBackendKey) →
+/// [`ResolvedBackendCommandKey`] →
 /// [`EphemeralEnvKey`] for env-spec backends), but stops once the
 /// resolved version is known. All three are content-addressed compute
 /// keys, so when an actual instantiation runs later in the same
@@ -497,17 +532,17 @@ pub async fn resolve_backend_identifier(
     source_path: &std::path::Path,
     manifest_source_anchor: SourceAnchor,
     exclude_newer: Option<ResolvedExcludeNewer>,
+    inline: Option<&InlinePackage>,
 ) -> Result<String, Arc<InstantiateBackendError>> {
-    let discovered = ctx
-        .compute(&DiscoveredBackendKey::new(source_path))
+    let discovered = discover_backend(ctx, source_path, inline)
         .await
-        .map_err(|e| Arc::new(InstantiateBackendError::Discovery(e)))?;
+        .map_err(InstantiateBackendError::Discovery)
+        .map_err(Arc::new)?;
 
     let BackendSpec::JsonRpc(resolved_spec) = discovered
         .backend_spec
         .clone()
         .resolve(manifest_source_anchor);
-
     let resolved_command = ctx
         .compute(&ResolvedBackendCommandKey::new(resolved_spec.clone()))
         .await;
@@ -535,6 +570,52 @@ pub async fn resolve_backend_identifier(
             Ok(format!("{cmd}@{version}"))
         }
     }
+}
+
+/// Resolve an immutable-cache backend identity. Unlike the legacy artifact
+/// identifier, this fingerprints the complete solved environment because an
+/// additional backend dependency changing can change build behavior even when
+/// the primary backend package version stays fixed. Unsupported system and
+/// in-memory commands return `None` so callers fall back to checkout/discovery.
+pub(crate) async fn resolve_immutable_backend_identifier_from_spec(
+    ctx: &mut ComputeCtx,
+    resolved_spec: JsonRpcBackendSpec,
+    exclude_newer: Option<ResolvedExcludeNewer>,
+) -> Result<Option<String>, Arc<InstantiateBackendError>> {
+    let resolved_command = ctx
+        .compute(&ResolvedBackendCommandKey::new(resolved_spec.clone()))
+        .await;
+    let ResolvedBackendCommand::Spec(CommandSpec::EnvironmentSpec(env_spec)) =
+        resolved_command.as_ref()
+    else {
+        return Ok(None);
+    };
+
+    let installed = ctx
+        .compute(&EphemeralEnvKey::new(ephemeral_env_spec_for(
+            env_spec,
+            exclude_newer,
+        )))
+        .await
+        .map_err(InstantiateBackendError::EphemeralEnv)
+        .map_err(Arc::new)?;
+    if installed
+        .records
+        .iter()
+        .any(|record| matches!(record, PixiRecord::Source(_)))
+    {
+        return Ok(None);
+    }
+    let mut records = installed.records.iter().collect::<Vec<_>>();
+    records.sort_by(|left, right| left.name().cmp(right.name()));
+    let mut hasher = Xxh3::new();
+    env_spec
+        .command
+        .as_deref()
+        .unwrap_or(&resolved_spec.name)
+        .hash(&mut hasher);
+    records.hash(&mut hasher);
+    Ok(Some(format!("env@{:016x}", hasher.finish())))
 }
 
 /// Build a [`Tool::System`] that runs the backend's executable directly

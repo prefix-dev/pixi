@@ -30,7 +30,7 @@ use http_cache_reqwest::{CACacheManager, Cache, CacheMode, HttpCache, HttpCacheO
 use itertools::Itertools;
 use rattler_conda_types::{PackageUrl, RepoDataRecord};
 use rattler_networking::LazyClient;
-use reqwest_middleware::ClientBuilder;
+use reqwest_middleware::{ClientBuilder, ClientWithMiddleware, Middleware, Next};
 use reqwest_retry::{RetryTransientMiddleware, policies::ExponentialBackoff};
 use thiserror::Error;
 use tokio::sync::Semaphore;
@@ -53,7 +53,7 @@ pub use metrics::CacheMetrics;
 pub use purl::PurlDerivationSource;
 pub use pypi_names::PypiNames;
 pub use reporter::Reporter;
-pub use resolvers::ProjectDefinedMapping;
+pub use resolvers::{ProjectDefinedMapping, ProjectDefinedMappingError};
 
 use crate::{
     derivation::DerivationOutcome,
@@ -150,11 +150,37 @@ pub enum MappingError {
     #[error("failed to fetch conda-pypi mapping from remote source")]
     #[diagnostic(help("{}", MAPPING_OFFLINE_HELP))]
     Reqwest(#[source] reqwest_middleware::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ProjectDefined(#[from] ProjectDefinedMappingError),
 }
 
 impl From<reqwest_middleware::Error> for MappingError {
     fn from(err: reqwest_middleware::Error) -> Self {
         MappingError::Reqwest(err)
+    }
+}
+
+/// Terminal middleware that hands the request to the caller's client,
+/// middleware stack included.
+///
+/// The mapping cache has to sit *outside* that stack: pixi's clients put the
+/// offline middleware first, so appending the cache with
+/// [`ClientBuilder::from_client`] would reject every offline request before
+/// the cache could serve it. With the delegate, a cache hit never reaches the
+/// caller's stack, while a miss goes through all of it - auth and mirrors
+/// online, the offline rejection (and its explanation) offline.
+struct DelegateToClient(ClientWithMiddleware);
+
+#[async_trait::async_trait]
+impl Middleware for DelegateToClient {
+    async fn handle(
+        &self,
+        req: reqwest::Request,
+        extensions: &mut http::Extensions,
+        _next: Next<'_>,
+    ) -> reqwest_middleware::Result<reqwest::Response> {
+        self.0.execute_with_extensions(req, extensions).await
     }
 }
 
@@ -166,12 +192,25 @@ impl PurlDerivationClient {
     /// `pixi_config::Config::cache_dir_for`) so that workspace-level
     /// `[cache.pypi-mapping]` overrides are respected; this crate stays
     /// agnostic about which config layer wins.
-    pub fn builder(client: LazyClient, cache_path: PathBuf) -> PurlDerivationClientBuilder {
-        // Construct a client with a retry policy and local caching
+    pub fn builder(
+        client: LazyClient,
+        cache_path: PathBuf,
+        offline: bool,
+    ) -> PurlDerivationClientBuilder {
+        // Construct a client with a retry policy and local caching. In
+        // offline mode a cached mapping is served regardless of freshness:
+        // revalidating a stale entry is a network request, which the offline
+        // middleware would reject even though a perfectly usable copy is on
+        // disk. A genuine cache miss still reaches the middleware and fails
+        // with the offline explanation.
         let retry_policy = ExponentialBackoff::builder().build_with_max_retries(3);
         let retry_strategy = RetryTransientMiddleware::new_with_policy(retry_policy);
         let cache_strategy = Cache(HttpCache {
-            mode: CacheMode::Default,
+            mode: if offline {
+                CacheMode::ForceCache
+            } else {
+                CacheMode::Default
+            },
             manager: CACacheManager {
                 path: cache_path.clone(),
                 remove_opts: Default::default(),
@@ -181,9 +220,10 @@ impl PurlDerivationClient {
 
         let wrapped_client = LazyClient::new(move || {
             let client = client.client().clone();
-            ClientBuilder::from_client(client)
+            ClientBuilder::new(unused_mapping_http_client())
                 .with(retry_strategy)
                 .with(cache_strategy)
+                .with(DelegateToClient(client))
                 .build()
         });
 
@@ -201,7 +241,7 @@ impl PurlDerivationClient {
         derivation_mode: &PurlDerivationMode,
         conda_packages: impl IntoIterator<Item = &mut RepoDataRecord>,
         reporter: Option<Arc<dyn Reporter>>,
-    ) -> miette::Result<()> {
+    ) -> Result<(), MappingError> {
         let start = Instant::now();
 
         // Collect the records into a vec so we can iterate multiple times.
@@ -272,9 +312,7 @@ impl PurlDerivationClient {
         let mut amended_records = 0;
         let mut total_records = 0;
         while let Some(next) = amend_futures.next().await {
-            // Use `Report::new` instead of `into_diagnostic` to preserve the
-            // diagnostic help text on `MappingError`.
-            let (record, derived_purls) = next.map_err(miette::Report::new)?;
+            let (record, derived_purls) = next?;
 
             if let Some(derived_purls) = derived_purls.into_purls() {
                 replace_pypi_purls(record, derived_purls);
@@ -441,4 +479,15 @@ fn replace_pypi_purls(record: &mut RepoDataRecord, purls: impl IntoIterator<Item
         .get_or_insert_with(BTreeSet::new);
     record_purls.retain(|purl| purl.package_type() != "pypi");
     record_purls.extend(purls);
+}
+
+/// Inner client for the mapping middleware stack.
+///
+/// Requests go through [`DelegateToClient`]. This client must not load the
+/// system CA store: `reqwest::Client::new()` panics when none are present.
+fn unused_mapping_http_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .tls_certs_only(std::iter::empty::<reqwest::Certificate>())
+        .build()
+        .expect("reqwest client without system CA store")
 }

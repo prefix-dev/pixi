@@ -201,10 +201,25 @@ impl<'de> toml_span::Deserialize<'de> for TomlBuildBackend {
         let spec = match workspace_marker {
             None => BackendSpec::Direct(toml_spec),
             Some(Spanned { value: true, span }) => {
-                if toml_spec.version.is_some() {
+                // The version and the source location stay owned by the
+                // workspace entry; an inherited backend cannot be repointed.
+                let location = toml_spec.location.as_ref();
+                let owned_field = if toml_spec.version.is_some() {
+                    Some("version")
+                } else if location.is_some_and(|loc| loc.path.is_some()) {
+                    Some("path")
+                } else if location.is_some_and(|loc| loc.git.is_some()) {
+                    Some("git")
+                } else if location.is_some_and(|loc| loc.url.is_some()) {
+                    Some("url")
+                } else {
+                    None
+                };
+                if let Some(owned_field) = owned_field {
                     return Err(DeserError::from(toml_span::Error {
                         kind: toml_span::ErrorKind::Custom(
-                            "`version` is mutual exclusive with `workspace`".into(),
+                            format!("`{owned_field}` is mutually exclusive with `workspace`")
+                                .into(),
                         ),
                         span,
                         line_info: None,
@@ -247,16 +262,31 @@ static BOTH_ADDITIONAL_DEPS_WARNING: Once = Once::new();
 fn spec_from_spanned_toml_location(
     spanned_toml: Spanned<TomlLocationSpec>,
 ) -> Result<SourceLocationSpec, DeserError> {
+    let span = spanned_toml.span;
     let source_location_spec = spanned_toml
         .value
         .into_source_location_spec()
         .map_err(|err| {
             DeserError::from(Error {
                 kind: toml_span::ErrorKind::Custom(Cow::Owned(err.to_string())),
-                span: spanned_toml.span,
+                span,
                 line_info: None,
             })
         })?;
+
+    // The lock file cannot record an LFS preference for build sources, so a
+    // fresh solve and an install from the lock file would behave differently.
+    if let SourceLocationSpec::Git(git) = &source_location_spec
+        && git.lfs.is_some()
+    {
+        return Err(DeserError::from(Error {
+            kind: toml_span::ErrorKind::Custom(Cow::Borrowed(
+                "`lfs` is not supported for build sources",
+            )),
+            span,
+            line_info: None,
+        }));
+    }
 
     Ok(source_location_spec)
 }
@@ -378,6 +408,25 @@ mod test {
             .expect_err("parsing should fail");
 
         format_parse_error(pixi_toml, parse_error)
+    }
+
+    #[test]
+    fn test_inherited_backend_rejects_owned_field_overrides() {
+        // The version and the source location of an inherited backend are
+        // owned by the workspace entry.
+        for (field, spec) in [
+            ("version", r#"version = "1.0""#),
+            ("path", r#"path = "./backend""#),
+            ("git", r#"git = "https://github.com/user/repo.git""#),
+            ("url", r#"url = "https://example.com/backend.conda""#),
+        ] {
+            let toml = format!(r#"backend = {{ name = "foobar", workspace = true, {spec} }}"#);
+            let error = expect_parse_failure(&toml);
+            assert!(
+                error.contains(&format!("`{field}` is mutually exclusive with `workspace`")),
+                "unexpected error for `{field}`: {error}"
+            );
+        }
     }
 
     #[test]

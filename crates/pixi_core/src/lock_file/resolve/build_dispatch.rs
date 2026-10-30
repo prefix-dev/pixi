@@ -18,7 +18,7 @@
 //! needed.
 use std::cell::Cell;
 use std::collections::HashSet;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::{collections::HashMap, path::Path};
 
 use crate::environment::{CondaPrefixUpdated, CondaPrefixUpdater};
@@ -42,12 +42,12 @@ use uv_configuration::{
 use uv_dispatch::{BuildDispatch, BuildDispatchError, SharedState};
 use uv_distribution_filename::DistFilename;
 use uv_distribution_types::{
-    CachedDist, ConfigSettings, DependencyMetadata, ExtraBuildRequires, IndexLocations,
-    IsBuildBackendError, PackageConfigSettings, SourceDist,
+    CachedDist, ConfigSettings, DependencyMetadata, ExtraBuildRequires, IndexCapabilities,
+    IndexLocations, IsBuildBackendError, PackageConfigSettings, SourceDist,
 };
 use uv_distribution_types::{ExtraBuildVariables, Requirement};
 use uv_install_wheel::LinkMode;
-use uv_python::{Interpreter, InterpreterError, PythonEnvironment};
+use uv_python_interpreter::{Interpreter, InterpreterError, PythonEnvironment};
 use uv_resolver::{ExcludeNewer, FlatIndex};
 use uv_types::{BuildArena, BuildContext, BuildStack, HashStrategy, ResolvedRequirements};
 use uv_workspace::WorkspaceCache;
@@ -71,6 +71,8 @@ pub struct UvBuildDispatchParams<'a> {
     index_strategy: IndexStrategy,
     constraints: Constraints,
     shared_state: SharedState,
+    // `SharedState` does not expose its index capabilities.
+    capabilities: IndexCapabilities,
     link_mode: uv_install_wheel::LinkMode,
     exclude_newer: Option<ExcludeNewer>,
     sources: NoSources,
@@ -106,6 +108,7 @@ impl<'a> UvBuildDispatchParams<'a> {
             hasher,
             index_strategy: IndexStrategy::default(),
             shared_state: SharedState::default(),
+            capabilities: IndexCapabilities::default(),
             link_mode: LinkMode::default(),
             constraints: Constraints::default(),
             exclude_newer: None,
@@ -125,6 +128,12 @@ impl<'a> UvBuildDispatchParams<'a> {
     /// Set the shared state for the build dispatch
     pub fn with_shared_state(mut self, shared_state: SharedState) -> Self {
         self.shared_state = shared_state;
+        self
+    }
+
+    /// Set the index capabilities exposed via `BuildContext::capabilities`.
+    pub fn with_capabilities(mut self, capabilities: IndexCapabilities) -> Self {
+        self.capabilities = capabilities;
         self
     }
 
@@ -192,6 +201,10 @@ impl<'a> UvBuildDispatchParams<'a> {
     }
 }
 
+/// The conda records to install into the build prefix, or the reason they
+/// are unavailable, raised only once a source build needs them.
+pub type BuildingRecords = Result<Vec<PixiRecord>, Box<dyn miette::Diagnostic + Send + Sync>>;
+
 /// Handles the lazy initialization of a build dispatch.
 ///
 /// A build dispatch is used to manage building Python packages from source,
@@ -204,7 +217,7 @@ impl<'a> UvBuildDispatchParams<'a> {
 pub struct LazyBuildDispatch<'a> {
     pub params: UvBuildDispatchParams<'a>,
     pub prefix_updater: CondaPrefixUpdater,
-    pub repodata_records: Cell<Option<miette::Result<Vec<PixiRecord>>>>,
+    pub repodata_records: Cell<Option<BuildingRecords>>,
 
     pub build_dispatch: AsyncCell<BuildDispatch<'a>>,
 
@@ -235,7 +248,7 @@ pub struct LazyBuildDispatch<'a> {
 
     /// Shared error holder for storing initialization errors that can be retrieved
     /// after the LazyBuildDispatch is consumed (e.g., in catch_unwind scenarios)
-    pub last_error: Arc<OnceCell<LazyBuildDispatchError>>,
+    pub last_error: Arc<Mutex<Option<LazyBuildDispatchError>>>,
 }
 
 /// These are resources for the [`BuildDispatch`] that need to be lazily
@@ -279,7 +292,7 @@ pub enum LazyBuildDispatchError {
     #[error(transparent)]
     ConversionError(#[from] pixi_uv_conversions::ConversionError),
     #[error(transparent)]
-    Uv(#[from] BuildDispatchError),
+    Uv(Box<BuildDispatchError>),
     #[error(transparent)]
     UvFrontend(#[from] uv_build_frontend::Error),
     #[error("failed to query interpreter in instantiated prefix")]
@@ -290,9 +303,28 @@ pub enum LazyBuildDispatchError {
     PythonMissingError { prefix: String },
 }
 
+impl From<BuildDispatchError> for LazyBuildDispatchError {
+    fn from(err: BuildDispatchError) -> Self {
+        Self::Uv(Box::new(err))
+    }
+}
+
+impl uv_errors::Hinted for LazyBuildDispatchError {}
+
 impl IsBuildBackendError for LazyBuildDispatchError {
     fn is_build_backend_error(&self) -> bool {
         false
+    }
+
+    fn is_user_failure(&self) -> bool {
+        match self {
+            Self::InstallationRequiredButDisallowed | Self::PythonMissingError { .. } => true,
+            Self::Uv(err) => err.is_user_failure(),
+            Self::UvFrontend(err) => err.is_user_failure(),
+            Self::InitializationError(_)
+            | Self::ConversionError(_)
+            | Self::QueryInterpreterError(_) => false,
+        }
     }
 }
 
@@ -304,13 +336,13 @@ impl<'a> LazyBuildDispatch<'a> {
         prefix_updater: CondaPrefixUpdater,
         project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
         environment: Environment<'a>,
-        repodata_records: miette::Result<Vec<PixiRecord>>,
+        repodata_records: BuildingRecords,
         no_build_isolation: NoBuildIsolation,
         lazy_deps: &'a LazyBuildDispatchDependencies,
         ignore_packages: Option<HashSet<rattler_conda_types::PackageName>>,
         macos_deployment_target: Option<String>,
         disallow_install_conda_prefix: bool,
-        last_error: Arc<OnceCell<LazyBuildDispatchError>>,
+        last_error: Arc<Mutex<Option<LazyBuildDispatchError>>>,
     ) -> Self {
         Self {
             params,
@@ -350,7 +382,7 @@ impl<'a> LazyBuildDispatch<'a> {
                     .repodata_records
                     .replace(None)
                     .expect("this function cannot be called twice")
-                    .map_err(|err| LazyBuildDispatchError::InitializationError(err.into()))?;
+                    .map_err(LazyBuildDispatchError::InitializationError)?;
 
                 let prefix = self
                     .prefix_updater
@@ -366,6 +398,7 @@ impl<'a> LazyBuildDispatch<'a> {
                 let mut env_vars = get_activated_environment_variables(
                     &self.project_env_vars,
                     &self.environment,
+                    &self.environment.activation_platform(),
                     CurrentEnvVarBehavior::Exclude,
                     None,
                     false,
@@ -465,7 +498,13 @@ impl<'a> LazyBuildDispatch<'a> {
 impl BuildContext for LazyBuildDispatch<'_> {
     type SourceDistBuilder = SourceBuild;
 
-    async fn interpreter(&self) -> &uv_python::Interpreter {
+    fn tar_backend(&self) -> uv_static::TarBackend {
+        // Matches what `BuildDispatch::new` selects, without forcing
+        // initialization of the lazy dispatch.
+        uv_static::TarBackend::from_env()
+    }
+
+    async fn interpreter(&self) -> &uv_python_interpreter::Interpreter {
         // In most cases the interpreter should be initialized, because one of the other
         // trait methods will have been called
         // But in case it is not, we will initialize it here
@@ -473,8 +512,13 @@ impl BuildContext for LazyBuildDispatch<'_> {
             Ok(dispatch) => dispatch.interpreter().await,
             Err(e) => {
                 // Store the error for later retrieval
-                let _ = self.last_error.set(e);
-                panic!("could not initialize build dispatch correctly")
+                let mut g = self.last_error.lock().unwrap_or_else(|e| e.into_inner());
+                if g.is_none() {
+                    *g = Some(e);
+                }
+                // `resume_unwind` skips the panic hook, so no panic message is printed
+                // before `super::pypi::resolve_pypi` catches this and reports the error
+                std::panic::resume_unwind(Box::new("could not initialize build dispatch correctly"))
             }
         }
     }
@@ -488,7 +532,7 @@ impl BuildContext for LazyBuildDispatch<'_> {
     }
 
     fn capabilities(&self) -> &uv_distribution_types::IndexCapabilities {
-        self.params.shared_state.capabilities()
+        &self.params.capabilities
     }
 
     fn dependency_metadata(&self) -> &uv_distribution_types::DependencyMetadata {
@@ -514,6 +558,7 @@ impl BuildContext for LazyBuildDispatch<'_> {
     async fn resolve<'a>(
         &'a self,
         requirements: &'a [Requirement],
+        hash_override: Option<&'a HashStrategy>,
         build_stack: &'a BuildStack,
     ) -> Result<ResolvedRequirements, impl IsBuildBackendError> {
         // Box the inner uv future. uv re-enters this trait recursively when an
@@ -521,9 +566,9 @@ impl BuildContext for LazyBuildDispatch<'_> {
         // → resolve → install → process_request`), so flattening the
         // state machine here keeps the cumulative stack frame bounded.
         let dispatch = self.get_or_try_init().await?;
-        Box::pin(dispatch.resolve(requirements, build_stack))
+        Box::pin(dispatch.resolve(requirements, hash_override, build_stack))
             .await
-            .map_err(LazyBuildDispatchError::Uv)
+            .map_err(LazyBuildDispatchError::from)
     }
 
     async fn install<'a>(
@@ -535,7 +580,7 @@ impl BuildContext for LazyBuildDispatch<'_> {
         let dispatch = self.get_or_try_init().await?;
         Box::pin(dispatch.install(resolution, venv, build_stack))
             .await
-            .map_err(LazyBuildDispatchError::Uv)
+            .map_err(LazyBuildDispatchError::from)
     }
 
     async fn setup_build<'a>(
@@ -543,6 +588,7 @@ impl BuildContext for LazyBuildDispatch<'_> {
         source: &'a Path,
         subdirectory: Option<&'a Path>,
         install_path: &'a Path,
+        stop_discovery_at: Option<&'a Path>,
         version_id: Option<&'a str>,
         dist: Option<&'a SourceDist>,
         sources: &'a NoSources,
@@ -555,6 +601,7 @@ impl BuildContext for LazyBuildDispatch<'_> {
             source,
             subdirectory,
             install_path,
+            stop_discovery_at,
             version_id,
             dist,
             sources,
@@ -604,15 +651,13 @@ impl BuildContext for LazyBuildDispatch<'_> {
     fn config_settings_package(&self) -> &uv_distribution_types::PackageConfigSettings {
         self.lazy_deps
             .package_config_settings
-            .get()
-            .expect("package config settings not initialized, this is a programming error")
+            .get_or_init(|| self.params.package_config_settings.clone())
     }
 
     fn extra_build_requires(&self) -> &uv_distribution_types::ExtraBuildRequires {
         self.lazy_deps
             .extra_build_requires
-            .get()
-            .expect("extra build requires not initialized, this is a programming error")
+            .get_or_init(|| self.params.extra_build_requires.clone())
     }
 
     fn build_isolation(&self) -> uv_types::BuildIsolation<'_> {
@@ -627,7 +672,6 @@ impl BuildContext for LazyBuildDispatch<'_> {
     fn extra_build_variables(&self) -> &ExtraBuildVariables {
         self.lazy_deps
             .extra_build_variables
-            .get()
-            .expect("extra build variables not initialized, this is a programming error")
+            .get_or_init(|| self.params.extra_build_variables.clone())
     }
 }

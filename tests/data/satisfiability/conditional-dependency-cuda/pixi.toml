@@ -1,0 +1,11 @@
+[workspace]
+channels = ["https://conda.anaconda.org/cond-test"]
+name = "conditional-dependency-cuda"
+platforms = [
+  { name = "linux-64-cuda", platform = "linux-64", cuda = "12" },
+  "linux-64",
+]
+
+[dependencies]
+base-package = "*"
+gpu-package = { version = "*", when = "__cuda>=12" }

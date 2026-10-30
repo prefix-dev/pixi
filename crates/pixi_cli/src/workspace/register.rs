@@ -73,13 +73,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             } else {
                 toml_edit::ser::to_string_pretty(&workspaces).into_diagnostic()?
             };
-            writeln!(std::io::stdout(), "{out}")
-                .map_err(|e| {
-                    if e.kind() == std::io::ErrorKind::BrokenPipe {
-                        std::process::exit(0);
-                    }
-                    e
-                })
+            pixi_utils::io::ignore_broken_pipe(writeln!(std::io::stdout(), "{out}"))
                 .into_diagnostic()?;
         }
         Some(Command::Remove(remove_args)) => {
@@ -110,7 +104,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
                 .with_global_config_source(args.config_source.source())
                 .with_closest_package(false)
                 .with_search_start(args.workspace_config.workspace_locator_start())
-                .locate()?;
+                .locate()
+                .await?;
 
             let target_name = args
                 .name

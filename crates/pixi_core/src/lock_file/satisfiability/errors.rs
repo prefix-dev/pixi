@@ -8,11 +8,14 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use pep440_rs::VersionSpecifiers;
 use pixi_command_dispatcher::{DevSourceMetadataError, SourceCheckoutError, SourceRecordError};
-use pixi_manifest::{PixiPlatformName, pypi::pypi_options::PrereleaseMode};
-use pixi_record::{ParseLockFileError, SourceMismatchError};
+use pixi_manifest::{ExcludeNewerError, PixiPlatformName, pypi::pypi_options::PrereleaseMode};
+use pixi_record::{
+    LockFileResolver, ParseLockFileError, SourceMismatchError, UnresolvedPixiRecord,
+};
 use pixi_uv_conversions::AsPep508Error;
 use rattler_conda_types::{MatchSpec, PackageName, ParseChannelError, ParseMatchSpecError};
 use rattler_lock::{PackageHashes, PypiIndexes};
+use rattler_solve::TimestampExclusionReason;
 use thiserror::Error;
 use url::Url;
 use uv_distribution_filename::ExtensionError;
@@ -41,6 +44,10 @@ pub enum EnvironmentUnsat {
 
     #[error(transparent)]
     InvalidChannel(#[from] ParseChannelError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ExcludeNewer(#[from] ExcludeNewerError),
 
     #[error(transparent)]
     InvalidDistExtensionInNoBuild(#[from] ExtensionError),
@@ -84,9 +91,6 @@ pub enum EnvironmentUnsat {
 
     #[error(transparent)]
     ExcludeNewerMismatch(#[from] ExcludeNewerMismatch),
-
-    #[error(transparent)]
-    SourceExcludeNewerMismatch(#[from] SourceExcludeNewerMismatch),
 }
 
 /// The workspace's definition of a platform diverged from what the lockfile
@@ -97,8 +101,8 @@ pub enum EnvironmentUnsat {
 #[derive(Debug, Error)]
 pub struct PlatformDefinitionChanged {
     pub(super) name: PixiPlatformName,
-    pub(super) expected_subdir: rattler_conda_types::Platform,
-    pub(super) found_subdir: rattler_conda_types::Platform,
+    pub(super) expected_subdir: rattler_conda_types::Subdir,
+    pub(super) found_subdir: rattler_conda_types::Subdir,
     pub(super) expected_virtual_packages: Vec<String>,
     pub(super) found_virtual_packages: Vec<String>,
 }
@@ -128,6 +132,7 @@ impl Display for PlatformDefinitionChanged {
 fn fmt_channel_priority(priority: rattler_solve::ChannelPriority) -> &'static str {
     match priority {
         rattler_solve::ChannelPriority::Strict => "strict",
+        rattler_solve::ChannelPriority::Flexible => "flexible",
         rattler_solve::ChannelPriority::Disabled => "disabled",
     }
 }
@@ -143,47 +148,119 @@ fn fmt_solve_strategy(strategy: rattler_solve::SolveStrategy) -> &'static str {
 #[derive(Debug, Error)]
 pub struct ExcludeNewerMismatch {
     package: String,
+    /// Set when the package is locked in the build or host environment of a
+    /// source package rather than in the environment itself.
+    origin: Option<ExcludeNewerOrigin>,
     timestamp: jiff::Timestamp,
     exclude_newer: jiff::Timestamp,
 }
 
+/// The build or host environment of a source package in which a locked
+/// package violates the exclude-newer cutoff.
+#[derive(Debug)]
+struct ExcludeNewerOrigin {
+    env: BuildOrHostEnv,
+    source_package: String,
+}
+
 impl Display for ExcludeNewerMismatch {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "the locked package '{}'", self.package)?;
+        if let Some(origin) = &self.origin {
+            write!(
+                f,
+                " in the {} environment of source package '{}'",
+                origin.env, origin.source_package
+            )?;
+        }
         write!(
             f,
-            "the locked package '{}' has timestamp {}, which is newer than the environment's exclude-newer cutoff {}",
-            self.package, self.timestamp, self.exclude_newer
+            " has timestamp {}, which is newer than the environment's exclude-newer cutoff {}",
+            self.timestamp, self.exclude_newer
         )
     }
 }
 
+/// Verifies that no locked conda package is newer than the exclude-newer
+/// cutoff that applies to it. Packages locked in the build and host
+/// environments of source packages are solved with the same cutoff, so they
+/// are checked as well.
+///
+/// Source packages themselves are skipped: pixi never records a timestamp for
+/// them, so exclude-newer does not apply to source packages.
 pub(super) fn verify_exclude_newer(
     exclude_newer: Option<&rattler_solve::ExcludeNewer>,
     locked_environment: &rattler_lock::Environment<'_>,
+    resolver: &LockFileResolver,
 ) -> Result<(), ExcludeNewerMismatch> {
     let Some(exclude_newer) = exclude_newer else {
         return Ok(());
     };
 
-    for (_platform, packages) in locked_environment.conda_packages_by_platform() {
+    // Build and host environments are shared between source packages, so
+    // remember which records were already checked.
+    let mut visited = HashSet::new();
+    for (_platform, packages) in locked_environment.packages_by_platform() {
         for package in packages {
-            let Some(record) = package.record() else {
+            let Some(record) = resolver.get_for_package(package) else {
+                // Pypi packages have no conda record.
                 continue;
             };
-            let channel = package
-                .as_binary()
-                .and_then(|binary| binary.channel.as_ref())
-                .map(ToString::to_string);
+            verify_exclude_newer_record(exclude_newer, &record, None, &mut visited)?;
+        }
+    }
 
-            if let Some(timestamp) = record.timestamp.as_ref()
-                && exclude_newer.is_excluded(&record.name, channel.as_deref(), Some(timestamp))
+    Ok(())
+}
+
+fn verify_exclude_newer_record(
+    exclude_newer: &rattler_solve::ExcludeNewer,
+    record: &UnresolvedPixiRecord,
+    origin: Option<(BuildOrHostEnv, &PackageName)>,
+    visited: &mut HashSet<UnresolvedPixiRecord>,
+) -> Result<(), ExcludeNewerMismatch> {
+    if !visited.insert(record.clone()) {
+        return Ok(());
+    }
+
+    match record {
+        UnresolvedPixiRecord::Binary(record) => {
+            // Check the package the way the solver checks repodata records,
+            // so exemptions on e.g. the build string or channel apply.
+            if let Some(TimestampExclusionReason::NewerThanCutoff { cutoff }) =
+                exclude_newer.exclusion_reason(record)
             {
+                // Select the timestamp the same way the solver does: the index
+                // timestamp if present, the build timestamp otherwise.
+                let package = &record.package_record;
+                let timestamp = package
+                    .indexed_timestamp
+                    .or(package.timestamp)
+                    .expect("a record newer than the cutoff has a timestamp");
                 return Err(ExcludeNewerMismatch {
-                    package: record.name.as_source().to_string(),
-                    timestamp: (*timestamp).into(),
-                    exclude_newer: exclude_newer
-                        .cutoff_for_package(&record.name, channel.as_deref()),
+                    package: package.name.as_source().to_string(),
+                    origin: origin.map(|(env, source_package)| ExcludeNewerOrigin {
+                        env,
+                        source_package: source_package.as_source().to_string(),
+                    }),
+                    timestamp: timestamp.into(),
+                    exclude_newer: cutoff,
                 });
+            }
+        }
+        UnresolvedPixiRecord::Source(source) => {
+            for (env, packages) in [
+                (BuildOrHostEnv::Build, &source.build_packages),
+                (BuildOrHostEnv::Host, &source.host_packages),
+            ] {
+                for package in packages {
+                    verify_exclude_newer_record(
+                        exclude_newer,
+                        package,
+                        Some((env, source.name())),
+                        visited,
+                    )?;
+                }
             }
         }
     }
@@ -191,13 +268,11 @@ pub(super) fn verify_exclude_newer(
     Ok(())
 }
 
-#[derive(Debug, Error)]
-#[error(
-    "the locked source package '{package}' has timestamps that exceed the environment's exclude-newer cutoff"
-)]
-pub struct SourceExcludeNewerMismatch {
-    package: String,
-}
+/// `Clone`, unlike [`PlatformUnsat`], so that every lazy build dispatch can
+/// own a copy when the host records it needs are unusable.
+#[derive(Debug, Clone, Error, Diagnostic)]
+#[error("there was a duplicate entry for '{0}'")]
+pub struct DuplicateEntry(pub String);
 
 #[derive(Debug, Error)]
 pub struct IndexesMismatch {
@@ -278,11 +353,22 @@ pub enum LocalMetadataMismatch {
         locked: pep440_rs::Version,
         current: pep440_rs::Version,
     },
-    #[error("requires-python changed from {locked:?} to {current:?}")]
+    #[error("requires-python changed from {locked} to {current}",
+        locked = format_requires_python(locked),
+        current = format_requires_python(current))]
     RequiresPython {
         locked: Option<VersionSpecifiers>,
         current: Option<VersionSpecifiers>,
     },
+}
+
+/// Formats an optional requires-python constraint, where the absence of a
+/// constraint means any Python version is allowed.
+fn format_requires_python(specifiers: &Option<VersionSpecifiers>) -> String {
+    match specifiers {
+        Some(specifiers) => format!("'{specifiers}'"),
+        None => "unrestricted".to_string(),
+    }
 }
 
 /// Formats a list of requirements, showing only the first 3 names.
@@ -385,8 +471,8 @@ pub enum PlatformUnsat {
     #[error("the conda package does not satisfy the pypi requirement '{0}' (required by '{1}')")]
     CondaUnsatisfiableRequirement(Box<uv_distribution_types::Requirement>, String),
 
-    #[error("there was a duplicate entry for '{0}'")]
-    DuplicateEntry(String),
+    #[error(transparent)]
+    DuplicateEntry(#[from] DuplicateEntry),
 
     #[error(
         "failed to recompute the build/host environments of a source record loaded from a pre-v7 lock file: {0}"
@@ -438,6 +524,9 @@ pub enum PlatformUnsat {
 
     #[error("direct pypi url dependency to a conda installed package '{0}' is not supported")]
     DirectUrlDependencyOnCondaInstalledPackage(uv_normalize::PackageName),
+
+    #[error("git archive dependency '{0}' is not supported")]
+    UnsupportedGitArchiveDependency(uv_normalize::PackageName),
 
     #[error("git dependency on a conda installed package '{0}' is not supported")]
     GitDependencyOnCondaInstalledPackage(uv_normalize::PackageName),
@@ -520,6 +609,13 @@ pub enum PlatformUnsat {
         name: String,
         expected_ref: String,
         found_ref: String,
+    },
+
+    #[error("'{name}' has mismatching git lfs preference: '{expected_lfs} != {found_lfs}'")]
+    LockedPyPIGitLfsMismatch {
+        name: String,
+        expected_lfs: bool,
+        found_lfs: bool,
     },
 
     #[error("'{0}' expected a git url but the lock file has: '{1}'")]
@@ -634,6 +730,22 @@ pub enum PlatformUnsat {
     },
 
     #[error(
+        "the declared run-exports ({bucket}) of source package '{package}' no longer match what the backend would re-derive from the manifest{added_msg}{removed_msg}",
+        added_msg = if added.is_empty() { String::new() } else { format!("; added: {}", added.join(", ")) },
+        removed_msg = if removed.is_empty() { String::new() } else { format!("; removed: {}", removed.join(", ")) },
+    )]
+    SourceRunExportsChanged {
+        /// The source package whose declared run-exports drifted.
+        package: String,
+        /// The run-export bucket that drifted (e.g. `weak`, `strong`).
+        bucket: &'static str,
+        /// Specs the backend now declares that the locked record is missing.
+        added: Vec<String>,
+        /// Specs the locked record carries that the backend no longer declares.
+        removed: Vec<String>,
+    },
+
+    #[error(
         "the resolved extra group '{group}' of source package '{package}' no longer matches what the backend would re-derive from the manifest{added_msg}{removed_msg}",
         added_msg = if added.is_empty() { String::new() } else { format!("; added: {}", added.join(", ")) },
         removed_msg = if removed.is_empty() { String::new() } else { format!("; removed: {}", removed.join(", ")) },
@@ -650,12 +762,24 @@ pub enum PlatformUnsat {
     },
 
     #[error(
-        "the locked package build source for '{0}' does not match the requested build source, {1}"
+        "the build source of '{package}' is locked as {locked}, but its manifest now resolves to {resolved}"
     )]
-    PackageBuildSourceMismatch(String, SourceMismatchError),
+    PackageBuildSourceChanged {
+        /// The source package whose build source drifted.
+        package: String,
+        /// The build source recorded in the lock file.
+        locked: String,
+        /// The build source its manifest resolves to now.
+        resolved: String,
+    },
 
     #[error("the metadata of source package '{0}' changed: {1}")]
     SourcePackageMetadataChanged(String, String),
+
+    #[error(
+        "the identity of source package '{package}' changed (for example its inline package definition was edited, or the lock file was written by a different pixi version)"
+    )]
+    SourcePackageIdentityChanged { package: String },
 
     #[error("the source location '{0}' changed from '{1}' to '{2}'")]
     SourceBuildLocationChanged(String, String, String),
@@ -749,5 +873,25 @@ impl PlatformUnsat {
                 | PlatformUnsat::LocalPackageMetadataMismatch(_, _)
                 | PlatformUnsat::FailedToReadLocalMetadata(_, _),
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::str::FromStr;
+
+    use super::*;
+
+    #[test]
+    fn requires_python_mismatch_prints_the_specifiers() {
+        let mismatch = LocalMetadataMismatch::RequiresPython {
+            locked: Some(VersionSpecifiers::from_str(">=3.8,<4").unwrap()),
+            current: None,
+        };
+
+        insta::assert_snapshot!(
+            mismatch,
+            @"requires-python changed from '>=3.8, <4' to unrestricted"
+        );
     }
 }

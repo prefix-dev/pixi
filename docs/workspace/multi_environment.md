@@ -21,10 +21,36 @@ There are a few things we wanted to keep in mind in the design:
 4. **Single environment Activation**: The design should allow only one environment to be active at any given time, simplifying the resolution process and preventing conflicts.
 5. **Fixed lock files**: It's crucial to preserve fixed lock files for consistency and predictability. Solutions must ensure reliability not just for authors but also for end-users, particularly at the time of lock file creation.
 
-### Feature & Environment Set Definitions
+### Environment & Feature Definitions
 
-Introduce environment sets into the `pixi.toml` this describes environments based on features. Introduce features into the `pixi.toml` that can describe parts of environments.
-As an environment goes beyond just `dependencies` the `feature` fields can be described by including the following fields:
+Environments are defined in the `pixi.toml` under the `[environments]` table.
+The content of an environment - dependencies, tasks and more - can be defined in two ways:
+
+- **directly on the environment**, for content that belongs to a single environment
+- **through features**, reusable parts that can be shared between environments
+
+When something is only needed in one environment, define it directly on the environment:
+
+```toml title="Environments with their own dependencies"
+[environments.lint.dependencies]
+pre-commit = "*"
+
+[environments.test.dependencies]
+pytest = "*"
+```
+
+When multiple environments share content, put the shared part in a feature and compose the environments from features:
+
+```toml title="Sharing dependencies through a feature"
+[feature.python.dependencies]
+python = "3.13.*"
+
+[environments]
+dev = { features = ["python"] }
+test = { features = ["python"] }
+```
+
+As an environment goes beyond just `dependencies`, both environments and features can be described by including the following fields:
 
 - `dependencies`: The conda package dependencies
 - `pypi-dependencies`: The pypi package dependencies
@@ -81,11 +107,8 @@ target.osx-arm64 = {dependencies = {mlx = "x.y.z"}}
 ```
 
 ```toml title="Define tasks as defaults of an environment"
-[feature.test.tasks]
+[environments.test.tasks]
 test = "pytest"
-
-[environments]
-test = ["test"]
 
 # `pixi run test` == `pixi run --environment test test`
 ```
@@ -121,12 +144,10 @@ test_prod = {features = ["py39", "test"], solve-group = "prod"}
 python = "*"
 numpy = "*"
 
-[feature.lint.dependencies]
-pre-commit = "*"
-
-[environments]
-# Create a custom environment which only has the `lint` feature (numpy isn't part of that env).
-lint = {features = ["lint"], no-default-feature = true}
+# Create a custom environment which only has the `pre-commit` dependency (numpy isn't part of that env).
+[environments.lint]
+no-default-feature = true
+dependencies = { pre-commit = "*" }
 ```
 
 ### lock file Structure
@@ -442,33 +463,33 @@ Initial write-up of the proposal: [GitHub Gist by 0xbe7a](https://gist.github.co
     matplotlib-base = ">=3.8.2,<3.9"
     ipykernel = ">=6.28.0,<6.29"
 
-    [feature.cuda]
+    [environments.cuda]
     platforms = ["win-64-cuda", "linux-64-cuda"]
     channels = ["nvidia", {channel = "pytorch", priority = -1}]
 
-    [feature.cuda.tasks]
+    [environments.cuda.tasks]
     train-model = "python train.py --cuda"
     evaluate-model = "python test.py --cuda"
 
-    [feature.cuda.dependencies]
+    [environments.cuda.dependencies]
     pytorch-cuda = {version = "12.1.*", channel = "pytorch"}
 
-    [feature.mlx]
+    [environments.mlx]
     platforms = ["osx-arm64-mlx"]
 
-    [feature.mlx.tasks]
+    [environments.mlx.tasks]
     train-model = "python train.py --mlx"
     evaluate-model = "python test.py --mlx"
 
-    [feature.mlx.dependencies]
+    [environments.mlx.dependencies]
     mlx = ">=0.16.0,<0.17.0"
 
+    # The default environment takes its content from features,
+    # so the cpu variant is defined as a feature.
     [feature.cpu]
     platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
 
     [environments]
-    cuda = ["cuda"]
-    mlx = ["mlx"]
     default = ["cpu"]
     ```
 

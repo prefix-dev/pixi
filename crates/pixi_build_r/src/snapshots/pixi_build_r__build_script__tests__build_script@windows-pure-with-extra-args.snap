@@ -7,12 +7,12 @@ R.exe --version
 
 
 
-if not exist "%LIBRARY_PREFIX%\R\library" mkdir "%LIBRARY_PREFIX%\R\library"
+if not exist "%PREFIX%\Lib\R\library" mkdir "%PREFIX%\Lib\R\library"
 @if errorlevel 1 exit 1
 
 
 
-R.exe CMD INSTALL --library=%LIBRARY_PREFIX%\R\library ^
+R.exe CMD INSTALL --library=%PREFIX%\Lib\R\library ^
     --no-lock ^
     --no-multiarch "/path/to/package"
 

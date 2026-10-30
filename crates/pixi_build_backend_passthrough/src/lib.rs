@@ -20,7 +20,7 @@ use pixi_build_frontend::{
 };
 use pixi_build_types::{
     BackendCapabilities, BinaryPackageSpec, ConstraintSpec, ExtraGroupName, NamedSpec, PackageSpec,
-    ProjectModel, SourcePackageName, Target, Targets, VariantValue,
+    ProjectModel, SourcePackageName, SourcePackageSpec, Target, Targets, VariantValue,
     procedures::{
         conda_build_v1::{CondaBuildV1Params, CondaBuildV1Result},
         conda_outputs::{
@@ -31,8 +31,8 @@ use pixi_build_types::{
     },
 };
 use rattler_conda_types::{
-    PackageName, Platform, Version, VersionSpec,
-    package::{IndexJson, PathType, PathsEntry, PathsJson, RunExportsJson},
+    PackageName, Subdir, Version, VersionSpec,
+    package::{BuildString, IndexJson, PathType, PathsEntry, PathsJson, RunExportsJson},
 };
 use serde::Deserialize;
 
@@ -139,7 +139,7 @@ impl InMemoryBackend for PassthroughBackend {
                 if self.config.noarch == Some(false) {
                     params.output.subdir
                 } else {
-                    Platform::NoArch
+                    Subdir::NoArch
                 }
             });
 
@@ -208,8 +208,11 @@ impl InMemoryBackend for PassthroughBackend {
                 create_conda_package_on_the_fly(&modified_index_json, &output_path).map_err(
                     |err| {
                         Box::new(
-                            BackendError::new(format!("failed to create conda package: {}", err))
-                                .into(),
+                            Box::new(BackendError::new(format!(
+                                "failed to create conda package: {}",
+                                err
+                            )))
+                            .into(),
                         )
                     },
                 )?;
@@ -223,7 +226,7 @@ impl InMemoryBackend for PassthroughBackend {
             input_glob_sets: None,
             name: self.index_json.name.as_normalized().to_owned(),
             version: self.index_json.version.clone(),
-            build: build_string,
+            build: build_string.to_string(),
             subdir,
         })
     }
@@ -489,19 +492,24 @@ fn generate_variant_combinations(
 /// the build string is augmented with a hash of the variant to ensure unique
 /// package identities.
 fn compute_build_string(
-    base_build: &str,
+    base_build: &BuildString,
     variant: &BTreeMap<String, VariantValue>,
     has_real_variants: bool,
-) -> String {
+) -> BuildString {
     if !has_real_variants {
-        base_build.to_string()
+        return base_build.clone();
+    }
+    let variant_hash = compute_variant_hash(variant);
+    if base_build.is_empty() {
+        variant_hash
+            .parse()
+            .expect("a hex hash is a valid build string")
     } else {
-        let variant_hash = compute_variant_hash(variant);
-        if base_build.is_empty() {
-            variant_hash
-        } else {
-            format!("{base_build}_{variant_hash}")
-        }
+        let mut build = base_build.clone();
+        build
+            .append(format!("_{variant_hash}"))
+            .expect("index.json build string with variant hash is a valid build string");
+        build
     }
 }
 
@@ -538,9 +546,15 @@ fn create_output(
             if config.noarch == Some(false) {
                 params.host_platform
             } else {
-                Platform::NoArch
+                Subdir::NoArch
             }
         });
+
+    let name = project_model
+        .name
+        .as_ref()
+        .map(|name| PackageName::try_from(name.as_str()).unwrap())
+        .unwrap_or_else(|| index_json.name.clone());
 
     // Track if there were actual variants before we add target_platform.
     // We only compute a build hash when there are real variants (not just target_platform).
@@ -590,6 +604,14 @@ fn create_output(
         extra_dependencies.entry(group).or_default().extend(specs);
     }
 
+    let output_version = project_model
+        .version
+        .as_ref()
+        .or_else(|| Some(index_json.version.version()))
+        .cloned()
+        .unwrap_or_else(|| Version::major(0));
+    let output_build = compute_build_string(&index_json.build, &variant, has_real_variants);
+
     CondaOutput {
         build_dependencies: Some(extract_dependencies(
             &project_model.targets,
@@ -600,33 +622,47 @@ fn create_output(
         run_dependencies,
         extra_dependencies,
         metadata: CondaOutputMetadata {
-            name: project_model
-                .name
-                .as_ref()
-                .map(|name| PackageName::try_from(name.as_str()).unwrap())
-                .unwrap_or_else(|| index_json.name.clone()),
-            version: project_model
-                .version
-                .as_ref()
-                .or_else(|| Some(index_json.version.version()))
-                .cloned()
-                .unwrap_or_else(|| Version::major(0))
-                .into(),
-            build: compute_build_string(&index_json.build, &variant, has_real_variants),
+            name: name.clone(),
+            version: output_version.clone().into(),
+            build: output_build.clone(),
             build_number: index_json.build_number,
             subdir,
             license: project_model.license.clone(),
             license_family: None,
             flags: index_json.flags.clone(),
+            track_features: index_json.track_features.clone(),
             noarch: index_json.noarch,
             purls: None,
             python_site_packages_path: None,
             variant,
         },
         ignore_run_exports: Default::default(),
-        run_exports: package_run_exports
-            .map(convert_run_exports_json)
-            .unwrap_or_default(),
+        // The output's own run-exports: the buckets declared in the project
+        // model, extended with those read from a pre-built package or - when
+        // no package was given - an instantiator-configured entry under this
+        // package's own name. Exported names the project model declares as
+        // source dependencies are emitted as source specs, mirroring real
+        // backends' `local_source_packages` mapping.
+        run_exports: {
+            let mut run_exports = model_run_exports(
+                &project_model.targets,
+                &output_version,
+                output_build.as_str(),
+            );
+            if let Some(extra) = package_run_exports
+                .or_else(|| run_exports_config.get(name.as_source()))
+                .map(|re| convert_run_exports_json(re, &model_source_specs(&project_model.targets)))
+            {
+                run_exports.weak.extend(extra.weak);
+                run_exports.strong.extend(extra.strong);
+                run_exports.noarch.extend(extra.noarch);
+                run_exports.weak_constrains.extend(extra.weak_constrains);
+                run_exports
+                    .strong_constrains
+                    .extend(extra.strong_constrains);
+            }
+            run_exports
+        },
         input_globs: None,
         input_glob_sets: None,
     }
@@ -801,11 +837,126 @@ fn convert_extra_depends(
         .collect()
 }
 
+/// Collects the names the project model declares as source dependencies
+/// (build/host/run), so run-exports referencing them can be emitted as source
+/// specs, mirroring real backends' `local_source_packages` mapping.
+fn model_source_specs(targets: &Option<Targets>) -> BTreeMap<String, SourcePackageSpec> {
+    let mut map = BTreeMap::new();
+    for target in applicable_targets(targets) {
+        for deps in [
+            target.build_dependencies.as_ref(),
+            target.host_dependencies.as_ref(),
+            target.run_dependencies.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        {
+            for (name, spec) in deps {
+                if let PackageSpec::Source(source) = spec {
+                    map.insert(name.as_str().to_string(), source.clone());
+                }
+            }
+        }
+    }
+    map
+}
+
+/// Converts the run-exports declared in the project model into the output's
+/// run-exports. Conditional targets are rejected before this point, so only
+/// the default target contributes.
+fn model_run_exports(
+    targets: &Option<Targets>,
+    output_version: &Version,
+    output_build: &str,
+) -> pixi_build_types::procedures::conda_outputs::CondaOutputRunExports {
+    let mut out = pixi_build_types::procedures::conda_outputs::CondaOutputRunExports::default();
+    for target in applicable_targets(targets) {
+        let Some(run_exports) = &target.run_exports else {
+            continue;
+        };
+        let named = |bucket: &Option<OrderMap<SourcePackageName, PackageSpec>>| {
+            bucket
+                .iter()
+                .flatten()
+                .map(|(name, spec)| NamedSpec {
+                    name: name.clone(),
+                    spec: match spec {
+                        PackageSpec::PinSubpackage(pin) => {
+                            resolve_pin_subpackage(pin, output_version, output_build)
+                        }
+                        other => other.clone(),
+                    },
+                })
+                .collect::<Vec<_>>()
+        };
+        let named_constraints = |bucket: &Option<OrderMap<SourcePackageName, ConstraintSpec>>| {
+            bucket
+                .iter()
+                .flatten()
+                .map(|(name, spec)| NamedSpec {
+                    name: name.clone(),
+                    spec: match spec {
+                        ConstraintSpec::PinSubpackage(pin) => {
+                            let PackageSpec::Binary(binary) =
+                                resolve_pin_subpackage(pin, output_version, output_build)
+                            else {
+                                unreachable!("pin-subpackage always resolves to a binary spec");
+                            };
+                            ConstraintSpec::Binary(binary)
+                        }
+                        other => other.clone(),
+                    },
+                })
+                .collect::<Vec<_>>()
+        };
+        out.noarch.extend(named(&run_exports.noarch));
+        out.strong.extend(named(&run_exports.strong));
+        out.weak.extend(named(&run_exports.weak));
+        out.strong_constrains
+            .extend(named_constraints(&run_exports.strong_constraints));
+        out.weak_constrains
+            .extend(named_constraints(&run_exports.weak_constraints));
+    }
+    out
+}
+
+/// Resolves a `pin-subpackage` run-export against the output's own version
+/// and build string, like real backends do before the run-exports leave the
+/// backend; `pin-compatible` is passed through for pixi to resolve instead.
+fn resolve_pin_subpackage(
+    pin: &pixi_build_types::PinSubpackageSpec,
+    output_version: &Version,
+    output_build: &str,
+) -> PackageSpec {
+    let pin = pixi_spec::Pin::try_from(pin.clone()).expect("valid pin spec");
+    let resolved = pin
+        .resolve(output_version, output_build)
+        .expect("pin resolution must succeed");
+    match resolved {
+        pixi_spec::PixiSpec::Version(version) => PackageSpec::Binary(Box::new(BinaryPackageSpec {
+            version: Some(version),
+            ..Default::default()
+        })),
+        pixi_spec::PixiSpec::DetailedVersion(detailed) => {
+            PackageSpec::Binary(Box::new(BinaryPackageSpec {
+                version: detailed.version.clone(),
+                build: detailed.build.clone(),
+                ..Default::default()
+            }))
+        }
+        other => unreachable!("pin resolution produced a non-version spec: {other:?}"),
+    }
+}
+
 /// Converts a `RunExportsJson` (from a conda package) to `CondaOutputRunExports`.
 fn convert_run_exports_json(
     run_exports: &RunExportsJson,
+    source_specs: &BTreeMap<String, SourcePackageSpec>,
 ) -> pixi_build_types::procedures::conda_outputs::CondaOutputRunExports {
-    fn convert_specs(specs: &[String]) -> Vec<NamedSpec<PackageSpec>> {
+    fn convert_specs(
+        specs: &[String],
+        source_specs: &BTreeMap<String, SourcePackageSpec>,
+    ) -> Vec<NamedSpec<PackageSpec>> {
         specs
             .iter()
             .filter_map(|spec_str| {
@@ -816,6 +967,16 @@ fn convert_run_exports_json(
                 .ok()?;
 
                 let pkg_name = match_spec.name.as_exact()?.clone();
+
+                if let Some(source) = source_specs.get(pkg_name.as_source()) {
+                    let mut source = source.clone();
+                    source.version = match_spec.version.clone().or(source.version);
+                    source.build = match_spec.build.clone().or(source.build);
+                    return Some(NamedSpec {
+                        name: SourcePackageName::from(pkg_name),
+                        spec: PackageSpec::Source(source),
+                    });
+                }
 
                 Some(NamedSpec {
                     name: SourcePackageName::from(pkg_name),
@@ -846,22 +1007,22 @@ fn convert_run_exports_json(
 
                 Some(NamedSpec {
                     name: SourcePackageName::from(pkg_name),
-                    spec: ConstraintSpec::Binary(BinaryPackageSpec {
+                    spec: ConstraintSpec::Binary(Box::new(BinaryPackageSpec {
                         version: match_spec.version.clone(),
                         extras: match_spec.extras.clone(),
                         flags: match_spec.flags.clone(),
                         condition: match_spec.condition.clone(),
                         ..Default::default()
-                    }),
+                    })),
                 })
             })
             .collect()
     }
 
     pixi_build_types::procedures::conda_outputs::CondaOutputRunExports {
-        weak: convert_specs(&run_exports.weak),
-        strong: convert_specs(&run_exports.strong),
-        noarch: convert_specs(&run_exports.noarch),
+        weak: convert_specs(&run_exports.weak, source_specs),
+        strong: convert_specs(&run_exports.strong, source_specs),
+        noarch: convert_specs(&run_exports.noarch, source_specs),
         weak_constrains: convert_constraint_specs(&run_exports.weak_constrains),
         strong_constrains: convert_constraint_specs(&run_exports.strong_constrains),
     }
@@ -910,9 +1071,9 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
         let project_model = match params.project_model {
             Some(project_model) => project_model,
             None => {
-                return Err(Box::new(CommunicationError::BackendError(
+                return Err(Box::new(CommunicationError::BackendError(Box::new(
                     BackendError::new("Passthrough backend requires a project model"),
-                )));
+                ))));
             }
         };
 
@@ -930,11 +1091,11 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
                     match rattler_package_streaming::seek::read_package_file(&path) {
                         Err(err) => {
                             return Err(Box::new(
-                                BackendError::new(format!(
+                                Box::new(BackendError::new(format!(
                                     "failed to read index.json from '{}': {}",
                                     path.display(),
                                     err
-                                ))
+                                )))
                                 .into(),
                             ));
                         }
@@ -949,7 +1110,7 @@ impl InMemoryBackendInstantiator for PassthroughBackendInstantiator {
                 // Create IndexJson from project model for on-the-fly package generation
                 let index_json = IndexJson {
                     arch: None,
-                    build: String::new(),
+                    build: BuildString::new_unchecked("0"),
                     build_number: 0,
                     constrains: vec![],
                     depends: vec![],

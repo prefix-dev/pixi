@@ -57,6 +57,15 @@ Checkout the [cache documentation](../workspace/environment.md#caching-packages)
 
 Check the [authentication documentation](../deployment/authentication.md)
 
+### TLS root certs
+
+The root certificates Pixi trusts for HTTPS connections.
+This is shown in both the `Global` and the `Workspace` section.
+The `Global` section shows what `pixi global` uses, which always reads the default configuration locations: it ignores a workspace's `.pixi/config.toml`, `--config-file` and `--no-config`.
+Both take the build's default, the [`tls-root-certs`](../reference/pixi_configuration.md#tls-root-certs) setting, the `--tls-root-certs` flag or `PIXI_TLS_ROOT_CERTS`, and the `SSL_CERT_FILE` and `SSL_CERT_DIR` environment variables into account.
+For example, `webpki (default)` means the bundled Mozilla roots are used because nothing else is configured, and `SSL_CERT_FILE=/etc/ssl/ca.pem (overrides system)` means the certificates from that file replace the system store.
+PyPI requests use the same certificates, unless [`pypi-config.allow-insecure-host`](../reference/pixi_configuration.md#pypi-config) is set: uv then builds its own HTTP client, which picks its root certificates separately and may not match this line.
+
 ### Cache size
 
 [requires `--extended`]
@@ -108,6 +117,6 @@ Only present once the environment has been installed.
 
 ### Minimum platform
 
-The minimum platform the installed packages actually require: the same subdir with only the virtual packages that some installed package depends on.
+What the installed packages actually require: the same subdir with only the virtual-package requirements that some installed package depends on, shown as match specs the way the packages spell them (`__glibc >=2.17`).
 This can be weaker than the resolved platform and tells you how portable the installed environment is.
 Only present once the environment has been installed.

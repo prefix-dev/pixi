@@ -13,7 +13,7 @@ pub async fn set<I: Interface>(
     name: &str,
 ) -> miette::Result<()> {
     // Set the new workspace name
-    workspace.manifest().set_name(name)?;
+    workspace.manifest().set_name(name);
 
     // Save workspace
     let workspace = workspace.save().await.into_diagnostic()?;

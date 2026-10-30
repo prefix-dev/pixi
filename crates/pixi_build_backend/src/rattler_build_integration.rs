@@ -9,18 +9,18 @@ use rattler_build_core::{
     tool_configuration,
     types::{Directories, PackageIdentifier, PackagingSettings},
 };
-use rattler_build_recipe::variant_render::RenderConfig;
+use rattler_build_recipe::{stage0::Recipe, variant_render::RenderConfig};
 use rattler_build_types::NormalizedKey;
 use rattler_build_variant_config::VariantConfig;
 use rattler_conda_types::compression_level::CompressionLevel;
 use rattler_conda_types::{
-    GenericVirtualPackage, NamedChannelOrUrl, NoArchType, Platform, RepodataRevision,
+    GenericVirtualPackage, NamedChannelOrUrl, NoArchType, RepodataRevision, Subdir,
     package::CondaArchiveType,
 };
 use url::Url;
 
 use crate::{
-    generated_recipe::GeneratedRecipe, utils::TemporaryRenderedRecipe, v3::generated_recipe_uses_v3,
+    generated_recipe::GeneratedRecipe, utils::TemporaryRenderedRecipe, v3::recipe_uses_v3,
 };
 
 /// A very similar function to `get_build_output` from rattler-build.
@@ -33,11 +33,11 @@ use crate::{
 pub async fn get_build_output(
     backend_name: &'static str,
     backend_version: &'static str,
-    generated_recipe: &GeneratedRecipe,
+    generated_recipe: &GeneratedRecipe<Recipe>,
     tool_config: Arc<tool_configuration::Configuration>,
-    target_platform: Platform,
-    host_platform: Platform,
-    build_platform: Platform,
+    target_platform: Subdir,
+    host_platform: Subdir,
+    build_platform: Subdir,
     host_virtual_packages: Option<Vec<GenericVirtualPackage>>,
     build_virtual_packages: Option<Vec<GenericVirtualPackage>>,
     channel_base_urls: Option<Vec<Url>>,
@@ -53,7 +53,7 @@ pub async fn get_build_output(
         recipe_code.clone(),
     );
 
-    let repodata_revision = if generated_recipe_uses_v3(&generated_recipe.recipe) {
+    let repodata_revision = if recipe_uses_v3(&generated_recipe.recipe) {
         RepodataRevision::V3
     } else {
         RepodataRevision::Legacy
@@ -92,7 +92,7 @@ pub async fn get_build_output(
             let effective_target_platform = if recipe.build().noarch.is_none() {
                 target_platform
             } else {
-                Platform::NoArch
+                Subdir::NoArch
             };
             let build_string = recipe
                 .build()
@@ -109,6 +109,7 @@ pub async fn get_build_output(
                 used_vars: variant,
                 recipe,
                 hash: rendered.hash_info.expect("hash should be set"),
+                pin_subpackages: rendered.pin_subpackages,
             }
         })
         .collect();
@@ -193,6 +194,7 @@ pub async fn get_build_output(
                     &recipe_path,
                     &output_dir,
                     &timestamp,
+                    host_platform,
                 )
                 .no_build_id(true)
                 .merge_build_and_host(recipe.build().merge_build_and_host_envs)
@@ -208,6 +210,7 @@ pub async fn get_build_output(
                 ),
                 store_recipe: false,
                 force_colors: false,
+                experimental: false,
                 sandbox_config: None,
                 solve_strategy: Default::default(),
                 exclude_newer: None,

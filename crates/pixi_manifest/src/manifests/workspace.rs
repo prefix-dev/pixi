@@ -8,19 +8,24 @@ use std::{
 
 use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Itertools;
-use miette::{Context, IntoDiagnostic, SourceCode, miette};
+use miette::SourceCode;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
-use rattler_conda_types::{ParseStrictness::Strict, Platform, Version, VersionSpec};
+use rattler_conda_types::{
+    NamedChannelOrUrl, PackageName, ParseStrictness::Strict, ParseVersionError,
+    ParseVersionSpecError, Subdir, Version, VersionSpec,
+};
 use toml_edit::Value;
 
 use crate::{
-    DependencyOverwriteBehavior, GetFeatureError, PixiPlatform, PixiPlatformName, PlatformEdit,
-    PlatformMove, Preview, PrioritizedChannel, PypiDependencyLocation, SpecType, TargetSelector,
-    Task, TaskName, TomlError, WorkspaceTarget, consts,
-    environment::{Environment, EnvironmentName},
+    Activation, AddDependencyOutcome, DependencyOverwriteBehavior, ExcludeNewerEditError,
+    ExcludeNewerExemption, GetFeatureError, KnownPreviewFlag, PixiPlatform, PixiPlatformError,
+    PixiPlatformName, PlatformEdit, PlatformMove, Preview, PrioritizedChannel,
+    PypiDependencyLocation, SpecType, TargetSelector, Task, TaskName, TomlError, WorkspaceTarget,
+    consts,
+    environment::{Environment, EnvironmentName, NewEnvironment},
     environments::Environments,
-    error::{DependencyError, UnknownFeature},
+    error::{DependencyError, GenericError, UnknownFeature},
     feature::{Feature, FeatureName},
     manifests::document::ManifestDocument,
     solve_group::SolveGroups,
@@ -40,8 +45,11 @@ pub struct WorkspaceManifest {
     /// Information about the project
     pub workspace: Workspace,
 
-    /// All the features defined in the project.
-    pub features: IndexMap<FeatureName, Feature>,
+    /// All the features defined in the project, including the implicit
+    /// features synthesized for environments with inline content. Access
+    /// from outside the crate goes through [`Self::all_features`] or
+    /// [`Self::user_features`] so call sites choose a view deliberately.
+    pub(crate) features: IndexMap<FeatureName, Feature>,
 
     /// All the environments defined in the project.
     pub environments: Environments,
@@ -68,35 +76,93 @@ impl WorkspaceManifest {
             .map_err(|e| WithSourceCode { source, error: e })
     }
 
+    /// Register the per-subdir platforms each environment and solve group
+    /// composes from the rich platforms its features reference, so the composed
+    /// names resolve for name-based consumers (lock keying, platform lookup).
+    ///
+    /// Only runs on the subdir-only `[system-requirements]` path; workspaces
+    /// with custom rich platforms match by name and need no composition.
+    pub(crate) fn register_composed_platforms(&mut self) -> Result<(), TomlError> {
+        if !self.workspace.use_platform_composition {
+            return Ok(());
+        }
+        let declared = self.workspace.platforms.clone();
+        let mut composed: IndexSet<PixiPlatform> = IndexSet::new();
+        for environment in self.environments.iter() {
+            let features = self.environment_features(environment);
+            composed.extend(crate::platform_composition::combined_platforms(
+                &features, &declared,
+            )?);
+        }
+        for solve_group in self.solve_groups.iter() {
+            let features = self.solve_group_features(solve_group);
+            composed.extend(crate::platform_composition::combined_platforms(
+                &features, &declared,
+            )?);
+        }
+        self.workspace.platforms.extend(composed);
+        Ok(())
+    }
+
+    /// The features that make up `environment`, including the default feature
+    /// unless the environment opts out.
+    fn environment_features(&self, environment: &Environment) -> Vec<&Feature> {
+        let mut features: Vec<&Feature> = environment
+            .features
+            .iter()
+            .filter_map(|name| self.features.get(name))
+            .collect();
+        if !environment.no_default_feature {
+            features.push(self.default_feature());
+        }
+        features
+    }
+
+    /// The deduplicated features across every environment in `solve_group`.
+    fn solve_group_features(&self, solve_group: &crate::solve_group::SolveGroup) -> Vec<&Feature> {
+        let mut seen: HashSet<FeatureName> = HashSet::new();
+        let mut features = Vec::new();
+        for &index in &solve_group.environments {
+            for feature in self.environment_features(&self.environments[index]) {
+                if seen.insert(feature.name.clone()) {
+                    features.push(feature);
+                }
+            }
+        }
+        features
+    }
+
+    /// Returns every feature, including the default feature, in manifest order.
+    pub fn features(&self) -> &IndexMap<FeatureName, Feature> {
+        &self.features
+    }
+
     /// Returns the default feature.
     ///
     /// This is the feature that is added implicitly by the tables at the root
     /// of the project manifest.
     pub fn default_feature(&self) -> &Feature {
         self.features
-            .get(&FeatureName::DEFAULT)
+            .get(&FeatureName::Default)
             .expect("default feature should always exist")
     }
 
     /// Returns a mutable reference to the default feature.
     pub(crate) fn default_feature_mut(&mut self) -> &mut Feature {
         self.features
-            .get_mut(&FeatureName::DEFAULT)
+            .get_mut(&FeatureName::Default)
             .expect("default feature should always exist")
     }
 
     /// Returns the mutable feature with the given name or `Err` if it does not
     /// exist.
-    pub fn feature_mut<Q>(&mut self, name: &Q) -> miette::Result<&mut Feature>
-    where
-        Q: ?Sized + Hash + Equivalent<FeatureName> + Display,
-    {
-        self.features.get_mut(name).ok_or_else(|| {
-            miette!(
-                "Feature {} does not exist",
-                consts::FEATURE_STYLE.apply_to(name)
-            )
-        })
+    pub fn feature_mut(
+        &mut self,
+        name: &FeatureName,
+    ) -> Result<&mut Feature, FeatureNotFoundError> {
+        self.features
+            .get_mut(name)
+            .ok_or_else(|| FeatureNotFoundError(name.clone()))
     }
 
     /// Returns the mutable feature with the given name
@@ -185,6 +251,24 @@ impl WorkspaceManifest {
         self.features.get(name)
     }
 
+    /// Every feature in the manifest, including the implicit features
+    /// synthesized for environments with inline content. This is the view
+    /// for resolution and other machinery that must see all feature content;
+    /// use [`Self::user_features`] when feature names are shown to the user.
+    pub fn all_features(&self) -> impl Iterator<Item = (&FeatureName, &Feature)> {
+        self.features.iter()
+    }
+
+    /// The features the user declared in the manifest: every feature except
+    /// the implicit ones synthesized for environments with inline content.
+    /// Inline content belongs to its environment, so this is the view for
+    /// anything that presents features to the user.
+    pub fn user_features(&self) -> impl Iterator<Item = (&FeatureName, &Feature)> {
+        self.features
+            .iter()
+            .filter(|(name, _)| !name.is_environment())
+    }
+
     /// Returns the preview field of the project
     pub fn preview(&self) -> &Preview {
         &self.workspace.preview
@@ -220,6 +304,69 @@ impl WorkspaceManifest {
     }
 }
 
+/// The outcome of adding activation scripts to the manifest, used to report
+/// what actually changed.
+#[derive(Debug, Clone)]
+pub struct ActivationScriptsChange {
+    /// Scripts that were newly added.
+    pub added: Vec<String>,
+    /// Scripts that were already present. When appending these were left in
+    /// place; when prepending they were moved to the front.
+    pub already_present: Vec<String>,
+}
+
+/// The error for an activation removal whose feature does not exist, phrased
+/// in terms of what the user passed: a missing environment, an environment
+/// without inline activation, or a missing feature -- never the synthesized
+/// environment feature, which is an implementation detail.
+fn missing_activation_feature_error(
+    workspace: &WorkspaceManifest,
+    feature_name: &FeatureName,
+    what: &'static str,
+) -> ActivationEditError {
+    match feature_name.environment_name() {
+        Some(environment) if workspace.environments.find(environment).is_none() => {
+            ActivationEditError::EnvironmentNotFound(environment.clone())
+        }
+        Some(_) => ActivationEditError::NoneDefined {
+            what,
+            location: ActivationLocation::new(None, feature_name),
+        },
+        None => ActivationEditError::FeatureNotFound(feature_name.clone()),
+    }
+}
+
+/// The feature/target an activation edit applies to. Its [`Display`] is the
+/// human-readable description used in error messages.
+#[derive(Debug, Clone)]
+pub struct ActivationLocation {
+    pub feature_name: FeatureName,
+    pub target: Option<TargetSelector>,
+}
+
+impl ActivationLocation {
+    fn new(target: Option<&TargetSelector>, feature_name: &FeatureName) -> Self {
+        Self {
+            feature_name: feature_name.clone(),
+            target: target.cloned(),
+        }
+    }
+}
+
+impl Display for ActivationLocation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.feature_name.is_default() {
+            write!(f, "the default feature")?;
+        } else {
+            write!(f, "{}", self.feature_name.user_facing())?;
+        }
+        if let Some(target) = &self.target {
+            write!(f, " and target '{target}'")?;
+        }
+        Ok(())
+    }
+}
+
 /// A mutable context that allows modifying the workspace manifest both in
 /// memory and on disk.
 pub struct WorkspaceManifestMut<'a> {
@@ -238,12 +385,22 @@ impl WorkspaceManifestMut<'_> {
         task: Task,
         platform: Option<&PixiPlatform>,
         feature_name: &FeatureName,
-    ) -> miette::Result<()> {
+    ) -> Result<(), TaskEditError> {
         // Check if the task already exists
         if let Ok(tasks) = self.workspace.tasks(platform, feature_name)
             && tasks.contains_key(&name)
         {
-            miette::bail!("task {} already exists", name);
+            return Err(TaskEditError::AlreadyExists(name));
+        }
+
+        self.ensure_inline_environment(feature_name)?;
+
+        // Refuse to write a task that refers to an environment that does not
+        // exist, the manifest would fail to parse afterwards.
+        for environment in task.referenced_environments() {
+            if self.workspace.environments.find(environment).is_none() {
+                return Err(TaskEditError::UnknownEnvironment(environment.clone()));
+            }
         }
 
         // Add the task to the Toml manifest
@@ -271,24 +428,295 @@ impl WorkspaceManifestMut<'_> {
         name: TaskName,
         platform: Option<&PixiPlatform>,
         feature_name: &FeatureName,
-    ) -> miette::Result<()> {
+    ) -> Result<(), TaskEditError> {
         // Check if the task exists
-        self.workspace
+        if !self
+            .workspace
             .tasks(platform, feature_name)?
-            .get(&name)
-            .ok_or_else(|| miette::miette!("task {} does not exist", name))?;
+            .contains_key(&name)
+        {
+            return Err(TaskEditError::NotFound(name));
+        }
 
         // Remove the task from the Toml manifest
         self.document
             .remove_task(name.as_str(), platform, feature_name)?;
 
-        // Remove the task from the internal manifest
+        // Remove the task from the internal manifest. The lookup above already
+        // established that the feature exists.
         self.workspace
-            .feature_mut(feature_name)?
+            .feature_mut(feature_name)
+            .expect("feature existence checked above")
             .targets
             .for_opt_target_mut(platform.map(TargetSelector::from).as_ref())
             .map(|target| target.tasks.remove(&name));
 
+        Ok(())
+    }
+
+    /// Adds activation scripts to the manifest. Scripts that are already
+    /// present are reported back instead of duplicated; with `prepend` they
+    /// are moved to the front instead.
+    ///
+    /// This function modifies both the workspace and the TOML document. Use
+    /// `ManifestProvenance::save` to persist the changes to disk.
+    pub fn add_activation_scripts(
+        &mut self,
+        scripts: Vec<String>,
+        prepend: bool,
+        target: Option<&TargetSelector>,
+        feature_name: &FeatureName,
+    ) -> Result<ActivationScriptsChange, TomlError> {
+        self.ensure_inline_environment(feature_name)?;
+
+        // Dedup the requested scripts, keeping the first occurrence.
+        let scripts: Vec<String> = scripts.into_iter().unique().collect();
+
+        let target_data = self
+            .workspace
+            .get_or_insert_target_mut(target, Some(feature_name));
+        let existing = target_data
+            .activation
+            .as_ref()
+            .and_then(|activation| activation.scripts.clone())
+            .unwrap_or_default();
+
+        let (already_present, added): (Vec<String>, Vec<String>) = scripts
+            .iter()
+            .cloned()
+            .partition(|script| existing.contains(script));
+
+        // Update the in-memory manifest.
+        let list = target_data
+            .activation
+            .get_or_insert_with(Activation::default)
+            .scripts
+            .get_or_insert_with(Vec::new);
+        if prepend {
+            list.retain(|script| !scripts.contains(script));
+            for (index, script) in scripts.iter().enumerate() {
+                list.insert(index, script.clone());
+            }
+        } else {
+            list.extend(added.iter().cloned());
+        }
+
+        // Update the TOML document.
+        self.document
+            .add_activation_scripts(&scripts, prepend, target, feature_name)?;
+
+        Ok(ActivationScriptsChange {
+            added,
+            already_present,
+        })
+    }
+
+    /// Removes activation scripts from the manifest. Errors when a script is
+    /// not present in the given feature/target.
+    ///
+    /// This function modifies both the workspace and the TOML document. Use
+    /// `ManifestProvenance::save` to persist the changes to disk.
+    pub fn remove_activation_scripts(
+        &mut self,
+        scripts: Vec<String>,
+        target: Option<&TargetSelector>,
+        feature_name: &FeatureName,
+    ) -> Result<(), ActivationEditError> {
+        const WHAT: &str = "activation scripts";
+        let location = ActivationLocation::new(target, feature_name);
+        if self.workspace.features.get(feature_name).is_none() {
+            return Err(missing_activation_feature_error(
+                self.workspace,
+                feature_name,
+                WHAT,
+            ));
+        }
+        let target_data = self
+            .workspace
+            .feature_mut(feature_name)
+            .expect("feature existence checked above")
+            .targets
+            .for_opt_target_mut(target)
+            .ok_or_else(|| ActivationEditError::NoneDefined {
+                what: WHAT,
+                location: location.clone(),
+            })?;
+
+        let existing = target_data
+            .activation
+            .as_ref()
+            .and_then(|activation| activation.scripts.as_ref());
+        if let Some(missing) = scripts
+            .iter()
+            .find(|script| !existing.is_some_and(|existing| existing.contains(script)))
+        {
+            return Err(ActivationEditError::ScriptNotFound {
+                script: missing.clone(),
+                location,
+            });
+        }
+
+        // Update the in-memory manifest, dropping emptied containers.
+        if let Some(activation) = target_data.activation.as_mut()
+            && let Some(list) = activation.scripts.as_mut()
+        {
+            list.retain(|script| !scripts.contains(script));
+            if list.is_empty() {
+                activation.scripts = None;
+            }
+        }
+        if target_data
+            .activation
+            .as_ref()
+            .is_some_and(|activation| activation.scripts.is_none() && activation.env.is_none())
+        {
+            target_data.activation = None;
+        }
+
+        // Update the TOML document.
+        self.document
+            .remove_activation_scripts(&scripts, target, feature_name)?;
+        self.repair_activation_anchor(feature_name)?;
+
+        Ok(())
+    }
+
+    /// Sets (inserts or overwrites) activation environment variables in the
+    /// manifest.
+    ///
+    /// This function modifies both the workspace and the TOML document. Use
+    /// `ManifestProvenance::save` to persist the changes to disk.
+    pub fn set_activation_env(
+        &mut self,
+        variables: Vec<(String, String)>,
+        target: Option<&TargetSelector>,
+        feature_name: &FeatureName,
+    ) -> Result<(), TomlError> {
+        self.ensure_inline_environment(feature_name)?;
+
+        // Update the in-memory manifest.
+        let env = self
+            .workspace
+            .get_or_insert_target_mut(target, Some(feature_name))
+            .activation
+            .get_or_insert_with(Activation::default)
+            .env
+            .get_or_insert_with(IndexMap::new);
+        for (key, value) in &variables {
+            env.insert(key.clone(), value.clone());
+        }
+
+        // Update the TOML document.
+        for (key, value) in &variables {
+            self.document
+                .set_activation_env(key, value, target, feature_name)?;
+        }
+
+        Ok(())
+    }
+
+    /// Removes activation environment variables from the manifest. Errors when
+    /// a variable is not present in the given feature/target.
+    ///
+    /// This function modifies both the workspace and the TOML document. Use
+    /// `ManifestProvenance::save` to persist the changes to disk.
+    pub fn remove_activation_env(
+        &mut self,
+        keys: Vec<String>,
+        target: Option<&TargetSelector>,
+        feature_name: &FeatureName,
+    ) -> Result<(), ActivationEditError> {
+        const WHAT: &str = "activation environment variables";
+        let location = ActivationLocation::new(target, feature_name);
+        if self.workspace.features.get(feature_name).is_none() {
+            return Err(missing_activation_feature_error(
+                self.workspace,
+                feature_name,
+                WHAT,
+            ));
+        }
+        let target_data = self
+            .workspace
+            .feature_mut(feature_name)
+            .expect("feature existence checked above")
+            .targets
+            .for_opt_target_mut(target)
+            .ok_or_else(|| ActivationEditError::NoneDefined {
+                what: WHAT,
+                location: location.clone(),
+            })?;
+
+        let existing = target_data
+            .activation
+            .as_ref()
+            .and_then(|activation| activation.env.as_ref());
+        if let Some(missing) = keys
+            .iter()
+            .find(|key| !existing.is_some_and(|existing| existing.contains_key(*key)))
+        {
+            return Err(ActivationEditError::EnvVarNotFound {
+                key: missing.clone(),
+                location,
+            });
+        }
+
+        // Update the in-memory manifest, dropping emptied containers.
+        if let Some(activation) = target_data.activation.as_mut()
+            && let Some(env) = activation.env.as_mut()
+        {
+            env.retain(|key, _| !keys.contains(key));
+            if env.is_empty() {
+                activation.env = None;
+            }
+        }
+        if target_data
+            .activation
+            .as_ref()
+            .is_some_and(|activation| activation.scripts.is_none() && activation.env.is_none())
+        {
+            target_data.activation = None;
+        }
+
+        // Update the TOML document.
+        for key in &keys {
+            self.document
+                .remove_activation_env(key, target, feature_name)?;
+        }
+        self.repair_activation_anchor(feature_name)?;
+
+        Ok(())
+    }
+
+    /// After a removal, makes sure the emptied-table cleanup didn't take the
+    /// feature or environment declaration with it: an environment entry must
+    /// stay parseable, and a feature that is still referenced by an
+    /// environment must stay declared. An unreferenced feature whose manifest
+    /// table is now empty is dropped from the in-memory manifest as well, so
+    /// an add-then-remove round trip leaves no stub behind.
+    fn repair_activation_anchor(&mut self, feature_name: &FeatureName) -> Result<(), TomlError> {
+        match feature_name {
+            FeatureName::Default => {}
+            FeatureName::Environment(name) => {
+                self.document
+                    .ensure_environment_has_features(name.as_str())?;
+            }
+            FeatureName::Named(_) => {
+                if !self.document.feature_table_is_empty(feature_name) {
+                    return Ok(());
+                }
+                let referenced = self
+                    .workspace
+                    .environments
+                    .iter()
+                    .any(|environment| environment.features.contains(feature_name));
+                if referenced {
+                    self.document.ensure_feature_table(feature_name)?;
+                } else {
+                    self.workspace.features.shift_remove(feature_name);
+                    self.document.remove_feature(feature_name)?;
+                }
+            }
+        }
         Ok(())
     }
 
@@ -299,28 +727,88 @@ impl WorkspaceManifestMut<'_> {
     /// `ManifestProvenance::save` to persist the changes to disk.
     pub fn add_environment(
         &mut self,
-        name: String,
-        features: Option<Vec<String>>,
-        solve_group: Option<String>,
-        no_default_feature: bool,
-    ) -> miette::Result<()> {
-        // Make sure the features exist
-        for feature in features.iter().flatten() {
-            if self.workspace.features.get(feature.as_str()).is_none() {
+        environment: NewEnvironment,
+    ) -> Result<(), EnvironmentEditError> {
+        // Make sure the features exist and can be referenced
+        for feature in environment.features.iter().flatten() {
+            if self
+                .workspace
+                .features
+                .get(&FeatureName::from(feature.as_str()))
+                .is_none()
+            {
                 return Err(UnknownFeature::new(feature.to_string(), &*self.workspace).into());
             }
         }
 
-        self.document.add_environment(
-            name.clone(),
-            features.clone(),
-            solve_group.clone(),
+        self.document.add_environment(environment.clone())?;
+
+        let NewEnvironment {
+            name,
+            features,
+            solve_group,
             no_default_feature,
-        )?;
+        } = environment;
 
         let environment_idx = self.workspace.environments.add(Environment {
             name: EnvironmentName::Named(name),
-            features: features.unwrap_or_default(),
+            features: features
+                .unwrap_or_default()
+                .into_iter()
+                .map(FeatureName::from)
+                .collect(),
+            solve_group: None,
+            no_default_feature,
+        });
+
+        if let Some(solve_group) = solve_group {
+            self.workspace
+                .solve_groups
+                .add(solve_group, environment_idx);
+        }
+
+        Ok(())
+    }
+
+    /// Replaces the features of an existing environment while preserving all
+    /// other content of its manifest entry, in particular content defined
+    /// inline on the environment. The feature synthesized for inline content
+    /// is kept in memory but never written to the manifest.
+    ///
+    /// This function modifies both the workspace and the TOML document. Use
+    /// `ManifestProvenance::save` to persist the changes to disk.
+    pub fn update_environment_features(
+        &mut self,
+        name: &EnvironmentName,
+        features: Vec<FeatureName>,
+    ) -> Result<(), EnvironmentEditError> {
+        // Make sure the referenced features exist
+        for feature in &features {
+            if !feature.is_environment() && self.workspace.features.get(feature).is_none() {
+                return Err(UnknownFeature::new(feature.to_string(), &*self.workspace).into());
+            }
+        }
+
+        let Some(environment) = self.workspace.environments.find(name) else {
+            return Err(EnvironmentEditError::NotFound(name.clone()));
+        };
+        let solve_group = environment
+            .solve_group
+            .map(|idx| self.workspace.solve_groups[idx].name.clone());
+        let no_default_feature = environment.no_default_feature;
+
+        self.document.update_environment_features(
+            name.as_str(),
+            features
+                .iter()
+                .filter(|feature| !feature.is_environment())
+                .map(|feature| feature.as_str().to_owned())
+                .collect(),
+        )?;
+
+        let environment_idx = self.workspace.environments.add(Environment {
+            name: name.clone(),
+            features,
             solve_group: None,
             no_default_feature,
         });
@@ -338,7 +826,31 @@ impl WorkspaceManifestMut<'_> {
     ///
     /// This function modifies both the workspace and the TOML document. Use
     /// `ManifestProvenance::save` to persist the changes to disk.
-    pub fn remove_environment(&mut self, name: &str) -> miette::Result<bool> {
+    pub fn remove_environment(&mut self, name: &str) -> Result<bool, TomlError> {
+        // Refuse to remove an environment that tasks still refer to, the
+        // manifest would fail to parse afterwards. Tasks defined inline on the
+        // environment are removed along with it.
+        let referencing_tasks = self
+            .workspace
+            .features
+            .values()
+            .filter(|feature| feature.name.environment_name().map(|n| n.as_str()) != Some(name))
+            .flat_map(|feature| feature.targets.targets())
+            .flat_map(|target| &target.tasks)
+            .filter(|(_, task)| task.referenced_environments().any(|e| e.as_str() == name))
+            .map(|(task_name, _)| format!("'{}'", task_name.as_str()))
+            .sorted()
+            .dedup()
+            .collect_vec();
+        if !referencing_tasks.is_empty() {
+            let referencing_tasks = referencing_tasks.join(", ");
+            return Err(GenericError::new(format!(
+                "cannot remove environment '{name}' because tasks refer to it: {referencing_tasks}"
+            ))
+            .with_help("remove these references first")
+            .into());
+        }
+
         // Remove the environment from the TOML document
         if !self.document.remove_environment(name)? {
             return Ok(false);
@@ -367,18 +879,18 @@ impl WorkspaceManifestMut<'_> {
     /// This function modifies both the workspace and the TOML document. Use
     /// `ManifestProvenance::save` to persist the changes to disk.
     ///
-    /// Returns the list of environments that were modified.
+    /// Returns the list of environments that were modified. Errors when the
+    /// feature does not exist.
     pub fn remove_feature(
         &mut self,
         feature_name: &FeatureName,
-    ) -> miette::Result<Vec<EnvironmentName>> {
+    ) -> Result<Vec<EnvironmentName>, EnvironmentEditError> {
         if feature_name.is_default() {
-            miette::bail!("Cannot remove the default feature");
+            return Err(EnvironmentEditError::RemoveDefaultFeature);
         }
 
         if self.workspace.features.get(feature_name).is_none() {
-            tracing::warn!("Feature `{}` doesn't exist", feature_name);
-            return Ok(Vec::new());
+            return Err(GetFeatureError::FeatureDoesNotExist(feature_name.clone()).into());
         }
 
         self.workspace.features.shift_remove(feature_name);
@@ -388,15 +900,15 @@ impl WorkspaceManifestMut<'_> {
             .workspace
             .environments
             .iter()
-            .filter(|env| env.features.contains(&feature_name.to_string()))
+            .filter(|env| env.features.contains(feature_name))
             .cloned()
             .collect();
 
         for env in &environments_using_feature {
-            let updated_features: Vec<String> = env
+            let updated_features: Vec<FeatureName> = env
                 .features
                 .iter()
-                .filter(|f| f.as_str() != feature_name.to_string())
+                .filter(|f| *f != feature_name)
                 .cloned()
                 .collect();
 
@@ -404,12 +916,16 @@ impl WorkspaceManifestMut<'_> {
                 .solve_group
                 .map(|idx| self.workspace.solve_groups[idx].name.clone());
 
-            // Update the environment, minus the removed feature
-            self.document.add_environment(
-                env.name.to_string(),
-                Some(updated_features.clone()),
-                solve_group.clone(),
-                env.no_default_feature,
+            // Update the environment's feature list, minus the removed
+            // feature, without touching the rest of the entry. The feature
+            // synthesized for inline content is implicit and never written.
+            self.document.update_environment_features(
+                env.name.as_str(),
+                updated_features
+                    .iter()
+                    .filter(|f| !f.is_environment())
+                    .map(|f| f.as_str().to_owned())
+                    .collect(),
             )?;
 
             let environment_idx = self.workspace.environments.add(Environment {
@@ -452,7 +968,20 @@ impl WorkspaceManifestMut<'_> {
     pub fn add_workspace_platforms(
         &mut self,
         platforms: &IndexSet<PixiPlatform>,
-    ) -> miette::Result<IndexSet<PixiPlatform>> {
+    ) -> Result<IndexSet<PixiPlatform>, PlatformEditError> {
+        // A platform's identity is its (subdir, customised virtual packages)
+        // definition, not its name. Reject adding a second entry that duplicates
+        // an existing definition under a different name -- it would produce a
+        // redundant duplicate solve. Same name + same definition is handled as a
+        // no-op below.
+        for incoming in platforms {
+            if let Some(existing) = self.workspace.workspace.platforms.iter().find(|existing| {
+                existing.name() != incoming.name() && existing.has_same_definition(incoming)
+            }) {
+                return Err(duplicate_definition_error(existing, incoming));
+            }
+        }
+
         // Only platforms that aren't already declared cause a change. Re-adding
         // an existing platform (e.g. `pixi add <dep> --platform linux-64` when
         // linux-64 is already declared) must leave the document untouched.
@@ -469,7 +998,7 @@ impl WorkspaceManifestMut<'_> {
         // it got extended, so drop subdir-platforms whose subdir is already
         // declared.
         if self.workspace.workspace.must_migrate {
-            let declared_subdirs: HashSet<Platform> = self
+            let declared_subdirs: HashSet<Subdir> = self
                 .workspace
                 .workspace
                 .platforms
@@ -487,6 +1016,11 @@ impl WorkspaceManifestMut<'_> {
         // A newly-added non-subdir platform is the only edit that commits the
         // legacy `[system-requirements]` migration to disk.
         let added_rich = new_platforms.iter().any(|p| !p.is_subdir_platform());
+        if added_rich {
+            // The workspace now declares a custom rich platform, so it is no
+            // longer subdir-only: match platforms by name instead of composing.
+            self.workspace.workspace.use_platform_composition = false;
+        }
         self.workspace
             .workspace
             .platforms
@@ -525,12 +1059,12 @@ impl WorkspaceManifestMut<'_> {
     fn append_subdir_platforms_toml(
         &mut self,
         new_platforms: &IndexSet<PixiPlatform>,
-    ) -> miette::Result<()> {
+    ) -> Result<(), TomlError> {
         let array = self
             .document
             .get_array_mut("platforms", &Default::default())?;
         for platform in new_platforms {
-            array.push(platform.subdir().to_string());
+            pixi_toml_edit::push_array_element(array, platform.subdir().to_string().into());
         }
         Ok(())
     }
@@ -543,12 +1077,15 @@ impl WorkspaceManifestMut<'_> {
     fn append_workspace_platforms_toml(
         &mut self,
         new_platforms: &IndexSet<PixiPlatform>,
-    ) -> miette::Result<()> {
+    ) -> Result<(), TomlError> {
         let array = self
             .document
             .get_array_mut("platforms", &Default::default())?;
         for platform in new_platforms {
-            array.push(crate::toml::platform::pixi_platform_to_toml_value(platform));
+            pixi_toml_edit::push_array_element(
+                array,
+                crate::toml::platform::pixi_platform_to_toml_value(platform),
+            );
         }
         Ok(())
     }
@@ -560,7 +1097,7 @@ impl WorkspaceManifestMut<'_> {
     /// for the legacy migration commit, where every entry changes shape;
     /// steady-state edits use the in-place helpers so they don't reflow the
     /// whole array.
-    fn rewrite_workspace_platforms_toml(&mut self) -> miette::Result<()> {
+    fn rewrite_workspace_platforms_toml(&mut self) -> Result<(), TomlError> {
         let entries: Vec<toml_edit::Value> = self
             .workspace
             .workspace
@@ -583,7 +1120,7 @@ impl WorkspaceManifestMut<'_> {
         &mut self,
         mut platforms: IndexSet<PixiPlatformName>,
         feature_name: &FeatureName,
-    ) -> miette::Result<IndexSet<PixiPlatformName>> {
+    ) -> Result<IndexSet<PixiPlatformName>, TomlError> {
         if feature_name.is_default() {
             return Ok(IndexSet::new());
         }
@@ -602,9 +1139,10 @@ impl WorkspaceManifestMut<'_> {
         feature_platforms.extend(added.iter().cloned());
 
         // Update TOML document feature platforms
-        self.document
-            .get_array_mut("platforms", feature_name)?
-            .extend(added.iter().map(|pn| pn.as_str().to_string()));
+        let array = self.document.get_array_mut("platforms", feature_name)?;
+        for platform_name in &added {
+            pixi_toml_edit::push_array_element(array, platform_name.as_str().into());
+        }
 
         Ok(added)
     }
@@ -619,7 +1157,7 @@ impl WorkspaceManifestMut<'_> {
         &mut self,
         name: &PixiPlatformName,
         edit: PlatformEdit,
-    ) -> miette::Result<()> {
+    ) -> Result<(), PlatformEditError> {
         let (index, original) = self
             .workspace
             .workspace
@@ -627,7 +1165,7 @@ impl WorkspaceManifestMut<'_> {
             .iter()
             .enumerate()
             .find(|(_, p)| p.name() == name)
-            .ok_or_else(|| missing_platform_error(name))?;
+            .ok_or_else(|| PlatformEditError::NotFound(name.clone()))?;
         let mut updated = original.clone();
 
         // The edit only matters if it actually changes the platform; a no-op
@@ -636,9 +1174,10 @@ impl WorkspaceManifestMut<'_> {
         // can change explicitly. The name only changes as a consequence of a
         // VP/subdir change, so it needs no separate comparison here.
         let before = updated.clone();
-        updated.apply_edit(edit).map_err(|e| miette!(e))?;
+        updated.apply_edit(edit)?;
         if updated.subdir() == before.subdir()
-            && updated.declared_virtual_packages() == before.declared_virtual_packages()
+            && updated.manifest_virtual_package_records()
+                == before.manifest_virtual_package_records()
         {
             return Ok(());
         }
@@ -648,6 +1187,12 @@ impl WorkspaceManifestMut<'_> {
         // so the in-memory set and the document diverge. Capture this before
         // `commit_if_needed` clears the flag.
         let was_migrating = self.workspace.workspace.must_migrate;
+
+        // An edit that yields a custom rich platform leaves the workspace no
+        // longer subdir-only: match platforms by name instead of composing.
+        if !updated.is_subdir_platform() {
+            self.workspace.workspace.use_platform_composition = false;
+        }
 
         // The edit may rename the platform (collapsing to a bare subdir or
         // recomputing the synthesised name), and the set is keyed by name, so
@@ -670,12 +1215,13 @@ impl WorkspaceManifestMut<'_> {
 
         if was_migrating {
             // The migration rebuilt the whole platform set; re-render it.
-            self.rewrite_workspace_platforms_toml()
+            self.rewrite_workspace_platforms_toml()?;
         } else {
             // Otherwise only this one entry changed: rewrite it in place so the
             // array keeps its order and on-disk formatting.
-            self.replace_workspace_platform_value(index, &updated)
+            self.replace_workspace_platform_value(index, &updated)?;
         }
+        Ok(())
     }
 
     /// Move the workspace platform `name` to a new position relative to the
@@ -687,22 +1233,19 @@ impl WorkspaceManifestMut<'_> {
         &mut self,
         name: &PixiPlatformName,
         target: &PlatformMove,
-    ) -> miette::Result<()> {
+    ) -> Result<(), PlatformEditError> {
         let platforms = &self.workspace.workspace.platforms;
         let from = platforms
             .iter()
             .position(|p| p.name() == name)
-            .ok_or_else(|| missing_platform_error(name))?;
+            .ok_or_else(|| PlatformEditError::NotFound(name.clone()))?;
 
         if let PlatformMove::Before(anchor) | PlatformMove::After(anchor) = target {
             if anchor == name {
-                miette::bail!(
-                    "cannot move platform '{}' relative to itself",
-                    name.as_str()
-                );
+                return Err(PlatformEditError::MoveRelativeToItself(name.clone()));
             }
             if !platforms.iter().any(|p| p.name() == anchor) {
-                return Err(missing_platform_error(anchor));
+                return Err(PlatformEditError::NotFound(anchor.clone()));
             }
         }
 
@@ -739,7 +1282,7 @@ impl WorkspaceManifestMut<'_> {
             return Ok(());
         }
 
-        self.rewrite_workspace_platforms_toml()
+        Ok(self.rewrite_workspace_platforms_toml()?)
     }
 
     /// Rewrite the `index`th entry of the workspace `platforms` array from
@@ -749,15 +1292,14 @@ impl WorkspaceManifestMut<'_> {
         &mut self,
         index: usize,
         platform: &PixiPlatform,
-    ) -> miette::Result<()> {
+    ) -> Result<(), TomlError> {
         let value = crate::toml::platform::pixi_platform_to_toml_value(platform);
         let array = self
             .document
             .get_array_mut("platforms", &Default::default())?;
-        if let Some(item) = array.get_mut(index) {
-            let decor = item.decor().clone();
-            *item = value;
-            *item.decor_mut() = decor;
+        if index < array.len() {
+            // `Array::replace` keeps the decor of the replaced element.
+            array.replace(index, value);
         }
         Ok(())
     }
@@ -769,7 +1311,7 @@ impl WorkspaceManifestMut<'_> {
         &mut self,
         old: &PixiPlatformName,
         new: &PixiPlatformName,
-    ) -> miette::Result<()> {
+    ) -> Result<(), TomlError> {
         let affected: Vec<FeatureName> = self
             .workspace
             .features
@@ -806,7 +1348,11 @@ impl WorkspaceManifestMut<'_> {
             let array = self.document.get_array_mut("platforms", &feature_name)?;
             for item in array.iter_mut() {
                 if item.as_str() == Some(old.as_str()) {
+                    // Keep the decor so spacing and comments around the
+                    // renamed entry survive.
+                    let decor = item.decor().clone();
                     *item = toml_edit::Value::from(new.as_str());
+                    *item.decor_mut() = decor;
                 }
             }
         }
@@ -824,7 +1370,7 @@ impl WorkspaceManifestMut<'_> {
         &mut self,
         platforms: impl IntoIterator<Item = &'a PixiPlatform>,
         feature_name: &FeatureName,
-    ) -> miette::Result<IndexSet<PixiPlatform>> {
+    ) -> Result<IndexSet<PixiPlatform>, PlatformEditError> {
         let pixi_platforms: IndexSet<PixiPlatform> = platforms.into_iter().cloned().collect();
         // Nothing to add (e.g. `pixi add <dep>` with no `--platform`): leave the
         // document untouched. Rewriting it here would flush the in-memory
@@ -833,9 +1379,10 @@ impl WorkspaceManifestMut<'_> {
         if pixi_platforms.is_empty() {
             return Ok(IndexSet::new());
         }
+        let added_to_workspace = self.add_workspace_platforms(&pixi_platforms)?;
+        self.ensure_inline_environment(feature_name)?;
         let platform_names: IndexSet<PixiPlatformName> =
             pixi_platforms.iter().map(|p| p.name().clone()).collect();
-        let added_to_workspace = self.add_workspace_platforms(&pixi_platforms)?;
         let added_to_feature = self.add_feature_platforms(platform_names, feature_name)?;
         Ok(pixi_platforms
             .into_iter()
@@ -849,7 +1396,7 @@ impl WorkspaceManifestMut<'_> {
         &mut self,
         platforms: impl IntoIterator<Item = &'a PixiPlatform>,
         feature_name: &FeatureName,
-    ) -> miette::Result<()> {
+    ) -> Result<(), PlatformEditError> {
         let platform_names: IndexSet<PixiPlatformName> =
             platforms.into_iter().map(|p| p.name().clone()).collect();
         if feature_name.is_default() {
@@ -863,7 +1410,7 @@ impl WorkspaceManifestMut<'_> {
     pub fn remove_workspace_platforms(
         &mut self,
         platforms: &IndexSet<PixiPlatformName>,
-    ) -> miette::Result<()> {
+    ) -> Result<(), TomlError> {
         // Update Manifest platforms. Features keep their own platform lists
         // even if entries are no longer in the workspace default: a feature
         // explicitly listing `platforms = [...]` is an opt-in to that exact
@@ -876,21 +1423,22 @@ impl WorkspaceManifestMut<'_> {
         // Update TOML document platforms. Retain-and-filter (rather than
         // clear-and-rebuild) so we preserve the user's quoting and spacing
         // for the entries that survive.
-        self.document
-            .get_array_mut("platforms", &FeatureName::DEFAULT)?
-            .retain(|item| {
-                let entry_name = if let Some(s) = item.as_str() {
-                    Some(s)
-                } else if let Some(table) = item.as_inline_table() {
-                    table.get("name").and_then(|v| v.as_str())
-                } else {
-                    None
-                };
-                match entry_name {
-                    Some(name) => !platforms.iter().any(|pn| pn.as_str() == name),
-                    None => true, // unexpected shape -- leave it alone
-                }
-            });
+        let array = self
+            .document
+            .get_array_mut("platforms", &FeatureName::Default)?;
+        pixi_toml_edit::retain_array_elements(array, |item| {
+            let entry_name = if let Some(s) = item.as_str() {
+                Some(s)
+            } else if let Some(table) = item.as_inline_table() {
+                table.get("name").and_then(|v| v.as_str())
+            } else {
+                None
+            };
+            match entry_name {
+                Some(name) => !platforms.iter().any(|pn| pn.as_str() == name),
+                None => true, // unexpected shape -- leave it alone
+            }
+        });
 
         Ok(())
     }
@@ -899,7 +1447,7 @@ impl WorkspaceManifestMut<'_> {
         &mut self,
         platforms: IndexSet<PixiPlatformName>,
         feature_name: &FeatureName,
-    ) -> miette::Result<()> {
+    ) -> Result<(), PlatformEditError> {
         if feature_name.is_default() {
             return Ok(());
         }
@@ -919,10 +1467,10 @@ impl WorkspaceManifestMut<'_> {
             .filter(|pn| !feature_platforms.contains(*pn))
             .collect();
         if !missing.is_empty() {
-            miette::bail!(
-                "feature '{feature_name}' does not declare platform(s): {}",
-                missing.iter().map(|pn| pn.as_str()).join(", ")
-            );
+            return Err(PlatformEditError::NotDeclaredByFeature {
+                feature_name: feature_name.clone(),
+                missing: missing.into_iter().cloned().collect(),
+            });
         }
 
         // Update the feature platforms:
@@ -932,14 +1480,43 @@ impl WorkspaceManifestMut<'_> {
             .retain(|p| !platforms.contains(p));
 
         // Update TOML document feature platforms
-        self.document
-            .get_array_mut("platforms", feature_name)?
-            .retain(|item| {
-                item.as_str()
-                    .map(|s| !platforms.iter().any(|pn| pn.as_str() == s))
-                    .unwrap_or(true)
-            });
+        let array = self.document.get_array_mut("platforms", feature_name)?;
+        pixi_toml_edit::retain_array_elements(array, |item| {
+            item.as_str()
+                .map(|s| !platforms.iter().any(|pn| pn.as_str() == s))
+                .unwrap_or(true)
+        });
 
+        Ok(())
+    }
+
+    /// Ensures that the environment backing a synthesized environment feature
+    /// exists so that inline content can be written to it. A missing
+    /// environment is created on the fly, including the default feature; the
+    /// shorthand manifest forms are converted to an explicit table first.
+    fn ensure_inline_environment(&mut self, feature_name: &FeatureName) -> Result<(), TomlError> {
+        let Some(name) = feature_name.environment_name() else {
+            return Ok(());
+        };
+
+        self.document.ensure_environment_is_table(name.as_str())?;
+
+        match self.workspace.environments.find(name) {
+            None => {
+                self.workspace.environments.add(Environment {
+                    name: name.clone(),
+                    features: vec![feature_name.clone()],
+                    solve_group: None,
+                    no_default_feature: false,
+                });
+            }
+            Some(environment) if !environment.features.contains(feature_name) => {
+                let mut environment = environment.clone();
+                environment.features.insert(0, feature_name.clone());
+                self.workspace.environments.add(environment);
+            }
+            Some(_) => {}
+        }
         Ok(())
     }
 
@@ -955,9 +1532,29 @@ impl WorkspaceManifestMut<'_> {
         targets: &[TargetSelector],
         feature_name: &FeatureName,
         overwrite_behavior: DependencyOverwriteBehavior,
-    ) -> miette::Result<bool> {
+    ) -> Result<AddDependencyOutcome, AddDependencyError> {
+        self.ensure_inline_environment(feature_name)?;
         let mut any_added = false;
+        let mut any_inherited = false;
         for target in to_target_options(targets) {
+            // An entry that inherits from `[workspace.dependencies]` stays as
+            // it is unless the new spec pins something down explicitly:
+            // rewriting the marker with a concrete spec would silently
+            // disconnect the entry from the workspace pool. This keeps
+            // `pixi upgrade` and bare `pixi add` from clobbering inherited
+            // entries.
+            if !spec.has_version_spec()
+                && !spec.is_source()
+                && self.document.dependency_inherits_workspace(
+                    name,
+                    spec_type,
+                    target.as_ref(),
+                    feature_name,
+                )
+            {
+                any_inherited = true;
+                continue;
+            }
             match self
                 .workspace
                 .get_or_insert_target_mut(target.as_ref(), Some(feature_name))
@@ -977,7 +1574,13 @@ impl WorkspaceManifestMut<'_> {
                 Err(e) => return Err(e.into()),
             };
         }
-        Ok(any_added)
+        Ok(if any_added {
+            AddDependencyOutcome::Added
+        } else if any_inherited {
+            AddDependencyOutcome::InheritsWorkspace
+        } else {
+            AddDependencyOutcome::AlreadyExists
+        })
     }
 
     /// Convert a (possibly absent) workspace platform name into the
@@ -1007,6 +1610,9 @@ impl WorkspaceManifestMut<'_> {
         platforms: &[PixiPlatformName],
         feature_name: &FeatureName,
     ) -> Result<(), RemoveDependencyError> {
+        if self.workspace.features.get(feature_name).is_none() {
+            return Err(MissingTargetError::new(None, feature_name, consts::DEPENDENCIES).into());
+        }
         let mut any_removed = false;
         for platform_name in to_options(platforms) {
             let selector = self.platform_target_selector(platform_name.as_ref());
@@ -1052,7 +1658,8 @@ impl WorkspaceManifestMut<'_> {
         editable: Option<bool>,
         overwrite_behavior: DependencyOverwriteBehavior,
         location: Option<PypiDependencyLocation>,
-    ) -> miette::Result<bool> {
+    ) -> Result<bool, AddDependencyError> {
+        self.ensure_inline_environment(feature_name)?;
         let mut any_added = false;
         for target in to_target_options(targets) {
             match self
@@ -1092,6 +1699,11 @@ impl WorkspaceManifestMut<'_> {
         platforms: &[PixiPlatformName],
         feature_name: &FeatureName,
     ) -> Result<(), RemoveDependencyError> {
+        if self.workspace.features.get(feature_name).is_none() {
+            return Err(
+                MissingTargetError::new(None, feature_name, consts::PYPI_DEPENDENCIES).into(),
+            );
+        }
         let mut any_removed = false;
         for platform_name in to_options(platforms) {
             let selector = self.platform_target_selector(platform_name.as_ref());
@@ -1134,7 +1746,9 @@ impl WorkspaceManifestMut<'_> {
         channels: impl IntoIterator<Item = PrioritizedChannel>,
         feature_name: &FeatureName,
         prepend: bool,
-    ) -> miette::Result<()> {
+    ) -> Result<(), TomlError> {
+        self.ensure_inline_environment(feature_name)?;
+
         // First collect all the new channels
         let to_add: IndexSet<_> = channels.into_iter().collect();
 
@@ -1148,14 +1762,16 @@ impl WorkspaceManifestMut<'_> {
         };
 
         let new: IndexSet<_> = to_add.difference(current).cloned().collect();
-        let new_channels: IndexSet<_> = new
-            .clone()
-            .into_iter()
-            .map(|channel| channel.channel)
+        let new_channel_names: IndexSet<String> = new
+            .iter()
+            .map(|channel| channel.channel.to_string())
             .collect();
 
-        // clear channels with modified priority
-        current.retain(|c| !new_channels.contains(&c.channel));
+        // Clear channels that are re-added with a modified priority. Compare
+        // display names so an entry that only differs in spelling (e.g. a URL
+        // with a trailing slash) is replaced instead of kept as a duplicate
+        // of the entry that ends up in the document.
+        current.retain(|c| !new_channel_names.contains(&c.channel.to_string()));
 
         // Create the final channel list in the desired order
         let final_channels = if prepend {
@@ -1171,11 +1787,21 @@ impl WorkspaceManifestMut<'_> {
         // Update both the parsed channels and the TOML document
         *current = final_channels.clone();
 
-        // Update the TOML document
+        // Update the TOML document: drop the entries of channels that are
+        // re-added with a different priority, then insert the new entries, so
+        // the untouched entries keep their formatting.
         let channels = self.document.get_array_mut("channels", feature_name)?;
-        channels.clear();
-        for channel in final_channels {
-            channels.push(Value::from(channel));
+        pixi_toml_edit::retain_array_elements(channels, |item| {
+            channel_array_element_name(item)
+                .is_none_or(|name| !new_channel_names.contains(&normalized_channel_name(name)))
+        });
+        for (index, channel) in new.into_iter().enumerate() {
+            let value = Value::from(channel);
+            if prepend {
+                pixi_toml_edit::insert_array_element(channels, index, value);
+            } else {
+                pixi_toml_edit::push_array_element(channels, value);
+            }
         }
 
         Ok(())
@@ -1189,7 +1815,7 @@ impl WorkspaceManifestMut<'_> {
         &mut self,
         channels: impl IntoIterator<Item = PrioritizedChannel>,
         feature_name: &FeatureName,
-    ) -> miette::Result<()> {
+    ) -> Result<(), RemoveChannelsError> {
         // Get current channels and channels to remove for the feature
         let current = if feature_name.is_default() {
             &mut self.workspace.workspace.channels
@@ -1203,7 +1829,7 @@ impl WorkspaceManifestMut<'_> {
                 current
                     .iter()
                     .position(|x| x.channel.to_string() == c.channel.to_string())
-                    .ok_or_else(|| miette::miette!("channel {} does not exist", c.channel.as_str()))
+                    .ok_or_else(|| RemoveChannelsError::NotFound(c.channel.clone()))
                     .map(|_| c.channel.to_string())
             })
             .collect::<Result<_, _>>()?;
@@ -1216,15 +1842,14 @@ impl WorkspaceManifestMut<'_> {
 
         // Remove channels from the manifest
         current.retain(|c| retained.contains(c));
-        let current_clone = current.clone();
 
-        // And from the TOML document
+        // And from the TOML document. Retain-and-filter (rather than
+        // clear-and-rebuild) so the remaining entries keep their formatting.
         let channels = self.document.get_array_mut("channels", feature_name)?;
-        // clear and recreate from current list
-        channels.clear();
-        for channel in current_clone.iter() {
-            channels.push(Value::from(channel.clone()));
-        }
+        pixi_toml_edit::retain_array_elements(channels, |item| {
+            channel_array_element_name(item)
+                .is_none_or(|name| !to_remove.contains(&normalized_channel_name(name)))
+        });
 
         Ok(())
     }
@@ -1237,7 +1862,7 @@ impl WorkspaceManifestMut<'_> {
         &mut self,
         channels: impl IntoIterator<Item = PrioritizedChannel>,
         feature_name: &FeatureName,
-    ) -> miette::Result<()> {
+    ) -> Result<(), TomlError> {
         let channels: Vec<_> = channels.into_iter().collect();
 
         // Get the current channels
@@ -1263,39 +1888,49 @@ impl WorkspaceManifestMut<'_> {
         Ok(())
     }
 
+    /// Enables a preview flag in both the parsed workspace and the TOML document.
+    /// Returns false if the flag was already enabled.
+    pub fn add_preview_flag(&mut self, flag: KnownPreviewFlag) -> Result<bool, TomlError> {
+        let added = self.document.add_preview_flag(flag.into())?;
+        match &mut self.workspace.workspace.preview {
+            Preview::Flags(flags) => {
+                if !flags.contains(&flag) {
+                    flags.push(flag);
+                }
+            }
+            preview @ Preview::AllEnabled(false) => *preview = Preview::Flags(vec![flag]),
+            Preview::AllEnabled(true) => {}
+        }
+        Ok(added)
+    }
+
     /// Set the workspace name.
     ///
     /// This function modifies both the workspace and the TOML document. Use
     /// `ManifestProvenance::save` to persist the changes to disk.
-    pub fn set_name(&mut self, name: &str) -> miette::Result<()> {
+    pub fn set_name(&mut self, name: &str) {
         self.workspace.workspace.name = Some(name.to_string());
         self.document.set_name(name);
-        Ok(())
     }
 
     /// Set the project description
     ///
     /// This function modifies both the workspace and the TOML document. Use
     /// `ManifestProvenance::save` to persist the changes to disk.
-    pub fn set_description(&mut self, description: &str) -> miette::Result<()> {
+    pub fn set_description(&mut self, description: &str) {
         // Update in both the manifest and the toml
         self.workspace.workspace.description = Some(description.to_string());
         self.document.set_description(description);
-
-        Ok(())
     }
 
     /// Set the project version
     ///
     /// This function modifies both the workspace and the TOML document. Use
     /// `ManifestProvenance::save` to persist the changes to disk.
-    pub fn set_version(&mut self, version: &str) -> miette::Result<()> {
+    pub fn set_version(&mut self, version: &str) -> Result<(), InvalidVersionError> {
         // Update in both the manifest and the toml
-        self.workspace.workspace.version = Some(
-            Version::from_str(version)
-                .into_diagnostic()
-                .context("could not convert version to a valid project version")?,
-        );
+        self.workspace.workspace.version =
+            Some(Version::from_str(version).map_err(InvalidVersionError)?);
         self.document.set_version(version);
         Ok(())
     }
@@ -1304,26 +1939,139 @@ impl WorkspaceManifestMut<'_> {
     ///
     /// This function modifies both the workspace and the TOML document. Use
     /// `ManifestProvenance::save` to persist the changes to disk.
-    pub fn set_requires_pixi(&mut self, version: Option<&str>) -> miette::Result<()> {
+    pub fn set_requires_pixi(&mut self, version: Option<&str>) -> Result<(), SetRequiresPixiError> {
         // Update in both the manifest and the toml
         self.workspace.workspace.requires_pixi = match version {
             Some(version) => Some(
                 VersionSpec::from_str(version, Strict)
-                    .into_diagnostic()
-                    .context("could not convert to a valid version spec")?,
+                    .map_err(SetRequiresPixiError::InvalidVersionSpec)?,
             ),
             None => None,
         };
-        self.document.set_requires_pixi(version).into_diagnostic()
+        Ok(self.document.set_requires_pixi(version)?)
+    }
+
+    /// Sets or removes the `exclude-newer` cutoff of the workspace.
+    ///
+    /// This function modifies both the workspace and the TOML document. Use
+    /// `ManifestProvenance::save` to persist the changes to disk.
+    pub fn set_exclude_newer_cutoff(
+        &mut self,
+        cutoff: Option<&str>,
+    ) -> Result<(), ExcludeNewerEditError> {
+        self.workspace
+            .workspace
+            .exclude_newer
+            .set_cutoff(self.document.workspace_table_mut()?, cutoff)
+    }
+
+    /// Exempts the releases of `name` that match the spec of `exemption`
+    /// from the `exclude-newer` cutoff, replacing an existing exemption of the
+    /// package.
+    pub fn add_exclude_newer_exemption(
+        &mut self,
+        name: PackageName,
+        exemption: ExcludeNewerExemption,
+    ) -> Result<(), ExcludeNewerEditError> {
+        self.workspace.workspace.exclude_newer.add_exemption(
+            self.document.workspace_table_mut()?,
+            name,
+            exemption,
+        )
+    }
+
+    /// Removes the `exclude-newer` exemption of `name`. Returns false if the
+    /// package was not exempt.
+    pub fn remove_exclude_newer_exemption(
+        &mut self,
+        name: &PackageName,
+    ) -> Result<bool, ExcludeNewerEditError> {
+        self.workspace
+            .workspace
+            .exclude_newer
+            .remove_exemption(self.document.workspace_table_mut()?, name)
+    }
+
+    /// Sets or removes the `pypi-exclude-newer` cutoff of the workspace.
+    pub fn set_pypi_exclude_newer_cutoff(
+        &mut self,
+        cutoff: Option<&str>,
+    ) -> Result<(), ExcludeNewerEditError> {
+        self.workspace
+            .workspace
+            .pypi_exclude_newer
+            .set_cutoff(self.document.workspace_table_mut()?, cutoff)
+    }
+
+    /// Exempts every release of the PyPI package `name` from the
+    /// `pypi-exclude-newer` cutoff.
+    pub fn add_pypi_exclude_newer_exemption(
+        &mut self,
+        name: PypiPackageName,
+    ) -> Result<(), ExcludeNewerEditError> {
+        self.workspace
+            .workspace
+            .pypi_exclude_newer
+            .add_exemption(self.document.workspace_table_mut()?, name)
+    }
+
+    /// Removes the `pypi-exclude-newer` exemption of `name`. Returns false if
+    /// the package was not exempt.
+    pub fn remove_pypi_exclude_newer_exemption(
+        &mut self,
+        name: &PypiPackageName,
+    ) -> Result<bool, ExcludeNewerEditError> {
+        self.workspace
+            .workspace
+            .pypi_exclude_newer
+            .remove_exemption(self.document.workspace_table_mut()?, name)
     }
 }
 
-/// Error for a workspace platform lookup by name that found nothing.
-fn missing_platform_error(name: &PixiPlatformName) -> miette::Report {
-    miette!(
-        "workspace does not define a platform named '{}'",
-        name.as_str()
-    )
+/// The channel a `channels` array element refers to: either a bare string or
+/// the `channel` key of an inline table entry like
+/// `{ channel = "nvidia", priority = 1 }`.
+fn channel_array_element_name(item: &Value) -> Option<&str> {
+    if let Some(name) = item.as_str() {
+        Some(name)
+    } else if let Some(table) = item.as_inline_table() {
+        table.get("channel").and_then(|value| value.as_str())
+    } else {
+        None
+    }
+}
+
+/// Normalizes a raw channel string from the TOML document so it compares
+/// equal to the display form of a parsed channel (e.g. URLs lose their
+/// trailing slash and get a lowercased host).
+fn normalized_channel_name(name: &str) -> String {
+    NamedChannelOrUrl::from_str(name)
+        .map(|channel| channel.to_string())
+        .unwrap_or_else(|_| name.to_string())
+}
+
+/// Error for adding a platform whose (subdir, customised virtual packages)
+/// definition is already declared under a different name.
+fn duplicate_definition_error(
+    existing: &PixiPlatform,
+    incoming: &PixiPlatform,
+) -> PlatformEditError {
+    let customised = existing.customised_virtual_packages();
+    let definition = if customised.is_empty() {
+        format!("subdir '{}'", existing.subdir())
+    } else {
+        let vps = customised
+            .iter()
+            .map(crate::platform::format_virtual_package)
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("subdir '{}' with virtual packages {vps}", existing.subdir())
+    };
+    PlatformEditError::DuplicateDefinition {
+        incoming: incoming.name().clone(),
+        existing: existing.name().clone(),
+        definition,
+    }
 }
 
 /// Position of the platform named `anchor`. The caller must have verified the
@@ -1366,10 +2114,14 @@ impl std::fmt::Display for MissingTargetError {
         match &self.platform {
             Some(platform) => write!(
                 f,
-                "No target for feature `{}` found on platform `{platform}`",
-                self.feature_name
+                "No target for {} found on platform `{platform}`",
+                self.feature_name.user_facing()
             ),
-            None => write!(f, "No default target for feature `{}`", self.feature_name),
+            None => write!(
+                f,
+                "No default target for {}",
+                self.feature_name.user_facing()
+            ),
         }
     }
 }
@@ -1386,6 +2138,11 @@ impl miette::Diagnostic for MissingTargetError {
             format!(
                 "Expected target for `{name}`, e.g.: `[{target_path}{section}]`",
                 name = self.feature_name,
+                section = self.section,
+            )
+        } else if let Some(environment) = self.feature_name.environment_name() {
+            format!(
+                "Expected target for environment '{environment}', e.g.: `[environments.{environment}.{target_path}{section}]`",
                 section = self.section,
             )
         } else {
@@ -1420,16 +2177,180 @@ pub enum RemoveDependencyError {
     Toml(#[from] TomlError),
 }
 
+/// Raised by [`WorkspaceManifest::feature_mut`] when the feature does not
+/// exist.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error("Feature {} does not exist", consts::FEATURE_STYLE.apply_to(.0))]
+pub struct FeatureNotFoundError(pub FeatureName);
+
+/// Errors from [`WorkspaceManifestMut::add_task`] and
+/// [`WorkspaceManifestMut::remove_task`].
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum TaskEditError {
+    #[error("task {0} already exists")]
+    AlreadyExists(TaskName),
+
+    #[error("task {0} does not exist")]
+    NotFound(TaskName),
+
+    #[error("the environment '{0}' does not exist")]
+    UnknownEnvironment(EnvironmentName),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Feature(#[from] GetFeatureError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Toml(#[from] TomlError),
+}
+
+/// Errors from removing activation scripts or environment variables.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum ActivationEditError {
+    #[error("the environment '{0}' does not exist")]
+    EnvironmentNotFound(EnvironmentName),
+
+    #[error("the feature '{}' does not exist", .0.as_str())]
+    FeatureNotFound(FeatureName),
+
+    /// `what` names the kind of entry, e.g. "activation scripts".
+    #[error("no {what} are defined for {location}")]
+    NoneDefined {
+        what: &'static str,
+        location: ActivationLocation,
+    },
+
+    #[error("the activation script '{script}' was not found for {location}")]
+    ScriptNotFound {
+        script: String,
+        location: ActivationLocation,
+    },
+
+    #[error("the activation environment variable '{key}' was not found for {location}")]
+    EnvVarNotFound {
+        key: String,
+        location: ActivationLocation,
+    },
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Toml(#[from] TomlError),
+}
+
+/// Errors from adding or editing environments and removing features.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum EnvironmentEditError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    UnknownFeature(#[from] UnknownFeature),
+
+    #[error("the environment '{0}' does not exist")]
+    NotFound(EnvironmentName),
+
+    #[error("Cannot remove the default feature")]
+    RemoveDefaultFeature,
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Feature(#[from] GetFeatureError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Toml(#[from] TomlError),
+}
+
+/// Errors from adding, editing, moving or removing platforms.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum PlatformEditError {
+    #[error("workspace does not define a platform named '{0}'")]
+    NotFound(PixiPlatformName),
+
+    #[error(
+        "cannot add platform '{incoming}': its definition ({definition}) is already declared as '{existing}'"
+    )]
+    #[diagnostic(help(
+        "reuse the existing platform '{existing}', or give this one a distinct subdir or virtual packages"
+    ))]
+    DuplicateDefinition {
+        incoming: PixiPlatformName,
+        existing: PixiPlatformName,
+        definition: String,
+    },
+
+    #[error("cannot move platform '{0}' relative to itself")]
+    MoveRelativeToItself(PixiPlatformName),
+
+    #[error(
+        "{} does not declare platform(s): {}",
+        .feature_name.user_facing(),
+        .missing.iter().join(", ")
+    )]
+    NotDeclaredByFeature {
+        feature_name: FeatureName,
+        missing: Vec<PixiPlatformName>,
+    },
+
+    #[error(transparent)]
+    InvalidEdit(#[from] PixiPlatformError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Toml(#[from] TomlError),
+}
+
+/// Errors from [`WorkspaceManifestMut::add_dependency`] and
+/// [`WorkspaceManifestMut::add_pep508_dependency`].
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum AddDependencyError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Dependency(#[from] DependencyError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Toml(#[from] TomlError),
+}
+
+/// Errors from [`WorkspaceManifestMut::remove_channels`].
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum RemoveChannelsError {
+    #[error("channel {} does not exist", .0.as_str())]
+    NotFound(NamedChannelOrUrl),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    FeatureNotFound(#[from] FeatureNotFoundError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Toml(#[from] TomlError),
+}
+
+/// Raised by [`WorkspaceManifestMut::set_version`].
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error("could not convert version to a valid project version")]
+pub struct InvalidVersionError(#[source] pub ParseVersionError);
+
+/// Errors from [`WorkspaceManifestMut::set_requires_pixi`].
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum SetRequiresPixiError {
+    #[error("could not convert to a valid version spec")]
+    InvalidVersionSpec(#[source] ParseVersionSpecError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Toml(#[from] TomlError),
+}
+
 /// One-shot migration from the legacy `[system-requirements]` shape to the
 /// per-platform-VPs shape. Lives in its own module so it's easy to delete
 /// once the legacy syntax is fully retired: drop the module, drop the
 /// `must_migrate` field on `Workspace`, drop the two call sites in
 /// `add_workspace_platforms` and `edit_workspace_platform`.
 mod migrate_to_rich_platforms {
-    use miette::miette;
-
     use super::WorkspaceManifestMut;
-    use crate::FeatureName;
+    use crate::{FeatureName, TomlError};
 
     /// Persist the in-memory migration when `must_migrate` is set and the
     /// edit produces a non-subdir platform: drop every `[system-requirements]`
@@ -1438,15 +2359,12 @@ mod migrate_to_rich_platforms {
     pub(super) fn commit_if_needed(
         manifest: &mut WorkspaceManifestMut<'_>,
         edit_produces_rich: bool,
-    ) -> miette::Result<()> {
+    ) -> Result<(), TomlError> {
         if !manifest.workspace.workspace.must_migrate || !edit_produces_rich {
             return Ok(());
         }
 
-        manifest
-            .document
-            .remove_system_requirements_section(None)
-            .map_err(|e| miette!(e))?;
+        manifest.document.remove_system_requirements_section(None)?;
 
         let named_features: Vec<FeatureName> = manifest
             .workspace
@@ -1458,8 +2376,7 @@ mod migrate_to_rich_platforms {
         for feature_name in &named_features {
             manifest
                 .document
-                .remove_system_requirements_section(Some(feature_name))
-                .map_err(|e| miette!(e))?;
+                .remove_system_requirements_section(Some(feature_name))?;
 
             let Some(in_memory) = manifest
                 .workspace
@@ -1469,10 +2386,7 @@ mod migrate_to_rich_platforms {
             else {
                 continue;
             };
-            let array = manifest
-                .document
-                .get_array_mut("platforms", feature_name)
-                .map_err(|e| miette!(e))?;
+            let array = manifest.document.get_array_mut("platforms", feature_name)?;
             array.clear();
             for platform_name in &in_memory {
                 array.push(platform_name.as_str());
@@ -1496,11 +2410,12 @@ mod tests {
     use itertools::Itertools;
     use miette::NarratableReportHandler;
     use pixi_spec::PixiSpec;
-    use pixi_test_utils::format_parse_error;
+    use pixi_test_utils::{format_diagnostic, format_parse_error};
     use rattler_conda_types::{
         MatchSpec, NamedChannelOrUrl, PackageName, ParseStrictness,
         ParseStrictness::{Lenient, Strict},
-        Platform, Version, VersionSpec,
+        Subdir, Version, VersionSpec,
+        package::BuildString,
     };
     use rstest::rstest;
     use toml_edit::DocumentMut;
@@ -1604,6 +2519,56 @@ start = "python -m flask run --port=5050"
         )
     }
 
+    #[rstest]
+    #[case("", true)]
+    #[case("preview = false", true)]
+    #[case("preview = true", false)]
+    #[case("preview = [\"pixi-build\"]", false)]
+    #[case("preview = [\"existing-flag\"]", true)]
+    fn test_add_preview_flag_keeps_parsed_and_document_in_sync(
+        #[case] preview: &str,
+        #[case] expected_added: bool,
+    ) {
+        let source = format!("{PROJECT_BOILERPLATE}\n{preview}\n");
+        let mut workspace = parse_pixi_toml(&source);
+
+        assert_eq!(
+            workspace
+                .editable()
+                .add_preview_flag(KnownPreviewFlag::PixiBuild)
+                .unwrap(),
+            expected_added
+        );
+        assert!(
+            !workspace
+                .editable()
+                .add_preview_flag(KnownPreviewFlag::PixiBuild)
+                .unwrap()
+        );
+
+        let rendered = workspace.document.render().unwrap();
+        let reparsed = parse_pixi_toml(&rendered);
+        assert_eq!(
+            workspace.manifest.workspace.preview,
+            reparsed.manifest.workspace.preview
+        );
+        assert!(
+            workspace
+                .manifest
+                .workspace
+                .preview
+                .is_enabled(KnownPreviewFlag::PixiBuild)
+        );
+        if preview.contains("existing-flag") {
+            let document = DocumentMut::from_str(&rendered).unwrap();
+            let flags = document["project"]["preview"].as_array().unwrap();
+            assert_eq!(
+                flags.iter().filter_map(Value::as_str).collect::<Vec<_>>(),
+                ["existing-flag", "pixi-build"]
+            );
+        }
+    }
+
     #[test]
     fn test_add_pep508_dependency() {
         let mut manifest = parse_pyproject_toml(PYPROJECT_BOILERPLATE);
@@ -1615,7 +2580,7 @@ start = "python -m flask run --port=5050"
             .add_pep508_dependency(
                 (&requirement, None),
                 &[],
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
                 None,
                 DependencyOverwriteBehavior::Overwrite,
                 None,
@@ -1674,7 +2639,7 @@ start = "python -m flask run --port=5050"
         // Remove flask from pyproject
         let name = PypiPackageName::from_str("flask").unwrap();
         manifest
-            .remove_pypi_dependency(&name, &[], &FeatureName::DEFAULT)
+            .remove_pypi_dependency(&name, &[], &FeatureName::Default)
             .unwrap();
 
         assert!(
@@ -1714,16 +2679,16 @@ start = "python -m flask run --port=5050"
         assert_eq!(
             targets.user_defined_selectors().cloned().collect_vec(),
             vec![
-                TargetSelector::Subdir(Platform::Win64),
-                TargetSelector::Subdir(Platform::Osx64),
+                TargetSelector::Subdir(Subdir::Win64),
+                TargetSelector::Subdir(Subdir::Osx64),
             ]
         );
 
         let win64_target = targets
-            .for_target(&TargetSelector::Subdir(Platform::Win64))
+            .for_target(&TargetSelector::Subdir(Subdir::Win64))
             .unwrap();
         let osx64_target = targets
-            .for_target(&TargetSelector::Subdir(Platform::Osx64))
+            .for_target(&TargetSelector::Subdir(Subdir::Osx64))
             .unwrap();
         assert_eq!(
             win64_target
@@ -2121,8 +3086,8 @@ foo = "1.0"
         "#;
         let manifest = parse_pixi_toml(contents).manifest;
         println!("{:?}", manifest.workspace.build_variants);
-        let linux64 = PixiPlatform::from_subdir(Platform::Linux64);
-        let win64 = PixiPlatform::from_subdir(Platform::Win64);
+        let linux64 = PixiPlatform::from_subdir(Subdir::Linux64);
+        let win64 = PixiPlatform::from_subdir(Subdir::Win64);
         let resolved_linux = manifest
             .workspace
             .build_variants
@@ -2217,13 +3182,13 @@ foo = "1.0"
             .as_ref()
             .and_then(|a| a.env.as_ref());
         let win64_activation_env = default_targets
-            .for_target(&TargetSelector::Subdir(Platform::Win64))
+            .for_target(&TargetSelector::Subdir(Subdir::Win64))
             .unwrap()
             .activation
             .as_ref()
             .and_then(|a| a.env.as_ref());
         let linux64_activation_env = default_targets
-            .for_target(&TargetSelector::Subdir(Platform::Linux64))
+            .for_target(&TargetSelector::Subdir(Subdir::Linux64))
             .unwrap()
             .activation
             .as_ref()
@@ -2259,13 +3224,13 @@ foo = "1.0"
             .as_ref()
             .and_then(|a| a.env.as_ref());
         let feature_win64_activation_env = feature_targets
-            .for_target(&TargetSelector::Subdir(Platform::Win64))
+            .for_target(&TargetSelector::Subdir(Subdir::Win64))
             .unwrap()
             .activation
             .as_ref()
             .and_then(|a| a.env.as_ref());
         let feature_linux64_activation_env = feature_targets
-            .for_target(&TargetSelector::Subdir(Platform::Linux64))
+            .for_target(&TargetSelector::Subdir(Subdir::Linux64))
             .unwrap()
             .activation
             .as_ref()
@@ -2298,7 +3263,7 @@ foo = "1.0"
         file_contents: &str,
         name: &str,
         kind: SpecType,
-        platforms: &[Platform],
+        platforms: &[Subdir],
         feature_name: &FeatureName,
     ) {
         let mut manifest = parse_pixi_toml(file_contents);
@@ -2308,7 +3273,7 @@ foo = "1.0"
             .copied()
             .map(PixiPlatformName::from)
             .collect();
-        let subdir_options: Vec<Option<Platform>> = if platforms.is_empty() {
+        let subdir_options: Vec<Option<Subdir>> = if platforms.is_empty() {
             vec![None]
         } else {
             platforms.iter().copied().map(Some).collect()
@@ -2392,22 +3357,22 @@ foo = "1.0"
             file_contents,
             "baz",
             SpecType::Build,
-            &[Platform::Linux64],
-            &FeatureName::DEFAULT,
+            &[Subdir::Linux64],
+            &FeatureName::Default,
         );
         test_remove(
             file_contents,
             "bar",
             SpecType::Run,
-            &[Platform::Win64],
-            &FeatureName::DEFAULT,
+            &[Subdir::Win64],
+            &FeatureName::Default,
         );
         test_remove(
             file_contents,
             "fooz",
             SpecType::Run,
             &[],
-            &FeatureName::DEFAULT,
+            &FeatureName::Default,
         );
     }
 
@@ -2440,7 +3405,7 @@ foo = "1.0"
                 &PackageName::new_unchecked("fooz"),
                 SpecType::Run,
                 &[],
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
             )
             .unwrap();
 
@@ -2458,8 +3423,8 @@ foo = "1.0"
 
         // Should still contain the fooz dependency for the different platforms
         for (platform, kind) in [
-            (Platform::Linux64, SpecType::Build),
-            (Platform::Win64, SpecType::Run),
+            (Subdir::Linux64, SpecType::Build),
+            (Subdir::Win64, SpecType::Run),
         ] {
             assert!(
                 manifest
@@ -2480,7 +3445,7 @@ foo = "1.0"
     fn test_remove_pypi(
         file_contents: &str,
         name: &str,
-        platforms: &[Platform],
+        platforms: &[Subdir],
         feature_name: &FeatureName,
     ) {
         let mut manifest = parse_pixi_toml(file_contents);
@@ -2492,7 +3457,7 @@ foo = "1.0"
             .copied()
             .map(PixiPlatformName::from)
             .collect();
-        let subdir_options: Vec<Option<Platform>> = if platforms.is_empty() {
+        let subdir_options: Vec<Option<Subdir>> = if platforms.is_empty() {
             vec![None]
         } else {
             platforms.iter().copied().map(Some).collect()
@@ -2547,16 +3512,16 @@ foo = "1.0"
     }
 
     #[rstest]
-    #[case::xpackage("xpackage", & [Platform::Linux64], FeatureName::default())]
-    #[case::jax("jax", & [Platform::Win64], FeatureName::default())]
+    #[case::xpackage("xpackage", & [Subdir::Linux64], FeatureName::default())]
+    #[case::jax("jax", & [Subdir::Win64], FeatureName::default())]
     #[case::requests("requests", & [], FeatureName::default())]
     #[case::feature_dep("feature_dep", & [], FeatureName::from("test"))]
     #[case::feature_target_dep(
-        "feature_target_dep", & [Platform::Linux64], FeatureName::from("test")
+        "feature_target_dep", & [Subdir::Linux64], FeatureName::from("test")
     )]
     fn test_remove_pypi_dependencies(
         #[case] package_name: &str,
-        #[case] platforms: &[Platform],
+        #[case] platforms: &[Subdir],
         #[case] feature_name: FeatureName,
     ) {
         let pixi_cfg = r#"[project]
@@ -2655,7 +3620,7 @@ feature_target_dep = "*"
             String::from("foo description")
         );
 
-        manifest.set_description("my new description").unwrap();
+        manifest.set_description("my new description");
 
         assert_eq!(
             manifest
@@ -2685,58 +3650,54 @@ feature_target_dep = "*"
         let mut manifest = parse_pixi_toml(file_contents);
         let mut manifest = manifest.editable();
 
-        fn pp(p: Platform) -> PixiPlatform {
+        fn pp(p: Subdir) -> PixiPlatform {
             PixiPlatform::from_subdir(p)
         }
-        fn pn(p: Platform) -> PixiPlatformName {
+        fn pn(p: Subdir) -> PixiPlatformName {
             p.into()
         }
 
         assert_eq!(
             manifest.workspace.workspace.platforms,
-            [pp(Platform::Linux64), pp(Platform::Win64)]
+            [pp(Subdir::Linux64), pp(Subdir::Win64)]
                 .into_iter()
                 .collect::<IndexSet<_>>()
         );
 
         manifest
-            .add_platforms([pp(Platform::OsxArm64)].iter(), &FeatureName::DEFAULT)
+            .add_platforms([pp(Subdir::OsxArm64)].iter(), &FeatureName::Default)
             .unwrap();
 
         assert_eq!(
             manifest.workspace.workspace.platforms,
-            [
-                pp(Platform::Linux64),
-                pp(Platform::Win64),
-                pp(Platform::OsxArm64),
-            ]
-            .into_iter()
-            .collect::<IndexSet<_>>()
-        );
-
-        manifest
-            .add_platforms(
-                [pp(Platform::LinuxAarch64), pp(Platform::Osx64)].iter(),
-                &FeatureName::from("test"),
-            )
-            .unwrap();
-
-        assert_eq!(
-            manifest
-                .workspace
-                .feature(&FeatureName::from("test"))
-                .unwrap()
-                .platforms
-                .clone()
-                .unwrap(),
-            [pn(Platform::LinuxAarch64), pn(Platform::Osx64)]
+            [pp(Subdir::Linux64), pp(Subdir::Win64), pp(Subdir::OsxArm64),]
                 .into_iter()
                 .collect::<IndexSet<_>>()
         );
 
         manifest
             .add_platforms(
-                [pp(Platform::LinuxAarch64), pp(Platform::Win64)].iter(),
+                [pp(Subdir::LinuxAarch64), pp(Subdir::Osx64)].iter(),
+                &FeatureName::from("test"),
+            )
+            .unwrap();
+
+        assert_eq!(
+            manifest
+                .workspace
+                .feature(&FeatureName::from("test"))
+                .unwrap()
+                .platforms
+                .clone()
+                .unwrap(),
+            [pn(Subdir::LinuxAarch64), pn(Subdir::Osx64)]
+                .into_iter()
+                .collect::<IndexSet<_>>()
+        );
+
+        manifest
+            .add_platforms(
+                [pp(Subdir::LinuxAarch64), pp(Subdir::Win64)].iter(),
                 &FeatureName::from("test"),
             )
             .unwrap();
@@ -2750,9 +3711,9 @@ feature_target_dep = "*"
                 .clone()
                 .unwrap(),
             [
-                pn(Platform::LinuxAarch64),
-                pn(Platform::Osx64),
-                pn(Platform::Win64),
+                pn(Subdir::LinuxAarch64),
+                pn(Subdir::Osx64),
+                pn(Subdir::Win64),
             ]
             .into_iter()
             .collect::<IndexSet<_>>()
@@ -2785,8 +3746,8 @@ platforms = [
         let mut editable = workspace.editable();
         editable
             .add_platforms(
-                [PixiPlatform::from_subdir(Platform::OsxArm64)].iter(),
-                &FeatureName::DEFAULT,
+                [PixiPlatform::from_subdir(Subdir::OsxArm64)].iter(),
+                &FeatureName::Default,
             )
             .unwrap();
 
@@ -2923,6 +3884,109 @@ platforms = ["linux-64", "osx-64"]
     }
 
     #[test]
+    fn test_auto_detected_definition_survives_toml_round_trip() {
+        fn gvp(
+            name: &str,
+            version: &str,
+            build: &str,
+        ) -> rattler_conda_types::GenericVirtualPackage {
+            rattler_conda_types::GenericVirtualPackage {
+                name: PackageName::try_from(name).unwrap(),
+                version: Version::from_str(version).unwrap(),
+                build_string: BuildString::new_unchecked(build),
+            }
+        }
+        // `"0"` build strings mirror what rattler's detection emits for
+        // version-only virtual packages; the manifest's friendly form drops
+        // them, so the round trip must still compare equal.
+        let customised = vec![
+            gvp("__glibc", "2.42", "0"),
+            gvp("__linux", "7.0.8", "0"),
+            gvp("__archspec", "1", "zen5"),
+        ];
+        let candidate = PixiPlatform::from_detection(None, Subdir::Linux64, customised).unwrap();
+
+        let mut workspace =
+            parse_pixi_toml("[workspace]\nname = \"x\"\nchannels = []\nplatforms = [\"win-64\"]\n");
+        workspace
+            .editable()
+            .add_platforms(std::iter::once(&candidate), &FeatureName::Default)
+            .unwrap();
+        let doc = workspace.document.to_string();
+
+        // Re-parse, mimicking a second `add auto-detected` invocation reading the
+        // manifest the first one wrote.
+        let reparsed = parse_pixi_toml(&doc);
+        let stored = reparsed
+            .manifest
+            .workspace
+            .platforms
+            .iter()
+            .find(|p| p.name() == candidate.name())
+            .expect("written platform parses back");
+
+        assert!(
+            stored.has_same_definition(&candidate),
+            "definition must survive the round trip:\n stored:    {:?}\n candidate: {:?}",
+            stored.customised_virtual_packages(),
+            candidate.customised_virtual_packages(),
+        );
+    }
+
+    #[test]
+    fn test_add_rejects_duplicate_definition_under_different_name() {
+        fn cuda_platform(name: &str) -> PixiPlatform {
+            let cuda = rattler_conda_types::GenericVirtualPackage {
+                name: PackageName::try_from("__cuda").unwrap(),
+                version: Version::from_str("12").unwrap(),
+                build_string: BuildString::new_unchecked("0"),
+            };
+            PixiPlatform::new_with_defaults(
+                PixiPlatformName::try_from(name).unwrap(),
+                Subdir::Linux64,
+                vec![cuda],
+            )
+            .unwrap()
+        }
+        let first = cuda_platform("gpu-a");
+        let second = cuda_platform("gpu-b");
+
+        let mut workspace =
+            parse_pixi_toml("[workspace]\nname = \"x\"\nchannels = []\nplatforms = [\"win-64\"]\n");
+        workspace
+            .editable()
+            .add_platforms(std::iter::once(&first), &FeatureName::Default)
+            .unwrap();
+
+        // Same subdir + virtual packages under a different name is rejected.
+        let err = workspace
+            .editable()
+            .add_platforms(std::iter::once(&second), &FeatureName::Default)
+            .unwrap_err();
+        assert_matches::assert_matches!(
+            &err,
+            PlatformEditError::DuplicateDefinition { incoming, existing, .. }
+                if incoming.as_str() == "gpu-b" && existing.as_str() == "gpu-a"
+        );
+        let help = miette::Diagnostic::help(&err).unwrap().to_string();
+        assert!(
+            help.contains("reuse the existing platform 'gpu-a'"),
+            "{help}"
+        );
+        let message = err.to_string();
+        assert!(
+            message.contains("with virtual packages __cuda=12)"),
+            "{message}"
+        );
+
+        // Re-adding the identical platform (same name + definition) is a no-op.
+        workspace
+            .editable()
+            .add_platforms(std::iter::once(&first), &FeatureName::Default)
+            .unwrap();
+    }
+
+    #[test]
     fn test_rich_platform_and_feature_reference_are_all_listed() {
         let file_contents = r#"
 [workspace]
@@ -2984,10 +4048,10 @@ platforms = ["linux-64-cuda-12-9"]
         let mut manifest = parse_pixi_toml(file_contents);
         let mut manifest = manifest.editable();
 
-        fn pp(p: Platform) -> PixiPlatform {
+        fn pp(p: Subdir) -> PixiPlatform {
             PixiPlatform::from_subdir(p)
         }
-        fn pn(p: Platform) -> PixiPlatformName {
+        fn pn(p: Subdir) -> PixiPlatformName {
             p.into()
         }
 
@@ -2997,22 +4061,18 @@ platforms = ["linux-64-cuda-12-9"]
         // platform set as a bare subdir-platform.
         assert_eq!(
             manifest.workspace.workspace.platforms,
-            [
-                pp(Platform::Linux64),
-                pp(Platform::Win64),
-                pp(Platform::Osx64),
-            ]
-            .into_iter()
-            .collect::<IndexSet<_>>()
+            [pp(Subdir::Linux64), pp(Subdir::Win64), pp(Subdir::Osx64),]
+                .into_iter()
+                .collect::<IndexSet<_>>()
         );
 
         manifest
-            .remove_platforms([pp(Platform::Linux64)].iter(), &FeatureName::DEFAULT)
+            .remove_platforms([pp(Subdir::Linux64)].iter(), &FeatureName::Default)
             .unwrap();
 
         assert_eq!(
             manifest.workspace.workspace.platforms,
-            [pp(Platform::Win64), pp(Platform::Osx64)]
+            [pp(Subdir::Win64), pp(Subdir::Osx64)]
                 .into_iter()
                 .collect::<IndexSet<_>>()
         );
@@ -3025,18 +4085,14 @@ platforms = ["linux-64-cuda-12-9"]
                 .platforms
                 .clone()
                 .unwrap(),
-            [
-                pn(Platform::Linux64),
-                pn(Platform::Win64),
-                pn(Platform::Osx64),
-            ]
-            .into_iter()
-            .collect::<IndexSet<_>>()
+            [pn(Subdir::Linux64), pn(Subdir::Win64), pn(Subdir::Osx64),]
+                .into_iter()
+                .collect::<IndexSet<_>>()
         );
 
         manifest
             .remove_platforms(
-                [pp(Platform::Linux64), pp(Platform::Osx64)].iter(),
+                [pp(Subdir::Linux64), pp(Subdir::Osx64)].iter(),
                 &FeatureName::from("test"),
             )
             .unwrap();
@@ -3049,14 +4105,14 @@ platforms = ["linux-64-cuda-12-9"]
                 .platforms
                 .clone()
                 .unwrap(),
-            [pn(Platform::Win64)].into_iter().collect::<IndexSet<_>>()
+            [pn(Subdir::Win64)].into_iter().collect::<IndexSet<_>>()
         );
 
         // Test removing non-existing platforms
         assert!(
             manifest
                 .remove_platforms(
-                    [pp(Platform::Linux64), pp(Platform::Osx64)].iter(),
+                    [pp(Subdir::Linux64), pp(Subdir::Osx64)].iter(),
                     &FeatureName::from("test"),
                 )
                 .is_err()
@@ -3088,21 +4144,21 @@ platforms = ["linux-64-cuda-12-9"]
         let mut manifest = parse_pixi_toml(file_contents);
         let mut manifest = manifest.editable();
 
-        fn pp(p: Platform) -> PixiPlatform {
+        fn pp(p: Subdir) -> PixiPlatform {
             PixiPlatform::from_subdir(p)
         }
-        fn pn(p: Platform) -> PixiPlatformName {
+        fn pn(p: Subdir) -> PixiPlatformName {
             p.into()
         }
 
         // Workspace-level remove of OsxArm64.
         manifest
-            .remove_platforms([pp(Platform::OsxArm64)].iter(), &FeatureName::DEFAULT)
+            .remove_platforms([pp(Subdir::OsxArm64)].iter(), &FeatureName::Default)
             .unwrap();
 
         assert_eq!(
             manifest.workspace.workspace.platforms,
-            [pp(Platform::Linux64)].into_iter().collect::<IndexSet<_>>(),
+            [pp(Subdir::Linux64)].into_iter().collect::<IndexSet<_>>(),
         );
 
         // The feature still references OsxArm64 -- this is the dangling
@@ -3116,9 +4172,7 @@ platforms = ["linux-64-cuda-12-9"]
             .unwrap();
         assert_eq!(
             dangling,
-            [pn(Platform::OsxArm64)]
-                .into_iter()
-                .collect::<IndexSet<_>>(),
+            [pn(Subdir::OsxArm64)].into_iter().collect::<IndexSet<_>>(),
         );
     }
 
@@ -3146,20 +4200,20 @@ platforms = ["linux-64-cuda-12-9"]
         let mut manifest = parse_pixi_toml(file_contents);
         let mut manifest = manifest.editable();
 
-        fn pp(p: Platform) -> PixiPlatform {
+        fn pp(p: Subdir) -> PixiPlatform {
             PixiPlatform::from_subdir(p)
         }
-        fn pn(p: Platform) -> PixiPlatformName {
+        fn pn(p: Subdir) -> PixiPlatformName {
             p.into()
         }
 
         // `add ... --feature gpu` extends both sides.
         manifest
-            .add_platforms([pp(Platform::OsxArm64)].iter(), &FeatureName::from("gpu"))
+            .add_platforms([pp(Subdir::OsxArm64)].iter(), &FeatureName::from("gpu"))
             .unwrap();
         assert_eq!(
             manifest.workspace.workspace.platforms,
-            [pp(Platform::Linux64), pp(Platform::OsxArm64)]
+            [pp(Subdir::Linux64), pp(Subdir::OsxArm64)]
                 .into_iter()
                 .collect::<IndexSet<_>>(),
         );
@@ -3171,14 +4225,12 @@ platforms = ["linux-64-cuda-12-9"]
                 .platforms
                 .clone()
                 .unwrap(),
-            [pn(Platform::OsxArm64)]
-                .into_iter()
-                .collect::<IndexSet<_>>(),
+            [pn(Subdir::OsxArm64)].into_iter().collect::<IndexSet<_>>(),
         );
 
         // `remove ... --feature gpu` shrinks only the feature.
         manifest
-            .remove_platforms([pp(Platform::OsxArm64)].iter(), &FeatureName::from("gpu"))
+            .remove_platforms([pp(Subdir::OsxArm64)].iter(), &FeatureName::from("gpu"))
             .unwrap();
         assert_eq!(
             manifest
@@ -3194,7 +4246,7 @@ platforms = ["linux-64-cuda-12-9"]
         // might still reference it.
         assert_eq!(
             manifest.workspace.workspace.platforms,
-            [pp(Platform::Linux64), pp(Platform::OsxArm64)]
+            [pp(Subdir::Linux64), pp(Subdir::OsxArm64)]
                 .into_iter()
                 .collect::<IndexSet<_>>(),
         );
@@ -3223,7 +4275,7 @@ platforms = ["linux-64", "win-64"]
         let conda_forge =
             PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from("conda-forge")));
         manifest
-            .add_channels([conda_forge.clone()], &FeatureName::DEFAULT, false)
+            .add_channels([conda_forge.clone()], &FeatureName::Default, false)
             .unwrap();
 
         let cuda_feature = FeatureName::from("cuda");
@@ -3257,7 +4309,7 @@ platforms = ["linux-64", "win-64"]
 
         // Try to add again, should not add more channels
         manifest
-            .add_channels([conda_forge.clone()], &FeatureName::DEFAULT, false)
+            .add_channels([conda_forge.clone()], &FeatureName::Default, false)
             .unwrap();
 
         assert_eq!(
@@ -3344,7 +4396,7 @@ platforms = ["linux-64", "win-64"]
             exclude_newer: None,
         };
         manifest
-            .add_channels([custom_channel.clone()], &FeatureName::DEFAULT, false)
+            .add_channels([custom_channel.clone()], &FeatureName::Default, false)
             .unwrap();
 
         assert!(
@@ -3363,7 +4415,7 @@ platforms = ["linux-64", "win-64"]
             exclude_newer: None,
         };
         manifest
-            .add_channels([prioritized_channel1.clone()], &FeatureName::DEFAULT, false)
+            .add_channels([prioritized_channel1.clone()], &FeatureName::Default, false)
             .unwrap();
 
         assert!(
@@ -3381,7 +4433,7 @@ platforms = ["linux-64", "win-64"]
             exclude_newer: None,
         };
         manifest
-            .add_channels([prioritized_channel2.clone()], &FeatureName::DEFAULT, false)
+            .add_channels([prioritized_channel2.clone()], &FeatureName::Default, false)
             .unwrap();
 
         assert!(
@@ -3431,7 +4483,7 @@ platforms = ["linux-64", "win-64"]
                     priority: None,
                     exclude_newer: None,
                 }],
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
             )
             .unwrap();
 
@@ -3466,10 +4518,340 @@ platforms = ["linux-64", "win-64"]
                         priority: None,
                         exclude_newer: None,
                     }],
-                    &FeatureName::DEFAULT,
+                    &FeatureName::Default,
                 )
                 .is_err()
         );
+    }
+
+    /// Adding a channel appends in place: the untouched entries keep their
+    /// multiline layout and comments instead of being rewritten.
+    #[test]
+    fn test_add_channels_preserves_formatting() {
+        let file_contents = r#"[workspace]
+name = "foo"
+channels = [
+    # the community mainstay
+    "conda-forge", # default
+    "bioconda",
+]
+platforms = ["linux-64"]
+"#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut manifest = workspace.editable();
+        manifest
+            .add_channels(
+                [PrioritizedChannel::from(NamedChannelOrUrl::Name(
+                    String::from("nvidia"),
+                ))],
+                &FeatureName::Default,
+                false,
+            )
+            .unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r#"
+        [workspace]
+        name = "foo"
+        channels = [
+            # the community mainstay
+            "conda-forge", # default
+            "bioconda",
+            "nvidia",
+        ]
+        platforms = ["linux-64"]
+        "#);
+    }
+
+    /// Re-adding a URL channel that the document spells with a trailing
+    /// slash replaces the entry: the parsed channels must not keep a stale
+    /// duplicate next to the entry that is written to the document.
+    #[test]
+    fn test_add_channel_url_trailing_slash_variant_replaces_entry() {
+        let file_contents = r#"[workspace]
+name = "foo"
+channels = ["https://repo.example.com/ch/"]
+platforms = ["linux-64"]
+"#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut manifest = workspace.editable();
+        manifest
+            .add_channels(
+                [PrioritizedChannel {
+                    channel: NamedChannelOrUrl::from_str("https://repo.example.com/ch").unwrap(),
+                    priority: Some(10),
+                    exclude_newer: None,
+                }],
+                &FeatureName::Default,
+                false,
+            )
+            .unwrap();
+
+        let document = manifest.document.to_string();
+        assert_eq!(
+            document.matches("repo.example.com").count(),
+            1,
+            "document lists the channel more than once:\n{document}"
+        );
+        assert_eq!(
+            manifest.workspace.workspace.channels.len(),
+            1,
+            "parsed channels diverge from the document: {:?}",
+            manifest.workspace.workspace.channels
+        );
+    }
+
+    /// Prepending a channel inserts it in front while the existing entries
+    /// keep their formatting.
+    #[test]
+    fn test_prepend_channel_preserves_formatting() {
+        let file_contents = r#"[workspace]
+name = "foo"
+channels = [
+    "conda-forge", # default
+    "bioconda",
+]
+platforms = ["linux-64"]
+"#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut manifest = workspace.editable();
+        manifest
+            .add_channels(
+                [PrioritizedChannel::from(NamedChannelOrUrl::Name(
+                    String::from("nvidia"),
+                ))],
+                &FeatureName::Default,
+                true,
+            )
+            .unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r#"
+        [workspace]
+        name = "foo"
+        channels = [
+            "nvidia",
+            "conda-forge", # default
+            "bioconda",
+        ]
+        platforms = ["linux-64"]
+        "#);
+    }
+
+    /// Removing a channel removes only its line: the surviving entries keep
+    /// their multiline layout and comments.
+    #[test]
+    fn test_remove_channels_preserves_formatting() {
+        let file_contents = r#"[workspace]
+name = "foo"
+channels = [
+    # the community mainstay
+    "conda-forge", # default
+    "bioconda", # remove me
+]
+platforms = ["linux-64"]
+"#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut manifest = workspace.editable();
+        manifest
+            .remove_channels(
+                [PrioritizedChannel::from(NamedChannelOrUrl::Name(
+                    String::from("bioconda"),
+                ))],
+                &FeatureName::Default,
+            )
+            .unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r#"
+        [workspace]
+        name = "foo"
+        channels = [
+            # the community mainstay
+            "conda-forge", # default
+        ]
+        platforms = ["linux-64"]
+        "#);
+    }
+
+    /// Removing a URL channel that is written with a trailing slash in the
+    /// manifest must remove it from the TOML document as well:
+    /// `NamedChannelOrUrl` normalizes the trailing slash away while the raw
+    /// file contents keep it.
+    #[test]
+    fn test_remove_url_channel_with_trailing_slash() {
+        let file_contents = r#"[workspace]
+name = "foo"
+channels = ["https://repo.example.com/ch/"]
+platforms = ["linux-64"]
+"#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut manifest = workspace.editable();
+        manifest
+            .remove_channels(
+                [PrioritizedChannel::from(
+                    "https://repo.example.com/ch/"
+                        .parse::<NamedChannelOrUrl>()
+                        .unwrap(),
+                )],
+                &FeatureName::Default,
+            )
+            .unwrap();
+
+        assert_eq!(manifest.workspace.workspace.channels, IndexSet::new());
+        assert_snapshot!(manifest.document.to_string(), @r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+        "#);
+    }
+
+    /// Removing a dependency must remove it from the TOML document even when
+    /// the document spells the name differently than the user typed it:
+    /// conda package names compare case-insensitively, so reporting success
+    /// while leaving the entry in the file silently diverges.
+    #[test]
+    fn test_remove_dependency_with_non_normalized_name_in_document() {
+        let file_contents = r#"[workspace]
+name = "foo"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+hTTPx = "*"
+numpy = "*"
+"#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut manifest = workspace.editable();
+        manifest
+            .remove_dependency(
+                &rattler_conda_types::PackageName::from_str("httpx").unwrap(),
+                SpecType::Run,
+                &[],
+                &FeatureName::Default,
+            )
+            .unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r#"
+        [workspace]
+        name = "foo"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+
+        [dependencies]
+        numpy = "*"
+        "#);
+    }
+
+    /// Re-adding a URL channel with a different priority replaces the
+    /// existing entry even when the manifest writes the URL with a trailing
+    /// slash, instead of leaving a duplicate behind.
+    #[test]
+    fn test_readd_url_channel_with_trailing_slash() {
+        let file_contents = r#"[workspace]
+name = "foo"
+channels = ["https://repo.example.com/ch/"]
+platforms = ["linux-64"]
+"#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut manifest = workspace.editable();
+        manifest
+            .add_channels(
+                [PrioritizedChannel {
+                    channel: "https://repo.example.com/ch/"
+                        .parse::<NamedChannelOrUrl>()
+                        .unwrap(),
+                    priority: Some(10),
+                    exclude_newer: None,
+                }],
+                &FeatureName::Default,
+                false,
+            )
+            .unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r#"
+        [workspace]
+        name = "foo"
+        channels = [{ channel = "https://repo.example.com/ch", priority = 10 }]
+        platforms = ["linux-64"]
+        "#);
+    }
+
+    /// Removing a channel that is written as an inline table with a trailing
+    /// slash in its URL removes the whole entry from the TOML document.
+    #[test]
+    fn test_remove_inline_table_channel_with_trailing_slash() {
+        let file_contents = r#"[workspace]
+name = "foo"
+channels = [{ channel = "https://repo.example.com/ch/", priority = 10 }]
+platforms = ["linux-64"]
+"#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut manifest = workspace.editable();
+        manifest
+            .remove_channels(
+                [PrioritizedChannel::from(
+                    "https://repo.example.com/ch/"
+                        .parse::<NamedChannelOrUrl>()
+                        .unwrap(),
+                )],
+                &FeatureName::Default,
+            )
+            .unwrap();
+
+        assert_eq!(manifest.workspace.workspace.channels, IndexSet::new());
+        assert_snapshot!(manifest.document.to_string(), @r#"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+        "#);
+    }
+
+    /// Removing a channel from a feature keeps the comment of the surviving
+    /// entry even when the array has no trailing comma.
+    #[test]
+    fn test_remove_feature_channel_preserves_formatting() {
+        let file_contents = r#"[workspace]
+name = "foo"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[feature.test]
+channels = [
+  "bioconda", # keep me
+  "test_channel"
+]
+"#;
+
+        let mut workspace = parse_pixi_toml(file_contents);
+        let mut manifest = workspace.editable();
+        manifest
+            .remove_channels(
+                [PrioritizedChannel::from(NamedChannelOrUrl::Name(
+                    String::from("test_channel"),
+                ))],
+                &FeatureName::from("test"),
+            )
+            .unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r#"
+        [workspace]
+        name = "foo"
+        channels = ["conda-forge"]
+        platforms = ["linux-64"]
+
+        [feature.test]
+        channels = [
+          "bioconda" # keep me
+        ]
+        "#);
     }
 
     #[test]
@@ -3651,7 +5033,7 @@ platforms = ["linux-64", "win-64"]
         assert_eq!(
             cuda_feature
                 .targets
-                .for_target(&TargetSelector::Subdir(Platform::OsxArm64))
+                .for_target(&TargetSelector::Subdir(Subdir::OsxArm64))
                 .unwrap()
                 .dependencies
                 .get(&SpecType::Run)
@@ -3718,16 +5100,16 @@ test = "test initial"
                 "default".into(),
                 Task::Plain("echo default".into()),
                 None,
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
             )
             .unwrap();
-        let linux64 = PixiPlatform::from_subdir(Platform::Linux64);
+        let linux64 = PixiPlatform::from_subdir(Subdir::Linux64);
         manifest
             .add_task(
                 "target_linux".into(),
                 Task::Plain("echo target_linux".into()),
                 Some(&linux64),
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
             )
             .unwrap();
         manifest
@@ -3781,7 +5163,7 @@ bar = "*"
                 &spec,
                 SpecType::Run,
                 &[],
-                &FeatureName::DEFAULT,
+                &FeatureName::Default,
                 DependencyOverwriteBehavior::Overwrite,
             )
             .unwrap();
@@ -3846,7 +5228,7 @@ bar = "*"
                 package_name.as_exact().unwrap(),
                 &pixi_spec,
                 SpecType::Run,
-                &[Platform::Linux64.into()],
+                &[Subdir::Linux64.into()],
                 &FeatureName::from("extra"),
                 DependencyOverwriteBehavior::Overwrite,
             )
@@ -3858,7 +5240,7 @@ bar = "*"
                 .feature(&FeatureName::from("extra"))
                 .unwrap()
                 .targets
-                .for_target(&TargetSelector::Subdir(Platform::Linux64))
+                .for_target(&TargetSelector::Subdir(Subdir::Linux64))
                 .unwrap()
                 .dependencies
                 .get(&SpecType::Run)
@@ -3882,7 +5264,7 @@ bar = "*"
                 package_name.as_exact().unwrap(),
                 &pixi_spec,
                 SpecType::Build,
-                &[Platform::Linux64.into()],
+                &[Subdir::Linux64.into()],
                 &FeatureName::from("build"),
                 DependencyOverwriteBehavior::Overwrite,
             )
@@ -3893,7 +5275,7 @@ bar = "*"
                 .workspace
                 .feature(&FeatureName::from("build"))
                 .map(|f| &f.targets)
-                .and_then(|t| t.for_target(&TargetSelector::Subdir(Platform::Linux64)))
+                .and_then(|t| t.for_target(&TargetSelector::Subdir(Subdir::Linux64)))
                 .and_then(|t| t.dependencies.get(&SpecType::Build))
                 .and_then(|deps| deps.get(&PackageName::from_str("cmake").unwrap()))
                 .and_then(|specs| specs.iter().next())
@@ -3904,6 +5286,84 @@ bar = "*"
         );
 
         assert_snapshot!(manifest.document.to_string());
+    }
+
+    #[test]
+    fn test_add_dependency_preserves_workspace_inherited_entry() {
+        let file_contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = ["linux-64"]
+
+[workspace.dependencies]
+numpy = "1.*"
+boltons = ">=24"
+
+[dependencies]
+numpy = { workspace = true }
+boltons = { workspace = true }
+"#;
+        let channel_config = default_channel_config();
+        let mut manifest = parse_pixi_toml(file_contents);
+        let mut manifest = manifest.editable();
+
+        // An unconstrained spec, as written by `pixi upgrade` and a bare
+        // `pixi add`, leaves the inherited entry untouched.
+        let (name, nameless) = MatchSpec::from_str("numpy", Strict)
+            .unwrap()
+            .into_nameless();
+        let spec = PixiSpec::from_nameless_matchspec(nameless, &channel_config);
+        let outcome = manifest
+            .add_dependency(
+                name.as_exact().unwrap(),
+                &spec,
+                SpecType::Run,
+                &[],
+                &FeatureName::Default,
+                DependencyOverwriteBehavior::Overwrite,
+            )
+            .unwrap();
+        assert_eq!(
+            outcome,
+            AddDependencyOutcome::InheritsWorkspace,
+            "inherited entry must be skipped"
+        );
+        assert!(
+            manifest
+                .document
+                .to_string()
+                .contains("numpy = { workspace = true }"),
+            "the workspace marker must remain in the document"
+        );
+
+        // An explicit version constraint replaces the marker.
+        let (name, nameless) = MatchSpec::from_str("boltons ==25.0", Strict)
+            .unwrap()
+            .into_nameless();
+        let spec = PixiSpec::from_nameless_matchspec(nameless, &channel_config);
+        let outcome = manifest
+            .add_dependency(
+                name.as_exact().unwrap(),
+                &spec,
+                SpecType::Run,
+                &[],
+                &FeatureName::Default,
+                DependencyOverwriteBehavior::Overwrite,
+            )
+            .unwrap();
+        assert_eq!(
+            outcome,
+            AddDependencyOutcome::Added,
+            "an explicit spec must overwrite the marker"
+        );
+        assert!(
+            manifest
+                .document
+                .to_string()
+                .contains(r#"boltons = "==25.0""#),
+            "the marker must be replaced by the concrete spec"
+        );
     }
 
     #[test]
@@ -3920,7 +5380,7 @@ bar = "*"
         let mut manifest = manifest.editable();
 
         manifest
-            .add_environment(String::from("test"), Some(Vec::new()), None, false)
+            .add_environment(NewEnvironment::new("test").with_features(Vec::new()))
             .unwrap();
         assert!(manifest.workspace.environment("test").is_some());
     }
@@ -3942,10 +5402,7 @@ bar = "*"
 
         manifest
             .add_environment(
-                String::from("test"),
-                Some(vec![String::from("foobar")]),
-                None,
-                false,
+                NewEnvironment::new("test").with_features(vec![String::from("foobar")]),
             )
             .unwrap();
         assert!(manifest.workspace.environment("test").is_some());
@@ -3968,17 +5425,14 @@ bar = "*"
 
         let err = manifest
             .add_environment(
-                String::from("test"),
-                Some(vec![String::from("non-existing")]),
-                None,
-                false,
+                NewEnvironment::new("test").with_features(vec![String::from("non-existing")]),
             )
             .unwrap_err();
 
         // Disable colors in tests
         let mut s = String::new();
         let report_handler = NarratableReportHandler::new().with_cause_chain();
-        report_handler.render_report(&mut s, err.as_ref()).unwrap();
+        report_handler.render_report(&mut s, &err).unwrap();
 
         assert_snapshot!(s, @r###"
         the feature 'non-existing' is not defined in the project manifest
@@ -4003,6 +5457,40 @@ bar = "*"
 
         assert!(manifest.remove_environment("foo").unwrap());
         assert!(!manifest.remove_environment("default").unwrap());
+    }
+
+    #[test]
+    fn test_remove_environment_referenced_by_task() {
+        let contents = r#"
+        [workspace]
+        channels = []
+        platforms = []
+
+        [environments]
+        foo = []
+        bar = []
+
+        [environments.baz.tasks]
+        own = { cmd = "echo", default-environment = "baz" }
+
+        [tasks]
+        a = "echo"
+        b = [{ task = "a", environment = "foo" }]
+        c = { cmd = "echo", default-environment = "foo" }
+        "#;
+        let mut manifest = parse_pixi_toml(contents);
+        let mut manifest = manifest.editable();
+
+        let err = manifest.remove_environment("foo").unwrap_err();
+        assert_snapshot!(format_diagnostic(&err), @r"
+        × cannot remove environment 'foo' because tasks refer to it: 'b', 'c'
+        help: remove these references first
+        ");
+        assert!(manifest.workspace.environment("foo").is_some());
+
+        // Only the environment's own inline tasks refer to it.
+        assert!(manifest.remove_environment("baz").unwrap());
+        assert!(manifest.remove_environment("bar").unwrap());
     }
 
     #[test]
@@ -4039,13 +5527,18 @@ bar = "*"
         assert!(modified.is_empty());
 
         // Check the feature was removed from the manifest
-        assert!(manifest.workspace.feature("test").is_none());
+        assert!(
+            manifest
+                .workspace
+                .feature(&FeatureName::from("test"))
+                .is_none()
+        );
 
-        // Remove non-existent feature should succeed
-        let result = manifest
+        // Remove non-existent feature should fail
+        let err = manifest
             .remove_feature(&FeatureName::from_str("nonexistent").unwrap())
-            .unwrap();
-        assert!(result.is_empty());
+            .unwrap_err();
+        assert_eq!(err.to_string(), "feature 'nonexistent' does not exist");
 
         // Remove feature used by environment should succeed and update environments
         let modified = manifest
@@ -4057,12 +5550,17 @@ bar = "*"
         );
 
         // Check the feature was removed from the manifest
-        assert!(manifest.workspace.feature("used").is_none());
+        assert!(
+            manifest
+                .workspace
+                .feature(&FeatureName::from("used"))
+                .is_none()
+        );
 
         // Check the environment was updated (feature removed)
         let env = manifest.workspace.environment("test-env").unwrap();
-        assert!(!env.features.contains(&"used".to_string()));
-        assert!(env.features.contains(&"also-used".to_string()));
+        assert!(!env.features.contains(&FeatureName::from("used")));
+        assert!(env.features.contains(&FeatureName::from("also-used")));
 
         // Cannot remove default feature
         let result = manifest.remove_feature(&FeatureName::from_str("default").unwrap());
@@ -4079,6 +5577,432 @@ bar = "*"
         assert!(!toml.contains("[feature.test]"));
         assert!(!toml.contains("[feature.used]"));
         assert!(toml.contains("[feature.also-used]"));
+    }
+
+    #[test]
+    fn test_remove_feature_keeps_inline_environment_content() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = ["linux-64"]
+
+[feature.shared.dependencies]
+some-package = "*"
+
+[environments.dev]
+features = ["shared"]
+dependencies = { other-package = "*" }
+"#;
+
+        let mut manifest = parse_pixi_toml(contents);
+        let mut manifest = manifest.editable();
+
+        let modified = manifest
+            .remove_feature(&FeatureName::from_str("shared").unwrap())
+            .unwrap();
+        assert_eq!(modified, vec![EnvironmentName::from_str("dev").unwrap()]);
+
+        // The content defined inline on the environment survives and the
+        // synthesized feature is not written to the feature list.
+        assert_snapshot!(manifest.document.to_string(), @r###"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [environments.dev]
+        dependencies = { other-package = "*" }
+        "###);
+
+        // The resulting document must still be a valid manifest.
+        parse_pixi_toml(&manifest.document.to_string());
+    }
+
+    #[test]
+    fn test_update_environment_features_preserves_inline_content() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = ["linux-64"]
+
+[feature.extra.dependencies]
+some-package = "*"
+
+[environments.dev]
+dependencies = { other-package = "*" }
+"#;
+
+        let mut manifest = parse_pixi_toml(contents);
+        let mut manifest = manifest.editable();
+
+        let environment_name = EnvironmentName::from_str("dev").unwrap();
+        manifest
+            .update_environment_features(
+                &environment_name,
+                vec![
+                    FeatureName::environment(&environment_name),
+                    FeatureName::from("extra"),
+                ],
+            )
+            .unwrap();
+
+        // The synthesized feature stays implicit while the named feature is
+        // written next to the inline content.
+        assert_snapshot!(manifest.document.to_string(), @r###"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [feature.extra.dependencies]
+        some-package = "*"
+
+        [environments.dev]
+        dependencies = { other-package = "*" }
+        features = ["extra"]
+        "###);
+
+        let env = manifest.workspace.environment("dev").unwrap();
+        assert_eq!(
+            env.features,
+            vec![
+                FeatureName::environment(&environment_name),
+                FeatureName::from("extra"),
+            ]
+        );
+
+        parse_pixi_toml(&manifest.document.to_string());
+    }
+
+    /// Adds a conda spec to an inline environment via its synthesized
+    /// feature. Both the parsed workspace and the argument are given so the
+    /// helper works for existing and freshly created environments.
+    fn add_dependency_to_environment(
+        manifest: &mut WorkspaceManifestMut<'_>,
+        spec: &str,
+        environment_name: &EnvironmentName,
+    ) -> Result<AddDependencyOutcome, AddDependencyError> {
+        let (name, spec) = MatchSpec::from_str(spec, Strict).unwrap().into_nameless();
+        let spec = PixiSpec::from_nameless_matchspec(spec, &default_channel_config());
+        manifest.add_dependency(
+            name.as_exact().unwrap(),
+            &spec,
+            SpecType::Run,
+            &[],
+            &FeatureName::environment(environment_name),
+            DependencyOverwriteBehavior::Overwrite,
+        )
+    }
+
+    #[test]
+    fn test_add_dependency_to_inline_environment() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = ["linux-64"]
+
+[environments.dev]
+dependencies = { other-package = "*" }
+"#;
+
+        let mut manifest = parse_pixi_toml(contents);
+        let mut manifest = manifest.editable();
+
+        let environment_name = EnvironmentName::from_str("dev").unwrap();
+        add_dependency_to_environment(&mut manifest, "numpy >=1.21", &environment_name).unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r#"
+
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [environments.dev]
+        dependencies = { other-package = "*", numpy = ">=1.21" }
+        "#);
+
+        parse_pixi_toml(&manifest.document.to_string());
+    }
+
+    #[test]
+    fn test_add_dependency_creates_inline_environment() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = ["linux-64"]
+"#;
+
+        let mut manifest = parse_pixi_toml(contents);
+        let mut manifest = manifest.editable();
+
+        let environment_name = EnvironmentName::from_str("dev").unwrap();
+        add_dependency_to_environment(&mut manifest, "numpy >=1.21", &environment_name).unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r###"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [environments.dev.dependencies]
+        numpy = ">=1.21"
+        "###);
+
+        // The created environment carries the synthesized feature and still
+        // includes the default feature.
+        let environment = manifest.workspace.environment("dev").unwrap();
+        assert_eq!(
+            environment.features,
+            vec![FeatureName::environment(&environment_name)]
+        );
+        assert!(!environment.no_default_feature);
+
+        parse_pixi_toml(&manifest.document.to_string());
+    }
+
+    #[test]
+    fn test_add_dependency_converts_environment_list_form() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = ["linux-64"]
+
+[feature.lint.dependencies]
+ruff = "*"
+
+[environments]
+dev = ["lint"]
+"#;
+
+        let mut manifest = parse_pixi_toml(contents);
+        let mut manifest = manifest.editable();
+
+        let environment_name = EnvironmentName::from_str("dev").unwrap();
+        add_dependency_to_environment(&mut manifest, "numpy >=1.21", &environment_name).unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r###"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [feature.lint.dependencies]
+        ruff = "*"
+
+        [environments.dev]
+        features = ["lint"]
+
+        [environments.dev.dependencies]
+        numpy = ">=1.21"
+        "###);
+
+        let environment = manifest.workspace.environment("dev").unwrap();
+        assert_eq!(
+            environment.features,
+            vec![
+                FeatureName::environment(&environment_name),
+                FeatureName::from("lint"),
+            ]
+        );
+
+        parse_pixi_toml(&manifest.document.to_string());
+    }
+
+    #[test]
+    fn test_add_dependency_converts_environment_inline_table_form() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = ["linux-64"]
+
+[feature.lint.dependencies]
+ruff = "*"
+
+[environments]
+dev = { features = ["lint"], no-default-feature = true }
+"#;
+
+        let mut manifest = parse_pixi_toml(contents);
+        let mut manifest = manifest.editable();
+
+        let environment_name = EnvironmentName::from_str("dev").unwrap();
+        add_dependency_to_environment(&mut manifest, "numpy >=1.21", &environment_name).unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r###"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [feature.lint.dependencies]
+        ruff = "*"
+
+        [environments.dev]
+        features = ["lint"]
+        no-default-feature = true
+
+        [environments.dev.dependencies]
+        numpy = ">=1.21"
+        "###);
+
+        let environment = manifest.workspace.environment("dev").unwrap();
+        assert!(environment.no_default_feature);
+
+        parse_pixi_toml(&manifest.document.to_string());
+    }
+
+    #[test]
+    fn test_add_dependency_to_default_environment_inline() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = ["linux-64"]
+"#;
+
+        let mut manifest = parse_pixi_toml(contents);
+        let mut manifest = manifest.editable();
+
+        add_dependency_to_environment(&mut manifest, "numpy >=1.21", &EnvironmentName::Default)
+            .unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r###"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [environments.default.dependencies]
+        numpy = ">=1.21"
+        "###);
+
+        let environment = manifest.workspace.environment("default").unwrap();
+        assert_eq!(
+            environment.features,
+            vec![FeatureName::environment(&EnvironmentName::Default)]
+        );
+
+        parse_pixi_toml(&manifest.document.to_string());
+    }
+
+    #[test]
+    fn test_remove_dependency_from_inline_environment() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = ["linux-64"]
+
+[environments.dev.dependencies]
+numpy = ">=1.21"
+other-package = "*"
+"#;
+
+        let mut manifest = parse_pixi_toml(contents);
+        let mut manifest = manifest.editable();
+
+        let environment_name = EnvironmentName::from_str("dev").unwrap();
+        manifest
+            .remove_dependency(
+                &PackageName::from_str("numpy").unwrap(),
+                SpecType::Run,
+                &[],
+                &FeatureName::environment(&environment_name),
+            )
+            .unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r###"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [environments.dev.dependencies]
+        other-package = "*"
+        "###);
+
+        parse_pixi_toml(&manifest.document.to_string());
+    }
+
+    #[test]
+    fn test_remove_dependency_from_environment_without_inline_content_errors() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = ["linux-64"]
+
+[feature.lint.dependencies]
+ruff = "*"
+
+[environments]
+dev = ["lint"]
+"#;
+
+        let mut manifest = parse_pixi_toml(contents);
+        let mut manifest = manifest.editable();
+
+        let environment_name = EnvironmentName::from_str("dev").unwrap();
+        let error = manifest
+            .remove_dependency(
+                &PackageName::from_str("ruff").unwrap(),
+                SpecType::Run,
+                &[],
+                &FeatureName::environment(&environment_name),
+            )
+            .unwrap_err();
+        assert_eq!(error.to_string(), "No default target for environment 'dev'");
+    }
+
+    #[test]
+    fn test_add_pypi_dependency_to_inline_environment() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = ["linux-64"]
+
+[environments.dev]
+dependencies = { python = "*" }
+"#;
+
+        let mut manifest = parse_pixi_toml(contents);
+        let mut manifest = manifest.editable();
+
+        let environment_name = EnvironmentName::from_str("dev").unwrap();
+        let requirement = pep508_rs::Requirement::from_str("numpy>=1.21").unwrap();
+        manifest
+            .add_pep508_dependency(
+                (&requirement, None),
+                &[],
+                &FeatureName::environment(&environment_name),
+                None,
+                DependencyOverwriteBehavior::Overwrite,
+                None,
+            )
+            .unwrap();
+
+        assert_snapshot!(manifest.document.to_string(), @r###"
+        [workspace]
+        name = "foo"
+        channels = []
+        platforms = ["linux-64"]
+
+        [environments.dev]
+        dependencies = { python = "*" }
+
+        [environments.dev.pypi-dependencies]
+        numpy = ">=1.21"
+        "###);
+
+        parse_pixi_toml(&manifest.document.to_string());
     }
 
     #[test]
@@ -4105,7 +6029,7 @@ bar = "*"
         assert!(manifest.default_feature().channel_priority.is_none());
         assert_eq!(
             manifest
-                .feature("strict")
+                .feature(&FeatureName::from("strict"))
                 .unwrap()
                 .channel_priority
                 .unwrap(),
@@ -4113,7 +6037,7 @@ bar = "*"
         );
         assert_eq!(
             manifest
-                .feature("disabled")
+                .feature(&FeatureName::from("disabled"))
                 .unwrap()
                 .channel_priority
                 .unwrap(),
@@ -4150,7 +6074,7 @@ bar = "*"
         // Add pytorch channel with prepend=true
         let pytorch = PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from("pytorch")));
         manifest
-            .add_channels([pytorch.clone()], &FeatureName::DEFAULT, true)
+            .add_channels([pytorch.clone()], &FeatureName::Default, true)
             .unwrap();
 
         // Verify pytorch is first in the list
@@ -4169,7 +6093,7 @@ bar = "*"
         // Add another channel without prepend
         let bioconda = PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from("bioconda")));
         manifest
-            .add_channels([bioconda.clone()], &FeatureName::DEFAULT, false)
+            .add_channels([bioconda.clone()], &FeatureName::Default, false)
             .unwrap();
 
         // Verify order is still pytorch, conda-forge, bioconda
@@ -4214,7 +6138,7 @@ channels = ["nvidia", "pytorch"]
             PrioritizedChannel::from(NamedChannelOrUrl::Name(String::from("conda-forge"))),
         ];
         manifest
-            .set_channels(new_channels, &FeatureName::DEFAULT)
+            .set_channels(new_channels, &FeatureName::Default)
             .unwrap();
 
         // Verify channels were replaced
@@ -4290,7 +6214,7 @@ channels = ["nvidia", "pytorch"]
         let manifest = WorkspaceManifest::from_toml_str_with_base_dir(toml, Path::new(""));
         let err = manifest.unwrap_err();
         insta::assert_snapshot!(format_parse_error(toml, err.error), @r###"
-         × conda source dependencies are not allowed without enabling the 'pixi-build' preview feature
+         × conda source dependencies are not allowed without enabling the 'pixi-build' preview flag
           ╭─[pixi.toml:8:15]
         7 │         [dependencies]
         8 │         foo = { path = "./foo" }
@@ -4298,7 +6222,7 @@ channels = ["nvidia", "pytorch"]
           ·                        ╰── source dependency specified here
         9 │
           ╰────
-         help: Add `preview = ["pixi-build"]` to the `workspace` or `project` table of your manifest
+         help: Run `pixi workspace preview add pixi-build` to enable the preview flag
         "###);
     }
 
@@ -4316,8 +6240,8 @@ channels = ["nvidia", "pytorch"]
 
         manifest
             .remove_platforms(
-                [PixiPlatform::from_subdir(Platform::Linux64)].iter(),
-                &FeatureName::DEFAULT,
+                [PixiPlatform::from_subdir(Subdir::Linux64)].iter(),
+                &FeatureName::Default,
             )
             .unwrap();
 
@@ -4444,7 +6368,7 @@ openssl = "<3"
 [target.linux-64.constraints]
 openssl = "<2"
 "#;
-        use rattler_conda_types::{PackageName, Platform};
+        use rattler_conda_types::{PackageName, Subdir};
         use std::str::FromStr;
 
         let manifest = parse_pixi_toml(contents).manifest;
@@ -4452,7 +6376,7 @@ openssl = "<2"
 
         let openssl = PackageName::from_str("openssl").unwrap();
 
-        // Platform-independent constraint
+        // Subdir-independent constraint
         let base_constraints = default_feature.constraints(None);
         assert!(base_constraints.is_some());
         let base_spec = base_constraints
@@ -4467,8 +6391,8 @@ openssl = "<2"
             .to_string();
         assert_eq!(base_spec, "<3");
 
-        // Platform-specific constraint overrides
-        let linux64 = PixiPlatform::from_subdir(Platform::Linux64);
+        // Subdir-specific constraint overrides
+        let linux64 = PixiPlatform::from_subdir(Subdir::Linux64);
         let linux_constraints = default_feature.constraints(Some(&linux64));
         assert!(linux_constraints.is_some());
         let linux_spec = linux_constraints
@@ -4482,6 +6406,21 @@ openssl = "<2"
             .unwrap()
             .to_string();
         assert_eq!(linux_spec, "<2");
+    }
+
+    /// The default feature of a manifest, to call [`FeaturesExt`] methods on.
+    struct DefaultFeature<'a>(&'a WorkspaceManifest);
+
+    impl<'a> HasWorkspaceManifest<'a> for DefaultFeature<'a> {
+        fn workspace_manifest(&self) -> &'a WorkspaceManifest {
+            self.0
+        }
+    }
+
+    impl<'a> HasFeaturesIter<'a> for DefaultFeature<'a> {
+        fn features(&self) -> impl DoubleEndedIterator<Item = &'a Feature> + 'a {
+            std::iter::once(self.0.default_feature())
+        }
     }
 
     #[test]
@@ -4525,24 +6464,273 @@ boltons = "0d"
     }
 
     #[test]
+    fn test_exclude_newer_table_syntax_is_parsed() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+
+[workspace.exclude-newer]
+cutoff = "7d"
+
+[workspace.exclude-newer.exemptions]
+polars = "1.43.1"
+py-rattler = "*"
+numpy = { version = "2.*", channel = "conda-forge" }
+
+[workspace.pypi-exclude-newer]
+cutoff = "2025-01-01"
+exemptions = { torch = "*" }
+"#;
+        use pixi_pypi_spec::PypiPackageName;
+        use rattler_conda_types::PackageName;
+        use std::str::FromStr;
+
+        let workspace = parse_pixi_toml(contents).manifest.workspace;
+        assert_eq!(workspace.exclude_newer.cutoff.unwrap().to_string(), "7days");
+        assert_eq!(
+            workspace
+                .exclude_newer
+                .exemptions
+                .keys()
+                .map(PackageName::as_source)
+                .sorted()
+                .collect::<Vec<_>>(),
+            ["numpy", "polars", "py-rattler"]
+        );
+        assert_eq!(
+            workspace.pypi_exclude_newer.cutoff.unwrap().to_string(),
+            "2025-01-02 00:00:00 UTC"
+        );
+        assert!(
+            workspace
+                .pypi_exclude_newer
+                .exemptions
+                .contains_key(&PypiPackageName::from_str("torch").unwrap())
+        );
+        assert!(workspace.exclude_newer_package_overrides.is_empty());
+        assert!(workspace.pypi_exclude_newer_package_overrides.is_empty());
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_tables_warn() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "7d"
+
+[exclude-newer]
+polars = "0d"
+openssl = "2025-01-01"
+
+[pypi-exclude-newer]
+boltons = "0d"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_tables_without_replacement_warn() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "7d"
+
+[exclude-newer]
+openssl = "30d"
+
+[pypi-exclude-newer]
+boltons = "2025-01-01"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_table_with_date_cutoff_warns() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "2025-01-01"
+
+[exclude-newer]
+polars = "0d"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_tables_with_dotted_names_warn() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "7d"
+
+[exclude-newer]
+"ruamel.yaml" = "0d"
+
+[pypi-exclude-newer]
+"zope.interface" = "0d"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_tables_keep_existing_exemptions() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = { cutoff = "7d", exemptions = { zlib = "1.3.1", polars = "1.0" } }
+pypi-exclude-newer = { exemptions = { requests = "*" } }
+
+[exclude-newer]
+polars = "0d"
+openssl = "0d"
+
+[pypi-exclude-newer]
+boltons = "0d"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_tables_without_any_cutoff_warn() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+
+[exclude-newer]
+polars = "0d"
+openssl = "30d"
+
+[pypi-exclude-newer]
+boltons = "0d"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_deprecated_exclude_newer_table_without_cutoff_warns() {
+        assert_snapshot!(expect_parse_warnings(
+            r#"
+[workspace]
+name = "foo"
+channels = [{ channel = "conda-forge", exclude-newer = "7d" }]
+platforms = []
+
+[exclude-newer]
+polars = "0d"
+
+[pypi-exclude-newer]
+boltons = "0d"
+"#
+        ));
+    }
+
+    #[test]
+    fn test_exclude_newer_config_applies_exemptions() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = { cutoff = "2015-12-02T02:07:43Z", exemptions = { polars = "1.43.1", numpy = "*" } }
+"#;
+
+        let manifest = parse_pixi_toml(contents).manifest;
+        let features = DefaultFeature(&manifest);
+        let resolved = features
+            .exclude_newer_config_resolved(&default_channel_config())
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            resolved
+                .exemptions()
+                .iter()
+                .map(|exemption| exemption.spec.to_string())
+                .sorted()
+                .collect::<Vec<_>>(),
+            ["numpy *", "polars ==1.43.1"]
+        );
+
+        use pixi_test_utils::uploaded_record;
+
+        let config: rattler_solve::ExcludeNewer = resolved.into();
+        assert!(!config.is_excluded(&uploaded_record("polars", "1.43.1", None)));
+        assert!(config.is_excluded(&uploaded_record("polars", "1.43.2", None)));
+        assert!(!config.is_excluded(&uploaded_record("numpy", "2.0.0", None)));
+        assert!(config.is_excluded(&uploaded_record("pandas", "2.0.0", None)));
+    }
+
+    #[test]
+    fn test_pypi_exclude_newer_config_falls_back_to_conda_cutoff() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "2015-12-02T02:07:43Z"
+pypi-exclude-newer = { exemptions = { torch = "*" } }
+"#;
+        let manifest = parse_pixi_toml(contents).manifest;
+        let features = DefaultFeature(&manifest);
+        let resolved = features.pypi_exclude_newer_config_resolved();
+        assert_eq!(
+            resolved.cutoff.unwrap(),
+            "2015-12-02T02:07:43Z"
+                .parse::<chrono::DateTime<chrono::Utc>>()
+                .unwrap()
+        );
+        assert_eq!(
+            resolved
+                .exempt_packages
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>(),
+            ["torch"]
+        );
+
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "2015-12-02T02:07:43Z"
+pypi-exclude-newer = "2016-12-02T02:07:43Z"
+"#;
+        let manifest = parse_pixi_toml(contents).manifest;
+        let features = DefaultFeature(&manifest);
+        assert_eq!(
+            features
+                .pypi_exclude_newer_config_resolved()
+                .cutoff
+                .unwrap(),
+            "2016-12-02T02:07:43Z"
+                .parse::<chrono::DateTime<chrono::Utc>>()
+                .unwrap()
+        );
+    }
+
+    #[test]
     fn test_exclude_newer_config_applies_package_overrides() {
-        struct TestFeatures<'a> {
-            manifest: &'a WorkspaceManifest,
-            features: Vec<&'a Feature>,
-        }
-
-        impl<'a> HasWorkspaceManifest<'a> for TestFeatures<'a> {
-            fn workspace_manifest(&self) -> &'a WorkspaceManifest {
-                self.manifest
-            }
-        }
-
-        impl<'a> HasFeaturesIter<'a> for TestFeatures<'a> {
-            fn features(&self) -> impl DoubleEndedIterator<Item = &'a Feature> + 'a {
-                self.features.clone().into_iter()
-            }
-        }
-
         let contents = r#"
 [project]
 name = "foo"
@@ -4556,11 +6744,7 @@ polars = "0d"
 
         let before = jiff::Timestamp::now();
         let manifest = parse_pixi_toml(contents).manifest;
-        let default_feature = manifest.default_feature();
-        let features = TestFeatures {
-            manifest: &manifest,
-            features: vec![default_feature],
-        };
+        let features = DefaultFeature(&manifest);
         let config: rattler_solve::ExcludeNewer = features
             .exclude_newer_config_resolved(&default_channel_config())
             .unwrap()
@@ -4576,23 +6760,6 @@ polars = "0d"
 
     #[test]
     fn test_exclude_newer_config_applies_channel_overrides() {
-        struct TestFeatures<'a> {
-            manifest: &'a WorkspaceManifest,
-            features: Vec<&'a Feature>,
-        }
-
-        impl<'a> HasWorkspaceManifest<'a> for TestFeatures<'a> {
-            fn workspace_manifest(&self) -> &'a WorkspaceManifest {
-                self.manifest
-            }
-        }
-
-        impl<'a> HasFeaturesIter<'a> for TestFeatures<'a> {
-            fn features(&self) -> impl DoubleEndedIterator<Item = &'a Feature> + 'a {
-                self.features.clone().into_iter()
-            }
-        }
-
         let contents = r#"
 [project]
 name = "foo"
@@ -4603,11 +6770,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
 
         let before = jiff::Timestamp::now();
         let manifest = parse_pixi_toml(contents).manifest;
-        let default_feature = manifest.default_feature();
-        let features = TestFeatures {
-            manifest: &manifest,
-            features: vec![default_feature],
-        };
+        let features = DefaultFeature(&manifest);
         let channel_config = default_channel_config();
         let config: rattler_solve::ExcludeNewer = features
             .exclude_newer_config_resolved(&channel_config)
@@ -4661,16 +6824,16 @@ exclude-newer = "2015-12-02T02:07:43Z"
         let mut editable = workspace.editable();
         let rich = PixiPlatform::new(
             PixiPlatformName::try_from("gpu-12-4").unwrap(),
-            Platform::Linux64,
+            Subdir::Linux64,
             vec![rattler_conda_types::GenericVirtualPackage {
                 name: rattler_conda_types::PackageName::try_from("__cuda").unwrap(),
                 version: Version::from_str("12.4").unwrap(),
-                build_string: String::new(),
+                build_string: BuildString::new_unchecked("0"),
             }],
         )
         .expect("rich platform with name != subdir");
         editable
-            .add_platforms([&rich], &FeatureName::DEFAULT)
+            .add_platforms([&rich], &FeatureName::Default)
             .unwrap();
 
         // Flag clears, legacy tables are gone, feature platforms point at the
@@ -4718,8 +6881,8 @@ exclude-newer = "2015-12-02T02:07:43Z"
         let mut editable = workspace.editable();
         editable
             .add_platforms(
-                [PixiPlatform::from_subdir(Platform::Osx64)].iter(),
-                &FeatureName::DEFAULT,
+                [PixiPlatform::from_subdir(Subdir::Osx64)].iter(),
+                &FeatureName::Default,
             )
             .unwrap();
 
@@ -4761,8 +6924,8 @@ exclude-newer = "2015-12-02T02:07:43Z"
         let mut editable = workspace.editable();
         editable
             .add_platforms(
-                [PixiPlatform::from_subdir(Platform::Linux64)].iter(),
-                &FeatureName::DEFAULT,
+                [PixiPlatform::from_subdir(Subdir::Linux64)].iter(),
+                &FeatureName::Default,
             )
             .unwrap();
 
@@ -4778,7 +6941,7 @@ exclude-newer = "2015-12-02T02:07:43Z"
         rattler_conda_types::GenericVirtualPackage {
             name: rattler_conda_types::PackageName::try_from(name).unwrap(),
             version: Version::from_str(version).unwrap(),
-            build_string: String::new(),
+            build_string: BuildString::new_unchecked("0"),
         }
     }
 
@@ -4938,7 +7101,7 @@ platforms = [
                         rattler_conda_types::GenericVirtualPackage {
                             name: rattler_conda_types::PackageName::try_from("__archspec").unwrap(),
                             version: Version::major(0),
-                            build_string: "x86-64-v3".to_string(),
+                            build_string: BuildString::new_unchecked("x86_64_v3"),
                         },
                     ],
                     ..Default::default()
@@ -4952,7 +7115,7 @@ platforms = [
 name = "named-variants"
 channels = ["conda-forge"]
 platforms = [
-    { name = "modern", platform = "linux-64", archspec = "x86-64-v3" },
+    { name = "modern", platform = "linux-64", archspec = "x86_64_v3" },
     "linux-64",
 ]
 "#,
@@ -4977,8 +7140,8 @@ platforms = [
         let mut editable = workspace.editable();
         editable
             .add_platforms(
-                [PixiPlatform::from_subdir(Platform::Linux64)].iter(),
-                &FeatureName::DEFAULT,
+                [PixiPlatform::from_subdir(Subdir::Linux64)].iter(),
+                &FeatureName::Default,
             )
             .unwrap();
 
@@ -5009,8 +7172,8 @@ platforms = [
         let mut editable = workspace.editable();
         editable
             .remove_platforms(
-                [PixiPlatform::from_subdir(Platform::Osx64)].iter(),
-                &FeatureName::DEFAULT,
+                [PixiPlatform::from_subdir(Subdir::Osx64)].iter(),
+                &FeatureName::Default,
             )
             .unwrap();
 
@@ -5121,5 +7284,111 @@ platforms = [
                 .all(|p| p.as_str() == "linux-64-cuda-12-0"),
             "feature should reference the renamed platform, got {gpu_platforms:?}",
         );
+    }
+
+    /// Each error path of [`WorkspaceManifestMut`] yields the expected typed
+    /// variant with an unchanged message, and `wrap_err` contexts that became
+    /// variant messages keep the underlying parse error as their source.
+    #[test]
+    fn test_typed_edit_errors() {
+        let mut workspace = parse_pixi_toml(
+            r#"
+            [workspace]
+            name = "t"
+            channels = ["conda-forge"]
+            platforms = ["linux-64", "osx-arm64"]
+
+            [tasks]
+            hello = "echo hello"
+
+            [feature.f1.activation]
+            scripts = ["a.sh"]
+            env = { FOO = "1" }
+
+            [environments]
+            e1 = ["f1"]
+            "#,
+        );
+        let mut manifest = workspace.editable();
+
+        let hello = TaskName::from("hello");
+        let err = manifest
+            .add_task(
+                hello.clone(),
+                Task::Plain("echo x".into()),
+                None,
+                &FeatureName::Default,
+            )
+            .unwrap_err();
+        assert_matches::assert_matches!(&err, TaskEditError::AlreadyExists(name) if *name == hello);
+        assert_eq!(err.to_string(), "task hello already exists");
+        let err = manifest
+            .remove_task(TaskName::from("nope"), None, &FeatureName::Default)
+            .unwrap_err();
+        assert_matches::assert_matches!(err, TaskEditError::NotFound(_));
+        let err = manifest
+            .remove_task(hello, None, &FeatureName::from("nosuch"))
+            .unwrap_err();
+        assert_matches::assert_matches!(err, TaskEditError::Feature(_));
+
+        let f1 = FeatureName::from("f1");
+        let err = manifest
+            .remove_activation_scripts(vec!["zz.sh".into()], None, &f1)
+            .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "the activation script 'zz.sh' was not found for feature 'f1'"
+        );
+        let err = manifest
+            .remove_activation_env(
+                vec!["FOO".into()],
+                Some(&TargetSelector::Subdir(Subdir::Win64)),
+                &f1,
+            )
+            .unwrap_err();
+        assert_matches::assert_matches!(
+            err,
+            ActivationEditError::NoneDefined {
+                what: "activation environment variables",
+                ..
+            }
+        );
+
+        let err = manifest.remove_feature(&FeatureName::Default).unwrap_err();
+        assert_matches::assert_matches!(err, EnvironmentEditError::RemoveDefaultFeature);
+
+        let channel = |name: &str| PrioritizedChannel::from(NamedChannelOrUrl::Name(name.into()));
+        let err = manifest
+            .remove_channels([channel("conda-forge")], &FeatureName::from("nosuch"))
+            .unwrap_err();
+        assert_matches::assert_matches!(err, RemoveChannelsError::FeatureNotFound(_));
+        let err = manifest
+            .remove_channels([channel("bioconda")], &FeatureName::Default)
+            .unwrap_err();
+        assert_eq!(err.to_string(), "channel bioconda does not exist");
+
+        let linux = PixiPlatformName::try_from("linux-64").unwrap();
+        let err = manifest
+            .move_workspace_platform(&linux, &PlatformMove::Before(linux.clone()))
+            .unwrap_err();
+        assert_matches::assert_matches!(err, PlatformEditError::MoveRelativeToItself(_));
+        let nope = PixiPlatformName::try_from("nope").unwrap();
+        let err = manifest
+            .move_workspace_platform(&nope, &PlatformMove::ToTop)
+            .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "workspace does not define a platform named 'nope'"
+        );
+
+        let err = manifest.set_version("not a version").unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "could not convert version to a valid project version"
+        );
+        assert!(std::error::Error::source(&err).is_some());
+        let err = manifest.set_requires_pixi(Some("<<<")).unwrap_err();
+        assert_matches::assert_matches!(err, SetRequiresPixiError::InvalidVersionSpec(_));
+        assert!(std::error::Error::source(&err).is_some());
     }
 }

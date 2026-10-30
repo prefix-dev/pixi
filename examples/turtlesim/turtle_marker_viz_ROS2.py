@@ -1,9 +1,10 @@
-from math import sin, cos
+from math import cos, sin
+
 import rclpy
+from builtin_interfaces.msg import Duration
 from rclpy.node import Node
 from turtlesim.msg import Pose
 from visualization_msgs.msg import Marker
-from builtin_interfaces.msg import Duration
 
 
 class TurtleMarkerNode(Node):

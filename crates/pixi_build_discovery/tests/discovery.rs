@@ -158,3 +158,32 @@ fn test_ros_discovery_priority() {
         }
     }
 }
+
+#[test]
+fn test_is_pixi_package_directory() {
+    let dir = |name: &str| dunce::canonicalize(discovery_directory().join(name)).unwrap();
+
+    // A manifest with a package section.
+    assert!(pixi_build_discovery::is_pixi_package_directory(&dir(
+        "simple"
+    )));
+
+    // Workspace-only manifests, with and without a package.xml next to them.
+    assert!(!pixi_build_discovery::is_pixi_package_directory(&dir(
+        "workspace-only"
+    )));
+    assert!(!pixi_build_discovery::is_pixi_package_directory(&dir(
+        "ros-with-workspace"
+    )));
+    assert!(!pixi_build_discovery::is_pixi_package_directory(&dir(
+        "not-a-package"
+    )));
+
+    // No pixi manifest at all.
+    assert!(!pixi_build_discovery::is_pixi_package_directory(&dir(
+        "ros-package"
+    )));
+    assert!(!pixi_build_discovery::is_pixi_package_directory(Path::new(
+        "/non-existing"
+    )));
+}

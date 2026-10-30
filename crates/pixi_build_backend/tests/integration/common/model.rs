@@ -214,6 +214,9 @@ fn convert_target_to_v1(target: &Target) -> PbtTarget {
                     .collect(),
             )
         },
+        // The test model has no run-exports; protocol tests exercise them
+        // through the real frontend conversion instead.
+        run_exports: None,
     }
 }
 

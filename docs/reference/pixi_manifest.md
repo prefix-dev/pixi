@@ -11,6 +11,24 @@ This document will explain the usage of the different tables.
     For example, the `[workspace]` table becomes `[tool.pixi.workspace]`.
     There are also some small extras that are available in the `pyproject.toml` file, checkout the [pyproject.toml](../python/pyproject_toml.md) documentation for more information.
 
+## TOML 1.1
+
+Pixi supports [TOML 1.1](https://toml.io/en/v1.1.0), which most notably allows multiline inline tables with trailing commas:
+
+```toml
+[dependencies]
+python = {
+    version = ">=3.12",
+    channel = "conda-forge",
+}
+```
+
+Commands that modify the manifest, like `pixi add`, keep the layout you wrote: new entries in a multiline table land on their own line, and removed entries take their whole line with them.
+
+!!! warning
+    Editor tooling and other programs that read your manifest may not understand TOML 1.1 yet.
+    In particular, most Python tools (pip, build backends, and Python's built-in `tomllib`) only read TOML 1.0, so using TOML 1.1 syntax in `pyproject.toml` can break them even though Pixi accepts it.
+
 ## Manifest discovery
 
 The manifest can be found at the following locations.
@@ -67,7 +85,7 @@ Pixi solves the dependencies for all these platforms and puts them in the lock f
 --8<-- "docs/source_files/pixi_tomls/main_pixi.toml:project_platforms"
 ```
 
-The available platforms (except `noarch` and `unknown`) are listed [here](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/platform/enum.Platform.html).
+The available (save `noarch`) platforms are listed [here](https://docs.rs/rattler_conda_types/latest/rattler_conda_types/subdir/enum.Subdir.html).
 
 #### Inline-table entries (per-platform virtual packages)
 
@@ -86,10 +104,10 @@ Recognised keys on an inline-table entry:
 
 - `platform`: the conda subdir the entry targets (e.g. `linux-64`, `osx-arm64`). Required unless `name` itself parses as a subdir.
 - `name`: workspace-scoped identifier used by `feature.<name>.platforms`, lockfile rows, and the CLI. Defaults to a name auto-derived from `platform` plus the declared virtual packages.
-- Friendly virtual-package keys: `cuda`, `archspec`, `glibc`, `linux`, `macos` (alias `osx`), `windows`. Each maps to the matching `__name` conda virtual package (`cuda` to `__cuda`, `glibc` to `__glibc`, `macos` to `__osx`, etc.).
-- Raw `__name = "version"` entries are accepted as an escape hatch for virtual packages without a friendly key.
+- Built-in virtual-package keys: `cuda`, `amdgpu`, `archspec`, `glibc`, `linux`, `macos` (alias `osx`), `windows`.
+- Other virtual packages require a `__`-prefixed key and a `"version"` or `"version=build_string"` value, for example `__site_service = "2=h1"`. Without a build string, the virtual package has the default build `0`. A build string may only contain ASCII letters, digits, `_`, `.` and `+`, as CEP 26 requires.
 
-Bare-string entries (`"linux-64"`) keep their original meaning: solve for that subdir using whatever virtual packages Pixi auto-detects on the host.
+Bare-string entries (`"linux-64"`) keep their original meaning: solve for that subdir against Pixi's [default declared virtual packages](../workspace/system_requirements.md#default-declared-virtual-packages).
 
 See [Declaring virtual packages per platform](../workspace/multi_platform_configuration.md#declaring-virtual-packages-per-platform) for binding features to specific rich entries.
 
@@ -218,7 +236,7 @@ internal = false
 ```
 
 Mapping files are JSON objects with `conda_name: pypi_package_name` entries.
-The value can also be a list of PyPI names — the conda package then satisfies all of them and one PURL is emitted per name — or `null` to mark a package as not available on PyPI.
+The value can also be a list of PyPI names (the conda package then satisfies all of them and one PURL is emitted per name), or `null` to mark a package as not available on PyPI.
 This is the same format that parselmouth publishes under [`files/v0/<channel>/compressed_mapping.json`](https://github.com/prefix-dev/parselmouth/tree/main/files/v0), so those files can be used directly (use the raw file URL).
 
 ```json title="local/robostack_mapping.json"
@@ -284,6 +302,10 @@ Options:
     Using packages from different incompatible channels like `conda-forge` and `main` can lead to hard to debug ABI incompatibilities.
 
     We strongly recommend not to switch the default.
+
+- `flexible`: The channels are used in the order they are defined in the `channels` list, but per package the candidates of a higher-priority channel are exhausted before the solver falls back to the next channel, regardless of the version.
+    Unlike `strict`, a package that only exists in a lower-priority channel can still be picked even when a higher-priority channel also provides it under a constraint the solve cannot satisfy.
+    This keeps most of the predictability of `strict` while avoiding some unsolvable environments, at the cost of possibly mixing channels per package.
 
 - `disabled`: There is no priority, all package variants from all channels will be set per package name and solved as one.
    Care should be taken when using this option.
@@ -369,7 +391,7 @@ When specified on the workspace this will exclude any package from consideration
 This is useful to reproduce installations regardless of new package releases, or to reduce the risk of
 installing recently published (and potentially compromised) packages.
 
-The value may be specified in the following formats:
+The cutoff may be specified in the following formats:
 
 * As an [RFC 3339](https://www.rfc-editor.org/rfc/rfc3339.html) timestamp (e.g. `2023-10-01T00:00:00Z`)
 * As a date in `YYYY-MM-DD` format (e.g. `2026-03-30`). This is interpreted as the start of the following day in UTC, so `2026-03-30` means `2026-03-31T00:00:00Z`.
@@ -377,53 +399,120 @@ The value may be specified in the following formats:
 
 When using a relative duration, the lock file will be re-solved when a package is not included in the cutoff date.
 
-Both PyPi and conda packages are considered.
+Both PyPI and conda packages are considered.
 
-For conda packages, the workspace-level cutoff can be overridden per package in the
-[`[exclude-newer]`](#exclude-newer-optional) table.
+```toml
+[workspace]
+exclude-newer = "7d"
+```
 
-For PyPI packages, the workspace-level cutoff can be overridden per package in the
-[`[pypi-exclude-newer]`](#exclude-newer-optional) table.
+Use [`pixi workspace exclude-newer set`](cli/pixi/workspace/exclude-newer/set.md) to set the cutoff from the command line, and [`pixi workspace exclude-newer unset`](cli/pixi/workspace/exclude-newer/unset.md) to remove it.
 
-This is especially useful when a package is pinned to a separate `channel` or `index` and needs a
-different cutoff than the rest of the workspace.
+#### Exemptions
+
+Some releases need to get through the cutoff immediately, for example an urgent security fix that you have reviewed, or a package you publish yourself.
+Instead of lowering the cutoff for every future release of such a package, exempt the releases you vetted.
+Write `exclude-newer` as a table with a `cutoff` and `exemptions` for that.
+An exempted release is never excluded, regardless of its upload time.
+
+The value of an exemption is a version spec, or a table with the same fields as a [conda dependency](#dependencies-optional) from a channel, such as `version`, `build` or `channel`.
+`polars = "==1.43.1"` exempts that release only, while `py-rattler = "*"` exempts every release of the package, including future ones.
+
+```toml
+[workspace]
+channels = [
+  # get the most recent versions of packages you control
+  { channel = "https://my.internal/channel", exclude-newer = "0d" },
+  "conda-forge",
+  "pytorch",
+]
+
+[workspace.exclude-newer]
+cutoff = "7d"
+
+[workspace.exclude-newer.exemptions]
+# CVE-XXXX-YYYY: this release contains the fix
+polars = "==1.43.1"
+# only ever built by us
+py-rattler = "*"
+# a release of a specific build string from a specific channel
+pytorch-cpu = { version = "==2.10.0", build = "cpu_*", channel = "pytorch" }
+# only the builds of this release that were published when it was reviewed
+openssl = { version = "==3.2.1", cutoff = "2026-10-12T08:00:00Z" }
+```
+
+A channel can override the cutoff with its own `exclude-newer` value, as shown above.
+Exemptions take precedence over the channel cutoff, which in turn takes precedence over the workspace cutoff.
+
+An exemption without a `cutoff` also lets through matching releases that are published later, e.g. a new build of `polars ==1.43.1`.
+Give an exemption a `cutoff` to only exempt the matching releases that were published up to that point in time, such as the time you reviewed them.
+The cutoff of an exemption is an RFC 3339 timestamp or a date, durations are not supported.
+Releases after it are subject to the channel and workspace cutoffs as usual, so they are allowed once they are old enough.
+
+Once the cutoff of every channel has passed the cutoff of an exemption, the exemption no longer exempts anything.
+[`pixi workspace exclude-newer prune`](cli/pixi/workspace/exclude-newer/prune.md) removes these stale exemptions.
+
+[`pixi workspace exclude-newer exempt`](cli/pixi/workspace/exclude-newer/exempt.md) adds exemptions without editing the manifest by hand.
+It takes the same specs as `pixi add`, so a bare package name exempts every release.
+An exemption with a version gets the current time as its `cutoff`, use `--cutoff` to pick a different one or `--no-cutoff` to exempt future releases as well.
+Exempting a package again replaces its exemption, and [`pixi workspace exclude-newer unexempt`](cli/pixi/workspace/exclude-newer/unexempt.md) removes it.
+
+```shell
+# exempts the releases of polars 1.43.1 published until now, and every release of py-rattler
+pixi workspace exclude-newer exempt polars==1.43.1 py-rattler
+pixi workspace exclude-newer exempt openssl==3.2.1 --cutoff 2026-10-12
+pixi workspace exclude-newer exempt 'pytorch::pytorch-cpu==2.10.0[build=cpu_*]' --no-cutoff
+pixi workspace exclude-newer unexempt py-rattler
+# remove the exemptions whose cutoff all channels have passed
+pixi workspace exclude-newer prune
+```
+
+#### PyPI packages
+
+The cutoff of `exclude-newer` applies to PyPI packages as well.
+Use `pypi-exclude-newer` to give PyPI packages their own `cutoff`, or to exempt PyPI packages from the cutoff.
+Without a `cutoff` of its own, `pypi-exclude-newer` falls back to the cutoff of `exclude-newer`.
+
+PyPI exemptions only support `"*"` for now, which exempts every release of the package.
+This is especially useful when a package is pinned to a separate `index` that you trust, or that does not provide upload times (see the note below).
+Pass `--pypi` to the `pixi workspace exclude-newer` commands to edit `pypi-exclude-newer`, e.g. `pixi workspace exclude-newer exempt --pypi torch`.
+
+```toml
+[workspace]
+exclude-newer = "7d"
+pypi-exclude-newer = { exemptions = { torch = "*" } }
+
+[pypi-dependencies]
+torch = { version = ">=2.10.0", index = "https://download.pytorch.org/whl/cu124" }
+```
+
+!!! warning "Deprecated: top-level `[exclude-newer]` and `[pypi-exclude-newer]` tables"
+    The top-level `[exclude-newer]` and `[pypi-exclude-newer]` tables of per-package cutoffs are deprecated and will be removed.
+    Replace a per-package cutoff of `"0d"` with a `"*"` exemption, or narrow it down to the releases you vetted.
+    Other per-package cutoffs have no direct replacement: to allow newer releases of a package, exempt the versions you vetted, and to keep a package on older releases, constrain its version in the dependencies.
 
 !!! note "Satisfiability checks with `exclude-newer`"
     For conda packages, pixi stores the package timestamp in `pixi.lock` and can use it during
     lock file satisfiability checks. That means changing `exclude-newer` can trigger a re-solve
-    when a locked conda package is newer than the configured cutoff.
+    when a locked conda package is newer than the configured cutoff and not exempt.
 
     For PyPI packages, pixi does not currently store upload timestamps in `pixi.lock`. As a
-    result, changes to `exclude-newer` or `[pypi-exclude-newer]` do not trigger the same
+    result, changes to `exclude-newer` or `pypi-exclude-newer` do not trigger the same
     lock file satisfiability check for already locked PyPI packages. Run `pixi update` to
     re-resolve PyPI packages and ensure the lock file respects the configured cutoff.
 
-```toml
-[workspace]
-exclude-newer = "2025-01-01"
-
-[dependencies]
-pytorch-cpu = { version = ">=2.10.0", channel = "pytorch" }
-
-[exclude-newer]
-pytorch-cpu = "0d"
-openssl = "0d"
-
-[pypi-dependencies]
-torch = { version = ">=2.10.0", index = "https://download.pytorch.org/whl/cu124" }
-
-[pypi-exclude-newer]
-torch = "0d"
-```
-
 !!! note
-    Note that for Pypi package indexes the package index must support the `upload-time` field as specified in [`PEP 700`](https://peps.python.org/pep-0700/).
-    If the field is not present for a given distribution, the distribution will be treated as unavailable. PyPI provides `upload-time` for all packages.
+    Note that for PyPI package indexes the package index must support the `upload-time` field as specified in [`PEP 700`](https://peps.python.org/pep-0700/).
+    If the field is not present for a given distribution, the distribution will be treated as unavailable, unless its package is exempted. PyPI provides `upload-time` for all packages.
+
+    If an extra index does not expose `upload-time`, such as a private mirror, you can lift the cutoff for that index with a
+    per-index override on [`extra-index-urls`](#alternative-registries):
+    `{ url = "https://internal/simple", exclude-newer = "0d" }`.
 
 ### `build-variants` (optional)
 
-!!! warning "Preview Feature"
-    Build variants require the `pixi-build` preview feature to be enabled:
+!!! warning "Preview Flag"
+    Build variants require the `pixi-build` preview flag to be enabled:
     ```toml
     [workspace]
     preview = ["pixi-build"]
@@ -449,6 +538,8 @@ When build variants are specified, Pixi will:
 2. **Build separate packages**: Create distinct package builds for each variant combination
 3. **Resolve dependencies**: Ensure each variant resolves with compatible dependency versions
 4. **Generate unique build strings**: Each variant gets a unique build identifier in the package name
+
+On top of the variants you declare, Pixi fills in some automatically: `target_platform`, and (for conda-forge builds) `c_stdlib`/`c_stdlib_version` derived from the platform's [system requirements](../workspace/system_requirements.md). An explicit entry here always overrides a derived value. See [Variants Pixi Sets for You](../build/variants.md#variants-pixi-sets-for-you).
 
 #### Platform-Specific Variants
 
@@ -480,8 +571,8 @@ For detailed examples and tutorials, see the [build variants documentation](../b
 
 ### `build-variants-files` (optional)
 
-!!! warning "Preview Feature"
-    Build variant files require the `pixi-build` preview feature to be enabled:
+!!! warning "Preview Flag"
+    Build variant files require the `pixi-build` preview flag to be enabled:
     ```toml
     [workspace]
     preview = ["pixi-build"]
@@ -489,7 +580,7 @@ For detailed examples and tutorials, see the [build variants documentation](../b
 
 Use `build-variants-files` to reference external variant definitions from YAML files.
 Paths are resolved relative to the workspace root and processed in the listed
-order—entries from earlier files take precedence over values loaded from later ones.
+order: entries from earlier files take precedence over values loaded from later ones.
 
 ```toml
 [workspace]
@@ -506,17 +597,10 @@ Otherwise, it will use `rattler-build`'s syntax as outlined in the [rattler-buil
 
 ### `dependencies` (optional)
 
-!!! warning "Preview Feature"
-    `[workspace.dependencies]` requires the `pixi-build` preview feature to be
-    enabled and only applies to **package** dependencies — see
-    [Workspace Dependencies](../build/workspace_dependencies.md) for the
-    semantics, override rules and error cases.
-
-A pool of conda dependency specs that members of the workspace can inherit
-per entry by writing `{ workspace = true }` in any of their
-`[package.*-dependencies]` tables or `[package.build.backend]`.
-Relative `path` specs are resolved against the workspace manifest's
-directory and re-anchored per consuming member.
+A pool of conda dependency specs that dependency tables can inherit from per entry by writing `{ workspace = true }`.
+The environment tables (`[dependencies]`, `[feature.*.dependencies]`, `[target.*.dependencies]`, `[constraints]`) can inherit out of the box.
+The package tables (`[package.*-dependencies]`, `[package.run-constraints]`, `[package.build.backend]`) require the `pixi-build` preview flag, as do source (`path`/`git`) entries in the pool itself (see [Workspace Dependencies](../build/workspace_dependencies.md) for the semantics, override rules and error cases).
+Relative `path` specs are resolved against the workspace manifest's directory and re-anchored per consuming member.
 
 ```toml
 [workspace.dependencies]
@@ -548,7 +632,7 @@ clean-env = { cmd="python isolated.py", clean-env=true } # Only on Unix!
 test = { cmd="pytest", default-environment="test" }  # Set a default pixi environment
 ```
 
-You can modify this table using [`pixi task`](cli/pixi/task.md).
+You can modify this table using [`pixi task`](cli/pixi/task/index.md).
 !!! note
     Specify different tasks for different platforms using the [target](#the-target-table) table
 
@@ -603,6 +687,13 @@ Often you might want to use an alternative or extra index for your workspace. Th
    **Only one** `index-url` can be defined per environment.
 - `extra-index-urls`: adds an extra index url. The urls are used in the order they are defined. And
    are preferred over the `index-url`. These are merged across features into an environment.
+   Each entry may be a plain URL string, or an inline table `{ url = "...", exclude-newer = ... }`
+   that overrides the workspace-level [`exclude-newer`](#exclude-newer-optional) for packages served
+   from that index only. Use `exclude-newer = "0d"` to lift the cutoff for an index, for example
+   a private mirror that does not expose `upload-time` metadata. Unlike other cutoffs, this also keeps
+   releases without an upload time. Exemptions in
+   [`pypi-exclude-newer`](#exclude-newer-optional) take precedence over the cutoff of an index.
+   Listing the same index with different cutoffs in one environment is an error.
 - `find-links`: which can either be a path `{path = './links'}` or a url `{url = 'https://example.com/links'}`.
    This is similar to the `--find-links` option in `pip`. These are merged across features into an
    environment.
@@ -612,9 +703,20 @@ An example:
 ```toml
 [pypi-options]
 index-url = "https://pypi.org/simple"
-extra-index-urls = ["https://example.com/simple"]
+extra-index-urls = [
+    "https://example.com/simple",
+    # No exclude-newer cutoff for this index (it does not expose `upload-time`):
+    { url = "https://internal.example.com/simple", exclude-newer = "0d" },
+    # A custom cutoff for this index only:
+    { url = "https://other.example.com/simple", exclude-newer = "2025-01-01" },
+]
 find-links = [{path = './links'}]
 ```
+
+!!! note
+    Changing a per-index `exclude-newer` does not invalidate already locked PyPI packages (see the
+    satisfiability note under [`exclude-newer`](#exclude-newer-optional)). Run `pixi update` to
+    re-resolve PyPI packages after changing it.
 
 There are some [examples](https://github.com/prefix-dev/pixi/tree/main/examples/pypi-custom-registry) in the Pixi repository, that make use of this feature.
 
@@ -642,6 +744,7 @@ detectron2 = { git = "https://github.com/facebookresearch/detectron2.git", rev =
 
 Setting `no-build-isolation` also affects the order in which PyPI packages are installed.
 Packages are installed in that order:
+
 - conda packages in one go
 - packages with build isolation in one go
 - packages without build isolation installed in the order they are added to `no-build-isolation`
@@ -737,9 +840,9 @@ By default, `pixi` will allow pre-release versions when a package only has pre-r
 
 - **"disallow"**: Disallow all pre-release versions.
 - **"allow"**: Allow all pre-release versions.
-- **"if-necessary"**: Allow pre-release versions if all versions of a package are pre-release.
-- **"explicit"**: Allow pre-release versions for first-party packages with explicit pre-release markers in their version requirements.
-- **"if-necessary-or-explicit"** (default): Allow pre-release versions if all versions of a package are pre-release, or if the package has an explicit pre-release marker in its version requirements.
+- **"if-necessary"**: Prefer stable versions, falling back to pre-release versions when necessary to satisfy the requirements.
+- **"explicit"**: Prefer stable versions for first-party packages with explicit pre-release markers in their version requirements, falling back to pre-releases when necessary. Disallow pre-releases for other packages.
+- **"if-necessary-or-explicit"** (default): Alias for `"if-necessary"`, following uv 0.12's pre-release selection policy.
 
 Example:
 ```toml
@@ -815,6 +918,18 @@ Dependencies can also be defined as a mapping where it is using a matchspec
 package0 = { version = ">=1.2.3", channel="conda-forge" }
 package1 = { version = ">=1.2.3", build="py34_0" }
 ```
+
+An entry can also inherit its spec from the [`[workspace.dependencies]`](#dependencies-optional) pool by writing `{ workspace = true }` instead of a direct spec:
+
+```toml
+[workspace.dependencies]
+numpy = "1.*"
+
+[dependencies]
+numpy = { workspace = true }
+```
+
+See [Workspace Dependencies](../build/workspace_dependencies.md) for the override layering and error rules.
 
 !!! tip
     The dependencies can be easily added using the `pixi add` command line.
@@ -900,29 +1015,11 @@ concatenated**, exactly like `[dependencies]`.
 This means each feature can independently constrain transitive dependencies, and the resulting
 environment must satisfy all of them simultaneously.
 
-```toml
-[dependencies]
-python = ">=3.11"
-
-[feature.cuda.dependencies]
-pytorch-gpu = ">=2.0"
-
-# When the cuda feature is active, enforce a compatible CUDA toolkit version
-[feature.cuda.constraints]
-cuda = ">=12.0"
-
-[feature.cuda11.constraints]
-cuda = "<12"
-
-[environments]
-gpu = ["cuda"]
-legacy-gpu = ["cuda11"]
+```toml title="Per-feature constraints"
+--8<-- "docs/source_files/pixi_tomls/feature-constraints.toml:per-feature-constraints"
 ```
 
-In the `gpu` environment the solver sees `cuda = ">=12.0"` as a constraint;
-in the `legacy-gpu` environment it sees `cuda = "<12"`.
-If both features were active in the same environment the solver would receive both
-constraints and would need to find a version that satisfies all of them.
+The above example will produce an environment with `mkdocs` and `python` installed, but the solver will make sure that the Python version is at least 3.14.0 and that `click` is not version 8.1.7.
 
 ### `pypi-dependencies`
 
@@ -978,6 +1075,9 @@ boltons = { git = "https://github.com/mahmoud/boltons.git", tag = "25.0.0" }
 
 # With https, specific tag and some subdirectory
 boltons = { git = "https://github.com/mahmoud/boltons.git", tag = "25.0.0", subdirectory = "some-subdir" }
+
+# With https and Git LFS files fetched during checkout
+my-model = { git = "https://github.com/example/my-model.git", lfs = true }
 
 # You can also directly add a source dependency from a path, tip keep this relative to the root of the workspace.
 minimal-project = { path = "./minimal-project", editable = true}
@@ -1039,16 +1139,24 @@ Learn more about installing PyTorch [here](../python/pytorch.md).
 A git repository to install from.
 This support both https:// and ssh:// urls.
 
-Use `git` in combination with `rev` or `subdirectory`:
+Git dependencies must refer to a project directory, optionally selected with `subdirectory`.
+References to wheel or source archives inside a Git repository using `#path=...` are not supported.
+
+Use `git` in combination with `rev`, `subdirectory` or `lfs`:
 
 - `rev`: A specific revision to install. e.g. `rev = "0106aced5faa299e6ede89d1230bd6784f2c3660`
 - `subdirectory`: A subdirectory to install from. `subdirectory = "src"` or `subdirectory = "src/packagex"`
+- `lfs`: Fetch Git LFS objects during the checkout. `lfs = true`
+  Requires `git-lfs` to be installed on the machine.
+  For PyPI dependencies Git LFS additionally has to be initialized with `git lfs install`.
+  This also works for conda source dependencies in `[dependencies]`.
 
 ```toml
 # Note don't forget the `ssh://` or `https://` prefix!
 pytest = { git = "https://github.com/pytest-dev/pytest.git"}
 httpx = { git = "https://github.com/encode/httpx.git", rev = "c7c13f18a5af4c64c649881b2fe8dbd72a519c32"}
 py-rattler = { git = "ssh://git@github.com/conda/rattler.git", subdirectory = "py-rattler" }
+my-model = { git = "https://github.com/example/my-model.git", lfs = true }
 ```
 
 ##### `path`
@@ -1284,6 +1392,8 @@ The environments table is defined using the following fields:
   But the different environments contain different subsets of the solve-groups dependencies set.
 - `no-default-feature`: Whether to include the default feature in that environment. The default is `false`, to include the default feature.
 
+Additionally, most fields that a [feature](#the-feature-table) accepts - `dependencies`, `pypi-dependencies`, `tasks`, `activation`, `channels`, `platforms`, `constraints`, `target` and more - can be set directly on an environment. See [Defining dependencies directly on an environment](#defining-dependencies-directly-on-an-environment).
+
 ```toml title="Full environments table specification"
 [environments]
 test = {features = ["test"], solve-group = "test"}
@@ -1325,21 +1435,63 @@ When an environment comprises several features (including the default feature):
   it is usually a good idea to set the workspace `platforms` to all platforms it can support across
   its environments.
 
+#### Defining dependencies directly on an environment
+
+Features are the right tool when you want to *share* dependencies between environments.
+When something belongs to a single environment, you can skip the feature and define it directly on the environment:
+
+```toml title="Inline environment dependencies"
+[environments.dev.dependencies]
+git = "*"
+
+[environments.test.dependencies]
+pytest = "*"
+pytest-xdist = "*"
+```
+
+This defines two environments, `dev` and `test`, without any intermediate feature.
+All feature content is available this way: `dependencies`, `pypi-dependencies`, `dev`, `tasks`, `activation`, `channels`, `channel-priority`, `solve-strategy`, `platforms`, `constraints`, `target` and `pypi-options`.
+`host-dependencies`, `build-dependencies` and `system-requirements` are not accepted here; define a feature if you need them.
+
+Inline content can be combined with shared features.
+The inline content takes precedence over the referenced features, which is relevant for the fields where order matters (such as `tasks` and `activation`):
+
+```toml title="Inline content combined with shared features"
+[feature.python.dependencies]
+python = "3.14.*"
+
+[environments.dev]
+features = ["python"]
+dependencies = { git = "*" }
+```
+
+Inline content is private to its environment; it cannot be referenced from the feature list of another environment.
+This also applies to the `default` environment: content defined inline on `[environments.default]` belongs to the default environment only, while the top-level tables (for example `[dependencies]` or `[tasks]`) belong to the default feature and are therefore inherited by every environment that doesn't set `no-default-feature = true`.
+
+Inline content can also be edited from the command line: the manifest-editing commands (`pixi add`, `pixi remove`, `pixi upgrade`, `pixi task add/remove/alias`, `pixi workspace channel add/remove` and `pixi workspace platform add/remove`) accept an `--environment` flag next to `--feature`:
+
+```shell
+pixi add --environment dev git
+pixi task add --environment dev serve "python serve.py"
+```
+
+The content is written inline on the environment, creating the environment if it does not exist.
+
 ## Global configuration
 
 The global configuration options are documented in the [global configuration](../reference/pixi_configuration.md) section.
 
 
-## Preview features
-Pixi sometimes introduces new features that are not yet stable, but that we would like for users to test out. These features are called preview features. Preview features are disabled by default and can be enabled by setting the `preview` field in the workspace manifest. The preview field is an array of strings that specify the preview features to enable, or the boolean value `true` to enable all preview features.
+## Preview flags
+Pixi sometimes introduces new features that are not yet stable, but that we would like for users to test out. These features are called preview flags. Preview flags are disabled by default and can be enabled by setting the `preview` field in the workspace manifest. The preview field is an array of strings that specify the preview flags to enable, or the boolean value `true` to enable all preview flags.
 
-An example of a preview feature in the manifest:
+An example of a preview flag in the manifest:
 
 ```toml
 --8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:preview"
 ```
 
-Preview features in the documentation will be marked as such on the relevant pages.
+Preview flags in the documentation will be marked as such on the relevant pages.
 
 ## The `dev` table
 The `dev` table allows you to depend on the development dependencies of a source package.
@@ -1354,7 +1506,7 @@ More information can be found in the [Dev packages](../build/dev.md) documentati
 ## The `package` section
 
 !!! warning "Important note"
-    `pixi-build` is a [preview feature](#preview-features), and will change until it is stabilized.
+    `pixi-build` is a [preview flag](#preview-flags), and will change until it is stabilized.
     Please keep that in mind when you use it for your workspaces.
     ```toml
     --8<-- "docs/source_files/pixi_tomls/simple_pixi_build.toml:preview"
@@ -1376,7 +1528,9 @@ The package section is defined using the following fields:
 - `host-dependencies`: The host dependencies of the package.
 - `run-dependencies`: The run dependencies of the package.
 - `run-constraints`: Version constraints applied to the package's run environment.
+- `run-exports`: The run-exports the package declares for its downstream consumers.
 - `target`: The target table to configure target specific dependencies. (Similar to the [target](#the-target-table) table)
+- `publish`: Whether a workspace-wide [`pixi publish`](cli/pixi/publish.md) publishes this package. Packages that do not opt in with `publish = true` are left out of the publish set.
 
 And to extend the basics, it can also contain the following fields:
 
@@ -1421,11 +1575,12 @@ The build system is a table that can contain the following fields:
   - `git`: a string representing URL to the source repository.
   - `rev`: a string representing SHA revision to checkout.
   - `subdirectory`: a string representing path to subdirectory to use.
-- `channels`: specifies the channels to get the build backend from.
 - `flags`: package variant flags recorded in the produced package metadata.
 - `backend`: specifies the build backend to use. This is a table that can contain the following fields:
   - `name`: the name of the build backend to use. This will also be the executable name.
   - `version`: the version of the build backend to use. Optional; when omitted it defaults to `*` (any version).
+  - `channels`: the channels to get the build backend from. When omitted the workspace channels are used.
+  - `additional-dependencies`: extra packages to install alongside the build backend.
 - `config`: a table that contains the configuration options for the build backend.
 - `target`: a table that can contain target specific build configuration.
   - Each target can have its own `config` table to override or extend the base configuration for specific platforms.
@@ -1464,7 +1619,7 @@ extra-args = ["-DCMAKE_BUILD_TYPE=Debug", "-DWIN_FLAG=ON"]
 
 
 ### The `build`, `host`, `run` and `run-constraints` dependency tables
-The dependencies of a package are split into four tables.
+The dependencies of a package are split into several tables.
 Each of these tables has a different purpose and is used to define the dependencies of the package.
 
 - [`build-dependencies`](#build-dependencies): Dependencies that are required to build the package on the build platform.
@@ -1472,6 +1627,7 @@ Each of these tables has a different purpose and is used to define the dependenc
 - [`run-dependencies`](#run-dependencies): Dependencies that are required to run the package on the target platform.
 - [`extra-dependencies`](#extra-dependencies): Optional run dependency groups that consumers can request through `extras`.
 - [`run-constraints`](#run-constraints): Version constraints applied to the package's run environment, applied only when the constrained package is already pulled in by another dependency.
+- [`run-exports`](#run-exports): Dependencies and constraints this package exports to the run environment of its consumers.
 
 
 ### `build-dependencies`
@@ -1549,3 +1705,69 @@ This mirrors the conda concept that surfaces as `run_constrained` in the package
 ```toml
 --8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:run-constraints"
 ```
+
+### `run-exports`
+
+The `run-exports` tables declare the dependencies this package exports to its *consumers*, mirroring the conda [run-exports mechanism](https://docs.conda.io/projects/conda-build/en/latest/resources/define-metadata.html#export-runtime-requirements).
+When another package depends on this package in its `host-dependencies` or `build-dependencies`, the exported entries are automatically added to that consumer's run dependencies or run constraints.
+
+The five buckets differ in when they apply:
+
+- `weak`: Added to the run dependencies of consumers that depend on this package in `host-dependencies`. This is the most common bucket; a library exports itself so consumers that link against it get it at runtime.
+- `strong`: Added to the run dependencies of consumers that depend on this package in `build-dependencies` or `host-dependencies`. Typically used by compilers to inject their runtime libraries.
+- `noarch`: The only bucket applied when the consuming output is `noarch`. A `noarch` consumer ignores the `weak` and `strong` buckets, so a package that should reach `noarch` consumers must export itself in `noarch` too.
+- `weak-constraints`: Added to the run *constraints* of consumers that depend on this package in `host-dependencies`.
+- `strong-constraints`: Added to the run *constraints* of consumers that depend on this package in `build-dependencies` or `host-dependencies`.
+
+```toml
+--8<-- "docs/source_files/pixi_tomls/pixi-package-manifest.toml:run-exports"
+```
+
+The `weak`, `strong` and `noarch` buckets accept the same specs as the dependency tables, including `path` and `git` source specs and [workspace inheritance](../build/workspace_dependencies.md).
+The constraints buckets accept binary specs only: a constraint never causes a package to be built or installed, so a source spec would be meaningless there.
+Url specs and `path` specs pointing at package archives (`.conda` / `.tar.bz2`) are rejected in every bucket because the exported spec is recorded in the built package, where a url or machine-local file path would be meaningless to consumers.
+
+!!! note "Exporting the package itself"
+    A package that exports *itself* (like `package = { path = "." }` above) is recorded without a version restriction when the built package is published.
+    To export the package pinned to the version it was built as, use [`pin-subpackage`](#pin-subpackage-and-pin-compatible) instead.
+
+!!! warning "Path specs in published packages"
+    A `path` source spec in a run-export only resolves for consumers that build the package from source within the same workspace layout.
+    In a published binary package the source location is dropped and only the package name and matchspec selectors remain.
+
+Like the other package dependency tables, every bucket accepts [conditional `if(...)` sub-tables](../build/dependency_types.md#conditional-dependencies):
+
+```toml
+[package.run-exports.weak."if(host_platform == 'linux-64')"]
+libgl = ">=1"
+```
+
+### `pin-subpackage` and `pin-compatible`
+
+Package dependency tables accept two pin specs that resolve to a concrete version range while the package is built, mirroring rattler-build's [`pin_subpackage` and `pin_compatible`](https://rattler-build.prefix.dev/latest/reference/jinja/#the-pin-functions) functions.
+
+A `pin-compatible` entry pins a dependency to a range derived from the version that was resolved in the *previous* environment.
+For an entry in `run-dependencies` that is the host environment (falling back to the build environment), for an entry in `host-dependencies` it is the build environment.
+The referenced package must be part of that environment, so a `pin-compatible` run dependency usually pairs with a host dependency of the same name:
+
+```toml
+--8<-- "docs/source_files/pixi_tomls/pixi-package-pins.toml:pins"
+```
+
+A `pin-subpackage` entry pins the package *itself* for its consumers, so it is only accepted in the `run-exports` tables and only on an entry named after the package.
+
+Both pins take the same arguments:
+
+- `lower-bound`: A pin expression like `"x.x"` (the number of version segments to keep) or a literal version. Defaults to `"x.x.x.x.x.x"`, which pins to the exact resolved version.
+- `upper-bound`: A pin expression like `"x"` (the segment to bump, exclusive) or a literal version. Defaults to `"x"`, which excludes the next major version.
+- `build`: An optional build-string matcher such as `"mpi_mpich_*"`.
+- `exact`: Pin the exact version and build string. Cannot be combined with any other argument.
+
+A pin expression selects version segments with `x` characters and derives a bound from the resolved version.
+For the lower bound, the version is truncated to the selected segments: `"x.x"` turns `1.2.3` into `>=1.2`.
+For the upper bound, the last selected segment is incremented by one and `.0a0` is appended, so pre-releases of the excluded version do not match: `"x"` turns `1.2.3` into `<2.0a0`, and `"x.x"` turns it into `<1.3.0a0`.
+
+The shorthand `{ pin-compatible = true }` uses the default bounds, matching a bare `pin_compatible('name')` call in a rattler-build recipe.
+If the host environment resolves `libfoo=1.2.3`, the default bounds produce `libfoo >=1.2.3,<2.0a0`.
+
+Pins are not accepted in `build-dependencies` (the build environment is resolved first, so there is nothing to pin against), in `run-constraints`, in `extra-dependencies`, or in any workspace dependency table.

@@ -42,7 +42,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             args.packages.join(" ")
         );
     };
-    let config = Config::with_cli_config(&args.config);
+    let config = Config::try_with_cli_config(&args.config)?;
     let project_original = Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
@@ -115,7 +115,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .wrap_err(format!("Couldn't remove packages from {env_name}"))
     {
         Ok(state_changes) => {
-            state_changes.report();
+            state_changes.report(&project).await;
         }
         Err(err) => {
             if let Err(revert_err) =

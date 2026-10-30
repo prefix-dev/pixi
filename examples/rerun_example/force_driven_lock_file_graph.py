@@ -84,7 +84,7 @@ def apply_forces_and_log(graph, pos):
         for edge in graph.edges():
             u, v = edge
             diff = pos[u] - pos[v]
-            dist = dist = (np.linalg.norm(diff) + 1e-9) * dist_scale
+            dist = (np.linalg.norm(diff) + 1e-9) * dist_scale
             if dist > 0:
                 degree_factor = (graph.degree(u) + graph.degree(v)) * degree_scale
                 attract = (attractive_force * dist**2) / degree_factor

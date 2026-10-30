@@ -11,7 +11,7 @@ use regex::Regex;
 use serde::{self, Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 
-use crate::{consts::DEFAULT_ENVIRONMENT_NAME, solve_group::SolveGroupIdx};
+use crate::{FeatureName, consts::DEFAULT_ENVIRONMENT_NAME, solve_group::SolveGroupIdx};
 
 #[derive(Debug, Clone, Error, Diagnostic, PartialEq)]
 #[error(
@@ -62,7 +62,7 @@ impl EnvironmentName {
     /// to read from an environment variable, otherwise it will fall back to
     /// default.
     ///
-    /// If `PIXI_PROJECT_ROOT` is set to a path different from `workspace_root`,
+    /// If `PIXI_WORKSPACE_ROOT` (or legacy `PIXI_PROJECT_ROOT`) is set to a path different from `workspace_root`,
     /// the environment variable fallback is skipped. This handles the case
     /// where a pixi task runs another pixi project via `--manifest-path` - the
     /// child process should not inherit the parent's environment name.
@@ -77,9 +77,9 @@ impl EnvironmentName {
 
         // Check if we should ignore PIXI_ env vars because they belong to a
         // different workspace
-        let should_ignore_env_vars = std::env::var("PIXI_PROJECT_ROOT")
-            .ok()
-            .is_some_and(|pixi_root| Path::new(&pixi_root) != workspace_root);
+        let should_ignore_env_vars =
+            crate::utils::workspace_or_project_env("PIXI_WORKSPACE_ROOT", "PIXI_PROJECT_ROOT")
+                .is_some_and(|pixi_root| Path::new(&pixi_root) != workspace_root);
 
         if should_ignore_env_vars {
             return Ok(EnvironmentName::Default);
@@ -150,6 +150,49 @@ impl<'de> Deserialize<'de> for EnvironmentName {
     }
 }
 
+/// Describes an environment that should be added to a manifest.
+///
+/// Construct it with [`NewEnvironment::new`] and refine it with the builder
+/// methods before passing it to `add_environment`.
+#[derive(Debug, Clone)]
+pub struct NewEnvironment {
+    pub(crate) name: String,
+    pub(crate) features: Option<Vec<String>>,
+    pub(crate) solve_group: Option<String>,
+    pub(crate) no_default_feature: bool,
+}
+
+impl NewEnvironment {
+    /// Creates a description of an environment with the given name and no
+    /// features, no solve group and the default feature included.
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            features: None,
+            solve_group: None,
+            no_default_feature: false,
+        }
+    }
+
+    /// Sets the features that make up the environment.
+    pub fn with_features(mut self, features: impl Into<Option<Vec<String>>>) -> Self {
+        self.features = features.into();
+        self
+    }
+
+    /// Sets the solve group the environment belongs to.
+    pub fn with_solve_group(mut self, solve_group: impl Into<Option<String>>) -> Self {
+        self.solve_group = solve_group.into();
+        self
+    }
+
+    /// Sets whether the default feature is excluded from the environment.
+    pub fn with_no_default_feature(mut self, no_default_feature: bool) -> Self {
+        self.no_default_feature = no_default_feature;
+        self
+    }
+}
+
 /// An environment describes a set of features that are available together.
 ///
 /// Individual features cannot be used directly, instead they are grouped
@@ -163,7 +206,7 @@ pub struct Environment {
     ///
     /// Note that the default feature is always added to the set of features
     /// that make up the environment.
-    pub features: Vec<String>,
+    pub features: Vec<FeatureName>,
 
     /// An optional solver-group. Multiple environments can share the same
     /// solve-group. All the dependencies of the environment that share the

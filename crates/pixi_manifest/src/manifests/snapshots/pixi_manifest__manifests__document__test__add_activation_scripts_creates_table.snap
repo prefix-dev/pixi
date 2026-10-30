@@ -1,0 +1,12 @@
+---
+source: crates/pixi_manifest/src/manifests/document.rs
+expression: document.to_string()
+---
+
+[project]
+name = "test"
+channels = []
+platforms = []
+
+[activation]
+scripts = ["setup.sh", "extra.sh"]

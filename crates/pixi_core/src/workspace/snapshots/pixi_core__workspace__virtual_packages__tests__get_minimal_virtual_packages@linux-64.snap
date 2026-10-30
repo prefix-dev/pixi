@@ -1,5 +1,5 @@
 ---
-source: src/workspace/virtual_packages.rs
+source: crates/pixi_core/src/workspace/virtual_packages.rs
 expression: packages
 ---
 [
@@ -12,7 +12,9 @@ expression: packages
             version: [[0], [0]],
             local: [],
         },
-        build_string: "0",
+        build_string: BuildString(
+            "0",
+        ),
     },
     GenericVirtualPackage {
         name: PackageName {
@@ -23,7 +25,9 @@ expression: packages
             version: [[0], [4], [18]],
             local: [],
         },
-        build_string: "0",
+        build_string: BuildString(
+            "0",
+        ),
     },
     GenericVirtualPackage {
         name: PackageName {
@@ -34,7 +38,9 @@ expression: packages
             version: [[0], [2], [28]],
             local: [],
         },
-        build_string: "0",
+        build_string: BuildString(
+            "0",
+        ),
     },
     GenericVirtualPackage {
         name: PackageName {
@@ -45,6 +51,8 @@ expression: packages
             version: [[0], [1]],
             local: [],
         },
-        build_string: "x86_64",
+        build_string: BuildString(
+            "x86_64",
+        ),
     },
 ]

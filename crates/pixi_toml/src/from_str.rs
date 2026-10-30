@@ -38,7 +38,7 @@ where
     fn deserialize(value: &mut Value<'de>) -> Result<Self, DeserError> {
         let span = value.span;
         value
-            .take_string("expected a string".into())?
+            .take_string("a string".into())?
             .parse()
             .map_err(|e: <T as FromStr>::Err| {
                 DeserError::from(Error {

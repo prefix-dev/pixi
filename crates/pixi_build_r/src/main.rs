@@ -13,8 +13,10 @@ use pixi_build_backend::{
     tools::BackendIdentifier,
     variants::NormalizedKey,
 };
-use rattler_build_recipe::stage0::{Item, Script, SerializableMatchSpec, Value};
-use rattler_conda_types::{ChannelUrl, Platform};
+use rattler_build_recipe::stage0::{
+    Item, Script, SerializableMatchSpec, SingleOutputRecipe, Value,
+};
+use rattler_conda_types::{ChannelUrl, Subdir};
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -61,13 +63,14 @@ impl RGenerator {
 #[async_trait::async_trait]
 impl GenerateRecipe for RGenerator {
     type Config = RBackendConfig;
+    type Recipe = SingleOutputRecipe;
 
     async fn generate_recipe(
         &self,
         model: &pixi_build_types::ProjectModel,
         config: &Self::Config,
         manifest_path: PathBuf,
-        _host_platform: Platform,
+        host_platform: Subdir,
         _python_params: Option<PythonParams>,
         variants: &HashSet<NormalizedKey>,
         _channels: Vec<ChannelUrl>,
@@ -112,6 +115,37 @@ impl GenerateRecipe for RGenerator {
             variants,
         );
 
+        // Rust, for packages with Rust code. The plain `rust` package, as
+        // conda-forge's R recipes use (e.g. r-gifski), rather than
+        // `compiler('rust')`, with which R's Makevars didn't find the library
+        // cargo built.
+        if metadata_provider.needs_rust().into_diagnostic()? {
+            requirements
+                .build
+                .push(matchspec_item("rust").into_diagnostic()?);
+            // On Windows, R packages build their Rust code for the GNU target,
+            // whose standard library `rust` doesn't bring
+            if host_platform == Subdir::Win64 {
+                requirements
+                    .build
+                    .push(matchspec_item("rust-std-x86_64-pc-windows-gnu").into_diagnostic()?);
+            }
+        }
+
+        // CMake and pkg-config, when `SystemRequirements` names them.
+        // Otherwise the build uses whichever is on the machine's PATH, or
+        // fails without one.
+        if metadata_provider.needs_cmake().into_diagnostic()? {
+            requirements
+                .build
+                .push(matchspec_item("cmake").into_diagnostic()?);
+        }
+        if metadata_provider.needs_pkg_config().into_diagnostic()? {
+            requirements
+                .build
+                .push(matchspec_item("pkg-config").into_diagnostic()?);
+        }
+
         // Add the R runtime to host and run requirements. A user-provided
         // r-base spec intersects with this one in the solver, so duplicates
         // are harmless.
@@ -126,7 +160,7 @@ impl GenerateRecipe for RGenerator {
         let r_dependencies = metadata_provider.runtime_dependencies().into_diagnostic()?;
 
         for dep in r_dependencies {
-            // Skip packages that are built into r-base (base + recommended packages)
+            // Skip packages that are built into r-base (the base packages)
             if metadata::is_builtin_package(&dep.name) {
                 continue;
             }
@@ -182,7 +216,7 @@ impl GenerateRecipe for RGenerator {
         // Generate build script
         let has_native_code = !compilers.is_empty();
         let build_script = BuildScriptContext {
-            build_platform: if Platform::current().is_windows() {
+            build_platform: if Subdir::current().unwrap_or(Subdir::NoArch).is_windows() {
                 BuildPlatform::Windows
             } else {
                 BuildPlatform::Unix
@@ -193,7 +227,12 @@ impl GenerateRecipe for RGenerator {
         }
         .render();
 
-        generated_recipe.recipe.build.script = Script::from_content(build_script)
+        *generated_recipe
+            .recipe
+            .build
+            .plan
+            .script_mut()
+            .expect("generated recipes use script mode") = Script::from_content(build_script)
             .with_env(
                 config
                     .env
@@ -261,7 +300,7 @@ impl GenerateRecipe for RGenerator {
 
     fn default_variants(
         &self,
-        _host_platform: Platform,
+        _host_platform: Subdir,
     ) -> miette::Result<BTreeMap<NormalizedKey, Vec<Variable>>> {
         // R packages don't typically need special default variants
         // Compiler variants are handled by rattler-build defaults
@@ -334,7 +373,7 @@ LinkingTo: Rcpp
                 &project_model,
                 &RBackendConfig::default(),
                 temp_dir.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -414,7 +453,7 @@ LinkingTo: Rcpp
                 &project_model,
                 &RBackendConfig::default(),
                 temp_dir.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -471,7 +510,7 @@ LinkingTo: Rcpp
                 &project_model,
                 &RBackendConfig::default(),
                 temp_dir.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -569,7 +608,7 @@ Imports:
                 &project_model,
                 &RBackendConfig::default(),
                 temp_dir.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -647,6 +686,271 @@ Imports:
     }
 
     #[tokio::test]
+    async fn test_recommended_packages_are_dependencies() {
+        let temp_dir = TempDir::new().unwrap();
+
+        // Base packages (methods, stats) come with r-base; recommended
+        // packages (MASS, Matrix) are separate packages on conda-forge
+        fs::write(
+            temp_dir.path().join("DESCRIPTION"),
+            r#"Package: example
+Version: 1.0.0
+Depends:
+    R (>= 4.1.0),
+    methods
+Imports:
+    stats,
+    MASS (>= 7.3),
+    Matrix
+LinkingTo:
+    Matrix
+"#,
+        )
+        .await
+        .unwrap();
+
+        let project_model = project_fixture!({
+            "name": "r-example",
+            "version": "1.0.0",
+            "targets": {
+                "defaultTarget": {}
+            }
+        });
+
+        let generated_recipe = RGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &RBackendConfig::default(),
+                temp_dir.path().to_path_buf(),
+                Subdir::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        let host: Vec<String> = generated_recipe
+            .recipe
+            .requirements
+            .host
+            .iter()
+            .map(|req| req.to_string())
+            .collect();
+        let run: Vec<String> = generated_recipe
+            .recipe
+            .requirements
+            .run
+            .iter()
+            .map(|req| req.to_string())
+            .collect();
+
+        for reqs in [&host, &run] {
+            assert!(
+                reqs.iter()
+                    .any(|req| req.contains("r-mass") && req.contains(">=7.3")),
+                "Should have r-mass >=7.3, got {reqs:?}"
+            );
+            assert!(
+                reqs.iter().any(|req| req.starts_with("r-matrix")),
+                "Should have r-matrix, got {reqs:?}"
+            );
+            assert!(
+                !reqs
+                    .iter()
+                    .any(|req| req.starts_with("r-stats") || req.starts_with("r-methods")),
+                "Base packages should be left out, got {reqs:?}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_rust_is_added_when_system_requirements_ask_for_cargo() {
+        let temp_dir = TempDir::new().unwrap();
+        fs::write(
+            temp_dir.path().join("DESCRIPTION"),
+            r#"Package: hellorust
+Version: 1.2.3
+SystemRequirements: Cargo (Rust's package manager), rustc
+"#,
+        )
+        .await
+        .unwrap();
+
+        let project_model = project_fixture!({
+            "name": "r-hellorust",
+            "version": "1.2.3",
+            "targets": {
+                "defaultTarget": {}
+            }
+        });
+
+        let build_requirements = |platform: Subdir| {
+            let project_model = project_model.clone();
+            let path = temp_dir.path().to_path_buf();
+            async move {
+                RGenerator::default()
+                    .generate_recipe(
+                        &project_model,
+                        &RBackendConfig::default(),
+                        path,
+                        platform,
+                        None,
+                        &HashSet::new(),
+                        vec![],
+                        None,
+                        None,
+                        None,
+                        None,
+                    )
+                    .await
+                    .expect("Failed to generate recipe")
+                    .recipe
+                    .requirements
+                    .build
+                    .iter()
+                    // The package name, without any version
+                    .map(|req| {
+                        req.to_string()
+                            .split_whitespace()
+                            .next()
+                            .unwrap_or_default()
+                            .to_string()
+                    })
+                    .collect::<Vec<String>>()
+            }
+        };
+
+        let linux = build_requirements(Subdir::Linux64).await;
+        assert!(
+            linux.iter().any(|req| req == "rust"),
+            "Should have rust in build requirements, got {linux:?}"
+        );
+        assert!(
+            !linux.iter().any(|req| req.starts_with("rust-std")),
+            "Should only add the GNU target's standard library on Windows, got {linux:?}"
+        );
+
+        let windows = build_requirements(Subdir::Win64).await;
+        assert!(
+            windows
+                .iter()
+                .any(|req| req == "rust-std-x86_64-pc-windows-gnu"),
+            "Should have the GNU target's standard library on Windows, got {windows:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_cmake_and_pkg_config_are_added_when_system_requirements_name_them() {
+        let temp_dir = TempDir::new().unwrap();
+        fs::write(
+            temp_dir.path().join("DESCRIPTION"),
+            r#"Package: demo
+Version: 1.0
+SystemRequirements: CMake (>= 3.15), libxml2, pkg-config
+"#,
+        )
+        .await
+        .unwrap();
+
+        let project_model = project_fixture!({
+            "name": "r-demo",
+            "version": "1.0",
+            "targets": {
+                "defaultTarget": {}
+            }
+        });
+
+        let build: Vec<String> = RGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &RBackendConfig::default(),
+                temp_dir.path().to_path_buf(),
+                Subdir::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe")
+            .recipe
+            .requirements
+            .build
+            .iter()
+            // The package name, without any version
+            .map(|req| {
+                req.to_string()
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or_default()
+                    .to_string()
+            })
+            .collect();
+
+        assert!(
+            build.iter().any(|req| req == "cmake"),
+            "Should have cmake in build requirements, got {build:?}"
+        );
+        assert!(
+            build.iter().any(|req| req == "pkg-config"),
+            "Should have pkg-config in build requirements, got {build:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_package_name_derived_from_description_is_r_prefixed() {
+        // When the model carries no name (the inline source-dependency flow),
+        // the recipe name comes from the DESCRIPTION via the metadata provider.
+        // It must be r-prefixed and lowercased so that a dependent's `Imports`
+        // (which maps through r_package_to_conda) resolves against it.
+        let temp_dir = TempDir::new().unwrap();
+
+        fs::write(
+            temp_dir.path().join("DESCRIPTION"),
+            "Package: Rhdf5lib\nVersion: 1.0.0\nTitle: Test Package\n",
+        )
+        .await
+        .unwrap();
+
+        let project_model = project_fixture!({
+            "version": "1.0.0",
+            "targets": {
+                "defaultTarget": {}
+            }
+        });
+
+        let generated_recipe = RGenerator::default()
+            .generate_recipe(
+                &project_model,
+                &RBackendConfig::default(),
+                temp_dir.path().to_path_buf(),
+                Subdir::Linux64,
+                None,
+                &HashSet::new(),
+                vec![],
+                None,
+                None,
+                None,
+                None,
+            )
+            .await
+            .expect("Failed to generate recipe");
+
+        assert_eq!(
+            generated_recipe.recipe.package.name.to_string(),
+            "r-rhdf5lib"
+        );
+    }
+
+    #[tokio::test]
     async fn test_explicit_compilers_override() {
         let temp_dir = TempDir::new().unwrap();
 
@@ -679,7 +983,7 @@ Imports:
                 &project_model,
                 &config,
                 temp_dir.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],

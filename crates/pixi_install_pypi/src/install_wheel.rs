@@ -10,11 +10,11 @@ type WheelInfo = (Vec<RecordEntry>, LibKind);
 /// into `purelib` or `platlib` (`None` for an unknown wheel kind).
 ///
 /// This function is used to detect if Python wheels will clobber already installed Conda packages
-pub(crate) fn get_wheel_info(whl: &Path) -> miette::Result<Option<WheelInfo>> {
+pub(crate) fn get_wheel_info(whl: &Path) -> Result<Option<WheelInfo>, WheelInfoError> {
     let dist_info_prefix = find_dist_info(whl)?;
     // Read the RECORD file.
-    let mut record_file =
-        File::open(whl.join(format!("{dist_info_prefix}.dist-info/RECORD"))).into_diagnostic()?;
+    let mut record_file = File::open(whl.join(format!("{dist_info_prefix}.dist-info/RECORD")))
+        .map_err(WheelInfoError::Io)?;
     let records = read_record_file(&mut record_file)?;
 
     let whl_kind = get_wheel_kind(whl, dist_info_prefix).unwrap_or(LibKind::Unknown);
@@ -30,10 +30,10 @@ pub(crate) fn get_wheel_info(whl: &Path) -> miette::Result<Option<WheelInfo>> {
 /// See: <https://github.com/PyO3/python-pkginfo-rs>
 ///
 /// See: <https://github.com/pypa/pip/blob/36823099a9cdd83261fdbc8c1d2a24fa2eea72ca/src/pip/_internal/utils/wheel.py#L38>
-fn find_dist_info(path: impl AsRef<Path>) -> miette::Result<String> {
+fn find_dist_info(path: impl AsRef<Path>) -> Result<String, WheelInfoError> {
     // Iterate over `path` to find the `.dist-info` directory. It should be at the top-level.
     let Some(dist_info) = fs_err::read_dir(path.as_ref())
-        .into_diagnostic()?
+        .map_err(WheelInfoError::Io)?
         .find_map(|entry| {
             let entry = entry.ok()?;
             let file_type = entry.file_type().ok()?;
@@ -49,11 +49,11 @@ fn find_dist_info(path: impl AsRef<Path>) -> miette::Result<String> {
             }
         })
     else {
-        miette::bail!("Missing .dist-info directory",);
+        return Err(WheelInfoError::MissingDistInfo);
     };
 
     let Some(dist_info_prefix) = dist_info.file_stem() else {
-        miette::bail!("Missing .dist-info directory",);
+        return Err(WheelInfoError::MissingDistInfo);
     };
 
     Ok(dist_info_prefix.to_string_lossy().to_string())
@@ -61,14 +61,14 @@ fn find_dist_info(path: impl AsRef<Path>) -> miette::Result<String> {
 
 /// Reads the record file
 /// <https://www.python.org/dev/peps/pep-0376/#record>
-pub(crate) fn read_record_file(record: &mut impl Read) -> miette::Result<Vec<RecordEntry>> {
+pub(crate) fn read_record_file(record: &mut impl Read) -> Result<Vec<RecordEntry>, WheelInfoError> {
     ReaderBuilder::new()
         .has_headers(false)
         .escape(Some(b'"'))
         .from_reader(record)
         .deserialize()
         .map(|entry| {
-            let entry: RecordEntry = entry.into_diagnostic()?;
+            let entry: RecordEntry = entry?;
             Ok(RecordEntry {
                 // selenium uses absolute paths for some reason
                 path: entry.path.trim_start_matches('/').to_string(),
@@ -81,13 +81,13 @@ pub(crate) fn read_record_file(record: &mut impl Read) -> miette::Result<Vec<Rec
 pub(crate) fn get_wheel_kind(
     wheel_path: &Path,
     dist_info_prefix: String,
-) -> miette::Result<LibKind> {
+) -> Result<LibKind, WheelInfoError> {
     // We're going step by step though
     // https://packaging.python.org/en/latest/specifications/binary-distribution-format/#installing-a-wheel-distribution-1-0-py32-none-any-whl
     // > 1.a Parse distribution-1.0.dist-info/WHEEL.
     // > 1.b Check that installer is compatible with Wheel-Version. Warn if minor version is greater, abort if major version is greater.
     let wheel_file_path = wheel_path.join(format!("{dist_info_prefix}.dist-info/WHEEL"));
-    let wheel_text = fs_err::read_to_string(wheel_file_path).into_diagnostic()?;
+    let wheel_text = fs_err::read_to_string(wheel_file_path).map_err(WheelInfoError::Io)?;
     let lib_kind = parse_wheel_file(&wheel_text)?;
     Ok(lib_kind)
 }
@@ -99,8 +99,26 @@ use std::{
     path::Path,
 };
 
-use miette::IntoDiagnostic;
 use serde::{Deserialize, Serialize};
+
+/// An error that can occur while reading the metadata of an unpacked wheel.
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum WheelInfoError {
+    #[error(transparent)]
+    Io(std::io::Error),
+
+    #[error("Missing .dist-info directory")]
+    MissingDistInfo,
+
+    #[error(transparent)]
+    Record(#[from] csv::Error),
+
+    #[error("Line {line} of the {filename} file is invalid")]
+    InvalidLine { line: usize, filename: String },
+
+    #[error("Invalid Wheel-Version in WHEEL file: {0:?}")]
+    InvalidWheelVersion(Option<String>),
+}
 
 /// Line in a RECORD file
 /// <https://www.python.org/dev/peps/pep-0376/#record>
@@ -134,21 +152,21 @@ pub(crate) enum LibKind {
 fn parse_key_value_file(
     file: impl Read,
     debug_filename: &str,
-) -> miette::Result<HashMap<String, Vec<String>>> {
+) -> Result<HashMap<String, Vec<String>>, WheelInfoError> {
     let mut data: HashMap<String, Vec<String>> = HashMap::default();
 
     let file = BufReader::new(file);
     for (line_no, line) in file.lines().enumerate() {
-        let line = line.into_diagnostic()?.trim().to_string();
+        let line = line.map_err(WheelInfoError::Io)?.trim().to_string();
         if line.is_empty() {
             continue;
         }
-        let (key, value) = line.split_once(':').ok_or_else(|| {
-            miette::miette!(
-                "Line {} of the {debug_filename} file is invalid",
-                line_no + 1
-            )
-        })?;
+        let (key, value) = line
+            .split_once(':')
+            .ok_or_else(|| WheelInfoError::InvalidLine {
+                line: line_no + 1,
+                filename: debug_filename.to_string(),
+            })?;
         data.entry(key.trim().to_string())
             .or_default()
             .push(value.trim().to_string());
@@ -160,7 +178,7 @@ fn parse_key_value_file(
 ///
 /// > {distribution}-{version}.dist-info/WHEEL is metadata about the archive itself in the same
 /// > basic key: value format:
-pub(crate) fn parse_wheel_file(wheel_text: &str) -> miette::Result<LibKind> {
+pub(crate) fn parse_wheel_file(wheel_text: &str) -> Result<LibKind, WheelInfoError> {
     // {distribution}-{version}.dist-info/WHEEL is metadata about the archive itself in the same basic key: value format:
     let data = parse_key_value_file(&mut wheel_text.as_bytes(), "WHEEL")?;
 
@@ -183,7 +201,7 @@ pub(crate) fn parse_wheel_file(wheel_text: &str) -> miette::Result<LibKind> {
         .and_then(|wheel_versions| wheel_versions.first());
     let wheel_version = wheel_version
         .and_then(|wheel_version| wheel_version.split_once('.'))
-        .ok_or_else(|| miette::miette!("Invalid Wheel-Version in WHEEL file: {wheel_version:?}"))?;
+        .ok_or_else(|| WheelInfoError::InvalidWheelVersion(wheel_version.cloned()))?;
 
     // pip has some test wheels that use that ancient version,
     // and technically we only need to check that the version is not higher
@@ -265,7 +283,7 @@ selenium-4.1.0.dist-info/RECORD,,"#;
     }
 
     #[test]
-    fn test_empty_value() -> miette::Result<()> {
+    fn test_empty_value() -> Result<(), super::WheelInfoError> {
         let wheel = r#"
 Wheel-Version: 1.0
 Generator: custom

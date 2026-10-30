@@ -26,7 +26,8 @@
 use pixi_cli::{
     add, build,
     cli_config::{
-        DependencyConfig, GitRev, LockFileUpdateConfig, NoInstallConfig, WorkspaceConfig,
+        DependencyConfig, GitRev, LockFileUpdateConfig, NoInstallConfig, ScriptWorkspaceConfig,
+        WorkspaceConfig,
     },
     global, init, install, lock, remove, search, task, update, workspace,
 };
@@ -44,7 +45,7 @@ use typed_path::Utf8NativePathBuf;
 
 use futures::FutureExt;
 use pixi_manifest::{CondaPypiMap, EnvironmentName, FeatureName, SpecType, task::Dependency};
-use rattler_conda_types::{NamedChannelOrUrl, Platform, RepoDataRecord};
+use rattler_conda_types::{NamedChannelOrUrl, RepoDataRecord, Subdir};
 use url::Url;
 
 /// Strings from an iterator
@@ -99,7 +100,7 @@ impl InitBuilder {
         self
     }
 
-    pub fn with_platforms(mut self, platforms: Vec<Platform>) -> Self {
+    pub fn with_platforms(mut self, platforms: Vec<Subdir>) -> Self {
         self.args.platforms = platforms.into_iter().map(|p| p.to_string()).collect();
         self
     }
@@ -161,8 +162,10 @@ pub trait HasDependencyConfig: Sized {
             pypi: false,
             platforms: Default::default(),
             feature: Default::default(),
+            environment: Default::default(),
             git: Default::default(),
             rev: Default::default(),
+            subdirectory: Default::default(),
             subdir: Default::default(),
         }
     }
@@ -198,7 +201,7 @@ pub trait HasDependencyConfig: Sized {
         self
     }
 
-    fn set_platforms(mut self, platforms: &[Platform]) -> Self {
+    fn set_platforms(mut self, platforms: &[Subdir]) -> Self {
         self.dependency_config()
             .platforms
             .extend(platforms.iter().copied().map(Into::into));
@@ -228,7 +231,7 @@ impl AddBuilder {
         self
     }
 
-    pub fn with_platform(mut self, platform: Platform) -> Self {
+    pub fn with_platform(mut self, platform: Subdir) -> Self {
         self.args.dependency_config.platforms.push(platform.into());
         self
     }
@@ -238,12 +241,23 @@ impl AddBuilder {
         self
     }
 
+    pub fn with_path(mut self, path: impl Into<PathBuf>) -> Self {
+        self.args.path = Some(path.into());
+        self
+    }
+
     pub fn with_git_rev(mut self, rev: GitRev) -> Self {
         self.args.dependency_config.rev = Some(rev);
         self
     }
 
-    pub fn with_git_subdir(mut self, subdir: String) -> Self {
+    pub fn with_git_subdirectory(mut self, subdirectory: String) -> Self {
+        self.args.dependency_config.subdirectory = Some(subdirectory);
+        self
+    }
+
+    /// Sets the deprecated `--subdir` alias rather than `--subdirectory`.
+    pub fn with_deprecated_git_subdir(mut self, subdir: String) -> Self {
         self.args.dependency_config.subdir = Some(subdir);
         self
     }
@@ -411,7 +425,7 @@ impl TaskAliasBuilder {
 }
 
 pub struct ProjectChannelAddBuilder {
-    pub workspace_config: WorkspaceConfig,
+    pub workspace_config: ScriptWorkspaceConfig,
     pub args: workspace::channel::AddRemoveArgs,
 }
 
@@ -453,7 +467,7 @@ impl IntoFuture for ProjectChannelAddBuilder {
 }
 
 pub struct ProjectChannelRemoveBuilder {
-    pub workspace_config: WorkspaceConfig,
+    pub workspace_config: ScriptWorkspaceConfig,
     pub args: workspace::channel::AddRemoveArgs,
 }
 
@@ -516,7 +530,7 @@ impl InstallBuilder {
         self.args.only = Some(pkg);
         self
     }
-    pub fn with_platform(mut self, platform: Platform) -> Self {
+    pub fn with_platform(mut self, platform: Subdir) -> Self {
         self.args.platform = Some(platform.into());
         self
     }
@@ -614,7 +628,7 @@ impl UpdateBuilder {
         self
     }
 
-    pub fn with_platform(mut self, platform: Platform) -> Self {
+    pub fn with_platform(mut self, platform: Subdir) -> Self {
         self.args
             .specs
             .platforms
@@ -681,13 +695,13 @@ pub struct BuildBuilder {
 
 impl BuildBuilder {
     /// Set the target platform for the build
-    pub fn with_target_platform(mut self, platform: Platform) -> Self {
+    pub fn with_target_platform(mut self, platform: Subdir) -> Self {
         self.args.target_platform = platform;
         self
     }
 
     /// Set the build platform for the build
-    pub fn with_build_platform(mut self, platform: Platform) -> Self {
+    pub fn with_build_platform(mut self, platform: Subdir) -> Self {
         self.args.build_platform = platform;
         self
     }
@@ -738,9 +752,11 @@ impl GlobalInstallBuilder {
     pub fn new(
         tmpdir: PathBuf,
         backend_override: Option<pixi_build_frontend::BackendOverride>,
+        config: pixi_config::ConfigCli,
     ) -> Self {
         let mut args = global::install::Args::default();
         args.backend_override = backend_override;
+        args.config = config;
         Self { args, tmpdir }
     }
 

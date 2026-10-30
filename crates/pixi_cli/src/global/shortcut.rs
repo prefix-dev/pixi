@@ -1,4 +1,4 @@
-use crate::global::revert_environment_after_error;
+use crate::global::{report_failed_environment, revert_environment_after_error};
 use clap::Parser;
 use fancy_display::FancyDisplay;
 use miette::Context;
@@ -55,7 +55,7 @@ pub async fn execute(args: SubCommand) -> miette::Result<()> {
 }
 
 pub async fn add(args: AddArgs) -> miette::Result<()> {
-    let config = Config::with_cli_config(&args.config);
+    let config = Config::try_with_cli_config(&args.config)?;
     let project_original = Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
@@ -78,7 +78,7 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
     match apply_changes(&args, &mut project_modified).await {
         Ok(state_changes) => {
             project_modified.manifest.save().await?;
-            state_changes.report();
+            state_changes.report(&project_modified).await;
             Ok(())
         }
         Err(err) => {
@@ -94,7 +94,7 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
 }
 
 pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
-    let config = Config::with_cli_config(&args.config);
+    let config = Config::try_with_cli_config(&args.config)?;
     let project_original = Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
@@ -155,6 +155,7 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
         );
     }
 
+    let mut all_changes = StateChanges::default();
     let mut last_updated_project = project_original;
     for (env_name, shortcuts) in to_remove_shortcuts_map {
         let mut project = last_updated_project.clone();
@@ -167,7 +168,7 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
                 )
             }) {
             Ok(state_changes) => {
-                state_changes.report();
+                all_changes |= state_changes;
             }
             Err(err) => {
                 if let Err(revert_err) =
@@ -176,10 +177,16 @@ pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
                     tracing::warn!("Reverting of the operation failed");
                     tracing::info!("Reversion error: {:?}", revert_err);
                 }
+                // The environments before this one are already changed and
+                // saved, so they are still reported even though the command
+                // fails.
+                all_changes.report(&last_updated_project).await;
+                report_failed_environment(&env_name);
                 return Err(err);
             }
         }
         last_updated_project = project;
     }
+    all_changes.report(&last_updated_project).await;
     Ok(())
 }

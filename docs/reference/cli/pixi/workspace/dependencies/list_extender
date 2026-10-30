@@ -1,0 +1,15 @@
+
+--8<-- [start:description]
+
+--8<-- [end:description]
+
+--8<-- [start:example]
+
+## Examples
+
+```shell
+pixi workspace dependencies list
+pixi workspace dependencies ls
+```
+
+--8<-- [end:example]

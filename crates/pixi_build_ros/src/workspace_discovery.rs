@@ -147,7 +147,15 @@ pub fn discover_ros_packages(
     markers.push(PACKAGE_XML.to_string());
     markers.extend(IGNORE_MARKERS.iter().map(|m| m.to_string()));
     let input_glob_set = InputGlobSet {
-        patterns: vec![format!("**/{PACKAGE_XML}")],
+        // Pixi manifests are included because a sibling that holds a pixi
+        // package manifest is referenced by its directory instead of its
+        // package.xml (see `sibling_source_spec`), so adding or editing
+        // such a manifest changes the emitted metadata.
+        patterns: vec![
+            format!("**/{PACKAGE_XML}"),
+            "**/pixi.toml".to_string(),
+            "**/pyproject.toml".to_string(),
+        ],
         markers,
         exclude_hidden: true,
         // Caller (pixi-build-ros::main) fills in the workspace root
@@ -168,14 +176,23 @@ fn path_to_forward_slashes(path: &Path) -> String {
 /// Build a matchspec string of the form
 /// `ros-<distro>-<name>[url="source://?path=<rel-to-manifest>"]` that, when
 /// parsed via `SerializableMatchSpec::from`, yields a source dependency
-/// pointing at the sibling's `package.xml`.
+/// pointing at the sibling package.
+///
+/// Siblings that hold a pixi package manifest are referenced by their
+/// directory: directory discovery uses that manifest, including its
+/// `[package.build.config]`, which an explicit `package.xml` reference
+/// deliberately ignores. Bare ROS packages are referenced by their
+/// `package.xml`, the only way to select ROS discovery for them.
 pub fn sibling_source_spec(
     conda_name: &str,
     sibling_package_xml: &Path,
     manifest_root: &Path,
 ) -> String {
-    let rel = pathdiff::diff_paths(sibling_package_xml, manifest_root)
-        .unwrap_or_else(|| sibling_package_xml.to_path_buf());
+    let target = match sibling_package_xml.parent() {
+        Some(dir) if pixi_build_discovery::is_pixi_package_directory(dir) => dir,
+        _ => sibling_package_xml,
+    };
+    let rel = pathdiff::diff_paths(target, manifest_root).unwrap_or_else(|| target.to_path_buf());
     let rel = path_to_forward_slashes(&rel);
 
     let mut url = Url::from_str("source://").expect("static URL parses");
@@ -375,7 +392,11 @@ mod tests {
         assert!(result.packages.is_empty());
         assert_eq!(
             result.input_glob_set.patterns,
-            vec!["**/package.xml".to_string()]
+            vec![
+                "**/package.xml".to_string(),
+                "**/pixi.toml".to_string(),
+                "**/pyproject.toml".to_string(),
+            ]
         );
         assert!(
             result
@@ -393,6 +414,73 @@ mod tests {
     fn nonexistent_workspace_root_returns_empty() {
         let result = discover_ros_packages(Path::new("/this/path/does/not/exist")).unwrap();
         assert!(result.packages.is_empty());
+    }
+
+    #[test]
+    fn sibling_with_pixi_package_manifest_is_referenced_by_directory() {
+        let tmp = tempdir().unwrap();
+        let root = tmp.path();
+
+        // The workspace the member packages belong to; manifest discovery for
+        // a member walks up to this manifest.
+        fs::write(
+            root.join("pixi.toml"),
+            r#"
+[workspace]
+name = "ws"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+preview = ["pixi-build"]
+"#,
+        )
+        .unwrap();
+
+        write_package_xml(&root.join("launch_pkg"), "launch_pkg");
+        write_package_xml(&root.join("node_pkg"), "node_pkg");
+        write_package_xml(&root.join("plain_pkg"), "plain_pkg");
+        fs::write(
+            root.join("node_pkg").join("pixi.toml"),
+            r#"
+[package]
+name = "ros-humble-node-pkg"
+version = "0.0.0"
+
+[package.build]
+backend = { name = "pixi-build-ros", version = "*" }
+
+[package.build.config]
+extra-package-mappings = [{ "my-conda-dep" = { conda = ["xtensor"] } }]
+"#,
+        )
+        .unwrap();
+
+        let discovered = discover_ros_packages(root).unwrap().packages;
+        let manifest_root = root.join("launch_pkg");
+        let specs = sibling_source_spec_map(&discovered, "launch_pkg", &manifest_root, "humble");
+
+        let spec_for = |rel: &str| {
+            let mut url = Url::from_str("source://").unwrap();
+            url.query_pairs_mut().append_pair("path", rel);
+            url
+        };
+
+        // node_pkg carries its own pixi package manifest: reference the
+        // directory so pixi discovers that manifest, including its
+        // [package.build.config].
+        assert_eq!(
+            specs.get("ros-humble-node-pkg").unwrap(),
+            &format!("ros-humble-node-pkg[url=\"{}\"]", spec_for("../node_pkg")),
+        );
+
+        // plain_pkg is a bare ROS package: keep pointing at its package.xml,
+        // which is the only way to select ROS discovery for it.
+        assert_eq!(
+            specs.get("ros-humble-plain-pkg").unwrap(),
+            &format!(
+                "ros-humble-plain-pkg[url=\"{}\"]",
+                spec_for("../plain_pkg/package.xml")
+            ),
+        );
     }
 
     #[test]

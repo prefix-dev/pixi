@@ -82,6 +82,58 @@ exposed = { snakemake = "snakemake" }
 More information on channels can be found [here](../advanced/channel_logic.md).
 
 
+## Exclude newer
+
+The `exclude-newer` key excludes packages uploaded after a cutoff from the solve of every environment in the manifest.
+This reduces the risk of installing recently published packages that might turn out to be compromised.
+It accepts the same values as the [workspace manifest](../reference/pixi_manifest.md#exclude-newer-optional): an RFC 3339 timestamp, a `YYYY-MM-DD` date, or a duration relative to the time of the solve.
+A date is interpreted as the start of the following day in UTC, so `2026-03-30` means `2026-03-31T00:00:00Z`.
+
+Use the string shorthand, such as `exclude-newer = "7d"`, when you only need a cutoff.
+To allow a reviewed release before it reaches that age, use a table with `cutoff` and `exemptions`:
+
+```toml
+version = 1
+
+exclude-newer = { cutoff = "7d", exemptions = { polars = "==1.43.1", my-tool = "*" } }
+
+[envs.tools]
+channels = [
+    { channel = "https://my.internal/channel", exclude-newer = "0d" },
+    "conda-forge",
+]
+dependencies = { my-tool = "*", polars = "*" }
+exposed = { my-tool = "my-tool" }
+```
+
+Exemptions work the same way as in the [workspace manifest](../reference/pixi_manifest.md#exemptions): `==1.43.1` exempts that version, a range such as `>=1.43.1,<1.44` exempts matching versions, and `"*"` exempts every version of a package.
+To narrow an exemption further, use a table with the same fields as a dependency, such as `{ version = "==1.43.1", build = "py312*" }`.
+Add a `cutoff` to the table, such as `{ version = "==1.43.1", cutoff = "2026-10-12T08:00:00Z" }`, to only exempt the matching releases that were published up to that point in time.
+An exemption applies in every environment, including when the package is a transitive dependency.
+Approving one version does not pin the dependency to that version.
+
+A channel can override the manifest-wide cutoff with its own `exclude-newer` value, as shown above.
+Exemptions bypass both the manifest-wide and channel cutoffs.
+Without a manifest-wide policy, channel cutoffs still work on their own.
+
+An environment containing a non-exempt package newer than its cutoff counts as out of sync.
+Tightening the cutoff or removing an exemption re-solves it on the next `pixi global sync`, potentially downgrading packages.
+If no allowed version satisfies the dependencies, the sync fails.
+
+[`pixi global exclude-newer`](../reference/cli/pixi/global/exclude-newer/index.md) edits the cutoff and the exemptions from the command line and syncs the environments afterwards:
+
+```shell
+pixi global exclude-newer set 7d
+pixi global exclude-newer exempt polars==1.43.1 my-tool
+pixi global exclude-newer unexempt my-tool
+pixi global exclude-newer prune
+```
+
+Like `pixi workspace exclude-newer exempt`, an exemption with a version gets the current time as its `cutoff` unless you pass `--cutoff` or `--no-cutoff`.
+`pixi global exclude-newer prune` removes the exemptions whose cutoff the cutoffs of all channels have passed.
+
+An exemption doesn't update the environments to the newer releases on its own, run `pixi global update` to pick them up.
+
 
 ## Dependencies
 
@@ -123,6 +175,70 @@ You can [`remove`](../reference/cli/pixi/global/remove.md) dependencies by runni
 ```shell
 pixi global remove --environment my-env package-a package-b
 ```
+
+
+## Source dependencies
+
+Instead of a Conda package from a channel, you can install a tool built from source.
+Point `pixi global install` at a git repository or a local path:
+
+```shell
+pixi global install --git https://github.com/prefix-dev/rattler-build rattler-build
+pixi global install --path ./my-tool
+```
+
+If the source contains a pixi package manifest, that's all you need.
+If it doesn't, tell pixi how to build it with `--build-backend`:
+
+```shell
+pixi global install --git https://github.com/BurntSushi/xsv.git --build-backend pixi-build-rust
+```
+
+This records an *inline package definition* under the `package` key of the dependency:
+
+```toml
+[envs.xsv]
+channels = ["conda-forge"]
+[envs.xsv.dependencies]
+xsv = { git = "https://github.com/BurntSushi/xsv.git", package.build.backend.name = "pixi-build-rust" }
+```
+
+When pixi can infer the package name from the source you can omit it, so the command above
+installs the `xsv` environment without naming it explicitly.
+If a source produces several differently-named packages, name the ones you want:
+
+```shell
+pixi global install --path ./workspace foo bar
+```
+
+When `--build-backend` or `--package` is combined with several named packages,
+the same inline definition is recorded for each of them.
+
+The `--build-backend` value accepts an optional version constraint, e.g.
+`--build-backend "pixi-build-rust>=0.3,<0.4"`.
+Any other field of the package definition can be set with `--package DOTTED_KEY=TOML_VALUE`,
+which maps directly onto the keys under `package`.
+The value must be valid TOML, so strings need their quotes:
+
+```shell
+pixi global install --git https://github.com/some/tool \
+  --build-backend pixi-build-python \
+  --package 'host-dependencies.hatchling="*"'
+```
+
+Anything expressible in a [pixi package manifest](../build/getting_started.md) is allowed here;
+the CLI flags are just a shortcut for editing the definition by hand with
+[`pixi global edit`](../reference/cli/pixi/global/edit.md).
+
+!!! note
+    Source dependencies are built on your machine, so an environment that contains one
+    can only target your current platform. Setting a different `platform` for such an
+    environment is an error.
+
+`pixi global sync` rebuilds a source dependency when its *specification* changes
+(for example an edited git revision or `package` table).
+To pick up new commits of an unpinned git dependency or new content of a local path,
+run [`pixi global update`](../reference/cli/pixi/global/update.md).
 
 
 ## Platform

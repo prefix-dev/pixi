@@ -11,12 +11,13 @@ pub use lock_file_resolver::{LockFileResolver, LockFileResolverError};
 use std::{collections::HashMap, path::Path, sync::Arc};
 
 pub use pinned_source::{
-    LockedGitUrl, MutablePinnedSourceSpec, ParseError, PinnedGitCheckout, PinnedGitSpec,
-    PinnedPathSpec, PinnedSourceSpec, PinnedUrlSpec, SourceMismatchError,
+    LockedGitUrl, LockedGitUrlError, MutablePinnedSourceSpec, ParseError, PinnedGitCheckout,
+    PinnedGitSpec, PinnedPathSpec, PinnedSourceSpec, PinnedUrlSpec, SourceMismatchError,
 };
 pub use pixi_variant::VariantValue;
 use rattler_conda_types::{
     MatchSpec, Matches, NamelessMatchSpec, PackageName, PackageRecord, RepoDataRecord,
+    package::RunExportsJson,
 };
 use rattler_lock::{
     CondaPackageData, ConversionError, EnvironmentPackages, LockFileBuilder, PackageHandle,
@@ -308,6 +309,16 @@ impl UnresolvedPixiRecord {
         }
     }
 
+    /// Run-exports declared by the package, regardless of record shape.
+    /// Partial source records carry them directly since their full package
+    /// record is not available until the source is re-evaluated.
+    pub fn run_exports(&self) -> Option<&RunExportsJson> {
+        match self {
+            UnresolvedPixiRecord::Binary(record) => record.package_record.run_exports.as_ref(),
+            UnresolvedPixiRecord::Source(record) => record.run_exports(),
+        }
+    }
+
     /// Returns true if this is a partial source record.
     pub fn is_partial(&self) -> bool {
         matches!(
@@ -581,7 +592,7 @@ mod tests {
         let mut package_record = PackageRecord::new(
             PackageName::from_str(name).unwrap(),
             version.parse::<VersionWithSource>().unwrap(),
-            build.to_string(),
+            build.parse().unwrap(),
         );
         package_record.subdir = "linux-64".into();
         let record = RepoDataRecord {
@@ -600,7 +611,7 @@ mod tests {
         let mut package_record = PackageRecord::new(
             PackageName::from_str(name).unwrap(),
             "1.0.0".parse::<VersionWithSource>().unwrap(),
-            "h0".to_string(),
+            "h0".parse().unwrap(),
         );
         package_record.subdir = "linux-64".into();
         let record = SourceRecord {

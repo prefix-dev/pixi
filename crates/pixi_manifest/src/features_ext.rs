@@ -1,19 +1,22 @@
 use std::collections::HashSet;
 
-use chrono::{DateTime, Utc};
 use indexmap::{IndexMap, IndexSet};
-use itertools::{Either, Itertools};
+use itertools::Itertools;
 use miette::Diagnostic;
-use pixi_spec::{ExcludeNewer, ResolvedExcludeNewer};
+use pixi_spec::ResolvedExcludeNewer;
 use pixi_spec_containers::DependencyMap;
-use rattler_conda_types::{ChannelConfig, ChannelUrl, NamedChannelOrUrl, ParseChannelError};
+use rattler_conda_types::{
+    ChannelConfig, ChannelUrl, NamedChannelOrUrl, ParseChannelError, Subdir,
+};
 
 use crate::{
-    CondaConstraints, CondaDependencies, PixiPlatform, PixiPlatformName, PrioritizedChannel,
-    PyPiDependencies, SpecType,
+    CondaConstraints, CondaDependencies, Feature, PixiPlatform, PixiPlatformName,
+    PrioritizedChannel, PyPiDependencies, SpecType,
     dependencies::CondaDevDependencies,
+    exclude_newer::{ExcludeNewerError, resolve_exclude_newer, resolve_pypi_exclude_newer},
     has_features_iter::HasFeaturesIter,
     has_manifest_ref::HasWorkspaceManifest,
+    platform_composition::{combined_platform_name, feature_supports_subdir},
     pypi::{ResolvedPypiExcludeNewer, pypi_options::PypiOptions},
     workspace::{ChannelPriority, SolveStrategy},
 };
@@ -104,46 +107,28 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
         Ok(channel_priority)
     }
 
-    /// Returns the raw workspace exclude-newer configuration before channel and
-    /// package-specific overrides are applied.
-    fn exclude_newer_raw(&self) -> Option<ExcludeNewer> {
-        self.workspace_manifest().workspace.exclude_newer
-    }
-
     /// Returns the effective exclude-newer solver configuration with absolute cutoffs.
     fn exclude_newer_config_resolved(
         &self,
         channel_config: &ChannelConfig,
-    ) -> Result<Option<ResolvedExcludeNewer>, ParseChannelError> {
-        exclude_newer_config_resolved_impl(self, |channel| {
-            channel.channel.clone().into_base_url(channel_config)
-        })
+    ) -> Result<Option<ResolvedExcludeNewer>, ExcludeNewerError> {
+        let workspace = &self.workspace_manifest().workspace;
+        resolve_exclude_newer(
+            &workspace.exclude_newer,
+            self.prioritized_channels().into_values(),
+            channel_config,
+            &workspace.exclude_newer_package_overrides,
+        )
     }
 
     /// Returns the effective PyPI exclude-newer solver configuration with absolute cutoffs.
     fn pypi_exclude_newer_config_resolved(&self) -> ResolvedPypiExcludeNewer {
-        let mut exclude_newer = self
-            .exclude_newer_raw()
-            .map(|config| ResolvedPypiExcludeNewer::from_datetime(config.cutoff()))
-            .unwrap_or_default();
-
-        for (name, package_exclude_newer) in &self
-            .workspace_manifest()
-            .workspace
-            .pypi_exclude_newer_package_overrides
-        {
-            exclude_newer = match package_exclude_newer {
-                ExcludeNewer::Timestamp(dt) => {
-                    exclude_newer.with_package_cutoff(name.as_normalized().clone(), *dt)
-                }
-                ExcludeNewer::Duration(duration) => exclude_newer.with_package_cutoff(
-                    name.as_normalized().clone(),
-                    ExcludeNewer::Duration(*duration).cutoff(),
-                ),
-            };
-        }
-
-        exclude_newer
+        let workspace = &self.workspace_manifest().workspace;
+        resolve_pypi_exclude_newer(
+            &workspace.pypi_exclude_newer,
+            workspace.exclude_newer.cutoff,
+            &workspace.pypi_exclude_newer_package_overrides,
+        )
     }
 
     /// Returns the strategy for solving packages.
@@ -161,33 +146,90 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
 
     /// Returns the platforms that this collection is compatible with.
     ///
-    /// Which platforms a collection support depends on which platforms the
-    /// selected features of the collection supports. The platforms that are
-    /// supported by the collection is the intersection of the platforms
-    /// supported by its features.
+    /// On the subdir-only `[system-requirements]` path each subdir every
+    /// feature supports resolves to the platform composed from the union of the
+    /// virtual packages its features' referenced platforms declare (registered
+    /// up front during parsing).
     ///
-    /// Features can specify which platforms they support through the
-    /// `platforms` key. If a feature does not specify any platforms the
-    /// features defined by the project are used.
+    /// Otherwise a workspace platform is supported when every selected feature
+    /// supports it by name or bare subdir. The bare-subdir shorthand only
+    /// widens: on subdirs where a feature pins a platform by exact name, only
+    /// the exactly pinned platforms remain, so a feature constrained to
+    /// `linux-64` does not drag a declared `linux-64-cuda` variant into the
+    /// environment (prefix-dev/pixi#6493) while a sibling feature pinning
+    /// that variant by name still selects it.
     fn platforms(&self) -> HashSet<PixiPlatformName> {
-        self.features()
-            .map(|feature| {
-                let it = match &feature.platforms {
-                    Some(platforms) => Either::Left(platforms.iter()),
-                    None => Either::Right(
-                        self.workspace_manifest()
-                            .workspace
-                            .platforms
-                            .iter()
-                            .map(|p| p.name()),
-                    ),
-                };
-                it.cloned().collect::<HashSet<_>>()
+        let workspace = &self.workspace_manifest().workspace;
+        if workspace.use_platform_composition {
+            let features: Vec<&Feature> = self.features().collect();
+            let subdirs: IndexSet<Subdir> = workspace
+                .platforms
+                .iter()
+                .map(PixiPlatform::subdir)
+                .collect();
+            return subdirs
+                .into_iter()
+                .filter(|subdir| {
+                    features.iter().all(|feature| {
+                        feature_supports_subdir(feature, *subdir, &workspace.platforms)
+                    })
+                })
+                .filter_map(|subdir| {
+                    let name = combined_platform_name(&features, subdir, &workspace.platforms);
+                    workspace
+                        .platforms
+                        .iter()
+                        .find(|platform| platform.name().as_str() == name)
+                        .map(|platform| platform.name().clone())
+                })
+                .collect();
+        }
+        let exact_names: HashSet<&PixiPlatformName> = self
+            .features()
+            .filter_map(|feature| feature.platforms.as_ref())
+            .flatten()
+            .collect();
+        let exact_subdirs: HashSet<Subdir> = workspace
+            .platforms
+            .iter()
+            .filter(|platform| exact_names.contains(platform.name()))
+            .map(PixiPlatform::subdir)
+            .collect();
+        workspace
+            .platforms
+            .iter()
+            .filter(|platform| {
+                self.features()
+                    .all(|feature| feature.supports_platform(Some(platform)))
             })
-            .reduce(|accumulated_platforms, feat| {
-                accumulated_platforms.intersection(&feat).cloned().collect()
+            .filter(|platform| {
+                exact_names.contains(platform.name()) || !exact_subdirs.contains(&platform.subdir())
             })
-            .unwrap_or_default()
+            .map(|platform| platform.name().clone())
+            .collect()
+    }
+
+    /// Whether `feature` contributes to `platform` in this collection. On the
+    /// composition path a feature matches by subdir (so it applies to the
+    /// composed platform); otherwise it matches by name or bare subdir.
+    fn feature_supports_platform(
+        &self,
+        feature: &Feature,
+        platform: Option<&PixiPlatform>,
+    ) -> bool {
+        let Some(platform) = platform else {
+            return true;
+        };
+        let workspace = &self.workspace_manifest().workspace;
+        if workspace.use_platform_composition {
+            crate::platform_composition::feature_supports_platform(
+                feature,
+                platform,
+                &workspace.platforms,
+            )
+        } else {
+            feature.supports_platform(Some(platform))
+        }
     }
 
     /// Returns true if any of the features has any reference to a pypi
@@ -205,7 +247,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     fn pypi_dependencies<'a>(&'a self, platform: Option<&'a PixiPlatform>) -> PyPiDependencies {
         let deps: Vec<_> = self
             .features()
-            .filter(|f| f.supports_platform(platform))
+            .filter(|f| self.feature_supports_platform(f, platform))
             .filter_map(|f| f.pypi_dependencies(platform))
             .collect();
         DependencyMap::merge_all(deps.iter().map(|d| d.as_ref()))
@@ -227,7 +269,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     ) -> CondaDependencies {
         let deps: Vec<_> = self
             .features()
-            .filter(|f| f.supports_platform(platform))
+            .filter(|f| self.feature_supports_platform(f, platform))
             .filter_map(|f| f.dependencies(kind, platform))
             .collect();
         DependencyMap::merge_all(deps.iter().map(|d| d.as_ref()))
@@ -251,7 +293,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     ) -> CondaDependencies {
         let deps: Vec<_> = self
             .features()
-            .filter(|f| f.supports_platform(platform))
+            .filter(|f| self.feature_supports_platform(f, platform))
             .filter_map(|f| f.combined_dependencies(platform))
             .collect();
         DependencyMap::merge_all(deps.iter().map(|d| d.as_ref()))
@@ -268,7 +310,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     ) -> CondaDevDependencies {
         let deps: Vec<_> = self
             .features()
-            .filter(|f| f.supports_platform(platform))
+            .filter(|f| self.feature_supports_platform(f, platform))
             .filter_map(|f| f.dev_dependencies(platform))
             .collect();
 
@@ -286,7 +328,7 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
     fn combined_constraints<'a>(&'a self, platform: Option<&'a PixiPlatform>) -> CondaConstraints {
         let constraints: Vec<_> = self
             .features()
-            .filter(|f| f.supports_platform(platform))
+            .filter(|f| self.feature_supports_platform(f, platform))
             .filter_map(|f| f.constraints(platform))
             .collect();
         DependencyMap::merge_all(constraints.iter().map(|d| d.as_ref()))
@@ -326,59 +368,13 @@ pub trait FeaturesExt<'source>: HasWorkspaceManifest<'source> + HasFeaturesIter<
 
         // Overlay features on top of the workspace base: features win on
         // single-assignment fields, lists and union-like fields are merged.
+        // Conflicting cutoffs of an extra index are caught at parse time.
         base.overlay(&feature_opts)
+            .expect("merging of pypi-options should already have been checked")
     }
 }
 
 impl<'source, FeatureCollection> FeaturesExt<'source> for FeatureCollection where
     FeatureCollection: HasWorkspaceManifest<'source> + HasFeaturesIter<'source>
 {
-}
-
-fn exclude_newer_config_resolved_impl<'source, T, F>(
-    features: &T,
-    mut channel_key: F,
-) -> Result<Option<ResolvedExcludeNewer>, ParseChannelError>
-where
-    T: FeaturesExt<'source> + ?Sized,
-    F: FnMut(&PrioritizedChannel) -> Result<ChannelUrl, ParseChannelError>,
-{
-    let mut exclude_newer = features
-        .exclude_newer_raw()
-        .map(|config| ResolvedExcludeNewer::from_datetime(config.cutoff()));
-
-    for channel in features.prioritized_channels().into_values() {
-        let Some(channel_exclude_newer) = channel.exclude_newer else {
-            continue;
-        };
-
-        let channel_key = channel_key(channel)?;
-        let config = exclude_newer
-            .get_or_insert_with(|| ResolvedExcludeNewer::from_datetime(DateTime::<Utc>::MAX_UTC));
-
-        *config = match channel_exclude_newer {
-            ExcludeNewer::Timestamp(dt) => config.clone().with_channel_cutoff(channel_key, dt),
-            ExcludeNewer::Duration(duration) => config
-                .clone()
-                .with_channel_cutoff(channel_key, ExcludeNewer::Duration(duration).cutoff()),
-        };
-    }
-
-    for (name, package_exclude_newer) in &features
-        .workspace_manifest()
-        .workspace
-        .exclude_newer_package_overrides
-    {
-        let config = exclude_newer
-            .get_or_insert_with(|| ResolvedExcludeNewer::from_datetime(DateTime::<Utc>::MAX_UTC));
-
-        *config = match package_exclude_newer {
-            ExcludeNewer::Timestamp(dt) => config.clone().with_package_cutoff(name.clone(), *dt),
-            ExcludeNewer::Duration(duration) => config
-                .clone()
-                .with_package_cutoff(name.clone(), ExcludeNewer::Duration(*duration).cutoff()),
-        };
-    }
-
-    Ok(exclude_newer)
 }

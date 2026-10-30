@@ -28,6 +28,7 @@ torchvision = ">=0.26.0,<0.27"
 [target.cuda-win-64.tasks]
 test = "python test.py --cuda"
 train = "python train.py --cuda"
+
 [target.cuda-linux-64.tasks]
 test = "python test.py --cuda"
 train = "python train.py --cuda"

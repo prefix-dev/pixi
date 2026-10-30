@@ -1,50 +1,41 @@
 use std::{
-    collections::{HashMap, HashSet, hash_map::Entry},
-    convert::identity,
-    ffi::OsString,
-    string::String,
+    collections::{HashMap, HashSet},
+    io::Read,
+    process::ExitCode,
 };
 
-#[cfg(unix)]
-use std::io::IsTerminal;
-
 use clap::Parser;
-use deno_task_shell::KillSignal;
-use dialoguer::theme::ColorfulTheme;
 use fancy_display::FancyDisplay;
 use indicatif::ProgressDrawTarget;
 use itertools::Itertools;
-use miette::{Diagnostic, IntoDiagnostic};
+use miette::IntoDiagnostic;
+use pixi_api::workspace::RunOptions;
 use pixi_config::{ConfigCli, ConfigCliActivation};
+use pixi_core::host::{cli_detector_consent, probe_conda_script, probe_pep723_script};
+
 use pixi_core::{
     Workspace, WorkspaceLocator,
-    environment::{PlatformData, sanity_check_workspace},
-    lock_file::{ReinstallPackages, UpdateLockFileOptions, UpdateMode},
     workspace::{
-        Environment, HasWorkspaceRef, PlatformOverrides, PlatformSource,
-        errors::UnsupportedPlatformError,
-        virtual_packages::{
-            EnvironmentRunnability, classify_environment_runnability,
-            verify_current_platform_can_run_environment,
-        },
+        Environment,
+        virtual_packages::{EnvironmentRunnability, classify_environment_runnability},
     },
 };
-use pixi_manifest::{HasWorkspaceManifest, PixiPlatformName, TaskName};
+use pixi_manifest::{PixiPlatformName, TaskName, WithWarnings};
 use pixi_progress::global_multi_progress;
-use pixi_task::{
-    AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
-    PreferExecutable, SearchEnvironments, TaskAndEnvironment, TaskGraph, get_task_env,
-};
-use rattler_conda_types::Platform;
-use thiserror::Error;
-use tokio_util::sync::CancellationToken;
-use tracing::Level;
+use rattler_conda_types::Subdir;
 
-use crate::cli_config::{LockAndInstallConfig, WorkspaceConfig};
+use crate::cli_config::{
+    LockAndInstallConfig, ScriptWorkspaceConfig, validate_transient_script_lock_file_usage,
+};
+use crate::cli_interface::cli_context;
 use crate::process_exit;
+use crate::run_script::{
+    RemoteScriptManifest, RunScriptInput, STDIN_SCRIPT_COMMAND, prepare_remote_script,
+    prepare_stdin_script, transient_script_cache_key,
+};
 use crate::shared::install_platform::resolve_install_platform;
 
-/// Runs task in the pixi environment.
+/// Run a task in an environment.
 ///
 /// This command is used to run tasks in the pixi environment.
 /// It will activate the environment and run the task in the environment.
@@ -68,8 +59,17 @@ pub struct Args {
     #[arg(long = "executable", short = 'x')]
     pub executable: bool,
 
+    /// Enable experimental `--script` features; currently the `conda-script`
+    /// block.
+    ///
+    /// The flag has no effect for PEP 723 scripts, so a shebang line can
+    /// pass it unconditionally. Setting `experimental.conda-script` in the
+    /// configuration opts in without the flag, with a warning on every run.
+    #[arg(long, requires = "script")]
+    pub experimental: bool,
+
     #[clap(flatten)]
-    pub workspace_config: WorkspaceConfig,
+    pub workspace_config: ScriptWorkspaceConfig,
 
     #[clap(flatten)]
     pub lock_and_install_config: LockAndInstallConfig,
@@ -121,10 +121,38 @@ pub struct Args {
     pub h: Option<bool>,
 }
 
+impl Args {
+    fn validate_script_options(&self) -> miette::Result<()> {
+        if self.workspace_config.script.is_none() {
+            return Ok(());
+        }
+
+        let mut unsupported = Vec::new();
+        if self.environment.is_some() {
+            unsupported.push("--environment");
+        }
+        if self.skip_deps {
+            unsupported.push("--skip-deps");
+        }
+
+        if unsupported.is_empty() {
+            Ok(())
+        } else {
+            Err(miette::miette!(
+                help = "A PEP 723 script has one implicit default run environment and no Pixi task graph.",
+                "`pixi run --script` does not support {}",
+                unsupported.join(", ")
+            ))
+        }
+    }
+}
+
 /// CLI entry point for `pixi run`
 /// When running the sigints are ignored and child can react to them. As it
 /// pleases.
-pub async fn execute(args: Args) -> miette::Result<()> {
+pub async fn execute(mut args: Args) -> miette::Result<ExitCode> {
+    args.validate_script_options()?;
+
     // Following statements don't spawn any progress bar, so set
     // progress draw target to hidden. Otherwise output may be
     // incorrect.
@@ -133,29 +161,196 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
     let cli_config = args
         .activation_config
+        .clone()
         .merge_config(args.config.clone().into());
 
-    // Load the workspace
-    let workspace = WorkspaceLocator::for_cli()
-        .with_global_config_source(args.config_source.source())
-        .with_search_start(args.workspace_config.workspace_locator_start())
-        .locate()?
-        .with_cli_config(cli_config);
+    let is_script = args.workspace_config.script.is_some();
+    let script_input = args
+        .workspace_config
+        .script
+        .as_deref()
+        .map(RunScriptInput::classify);
+    let requested_lock_file_usage = args.lock_and_install_config.lock_file_usage()?;
+    let global_config_source = args.config_source.source();
+    let mut _remote_script_directory = None;
+    let mut stdin_script_command = None;
+    let workspace = match script_input {
+        Some(RunScriptInput::Remote(url)) => {
+            validate_transient_script_lock_file_usage(requested_lock_file_usage)?;
+            let root = std::env::current_dir().into_diagnostic()?;
+            let config = pixi_config::Config::try_load_with(&root, &global_config_source)?
+                .merge_config(cli_config);
+            let prepared = prepare_remote_script(url, &config, &root, args.experimental).await?;
+            let cache_key =
+                transient_script_cache_key(b"remote", prepared.original_url.as_str().as_bytes());
+            let manifest = match prepared.manifest {
+                RemoteScriptManifest::Pep723(manifest) => manifest,
+                RemoteScriptManifest::CondaScript(manifest) => {
+                    let entrypoint = manifest.metadata().entrypoint.clone();
+                    let host =
+                        probe_conda_script(&manifest, &root, &config, cli_detector_consent(None))
+                            .await?;
+                    let workspace = Workspace::from_transient_conda_script(
+                        manifest,
+                        config,
+                        root,
+                        &prepared.cache_name,
+                        &cache_key,
+                        host,
+                    )?;
+                    if not_hidden {
+                        global_multi_progress()
+                            .set_draw_target(ProgressDrawTarget::stderr_with_hz(20));
+                    }
+                    let code =
+                        crate::conda_script::execute_run(workspace, entrypoint, args).await?;
+                    drop(prepared.directory);
+                    return Ok(process_exit::exit_code_from_code(code));
+                }
+            };
+            let script_path = manifest.path().to_owned();
+            let host =
+                probe_pep723_script(&manifest, &root, &config, cli_detector_consent(None)).await?;
+            let WithWarnings {
+                value: workspace,
+                warnings,
+            } = Workspace::from_transient_script(
+                manifest,
+                config,
+                root,
+                script_path,
+                &prepared.cache_name,
+                &cache_key,
+                host,
+            )?;
+            for warning in warnings {
+                tracing::warn!("{warning}");
+            }
+            _remote_script_directory = Some(prepared.directory);
+            workspace
+        }
+        Some(RunScriptInput::Stdin) => {
+            validate_transient_script_lock_file_usage(requested_lock_file_usage)?;
+            let root = std::env::current_dir().into_diagnostic()?;
+            let config = pixi_config::Config::try_load_with(&root, &global_config_source)?
+                .merge_config(cli_config);
+            let mut contents = Vec::new();
+            std::io::stdin()
+                .read_to_end(&mut contents)
+                .into_diagnostic()?;
+            let prepared = prepare_stdin_script(contents, &root)?;
+            let cache_key =
+                transient_script_cache_key(b"stdin", prepared.manifest.metadata().as_bytes());
+            let host = probe_pep723_script(
+                &prepared.manifest,
+                &root,
+                &config,
+                cli_detector_consent(None),
+            )
+            .await?;
+            let WithWarnings {
+                value: workspace,
+                warnings,
+            } = Workspace::from_transient_script(
+                prepared.manifest,
+                config,
+                root,
+                "<stdin>".into(),
+                "stdin",
+                &cache_key,
+                host,
+            )?;
+            for warning in warnings {
+                tracing::warn!("{warning}");
+            }
+            stdin_script_command = Some(prepared.command);
+            workspace
+        }
+        Some(RunScriptInput::Local(path)) => {
+            let root = std::path::absolute(&path)
+                .into_diagnostic()?
+                .parent()
+                .expect("an absolute script path always has a parent")
+                .to_owned();
+            let config = pixi_config::Config::try_load_with(&root, &global_config_source)?
+                .merge_config(cli_config.clone());
+            // The configuration option opts in for every run, so the flag is
+            // only needed when it is unset.
+            let opted_in = args.experimental || config.experimental_conda_script();
+            // A conda-script block takes this file off the PEP 723 path; a
+            // file with both kinds of block is rejected by the detection.
+            if let Some(manifest) = crate::conda_script::detect_with_fallback(&path, opted_in)? {
+                crate::conda_script::ensure_enabled(
+                    args.experimental,
+                    &config,
+                    &path.display().to_string(),
+                )?;
+                if not_hidden {
+                    global_multi_progress().set_draw_target(ProgressDrawTarget::stderr_with_hz(20));
+                }
+                let entrypoint = manifest.metadata().entrypoint.clone();
+                let host =
+                    probe_conda_script(&manifest, &root, &config, cli_detector_consent(None))
+                        .await?;
+                let workspace = Workspace::from_conda_script(manifest, config, host)?;
+                let code = crate::conda_script::execute_run(workspace, entrypoint, args).await?;
+                return Ok(process_exit::exit_code_from_code(code));
+            }
+            WorkspaceLocator::for_cli()
+                .with_global_config_source(global_config_source)
+                .with_search_start(pixi_core::workspace::DiscoveryStart::Script(path))
+                .with_cli_config(cli_config)
+                .locate()
+                .await?
+        }
+        None => {
+            WorkspaceLocator::for_cli()
+                .with_global_config_source(global_config_source)
+                .with_search_start(args.workspace_config.workspace_locator_start())
+                .with_cli_config(cli_config)
+                .locate()
+                .await?
+        }
+    };
+
+    let stdin_display_args = if stdin_script_command.is_some() {
+        Some(args.task.clone())
+    } else {
+        None
+    };
+    if stdin_script_command.is_some() {
+        args.task.insert(0, STDIN_SCRIPT_COMMAND.to_owned());
+        args.executable = true;
+    } else if is_script {
+        let script_path = workspace.workspace.provenance.path.clone();
+        let script_path = script_path.into_os_string().into_string().map_err(|_| {
+            miette::miette!("the script path must contain only valid UTF-8 characters")
+        })?;
+
+        args.task.insert(0, script_path);
+        args.task.insert(0, "python".to_owned());
+        args.executable = true;
+    }
 
     // Extract the passed in environment name.
-    let environment = workspace.environment_from_name_or_env_var(args.environment.clone())?;
+    let environment = if is_script {
+        workspace.default_environment()
+    } else {
+        workspace.environment_from_name_or_env_var(args.environment.clone())?
+    };
 
     // Find the environment to run the task in, if any were specified.
-    let explicit_environment = if args.environment.is_none() && environment.is_default() {
-        None
-    } else {
-        Some(environment.clone())
-    };
+    let explicit_environment =
+        if is_script || (args.environment.is_none() && environment.is_default()) {
+            None
+        } else {
+            Some(environment.clone())
+        };
 
     // Print all available tasks if no task is provided
     if args.task.is_empty() {
         command_not_found(&workspace, explicit_environment);
-        return Ok(());
+        return Ok(ExitCode::SUCCESS);
     }
 
     // We expect progress bar to be used afterwards, so set draw
@@ -163,323 +358,37 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     if not_hidden {
         global_multi_progress().set_draw_target(ProgressDrawTarget::stderr_with_hz(20));
     }
-    // Sanity check of prefix location
-    sanity_check_workspace(&workspace).await?;
 
-    // `--platform` pins which declared platform the environment is installed
-    // and activated for. Without it we auto-upgrade to the platform the
-    // environment was last installed for (so users need not repeat
-    // `--platform`), falling back to the host-aware best match when the
-    // environment isn't installed yet.
-    let user_platform = resolve_install_platform(&workspace, args.platform.as_ref())?;
-    let installed_platform = environment.installed_resolved_platform_name();
-    let run_platform = user_platform.clone().or_else(|| installed_platform.clone());
-    let best_declared_platform = environment.named_or_best_declared_platform(run_platform.as_ref());
-
-    let (resolved_marker, minimum_marker) = environment.installed_platforms();
-    let format_marker = |marker: &Option<PlatformData>| {
-        marker
-            .as_ref()
-            .map_or_else(|| "<none>".to_string(), ToString::to_string)
+    let options = RunOptions {
+        task: args.task,
+        environment: explicit_environment.as_ref().map(|env| env.name().clone()),
+        platform: resolve_install_platform(&workspace, args.platform.as_ref())?,
+        executable: args.executable,
+        clean_env: args.clean_env,
+        skip_deps: args.skip_deps,
+        templated: args.templated,
+        dry_run: args.dry_run,
+        lock_file_usage: requested_lock_file_usage,
+        no_install: args.lock_and_install_config.no_install(),
+        custom_commands: stdin_script_command
+            .map(|command| {
+                HashMap::from([(STDIN_SCRIPT_COMMAND.to_owned(), command.shell_command())])
+            })
+            .unwrap_or_default(),
+        display_command: stdin_display_args.map(|forwarded_args| {
+            if forwarded_args.is_empty() {
+                "python -c <stdin>".to_owned()
+            } else {
+                format!("python -c <stdin> {}", forwarded_args.iter().format(" "))
+            }
+        }),
     };
-    tracing::debug!(
-        "Run-platform decision for environment '{}': --platform={:?}, auto-detected={}, installed resolved platform={:?}, marker resolved={}, marker minimum={}, chosen run platform={:?}",
-        environment.name(),
-        user_platform.as_ref().map(|p| p.as_str()),
-        PlatformData::from(&environment.workspace().host_platform(
-            PlatformSource::Defaults,
-            PlatformOverrides::EnvironmentVariableOverrides
-        )),
-        installed_platform.as_ref().map(|p| p.as_str()),
-        format_marker(&resolved_marker),
-        format_marker(&minimum_marker),
-        run_platform.as_ref().map(|p| p.as_str()),
-    );
-    if let Some(platform) = best_declared_platform {
-        tracing::info!(
-            "Running tasks in environment '{}' assuming platform '{}'",
-            environment.name().fancy_display(),
-            platform.name(),
-        );
+    let code = cli_context(workspace.clone()).run(options).await?;
+
+    if code == 127 {
+        command_not_found(&workspace, explicit_environment);
     }
-
-    // A `--platform` the environment doesn't list is a membership error. With
-    // no platform requested, defer to the install path's minimum fallback.
-    if args.lock_and_install_config.allow_installs()
-        && best_declared_platform.is_none()
-        && let Some(name) = user_platform.as_ref()
-    {
-        return Err(miette::miette!(
-            "platform '{}' is not part of environment '{}'",
-            name,
-            environment.name(),
-        ));
-    }
-
-    if args.lock_and_install_config.allow_installs() {
-        environment.emit_emulation_warning();
-    }
-
-    // Top-level progress, kept here so we can clear it between phases.
-    let progress = pixi_reporters::TopLevelProgress::from_global();
-
-    // Ensure that the lock file is up-to-date.
-    let mut lock_file = workspace
-        .update_lock_file(
-            Some(progress.clone()),
-            UpdateLockFileOptions {
-                lock_file_usage: args.lock_and_install_config.lock_file_usage()?,
-                no_install: args.lock_and_install_config.no_install(),
-                max_concurrent_solves: workspace.config().max_concurrent_solves(),
-                ..Default::default()
-            },
-        )
-        .await?
-        .0;
-
-    // Pin the run platform (explicit `--platform`, else the auto-upgraded
-    // resolved platform) so the on-demand prefix install below targets it.
-    lock_file.target_platform = run_platform.clone();
-
-    // Spawn a task that listens for ctrl+c and resets the cursor.
-    tokio::spawn(async {
-        if tokio::signal::ctrl_c().await.is_ok() {
-            reset_cursor();
-        }
-    });
-
-    // Construct a task graph from the input arguments.
-    // Pin the search only to an explicit `--platform`; otherwise each
-    // environment resolves its own platform, so foreign-platform tasks are found.
-    let search_platform = if args.lock_and_install_config.allow_installs() {
-        user_platform.as_ref().and_then(|name| {
-            (&workspace)
-                .workspace_manifest()
-                .workspace
-                .platform_by_name(name)
-        })
-    } else {
-        None
-    };
-    let search_environment =
-        SearchEnvironments::from_opt_env(&workspace, explicit_environment.clone(), search_platform)
-            .with_disambiguate_fn(disambiguate_task_interactive);
-
-    let task_graph = TaskGraph::from_cmd_args(
-        &workspace,
-        &search_environment,
-        args.task,
-        args.skip_deps,
-        if args.executable {
-            PreferExecutable::Always
-        } else {
-            PreferExecutable::TaskFirst
-        },
-        args.templated,
-    )?;
-    tracing::debug!("Task graph: {}", task_graph);
-
-    // Print dry-run message if dry-run mode is enabled
-    if args.dry_run {
-        pixi_progress::println!(
-            "{}{}\n\n",
-            console::Emoji("🌵 ", ""),
-            console::style("Dry-run mode enabled - no tasks will be executed.")
-                .yellow()
-                .bold()
-        );
-    }
-
-    // Traverse the task graph in topological order and execute each individual
-    // task.
-    let mut task_idx = 0;
-    let mut task_envs = HashMap::new();
-    let signal = KillSignal::default();
-    // make sure that child processes are killed when pixi stops
-    let _drop_guard = signal.clone().drop_guard();
-
-    let init_cwd = std::env::current_dir().ok();
-    for task_id in task_graph.topological_order() {
-        let executable_task =
-            ExecutableTask::from_task_graph(&task_graph, task_id, init_cwd.clone());
-
-        // If the task is not executable (e.g. an alias), we skip it. This ensures we
-        // don't instantiate a prefix for an alias.
-        if !executable_task.task().is_executable() {
-            continue;
-        }
-
-        // Fail before announcing a task whose environment can't run here at
-        // all; by-accident environments proceed and `--platform` overrides.
-        if args.lock_and_install_config.allow_installs()
-            && user_platform.is_none()
-            && classify_environment_runnability(
-                &executable_task.run_environment,
-                Some(lock_file.as_lock_file()),
-            ) == EnvironmentRunnability::Unsupported
-        {
-            return Err(
-                match verify_current_platform_can_run_environment(
-                    &executable_task.run_environment,
-                    Some(lock_file.as_lock_file()),
-                ) {
-                    Err(err) => err.into(),
-                    Ok(()) => executable_task
-                        .run_environment
-                        .unsupported_platform_error()
-                        .into(),
-                },
-            );
-        }
-
-        // Showing which command is being run if the level and type allows it.
-        if tracing::enabled!(Level::WARN) && !executable_task.task().is_custom() {
-            if task_idx > 0 {
-                // Add a newline between task outputs
-                pixi_progress::println!();
-            }
-
-            let display_command = executable_task.display_command().to_string();
-
-            pixi_progress::println!(
-                "{}{}{}{}{}{}{}",
-                console::Emoji("✨ ", ""),
-                console::style("Pixi task (").bold(),
-                console::style(executable_task.name().unwrap_or("unnamed"))
-                    .green()
-                    .bold(),
-                // Only print environment if multiple environments are available
-                if workspace.environments().len() > 1 {
-                    format!(
-                        " in {}",
-                        executable_task.run_environment.name().fancy_display()
-                    )
-                } else {
-                    "".to_string()
-                },
-                console::style("): ").bold(),
-                display_command,
-                if let Some(description) = executable_task.task().description() {
-                    console::style(format!(": ({description})")).yellow()
-                } else {
-                    console::style("".to_string()).yellow()
-                }
-            );
-        }
-
-        // on dry-run mode, we just print the command and skip the execution
-        if args.dry_run {
-            task_idx += 1;
-            continue;
-        }
-
-        // check task cache
-        let task_cache = match executable_task
-            .can_skip(lock_file.as_lock_file())
-            .await
-            .into_diagnostic()?
-        {
-            CanSkip::No(cache) => cache,
-            CanSkip::Yes => {
-                let args_text = if !executable_task.args().is_empty() {
-                    format!(
-                        " with args {}",
-                        console::style(executable_task.args()).bold()
-                    )
-                } else {
-                    String::new()
-                };
-
-                pixi_progress::println!(
-                    "Task '{}'{args_text} can be skipped (cache hit) 🚀",
-                    console::style(executable_task.name().unwrap_or("")).bold()
-                );
-                task_idx += 1;
-                continue;
-            }
-        };
-
-        // If we don't have a command environment yet, we need to compute it. We lazily
-        // compute the task environment because we only need the environment if
-        // a task is actually executed.
-        let task_env: &_ = match task_envs.entry(executable_task.run_environment.clone()) {
-            Entry::Occupied(env) => env.into_mut(),
-            Entry::Vacant(entry) => {
-                // Check if we allow installs
-                if args.lock_and_install_config.allow_installs() {
-                    // Ensure there is a valid prefix
-                    lock_file
-                        .prefix(
-                            &executable_task.run_environment,
-                            UpdateMode::QuickValidate,
-                            &ReinstallPackages::default(),
-                            &pixi_core::environment::InstallFilter::default(),
-                        )
-                        .await?;
-
-                    // Validate that the auto-detected machine (or explicit
-                    // `--platform`) can run what was installed, comparing
-                    // against the resolved/minimum platforms in conda-meta/pixi.
-                    pixi_core::workspace::virtual_packages::verify_run_platform(
-                        &executable_task.run_environment,
-                        user_platform.as_ref(),
-                    )?;
-                }
-
-                // Clear the current progress reports.
-                progress.on_clear();
-
-                // Clear caches based on the filesystem. The tasks might change files on disk.
-                lock_file.command_dispatcher.clear_filesystem_caches().await;
-
-                let command_env = get_task_env(
-                    &executable_task.run_environment,
-                    args.clean_env || executable_task.task().clean_env(),
-                    Some(lock_file.as_lock_file()),
-                    workspace.config().force_activate(),
-                    workspace.config().experimental_activation_cache_usage(),
-                )
-                .await?;
-                entry.insert(command_env)
-            }
-        };
-
-        let task_env = task_env
-            .iter()
-            .map(|(k, v)| (OsString::from(k), OsString::from(v)))
-            .collect();
-
-        // Execute the task itself within the command environment. If one of the tasks
-        // failed with a non-zero exit code, we exit this parent process with
-        // the same code.
-        match execute_task(&executable_task, &task_env, signal.clone()).await {
-            Ok(_) => {
-                task_idx += 1;
-            }
-            Err(TaskExecutionError::NonZeroExitCode(code)) => {
-                if code == 127 {
-                    command_not_found(&workspace, explicit_environment.clone());
-                }
-                process_exit::exit_with_code(code);
-            }
-            Err(err) => return Err(err.into()),
-        }
-
-        // Compute post-run hash, warn on missing globs, and update the cache
-        let post_hash = executable_task
-            .compute_post_run_hash(lock_file.as_lock_file(), task_cache)
-            .await
-            .into_diagnostic()?;
-        if let Some(ref hash) = post_hash {
-            executable_task.warn_on_missing_globs(hash);
-        }
-        executable_task
-            .save_cache(post_hash)
-            .await
-            .into_diagnostic()?;
-    }
-
-    Ok(())
+    Ok(process_exit::exit_code_from_code(code))
 }
 
 /// Called when a command was not found.
@@ -507,221 +416,30 @@ fn command_not_found<'p>(workspace: &'p Workspace, explicit_environment: Option<
         );
     }
 
-    // Help user when there is no task available because the platform is not
-    // supported
-    if workspace
-        .environments()
-        .iter()
-        .all(|env| env.best_declared_platform().is_none())
-    {
+    // Point at the missing platform only when it is genuinely what blocks the
+    // run. An environment that installs nothing, or whose packages the machine
+    // already satisfies, runs here regardless of the declared platforms, so
+    // suggesting `platform add` would send the user after the wrong problem.
+    if workspace.environments().iter().all(|env| {
+        classify_environment_runnability(env, None) == EnvironmentRunnability::Unsupported
+    }) {
         pixi_progress::println!(
             "\nHelp: This platform ({}) is not supported. Please run the following command to add this platform to the workspace:\n\n\tpixi workspace platform add {}",
-            Platform::current(),
-            Platform::current()
+            Subdir::current().unwrap_or(Subdir::NoArch),
+            Subdir::current().unwrap_or(Subdir::NoArch)
         );
     }
 }
 
-#[derive(Debug, Error, Diagnostic)]
-enum TaskExecutionError {
-    #[error("the script exited with a non-zero exit code {0}")]
-    NonZeroExitCode(i32),
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
 
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    FailedToParseShellScript(#[from] FailedToParseShellScript),
+    use super::Args;
 
-    #[error(transparent)]
-    InvalidWorkingDirectory(#[from] InvalidWorkingDirectory),
-
-    #[error(transparent)]
-    UnsupportedPlatformError(#[from] UnsupportedPlatformError),
-}
-
-/// Called to execute a single command.
-///
-/// This function is called from [`execute`].
-async fn execute_task(
-    task: &ExecutableTask<'_>,
-    command_env: &HashMap<OsString, OsString>,
-    kill_signal: KillSignal,
-) -> Result<(), TaskExecutionError> {
-    let Some(script) = task.as_deno_script()? else {
-        return Ok(());
-    };
-    let cwd = task.working_directory()?;
-    let execute_future = deno_task_shell::execute(
-        script,
-        command_env.clone(),
-        cwd,
-        Default::default(),
-        kill_signal.clone(),
-    );
-
-    // Execute the process and forward signals.
-    let status_code = run_future_forwarding_signals(kill_signal, execute_future).await;
-    if status_code != 0 {
-        return Err(TaskExecutionError::NonZeroExitCode(status_code));
+    #[test]
+    fn experimental_requires_a_script() {
+        assert!(Args::try_parse_from(["run", "--experimental", "--script", "main.c"]).is_ok());
+        assert!(Args::try_parse_from(["run", "--experimental", "task"]).is_err());
     }
-
-    Ok(())
-}
-
-/// Called to disambiguate between environments to run a task in.
-fn disambiguate_task_interactive<'p>(
-    problem: &AmbiguousTask<'p>,
-) -> Option<TaskAndEnvironment<'p>> {
-    // If any of the candidate tasks declares a `default-environment` that
-    // corresponds to one of the candidate environments, prefer that
-    // environment automatically.
-    if let Some(idx) = problem.environments.iter().position(|(env, task)| {
-        if let Some(default_env_name) = task.default_environment() {
-            default_env_name == env.name()
-        } else {
-            false
-        }
-    }) {
-        return Some(problem.environments[idx].clone());
-    }
-
-    let environment_names = problem
-        .environments
-        .iter()
-        .map(|(env, _)| env.name())
-        .collect_vec();
-    let theme = ColorfulTheme {
-        active_item_style: console::Style::new().for_stderr().magenta(),
-        ..ColorfulTheme::default()
-    };
-
-    dialoguer::Select::with_theme(&theme)
-        .with_prompt(format!(
-            "The task '{}' {}can be run in multiple environments.\n\nPlease select an environment to run the task in:",
-            problem.task_name.fancy_display(),
-            if let Some(dependency) = &problem.depended_on_by {
-                format!("(depended on by '{}') ", dependency.0.fancy_display())
-            } else {
-                String::new()
-            }
-        ))
-        .report(false)
-        .items(&environment_names)
-        .default(0)
-        .interact_opt()
-        .map_or(None, identity)
-        .map(|idx| problem.environments[idx].clone())
-}
-
-/// `dialoguer` doesn't clean up your term if it's aborted via e.g. `SIGINT` or
-/// other exceptions: <https://github.com/console-rs/dialoguer/issues/188>.
-///
-/// `dialoguer`, as a library, doesn't want to mess with signal handlers,
-/// but we, as an application, are free to mess with signal handlers if we feel
-/// like it, since we own the process.
-/// This function was taken from <https://github.com/dnjstrom/git-select-branch/blob/16c454624354040bc32d7943b9cb2e715a5dab92/src/main.rs#L119>.
-fn reset_cursor() {
-    let term = console::Term::stdout();
-    let _ = term.show_cursor();
-}
-
-// /// Exit the process with the appropriate exit code for a SIGINT.
-// fn exit_process_on_sigint() {
-//     // https://learn.microsoft.com/en-us/cpp/c-runtime-library/signal-constants
-//     #[cfg(target_os = "windows")]
-//     std::process::exit(3);
-//
-//     // POSIX compliant OSs: 128 + SIGINT (2)
-//     #[cfg(not(target_os = "windows"))]
-//     std::process::exit(130);
-// }
-
-/// Runs a task future forwarding any signals received to the process.
-///
-/// Signal listeners and ctrl+c listening will be setup.
-pub async fn run_future_forwarding_signals<TOutput>(
-    #[cfg_attr(windows, allow(unused_variables))] kill_signal: KillSignal,
-    future: impl std::future::Future<Output = TOutput>,
-) -> TOutput {
-    fn spawn_future_with_cancellation(
-        future: impl std::future::Future<Output = ()> + 'static,
-        token: CancellationToken,
-    ) {
-        tokio::task::spawn_local(async move {
-            tokio::select! {
-              _ = future => {}
-              _ = token.cancelled() => {}
-            }
-        });
-    }
-
-    let token = CancellationToken::new();
-    let _token_drop_guard = token.clone().drop_guard();
-    let local_set = tokio::task::LocalSet::new();
-
-    local_set
-        .run_until(async move {
-            #[cfg(windows)]
-            spawn_future_with_cancellation(listen_ctrl_c_windows(), token.clone());
-
-            #[cfg(unix)]
-            spawn_future_with_cancellation(listen_and_forward_all_signals(kill_signal), token);
-
-            future.await
-        })
-        .await
-}
-
-#[cfg(windows)]
-async fn listen_ctrl_c_windows() {
-    // On windows, ctrl+c is sent to the process group, so the signal would
-    // have already been sent to the child process. We still want to listen
-    // for ctrl+c here to keep the process alive when receiving it, but no
-    // need to forward the signal because it's already been sent.
-    while let Ok(()) = tokio::signal::ctrl_c().await {}
-}
-
-/// Listens to all incoming signals and forwards all of them, except
-/// some cases.
-///
-/// Note that we don't handle `SIGINT` correctly, if the subprocess changes
-/// its PGID, then the system won't forward CTRL+C automatically.
-/// However, we should do that to ensure consistent behaviour.
-///
-/// To resolve this we should patch `deno_task_shell` to return PID
-/// from which we could get PGID and do things right.
-///
-/// Resulting approach should mimic
-/// <https://github.com/astral-sh/uv/blob/9d17dfa3537312b928f94479f632891f918c4760/crates/uv/src/child.rs#L156C21-L168C77>
-#[cfg(unix)]
-async fn listen_and_forward_all_signals(kill_signal: KillSignal) {
-    use futures::FutureExt;
-
-    use pixi_core::signals::SIGNALS;
-
-    // listen and forward every signal we support
-    let mut futures = Vec::with_capacity(SIGNALS.len());
-    let is_interactive = std::io::stdin().is_terminal();
-    for signo in SIGNALS.iter().copied() {
-        if signo == libc::SIGKILL
-            || signo == libc::SIGSTOP
-            || (signo == libc::SIGINT && is_interactive)
-        {
-            continue; // skip, can't listen to these
-        }
-
-        let kill_signal = kill_signal.clone();
-        futures.push(
-            async move {
-                let Ok(mut stream) = tokio::signal::unix::signal(signo.into()) else {
-                    return;
-                };
-                let signal_kind = signo.into();
-                while let Some(()) = stream.recv().await {
-                    kill_signal.send(signal_kind);
-                }
-            }
-            .boxed_local(),
-        )
-    }
-    futures::future::join_all(futures).await;
 }
