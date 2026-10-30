@@ -18,6 +18,7 @@ use self::workspace_script::{ScriptSource, WorkspaceScript, local_lock_file_path
 use std::os::unix::fs::symlink;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
+    ffi::OsStr,
     fmt::{Debug, Formatter},
     hash::Hash,
     path::{Path, PathBuf},
@@ -1119,11 +1120,33 @@ impl Workspace {
         default_build_dir
     }
 
+    /// Returns the path to the lock file of a project workspace.
+    ///
+    /// This is [consts::PROJECT_LOCK_FILE], unless the workspace was loaded
+    /// from a manifest with a custom name (for example `custom-pixi.toml`
+    /// passed with `--manifest-path`). In that case the lock file is named
+    /// after the manifest (`custom-pixi.lock`), so that several manifests in
+    /// one directory do not share a lock file.
+    fn project_lock_file_path(&self) -> PathBuf {
+        let provenance = &self.workspace.provenance;
+        if provenance.kind == ManifestKind::Pixi {
+            let file_name = provenance.path.file_name().and_then(OsStr::to_str);
+            let file_stem = provenance.path.file_stem().and_then(OsStr::to_str);
+            if let (Some(file_name), Some(file_stem)) = (file_name, file_stem)
+                && file_name != consts::WORKSPACE_MANIFEST
+                && file_name != consts::MOJOPROJECT_MANIFEST
+            {
+                return self.root.join(format!("{file_stem}.lock"));
+            }
+        }
+        self.root.join(consts::PROJECT_LOCK_FILE)
+    }
+
     /// Returns the path to the lock file of the project
     /// [consts::PROJECT_LOCK_FILE]
     pub fn lock_file_path(&self) -> PathBuf {
         match &self.storage {
-            WorkspaceStorage::Project => self.root.join(consts::PROJECT_LOCK_FILE),
+            WorkspaceStorage::Project => self.project_lock_file_path(),
             WorkspaceStorage::Script(script) => script
                 .lock_file_path()
                 .expect("transient script workspaces do not have a lock file path"),
@@ -1133,7 +1156,7 @@ impl Workspace {
     /// Returns the lock file path when this workspace can persist a lock file.
     pub fn persistent_lock_file_path(&self) -> Option<PathBuf> {
         match &self.storage {
-            WorkspaceStorage::Project => Some(self.root.join(consts::PROJECT_LOCK_FILE)),
+            WorkspaceStorage::Project => Some(self.project_lock_file_path()),
             WorkspaceStorage::Script(script) => script.lock_file_path(),
         }
     }
@@ -1891,6 +1914,33 @@ packages: []
                 .find(|g| g.name.as_normalized() == "__glibc")
                 .unwrap();
             assert_eq!(glibc.version, Version::from_str("2.12").unwrap());
+        }
+    }
+
+    #[test]
+    fn test_lock_file_path_follows_the_manifest_name() {
+        const WORKSPACE_STR: &str = r#"
+        [workspace]
+        channels = []
+        "#;
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let temp_dir_path = dunce::canonicalize(temp_dir.path()).unwrap();
+        for (manifest, lock_file) in [
+            (consts::WORKSPACE_MANIFEST, consts::PROJECT_LOCK_FILE),
+            (consts::MOJOPROJECT_MANIFEST, consts::PROJECT_LOCK_FILE),
+            ("custom-pixi.toml", "custom-pixi.lock"),
+            ("pixi-ci.toml", "pixi-ci.lock"),
+        ] {
+            let workspace =
+                Workspace::from_str(&temp_dir_path.join(manifest), WORKSPACE_STR).unwrap();
+            let expected = temp_dir_path.join(lock_file);
+            assert_eq!(workspace.lock_file_path(), expected, "{manifest}");
+            assert_eq!(
+                workspace.persistent_lock_file_path(),
+                Some(expected),
+                "{manifest}"
+            );
         }
     }
 
