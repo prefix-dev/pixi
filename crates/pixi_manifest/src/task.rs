@@ -579,7 +579,7 @@ impl<'a> TaskRenderContext<'a> {
         );
         pixi_vars.insert(
             "environment".to_string(),
-            minijinja::Value::from_serialize(&env_vars),
+            minijinja::Value::from(minijinja::value::Serde(&env_vars)),
         );
 
         // Add manifest path if available
@@ -605,10 +605,10 @@ impl<'a> TaskRenderContext<'a> {
 
         context_map.insert(
             "pixi".to_string(),
-            minijinja::Value::from_serialize(&pixi_vars),
+            minijinja::Value::from(minijinja::value::Serde(&pixi_vars)),
         );
 
-        minijinja::Value::from_serialize(&context_map)
+        minijinja::Value::from(minijinja::value::Serde(&context_map))
     }
 }
 
@@ -1351,7 +1351,7 @@ mod jinja_rendering_tests {
         assert_eq!(render("{{ pixi.is_linux | string }}"), "True");
         assert_eq!(render(r#"{{ "x=" ~ pixi.is_win }}"#), "x=False");
         assert_eq!(render("{{ [pixi.is_linux] }}"), "[True]");
-        assert_eq!(render("{{ {'w': pixi.is_win} }}"), "{\"w\": False}");
+        assert_eq!(render("{{ {'w': pixi.is_win} }}"), "{'w': False}");
         assert_eq!(render("{{ true }}"), "True");
         assert_eq!(render("{{ false }}"), "False");
     }

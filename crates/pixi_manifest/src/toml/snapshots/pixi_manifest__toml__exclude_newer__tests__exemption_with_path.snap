@@ -2,8 +2,8 @@
 source: crates/pixi_manifest/src/toml/exclude_newer.rs
 expression: "render_error(input, err)"
 ---
-  × the path does not refer to a valid conda package archive
+  × an exclude-newer exemption must use a `url` instead of a `path`
    ╭─[pixi.toml:1:58]
- 1 │ exclude-newer = { cutoff = "7d", exemptions = { polars = { path = "./polars" } } }
-   ·                                                          ─────────────────────
+ 1 │ exclude-newer = { cutoff = "7d", exemptions = { polars = { path = "./polars-1.0-0.conda" } } }
+   ·                                                          ─────────────────────────────────
    ╰────

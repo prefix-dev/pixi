@@ -1,4 +1,5 @@
 import platform
+import shutil
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
@@ -63,6 +64,23 @@ def test_exec_list(pixi: Path, dummy_channel_1: str) -> None:
         stdout_contains=["dummy-g"],
         stdout_excludes=["dummy-b"],
     )
+
+
+@pytest.mark.skipif(
+    sys.platform.startswith("win"),
+    reason="For some reason .bat files are not correctly executed on windows",
+)
+def test_exec_list_reuses_environment(pixi: Path, channels: Path, tmp_path: Path) -> None:
+    """`--list` lists a cached environment without solving it again."""
+    channel = tmp_path / "channel"
+    shutil.copytree(channels / "dummy_channel_1", channel)
+    env = {"PIXI_CACHE_DIR": str(tmp_path / "cache")}
+    command: list[str | Path] = [pixi, "exec", "--channel", channel.as_uri(), "--list", "dummy-g"]
+    verify_cli_command(command, env=env, stdout_contains=["dummy-g", "dummy-b"])
+
+    # Without the channel, listing only succeeds if nothing is solved.
+    shutil.rmtree(channel)
+    verify_cli_command(command, env=env, stdout_contains=["dummy-g", "dummy-b"])
 
 
 def test_pixi_environment_name_and_ps1(pixi: Path, dummy_channel_1: str) -> None:

@@ -47,8 +47,8 @@ use pixi_core::repodata::Repodata;
 use pixi_core::workspace::stdlib_variants::{StdlibVersionPin, derive_stdlib_variants};
 use pixi_manifest::platform::host::{host_subdir, platform_from_detected};
 use pixi_manifest::{
-    ExcludeNewerError, InlinePackageManifest, PixiPlatform, PrioritizedChannel, WorkspaceManifest,
-    resolve_exclude_newer, stale_exemptions,
+    ExcludeNewerConfig, ExcludeNewerError, InlinePackageManifest, PixiPlatform, PrioritizedChannel,
+    WorkspaceManifest, resolve_exclude_newer, stale_exemptions,
 };
 use pixi_path::AbsPathBuf;
 use pixi_reporters::TopLevelProgress;
@@ -116,6 +116,15 @@ pub enum CommandDispatcherError {
     BackendOverride(#[source] Box<dyn Diagnostic + Send + Sync>),
 }
 
+/// The directory of the global manifest could not be canonicalized.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error("failed to canonicalize the global manifest directory '{}'", .path.display())]
+pub struct CanonicalizeManifestDirError {
+    path: PathBuf,
+    #[source]
+    source: std::io::Error,
+}
+
 #[derive(Debug, thiserror::Error, miette::Diagnostic)]
 pub enum InferPackageNameError {
     #[error("only source specifications are supported")]
@@ -163,6 +172,26 @@ pub enum DiscoverProjectError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Manifest(#[from] ManifestError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    CanonicalizeManifestDir(#[from] CanonicalizeManifestDirError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ConfiguredExcludeNewer(#[from] Box<AddConfiguredExcludeNewerError>),
+}
+
+/// An error from adding the `exclude-newer` of the configuration to a new
+/// global manifest.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum AddConfiguredExcludeNewerError {
+    #[error("invalid `exclude-newer` in the pixi configuration")]
+    Invalid(#[source] pixi_manifest::ConfiguredExcludeNewerError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Edit(#[from] pixi_manifest::ExcludeNewerEditError),
 }
 
 /// An error from creating the global manifest from an existing installation.
@@ -763,13 +792,51 @@ impl Project {
                     .map_err(|e| DiscoverProjectError::Migrate(Cause::new(e)));
             } else {
                 tracing::debug!("Create an empty global manifest.");
-                tokio_fs::File::create(&manifest_path)
-                    .await
-                    .map_err(DiscoverProjectError::Io)?;
+                // Nothing is written before the `exclude-newer` of the
+                // configuration is converted, so an invalid configuration
+                // doesn't leave behind a manifest that never gets it.
+                // Canonicalized like `from_path` does, so that paths relative
+                // to the manifest resolve the same once it is read back.
+                let manifest_path = dunce::canonicalize(&manifest_dir)
+                    .map_err(|source| CanonicalizeManifestDirError {
+                        path: manifest_dir.clone(),
+                        source,
+                    })?
+                    .join(
+                        manifest_path
+                            .file_name()
+                            .expect("the manifest path has a file name"),
+                    );
+                let mut project = Self::from_str(&manifest_path, "", env_root, bin_dir)?;
+                if project.add_configured_exclude_newer().map_err(Box::new)? {
+                    project.manifest.save().await?;
+                } else {
+                    tokio_fs::File::create(&manifest_path)
+                        .await
+                        .map_err(DiscoverProjectError::Io)?;
+                }
+                return Ok(project);
             }
         }
 
         Ok(Self::from_path(&manifest_path, env_root, bin_dir)?)
+    }
+
+    /// Adds the `exclude-newer` of the configuration to the `exclude-newer`
+    /// of a new manifest, without saving it. Returns whether it is set.
+    ///
+    /// A manifest created from an existing installation doesn't get it, as its
+    /// environments were installed without the cutoff.
+    fn add_configured_exclude_newer(&mut self) -> Result<bool, AddConfiguredExcludeNewerError> {
+        let Some(configured) = self.config.exclude_newer.clone() else {
+            return Ok(false);
+        };
+        let value = pixi_config::exclude_newer_to_toml(&configured);
+        let exclude_newer = ExcludeNewerConfig::try_from(&configured)
+            .map_err(AddConfiguredExcludeNewerError::Invalid)?;
+
+        self.manifest.set_exclude_newer(&value, exclude_newer)?;
+        Ok(true)
     }
 
     async fn try_from_existing_installation(

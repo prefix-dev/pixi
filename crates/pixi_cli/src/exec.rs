@@ -24,7 +24,8 @@ use rattler::{
     package_cache::PackageCache,
 };
 use rattler_conda_types::{
-    ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, Subdir, referenced_virtual_packages,
+    ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, PackageRecord, Subdir,
+    referenced_virtual_packages,
 };
 use rattler_solve::{SolverImpl, SolverTask, resolvo::Solver};
 use reqwest_middleware::ClientWithMiddleware;
@@ -188,6 +189,11 @@ pub async fn execute(args: Args) -> miette::Result<ExitCode> {
     Ok(process_exit::exit_code_from_status(status))
 }
 
+/// The `exclude-newer` of the configuration can't be applied.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error("invalid `exclude-newer` in the pixi configuration")]
+struct InvalidConfiguredExcludeNewer(#[source] pixi_config::InvalidExcludeNewerError);
+
 /// Creates a prefix for the `pixi exec` command.
 pub async fn create_exec_prefix(
     args: &Args,
@@ -207,8 +213,26 @@ pub async fn create_exec_prefix(
         .map(|c| c.base_url.to_string())
         .collect();
 
+    // The `exclude-newer` of the configuration applies to `pixi exec`, which
+    // has no manifest of its own.
+    let exclude_newer = config
+        .exclude_newer
+        .as_ref()
+        .map(rattler_solve::ExcludeNewer::try_from)
+        .transpose()
+        .map_err(InvalidConfiguredExcludeNewer)?;
+
+    // Hash the configuration as configured, like the backend metadata cache
+    // does, so a relative cutoff such as `7d` keeps reusing the same
+    // environment. The exemptions are hashed as parsed by `rattler_config`.
+    let exclude_newer_toml = config
+        .exclude_newer
+        .as_ref()
+        .map(pixi_config::exclude_newer_to_toml);
+
     let environment_hash =
-        EnvironmentHash::new(specs.clone(), channels, platform, config.offline());
+        EnvironmentHash::new(specs.clone(), channels, platform, config.offline())
+            .with_exclude_newer(exclude_newer_toml);
 
     let dir_prefix = exec_dir_prefix(
         &specs,
@@ -231,15 +255,24 @@ pub async fn create_exec_prefix(
     .into_diagnostic()
     .context("failed to acquire write lock on prefix")?;
 
-    // Reuse the cached prefix when it is already installed. `--list`
-    // still needs the solved records to print the table, so it falls
-    // through to the (cheap, no-op) install path below rather than
-    // returning here.
-    if !args.force_reinstall && args.list.is_none() && env_lock.current().is_some() {
+    // Reuse the cached prefix when it is already installed. `--list` lists
+    // the installed packages rather than solving again, as a new solve could
+    // pick newer packages, e.g. with a relative `exclude-newer` cutoff.
+    if !args.force_reinstall && env_lock.current().is_some() {
         tracing::info!(
             "reusing existing environment in {}",
             prefix.root().display()
         );
+        if let Some(regex) = &args.list {
+            let records = prefix.find_installed_packages()?;
+            list_exec_environment(
+                &specs,
+                records
+                    .iter()
+                    .map(|record| &record.repodata_record.package_record),
+                regex,
+            )?;
+        }
         return Ok(prefix);
     }
 
@@ -326,6 +359,7 @@ pub async fn create_exec_prefix(
             specs: specs.clone(),
             virtual_packages: virtual_packages.clone(),
             excluded_candidates: excluded_candidates.clone(),
+            exclude_newer: exclude_newer.clone(),
             ..SolverTask::from_iter(&repodata.clone())
         })
     });
@@ -350,6 +384,7 @@ pub async fn create_exec_prefix(
                     specs: specs[..specs.len() - 1].to_vec(),
                     virtual_packages: virtual_packages.clone(),
                     excluded_candidates: excluded_candidates.clone(),
+                    exclude_newer: exclude_newer.clone(),
                     ..SolverTask::from_iter(&repodata.clone())
                 })
             })
@@ -417,38 +452,42 @@ pub async fn create_exec_prefix(
         .context("failed to record prefix install fingerprint")?;
 
     if let Some(ref regex) = args.list {
-        list_exec_environment(final_specs, solved_records, regex.clone())?;
+        list_exec_environment(
+            &final_specs,
+            solved_records
+                .records
+                .iter()
+                .map(|record| &record.package_record),
+            regex,
+        )?;
     }
 
     Ok(prefix)
 }
 
-fn list_exec_environment(
-    specs: Vec<MatchSpec>,
-    solved_records: rattler_conda_types::SolverResult,
-    regex: String,
+fn list_exec_environment<'a>(
+    specs: &[MatchSpec],
+    records: impl IntoIterator<Item = &'a PackageRecord>,
+    regex: &str,
 ) -> Result<(), miette::Error> {
-    let regex = { if regex.is_empty() { None } else { Some(regex) } };
-    let mut packages_to_output = solved_records
-        .records
-        .iter()
+    let regex = (!regex.is_empty()).then_some(regex);
+    let mut packages_to_output = records
+        .into_iter()
         .map(|record| {
             PackageToOutput::new(
-                &record.package_record,
+                record,
                 specs
-                    .clone()
-                    .into_iter()
-                    .filter_map(|spec| spec.name.as_exact().cloned()) // Extract exact name if it exists
-                    .collect_vec()
-                    .contains(&record.package_record.name),
+                    .iter()
+                    .filter_map(|spec| spec.name.as_exact()) // Extract exact name if it exists
+                    .contains(&record.name),
             )
         })
         .collect_vec();
-    if let Some(ref regex) = regex {
+    if let Some(regex) = regex {
         let regex = regex::Regex::new(regex).into_diagnostic()?;
         packages_to_output.retain(|package| regex.is_match(package.name.as_normalized()));
     }
-    let output_message = if let Some(ref regex) = regex {
+    let output_message = if let Some(regex) = regex {
         format!(
             "The environment has {} packages filtered by regex `{}`:",
             console::style(packages_to_output.len()).bold(),

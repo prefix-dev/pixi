@@ -9,7 +9,8 @@ use indexmap::IndexSet;
 use pixi_config::Config;
 use pixi_consts::consts;
 use pixi_manifest::{
-    ExcludeNewerEditError, ExcludeNewerExemption, PrioritizedChannel, TomlError, toml::TomlDocument,
+    ExcludeNewerConfig, ExcludeNewerEditError, ExcludeNewerExemption, PrioritizedChannel,
+    TomlError, toml::TomlDocument,
 };
 use pixi_toml::TomlIndexMap;
 use pixi_utils::{executable_from_path, strip_executable_extension};
@@ -417,6 +418,20 @@ impl Manifest {
         Ok(())
     }
 
+    /// Replaces the `exclude-newer` of the manifest with `config`, written as
+    /// `value`, the TOML that `config` was parsed from.
+    pub fn set_exclude_newer(
+        &mut self,
+        value: &str,
+        config: ExcludeNewerConfig,
+    ) -> Result<(), ExcludeNewerEditError> {
+        self.parsed
+            .exclude_newer
+            .replace(self.document.as_table_mut(), value, config)?;
+        tracing::debug!("Set exclude-newer to {value} in toml document");
+        Ok(())
+    }
+
     /// Exempts the releases of `name` that match the spec of `exemption`
     /// from the `exclude-newer` cutoff, replacing an existing exemption of the
     /// package.
@@ -693,9 +708,15 @@ impl Manifest {
     /// Saves the manifest to the file system
     pub async fn save(&self) -> Result<(), ManifestError> {
         let contents = {
-            // Ensure that version is always set when saving
+            // Ensure that version is always set when saving, as the first key
             let mut document = self.document.clone();
-            document.get_or_insert("version", ManifestVersion::default().into());
+            let table = document.as_table_mut();
+            if !table.contains_key("version") {
+                table.insert("version", ManifestVersion::default().into());
+                table.sort_values_by(|a, _, b, _| {
+                    (a.get() != "version").cmp(&(b.get() != "version"))
+                });
+            }
             document.to_string()
         };
 

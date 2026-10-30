@@ -18,9 +18,9 @@ use rattler_conda_types::{
 use toml_edit::Value;
 
 use crate::{
-    Activation, AddDependencyOutcome, DependencyOverwriteBehavior, ExcludeNewerEditError,
-    ExcludeNewerExemption, GetFeatureError, KnownPreviewFlag, PixiPlatform, PixiPlatformError,
-    PixiPlatformName, PlatformEdit, PlatformMove, Preview, PrioritizedChannel,
+    Activation, AddDependencyOutcome, DependencyOverwriteBehavior, ExcludeNewerConfig,
+    ExcludeNewerEditError, ExcludeNewerExemption, GetFeatureError, KnownPreviewFlag, PixiPlatform,
+    PixiPlatformError, PixiPlatformName, PlatformEdit, PlatformMove, Preview, PrioritizedChannel,
     PypiDependencyLocation, SpecType, TargetSelector, Task, TaskName, TomlError, WorkspaceTarget,
     consts,
     environment::{Environment, EnvironmentName, NewEnvironment},
@@ -1963,6 +1963,23 @@ impl WorkspaceManifestMut<'_> {
             .workspace
             .exclude_newer
             .set_cutoff(self.document.workspace_table_mut()?, cutoff)
+    }
+
+    /// Replaces the `exclude-newer` of the workspace with `config`, written
+    /// as `value`, the TOML that `config` was parsed from.
+    ///
+    /// This function modifies both the workspace and the TOML document. Use
+    /// `ManifestProvenance::save` to persist the changes to disk.
+    pub fn set_exclude_newer(
+        &mut self,
+        value: &str,
+        config: ExcludeNewerConfig,
+    ) -> Result<(), ExcludeNewerEditError> {
+        self.workspace.workspace.exclude_newer.replace(
+            self.document.workspace_table_mut()?,
+            value,
+            config,
+        )
     }
 
     /// Exempts the releases of `name` that match the spec of `exemption`
