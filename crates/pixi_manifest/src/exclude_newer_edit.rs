@@ -198,15 +198,15 @@ impl ExcludeNewerConfig {
         // Replacing an exemption with a later cutoff exempts releases that may
         // not have been vetted.
         if let Some(old) = self.exemptions.get(&name).and_then(|old| old.cutoff)
-            && exemption.cutoff.is_none_or(|new| new > old)
+            && exemption.cutoff.is_none_or(|new| exempts_later(new, old))
         {
             let new = exemption
                 .cutoff
-                .map_or_else(|| "no cutoff".to_string(), crate::format_cutoff);
+                .map_or_else(|| "no cutoff".to_string(), crate::format_exclude_newer);
             tracing::warn!(
                 "moved the exclude-newer exemption cutoff of {} from {} to {new}",
                 name.as_source(),
-                crate::format_cutoff(old)
+                crate::format_exclude_newer(old)
             );
         }
         let value = exemption.to_toml_value();
@@ -484,6 +484,18 @@ fn collapse(parent: &mut Table, key: &str) {
     }
 }
 
+/// Returns whether the exemption cutoff `new` lets through releases that
+/// `old` doesn't, now or later.
+fn exempts_later(new: ExcludeNewer, old: ExcludeNewer) -> bool {
+    match (new, old) {
+        (ExcludeNewer::Timestamp(new), ExcludeNewer::Timestamp(old)) => new > old,
+        (ExcludeNewer::Duration(new), ExcludeNewer::Duration(old)) => new < old,
+        // A duration moves forward in time, past every point in time.
+        (ExcludeNewer::Duration(_), ExcludeNewer::Timestamp(_)) => true,
+        (ExcludeNewer::Timestamp(new), old) => new > old.cutoff(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use insta::assert_snapshot;
@@ -561,12 +573,9 @@ mod tests {
             let (name, spec) =
                 parse_conda_exemption(spec, &ChannelConfig::default_with_root_dir("/".into()))
                     .unwrap();
-            let ExcludeNewer::Timestamp(cutoff) = cutoff.parse().unwrap() else {
-                panic!("expected an absolute cutoff");
-            };
             let exemption = ExcludeNewerExemption {
                 spec,
-                cutoff: Some(cutoff),
+                cutoff: Some(cutoff.parse().unwrap()),
             };
             config
                 .add_exemption(document.as_table_mut(), name, exemption)

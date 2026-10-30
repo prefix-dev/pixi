@@ -1,6 +1,5 @@
 use std::{collections::HashMap, str::FromStr};
 
-use chrono::{DateTime, Utc};
 use indexmap::IndexMap;
 use itertools::Itertools;
 use pixi_pypi_spec::{PypiPackageName, VersionOrStar};
@@ -196,7 +195,7 @@ fn parse_conda_exemptions(
 
 /// Removes the `cutoff` of an exemption table from `entry` and parses it,
 /// leaving the match spec fields behind.
-fn take_exemption_cutoff(entry: &mut Value<'_>) -> Result<Option<DateTime<Utc>>, toml_span::Error> {
+fn take_exemption_cutoff(entry: &mut Value<'_>) -> Result<Option<ExcludeNewer>, toml_span::Error> {
     let mut table = match entry.take() {
         ValueInner::Table(table) => table,
         other => {
@@ -210,23 +209,14 @@ fn take_exemption_cutoff(entry: &mut Value<'_>) -> Result<Option<DateTime<Utc>>,
         return Ok(None);
     };
     let span = value.span;
-    let error = |message: String| toml_span::Error {
-        kind: ErrorKind::Custom(message.into()),
-        span,
-        line_info: None,
-    };
     let cutoff = value.take_string(None)?;
-    // The generic error of `ExcludeNewer` suggests durations, which are not
-    // allowed here, and e.g. `now` is only accepted by the CLI.
-    match ExcludeNewer::from_str(&cutoff) {
-        Ok(ExcludeNewer::Timestamp(cutoff)) => Ok(Some(cutoff)),
-        Ok(ExcludeNewer::Duration(_)) => Err(error(format!(
-            "the cutoff of an exclude-newer exemption must be a date or a timestamp, not a duration like `{cutoff}`"
-        ))),
-        Err(_) => Err(error(format!(
-            "the cutoff of an exclude-newer exemption must be a date like `2026-10-12` or an RFC 3339 timestamp, not `{cutoff}`"
-        ))),
-    }
+    ExcludeNewer::from_str(&cutoff)
+        .map(Some)
+        .map_err(|message| toml_span::Error {
+            kind: ErrorKind::Custom(message.into()),
+            span,
+            line_info: None,
+        })
 }
 
 /// An exemption of `[workspace.exclude-newer]` that cannot select repodata
@@ -506,9 +496,16 @@ exclude-newer = { cutoff = "7d", exemptions = { openssl = { version = "==3.2.1",
 
     #[test]
     fn test_exemption_with_relative_cutoff() {
-        let input = r#"exclude-newer = { cutoff = "7d", exemptions = { openssl = { version = "==3.2.1", cutoff = "1d" } } }"#;
-        let err = parse_conda(input).unwrap_err();
-        assert_snapshot!(render_error(input, err));
+        let config = parse_conda(
+            r#"exclude-newer = { cutoff = "7d", exemptions = { openssl = { version = "==3.2.1", cutoff = "1d" } } }"#,
+        )
+        .unwrap();
+        assert_eq!(
+            config.exemptions[&PackageName::new_unchecked("openssl")].cutoff,
+            Some(ExcludeNewer::Duration(std::time::Duration::from_secs(
+                24 * 60 * 60
+            )))
+        );
     }
 
     #[test]

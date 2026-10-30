@@ -44,8 +44,8 @@ pub use environment::{Environment, EnvironmentName, NewEnvironment, ParseEnviron
 pub use error::{DependencyError, GenericError, TomlError, UnknownFeature};
 pub use exclude_newer::{
     ConfiguredExcludeNewerError, ExcludeNewerConfig, ExcludeNewerError, ExcludeNewerExemption,
-    ExcludeNewerTableMigration, PypiExcludeNewerConfig, format_cutoff, resolve_exclude_newer,
-    resolve_pypi_exclude_newer, stale_exemptions,
+    ExcludeNewerTableMigration, PypiExcludeNewerConfig, format_cutoff, format_exclude_newer,
+    resolve_exclude_newer, resolve_pypi_exclude_newer, stale_exemptions,
 };
 pub use exclude_newer_edit::{
     ExcludeNewerEditError, ParseExemptionError, entry_as_written, parse_conda_exemption,

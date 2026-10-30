@@ -56,9 +56,10 @@ pub struct ResolvedExcludeNewer {
     pub include_unknown_timestamp: bool,
 
     /// The cutoffs as configured, before relative cutoffs were resolved
-    /// against the current time. See [`Self::hash_configured`].
+    /// against the current time. See [`Self::hash_configured`]. Boxed, as only
+    /// cache keys use it.
     #[serde(skip)]
-    configured: Option<ConfiguredCutoffs>,
+    configured: Option<Box<ConfiguredCutoffs>>,
 }
 
 /// The cutoffs of a [`ResolvedExcludeNewer`] as configured, with relative
@@ -74,6 +75,9 @@ pub struct ConfiguredCutoffs {
     /// The configured package-specific cutoffs of the deprecated top-level
     /// `[exclude-newer]` table.
     pub package_cutoffs: BTreeMap<PackageName, ExcludeNewer>,
+
+    /// The configured cutoffs of the exemptions, by the spec they exempt.
+    pub exemption_cutoffs: Vec<(MatchSpec, ExcludeNewer)>,
 }
 
 /// Records matching [`Self::spec`] are exempt from the cutoff of a
@@ -134,7 +138,7 @@ impl ResolvedExcludeNewer {
     /// Records the cutoffs this configuration was resolved from, which
     /// [`Self::hash_configured`] hashes instead of the resolved cutoffs.
     pub fn with_configured_cutoffs(mut self, configured: ConfiguredCutoffs) -> Self {
-        self.configured = Some(configured);
+        self.configured = Some(Box::new(configured));
         self
     }
 
@@ -148,8 +152,22 @@ impl ResolvedExcludeNewer {
     pub fn hash_configured<H: Hasher>(&self, state: &mut H) {
         match &self.configured {
             Some(configured) => {
-                configured.hash(state);
-                self.exemptions.hash(state);
+                configured.cutoff.hash(state);
+                configured.channel_cutoffs.hash(state);
+                configured.package_cutoffs.hash(state);
+                // The cutoff of an exemption can be relative too.
+                self.exemptions.len().hash(state);
+                for exemption in &self.exemptions {
+                    exemption.spec.hash(state);
+                    match configured
+                        .exemption_cutoffs
+                        .iter()
+                        .find(|(spec, _)| *spec == exemption.spec)
+                    {
+                        Some((_, cutoff)) => Some(*cutoff).hash(state),
+                        None => exemption.cutoff.map(ExcludeNewer::Timestamp).hash(state),
+                    }
+                }
                 self.include_unknown_timestamp.hash(state);
             }
             None => self.hash(state),

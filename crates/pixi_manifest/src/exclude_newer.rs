@@ -7,10 +7,9 @@ use miette::Diagnostic;
 use pixi_pypi_spec::{PypiPackageName, VersionOrStar};
 use pixi_spec::{
     BinarySpec, ConfiguredCutoffs, DetailedSpec, ExcludeNewer, InvalidExemptionError, PixiSpec,
-    ResolvedExcludeNewer, SpecConversionError, from_jiff_timestamp,
+    ResolvedExcludeNewer, SpecConversionError,
 };
 use rattler_conda_types::{ChannelConfig, MatchSpec, PackageName, ParseChannelError};
-use rattler_config::config::exclude_newer::CutoffValue;
 use serde::ser::SerializeMap;
 
 use crate::{
@@ -36,12 +35,13 @@ use crate::{
 /// exemptions = { py-rattler = "*", polars = "==1.43.1" }
 /// ```
 ///
-/// An exemption can also have a `cutoff` of its own, an absolute point in
-/// time, after which matching releases are no longer exempt:
+/// An exemption can also have a `cutoff` of its own, after which matching
+/// releases are no longer exempt:
 ///
 /// ```toml
 /// [workspace.exclude-newer.exemptions]
 /// openssl = { version = "==3.2.1", cutoff = "2026-10-12T00:00:00Z" }
+/// ruff = { version = "*", cutoff = "1d" }
 /// ```
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ExcludeNewerConfig {
@@ -61,20 +61,11 @@ pub struct ExcludeNewerExemption {
     /// The releases that are exempt.
     pub spec: BinarySpec,
 
-    /// Releases published after this point in time are not exempt, even if
-    /// they match [`Self::spec`]. This restricts the exemption to the releases
-    /// that existed when they were vetted, e.g. a later build of the same
-    /// version is not exempt.
-    pub cutoff: Option<DateTime<Utc>>,
-}
-
-impl ExcludeNewerExemption {
-    /// Returns whether the exemption allows nothing beyond `effective_cutoff`,
-    /// the earliest cutoff of the channels it applies to. Only exemptions with
-    /// a cutoff can become stale.
-    fn is_stale(&self, effective_cutoff: DateTime<Utc>) -> bool {
-        self.cutoff.is_some_and(|cutoff| cutoff <= effective_cutoff)
-    }
+    /// Releases published after this cutoff are not exempt, even if they
+    /// match [`Self::spec`]. A point in time restricts the exemption to the
+    /// releases that existed when they were vetted, e.g. a later build of the
+    /// same version is not exempt.
+    pub cutoff: Option<ExcludeNewer>,
 }
 
 impl ExcludeNewerExemption {
@@ -93,9 +84,30 @@ impl ExcludeNewerExemption {
                 table
             }
         };
-        table.insert("cutoff", format_cutoff(cutoff).into());
+        table.insert("cutoff", format_exclude_newer(cutoff).into());
         table.into()
     }
+}
+
+/// Formats a cutoff the way it is written to the manifest, see
+/// [`format_cutoff`]. A duration is written in its largest whole unit, e.g.
+/// `7d`.
+pub fn format_exclude_newer(cutoff: ExcludeNewer) -> String {
+    let duration = match cutoff {
+        ExcludeNewer::Timestamp(cutoff) => return format_cutoff(cutoff),
+        ExcludeNewer::Duration(duration) => duration,
+    };
+    if duration.subsec_nanos() != 0 {
+        return cutoff.to_string();
+    }
+    let seconds = duration.as_secs();
+    [(24 * 60 * 60, "d"), (60 * 60, "h"), (60, "m")]
+        .into_iter()
+        .find(|(unit, _)| seconds != 0 && seconds % unit == 0)
+        .map_or_else(
+            || format!("{seconds}s"),
+            |(unit, suffix)| format!("{}{suffix}", seconds / unit),
+        )
 }
 
 /// Formats an absolute cutoff the way it is written to the manifest. A cutoff
@@ -131,7 +143,6 @@ impl serde::Serialize for ExcludeNewerExemption {
         let Some(cutoff) = self.cutoff else {
             return self.spec.serialize(serializer);
         };
-        let cutoff = ExcludeNewer::Timestamp(cutoff);
         match &self.spec {
             BinarySpec::Version(version) => WithCutoff {
                 spec: &DetailedSpec {
@@ -162,11 +173,6 @@ pub enum ConfiguredExcludeNewerError {
         #[source]
         source: InvalidExemptionSpec,
     },
-    #[error(
-        "the cutoff of the exclude-newer exemption for `{}` must be a date or a timestamp, not a duration like `{cutoff}`",
-        .name.as_source()
-    )]
-    ExemptionDurationCutoff { name: PackageName, cutoff: String },
 }
 
 impl TryFrom<&rattler_config::config::exclude_newer::ExcludeNewerConfig> for ExcludeNewerConfig {
@@ -202,21 +208,10 @@ impl TryFrom<&rattler_config::config::exclude_newer::ExcludeNewerConfig> for Exc
                     _ => return Err(exemption_error(InvalidExemptionSpec::NotBinary)),
                 };
                 let spec = validate_exemption_spec(name, spec).map_err(exemption_error)?;
-                // The cutoff of an exemption in a manifest restricts it to the
-                // releases that were vetted, so it can't move over time.
                 let cutoff = exemption
                     .cutoff
                     .as_ref()
-                    .map(|cutoff| match cutoff.value() {
-                        CutoffValue::Timestamp(timestamp) => Ok(from_jiff_timestamp(timestamp)),
-                        CutoffValue::Duration(_) => {
-                            Err(ConfiguredExcludeNewerError::ExemptionDurationCutoff {
-                                name: name.clone(),
-                                cutoff: cutoff.to_string(),
-                            })
-                        }
-                    })
-                    .transpose()?;
+                    .map(|cutoff| ExcludeNewer::from(cutoff.value()));
                 Ok((name.clone(), ExcludeNewerExemption { spec, cutoff }))
             })
             .collect::<Result<_, _>>()?;
@@ -381,11 +376,15 @@ fn resolve_exclude_newer_at<'a>(
 
     // Exemptions only matter when something is excluded in the first place.
     if let Some(mut resolved) = exclude_newer.take() {
-        resolved = resolved.with_configured_cutoffs(configured);
         for (name, exemption) in &config.exemptions {
             let spec = exemption_match_spec(name, exemption, channel_config)?;
-            resolved = resolved.with_exemption_until(spec, exemption.cutoff)?;
+            if let Some(cutoff) = exemption.cutoff {
+                configured.exemption_cutoffs.push((spec.clone(), cutoff));
+            }
+            resolved = resolved
+                .with_exemption_until(spec, exemption.cutoff.map(|cutoff| cutoff.cutoff_at(now)))?;
         }
+        resolved = resolved.with_configured_cutoffs(configured);
         exclude_newer = Some(resolved);
     }
 
@@ -416,9 +415,13 @@ fn exemption_match_spec(
 /// [`resolve_exclude_newer`]. This includes the default cutoff, which applies
 /// to the channels of e.g. build backends that are not channels of the
 /// environment. `package_overrides` are the per-package cutoffs of the
-/// deprecated top-level `[exclude-newer]` table. Relative cutoffs only move
-/// forward in time, so a stale exemption stays stale unless the configuration
-/// changes.
+/// deprecated top-level `[exclude-newer]` table.
+///
+/// A stale exemption stays stale unless the configuration changes. Relative
+/// cutoffs only move forward in time, so an exemption with a point in time as
+/// its cutoff that is stale now stays stale. An exemption with a duration
+/// moves forward as well, and eventually past every point in time, so it is
+/// only stale if it still is at the end of time.
 pub fn stale_exemptions<'a, Channels>(
     config: &ExcludeNewerConfig,
     environments: impl IntoIterator<Item = Channels>,
@@ -429,34 +432,57 @@ pub fn stale_exemptions<'a, Channels>(
 where
     Channels: IntoIterator<Item = &'a PrioritizedChannel>,
 {
-    let mut resolved = environments
+    let environments = environments
         .into_iter()
-        .map(|channels| {
-            resolve_exclude_newer_at(
+        .map(|channels| channels.into_iter().collect_vec())
+        .collect_vec();
+    let resolve_at = |now: DateTime<Utc>| {
+        let mut resolved = environments
+            .iter()
+            .map(|channels| {
+                resolve_exclude_newer_at(
+                    config,
+                    channels.iter().copied(),
+                    channel_config,
+                    package_overrides.clone(),
+                    now,
+                )
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        // Without environments, the exemptions apply to the ones added later.
+        if resolved.is_empty() {
+            resolved.push(resolve_exclude_newer_at(
                 config,
-                channels,
+                [],
                 channel_config,
                 package_overrides.clone(),
                 now,
-            )
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    // Without environments, the exemptions apply to the ones added later.
-    if resolved.is_empty() {
-        resolved.push(resolve_exclude_newer_at(
-            config,
-            [],
-            channel_config,
-            package_overrides,
-            now,
-        )?);
-    }
+            )?);
+        }
+        Ok::<_, ExcludeNewerError>(resolved)
+    };
+    let resolved_now = resolve_at(now)?;
+    let end_of_time = DateTime::<Utc>::MAX_UTC;
+    let resolved_at_end = if config
+        .exemptions
+        .values()
+        .any(|exemption| matches!(exemption.cutoff, Some(ExcludeNewer::Duration(_))))
+    {
+        resolve_at(end_of_time)?
+    } else {
+        Vec::new()
+    };
 
     let mut stale = Vec::new();
     for (name, exemption) in &config.exemptions {
-        if exemption.cutoff.is_none() {
+        let Some(cutoff) = exemption.cutoff else {
             continue;
-        }
+        };
+        let (resolved, at) = match cutoff {
+            ExcludeNewer::Timestamp(_) => (&resolved_now, now),
+            ExcludeNewer::Duration(_) => (&resolved_at_end, end_of_time),
+        };
+        let cutoff = cutoff.cutoff_at(at);
         let spec = exemption_match_spec(name, exemption, channel_config)?;
         let is_stale = resolved.iter().all(|resolved| {
             // Without a resolved configuration nothing is excluded.
@@ -467,7 +493,7 @@ where
                 Some(channel) => resolved.cutoff_for(name, &channel.base_url),
                 None => resolved.earliest_cutoff_for(name),
             };
-            exemption.is_stale(effective_cutoff)
+            cutoff <= effective_cutoff
         });
         if is_stale {
             stale.push(name.clone());
@@ -753,6 +779,39 @@ mod tests {
     }
 
     #[test]
+    fn test_stale_exemptions_duration_cutoff() {
+        let config = ExcludeNewerConfig {
+            cutoff: Some(ExcludeNewer::from_str("7d").unwrap()),
+            exemptions: IndexMap::from_iter([
+                ("longer".parse().unwrap(), exemption("==1", Some("14d"))),
+                ("equal".parse().unwrap(), exemption("==1", Some("7d"))),
+                ("shorter".parse().unwrap(), exemption("==1", Some("1d"))),
+            ]),
+        };
+        assert_eq!(
+            stale(&config, &[channel("conda-forge", None)]),
+            ["longer", "equal"]
+        );
+
+        // A duration moves past a point in time, so an exemption that is
+        // stale now but not later is kept.
+        let config = ExcludeNewerConfig {
+            cutoff: Some(ExcludeNewer::from_str("2026-10-28T00:00:00Z").unwrap()),
+            exemptions: IndexMap::from_iter([
+                ("relative".parse().unwrap(), exemption("==1", Some("2d"))),
+                (
+                    "absolute".parse().unwrap(),
+                    exemption("==1", Some("2026-10-25T00:00:00Z")),
+                ),
+            ]),
+        };
+        assert_eq!(
+            stale(&config, &[channel("conda-forge", None)]),
+            ["absolute"]
+        );
+    }
+
+    #[test]
     fn test_stale_exemptions_of_channel() {
         let config = ExcludeNewerConfig {
             cutoff: Some(ExcludeNewer::from_str("7d").unwrap()),
@@ -829,10 +888,13 @@ mod tests {
 
         let config = ExcludeNewerConfig {
             cutoff: Some(ExcludeNewer::from_str("14d").unwrap()),
-            exemptions: IndexMap::from_iter([(
-                "polars".parse().unwrap(),
-                exemption("==1", Some("2026-10-19T00:00:00Z")),
-            )]),
+            exemptions: IndexMap::from_iter([
+                (
+                    "polars".parse().unwrap(),
+                    exemption("==1", Some("2026-10-19T00:00:00Z")),
+                ),
+                ("ruff".parse().unwrap(), exemption("==1", Some("3d"))),
+            ]),
         };
         let channels = [channel("conda-forge", Some("7d"))];
         let configured_hash = |config: &ExcludeNewerConfig, now: &str| {
@@ -939,7 +1001,7 @@ mod tests {
         assert_eq!(spec.build.as_ref().unwrap().to_string(), "py3*");
         assert_eq!(spec.channel.as_ref().unwrap().to_string(), "conda-forge");
         assert_eq!(
-            polars.cutoff.map(format_cutoff).as_deref(),
+            polars.cutoff.map(format_exclude_newer).as_deref(),
             Some("2026-10-12")
         );
     }
@@ -962,16 +1024,16 @@ mod tests {
         );
     }
 
-    /// The cutoff of an exemption in a manifest can't move over time.
     #[test]
-    fn test_configured_exclude_newer_rejects_duration_exemption_cutoff() {
-        let error = ExcludeNewerConfig::try_from(&configured(
-            r#"{ cutoff = "7d", exemptions = { ruff = { version = "*", cutoff = "1d" } } }"#,
+    fn test_from_configured_exclude_newer_duration_exemption_cutoff() {
+        let config = ExcludeNewerConfig::try_from(&configured(
+            r#"{ cutoff = "7d", exemptions = { ruff = { version = "*", cutoff = "36h" } } }"#,
         ))
-        .unwrap_err();
+        .unwrap();
+        let ruff = &config.exemptions[&PackageName::new_unchecked("ruff")];
         assert_eq!(
-            error.to_string(),
-            "the cutoff of the exclude-newer exemption for `ruff` must be a date or a timestamp, not a duration like `1d`"
+            ruff.to_toml_value().to_string(),
+            r#"{ version = "*", cutoff = "36h" }"#
         );
     }
 

@@ -142,10 +142,39 @@ dummy-b = "*"
     assert exclude_newer(manifest) == "2020-01-01"
 
     verify_cli_command(
-        [pixi, "workspace", "exclude-newer", "exempt", "dummy-b", "--cutoff", "7d", *flags],
+        [
+            pixi,
+            "workspace",
+            "exclude-newer",
+            "exempt",
+            "dummy-b",
+            "--cutoff",
+            "7 weeks ago",
+            *flags,
+        ],
         ExitCode.FAILURE,
         stderr_contains="not a valid exemption cutoff",
     )
+
+    # A duration moves with the current time, like the cutoff of a workspace
+    verify_cli_command(
+        [
+            pixi,
+            "workspace",
+            "exclude-newer",
+            "exempt",
+            "dummy-b",
+            "--cutoff",
+            "168h",
+            "--no-install",
+            *flags,
+        ],
+        stderr_contains="Exempted dummy-b (published up to 7d ago)",
+    )
+    assert exclude_newer(manifest) == {
+        "cutoff": "2020-01-01",
+        "exemptions": {"dummy-b": {"version": "*", "cutoff": "7d"}},
+    }
     verify_cli_command(
         [
             pixi,
@@ -341,6 +370,41 @@ def test_config_exclude_newer_url_exemption(pixi: Path, tmp_path: Path, channels
         env=env,
         stderr_contains="uploaded after the cutoff date",
     )
+
+
+def test_config_exclude_newer_duration_exemption_cutoff(
+    pixi: Path, tmp_path: Path, dummy_channel_1: str
+) -> None:
+    """`pixi exec`, `pixi init` and `pixi global` accept the same exemption
+    with a duration as its cutoff, as `rattler_config` owns the rules."""
+    env = {"PIXI_HOME": str(tmp_path), "PIXI_CACHE_DIR": str(tmp_path / "cache")}
+    # Every package in dummy_channel_1 was uploaded in 2025, dummy-a depends
+    # on dummy-c.
+    exemption = '{ version = "*", cutoff = "1d" }'
+    (tmp_path / "config.toml").write_text(
+        'exclude-newer = { cutoff = "2020-01-01", exemptions = '
+        f"{{ dummy-a = {exemption}, dummy-c = {exemption} }} }}\n"
+    )
+    noop = ["cmd", "/c", "exit 0"] if sys.platform.startswith("win") else ["true"]
+    verify_cli_command(
+        [pixi, "exec", "--channel", dummy_channel_1, "--spec", "dummy-a", "--", *noop],
+        env=env,
+    )
+
+    workspace = tmp_path / "workspace"
+    verify_cli_command(
+        [pixi, "init", workspace, "--channel", dummy_channel_1, "--platform", CURRENT_PLATFORM],
+        env=env,
+    )
+    verify_cli_command(
+        [pixi, "add", "--manifest-path", workspace / "pixi.toml", "dummy-a"], env=env
+    )
+
+    verify_cli_command(
+        [pixi, "global", "install", "--channel", dummy_channel_1, "dummy-a"], env=env
+    )
+    manifest = tomli.loads((tmp_path / "manifests" / "pixi-global.toml").read_text())
+    assert manifest["exclude-newer"]["exemptions"]["dummy-a"]["cutoff"] == "1d"
 
 
 def test_config_exclude_newer_exec(pixi: Path, tmp_path: Path, dummy_channel_1: str) -> None:

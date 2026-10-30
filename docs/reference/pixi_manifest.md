@@ -446,7 +446,7 @@ Exemptions take precedence over the channel cutoff, which in turn takes preceden
 
 An exemption without a `cutoff` also lets through matching releases that are published later, e.g. a new build of `polars ==1.43.1`.
 Give an exemption a `cutoff` to only exempt the matching releases that were published up to that point in time, such as the time you reviewed them.
-The cutoff of an exemption is an RFC 3339 timestamp or a date, durations are not supported.
+The cutoff of an exemption takes the same values as the workspace cutoff, so it can also be a duration such as `"1d"`, which exempts matching releases once they are a day old.
 Releases after it are subject to the channel and workspace cutoffs as usual, so they are allowed once they are old enough.
 
 Once the cutoff of every channel has passed the cutoff of an exemption, the exemption no longer exempts anything.
