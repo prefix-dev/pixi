@@ -1351,7 +1351,7 @@ mod jinja_rendering_tests {
         assert_eq!(render("{{ pixi.is_linux | string }}"), "True");
         assert_eq!(render(r#"{{ "x=" ~ pixi.is_win }}"#), "x=False");
         assert_eq!(render("{{ [pixi.is_linux] }}"), "[True]");
-        assert_eq!(render("{{ {'w': pixi.is_win} }}"), "{\"w\": False}");
+        assert_eq!(render("{{ {'w': pixi.is_win} }}"), "{'w': False}");
         assert_eq!(render("{{ true }}"), "True");
         assert_eq!(render("{{ false }}"), "False");
     }

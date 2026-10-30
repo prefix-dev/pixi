@@ -405,13 +405,14 @@ def test_config_exclude_newer_global(pixi: Path, tmp_path: Path, dummy_channel_1
 def test_config_exclude_newer_invalid_global(
     pixi: Path, tmp_path: Path, dummy_channel_1: str
 ) -> None:
-    """A configuration file with an invalid `exclude-newer` is skipped with an
-    error, like for any other invalid value."""
+    """A configuration file with an invalid `exclude-newer` is a hard error,
+    like any other configuration file that fails to parse."""
     env = {"PIXI_HOME": str(tmp_path)}
     config = tmp_path / "config.toml"
     config.write_text('exclude-newer = "garbage"\n')
     command: list[str | Path] = [pixi, "global", "install", "--channel", dummy_channel_1, "dummy-b"]
 
-    verify_cli_command(command, env=env, stderr_contains="invalid cutoff `garbage`")
-    manifest = tmp_path / "manifests" / "pixi-global.toml"
-    assert "exclude-newer" not in tomli.loads(manifest.read_text())
+    verify_cli_command(
+        command, ExitCode.FAILURE, env=env, stderr_contains="invalid cutoff `garbage`"
+    )
+    assert not (tmp_path / "manifests" / "pixi-global.toml").exists()

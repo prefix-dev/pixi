@@ -115,7 +115,7 @@ pub enum InitError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    ConfiguredExcludeNewer(#[from] ConfiguredExcludeNewerError),
+    ConfiguredExcludeNewer(#[from] Box<ConfiguredExcludeNewerError>),
 }
 
 enum InitStrategy {
@@ -177,7 +177,7 @@ pub async fn init<I: Interface>(
     let config = Config::try_load(&dir)?;
     // Parsed before anything is written, so an invalid configuration doesn't
     // leave a half-created workspace behind.
-    let exclude_newer = configured_exclude_newer(&config)?;
+    let exclude_newer = configured_exclude_newer(&config).map_err(Box::new)?;
     let render_ctx = build_render_context(&dir, &options, &config);
 
     let strategy = calculate_strategy(&options, &dir, interface).await?;
@@ -207,7 +207,9 @@ pub async fn init<I: Interface>(
     // the configuration, an existing one keeps its own.
     let workspace = match exclude_newer {
         Some((value, exclude_newer)) if created => {
-            write_configured_exclude_newer(workspace, &value, exclude_newer).await?
+            write_configured_exclude_newer(workspace, &value, exclude_newer)
+                .await
+                .map_err(Box::new)?
         }
         _ => workspace,
     };
@@ -261,7 +263,9 @@ async fn write_configured_exclude_newer(
     exclude_newer: ExcludeNewerConfig,
 ) -> Result<Workspace, ConfiguredExcludeNewerError> {
     let mut workspace = workspace.modify()?;
-    workspace.manifest().set_exclude_newer(value, exclude_newer)?;
+    workspace
+        .manifest()
+        .set_exclude_newer(value, exclude_newer)?;
     workspace
         .save()
         .await
@@ -1444,24 +1448,23 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_init_skips_config_with_invalid_exclude_newer() {
+    async fn test_init_fails_on_config_with_invalid_exclude_newer() {
         let tmp_dir = tempfile::tempdir().unwrap();
         write_config_exclude_newer(tmp_dir.path(), r#""garbage""#);
 
         let interface = MockInterface {
             confirm_response: true,
         };
-        init(
+        let error = init(
             &interface,
             init_options(tmp_dir.path(), ManifestFormat::Pixi),
         )
         .await
-        .unwrap();
+        .unwrap_err();
 
-        // A configuration file that doesn't parse is skipped with an error,
-        // like for any other invalid value.
-        let manifest =
-            fs_err::read_to_string(tmp_dir.path().join(consts::WORKSPACE_MANIFEST)).unwrap();
-        assert!(!manifest.contains("exclude-newer"), "{manifest}");
+        // A configuration file that doesn't parse is a hard error, and
+        // nothing is written.
+        assert!(matches!(error, InitError::Config(_)), "{error:?}");
+        assert!(!tmp_dir.path().join(consts::WORKSPACE_MANIFEST).exists());
     }
 }
