@@ -1,0 +1,5 @@
+- PREFER to use `pixi run` to execute tasks instead of running executables coming from your system 
+- You MUST NOT work around limitations or bugs in rattler or Rattler-Build. Fix them upstream instead.
+- Error messages MUST start with a lowercase letter and end without a trailing dot
+- You MUST NOT modify CHANGELOG.md, that is auto-generated
+- PREFER inline snapshots in tests over substring assertions
