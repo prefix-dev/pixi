@@ -169,15 +169,6 @@ fn parse_conda_exemptions(
             Ok(spec) => {
                 exemptions.insert(name, ExcludeNewerExemption { spec, cutoff });
             }
-            Err(InvalidExemptionSpec::Empty) if cutoff.is_some() => {
-                errors.errors.push(toml_span::Error {
-                    kind: ErrorKind::Custom(
-                        "an exclude-newer exemption table must specify at least one match spec field besides `cutoff`, use `version = \"*\"` to exempt every release up to the cutoff".into(),
-                    ),
-                    span,
-                    line_info: None,
-                })
-            }
             Err(err) => errors.errors.push(toml_span::Error {
                 kind: ErrorKind::Custom(err.to_string().into()),
                 span,
@@ -228,19 +219,14 @@ pub enum InvalidExemptionSpec {
     )]
     NotBinary,
 
-    #[error(
-        "an exclude-newer exemption table must specify at least one match spec field, use `\"*\"` to exempt every release"
-    )]
-    Empty,
-
     /// `rattler_config` only exempts a package archive by its `url`.
     #[error("an exclude-newer exemption must use a `url` instead of a `path`")]
     Path,
 
-    /// The exemption breaks one of the rules of `rattler_config`, e.g. it has
-    /// `extras` or a `when`, which don't select packages.
+    /// The exemption breaks one of the rules of `rattler_config`, e.g. it is
+    /// an empty table or has `extras`, which don't select packages.
     #[error(transparent)]
-    Rattler(rattler_config::config::exclude_newer::InvalidExemptionSpecError),
+    Rattler(#[from] InvalidExemptionSpecError),
 
     #[error(transparent)]
     Spec(#[from] SpecError),
@@ -276,10 +262,7 @@ pub fn validate_exemption_spec(
             let nameless = (*detailed)
                 .clone()
                 .try_into_nameless_match_spec(&channel_config)?;
-            validate_rattler_exemption_spec(name, &nameless).map_err(|err| match err {
-                InvalidExemptionSpecError::Empty => InvalidExemptionSpec::Empty,
-                err => InvalidExemptionSpec::Rattler(err),
-            })?;
+            validate_rattler_exemption_spec(name, &nameless)?;
             // A bare version string parses into a detailed spec that only
             // carries a version. Keep it as the plain version it was written
             // as.
