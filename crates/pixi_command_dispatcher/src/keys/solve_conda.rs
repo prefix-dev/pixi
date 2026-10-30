@@ -23,7 +23,7 @@ use rattler_conda_types::{
     Channel, ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName,
     PackageNameMatcher, ParseMatchSpecOptions, RepodataRevision, Subdir,
 };
-use rattler_repodata_gateway::GatewayError;
+use rattler_repodata_gateway::{GatewayError, sparse::PackageFormatSelection};
 use rattler_solve::{ChannelPriority, SolveError, SolveStrategy};
 use thiserror::Error;
 use tracing::instrument;
@@ -282,6 +282,7 @@ impl Key for SolveCondaKey {
                     .chain(dev_source_fetch_specs),
             )
             .recursive(true)
+            .package_format_selection(PackageFormatSelection::PreferCondaWithWhl)
             // Without a reporter the fetched notices are dropped on the floor,
             // so do not pay for them.
             .channel_notices(gateway_reporter.is_some());
