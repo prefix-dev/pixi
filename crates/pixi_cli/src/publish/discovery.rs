@@ -296,6 +296,9 @@ fn discover_opted_in_packages(workspace_root: &Path) -> miette::Result<BTreeSet<
         // machines. Only committed ignore files decide membership.
         .git_global(false)
         .git_exclude(false)
+        // Ignore files can un-ignore hidden entries (e.g. `!.*`), but the git
+        // directory never contains workspace packages.
+        .filter_entry(|entry| entry.depth() == 0 || entry.file_name() != ".git")
         .build()
     {
         let entry = match entry {
@@ -686,6 +689,32 @@ mod tests {
             "[package]\nname = \"dep\"\npublish = true\n",
         );
         fs_err::write(root_path.join(".gitignore"), "vendored/\n").unwrap();
+
+        let members = discover_opted_in_packages(root_path).unwrap();
+        assert_eq!(members, set(&["packages/foo"]));
+    }
+
+    #[test]
+    fn discovery_never_searches_the_git_dir() {
+        let root = tempfile::tempdir().unwrap();
+        let root_path = root.path();
+
+        write_manifest(root_path, ".", "[workspace]\nchannels = []\n");
+        write_manifest(
+            root_path,
+            "packages/foo",
+            "[package]\nname = \"foo\"\npublish = true\n",
+        );
+        // `!.*` un-ignores hidden entries, `.git` included, and a branch named
+        // `x/pixi.toml` leaves a reflog file with that name inside `.git`.
+        fs_err::write(root_path.join(".gitignore"), "!.*\n").unwrap();
+        let reflog_dir = root_path.join(".git/logs/refs/heads/x");
+        fs_err::create_dir_all(&reflog_dir).unwrap();
+        fs_err::write(
+            reflog_dir.join("pixi.toml"),
+            "0000000 1111111 A <a@b> 0 +0000\tbranch: Created from HEAD\n",
+        )
+        .unwrap();
 
         let members = discover_opted_in_packages(root_path).unwrap();
         assert_eq!(members, set(&["packages/foo"]));
