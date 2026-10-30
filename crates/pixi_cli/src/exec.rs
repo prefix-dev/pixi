@@ -1,10 +1,5 @@
 use std::{
-    collections::BTreeSet,
-    collections::HashMap,
-    hash::{DefaultHasher, Hash, Hasher},
-    path::Path,
-    process::ExitCode,
-    str::FromStr,
+    collections::BTreeSet, collections::HashMap, path::Path, process::ExitCode, str::FromStr,
 };
 
 use clap::{Parser, ValueHint};
@@ -230,15 +225,14 @@ pub async fn create_exec_prefix(
     // Hash the configuration as configured, like the backend metadata cache
     // does, so a relative cutoff such as `7d` keeps reusing the same
     // environment. The exemptions are hashed as parsed by `rattler_config`.
-    let exclude_newer_hash = config.exclude_newer.as_ref().map(|exclude_newer| {
-        let mut hasher = DefaultHasher::new();
-        pixi_config::exclude_newer_to_toml(exclude_newer).hash(&mut hasher);
-        hasher.finish()
-    });
+    let exclude_newer_toml = config
+        .exclude_newer
+        .as_ref()
+        .map(pixi_config::exclude_newer_to_toml);
 
     let environment_hash =
         EnvironmentHash::new(specs.clone(), channels, platform, config.offline())
-            .with_exclude_newer_hash(exclude_newer_hash);
+            .with_exclude_newer(exclude_newer_toml);
 
     let dir_prefix = exec_dir_prefix(
         &specs,
