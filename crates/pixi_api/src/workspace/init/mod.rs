@@ -59,6 +59,10 @@ pub enum InitError {
 
     #[error(transparent)]
     #[diagnostic(transparent)]
+    Config(#[from] pixi_config::ConfigError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
     Interface(#[from] InterfaceError),
 
     #[error(transparent)]
