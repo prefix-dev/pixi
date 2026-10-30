@@ -9,7 +9,7 @@ use std::{
 use itertools::Itertools;
 use miette::Diagnostic;
 use minijinja::{Environment, context};
-use pixi_config::{Config, S3OptionsMap, get_default_author, pixi_home};
+use pixi_config::{Config, ConfigError, S3OptionsMap, get_default_author, pixi_home};
 use pixi_consts::consts;
 use pixi_core::{
     Workspace,
@@ -60,6 +60,10 @@ pub enum InitError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Interface(#[from] InterfaceError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Config(#[from] ConfigError),
 
     #[error(transparent)]
     #[diagnostic(transparent)]
