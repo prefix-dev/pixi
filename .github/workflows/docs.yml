@@ -11,6 +11,7 @@ on:
       - "zensical.toml"
       - "pixi.*"
       - "install/*"
+      - "pages/*"
     tags:
       - v**
   pull_request:
@@ -22,6 +23,7 @@ on:
       - "zensical.toml"
       - "pixi.*"
       - "install/*"
+      - "pages/*"
   workflow_dispatch:
     inputs:
       tag:
@@ -135,16 +137,16 @@ jobs:
         run: |
           pixi run deploy-dev
 
-      - name: Copy file to gh-pages
+      - name: Copy files to gh-pages
         run: |
           git fetch
           git checkout gh-pages
-          git checkout main -- install/install.sh install/install.ps1
-          mv install/install.sh install/install.ps1 .
+          git checkout main -- install/install.sh install/install.ps1 pages/robots.txt
+          mv install/install.sh install/install.ps1 pages/robots.txt .
           git restore --staged .
-          git add install.sh install.ps1
+          git add install.sh install.ps1 robots.txt
           # Check diff before committing
-          git diff-index --quiet HEAD || git commit -m "Update install scripts from main"
+          git diff-index --quiet HEAD || git commit -m "Update install scripts and robots.txt from main"
           git push origin gh-pages
 
       - name: Checkout main branch
