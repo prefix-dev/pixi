@@ -88,6 +88,13 @@ pub enum InitError {
     #[diagnostic(transparent)]
     Toml(#[from] TomlError),
 
+    #[error("failed to extend '{}'", .path.display())]
+    ExtendPyproject {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
     #[error("failed to create directory '{}'", .path.display())]
     CreateDirectory {
         path: PathBuf,
@@ -403,37 +410,33 @@ async fn extend_pyproject<I: Interface>(
             },
         )
         .expect("should be able to render the template");
-    if let Err(e) = {
-        fs::OpenOptions::new()
-            .append(true)
-            .open(manifest_path.clone())
-            .and_then(|mut p| p.write_all(rv.as_bytes()))
-    } {
-        tracing::warn!(
-            "Warning, couldn't update '{}' because of: {}",
-            manifest_path.to_string_lossy(),
-            e
-        );
-    } else {
-        // Inform about the addition of the package itself as an editable dependency of
-        // the workspace
+    fs::OpenOptions::new()
+        .append(true)
+        .open(&manifest_path)
+        .and_then(|mut p| p.write_all(rv.as_bytes()))
+        .map_err(|source| InitError::ExtendPyproject {
+            path: manifest_path.clone(),
+            source,
+        })?;
+
+    // Inform about the addition of the package itself as an editable dependency of
+    // the workspace
+    interface
+        .success(&format!(
+            "Added package '{name}' as an editable dependency."
+        ))
+        .await;
+    // Inform about the addition of environments from optional dependencies
+    // or dependency groups (if any)
+    if !environments.is_empty() {
+        let envs: Vec<&str> = environments.keys().map(AsRef::as_ref).collect();
         interface
             .success(&format!(
-                "Added package '{name}' as an editable dependency."
+                "Added environment{} '{}' from optional dependencies or dependency groups.",
+                if envs.len() > 1 { "s" } else { "" },
+                envs.join("', '")
             ))
             .await;
-        // Inform about the addition of environments from optional dependencies
-        // or dependency groups (if any)
-        if !environments.is_empty() {
-            let envs: Vec<&str> = environments.keys().map(AsRef::as_ref).collect();
-            interface
-                .success(&format!(
-                    "Added environment{} '{}' from optional dependencies or dependency groups.",
-                    if envs.len() > 1 { "s" } else { "" },
-                    envs.join("', '")
-                ))
-                .await;
-        }
     }
 
     Ok(Workspace::from_path(&manifest_path)?)
