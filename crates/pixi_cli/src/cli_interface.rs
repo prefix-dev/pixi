@@ -1,5 +1,4 @@
-use miette::IntoDiagnostic;
-use pixi_api::{Interface, WorkspaceContext};
+use pixi_api::{Interface, InterfaceError, WorkspaceContext};
 use pixi_core::Workspace;
 
 /// Builds the [`WorkspaceContext`] every CLI command works through.
@@ -22,16 +21,16 @@ impl Interface for CliInterface {
         true
     }
 
-    async fn confirm(&self, msg: &str) -> miette::Result<bool> {
+    async fn confirm(&self, msg: &str) -> Result<bool, InterfaceError> {
         dialoguer::Confirm::new()
             .with_prompt(msg)
             .default(false)
             .show_default(true)
             .interact()
-            .into_diagnostic()
+            .map_err(InterfaceError::new)
     }
 
-    async fn select(&self, msg: &str, options: &[String]) -> miette::Result<Option<usize>> {
+    async fn select(&self, msg: &str, options: &[String]) -> Result<Option<usize>, InterfaceError> {
         let theme = dialoguer::theme::ColorfulTheme {
             active_item_style: console::Style::new().for_stderr().magenta(),
             ..dialoguer::theme::ColorfulTheme::default()
