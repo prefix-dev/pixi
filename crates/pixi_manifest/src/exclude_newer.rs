@@ -10,6 +10,7 @@ use pixi_spec::{
     ResolvedExcludeNewer, SpecConversionError, from_jiff_timestamp,
 };
 use rattler_conda_types::{ChannelConfig, MatchSpec, PackageName, ParseChannelError};
+use rattler_config::config::exclude_newer::CutoffValue;
 use serde::ser::SerializeMap;
 
 use crate::{
@@ -161,6 +162,11 @@ pub enum ConfiguredExcludeNewerError {
         #[source]
         source: InvalidExemptionSpec,
     },
+    #[error(
+        "the cutoff of the exclude-newer exemption for `{}` must be a date or a timestamp, not a duration like `{cutoff}`",
+        .name.as_source()
+    )]
+    ExemptionDurationCutoff { name: PackageName, cutoff: String },
 }
 
 impl TryFrom<&rattler_config::config::exclude_newer::ExcludeNewerConfig> for ExcludeNewerConfig {
@@ -196,10 +202,21 @@ impl TryFrom<&rattler_config::config::exclude_newer::ExcludeNewerConfig> for Exc
                     _ => return Err(exemption_error(InvalidExemptionSpec::NotBinary)),
                 };
                 let spec = validate_exemption_spec(name, spec).map_err(exemption_error)?;
+                // The cutoff of an exemption in a manifest restricts it to the
+                // releases that were vetted, so it can't move over time.
                 let cutoff = exemption
                     .cutoff
                     .as_ref()
-                    .map(|cutoff| from_jiff_timestamp(cutoff.timestamp()));
+                    .map(|cutoff| match cutoff.value() {
+                        CutoffValue::Timestamp(timestamp) => Ok(from_jiff_timestamp(timestamp)),
+                        CutoffValue::Duration(_) => {
+                            Err(ConfiguredExcludeNewerError::ExemptionDurationCutoff {
+                                name: name.clone(),
+                                cutoff: cutoff.to_string(),
+                            })
+                        }
+                    })
+                    .transpose()?;
                 Ok((name.clone(), ExcludeNewerExemption { spec, cutoff }))
             })
             .collect::<Result<_, _>>()?;
@@ -942,6 +959,19 @@ mod tests {
         assert_eq!(
             ruff.to_toml_value().to_string(),
             format!(r#"{{ url = "{url}", cutoff = "2026-10-12" }}"#)
+        );
+    }
+
+    /// The cutoff of an exemption in a manifest can't move over time.
+    #[test]
+    fn test_configured_exclude_newer_rejects_duration_exemption_cutoff() {
+        let error = ExcludeNewerConfig::try_from(&configured(
+            r#"{ cutoff = "7d", exemptions = { ruff = { version = "*", cutoff = "1d" } } }"#,
+        ))
+        .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            "the cutoff of the exclude-newer exemption for `ruff` must be a date or a timestamp, not a duration like `1d`"
         );
     }
 
