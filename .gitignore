@@ -13,9 +13,6 @@ Thumbs.db
 .env.local
 .env.*.local
 
-# Agents
-AGENTS.md
-
 # Documentation and build artifacts
 site/
 .build
