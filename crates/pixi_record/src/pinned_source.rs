@@ -300,6 +300,73 @@ impl PinnedUrlSpec {
             subdirectory: self.subdirectory.join(path.as_str()),
         }
     }
+
+    /// Construct the lock file compatible [`Url`] from [`PinnedUrlSpec`].
+    ///
+    /// The hashes and the subdirectory are stored in the fragment, because the
+    /// query belongs to the url of the archive, e.g.
+    /// `https://example.com/archive.tar.gz#sha256=<hex>&subdirectory=pkg_dir`.
+    pub fn into_locked_url(&self) -> Url {
+        let mut fragment = url::form_urlencoded::Serializer::new(String::new());
+        fragment.append_pair("sha256", &hex::encode(self.sha256));
+        if let Some(md5) = self.md5 {
+            fragment.append_pair("md5", &hex::encode(md5));
+        }
+        if !self.subdirectory.is_empty() {
+            fragment.append_pair("subdirectory", &self.subdirectory.to_string());
+        }
+
+        let mut url = self.url.clone();
+        url.set_fragment(Some(&fragment.finish()));
+        url
+    }
+
+    /// Extracts a pinned url spec from a url created by
+    /// [`PinnedUrlSpec::into_locked_url`].
+    pub fn from_locked_url(locked_url: &Url) -> Result<Self, LockedUrlError> {
+        let mut sha256 = None;
+        let mut md5 = None;
+        let mut subdirectory = None;
+
+        let fragment = locked_url.fragment().unwrap_or_default();
+        for (key, val) in url::form_urlencoded::parse(fragment.as_bytes()) {
+            match &*key {
+                "sha256" => {
+                    let hash =
+                        rattler_digest::parse_digest_from_hex::<rattler_digest::Sha256>(&val)
+                            .ok_or(LockedUrlError::InvalidHash("sha256"))?;
+                    if sha256.replace(hash).is_some() {
+                        return Err(LockedUrlError::Duplicate("sha256"));
+                    }
+                }
+                "md5" => {
+                    let hash = rattler_digest::parse_digest_from_hex::<rattler_digest::Md5>(&val)
+                        .ok_or(LockedUrlError::InvalidHash("md5"))?;
+                    if md5.replace(hash).is_some() {
+                        return Err(LockedUrlError::Duplicate("md5"));
+                    }
+                }
+                "subdirectory" => {
+                    if subdirectory.replace(val.into_owned()).is_some() {
+                        return Err(LockedUrlError::Duplicate("subdirectory"));
+                    }
+                }
+                _ => continue,
+            }
+        }
+
+        let mut url = locked_url.clone();
+        url.set_fragment(None);
+
+        Ok(Self {
+            url,
+            sha256: sha256.ok_or(LockedUrlError::MissingSha256)?,
+            md5,
+            subdirectory: subdirectory
+                .and_then(|s| Subdirectory::try_from(s).ok())
+                .unwrap_or_default(),
+        })
+    }
 }
 
 impl From<PinnedUrlSpec> for PinnedSourceSpec {
@@ -591,8 +658,8 @@ impl From<PinnedGitSpec> for UrlOrPath {
 }
 
 impl From<PinnedUrlSpec> for UrlOrPath {
-    fn from(_value: PinnedUrlSpec) -> Self {
-        unimplemented!()
+    fn from(value: PinnedUrlSpec) -> Self {
+        UrlOrPath::Url(value.into_locked_url())
     }
 }
 
@@ -701,12 +768,29 @@ pub enum LockedGitUrlError {
     Invalid(#[from] OidParseError),
 }
 
+#[derive(Debug, Error, miette::Diagnostic)]
+/// An error that occurs when converting a locked url into a [`PinnedUrlSpec`].
+pub enum LockedUrlError {
+    /// A fragment parameter appears more than once.
+    #[error("multiple {0} values in URL")]
+    Duplicate(&'static str),
+    /// The URL has no sha256 hash in its fragment.
+    #[error("missing sha256")]
+    MissingSha256,
+    /// A hash in the fragment is not valid hex of the right length.
+    #[error("invalid {0} hash")]
+    InvalidHash(&'static str),
+}
+
 #[derive(Debug, Error)]
 /// An error that occurs when parsing a [`PinnedSourceSpec`].
 pub enum ParseError {
     /// An error that occurs when parsing a locked git URL.
     #[error("failed to parse locked git url {0}. Reason: {1}")]
     LockedGitUrl(String, String),
+    /// An error that occurs when parsing a locked url.
+    #[error("failed to parse locked url {0}. Reason: {1}")]
+    LockedUrl(String, String),
 }
 
 impl TryFrom<UrlOrPath> for PinnedSourceSpec {
@@ -724,7 +808,12 @@ impl TryFrom<UrlOrPath> for PinnedSourceSpec {
                         })?;
                         Ok(pinned.into())
                     }
-                    false => unimplemented!("url not supported"),
+                    false => {
+                        let pinned = PinnedUrlSpec::from_locked_url(&url).map_err(|err| {
+                            ParseError::LockedUrl(url.to_string(), err.to_string())
+                        })?;
+                        Ok(pinned.into())
+                    }
                 }
             }
             UrlOrPath::Path(path) => Ok(PinnedPathSpec { path }.into()),
@@ -1067,6 +1156,58 @@ mod tests {
 
         let parsed = PinnedGitCheckout::from_locked_url(&locked).unwrap();
         assert_eq!(parsed, spec.source);
+    }
+
+    /// A url source round-trips through its lock file location.
+    /// <https://github.com/prefix-dev/pixi/issues/7230>
+    #[test]
+    fn test_pinned_url_lock_file_roundtrip() {
+        let pinned = PinnedSourceSpec::Url(PinnedUrlSpec {
+            url: Url::parse("https://cran.r-project.org/src/contrib/fortunes_1.5-5.tar.gz")
+                .unwrap(),
+            sha256: rattler_digest::parse_digest_from_hex::<rattler_digest::Sha256>(
+                "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            )
+            .unwrap(),
+            md5: None,
+            subdirectory: Default::default(),
+        });
+
+        let location = rattler_lock::UrlOrPath::from(pinned.clone());
+        let parsed = PinnedSourceSpec::try_from(location).unwrap();
+        assert_eq!(parsed, pinned);
+    }
+
+    /// The md5 hash, the subdirectory and the query of the archive url also
+    /// round-trip through the lock file location.
+    #[test]
+    fn test_pinned_url_lock_file_roundtrip_all_fields() {
+        let pinned = PinnedSourceSpec::Url(PinnedUrlSpec {
+            url: Url::parse("https://example.com/download?file=archive.tar.gz").unwrap(),
+            sha256: rattler_digest::parse_digest_from_hex::<rattler_digest::Sha256>(
+                "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            )
+            .unwrap(),
+            md5: Some(
+                rattler_digest::parse_digest_from_hex::<rattler_digest::Md5>(
+                    "d41d8cd98f00b204e9800998ecf8427e",
+                )
+                .unwrap(),
+            ),
+            subdirectory: Subdirectory::try_from("pkg dir/recipe".to_string()).unwrap(),
+        });
+
+        let location = rattler_lock::UrlOrPath::from(pinned.clone());
+        let parsed = PinnedSourceSpec::try_from(location).unwrap();
+        assert_eq!(parsed, pinned);
+    }
+
+    /// A url location without a sha256 hash is an error, not a panic.
+    #[test]
+    fn test_locked_url_without_sha256_is_an_error() {
+        let location =
+            rattler_lock::UrlOrPath::Url(Url::parse("https://example.com/archive.tar.gz").unwrap());
+        assert!(PinnedSourceSpec::try_from(location).is_err());
     }
 
     /// Without an LFS preference the locked git URL stays unchanged, so
