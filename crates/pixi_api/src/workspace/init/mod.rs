@@ -8,7 +8,7 @@ use std::{
 
 use itertools::Itertools;
 use miette::Diagnostic;
-use minijinja::{Environment, context};
+use minijinja::{Environment, context, value::Serde};
 use pixi_config::{Config, ConfigError, S3OptionsMap, get_default_author, pixi_home};
 use pixi_consts::consts;
 use pixi_core::{
@@ -474,15 +474,15 @@ async fn extend_pyproject<I: Interface>(
             consts::PYPROJECT_MANIFEST,
             template::PYROJECT_TEMPLATE_EXISTING,
             context! {
-                name,
+                name => &name,
                 pixi_name,
-                channels => render_ctx.channels,
+                channels => Serde(&render_ctx.channels),
                 platforms => render_ctx.platforms,
-                environments,
+                environments => Serde(&environments),
                 pypi_mapping,
-                index_url => render_ctx.index_url.as_ref(),
-                extra_index_urls => render_ctx.extra_index_urls,
-                s3 => relevant_s3_options(render_ctx.s3_options, render_ctx.channels),
+                index_url => Serde(render_ctx.index_url.as_ref()),
+                extra_index_urls => Serde(render_ctx.extra_index_urls),
+                s3 => Serde(relevant_s3_options(render_ctx.s3_options, render_ctx.channels)),
             },
         )
         .expect("should be able to render the template");
@@ -552,15 +552,15 @@ async fn create_new_pyproject<I: Interface>(
             template::NEW_PYROJECT_TEMPLATE,
             context! {
                 name => pypi_safe_name,
-                pypi_package_name,
+                pypi_package_name => &pypi_package_name,
                 version => render_ctx.version,
                 author => render_ctx.author,
-                channels=> render_ctx.channels,
+                channels => Serde(&render_ctx.channels),
                 platforms=> render_ctx.platforms,
                 pypi_mapping,
-                index_url => render_ctx.index_url.as_ref(),
-                extra_index_urls => &render_ctx.extra_index_urls,
-                s3 => relevant_s3_options(render_ctx.s3_options, render_ctx.channels),
+                index_url => Serde(render_ctx.index_url.as_ref()),
+                extra_index_urls => Serde(&render_ctx.extra_index_urls),
+                s3 => Serde(relevant_s3_options(render_ctx.s3_options, render_ctx.channels)),
             },
         )
         .expect("should be able to render the template");
@@ -639,11 +639,11 @@ fn render_workspace(
         name,
         version,
         author,
-        channels,
+        channels => Serde(&channels),
         platforms,
-        index_url,
-        extra_index_urls,
-        s3 => relevant_s3_options(s3_options, channels),
+        index_url => Serde(index_url),
+        extra_index_urls => Serde(extra_index_urls),
+        s3 => Serde(relevant_s3_options(s3_options, channels)),
         env_vars => {if let Some(env_vars) = env_vars {
             env_vars.iter().map(|(k, v)| format!("{k} = \"{v}\"")).collect::<Vec<String>>().join(", ")
         } else {String::new()}},
