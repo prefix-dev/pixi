@@ -1,0 +1,15 @@
+[workspace]
+name = "conda-pypi-integration"
+channels = ["conda-forge", "https://conda.anaconda.org/conda-pypi"]
+platforms = ["osx-arm64"]
+
+[dependencies]
+python = "3.12.*"
+boltons = { version = "*", channel = "https://conda.anaconda.org/conda-pypi" }
+black = { version = "*", channel = "https://conda.anaconda.org/conda-pypi" }
+
+[pypi-dependencies]
+flask = "*"
+
+[tasks]
+test = "python check.py"
