@@ -136,6 +136,7 @@ fn render_env_platform(
     env: &Environment,
     platform: LockedPlatform<'_>,
     ignore_pypi_errors: bool,
+    ignore_source_errors: bool,
     sha256: bool,
 ) -> miette::Result<()> {
     // Rich platforms (platforms carrying system-requirements) are named
@@ -157,12 +158,18 @@ fn render_env_platform(
             LockedPackage::Conda(CondaPackageData::Binary(p)) => {
                 conda_packages_from_lock_file.push(p.clone())
             }
-            LockedPackage::Conda(CondaPackageData::Source(_)) => {
-                miette::bail!(
-                    "Conda source packages are not supported in a conda explicit spec. \
-                        Specify `--ignore-source-errors` to ignore this error and create \
-                        a spec file containing only the binary conda dependencies from the lock file."
-                );
+            LockedPackage::Conda(CondaPackageData::Source(source)) => {
+                if ignore_source_errors {
+                    tracing::warn!(
+                        "ignoring source package {} since source packages are not supported",
+                        source.name().as_normalized()
+                    );
+                } else {
+                    miette::bail!(
+                        help = "Specify `--ignore-source-errors` to create a spec file containing only the binary conda dependencies from the lock file.",
+                        "conda source packages are not supported in a conda explicit spec"
+                    );
+                }
             }
             LockedPackage::Pypi(pypi) => {
                 if ignore_pypi_errors {
@@ -172,9 +179,8 @@ fn render_env_platform(
                     );
                 } else {
                     miette::bail!(
-                        "PyPI packages are not supported in a conda explicit spec. \
-                        Specify `--ignore-pypi-errors` to ignore this error and create \
-                        a spec file containing only the conda dependencies from the lock file."
+                        help = "Specify `--ignore-pypi-errors` to create a spec file containing only the conda dependencies from the lock file.",
+                        "PyPI packages are not supported in a conda explicit spec"
                     );
                 }
             }
@@ -302,6 +308,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
             &env,
             plat,
             args.ignore_pypi_errors,
+            args.ignore_source_errors,
             args.sha256,
         )?;
     }
@@ -332,11 +339,27 @@ mod tests {
                 // example contains pypi dependencies so should fail if `ignore_pypi_errors` is
                 // false.
                 assert!(
-                    render_env_platform(output_dir.path(), env_name, &env, platform, false, false)
-                        .is_err()
+                    render_env_platform(
+                        output_dir.path(),
+                        env_name,
+                        &env,
+                        platform,
+                        false,
+                        false,
+                        false
+                    )
+                    .is_err()
                 );
-                render_env_platform(output_dir.path(), env_name, &env, platform, true, false)
-                    .unwrap();
+                render_env_platform(
+                    output_dir.path(),
+                    env_name,
+                    &env,
+                    platform,
+                    true,
+                    false,
+                    false,
+                )
+                .unwrap();
 
                 let file_path = output_dir
                     .path()
@@ -360,8 +383,16 @@ mod tests {
         for (env_name, env) in lock_file.environments() {
             for platform in env.platforms() {
                 let platform_name = platform.name();
-                render_env_platform(output_dir.path(), env_name, &env, platform, true, true)
-                    .unwrap();
+                render_env_platform(
+                    output_dir.path(),
+                    env_name,
+                    &env,
+                    platform,
+                    true,
+                    false,
+                    true,
+                )
+                .unwrap();
 
                 let expected: HashMap<String, String> = env
                     .packages(platform)
@@ -395,6 +426,67 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_render_conda_explicit_spec_source_packages() {
+        let path = Path::new(env!("CARGO_WORKSPACE_DIR"))
+            .join("tests/data/pixi-build/rich_example/pixi.lock");
+        let lock_file = LockFile::from_path(&path).unwrap();
+
+        let output_dir = tempdir().unwrap();
+
+        for (env_name, env) in lock_file.environments() {
+            for platform in env.platforms() {
+                let platform_name = platform.name();
+                // The fixture contains a source package, so rendering should
+                // fail unless `ignore_source_errors` is set.
+                let err = render_env_platform(
+                    output_dir.path(),
+                    env_name,
+                    &env,
+                    platform,
+                    false,
+                    false,
+                    false,
+                )
+                .unwrap_err();
+                assert!(err.to_string().contains("source packages"), "{err}");
+                render_env_platform(
+                    output_dir.path(),
+                    env_name,
+                    &env,
+                    platform,
+                    false,
+                    true,
+                    false,
+                )
+                .unwrap();
+
+                let binary_urls: HashSet<String> = env
+                    .packages(platform)
+                    .unwrap()
+                    .filter_map(|package| match package {
+                        LockedPackage::Conda(CondaPackageData::Binary(p)) => {
+                            Some(p.location.to_string())
+                        }
+                        _ => None,
+                    })
+                    .collect();
+
+                let file_path = output_dir
+                    .path()
+                    .join(format!("{env_name}_{platform_name}_conda_spec.txt"));
+                let rendered_urls: HashSet<String> = fs_err::read_to_string(file_path)
+                    .unwrap()
+                    .lines()
+                    .filter_map(|line| line.split_once('#'))
+                    .filter(|(url, _)| !url.is_empty())
+                    .map(|(url, _)| url.to_string())
+                    .collect();
+                assert_eq!(rendered_urls, binary_urls);
+            }
+        }
+    }
+
     /// Loads the rich-platform fixture, which declares five platforms across
     /// three subdirs, two of which (`osx-arm64` and `linux-64`) are covered by
     /// more than one platform.
@@ -413,8 +505,16 @@ mod tests {
         for (env_name, env) in lock_file.environments() {
             for platform in env.platforms() {
                 let platform_name = platform.name();
-                render_env_platform(output_dir.path(), env_name, &env, platform, true, false)
-                    .unwrap();
+                render_env_platform(
+                    output_dir.path(),
+                    env_name,
+                    &env,
+                    platform,
+                    true,
+                    false,
+                    false,
+                )
+                .unwrap();
 
                 let file_path = output_dir
                     .path()
