@@ -23,7 +23,7 @@ pub use run::{RunOptions, run_future_forwarding_signals};
 pub(crate) mod search;
 
 pub(crate) mod shell;
-pub use shell::ShellOptions;
+pub use shell::{ShellError, ShellOptions};
 
 pub(crate) mod task;
 
