@@ -109,6 +109,12 @@ static CONFIG_OPTION_DESCRIPTIONS: &[ConfigOptionDescription] = &[
         default: "(system default)",
     },
     ConfigOptionDescription {
+        key: "cache.virtual-package-detectors",
+        description: "Cache directory for virtual package detector environments and their cached reports. Inherits from `cache.root` when unset.",
+        value_type: "path",
+        default: "(inherited)",
+    },
+    ConfigOptionDescription {
         key: "concurrency",
         description: "Concurrency limits. See `concurrency.*` keys; can also be set as a JSON object.",
         value_type: "table",
@@ -371,6 +377,30 @@ static CONFIG_OPTION_DESCRIPTIONS: &[ConfigOptionDescription] = &[
         description: "Platform used when installing build backends and other tools. Useful when you want tooling for a different platform than the current one.",
         value_type: "platform",
         default: "(current platform)",
+    },
+    ConfigOptionDescription {
+        key: "virtual-package-detectors",
+        description: "Settings for the virtual package detectors that channels register. See `virtual-package-detectors.*` keys; can also be set as a JSON object.",
+        value_type: "table",
+        default: "(empty)",
+    },
+    ConfigOptionDescription {
+        key: "virtual-package-detectors.consent",
+        description: "Saved decisions on whether a channel's detectors may run, keyed by the channel's base URL. Across configuration layers, `deny` wins over `allow`.",
+        value_type: "map of channel URL → `allow` or `deny`",
+        default: "{}",
+    },
+    ConfigOptionDescription {
+        key: "virtual-package-detectors.consent.<origin>",
+        description: "Whether the detectors registered by the channel `<origin>` may be installed and run. When unset, Pixi asks before running them.",
+        value_type: "one of `allow`, `deny`",
+        default: "(unset)",
+    },
+    ConfigOptionDescription {
+        key: "virtual-package-detectors.timeout-seconds",
+        description: "How long a detector, and separately its activation, may run. At most 300.",
+        value_type: "integer (seconds)",
+        default: "30",
     },
 ];
 
