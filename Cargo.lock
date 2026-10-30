@@ -6907,6 +6907,7 @@ dependencies = [
  "url",
  "urlencoding",
  "which",
+ "xxhash-rust",
 ]
 
 [[package]]
