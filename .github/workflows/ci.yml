@@ -907,6 +907,13 @@ jobs:
           test ! -e ~/.pixi/bin/pixi
           sh < ./install/install.sh
           ~/.pixi/bin/pixi --version
+      - name: "Install for zsh with ZDOTDIR set"
+        run: |
+          ZDOTDIR="$(mktemp -d)"
+          PIXI_HOME="$(mktemp -d)"
+          export ZDOTDIR PIXI_HOME
+          SHELL=/bin/zsh sh < ./install/install.sh
+          grep -F "$PIXI_HOME/bin" "$ZDOTDIR/.zshrc"
 
   test-install-sh-alpine:
     name: install.sh | alpine linux
