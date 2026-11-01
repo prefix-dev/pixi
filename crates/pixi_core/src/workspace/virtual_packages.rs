@@ -1,7 +1,7 @@
 use crate::environment::{PlatformData, RequiredPlatform};
 use crate::lock_file::virtual_packages::{
-    MachineValidationError, compute_required_virtual_package_specs, unmet_requirements,
-    validate_system_meets_environment_requirements,
+    MachineValidationError, UnknownNames, compute_required_virtual_package_specs,
+    unmet_requirements, validate_system_meets_environment_requirements,
 };
 use crate::workspace::{
     Environment, HasWorkspaceRef,
@@ -9,14 +9,14 @@ use crate::workspace::{
 };
 use fancy_display::FancyDisplay;
 use miette::Diagnostic;
-use pixi_manifest::platform::host::{host_capabilities, host_subdir};
+use pixi_manifest::platform::host::platform_override_is_foreign;
 use pixi_manifest::{
     EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform, PixiPlatformName,
-    platform::{candidate_subdirs, solver_virtual_packages, unsatisfied_capabilities},
+    platform::{candidate_subdirs, unsatisfied_capabilities},
 };
-use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Platform};
+use rattler_conda_types::{GenericVirtualPackage, MatchSpec, Subdir};
 use rattler_lock::LockFile;
-use rattler_virtual_packages::VirtualPackage;
+use std::borrow::Cow;
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::path::PathBuf;
@@ -39,9 +39,10 @@ pub enum VerifyCurrentPlatformError {
 ///
 /// Two checks, in order:
 ///
-/// 1. *Declared compatibility* -- does one of the environment's declared
-///    platforms match this machine (subdir + declared virtual packages)? This
-///    is [`Environment::best_declared_platform`].
+/// 1. *Declared compatibility* -- was the environment installed for one of its
+///    declared platforms, or does one match this machine (subdir + declared
+///    virtual packages)? This is
+///    [`Environment::installed_or_best_declared_platform`].
 /// 2. *Resolution compatibility* -- if (1) fails and a resolution is available,
 ///    fall back to the virtual-package requirements the resolved dependencies
 ///    actually place on the machine (a declared platform may promise virtual
@@ -56,20 +57,33 @@ pub fn verify_current_platform_can_run_environment(
 ) -> Result<(), VerifyCurrentPlatformError> {
     // When overriding platform skip validation entirely.
     // The host platform wouldn't satisfy the requirements
-    if std::env::var(pixi_consts::consts::PIXI_OVERRIDE_PLATFORM).is_ok() {
+    if platform_override_is_foreign() {
         return Ok(());
     }
 
     // Check 1:
-    if let Some(current_platform) = environment.best_declared_platform() {
+    if let Some(current_platform) = environment.installed_or_best_declared_platform() {
         // Declared-compatible. Keep validating the resolved requirements
         // (conda virtual packages + pypi wheel tags) against the lock file.
         if let Some(lock_file) = lock_file {
+            // An installed environment keeps running where a detector could
+            // not be asked.
+            let unknown = if environment.installed_resolved_platform().is_some() {
+                UnknownNames::Unchecked
+            } else {
+                UnknownNames::Absent
+            };
+            let host = if unknown == UnknownNames::Unchecked {
+                environment.host_for_cached_run()
+            } else {
+                Cow::Borrowed(environment.host())
+            };
             validate_system_meets_environment_requirements(
                 lock_file,
                 current_platform,
                 environment.name(),
-                None,
+                &host,
+                unknown,
             )?;
         }
         return Ok(());
@@ -109,44 +123,53 @@ pub fn minimum_compatible_declared_platform<'p>(
     environment: &Environment<'p>,
     lock_file: &LockFile,
 ) -> Result<&'p PixiPlatform, Vec<MatchSpec>> {
-    let current = host_subdir();
-    let system_virtual_packages = host_capabilities();
-    let candidate_subdirs = candidate_subdirs(current);
-
-    let manifest = environment.workspace_manifest();
     let env_platform_names = environment.platforms();
-    // Workspace declaration order, so ties between declared platforms that
-    // share a subdir resolve deterministically.
-    let declared_platforms: Vec<&PixiPlatform> = manifest
-        .workspace
-        .platforms
-        .iter()
-        .filter(|platform| env_platform_names.contains(platform.name()))
-        .collect();
-    let required =
-        compute_required_virtual_package_specs(lock_file, environment.name(), &declared_platforms);
-
+    let installed_platform = environment
+        .installed_resolved_platform()
+        .filter(|platform| env_platform_names.contains(platform.name()));
+    let installed = installed_platform.is_some();
+    let host = if installed {
+        environment.host_for_cached_run()
+    } else {
+        Cow::Borrowed(environment.host())
+    };
+    let current = host.subdir();
+    let system_virtual_packages = host.capabilities();
+    let manifest = environment.workspace_manifest();
     let mut unmet: Option<Vec<MatchSpec>> = None;
-    for subdir in &candidate_subdirs {
-        // A subdir with no resolved packages requires no virtual packages, so
-        // the machine trivially satisfies it -- e.g. an empty environment whose
-        // only content is tasks still runs under an unsatisfiable requirement.
-        let unsatisfied = required
-            .get(subdir)
-            .map(|specs| unmet_requirements(specs, &system_virtual_packages))
-            .unwrap_or_default();
-        if unsatisfied.is_empty() {
-            if let Some(declared) = declared_platforms
-                .iter()
-                .find(|declared| declared.subdir() == *subdir)
-            {
+    for subdir in candidate_subdirs(current) {
+        for declared in manifest.workspace.platforms.iter().filter(|platform| {
+            platform.subdir() == subdir
+                && env_platform_names.contains(platform.name())
+                && installed_platform.is_none_or(|installed| installed.name() == platform.name())
+        }) {
+            // Platform aliases sharing a subdir can select different packages.
+            // Their requirements must not be combined into one impossible floor.
+            let required =
+                compute_required_virtual_package_specs(lock_file, environment.name(), &[declared]);
+            let unsatisfied = required
+                .get(&subdir)
+                .map(|specs| {
+                    let known = specs
+                        .iter()
+                        .filter(|spec| {
+                            !installed
+                                || spec
+                                    .name
+                                    .as_exact()
+                                    .is_none_or(|name| !host.is_unknown(name.as_normalized()))
+                        })
+                        .cloned()
+                        .collect::<Vec<_>>();
+                    unmet_requirements(&known, &system_virtual_packages)
+                })
+                .unwrap_or_default();
+            if unsatisfied.is_empty() {
                 return Ok(declared);
             }
-            continue;
+            unmet.get_or_insert(unsatisfied);
         }
-        unmet.get_or_insert(unsatisfied);
     }
-
     Err(unmet.unwrap_or_default())
 }
 
@@ -157,7 +180,9 @@ enum RunPlatformFailure {
     /// installed packages place on it.
     UnmetRequirements(Vec<MatchSpec>),
     /// The environment was installed for a subdir, which the machine cannot run.
-    UnrunnableSubdir(Platform),
+    UnrunnableSubdir(Subdir),
+    /// Detection or an explicit override could not be interpreted.
+    Detection(crate::host::HostUndetected),
 }
 
 /// The platform the environment was installed for cannot run the installed
@@ -169,7 +194,7 @@ pub struct RunPlatformUnsupportedError {
     platform: PixiPlatformName,
     /// The subdir behind `platform`. Kept alongside the name because a
     /// `CONDA_OVERRIDE_*` suggestion is only useful on the platforms that honor it
-    subdir: Platform,
+    subdir: Subdir,
     failure: RunPlatformFailure,
 }
 
@@ -177,6 +202,7 @@ impl Diagnostic for RunPlatformUnsupportedError {
     /// Generate a good help text for the `RunPlatformUnsupportedError`
     fn help(&self) -> Option<Box<dyn Display + '_>> {
         match &self.failure {
+            RunPlatformFailure::Detection(error) => Some(Box::new(error)),
             RunPlatformFailure::UnrunnableSubdir(subdir) => Some(Box::new(format!(
                 "It was installed for subdir '{subdir}', which this machine cannot run. \
                  Reinstall for this machine with 'pixi install'."
@@ -217,13 +243,13 @@ enum RunPlatformVerdict {
     /// the requirements it fails to meet.
     BelowMinimum(Vec<MatchSpec>),
     /// The environment was installed for a subdir the base cannot run at all.
-    UnrunnableSubdir(Platform),
+    UnrunnableSubdir(Subdir),
 }
 
 /// Classify a base platform against the resolution platform and the
 /// requirements an environment was installed with.
 fn classify_run_platform(
-    base_subdirs: &[Platform],
+    base_subdirs: &[Subdir],
     base_capabilities: &[GenericVirtualPackage],
     resolved: &PlatformData,
     minimum: &RequiredPlatform,
@@ -233,7 +259,7 @@ fn classify_run_platform(
     let meets_resolved = base_subdirs.contains(&resolved.subdir()) && unmet_resolved.is_empty();
     let meets_minimum = base_subdirs.contains(&minimum.subdir()) && unmet_minimum.is_empty();
 
-    if meets_resolved {
+    if meets_resolved && meets_minimum {
         RunPlatformVerdict::Compatible
     } else if meets_minimum {
         RunPlatformVerdict::OnlyMinimum(unmet_resolved)
@@ -252,7 +278,7 @@ fn classify_run_platform(
 /// distinguish a missing virtual package from one at a too-low version.
 fn describe_resolution_gap(
     base: &PixiPlatformName,
-    unresolvable_subdir: Option<Platform>,
+    unresolvable_subdir: Option<Subdir>,
     unmet: &[GenericVirtualPackage],
     machine: &[GenericVirtualPackage],
 ) -> String {
@@ -305,10 +331,14 @@ fn describe_resolution_gap(
 /// `__archspec` carries a constant version and names its microarchitecture in
 /// the build string, so rendering it like the others produces the useless
 /// "archspec >=0"; name the microarchitecture instead.
+/// AMDGPU ISA requirements are exact, not lower bounds.
 fn describe_requirement(required: &GenericVirtualPackage) -> String {
     let name = required.name.as_normalized().trim_start_matches('_');
     match archspec_microarchitecture_of(required) {
         Some(microarchitecture) => format!("{name} {microarchitecture}"),
+        None if required.name.as_normalized() == "__amdgpu_arch" => {
+            format!("{name} =={}", required.version)
+        }
         None => format!("{name} >={}", required.version),
     }
 }
@@ -326,7 +356,7 @@ fn describe_provided(provided: &GenericVirtualPackage) -> String {
 /// one at all.
 fn archspec_microarchitecture_of(package: &GenericVirtualPackage) -> Option<&str> {
     (package.name.as_normalized() == "__archspec")
-        .then(|| pixi_manifest::platform::archspec_microarchitecture(&package.build_string))
+        .then(|| pixi_manifest::platform::archspec_microarchitecture(package.build_string.as_str()))
         .flatten()
 }
 
@@ -387,11 +417,11 @@ pub fn verify_run_platform(
 ) -> Result<(), RunPlatformUnsupportedError> {
     // An explicit platform override means the user vouches for the machine, so
     // host validation is skipped.
-    if std::env::var(pixi_consts::consts::PIXI_OVERRIDE_PLATFORM).is_ok() {
+    if platform_override_is_foreign() {
         return Ok(());
     }
 
-    let (Some(resolved), Some(minimum)) = environment.installed_platforms() else {
+    let (Some(mut resolved), Some(mut minimum)) = environment.installed_platforms() else {
         // No marker (older pixi or not installed) -- nothing to validate.
         return Ok(());
     };
@@ -405,19 +435,37 @@ pub fn verify_run_platform(
             };
             (
                 vec![platform.subdir()],
-                platform.declared_virtual_packages().to_vec(),
+                platform.solver_virtual_package_records(),
                 name.clone(),
                 platform.subdir(),
             )
         }
         // Auto-detected machine: its real virtual packages, and the subdirs it
         // can run (current subdir plus architecture fallbacks).
+        // Recorded detector names remain unchecked unless explicitly overridden.
         None => {
-            let current = host_subdir();
+            let host = environment.host_for_cached_run();
+            host.platform()
+                .map_err(|error| RunPlatformUnsupportedError {
+                    environment: environment.name().clone(),
+                    platform: PixiPlatformName::from(host.subdir()),
+                    subdir: host.subdir(),
+                    failure: RunPlatformFailure::Detection(error),
+                })?;
+            let current = host.subdir();
             let subdirs = candidate_subdirs(current);
+            resolved
+                .virtual_packages
+                .retain(|package| !host.is_unknown(package.name.as_normalized()));
+            minimum.retain_requirements(|spec| {
+                spec.name
+                    .as_exact()
+                    .is_none_or(|name| !host.is_unknown(name.as_normalized()))
+            });
+            let capabilities = host.capabilities().into_owned();
             (
                 subdirs,
-                host_capabilities(),
+                Cow::Owned(capabilities),
                 PixiPlatformName::from(current),
                 current,
             )
@@ -527,16 +575,16 @@ pub(crate) fn environment_has_dependencies_for_platform(
 ///   require (computed from the lock file);
 /// - and is unsupported when it meets neither.
 ///
-/// Unlike run-time validation, this never consults the `conda-meta/pixi`
-/// marker: the marker records the platform a *previous* install resolved for,
-/// which goes stale when the manifest changes.
+/// Requirements come from the current lock file, not a previous install's
+/// marker. An installed platform narrows the selection while it remains
+/// declared, so another alias's packages cannot invalidate the cached prefix.
 pub fn classify_environment_runnability(
     environment: &Environment<'_>,
     lock_file: Option<&LockFile>,
 ) -> EnvironmentRunnability {
     // Mirror `verify_current_platform_can_run_environment`: an explicit
     // platform override means the user vouches for the machine.
-    if std::env::var(pixi_consts::consts::PIXI_OVERRIDE_PLATFORM).is_ok() {
+    if platform_override_is_foreign() {
         return EnvironmentRunnability::ByDesign;
     }
 
@@ -558,12 +606,10 @@ pub fn classify_environment_runnability(
 }
 
 impl Environment<'_> {
-    /// Returns the set of virtual packages to use for the specified platform.
-    /// Reads them straight off `platform.declared_virtual_packages()`: the
-    /// subdir baseline is materialised by [`PixiPlatform::from_subdir`], so
-    /// there is no separate "compute defaults" step.
-    pub fn virtual_packages(&self, platform: &PixiPlatform) -> Vec<VirtualPackage> {
-        solver_virtual_packages(platform)
+    /// Returns conda virtual-package records for solving, preserving detected host
+    /// records and normalizing manifest declarations for the solver.
+    pub fn virtual_packages(&self, platform: &PixiPlatform) -> Vec<GenericVirtualPackage> {
+        platform.solver_virtual_package_records().into_owned()
     }
 }
 
@@ -571,9 +617,12 @@ impl Environment<'_> {
 mod tests {
     use std::str::FromStr;
 
+    use pixi_manifest::platform::solver_virtual_packages;
+    use rattler_virtual_packages::VirtualPackage;
+
     use insta::assert_debug_snapshot;
     use itertools::Itertools;
-    use rattler_conda_types::{GenericVirtualPackage, Platform};
+    use rattler_conda_types::{GenericVirtualPackage, Subdir, package::BuildString};
 
     use super::*;
 
@@ -581,13 +630,13 @@ mod tests {
     #[test]
     fn test_get_minimal_virtual_packages() {
         let platforms = vec![
-            Platform::NoArch,
-            Platform::Linux64,
-            Platform::LinuxAarch64,
-            Platform::LinuxPpc64le,
-            Platform::Osx64,
-            Platform::OsxArm64,
-            Platform::Win64,
+            Subdir::NoArch,
+            Subdir::Linux64,
+            Subdir::LinuxAarch64,
+            Subdir::LinuxPpc64le,
+            Subdir::Osx64,
+            Subdir::OsxArm64,
+            Subdir::Win64,
         ];
 
         for platform in platforms {
@@ -602,12 +651,117 @@ mod tests {
         }
     }
 
+    #[test]
+    fn cached_run_platform_uses_persisted_detector_provenance_and_overrides() {
+        use crate::environment::{EnvironmentFile, LockedEnvironmentHash, write_environment_file};
+        use crate::host::HostDetection;
+        use pixi_manifest::platform::host::platform_from_detected;
+        use rattler_conda_types::{PackageName, Version};
+
+        let subdir = Subdir::current().unwrap_or(Subdir::NoArch);
+        for name in ["__cuda", "__test_detector_capability"] {
+            let package_name: PackageName = name.parse().unwrap();
+            let variable = format!(
+                "CONDA_OVERRIDE_{}",
+                name.trim_start_matches("__").to_uppercase()
+            );
+            let directory = tempfile::tempdir().unwrap();
+            let manifest_path = directory.path().join("pixi.toml");
+            let mut workspace = crate::Workspace::from_str(
+                &manifest_path,
+                &format!(
+                    "[workspace]\nname = 'cached-provenance'\nchannels = []\nplatforms = ['{subdir}']"
+                ),
+            )
+            .unwrap();
+            workspace.host = HostDetection::from_platform(
+                platform_from_detected(
+                    subdir,
+                    vec![GenericVirtualPackage {
+                        name: package_name.clone(),
+                        version: Version::major(1),
+                        build_string: BuildString::new_unchecked("0"),
+                    }],
+                )
+                .unwrap(),
+            );
+            let environment = workspace.default_environment();
+            for declared in [false, true] {
+                for recorded in [false, true] {
+                    write_environment_file(
+                        &environment.dir(),
+                        EnvironmentFile {
+                            manifest_path: manifest_path.clone(),
+                            environment_name: environment.name().to_string(),
+                            pixi_version: "test".to_string(),
+                            environment_lock_file_hash: LockedEnvironmentHash::invalid(),
+                            resolved_platform: Some(PlatformData::new(
+                                subdir,
+                                if declared {
+                                    vec![GenericVirtualPackage {
+                                        name: package_name.clone(),
+                                        version: Version::major(3),
+                                        build_string: BuildString::new_unchecked("0"),
+                                    }]
+                                } else {
+                                    Vec::new()
+                                },
+                            )),
+                            minimum_supported_platform: Some(RequiredPlatform::new(
+                                subdir,
+                                vec![
+                                    MatchSpec::from_str(
+                                        &format!("{name} >=3"),
+                                        rattler_conda_types::ParseStrictness::Lenient,
+                                    )
+                                    .unwrap(),
+                                ],
+                            )),
+                            detector_virtual_packages: if recorded {
+                                [(
+                                    package_name.clone(),
+                                    Some(crate::host::DetectedVersion {
+                                        version: Version::major(3),
+                                        build_string: "0".to_string(),
+                                    }),
+                                )]
+                                .into()
+                            } else {
+                                Default::default()
+                            },
+                            source_fingerprints: Default::default(),
+                        },
+                    )
+                    .unwrap();
+                    for (value, compatible) in [
+                        (None, recorded),
+                        (Some(""), false),
+                        (Some("3"), true),
+                        (Some("3=bad=build"), false),
+                    ] {
+                        temp_env::with_vars(
+                            [("PIXI_OVERRIDE_PLATFORM", None), (variable.as_str(), value)],
+                            || {
+                                let result = verify_run_platform(&environment, None);
+                                assert_eq!(
+                                    result.is_ok(),
+                                    compatible,
+                                    "{name}, declared={declared}, recorded={recorded}, override={value:?}: {result:?}"
+                                );
+                            },
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     /// Lock-fallback classification: a machine matching no declared platform
     /// runs the environment "by accident" when the lock-resolved minimum is
     /// satisfied, and not at all when it isn't.
     #[test]
     fn classify_runnability_falls_back_to_lock_minimum() {
-        let current = Platform::current();
+        let current = Subdir::current().unwrap_or(Subdir::NoArch);
         let manifest = format!(
             r#"
             [workspace]
@@ -663,6 +817,13 @@ packages:
             ),
             EnvironmentRunnability::Unsupported,
         );
+        assert_eq!(
+            classify_environment_runnability(
+                &environment,
+                Some(&lock("  depends:\n  - __test_detector_capability >=3\n")),
+            ),
+            EnvironmentRunnability::Unsupported,
+        );
     }
 
     /// `install_platform`'s fallback (the fix for an unsatisfied-but-unused
@@ -671,7 +832,7 @@ packages:
     /// the resolved packages need none of the unsatisfied virtual packages.
     #[test]
     fn minimum_compatible_platform_ignores_unused_requirement() {
-        let current = Platform::current();
+        let current = Subdir::current().unwrap_or(Subdir::NoArch);
         let manifest = format!(
             r#"
             [workspace]
@@ -732,7 +893,7 @@ packages:
     /// tasks in empty environments under an unsatisfiable system requirement.
     #[test]
     fn minimum_compatible_platform_runs_empty_environment() {
-        let current = Platform::current();
+        let current = Subdir::current().unwrap_or(Subdir::NoArch);
         let manifest = format!(
             r#"
             [workspace]
@@ -767,7 +928,7 @@ packages: []
     /// without consulting any lock file.
     #[test]
     fn classify_runnability_by_design_via_declared_platform() {
-        let current = Platform::current();
+        let current = Subdir::current().unwrap_or(Subdir::NoArch);
         let manifest = format!(
             r#"
             [workspace]
@@ -792,7 +953,7 @@ packages: []
     /// lacks: nothing it installs can require them.
     #[test]
     fn classify_runnability_no_dependencies() {
-        let current = Platform::current();
+        let current = Subdir::current().unwrap_or(Subdir::NoArch);
         let manifest = format!(
             r#"
             [workspace]
@@ -813,7 +974,7 @@ packages: []
     /// prefix, so an environment declaring only those still has dependencies.
     #[test]
     fn classify_runnability_counts_dev_dependencies() {
-        let current = Platform::current();
+        let current = Subdir::current().unwrap_or(Subdir::NoArch);
         let manifest = format!(
             r#"
             [workspace]
@@ -838,11 +999,11 @@ packages: []
     fn declared_cuda_overrides_default() {
         let pp = pixi_manifest::PixiPlatform::new(
             pixi_manifest::PixiPlatformName::try_from("gpu").unwrap(),
-            Platform::Linux64,
+            Subdir::Linux64,
             vec![GenericVirtualPackage {
                 name: rattler_conda_types::PackageName::try_from("__cuda").unwrap(),
                 version: rattler_conda_types::Version::from_str("12.0").unwrap(),
-                build_string: String::new(),
+                build_string: BuildString::new_unchecked("0"),
             }],
         )
         .unwrap();
@@ -857,7 +1018,7 @@ packages: []
         assert_eq!(cuda.to_string(), "12.0");
 
         // A platform with no declared cuda should not emit a __cuda VP.
-        let bare = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
+        let bare = pixi_manifest::PixiPlatform::from_subdir(Subdir::Linux64);
         assert!(
             !solver_virtual_packages(&bare)
                 .iter()
@@ -870,11 +1031,11 @@ packages: []
     fn declared_libc_picks_family_and_version() {
         let pp = pixi_manifest::PixiPlatform::new(
             pixi_manifest::PixiPlatformName::try_from("musl-host").unwrap(),
-            Platform::LinuxAarch64,
+            Subdir::LinuxAarch64,
             vec![GenericVirtualPackage {
                 name: rattler_conda_types::PackageName::try_from("__musl").unwrap(),
                 version: rattler_conda_types::Version::from_str("1.2.4").unwrap(),
-                build_string: String::new(),
+                build_string: BuildString::new_unchecked("0"),
             }],
         )
         .unwrap();
@@ -893,11 +1054,11 @@ packages: []
         GenericVirtualPackage {
             name: rattler_conda_types::PackageName::try_from(name).unwrap(),
             version: rattler_conda_types::Version::from_str(version).unwrap(),
-            build_string: String::new(),
+            build_string: BuildString::new_unchecked("0"),
         }
     }
 
-    fn platform_data(subdir: Platform, vps: Vec<GenericVirtualPackage>) -> PlatformData {
+    fn platform_data(subdir: Subdir, vps: Vec<GenericVirtualPackage>) -> PlatformData {
         PlatformData {
             subdir,
             virtual_packages: vps,
@@ -906,7 +1067,7 @@ packages: []
 
     /// The requirement side: match specs as a resolved package's `depends`
     /// spells them, not concrete virtual packages.
-    fn required_platform(subdir: Platform, specs: &[&str]) -> RequiredPlatform {
+    fn required_platform(subdir: Subdir, specs: &[&str]) -> RequiredPlatform {
         RequiredPlatform::new(
             subdir,
             specs
@@ -921,10 +1082,10 @@ packages: []
     #[test]
     fn classify_compatible_when_base_meets_resolution() {
         // Base provides cuda 12.4; resolution needs 12.0 and minimum 12.0.
-        let resolved = platform_data(Platform::Linux64, vec![gvp("__cuda", "12.0")]);
-        let minimum = required_platform(Platform::Linux64, &["__cuda >=12.0"]);
+        let resolved = platform_data(Subdir::Linux64, vec![gvp("__cuda", "12.0")]);
+        let minimum = required_platform(Subdir::Linux64, &["__cuda >=12.0"]);
         let verdict = classify_run_platform(
-            &[Platform::Linux64],
+            &[Subdir::Linux64],
             &[gvp("__cuda", "12.4")],
             &resolved,
             &minimum,
@@ -937,10 +1098,10 @@ packages: []
         // Resolution wanted glibc 2.28, the package floor is only 2.17, and the
         // base provides 2.17 -- it runs, but by accident. The verdict carries
         // the resolution requirement the base misses.
-        let resolved = platform_data(Platform::Linux64, vec![gvp("__glibc", "2.28")]);
-        let minimum = required_platform(Platform::Linux64, &["__glibc >=2.17"]);
+        let resolved = platform_data(Subdir::Linux64, vec![gvp("__glibc", "2.28")]);
+        let minimum = required_platform(Subdir::Linux64, &["__glibc >=2.17"]);
         let verdict = classify_run_platform(
-            &[Platform::Linux64],
+            &[Subdir::Linux64],
             &[gvp("__glibc", "2.17")],
             &resolved,
             &minimum,
@@ -952,15 +1113,43 @@ packages: []
     }
 
     #[test]
+    fn classify_wrong_amdgpu_architecture_against_package_requirements() {
+        let required_arch = gvp("__amdgpu_arch", "9.0.10");
+        let resolved = platform_data(
+            Subdir::Linux64,
+            vec![gvp("__amdgpu", "0"), required_arch.clone()],
+        );
+        let base = [gvp("__amdgpu", "0"), gvp("__amdgpu_arch", "9.0.11")];
+        let minimum = required_platform(Subdir::Linux64, &["__amdgpu", "__amdgpu_arch ==9.0.10"]);
+
+        assert_eq!(
+            classify_run_platform(&[Subdir::Linux64], &base, &resolved, &minimum),
+            RunPlatformVerdict::BelowMinimum(
+                required_platform(Subdir::Linux64, &["__amdgpu_arch ==9.0.10"])
+                    .requirements()
+                    .to_vec()
+            )
+        );
+
+        // With no package dependency on the architecture, only the declared
+        // resolution target is unmet; the installed packages still run.
+        let minimum = required_platform(Subdir::Linux64, &["__amdgpu"]);
+        assert_eq!(
+            classify_run_platform(&[Subdir::Linux64], &base, &resolved, &minimum),
+            RunPlatformVerdict::OnlyMinimum(vec![required_arch])
+        );
+    }
+
+    #[test]
     fn resolution_gap_names_missing_virtual_package() {
-        let base = PixiPlatformName::from(Platform::Linux64);
+        let base = PixiPlatformName::from(Subdir::Linux64);
         let gap = describe_resolution_gap(&base, None, &[gvp("__cuda", "12")], &[]);
         insta::assert_snapshot!(gap, @"requires cuda >=12, but this machine does not provide '__cuda'. The currently installed packages don't actually need it, so the environment still runs, but the next re-resolve (e.g. 'pixi update' or a change to the manifest) may install packages that do, which would no longer run on this machine.");
     }
 
     #[test]
     fn resolution_gap_names_too_low_virtual_package() {
-        let base = PixiPlatformName::from(Platform::Linux64);
+        let base = PixiPlatformName::from(Subdir::Linux64);
         let gap = describe_resolution_gap(
             &base,
             None,
@@ -972,7 +1161,7 @@ packages: []
 
     #[test]
     fn resolution_gap_joins_multiple_requirements() {
-        let base = PixiPlatformName::from(Platform::Linux64);
+        let base = PixiPlatformName::from(Subdir::Linux64);
         let gap = describe_resolution_gap(
             &base,
             None,
@@ -984,18 +1173,18 @@ packages: []
 
     #[test]
     fn resolution_gap_reports_unrunnable_subdir() {
-        let base = PixiPlatformName::from(Platform::Linux64);
-        let gap = describe_resolution_gap(&base, Some(Platform::LinuxAarch64), &[], &[]);
+        let base = PixiPlatformName::from(Subdir::Linux64);
+        let gap = describe_resolution_gap(&base, Some(Subdir::LinuxAarch64), &[], &[]);
         insta::assert_snapshot!(gap, @"was resolved for platform 'linux-aarch64', which this machine cannot run. The currently installed packages are compatible with 'linux-64', so the environment still runs, but the next re-resolve (e.g. 'pixi update' or a change to the manifest) may install packages that only run on 'linux-aarch64'.");
     }
 
     #[test]
     fn classify_below_minimum_reports_unmet() {
         // Base glibc 2.12 is below the 2.17 floor the installed packages need.
-        let resolved = platform_data(Platform::Linux64, vec![gvp("__glibc", "2.28")]);
-        let minimum = required_platform(Platform::Linux64, &["__glibc >=2.17"]);
+        let resolved = platform_data(Subdir::Linux64, vec![gvp("__glibc", "2.28")]);
+        let minimum = required_platform(Subdir::Linux64, &["__glibc >=2.17"]);
         let verdict = classify_run_platform(
-            &[Platform::Linux64],
+            &[Subdir::Linux64],
             &[gvp("__glibc", "2.12")],
             &resolved,
             &minimum,
@@ -1012,14 +1201,35 @@ packages: []
     }
 
     #[test]
+    fn classify_custom_capability_resolution_and_package_floor() {
+        let name = "__test_detector_capability";
+        let resolved = platform_data(Subdir::Linux64, vec![gvp(name, "4")]);
+        let minimum = required_platform(Subdir::Linux64, &["__test_detector_capability >=3"]);
+        for capabilities in [vec![], vec![gvp(name, "2")]] {
+            assert_eq!(
+                classify_run_platform(&[Subdir::Linux64], &capabilities, &resolved, &minimum),
+                RunPlatformVerdict::BelowMinimum(minimum.requirements().to_vec()),
+            );
+        }
+        assert_eq!(
+            classify_run_platform(&[Subdir::Linux64], &[gvp(name, "3")], &resolved, &minimum),
+            RunPlatformVerdict::OnlyMinimum(vec![gvp(name, "4")]),
+        );
+        assert_eq!(
+            classify_run_platform(&[Subdir::Linux64], &[gvp(name, "4")], &resolved, &minimum),
+            RunPlatformVerdict::Compatible,
+        );
+    }
+
+    #[test]
     fn run_platform_refusal_suggests_overrides_from_the_requirements() {
         let spec = |raw: &str| {
             MatchSpec::from_str(raw, rattler_conda_types::ParseStrictness::Lenient).unwrap()
         };
         let error = RunPlatformUnsupportedError {
             environment: EnvironmentName::Default,
-            platform: PixiPlatformName::from(Platform::Linux64),
-            subdir: Platform::Linux64,
+            platform: PixiPlatformName::from(Subdir::Linux64),
+            subdir: Subdir::Linux64,
             failure: RunPlatformFailure::UnmetRequirements(vec![
                 spec("__glibc >=2.28"),
                 spec("__cuda >=12"),
@@ -1049,8 +1259,8 @@ packages: []
     fn run_platform_refusal_omits_the_override_section_when_useless() {
         let error = RunPlatformUnsupportedError {
             environment: EnvironmentName::Default,
-            platform: PixiPlatformName::from(Platform::Linux64),
-            subdir: Platform::Linux64,
+            platform: PixiPlatformName::from(Subdir::Linux64),
+            subdir: Subdir::Linux64,
             failure: RunPlatformFailure::UnmetRequirements(vec![
                 MatchSpec::from_str("__unix", rattler_conda_types::ParseStrictness::Lenient)
                     .unwrap(),
@@ -1087,8 +1297,8 @@ packages: []
         for (name, env_var) in ignored_here {
             let error = RunPlatformUnsupportedError {
                 environment: EnvironmentName::Default,
-                platform: PixiPlatformName::from(Platform::current()),
-                subdir: Platform::current(),
+                platform: PixiPlatformName::from(Subdir::current().unwrap_or(Subdir::NoArch)),
+                subdir: Subdir::current().unwrap_or(Subdir::NoArch),
                 failure: RunPlatformFailure::UnmetRequirements(vec![
                     MatchSpec::from_str(name, rattler_conda_types::ParseStrictness::Lenient)
                         .unwrap(),
@@ -1107,27 +1317,24 @@ packages: []
 
     #[test]
     fn classify_reports_an_unrunnable_subdir_rather_than_its_requirements() {
-        let resolved = platform_data(Platform::Osx64, vec![]);
-        let minimum = required_platform(Platform::Osx64, &["__osx >=11.0"]);
+        let resolved = platform_data(Subdir::Osx64, vec![]);
+        let minimum = required_platform(Subdir::Osx64, &["__osx >=11.0"]);
         let verdict = classify_run_platform(
-            &[Platform::Linux64],
+            &[Subdir::Linux64],
             &[gvp("__osx", "13.0")],
             &resolved,
             &minimum,
         );
-        assert_eq!(
-            verdict,
-            RunPlatformVerdict::UnrunnableSubdir(Platform::Osx64)
-        );
+        assert_eq!(verdict, RunPlatformVerdict::UnrunnableSubdir(Subdir::Osx64));
     }
 
     #[test]
     fn run_platform_refusal_for_a_subdir_mismatch_names_the_subdir() {
         let error = RunPlatformUnsupportedError {
             environment: EnvironmentName::Default,
-            platform: PixiPlatformName::from(Platform::Linux64),
-            subdir: Platform::Linux64,
-            failure: RunPlatformFailure::UnrunnableSubdir(Platform::Osx64),
+            platform: PixiPlatformName::from(Subdir::Linux64),
+            subdir: Subdir::Linux64,
+            failure: RunPlatformFailure::UnrunnableSubdir(Subdir::Osx64),
         };
         let help = error
             .help()
@@ -1145,10 +1352,10 @@ packages: []
     fn classify_compatible_via_candidate_subdir() {
         // An emulated subdir (osx-64 among an osx-arm64 host's candidates) with
         // satisfied virtual packages is compatible.
-        let resolved = platform_data(Platform::Osx64, vec![gvp("__osx", "11.0")]);
-        let minimum = required_platform(Platform::Osx64, &[]);
+        let resolved = platform_data(Subdir::Osx64, vec![gvp("__osx", "11.0")]);
+        let minimum = required_platform(Subdir::Osx64, &[]);
         let verdict = classify_run_platform(
-            &[Platform::OsxArm64, Platform::Osx64],
+            &[Subdir::OsxArm64, Subdir::Osx64],
             &[gvp("__osx", "13.0")],
             &resolved,
             &minimum,

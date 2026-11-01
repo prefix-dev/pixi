@@ -18,9 +18,12 @@ use pixi_build_backend::generated_recipe::{GenerateRecipe, GeneratedRecipe, Pyth
 use pixi_build_backend::intermediate_backend::IntermediateBackendInstantiator;
 use pixi_build_backend::tools::BackendIdentifier;
 use rattler_build_jinja::{JinjaTemplate, Variable};
-use rattler_build_recipe::stage0::{Item, Script, SerializableMatchSpec, Value};
+use rattler_build_recipe::stage0::{
+    Conditional, Item, JinjaExpression, NestedItemList, Script, SerializableMatchSpec,
+    SingleOutputRecipe, Value,
+};
 use rattler_build_types::NormalizedKey;
-use rattler_conda_types::{ChannelUrl, Platform};
+use rattler_conda_types::{ChannelUrl, Subdir};
 
 use crate::build_script::render_build_script;
 use crate::config::{PackageMappingSource, extract_distro_from_channels_list};
@@ -37,6 +40,7 @@ pub struct RosGenerator {}
 #[async_trait::async_trait]
 impl GenerateRecipe for RosGenerator {
     type Config = RosBackendConfig;
+    type Recipe = SingleOutputRecipe;
 
     #[tracing::instrument(
         name = "ros_generate_recipe",
@@ -51,7 +55,7 @@ impl GenerateRecipe for RosGenerator {
         model: &pixi_build_types::ProjectModel,
         config: &Self::Config,
         manifest_path: PathBuf,
-        host_platform: Platform,
+        host_platform: Subdir,
         _python_params: Option<PythonParams>,
         _variants: &HashSet<NormalizedKey>,
         channels: Vec<ChannelUrl>,
@@ -269,8 +273,12 @@ impl GenerateRecipe for RosGenerator {
         build_items.push(Item::Value(Value::new_template(c_compiler, None)));
         build_items.push(Item::Value(Value::new_template(cxx_compiler, None)));
 
+        // The host python cannot run on the build machine when
+        // cross-compiling, e.g. for `ament_python` packages.
+        build_items.push(cross_python_build_item());
+
         // Add host dependencies
-        let host_dep_names = ["python", "numpy", "pip", "pkg-config"];
+        let host_dep_names = ["python", "numpy", "pip", "pkg-config", "setuptools"];
         for dep in &host_dep_names {
             host_items.push(Item::Value(Value::new_concrete(
                 SerializableMatchSpec::from(*dep),
@@ -368,10 +376,26 @@ impl GenerateRecipe for RosGenerator {
 
     fn default_variants(
         &self,
-        host_platform: Platform,
+        host_platform: Subdir,
     ) -> miette::Result<BTreeMap<NormalizedKey, Vec<Variable>>> {
         Ok(default_compiler_variants(host_platform))
     }
+}
+
+/// `cross-python` for the target platform, only when cross-compiling.
+///
+/// Its activation replaces the host prefix's python with one that runs on
+/// the build machine, so `$PYTHON` keeps working in the build scripts.
+fn cross_python_build_item() -> Item<SerializableMatchSpec> {
+    let cross_python = JinjaTemplate::new("cross-python_${{ target_platform }}".to_string())
+        .expect("valid jinja template");
+    Item::Conditional(Conditional {
+        condition: JinjaExpression::new("build_platform != target_platform".to_string())
+            .expect("valid jinja expression"),
+        then: NestedItemList::single(Item::Value(Value::new_template(cross_python, None))),
+        else_value: None,
+        condition_span: None,
+    })
 }
 
 #[tokio::main]
@@ -395,7 +419,7 @@ mod tests {
     use std::path::PathBuf;
 
     use pixi_build_types::ProjectModel;
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::Subdir;
 
     use super::*;
 
@@ -435,13 +459,9 @@ mod tests {
         let distro = jazzy_distro();
         let package_map = default_package_map();
 
-        let requirements = package_xml_to_conda_requirements(
-            &package_xml,
-            &distro,
-            Platform::Linux64,
-            &package_map,
-        )
-        .unwrap();
+        let requirements =
+            package_xml_to_conda_requirements(&package_xml, &distro, Subdir::Linux64, &package_map)
+                .unwrap();
 
         insta::assert_yaml_snapshot!(requirements.build, @r###"
         - ros-jazzy-ament-cmake
@@ -492,13 +512,9 @@ mod tests {
         let distro = jazzy_distro();
         let package_map = default_package_map();
 
-        let requirements = package_xml_to_conda_requirements(
-            &package_xml,
-            &distro,
-            Platform::Linux64,
-            &package_map,
-        )
-        .unwrap();
+        let requirements =
+            package_xml_to_conda_requirements(&package_xml, &distro, Subdir::Linux64, &package_map)
+                .unwrap();
 
         insta::assert_yaml_snapshot!(requirements.build, @r###"
         - ros-jazzy-ament-cmake
@@ -534,7 +550,7 @@ mod tests {
                 &model,
                 &config,
                 temp_path.to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -599,6 +615,8 @@ mod tests {
           - coreutils
           - "${{ compiler('c') }}"
           - "${{ compiler('cxx') }}"
+          - if: build_platform != target_platform
+            then: "cross-python_${{ target_platform }}"
         host:
           - ros-jazzy-ament-cmake
           - ros-jazzy-example-interfaces
@@ -622,6 +640,7 @@ mod tests {
           - numpy
           - pip
           - pkg-config
+          - setuptools
           - ros2-distro-mutex
         run:
           - ros-jazzy-example-interfaces
@@ -664,7 +683,7 @@ mod tests {
                 model,
                 &config,
                 temp_path.to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -755,7 +774,7 @@ mod tests {
                 &model,
                 &config,
                 temp_path.to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -976,7 +995,7 @@ mod tests {
                 &model,
                 &config,
                 dest.clone(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -1013,7 +1032,7 @@ mod tests {
                 &model,
                 &config,
                 temp_path.to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![ChannelUrl::from(
@@ -1061,7 +1080,7 @@ mod tests {
                 &model,
                 &config,
                 temp_path.to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![ChannelUrl::from(
@@ -1106,7 +1125,7 @@ mod tests {
                 &model,
                 &config,
                 temp_path.to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![ChannelUrl::from(
@@ -1147,7 +1166,7 @@ mod tests {
                 &model,
                 &config,
                 temp_path.to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -1337,7 +1356,7 @@ mod tests {
                 &model,
                 &config,
                 pkg_a_manifest.clone(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -1384,7 +1403,7 @@ mod tests {
                 &model,
                 &config,
                 workspace_root.join("pkg_a"),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -1433,7 +1452,7 @@ mod tests {
                 &model,
                 &config,
                 workspace_root.join("pkg_a"),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -1479,7 +1498,7 @@ mod tests {
                 &model,
                 &config,
                 workspace_root.join("src").join("pkg_a"),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -1542,7 +1561,7 @@ mod tests {
                 &model,
                 &config,
                 workspace_root.join("pkg_a"),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -1579,7 +1598,7 @@ mod tests {
                 &model,
                 &config,
                 workspace_root.join("pkg_a"),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],

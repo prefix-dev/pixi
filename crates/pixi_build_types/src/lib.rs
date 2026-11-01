@@ -22,7 +22,7 @@ pub use project_model::{
     Target, TargetSelector, Targets, UrlSpec,
 };
 use rattler_conda_types::{
-    GenericVirtualPackage, PackageName, Platform, Version, VersionSpec,
+    GenericVirtualPackage, PackageName, Subdir, Version, VersionSpec,
     version_spec::{LogicalOperator, RangeOperator},
 };
 use serde::{Deserialize, Serialize};
@@ -145,7 +145,7 @@ impl Display for PixiBuildApiVersion {
 #[serde(rename_all = "camelCase")]
 pub struct PlatformAndVirtualPackages {
     /// The platform
-    pub platform: Platform,
+    pub platform: Subdir,
 
     /// Virtual packages associated with the platform. Or `None` if the virtual
     /// packages are not specified.

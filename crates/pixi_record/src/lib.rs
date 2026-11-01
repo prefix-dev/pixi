@@ -11,8 +11,8 @@ pub use lock_file_resolver::{LockFileResolver, LockFileResolverError};
 use std::{collections::HashMap, path::Path, sync::Arc};
 
 pub use pinned_source::{
-    LockedGitUrl, MutablePinnedSourceSpec, ParseError, PinnedGitCheckout, PinnedGitSpec,
-    PinnedPathSpec, PinnedSourceSpec, PinnedUrlSpec, SourceMismatchError,
+    LockedGitUrl, LockedGitUrlError, MutablePinnedSourceSpec, ParseError, PinnedGitCheckout,
+    PinnedGitSpec, PinnedPathSpec, PinnedSourceSpec, PinnedUrlSpec, SourceMismatchError,
 };
 pub use pixi_variant::VariantValue;
 use rattler_conda_types::{
@@ -592,7 +592,7 @@ mod tests {
         let mut package_record = PackageRecord::new(
             PackageName::from_str(name).unwrap(),
             version.parse::<VersionWithSource>().unwrap(),
-            build.to_string(),
+            build.parse().unwrap(),
         );
         package_record.subdir = "linux-64".into();
         let record = RepoDataRecord {
@@ -611,7 +611,7 @@ mod tests {
         let mut package_record = PackageRecord::new(
             PackageName::from_str(name).unwrap(),
             "1.0.0".parse::<VersionWithSource>().unwrap(),
-            "h0".to_string(),
+            "h0".parse().unwrap(),
         );
         package_record.subdir = "linux-64".into();
         let record = SourceRecord {

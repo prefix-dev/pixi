@@ -7,5 +7,6 @@ pixi config unset default-channels
 pixi config unset --global mirrors
 pixi config unset repodata-config.disable-zstd --system
 pixi config unset shell --path /path/to/config.toml
+pixi config unset --shared 'virtual-package-detectors.consent."https://conda.anaconda.org/conda-forge"'
 ```
 --8<-- [end:example]

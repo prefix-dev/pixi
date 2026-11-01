@@ -140,11 +140,15 @@ def llvm_profdata() -> Path:
 
 
 def encoded_rustflags(profile_flag: str, target: str) -> str:
+    # CARGO_ENCODED_RUSTFLAGS overrides every other rustflags source, so carry over
+    # the flags cargo would otherwise pick from the environment, in cargo's order.
     if encoded_flags := os.environ.get("CARGO_ENCODED_RUSTFLAGS"):
         flags: list[str] = [encoded_flags]
+    elif (rustflags := os.environ.get("RUSTFLAGS")) is not None:
+        flags = shlex.split(rustflags)
     else:
-        flags = shlex.split(os.environ.get("RUSTFLAGS", ""))
-    # CARGO_ENCODED_RUSTFLAGS overrides the target rustflags in .cargo/config.toml.
+        flags = shlex.split(os.environ.get("CARGO_BUILD_RUSTFLAGS", ""))
+    # It also overrides the target rustflags in .cargo/config.toml.
     if target.endswith("-pc-windows-msvc"):
         flags.append("-Ctarget-feature=+crt-static")
     flags.append(profile_flag)

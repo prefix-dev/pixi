@@ -20,7 +20,7 @@ use pixi_record::{
 use pixi_spec::{BinarySpec, PixiSpec, SourceAnchor, SourceLocationSpec};
 use pixi_spec_containers::DependencyMap;
 use pixi_variant::VariantValue;
-use rattler_conda_types::{PackageName, PackageRecord, Platform, package::RunExportsJson};
+use rattler_conda_types::{PackageName, PackageRecord, Subdir, package::RunExportsJson};
 use rattler_solve::SolveStrategy;
 
 use crate::{
@@ -411,6 +411,8 @@ async fn assemble_source_record_inner(
         sha256: None,
         md5: None,
         timestamp: None,
+        indexed_timestamp: None,
+        attestations_sha256: None,
         platform: output
             .metadata
             .subdir
@@ -423,6 +425,7 @@ async fn assemble_source_record_inner(
             .as_ref()
             .map(ToString::to_string),
         name: output.metadata.name.clone(),
+        // Validated when the backend returned its outputs.
         build: output.metadata.build.clone(),
         version: output.metadata.version.clone(),
         build_number: output.metadata.build_number,
@@ -684,13 +687,13 @@ impl LifecycleKind for SourceRecordReporterLifecycle {
 /// whose subdir is not a known platform (those are not ours to judge).
 fn installed_records_for_platform(
     installed: Arc<[UnresolvedPixiRecord]>,
-    platform: Platform,
+    platform: Subdir,
 ) -> Arc<[UnresolvedPixiRecord]> {
     let fits = |record: &UnresolvedPixiRecord| match record
         .package_record()
-        .and_then(|record| record.subdir.parse::<Platform>().ok())
+        .and_then(|record| record.subdir.parse::<Subdir>().ok())
     {
-        Some(subdir) => subdir == Platform::NoArch || subdir == platform,
+        Some(subdir) => subdir == Subdir::NoArch || subdir == platform,
         None => true,
     };
     if installed.iter().all(fits) {
@@ -714,7 +717,7 @@ mod tests {
         let mut package_record = PackageRecord::new(
             PackageName::new_unchecked(name),
             "1.0.0".parse::<VersionWithSource>().unwrap(),
-            "h0".into(),
+            "h0".parse().unwrap(),
         );
         package_record.subdir = subdir.into();
         UnresolvedPixiRecord::Binary(Arc::new(RepoDataRecord {
@@ -740,7 +743,7 @@ mod tests {
             binary("pyfoo", "noarch"),
             binary("mystery", "not-a-platform"),
         ]);
-        let kept = installed_records_for_platform(installed.clone(), Platform::Linux64);
+        let kept = installed_records_for_platform(installed.clone(), Subdir::Linux64);
         assert!(
             Arc::ptr_eq(&kept, &installed),
             "nothing to drop, nothing copied"
@@ -754,7 +757,7 @@ mod tests {
             binary("dummy-b", "osx-arm64"),
             binary("pyfoo", "noarch"),
         ]);
-        let kept = installed_records_for_platform(installed, Platform::Linux64);
+        let kept = installed_records_for_platform(installed, Subdir::Linux64);
         assert_eq!(names(&kept), ["libfoo", "pyfoo"]);
     }
 }

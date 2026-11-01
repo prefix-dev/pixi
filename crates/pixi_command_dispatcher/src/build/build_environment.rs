@@ -1,4 +1,4 @@
-use rattler_conda_types::{GenericVirtualPackage, Platform};
+use rattler_conda_types::{GenericVirtualPackage, Subdir};
 use rattler_virtual_packages::{
     DetectVirtualPackageError, VirtualPackageOverrides, VirtualPackages,
 };
@@ -7,10 +7,10 @@ use serde::Serialize;
 /// Contains information about the build and host environments.
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize)]
 pub struct BuildEnvironment {
-    pub host_platform: Platform,
+    pub host_platform: Subdir,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub host_virtual_packages: Vec<GenericVirtualPackage>,
-    pub build_platform: Platform,
+    pub build_platform: Subdir,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub build_virtual_packages: Vec<GenericVirtualPackage>,
 }
@@ -36,9 +36,9 @@ impl Default for BuildEnvironment {
                 .collect();
 
         Self {
-            host_platform: Platform::current(),
+            host_platform: Subdir::current().unwrap_or(Subdir::NoArch),
             host_virtual_packages: virtual_packages.clone(),
-            build_platform: Platform::current(),
+            build_platform: Subdir::current().unwrap_or(Subdir::NoArch),
             build_virtual_packages: virtual_packages,
         }
     }
@@ -47,11 +47,11 @@ impl Default for BuildEnvironment {
 impl BuildEnvironment {
     /// Constructs a build environment that targets a specific `target_platform`
     /// from the current platform.
-    pub fn simple_cross(target_platform: Platform) -> Result<Self, DetectVirtualPackageError> {
+    pub fn simple_cross(target_platform: Subdir) -> Result<Self, DetectVirtualPackageError> {
         Ok(Self {
             host_platform: target_platform,
             host_virtual_packages: vec![],
-            build_platform: Platform::current(),
+            build_platform: Subdir::current().unwrap_or(Subdir::NoArch),
             build_virtual_packages: VirtualPackages::detect(
                 &VirtualPackageOverrides::default(),
                 None,
@@ -62,7 +62,7 @@ impl BuildEnvironment {
     }
 
     /// Constructs a build environment that targets a specific `target_platform`
-    pub fn simple(platform: Platform, virtual_packages: Vec<GenericVirtualPackage>) -> Self {
+    pub fn simple(platform: Subdir, virtual_packages: Vec<GenericVirtualPackage>) -> Self {
         Self {
             host_platform: platform,
             host_virtual_packages: virtual_packages.clone(),

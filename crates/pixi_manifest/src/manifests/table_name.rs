@@ -153,7 +153,7 @@ mod tests {
             TableName::new()
                 .with_feature_name(Some(&FeatureName::Default))
                 .with_target(Some(TargetSelector::Subdir(
-                    rattler_conda_types::Platform::Linux64,
+                    rattler_conda_types::Subdir::Linux64,
                 )))
                 .with_table(Some("dependencies"))
                 .to_string()
@@ -173,7 +173,7 @@ mod tests {
             TableName::new()
                 .with_feature_name(Some(&feature_name))
                 .with_target(Some(TargetSelector::Subdir(
-                    rattler_conda_types::Platform::Linux64,
+                    rattler_conda_types::Subdir::Linux64,
                 )))
                 .with_table(Some("dependencies"))
                 .to_string()
@@ -196,7 +196,7 @@ mod tests {
             TableName::new()
                 .with_feature_name(Some(&environment_feature))
                 .with_target(Some(TargetSelector::Subdir(
-                    rattler_conda_types::Platform::Linux64,
+                    rattler_conda_types::Subdir::Linux64,
                 )))
                 .with_table(Some("dependencies"))
                 .to_string()

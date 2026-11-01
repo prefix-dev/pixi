@@ -12,9 +12,9 @@ use pixi_build_backend::{
     tools::BackendIdentifier,
 };
 use rattler_build_jinja::Variable;
-use rattler_build_recipe::stage0::{Script, Value};
+use rattler_build_recipe::stage0::{Script, SingleOutputRecipe, Value};
 use rattler_build_types::NormalizedKey;
-use rattler_conda_types::{ChannelUrl, Platform};
+use rattler_conda_types::{ChannelUrl, Subdir};
 use std::collections::HashSet;
 use std::path::PathBuf;
 use std::{collections::BTreeMap, path::Path, sync::Arc};
@@ -25,13 +25,14 @@ pub struct MojoGenerator {}
 #[async_trait::async_trait]
 impl GenerateRecipe for MojoGenerator {
     type Config = MojoBackendConfig;
+    type Recipe = SingleOutputRecipe;
 
     async fn generate_recipe(
         &self,
         model: &pixi_build_types::ProjectModel,
         config: &Self::Config,
         manifest_path: PathBuf,
-        _host_platform: Platform,
+        _host_platform: Subdir,
         _python_params: Option<PythonParams>,
         variants: &HashSet<NormalizedKey>,
         _channels: Vec<ChannelUrl>,
@@ -124,7 +125,7 @@ impl GenerateRecipe for MojoGenerator {
 
     fn default_variants(
         &self,
-        host_platform: Platform,
+        host_platform: Subdir,
     ) -> miette::Result<BTreeMap<NormalizedKey, Vec<Variable>>> {
         Ok(default_compiler_variants(host_platform))
     }
@@ -256,7 +257,7 @@ mod tests {
                     ..Default::default()
                 },
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -309,7 +310,7 @@ mod tests {
                     ..Default::default()
                 },
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -353,7 +354,7 @@ mod tests {
                     ..Default::default()
                 },
                 source_dir.clone(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -428,7 +429,7 @@ mod tests {
                 &project_model,
                 &MojoBackendConfig::default(),
                 temp.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -478,7 +479,7 @@ mod tests {
                     ..Default::default()
                 },
                 temp.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -530,7 +531,7 @@ mod tests {
                 &project_model,
                 &MojoBackendConfig::default(),
                 temp.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -578,7 +579,7 @@ mod tests {
                     ..Default::default()
                 },
                 temp.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -659,7 +660,7 @@ mod tests {
                     ..Default::default()
                 },
                 temp.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -724,7 +725,7 @@ mod tests {
                     ..Default::default()
                 },
                 temp.path().to_path_buf(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],

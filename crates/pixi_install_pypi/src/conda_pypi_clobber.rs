@@ -7,7 +7,7 @@ use std::{
 use pixi_path::normalize_std;
 use rattler_conda_types::PrefixRecord;
 use uv_distribution_types::{CachedDist, Name};
-use uv_python::PythonEnvironment;
+use uv_python_interpreter::PythonEnvironment;
 
 use ahash::AHashMap;
 
@@ -101,7 +101,7 @@ fn parse_wheel_data_path(record_path: &Path) -> Option<(WheelDataScheme, &Path)>
 /// The destinations wheel files are installed to, in prefix-relative form.
 ///
 /// Derived from the same layout that uv's installer writes with
-/// ([`uv_python::Interpreter::layout`]), so the prediction cannot drift from
+/// ([`uv_python_interpreter::Interpreter::layout`]), so the prediction cannot drift from
 /// the actual writes. The absolute layout paths are relative-ized against
 /// the interpreter's own `sys_prefix`: both values come from a single
 /// interpreter probe and therefore cannot disagree about path spelling
@@ -240,12 +240,12 @@ impl PypiCondaClobberRegistry {
         self,
         wheels: Vec<CachedDist>,
         venv: &PythonEnvironment,
-    ) -> miette::Result<Option<ClobberReport>> {
+    ) -> Option<ClobberReport> {
         let Some(install_paths) = WheelInstallPaths::from_environment(venv) else {
             tracing::debug!(
                 "skipping conda-clobber check: the interpreter's install scheme is not inside its sys_prefix"
             );
-            return Ok(None);
+            return None;
         };
 
         let mut clobber_report = ClobberReport::default();
@@ -298,9 +298,9 @@ impl PypiCondaClobberRegistry {
             }
         }
         if clobber_report.is_empty() {
-            return Ok(None);
+            return None;
         }
-        Ok(Some(clobber_report))
+        Some(clobber_report)
     }
 }
 

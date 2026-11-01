@@ -18,7 +18,7 @@ impl PackageToOutput {
         Self {
             name: record.name.clone(),
             version: record.version.version().clone(),
-            build: Some(record.build.clone()),
+            build: Some(record.build.to_string()),
             size_bytes: record.size,
             is_explicit,
         }

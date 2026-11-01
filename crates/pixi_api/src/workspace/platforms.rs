@@ -16,7 +16,7 @@
 
 use indexmap::IndexSet;
 use pixi_manifest::{PixiPlatform, PixiPlatformName};
-use rattler_conda_types::Platform;
+use rattler_conda_types::Subdir;
 
 /// Resolve each requested platform name against the workspace's declared
 /// platforms. A name that is not a declared workspace platform but parses
@@ -38,7 +38,7 @@ pub fn resolve_platforms(
                 return Ok(platform.clone());
             }
             name.as_str()
-                .parse::<Platform>()
+                .parse::<Subdir>()
                 .map(PixiPlatform::from_subdir)
                 .map_err(|_| miette::miette!("workspace does not define a platform named '{name}'"))
         })

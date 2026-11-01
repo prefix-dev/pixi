@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 import tomli
 import tomli_w
-from dirty_equals import AnyThing, IsDict, IsList, IsStr
+from dirty_equals import AnyThing, IsDict, IsInstance, IsList, IsStr
 from inline_snapshot import snapshot
 
 from .common import (
@@ -617,6 +617,75 @@ def test_config_shared_layer(pixi: Path, tmp_path: Path) -> None:
     )
 
 
+def test_invalid_config_is_a_hard_error(pixi: Path, tmp_path: Path) -> None:
+    """A config file that fails to parse stops every command that loads it,
+    instead of being skipped with its settings silently dropped."""
+    env = isolated_config_env(tmp_path)
+    config = Path(env["PIXI_HOME"]) / "config.toml"
+    config.write_text("default-channels = 5\n")
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "pixi.toml").write_text(
+        '[workspace]\nname = "test"\nchannels = []\nplatforms = []\n'
+    )
+
+    def fails(command: list[Path | str], broken: Path = config) -> None:
+        verify_cli_command(
+            command,
+            env=env,
+            cwd=workspace,
+            expected_exit_code=ExitCode.FAILURE,
+            stderr_contains=[str(broken), "pixi config unset"],
+        )
+
+    new_workspace = tmp_path / "new"
+    fails([pixi, "init", new_workspace])
+    assert not (new_workspace / "pixi.toml").exists()
+    fails([pixi, "exec", "python", "--version"])
+    fails([pixi, "global", "list"])
+    fails([pixi, "workspace", "name", "get"])
+    # `--no-config` skips the broken file.
+    verify_cli_command(
+        [pixi, "workspace", "name", "--no-config", "get"],
+        env=env,
+        cwd=workspace,
+        stdout_contains="test",
+    )
+
+    # So does a broken workspace config file.
+    config.unlink()
+    local_config = workspace / ".pixi" / "config.toml"
+    local_config.parent.mkdir()
+    local_config.write_text('tls-no-verify = "maybe"\n')
+    fails([pixi, "workspace", "name", "get"], Path(".pixi", "config.toml"))
+
+
+def test_invalid_config_can_be_repaired(pixi: Path, tmp_path: Path) -> None:
+    """`pixi config` still loads a broken config file, so it can fix it."""
+    env = isolated_config_env(tmp_path)
+    config = Path(env["PIXI_HOME"]) / "config.toml"
+    config.write_text("default-channels = 5\nshell.change-ps1 = false\n")
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "pixi.toml").write_text(
+        '[workspace]\nname = "test"\nchannels = []\nplatforms = []\n'
+    )
+    local_config = workspace / ".pixi" / "config.toml"
+    local_config.parent.mkdir()
+    local_config.write_text('tls-no-verify = "maybe"\n')
+
+    verify_cli_command([pixi, "config", "list"], env=env, cwd=workspace)
+    verify_cli_command(
+        [pixi, "config", "unset", "--local", "tls-no-verify"], env=env, cwd=workspace
+    )
+    verify_cli_command(
+        [pixi, "config", "unset", "--global", "default-channels"], env=env, cwd=workspace
+    )
+    assert tomli.loads(local_config.read_text()) == {}
+    assert tomli.loads(config.read_text()) == {"shell": {"change-ps1": False}}
+    verify_cli_command([pixi, "workspace", "name", "get"], env=env, cwd=workspace)
+
+
 def test_config_list_honors_the_config_source_flags(pixi: Path, tmp_path: Path) -> None:
     """`config list` can be pointed at one file or told to skip discovery."""
     env = isolated_config_env(tmp_path)
@@ -990,14 +1059,18 @@ def test_pixi_lock(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: str) -
     dot_pixi = tmp_pixi_workspace / ".pixi"
     shutil.rmtree(dot_pixi)
 
-    # Run pixi lock to recreate the lock file and validate the return code with --check is 1
-    verify_cli_command(
-        [pixi, "lock", "--manifest-path", manifest_path, "--check"],
-        expected_exit_code=ExitCode.FAILURE,
-        stderr_contains=["+", "dummy-a"],
-    )
+    # --check reports the missing lock file with its diff and exits 1, but is read-only:
+    # it must not create pixi.lock, so running it again fails the same way.
+    for _ in range(2):
+        verify_cli_command(
+            [pixi, "lock", "--manifest-path", manifest_path, "--check"],
+            expected_exit_code=ExitCode.FAILURE,
+            stderr_contains=["+", "dummy-a"],
+        )
+        assert not lock_file_path.exists()
 
-    # Run pixi lock again to validate that the return code with --check is 0
+    # A plain `pixi lock` recreates the lock file, after which --check passes
+    verify_cli_command([pixi, "lock", "--manifest-path", manifest_path])
     verify_cli_command(
         [pixi, "lock", "--manifest-path", manifest_path, "--check"],
     )
@@ -1571,10 +1644,17 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
     # The resolved and minimum supported platforms depend on the host that runs
     # this test, so only assert their structure instead of a hardcoded platform.
     IsPlatformInfo = IsDict(name=IsStr, subdir=IsStr, virtual_packages=IsAnyList)
+    IsTlsRootCerts = IsDict(
+        mode=IsStr,
+        is_default=IsInstance(bool),
+        env_sources=IsAnyList,
+        env_replaces_mode=IsInstance(bool),
+    )
     assert info_data == snapshot(
         {
             "platform": IsStr,
             "virtual_packages": IsAnyList,
+            "virtual_package_detectors": IsAnyList,
             "version": IsStr,
             "cache_dir": IsStr,
             "cache_size": AnyThing,
@@ -1584,6 +1664,7 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
                 "bin_dir": IsStr,
                 "env_dir": IsStr,
                 "manifest": IsStr,
+                "tls_root_certs": IsTlsRootCerts,
             },
             "project_info": {
                 "name": "test",
@@ -1591,6 +1672,7 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
                 "last_updated": IsStr,
                 "pixi_folder_size": IsStr,
                 "version": None,
+                "tls_root_certs": IsTlsRootCerts,
             },
             "environments_info": [
                 {
@@ -1625,6 +1707,54 @@ def test_info_output_extended(pixi: Path, tmp_pixi_workspace: Path) -> None:
             "config_locations": IsAnyList,
         }
     )
+
+
+def test_info_global_tls_root_certs_ignores_config_file(pixi: Path, tmp_path: Path) -> None:
+    """`pixi global` doesn't read `PIXI_CONFIG_FILE`, so the global TLS root
+    certs reported by `pixi info` must not follow it either."""
+    env = isolated_config_env(tmp_path)
+    (Path(env["PIXI_HOME"]) / "config.toml").write_text('tls-root-certs = "webpki"\n')
+    config_file = tmp_path / "custom.toml"
+    config_file.write_text('tls-root-certs = "system"\n')
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    (workspace / "pixi.toml").write_text(
+        '[workspace]\nname = "test"\nchannels = []\nplatforms = []\n'
+    )
+
+    result = verify_cli_command(
+        [pixi, "info", "--json"],
+        env=env | {"PIXI_CONFIG_FILE": str(config_file)},
+        cwd=workspace,
+    )
+    info_data = json.loads(result.stdout)
+
+    # Workspace commands read `PIXI_CONFIG_FILE` instead of the searched files.
+    assert info_data["project_info"]["tls_root_certs"]["mode"] == "system"
+    # `pixi global` only reads the searched files.
+    assert info_data["global_info"]["tls_root_certs"]["mode"] == "webpki"
+
+
+def test_info_tls_root_certs_env_overrides_workspace_config(pixi: Path, tmp_path: Path) -> None:
+    """`PIXI_TLS_ROOT_CERTS` overrides a workspace's `.pixi/config.toml` for
+    workspace commands, so `pixi info` must report it in the workspace too."""
+    env = isolated_config_env(tmp_path)
+    workspace = tmp_path / "workspace"
+    workspace.joinpath(".pixi").mkdir(parents=True)
+    (workspace / "pixi.toml").write_text(
+        '[workspace]\nname = "test"\nchannels = []\nplatforms = []\n'
+    )
+    (workspace / ".pixi" / "config.toml").write_text('tls-root-certs = "webpki"\n')
+
+    result = verify_cli_command(
+        [pixi, "info", "--json"],
+        env=env | {"PIXI_TLS_ROOT_CERTS": "system"},
+        cwd=workspace,
+    )
+    info_data = json.loads(result.stdout)
+
+    assert info_data["project_info"]["tls_root_certs"]["mode"] == "system"
+    assert info_data["global_info"]["tls_root_certs"]["mode"] == "system"
 
 
 @pytest.mark.skipif(
@@ -1936,6 +2066,31 @@ dependencies:
             [str(tmp_pixi_workspace / "export_test")],
             "pixi workspace export conda-explicit-spec",
         ),
+        (
+            ["workspace", "export", "conda-explicit-spec", "--sha256"],
+            [str(tmp_pixi_workspace / "export_test_sha256")],
+            "pixi workspace export conda-explicit-spec --sha256",
+        ),
+        (
+            ["workspace", "exclude-newer", "set"],
+            ["7d"],
+            "pixi workspace exclude-newer set",
+        ),
+        (
+            ["workspace", "exclude-newer", "exempt"],
+            ["python"],
+            "pixi workspace exclude-newer exempt",
+        ),
+        (
+            ["workspace", "exclude-newer", "unexempt"],
+            ["python"],
+            "pixi workspace exclude-newer unexempt",
+        ),
+        (
+            ["workspace", "exclude-newer", "unset"],
+            [],
+            "pixi workspace exclude-newer unset",
+        ),
         # Upgrade commands
         (["upgrade"], [], "pixi upgrade"),
         # Pixi publish (builds and uploads)
@@ -2236,6 +2391,20 @@ dummy-a = "*"
     )
     parsed_manifest = tomli.loads(manifest_path.read_text())
     assert parsed_manifest["environments"]["test-env"] == ["test"]
+
+
+def test_workspace_feature_remove_missing(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    manifest_path = tmp_pixi_workspace / "pixi.toml"
+    verify_cli_command([pixi, "init", tmp_pixi_workspace])
+    before = manifest_path.read_text()
+
+    verify_cli_command(
+        [pixi, "workspace", "feature", "remove", "--manifest-path", manifest_path, "nosuch"],
+        ExitCode.FAILURE,
+        stderr_contains="feature 'nosuch' does not exist",
+        stderr_excludes="Removed feature",
+    )
+    assert manifest_path.read_text() == before
 
 
 def test_workspace_activation(pixi: Path, tmp_pixi_workspace: Path) -> None:

@@ -19,7 +19,7 @@ import json
 import shutil
 import socketserver
 import threading
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -36,7 +36,7 @@ class _QuietHandler(http.server.SimpleHTTPRequestHandler):
 
 
 @contextmanager
-def serving(directory: Path) -> Iterator[str]:
+def serving(directory: Path) -> Generator[str]:
     """Serve `directory` over HTTP, shutting the server down on exit.
 
     A context manager rather than a fixture because several tests need to stop

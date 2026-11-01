@@ -22,7 +22,7 @@ use pixi_core::{
 
 use crate::cli_config::{LockAndInstallConfig, WorkspaceConfig};
 
-/// Print the pixi environment activation script.
+/// Print a pixi environment activation script.
 ///
 /// You can source the script to activate the environment without needing pixi
 /// itself.
@@ -169,8 +169,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.project_config.workspace_locator_start())
-        .locate()?
-        .with_cli_config(config);
+        .with_cli_config(config)
+        .locate()
+        .await?;
 
     let environment = workspace.environment_from_name_or_env_var(args.environment)?;
 
@@ -212,7 +213,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::Subdir;
     #[cfg(target_family = "windows")]
     use rattler_shell::shell::CmdExe;
     #[cfg(not(target_family = "windows"))]
@@ -225,8 +226,8 @@ mod tests {
     #[tokio::test]
     async fn test_shell_hook_unix() {
         let default_shell = rattler_shell::shell::ShellEnum::default();
-        let path_var_name = default_shell.path_var(&Platform::current());
-        let project = WorkspaceLocator::default().locate().unwrap();
+        let path_var_name = default_shell.path_var(&Subdir::current().unwrap_or(Subdir::NoArch));
+        let project = WorkspaceLocator::default().locate().await.unwrap();
         let environment = project.default_environment();
 
         let script = generate_activation_script(
@@ -282,8 +283,8 @@ mod tests {
     #[tokio::test]
     async fn test_shell_hook_windows() {
         let default_shell = rattler_shell::shell::ShellEnum::default();
-        let path_var_name = default_shell.path_var(&Platform::current());
-        let project = WorkspaceLocator::default().locate().unwrap();
+        let path_var_name = default_shell.path_var(&Subdir::current().unwrap_or(Subdir::NoArch));
+        let project = WorkspaceLocator::default().locate().await.unwrap();
         let environment = project.default_environment();
 
         let script = generate_activation_script(

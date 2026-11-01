@@ -108,11 +108,11 @@ impl Eq for WorkspaceEnvRef {}
 mod tests {
     use std::collections::hash_map::DefaultHasher;
 
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::Subdir;
 
     use super::*;
 
-    fn mk(id: u32, name: &str, platform: Platform) -> WorkspaceEnvRef {
+    fn mk(id: u32, name: &str, platform: Subdir) -> WorkspaceEnvRef {
         WorkspaceEnvRef::new(
             WorkspaceEnvId(id),
             name.to_string(),
@@ -129,23 +129,23 @@ mod tests {
 
     #[test]
     fn different_ids_same_labels_are_unequal() {
-        let a = mk(0, "default", Platform::Linux64);
-        let b = mk(1, "default", Platform::Linux64);
+        let a = mk(0, "default", Subdir::Linux64);
+        let b = mk(1, "default", Subdir::Linux64);
         assert_ne!(a, b);
         assert_ne!(hash_of(&a), hash_of(&b));
     }
 
     #[test]
     fn same_id_different_labels_are_equal() {
-        let a = mk(7, "default", Platform::Linux64);
-        let b = mk(7, "other", Platform::OsxArm64);
+        let a = mk(7, "default", Subdir::Linux64);
+        let b = mk(7, "other", Subdir::OsxArm64);
         assert_eq!(a, b);
         assert_eq!(hash_of(&a), hash_of(&b));
     }
 
     #[test]
     fn display_formats_name_at_platform() {
-        let ws = mk(0, "default", Platform::Linux64);
+        let ws = mk(0, "default", Subdir::Linux64);
         assert_eq!(ws.to_string(), "default@linux-64");
     }
 }

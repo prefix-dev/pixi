@@ -7,6 +7,7 @@ mod environment;
 mod environments;
 mod error;
 mod exclude_newer;
+mod exclude_newer_edit;
 mod feature;
 mod features_ext;
 mod has_features_iter;
@@ -39,18 +40,28 @@ pub use discovery::{
     DiscoveryStart, ExplicitManifestError, InvalidRequiresPixiError, LoadManifestsError, Manifests,
     PixiVersionMismatchError, WorkspaceDiscoverer, WorkspaceDiscoveryError,
 };
-pub use environment::{Environment, EnvironmentName, NewEnvironment};
-pub use error::{DependencyError, GenericError, TomlError};
-pub use exclude_newer::resolve_exclude_newer;
+pub use environment::{Environment, EnvironmentName, NewEnvironment, ParseEnvironmentNameError};
+pub use error::{DependencyError, GenericError, TomlError, UnknownFeature};
+pub use exclude_newer::{
+    ExcludeNewerConfig, ExcludeNewerError, ExcludeNewerExemption, ExcludeNewerTableMigration,
+    PypiExcludeNewerConfig, format_cutoff, resolve_exclude_newer, resolve_pypi_exclude_newer,
+    stale_exemptions,
+};
+pub use exclude_newer_edit::{
+    ExcludeNewerEditError, ParseExemptionError, entry_as_written, parse_conda_exemption,
+    parse_pypi_exemption,
+};
 pub use feature::{Feature, FeatureName};
-pub use features_ext::FeaturesExt;
+pub use features_ext::{ChannelPriorityCombinationError, FeaturesExt};
 pub use has_features_iter::HasFeaturesIter;
 pub use has_manifest_ref::HasWorkspaceManifest;
 use itertools::Itertools;
 pub use manifests::{
-    ActivationScriptsChange, AssociateProvenance, ManifestKind, ManifestProvenance, ManifestSource,
-    MissingTargetError, PackageManifest, ProvenanceError, RemoveDependencyError, WithProvenance,
-    WorkspaceManifest, WorkspaceManifestMut,
+    ActivationEditError, ActivationLocation, ActivationScriptsChange, AddDependencyError,
+    AssociateProvenance, EnvironmentEditError, FeatureNotFoundError, InvalidVersionError,
+    ManifestKind, ManifestProvenance, ManifestSource, MissingTargetError, PackageManifest,
+    PlatformEditError, ProvenanceError, RemoveChannelsError, RemoveDependencyError,
+    SetRequiresPixiError, TaskEditError, WithProvenance, WorkspaceManifest, WorkspaceManifestMut,
 };
 use miette::Diagnostic;
 pub use package::Package;
@@ -168,7 +179,7 @@ pub enum PypiDependencyLocation {
 
 use console::StyledObject;
 use fancy_display::FancyDisplay;
-pub use manifests::ManifestDocument;
+pub use manifests::{ManifestDocument, ManifestDocumentError, ManifestRenderError};
 use pixi_consts::consts;
 
 /// Converts a slice of `PixiPlatformName`s to a non-empty `Vec` of

@@ -55,7 +55,7 @@ pub async fn execute(args: SubCommand) -> miette::Result<()> {
 }
 
 pub async fn add(args: AddArgs) -> miette::Result<()> {
-    let config = Config::with_cli_config(&args.config);
+    let config = Config::try_with_cli_config(&args.config)?;
     let project_original = Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());
@@ -94,7 +94,7 @@ pub async fn add(args: AddArgs) -> miette::Result<()> {
 }
 
 pub async fn remove(args: RemoveArgs) -> miette::Result<()> {
-    let config = Config::with_cli_config(&args.config);
+    let config = Config::try_with_cli_config(&args.config)?;
     let project_original = Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());

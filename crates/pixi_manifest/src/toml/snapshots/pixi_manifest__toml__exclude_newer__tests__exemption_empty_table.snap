@@ -1,0 +1,9 @@
+---
+source: crates/pixi_manifest/src/toml/exclude_newer.rs
+expression: "render_error(input, err)"
+---
+  × an exclude-newer exemption table must specify at least one match spec field, use `"*"` to exempt every release
+   ╭─[pixi.toml:1:58]
+ 1 │ exclude-newer = { cutoff = "7d", exemptions = { polars = {} } }
+   ·                                                          ──
+   ╰────

@@ -16,13 +16,15 @@ mod provenance;
 mod source;
 mod workspace;
 
-pub use document::ManifestDocument;
+pub use document::{ManifestDocument, ManifestDocumentError, ManifestRenderError};
 pub use package::PackageManifest;
 pub use provenance::{
     AssociateProvenance, ManifestKind, ManifestProvenance, ProvenanceError, WithProvenance,
 };
 pub use source::ManifestSource;
 pub use workspace::{
-    ActivationScriptsChange, MissingTargetError, RemoveDependencyError, WorkspaceManifest,
-    WorkspaceManifestMut,
+    ActivationEditError, ActivationLocation, ActivationScriptsChange, AddDependencyError,
+    EnvironmentEditError, FeatureNotFoundError, InvalidVersionError, MissingTargetError,
+    PlatformEditError, RemoveChannelsError, RemoveDependencyError, SetRequiresPixiError,
+    TaskEditError, WorkspaceManifest, WorkspaceManifestMut,
 };

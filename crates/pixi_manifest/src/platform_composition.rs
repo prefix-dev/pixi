@@ -12,7 +12,7 @@
 use std::collections::{BTreeMap, HashSet};
 
 use indexmap::IndexSet;
-use rattler_conda_types::{GenericVirtualPackage, Platform};
+use rattler_conda_types::{GenericVirtualPackage, Subdir};
 
 use crate::{
     Feature, PixiPlatform, PixiPlatformName, TomlError, error::GenericError,
@@ -24,7 +24,7 @@ use crate::{
 fn referenced_subdirs(
     feature: &Feature,
     workspace_platforms: &IndexSet<PixiPlatform>,
-) -> Option<HashSet<Platform>> {
+) -> Option<HashSet<Subdir>> {
     let names = feature.platforms.as_ref()?;
     Some(
         names
@@ -38,7 +38,7 @@ fn referenced_subdirs(
 /// Whether `feature` applies on `subdir` (no `platforms` key means everywhere).
 pub(crate) fn feature_supports_subdir(
     feature: &Feature,
-    subdir: Platform,
+    subdir: Subdir,
     workspace_platforms: &IndexSet<PixiPlatform>,
 ) -> bool {
     match referenced_subdirs(feature, workspace_platforms) {
@@ -62,7 +62,7 @@ pub(crate) fn feature_supports_platform(
 /// order. Features without a `platforms` key pin nothing.
 fn referenced_platforms<'a>(
     features: &[&Feature],
-    subdir: Platform,
+    subdir: Subdir,
     workspace_platforms: &'a IndexSet<PixiPlatform>,
 ) -> Vec<&'a PixiPlatform> {
     let mut seen: HashSet<&PixiPlatformName> = HashSet::new();
@@ -87,21 +87,21 @@ fn referenced_platforms<'a>(
 /// that does not customise a virtual package does not constrain it.
 fn union_virtual_packages(platforms: &[&PixiPlatform]) -> Vec<GenericVirtualPackage> {
     let mut union: BTreeMap<String, GenericVirtualPackage> = BTreeMap::new();
-    for package in platforms.iter().flat_map(|platform| {
-        let subdir = platform.subdir();
-        platform
-            .declared_virtual_packages()
+    for platform in platforms {
+        for package in platform
+            .manifest_virtual_package_records()
             .iter()
-            .filter(move |gvp| !crate::platform::is_subdir_default(gvp, subdir))
-    }) {
-        union
-            .entry(package.name.as_normalized().to_string())
-            .and_modify(|existing| {
-                if package.version > existing.version {
-                    *existing = package.clone();
-                }
-            })
-            .or_insert_with(|| package.clone());
+            .filter(|gvp| !crate::platform::is_subdir_default(gvp, platform.subdir()))
+        {
+            union
+                .entry(package.name.as_normalized().to_string())
+                .and_modify(|existing| {
+                    if package.version > existing.version {
+                        *existing = package.clone();
+                    }
+                })
+                .or_insert_with(|| package.clone());
+        }
     }
     union.into_values().collect()
 }
@@ -113,7 +113,7 @@ fn union_virtual_packages(platforms: &[&PixiPlatform]) -> Vec<GenericVirtualPack
 /// exactly the same virtual packages.
 pub(crate) fn combined_platform_name(
     features: &[&Feature],
-    subdir: Platform,
+    subdir: Subdir,
     workspace_platforms: &IndexSet<PixiPlatform>,
 ) -> String {
     let referenced = referenced_platforms(features, subdir, workspace_platforms);
@@ -131,7 +131,7 @@ pub(crate) fn combined_platform_name(
 /// [`combined_platform_name`]); `None` when the union name is invalid.
 fn combined_platform(
     features: &[&Feature],
-    subdir: Platform,
+    subdir: Subdir,
     workspace_platforms: &IndexSet<PixiPlatform>,
 ) -> Result<PixiPlatform, TomlError> {
     let referenced = referenced_platforms(features, subdir, workspace_platforms);
@@ -160,7 +160,7 @@ pub(crate) fn combined_platforms(
     features: &[&Feature],
     workspace_platforms: &IndexSet<PixiPlatform>,
 ) -> Result<Vec<PixiPlatform>, TomlError> {
-    let subdirs: IndexSet<Platform> = workspace_platforms
+    let subdirs: IndexSet<Subdir> = workspace_platforms
         .iter()
         .map(PixiPlatform::subdir)
         .collect();

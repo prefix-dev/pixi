@@ -98,7 +98,7 @@ async fn apply_manifest_changes(
 }
 
 pub async fn execute(args: Args) -> miette::Result<()> {
-    let config = Config::with_cli_config(&args.config);
+    let config = Config::try_with_cli_config(&args.config)?;
     let project_original = pixi_global::Project::discover_or_create()
         .await?
         .with_cli_config(config.clone());

@@ -12,7 +12,6 @@ license.workspace = true
 [dependencies]
 chrono = { workspace = true }
 dunce = { workspace = true }
-hex = { workspace = true }
 miette = { workspace = true }
 pathdiff = { workspace = true }
 pep440_rs = { workspace = true }
@@ -37,7 +36,7 @@ uv-normalize = { workspace = true }
 uv-pep440 = { workspace = true }
 uv-pep508 = { workspace = true, features = ["non-pep508-extensions"] }
 uv-pypi-types = { workspace = true }
-uv-python = { workspace = true }
+uv-python-interpreter = { workspace = true }
 uv-redacted = { workspace = true }
 uv-resolver = { workspace = true }
 uv-types = { workspace = true }

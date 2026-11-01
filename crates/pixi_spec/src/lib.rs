@@ -24,7 +24,10 @@ use std::{fmt::Display, path::PathBuf, str::FromStr};
 
 pub use detailed::DetailedSpec;
 pub use dev_source::DevSourceSpec;
-pub use exclude_newer::{ExcludeNewer, ResolvedExcludeNewer, to_saturating_jiff_timestamp};
+pub use exclude_newer::{
+    ConfiguredCutoffs, ExcludeNewer, InvalidExemptionError, ResolvedExcludeNewer,
+    ResolvedExemption, to_saturating_jiff_timestamp,
+};
 pub use git::{GitLocationSpec, GitReference, GitReferenceError, GitSpec};
 use itertools::Either;
 pub use matchspec_fields::MatchspecFields;
@@ -39,7 +42,7 @@ pub use rattler_lock::Verbatim;
 pub use source_anchor::SourceAnchor;
 pub use subdirectory::{Subdirectory, SubdirectoryError};
 use thiserror::Error;
-pub use toml::{TomlLocationSpec, TomlSpec, TomlVersionSpecStr};
+pub use toml::{SpecError, TomlLocationSpec, TomlSpec, TomlVersionSpecStr};
 use url::url_is_binary;
 pub use url::{UrlBinarySpec, UrlSourceSpec, UrlSpec};
 

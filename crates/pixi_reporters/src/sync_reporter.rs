@@ -12,7 +12,7 @@ use rattler::install::Transaction;
 use rattler_conda_types::{PrefixRecord, RepoDataRecord};
 use std::{cmp::Ordering, collections::HashMap, sync::Arc};
 use tokio::sync::mpsc::UnboundedReceiver;
-use uv_configuration::initialize_rayon_once;
+use uv_threads::initialize_rayon_once;
 
 #[derive(Clone)]
 pub struct SyncReporter {

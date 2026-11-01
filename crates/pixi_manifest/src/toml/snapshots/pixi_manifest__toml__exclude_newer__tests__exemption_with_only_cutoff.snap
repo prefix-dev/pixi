@@ -1,0 +1,9 @@
+---
+source: crates/pixi_manifest/src/toml/exclude_newer.rs
+expression: "render_error(input, err)"
+---
+  × an exclude-newer exemption table must specify at least one match spec field besides `cutoff`, use `version = "*"` to exempt every release up to the cutoff
+   ╭─[pixi.toml:1:59]
+ 1 │ exclude-newer = { cutoff = "7d", exemptions = { openssl = { cutoff = "2026-10-12" } } }
+   ·                                                           ─────────────────────────
+   ╰────

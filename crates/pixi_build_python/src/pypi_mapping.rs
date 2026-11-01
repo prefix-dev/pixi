@@ -16,7 +16,7 @@ use indexmap::IndexMap;
 
 use miette::Diagnostic;
 use rattler_conda_types::{
-    ChannelUrl, MatchSpec, PackageName, ParseStrictness, Platform, VersionSpec,
+    ChannelUrl, MatchSpec, PackageName, ParseStrictness, Subdir, VersionSpec,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -277,24 +277,24 @@ impl PyPiToCondaMapper {
 
     /// Create a marker environment for the given platform and Python version.
     ///
-    /// This converts a rattler Platform to a pep508_rs MarkerEnvironment that can be used
+    /// This converts a rattler Subdir to a pep508_rs MarkerEnvironment that can be used
     /// to evaluate PEP 508 environment markers.
-    fn create_marker_environment(platform: Platform) -> pep508_rs::MarkerEnvironment {
-        // Map Platform to Python's sys.platform and other marker values
+    fn create_marker_environment(platform: Subdir) -> pep508_rs::MarkerEnvironment {
+        // Map Subdir to Python's sys.platform and other marker values
         let (sys_platform, os_name, platform_system, platform_machine) = match platform {
-            Platform::Linux64 => ("linux", "posix", "Linux", "x86_64"),
-            Platform::LinuxAarch64 => ("linux", "posix", "Linux", "aarch64"),
-            Platform::LinuxPpc64le => ("linux", "posix", "Linux", "ppc64le"),
-            Platform::LinuxS390X => ("linux", "posix", "Linux", "s390x"),
-            Platform::LinuxArmV6l => ("linux", "posix", "Linux", "armv6l"),
-            Platform::LinuxArmV7l => ("linux", "posix", "Linux", "armv7l"),
-            Platform::Linux32 => ("linux", "posix", "Linux", "i686"),
-            Platform::Osx64 => ("darwin", "posix", "Darwin", "x86_64"),
-            Platform::OsxArm64 => ("darwin", "posix", "Darwin", "arm64"),
-            Platform::Win64 => ("win32", "nt", "Windows", "AMD64"),
-            Platform::Win32 => ("win32", "nt", "Windows", "x86"),
-            Platform::WinArm64 => ("win32", "nt", "Windows", "ARM64"),
-            Platform::NoArch => ("linux", "posix", "Linux", "x86_64"),
+            Subdir::Linux64 => ("linux", "posix", "Linux", "x86_64"),
+            Subdir::LinuxAarch64 => ("linux", "posix", "Linux", "aarch64"),
+            Subdir::LinuxPpc64le => ("linux", "posix", "Linux", "ppc64le"),
+            Subdir::LinuxS390X => ("linux", "posix", "Linux", "s390x"),
+            Subdir::LinuxArmV6l => ("linux", "posix", "Linux", "armv6l"),
+            Subdir::LinuxArmV7l => ("linux", "posix", "Linux", "armv7l"),
+            Subdir::Linux32 => ("linux", "posix", "Linux", "i686"),
+            Subdir::Osx64 => ("darwin", "posix", "Darwin", "x86_64"),
+            Subdir::OsxArm64 => ("darwin", "posix", "Darwin", "arm64"),
+            Subdir::Win64 => ("win32", "nt", "Windows", "AMD64"),
+            Subdir::Win32 => ("win32", "nt", "Windows", "x86"),
+            Subdir::WinArm64 => ("win32", "nt", "Windows", "ARM64"),
+            Subdir::NoArch => ("linux", "posix", "Linux", "x86_64"),
             _ => ("linux", "posix", "Linux", "x86_64"), // Default to linux x86_64 for unknown platforms
         };
 
@@ -361,7 +361,7 @@ impl PyPiToCondaMapper {
     /// version constraints we cannot evaluate at recipe generation time.
     fn should_skip_requirement(
         req: &pep508_rs::Requirement<pep508_rs::VerbatimUrl>,
-        platform: Platform,
+        platform: Subdir,
     ) -> bool {
         // If there are no markers, always include (don't skip)
         if req.marker == pep508_rs::MarkerTree::default() {
@@ -370,7 +370,7 @@ impl PyPiToCondaMapper {
 
         // For NoArch platform, exclude ALL dependencies with markers
         // NoArch packages must be platform-independent
-        if platform == Platform::NoArch {
+        if platform == Subdir::NoArch {
             return true;
         }
 
@@ -410,7 +410,7 @@ impl PyPiToCondaMapper {
     pub async fn map_requirements(
         &self,
         requirements: &[pep508_rs::Requirement<pep508_rs::VerbatimUrl>],
-        platform: Platform,
+        platform: Subdir,
     ) -> Result<Vec<MappedCondaDependency>, MappingError> {
         let mut mapped = Vec::new();
 
@@ -501,7 +501,7 @@ pub fn extract_channel_name(channel: &ChannelUrl) -> Option<&str> {
 fn apply_user_map(
     requirements: &[pep508_rs::Requirement<pep508_rs::VerbatimUrl>],
     user_map: Option<&IndexMap<String, PypiCondaMapEntry>>,
-    platform: Platform,
+    platform: Subdir,
 ) -> (
     Vec<MappedCondaDependency>,
     Vec<pep508_rs::Requirement<pep508_rs::VerbatimUrl>>,
@@ -591,7 +591,7 @@ pub async fn map_requirements_with_channels(
     channels: &[ChannelUrl],
     cache_dir: &Option<PathBuf>,
     context: &str,
-    platform: Platform,
+    platform: Subdir,
 ) -> Vec<MappedCondaDependency> {
     let (mut user_mapped, remaining) = apply_user_map(requirements, user_map, platform);
 
@@ -762,7 +762,7 @@ mod tests {
         ];
 
         let mapped = mapper
-            .map_requirements(&requirements, Platform::Linux64)
+            .map_requirements(&requirements, Subdir::Linux64)
             .await
             .unwrap();
 
@@ -796,7 +796,7 @@ mod tests {
             requirement("numpy"),
         ];
 
-        let (mapped, remaining) = apply_user_map(&requirements, Some(&user_map), Platform::Linux64);
+        let (mapped, remaining) = apply_user_map(&requirements, Some(&user_map), Subdir::Linux64);
 
         // `torch` is mapped with its version spec, `my-internal-pkg` is
         // silently dropped, `numpy` is left for the mapping service.
@@ -819,7 +819,7 @@ mod tests {
         )]);
 
         let requirements = vec![requirement("my-pkg")];
-        let (mapped, remaining) = apply_user_map(&requirements, Some(&user_map), Platform::Linux64);
+        let (mapped, remaining) = apply_user_map(&requirements, Some(&user_map), Subdir::Linux64);
 
         assert_eq!(mapped.len(), 1);
         assert_eq!(mapped[0].name.as_normalized(), "my-conda-pkg");
@@ -836,12 +836,12 @@ mod tests {
         // The marker does not apply to linux-64, so the user-mapped
         // dependency is dropped entirely.
         let requirements = vec![requirement("torch; sys_platform == 'win32'")];
-        let (mapped, remaining) = apply_user_map(&requirements, Some(&user_map), Platform::Linux64);
+        let (mapped, remaining) = apply_user_map(&requirements, Some(&user_map), Subdir::Linux64);
         assert!(mapped.is_empty());
         assert!(remaining.is_empty());
 
         // On NoArch any marker-bearing dependency is dropped.
-        let (mapped, remaining) = apply_user_map(&requirements, Some(&user_map), Platform::NoArch);
+        let (mapped, remaining) = apply_user_map(&requirements, Some(&user_map), Subdir::NoArch);
         assert!(mapped.is_empty());
         assert!(remaining.is_empty());
     }
@@ -854,7 +854,7 @@ mod tests {
         )]);
 
         let requirements = vec![requirement("torch")];
-        let (mapped, remaining) = apply_user_map(&requirements, Some(&user_map), Platform::Linux64);
+        let (mapped, remaining) = apply_user_map(&requirements, Some(&user_map), Subdir::Linux64);
         // The invalid override is warned about and the dependency falls
         // through to the mapping service instead of being silently dropped.
         assert!(mapped.is_empty());
@@ -869,12 +869,12 @@ mod tests {
         // A marker-gated requirement that does not apply to the platform is
         // dropped before the Skip entry matters: neither mapped nor remaining.
         let requirements = vec![requirement("torch; sys_platform == 'win32'")];
-        let (mapped, remaining) = apply_user_map(&requirements, Some(&user_map), Platform::Linux64);
+        let (mapped, remaining) = apply_user_map(&requirements, Some(&user_map), Subdir::Linux64);
         assert!(mapped.is_empty());
         assert!(remaining.is_empty());
 
         // On a matching platform the Skip entry drops it silently.
-        let (mapped, remaining) = apply_user_map(&requirements, Some(&user_map), Platform::Win64);
+        let (mapped, remaining) = apply_user_map(&requirements, Some(&user_map), Subdir::Win64);
         assert!(mapped.is_empty());
         assert!(remaining.is_empty());
     }
@@ -895,7 +895,7 @@ mod tests {
         ]);
 
         let requirements = vec![requirement("my-pkg")];
-        let (mapped, remaining) = apply_user_map(&requirements, Some(&user_map), Platform::Linux64);
+        let (mapped, remaining) = apply_user_map(&requirements, Some(&user_map), Subdir::Linux64);
         assert!(remaining.is_empty());
         assert_eq!(mapped.len(), 1);
         assert_eq!(mapped[0].name.as_normalized(), "second");
@@ -909,7 +909,7 @@ mod tests {
         )]);
 
         let requirements = vec![requirement("torch===2.0.0")];
-        let (mapped, _) = apply_user_map(&requirements, Some(&user_map), Platform::Linux64);
+        let (mapped, _) = apply_user_map(&requirements, Some(&user_map), Subdir::Linux64);
         assert_eq!(
             mapped[0].version_spec.as_ref().unwrap().to_string(),
             "==2.0.0"
@@ -932,7 +932,7 @@ mod tests {
             &[],
             &None,
             "test",
-            Platform::Linux64,
+            Subdir::Linux64,
         )
         .await;
 
@@ -978,13 +978,13 @@ mod tests {
         ];
 
         let mapped_linux = mapper
-            .map_requirements(&requirements, Platform::Linux64)
+            .map_requirements(&requirements, Subdir::Linux64)
             .await
             .unwrap();
         assert_eq!(mapped_linux.len(), 1, "Should include on Linux64");
 
         let mapped_win = mapper
-            .map_requirements(&requirements, Platform::Win64)
+            .map_requirements(&requirements, Subdir::Win64)
             .await
             .unwrap();
         assert_eq!(mapped_win.len(), 0, "Should exclude on Win64");
@@ -1009,13 +1009,13 @@ mod tests {
             vec![pep508_rs::Requirement::from_str("colorama; sys_platform == 'win32'").unwrap()];
 
         let mapped_win = mapper
-            .map_requirements(&requirements, Platform::Win64)
+            .map_requirements(&requirements, Subdir::Win64)
             .await
             .unwrap();
         assert_eq!(mapped_win.len(), 1, "Should include on Win64");
 
         let mapped_linux = mapper
-            .map_requirements(&requirements, Platform::Linux64)
+            .map_requirements(&requirements, Subdir::Linux64)
             .await
             .unwrap();
         assert_eq!(mapped_linux.len(), 0, "Should exclude on Linux64");
@@ -1041,13 +1041,13 @@ mod tests {
         ];
 
         let mapped_osx = mapper
-            .map_requirements(&requirements, Platform::Osx64)
+            .map_requirements(&requirements, Subdir::Osx64)
             .await
             .unwrap();
         assert_eq!(mapped_osx.len(), 1, "Should include on Osx64");
 
         let mapped_linux = mapper
-            .map_requirements(&requirements, Platform::Linux64)
+            .map_requirements(&requirements, Subdir::Linux64)
             .await
             .unwrap();
         assert_eq!(mapped_linux.len(), 0, "Should exclude on Linux64");
@@ -1067,7 +1067,7 @@ mod tests {
 
         let requirements = vec![pep508_rs::Requirement::from_str("requests").unwrap()];
 
-        for &platform in &[Platform::Linux64, Platform::Win64, Platform::Osx64] {
+        for &platform in &[Subdir::Linux64, Subdir::Win64, Subdir::Osx64] {
             let mapped = mapper
                 .map_requirements(&requirements, platform)
                 .await
@@ -1100,7 +1100,7 @@ mod tests {
         ];
 
         let mapped = mapper
-            .map_requirements(&requirements, Platform::Linux64)
+            .map_requirements(&requirements, Subdir::Linux64)
             .await
             .unwrap();
         assert_eq!(
@@ -1134,7 +1134,7 @@ mod tests {
         ];
 
         let mapped_linux = mapper
-            .map_requirements(&requirements, Platform::Linux64)
+            .map_requirements(&requirements, Subdir::Linux64)
             .await
             .unwrap();
         assert_eq!(
@@ -1144,7 +1144,7 @@ mod tests {
         );
 
         let mapped_win = mapper
-            .map_requirements(&requirements, Platform::Win64)
+            .map_requirements(&requirements, Subdir::Win64)
             .await
             .unwrap();
         assert_eq!(
@@ -1171,51 +1171,43 @@ mod tests {
         let test_cases = vec![
             // (marker_expression, platform, should_include)
             // sys_platform markers
-            ("sys_platform == 'linux'", Platform::Linux64, true),
-            ("sys_platform == 'linux'", Platform::LinuxAarch64, true),
-            ("sys_platform == 'linux'", Platform::Win64, false),
-            ("sys_platform == 'linux'", Platform::Osx64, false),
-            ("sys_platform == 'win32'", Platform::Win64, true),
-            ("sys_platform == 'win32'", Platform::Win32, true),
-            ("sys_platform == 'win32'", Platform::WinArm64, true),
-            ("sys_platform == 'win32'", Platform::Linux64, false),
-            ("sys_platform == 'darwin'", Platform::Osx64, true),
-            ("sys_platform == 'darwin'", Platform::OsxArm64, true),
-            ("sys_platform == 'darwin'", Platform::Linux64, false),
+            ("sys_platform == 'linux'", Subdir::Linux64, true),
+            ("sys_platform == 'linux'", Subdir::LinuxAarch64, true),
+            ("sys_platform == 'linux'", Subdir::Win64, false),
+            ("sys_platform == 'linux'", Subdir::Osx64, false),
+            ("sys_platform == 'win32'", Subdir::Win64, true),
+            ("sys_platform == 'win32'", Subdir::Win32, true),
+            ("sys_platform == 'win32'", Subdir::WinArm64, true),
+            ("sys_platform == 'win32'", Subdir::Linux64, false),
+            ("sys_platform == 'darwin'", Subdir::Osx64, true),
+            ("sys_platform == 'darwin'", Subdir::OsxArm64, true),
+            ("sys_platform == 'darwin'", Subdir::Linux64, false),
             // platform_system markers
-            ("platform_system == 'Linux'", Platform::Linux64, true),
-            ("platform_system == 'Linux'", Platform::LinuxAarch64, true),
-            ("platform_system == 'Linux'", Platform::Win64, false),
-            ("platform_system == 'Windows'", Platform::Win64, true),
-            ("platform_system == 'Windows'", Platform::Win32, true),
-            ("platform_system == 'Windows'", Platform::Linux64, false),
-            ("platform_system == 'Darwin'", Platform::Osx64, true),
-            ("platform_system == 'Darwin'", Platform::OsxArm64, true),
-            ("platform_system == 'Darwin'", Platform::Linux64, false),
+            ("platform_system == 'Linux'", Subdir::Linux64, true),
+            ("platform_system == 'Linux'", Subdir::LinuxAarch64, true),
+            ("platform_system == 'Linux'", Subdir::Win64, false),
+            ("platform_system == 'Windows'", Subdir::Win64, true),
+            ("platform_system == 'Windows'", Subdir::Win32, true),
+            ("platform_system == 'Windows'", Subdir::Linux64, false),
+            ("platform_system == 'Darwin'", Subdir::Osx64, true),
+            ("platform_system == 'Darwin'", Subdir::OsxArm64, true),
+            ("platform_system == 'Darwin'", Subdir::Linux64, false),
             // os_name markers
-            ("os_name == 'posix'", Platform::Linux64, true),
-            ("os_name == 'posix'", Platform::Osx64, true),
-            ("os_name == 'posix'", Platform::Win64, false),
-            ("os_name == 'nt'", Platform::Win64, true),
-            ("os_name == 'nt'", Platform::Linux64, false),
+            ("os_name == 'posix'", Subdir::Linux64, true),
+            ("os_name == 'posix'", Subdir::Osx64, true),
+            ("os_name == 'posix'", Subdir::Win64, false),
+            ("os_name == 'nt'", Subdir::Win64, true),
+            ("os_name == 'nt'", Subdir::Linux64, false),
             // platform_machine markers
-            ("platform_machine == 'x86_64'", Platform::Linux64, true),
-            ("platform_machine == 'x86_64'", Platform::Osx64, true),
-            (
-                "platform_machine == 'x86_64'",
-                Platform::LinuxAarch64,
-                false,
-            ),
-            (
-                "platform_machine == 'aarch64'",
-                Platform::LinuxAarch64,
-                true,
-            ),
-            ("platform_machine == 'aarch64'", Platform::Linux64, false),
-            ("platform_machine == 'arm64'", Platform::OsxArm64, true),
-            ("platform_machine == 'arm64'", Platform::Osx64, false),
-            ("platform_machine == 'AMD64'", Platform::Win64, true),
-            ("platform_machine == 'AMD64'", Platform::Win32, false),
+            ("platform_machine == 'x86_64'", Subdir::Linux64, true),
+            ("platform_machine == 'x86_64'", Subdir::Osx64, true),
+            ("platform_machine == 'x86_64'", Subdir::LinuxAarch64, false),
+            ("platform_machine == 'aarch64'", Subdir::LinuxAarch64, true),
+            ("platform_machine == 'aarch64'", Subdir::Linux64, false),
+            ("platform_machine == 'arm64'", Subdir::OsxArm64, true),
+            ("platform_machine == 'arm64'", Subdir::Osx64, false),
+            ("platform_machine == 'AMD64'", Subdir::Win64, true),
+            ("platform_machine == 'AMD64'", Subdir::Win32, false),
         ];
 
         for (marker, platform, should_include) in test_cases {
@@ -1334,7 +1326,7 @@ mod tests {
         ];
 
         let mapped = mapper
-            .map_requirements(&requirements, Platform::NoArch)
+            .map_requirements(&requirements, Subdir::NoArch)
             .await
             .unwrap();
 
@@ -1404,7 +1396,7 @@ mod tests {
             let requirements = vec![pep508_rs::Requirement::from_str(req_str).unwrap()];
 
             let mapped = mapper
-                .map_requirements(&requirements, Platform::NoArch)
+                .map_requirements(&requirements, Subdir::NoArch)
                 .await
                 .unwrap();
 
@@ -1452,7 +1444,7 @@ mod tests {
         ];
 
         let mapped = mapper
-            .map_requirements(&requirements, Platform::NoArch)
+            .map_requirements(&requirements, Subdir::NoArch)
             .await
             .unwrap();
 

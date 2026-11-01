@@ -3,20 +3,25 @@ use std::{
     path::{Path, PathBuf},
     process::{Command, Stdio},
     str::FromStr,
-    sync::{LazyLock, Mutex},
+    sync::{LazyLock, Mutex, OnceLock},
 };
 
 use clap::{ArgAction, Parser};
 use itertools::Itertools;
-use miette::{Context, IntoDiagnostic, miette};
 use pixi_consts::consts;
 use rattler_conda_types::{
-    ChannelConfig, NamedChannelOrUrl, Platform, Version, VersionBumpType, VersionSpec,
+    ChannelConfig, ChannelUrl, NamedChannelOrUrl, Subdir, Version, VersionBumpType, VersionSpec,
     version_spec::{EqualityOperator, LogicalOperator, RangeOperator},
 };
 use rattler_config::config::{CommonConfig, ConfigBase};
-use rattler_config::locations::{
+pub use rattler_config::locations::{
     ConfigLayer, ConfigLocation, shared_system_config_path, shared_user_config_paths,
+};
+
+mod detector_decisions;
+pub use detector_decisions::{
+    DetectorConfigError, consent_origin, repository_detector_config_path, write_detector_decision,
+    write_repository_detector_decision,
 };
 use rattler_networking::s3_middleware;
 use rattler_repodata_gateway::{Gateway, GatewayBuilder, SourceConfig, fetch::CacheAction};
@@ -25,6 +30,7 @@ use serde::{Deserialize, Serialize, de::IntoDeserializer};
 use url::Url;
 
 const EXPERIMENTAL: &str = "experimental";
+const VIRTUAL_PACKAGE_DETECTORS: &str = "virtual-package-detectors";
 
 /// Controls which root certificates to use for TLS connections.
 ///
@@ -148,6 +154,45 @@ static NETFS_REDIRECT_WARNED: LazyLock<Mutex<HashSet<CacheKind>>> =
 /// [`Config::cache_dir_for`] instead.
 static GLOBAL_CACHE_CONFIG: LazyLock<CacheConfig> = LazyLock::new(|| Config::load_global().cache);
 
+/// Merges the config files at `locations`, lowest precedence first, skipping
+/// missing ones. A file that fails to load is an error, or, if `lenient`, is
+/// logged and skipped.
+fn merge_locations(locations: Vec<ConfigLocation>, lenient: bool) -> Result<Config, ConfigError> {
+    let mut config = Config::default();
+    for location in locations {
+        let loaded = match location.layer {
+            ConfigLayer::Shared => Config::from_shared_path(&location.path),
+            ConfigLayer::Tool => Config::from_path(&location.path),
+        };
+        match loaded {
+            Ok(c) => config = config.merge_config(c),
+            Err(ConfigError::FileNotFound(_)) => (),
+            Err(e) if lenient => log_skipped(e),
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(config)
+}
+
+/// Logs a config file that failed to load and is skipped.
+fn log_skipped(error: ConfigError) {
+    tracing::error!("{:?}", miette::Report::new(error));
+}
+
+/// Layers env-derived CLI defaults on top, so process-env changes still apply.
+fn with_env_defaults(file_layers: Config) -> Config {
+    let mut default_cli = ConfigCli::default();
+    default_cli.update_from(std::env::args().take(0));
+    file_layers.merge_config(default_cli.into())
+}
+
+/// The path of the project-local config file of `project_root`.
+fn local_config_path(project_root: &Path) -> PathBuf {
+    project_root
+        .join(consts::PIXI_DIR)
+        .join(consts::CONFIG_FILE)
+}
+
 /// Describes where the system + user-level config layer comes from. Built from
 /// [`ConfigSourceCli`] (which mirrors `--no-config` / `--config-file`) and
 /// passed into [`Config::load_global_with`] and [`Config::load_with`].
@@ -229,10 +274,23 @@ pub fn pixi_home() -> Option<PathBuf> {
 ///   exists.
 /// - If that is not set, the default cache directory of
 ///   [`rattler::default_cache_dir`] is used.
-pub fn get_cache_dir() -> miette::Result<PathBuf> {
+pub fn get_cache_dir() -> Result<PathBuf, CacheDirError> {
     resolve_cache_root(&GLOBAL_CACHE_CONFIG)
         .map(|(path, _)| path)
-        .ok_or_else(|| miette::miette!("could not determine default cache directory"))
+        .ok_or(CacheDirError)
+}
+
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error("could not determine default cache directory")]
+pub struct CacheDirError;
+
+/// A path in the config that cannot be used as configured.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum ConfigPathError {
+    #[error("could not resolve home directory for '~' in `{key}` = {}", path.display())]
+    HomeDirNotFound { key: &'static str, path: PathBuf },
+    #[error("`{key}` must be an absolute path, got: {}", path.display())]
+    NotAbsolute { key: &'static str, path: PathBuf },
 }
 
 /// How the cache directory was resolved.
@@ -353,6 +411,9 @@ pub enum CacheKind {
     BuildToolEnvironments,
     /// Detached environments root (when `detached-environments = true`).
     DetachedEnvironments,
+    /// Environments and results of channel-registered virtual package
+    /// detectors.
+    VirtualPackageDetectors,
 }
 
 impl CacheKind {
@@ -366,6 +427,7 @@ impl CacheKind {
             CacheKind::ExecEnvironments => consts::CACHED_ENVS_DIR,
             CacheKind::BuildToolEnvironments => consts::CACHED_BUILD_TOOL_ENVS_DIR,
             CacheKind::DetachedEnvironments => consts::ENVIRONMENTS_DIR,
+            CacheKind::VirtualPackageDetectors => consts::VIRTUAL_PACKAGE_DETECTORS_CACHE_DIR,
         }
     }
 
@@ -383,6 +445,7 @@ impl CacheKind {
             CacheKind::ExecEnvironments => "exec-environments",
             CacheKind::BuildToolEnvironments => "build-tool-environments",
             CacheKind::DetachedEnvironments => "detached-environments",
+            CacheKind::VirtualPackageDetectors => "virtual-package-detectors",
         }
     }
 
@@ -427,6 +490,9 @@ pub struct CacheConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub detached_environments: Option<PathBuf>,
 
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub virtual_package_detectors: Option<PathBuf>,
+
     /// How to handle a cache that lives on a network filesystem.
     #[serde(default, skip_serializing_if = "NetfsRedirect::is_default")]
     pub netfs_redirect: NetfsRedirect,
@@ -447,6 +513,7 @@ impl CacheConfig {
             CacheKind::ExecEnvironments => &self.exec_environments,
             CacheKind::BuildToolEnvironments => &self.build_tool_environments,
             CacheKind::DetachedEnvironments => &self.detached_environments,
+            CacheKind::VirtualPackageDetectors => &self.virtual_package_detectors,
         };
         p.as_deref()
     }
@@ -464,6 +531,9 @@ impl CacheConfig {
                 .build_tool_environments
                 .or(self.build_tool_environments),
             detached_environments: other.detached_environments.or(self.detached_environments),
+            virtual_package_detectors: other
+                .virtual_package_detectors
+                .or(self.virtual_package_detectors),
             netfs_redirect: if other.netfs_redirect == NetfsRedirect::default() {
                 self.netfs_redirect
             } else {
@@ -490,6 +560,10 @@ impl CacheConfig {
                 "cache.detached-environments",
                 &mut self.detached_environments,
             ),
+            (
+                "cache.virtual-package-detectors",
+                &mut self.virtual_package_detectors,
+            ),
         ]
         .into_iter()
         .filter_map(|(name, opt)| opt.as_mut().map(|p| (name, p)))
@@ -499,17 +573,14 @@ impl CacheConfig {
     ///
     /// Mirrors the existing behavior of the top-level `detached-environments`
     /// field. Called automatically by [`Config::from_toml`].
-    pub fn expand_paths(&mut self) -> miette::Result<()> {
+    pub fn expand_paths(&mut self) -> Result<(), ConfigPathError> {
         for (name, path) in self.iter_paths_mut() {
             if !path.to_string_lossy().starts_with('~') {
                 continue;
             }
-            let home_dir = dirs::home_dir().ok_or_else(|| {
-                miette!(
-                    "could not resolve home directory for '~' in `{}` = {}",
-                    name,
-                    path.display()
-                )
+            let home_dir = dirs::home_dir().ok_or_else(|| ConfigPathError::HomeDirNotFound {
+                key: name,
+                path: path.clone(),
             })?;
             // Safe unwrap: we just checked the path starts with '~'.
             *path = home_dir.join(path.strip_prefix("~").unwrap());
@@ -519,10 +590,10 @@ impl CacheConfig {
 
     /// Ensure every set path is absolute. `~` should already be expanded by
     /// [`Self::expand_paths`] before calling this.
-    pub fn validate(&self) -> miette::Result<()> {
+    pub fn validate(&self) -> Result<(), ConfigPathError> {
         // iter_paths_mut takes &mut, so reuse the field list locally rather
         // than cloning. Keep this in sync with `iter_paths_mut`.
-        let entries: [(&str, Option<&PathBuf>); 8] = [
+        let entries: [(&str, Option<&PathBuf>); 9] = [
             ("cache.root", self.root.as_ref()),
             ("cache.conda-packages", self.conda_packages.as_ref()),
             ("cache.repodata", self.repodata.as_ref()),
@@ -537,14 +608,17 @@ impl CacheConfig {
                 "cache.detached-environments",
                 self.detached_environments.as_ref(),
             ),
+            (
+                "cache.virtual-package-detectors",
+                self.virtual_package_detectors.as_ref(),
+            ),
         ];
         for (name, path) in entries.into_iter().filter_map(|(n, p)| p.map(|p| (n, p))) {
             if !path.is_absolute() {
-                return Err(miette!(
-                    "`{}` must be an absolute path, got: {}",
-                    name,
-                    path.display()
-                ));
+                return Err(ConfigPathError::NotAbsolute {
+                    key: name,
+                    path: path.clone(),
+                });
             }
         }
         Ok(())
@@ -590,6 +664,7 @@ fn env_var_for(kind: CacheKind) -> &'static str {
         CacheKind::ExecEnvironments => "PIXI_CACHE_EXEC_ENVIRONMENTS_DIR",
         CacheKind::BuildToolEnvironments => "PIXI_CACHE_BUILD_TOOL_ENVIRONMENTS_DIR",
         CacheKind::DetachedEnvironments => "PIXI_CACHE_DETACHED_ENVIRONMENTS_DIR",
+        CacheKind::VirtualPackageDetectors => "PIXI_CACHE_VIRTUAL_PACKAGE_DETECTORS_DIR",
     }
 }
 
@@ -616,7 +691,10 @@ fn env_netfs_redirect() -> Option<NetfsRedirect> {
     }
 }
 
-fn resolve_cache_kind_dir(cache_cfg: &CacheConfig, kind: CacheKind) -> miette::Result<PathBuf> {
+fn resolve_cache_kind_dir(
+    cache_cfg: &CacheConfig,
+    kind: CacheKind,
+) -> Result<PathBuf, CacheDirError> {
     // Env vars override TOML for per-kind paths. Setting one bypasses the
     // redirect logic for that kind, mirroring the TOML field's semantics.
     if let Some(p) = env_path_for(kind) {
@@ -626,8 +704,7 @@ fn resolve_cache_kind_dir(cache_cfg: &CacheConfig, kind: CacheKind) -> miette::R
         return Ok(p.to_path_buf());
     }
 
-    let (base, source) = resolve_cache_root(cache_cfg)
-        .ok_or_else(|| miette::miette!("could not determine default cache directory"))?;
+    let (base, source) = resolve_cache_root(cache_cfg).ok_or(CacheDirError)?;
     let pinned = matches!(source, CacheDirSource::UserPinned);
 
     let redirect_mode = env_netfs_redirect().unwrap_or(cache_cfg.netfs_redirect);
@@ -727,10 +804,6 @@ pub struct ConfigCli {
     #[arg(long, env = "PIXI_NO_REF_LINKS", help_heading = consts::CLAP_CONFIG_OPTIONS)]
     pub no_ref_links: bool,
 
-    /// Do not verify the TLS certificate of the server.
-    #[arg(long, action = ArgAction::SetTrue, help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    pub tls_no_verify: bool,
-
     /// Run without network access, using only cached data. Commands fail if
     /// data is missing from the cache. Pass `--offline=false` to override an
     /// `offline` setting from the configuration.
@@ -745,13 +818,36 @@ pub struct ConfigCli {
     )]
     pub offline: Option<bool>,
 
-    /// Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store).
-    #[arg(long, env = "PIXI_TLS_ROOT_CERTS", help_heading = consts::CLAP_CONFIG_OPTIONS)]
-    pub tls_root_certs: Option<TlsRootCerts>,
+    #[clap(flatten)]
+    pub tls: ConfigCliTls,
 
     /// Use environment activation cache (experimental)
     #[arg(long, help_heading = consts::CLAP_CONFIG_OPTIONS)]
     pub use_environment_activation_cache: bool,
+}
+
+/// TLS options for commands that make HTTPS requests. Flattened into
+/// [`ConfigCli`] and into commands that only need these network settings.
+#[derive(Parser, Debug, Default, Clone)]
+pub struct ConfigCliTls {
+    /// Do not verify the TLS certificate of the server.
+    #[arg(long, action = ArgAction::SetTrue, help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    pub tls_no_verify: bool,
+
+    /// Which TLS root certificates to use: 'webpki' (bundled Mozilla roots) or 'system' (system store).
+    #[arg(long, env = "PIXI_TLS_ROOT_CERTS", help_heading = consts::CLAP_CONFIG_OPTIONS)]
+    pub tls_root_certs: Option<TlsRootCerts>,
+}
+
+impl From<ConfigCliTls> for Config {
+    fn from(cli: ConfigCliTls) -> Self {
+        warn_deprecated_tls_root_certs(cli.tls_root_certs, None);
+        Self {
+            tls_no_verify: cli.tls_no_verify.then_some(true),
+            tls_root_certs: cli.tls_root_certs,
+            ..Default::default()
+        }
+    }
 }
 
 #[derive(Parser, Debug, Clone, Default)]
@@ -860,7 +956,7 @@ pub struct PyPIConfig {
 // `S3Options` and the `S3OptionsMap` newtype now live in `rattler_config`.
 // Re-exported so external crates that referenced `pixi_config::S3Options`
 // keep compiling.
-pub use rattler_config::config::s3::{S3Options, S3OptionsMap};
+pub use rattler_config::config::s3::{S3AddressingStyle, S3Options, S3OptionsMap};
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(untagged)]
@@ -897,19 +993,18 @@ impl DetachedEnvironments {
     /// If `self` is the `DetachedEnvironments::Path` variant, expands `~`
     /// to the absolute path to the home directory, otherwise clone the boolean
     /// variant.
-    pub fn resolve_path(&self) -> miette::Result<Self> {
+    pub fn resolve_path(&self) -> Result<Self, ConfigPathError> {
         match self {
             DetachedEnvironments::Boolean(_) => Ok(self.clone()),
             DetachedEnvironments::Path(p) => {
                 let mut path = p.clone();
                 // If the path starts with ~, expand it to the home directory
                 if path.to_string_lossy().starts_with("~") {
-                    let home_dir = dirs::home_dir().ok_or_else(|| {
-                        miette!(
-                            "Could not resolve home directory for '~' in path {}",
-                            path.display()
-                        )
-                    })?;
+                    let home_dir =
+                        dirs::home_dir().ok_or_else(|| ConfigPathError::HomeDirNotFound {
+                            key: "detached-environments",
+                            path: path.clone(),
+                        })?;
                     // Safe unwrap as we checked if it starts with ~
                     path = home_dir.join(path.strip_prefix("~").unwrap());
                 }
@@ -918,7 +1013,7 @@ impl DetachedEnvironments {
         }
     }
 
-    pub fn validate(&self) -> miette::Result<()> {
+    pub fn validate(&self) -> Result<(), ConfigPathError> {
         // Resolve the path variant (if present) prior to validating it.
         let resolved_self = self.resolve_path()?;
 
@@ -926,10 +1021,10 @@ impl DetachedEnvironments {
             DetachedEnvironments::Boolean(_) => {}
             DetachedEnvironments::Path(path) => {
                 if !path.is_absolute() {
-                    return Err(miette!(
-                        "The `detached-environments` path must be an absolute path: {}",
-                        path.display()
-                    ));
+                    return Err(ConfigPathError::NotAbsolute {
+                        key: "detached-environments",
+                        path,
+                    });
                 }
             }
         }
@@ -1234,6 +1329,12 @@ pub struct Config {
     #[serde(skip_serializing_if = "ExperimentalConfig::is_default")]
     pub experimental: ExperimentalConfig,
 
+    /// Consent decisions and the timeout for channel-registered virtual
+    /// package detectors. Shared with every rattler-based tool.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "VirtualPackageDetectorsConfig::is_default")]
+    pub virtual_package_detectors: VirtualPackageDetectorsConfig,
+
     /// Concurrency configuration for pixi
     #[serde(default)]
     #[serde(skip_serializing_if = "ConcurrencyConfig::is_default")]
@@ -1282,7 +1383,7 @@ pub struct Config {
     /// these types of tools.
     #[serde(default)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub tool_platform: Option<Platform>,
+    pub tool_platform: Option<Subdir>,
 
     /// Per-cache directory configuration. Lets users redirect specific
     /// caches (conda packages, repodata, pypi mapping, etc.) to different
@@ -1324,6 +1425,7 @@ impl Default for Config {
             pinning_strategy: None,
             shell: ShellConfig::default(),
             experimental: ExperimentalConfig::default(),
+            virtual_package_detectors: VirtualPackageDetectorsConfig::default(),
             concurrency: ConcurrencyConfig::default(),
             run_post_link_scripts: None,
             allow_symbolic_links: None,
@@ -1384,6 +1486,7 @@ impl From<CommonConfig> for Config {
             allow_symbolic_links: common.allow_symbolic_links,
             allow_hard_links: common.allow_hard_links,
             allow_ref_links: common.allow_ref_links,
+            virtual_package_detectors: normalize_detector_consent(common.virtual_package_detectors),
             ..Default::default()
         }
     }
@@ -1449,10 +1552,7 @@ fn warn_deprecated_tls_root_certs(value: Option<TlsRootCerts>, source: Option<&s
 
 impl From<ConfigCli> for Config {
     fn from(cli: ConfigCli) -> Self {
-        warn_deprecated_tls_root_certs(cli.tls_root_certs, None);
         Self {
-            tls_no_verify: if cli.tls_no_verify { Some(true) } else { None },
-            tls_root_certs: cli.tls_root_certs,
             offline: cli.offline,
             authentication_override_file: cli.auth_file,
             pypi_config: cli
@@ -1486,7 +1586,7 @@ impl From<ConfigCli> for Config {
             allow_symbolic_links: cli.no_symbolic_links.then_some(false),
             allow_hard_links: cli.no_hard_links.then_some(false),
             allow_ref_links: cli.no_ref_links.then_some(false),
-            ..Default::default()
+            ..Config::from(cli.tls)
         }
     }
 }
@@ -1588,21 +1688,131 @@ impl ShellConfig {
 // to reqwest's own env-var handling. We end up reading the env twice
 // per process (once cached in rattler, once cached here) — acceptable.
 pub use rattler_config::config::proxy::ProxyConfig;
+pub use rattler_config::config::virtual_package_detectors::{
+    DetectorDecision, VirtualPackageDetectorsConfig,
+};
+
+/// Merges detector configuration so that `other` wins for the timeout, while a
+/// `deny` for a channel wins over an `allow` from any other layer. A
+/// repository configuration can therefore authorize detectors, but never
+/// override a user's explicit refusal.
+fn merge_virtual_package_detectors(
+    mut base: VirtualPackageDetectorsConfig,
+    other: &VirtualPackageDetectorsConfig,
+) -> VirtualPackageDetectorsConfig {
+    base = normalize_detector_consent(base);
+    base.timeout_seconds = other.timeout_seconds.or(base.timeout_seconds);
+    for (origin, decision) in &other.consent {
+        let entry = base
+            .consent
+            .entry(consent_origin(origin))
+            .or_insert(*decision);
+        if *decision == DetectorDecision::Deny {
+            *entry = DetectorDecision::Deny;
+        }
+    }
+    base
+}
+
+fn normalize_detector_consent(
+    mut config: VirtualPackageDetectorsConfig,
+) -> VirtualPackageDetectorsConfig {
+    config.consent = config.consent.into_iter().fold(
+        indexmap::IndexMap::new(),
+        |mut consent, (origin, decision)| {
+            let entry = consent.entry(consent_origin(&origin)).or_insert(decision);
+            if decision == DetectorDecision::Deny {
+                *entry = DetectorDecision::Deny;
+            }
+            consent
+        },
+    );
+    config
+}
 
 // `BuildConfig` and `PackageFormatAndCompression` now live in
 // `rattler_config`. Re-exported so external paths keep compiling.
 pub use rattler_config::config::build::{BuildConfig, PackageFormatAndCompression};
 
-#[derive(thiserror::Error, Debug)]
+#[derive(thiserror::Error, miette::Diagnostic, Debug)]
 pub enum ConfigError {
     #[error("no file was found at {0}")]
     FileNotFound(PathBuf),
-    #[error("failed to read config from '{0}'")]
-    ReadError(std::io::Error),
-    #[error("failed to parse config of {1}: {0}")]
-    ParseError(miette::Report, PathBuf),
-    #[error("validation error of {1}: {0}")]
-    ValidationError(miette::Report, PathBuf),
+    #[error("failed to read config file")]
+    ReadError(#[source] std::io::Error),
+    #[error("failed to parse config file '{}'", .1.display())]
+    #[diagnostic(help("{FIX_CONFIG_HELP}"))]
+    ParseError(#[source] ParseConfigError, PathBuf),
+    #[error("invalid config file '{}'", .1.display())]
+    #[diagnostic(help("{FIX_CONFIG_HELP}"))]
+    ValidationError(#[source] ConfigValidationError, PathBuf),
+}
+
+const FIX_CONFIG_HELP: &str = "fix the file with `pixi config edit`, or remove the invalid key with `pixi config unset <key>`";
+
+#[derive(thiserror::Error, miette::Diagnostic, Debug)]
+pub enum ConfigValidationError {
+    #[error(transparent)]
+    Path(#[from] ConfigPathError),
+    #[error(transparent)]
+    VirtualPackageDetectors(#[from] rattler_config::config::ValidationError),
+}
+
+#[derive(thiserror::Error, miette::Diagnostic, Debug)]
+pub enum ParseConfigError {
+    #[error(transparent)]
+    Toml(#[from] toml_edit::de::Error),
+    #[error(transparent)]
+    SharedToml(#[from] toml::de::Error),
+    #[error(transparent)]
+    Path(#[from] ConfigPathError),
+}
+
+#[derive(thiserror::Error, miette::Diagnostic, Debug)]
+pub enum SetConfigError {
+    #[error("Unknown key: {}\nSupported keys:\n\t{supported_keys}", console::style(key).red())]
+    UnknownKey { key: String, supported_keys: String },
+    #[error("invalid value for `{key}`")]
+    InvalidValue {
+        key: String,
+        #[source]
+        source: Box<dyn std::error::Error + Send + Sync>,
+    },
+    #[error("`{key}` requires a value")]
+    MissingValue { key: String },
+    #[error("The `{key}` field is deprecated. Please use the `shell.{key}` field instead.")]
+    Deprecated { key: String },
+    #[error(transparent)]
+    Path(#[from] ConfigPathError),
+    #[error("{0}")]
+    DetectorConsent(String),
+}
+
+fn invalid_value<E: std::error::Error + Send + Sync + 'static>(
+    key: &str,
+) -> impl FnOnce(E) -> SetConfigError + '_ {
+    move |source| SetConfigError::InvalidValue {
+        key: key.to_string(),
+        source: Box::new(source),
+    }
+}
+
+fn parse_opt<T: FromStr>(value: Option<String>, key: &str) -> Result<Option<T>, SetConfigError>
+where
+    T::Err: std::error::Error + Send + Sync + 'static,
+{
+    value
+        .map(|v| v.parse())
+        .transpose()
+        .map_err(invalid_value(key))
+}
+
+#[derive(thiserror::Error, miette::Diagnostic, Debug)]
+pub enum SaveConfigError {
+    #[error(transparent)]
+    Serialize(#[from] toml_edit::ser::Error),
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
 }
 
 impl Config {
@@ -1623,8 +1833,8 @@ impl Config {
         // HACK: Use win-64 as the default tool platform if currently running on
         // win-arm64. This is a workaround for the fact that we don't have a
         // good win-arm64 toolchain yet.
-        if Platform::current() == Platform::WinArm64 {
-            config.tool_platform = Some(Platform::Win64);
+        if Subdir::current().expect("pixi runs on a known conda platform") == Subdir::WinArm64 {
+            config.tool_platform = Some(Subdir::Win64);
         }
 
         config
@@ -1643,15 +1853,16 @@ impl Config {
     pub fn from_toml(
         toml: &str,
         source_path: Option<&Path>,
-    ) -> miette::Result<(Config, Set<String>)> {
-        let de = toml_edit::de::Deserializer::from_str(toml).into_diagnostic()?;
+    ) -> Result<(Config, Set<String>), ParseConfigError> {
+        let de = toml_edit::de::Deserializer::from_str(toml)?;
 
         // Deserialize the config and collect unused keys
         let mut unused_keys = Set::new();
         let mut config: Config = serde_ignored::deserialize(de, |path| {
             unused_keys.insert(path.to_string());
-        })
-        .into_diagnostic()?;
+        })?;
+        config.virtual_package_detectors =
+            normalize_detector_consent(config.virtual_package_detectors);
 
         fn create_deprecation_warning(old: &str, new: &str, source_path: Option<&Path>) {
             let msg = format!(
@@ -1770,8 +1981,7 @@ impl Config {
         };
 
         let (base, unused_keys) = ConfigBase::<Config>::from_toml_str_shared(&s)
-            .into_diagnostic()
-            .map_err(|e| ConfigError::ParseError(e, path.to_path_buf()))?;
+            .map_err(|e| ConfigError::ParseError(e.into(), path.to_path_buf()))?;
 
         // `rattler_config` folds the deprecated `tls-root-certs` spellings
         // into `system`, so read back what was actually written to keep
@@ -1827,29 +2037,18 @@ impl Config {
     }
 
     /// Load the system-wide config layer: the shared file with the pixi file
-    /// merged on top, see [`system_config_locations`].
+    /// merged on top, see [`system_config_locations`]. Files that fail to
+    /// load are logged and skipped.
     ///
     /// # Returns
     ///
     /// The loaded system config
     pub fn load_system() -> Config {
-        let mut config = Config::default();
-        for location in system_config_locations() {
-            let loaded = match location.layer {
-                ConfigLayer::Shared => Config::from_shared_path(&location.path),
-                ConfigLayer::Tool => Config::from_path(&location.path),
-            };
-            match loaded {
-                Ok(c) => config = config.merge_config(c),
-                Err(ConfigError::FileNotFound(_)) => (), // it's fine that no file is there
-                Err(e) => tracing::error!("{e}"),
-            }
-        }
-        config
+        merge_locations(system_config_locations(), true).unwrap_or_default()
     }
 
     /// Validate the config file.
-    pub fn validate(&self) -> miette::Result<()> {
+    pub fn validate(&self) -> Result<(), ConfigValidationError> {
         // Validate the detached environments directory is set correctly
         if let Some(detached_environments) = self.detached_environments.as_ref() {
             detached_environments.validate()?
@@ -1857,6 +2056,7 @@ impl Config {
 
         // Validate that all configured [cache] paths are absolute.
         self.cache.validate()?;
+        rattler_config::config::Config::validate(&self.virtual_package_detectors)?;
 
         Ok(())
     }
@@ -1873,89 +2073,97 @@ impl Config {
     ///   because the underlying files are env-independent.
     ///
     /// The project-local `<project>/.pixi/config.toml` layer that
-    /// [`Config::load_with`] adds on top is unaffected.
-    pub fn load_global_with(source: &GlobalConfigSource) -> Config {
+    /// [`Config::try_load_with`] adds on top is unaffected.
+    ///
+    /// # Errors
+    ///
+    /// Any config file that exists but fails to load.
+    pub fn try_load_global_with(source: &GlobalConfigSource) -> Result<Config, ConfigError> {
         // Cache only the default search-the-disk layers; non-default sources
         // (--no-config / --config-file) are per-invocation and can vary.
-        static SEARCH_LAYERS: LazyLock<Config> = LazyLock::new(|| {
-            let mut config = Config::default();
-            for location in config_search_locations() {
-                let loaded = match location.layer {
-                    ConfigLayer::Shared => Config::from_shared_path(&location.path),
-                    ConfigLayer::Tool => Config::from_path(&location.path),
-                };
-                match loaded {
-                    Ok(c) => config = config.merge_config(c),
-                    Err(ConfigError::FileNotFound(_)) => (),
-                    Err(e) => tracing::error!(
-                        "Failed to load global config '{}' with error: {}",
-                        location.path.display(),
-                        e
-                    ),
-                }
-            }
-            config
-        });
+        static SEARCH_LAYERS: OnceLock<Config> = OnceLock::new();
 
         let file_layers = match source {
             GlobalConfigSource::None => Config::default(),
-            GlobalConfigSource::File(path) => match Config::from_path(path) {
-                Ok(c) => c,
-                Err(e) => {
-                    tracing::error!(
-                        "Failed to load config file '{}' (from --config-file / \
-                         PIXI_CONFIG_FILE): {}",
-                        path.display(),
-                        e
-                    );
-                    Config::default()
+            GlobalConfigSource::File(path) => Config::from_path(path)?,
+            GlobalConfigSource::Search => match SEARCH_LAYERS.get() {
+                Some(config) => config.clone(),
+                None => {
+                    let config = merge_locations(config_search_locations(), false)?;
+                    SEARCH_LAYERS.get_or_init(|| config).clone()
                 }
             },
-            GlobalConfigSource::Search => SEARCH_LAYERS.clone(),
         };
+        Ok(with_env_defaults(file_layers))
+    }
 
-        // Layer env-derived CLI defaults so process-env changes still apply.
-        let mut default_cli = ConfigCli::default();
-        default_cli.update_from(std::env::args().take(0));
-        file_layers.merge_config(default_cli.into())
+    /// Like [`Config::try_load_global_with`], but files that fail to load are
+    /// logged and skipped, so `pixi config` can still repair them.
+    pub fn load_global_with(source: &GlobalConfigSource) -> Config {
+        let file_layers = match source {
+            GlobalConfigSource::None => Config::default(),
+            GlobalConfigSource::File(path) => Config::from_path(path).unwrap_or_else(|e| {
+                log_skipped(e);
+                Config::default()
+            }),
+            GlobalConfigSource::Search => {
+                merge_locations(config_search_locations(), true).unwrap_or_default()
+            }
+        };
+        with_env_defaults(file_layers)
     }
 
     /// Load the global config layer using the default search behavior.
+    pub fn try_load_global() -> Result<Config, ConfigError> {
+        Self::try_load_global_with(&GlobalConfigSource::Search)
+    }
+
+    /// Like [`Config::try_load_global`], but files that fail to load are
+    /// logged and skipped.
     pub fn load_global() -> Config {
         Self::load_global_with(&GlobalConfigSource::Search)
     }
 
     /// Load the global config and layer the given cli config on top of it.
-    pub fn with_cli_config(cli: &ConfigCli) -> Config {
-        let config = Config::load_global();
-        config.merge_config(cli.clone().into())
+    pub fn try_with_cli_config(cli: &ConfigCli) -> Result<Config, ConfigError> {
+        Ok(Self::try_load_global()?.merge_config(cli.clone().into()))
     }
 
-    /// Load the config from the given path (project root), using the supplied
-    /// source for the global layer. Project-local
-    /// `<project>/.pixi/config.toml` is merged on top.
-    pub fn load_with(project_root: &Path, source: &GlobalConfigSource) -> Config {
-        let mut config = Self::load_global_with(source);
-        let local_config_path = project_root
-            .join(consts::PIXI_DIR)
-            .join(consts::CONFIG_FILE);
-
-        match Self::from_path(&local_config_path) {
-            Ok(c) => config = config.merge_config(c),
-            Err(e) => tracing::debug!(
-                "Failed to load local config: {} (error: {})",
-                local_config_path.display(),
-                e
-            ),
+    /// Loads global configuration and merges `<project>/.pixi/config.toml` on top.
+    ///
+    /// # Errors
+    ///
+    /// Any config file that exists but fails to load.
+    pub fn try_load_with(
+        project_root: &Path,
+        source: &GlobalConfigSource,
+    ) -> Result<Config, ConfigError> {
+        let config = Self::try_load_global_with(source)?;
+        match Self::from_path(&local_config_path(project_root)) {
+            Ok(local) => Ok(config.merge_config(local)),
+            Err(ConfigError::FileNotFound(_)) => Ok(config),
+            Err(e) => Err(e),
         }
+    }
 
-        config
+    /// Like [`Config::try_load_with`], but files that fail to load are logged
+    /// and skipped.
+    pub fn load_with(project_root: &Path, source: &GlobalConfigSource) -> Config {
+        let config = Self::load_global_with(source);
+        match Self::from_path(&local_config_path(project_root)) {
+            Ok(local) => config.merge_config(local),
+            Err(ConfigError::FileNotFound(_)) => config,
+            Err(e) => {
+                log_skipped(e);
+                config
+            }
+        }
     }
 
     /// Load the config from the given path (project root) using the default
     /// global search.
-    pub fn load(project_root: &Path) -> Config {
-        Self::load_with(project_root, &GlobalConfigSource::Search)
+    pub fn try_load(project_root: &Path) -> Result<Config, ConfigError> {
+        Self::try_load_with(project_root, &GlobalConfigSource::Search)
     }
 
     // Get all possible keys of the configuration
@@ -1966,6 +2174,7 @@ impl Config {
             "cache.build-tool-environments",
             "cache.conda-packages",
             "cache.detached-environments",
+            "cache.virtual-package-detectors",
             "cache.exec-environments",
             "cache.netfs-redirect",
             "cache.pypi-mapping",
@@ -2007,7 +2216,7 @@ impl Config {
             "s3-options",
             "s3-options.<bucket>",
             "s3-options.<bucket>.endpoint-url",
-            "s3-options.<bucket>.force-path-style",
+            "s3-options.<bucket>.addressing-style",
             "s3-options.<bucket>.region",
             "shell",
             "shell.change-ps1",
@@ -2016,6 +2225,10 @@ impl Config {
             "tls-no-verify",
             "tls-root-certs",
             "tool-platform",
+            "virtual-package-detectors",
+            "virtual-package-detectors.timeout-seconds",
+            "virtual-package-detectors.consent",
+            "virtual-package-detectors.consent.<origin>",
         ]
     }
 
@@ -2070,6 +2283,10 @@ impl Config {
             pinning_strategy: other.pinning_strategy.or(self.pinning_strategy),
             shell: self.shell.merge(other.shell),
             experimental: self.experimental.merge(other.experimental),
+            virtual_package_detectors: merge_virtual_package_detectors(
+                self.virtual_package_detectors,
+                &other.virtual_package_detectors,
+            ),
             // Make other take precedence over self to allow for setting the value through the CLI
             concurrency: self
                 .concurrency
@@ -2197,8 +2414,9 @@ impl Config {
     }
 
     /// The platform to use to install tools.
-    pub fn tool_platform(&self) -> Platform {
-        self.tool_platform.unwrap_or(Platform::current())
+    pub fn tool_platform(&self) -> Subdir {
+        self.tool_platform
+            .unwrap_or_else(|| Subdir::current().expect("pixi runs on a known conda platform"))
     }
 
     pub fn get_proxies(&self) -> reqwest::Result<Vec<Proxy>> {
@@ -2243,85 +2461,84 @@ impl Config {
     /// # Note
     ///
     /// It is required to call `save()` to persist the changes.
-    pub fn set(&mut self, key: &str, value: Option<String>) -> miette::Result<()> {
-        let show_supported_keys =
-            || format!("Supported keys:\n\t{}", self.get_keys().join(",\n\t"));
-        let err = miette::miette!(
-            "Unknown key: {}\n{}",
-            console::style(key).red(),
-            show_supported_keys()
-        );
+    pub fn set(&mut self, key: &str, value: Option<String>) -> Result<(), SetConfigError> {
+        let supported_keys = self.get_keys().join(",\n\t");
+        let err = SetConfigError::UnknownKey {
+            key: key.to_string(),
+            supported_keys,
+        };
+        let missing = SetConfigError::MissingValue {
+            key: key.to_string(),
+        };
 
         match key {
             "default-channels" => {
                 self.default_channels = value
                     .map(|v| serde_json::de::from_str(&v))
                     .transpose()
-                    .into_diagnostic()?
+                    .map_err(invalid_value(key))?
                     .unwrap_or_default();
             }
             "authentication-override-file" => {
                 self.authentication_override_file = value.map(PathBuf::from);
             }
             "tls-no-verify" => {
-                self.tls_no_verify = value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                self.tls_no_verify = parse_opt(value, key)?;
             }
             "offline" => {
-                self.offline = value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                self.offline = parse_opt(value, key)?;
             }
             "tls-root-certs" => {
                 self.tls_root_certs = value
                     .map(|v| TlsRootCerts::from_str(v.as_str()))
                     .transpose()
-                    .into_diagnostic()?;
+                    .map_err(invalid_value(key))?;
             }
             "mirrors" => {
                 self.mirrors = value
                     .map(|v| serde_json::de::from_str(&v))
                     .transpose()
-                    .into_diagnostic()?
+                    .map_err(invalid_value(key))?
                     .unwrap_or_default();
             }
             "detached-environments" => {
                 self.detached_environments = value
                     .map(|v| {
-                        Ok::<_, miette::Report>(match v.as_str() {
+                        Ok::<_, SetConfigError>(match v.as_str() {
                             "true" => DetachedEnvironments::Boolean(true),
                             "false" => DetachedEnvironments::Boolean(false),
                             _ => DetachedEnvironments::Path(PathBuf::from(v)).resolve_path()?,
                         })
                     })
                     .transpose()?;
+                if let Some(detached) = &self.detached_environments {
+                    detached.validate()?;
+                }
             }
             "pinning-strategy" => {
                 self.pinning_strategy = value
                     .map(|v| PinningStrategy::from_str(v.as_str()))
                     .transpose()
-                    .into_diagnostic()?
+                    .map_err(invalid_value(key))?
             }
-            "change-ps1" => {
-                return Err(miette::miette!(
-                    "The `change-ps1` field is deprecated. Please use the `shell.change-ps1` field instead."
-                ));
-            }
-            "force-activate" => {
-                return Err(miette::miette!(
-                    "The `force-activate` field is deprecated. Please use the `shell.force-activate` field instead."
-                ));
+            "change-ps1" | "force-activate" => {
+                return Err(SetConfigError::Deprecated {
+                    key: key.to_string(),
+                });
             }
             "tool-platform" => {
                 self.tool_platform = value
                     .as_deref()
-                    .map(Platform::from_str)
+                    .map(Subdir::from_str)
                     .transpose()
-                    .into_diagnostic()?;
+                    .map_err(invalid_value(key))?;
             }
             key if key.starts_with("index-config") => {
                 if key == "index-config" {
                     self.index_config = value
                         .map(|v| serde_json::de::from_str(&v))
                         .transpose()
-                        .into_diagnostic()?
+                        .map_err(invalid_value(key))?
                         .unwrap_or_default();
                     return Ok(());
                 } else if !key.starts_with("index-config.") {
@@ -2331,12 +2548,10 @@ impl Config {
                 let subkey = key.strip_prefix("index-config.").unwrap();
                 match subkey {
                     "write-zst" => {
-                        self.index_config.default.write_zst =
-                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                        self.index_config.default.write_zst = parse_opt(value, key)?;
                     }
                     "write-shards" => {
-                        self.index_config.default.write_shards =
-                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                        self.index_config.default.write_shards = parse_opt(value, key)?;
                     }
                     "base-url" => {
                         self.index_config.default.base_url = value;
@@ -2351,7 +2566,7 @@ impl Config {
                     self.repodata_config = value
                         .map(|v| serde_json::de::from_str(&v))
                         .transpose()
-                        .into_diagnostic()?
+                        .map_err(invalid_value(key))?
                         .unwrap_or_default();
                     return Ok(());
                 } else if !key.starts_with("repodata-config.") {
@@ -2361,16 +2576,13 @@ impl Config {
                 let subkey = key.strip_prefix("repodata-config.").unwrap();
                 match subkey {
                     "disable-bzip2" => {
-                        self.repodata_config.default.disable_bzip2 =
-                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                        self.repodata_config.default.disable_bzip2 = parse_opt(value, key)?;
                     }
                     "disable-zstd" => {
-                        self.repodata_config.default.disable_zstd =
-                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                        self.repodata_config.default.disable_zstd = parse_opt(value, key)?;
                     }
                     "disable-sharded" => {
-                        self.repodata_config.default.disable_sharded =
-                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                        self.repodata_config.default.disable_sharded = parse_opt(value, key)?;
                     }
                     _ => return Err(err),
                 }
@@ -2378,7 +2590,8 @@ impl Config {
             key if key.starts_with("pypi-config") => {
                 if key == "pypi-config" {
                     if let Some(value) = value {
-                        self.pypi_config = serde_json::de::from_str(&value).into_diagnostic()?;
+                        self.pypi_config =
+                            serde_json::de::from_str(&value).map_err(invalid_value(key))?;
                     } else {
                         self.pypi_config = PyPIConfig::default();
                     }
@@ -2393,21 +2606,20 @@ impl Config {
                         self.pypi_config.index_url = value
                             .map(|v| Url::parse(&v))
                             .transpose()
-                            .into_diagnostic()?;
+                            .map_err(invalid_value(key))?;
                     }
                     "extra-index-urls" => {
                         self.pypi_config.extra_index_urls = value
                             .map(|v| serde_json::de::from_str(&v))
                             .transpose()
-                            .into_diagnostic()?
+                            .map_err(invalid_value(key))?
                             .unwrap_or_default();
                     }
                     "keyring-provider" => {
                         self.pypi_config.keyring_provider = value
-                            .map(|v| match v.as_str() {
-                                "disabled" => Ok(KeyringProvider::Disabled),
-                                "subprocess" => Ok(KeyringProvider::Subprocess),
-                                _ => Err(miette::miette!("invalid keyring provider")),
+                            .map(|v| {
+                                KeyringProvider::deserialize(v.into_deserializer())
+                                    .map_err(invalid_value::<serde::de::value::Error>(key))
                             })
                             .transpose()?;
                     }
@@ -2415,7 +2627,7 @@ impl Config {
                         self.pypi_config.allow_insecure_host = value
                             .map(|v| serde_json::de::from_str(&v))
                             .transpose()
-                            .into_diagnostic()?
+                            .map_err(invalid_value(key))?
                             .unwrap_or_default();
                     }
                     _ => return Err(err),
@@ -2424,9 +2636,10 @@ impl Config {
             key if key.starts_with("s3-options") => {
                 if key == "s3-options" {
                     if let Some(value) = value {
-                        self.s3_options = serde_json::de::from_str(&value).into_diagnostic()?;
+                        self.s3_options =
+                            serde_json::de::from_str(&value).map_err(invalid_value(key))?;
                     } else {
-                        return Err(miette!("s3-options requires a value"));
+                        return Err(missing);
                     }
                     return Ok(());
                 }
@@ -2439,49 +2652,47 @@ impl Config {
                             "endpoint-url" => {
                                 if let Some(value) = value {
                                     bucket_config.endpoint_url =
-                                        Url::parse(&value).into_diagnostic()?;
+                                        Url::parse(&value).map_err(invalid_value(key))?;
                                 } else {
-                                    return Err(miette!(
-                                        "s3-options.{}.endpoint-url requires a value",
-                                        bucket
-                                    ));
+                                    return Err(missing);
                                 }
                             }
                             "region" => {
                                 if let Some(value) = value {
                                     bucket_config.region = value;
                                 } else {
-                                    return Err(miette!(
-                                        "s3-options.{}.region requires a value",
-                                        bucket
-                                    ));
+                                    return Err(missing);
                                 }
                             }
-                            "force-path-style" => {
+                            "addressing-style" => {
                                 if let Some(value) = value {
-                                    bucket_config.force_path_style =
-                                        value.parse().into_diagnostic()?;
+                                    bucket_config.addressing_style =
+                                        S3AddressingStyle::deserialize(value.into_deserializer())
+                                            .map_err(invalid_value::<serde::de::value::Error>(
+                                                key,
+                                            ))?;
                                 } else {
-                                    return Err(miette!(
-                                        "s3-options.{}.force-path-style requires a value",
-                                        bucket
-                                    ));
+                                    return Err(missing);
                                 }
                             }
                             _ => return Err(err),
                         }
                     }
                 } else {
-                    let value = value.ok_or_else(|| miette!("s3-options requires a value"))?;
+                    let value = value.ok_or(missing)?;
                     let s3_options: S3Options =
-                        serde_json::de::from_str(&value).into_diagnostic()?;
+                        serde_json::de::from_str(&value).map_err(invalid_value(key))?;
                     self.s3_options.0.insert(subkey.to_string(), s3_options);
                 }
+            }
+            key if key.starts_with(VIRTUAL_PACKAGE_DETECTORS) => {
+                self.set_virtual_package_detectors(key, value)?;
             }
             key if key.starts_with(EXPERIMENTAL) => {
                 if key == EXPERIMENTAL {
                     if let Some(value) = value {
-                        self.experimental = serde_json::de::from_str(&value).into_diagnostic()?;
+                        self.experimental =
+                            serde_json::de::from_str(&value).map_err(invalid_value(key))?;
                     } else {
                         self.experimental = ExperimentalConfig::default();
                     }
@@ -2495,12 +2706,10 @@ impl Config {
                     .unwrap();
                 match subkey {
                     "use-environment-activation-cache" => {
-                        self.experimental.use_environment_activation_cache =
-                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                        self.experimental.use_environment_activation_cache = parse_opt(value, key)?;
                     }
                     "conda-script" => {
-                        self.experimental.conda_script =
-                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                        self.experimental.conda_script = parse_opt(value, key)?;
                     }
                     _ => return Err(err),
                 }
@@ -2508,7 +2717,8 @@ impl Config {
             key if key.starts_with("concurrency") => {
                 if key == "concurrency" {
                     if let Some(value) = value {
-                        self.concurrency = serde_json::de::from_str(&value).into_diagnostic()?;
+                        self.concurrency =
+                            serde_json::de::from_str(&value).map_err(invalid_value(key))?;
                     } else {
                         self.concurrency = ConcurrencyConfig::default();
                     }
@@ -2520,16 +2730,17 @@ impl Config {
                 match subkey {
                     "solves" => {
                         if let Some(value) = value {
-                            self.concurrency.solves = value.parse().into_diagnostic()?;
+                            self.concurrency.solves = value.parse().map_err(invalid_value(key))?;
                         } else {
-                            return Err(miette!("'solves' requires a number value"));
+                            return Err(missing);
                         }
                     }
                     "downloads" => {
                         if let Some(value) = value {
-                            self.concurrency.downloads = value.parse().into_diagnostic()?;
+                            self.concurrency.downloads =
+                                value.parse().map_err(invalid_value(key))?;
                         } else {
-                            return Err(miette!("'downloads' requires a number value"));
+                            return Err(missing);
                         }
                     }
                     _ => return Err(err),
@@ -2538,7 +2749,8 @@ impl Config {
             key if key.starts_with("shell") => {
                 if key == "shell" {
                     if let Some(value) = value {
-                        self.shell = serde_json::de::from_str(&value).into_diagnostic()?;
+                        self.shell =
+                            serde_json::de::from_str(&value).map_err(invalid_value(key))?;
                     } else {
                         self.shell = ShellConfig::default();
                     }
@@ -2549,45 +2761,37 @@ impl Config {
                 let subkey = key.strip_prefix("shell.").unwrap();
                 match subkey {
                     "force-activate" => {
-                        self.shell.force_activate =
-                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                        self.shell.force_activate = parse_opt(value, key)?;
                     }
                     "source-completion-scripts" => {
-                        self.shell.source_completion_scripts =
-                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                        self.shell.source_completion_scripts = parse_opt(value, key)?;
                     }
                     "change-ps1" => {
-                        self.shell.change_ps1 =
-                            value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                        self.shell.change_ps1 = parse_opt(value, key)?;
                     }
                     _ => return Err(err),
                 }
             }
             key if key.starts_with("run-post-link-scripts") => {
                 if let Some(value) = value {
-                    self.run_post_link_scripts = Some(
-                        value
-                            .parse()
-                            .into_diagnostic()
-                            .wrap_err("failed to parse run-post-link-scripts")?,
-                    );
+                    self.run_post_link_scripts = Some(value.parse().map_err(invalid_value(key))?);
                 }
                 return Ok(());
             }
             "allow-symbolic-links" => {
-                self.allow_symbolic_links =
-                    value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                self.allow_symbolic_links = parse_opt(value, key)?;
             }
             "allow-hard-links" => {
-                self.allow_hard_links = value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                self.allow_hard_links = parse_opt(value, key)?;
             }
             "allow-ref-links" => {
-                self.allow_ref_links = value.map(|v| v.parse()).transpose().into_diagnostic()?;
+                self.allow_ref_links = parse_opt(value, key)?;
             }
             key if key.starts_with("proxy-config") => {
                 if key == "proxy-config" {
                     if let Some(value) = value {
-                        self.proxy_config = serde_json::de::from_str(&value).into_diagnostic()?;
+                        self.proxy_config =
+                            serde_json::de::from_str(&value).map_err(invalid_value(key))?;
                     } else {
                         self.proxy_config = ProxyConfig::default();
                     }
@@ -2602,19 +2806,19 @@ impl Config {
                         self.proxy_config.https = value
                             .map(|v| Url::parse(&v))
                             .transpose()
-                            .into_diagnostic()?;
+                            .map_err(invalid_value(key))?;
                     }
                     "http" => {
                         self.proxy_config.http = value
                             .map(|v| Url::parse(&v))
                             .transpose()
-                            .into_diagnostic()?;
+                            .map_err(invalid_value(key))?;
                     }
                     "non-proxy-hosts" => {
                         self.proxy_config.non_proxy_hosts = value
                             .map(|v| serde_json::de::from_str(&v))
                             .transpose()
-                            .into_diagnostic()?
+                            .map_err(invalid_value(key))?
                             .unwrap_or_default();
                     }
                     _ => return Err(err),
@@ -2623,7 +2827,8 @@ impl Config {
             key if key.starts_with("cache") => {
                 if key == "cache" {
                     if let Some(value) = value {
-                        self.cache = serde_json::de::from_str(&value).into_diagnostic()?;
+                        self.cache =
+                            serde_json::de::from_str(&value).map_err(invalid_value(key))?;
                     } else {
                         self.cache = CacheConfig::default();
                     }
@@ -2647,11 +2852,14 @@ impl Config {
                     "detached-environments" => {
                         self.cache.detached_environments = value.map(PathBuf::from)
                     }
+                    "virtual-package-detectors" => {
+                        self.cache.virtual_package_detectors = value.map(PathBuf::from)
+                    }
                     "netfs-redirect" => {
                         self.cache.netfs_redirect = value
                             .map(|v| NetfsRedirect::from_str(&v))
                             .transpose()
-                            .into_diagnostic()?
+                            .map_err(invalid_value(key))?
                             .unwrap_or_default();
                     }
                     _ => return Err(err),
@@ -2665,26 +2873,136 @@ impl Config {
         Ok(())
     }
 
+    /// Sets a key below `virtual-package-detectors`.
+    ///
+    /// The consent table is keyed by registration channel URL. An origin
+    /// containing dots must be a quoted segment, as in
+    /// `virtual-package-detectors.consent."https://conda.anaconda.org/conda-forge"`.
+    fn set_virtual_package_detectors(
+        &mut self,
+        key: &str,
+        value: Option<String>,
+    ) -> Result<(), SetConfigError> {
+        let err = SetConfigError::UnknownKey {
+            key: key.to_string(),
+            supported_keys: self.get_keys().join(",\n\t"),
+        };
+        if key == VIRTUAL_PACKAGE_DETECTORS {
+            let detectors = match value {
+                Some(value) => serde_json::de::from_str(&value).map_err(invalid_value(key))?,
+                None => VirtualPackageDetectorsConfig::default(),
+            };
+            rattler_config::config::Config::validate(&detectors).map_err(invalid_value(key))?;
+            self.virtual_package_detectors = normalize_detector_consent(detectors);
+            return Ok(());
+        }
+        let Some(subkey) = key.strip_prefix("virtual-package-detectors.") else {
+            return Err(err);
+        };
+        if subkey == "timeout-seconds" {
+            let previous = self.virtual_package_detectors.timeout_seconds;
+            self.virtual_package_detectors.timeout_seconds = value
+                .map(|v| v.parse::<u64>())
+                .transpose()
+                .map_err(invalid_value(key))?;
+            if let Err(error) =
+                rattler_config::config::Config::validate(&self.virtual_package_detectors)
+            {
+                self.virtual_package_detectors.timeout_seconds = previous;
+                return Err(invalid_value(key)(error));
+            }
+            return Ok(());
+        }
+        if subkey == "consent" {
+            self.virtual_package_detectors.consent = match value {
+                Some(value) => serde_json::de::from_str(&value).map_err(invalid_value(key))?,
+                None => Default::default(),
+            };
+            self.virtual_package_detectors =
+                normalize_detector_consent(std::mem::take(&mut self.virtual_package_detectors));
+            return Ok(());
+        }
+        let Some(consent_key) = subkey.strip_prefix("consent.") else {
+            return Err(err);
+        };
+        let segments = toml_edit::Key::parse(consent_key).map_err(invalid_value(key))?;
+        let origin = segments
+            .first()
+            .map(|segment| segment.get())
+            .and_then(|origin| Url::parse(origin).ok())
+            .filter(|url| !url.cannot_be_a_base())
+            .map(ChannelUrl::from)
+            .map(|origin| consent_origin(&origin))
+            .ok_or_else(|| {
+                SetConfigError::DetectorConsent(
+                    "the consent origin must be a channel URL, quoted when it contains dots: \
+                     virtual-package-detectors.consent.\"https://conda.anaconda.org/conda-forge\""
+                        .to_string(),
+                )
+            })?;
+        if segments.len() != 1 {
+            return Err(SetConfigError::DetectorConsent(format!(
+                "consent is channel-wide: use virtual-package-detectors.consent.\"{}\" \
+                 with a scalar \"allow\" or \"deny\", not a per-detector key",
+                origin.as_str().trim_end_matches('/')
+            )));
+        }
+        match value {
+            Some(value) => {
+                let decision = match value.as_str() {
+                    "allow" => DetectorDecision::Allow,
+                    "deny" => DetectorDecision::Deny,
+                    other => {
+                        return Err(SetConfigError::DetectorConsent(format!(
+                            "a channel consent decision is \"allow\" or \"deny\", got {other:?}"
+                        )));
+                    }
+                };
+                self.virtual_package_detectors.set_consent(origin, decision);
+            }
+            None => {
+                self.virtual_package_detectors.consent.shift_remove(&origin);
+            }
+        }
+        rattler_config::config::Config::validate(&self.virtual_package_detectors)
+            .map_err(invalid_value(key))?;
+        Ok(())
+    }
+
+    /// The keys of a shared configuration file's contents that not every
+    /// rattler-based tool understands, and that a shared file must not carry.
+    pub fn keys_not_shared(toml: &str) -> Result<Vec<String>, ParseConfigError> {
+        let (_, unused) = ConfigBase::<Config>::from_toml_str_shared(toml)?;
+        Ok(unused.into_iter().collect())
+    }
+
+    /// The configuration shared with other rattler-based tools alone: the
+    /// shared system file with the shared user files on top.
+    pub fn load_shared() -> Config {
+        let mut config = Config::default();
+        for path in std::iter::once(shared_system_config_path()).chain(shared_user_config_paths()) {
+            match Config::from_shared_path(&path) {
+                Ok(loaded) => config = config.merge_config(loaded),
+                Err(ConfigError::FileNotFound(_)) => (),
+                Err(e) => log_skipped(e),
+            }
+        }
+        config
+    }
+
     /// Save the config to the given path.
-    pub fn save(&self, to: &Path) -> miette::Result<()> {
-        let contents = toml_edit::ser::to_string_pretty(&self).into_diagnostic()?;
+    pub fn save(&self, to: &Path) -> Result<(), SaveConfigError> {
+        let contents = toml_edit::ser::to_string_pretty(&self)?;
         tracing::debug!("Saving config to: {}", to.display());
 
         let parent = to.parent().expect("config path should have a parent");
-        fs_err::create_dir_all(parent)
-            .into_diagnostic()
-            .wrap_err(format!(
-                "failed to create directories in '{}'",
-                parent.display()
-            ))?;
-        fs_err::write(to, contents)
-            .into_diagnostic()
-            .wrap_err(format!("failed to write config to '{}'", to.display()))
+        fs_err::create_dir_all(parent)?;
+        Ok(fs_err::write(to, contents)?)
     }
 
     /// Resolve the cache directory for `kind`, applying this config's
     /// `[cache]` settings on top of the env-var / default resolution.
-    pub fn cache_dir_for(&self, kind: CacheKind) -> miette::Result<PathBuf> {
+    pub fn cache_dir_for(&self, kind: CacheKind) -> Result<PathBuf, CacheDirError> {
         resolve_cache_kind_dir(&self.cache, kind)
     }
 
@@ -2711,7 +3029,13 @@ impl Config {
                     s3_middleware::S3Config::Custom {
                         endpoint_url: v.endpoint_url.clone(),
                         region: v.region.clone(),
-                        force_path_style: v.force_path_style,
+                        addressing_style: match v.addressing_style {
+                            S3AddressingStyle::Path => s3_middleware::S3AddressingStyle::Path,
+                            S3AddressingStyle::VirtualHost => {
+                                s3_middleware::S3AddressingStyle::VirtualHost
+                            }
+                        },
+                        credentials_provider: None,
                     },
                 )
             })
@@ -2754,6 +3078,36 @@ pub fn config_path_global() -> Vec<PathBuf> {
     .into_iter()
     .flatten()
     .collect()
+}
+
+/// Pixi's own user configuration file to write: the highest-priority existing
+/// candidate from [`config_path_global`], otherwise the last candidate.
+pub fn user_config_write_path() -> PathBuf {
+    user_config_write_path_from(config_path_global(), ConfigLayer::Tool)
+        .expect("there is always a candidate for the user configuration file")
+}
+
+/// The shared user configuration file to write: the highest-priority existing
+/// candidate from [`shared_user_config_paths`], otherwise the first candidate.
+pub fn shared_user_config_write_path() -> PathBuf {
+    user_config_write_path_from(shared_user_config_paths(), ConfigLayer::Shared)
+        .expect("the user configuration directory is known")
+}
+
+fn user_config_write_path_from(
+    mut candidates: Vec<PathBuf>,
+    layer: ConfigLayer,
+) -> Option<PathBuf> {
+    let last = candidates.len().checked_sub(1)?;
+    let fallback = match layer {
+        ConfigLayer::Shared => 0,
+        ConfigLayer::Tool => last,
+    };
+    let selected = candidates
+        .iter()
+        .rposition(|path| path.exists())
+        .unwrap_or(fallback);
+    Some(candidates.swap_remove(selected))
 }
 
 /// Every configuration file pixi reads by default, from lowest to highest
@@ -2904,7 +3258,21 @@ UNUSED = "unused"
         let error_message = result.unwrap_err().to_string();
         assert_eq!(
             error_message,
-            "The `detached-environments` path must be an absolute path: ./relative_path/"
+            "`detached-environments` must be an absolute path, got: ./relative_path/"
+        );
+    }
+
+    /// `set` must reject a relative path, otherwise `pixi config set` writes a
+    /// file that fails validation on every later load.
+    #[test]
+    fn test_set_detached_environments_relative_path() {
+        let mut config = Config::default();
+        let err = config
+            .set("detached-environments", Some("rel/x".to_string()))
+            .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "`detached-environments` must be an absolute path, got: rel/x"
         );
     }
 
@@ -2925,8 +3293,10 @@ UNUSED = "unused"
     fn test_config_from_cli() {
         // Test with all CLI options enabled
         let cli = ConfigCli {
-            tls_no_verify: true,
-            tls_root_certs: Some(TlsRootCerts::System),
+            tls: ConfigCliTls {
+                tls_no_verify: true,
+                tls_root_certs: Some(TlsRootCerts::System),
+            },
             offline: Some(true),
             auth_file: None,
             pypi_keyring_provider: Some(KeyringProvider::Subprocess),
@@ -2960,8 +3330,7 @@ UNUSED = "unused"
         assert_eq!(config.pinning_strategy, Some(PinningStrategy::Semver));
 
         let cli = ConfigCli {
-            tls_no_verify: false,
-            tls_root_certs: None,
+            tls: ConfigCliTls::default(),
             offline: None,
             auth_file: Some(PathBuf::from("path.json")),
             pypi_keyring_provider: None,
@@ -3149,7 +3518,7 @@ UNUSED = "unused"
             [s3-options.bucket1]
             endpoint-url = "https://my-s3-host"
             region = "us-east-1"
-            force-path-style = false
+            addressing-style = "path"
         "#;
         let (config, _) = Config::from_toml(toml, None).unwrap();
         let s3_options = config.s3_options.0;
@@ -3158,26 +3527,40 @@ UNUSED = "unused"
             Url::parse("https://my-s3-host").unwrap()
         );
         assert_eq!(s3_options["bucket1"].region, "us-east-1");
-        assert!(!s3_options["bucket1"].force_path_style);
+        assert_eq!(
+            s3_options["bucket1"].addressing_style,
+            S3AddressingStyle::Path
+        );
     }
 
     #[test]
     fn test_s3_options_invalid_config() {
-        let toml = r#"
+        for region in ["", "region = 42", "region = true"] {
+            let toml = format!(
+                r#"
+                [s3-options.bucket1]
+                endpoint-url = "https://my-s3-host"
+                {region}
+                "#
+            );
+            assert!(matches!(
+                Config::from_toml(&toml, None),
+                Err(ParseConfigError::Toml(_))
+            ));
+        }
+
+        let (config, _) = Config::from_toml(
+            r#"
             [s3-options.bucket1]
             endpoint-url = "https://my-s3-host"
             region = "us-east-1"
-            # force-path-style = false
-        "#;
-        let result = Config::from_toml(toml, None);
-        assert!(result.is_err());
-        assert!(
-            result
-                .err()
-                .unwrap()
-                .to_string()
-                .contains("missing field `force-path-style`")
-        );
+            "#,
+            None,
+        )
+        .unwrap();
+        let bucket = &config.s3_options.0["bucket1"];
+        assert_eq!(bucket.region, "us-east-1");
+        assert_eq!(bucket.addressing_style, S3AddressingStyle::VirtualHost);
     }
 
     #[test]
@@ -3189,15 +3572,189 @@ UNUSED = "unused"
     }
 
     #[test]
+    fn test_virtual_package_detectors_keys() {
+        let mut config = Config::default();
+        let origin =
+            ChannelUrl::from(Url::parse("https://conda.anaconda.org/conda-forge").unwrap());
+        let key = "virtual-package-detectors.consent.\"https://conda.anaconda.org/conda-forge/\"";
+        config.set(key, Some("allow".to_string())).unwrap();
+        assert_eq!(
+            config.virtual_package_detectors.consent(&origin),
+            Some(DetectorDecision::Allow)
+        );
+        config.set(key, Some("deny".to_string())).unwrap();
+        assert_eq!(
+            config.virtual_package_detectors.consent(&origin),
+            Some(DetectorDecision::Deny)
+        );
+        assert!(config.set(key, Some("maybe".to_string())).is_err());
+        assert!(config.set(
+            "virtual-package-detectors.consent.\"https://conda.anaconda.org/conda-forge\".mpi-detect",
+            Some("allow".to_string()),
+        ).is_err());
+        config.set(key, None).unwrap();
+        assert_eq!(config.virtual_package_detectors.consent(&origin), None);
+        assert!(
+            config
+                .set(
+                    "virtual-package-detectors.consent.conda-forge",
+                    Some("allow".to_string()),
+                )
+                .is_err()
+        );
+        config
+            .set(
+                "virtual-package-detectors.timeout-seconds",
+                Some("60".to_string()),
+            )
+            .unwrap();
+        assert_eq!(config.virtual_package_detectors.timeout_seconds, Some(60));
+        assert!(
+            config
+                .set(
+                    "virtual-package-detectors.timeout-seconds",
+                    Some("900".to_string())
+                )
+                .is_err()
+        );
+        config.set(
+            "virtual-package-detectors",
+            Some(r#"{"timeout-seconds": 30, "consent": {"https://conda.anaconda.org/conda-forge": "deny"}}"#.to_string()),
+        ).unwrap();
+        let toml = toml_edit::ser::to_string_pretty(&config).unwrap();
+        let (parsed, _) = Config::from_toml(&toml, None).unwrap();
+        assert_eq!(
+            parsed.virtual_package_detectors.consent(&origin),
+            Some(DetectorDecision::Deny)
+        );
+        assert_eq!(parsed.virtual_package_detectors.timeout_seconds, Some(30));
+        for seconds in [0, 301] {
+            assert!(
+                config
+                    .set(
+                        "virtual-package-detectors",
+                        Some(format!(r#"{{"timeout-seconds": {seconds}}}"#)),
+                    )
+                    .is_err()
+            );
+            assert_eq!(config.virtual_package_detectors.timeout_seconds, Some(30));
+            let directory = tempfile::tempdir().unwrap();
+            let path = directory.path().join("config.toml");
+            fs_err::write(
+                &path,
+                format!("[virtual-package-detectors]\ntimeout-seconds = {seconds}\n"),
+            )
+            .unwrap();
+            assert!(matches!(
+                Config::from_path(&path),
+                Err(ConfigError::ValidationError(_, _))
+            ));
+            assert!(matches!(
+                Config::from_shared_path(&path),
+                Err(ConfigError::ValidationError(_, _))
+            ));
+        }
+    }
+
+    #[test]
+    fn test_virtual_package_detectors_are_shared_keys() {
+        let shared = r#"
+            [virtual-package-detectors]
+            timeout-seconds = 60
+
+            [virtual-package-detectors.consent]
+            "https://conda.anaconda.org/conda-forge" = "allow"
+        "#;
+        assert!(Config::keys_not_shared(shared).unwrap().is_empty());
+        let not_shared = Config::keys_not_shared("[shell]\nchange-ps1 = false\n").unwrap();
+        assert_eq!(not_shared, ["shell"]);
+    }
+
+    #[test]
+    fn authenticated_detector_denials_survive_loading_and_merging() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("config.toml");
+        fs_err::write(
+            &path,
+            "[virtual-package-detectors.consent]\n\
+             \"https://user:secret@prefix.dev/t/token/channel\" = \"deny\"\n",
+        )
+        .unwrap();
+        let (repository, _) = Config::from_toml(
+            "[virtual-package-detectors.consent]\n\"https://prefix.dev/channel\" = \"allow\"\n",
+            None,
+        )
+        .unwrap();
+        let origin = ChannelUrl::from(Url::parse("https://prefix.dev/channel").unwrap());
+        for user in [
+            Config::from_path(&path).unwrap(),
+            Config::from_shared_path(&path).unwrap(),
+        ] {
+            assert_eq!(
+                user.merge_config(repository.clone())
+                    .virtual_package_detectors
+                    .consent(&origin),
+                Some(DetectorDecision::Deny)
+            );
+        }
+    }
+
+    #[test]
+    fn test_virtual_package_detectors_deny_wins_across_layers() {
+        let origin = |url: &str| ChannelUrl::from(Url::parse(url).unwrap());
+        let config = |decisions: &[(&str, DetectorDecision)]| {
+            let mut detectors = VirtualPackageDetectorsConfig::default();
+            for (url, decision) in decisions {
+                detectors.set_consent(origin(url), *decision);
+            }
+            Config {
+                virtual_package_detectors: detectors,
+                ..Config::default()
+            }
+        };
+        let user = config(&[
+            ("https://denied.example/channel", DetectorDecision::Deny),
+            ("https://allowed.example/channel", DetectorDecision::Allow),
+        ]);
+        let repository = config(&[
+            ("https://denied.example/channel", DetectorDecision::Allow),
+            ("https://allowed.example/channel", DetectorDecision::Deny),
+            ("https://new.example/channel", DetectorDecision::Allow),
+        ]);
+        let merged = user.merge_config(repository).virtual_package_detectors;
+        assert_eq!(
+            merged.consent(&origin("https://denied.example/channel")),
+            Some(DetectorDecision::Deny)
+        );
+        assert_eq!(
+            merged.consent(&origin("https://allowed.example/channel")),
+            Some(DetectorDecision::Deny)
+        );
+        assert_eq!(
+            merged.consent(&origin("https://new.example/channel")),
+            Some(DetectorDecision::Allow)
+        );
+    }
+
+    #[test]
     fn test_config_merge_priority() {
         // If I set every config key, ensure that `other wins`
         let mut config = Config::default();
+        let mut virtual_package_detectors = VirtualPackageDetectorsConfig {
+            timeout_seconds: Some(45),
+            ..Default::default()
+        };
+        virtual_package_detectors.set_consent(
+            ChannelUrl::from(Url::parse("https://conda.anaconda.org/conda-forge").unwrap()),
+            DetectorDecision::Allow,
+        );
         let other = Config {
             default_channels: vec![NamedChannelOrUrl::from_str("conda-forge").unwrap()],
             channel_config: ChannelConfig::default_with_root_dir(PathBuf::from("/root/dir")),
             tls_no_verify: Some(true),
             tls_root_certs: Some(TlsRootCerts::System),
             offline: Some(true),
+            virtual_package_detectors,
             detached_environments: Some(DetachedEnvironments::Path(PathBuf::from("/path/to/envs"))),
             concurrency: ConcurrencyConfig {
                 solves: 5,
@@ -3232,7 +3789,7 @@ UNUSED = "unused"
                 S3Options {
                     endpoint_url: Url::parse("https://my-s3-host").unwrap(),
                     region: "us-east-1".to_string(),
-                    force_path_style: false,
+                    addressing_style: S3AddressingStyle::VirtualHost,
                 },
             )])),
             repodata_config: RepodataConfig {
@@ -3462,6 +4019,67 @@ UNUSED = "unused"
         );
     }
 
+    #[rstest]
+    fn test_user_config_write_path_matches_load_precedence(
+        #[values(ConfigLayer::Shared, ConfigLayer::Tool)] layer: ConfigLayer,
+        #[values(
+            [true, true, true],
+            [true, true, false],
+            [true, false, false],
+            [false, true, true],
+            [false, true, false],
+            [false, false, true]
+        )]
+        existing: [bool; 3],
+    ) {
+        let directory = tempfile::tempdir().unwrap();
+        let candidates: Vec<_> = ["xdg.toml", "user.toml", "home.toml"]
+            .map(|name| directory.path().join(name))
+            .into();
+        for (path, exists) in candidates.iter().zip(existing) {
+            if exists {
+                fs_err::write(path, "tls-no-verify = true\n").unwrap();
+            }
+        }
+        let selected = user_config_write_path_from(candidates.clone(), layer).unwrap();
+        let expected = existing.iter().rposition(|exists| *exists).unwrap();
+        assert_eq!(selected, candidates[expected]);
+        fs_err::write(&selected, "tls-no-verify = false\n").unwrap();
+
+        let locations = match layer {
+            ConfigLayer::Shared => layer_locations(candidates, Vec::new()),
+            ConfigLayer::Tool => layer_locations(Vec::new(), candidates),
+        };
+        let mut config = Config::default();
+        for location in locations {
+            let loaded = match location.layer {
+                ConfigLayer::Shared => Config::from_shared_path(&location.path),
+                ConfigLayer::Tool => Config::from_path(&location.path),
+            };
+            match loaded {
+                Ok(loaded) => config = config.merge_config(loaded),
+                Err(ConfigError::FileNotFound(_)) => {}
+                Err(error) => panic!("{error}"),
+            }
+        }
+        assert_eq!(config.tls_no_verify, Some(false));
+    }
+
+    #[rstest]
+    #[case(ConfigLayer::Shared, 0)]
+    #[case(ConfigLayer::Tool, 2)]
+    fn test_user_config_write_path_fallback(#[case] layer: ConfigLayer, #[case] fallback: usize) {
+        let directory = tempfile::tempdir().unwrap();
+        let candidates: Vec<_> = ["xdg.toml", "user.toml", "home.toml"]
+            .map(|name| directory.path().join(name))
+            .into();
+        assert_eq!(
+            user_config_write_path_from(candidates.clone(), layer),
+            Some(candidates[fallback].clone())
+        );
+        assert_eq!(user_config_write_path_from(Vec::new(), layer), None);
+    }
+
     #[test]
     fn test_config_merge_multiple() {
         let mut config = Config::default();
@@ -3480,7 +4098,7 @@ UNUSED = "unused"
                     S3Options {
                         endpoint_url: Url::parse("https://my-s3-host").unwrap(),
                         region: "us-east-1".to_string(),
-                        force_path_style: false,
+                        addressing_style: S3AddressingStyle::VirtualHost,
                     },
                 ),
                 (
@@ -3488,7 +4106,7 @@ UNUSED = "unused"
                     S3Options {
                         endpoint_url: Url::parse("https://my-s3-host").unwrap(),
                         region: "us-east-1".to_string(),
-                        force_path_style: false,
+                        addressing_style: S3AddressingStyle::VirtualHost,
                     },
                 ),
             ])),
@@ -3518,7 +4136,7 @@ UNUSED = "unused"
                 S3Options {
                     endpoint_url: Url::parse("https://my-new-s3-host").unwrap(),
                     region: "us-east-1".to_string(),
-                    force_path_style: false,
+                    addressing_style: S3AddressingStyle::VirtualHost,
                 },
             )])),
             ..Default::default()
@@ -3556,15 +4174,23 @@ UNUSED = "unused"
             ..config_2
         };
 
-        let mut merged = config_1.clone();
-        merged = merged.merge_config(config_2);
+        let merged = config_1.merge_config(config_2);
         assert!(merged.s3_options.0.contains_key("bucket1"));
-
-        let debug = format!("{merged:#?}");
-        let debug = debug.replace("\\\\", "/");
-        // replace the path with a placeholder
-        let debug = debug.replace(&d.to_str().unwrap().replace('\\', "/"), "path");
-        insta::assert_snapshot!(debug);
+        assert_eq!(
+            merged.default_channels,
+            ["conda-forge", "bioconda", "defaults"]
+                .map(|channel| NamedChannelOrUrl::from_str(channel).unwrap())
+        );
+        assert_eq!(merged.tls_no_verify, Some(false));
+        assert_eq!(merged.shell.change_ps1, Some(true));
+        assert_eq!(
+            merged.mirrors[&Url::parse("https://conda.anaconda.org/conda-forge").unwrap()],
+            vec![Url::parse("whatever://config_2").unwrap()]
+        );
+        assert_eq!(
+            merged.loaded_from,
+            vec![d.join("config_2.toml"), d.join("config_1.toml")]
+        );
     }
 
     #[test]
@@ -3663,13 +4289,15 @@ UNUSED = "unused"
                 .as_path()
         );
 
+        // Must be absolute on every platform; `/path/to/envs` is not on Windows.
+        let envs_dir = std::env::temp_dir().join("envs");
         config
-            .set("detached-environments", Some("/path/to/envs".to_string()))
+            .set(
+                "detached-environments",
+                Some(envs_dir.to_string_lossy().into_owned()),
+            )
             .unwrap();
-        assert_eq!(
-            config.detached_environments_dir().unwrap(),
-            Some(PathBuf::from("/path/to/envs"))
-        );
+        assert_eq!(config.detached_environments_dir().unwrap(), Some(envs_dir));
 
         config
             .set("mirrors", Some(r#"{"https://conda.anaconda.org/conda-forge": ["https://prefix.dev/conda-forge"]}"#.to_string()))
@@ -3736,7 +4364,7 @@ UNUSED = "unused"
 
         assert_eq!(config.max_concurrent_downloads(), 1);
 
-        config.set("s3-options.my-bucket", Some(r#"{"endpoint-url": "http://localhost:9000", "force-path-style": true, "region": "auto"}"#.to_string())).unwrap();
+        config.set("s3-options.my-bucket", Some(r#"{"endpoint-url": "http://localhost:9000", "addressing-style": "path", "region": "auto"}"#.to_string())).unwrap();
         let s3_options = config.s3_options.0.get("my-bucket").unwrap();
         assert!(
             s3_options
@@ -3744,14 +4372,14 @@ UNUSED = "unused"
                 .to_string()
                 .contains("http://localhost:9000")
         );
-        assert!(s3_options.force_path_style);
+        assert_eq!(s3_options.addressing_style, S3AddressingStyle::Path);
         assert_eq!(s3_options.region, "auto");
 
         // Test tool-platform
         config
             .set("tool-platform", Some("linux-64".to_string()))
             .unwrap();
-        assert_eq!(config.tool_platform, Some(Platform::Linux64));
+        assert_eq!(config.tool_platform, Some(Subdir::Linux64));
 
         // Test run-post-link-scripts
         config
@@ -3874,8 +4502,8 @@ UNUSED = "unused"
             .unwrap();
         config
             .set(
-                "s3-options.test-bucket.force-path-style",
-                Some("false".to_string()),
+                "s3-options.test-bucket.addressing-style",
+                Some("virtual-host".to_string()),
             )
             .unwrap();
 
@@ -3954,7 +4582,10 @@ UNUSED = "unused"
 
         // Test detached-environments
         config
-            .set("detached-environments", Some("/custom/path".to_string()))
+            .set(
+                "detached-environments",
+                Some(std::env::temp_dir().to_string_lossy().into_owned()),
+            )
             .unwrap();
         assert!(matches!(
             config.detached_environments,
@@ -3968,6 +4599,23 @@ UNUSED = "unused"
         assert_eq!(config.pinning_strategy, Some(PinningStrategy::Semver));
 
         config.set("unknown-key", None).unwrap_err();
+    }
+
+    #[test]
+    fn test_set_errors_name_the_key() {
+        let mut config = Config::default();
+
+        let err = config.set("offline", Some("maybe".into())).unwrap_err();
+        assert_eq!(err.to_string(), "invalid value for `offline`");
+        assert_eq!(
+            std::error::Error::source(&err).unwrap().to_string(),
+            "provided string was not `true` or `false`"
+        );
+
+        for key in ["s3-options", "s3-options.bucket", "concurrency.solves"] {
+            let err = config.set(key, None).unwrap_err();
+            assert_eq!(err.to_string(), format!("`{key}` requires a value"));
+        }
     }
 
     #[rstest]
@@ -4275,6 +4923,7 @@ UNUSED = "unused"
             CacheKind::ExecEnvironments,
             CacheKind::BuildToolEnvironments,
             CacheKind::DetachedEnvironments,
+            CacheKind::VirtualPackageDetectors,
         ];
         for kind in kinds {
             let toml = format!("{} = \"/abs/path\"\n", kind.config_key());

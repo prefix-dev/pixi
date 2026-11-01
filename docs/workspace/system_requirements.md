@@ -133,11 +133,18 @@ runner solving a CUDA-enabled lock file).
 
 - `CONDA_OVERRIDE_CUDA` sets the `__cuda` version. Example: `CONDA_OVERRIDE_CUDA=11`.
 - `CONDA_OVERRIDE_CUDA_ARCH` sets the `__cuda_arch` compute capability, formatted as `{major}.{minor}`. Example: `CONDA_OVERRIDE_CUDA_ARCH=8.6`.
+- `CONDA_OVERRIDE_AMDGPU` declares an AMD GPU (`__amdgpu`). Its only valid version is `0`. Example: `CONDA_OVERRIDE_AMDGPU=0`.
+- `CONDA_OVERRIDE_AMDGPU_ARCH` sets the `__amdgpu_arch` AMDGPU ISA version, formatted as `{major}.{minor}.{stepping}`. Example: `CONDA_OVERRIDE_AMDGPU_ARCH=11.0.0`.
 - `CONDA_OVERRIDE_GLIBC` sets the `__glibc` version. Example: `CONDA_OVERRIDE_GLIBC=2.28`.
 - `CONDA_OVERRIDE_OSX` sets the `__osx` version. Example: `CONDA_OVERRIDE_OSX=13.0`.
 - `CONDA_OVERRIDE_LINUX` sets the `__linux` version. Example: `CONDA_OVERRIDE_LINUX=4.18`.
 - `CONDA_OVERRIDE_WIN` sets the `__win` version. Example: `CONDA_OVERRIDE_WIN=0`.
 - `CONDA_OVERRIDE_ARCHSPEC` sets the `__archspec` CPU microarchitecture name. Example: `CONDA_OVERRIDE_ARCHSPEC=skylake`. Set it to `0` to mark the microarchitecture as unknown.
+
+On a machine without an AMD GPU, set both `CONDA_OVERRIDE_AMDGPU=0` and
+`CONDA_OVERRIDE_AMDGPU_ARCH=<major.minor.stepping>` to mock an architecture.
+The architecture override is ignored when `__amdgpu` is absent. Unsupported
+platform errors include the required assignments in their override hints.
 
 Setting any of these to an empty string (for example `CONDA_OVERRIDE_CUDA=""`)
 disables the corresponding virtual package instead of setting a version, which

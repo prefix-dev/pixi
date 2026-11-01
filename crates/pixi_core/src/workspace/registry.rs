@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::{cmp::Ordering, collections::HashMap};
 
 use itertools::Itertools;
-use miette::{Context, Diagnostic, IntoDiagnostic};
+use miette::Diagnostic;
 use pixi_config::pixi_home;
 use pixi_consts::consts;
 use serde::{Deserialize, Serialize};
@@ -22,11 +22,34 @@ pub struct WorkspaceRegistry {
     pub named_workspaces: HashMap<String, PathBuf>,
 }
 
-/// Errors that may occur when loading the workspace registry
+/// Errors that may occur when using the workspace registry
 #[derive(Debug, Error, Diagnostic)]
 pub enum WorkspaceRegistryError {
     #[error(transparent)]
     Io(#[from] std::io::Error),
+
+    #[error("unable to determine pixi home directory")]
+    PixiHome,
+
+    #[error("failed to parse the workspace registry")]
+    Parse(#[source] toml_edit::de::Error),
+
+    #[error("failed to serialize the workspace registry")]
+    Serialize(#[source] toml_edit::ser::Error),
+
+    #[error("failed to create directories in '{}'", .path.display())]
+    CreateDir {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("failed to write workspace registry config to '{}'", .path.display())]
+    Write {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
 
     #[error("could not find workspace '{}'", .name)]
     #[diagnostic(help("{help}"))]
@@ -35,9 +58,8 @@ pub enum WorkspaceRegistryError {
 
 impl WorkspaceRegistry {
     /// Loads the workspace registry from disk, if it exists.
-    pub fn load() -> miette::Result<Self> {
-        let path = workspace_registry_path()
-            .ok_or_else(|| miette::miette!("Unable to determine pixi home directory"))?;
+    pub fn load() -> Result<Self, WorkspaceRegistryError> {
+        let path = workspace_registry_path().ok_or(WorkspaceRegistryError::PixiHome)?;
 
         let contents = match fs_err::read_to_string(&path) {
             Ok(c) => c,
@@ -49,62 +71,56 @@ impl WorkspaceRegistry {
                 return Ok(WorkspaceRegistry::default());
             }
             Err(e) => {
-                return Err(e).into_diagnostic()?;
+                return Err(e.into());
             }
         };
 
         // Deserialize the contents
-        let de = toml_edit::de::Deserializer::parse(&contents).into_diagnostic()?;
+        let de =
+            toml_edit::de::Deserializer::parse(&contents).map_err(WorkspaceRegistryError::Parse)?;
         let registry: WorkspaceRegistry =
-            serde_ignored::deserialize(de, |_| {}).into_diagnostic()?;
+            serde_ignored::deserialize(de, |_| {}).map_err(WorkspaceRegistryError::Parse)?;
 
         Ok(registry)
     }
 
     /// Saves the workspace registry to disk.
-    pub async fn save(&self) -> miette::Result<()> {
-        let path = workspace_registry_path()
-            .ok_or_else(|| miette::miette!("Unable to determine pixi home directory"))?;
+    pub async fn save(&self) -> Result<(), WorkspaceRegistryError> {
+        let path = workspace_registry_path().ok_or(WorkspaceRegistryError::PixiHome)?;
 
         if let Some(parent) = path.parent() {
-            fs_err::create_dir_all(parent)
-                .into_diagnostic()
-                .wrap_err(format!(
-                    "failed to create directories in '{}'",
-                    parent.display()
-                ))?;
+            fs_err::create_dir_all(parent).map_err(|source| WorkspaceRegistryError::CreateDir {
+                path: parent.to_path_buf(),
+                source,
+            })?;
         }
 
-        let contents = toml_edit::ser::to_string_pretty(&self).into_diagnostic()?;
+        let contents =
+            toml_edit::ser::to_string_pretty(&self).map_err(WorkspaceRegistryError::Serialize)?;
         fs_err::write(&path, contents)
-            .into_diagnostic()
-            .wrap_err(format!(
-                "failed to write workspace registry config to '{}'",
-                path.display()
-            ))
+            .map_err(|source| WorkspaceRegistryError::Write { path, source })
     }
 
     /// Remove the workspace from the registry given the workspace name.
-    pub async fn remove_workspace(&mut self, name: &String) -> miette::Result<()> {
-        if self.named_workspaces.contains_key(name) {
-            self.named_workspaces.remove(name);
-            self.save().await?;
-        } else {
-            return Err(miette::diagnostic!("Workspace '{}' is not found.", name,).into());
-        }
-        Ok(())
+    pub async fn remove_workspace(&mut self, name: &String) -> Result<(), WorkspaceRegistryError> {
+        self.named_workspace(name)?;
+        self.named_workspaces.remove(name);
+        self.save().await
     }
 
     /// Add a workspace to the registry given the name and path association.
-    pub async fn add_workspace(&mut self, name: String, path: PathBuf) -> miette::Result<()> {
+    pub async fn add_workspace(
+        &mut self,
+        name: String,
+        path: PathBuf,
+    ) -> Result<(), WorkspaceRegistryError> {
         self.named_workspaces.entry(name).or_insert(path);
-        self.save().await?;
-        Ok(())
+        self.save().await
     }
 
     /// Prune the workspace by removing entries whose path does not exist. Returns the
     /// list of workspaces that have been removed.
-    pub async fn prune(&mut self) -> miette::Result<Vec<String>> {
+    pub async fn prune(&mut self) -> Result<Vec<String>, WorkspaceRegistryError> {
         let names_to_remove: Vec<_> = self
             .named_workspaces
             .iter()
@@ -126,10 +142,7 @@ impl WorkspaceRegistry {
     }
 
     /// Retrieve the path to the manifest file for a named workspaces.
-    pub fn named_workspace(
-        &self,
-        name: &String,
-    ) -> miette::Result<PathBuf, WorkspaceRegistryError> {
+    pub fn named_workspace(&self, name: &String) -> Result<PathBuf, WorkspaceRegistryError> {
         match self.named_workspaces.get(name) {
             Some(path) => Ok(path.clone()),
             None => {

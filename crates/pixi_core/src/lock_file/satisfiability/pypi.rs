@@ -5,7 +5,7 @@ use std::{
     str::FromStr,
     sync::{Arc, Mutex},
 };
-use uv_redacted::DisplaySafeUrl;
+use uv_redacted::SafeUrl;
 
 use dashmap::DashMap;
 use futures::TryStreamExt;
@@ -17,7 +17,7 @@ use pixi_command_dispatcher::{
 use pixi_git::url::RepositoryUrl;
 use pixi_install_pypi::LockedPypiRecord;
 use pixi_manifest::{EnvironmentName, FeaturesExt, HasWorkspaceManifest, PixiPlatform};
-use pixi_record::{LockedGitUrl, PixiRecord};
+use pixi_record::LockedGitUrl;
 use pixi_spec::Subdirectory;
 use pixi_uv_context::UvResolutionContext;
 use pixi_uv_conversions::{
@@ -26,21 +26,20 @@ use pixi_uv_conversions::{
     pypi_options_to_index_locations, to_index_strategy, to_requirements_relative_to,
 };
 use pypi_modifiers::pypi_marker_env::determine_marker_environment;
-use pypi_modifiers::pypi_tags::{get_pypi_tags, is_python_record, macos_deployment_target};
-use rattler_conda_types::GenericVirtualPackage;
+use pypi_modifiers::pypi_tags::{is_python_record, macos_deployment_target};
 use rattler_lock::UrlOrPath;
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
-use uv_client::{FlatIndexClient, RegistryClientBuilder};
-use uv_configuration::initialize_rayon_once;
+use uv_client::RegistryClientBuilder;
 use uv_distribution::DistributionDatabase;
-use uv_distribution_types::{ConfigSettings, DependencyMetadata, IndexUrl, RequirementSource};
+use uv_distribution_types::{ConfigSettings, DependencyMetadata, RequirementSource};
 use uv_git_types::GitReference;
 use uv_pypi_types::PyProjectToml;
 use uv_resolver::FlatIndex;
+use uv_threads::initialize_rayon_once;
 use uv_types::HashStrategy;
 
-use super::errors::PlatformUnsat;
+use super::errors::{DuplicateEntry, PlatformUnsat};
 use super::platform::{RequirementOrigin, VerifySatisfiabilityContext};
 use super::pypi_metadata;
 use crate::{
@@ -48,7 +47,7 @@ use crate::{
         CondaPrefixUpdater, PixiRecordsByName, PypiRecordsByName,
         outdated::{BuildCacheKey, PypiEnvironmentBuildCache},
         records_by_name::LockedPypiRecordsByName,
-        resolve::build_dispatch::{LazyBuildDispatch, UvBuildDispatchParams},
+        resolve::build_dispatch::{BuildingRecords, LazyBuildDispatch, UvBuildDispatchParams},
     },
     workspace::{
         Environment, EnvironmentVars, HasWorkspaceRef, grouped_environment::GroupedEnvironment,
@@ -78,7 +77,8 @@ pub(crate) fn pypi_satisfies_editable(
         RequirementSource::Registry { .. }
         | RequirementSource::Url { .. }
         | RequirementSource::Path { .. }
-        | RequirementSource::Git { .. } => {
+        | RequirementSource::GitDirectory { .. }
+        | RequirementSource::GitPath { .. } => {
             unreachable!(
                 "editable requirement cannot be from registry, url, git or path (non-directory)"
             )
@@ -191,7 +191,7 @@ pub(crate) fn pypi_satisfies_requirement(
                 locked_data.as_wheel().and_then(|w| w.index_url.as_ref()),
             ) {
                 (Some(required_index), Some(locked_url)) => {
-                    let required_url: Url = required_index.url.url().clone().into();
+                    let required_url = required_index.url.url().clone().into_unsafe_url();
                     // When a package is resolved from a local directory / file:// index,
                     // rattler_lock stores its location as a Path and strips index_url during
                     // deserialization (defaulting it to default_index). If the locked package
@@ -268,7 +268,7 @@ pub(crate) fn pypi_satisfies_requirement(
                     .strip_prefix("direct+")
                     .and_then(|str| Url::parse(str).ok())
                     .unwrap_or(locked_url.clone());
-                let locked_url = DisplaySafeUrl::from_url(locked_url);
+                let locked_url = SafeUrl::from_url(locked_url);
 
                 // Compare the URLs ignoring any userinfo (credentials). We redact
                 // credentials (e.g. `__token__` -> `****`) when writing the direct
@@ -290,7 +290,7 @@ pub(crate) fn pypi_satisfies_requirement(
             }
             Err(PlatformUnsat::LockedPyPIRequiresDirectUrl(spec.name.to_string()).into())
         }
-        RequirementSource::Git {
+        RequirementSource::GitDirectory {
             git, subdirectory, ..
         } => {
             // Use `git.url()`, not `git.repository()`: uv's `repository()` strips the
@@ -304,7 +304,8 @@ pub(crate) fn pypi_satisfies_requirement(
                     if let Ok(pinned_git_spec) = LockedGitUrl::new(url.clone()).to_pinned_git_spec()
                     {
                         let pinned_repository = RepositoryUrl::new(&pinned_git_spec.git);
-                        let specified_repository = RepositoryUrl::new(git_url);
+                        let specified_repository =
+                            RepositoryUrl::new(&git_url.clone().into_unsafe_url());
 
                         let repo_is_same = pinned_repository == specified_repository;
                         if !repo_is_same {
@@ -428,6 +429,9 @@ pub(crate) fn pypi_satisfies_requirement(
                 .into()),
             }
         }
+        RequirementSource::GitPath { .. } => {
+            Err(PlatformUnsat::UnsupportedGitArchiveDependency(spec.name.clone()).into())
+        }
         RequirementSource::Path { install_path, .. }
         | RequirementSource::Directory { install_path, .. } => {
             if let UrlOrPath::Path(locked_path) = &**locked_data.location() {
@@ -467,7 +471,7 @@ pub(super) async fn lock_pypi_packages(
     ctx: &VerifySatisfiabilityContext<'_>,
     locked_pixi_records: &PixiRecordsByName,
     unresolved_pypi_environment: &PypiRecordsByName,
-    building_pixi_records: Result<PixiRecordsByName, PlatformUnsat>,
+    building_pixi_records: Result<PixiRecordsByName, DuplicateEntry>,
 ) -> Result<LockedPypiRecordsByName, CommandDispatcherError<Box<PlatformUnsat>>> {
     // Reading local package metadata is independent and IO-bound, so resolve
     // records concurrently and reassemble in the original order.
@@ -584,7 +588,7 @@ struct BuildMetadataContext<'a> {
     project_env_vars: &'a HashMap<EnvironmentName, EnvironmentVars>,
     command_dispatcher: CommandDispatcher,
     build_caches: &'a DashMap<BuildCacheKey, Arc<PypiEnvironmentBuildCache>>,
-    building_pixi_records: &'a Result<PixiRecordsByName, PlatformUnsat>,
+    building_pixi_records: &'a Result<PixiRecordsByName, DuplicateEntry>,
     static_metadata_cache: &'a DashMap<PathBuf, pypi_metadata::LocalPackageMetadata>,
 }
 
@@ -669,16 +673,15 @@ async fn read_local_package_metadata(
     );
 
     let registry_client = {
-        let base_client_builder = ctx.uv_context.base_client_builder(
-            allow_insecure_hosts.clone(),
-            Some(&marker_environment),
-            ctx.uv_context.connectivity,
-        );
+        let base_client_builder = ctx
+            .uv_context
+            .base_client_builder(allow_insecure_hosts.clone(), ctx.uv_context.connectivity);
 
         let mut uv_client_builder =
             RegistryClientBuilder::new(base_client_builder, ctx.uv_context.cache.clone())
                 .index_locations(index_locations.clone())
-                .index_strategy(index_strategy);
+                .index_strategy(index_strategy)
+                .markers(&marker_environment);
 
         for p in &ctx.uv_context.proxies {
             uv_client_builder = uv_client_builder.proxy(p.clone())
@@ -691,42 +694,16 @@ async fn read_local_package_metadata(
         )
     };
 
-    // Get tags for this platform (needed for FlatIndex)
-    let tags = get_pypi_tags(ctx.platform, python_record.as_ref()).map_err(|e| {
-        PlatformUnsat::FailedToReadLocalMetadata(
-            package_name.clone(),
-            format!("Failed to determine pypi tags: {e}"),
-        )
-    })?;
-
-    let flat_index = {
-        let flat_index_client = FlatIndexClient::new(
-            registry_client.cached_client(),
-            ctx.uv_context.connectivity,
-            &ctx.uv_context.cache,
-        );
-        let flat_index_urls: Vec<&IndexUrl> = index_locations
-            .flat_indexes()
-            .map(|index| index.url())
-            .collect();
-        let flat_index_entries = flat_index_client
-            .fetch_all(flat_index_urls.into_iter())
-            .await
-            .map_err(|e| {
-                PlatformUnsat::FailedToReadLocalMetadata(
-                    package_name.clone(),
-                    format!("Failed to fetch flat index entries: {e}"),
-                )
-            })?;
-        // Satisfiability compares the lock file against the manifest; the
-        // build machinery here has no locked digests to verify against.
-        FlatIndex::from_entries(
-            flat_index_entries,
-            Some(&tags),
-            &HashStrategy::None,
-            &build_options,
-        )
-    };
+    // Satisfiability compares the lock file against the manifest; the
+    // build machinery here has no locked digests to verify against.
+    let flat_index = FlatIndex::load(&registry_client, &ctx.uv_context.cache, &index_locations)
+        .await
+        .map_err(|e| {
+            PlatformUnsat::FailedToReadLocalMetadata(
+                package_name.clone(),
+                format!("Failed to fetch flat index entries: {e}"),
+            )
+        })?;
 
     // Source-build metadata is independent of the conda environment, so do not
     // include the conda fingerprint here. Only include cache discriminators that
@@ -737,6 +714,7 @@ async fn read_local_package_metadata(
         &config_settings,
         deployment_target.as_deref(),
     );
+    let hash_strategy = HashStrategy::default();
     let build_params = UvBuildDispatchParams::new(
         &registry_client,
         &ctx.uv_context.cache,
@@ -745,11 +723,12 @@ async fn read_local_package_metadata(
         &dependency_metadata,
         &config_settings,
         &build_options,
-        &HashStrategy::None,
+        &hash_strategy,
     )
     .with_index_strategy(index_strategy)
+    .with_capabilities(ctx.uv_context.capabilities.clone())
     .with_workspace_cache(ctx.uv_context.workspace_cache.clone())
-    .with_shared_state(ctx.uv_context.shared_state.fork())
+    .with_shared_state(ctx.uv_context.shared_state.fork().into_inner())
     .with_no_sources(ctx.uv_context.no_sources.clone())
     .with_concurrency(ctx.uv_context.concurrency.clone())
     .with_cache_config_settings(&cache_config_settings);
@@ -771,10 +750,7 @@ async fn read_local_package_metadata(
             CondaPrefixUpdater::builder(
                 group,
                 prefix_platform.clone(),
-                virtual_packages
-                    .into_iter()
-                    .map(GenericVirtualPackage::from)
-                    .collect(),
+                virtual_packages,
                 ctx.command_dispatcher.clone(),
             )
             .finish()
@@ -791,11 +767,11 @@ async fn read_local_package_metadata(
     let last_error = Arc::new(Mutex::new(None));
     // Use building_pixi_records (host platform) for installing Python and building,
     // since we can only run binaries on the host platform
-    let building_records: miette::Result<Vec<PixiRecord>> = ctx
+    let building_records: BuildingRecords = ctx
         .building_pixi_records
         .as_ref()
         .map(|r| r.records.clone())
-        .map_err(|e| miette::miette!("{}", e));
+        .map_err(|e| Box::new(e.clone()) as _);
     let lazy_build_dispatch = LazyBuildDispatch::new(
         build_params,
         conda_prefix_updater,
@@ -909,10 +885,10 @@ mod tests {
     use rattler_lock::{PypiPackageData, UrlOrPath, Verbatim};
     use url::Url;
     use uv_distribution_types::RequirementSource;
-    use uv_redacted::DisplaySafeUrl;
+    use uv_redacted::SafeUrl;
 
-    use super::super::PypiNoBuildCheck;
     use super::super::platform::RequirementOrigin;
+    use super::super::{PlatformUnsat, PypiNoBuildCheck};
     use super::pypi_satisfies_requirement;
     use crate::lock_file::tests::{make_source_package_with, make_wheel_package_with};
 
@@ -1040,6 +1016,42 @@ mod tests {
             &[],
         )
         .unwrap();
+    }
+
+    #[test]
+    fn git_archive_requirement_returns_error_instead_of_panicking() {
+        let spec = pep508_requirement_to_uv_requirement(
+            pep508_rs::Requirement::from_str(
+                "mypkg @ git+https://example.com/repo.git#path=dist/mypkg-0.1.0-py3-none-any.whl",
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert!(matches!(spec.source, RequirementSource::GitPath { .. }));
+        let locked = lock_for_test(make_wheel_package_with(
+            "mypkg",
+            "0.1.0",
+            "https://example.com/mypkg-0.1.0-py3-none-any.whl"
+                .parse()
+                .unwrap(),
+            None,
+            None,
+            vec![],
+            None,
+        ));
+        let err = pypi_satisfies_requirement(
+            &spec,
+            &locked,
+            Path::new("/"),
+            RequirementOrigin::RequiresDist,
+            &[],
+            &[],
+        )
+        .unwrap_err();
+        assert!(matches!(
+            *err,
+            PlatformUnsat::UnsupportedGitArchiveDependency(_)
+        ));
     }
 
     /// Reproduces issue #5661: PyPI dependency with full commit hash from a
@@ -1529,7 +1541,7 @@ mod tests {
 
         let index =
             uv_distribution_types::IndexMetadata::from(uv_distribution_types::IndexUrl::from(
-                uv_pep508::VerbatimUrl::from_url(DisplaySafeUrl::parse(index_url).unwrap()),
+                uv_pep508::VerbatimUrl::from_url(SafeUrl::parse(index_url).unwrap()),
             ));
         uv_distribution_types::Requirement {
             name: UvPackageName::from_str(name).unwrap(),
@@ -1541,6 +1553,7 @@ mod tests {
                 index: Some(index),
                 conflict: None,
             },
+            scope: Default::default(),
             origin: None,
         }
     }

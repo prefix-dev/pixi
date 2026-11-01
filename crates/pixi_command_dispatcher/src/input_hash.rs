@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::hash::{Hash, Hasher};
 use xxhash_rust::xxh3::Xxh3;
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(transparent)]
 pub struct ProjectModelHash(u64);
 
@@ -60,7 +60,7 @@ impl BackendBinaryFingerprint {
 ///
 /// This is used to detect when the build configuration changes, which should
 /// invalidate the metadata cache even if the project model hasn't changed.
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(transparent)]
 pub struct ConfigurationHash(u64);
 

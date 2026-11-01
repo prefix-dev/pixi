@@ -1,21 +1,27 @@
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::str::FromStr;
 
 use clap::Parser;
+use itertools::Itertools;
 use miette::IntoDiagnostic;
 use pixi_api::WorkspaceContext;
+use pixi_core::host::{HostProbeError, HostUndetected};
+use pixi_core::workspace::grouped_environment::GroupedEnvironment;
 use pixi_core::{WorkspaceLocator, environment::LockFileUsage};
 use pixi_manifest::{
     EnvironmentName, FeatureName, FeaturesExt, HasWorkspaceManifest, PixiPlatform,
-    PixiPlatformName, PlatformEdit, PlatformMove,
+    PixiPlatformName, PlatformEdit, PlatformMove, PrioritizedChannel,
     platform::{
-        candidate_subdirs, capability_satisfied_by,
-        host::{detect_host, host_capabilities, host_subdir, machine_virtual_packages},
+        candidate_subdirs, capability_satisfied_by, host::machine_virtual_packages,
         subdir_default_virtual_packages,
     },
 };
-use rattler_conda_types::{GenericVirtualPackage, PackageName, Platform, Version};
+use rattler_conda_types::{
+    GenericVirtualPackage, PackageName, Subdir, Version, package::BuildString,
+    virtual_package_detector::VirtualPackageName,
+};
 
 use crate::{
     cli_config::{ScriptWorkspaceConfig, script_lock_file_usage},
@@ -35,27 +41,30 @@ pub struct Args {
     pub command: Command,
 }
 
-/// Common virtual-package shortcut flags shared by `add` and `edit`. Wrapped
-/// in a clap struct so the rules (parsing, validation, conversion to
-/// `GenericVirtualPackage`) live in one place.
-///
-/// Mirrors the TOML's per-virtual-package keys (`cuda`, `archspec`, `glibc`,
-/// `linux`, `macos`, `windows`). Virtual packages without a friendly flag are
-/// declared as trailing `__name[=version[=build_string]]` positionals on the
-/// surrounding `add` / `edit` command, matching the `__name` raw-key escape
-/// hatch in the TOML layer.
+/// Built-in virtual-package flags shared by `add` and `edit`.
 #[derive(Parser, Debug, Default, Clone)]
 pub struct VirtualPackageArgs {
     /// Declare a `__cuda` virtual package at the given version, e.g. `12.0`.
     /// Valid on any subdir.
-    #[clap(long, value_name = "VERSION")]
+    #[clap(long, value_name = "VERSION[=BUILD]")]
     pub cuda: Option<String>,
 
     /// Declare a `__cuda_arch` virtual package (GPU compute capability) at the
     /// given version, e.g. `8.6`. Requires `--cuda` (or an existing `__cuda`),
     /// matching the conda CEP coupling. Serialized as `cuda = { driver, arch }`.
-    #[clap(long, value_name = "VERSION")]
+    #[clap(long, value_name = "VERSION[=BUILD]")]
     pub cuda_arch: Option<String>,
+
+    /// Declare a `__amdgpu` virtual package, stating that an AMD GPU is
+    /// present. Valid on any subdir. Serialized as `amdgpu = true`.
+    #[clap(long)]
+    pub amdgpu: bool,
+
+    /// Declare a `__amdgpu_arch` virtual package from an AMDGPU target name,
+    /// e.g. `gfx90a`. Also declares `__amdgpu`. Serialized as
+    /// `amdgpu = "<target>"`.
+    #[clap(long, value_name = "TARGET")]
+    pub amdgpu_arch: Option<String>,
 
     /// Declare a `__archspec` virtual package with the given microarchitecture
     /// string, e.g. `x86_64_v3`. Valid on any subdir.
@@ -64,22 +73,22 @@ pub struct VirtualPackageArgs {
 
     /// Declare a `__glibc` virtual package at the given version, e.g. `2.28`.
     /// Only valid on linux subdirs.
-    #[clap(long, value_name = "VERSION")]
+    #[clap(long, value_name = "VERSION[=BUILD]")]
     pub glibc: Option<String>,
 
     /// Declare a `__linux` virtual package at the given kernel version,
     /// e.g. `5.10`. Only valid on linux subdirs.
-    #[clap(long, value_name = "VERSION")]
+    #[clap(long, value_name = "VERSION[=BUILD]")]
     pub linux: Option<String>,
 
     /// Declare a `__osx` virtual package at the given macOS version,
     /// e.g. `14.0`. Only valid on osx subdirs.
-    #[clap(long, visible_alias = "osx", value_name = "VERSION")]
+    #[clap(long, visible_alias = "osx", value_name = "VERSION[=BUILD]")]
     pub macos: Option<String>,
 
     /// Declare a `__win` virtual package at the given Windows version,
     /// e.g. `10`. Only valid on win subdirs.
-    #[clap(long, value_name = "VERSION")]
+    #[clap(long, value_name = "VERSION[=BUILD]")]
     pub windows: Option<String>,
 }
 
@@ -88,6 +97,8 @@ impl VirtualPackageArgs {
     pub fn is_empty(&self) -> bool {
         self.cuda.is_none()
             && self.cuda_arch.is_none()
+            && !self.amdgpu
+            && self.amdgpu_arch.is_none()
             && self.archspec.is_none()
             && self.glibc.is_none()
             && self.linux.is_none()
@@ -95,25 +106,21 @@ impl VirtualPackageArgs {
             && self.windows.is_none()
     }
 
-    /// Translate the friendly flags plus any trailing raw `__name=value`
-    /// positionals into a vector of [`GenericVirtualPackage`]. `subdir` is
-    /// used to reject nonsensical combinations (e.g. `--glibc` on win-64).
+    /// Translate built-in flags and raw `__name[=version[=build_string]]`
+    /// positionals into virtual packages, rejecting invalid subdir combinations.
     pub fn into_specs(
         self,
-        subdir: Platform,
-        raw_specs: &[String],
+        subdir: Subdir,
+        custom_specs: &[String],
     ) -> miette::Result<Vec<GenericVirtualPackage>> {
         let mut specs = Vec::new();
         let mut seen_names = HashSet::new();
 
         if let Some(value) = self.cuda {
-            let version = parse_virtual_package_version("--cuda", &value)?;
             push_unique(
                 &mut specs,
                 &mut seen_names,
-                "__cuda",
-                version,
-                String::new(),
+                parse_virtual_package_flag("--cuda", "__cuda", &value)?,
             )?;
         }
         if let Some(value) = self.cuda_arch {
@@ -121,66 +128,89 @@ impl VirtualPackageArgs {
             // the platform model once the full virtual-package set is known --
             // here we only collect the spec, since `edit` may add `--cuda-arch`
             // to a platform that already declares `__cuda`.
-            let version = parse_virtual_package_version("--cuda-arch", &value)?;
             push_unique(
                 &mut specs,
                 &mut seen_names,
-                "__cuda_arch",
-                version,
-                String::new(),
+                parse_virtual_package_flag("--cuda-arch", "__cuda_arch", &value)?,
+            )?;
+        }
+        if self.amdgpu || self.amdgpu_arch.is_some() {
+            // `__amdgpu` is presence-only, and an architecture implies the
+            // GPU it belongs to, so `--amdgpu-arch` declares both.
+            push_unique(
+                &mut specs,
+                &mut seen_names,
+                GenericVirtualPackage {
+                    name: virtual_package_name("__amdgpu"),
+                    version: zero_version(),
+                    build_string: BuildString::new_unchecked("0"),
+                },
+            )?;
+        }
+        if let Some(value) = self.amdgpu_arch {
+            let version = pixi_manifest::platform::amdgpu_arch_from_target_name(&value)
+                .map_err(|message| miette::miette!("--amdgpu-arch: {message}"))?;
+            push_unique(
+                &mut specs,
+                &mut seen_names,
+                GenericVirtualPackage {
+                    name: virtual_package_name("__amdgpu_arch"),
+                    version,
+                    build_string: BuildString::new_unchecked("0"),
+                },
             )?;
         }
         if let Some(value) = self.archspec {
             if value.is_empty() {
                 miette::bail!("--archspec requires a non-empty microarchitecture string");
             }
-            pixi_manifest::platform::validate_archspec_name(&value)
+            let build_string = pixi_manifest::platform::parse_archspec_build_string(&value)
                 .map_err(|message| miette::miette!("{message}"))?;
             push_unique(
                 &mut specs,
                 &mut seen_names,
-                "__archspec",
-                zero_version(),
-                value,
+                GenericVirtualPackage {
+                    name: virtual_package_name("__archspec"),
+                    version: zero_version(),
+                    build_string,
+                },
             )?;
         }
         if let Some(value) = self.glibc {
-            require_subdir_family(subdir, Platform::is_linux, "--glibc", "linux")?;
-            let version = parse_virtual_package_version("--glibc", &value)?;
+            require_subdir_family(subdir, Subdir::is_linux, "--glibc", "linux")?;
             push_unique(
                 &mut specs,
                 &mut seen_names,
-                "__glibc",
-                version,
-                String::new(),
+                parse_virtual_package_flag("--glibc", "__glibc", &value)?,
             )?;
         }
         if let Some(value) = self.linux {
-            require_subdir_family(subdir, Platform::is_linux, "--linux", "linux")?;
-            let version = parse_virtual_package_version("--linux", &value)?;
+            require_subdir_family(subdir, Subdir::is_linux, "--linux", "linux")?;
             push_unique(
                 &mut specs,
                 &mut seen_names,
-                "__linux",
-                version,
-                String::new(),
+                parse_virtual_package_flag("--linux", "__linux", &value)?,
             )?;
         }
         if let Some(value) = self.macos {
-            require_subdir_family(subdir, Platform::is_osx, "--macos", "osx")?;
-            let version = parse_virtual_package_version("--macos", &value)?;
-            push_unique(&mut specs, &mut seen_names, "__osx", version, String::new())?;
+            require_subdir_family(subdir, Subdir::is_osx, "--macos", "osx")?;
+            push_unique(
+                &mut specs,
+                &mut seen_names,
+                parse_virtual_package_flag("--macos", "__osx", &value)?,
+            )?;
         }
         if let Some(value) = self.windows {
-            require_subdir_family(subdir, Platform::is_windows, "--windows", "win")?;
-            let version = parse_virtual_package_version("--windows", &value)?;
-            push_unique(&mut specs, &mut seen_names, "__win", version, String::new())?;
+            require_subdir_family(subdir, Subdir::is_windows, "--windows", "win")?;
+            push_unique(
+                &mut specs,
+                &mut seen_names,
+                parse_virtual_package_flag("--windows", "__win", &value)?,
+            )?;
         }
 
-        for raw in raw_specs {
-            let gvp = parse_raw_virtual_package(raw)?;
-            // Reject duplicates so the order of `--cuda 12.0 __cuda=11.0`
-            // can't silently shadow the friendly value.
+        for spec in custom_specs {
+            let gvp = parse_raw_virtual_package(spec)?;
             let name = gvp.name.as_normalized().to_string();
             if !seen_names.insert(name.clone()) {
                 miette::bail!(
@@ -197,28 +227,21 @@ impl VirtualPackageArgs {
 fn push_unique(
     specs: &mut Vec<GenericVirtualPackage>,
     seen: &mut HashSet<String>,
-    conda_name: &str,
-    version: Version,
-    build_string: String,
+    package: GenericVirtualPackage,
 ) -> miette::Result<()> {
-    let name = virtual_package_name(conda_name);
-    let normalized = name.as_normalized().to_string();
+    let normalized = package.name.as_normalized().to_string();
     if !seen.insert(normalized.clone()) {
         miette::bail!(
             "virtual package '{normalized}' was specified more than once on the command line"
         );
     }
-    specs.push(GenericVirtualPackage {
-        name,
-        version,
-        build_string,
-    });
+    specs.push(package);
     Ok(())
 }
 
 fn require_subdir_family(
-    subdir: Platform,
-    predicate: impl Fn(Platform) -> bool,
+    subdir: Subdir,
+    predicate: impl Fn(Subdir) -> bool,
     flag: &str,
     family: &str,
 ) -> miette::Result<()> {
@@ -239,57 +262,42 @@ fn zero_version() -> Version {
     Version::from_str("0").expect("'0' is a valid Version")
 }
 
-fn parse_virtual_package_version(flag: &str, value: &str) -> miette::Result<Version> {
-    Version::from_str(value)
-        .into_diagnostic()
-        .map_err(|e| miette::miette!("{flag}: '{value}' is not a valid version: {e}"))
+/// Parse a version-style flag the way the manifest parses the matching key.
+fn parse_virtual_package_flag(
+    flag: &str,
+    conda_name: &str,
+    value: &str,
+) -> miette::Result<GenericVirtualPackage> {
+    pixi_manifest::platform::parse_versioned_virtual_package(
+        virtual_package_name(conda_name),
+        value,
+    )
+    .map_err(|message| miette::miette!("{flag}: {message}"))
 }
 
 fn parse_raw_virtual_package(spec: &str) -> miette::Result<GenericVirtualPackage> {
-    // `splitn` keeps trailing '=' segments in the build string, matching the
-    // manifest's raw parser, instead of silently dropping them.
-    let mut parts = spec.splitn(3, '=');
-    let name_str = parts.next().unwrap_or("");
-    if name_str.strip_prefix("__").is_none_or(str::is_empty) {
-        miette::bail!(
-            "'{spec}' is not a virtual package spec: name must start with '__' followed by a name (e.g. '__cuda=12.0')"
-        );
-    }
-    let name = PackageName::try_from(name_str)
+    let (name, value) = spec.split_once('=').unwrap_or((spec, "0"));
+    let name = VirtualPackageName::try_from(name)
         .into_diagnostic()
-        .map_err(|e| miette::miette!("'{name_str}' is not a valid virtual package name: {e}"))?;
-    let version = parts
-        .next()
-        .map(|v| {
-            Version::from_str(v)
-                .into_diagnostic()
-                .map_err(|e| miette::miette!("'{v}' is not a valid virtual package version: {e}"))
-        })
-        .transpose()?
-        .unwrap_or_else(zero_version);
-    let build_string = parts.next().unwrap_or("").to_string();
-    pixi_manifest::platform::validate_virtual_package_build_string(&name, &build_string)
-        .map_err(|message| miette::miette!("{message}"))?;
-    Ok(GenericVirtualPackage {
-        name,
-        version,
-        build_string,
-    })
+        .map_err(|e| miette::miette!("'{name}' is not a valid virtual package name: {e}"))?
+        .into_package_name();
+    pixi_manifest::platform::parse_versioned_virtual_package(name, value)
+        .map_err(|message| miette::miette!("{message}"))
 }
 
 /// Parse a positional add argument. Accepts either a bare subdir
 /// (`linux-64`) or `<name>=<subdir>` (`gpu-linux=linux-64`).
-fn parse_add_positional(input: &str) -> miette::Result<(PixiPlatformName, Platform)> {
+fn parse_add_positional(input: &str) -> miette::Result<(PixiPlatformName, Subdir)> {
     if let Some((name, subdir)) = input.split_once('=') {
         let name = PixiPlatformName::try_from(name)
             .into_diagnostic()
             .map_err(|e| miette::miette!("invalid platform name '{name}': {e}"))?;
-        let subdir = Platform::from_str(subdir)
+        let subdir = Subdir::from_str(subdir)
             .into_diagnostic()
             .map_err(|e| miette::miette!("'{subdir}' is not a valid conda subdir: {e}"))?;
         Ok((name, subdir))
     } else {
-        let subdir = Platform::from_str(input)
+        let subdir = Subdir::from_str(input)
             .into_diagnostic()
             .map_err(|e| miette::miette!("'{input}' is not a valid conda subdir: {e}"))?;
         Ok((subdir.into(), subdir))
@@ -300,22 +308,14 @@ fn parse_add_positional(input: &str) -> miette::Result<(PixiPlatformName, Platfo
 pub struct AddArgs {
     /// Platforms to add, optionally followed by raw virtual-package specs.
     ///
-    /// Each non-`__`-prefixed entry is either a bare conda subdir
-    /// (`linux-64`) or `<name>=<subdir>` for a custom-named platform
-    /// (`gpu-linux=linux-64`).
+    /// A bare conda subdir (`linux-64`) or `<name>=<subdir>`
+    /// (`gpu-linux=linux-64`) adds a platform. Entries beginning with `__`
+    /// declare virtual packages as `__name[=version[=build_string]]`.
     ///
-    /// With `--auto-detect`, give at most a single bare `<name>` (no
-    /// `=<subdir>`) to name the detected platform; `<name>=<subdir>` is
-    /// rejected because the subdir is detected from this machine.
+    /// With `--auto-detect`, give at most a single bare `<name>` to name the
+    /// detected platform. Virtual-package specs override detected values.
     ///
-    /// Each `__`-prefixed entry is a raw virtual-package spec
-    /// (`__name[=version[=build_string]]`) and is attached to the
-    /// (single) custom-named platform in the same invocation. This mirrors
-    /// the `__name = "..."` raw-key escape hatch in pixi.toml for virtual
-    /// packages without a friendly flag (`--cuda`, `--archspec`, ...).
-    ///
-    /// When any virtual-package (friendly flag or raw spec) is set, exactly
-    /// one platform may be given.
+    /// When any virtual package is set, exactly one platform may be given.
     #[clap(
         num_args=0..,
         value_name = "PLATFORM|NAME=PLATFORM|__NAME[=VERSION[=BUILD]]",
@@ -362,13 +362,13 @@ pub struct EditArgs {
 
     /// Set a new conda subdir for this platform.
     #[clap(long, value_name = "SUBDIR")]
-    pub subdir: Option<Platform>,
+    pub subdir: Option<Subdir>,
 
     #[clap(flatten)]
     pub virtual_packages: VirtualPackageArgs,
 
-    /// Remove the named virtual package from this platform. Can be repeated.
-    #[clap(long = "remove-virtual-package", value_name = "NAME", num_args = 1)]
+    /// Remove a virtual package by canonical `__name`. Can be repeated.
+    #[clap(long = "remove-virtual-package", value_name = "__NAME", num_args = 1)]
     pub remove_virtual_packages: Vec<String>,
 
     /// Clear all virtual packages before applying any add/upsert operations.
@@ -501,7 +501,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
-        .locate()?;
+        .locate()
+        .await?;
 
     let lock_file_usage = script_lock_file_usage(
         LockFileUsage::Update,
@@ -510,13 +511,20 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     )?;
     let workspace_ctx = cli_context(workspace.clone());
 
+    // Keep mutation state off the enclosing CLI dispatch futures.
     match args.command {
-        Command::Add(args) => execute_add(&workspace_ctx, args, lock_file_usage).await,
-        Command::Edit(args) => execute_edit(&workspace_ctx, args, lock_file_usage).await,
-        Command::Move(args) => execute_move(&workspace_ctx, args, lock_file_usage).await,
+        Command::Add(args) => Box::pin(execute_add(&workspace_ctx, args, lock_file_usage)).await,
+        Command::Edit(args) => Box::pin(execute_edit(&workspace_ctx, args, lock_file_usage)).await,
+        Command::Move(args) => Box::pin(execute_move(&workspace_ctx, args, lock_file_usage)).await,
         Command::List(args) => execute_list(&workspace_ctx, args).await,
         Command::Remove(args) => {
-            execute_remove(&workspace, &workspace_ctx, args, lock_file_usage).await
+            Box::pin(execute_remove(
+                &workspace,
+                &workspace_ctx,
+                args,
+                lock_file_usage,
+            ))
+            .await
         }
     }
 }
@@ -526,11 +534,10 @@ async fn execute_add(
     args: AddArgs,
     lock_file_usage: LockFileUsage,
 ) -> miette::Result<()> {
-    // Positionals beginning with `__` are raw virtual-package specs; the rest
-    // are platform entries. The split mirrors the TOML's `__name = "..."`
-    // raw-key form.
-    let (raw_specs, platform_entries): (Vec<String>, Vec<String>) =
-        args.platform.into_iter().partition(|s| s.starts_with("__"));
+    let (custom_specs, platform_entries): (Vec<String>, Vec<String>) = args
+        .platform
+        .into_iter()
+        .partition(|input| input.starts_with("__"));
 
     // `--auto-detect` detects this machine instead of naming a subdir; any
     // virtual-package flags then override the detected values.
@@ -556,7 +563,7 @@ async fn execute_add(
             workspace_ctx,
             explicit_name,
             args.virtual_packages,
-            &raw_specs,
+            &custom_specs,
             args.no_install,
             crate::cli_config::feature_from_flags(args.environment.as_ref(), args.feature.as_ref()),
             lock_file_usage,
@@ -568,16 +575,16 @@ async fn execute_add(
         miette::bail!("at least one platform argument is required");
     }
 
-    let virtual_packages_present = !args.virtual_packages.is_empty() || !raw_specs.is_empty();
+    let virtual_packages_present = !args.virtual_packages.is_empty() || !custom_specs.is_empty();
 
     if virtual_packages_present && platform_entries.len() != 1 {
         miette::bail!(
-            "virtual-package flags or `__name=value` positionals require exactly one platform argument; got {}",
+            "virtual-package flags or `__name[=version]` positionals require exactly one platform argument; got {}",
             platform_entries.len()
         );
     }
 
-    let parsed: Vec<(PixiPlatformName, Platform)> = platform_entries
+    let parsed: Vec<(PixiPlatformName, Subdir)> = platform_entries
         .iter()
         .map(|raw| parse_add_positional(raw))
         .collect::<miette::Result<_>>()?;
@@ -604,7 +611,7 @@ async fn execute_add(
                 "virtual packages require a custom platform name; use `<name>=<subdir>` (e.g. `gpu-{subdir}={subdir}`) instead of the bare subdir"
             );
         }
-        let specs = args.virtual_packages.into_specs(subdir, &raw_specs)?;
+        let specs = args.virtual_packages.into_specs(subdir, &custom_specs)?;
         platforms.push(PixiPlatform::new_with_defaults(name, subdir, specs).into_diagnostic()?);
     } else {
         for (name, subdir) in parsed {
@@ -620,7 +627,16 @@ async fn execute_add(
             crate::cli_config::feature_from_flags(args.environment.as_ref(), args.feature.as_ref()),
             lock_file_usage,
         )
-        .await
+        .await?;
+    Ok(())
+}
+
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+enum AutoDetectPlatformError {
+    #[error(transparent)]
+    Host(#[from] HostUndetected),
+    #[error(transparent)]
+    Platform(#[from] pixi_manifest::platform::PixiPlatformError),
 }
 
 /// Detect this machine, apply any virtual-package overrides on top, and hand the
@@ -630,21 +646,53 @@ async fn execute_add_auto_detected(
     workspace_ctx: &WorkspaceContext<CliInterface>,
     explicit_name: Option<PixiPlatformName>,
     virtual_packages: VirtualPackageArgs,
-    raw_specs: &[String],
+    custom_specs: &[String],
     no_install: bool,
     feature: FeatureName,
     lock_file_usage: LockFileUsage,
 ) -> miette::Result<()> {
-    let subdir = host_subdir();
-    let detected = detect_host(subdir).into_diagnostic()?;
-    let overrides = virtual_packages.into_specs(subdir, raw_specs)?;
+    let workspace = workspace_ctx.workspace();
+    let channels = match &feature {
+        FeatureName::Default => GroupedEnvironment::from(workspace.default_environment())
+            .channel_urls(&workspace.channel_config())
+            .map_err(HostProbeError::Channel)?,
+        FeatureName::Environment(name) => {
+            let environment = workspace
+                .environment(name)
+                .ok_or_else(|| miette::miette!("environment '{name}' does not exist"))?;
+            GroupedEnvironment::from(environment)
+                .channel_urls(&workspace.channel_config())
+                .map_err(HostProbeError::Channel)?
+        }
+        FeatureName::Named(_) => PrioritizedChannel::sort_channels_by_priority(
+            workspace
+                .workspace_manifest()
+                .feature(&feature)
+                .and_then(|feature| feature.channels.as_ref())
+                .unwrap_or(&workspace.workspace_manifest().workspace.channels),
+        )
+        .unique()
+        .map(|channel| channel.clone().into_base_url(&workspace.channel_config()))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(HostProbeError::Channel)?,
+    };
+    let host = workspace
+        .detect_host_with_all_detectors_for_channels(&channels)
+        .await?;
+    let subdir = host.subdir();
+    let detected = host
+        .platform()
+        .map_err(AutoDetectPlatformError::Host)?
+        .clone();
+    let overrides = virtual_packages.into_specs(subdir, custom_specs)?;
     let merged = merge_virtual_packages(detected.customised_virtual_packages(), overrides);
     let explicit = explicit_name.is_some();
-    let candidate =
-        PixiPlatform::from_detection(explicit_name, subdir, merged).into_diagnostic()?;
+    let candidate = PixiPlatform::from_detection(explicit_name, subdir, merged)
+        .map_err(AutoDetectPlatformError::Platform)?;
     workspace_ctx
         .add_auto_detected_platform(candidate, explicit, no_install, feature, lock_file_usage)
-        .await
+        .await?;
+    Ok(())
 }
 
 /// Merge user-supplied virtual packages over detected ones: a user spec
@@ -686,18 +734,15 @@ async fn execute_edit(
     };
     let insert_or_update_virtual_packages = args
         .virtual_packages
-        .clone()
         .into_specs(subdir, &args.raw_virtual_packages)?;
 
     let remove_virtual_packages: Vec<PackageName> = args
         .remove_virtual_packages
         .iter()
-        .map(|raw| {
-            PackageName::try_from(raw.as_str())
-                .into_diagnostic()
-                .map_err(|e| {
-                    miette::miette!("--remove-virtual-package: '{raw}' is not a valid name: {e}")
-                })
+        .map(|key| {
+            VirtualPackageName::try_from(key.as_str())
+                .map(VirtualPackageName::into_package_name)
+                .map_err(|error| miette::miette!("--remove-virtual-package: {error}"))
         })
         .collect::<miette::Result<_>>()?;
 
@@ -709,14 +754,20 @@ async fn execute_edit(
     };
 
     if edit.is_noop() {
+        let command = <VirtualPackageArgs as clap::Args>::augment_args(clap::Command::new("edit"));
+        let flags = command
+            .get_arguments()
+            .filter_map(clap::Arg::get_long)
+            .format_with(", ", |flag, f| f(&format_args!("--{flag}")));
         miette::bail!(
-            "nothing to do: pass at least one of --subdir, a virtual-package flag (--cuda, --archspec, --glibc, --linux, --macos, --windows), a `__name=value` positional, --remove-virtual-package, or --clear-virtual-packages"
+            "nothing to do: pass at least one of --subdir, a virtual-package flag ({flags}), a `__name=version` positional, --remove-virtual-package, or --clear-virtual-packages"
         );
     }
 
     workspace_ctx
         .edit_platform(args.name, edit, args.no_install, lock_file_usage)
-        .await
+        .await?;
+    Ok(())
 }
 
 async fn execute_move(
@@ -734,7 +785,8 @@ async fn execute_move(
 
     workspace_ctx
         .move_platform(args.name, target, args.no_install, lock_file_usage)
-        .await
+        .await?;
+    Ok(())
 }
 
 /// Print every workspace platform in full detail, preceded by the
@@ -766,22 +818,25 @@ async fn execute_list(
         return Ok(());
     }
 
+    let host = workspace.detect_host_with_all_detectors().await?;
+    let machine = HostMachine::from_host(&host);
+
     if args.json {
-        // Same snapshot the human output renders, so the two views of one
-        // command cannot disagree about the host.
-        let machine = HostMachine::detect();
         let mut platforms: Vec<serde_json::Value> =
             Vec::with_capacity(workspace_platforms.len() + 1);
         platforms.push(autodetected_to_json(&machine));
-        // Probe each distinct subdir once. Detecting per row repeats the work,
-        // and repeats the warning when a `CONDA_OVERRIDE_*` value is unusable.
-        let mut probed: HashMap<Platform, Vec<GenericVirtualPackage>> = HashMap::new();
+        // Reuse the complete host detection, and probe each other subdir once.
+        let mut probed: HashMap<Subdir, Vec<GenericVirtualPackage>> = HashMap::new();
         for p in &workspace_platforms {
-            probed
-                .entry(p.subdir())
-                .or_insert_with(|| machine_virtual_packages(p.subdir()));
+            let detected: &[GenericVirtualPackage] = if p.subdir() == machine.subdir {
+                &machine.detected
+            } else {
+                probed
+                    .entry(p.subdir())
+                    .or_insert_with(|| machine_virtual_packages(p.subdir()))
+            };
             let users = environments_and_features_using(workspace, p);
-            platforms.push(show_to_json(p, &users, &probed[&p.subdir()]));
+            platforms.push(show_to_json(p, &users, detected));
         }
 
         let value = serde_json::json!({
@@ -797,7 +852,6 @@ async fn execute_list(
     }
 
     let mut stdout = std::io::stdout();
-    let machine = HostMachine::detect();
     print_autodetected_host(&mut stdout, &machine);
 
     if !workspace_platforms.is_empty() {
@@ -816,7 +870,7 @@ async fn execute_list(
 /// in declaration order, each followed by its usage lines.
 fn format_workspace_platform_rows(
     workspace: &pixi_core::Workspace,
-    machine: &HostMachine,
+    machine: &HostMachine<'_>,
 ) -> String {
     let reachability = MachineReachability::compute(workspace, machine);
     let multiple_environments = workspace.environments().len() > 1;
@@ -862,12 +916,13 @@ async fn execute_remove(
             crate::cli_config::feature_from_flags(args.environment.as_ref(), args.feature.as_ref()),
             lock_file_usage,
         )
-        .await
+        .await?;
+    Ok(())
 }
 
 /// Pretty-print rattler's host detection as a "diagnostic" header rather
 /// than another `<name>:` row.
-fn print_autodetected_host(stdout: &mut std::io::Stdout, machine: &HostMachine) {
+fn print_autodetected_host(stdout: &mut std::io::Stdout, machine: &HostMachine<'_>) {
     let _ = writeln!(stdout, "Your current machine was detected as:");
     let _ = writeln!(
         stdout,
@@ -927,17 +982,17 @@ struct PlatformUsers {
 /// Snapshot of the local machine used to color platform rows in `list`:
 /// the subdir we target, which subdirs we can run packages from (that one plus
 /// arch fallbacks) and which virtual packages rattler detected on the host.
-struct HostMachine {
-    subdir: Platform,
-    candidate_subdirs: Vec<Platform>,
-    detected: Vec<GenericVirtualPackage>,
+struct HostMachine<'a> {
+    subdir: Subdir,
+    candidate_subdirs: Vec<Subdir>,
+    detected: Cow<'a, [GenericVirtualPackage]>,
 }
 
-impl HostMachine {
-    fn detect() -> Self {
-        let subdir = host_subdir();
+impl<'a> HostMachine<'a> {
+    fn from_host(host: &'a pixi_core::host::HostDetection) -> Self {
+        let subdir = host.subdir();
         let candidate_subdirs = candidate_subdirs(subdir);
-        let detected = host_capabilities();
+        let detected = host.capabilities();
         HostMachine {
             subdir,
             candidate_subdirs,
@@ -948,7 +1003,7 @@ impl HostMachine {
     /// `true` when a platform with this subdir can actually run on the
     /// current host -- includes architecture fallbacks (`Win64` → `Win32`,
     /// `Osx*` → `Osx64`).
-    fn covers_subdir(&self, subdir: Platform) -> bool {
+    fn covers_subdir(&self, subdir: Subdir) -> bool {
         self.candidate_subdirs.contains(&subdir)
     }
 
@@ -973,7 +1028,7 @@ impl HostMachine {
             return false;
         }
         pixi_manifest::toml::inline_virtual_package_specs(
-            platform.declared_virtual_packages(),
+            platform.manifest_virtual_package_records().as_ref(),
             Some(&subdir_default_virtual_packages(subdir)),
         )
         .iter()
@@ -990,7 +1045,7 @@ struct MachineReachability {
 }
 
 impl MachineReachability {
-    fn compute(workspace: &pixi_core::Workspace, machine: &HostMachine) -> Self {
+    fn compute(workspace: &pixi_core::Workspace, machine: &HostMachine<'_>) -> Self {
         let manifest = workspace.workspace_manifest();
         let supported: HashSet<&str> = manifest
             .workspace
@@ -1039,7 +1094,7 @@ impl MachineReachability {
 /// platform, with unreachable names dimmed.
 fn format_workspace_platform_row(
     platform: &PixiPlatform,
-    machine: &HostMachine,
+    machine: &HostMachine<'_>,
     users: &PlatformUsers,
     reachability: &MachineReachability,
     multiple_environments: bool,
@@ -1057,7 +1112,7 @@ fn format_workspace_platform_row(
 
     let mut all_vps_ok = true;
     for spec in pixi_manifest::toml::inline_virtual_package_specs(
-        platform.declared_virtual_packages(),
+        platform.manifest_virtual_package_records().as_ref(),
         Some(&subdir_default_virtual_packages(subdir)),
     ) {
         let satisfied = spec.packages.iter().all(|p| machine.satisfies(p));
@@ -1134,7 +1189,7 @@ fn format_user_names(names: &[String], unreachable: &HashSet<String>) -> String 
 /// host-detection header. The header is informational, so the body is
 /// emitted verbatim without the match-aware dimming the workspace rows
 /// use.
-fn inline_entry_body(subdir: Platform, declared: &[GenericVirtualPackage]) -> String {
+fn inline_entry_body(subdir: Subdir, declared: &[GenericVirtualPackage]) -> String {
     let mut parts = vec![format!("platform={}", subdir.as_str())];
     parts.extend(render_friendly(
         declared,
@@ -1170,7 +1225,7 @@ fn show_to_json(
         "name": platform.name().as_str(),
         "subdir": platform.subdir().as_str(),
         "virtual_packages": render_friendly(
-            platform.declared_virtual_packages(),
+            platform.manifest_virtual_package_records().as_ref(),
             Some(&subdir_default_virtual_packages(platform.subdir())),
         ),
         "detected_virtual_packages": detected,
@@ -1183,7 +1238,7 @@ fn show_to_json(
 /// JSON counterpart to [`print_autodetected_host`]. Carries the same data
 /// shape as a real platform entry plus an `is_autodetected: true` marker so
 /// downstream tooling can tell synthetic rows apart from declared ones.
-fn autodetected_to_json(machine: &HostMachine) -> serde_json::Value {
+fn autodetected_to_json(machine: &HostMachine<'_>) -> serde_json::Value {
     let detected: Vec<String> = render_friendly(&machine.detected, None);
     serde_json::json!({
         "name": "current",
@@ -1232,11 +1287,11 @@ mod tests {
     }
 
     /// A host that runs linux-64 with no customised virtual packages.
-    fn linux_machine() -> HostMachine {
+    fn linux_machine() -> HostMachine<'static> {
         HostMachine {
-            subdir: Platform::Linux64,
-            candidate_subdirs: vec![Platform::Linux64],
-            detected: Vec::new(),
+            subdir: Subdir::Linux64,
+            candidate_subdirs: vec![Subdir::Linux64],
+            detected: Cow::Borrowed(&[]),
         }
     }
 
@@ -1281,7 +1336,7 @@ mod tests {
             glibc: Some("2.28".into()),
             ..Default::default()
         };
-        let err = args.into_specs(Platform::Win64, &[]).unwrap_err();
+        let err = args.into_specs(Subdir::Win64, &[]).unwrap_err();
         assert!(
             err.to_string()
                 .contains("--glibc only applies to linux subdirs"),
@@ -1295,7 +1350,7 @@ mod tests {
             macos: Some("14.0".into()),
             ..Default::default()
         };
-        let err = args.into_specs(Platform::Linux64, &[]).unwrap_err();
+        let err = args.into_specs(Subdir::Linux64, &[]).unwrap_err();
         assert!(
             err.to_string()
                 .contains("--macos only applies to osx subdirs"),
@@ -1309,7 +1364,7 @@ mod tests {
             glibc: Some("2.28".into()),
             ..Default::default()
         };
-        let specs = args.into_specs(Platform::Linux64, &[]).unwrap();
+        let specs = args.into_specs(Subdir::Linux64, &[]).unwrap();
         assert_eq!(specs.len(), 1);
         assert_eq!(specs[0].name.as_normalized(), "__glibc");
         assert_eq!(specs[0].version.to_string(), "2.28");
@@ -1322,7 +1377,7 @@ mod tests {
             cuda_arch: Some("8.6".into()),
             ..Default::default()
         };
-        let specs = args.into_specs(Platform::Linux64, &[]).unwrap();
+        let specs = args.into_specs(Subdir::Linux64, &[]).unwrap();
         let by_name: std::collections::HashMap<_, _> = specs
             .iter()
             .map(|s| (s.name.as_normalized(), s.version.to_string()))
@@ -1331,12 +1386,92 @@ mod tests {
         assert_eq!(by_name.get("__cuda_arch").map(String::as_str), Some("8.6"));
     }
 
+    /// `__amdgpu` carries no value, so `--amdgpu-arch` alone declares it too.
     #[test]
-    fn parse_raw_virtual_package_keeps_trailing_segments_in_build_string() {
-        // Extra '=' segments belong to the build string -- as in the
-        // manifest's raw parser -- rather than being silently dropped.
-        let package = parse_raw_virtual_package("__foo=1=special=build").unwrap();
-        assert_eq!(package.build_string, "special=build");
+    fn into_specs_amdgpu_arch_implies_amdgpu() {
+        let args = VirtualPackageArgs {
+            amdgpu_arch: Some("gfx90a".into()),
+            ..Default::default()
+        };
+        let specs = args.into_specs(Subdir::Linux64, &[]).unwrap();
+        let by_name: std::collections::HashMap<_, _> = specs
+            .iter()
+            .map(|s| (s.name.as_normalized(), s.version.to_string()))
+            .collect();
+        assert_eq!(by_name.get("__amdgpu").map(String::as_str), Some("0"));
+        assert_eq!(
+            by_name.get("__amdgpu_arch").map(String::as_str),
+            Some("9.0.10")
+        );
+
+        let invalid = VirtualPackageArgs {
+            amdgpu_arch: Some("9.0.10".into()),
+            ..Default::default()
+        };
+        assert!(invalid.into_specs(Subdir::Linux64, &[]).is_err());
+    }
+
+    #[test]
+    fn into_specs_accepts_build_strings_like_the_manifest() {
+        let args = VirtualPackageArgs {
+            cuda: Some("12.0=h1".into()),
+            glibc: Some("2.28".into()),
+            ..Default::default()
+        };
+        let specs = args.into_specs(Subdir::Linux64, &[]).unwrap();
+        let rendered: Vec<String> = specs
+            .iter()
+            .map(pixi_manifest::platform::format_virtual_package)
+            .collect();
+        assert_eq!(rendered, ["__cuda=12.0=h1", "__glibc=2.28"]);
+
+        let args = VirtualPackageArgs {
+            cuda: Some("=h1".into()),
+            ..Default::default()
+        };
+        let err = args.into_specs(Subdir::Linux64, &[]).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("--cuda: '=h1' is not a valid version and build string"),
+            "{err}"
+        );
+    }
+
+    #[test]
+    fn parse_raw_virtual_package_rejects_invalid_build_strings() {
+        for spec in ["__foo=1=special=build", "__foo=1=a-b", "__foo=1="] {
+            let error = parse_raw_virtual_package(spec).unwrap_err();
+            assert!(
+                error.to_string().contains("build string"),
+                "{spec}: {error}"
+            );
+        }
+    }
+
+    #[test]
+    fn parse_raw_virtual_package_defaults_omitted_version() {
+        let package = parse_raw_virtual_package("__site_service").unwrap();
+        assert_eq!(package.name.as_normalized(), "__site_service");
+        assert_eq!(package.version.to_string(), "0");
+        assert_eq!(package.build_string, "0");
+    }
+
+    #[test]
+    fn parse_raw_virtual_package_rejects_names_the_manifest_rejects() {
+        for spec in [
+            "cud=1",
+            "site_service=1",
+            "__=1",
+            "__a..b=1",
+            "__a__b=1",
+            "__-x=1",
+            "___x=1",
+        ] {
+            assert!(
+                parse_raw_virtual_package(spec).is_err(),
+                "{spec} must be rejected"
+            );
+        }
     }
 
     #[test]
@@ -1345,13 +1480,11 @@ mod tests {
             archspec: Some("x86-64-v3".into()),
             ..Default::default()
         };
-        let error = args.into_specs(Platform::Linux64, &[]).unwrap_err();
+        let error = args.into_specs(Subdir::Linux64, &[]).unwrap_err();
         assert!(
             error.to_string().contains("did you mean 'x86_64_v3'"),
             "{error}"
         );
-        // The raw form is validated too, including a trailing segment that
-        // only survives because the parser keeps it.
         let error = parse_raw_virtual_package("__archspec=0=x86_64_v3=oops").unwrap_err();
         assert!(
             error.to_string().contains("not a known archspec"),
@@ -1360,14 +1493,14 @@ mod tests {
     }
 
     #[test]
-    fn into_specs_rejects_raw_positional_duplicate_of_friendly_flag() {
+    fn into_specs_rejects_custom_positional_duplicate_of_builtin_flag() {
         let args = VirtualPackageArgs {
             cuda: Some("12.0".into()),
             ..Default::default()
         };
-        let err = args
-            .into_specs(Platform::Linux64, &["__cuda=11.0".to_string()])
+        let error = args
+            .into_specs(Subdir::Linux64, &["__cuda=11.0".to_string()])
             .unwrap_err();
-        assert!(err.to_string().contains("more than once"), "{err}");
+        assert!(error.to_string().contains("more than once"), "{error}");
     }
 }

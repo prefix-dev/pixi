@@ -5,21 +5,34 @@ use std::{
     time::{Duration, Instant},
 };
 
-use miette::IntoDiagnostic;
 use pixi_auth::{get_auth_middleware, get_auth_store};
 use pixi_config::Config;
 use pixi_consts::consts;
 use rattler_networking::{
-    AuthChallengeMiddleware, GCSMiddleware, LazyClient, MirrorMiddleware, OciMiddleware,
-    OfflineMiddleware, S3Middleware, mirror_middleware::Mirror,
+    AuthChallengeMiddleware, AuthenticationStorageError, GCSMiddleware, LazyClient,
+    MirrorMiddleware, OciMiddleware, OfflineMiddleware, S3Middleware, mirror_middleware::Mirror,
 };
 use reqwest::Client;
 use reqwest_middleware::{ClientWithMiddleware, Middleware};
 use reqwest_retry::RetryTransientMiddleware;
 use retry_policies::policies::ExponentialBackoff;
 
+use itertools::Itertools;
+use serde::Serialize;
+
+use crate::tls::CertEnvSource;
 #[cfg(any(feature = "native-tls", feature = "rustls"))]
 use crate::tls::Certificates;
+
+/// An error that occurs when building pixi's HTTP clients.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum ReqwestClientError {
+    #[error("failed to load the authentication storage")]
+    AuthStorage(#[from] AuthenticationStorageError),
+
+    #[error("failed to configure the proxies from the pixi config")]
+    Proxy(#[source] reqwest::Error),
+}
 
 /// The default retry policy employed by pixi.
 /// TODO: At some point we might want to make this configurable.
@@ -59,9 +72,12 @@ pub fn mirror_middleware(config: &Config) -> MirrorMiddleware {
 }
 
 /// Creates OCI middleware using pixi's authentication store.
-pub fn oci_middleware(client: LazyReqwestClient, config: &Config) -> miette::Result<OciMiddleware> {
+pub fn oci_middleware(
+    client: LazyReqwestClient,
+    config: &Config,
+) -> Result<OciMiddleware, ReqwestClientError> {
     let client = LazyClient::new(|| ClientWithMiddleware::new(client.into_client(), vec![]));
-    let auth_store = get_auth_store(config).into_diagnostic()?;
+    let auth_store = get_auth_store(config)?;
 
     Ok(OciMiddleware::new(client).with_authentication_storage(auth_store))
 }
@@ -135,7 +151,72 @@ pub fn tls_backend() -> &'static str {
     }
 }
 
-pub fn reqwest_client_builder(config: Option<&Config>) -> miette::Result<reqwest::ClientBuilder> {
+/// The root certificates pixi's HTTP client trusts, taking the TLS backend
+/// default, the `tls-root-certs` setting and `SSL_CERT_FILE` / `SSL_CERT_DIR`
+/// into account.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct EffectiveTlsRootCerts {
+    /// The root store selected by `tls-root-certs`, or the backend default.
+    pub mode: pixi_config::TlsRootCerts,
+    /// Whether `mode` is the backend default because `tls-root-certs` is unset.
+    pub is_default: bool,
+    /// The environment variables whose certificates are in use.
+    pub env_sources: Vec<CertEnvSource>,
+    /// Whether the environment certificates replace the roots of `mode`
+    /// (rustls) instead of being added to them (native-tls).
+    pub env_replaces_mode: bool,
+}
+
+impl std::fmt::Display for EffectiveTlsRootCerts {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let env = self
+            .env_sources
+            .iter()
+            .map(|source| format!("{}={}", source.variable, source.value))
+            .join(", ");
+        if self.env_sources.is_empty() {
+            write!(f, "{}", self.mode)?;
+            if self.is_default {
+                write!(f, " (default)")?;
+            }
+            Ok(())
+        } else if self.env_replaces_mode {
+            write!(f, "{env} (overrides {})", self.mode)
+        } else {
+            write!(f, "{} + {env}", self.mode)
+        }
+    }
+}
+
+/// Resolve which root certificates pixi's HTTP client trusts for the
+/// `configured` `tls-root-certs` value, or for the backend default when it is
+/// `None`, given the environment certificates from
+/// [`Certificates::env_sources`].
+///
+/// Follows the same rules as [`reqwest_client_builder`]. The deprecated
+/// `native` and `all` modes are reported as `system`, which is how they behave.
+#[allow(deprecated)]
+pub fn effective_tls_root_certs(
+    configured: Option<pixi_config::TlsRootCerts>,
+    env_sources: Vec<CertEnvSource>,
+) -> EffectiveTlsRootCerts {
+    let mode = match configured.unwrap_or_else(default_tls_root_certs) {
+        pixi_config::TlsRootCerts::Webpki => pixi_config::TlsRootCerts::Webpki,
+        pixi_config::TlsRootCerts::System
+        | pixi_config::TlsRootCerts::LegacyNative
+        | pixi_config::TlsRootCerts::All => pixi_config::TlsRootCerts::System,
+    };
+    EffectiveTlsRootCerts {
+        mode,
+        is_default: configured.is_none(),
+        env_sources,
+        env_replaces_mode: cfg!(not(feature = "native-tls")),
+    }
+}
+
+pub fn reqwest_client_builder(
+    config: Option<&Config>,
+) -> Result<reqwest::ClientBuilder, ReqwestClientError> {
     let mut builder = Client::builder()
         .pool_max_idle_per_host(DEFAULT_REQWEST_IDLE_PER_HOST)
         .user_agent(DEFAULT_REQWEST_USER_AGENT.as_str())
@@ -167,7 +248,7 @@ pub fn reqwest_client_builder(config: Option<&Config>) -> miette::Result<reqwest
     let proxies = config
         .map(|c| c.get_proxies())
         .transpose()
-        .into_diagnostic()?
+        .map_err(ReqwestClientError::Proxy)?
         .unwrap_or_default();
 
     for p in proxies {
@@ -212,7 +293,7 @@ pub fn build_reqwest_middleware_stack(
     config: &Config,
     client: &LazyReqwestClient,
     s3_config_project: Option<HashMap<String, rattler_networking::s3_middleware::S3Config>>,
-) -> miette::Result<Box<[Arc<dyn Middleware>]>> {
+) -> Result<Box<[Arc<dyn Middleware>]>, ReqwestClientError> {
     let mut result: Vec<Arc<dyn Middleware>> = Vec::new();
 
     // The offline middleware must be the very first middleware in the stack so
@@ -249,10 +330,10 @@ pub fn build_reqwest_middleware_stack(
     s3_config.extend(s3_config_global);
     s3_config.extend(s3_config_project);
 
-    let store = get_auth_store(config).into_diagnostic()?;
+    let store = get_auth_store(config)?;
     result.push(Arc::new(S3Middleware::new(s3_config, store)));
 
-    result.push(Arc::new(get_auth_middleware(config).into_diagnostic()?));
+    result.push(Arc::new(get_auth_middleware(config)?));
 
     // Reacts to `WWW-Authenticate` challenges
     result.push(Arc::new(AuthChallengeMiddleware::default()));
@@ -263,7 +344,7 @@ pub fn build_reqwest_middleware_stack(
 pub fn build_reqwest_clients(
     config: Option<&Config>,
     s3_config_project: Option<HashMap<String, rattler_networking::s3_middleware::S3Config>>,
-) -> miette::Result<(Client, ClientWithMiddleware)> {
+) -> Result<(Client, ClientWithMiddleware), ReqwestClientError> {
     // If we do not have a config, we will just load the global default.
     let config = if let Some(config) = config {
         Cow::Borrowed(config)
@@ -283,7 +364,7 @@ pub fn build_reqwest_clients(
 pub fn build_lazy_reqwest_clients(
     config: Option<&Config>,
     s3_config_project: Option<HashMap<String, rattler_networking::s3_middleware::S3Config>>,
-) -> miette::Result<(LazyReqwestClient, LazyClient)> {
+) -> Result<(LazyReqwestClient, LazyClient), ReqwestClientError> {
     // If we do not have a config, we will just load the global default.
     let config = if let Some(config) = config {
         Cow::Borrowed(config)
@@ -312,7 +393,7 @@ pub struct LazyReqwestClient {
 }
 
 impl LazyReqwestClient {
-    pub fn new(config: &Config) -> miette::Result<Self> {
+    pub fn new(config: &Config) -> Result<Self, ReqwestClientError> {
         let tls_no_verify = config.tls_no_verify();
         if tls_no_verify {
             tracing::warn!(
@@ -349,7 +430,7 @@ impl LazyReqwestClient {
 pub fn uv_middlewares(
     config: &Config,
     client: LazyReqwestClient,
-) -> miette::Result<Vec<Arc<dyn Middleware>>> {
+) -> Result<Vec<Arc<dyn Middleware>>, ReqwestClientError> {
     let mut middlewares: Vec<Arc<dyn Middleware>> = Vec::new();
 
     // Reject every request before any other middleware when in offline mode.
@@ -367,7 +448,7 @@ pub fn uv_middlewares(
     // Add authentication middleware after mirror rewriting so it can authenticate
     // against the rewritten URLs (important for mirrors that require different
     // credentials)
-    middlewares.push(Arc::new(get_auth_middleware(config).into_diagnostic()?));
+    middlewares.push(Arc::new(get_auth_middleware(config)?));
     Ok(middlewares)
 }
 

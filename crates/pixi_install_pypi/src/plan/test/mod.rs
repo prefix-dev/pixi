@@ -904,6 +904,36 @@ fn test_installed_git_lfs_the_same() {
     );
 }
 
+/// A Git archive install is not equivalent to an install from the repository root,
+/// even when the repository and revision match.
+#[test]
+fn test_installed_git_archive_required_git_directory() {
+    let requested = Url::parse("git+https://github.com/pypa/pip.git@some-branch")
+        .expect("could not parse git url");
+
+    let site_packages = MockedSitePackages::new().add_git(
+        "pip",
+        "1.0.0",
+        requested,
+        InstalledDistOptions::default().with_git_path("packages/pip.whl"),
+    );
+    let locked_git_url =
+        Url::parse("git+https://github.com/pypa/pip.git?branch=some-branch#9d4f36d87dae9a968fb527e2cb87e8a507b0beb3")
+            .expect("could not parse git url");
+    let required = RequiredPackages::new().add_git("pip", "1.0.0", locked_git_url);
+
+    let installs = harness::install_planner()
+        .plan(
+            &site_packages,
+            NoCache,
+            &required.to_required_dists(),
+            &uv_configuration::BuildOptions::default(),
+        )
+        .expect("should install");
+
+    assert_matches!(installs.reinstalls[0].1, NeedReinstall::GitArchiveIsPath);
+}
+
 /// When having a git installed, and we require the same version from the registry
 /// we should reinstall, otherwise we should not
 /// note that we are using full git commits here, because it seems from my (Tim)
