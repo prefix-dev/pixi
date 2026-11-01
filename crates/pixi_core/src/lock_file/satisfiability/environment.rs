@@ -8,11 +8,13 @@ use crate::lock_file::records_by_name::HasNameVersion;
 use itertools::Itertools;
 use pixi_install_pypi::UnresolvedPypiRecord;
 use pixi_manifest::{
-    FeaturesExt, HasWorkspaceManifest, PixiPlatformName, pypi::pypi_options::NoBuild,
+    FeaturesExt, HasWorkspaceManifest, PixiPlatformName, platform::VirtualPackageRecords,
+    pypi::pypi_options::NoBuild,
 };
 use pixi_pypi_spec::PixiPypiSource;
+use pixi_record::LockFileResolver;
 use pypi_modifiers::Tags;
-use rattler_conda_types::{ChannelUrl, NamedChannelOrUrl, Platform};
+use rattler_conda_types::{ChannelUrl, NamedChannelOrUrl, Subdir};
 use rattler_lock::{LockedPackage, PypiIndexes, UrlOrPath};
 use url::Url;
 use uv_distribution_filename::{DistExtension, ExtensionError, SourceDistExtension, WheelFilename};
@@ -31,6 +33,7 @@ use crate::workspace::{Environment, grouped_environment::GroupedEnvironment};
 pub fn verify_environment_satisfiability(
     environment: &Environment<'_>,
     locked_environment: rattler_lock::Environment<'_>,
+    resolver: &LockFileResolver,
 ) -> Result<(), EnvironmentUnsat> {
     let grouped_env = GroupedEnvironment::from(environment.clone());
 
@@ -81,7 +84,7 @@ pub fn verify_environment_satisfiability(
     // covered by some env platform is treated as the same target -- this is
     // the case for old lockfiles whose bare-subdir names no longer appear in
     // workspace.platforms after the `[system-requirements]` migration.
-    let env_subdirs: HashSet<rattler_conda_types::Platform> = platforms
+    let env_subdirs: HashSet<rattler_conda_types::Subdir> = platforms
         .iter()
         .filter_map(|name| {
             environment
@@ -137,21 +140,30 @@ pub fn verify_environment_satisfiability(
         // changed (e.g. adding/removing `__cuda` or pinning `__glibc` to
         // a non-default version).
         let workspace_subdir = workspace_platform.subdir();
-        let expected_vps: Vec<String> = workspace_platform
-            .declared_virtual_packages()
+        let records = match workspace_platform.records() {
+            VirtualPackageRecords::Manifest(records) | VirtualPackageRecords::Detected(records) => {
+                records
+            }
+        };
+        let expected_vps: Vec<String> = records
             .iter()
             .filter(|gvp| !pixi_manifest::platform::is_subdir_default(gvp, workspace_subdir))
-            .map(|vp| vp.to_string())
+            .map(pixi_manifest::platform::format_virtual_package)
             .collect();
+        // Re-format parsed entries so `__unix=0` and `__unix=0=0` compare
+        // equal; unreadable entries stay as written and never match.
         let locked_vps: Vec<String> = locked
             .virtual_packages
             .iter()
-            .filter(|raw| {
-                pixi_manifest::platform::parse_locked_virtual_package(raw)
-                    .map(|gvp| !pixi_manifest::platform::is_subdir_default(&gvp, workspace_subdir))
-                    .unwrap_or(true)
-            })
-            .cloned()
+            .filter_map(
+                |raw| match pixi_manifest::platform::parse_locked_virtual_package(raw) {
+                    Some(gvp) => {
+                        (!pixi_manifest::platform::is_subdir_default(&gvp, workspace_subdir))
+                            .then(|| pixi_manifest::platform::format_virtual_package(&gvp))
+                    }
+                    None => Some(raw.clone()),
+                },
+            )
             .collect();
         let same_subdir = workspace_subdir == locked.subdir;
         // Compare VPs as multisets: lockfile ordering is not part of the
@@ -243,14 +255,11 @@ pub fn verify_environment_satisfiability(
         });
     }
 
-    let resolved_exclude_newer = environment.exclude_newer_config_resolved(&config)?;
-
-    let exclude_newer = resolved_exclude_newer
-        .as_ref()
-        .cloned()
+    let exclude_newer = environment
+        .exclude_newer_config_resolved(&config)?
         .map(rattler_solve::ExcludeNewer::from);
 
-    if let Err(err) = verify_exclude_newer(exclude_newer.as_ref(), &locked_environment) {
+    if let Err(err) = verify_exclude_newer(exclude_newer.as_ref(), &locked_environment, resolver) {
         return Err(EnvironmentUnsat::ExcludeNewerMismatch(err));
     }
 
@@ -258,7 +267,7 @@ pub fn verify_environment_satisfiability(
 }
 
 struct PypiWheelTagsCheck {
-    platform_wheel_tags: HashMap<Platform, Tags>,
+    platform_wheel_tags: HashMap<Subdir, Tags>,
 }
 
 impl PypiWheelTagsCheck {
@@ -315,7 +324,7 @@ impl PypiWheelTagsCheck {
 
     pub fn check(
         &self,
-        platform: Platform,
+        platform: Subdir,
         package_data: &UnresolvedPypiRecord,
     ) -> Result<(), EnvironmentUnsat> {
         let package_data = package_data.as_package_data();

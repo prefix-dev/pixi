@@ -1,5 +1,6 @@
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::Arc;
 
 use pixi_consts::consts;
 use pixi_record::LockedGitUrl;
@@ -27,7 +28,9 @@ fn index_url_from_lock(index: Option<&Url>) -> IndexUrl {
     let url = index
         .cloned()
         .unwrap_or_else(|| consts::DEFAULT_PYPI_INDEX_URL.clone());
-    IndexUrl::from(uv_pep508::VerbatimUrl::from(url))
+    IndexUrl::from(uv_pep508::VerbatimUrl::from(
+        uv_redacted::SafeUrl::from_url(url),
+    ))
 }
 
 /// Converts our locked data to a file
@@ -38,7 +41,7 @@ pub fn locked_data_to_file(
     requires_python: Option<pep440_rs::VersionSpecifiers>,
 ) -> Result<uv_distribution_types::File, ConversionError> {
     let url = uv_distribution_types::FileLocation::AbsoluteUrl(UrlString::from(
-        uv_redacted::DisplaySafeUrl::from_url(url.clone()),
+        uv_redacted::SafeUrl::from_url(url.clone()),
     ));
 
     // Convert PackageHashes to uv hashes
@@ -46,17 +49,17 @@ pub fn locked_data_to_file(
 
     let uv_requires_python = requires_python
         .map(|inside| to_uv_version_specifiers(&inside))
-        .transpose()?;
+        .transpose()?
+        .map(Arc::new);
 
     Ok(uv_distribution_types::File {
         filename: filename.into(),
-        dist_info_metadata: false,
+        dist_info_metadata: None,
         hashes: hashes.into(),
         requires_python: uv_requires_python,
         upload_time_utc_ms: None,
         yanked: None,
         size: None,
-        zstd: None,
         url,
     })
 }
@@ -103,19 +106,23 @@ pub fn convert_to_dist(
                 Dist::from_url(
                     pkg_name,
                     VerbatimParsedUrl {
-                        parsed_url: ParsedUrl::Git(parsed_git_url),
-                        verbatim: uv_pep508::VerbatimUrl::from(url_without_direct.into_owned()),
+                        parsed_url: ParsedUrl::GitDirectory(parsed_git_url),
+                        verbatim: uv_pep508::VerbatimUrl::from_url(uv_redacted::SafeUrl::from_url(
+                            url_without_direct.into_owned(),
+                        )),
                     },
                 )?
             } else {
                 Dist::from_url(
                     pkg_name,
                     VerbatimParsedUrl {
-                        parsed_url: ParsedUrl::try_from(uv_redacted::DisplaySafeUrl::from_url(
+                        parsed_url: ParsedUrl::try_from(uv_redacted::SafeUrl::from_url(
                             url_without_direct.clone().into_owned(),
                         ))
                         .map_err(Box::new)?,
-                        verbatim: uv_pep508::VerbatimUrl::from(url_without_direct.into_owned()),
+                        verbatim: uv_pep508::VerbatimUrl::from_url(uv_redacted::SafeUrl::from_url(
+                            url_without_direct.into_owned(),
+                        )),
                     },
                 )?
             }
@@ -152,6 +159,7 @@ pub fn convert_to_dist(
                         filename,
                         file: Box::new(file),
                         index: index_url_from_lock(record.index_url.as_ref()),
+                        size_is_authoritative: false,
                     }],
                     best_wheel_index: 0,
                     sdist: None,
@@ -166,6 +174,7 @@ pub fn convert_to_dist(
                     index: index_url_from_lock(record.index_url.as_ref()),
                     // I don't think this really matters for the install
                     wheels: vec![],
+                    size_is_authoritative: false,
                     ext: SourceDistExtension::from_path(Path::new(filename_raw)).map_err(|e| {
                         ConvertToUvDistError::Extension(e, filename_raw.to_string())
                     })?,

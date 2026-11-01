@@ -20,7 +20,7 @@ use rattler_conda_types::NamedChannelOrUrl;
 
 use crate::cli_interface::CliInterface;
 
-/// Creates a new workspace or script
+/// Create a new workspace or script
 ///
 /// The positional path starts a workspace, while `--script` writes a metadata
 /// block into a single file: a PEP 723 block for a Python file, a

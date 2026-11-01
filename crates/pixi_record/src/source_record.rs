@@ -1023,7 +1023,7 @@ mod tests {
     use std::{path::Path, str::FromStr};
 
     use rattler_conda_types::{
-        PackageName, PackageRecord, Platform, RepoDataRecord, VersionWithSource,
+        PackageName, PackageRecord, RepoDataRecord, Subdir, VersionWithSource,
         package::DistArchiveIdentifier,
     };
     use rattler_lock::{
@@ -1041,7 +1041,7 @@ mod tests {
             let package_record = PackageRecord::new(
                 PackageName::from_str(name).expect("valid name"),
                 VersionWithSource::from_str("1.0").expect("valid version"),
-                "h0".into(),
+                "h0".parse().unwrap(),
             );
             let file_name = format!("{name}-1.0-h0.conda");
             crate::UnresolvedPixiRecord::Binary(std::sync::Arc::new(RepoDataRecord {
@@ -1245,10 +1245,10 @@ mod tests {
     /// Build a lock file string from a set of SourceRecords.
     fn build_lock_from_records(records: &[SourceRecord], workspace_root: &Path) -> String {
         // Collect all unique platforms from the records (using the package_record's subdir).
-        let platforms: std::collections::HashSet<Platform> = records
+        let platforms: std::collections::HashSet<Subdir> = records
             .iter()
             .map(|r| {
-                Platform::from_str(&r.package_record().subdir)
+                Subdir::from_str(&r.package_record().subdir)
                     .expect("failed to parse platform from subdir")
             })
             .collect();
@@ -1271,7 +1271,7 @@ mod tests {
         );
 
         for record in records {
-            let platform = Platform::from_str(&record.package_record().subdir)
+            let platform = Subdir::from_str(&record.package_record().subdir)
                 .expect("failed to parse platform from subdir");
             let conda_data =
                 CondaPackageData::from(record.clone().into_conda_source_data(workspace_root));
@@ -1506,7 +1506,7 @@ mod tests {
             "1.0.0"
                 .parse::<rattler_conda_types::VersionWithSource>()
                 .unwrap(),
-            "h1234_0".into(),
+            "h1234_0".parse().unwrap(),
         );
         record.subdir = "linux-64".into();
         record.depends = vec!["python >=3.8".into()];

@@ -8,7 +8,7 @@ use pixi_config::Config;
 use pixi_core::Workspace;
 use pixi_manifest::FeaturesExt;
 use pixi_test_utils::MockRepoData;
-use rattler_conda_types::{NamedChannelOrUrl, Platform};
+use rattler_conda_types::{NamedChannelOrUrl, Subdir};
 use tempfile::TempDir;
 use url::Url;
 
@@ -90,7 +90,7 @@ async fn add_remove_channel() {
 async fn parse_project() {
     setup_tracing();
 
-    fn dependency_names(project: &Workspace, platform: Platform) -> Vec<String> {
+    fn dependency_names(project: &Workspace, platform: Subdir) -> Vec<String> {
         let pp = pixi_manifest::PixiPlatform::from_subdir(platform);
         project
             .default_environment()
@@ -102,9 +102,9 @@ async fn parse_project() {
 
     let pixi_toml = include_str!("../../../../tests/data/pixi_tomls/many_targets.toml");
     let project = Workspace::from_str(&PathBuf::from("./many/pixi.toml"), pixi_toml).unwrap();
-    assert_debug_snapshot!(dependency_names(&project, Platform::Linux64));
-    assert_debug_snapshot!(dependency_names(&project, Platform::OsxArm64));
-    assert_debug_snapshot!(dependency_names(&project, Platform::Win64));
+    assert_debug_snapshot!(dependency_names(&project, Subdir::Linux64));
+    assert_debug_snapshot!(dependency_names(&project, Subdir::OsxArm64));
+    assert_debug_snapshot!(dependency_names(&project, Subdir::Win64));
 }
 
 #[tokio::test]

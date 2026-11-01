@@ -4,7 +4,7 @@
 //!
 //! * [`Targets`] - A project target trait.
 //! * [`TargetSelector`] - An extension trait that extends the target selector with additional functionality.
-use rattler_conda_types::Platform;
+use rattler_conda_types::Subdir;
 
 use crate::PackageSpec;
 use pixi_build_types::{self as pbt};
@@ -12,7 +12,7 @@ use pixi_build_types::{self as pbt};
 /// A trait that extend the target selector with additional functionality.
 pub trait TargetSelector {
     /// Does the target selector match the platform?
-    fn matches(&self, platform: Platform) -> bool;
+    fn matches(&self, platform: Subdir) -> bool;
 }
 
 /// A trait that represent a project target.
@@ -37,7 +37,7 @@ pub trait Targets {
 
 // === Below here are the implementations for v1 ===
 impl TargetSelector for pbt::TargetSelector {
-    fn matches(&self, platform: Platform) -> bool {
+    fn matches(&self, platform: Subdir) -> bool {
         match self {
             pbt::TargetSelector::Platform(p) => p == &platform.to_string(),
             pbt::TargetSelector::Subdir(s) => s == &platform.to_string(),

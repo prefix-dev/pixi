@@ -1,21 +1,49 @@
 use fancy_display::FancyDisplay;
-use miette::IntoDiagnostic;
+use miette::Diagnostic;
 use pixi_manifest::{
-    EnvironmentName, FeatureName, HasWorkspaceManifest, PixiPlatform, PixiPlatformName,
-    PlatformEdit, PlatformMove,
+    EnvironmentName, FeatureName, HasWorkspaceManifest, LoadManifestsError, PixiPlatform,
+    PixiPlatformName, PlatformEdit, PlatformEditError, PlatformMove,
 };
 use std::collections::HashMap;
+use thiserror::Error;
 
 use pixi_core::{Workspace, workspace::WorkspaceMut};
 use pixi_manifest::FeaturesExt;
 
 use pixi_core::{
     UpdateLockFileOptions,
-    environment::{InstallFilter, LockFileUsage, get_update_lock_file_and_prefix},
+    environment::{
+        InstallFilter, LockFileAndPrefixesError, LockFileUsage, get_update_lock_file_and_prefix,
+    },
+    host::HostProbeError,
     lock_file::{ReinstallPackages, UpdateMode},
 };
 
 use crate::Interface;
+use crate::workspace::workspace::{SaveManifestError, save};
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum PlatformError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    LoadWorkspace(#[from] LoadManifestsError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Edit(#[from] PlatformEditError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    HostProbe(#[from] HostProbeError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    LockFileAndPrefixes(#[from] LockFileAndPrefixesError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Save(#[from] SaveManifestError),
+}
 
 pub async fn list(workspace: &Workspace) -> HashMap<EnvironmentName, Vec<PixiPlatformName>> {
     workspace
@@ -50,7 +78,8 @@ async fn update_platform_lock_file_and_prefix(
     progress: Option<std::sync::Arc<pixi_reporters::TopLevelProgress>>,
     no_install: bool,
     lock_file_usage: LockFileUsage,
-) -> miette::Result<()> {
+) -> Result<(), PlatformError> {
+    workspace.refresh_environment_hosts().await?;
     let default_env = workspace.default_environment();
     let no_install = no_install || default_env.best_declared_platform().is_none();
     if no_install && default_env.best_declared_platform().is_none() {
@@ -86,7 +115,7 @@ pub async fn edit<I: Interface>(
     edit: PlatformEdit,
     no_install: bool,
     lock_file_usage: LockFileUsage,
-) -> miette::Result<()> {
+) -> Result<(), PlatformError> {
     workspace.manifest().edit_workspace_platform(&name, edit)?;
 
     update_platform_lock_file_and_prefix(
@@ -96,7 +125,7 @@ pub async fn edit<I: Interface>(
         lock_file_usage,
     )
     .await?;
-    workspace.save().await.into_diagnostic()?;
+    save(workspace).await?;
 
     interface.success(&format!("Updated platform {name}")).await;
     Ok(())
@@ -111,7 +140,7 @@ pub async fn move_platform<I: Interface>(
     target: PlatformMove,
     no_install: bool,
     lock_file_usage: LockFileUsage,
-) -> miette::Result<()> {
+) -> Result<(), PlatformError> {
     workspace
         .manifest()
         .move_workspace_platform(&name, &target)?;
@@ -123,7 +152,7 @@ pub async fn move_platform<I: Interface>(
         lock_file_usage,
     )
     .await?;
-    workspace.save().await.into_diagnostic()?;
+    save(workspace).await?;
 
     interface.success(&format!("Moved platform {name}")).await;
     Ok(())
@@ -153,7 +182,7 @@ pub async fn add_auto_detected<I: Interface>(
     no_install: bool,
     feature_name: FeatureName,
     lock_file_usage: LockFileUsage,
-) -> miette::Result<()> {
+) -> Result<(), PlatformError> {
     // A script's implicit platforms are pixi's own guess, not a declaration,
     // so deduplicating against them would make this a guaranteed no-op.
     workspace.forget_implicit_script_platforms();
@@ -208,7 +237,7 @@ pub async fn add_auto_detected<I: Interface>(
         lock_file_usage,
     )
     .await?;
-    workspace.save().await.into_diagnostic()?;
+    save(workspace).await?;
 
     match outcome {
         AutoDetectedOutcome::Added => {
@@ -260,7 +289,7 @@ pub async fn add<I: Interface>(
     no_install: bool,
     feature_name: FeatureName,
     lock_file_usage: LockFileUsage,
-) -> miette::Result<()> {
+) -> Result<(), PlatformError> {
     // Add the platforms to the manifest; `added` holds only those that caused
     // an actual change so already-declared platforms are reported as no-ops.
     let added = workspace
@@ -275,7 +304,7 @@ pub async fn add<I: Interface>(
         lock_file_usage,
     )
     .await?;
-    workspace.save().await.into_diagnostic()?;
+    save(workspace).await?;
 
     // Report back to the user
     for platform in &platforms {
@@ -311,7 +340,7 @@ pub async fn remove<I: Interface>(
     no_install: bool,
     feature_name: FeatureName,
     lock_file_usage: LockFileUsage,
-) -> miette::Result<()> {
+) -> Result<(), PlatformError> {
     // Remove the platform(s) from the manifest
     workspace
         .manifest()
@@ -324,7 +353,7 @@ pub async fn remove<I: Interface>(
         lock_file_usage,
     )
     .await?;
-    workspace.save().await.into_diagnostic()?;
+    save(workspace).await?;
 
     // Report back to the user
     for platform in platforms {
@@ -347,9 +376,10 @@ pub async fn remove<I: Interface>(
 mod tests {
     use pixi_core::{Workspace, environment::LockFileUsage};
     use pixi_manifest::{FeatureName, PixiPlatform};
-    use rattler_conda_types::Platform;
+    use rattler_conda_types::Subdir;
 
     use super::*;
+    use crate::InterfaceError;
 
     struct MockInterface;
 
@@ -357,8 +387,15 @@ mod tests {
         async fn is_cli(&self) -> bool {
             false
         }
-        async fn confirm(&self, _msg: &str) -> miette::Result<bool> {
+        async fn confirm(&self, _msg: &str) -> Result<bool, InterfaceError> {
             Ok(true)
+        }
+        async fn select(
+            &self,
+            _msg: &str,
+            _options: &[String],
+        ) -> Result<Option<usize>, InterfaceError> {
+            Ok(None)
         }
         async fn error(&self, _msg: &str) {}
         async fn info(&self, _msg: &str) {}
@@ -376,7 +413,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_remove_host_platform_without_no_install() {
-        let current_platform = Platform::current();
+        let current_platform = Subdir::current().unwrap_or(Subdir::NoArch);
         let host = current_platform.as_str();
         let (_tmp, workspace) = workspace_from(&format!(
             r#"
@@ -414,7 +451,7 @@ channels = []
 platforms = ["win-64"]
 "#,
         );
-        let platform = PixiPlatform::from_subdir(Platform::Win64);
+        let platform = PixiPlatform::from_subdir(Subdir::Win64);
         let result = remove(
             &MockInterface,
             workspace.modify().unwrap(),
@@ -442,7 +479,7 @@ channels = []
 platforms = ["linux-64"]
 "#,
         );
-        let platform = PixiPlatform::from_subdir(Platform::Win64);
+        let platform = PixiPlatform::from_subdir(Subdir::Win64);
         let result = add(
             &MockInterface,
             workspace.modify().unwrap(),

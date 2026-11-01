@@ -31,6 +31,7 @@ const WORKSPACE_KEYS: &[&str] = &[
     "exclude-newer",
     "platforms",
     "preview",
+    "pypi-exclude-newer",
     "pypi-options",
     "requires-pixi",
     "solve-strategy",

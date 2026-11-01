@@ -24,7 +24,7 @@ pub use repodata_reporter::{
     channel_notices_cache_dir, display_channel_notices, queue_channel_notice,
 };
 use sync_reporter::SyncReporter;
-use uv_configuration::initialize_rayon_once;
+use uv_threads::initialize_rayon_once;
 // Re-export the uv_reporter types for external use
 pub use uv_reporter::{UvReporter, UvReporterOptions};
 

@@ -4,7 +4,7 @@ use pixi_config::Config;
 use pixi_core::Workspace;
 use pixi_utils::reqwest::build_lazy_reqwest_clients;
 use rattler_conda_types::{
-    Channel, MatchSpec, PackageName, PackageNameMatcher, Platform, RepoDataRecord,
+    Channel, MatchSpec, PackageName, PackageNameMatcher, RepoDataRecord, Subdir,
 };
 use rattler_repodata_gateway::ChannelNoticeResult;
 
@@ -32,7 +32,7 @@ pub async fn search(
     config: Config,
     matchspec: MatchSpec,
     channels: IndexSet<Channel>,
-    platforms: Vec<Platform>,
+    platforms: Vec<Subdir>,
     fuzzy_limit: Option<usize>,
 ) -> miette::Result<SearchResult> {
     let client = if let Some(workspace) = workspace {

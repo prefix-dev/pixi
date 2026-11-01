@@ -2,7 +2,7 @@
 //! used by `list` and `tree` to label which prefix their output reflects.
 
 use pixi_core::workspace::Environment;
-use rattler_conda_types::Platform;
+use rattler_conda_types::Subdir;
 
 /// The platform `environment` was installed for, read from its
 /// `conda-meta/pixi` marker file, with an emulation hint when that subdir
@@ -11,7 +11,7 @@ use rattler_conda_types::Platform;
 pub(crate) fn installed_platform_note(environment: &Environment<'_>) -> Option<String> {
     let (resolved, _minimum) = environment.installed_platforms();
     let subdir = resolved?.subdir();
-    let host = Platform::current();
+    let host = Subdir::current().unwrap_or(Subdir::NoArch);
     if subdir == host {
         Some(subdir.to_string())
     } else {

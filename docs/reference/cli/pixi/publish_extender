@@ -28,7 +28,7 @@ The `--target-channel` value determines the upload backend:
 
 | URL pattern | Backend |
 |-------------|---------|
-| `https://prefix.dev/<channel>` | [prefix.dev](https://prefix.dev) |
+| `https://prefix.dev/<channel>` or `https://prefix.dev/<namespace>/<channel>` | [prefix.dev](https://prefix.dev) |
 | `https://anaconda.org/<owner>` | [Anaconda.org](https://anaconda.org) |
 | `cloudsmith://<owner>/<repository>/` | [Cloudsmith](https://cloudsmith.com) |
 | `s3://bucket-name/channel` | S3-compatible storage |

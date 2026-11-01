@@ -11,11 +11,11 @@ use deno_task_shell::{
 };
 use fs_err::tokio as tokio_fs;
 use itertools::Itertools;
-use miette::{Context, Diagnostic};
+use miette::Diagnostic;
 use pixi_consts::consts;
 use pixi_core::{
     Workspace,
-    activation::CurrentEnvVarBehavior,
+    activation::{ActivationError, CurrentEnvVarBehavior},
     workspace::get_activated_environment_variables,
     workspace::{Environment, HasWorkspaceRef},
 };
@@ -346,7 +346,7 @@ impl<'p> ExecutableTask<'p> {
     /// Emit warnings for missing input/output globs given a computed hash.
     pub fn warn_on_missing_globs(&self, post_hash: &TaskHash) {
         let (rendered_inputs, rendered_outputs) = match self.task().as_execute() {
-            Ok(exe) => {
+            Some(exe) => {
                 let context = self.render_context();
                 let ins = exe
                     .inputs
@@ -358,7 +358,7 @@ impl<'p> ExecutableTask<'p> {
                     .map(|p| p.render(&context).unwrap_or_default());
                 (ins, outs)
             }
-            Err(_) => (None, None),
+            None => (None, None),
         };
 
         // Outputs warning
@@ -453,7 +453,7 @@ impl<'p> ExecutableTask<'p> {
         &self,
         post_run_hash: Option<TaskHash>,
     ) -> Result<(), CacheUpdateError> {
-        let execute = if let Ok(task) = self.task().as_execute() {
+        let execute = if let Some(task) = self.task().as_execute() {
             task
         } else {
             // Don't save cache for non-execute tasks
@@ -566,7 +566,7 @@ pub async fn get_task_env(
     lock_file: Option<&LockFile>,
     force_activate: bool,
     experimental_cache: bool,
-) -> miette::Result<HashMap<String, String>> {
+) -> Result<HashMap<String, String>, ActivationError> {
     // Get environment variables from the activation
     let env_var_behavior = if clean_env {
         CurrentEnvVarBehavior::Clean
@@ -584,8 +584,7 @@ pub async fn get_task_env(
             experimental_cache,
         )
     })
-    .await
-    .wrap_err("failed to activate environment")?
+    .await?
     .clone();
 
     // Add the current working directory to the environment

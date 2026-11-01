@@ -1,0 +1,6 @@
+#:schema ./../../schema.json
+
+[workspace]
+name = "unknown-virtual-package"
+channels = []
+platforms = [{ platform = "linux-64", cud = "12" }]

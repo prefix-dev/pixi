@@ -9,7 +9,7 @@ use pixi_api::workspace::{Package, PackageKind};
 use pixi_consts::consts;
 use pixi_core::WorkspaceLocator;
 use pixi_manifest::PixiPlatformName;
-use rattler_conda_types::Platform;
+use rattler_conda_types::Subdir;
 use serde::Serialize;
 
 use crate::{
@@ -150,7 +150,7 @@ pub const DEFAULT_FIELDS: [Field; 6] = [
     Field::Source,
 ];
 
-/// List the packages of the current workspace
+/// List the packages of an environment
 ///
 /// Highlighted packages are explicit dependencies.
 #[derive(Debug, Parser)]
@@ -211,7 +211,8 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.workspace_config.workspace_locator_start())
-        .locate()?;
+        .locate()
+        .await?;
 
     let lock_file_usage = script_lock_file_usage(
         args.lock_file_update_config.lock_file_usage()?,
@@ -224,7 +225,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         None => environment
             .best_declared_platform()
             .map(|p| p.name().to_string())
-            .unwrap_or_else(|| Platform::current().to_string()),
+            .unwrap_or_else(|| Subdir::current().unwrap_or(Subdir::NoArch).to_string()),
     };
 
     let workspace_ctx = cli_context(workspace.clone());

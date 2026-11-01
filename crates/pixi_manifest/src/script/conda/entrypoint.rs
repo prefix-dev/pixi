@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use itertools::Itertools;
 use pixi_toml::{custom_error, custom_error_message_with_help};
-use rattler_conda_types::Platform;
+use rattler_conda_types::Subdir;
 use toml_span::{DeserError, Value, de_helpers::expected, value::ValueInner};
 
 /// The command that runs a `conda-script` file.
@@ -26,14 +26,14 @@ pub enum EntrypointSelector {
     /// Any Windows platform.
     Win,
     /// One platform, like `linux-64`.
-    Platform(Platform),
+    Platform(Subdir),
 }
 
 impl Entrypoint {
     /// The command for `platform`, taking the most specific matching key:
     /// the exact platform wins over its family (`linux`, `osx`, `win`),
     /// which wins over `unix`. Returns `None` when no key matches.
-    pub fn select(&self, platform: Platform) -> Option<&str> {
+    pub fn select(&self, platform: Subdir) -> Option<&str> {
         match self {
             Entrypoint::Uniform(command) => Some(command),
             Entrypoint::PerPlatform(commands) => {
@@ -88,7 +88,7 @@ impl<'de> toml_span::Deserialize<'de> for Entrypoint {
                         "linux" => Some(EntrypointSelector::Linux),
                         "osx" => Some(EntrypointSelector::Osx),
                         "win" => Some(EntrypointSelector::Win),
-                        name => match Platform::from_str(name) {
+                        name => match Subdir::from_str(name) {
                             Ok(platform) => Some(EntrypointSelector::Platform(platform)),
                             Err(_) => {
                                 errors.errors.push(custom_error(
@@ -143,11 +143,8 @@ mod tests {
     #[test]
     fn a_uniform_entrypoint_matches_every_platform() {
         let entrypoint = parse_entrypoint(r#"entrypoint = "python ${SCRIPT}""#);
-        assert_eq!(
-            entrypoint.select(Platform::Linux64),
-            Some("python ${SCRIPT}")
-        );
-        assert_eq!(entrypoint.select(Platform::Win64), Some("python ${SCRIPT}"));
+        assert_eq!(entrypoint.select(Subdir::Linux64), Some("python ${SCRIPT}"));
+        assert_eq!(entrypoint.select(Subdir::Win64), Some("python ${SCRIPT}"));
     }
 
     #[test]
@@ -155,20 +152,20 @@ mod tests {
         let entrypoint = parse_entrypoint(
             r#"entrypoint = { unix = "unix", linux = "linux", linux-64 = "linux-64", win = "win" }"#,
         );
-        assert_eq!(entrypoint.select(Platform::Linux64), Some("linux-64"));
-        assert_eq!(entrypoint.select(Platform::LinuxAarch64), Some("linux"));
-        assert_eq!(entrypoint.select(Platform::Osx64), Some("unix"));
-        assert_eq!(entrypoint.select(Platform::Win64), Some("win"));
-        assert_eq!(entrypoint.select(Platform::WinArm64), Some("win"));
+        assert_eq!(entrypoint.select(Subdir::Linux64), Some("linux-64"));
+        assert_eq!(entrypoint.select(Subdir::LinuxAarch64), Some("linux"));
+        assert_eq!(entrypoint.select(Subdir::Osx64), Some("unix"));
+        assert_eq!(entrypoint.select(Subdir::Win64), Some("win"));
+        assert_eq!(entrypoint.select(Subdir::WinArm64), Some("win"));
     }
 
     #[test]
     fn a_platform_without_a_matching_key_selects_nothing() {
         let windows_only = parse_entrypoint(r#"entrypoint = { win = "win" }"#);
-        assert_eq!(windows_only.select(Platform::Linux64), None);
+        assert_eq!(windows_only.select(Subdir::Linux64), None);
 
         let unix_only = parse_entrypoint(r#"entrypoint = { unix = "unix" }"#);
-        assert_eq!(unix_only.select(Platform::Win64), None);
-        assert_eq!(unix_only.select(Platform::LinuxRiscv64), Some("unix"));
+        assert_eq!(unix_only.select(Subdir::Win64), None);
+        assert_eq!(unix_only.select(Subdir::LinuxRiscv64), Some("unix"));
     }
 }

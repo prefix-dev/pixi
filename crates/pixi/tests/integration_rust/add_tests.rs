@@ -6,7 +6,7 @@ use pixi_consts::consts;
 use pixi_core::DependencyType;
 use pixi_manifest::{FeatureName, FeaturesExt, SpecType};
 use pixi_pypi_spec::{PixiPypiSource, PixiPypiSpec, PypiPackageName, VersionOrStar};
-use rattler_conda_types::{PackageName, Platform};
+use rattler_conda_types::{PackageName, Subdir};
 use tempfile::TempDir;
 use url::Url;
 
@@ -61,17 +61,17 @@ async fn add_functionality() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         "rattler==3"
     ));
     assert!(!lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         "rattler==2"
     ));
     assert!(!lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         "rattler==1"
     ));
 
@@ -80,7 +80,7 @@ async fn add_functionality() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(!lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         "rattler==1"
     ));
 }
@@ -114,7 +114,7 @@ async fn add_with_channel() {
     let mut specs = project
         .default_environment()
         .combined_dependencies(Some(&pixi_manifest::PixiPlatform::from_subdir(
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
         )))
         .into_specs();
 
@@ -182,7 +182,7 @@ async fn add_functionality_union() {
     let dependencies = project.default_environment().dependencies(
         SpecType::Run,
         Some(&pixi_manifest::PixiPlatform::from_subdir(
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
         )),
     );
     let (name, _) = dependencies.into_specs().next().unwrap();
@@ -190,7 +190,7 @@ async fn add_functionality_union() {
     let host_deps = project.default_environment().dependencies(
         SpecType::Host,
         Some(&pixi_manifest::PixiPlatform::from_subdir(
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
         )),
     );
     let (name, _) = host_deps.into_specs().next().unwrap();
@@ -198,7 +198,7 @@ async fn add_functionality_union() {
     let build_deps = project.default_environment().dependencies(
         SpecType::Build,
         Some(&pixi_manifest::PixiPlatform::from_subdir(
-            Platform::current(),
+            Subdir::current().unwrap_or(Subdir::NoArch),
         )),
     );
     let (name, _) = build_deps.into_specs().next().unwrap();
@@ -208,17 +208,17 @@ async fn add_functionality_union() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         "rattler==1"
     ));
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         "libcomputer==1.2"
     ));
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         "libidk==3.1"
     ));
 }
@@ -233,7 +233,7 @@ async fn add_functionality_os() {
     // Add a package `foo` that depends on `bar` both set to version 1.
     package_database.add_package(
         Package::build("rattler", "1")
-            .with_subdir(Platform::LinuxS390X)
+            .with_subdir(Subdir::LinuxS390X)
             .finish(),
     );
 
@@ -247,8 +247,8 @@ async fn add_functionality_os() {
     let pixi = PixiControl::new().unwrap();
 
     pixi.init_with_platforms(vec![
-        Platform::current().to_string(),
-        Platform::LinuxS390X.to_string(),
+        Subdir::current().unwrap_or(Subdir::NoArch).to_string(),
+        Subdir::LinuxS390X.to_string(),
     ])
     .with_local_channel(channel_dir.path())
     .await
@@ -256,7 +256,7 @@ async fn add_functionality_os() {
 
     // Add a package
     pixi.add("rattler==1")
-        .set_platforms(&[Platform::LinuxS390X])
+        .set_platforms(&[Subdir::LinuxS390X])
         .set_type(DependencyType::CondaDependency(SpecType::Host))
         .await
         .unwrap();
@@ -264,7 +264,7 @@ async fn add_functionality_os() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_match_spec(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::LinuxS390X,
+        Subdir::LinuxS390X,
         "rattler==1"
     ));
 }
@@ -304,7 +304,11 @@ async fn add_pypi_functionality() {
 
     // Create local conda channel with Python for multiple platforms
     let mut package_db = MockRepoData::default();
-    for platform in [Platform::current(), Platform::Linux64, Platform::Osx64] {
+    for platform in [
+        Subdir::current().unwrap_or(Subdir::NoArch),
+        Subdir::Linux64,
+        Subdir::Osx64,
+    ] {
         package_db.add_package(
             Package::build("python", "3.12.0")
                 .with_subdir(platform)
@@ -319,9 +323,9 @@ async fn add_pypi_functionality() {
         .without_channels()
         .with_local_channel(channel.url().to_file_path().unwrap())
         .with_platforms(vec![
-            Platform::current(),
-            Platform::Linux64,
-            Platform::Osx64,
+            Subdir::current().unwrap_or(Subdir::NoArch),
+            Subdir::Linux64,
+            Subdir::Osx64,
         ])
         .await
         .unwrap();
@@ -355,14 +359,14 @@ async fn add_pypi_functionality() {
         boltons_fixture.base_url, boltons_short_commit
     ))
     .set_type(DependencyType::PypiDependency)
-    .set_platforms(&[Platform::Osx64])
+    .set_platforms(&[Subdir::Osx64])
     .await
     .unwrap();
 
     // Add a pypi package to a target with extras
     pixi.add("pytest[dev]==8.3.2")
         .set_type(DependencyType::PypiDependency)
-        .set_platforms(&[Platform::Linux64])
+        .set_platforms(&[Subdir::Linux64])
         .await
         .unwrap();
 
@@ -385,31 +389,31 @@ async fn add_pypi_functionality() {
     let lock = pixi.lock_file().await.unwrap();
     assert!(lock.contains_pypi_package(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::current(),
+        Subdir::current().unwrap_or(Subdir::NoArch),
         "pipx"
     ));
     assert!(lock.contains_pep508_requirement(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::Osx64,
+        Subdir::Osx64,
         pep508_rs::Requirement::from_str("boltons").unwrap()
     ));
     assert!(lock.contains_pep508_requirement(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::Linux64,
+        Subdir::Linux64,
         pep508_rs::Requirement::from_str("pytest").unwrap(),
     ));
     // Test that the dev extras are added, mock is a test dependency of
     // `pytest==8.3.2`
     assert!(lock.contains_pep508_requirement(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::Linux64,
+        Subdir::Linux64,
         pep508_rs::Requirement::from_str("mock").unwrap(),
     ));
 
     // Add a pypi package with a git url (using local fixture)
     pixi.add(&format!("httpx @ git+{}", httpx_fixture.base_url))
         .set_type(DependencyType::PypiDependency)
-        .set_platforms(&[Platform::Linux64])
+        .set_platforms(&[Subdir::Linux64])
         .await
         .unwrap();
 
@@ -420,31 +424,23 @@ async fn add_pypi_functionality() {
         isort_fixture.base_url, isort_commit
     ))
     .set_type(DependencyType::PypiDependency)
-    .set_platforms(&[Platform::Linux64])
+    .set_platforms(&[Subdir::Linux64])
     .await
     .unwrap();
 
     // Add pytest from direct wheel URL (using local wheel file)
     pixi.add(&format!("pytest @ {pytest_wheel_url}"))
         .set_type(DependencyType::PypiDependency)
-        .set_platforms(&[Platform::Linux64])
+        .set_platforms(&[Subdir::Linux64])
         .await
         .unwrap();
 
     let lock = pixi.lock_file().await.unwrap();
+    assert!(lock.contains_pypi_package(consts::DEFAULT_ENVIRONMENT_NAME, Subdir::Linux64, "httpx"));
+    assert!(lock.contains_pypi_package(consts::DEFAULT_ENVIRONMENT_NAME, Subdir::Linux64, "isort"));
     assert!(lock.contains_pypi_package(
         consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::Linux64,
-        "httpx"
-    ));
-    assert!(lock.contains_pypi_package(
-        consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::Linux64,
-        "isort"
-    ));
-    assert!(lock.contains_pypi_package(
-        consts::DEFAULT_ENVIRONMENT_NAME,
-        Platform::Linux64,
+        Subdir::Linux64,
         "pytest"
     ));
 }
@@ -468,14 +464,14 @@ async fn add_pypi_extra_functionality() {
     let mut package_db = MockRepoData::default();
     package_db.add_package(
         Package::build("python", "3.12.0")
-            .with_subdir(Platform::current())
+            .with_subdir(Subdir::current().unwrap_or(Subdir::NoArch))
             .finish(),
     );
     let channel = package_db.into_channel().await.unwrap();
 
     let channel_url = channel.url();
     let index_url = pypi_index.index_url();
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
 
     // Create manifest with local channel and pypi index
     let pixi = PixiControl::from_manifest(&format!(
@@ -842,7 +838,7 @@ async fn add_pypi_path_dependency_rewrites_absolute_manifest_path() {
     let mut package_database = MockRepoData::default();
     package_database.add_package(
         Package::build("python", "3.12.0")
-            .with_subdir(Platform::current())
+            .with_subdir(Subdir::current().unwrap_or(Subdir::NoArch))
             .finish(),
     );
     let channel = package_database.into_channel().await.unwrap();
@@ -850,7 +846,7 @@ async fn add_pypi_path_dependency_rewrites_absolute_manifest_path() {
     let pixi = PixiControl::new().unwrap();
     pixi.init()
         .with_local_channel(channel.url().to_file_path().unwrap())
-        .with_platforms(vec![Platform::current()])
+        .with_platforms(vec![Subdir::current().unwrap_or(Subdir::NoArch)])
         .await
         .unwrap();
     pixi.add("python").await.unwrap();
@@ -1026,7 +1022,7 @@ async fn direct_pixi_manifest_input_is_stored_as_directory() {
     setup_tracing();
 
     let backend_override = BackendOverride::from_memory(PassthroughBackend::instantiator());
-    let platform = Platform::current();
+    let platform = Subdir::current().unwrap_or(Subdir::NoArch);
     let pixi = PixiControl::from_manifest(&format!(
         r#"
 [workspace]
@@ -1117,7 +1113,7 @@ preview = ['pixi-build']
         .unwrap();
 
     let lock = pixi.lock_file().await.unwrap();
-    let p = lock.platform(&Platform::Win64.to_string()).unwrap();
+    let p = lock.platform(&Subdir::Win64.to_string()).unwrap();
     let git_package = lock
         .default_environment()
         .unwrap()
@@ -1170,7 +1166,7 @@ preview = ['pixi-build']
         .unwrap();
 
     let lock = pixi.lock_file().await.unwrap();
-    let p = lock.platform(&Platform::Win64.to_string()).unwrap();
+    let p = lock.platform(&Subdir::Win64.to_string()).unwrap();
     let git_package = lock
         .default_environment()
         .unwrap()
@@ -1232,7 +1228,7 @@ preview = ['pixi-build']
         .unwrap();
 
     let lock = pixi.lock_file().await.unwrap();
-    let p = lock.platform(&Platform::Linux64.to_string()).unwrap();
+    let p = lock.platform(&Subdir::Linux64.to_string()).unwrap();
     let git_package = lock
         .default_environment()
         .unwrap()
@@ -1292,7 +1288,7 @@ preview = ['pixi-build']"#,
 
     // Check the lock file
     let lock = pixi.lock_file().await.unwrap();
-    let p = lock.platform(&Platform::Linux64.to_string()).unwrap();
+    let p = lock.platform(&Subdir::Linux64.to_string()).unwrap();
     let git_package = lock
         .default_environment()
         .unwrap()
@@ -1349,7 +1345,7 @@ preview = ['pixi-build']"#,
 
     // Check the lock file
     let lock = pixi.lock_file().await.unwrap();
-    let p = lock.platform(&Platform::Win64.to_string()).unwrap();
+    let p = lock.platform(&Subdir::Win64.to_string()).unwrap();
     let git_package = lock
         .default_environment()
         .unwrap()
@@ -1428,7 +1424,7 @@ channels = ["https://prefix.dev/conda-forge"]
 platforms = ["{platform}"]
 
 "#,
-            platform = Platform::current()
+            platform = Subdir::current().unwrap_or(Subdir::NoArch)
         )
         .as_str(),
     )
@@ -1460,7 +1456,7 @@ platforms = ["{platform}"]
 
     let lock_file = pixi.lock_file().await.unwrap();
     let p = lock_file
-        .platform(&Platform::current().to_string())
+        .platform(&Subdir::current().unwrap_or(Subdir::NoArch).to_string())
         .unwrap();
 
     let boltons = lock_file
@@ -1531,7 +1527,7 @@ preview = ["pixi-build"]
     assert!(result.is_ok());
 
     let workspace = pixi.workspace().unwrap();
-    let linux64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
+    let linux64 = pixi_manifest::PixiPlatform::from_subdir(Subdir::Linux64);
     let deps = workspace
         .default_environment()
         .combined_dependencies(Some(&linux64));
@@ -1599,7 +1595,7 @@ async fn add_pypi_with_index() {
     let mut package_db = MockRepoData::default();
     package_db.add_package(
         Package::build("python", "3.12.0")
-            .with_subdir(Platform::current())
+            .with_subdir(Subdir::current().unwrap_or(Subdir::NoArch))
             .finish(),
     );
     let channel = package_db.into_channel().await.unwrap();
@@ -1664,7 +1660,7 @@ dependencies = {{
 test = ["test"]
 "#,
         channel = local_channel.url(),
-        platform = Platform::current()
+        platform = Subdir::current().unwrap_or(Subdir::NoArch)
     ))
     .unwrap();
 
@@ -1716,7 +1712,7 @@ foobar = {{
 }}
 "#,
         channel = local_channel.url(),
-        platform = Platform::current()
+        platform = Subdir::current().unwrap_or(Subdir::NoArch)
     ))
     .unwrap();
 

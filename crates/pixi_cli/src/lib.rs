@@ -9,7 +9,7 @@
 #![deny(clippy::dbg_macro, clippy::unwrap_used)]
 
 use clap::builder::styling::{AnsiColor, Color, Style};
-use clap::{CommandFactory, Parser};
+use clap::{CommandFactory, Parser, ValueEnum};
 use indicatif::ProgressDrawTarget;
 use miette::IntoDiagnostic;
 use pixi_consts::consts;
@@ -35,6 +35,7 @@ pub mod import;
 pub mod info;
 pub mod init;
 pub mod install;
+pub mod install_ping;
 pub mod list;
 pub mod lock;
 pub(crate) mod match_spec_or_path;
@@ -186,6 +187,8 @@ pub enum Command {
     Import(import::Args),
     #[clap(visible_alias = "i")]
     Install(install::Args),
+    #[clap(name = "__install-ping", hide = true)]
+    InstallPing(install_ping::Args),
     #[clap(visible_alias = "ls")]
     List(list::Args),
     Lock(lock::Args),
@@ -251,6 +254,7 @@ pub async fn execute() -> miette::Result<ExitCode> {
     let args = match Args::try_parse() {
         Ok(args) => args,
         Err(error) => {
+            set_console_colors(None);
             let exit_code = process_exit::exit_code_from_code(error.exit_code());
             pixi_utils::io::ignore_broken_pipe(error.print()).into_diagnostic()?;
             return Ok(exit_code);
@@ -258,7 +262,7 @@ pub async fn execute() -> miette::Result<ExitCode> {
     };
 
     let no_progress = args.no_progress();
-    set_console_colors(&args);
+    set_console_colors(Some(&args.global_options.color));
 
     let use_colors = console::colors_enabled_stderr();
     let in_ci = matches!(env::var("CI").as_deref(), Ok("1" | "true"));
@@ -359,6 +363,9 @@ fn setup_logging(args: &Args, use_colors: bool) -> miette::Result<()> {
     // Set up the tracing subscriber
     let fmt_layer = tracing_subscriber::fmt::layer()
         .with_ansi(use_colors)
+        // Our log messages embed `console::style` colours, which the default
+        // sanitization would print as literal `\x1b` sequences
+        .with_ansi_sanitization(false)
         .with_target(pixi_level >= LevelFilter::INFO)
         .with_writer(IndicatifWriter::new(pixi_progress::global_multi_progress()))
         .without_time();
@@ -383,11 +390,14 @@ pub async fn execute_command(
         Command::Clean(cmd) => clean::execute(cmd).await.map(|()| ExitCode::SUCCESS),
         Command::Run(cmd) => run::execute(cmd).await,
         Command::Global(cmd) => global::execute(cmd).await.map(|()| ExitCode::SUCCESS),
-        Command::Auth(cmd) => rattler::cli::auth::execute(cmd)
-            .await
-            .into_diagnostic()
-            .map(|()| ExitCode::SUCCESS),
+        Command::Auth(cmd) => rattler::cli::auth::execute(
+            cmd.with_default_oauth_audience("prefix.dev", "https://api.basilisk.prefix.dev"),
+        )
+        .await
+        .into_diagnostic()
+        .map(|()| ExitCode::SUCCESS),
         Command::Install(cmd) => install::execute(cmd).await.map(|()| ExitCode::SUCCESS),
+        Command::InstallPing(cmd) => install_ping::execute(cmd).await.map(|()| ExitCode::SUCCESS),
         Command::Reinstall(cmd) => reinstall::execute(cmd).await.map(|()| ExitCode::SUCCESS),
         Command::Shell(cmd) => shell::execute(cmd).await,
         Command::ShellHook(cmd) => shell_hook::execute(cmd).await.map(|()| ExitCode::SUCCESS),
@@ -433,27 +443,41 @@ pub enum ColorOutput {
     Auto,
 }
 
-fn set_console_colors(args: &Args) {
+/// Applies the color choice to `console` and to clap's help and error output.
+///
+/// `color` is the parsed `--color` or `PIXI_COLOR`. Without it, e.g. when
+/// printing help or an argument error, `PIXI_COLOR` is read directly.
+fn set_console_colors(color: Option<&ColorOutput>) {
     // Honor FORCE_COLOR and NO_COLOR environment variables.
     // Those take precedence over the CLI flag and PIXI_COLOR
-    let color = match env::var("FORCE_COLOR") {
-        Ok(_) => &ColorOutput::Always,
-        Err(_) => match env::var("NO_COLOR") {
-            Ok(_) => &ColorOutput::Never,
-            Err(_) => &args.global_options.color,
-        },
+    let color = if env::var("FORCE_COLOR").is_ok() {
+        ColorOutput::Always
+    } else if env::var("NO_COLOR").is_ok() {
+        ColorOutput::Never
+    } else {
+        color
+            .cloned()
+            .or_else(|| {
+                env::var("PIXI_COLOR")
+                    .ok()
+                    .and_then(|value| ColorOutput::from_str(&value, false).ok())
+            })
+            .unwrap_or_default()
     };
 
     match color {
         ColorOutput::Always => {
             console::set_colors_enabled(true);
             console::set_colors_enabled_stderr(true);
+            colorchoice::ColorChoice::Always.write_global();
         }
         ColorOutput::Never => {
             console::set_colors_enabled(false);
             console::set_colors_enabled_stderr(false);
+            colorchoice::ColorChoice::Never.write_global();
         }
-        ColorOutput::Auto => {} // Let `console` detect if colors should be enabled
+        // Let `console` and clap detect if colors should be enabled
+        ColorOutput::Auto => {}
     };
 }
 

@@ -1,0 +1,24 @@
+---
+source: crates/pixi_manifest/src/manifests/workspace.rs
+expression: "expect_parse_warnings(r#\"\n[workspace]\nname = \"foo\"\nchannels = []\nplatforms = []\nexclude-newer = \"7d\"\n\n[exclude-newer]\nopenssl = \"30d\"\n\n[pypi-exclude-newer]\nboltons = \"2025-01-01\"\n\"#)"
+---
+  ⚠ the top-level `[exclude-newer]` table of per-package cutoffs is deprecated and will be removed in a future release
+    ╭─[pixi.toml:8:1]
+  7 │
+  8 │ ╭─▶ [exclude-newer]
+  9 │ ├─▶ openssl = "30d"
+    · ╰──── this table will be removed
+ 10 │
+    ╰────
+  help: the per-package cutoffs of `openssl` have no direct replacement and stop working when the table is removed. To allow newer releases of a package, add the versions you vetted to `exemptions`;
+        to keep a package on older releases, constrain its version in the dependencies.
+
+  ⚠ the top-level `[pypi-exclude-newer]` table of per-package cutoffs is deprecated and will be removed in a future release
+    ╭─[pixi.toml:11:1]
+ 10 │
+ 11 │ ╭─▶ [pypi-exclude-newer]
+ 12 │ ├─▶ boltons = "2025-01-01"
+    · ╰──── this table will be removed
+    ╰────
+  help: the per-package cutoffs of `boltons` have no direct replacement and stop working when the table is removed. To allow newer releases of a package, add the versions you vetted to `exemptions`;
+        to keep a package on older releases, constrain its version in the dependencies.

@@ -343,34 +343,46 @@ fn version_spec_error<T: Into<String>>(input: T) -> Option<impl Display> {
     None
 }
 
+/// An error that occurs when a TOML dependency spec has an invalid
+/// combination of fields or cannot be converted into the requested spec.
 #[derive(Error, Debug)]
 pub enum SpecError {
+    /// Git reference fields were given without a `git` location.
     #[error("`branch`, `rev`, `tag`, and `lfs` are only valid when `git` is specified")]
     NotAGitSpec,
 
+    /// More than one of `branch`, `rev` and `tag` was given.
     #[error("only one of `branch`, `rev`, or `tag` can be specified")]
     MultipleGitRefs,
 
+    /// A detailed spec without any field that identifies a package.
     #[error(
         "one of `version`, `build`, `build-number`, `file-name`, `channel`, `subdir`, `md5`, `sha256`, `git`, `url`, or `path` must be specified"
     )]
     MissingDetailedIdentifier,
 
+    /// More than one of `url`, `path` and `git` was given.
     #[error("only one of `url`, `path`, or `git` can be specified")]
     MultipleIdentifiers,
 
+    /// Two fields that cannot be combined were given.
     #[error("{0} cannot be used with {1}")]
     InvalidCombination(Cow<'static, str>, Cow<'static, str>),
 
+    /// The `when` condition is invalid.
     #[error("{message}")]
     InvalidWhen {
+        /// What is wrong with the condition.
         message: String,
+        /// A suggestion to fix the condition.
         help: Option<String>,
     },
 
+    /// The spec does not describe a binary package.
     #[error(transparent)]
     NotABinary(NotBinary),
 
+    /// The `subdirectory` field is invalid.
     #[error(transparent)]
     InvalidSubdirectory(#[from] SubdirectoryError),
 }

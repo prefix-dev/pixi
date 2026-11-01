@@ -47,10 +47,10 @@ pub async fn execute(args: Args) -> miette::Result<ExitCode> {
         .with_ignore_pixi_version_check(!is_verify);
 
     match args.command {
-        Command::Get => get::execute(workspace_locator.locate()?).await,
-        Command::Set(args) => set::execute(workspace_locator.locate()?, args).await,
-        Command::Unset => unset::execute(workspace_locator.locate()?).await,
-        Command::Verify => return verify::execute(workspace_locator.locate().map(|_| ())),
+        Command::Get => get::execute(workspace_locator.locate().await?).await,
+        Command::Set(args) => set::execute(workspace_locator.locate().await?, args).await,
+        Command::Unset => unset::execute(workspace_locator.locate().await?).await,
+        Command::Verify => return verify::execute(workspace_locator.locate().await.map(|_| ())),
     }?;
     Ok(ExitCode::SUCCESS)
 }
