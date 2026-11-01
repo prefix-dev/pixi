@@ -323,15 +323,20 @@ You can even run Python scripts like this:
 
 1. everything here will be run inside of the pixi environment
 
-If you want to use PowerShell, you need to specify `-Command` as well.
+If you want to use PowerShell, you need to read the script file and evaluate its content:
 
 ```yaml
 - run: | # (1)!
     python --version | Select-String "3.11"
-  shell: pixi run pwsh -Command {0} # pwsh works on all platforms
+  shell: pixi run pwsh -NoProfile -Command "Invoke-Expression (Get-Content -Raw '{0}')" # pwsh works on all platforms
 ```
 
 1. everything here will be run inside of the pixi environment
+
+!!!warning "Don't use `pwsh -Command {0}` or `pwsh -File {0}`"
+    GitHub Actions only adds the `.ps1` extension to the temporary script file when the shell command starts with `pwsh`.
+    Without that extension, `shell: pixi run pwsh -Command {0}` doesn't run the script as PowerShell. It tries to open the file as a program, and on most runners the step passes without running anything.
+    `shell: pixi run pwsh -File {0}` works on Linux and macOS but fails on Windows because the file has no `.ps1` extension.
 
 !!!note "How does it work under the hood?"
     Under the hood, the `shell: xyz {0}` option is implemented by creating a temporary script file and calling `xyz` with that script file as an argument.
