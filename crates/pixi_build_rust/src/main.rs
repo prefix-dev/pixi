@@ -15,8 +15,10 @@ use pixi_build_backend::{
     intermediate_backend::IntermediateBackendInstantiator,
     tools::BackendIdentifier,
 };
-use rattler_build_recipe::stage0::{Item, Script, SerializableMatchSpec, Value};
-use rattler_conda_types::{ChannelUrl, Platform};
+use rattler_build_recipe::stage0::{
+    Item, Script, SerializableMatchSpec, SingleOutputRecipe, Value,
+};
+use rattler_conda_types::{ChannelUrl, Subdir};
 use std::collections::HashSet;
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
@@ -30,13 +32,14 @@ pub struct RustGenerator {}
 #[async_trait::async_trait]
 impl GenerateRecipe for RustGenerator {
     type Config = RustBackendConfig;
+    type Recipe = SingleOutputRecipe;
 
     async fn generate_recipe(
         &self,
         model: &pixi_build_types::ProjectModel,
         config: &Self::Config,
         manifest_path: PathBuf,
-        _host_platform: Platform,
+        _host_platform: Subdir,
         _python_params: Option<PythonParams>,
         variants: &HashSet<NormalizedKey>,
         _channels: Vec<ChannelUrl>,
@@ -159,7 +162,7 @@ impl GenerateRecipe for RustGenerator {
             source_dir: manifest_root.display().to_string(),
             extra_args: cargo_args,
             has_sccache,
-            is_bash: !Platform::current().is_windows(),
+            is_bash: !Subdir::current().unwrap_or(Subdir::NoArch).is_windows(),
         }
         .render();
 
@@ -211,7 +214,7 @@ impl GenerateRecipe for RustGenerator {
 
     fn default_variants(
         &self,
-        host_platform: Platform,
+        host_platform: Subdir,
     ) -> miette::Result<BTreeMap<NormalizedKey, Vec<Variable>>> {
         Ok(default_compiler_variants(host_platform))
     }
@@ -257,7 +260,7 @@ mod tests {
                     ..RustBackendConfig::new_with_clean_environment().with_ignore_cargo_manifest()
                 },
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &std::collections::HashSet::new(),
                 vec![],
@@ -341,7 +344,7 @@ mod tests {
                 &project_model,
                 &RustBackendConfig::new_with_clean_environment().with_ignore_cargo_manifest(),
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -397,7 +400,7 @@ mod tests {
                 &project_model,
                 &RustBackendConfig::new_with_clean_environment().with_ignore_cargo_manifest(),
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -445,7 +448,7 @@ mod tests {
                 &project_model,
                 &RustBackendConfig::new_with_clean_environment().with_ignore_cargo_manifest(),
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -505,7 +508,7 @@ mod tests {
                     ..RustBackendConfig::new_with_clean_environment()
                 },
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -567,7 +570,7 @@ mod tests {
                     ..RustBackendConfig::new_with_clean_environment()
                 },
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -615,7 +618,7 @@ mod tests {
                     ..RustBackendConfig::new_with_clean_environment()
                 },
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -652,7 +655,7 @@ mod tests {
                 &RustBackendConfig::new_with_clean_environment(),
                 // Using this crate itself, as it has interesting metadata, using .workspace
                 std::env::current_dir().unwrap(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -762,7 +765,7 @@ mod tests {
                 &project_model,
                 &RustBackendConfig::new_with_clean_environment(),
                 PathBuf::from("/non/existent/path"),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &std::collections::HashSet::new(),
                 vec![],
@@ -796,7 +799,7 @@ mod tests {
                 &project_model,
                 &RustBackendConfig::new_with_clean_environment().with_ignore_cargo_manifest(),
                 std::env::current_dir().unwrap(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &std::collections::HashSet::new(),
                 vec![],
@@ -839,7 +842,7 @@ mod tests {
                     ..RustBackendConfig::new_with_clean_environment()
                 },
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -916,7 +919,7 @@ mod tests {
                     ..RustBackendConfig::new_with_clean_environment()
                 },
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -1003,7 +1006,7 @@ mod tests {
                 &project_model,
                 &RustBackendConfig::new_with_clean_environment().with_ignore_cargo_manifest(),
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],
@@ -1093,7 +1096,7 @@ mod tests {
                 &project_model,
                 &RustBackendConfig::new_with_clean_environment().with_ignore_cargo_manifest(),
                 PathBuf::from("."),
-                Platform::Linux64,
+                Subdir::Linux64,
                 None,
                 &HashSet::new(),
                 vec![],

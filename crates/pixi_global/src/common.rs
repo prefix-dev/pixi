@@ -13,7 +13,6 @@ use fs_err::tokio as tokio_fs;
 use indexmap::{IndexMap, IndexSet};
 use is_executable::IsExecutable;
 use itertools::Itertools;
-use miette::{Context, IntoDiagnostic};
 use pixi_config::pixi_home;
 use pixi_consts::consts;
 use pixi_manifest::PrioritizedChannel;
@@ -31,6 +30,43 @@ use super::{
     trampoline::{GlobalExecutable, Trampoline},
 };
 
+/// An error from setting up or reading the global directories.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum GlobalDirError {
+    #[error("couldn't determine the pixi home directory")]
+    MissingPixiHome,
+
+    #[error(transparent)]
+    Io(std::io::Error),
+}
+
+/// An error from reading the package records in a `conda-meta` directory.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum CondaMetaError {
+    #[error(transparent)]
+    Io(std::io::Error),
+
+    #[error("failed to parse the prefix record '{}'", .0.display())]
+    ParseRecord(PathBuf, #[source] std::io::Error),
+}
+
+/// A channel URL from a prefix record that couldn't be parsed.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error("failed to parse the channel URL '{channel}'")]
+pub struct ParseChannelUrlError {
+    channel: String,
+    #[source]
+    source: url::ParseError,
+}
+
+/// Shortcuts requested in the manifest that no installed package provides.
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+#[error(
+    "the following shortcuts are requested but not available: {}",
+    .0.iter().map(|n| n.as_normalized()).join(", ")
+)]
+pub struct UnavailableShortcutsError(IndexSet<PackageName>);
+
 /// Global binaries directory, default to `$HOME/.pixi/bin`
 #[derive(Debug, Clone)]
 pub struct BinDir(PathBuf);
@@ -38,38 +74,43 @@ pub struct BinDir(PathBuf);
 impl BinDir {
     /// Create the binary executable directory from path
     #[cfg(test)]
-    pub fn new(root: PathBuf) -> miette::Result<Self> {
+    pub fn new(root: PathBuf) -> Result<Self, GlobalDirError> {
         let path = root.join("bin");
-        fs_err::create_dir_all(&path).into_diagnostic()?;
+        fs_err::create_dir_all(&path).map_err(GlobalDirError::Io)?;
         Ok(Self(path))
     }
 
     /// Create the binary executable directory from environment variables
-    pub async fn from_env() -> miette::Result<Self> {
+    pub async fn from_env() -> Result<Self, GlobalDirError> {
         let bin_dir = pixi_home()
             .map(|path| path.join("bin"))
-            .ok_or(miette::miette!(
-                "Couldn't determine global binary executable directory"
-            ))?;
-        tokio_fs::create_dir_all(&bin_dir).await.into_diagnostic()?;
+            .ok_or(GlobalDirError::MissingPixiHome)?;
+        tokio_fs::create_dir_all(&bin_dir)
+            .await
+            .map_err(GlobalDirError::Io)?;
         Ok(Self(bin_dir))
     }
 
     /// Asynchronously retrieves all files in the binary executable directory.
     ///
     /// This function reads the directory specified by `self.0` and try to
-    /// collect all file paths into a vector. It returns a `miette::Result`
+    /// collect all file paths into a vector. It returns a `Result`
     /// containing the vector of `GlobalExecutable`or an error if the
     /// directory can't be read.
-    pub(crate) async fn executables(&self) -> miette::Result<Vec<GlobalExecutable>> {
+    pub(crate) async fn executables(&self) -> Result<Vec<GlobalExecutable>, GlobalDirError> {
         let mut files = Vec::new();
-        let mut entries = tokio_fs::read_dir(&self.0).await.into_diagnostic()?;
+        let mut entries = tokio_fs::read_dir(&self.0)
+            .await
+            .map_err(GlobalDirError::Io)?;
 
-        while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
+        while let Some(entry) = entries.next_entry().await.map_err(GlobalDirError::Io)? {
             let path = entry.path();
             if let Ok(trampoline) = Trampoline::try_from(&path).await {
                 files.push(GlobalExecutable::Trampoline(trampoline));
-            } else if path.is_file() && path.is_executable() && is_binary(&path)?.not() {
+            } else if path.is_file()
+                && path.is_executable()
+                && is_binary(&path).map_err(GlobalDirError::Io)?.not()
+            {
                 // If the file is not a binary, it's a script
                 files.push(GlobalExecutable::Script(path));
             }
@@ -107,18 +148,20 @@ pub struct EnvRoot(PathBuf);
 impl EnvRoot {
     /// Create the environment root directory
     #[cfg(test)]
-    pub fn new(root: PathBuf) -> miette::Result<Self> {
+    pub fn new(root: PathBuf) -> Result<Self, GlobalDirError> {
         let path = root.join("envs");
-        fs_err::create_dir_all(&path).into_diagnostic()?;
+        fs_err::create_dir_all(&path).map_err(GlobalDirError::Io)?;
         Ok(Self(path))
     }
 
     /// Create the environment root directory from environment variables
-    pub async fn from_env() -> miette::Result<Self> {
+    pub async fn from_env() -> Result<Self, GlobalDirError> {
         let path = pixi_home()
             .map(|path| path.join("envs"))
-            .ok_or_else(|| miette::miette!("Couldn't get home path"))?;
-        tokio_fs::create_dir_all(&path).await.into_diagnostic()?;
+            .ok_or(GlobalDirError::MissingPixiHome)?;
+        tokio_fs::create_dir_all(&path)
+            .await
+            .map_err(GlobalDirError::Io)?;
         Ok(Self(path))
     }
 
@@ -127,11 +170,13 @@ impl EnvRoot {
     }
 
     /// Get all directories in the env root
-    pub(crate) async fn directories(&self) -> miette::Result<Vec<PathBuf>> {
+    pub(crate) async fn directories(&self) -> Result<Vec<PathBuf>, GlobalDirError> {
         let mut directories = Vec::new();
-        let mut entries = tokio_fs::read_dir(&self.path()).await.into_diagnostic()?;
+        let mut entries = tokio_fs::read_dir(&self.path())
+            .await
+            .map_err(GlobalDirError::Io)?;
 
-        while let Some(entry) = entries.next_entry().await.into_diagnostic()? {
+        while let Some(entry) = entries.next_entry().await.map_err(GlobalDirError::Io)? {
             let path = entry.path();
             if path.is_dir() {
                 directories.push(path);
@@ -158,9 +203,11 @@ impl EnvDir {
     pub(crate) async fn from_env_root(
         env_root: EnvRoot,
         environment_name: &EnvironmentName,
-    ) -> miette::Result<Self> {
+    ) -> Result<Self, GlobalDirError> {
         let path = env_root.path().join(environment_name.as_str());
-        tokio_fs::create_dir_all(&path).await.into_diagnostic()?;
+        tokio_fs::create_dir_all(&path)
+            .await
+            .map_err(GlobalDirError::Io)?;
 
         Ok(Self { path })
     }
@@ -174,16 +221,16 @@ impl EnvDir {
 
 /// Checks if a file is binary by reading the first 1024 bytes and checking for
 /// null bytes.
-pub(crate) fn is_binary(file_path: impl AsRef<Path>) -> miette::Result<bool> {
-    let mut file = fs::File::open(file_path.as_ref()).into_diagnostic()?;
+pub(crate) fn is_binary(file_path: impl AsRef<Path>) -> std::io::Result<bool> {
+    let mut file = fs::File::open(file_path.as_ref())?;
     let mut buffer = [0; 1024];
-    let bytes_read = file.read(&mut buffer).into_diagnostic()?;
+    let bytes_read = file.read(&mut buffer)?;
 
     Ok(buffer[..bytes_read].contains(&0))
 }
 
 /// Finds the package record from the `conda-meta` directory.
-pub async fn find_package_records(conda_meta: &Path) -> miette::Result<Vec<PrefixRecord>> {
+pub async fn find_package_records(conda_meta: &Path) -> Result<Vec<PrefixRecord>, CondaMetaError> {
     let read_dir = tokio_fs::read_dir(conda_meta).await;
     let mut records = Vec::new();
 
@@ -191,21 +238,16 @@ pub async fn find_package_records(conda_meta: &Path) -> miette::Result<Vec<Prefi
         Ok(dir) => dir,
         Err(e) => match e.kind() {
             std::io::ErrorKind::NotFound => return Ok(records),
-            _ => miette::bail!(
-                "Failed to read conda-meta directory {}: {}",
-                conda_meta.display(),
-                e
-            ),
+            _ => return Err(CondaMetaError::Io(e)),
         },
     };
 
-    while let Some(entry) = read_dir.next_entry().await.into_diagnostic()? {
+    while let Some(entry) = read_dir.next_entry().await.map_err(CondaMetaError::Io)? {
         let path = entry.path();
         // Check if the entry is a file and has a .json extension
         if path.is_file() && path.extension().and_then(OsStr::to_str) == Some("json") {
             let prefix_record = PrefixRecord::from_path(&path)
-                .into_diagnostic()
-                .wrap_err_with(|| format!("Couldn't parse json from {}", path.display()))?;
+                .map_err(|e| CondaMetaError::ParseRecord(path.clone(), e))?;
 
             records.push(prefix_record);
         }
@@ -335,7 +377,7 @@ impl StateChanges {
     pub async fn into_reports(
         mut self,
         project: &super::Project,
-    ) -> miette::Result<Vec<EnvReport>> {
+    ) -> Result<Vec<EnvReport>, CondaMetaError> {
         self.prune();
 
         let env_names = self
@@ -360,7 +402,10 @@ impl StateChanges {
         match self.into_reports(project).await {
             Ok(reports) => reports,
             Err(err) => {
-                tracing::warn!("Couldn't describe what changed\n{err:?}");
+                tracing::warn!(
+                    "Couldn't describe what changed\n{:?}",
+                    miette::Report::new(err)
+                );
                 Vec::new()
             }
         }
@@ -430,7 +475,7 @@ pub(crate) fn is_single_package_environment(
 pub(crate) async fn installed_version(
     project: &super::Project,
     env_name: &EnvironmentName,
-) -> miette::Result<Option<String>> {
+) -> Result<Option<String>, CondaMetaError> {
     let conda_meta = project
         .env_root_path()
         .join(env_name.as_str())
@@ -439,18 +484,14 @@ pub(crate) async fn installed_version(
     let mut read_dir = match tokio_fs::read_dir(&conda_meta).await {
         Ok(read_dir) => read_dir,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(err) => miette::bail!(
-            "Failed to read conda-meta directory {}: {}",
-            conda_meta.display(),
-            err
-        ),
+        Err(err) => return Err(CondaMetaError::Io(err)),
     };
 
     // Records written by conda or mamba keep the original case of the package
     // name in the file name, so the candidate test is case insensitive; the
     // parsed record still has to match by normalized name.
     let prefix = format!("{}-", env_name.as_str().to_lowercase());
-    while let Some(entry) = read_dir.next_entry().await.into_diagnostic()? {
+    while let Some(entry) = read_dir.next_entry().await.map_err(CondaMetaError::Io)? {
         let path = entry.path();
         if path.extension().and_then(OsStr::to_str) != Some("json") {
             continue;
@@ -464,8 +505,7 @@ pub(crate) async fn installed_version(
         }
 
         let record = PrefixRecord::from_path(&path)
-            .into_diagnostic()
-            .wrap_err_with(|| format!("Couldn't parse json from {}", path.display()))?;
+            .map_err(|e| CondaMetaError::ParseRecord(path.clone(), e))?;
         if record.repodata_record.package_record.name.as_normalized() == env_name.as_str() {
             return Ok(Some(
                 record
@@ -492,7 +532,7 @@ async fn build_report(
     project: &super::Project,
     env_name: &EnvironmentName,
     changes: &[StateChange],
-) -> miette::Result<EnvReport> {
+) -> Result<EnvReport, CondaMetaError> {
     // Keyed by name so that an item is reported once with its net effect: a
     // `--force-reinstall` unexposes and re-exposes the same executable, and all
     // that matters is that it ended up exposed. Changes are walked in the order
@@ -617,21 +657,23 @@ impl std::ops::BitOrAssign for StateChanges {
 pub(crate) fn channel_url_to_prioritized_channel(
     channel: &str,
     channel_config: &ChannelConfig,
-) -> miette::Result<PrioritizedChannel> {
+) -> Result<PrioritizedChannel, ParseChannelUrlError> {
     // If channel url contains channel config alias as a substring, don't use it as
     // a URL
-    if channel.contains(channel_config.channel_alias.as_str()) {
-        // Create channel from URL for parsing
-        let channel = Channel::from_url(Url::from_str(channel).expect("channel should be url"));
-        // If it has a name return as named channel
-        if let Some(name) = channel.name {
-            // If the channel has a name, use it as the channel
-            return Ok(NamedChannelOrUrl::from_str(&name).into_diagnostic()?.into());
-        }
-    }
-    // If channel doesn't contain the alias or has no name, use it as a URL
+    let name = channel
+        .contains(channel_config.channel_alias.as_str())
+        .then(|| {
+            // Create channel from URL for parsing
+            Channel::from_url(Url::from_str(channel).expect("channel should be url")).name
+        })
+        .flatten();
+    // If the channel has a name, use it as the channel; otherwise use it as a URL
+    let channel = name.as_deref().unwrap_or(channel);
     Ok(NamedChannelOrUrl::from_str(channel)
-        .into_diagnostic()?
+        .map_err(|source| ParseChannelUrlError {
+            channel: channel.to_string(),
+            source,
+        })?
         .into())
 }
 
@@ -646,7 +688,7 @@ pub(crate) fn shortcuts_sync_status(
     shortcuts: IndexSet<PackageName>,
     prefix_records: Vec<PrefixRecord>,
     prefix_root: &Path,
-) -> miette::Result<(Vec<PrefixRecord>, Vec<PrefixRecord>)> {
+) -> Result<(Vec<PrefixRecord>, Vec<PrefixRecord>), UnavailableShortcutsError> {
     let mut remaining_shortcuts = shortcuts;
     let mut records_to_install = Vec::new();
     let mut records_to_uninstall = Vec::new();
@@ -672,13 +714,7 @@ pub(crate) fn shortcuts_sync_status(
     }
 
     if remaining_shortcuts.is_empty().not() {
-        miette::bail!(
-            "the following shortcuts are requested but not available: {}",
-            remaining_shortcuts
-                .iter()
-                .map(|n| n.as_normalized())
-                .join(", ")
-        );
+        return Err(UnavailableShortcutsError(remaining_shortcuts));
     }
     Ok((records_to_install, records_to_uninstall))
 }
@@ -721,7 +757,7 @@ pub(crate) async fn expose_scripts_sync_status(
     bin_dir: &BinDir,
     env_dir: &EnvDir,
     mappings: &IndexSet<Mapping>,
-) -> miette::Result<(Vec<GlobalExecutable>, IndexSet<ExposedName>)> {
+) -> Result<(Vec<GlobalExecutable>, IndexSet<ExposedName>), GlobalDirError> {
     // Get all paths to the binaries from trampolines or scripts in the bin
     // directory.
     let locally_exposed = bin_dir.executables().await?;
@@ -950,6 +986,12 @@ mod tests {
             ),
             prioritized_channel
         );
+
+        // A channel name derived from the alias can itself be an invalid URL
+        let channel = "https://conda.anaconda.org/https://conda.anaconda.org:99999";
+        let err = channel_url_to_prioritized_channel(channel, &channel_config).unwrap_err();
+        assert_eq!(err.channel, "https://conda.anaconda.org:99999");
+        assert_eq!(err.source, url::ParseError::InvalidPort);
     }
 
     #[rstest]

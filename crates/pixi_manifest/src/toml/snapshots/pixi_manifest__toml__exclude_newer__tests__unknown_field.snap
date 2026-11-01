@@ -1,0 +1,11 @@
+---
+source: crates/pixi_manifest/src/toml/exclude_newer.rs
+expression: "render_error(input, err)"
+---
+  × Unexpected keys, expected only 'cutoff', 'exemptions'
+   ╭─[pixi.toml:1:34]
+ 1 │ exclude-newer = { cutoff = "7d", exemption = { polars = "*" } }
+   ·                                  ────┬────
+   ·                                      ╰── 'exemption' was not expected here
+   ╰────
+  help: Did you mean 'exemptions'?

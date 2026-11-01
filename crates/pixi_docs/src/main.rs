@@ -542,7 +542,7 @@ fn arguments(options: &[&clap::Arg], parents: &[String]) -> String {
                 opt.get_default_values()
                     .iter()
                     .map(|value| {
-                        if rattler_conda_types::Platform::from_str(
+                        if rattler_conda_types::Subdir::from_str(
                             value.as_os_str().to_str().unwrap(),
                         )
                         .is_ok()

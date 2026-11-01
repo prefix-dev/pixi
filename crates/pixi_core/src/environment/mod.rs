@@ -1,14 +1,20 @@
 pub(crate) mod conda_metadata;
 mod conda_prefix;
 pub mod list;
-pub use conda_prefix::{CondaPrefixUpdated, CondaPrefixUpdater, CondaPrefixUpdaterBuilder};
+pub use conda_prefix::{
+    CondaPrefixUpdateError, CondaPrefixUpdated, CondaPrefixUpdater, CondaPrefixUpdaterBuildError,
+    CondaPrefixUpdaterBuilder,
+};
 use dialoguer::theme::ColorfulTheme;
 use futures::{FutureExt, StreamExt, TryStreamExt, stream};
-use miette::{Context, IntoDiagnostic};
+use miette::Diagnostic;
 use pixi_consts::consts;
 use pixi_git::credentials::store_credentials_from_url;
 pub use pixi_install_pypi::{ContinuePyPIPrefixUpdate, on_python_interpreter_change};
-use pixi_manifest::{FeaturesExt, PixiPlatform, PixiPlatformName, platform::candidate_subdirs};
+use pixi_manifest::{
+    EnvironmentName, FeaturesExt, PixiPlatform, PixiPlatformName,
+    platform::{VirtualPackageRecords, candidate_subdirs},
+};
 use pixi_progress::await_in_progress;
 use pixi_pypi_spec::PixiPypiSource;
 pub use pixi_python_status::PythonStatus;
@@ -16,10 +22,11 @@ use pixi_spec::{GitSpec, PixiSpec};
 use pixi_utils::EnvironmentFingerprint;
 use pixi_utils::{prefix::Prefix, rlimit::try_increase_rlimit_to_sensible};
 use rattler_conda_types::{
-    GenericVirtualPackage, MatchSpec, PackageNameMatcher, ParseStrictness, Platform, StringMatcher,
-    Version, VersionSpec, version_spec::RangeOperator,
+    GenericVirtualPackage, MatchSpec, PackageName, PackageNameMatcher, ParseStrictness,
+    StringMatcher, Subdir, Version, VersionSpec, version_spec::RangeOperator,
 };
 use rattler_lock::{LockFile, LockedPackage};
+use rattler_virtual_package_detectors::DetectedVersion;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use std::{
@@ -28,23 +35,70 @@ use std::{
     io::ErrorKind,
     path::{Path, PathBuf},
 };
+use thiserror::Error;
 use xxhash_rust::xxh3::Xxh3;
 
 use crate::workspace;
 use crate::{
     Workspace,
     lock_file::{
-        LockFileDerivedData, ReinstallPackages, UpdateLockFileOptions, UpdateMode,
-        resolve_lock_platform_for,
+        LockFileDerivedData, ReinstallPackages, UpdateLockFileError, UpdateLockFileOptions,
+        UpdateMode, UpdatePrefixError, resolve_lock_platform_for,
     },
     workspace::{Environment, HasWorkspaceRef, grouped_environment::GroupedEnvironment},
 };
 
+/// Errors that can occur while checking that the workspace is in a sane state.
+#[derive(Debug, Error, Diagnostic)]
+pub enum SanityCheckError {
+    #[error(transparent)]
+    ReadPrefixFile(std::io::Error),
+
+    #[error("failed to remove old environment directory")]
+    RemoveEnvironmentDir(#[source] std::io::Error),
+
+    #[error(
+        "the environment directory has moved from '{}' to '{}'",
+        .previous.display(),
+        .current.display()
+    )]
+    #[diagnostic(help(
+        "Environments are non-relocatable, moving them can cause issues. Remove the environment directory, pixi will recreate it on the next run."
+    ))]
+    EnvironmentDirMoved { previous: PathBuf, current: PathBuf },
+
+    #[error("failed to create the .pixi directory at '{}'", .path.display())]
+    CreatePixiDir {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("failed to create '{}'", .path.display())]
+    CreateFile {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+}
+
+/// Errors that can occur while reading or writing the environment file.
+#[derive(Debug, Error, Diagnostic)]
+pub enum EnvironmentFileError {
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
+
+    #[error("failed to serialize the environment file")]
+    Serialize(#[source] serde_json::Error),
+}
+
 /// Verify the location of the prefix folder is not changed so the applied
 /// prefix path is still valid. Errors when there is a file system error or the
-/// path does not align with the defined prefix. Returns false when the file is
-/// not present.
-pub async fn verify_prefix_location_unchanged(environment_dir: &Path) -> miette::Result<()> {
+/// path does not align with the defined prefix. Succeeds when the file is not
+/// present.
+pub async fn verify_prefix_location_unchanged(
+    environment_dir: &Path,
+) -> Result<(), SanityCheckError> {
     let prefix_file = environment_dir
         .join(consts::CONDA_META_DIR)
         .join(consts::PREFIX_FILE_NAME);
@@ -60,7 +114,7 @@ pub async fn verify_prefix_location_unchanged(environment_dir: &Path) -> miette:
         // Scream the error if we don't know it.
         Err(e) => {
             tracing::error!("failed to read prefix file: {}", prefix_file.display());
-            Err(e).into_diagnostic()
+            Err(SanityCheckError::ReadPrefixFile(e))
         }
         // Check if the path in the file aligns with the current path.
         Ok(p) if prefix_file.starts_with(&p) => Ok(()),
@@ -77,7 +131,7 @@ pub async fn verify_prefix_location_unchanged(environment_dir: &Path) -> miette:
 async fn prefix_location_changed(
     environment_dir: &Path,
     previous_dir: &Path,
-) -> miette::Result<()> {
+) -> Result<(), SanityCheckError> {
     let theme = ColorfulTheme {
         active_item_style: console::Style::new().for_stderr().magenta(),
         ..ColorfulTheme::default()
@@ -92,21 +146,19 @@ async fn prefix_location_changed(
         .report(false)
         .default(true)
         .interact_opt()
-        .map_or(None, std::convert::identity);
+        .unwrap_or(None);
     if user_value == Some(true) {
         await_in_progress("removing old environment", |_| {
             tokio::fs::remove_dir_all(environment_dir)
         })
         .await
-        .into_diagnostic()
-        .context("failed to remove old environment directory")?;
+        .map_err(SanityCheckError::RemoveEnvironmentDir)?;
         Ok(())
     } else {
-        Err(miette::diagnostic!(
-            help = "Remove the environment directory, pixi will recreate it on the next run.",
-            "The environment directory has moved from `{}` to `{}`. Environments are non-relocatable, moving them can cause issues.", previous_dir.display(), environment_dir.display()
-        )
-            .into())
+        Err(SanityCheckError::EnvironmentDirMoved {
+            previous: previous_dir.to_path_buf(),
+            current: environment_dir.to_path_buf(),
+        })
     }
 }
 
@@ -290,11 +342,12 @@ impl LockedEnvironmentHash {
         // the order they appear in the manifest.
         if let Some(platform) = platform {
             platform.subdir().to_string().hash(&mut hasher);
-            let mut virtual_packages: Vec<String> = platform
-                .declared_virtual_packages()
-                .iter()
-                .map(ToString::to_string)
-                .collect();
+            let records = match platform.records() {
+                VirtualPackageRecords::Manifest(records)
+                | VirtualPackageRecords::Detected(records) => records,
+            };
+            let mut virtual_packages: Vec<String> =
+                records.iter().map(ToString::to_string).collect();
             virtual_packages.sort_unstable();
             for virtual_package in virtual_packages {
                 virtual_package.hash(&mut hasher);
@@ -320,7 +373,7 @@ impl LockedEnvironmentHash {
 #[derive(Serialize, Deserialize)]
 pub struct PlatformData {
     /// The conda subdir this platform targets, e.g. `linux-64`.
-    pub(crate) subdir: Platform,
+    pub(crate) subdir: Subdir,
     /// The virtual packages that define this platform.
     pub(crate) virtual_packages: Vec<GenericVirtualPackage>,
 }
@@ -330,7 +383,7 @@ impl PlatformData {
     /// define it. Used by callers outside this module (e.g. `pixi global`)
     /// that compute the two fields themselves rather than from a
     /// [`PixiPlatform`].
-    pub fn new(subdir: Platform, virtual_packages: Vec<GenericVirtualPackage>) -> Self {
+    pub fn new(subdir: Subdir, virtual_packages: Vec<GenericVirtualPackage>) -> Self {
         Self {
             subdir,
             virtual_packages,
@@ -338,7 +391,7 @@ impl PlatformData {
     }
 
     /// The conda subdir this platform targets, e.g. `linux-64`.
-    pub fn subdir(&self) -> Platform {
+    pub fn subdir(&self) -> Subdir {
         self.subdir
     }
 
@@ -350,23 +403,33 @@ impl PlatformData {
 
 impl From<&PixiPlatform> for PlatformData {
     fn from(platform: &PixiPlatform) -> Self {
+        let records = match platform.records() {
+            VirtualPackageRecords::Manifest(records) | VirtualPackageRecords::Detected(records) => {
+                records
+            }
+        };
         Self {
             subdir: platform.subdir(),
-            virtual_packages: platform.declared_virtual_packages().to_vec(),
+            virtual_packages: records.clone(),
         }
     }
 }
 
 impl Display for PlatformData {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write_platform(f, self.subdir, &self.virtual_packages)
+        let entries: Vec<String> = self
+            .virtual_packages
+            .iter()
+            .map(pixi_manifest::platform::format_virtual_package)
+            .collect();
+        write_platform(f, self.subdir, &entries)
     }
 }
 
 /// Render a platform as `<subdir>` or `<subdir> [entry, entry]`.
 fn write_platform(
     f: &mut Formatter<'_>,
-    subdir: Platform,
+    subdir: Subdir,
     entries: &[impl Display],
 ) -> std::fmt::Result {
     write!(f, "{subdir}")?;
@@ -387,13 +450,13 @@ fn write_platform(
 #[serde(from = "RequiredPlatformRaw", into = "RequiredPlatformRaw")]
 #[derive(Clone)]
 pub struct RequiredPlatform {
-    subdir: Platform,
+    subdir: Subdir,
     requirements: Vec<MatchSpec>,
 }
 
 impl RequiredPlatform {
     /// A requirement set from a subdir and the specs resolved dependencies
-    pub fn new(subdir: Platform, requirements: Vec<MatchSpec>) -> Self {
+    pub fn new(subdir: Subdir, requirements: Vec<MatchSpec>) -> Self {
         Self {
             subdir,
             requirements,
@@ -401,13 +464,18 @@ impl RequiredPlatform {
     }
 
     /// The conda subdir these requirements were resolved for.
-    pub fn subdir(&self) -> Platform {
+    pub fn subdir(&self) -> Subdir {
         self.subdir
     }
 
     /// The virtual-package specs resolved dependencies require.
     pub fn requirements(&self) -> &[MatchSpec] {
         &self.requirements
+    }
+
+    /// Keeps only requirements whose values are known for cached-run validation.
+    pub(crate) fn retain_requirements(&mut self, keep: impl FnMut(&MatchSpec) -> bool) {
+        self.requirements.retain(keep);
     }
 
     /// The requirements as conda match-spec strings: how they are written to the
@@ -427,7 +495,7 @@ impl Display for RequiredPlatform {
 /// strings, matching how [`GenericVirtualPackage`] renders itself in this file
 #[derive(Serialize, Deserialize)]
 struct RequiredPlatformRaw {
-    subdir: Platform,
+    subdir: Subdir,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     requirements: Vec<String>,
     /// Written by pixi versions that recorded requirements as concrete virtual
@@ -486,8 +554,8 @@ fn legacy_requirement(package: &GenericVirtualPackage) -> MatchSpec {
     MatchSpec {
         name: PackageNameMatcher::Exact(package.name.clone()),
         version,
-        build: (!package.build_string.is_empty())
-            .then(|| StringMatcher::Exact(package.build_string.clone())),
+        build: (!pixi_manifest::platform::is_default_build_string(package.build_string.as_str()))
+            .then(|| StringMatcher::Exact(package.build_string.to_string())),
         ..MatchSpec::default()
     }
 }
@@ -521,6 +589,10 @@ pub struct EnvironmentFile {
     /// versions.
     #[serde(default)]
     pub minimum_supported_platform: Option<RequiredPlatform>,
+    /// Installed detector values, with `None` recording explicit absence.
+    /// Older markers record no provenance; built-in values remain authoritative.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub detector_virtual_packages: BTreeMap<PackageName, Option<DetectedVersion>>,
     /// Fingerprints of the manifest's source dependencies at install time,
     /// keyed by package name: a hash of the source spec plus any inline
     /// package definition. Only written by `pixi global`, which has no lock
@@ -548,39 +620,40 @@ fn environment_file_path(environment_dir: &Path) -> PathBuf {
 pub fn write_environment_file(
     environment_dir: &Path,
     env_file: EnvironmentFile,
-) -> miette::Result<PathBuf> {
+) -> Result<PathBuf, EnvironmentFileError> {
     let path = environment_file_path(environment_dir);
 
     let parent = path
         .parent()
         .expect("There should already be a conda-meta folder");
 
-    match fs_err::create_dir_all(parent).into_diagnostic() {
+    match fs_err::create_dir_all(parent) {
         Ok(_) => {
             // Using json as it's easier to machine read it.
-            let contents = serde_json::to_string_pretty(&env_file).into_diagnostic()?;
-            match fs_err::write(&path, contents).into_diagnostic() {
+            let contents =
+                serde_json::to_string_pretty(&env_file).map_err(EnvironmentFileError::Serialize)?;
+            match fs_err::write(&path, contents) {
                 Ok(_) => {
                     tracing::debug!("Wrote environment file to: {:?}", path);
                 }
-                Err(e) => tracing::debug!(
-                    "Unable to write environment file to: {:?} => {:?}",
-                    path,
-                    e.root_cause().to_string()
-                ),
+                Err(e) => {
+                    tracing::debug!("Unable to write environment file to: {:?} => {e:?}", path)
+                }
             };
             Ok(path)
         }
         Err(e) => {
             tracing::debug!("Unable to create conda-meta folder to: {:?}", path);
-            Err(e)
+            Err(e.into())
         }
     }
 }
 
 /// Reading the environment file of the environment.
 /// Removing it if it's not valid.
-pub fn read_environment_file(environment_dir: &Path) -> miette::Result<Option<EnvironmentFile>> {
+pub fn read_environment_file(
+    environment_dir: &Path,
+) -> Result<Option<EnvironmentFile>, EnvironmentFileError> {
     let path = environment_file_path(environment_dir);
 
     let contents = match fs_err::read_to_string(&path) {
@@ -596,7 +669,7 @@ pub fn read_environment_file(environment_dir: &Path) -> miette::Result<Option<En
                 e
             );
             let _ = fs_err::remove_file(&path);
-            return Err(e).into_diagnostic();
+            return Err(e.into());
         }
     };
     let env_file: EnvironmentFile = match serde_json::from_str(&contents) {
@@ -620,9 +693,12 @@ pub fn read_environment_file(environment_dir: &Path) -> miette::Result<Option<En
 ///     2. It verifies that the system requirements are met.
 ///     3. It verifies the absence of the `env` folder.
 ///     4. It verifies that the prefix contains a `.gitignore` file.
-pub async fn sanity_check_workspace(project: &Workspace) -> miette::Result<()> {
-    // Sanity check of prefix location
-    verify_prefix_location_unchanged(project.environments_dir().as_path()).await?;
+pub async fn sanity_check_workspace(project: &Workspace) -> Result<(), SanityCheckError> {
+    // Sanity check of prefix location, the prefix file lives in each
+    // environment's `conda-meta` folder
+    for environment in project.environments() {
+        verify_prefix_location_unchanged(&environment.dir()).await?;
+    }
 
     // TODO: remove on a 1.0 release
     // Check for old `env` folder as we moved to `envs` in 0.13.0
@@ -682,35 +758,6 @@ pub fn store_credentials_from_requirements(git_requirements: Vec<GitSpec>) {
     }
 }
 
-/// Extract any credentials that are defined on the project dependencies
-/// themselves. While we don't store plaintext credentials in the `pixi.lock`,
-/// we do respect credentials that are defined in the `pixi.toml` or
-/// `pyproject.toml`.
-pub async fn store_credentials_from_project(project: &Workspace) -> miette::Result<()> {
-    for env in project.environments() {
-        let env_platforms = env.platforms();
-        for platform in env_platforms {
-            // A feature may name a platform absent from `workspace.platforms`;
-            // pass the `Option` through (a miss means no platform overrides).
-            let platform = project
-                .workspace
-                .value
-                .workspace
-                .platform_by_name(&platform);
-            let dependencies = env.combined_dependencies(platform);
-            for (_, dep_spec) in dependencies {
-                for spec in dep_spec {
-                    if let PixiSpec::Git(spec) = spec {
-                        store_credentials_from_url(&spec.git);
-                    }
-                }
-            }
-        }
-    }
-
-    Ok(())
-}
-
 /// Create a file at the given path with the given contents if it does not exist.
 /// If the file already exists, it does nothing.
 /// If the file cannot be created due to a read-only filesystem,
@@ -718,8 +765,7 @@ pub async fn store_credentials_from_project(project: &Workspace) -> miette::Resu
 async fn best_effort_write_file_if_missing(
     path: &Path,
     contents: &str,
-    error_message: &str,
-) -> miette::Result<()> {
+) -> Result<(), SanityCheckError> {
     if !path.exists() {
         match tokio::fs::write(path, contents).await {
             Ok(_) => Ok(()),
@@ -727,9 +773,10 @@ async fn best_effort_write_file_if_missing(
                 tracing::debug!("Failed to create file at: {}, error: {}", path.display(), e);
                 Ok(())
             }
-            Err(e) => Err(e)
-                .into_diagnostic()
-                .wrap_err(format!("{error_message} {}", path.display())),
+            Err(source) => Err(SanityCheckError::CreateFile {
+                path: path.to_path_buf(),
+                source,
+            }),
         }?;
     }
     Ok(())
@@ -740,7 +787,7 @@ async fn best_effort_write_file_if_missing(
 /// If the `.gitignore` file doesn't exist, create it with a '*' pattern.
 /// Also creates a `.condapackageignore` file to exclude the `.pixi` directory
 /// from builds.
-async fn ensure_pixi_directory_and_gitignore(pixi_dir: &Path) -> miette::Result<()> {
+async fn ensure_pixi_directory_and_gitignore(pixi_dir: &Path) -> Result<(), SanityCheckError> {
     let gitignore_path = pixi_dir.join(".gitignore");
     let condapackageignore_path = pixi_dir.join(".condapackageignore");
 
@@ -748,26 +795,16 @@ async fn ensure_pixi_directory_and_gitignore(pixi_dir: &Path) -> miette::Result<
     if !pixi_dir.exists() {
         tokio::fs::create_dir_all(&pixi_dir)
             .await
-            .into_diagnostic()
-            .wrap_err(format!(
-                "Failed to create .pixi/ directory at {}",
-                pixi_dir.display()
-            ))?;
+            .map_err(|source| SanityCheckError::CreatePixiDir {
+                path: pixi_dir.to_path_buf(),
+                source,
+            })?;
     }
 
-    best_effort_write_file_if_missing(
-        &gitignore_path,
-        "*\n!config.toml\n",
-        "Failed to create .gitignore file at",
-    )
-    .await?;
+    best_effort_write_file_if_missing(&gitignore_path, "*\n!config.toml\n").await?;
 
-    best_effort_write_file_if_missing(
-        &condapackageignore_path,
-        ".pixi\n!.pixi/config.toml\n",
-        "Failed to create .condapackageignore file at",
-    )
-    .await?;
+    best_effort_write_file_if_missing(&condapackageignore_path, ".pixi\n!.pixi/config.toml\n")
+        .await?;
 
     Ok(())
 }
@@ -850,7 +887,7 @@ pub async fn get_update_lock_file_and_prefix<'env>(
     update_lock_file_options: UpdateLockFileOptions,
     reinstall_packages: ReinstallPackages,
     filter: &InstallFilter,
-) -> miette::Result<(LockFileDerivedData<'env>, Prefix)> {
+) -> Result<(LockFileDerivedData<'env>, Prefix), LockFileAndPrefixesError> {
     let (lock_file, prefixes) = get_lock_file_and_prefixes(
         std::slice::from_ref(environment),
         None,
@@ -868,6 +905,36 @@ pub async fn get_update_lock_file_and_prefix<'env>(
             .next()
             .expect("must be at least one prefix"),
     ))
+}
+
+/// An error that can occur while updating the lock file and the prefixes of
+/// a set of environments.
+#[derive(Debug, Error, Diagnostic)]
+pub enum LockFileAndPrefixesError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    HostProbe(#[from] crate::host::HostProbeError),
+
+    #[error("no environments provided to install")]
+    NoEnvironments,
+
+    #[error("platform '{platform}' is not part of environment '{environment}'")]
+    PlatformNotInEnvironment {
+        platform: PixiPlatformName,
+        environment: EnvironmentName,
+    },
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    SanityCheck(#[from] SanityCheckError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    UpdateLockFile(#[from] UpdateLockFileError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    UpdatePrefix(#[from] UpdatePrefixError),
 }
 
 /// Chooses how installation obtains lock data.
@@ -894,12 +961,15 @@ pub async fn get_lock_file_and_prefixes<'env>(
     lock_file_source: LockFileSource,
     reinstall_packages: ReinstallPackages,
     filter: &InstallFilter,
-) -> miette::Result<(LockFileDerivedData<'env>, Vec<Prefix>)> {
+) -> Result<(LockFileDerivedData<'env>, Vec<Prefix>), LockFileAndPrefixesError> {
     if environments.is_empty() {
-        return Err(miette::miette!("No environments provided to install."));
+        return Err(LockFileAndPrefixesError::NoEnvironments);
     }
 
     let workspace = environments[0].workspace();
+    workspace
+        .refresh_environment_hosts_for_platform_selection(environments)
+        .await?;
 
     let no_install = match &lock_file_source {
         LockFileSource::Update(options) | LockFileSource::Resolve(options) => options.no_install,
@@ -913,11 +983,10 @@ pub async fn get_lock_file_and_prefixes<'env>(
                 .is_none()
             && let Some(name) = target_platform
         {
-            return Err(miette::miette!(
-                "platform '{}' is not part of environment '{}'",
-                name,
-                env.name(),
-            ));
+            return Err(LockFileAndPrefixesError::PlatformNotInEnvironment {
+                platform: name.clone(),
+                environment: env.name().clone(),
+            });
         }
         if !no_install {
             env.emit_emulation_warning();
@@ -931,7 +1000,7 @@ pub async fn get_lock_file_and_prefixes<'env>(
         && target_platform.is_some()
         && let Some(platform) = environments[0].named_or_best_declared_platform(target_platform)
     {
-        let current = Platform::current();
+        let current = Subdir::current().unwrap_or(Subdir::NoArch);
         let subdir = platform.subdir();
         if !candidate_subdirs(current).contains(&subdir) {
             tracing::warn!(
@@ -970,7 +1039,7 @@ pub async fn get_lock_file_and_prefixes<'env>(
     .0;
     // Pin the override so the downstream prefix helpers see it without a
     // fresh parameter on every call.
-    lock_file.target_platform = target_platform.cloned();
+    lock_file.set_explicit_target_platform(target_platform.cloned());
 
     // Get the prefix from the lock file.
     let lock_file_ref = &lock_file;
@@ -1001,7 +1070,7 @@ pub type PerGroupAndPlatform<'p, T> = PerGroup<'p, HashMap<PixiPlatformName, T>>
 mod tests {
     use std::str::FromStr;
 
-    use rattler_conda_types::{PackageName, Version};
+    use rattler_conda_types::{PackageName, Version, package::BuildString};
 
     use super::*;
 
@@ -1019,6 +1088,36 @@ mod tests {
         let parsed: EnvironmentFile = serde_json::from_str(json).expect("legacy file parses");
         assert!(parsed.resolved_platform.is_none());
         assert!(parsed.minimum_supported_platform.is_none());
+        assert!(parsed.detector_virtual_packages.is_empty());
+    }
+
+    #[test]
+    fn environment_file_roundtrips_detector_values_and_absence() {
+        let file = EnvironmentFile {
+            manifest_path: PathBuf::from("/ws/pixi.toml"),
+            environment_name: "default".to_string(),
+            pixi_version: "test".to_string(),
+            environment_lock_file_hash: LockedEnvironmentHash::invalid(),
+            resolved_platform: None,
+            minimum_supported_platform: None,
+            detector_virtual_packages: BTreeMap::from([
+                (
+                    "__cuda".parse().unwrap(),
+                    Some(DetectedVersion {
+                        version: Version::major(3),
+                        build_string: "0".to_string(),
+                    }),
+                ),
+                ("__test_missing".parse().unwrap(), None),
+            ]),
+            source_fingerprints: BTreeMap::new(),
+        };
+        let serialized = serde_json::to_string(&file).unwrap();
+        let restored: EnvironmentFile = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(
+            restored.detector_virtual_packages,
+            file.detector_virtual_packages
+        );
     }
 
     /// A linux-64 lock environment with no packages, so the quick-validate
@@ -1027,7 +1126,7 @@ mod tests {
         let mut builder = rattler_lock::LockFile::builder()
             .with_platforms(vec![rattler_lock::PlatformData {
                 name: rattler_lock::PlatformName::try_from("linux-64").unwrap(),
-                subdir: Platform::Linux64,
+                subdir: Subdir::Linux64,
                 virtual_packages: vec![],
             }])
             .unwrap();
@@ -1039,11 +1138,11 @@ mod tests {
         let linux = GenericVirtualPackage {
             name: PackageName::from_str("__linux").unwrap(),
             version: Version::from_str(version).unwrap(),
-            build_string: String::new(),
+            build_string: BuildString::new_unchecked("0"),
         };
         PixiPlatform::new(
             PixiPlatformName::try_from("linux-box").unwrap(),
-            Platform::Linux64,
+            Subdir::Linux64,
             vec![linux],
         )
         .unwrap()
@@ -1081,12 +1180,12 @@ mod tests {
         let gvp = |name: &str, version: &str| GenericVirtualPackage {
             name: PackageName::from_str(name).unwrap(),
             version: Version::from_str(version).unwrap(),
-            build_string: String::new(),
+            build_string: BuildString::new_unchecked("0"),
         };
         let make = |packages: Vec<GenericVirtualPackage>| {
             PixiPlatform::new(
                 PixiPlatformName::try_from("linux-box").unwrap(),
-                Platform::Linux64,
+                Subdir::Linux64,
                 packages,
             )
             .unwrap()
@@ -1108,17 +1207,17 @@ mod tests {
         let cuda = GenericVirtualPackage {
             name: PackageName::from_str("__cuda").unwrap(),
             version: Version::from_str("12").unwrap(),
-            build_string: String::new(),
+            build_string: BuildString::new_unchecked("0"),
         };
         let platform = PixiPlatform::new(
             PixiPlatformName::try_from("gpu-box").unwrap(),
-            Platform::Linux64,
+            Subdir::Linux64,
             vec![cuda.clone()],
         )
         .unwrap();
 
         let data = PlatformData::from(&platform);
-        assert_eq!(data.subdir, Platform::Linux64);
+        assert_eq!(data.subdir, Subdir::Linux64);
         assert!(data.virtual_packages.contains(&cuda));
 
         // The composition survives a JSON round-trip; the custom name is not
@@ -1126,8 +1225,83 @@ mod tests {
         let json = serde_json::to_string(&data).unwrap();
         assert!(!json.contains("gpu-box"));
         let restored: PlatformData = serde_json::from_str(&json).unwrap();
-        assert_eq!(restored.subdir, Platform::Linux64);
+        assert_eq!(restored.subdir, Subdir::Linux64);
         assert!(restored.virtual_packages.contains(&cuda));
+    }
+
+    /// Markers written before pixi adopted CEP26 omit the default build. They
+    /// must still read back as the records the manifest declares, otherwise
+    /// the installed platform is no longer recognised after an upgrade.
+    #[test]
+    fn platform_data_reads_markers_without_default_builds() {
+        let restored: PlatformData =
+            serde_json::from_str(r#"{"subdir":"linux-64","virtual_packages":["__cuda=12"]}"#)
+                .unwrap();
+        let declared = pixi_manifest::platform::parse_versioned_virtual_package(
+            PackageName::from_str("__cuda").unwrap(),
+            "12",
+        )
+        .unwrap();
+        assert_eq!(restored.virtual_packages(), [declared].as_slice());
+    }
+
+    #[test]
+    fn platform_data_display_omits_default_builds() {
+        let data = PlatformData::new(
+            Subdir::Linux64,
+            vec![
+                GenericVirtualPackage {
+                    name: "__cuda".parse().unwrap(),
+                    version: Version::from_str("12").unwrap(),
+                    build_string: BuildString::new_unchecked("0"),
+                },
+                GenericVirtualPackage {
+                    name: "__archspec".parse().unwrap(),
+                    version: Version::major(0),
+                    build_string: BuildString::new_unchecked("zen2"),
+                },
+            ],
+        );
+        assert_eq!(data.to_string(), "linux-64 [__cuda=12, __archspec=0=zen2]");
+    }
+
+    #[test]
+    fn platform_data_preserves_source_records() {
+        let records = vec![
+            GenericVirtualPackage {
+                name: "__archspec".parse().unwrap(),
+                version: Version::major(1),
+                build_string: BuildString::new_unchecked("zen2"),
+            },
+            GenericVirtualPackage {
+                name: "__unix".parse().unwrap(),
+                version: Version::major(0),
+                build_string: BuildString::new_unchecked("0"),
+            },
+            GenericVirtualPackage {
+                name: "__vendor".parse().unwrap(),
+                version: Version::major(7),
+                build_string: BuildString::new_unchecked("0"),
+            },
+        ];
+        let declared = PixiPlatform::new(
+            "declared".try_into().unwrap(),
+            Subdir::Linux64,
+            records.clone(),
+        )
+        .unwrap();
+        let detected =
+            pixi_manifest::platform::host::platform_from_detected(Subdir::Linux64, records.clone())
+                .unwrap();
+
+        for platform in [declared, detected] {
+            let data = PlatformData::from(&platform);
+            assert_eq!(data.virtual_packages(), records.as_slice());
+            let json = serde_json::to_string(&data).unwrap();
+            let restored: PlatformData = serde_json::from_str(&json).unwrap();
+            assert_eq!(restored.subdir(), Subdir::Linux64);
+            assert_eq!(restored.virtual_packages(), records.as_slice());
+        }
     }
 
     #[test]
@@ -1137,7 +1311,7 @@ mod tests {
             MatchSpec::from_str(archspec, ParseStrictness::Lenient).unwrap(),
             MatchSpec::from_str("__glibc >=2.17", ParseStrictness::Lenient).unwrap(),
         ];
-        let platform = RequiredPlatform::new(Platform::Linux64, requirements);
+        let platform = RequiredPlatform::new(Subdir::Linux64, requirements);
 
         let json = serde_json::to_string(&platform).unwrap();
         // Stored as strings, like the concrete virtual packages beside them,
@@ -1146,7 +1320,7 @@ mod tests {
         assert!(!json.contains("\"build\":{"), "{json}");
 
         let restored: RequiredPlatform = serde_json::from_str(&json).unwrap();
-        assert_eq!(restored.subdir(), Platform::Linux64);
+        assert_eq!(restored.subdir(), Subdir::Linux64);
         let archspec_spec = restored
             .requirements()
             .iter()
@@ -1171,7 +1345,7 @@ mod tests {
             "virtual_packages": ["__glibc=2.17", "__cuda=0"]
         }"#;
         let restored: RequiredPlatform = serde_json::from_str(legacy).unwrap();
-        assert_eq!(restored.subdir(), Platform::Linux64);
+        assert_eq!(restored.subdir(), Subdir::Linux64);
         // A recorded version becomes a lower bound; version 0 meant "any".
         assert_eq!(
             restored
@@ -1258,7 +1432,7 @@ mod tests {
             "__archspec 1.* ^(x86_64_v3|haswell|skylake)$",
         ] {
             let spec = MatchSpec::from_str(raw, ParseStrictness::Lenient).unwrap();
-            let platform = RequiredPlatform::new(Platform::Linux64, vec![spec.clone()]);
+            let platform = RequiredPlatform::new(Subdir::Linux64, vec![spec.clone()]);
             let json = serde_json::to_string(&platform).unwrap();
             let restored: RequiredPlatform = serde_json::from_str(&json)
                 .unwrap_or_else(|e| panic!("'{raw}' did not survive the round trip: {e}"));

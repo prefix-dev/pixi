@@ -1,6 +1,7 @@
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::hash::{Hash, Hasher};
 
-use rattler_conda_types::{MatchSpec, Platform};
+use rattler_conda_types::{MatchSpec, Subdir};
+use xxhash_rust::xxh3::Xxh3;
 
 /// Hash identifying a cached `pixi exec` environment by its specs, channels
 /// and platform. The executed command is intentionally not part of the hash.
@@ -8,7 +9,7 @@ use rattler_conda_types::{MatchSpec, Platform};
 pub struct EnvironmentHash {
     pub specs: Vec<MatchSpec>,
     pub channels: Vec<String>,
-    pub platform: Platform,
+    pub platform: Subdir,
     /// Whether the solve that produced this environment was restricted to
     /// locally available packages. Part of the identity because such a solve
     /// can pick older versions, and the prefix is reused across runs: without
@@ -20,7 +21,7 @@ impl EnvironmentHash {
     pub fn new(
         specs: Vec<MatchSpec>,
         channels: Vec<String>,
-        platform: Platform,
+        platform: Subdir,
         offline: bool,
     ) -> Self {
         let mut specs = specs;
@@ -37,7 +38,7 @@ impl EnvironmentHash {
     /// Directory name for the cached environment: `{prefix}-{hash}` when a
     /// prefix is given, otherwise just `{hash}`.
     pub fn name(&self, prefix: Option<&str>) -> String {
-        let mut hasher = DefaultHasher::new();
+        let mut hasher = Xxh3::new();
         self.hash(&mut hasher);
         let hash = hasher.finish();
         match prefix {
@@ -49,7 +50,7 @@ impl EnvironmentHash {
 
 #[cfg(test)]
 mod tests {
-    use rattler_conda_types::{MatchSpec, ParseStrictness, Platform};
+    use rattler_conda_types::{MatchSpec, ParseStrictness, Subdir};
 
     use super::EnvironmentHash;
 
@@ -63,7 +64,7 @@ mod tests {
         let h = EnvironmentHash::new(
             vec![spec("rucio-mcp")],
             vec!["conda-forge".into()],
-            Platform::Linux64,
+            Subdir::Linux64,
             false,
         );
         let strip = |s: String| s.rsplit_once('-').unwrap().1.to_string();
@@ -73,9 +74,21 @@ mod tests {
         );
     }
 
+    // The name is a directory on disk, so it must not change between builds.
+    #[test]
+    fn name_is_stable() {
+        let h = EnvironmentHash::new(
+            vec![spec("python")],
+            vec!["conda-forge".into()],
+            Subdir::Linux64,
+            false,
+        );
+        assert_eq!(h.name(Some("python")), "python-5a7a16265bfee075");
+    }
+
     #[test]
     fn name_has_no_prefix_when_caller_passes_none() {
-        let h = EnvironmentHash::new(vec![spec("foo")], vec![], Platform::Linux64, false);
+        let h = EnvironmentHash::new(vec![spec("foo")], vec![], Subdir::Linux64, false);
         let name = h.name(None);
         assert!(name.chars().all(|c| c.is_ascii_hexdigit()), "got {name}");
     }
@@ -85,7 +98,7 @@ mod tests {
         let h = EnvironmentHash::new(
             vec![spec("extra"), spec("cmd")],
             vec![],
-            Platform::Linux64,
+            Subdir::Linux64,
             false,
         );
         assert!(h.name(Some("cmd")).starts_with("cmd-"));
@@ -96,13 +109,13 @@ mod tests {
         let a = EnvironmentHash::new(
             vec![spec("foo"), spec("bar")],
             vec![],
-            Platform::Linux64,
+            Subdir::Linux64,
             false,
         );
         let b = EnvironmentHash::new(
             vec![spec("bar"), spec("foo")],
             vec![],
-            Platform::Linux64,
+            Subdir::Linux64,
             false,
         );
         assert_eq!(a.name(None), b.name(None));
@@ -110,15 +123,15 @@ mod tests {
 
     #[test]
     fn name_changes_when_specs_change() {
-        let a = EnvironmentHash::new(vec![spec("foo")], vec![], Platform::Linux64, false);
-        let b = EnvironmentHash::new(vec![spec("bar")], vec![], Platform::Linux64, false);
+        let a = EnvironmentHash::new(vec![spec("foo")], vec![], Subdir::Linux64, false);
+        let b = EnvironmentHash::new(vec![spec("bar")], vec![], Subdir::Linux64, false);
         assert_ne!(a.name(None), b.name(None));
     }
 
     #[test]
     fn name_changes_when_platform_changes() {
-        let a = EnvironmentHash::new(vec![spec("foo")], vec![], Platform::Linux64, false);
-        let b = EnvironmentHash::new(vec![spec("foo")], vec![], Platform::Osx64, false);
+        let a = EnvironmentHash::new(vec![spec("foo")], vec![], Subdir::Linux64, false);
+        let b = EnvironmentHash::new(vec![spec("foo")], vec![], Subdir::Osx64, false);
         assert_ne!(a.name(None), b.name(None));
     }
 
@@ -127,15 +140,28 @@ mod tests {
         let a = EnvironmentHash::new(
             vec![spec("foo")],
             vec!["conda-forge".into(), "bioconda".into()],
-            Platform::Linux64,
+            Subdir::Linux64,
             false,
         );
         let b = EnvironmentHash::new(
             vec![spec("foo")],
             vec!["bioconda".into(), "conda-forge".into()],
-            Platform::Linux64,
+            Subdir::Linux64,
             false,
         );
         assert_ne!(a.name(None), b.name(None));
+    }
+
+    // Regression test for https://github.com/prefix-dev/pixi/issues/7165.
+    #[test]
+    fn name_changes_when_zero_component_moves() {
+        for (a, b) in [
+            ("maturin==1.0.1", "maturin==1.1.0"),
+            ("maturin==13.0.1", "maturin==13.1.0"),
+        ] {
+            let ha = EnvironmentHash::new(vec![spec(a)], vec![], Subdir::Linux64, false);
+            let hb = EnvironmentHash::new(vec![spec(b)], vec![], Subdir::Linux64, false);
+            assert_ne!(ha.name(None), hb.name(None), "{a} vs {b}");
+        }
     }
 }

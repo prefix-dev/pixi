@@ -17,7 +17,6 @@ build:
   always_copy_files: []
   always_include_files: []
   merge_build_and_host_envs: false
-  files: []
   dynamic_linking:
     rpaths: []
     binary_relocation: true

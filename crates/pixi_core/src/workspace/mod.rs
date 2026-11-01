@@ -25,21 +25,22 @@ use std::{
 };
 
 use crate::{
-    activation::{CurrentEnvVarBehavior, initialize_env_variables},
+    activation::{ActivationError, CurrentEnvVarBehavior, initialize_env_variables},
     lock_file::filter_lock_file,
     repodata::Repodata,
 };
 use async_once_cell::OnceCell as AsyncCell;
+pub use conda_pypi_map::CondaPypiMapError;
 pub use discovery::{DiscoveryStart, WorkspaceLocator, WorkspaceLocatorError};
 pub use environment::Environment;
 pub use has_project_ref::HasWorkspaceRef;
 use indexmap::{Equivalent, IndexSet};
-use miette::{Diagnostic, IntoDiagnostic};
+use miette::Diagnostic;
 use once_cell::sync::OnceCell;
 use pep508_rs::Requirement;
 use pixi_build_frontend::BackendOverride;
 use pixi_command_dispatcher::{CacheDirs, CommandDispatcher, CommandDispatcherBuilder, Limits};
-use pixi_config::{CacheKind, Config, RunPostLinkScripts};
+use pixi_config::{CacheDirError, CacheKind, Config, RunPostLinkScripts};
 use pixi_consts::consts;
 use pixi_diff::LockFileDiff;
 use pixi_manifest::script::conda::CondaScriptManifest;
@@ -52,29 +53,31 @@ use pixi_manifest::{
 use pixi_path::AbsPathBuf;
 use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::SourceSpec;
-use pixi_utils::reqwest::build_lazy_reqwest_clients;
+use pixi_utils::reqwest::{ReqwestClientError, build_lazy_reqwest_clients};
 use pixi_utils::{
     reqwest::LazyReqwestClient,
     variants::{VariantConfig, VariantValue},
 };
 use pypi_mapping::PurlDerivationMode;
 use rattler_conda_types::{
-    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, Platform,
+    ChannelConfig, ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, Subdir,
 };
 use rattler_lock::LockFile;
 use thiserror::Error;
 
-use crate::lock_file::LockedPackageKind;
-use pixi_manifest::platform::host::{
-    detect_host, host_capabilities, host_subdir, platform_from_detected,
+use crate::host::{
+    DenyAll, DetectorConsent, HostDetection, HostDetector, HostProbeError, HostScope, WantedNames,
+    s3_config_of,
 };
+use crate::lock_file::LockedPackageKind;
+use pixi_manifest::platform::host::platform_from_detected;
 use pixi_manifest::platform::unsatisfied_capabilities;
 use rattler_networking::{LazyClient, s3_middleware};
 use rattler_repodata_gateway::Gateway;
 pub use registry::{WorkspaceRegistry, WorkspaceRegistryError};
 pub use solve_group::SolveGroup;
-use tokio::sync::Semaphore;
-pub use workspace_mut::WorkspaceMut;
+use tokio::sync::{Mutex, Semaphore};
+pub use workspace_mut::{AddSpecsError, WorkspaceMut};
 use xxhash_rust::xxh3::xxh3_64;
 
 static CUSTOM_TARGET_DIR_WARN: OnceCell<()> = OnceCell::new();
@@ -138,6 +141,8 @@ const NON_SEMVER_PACKAGES: [&str; 11] = [
     "python", "rust", "julia", "gcc", "gxx", "gfortran", "nodejs", "deno", "r", "r-base", "perl",
 ];
 
+type HostScopeCache = Vec<(HostScope, Arc<HostDetection>)>;
+
 /// The pixi workspace, this main struct to interact with a workspace.
 ///
 /// This structs holds manifests of the workspace and optionally the current
@@ -194,12 +199,45 @@ pub struct Workspace {
 
     /// Optional backend override for testing purposes
     backend_override: Option<BackendOverride>,
+
+    /// The host supplied to synchronous constructors and script workspaces.
+    host: HostDetection,
+
+    /// The consent policy used by discovery, including this process's decisions.
+    detector_consent: Option<Arc<dyn DetectorConsent>>,
+
+    /// Host capabilities prepared with each environment's effective solve scope.
+    environment_hosts: Arc<AsyncCell<HashMap<EnvironmentName, Arc<HostDetection>>>>,
+
+    /// Detections retained across manifest edits for unchanged solve scopes.
+    environment_host_scopes: Arc<Mutex<HostScopeCache>>,
 }
 
 #[derive(Debug, Clone)]
 enum WorkspaceStorage {
     Project,
     Script(WorkspaceScript),
+}
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum EnvironmentFromNameError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Parse(#[from] pixi_manifest::ParseEnvironmentNameError),
+
+    #[error("unknown environment '{0}'")]
+    Unknown(EnvironmentName),
+}
+
+#[derive(Debug, Error, Diagnostic)]
+pub enum CommandDispatcherBuilderError {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    CacheDir(#[from] CacheDirError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Client(#[from] ReqwestClientError),
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -220,9 +258,9 @@ pub enum ScriptWorkspaceError {
         "a script without `platforms` is resolved for this machine. Declare the platforms in the script metadata to resolve it for a fixed target instead."
     ))]
     HostDetection {
-        subdir: Platform,
+        subdir: Subdir,
         #[source]
-        source: pixi_manifest::platform::host::HostDetectionError,
+        source: crate::host::HostUndetected,
     },
 }
 
@@ -266,12 +304,16 @@ fn set_implicit_script_platforms(
 /// A lock file that does not parse is left to the loader to report.
 fn implicit_script_platforms(
     lock_file_path: Option<&Path>,
+    host: &HostDetection,
 ) -> Result<IndexSet<PixiPlatform>, ScriptWorkspaceError> {
-    let subdir = host_subdir();
-    let host = detect_host(subdir).map_err(|error| ScriptWorkspaceError::HostDetection {
-        subdir,
-        source: error,
-    })?;
+    let subdir = host.subdir();
+    let host = host
+        .platform()
+        .map_err(|error| ScriptWorkspaceError::HostDetection {
+            subdir,
+            source: error,
+        })?
+        .clone();
 
     // A lock file that does not parse is passed over silently: the loader reads
     // the same file moments later and reports why it is unusable, with a
@@ -289,7 +331,7 @@ fn implicit_script_platforms(
     // nothing to reject and no re-solve to trigger on every run.
     let host_is_baseline = host.customised_virtual_packages().is_empty();
 
-    let mut foreign_subdirs: IndexSet<Platform> = IndexSet::new();
+    let mut foreign_subdirs: IndexSet<Subdir> = IndexSet::new();
     let mut rejected_baseline = false;
     let mut rejected_unrunnable = false;
     let mut locked: IndexSet<PixiPlatform> = IndexSet::new();
@@ -311,7 +353,7 @@ fn implicit_script_platforms(
         }
         if !unsatisfied_capabilities(
             &recorded.customised_virtual_packages(),
-            host.declared_virtual_packages(),
+            host.solver_virtual_package_records().as_ref(),
         )
         .is_empty()
         {
@@ -401,24 +443,39 @@ impl Workspace {
     pub(crate) fn from_manifests(
         manifest: Manifests,
         source: &pixi_config::GlobalConfigSource,
+        host: HostDetection,
     ) -> Self {
-        // Get the absolute path of the manifest, preserving symlinks by only
-        // canonicalizing the parent directory
-        let manifest_path = manifest.workspace.provenance.absolute_path();
-        // Take the parent after canonicalizing to ensure this works even when the
-        // manifest
-        let root = manifest_path
+        let config = Config::load_with(&Self::root_of(&manifest), source);
+        Self::from_manifests_with_config(manifest, config, host)
+    }
+
+    /// The directory the workspace manifest lives in, following the parent's
+    /// symlinks but not the manifest's own.
+    fn root_of(manifest: &Manifests) -> PathBuf {
+        manifest
+            .workspace
+            .provenance
+            .absolute_path()
             .parent()
             .expect("manifest path should always have a parent")
-            .to_owned();
+            .to_owned()
+    }
 
-        let config = Config::load_with(&root, source);
+    /// Like [`Self::from_manifests`] with a configuration that was already
+    /// loaded for the workspace root.
+    pub(crate) fn from_manifests_with_config(
+        manifest: Manifests,
+        config: Config,
+        host: HostDetection,
+    ) -> Self {
+        let root = Self::root_of(&manifest);
         Self::from_parsed(
             manifest.workspace,
             manifest.package,
             root,
             config,
             WorkspaceStorage::Project,
+            host,
         )
     }
 
@@ -428,24 +485,11 @@ impl Workspace {
         root: PathBuf,
         config: Config,
         storage: WorkspaceStorage,
+        host: HostDetection,
     ) -> Self {
         let env_vars = Workspace::init_env_vars(&workspace.value.environments);
         let manifest_location_name = root.file_name().map(|p| p.to_string_lossy().into_owned());
-        let s3_options = workspace.value.workspace.s3_options.clone();
-        let s3_config = s3_options
-            .unwrap_or_default()
-            .iter()
-            .map(|(key, value)| {
-                (
-                    key.clone(),
-                    s3_middleware::S3Config::Custom {
-                        endpoint_url: value.endpoint_url.clone(),
-                        region: value.region.clone(),
-                        force_path_style: value.force_path_style,
-                    },
-                )
-            })
-            .collect::<HashMap<String, s3_middleware::S3Config>>();
+        let s3_config = s3_config_of(&workspace.value);
 
         Self {
             root,
@@ -461,6 +505,10 @@ impl Workspace {
             repodata_gateway: Default::default(),
             concurrent_downloads_semaphore: OnceCell::default(),
             backend_override: None,
+            host,
+            detector_consent: None,
+            environment_hosts: Arc::new(AsyncCell::new()),
+            environment_host_scopes: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -471,6 +519,7 @@ impl Workspace {
     pub fn from_script(
         script: ScriptManifest,
         config: Config,
+        host: HostDetection,
     ) -> Result<WithWarnings<Self>, ScriptWorkspaceError> {
         let script_path = script.path().to_owned();
         let script_manifest = script.clone();
@@ -498,7 +547,7 @@ impl Workspace {
                 .expect("a local script has an adjacent lock-file path");
             set_implicit_script_platforms(
                 &mut manifest.workspace,
-                implicit_script_platforms(Some(&lock_file_path))?,
+                implicit_script_platforms(Some(&lock_file_path), &host)?,
             );
         }
         let workspace =
@@ -510,6 +559,7 @@ impl Workspace {
             root,
             config,
             WorkspaceStorage::Script(workspace_script),
+            host,
         ))
         .with_warnings(warnings))
     }
@@ -521,6 +571,7 @@ impl Workspace {
     pub fn from_conda_script(
         script: CondaScriptManifest,
         config: Config,
+        host: HostDetection,
     ) -> Result<WithWarnings<Self>, ScriptWorkspaceError> {
         let script_path = script.path().to_owned();
         let root = script_path
@@ -532,7 +583,7 @@ impl Workspace {
             None
         } else {
             let lock_file_path = local_lock_file_path(&script_path);
-            Some(implicit_script_platforms(Some(&lock_file_path))?)
+            Some(implicit_script_platforms(Some(&lock_file_path), &host)?)
         };
         let (manifest, warnings) = script
             .into_workspace_manifest(implicit_platforms, &root)
@@ -554,6 +605,7 @@ impl Workspace {
             root,
             config,
             WorkspaceStorage::Script(workspace_script),
+            host,
         ))
         .with_warnings(warnings))
     }
@@ -565,13 +617,14 @@ impl Workspace {
         root: PathBuf,
         cache_name: &str,
         cache_key: &[u8],
+        host: HostDetection,
     ) -> Result<WithWarnings<Self>, ScriptWorkspaceError> {
         let script_path = script.path().to_owned();
         let script_config = script.workspace_config().map_err(Box::new)?;
         let implicit_platforms = if script_config.platforms_explicit {
             None
         } else {
-            Some(implicit_script_platforms(None)?)
+            Some(implicit_script_platforms(None, &host)?)
         };
         let (manifest, warnings) = script
             .into_workspace_manifest(implicit_platforms, &root)
@@ -597,6 +650,7 @@ impl Workspace {
             root,
             config,
             WorkspaceStorage::Script(workspace_script),
+            host,
         ))
         .with_warnings(warnings))
     }
@@ -609,6 +663,7 @@ impl Workspace {
         provenance_path: PathBuf,
         cache_name: &str,
         cache_key: &[u8],
+        host: HostDetection,
     ) -> Result<WithWarnings<Self>, ScriptWorkspaceError> {
         let script_manifest = script.clone();
         let script_config = script.workspace_config()?;
@@ -626,7 +681,7 @@ impl Workspace {
             // is the only platform it can be resolved for.
             set_implicit_script_platforms(
                 &mut manifest.workspace,
-                implicit_script_platforms(None)?,
+                implicit_script_platforms(None, &host)?,
             );
         }
 
@@ -651,6 +706,7 @@ impl Workspace {
             root,
             config,
             WorkspaceStorage::Script(workspace_script),
+            host,
         ))
         .with_warnings(warnings))
     }
@@ -671,7 +727,11 @@ impl Workspace {
         let WithWarnings {
             value: manifests, ..
         } = Manifests::from_workspace_manifest_path(manifest_path.to_path_buf())?;
-        Ok(Self::from_manifests(manifests, source))
+        Ok(Self::from_manifests(
+            manifests,
+            source,
+            HostDetection::builtin(),
+        ))
     }
 
     /// Constructs a workspace from a manifest string loaded from a specific
@@ -685,6 +745,7 @@ impl Workspace {
         Ok(Self::from_manifests(
             manifests,
             &pixi_config::GlobalConfigSource::Search,
+            HostDetection::builtin(),
         ))
     }
 
@@ -694,6 +755,141 @@ impl Workspace {
             .iter()
             .map(|environment| (environment.name.clone(), EnvironmentVars::new()))
             .collect()
+    }
+
+    /// What this machine provides for the default environment's solve channels.
+    pub fn host(&self) -> &HostDetection {
+        self.default_environment().host()
+    }
+
+    /// Retains a script's discovery policy and already-probed host.
+    fn retain_script_host(&mut self, consent: Arc<dyn DetectorConsent>) {
+        let host = Arc::new(self.host.clone());
+        let hosts = self
+            .environments()
+            .into_iter()
+            .map(|environment| (environment.name().clone(), host.clone()))
+            .collect();
+        self.detector_consent = Some(consent);
+        self.environment_hosts = Arc::new(AsyncCell::new_with(hosts));
+    }
+
+    /// Retains the consent policy that [`Self::refresh_environment_hosts`]
+    /// detects hosts with.
+    fn retain_detector_consent(&mut self, consent: Arc<dyn DetectorConsent>) {
+        self.detector_consent = Some(consent);
+    }
+
+    /// Invalidates environment mappings without discarding unchanged detections.
+    fn invalidate_environment_hosts(&mut self) {
+        match Arc::get_mut(&mut self.environment_hosts) {
+            Some(hosts) => {
+                hosts.take();
+            }
+            None => self.environment_hosts = Arc::new(AsyncCell::new()),
+        }
+    }
+
+    /// Detects hosts when selecting a platform depends on it: when a
+    /// candidate environment that is not installed yet has a platform that declares
+    /// virtual packages beyond its subdir's defaults. Otherwise the built-in
+    /// host, or the installed platform, selects the platform without any
+    /// detection.
+    pub async fn refresh_environment_hosts_for_platform_selection(
+        &self,
+        environments: &[Environment<'_>],
+    ) -> Result<(), HostProbeError> {
+        for environment in environments {
+            if environment.installed_resolved_platform().is_some() {
+                continue;
+            }
+            let scope = HostScope::for_environment(
+                &grouped_environment::GroupedEnvironment::from(environment.clone()),
+            )?;
+            if scope.declares_virtual_packages() {
+                return self.refresh_environment_hosts().await;
+            }
+        }
+        Ok(())
+    }
+
+    /// Detects each environment's host once per distinct solve scope. Until
+    /// this runs, environments see the built-in host only. Call it before a
+    /// solve, an install, or another decision that depends on detector
+    /// results.
+    pub async fn refresh_environment_hosts(&self) -> Result<(), HostProbeError> {
+        let Some(consent) = &self.detector_consent else {
+            // Synchronous constructors and explicitly injected hosts never probe.
+            return Ok(());
+        };
+        if self.environment_hosts.get().is_some() {
+            return Ok(());
+        }
+        // Keep detector futures out of every solve, install and mutation future.
+        self.environment_hosts
+            .get_or_try_init(Box::pin(async {
+                let mut cache = self.environment_host_scopes.lock().await;
+                let detector = OnceCell::new();
+                let mut hosts = HashMap::new();
+                for environment in self.environments() {
+                    let scope = HostScope::for_environment(
+                        &grouped_environment::GroupedEnvironment::from(environment.clone()),
+                    )?;
+                    let host = match cache.iter().find(|(cached, _)| cached == &scope) {
+                        Some((_, host)) => host.clone(),
+                        None => {
+                            let detector =
+                                detector.get_or_try_init(|| self.host_detector(consent.clone()))?;
+                            let host = Arc::new(scope.detect(detector).await?);
+                            cache.push((scope, host.clone()));
+                            host
+                        }
+                    };
+                    hosts.insert(environment.name().clone(), host);
+                }
+                Ok::<_, HostProbeError>(hosts)
+            }))
+            .await?;
+        Ok(())
+    }
+
+    fn host_detector(
+        &self,
+        consent: Arc<dyn DetectorConsent>,
+    ) -> Result<HostDetector, HostProbeError> {
+        Ok(HostDetector::with_gateway(
+            self.config().clone(),
+            consent,
+            self.authenticated_client()
+                .map_err(|error| HostProbeError::Client(error.to_string()))?
+                .clone(),
+            self.repodata_gateway()
+                .map_err(|error| HostProbeError::Client(error.to_string()))?
+                .clone(),
+        ))
+    }
+
+    /// Probes every consented detector registered by the default environment's
+    /// effective solve channels, whether or not a platform declares its names.
+    pub async fn detect_host_with_all_detectors(&self) -> Result<HostDetection, HostProbeError> {
+        let channels = grouped_environment::GroupedEnvironment::from(self.default_environment())
+            .channel_urls(&self.channel_config())
+            .map_err(HostProbeError::Channel)?;
+        self.detect_host_with_all_detectors_for_channels(&channels)
+            .await
+    }
+
+    /// Probes every consented detector registered by the supplied effective channels.
+    pub async fn detect_host_with_all_detectors_for_channels(
+        &self,
+        channels: &[ChannelUrl],
+    ) -> Result<HostDetection, HostProbeError> {
+        let consent = self
+            .detector_consent
+            .clone()
+            .unwrap_or_else(|| Arc::new(DenyAll));
+        let detector = self.host_detector(consent)?;
+        Ok(detector.detect(channels, WantedNames::All).await?)
     }
 
     pub fn env_vars(&self) -> &HashMap<EnvironmentName, EnvironmentVars> {
@@ -982,7 +1178,8 @@ impl Workspace {
     ///
     /// If no explicit name is provided, this function will try to read the
     /// environment name from the `PIXI_ENVIRONMENT_NAME` environment variable.
-    /// However, if `PIXI_PROJECT_ROOT` is set and differs from this workspace's
+    /// However, if `PIXI_WORKSPACE_ROOT` (or legacy `PIXI_PROJECT_ROOT`) is set
+    /// and differs from this workspace's
     /// root, the environment variable is ignored and the default environment
     /// is returned instead. This handles the case where a pixi task runs
     /// another pixi project via `--manifest-path` - the child process should
@@ -990,12 +1187,11 @@ impl Workspace {
     pub fn environment_from_name_or_env_var(
         &self,
         name: Option<String>,
-    ) -> miette::Result<Environment<'_>> {
-        let environment_name =
-            EnvironmentName::from_arg_or_env_var(name, self.root()).into_diagnostic()?;
+    ) -> Result<Environment<'_>, EnvironmentFromNameError> {
+        let environment_name = EnvironmentName::from_arg_or_env_var(name, self.root())?;
 
         self.environment(&environment_name)
-            .ok_or_else(|| miette::miette!("unknown environment '{environment_name}'"))
+            .ok_or(EnvironmentFromNameError::Unknown(environment_name))
     }
 
     /// Returns all the solve groups in the project.
@@ -1043,7 +1239,7 @@ impl Workspace {
     /// `[system-requirements]` shape. A subdir the workspace does not declare
     /// (cross-building for `osx-arm64` from a linux-only workspace, say) falls
     /// back to the subdir baseline.
-    pub fn pixi_platform_for_subdir(&self, subdir: Platform) -> PixiPlatform {
+    pub fn pixi_platform_for_subdir(&self, subdir: Subdir) -> PixiPlatform {
         let candidates: Vec<&PixiPlatform> = self
             .workspace
             .value
@@ -1134,13 +1330,13 @@ impl Workspace {
 
     /// Returns the reqwest client used for http networking
     /// this api is not used now, uncomment when use in the future
-    pub fn client(&self) -> miette::Result<&LazyReqwestClient> {
+    pub fn client(&self) -> Result<&LazyReqwestClient, ReqwestClientError> {
         Ok(&self.lazy_client_and_authenticated_client()?.0)
     }
 
     /// Create an authenticated reqwest client for this project
     /// use authentication from `rattler_networking`
-    pub fn authenticated_client(&self) -> miette::Result<&LazyClient> {
+    pub fn authenticated_client(&self) -> Result<&LazyClient, ReqwestClientError> {
         Ok(&self.lazy_client_and_authenticated_client()?.1)
     }
 
@@ -1166,7 +1362,7 @@ impl Workspace {
     pub fn command_dispatcher_builder(
         &self,
         progress: Option<&Arc<pixi_reporters::TopLevelProgress>>,
-    ) -> miette::Result<CommandDispatcherBuilder> {
+    ) -> Result<CommandDispatcherBuilder, CommandDispatcherBuilderError> {
         let cache_dir = AbsPathBuf::new(pixi_config::get_cache_dir()?)
             .expect("cache dir is not absolute")
             .into_assume_dir();
@@ -1177,12 +1373,12 @@ impl Workspace {
 
         // Determine the tool platform to use
         let tool_platform = self.config().tool_platform();
-        let host_subdir = host_subdir();
+        let host_subdir = self.host.subdir();
         let tool_virtual_packages = if tool_platform.only_platform() == host_subdir.only_platform()
         {
             // If the tool platform is the same as the current platform, we just assume the
             // same virtual packages apply.
-            host_capabilities()
+            self.host.capabilities().into_owned()
         } else {
             vec![]
         };
@@ -1231,7 +1427,7 @@ impl Workspace {
 
     fn lazy_client_and_authenticated_client(
         &self,
-    ) -> miette::Result<&(LazyReqwestClient, rattler_networking::LazyClient)> {
+    ) -> Result<&(LazyReqwestClient, rattler_networking::LazyClient), ReqwestClientError> {
         self.client.get_or_try_init(|| {
             build_lazy_reqwest_clients(Some(self.config()), Some(self.s3_config.clone()))
         })
@@ -1261,7 +1457,7 @@ impl Workspace {
     /// Returns which PyPI purl derivation mode we should use.
     /// It can use project-defined mappings in the format `conda_name: pypi_name`,
     /// or the self-hosted prefix.dev mappings.
-    pub fn pypi_name_derivation_mode(&self) -> miette::Result<&PurlDerivationMode> {
+    pub fn pypi_name_derivation_mode(&self) -> Result<&PurlDerivationMode, CondaPypiMapError> {
         self.derivation_mode.get_or_try_init(|| {
             conda_pypi_map::build_pypi_name_derivation_mode(
                 &self.workspace.value,
@@ -1326,13 +1522,10 @@ pub async fn get_activated_environment_variables<'a>(
     lock_file: Option<&LockFile>,
     force_activate: bool,
     experimental_cache: bool,
-) -> miette::Result<&'a HashMap<String, String>> {
-    let vars = project_env_vars.get(environment.name()).ok_or_else(|| {
-        miette::miette!(
-            "{} environment should be already created during project creation",
-            environment.name()
-        )
-    })?;
+) -> Result<&'a HashMap<String, String>, ActivationError> {
+    let vars = project_env_vars
+        .get(environment.name())
+        .ok_or_else(|| ActivationError::MissingEnvironmentVars(environment.name().clone()))?;
     match current_env_var_behavior {
         CurrentEnvVarBehavior::Clean => {
             vars.clean()
@@ -1524,18 +1717,76 @@ fn write_warning_file(
 mod tests {
     use std::str::FromStr;
 
+    use pixi_manifest::platform::host::{detect_host, host_subdir};
+
     use insta::{assert_debug_snapshot, assert_snapshot};
     use itertools::Itertools;
     use pixi_config::{CacheConfig, Config, DetachedEnvironments};
-    use pixi_manifest::{FeatureName, FeaturesExt, HasWorkspaceManifest, script::ScriptManifest};
+    use pixi_manifest::{
+        FeatureName, FeaturesExt, HasWorkspaceManifest, NewEnvironment, script::ScriptManifest,
+    };
     use pypi_mapping::{MappingMode, ProjectDefinedChannelMapping, ProjectDefinedMappingLocation};
     use rattler_conda_types::{
-        Channel, GenericVirtualPackage, NamedChannelOrUrl, Platform, Version,
+        Channel, GenericVirtualPackage, NamedChannelOrUrl, Subdir, Version, package::BuildString,
     };
     use url::Url;
     use xxhash_rust::xxh3::xxh3_64;
 
     use super::*;
+
+    #[tokio::test]
+    async fn environment_mutation_reuses_hosts_for_unchanged_solve_scopes() {
+        let directory = tempfile::tempdir().unwrap();
+        let manifest_path = directory.path().join("pixi.toml");
+        let source = r#"
+            [workspace]
+            name = "host-lifecycle"
+            channels = []
+            platforms = ["linux-64"]
+        "#;
+        fs_err::write(&manifest_path, source).unwrap();
+        let mut workspace = Workspace::from_str(&manifest_path, source).unwrap();
+        let host = Arc::new(HostDetection::from_platform(
+            PixiPlatform::new(
+                PixiPlatformName::try_from("host").unwrap(),
+                Subdir::Linux64,
+                vec![GenericVirtualPackage {
+                    name: PackageName::from_str("__scope_capability").unwrap(),
+                    version: Version::from_str("3").unwrap(),
+                    build_string: BuildString::new_unchecked("0"),
+                }],
+            )
+            .unwrap(),
+        ));
+        let scope = HostScope::for_environment(&grouped_environment::GroupedEnvironment::from(
+            workspace.default_environment(),
+        ))
+        .unwrap();
+        workspace
+            .environment_host_scopes
+            .lock()
+            .await
+            .push((scope, host.clone()));
+        workspace.retain_detector_consent(Arc::new(DenyAll));
+        workspace.refresh_environment_hosts().await.unwrap();
+
+        let mut modified = workspace.clone().modify().unwrap();
+        modified
+            .manifest()
+            .add_environment(NewEnvironment::new("extra"))
+            .unwrap();
+        modified
+            .workspace()
+            .refresh_environment_hosts()
+            .await
+            .unwrap();
+
+        let extra = modified.workspace().environment("extra").unwrap();
+        assert!(std::ptr::eq(extra.host(), host.as_ref()));
+        assert!(std::ptr::eq(modified.workspace().host(), workspace.host()));
+        assert!(workspace.environment("extra").is_none());
+        assert_eq!(workspace.environment_host_scopes.lock().await.len(), 1);
+    }
 
     /// A platform row carries whatever package names were written into it, and
     /// a long enough one spells out past the platform-name limit. Such a row is
@@ -1568,7 +1819,7 @@ packages: []
         let lock_file_path = dir.path().join("script.py.pixi.lock");
         fs_err::write(&lock_file_path, lock_source).unwrap();
 
-        let platforms = implicit_script_platforms(Some(&lock_file_path))
+        let platforms = implicit_script_platforms(Some(&lock_file_path), &HostDetection::builtin())
             .expect("an unnameable row must not fail the whole lookup");
 
         // The bare-subdir row came through, so the lock really was read.
@@ -1629,13 +1880,13 @@ packages: []
                 .platforms
                 .iter()
                 .find(|p| {
-                    p.declared_virtual_packages()
+                    p.manifest_virtual_package_records()
                         .iter()
                         .any(|g| g.name.as_normalized() == "__glibc")
                 })
                 .expect("the migration should synthesise a platform carrying __glibc");
-            let glibc = glibc_platform
-                .declared_virtual_packages()
+            let manifest_records = glibc_platform.manifest_virtual_package_records();
+            let glibc = manifest_records
                 .iter()
                 .find(|g| g.name.as_normalized() == "__glibc")
                 .unwrap();
@@ -1719,7 +1970,7 @@ packages: []
         )
         .unwrap();
 
-        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
+        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Subdir::Linux64);
         assert_snapshot!(format_dependencies(
             workspace
                 .default_environment()
@@ -1760,7 +2011,7 @@ packages: []
         )
         .unwrap();
 
-        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
+        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Subdir::Linux64);
         assert_snapshot!(format_dependencies(
             workspace
                 .default_environment()
@@ -1795,7 +2046,7 @@ packages: []
         )
         .unwrap();
 
-        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
+        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Subdir::Linux64);
         assert_snapshot!(format_dependencies(
             workspace
                 .default_environment()
@@ -1827,9 +2078,9 @@ packages: []
         )
         .unwrap();
 
-        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
-        let win64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Win64);
-        let osx_arm64 = pixi_manifest::PixiPlatform::from_subdir(Platform::OsxArm64);
+        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Subdir::Linux64);
+        let win64 = pixi_manifest::PixiPlatform::from_subdir(Subdir::Win64);
+        let osx_arm64 = pixi_manifest::PixiPlatform::from_subdir(Subdir::OsxArm64);
         assert_snapshot!(format!(
             "= Linux64\n{}\n\n= Win64\n{}\n\n= OsxArm64\n{}",
             fmt_activation_scripts(
@@ -1870,9 +2121,9 @@ packages: []
         )
         .unwrap();
 
-        let osx64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Osx64);
-        let win64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Win64);
-        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Platform::Linux64);
+        let osx64 = pixi_manifest::PixiPlatform::from_subdir(Subdir::Osx64);
+        let win64 = pixi_manifest::PixiPlatform::from_subdir(Subdir::Win64);
+        let linux64 = pixi_manifest::PixiPlatform::from_subdir(Subdir::Linux64);
         assert_debug_snapshot!(
             workspace
                 .workspace
@@ -1912,11 +2163,11 @@ packages: []
 
         let platform = pixi_manifest::PixiPlatform::new(
             pixi_manifest::PixiPlatformName::from_str("mac").unwrap(),
-            Platform::OsxArm64,
+            Subdir::OsxArm64,
             vec![GenericVirtualPackage {
                 name: "__osx".parse().unwrap(),
                 version: Version::from_str("13.5").unwrap(),
-                build_string: "0".to_string(),
+                build_string: BuildString::new_unchecked("0"),
             }],
         )
         .unwrap();
@@ -1954,11 +2205,11 @@ packages: []
 
         let platform = pixi_manifest::PixiPlatform::new(
             pixi_manifest::PixiPlatformName::from_str("my-mac").unwrap(),
-            Platform::OsxArm64,
+            Subdir::OsxArm64,
             vec![GenericVirtualPackage {
                 name: "__osx".parse().unwrap(),
                 version: Version::from_str("15.1.1").unwrap(),
-                build_string: "0".to_string(),
+                build_string: BuildString::new_unchecked("0"),
             }],
         )
         .unwrap();
@@ -1986,11 +2237,11 @@ packages: []
 
         let platform = pixi_manifest::PixiPlatform::new(
             pixi_manifest::PixiPlatformName::from_str("my-linux").unwrap(),
-            Platform::Linux64,
+            Subdir::Linux64,
             vec![GenericVirtualPackage {
                 name: "__glibc".parse().unwrap(),
                 version: Version::from_str("2.28.1").unwrap(),
-                build_string: "0".to_string(),
+                build_string: BuildString::new_unchecked("0"),
             }],
         )
         .unwrap();
@@ -2019,10 +2270,10 @@ packages: []
             "#;
         let workspace = Workspace::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
-        let platform = workspace.pixi_platform_for_subdir(Platform::Linux64);
+        let platform = workspace.pixi_platform_for_subdir(Subdir::Linux64);
         assert_eq!(
             platform
-                .declared_virtual_packages()
+                .manifest_virtual_package_records()
                 .iter()
                 .find(|vp| vp.name.as_normalized() == "__glibc")
                 .map(|vp| vp.version.to_string()),
@@ -2048,17 +2299,17 @@ packages: []
             "#;
         let workspace = Workspace::from_str(Path::new("pixi.toml"), file_contents).unwrap();
 
-        let declared = workspace.pixi_platform_for_subdir(Platform::Linux64);
+        let declared = workspace.pixi_platform_for_subdir(Subdir::Linux64);
         assert_eq!(
-            declared.declared_virtual_packages(),
-            PixiPlatform::from_subdir(Platform::Linux64).declared_virtual_packages()
+            declared.manifest_virtual_package_records(),
+            PixiPlatform::from_subdir(Subdir::Linux64).manifest_virtual_package_records()
         );
 
-        let undeclared = workspace.pixi_platform_for_subdir(Platform::OsxArm64);
+        let undeclared = workspace.pixi_platform_for_subdir(Subdir::OsxArm64);
         assert_eq!(undeclared.name().as_str(), "osx-arm64");
         assert_eq!(
-            undeclared.declared_virtual_packages(),
-            PixiPlatform::from_subdir(Platform::OsxArm64).declared_virtual_packages()
+            undeclared.manifest_virtual_package_records(),
+            PixiPlatform::from_subdir(Subdir::OsxArm64).manifest_virtual_package_records()
         );
     }
 
@@ -2160,11 +2411,12 @@ packages: []
             "#;
         let workspace = Workspace::from_str(Path::new("pixi.toml"), non_existing_channel).unwrap();
 
-        // We output error message with bold channel name,
-        // so we need to disable colors for snapshot
-        console::set_colors_enabled(false);
-
-        insta::assert_snapshot!(workspace.pypi_name_derivation_mode().unwrap_err());
+        let err = workspace.pypi_name_derivation_mode().unwrap_err();
+        let CondaPypiMapError::UnusedChannel { channel, channels } = err else {
+            panic!("expected UnusedChannel, got {err:?}");
+        };
+        assert_eq!(channel, "non-existing-channel");
+        assert_eq!(channels, "conda-forge, pytorch");
     }
 
     #[test]
@@ -2234,6 +2486,7 @@ platforms = []
                 },
                 ..Default::default()
             },
+            HostDetection::builtin(),
         )
         .unwrap()
         .value
@@ -2270,6 +2523,7 @@ platforms = []
                 },
                 ..Default::default()
             },
+            HostDetection::builtin(),
         )
         .unwrap()
         .value;
@@ -2337,6 +2591,7 @@ platforms = []
                 },
                 ..Default::default()
             },
+            HostDetection::builtin(),
         )
         .unwrap()
         .value;
@@ -2409,6 +2664,12 @@ print("hello")
             workspace_env["PIXI_PROJECT_MANIFEST"],
             root.path().join("example.py").to_string_lossy()
         );
+        for suffix in ["ROOT", "NAME", "MANIFEST", "VERSION"] {
+            assert_eq!(
+                workspace_env[&format!("PIXI_WORKSPACE_{suffix}")],
+                workspace_env[&format!("PIXI_PROJECT_{suffix}")],
+            );
+        }
 
         let environment_env = workspace.default_environment().get_metadata_env();
         assert_eq!(environment_env["PIXI_ENVIRONMENT_NAME"], "default");
@@ -2433,7 +2694,7 @@ print("hello")
                 .iter()
                 .map(PixiPlatform::subdir)
                 .collect::<Vec<_>>(),
-            [Platform::current()]
+            [Subdir::current().unwrap_or(Subdir::NoArch)]
         );
     }
 
@@ -2520,9 +2781,9 @@ print("hello")
         // A subdir this machine cannot run. A lock file can hold one when the
         // script declared `platforms` and had the line removed since.
         let foreign = if host.is_windows() {
-            Platform::Linux64
+            Subdir::Linux64
         } else {
-            Platform::Win64
+            Subdir::Win64
         };
         let lock_file = LockFile::builder()
             .with_platforms(
@@ -2578,7 +2839,7 @@ print("hello")
         fs_err::write(&lock_file_path, baseline_lock_source(subdir)).unwrap();
 
         assert_eq!(
-            implicit_script_platforms(Some(&lock_file_path)).unwrap(),
+            implicit_script_platforms(Some(&lock_file_path), &HostDetection::builtin()).unwrap(),
             IndexSet::from([host])
         );
     }
@@ -2595,11 +2856,7 @@ print("hello")
         let Some(recorded) = host.customised_virtual_packages().first().cloned() else {
             return;
         };
-        let build = if recorded.build_string.is_empty() {
-            "0"
-        } else {
-            recorded.build_string.as_str()
-        };
+        let build = recorded.build_string.as_str();
         let lock_source = format!(
             r#"version: 7
 platforms:
@@ -2622,7 +2879,8 @@ packages: []
         let lock_file_path = dir.path().join("script.py.pixi.lock");
         fs_err::write(&lock_file_path, lock_source).unwrap();
 
-        let platforms = implicit_script_platforms(Some(&lock_file_path)).unwrap();
+        let platforms =
+            implicit_script_platforms(Some(&lock_file_path), &HostDetection::builtin()).unwrap();
         assert_eq!(
             platforms
                 .iter()
@@ -2662,12 +2920,12 @@ packages: []
         fs_err::write(&lock_file_path, lock_source).unwrap();
 
         assert_eq!(
-            implicit_script_platforms(Some(&lock_file_path)).unwrap(),
+            implicit_script_platforms(Some(&lock_file_path), &HostDetection::builtin()).unwrap(),
             IndexSet::from([host])
         );
     }
 
-    fn baseline_lock_source(subdir: Platform) -> String {
+    fn baseline_lock_source(subdir: Subdir) -> String {
         format!(
             r#"version: 7
 platforms:

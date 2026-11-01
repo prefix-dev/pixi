@@ -157,7 +157,7 @@ Only certain `pixi-build` backends support the `compilers` configuration option.
 To configure compilers in your `pixi-build` project, you can use the `compilers` configuration option in your `pixi.toml` file. Below are some examples of how to set up compiler configurations for different scenarios.
 
 !!! note "Backend Support"
-Compiler configuration is only available in backends that have specifically implemented this feature. Not all backends support the `compilers` configuration option. Check your backend's documentation to see if it supports compiler configuration.
+    Compiler configuration is only available in backends that have specifically implemented this feature. Not all backends support the `compilers` configuration option. Check your backend's documentation to see if it supports compiler configuration.
 
 ### Basic Compiler Configuration
 

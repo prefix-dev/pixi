@@ -15,6 +15,10 @@ assimp:
   robostack: [assimp]
 assimp-dev:
   robostack: [assimp]
+autoconf:
+  robostack: [autoconf]
+automake:
+  robostack: [automake]
 avahi-daemon:
   robostack: [python-avahi]
 benchmark:
@@ -206,6 +210,8 @@ ignition-transport10:
   robostack: [libignition-transport11]
 ignition-transport11:
   robostack: [libignition-transport11]
+iproute2:
+  robostack: []
 java:
   robostack: [openjdk]
 jupyter-notebook:
@@ -581,6 +587,8 @@ msgpack:
   robostack: [msgpack-python]
 muparser:
   robostack: [muparser]
+nanobind-dev:
+  robostack: [nanobind]
 netpbm:
   robostack:
     linux-aarch64: []
@@ -761,6 +769,8 @@ python3-coverage:
   robostack: [coverage]
 python3-cryptography:
   robostack: [cryptography]
+python3-dbus:
+  robostack: [dbus-python]
 python3-defusedxml:
   robostack: [defusedxml]
 python3-deprecated:
@@ -867,6 +877,8 @@ python3-pydantic:
   robostack: [pydantic]
 python3-pydot:
   robostack: [pydot]
+python3-pygnssutils-pip:
+  robostack: [pygnssutils]
 python3-pygraphviz:
   robostack: [pygraphviz]
 python3-pykdl:
@@ -939,6 +951,8 @@ python3-tornado:
   robostack: [tornado]
 python3-torchvision-pip:
   robostack: [torchvision]
+python3-tqdm:
+  robostack: [tqdm]
 python3-transforms3d:
   robostack: [transforms3d]
 python3-twisted:
@@ -947,6 +961,8 @@ python3-typeguard:
   robostack: [typeguard]
 python3-types-pyyaml:
   robostack: [types-pyyaml]
+python3-typing-extensions:
+  robostack: [typing_extensions]
 python3-ultralytics-pip:
   robostack: [ultralytics]
 python3-unidiff:

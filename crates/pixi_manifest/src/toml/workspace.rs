@@ -5,7 +5,7 @@ use std::{
 };
 
 use indexmap::{IndexMap, IndexSet};
-use pixi_spec::{ExcludeNewer, TomlSpec, TomlVersionSpecStr};
+use pixi_spec::{TomlSpec, TomlVersionSpecStr};
 use pixi_toml::{TomlFromStr, TomlHashMap, TomlIndexMap, TomlIndexSet, TomlWith};
 use rattler_conda_types::{PackageName, Version, VersionSpec};
 use std::str::FromStr;
@@ -13,12 +13,13 @@ use toml_span::{DeserError, Span, Spanned, Value, de_helpers::TableHelper, value
 use url::Url;
 
 use crate::{
-    KnownPreviewFlag, PixiPlatform, PrioritizedChannel, S3Options, TargetSelector, Targets,
-    TomlError, WithWarnings, Workspace,
+    ExcludeNewerConfig, KnownPreviewFlag, PixiPlatform, PrioritizedChannel, PypiExcludeNewerConfig,
+    S3Options, TargetSelector, Targets, TomlError, WithWarnings, Workspace,
     error::GenericError,
     pypi::pypi_options::PypiOptions,
     toml::{
-        manifest::ExternalWorkspaceProperties, platform::TomlPixiPlatform, preview::TomlPreview,
+        TomlExcludeNewer, TomlPypiExcludeNewer, manifest::ExternalWorkspaceProperties,
+        platform::TomlPixiPlatform, preview::TomlPreview,
     },
     utils::PixiSpanned,
     workspace::{BuildVariantSource, ChannelPriority, CondaPypiMap, SolveStrategy},
@@ -119,7 +120,8 @@ pub struct TomlWorkspace {
     pub build_variants: Option<HashMap<String, Vec<String>>>,
     pub build_variant_files: Option<Vec<Spanned<TomlFromStr<PathBuf>>>>,
     pub requires_pixi: Option<VersionSpec>,
-    pub exclude_newer: Option<ExcludeNewer>,
+    pub exclude_newer: ExcludeNewerConfig,
+    pub pypi_exclude_newer: PypiExcludeNewerConfig,
 
     /// `[workspace.dependencies]` pool for `{ workspace = true }` inheritance.
     pub dependencies: Option<PixiSpanned<WorkspaceDependencyMap>>,
@@ -263,6 +265,7 @@ impl TomlWorkspace {
             ),
             requires_pixi: self.requires_pixi,
             exclude_newer: self.exclude_newer,
+            pypi_exclude_newer: self.pypi_exclude_newer,
             exclude_newer_package_overrides: IndexMap::default(),
             pypi_exclude_newer_package_overrides: IndexMap::default(),
             dependencies,
@@ -398,8 +401,13 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             .optional::<TomlVersionSpecStr>("requires-pixi")
             .map(TomlVersionSpecStr::into_inner);
         let exclude_newer = th
-            .optional::<TomlWith<_, TomlFromStr<_>>>("exclude-newer")
-            .map(TomlWith::into_inner);
+            .optional::<TomlExcludeNewer>("exclude-newer")
+            .map(TomlExcludeNewer::into_inner)
+            .unwrap_or_default();
+        let pypi_exclude_newer = th
+            .optional::<TomlPypiExcludeNewer>("pypi-exclude-newer")
+            .map(TomlPypiExcludeNewer::into_inner)
+            .unwrap_or_default();
         let dependencies = th.optional("dependencies");
 
         th.finalize(None)?;
@@ -428,6 +436,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspace {
             build_variant_files,
             requires_pixi,
             exclude_newer,
+            pypi_exclude_newer,
             dependencies,
             span: value.span,
         })
@@ -450,6 +459,7 @@ impl<'de> toml_span::Deserialize<'de> for TomlWorkspaceTarget {
 
 #[cfg(test)]
 mod test {
+    use rattler_conda_types::package::BuildString;
     use std::path::Path;
 
     use crate::{
@@ -564,25 +574,25 @@ mod test {
         let cuda = workspace.platform_by_name(&cuda_name).unwrap();
         assert_eq!(
             cuda.subdir(),
-            rattler_conda_types::Platform::Linux64,
+            rattler_conda_types::Subdir::Linux64,
             "custom name should keep linux-64 as its subdir"
         );
         let declared: Vec<String> = cuda
-            .declared_virtual_packages()
+            .manifest_virtual_package_records()
             .iter()
-            .map(|vp| vp.to_string())
+            .map(crate::platform::format_virtual_package)
             .collect();
         assert_eq!(
             declared,
             vec![
                 "__cuda=12.0".to_string(),
-                "__unix=0=0".to_string(),
+                "__unix=0".to_string(),
                 "__linux=4.18".to_string(),
                 "__glibc=2.28".to_string(),
                 "__archspec=0=x86_64".to_string(),
             ],
             "rich platforms materialise the subdir defaults alongside the declared __cuda; \
-             `__unix=0=0` reflects rattler's version=0, build_string=\"0\" shape",
+             the default build `0` is omitted",
         );
 
         // Subdir entries (`linux-64`, `osx-arm64` with name == subdir)
@@ -597,8 +607,8 @@ mod test {
         assert_eq!(
             subdirs,
             vec![
-                rattler_conda_types::Platform::Linux64,
-                rattler_conda_types::Platform::OsxArm64,
+                rattler_conda_types::Subdir::Linux64,
+                rattler_conda_types::Subdir::OsxArm64,
             ]
         );
     }
@@ -607,7 +617,7 @@ mod test {
     fn test_platform_match_diagnostics_and_unsatisfied_requirements() {
         use std::collections::HashSet;
 
-        use rattler_conda_types::{GenericVirtualPackage, Platform};
+        use rattler_conda_types::{GenericVirtualPackage, Subdir};
 
         use crate::PixiPlatformName;
 
@@ -634,24 +644,24 @@ mod test {
         // materialised subdir defaults must not count); `mac` needs a subdir
         // this host can't run.
         let diagnostics =
-            workspace.platform_match_diagnostics(Platform::Linux64, &[], &env_platforms);
+            workspace.platform_match_diagnostics(Subdir::Linux64, &[], &env_platforms);
         assert_eq!(diagnostics.len(), 2);
 
         let gpu = &diagnostics[0];
         assert_eq!(gpu.name.as_str(), "gpu-linux");
-        assert_eq!(gpu.subdir, Platform::Linux64);
+        assert_eq!(gpu.subdir, Subdir::Linux64);
         assert!(gpu.subdir_matches_host);
         assert!(!gpu.matches_host());
         let unsatisfied: Vec<String> = gpu
             .unsatisfied_virtual_packages
             .iter()
-            .map(ToString::to_string)
+            .map(crate::platform::format_virtual_package)
             .collect();
         assert_eq!(unsatisfied, vec!["__cuda=12.0".to_string()]);
 
         let mac = &diagnostics[1];
         assert_eq!(mac.name.as_str(), "mac");
-        assert_eq!(mac.subdir, Platform::OsxArm64);
+        assert_eq!(mac.subdir, Subdir::OsxArm64);
         assert!(!mac.subdir_matches_host);
         assert!(mac.unsatisfied_virtual_packages.is_empty());
         assert!(!mac.matches_host());
@@ -659,9 +669,9 @@ mod test {
         // The aggregate requirements only cover host-runnable subdirs, so
         // `mac` contributes nothing.
         let requirements: Vec<String> = workspace
-            .unsatisfied_platform_requirements(Platform::Linux64, &[], &env_platforms)
+            .unsatisfied_platform_requirements(Subdir::Linux64, &[], &env_platforms)
             .iter()
-            .map(ToString::to_string)
+            .map(crate::platform::format_virtual_package)
             .collect();
         assert_eq!(requirements, vec!["__cuda=12.0".to_string()]);
 
@@ -670,17 +680,17 @@ mod test {
         let host_cuda = GenericVirtualPackage {
             name: "__cuda".parse().unwrap(),
             version: "12.4".parse().unwrap(),
-            build_string: "0".to_string(),
+            build_string: BuildString::new_unchecked("0"),
         };
         let diagnostics = workspace.platform_match_diagnostics(
-            Platform::Linux64,
+            Subdir::Linux64,
             std::slice::from_ref(&host_cuda),
             &env_platforms,
         );
         assert!(diagnostics[0].matches_host());
         assert!(
             workspace
-                .unsatisfied_platform_requirements(Platform::Linux64, &[host_cuda], &env_platforms)
+                .unsatisfied_platform_requirements(Subdir::Linux64, &[host_cuda], &env_platforms)
                 .is_empty()
         );
     }

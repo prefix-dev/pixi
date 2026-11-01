@@ -11,6 +11,7 @@ use uv_distribution::RegistryWheelIndex;
 use uv_distribution_filename::WheelFilename;
 use uv_distribution_types::IndexUrl;
 use uv_pep508::VerbatimUrl;
+use uv_redacted::SafeUrl;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Package {
@@ -61,7 +62,7 @@ impl Package {
         let kind = PackageKind::from(package);
 
         let build = match package {
-            PackageExt::Conda(pkg) => pkg.record().map(|r| r.build.clone()),
+            PackageExt::Conda(pkg) => pkg.record().map(|r| r.build.to_string()),
             PackageExt::PyPI(_, _) => None,
         };
 
@@ -87,7 +88,7 @@ impl Package {
                         .index_url
                         .clone()
                         .unwrap_or_else(|| consts::DEFAULT_PYPI_INDEX_URL.clone());
-                    let index = IndexUrl::from(VerbatimUrl::from(url));
+                    let index = IndexUrl::from(VerbatimUrl::from(SafeUrl::from_url(url)));
                     let size = if let Some(registry_index) = registry_index {
                         // Handle case where the registry index is present
                         let wheel_filename = p
@@ -95,17 +96,17 @@ impl Package {
                             .file_name()
                             .and_then(|f| WheelFilename::from_str(f).ok());
                         let entry = registry_index.get(name).find(|entry| {
-                            if entry.index.url() != &index {
+                            if entry.index().url() != &index {
                                 return false;
                             }
                             if let Some(filename) = &wheel_filename {
-                                &entry.dist.filename == filename
+                                &entry.dist().filename == filename
                             } else {
-                                Some(&entry.dist.filename.version)
+                                Some(&entry.dist().filename.version)
                                     == to_uv_version(&p.version).ok().as_ref()
                             }
                         });
-                        entry.and_then(|e| get_dir_size(&e.dist.path).ok())
+                        entry.and_then(|e| get_dir_size(&e.dist().path).ok())
                     } else {
                         get_pypi_location_information(&p.location).0
                     };

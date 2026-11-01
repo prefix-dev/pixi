@@ -32,9 +32,7 @@ endpoint-url = "{{ s3[key]["endpoint-url"] }}"
 {%- if s3[key].region %}
 region = "{{ s3[key].region }}"
 {%- endif %}
-{%- if s3[key]["force-path-style"] is not none %}
-force-path-style = {{ s3[key]["force-path-style"] }}
-{%- endif %}
+force-path-style = {{ s3[key]["addressing-style"] == "path" }}
 
 {%- endfor %}
 {%- endif %}
@@ -95,9 +93,7 @@ endpoint-url = "{{ s3[key]["endpoint-url"] }}"
 {%- if s3[key].region %}
 region = "{{ s3[key].region }}"
 {%- endif %}
-{%- if s3[key]["force-path-style"] is not none %}
-force-path-style = {{ s3[key]["force-path-style"] }}
-{%- endif %}
+force-path-style = {{ s3[key]["addressing-style"] == "path" }}
 
 {%- endfor %}
 {%- endif %}
@@ -149,9 +145,7 @@ endpoint-url = "{{ s3[key]["endpoint-url"] }}"
 {%- if s3[key].region %}
 region = "{{ s3[key].region }}"
 {%- endif %}
-{%- if s3[key]["force-path-style"] is not none %}
-force-path-style = {{ s3[key]["force-path-style"] }}
-{%- endif %}
+force-path-style = {{ s3[key]["addressing-style"] == "path" }}
 
 {%- endfor %}
 {%- endif %}

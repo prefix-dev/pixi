@@ -19,7 +19,7 @@ use rattler_lock::{LockFile, LockedPackage};
 
 use crate::cli_config::ScriptWorkspaceConfig;
 
-/// Updates dependencies to newer compatible versions.
+/// Update dependencies to newer compatible versions.
 ///
 /// Projects and scripts with an adjacent lock file write that lock file. A
 /// script without one writes its cached resolution.
@@ -134,8 +134,9 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let workspace = WorkspaceLocator::for_cli()
         .with_global_config_source(args.config_source.source())
         .with_search_start(args.project_config.workspace_locator_start())
-        .locate()?
-        .with_cli_config(args.config);
+        .with_cli_config(args.config)
+        .locate()
+        .await?;
 
     let mut specs = UpdateSpecs::from(args.specs);
 
@@ -169,6 +170,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     let relaxed_lock_file = unlock_packages(&workspace, loaded_lock_file, &specs);
 
     // Update the packages in the lock file.
+    workspace.refresh_environment_hosts().await?;
     let progress = pixi_reporters::TopLevelProgress::from_global();
     let dispatcher = workspace
         .command_dispatcher_builder(Some(&progress))?
@@ -176,7 +178,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
     // Scoped so the bars are cleared before the diff or the JSON is printed.
     let updated_lock_file = {
         let _clear_progress = pixi_reporters::TopLevelProgress::clear_when_done(Some(&progress));
-        UpdateContext::builder(&workspace, dispatcher)?
+        UpdateContext::builder(&workspace, dispatcher)
             .with_lock_file(relaxed_lock_file.clone())
             .with_no_install(args.no_install)
             .with_update_targets(specs.packages.clone())

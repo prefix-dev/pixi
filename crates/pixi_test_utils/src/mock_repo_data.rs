@@ -3,13 +3,14 @@
 
 use chrono::{DateTime, Utc};
 use miette::IntoDiagnostic;
-use rattler_conda_types::package::ArchiveIdentifier;
+use rattler_conda_types::package::{ArchiveIdentifier, BuildString};
 use rattler_conda_types::{
-    ChannelInfo, PackageName, PackageRecord, PackageUrl, Platform, RepoData, VersionWithSource,
+    ChannelInfo, PackageName, PackageRecord, PackageUrl, RepoData, Subdir, VersionWithSource,
     package::{
         CondaArchiveType, DistArchiveIdentifier, IndexJson, PathType, PathsEntry, PathsJson,
         RunExportsJson,
     },
+    virtual_package_detector::DetectorRegistrationMetadata,
 };
 use std::{
     collections::HashSet,
@@ -33,12 +34,24 @@ impl LocalChannel {
 #[derive(Default, Clone, Debug)]
 pub struct MockRepoData {
     packages: Vec<Package>,
+    /// Detector registrations written into every subdir's repodata.
+    virtual_package_detectors: Option<DetectorRegistrationMetadata>,
 }
 
 impl MockRepoData {
     /// Adds a package to the database
     pub fn with_package(mut self, package: Package) -> Self {
         self.packages.push(package);
+        self
+    }
+
+    /// Registers virtual package detectors in every subdir's repodata: a map
+    /// from detector package name to the virtual packages it reports.
+    pub fn with_virtual_package_detectors(
+        mut self,
+        registrations: DetectorRegistrationMetadata,
+    ) -> Self {
+        self.virtual_package_detectors = Some(registrations);
         self
     }
 
@@ -53,13 +66,12 @@ impl MockRepoData {
         let mut platforms = self.platforms();
 
         // Make sure NoArch is always included
-        if !platforms.contains(&Platform::NoArch) {
-            platforms.insert(Platform::NoArch);
+        if !platforms.contains(&Subdir::NoArch) {
+            platforms.insert(Subdir::NoArch);
         }
 
         // Make sure the current platform is included
-        let current_platform = Platform::current();
-        if !platforms.contains(&current_platform) {
+        if let Some(current_platform) = Subdir::current() {
             platforms.insert(current_platform);
         }
 
@@ -110,6 +122,7 @@ impl MockRepoData {
                     base_url: None,
                     channel_relations: None,
                     repodata_revisions: Default::default(),
+                    virtual_package_detectors: self.virtual_package_detectors.clone(),
                 }),
                 packages: tar_bz2_packages.into_iter().collect(),
                 conda_packages: conda_packages.into_iter().collect(),
@@ -135,17 +148,14 @@ impl MockRepoData {
     }
 
     /// Returns all packages for the specified platform.
-    pub fn packages_by_platform(
-        &self,
-        platform: Platform,
-    ) -> impl Iterator<Item = &'_ Package> + '_ {
+    pub fn packages_by_platform(&self, platform: Subdir) -> impl Iterator<Item = &'_ Package> + '_ {
         self.packages
             .iter()
             .filter(move |pkg| pkg.subdir == platform)
     }
 
     /// Returns all the platforms that this database has packages for
-    pub fn platforms(&self) -> HashSet<Platform> {
+    pub fn platforms(&self) -> HashSet<Subdir> {
         self.packages.iter().map(|pkg| pkg.subdir).collect()
     }
 }
@@ -154,10 +164,21 @@ impl MockRepoData {
 #[derive(Clone, Debug)]
 pub struct Package {
     pub package_record: PackageRecord,
-    subdir: Platform,
+    subdir: Subdir,
     archive_type: CondaArchiveType,
     /// If true, a materialized .conda file will be created for this package
     materialize: bool,
+    /// Files the package installs, beyond its metadata.
+    files: Vec<PackageFile>,
+}
+
+/// A file inside a materialized package.
+#[derive(Clone, Debug)]
+pub struct PackageFile {
+    relative_path: PathBuf,
+    contents: Vec<u8>,
+    #[cfg(unix)]
+    executable: bool,
 }
 
 // Implement `AsRef` for a `PackageRecord` allows using `Package` in a number of algorithms used in
@@ -175,7 +196,7 @@ pub struct PackageBuilder {
     build: Option<String>,
     build_number: Option<u64>,
     depends: Vec<String>,
-    subdir: Option<Platform>,
+    subdir: Option<Subdir>,
     archive_type: CondaArchiveType,
     timestamp: Option<DateTime<Utc>>,
     md5: Option<String>,
@@ -183,6 +204,8 @@ pub struct PackageBuilder {
     purls: Option<std::collections::BTreeSet<PackageUrl>>,
     materialize: bool,
     run_exports: Option<RunExportsJson>,
+    /// Files the package installs, beyond its metadata.
+    files: Vec<PackageFile>,
 }
 
 impl Package {
@@ -205,6 +228,7 @@ impl Package {
             // extract run_exports from the actual conda file, which doesn't exist
             // for non-materialized mock packages.
             run_exports: Some(RunExportsJson::default()),
+            files: Vec::new(),
         }
     }
 
@@ -219,7 +243,7 @@ impl Package {
             identifier: ArchiveIdentifier {
                 name: self.package_record.name.as_source().to_string(),
                 version: self.package_record.version.to_string(),
-                build_string: self.package_record.build.clone(),
+                build_string: self.package_record.build.to_string(),
             },
             archive_type: self.archive_type.into(),
         }
@@ -246,7 +270,7 @@ impl PackageBuilder {
     }
 
     /// Explicitly set the platform of this package
-    pub fn with_subdir(mut self, subdir: Platform) -> Self {
+    pub fn with_subdir(mut self, subdir: Subdir) -> Self {
         self.subdir = Some(subdir);
         self
     }
@@ -290,6 +314,24 @@ impl PackageBuilder {
 
     /// Enable materialization for this package.
     /// When enabled, a real .conda file will be created containing index.json and paths.json
+    /// Adds a file to the package. Only materialized packages carry files.
+    pub fn with_file(
+        mut self,
+        relative_path: impl Into<PathBuf>,
+        contents: impl Into<Vec<u8>>,
+        _executable: bool,
+    ) -> Self {
+        self.files.push(PackageFile {
+            relative_path: relative_path.into(),
+            contents: contents.into(),
+            #[cfg(unix)]
+            executable: _executable,
+        });
+        self
+    }
+
+    /// Enable materialization for this package.
+    /// When enabled, a real .conda file will be created containing index.json and paths.json
     pub fn with_materialize(mut self, materialize: bool) -> Self {
         self.materialize = materialize;
         self
@@ -304,7 +346,7 @@ impl PackageBuilder {
 
     /// Finish construction of the package
     pub fn finish(self) -> Package {
-        let subdir = self.subdir.unwrap_or(Platform::NoArch);
+        let subdir = self.subdir.unwrap_or(Subdir::NoArch);
         let build_number = self.build_number.unwrap_or(0);
         let build = self.build.unwrap_or_else(|| format!("{build_number}"));
         let (sha256, md5) = match (self.sha256, self.md5) {
@@ -335,12 +377,14 @@ impl PackageBuilder {
         Package {
             package_record: PackageRecord {
                 arch: None,
-                build,
+                build: BuildString::new_unchecked(build),
                 build_number,
                 constrains: vec![],
                 depends: self.depends,
                 features: None,
                 legacy_bz2_md5: None,
+                attestations_sha256: None,
+                indexed_timestamp: None,
                 legacy_bz2_size: None,
                 license: None,
                 license_family: None,
@@ -368,6 +412,7 @@ impl PackageBuilder {
             subdir,
             archive_type: self.archive_type,
             materialize: self.materialize,
+            files: self.files,
         }
     }
 }
@@ -423,15 +468,40 @@ pub fn create_conda_package(
     let index_json_sha256 =
         rattler_digest::compute_bytes_digest::<rattler_digest::Sha256>(index_json_bytes);
 
-    let paths_json = PathsJson {
-        paths: vec![PathsEntry {
-            relative_path: PathBuf::from("info/index.json"),
+    let mut path_entries = vec![PathsEntry {
+        relative_path: PathBuf::from("info/index.json"),
+        no_link: false,
+        path_type: PathType::HardLink,
+        prefix_placeholder: None,
+        sha256: Some(index_json_sha256),
+        size_in_bytes: Some(index_json_bytes.len() as u64),
+    }];
+    let mut file_paths = Vec::new();
+    for file in &package.files {
+        let path = temp_dir.path().join(&file.relative_path);
+        if let Some(parent) = path.parent() {
+            fs_err::create_dir_all(parent)?;
+        }
+        fs_err::write(&path, &file.contents)?;
+        #[cfg(unix)]
+        if file.executable {
+            use std::os::unix::fs::PermissionsExt;
+            fs_err::set_permissions(&path, std::fs::Permissions::from_mode(0o755))?;
+        }
+        path_entries.push(PathsEntry {
+            relative_path: file.relative_path.clone(),
             no_link: false,
             path_type: PathType::HardLink,
             prefix_placeholder: None,
-            sha256: Some(index_json_sha256),
-            size_in_bytes: Some(index_json_bytes.len() as u64),
-        }],
+            sha256: Some(
+                rattler_digest::compute_bytes_digest::<rattler_digest::Sha256>(&file.contents),
+            ),
+            size_in_bytes: Some(file.contents.len() as u64),
+        });
+        file_paths.push(path);
+    }
+    let paths_json = PathsJson {
+        paths: path_entries,
         paths_version: 1,
     };
 
@@ -441,6 +511,7 @@ pub fn create_conda_package(
 
     // Collect paths to include in the package
     let mut paths = vec![info_dir.join("index.json"), info_dir.join("paths.json")];
+    paths.extend(file_paths);
 
     // Create run_exports.json if the package has run exports
     if let Some(run_exports) = &package.package_record.run_exports

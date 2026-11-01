@@ -15,9 +15,7 @@ use futures::FutureExt;
 use indexmap::IndexMap;
 use indicatif::ProgressBar;
 use itertools::{Either, Itertools};
-use miette::{Context, IntoDiagnostic};
 use ordermap::OrderSet;
-use pixi_consts::consts;
 use pixi_install_pypi::{LockedPypiRecord, UnresolvedPypiRecord};
 use pixi_manifest::{
     EnvironmentName, HasWorkspaceManifest, PixiPlatform, PixiPlatformName, SolveStrategy,
@@ -27,16 +25,17 @@ use pixi_pypi_spec::PixiPypiSpec;
 use pixi_record::{LockedGitUrl, PixiRecord};
 use pixi_reporters::{UvReporter, UvReporterOptions};
 use pixi_uv_conversions::{
-    ConversionError, GitUrlWithPrefix, WorkspaceAnchor, as_uv_req,
-    configure_insecure_hosts_for_tls_bypass, convert_uv_requirements_to_pep508,
-    into_pinned_git_spec, into_uv_git_reference, into_uv_git_sha,
-    pypi_cache_config_settings_with_macos_deployment_target, pypi_options_to_build_options,
-    pypi_options_to_index_locations, to_index_strategy, to_prerelease_mode,
-    to_requirements_relative_to, to_uv_normalize, to_uv_version, to_version_specifiers,
+    AnchorError, AsPep508Error, ConversionError, ConvertFlatIndexLocationError, GitUrlWithPrefix,
+    WorkspaceAnchor, as_uv_req, configure_insecure_hosts_for_tls_bypass,
+    convert_uv_requirements_to_pep508, into_pinned_git_spec, into_uv_git_reference,
+    into_uv_git_sha, pypi_cache_config_settings_with_macos_deployment_target,
+    pypi_options_to_build_options, pypi_options_to_index_locations, to_index_strategy,
+    to_prerelease_mode, to_requirements_relative_to, to_uv_normalize, to_uv_version,
+    to_version_specifiers,
 };
 use pypi_modifiers::{
-    pypi_marker_env::determine_marker_environment,
-    pypi_tags::{get_pypi_tags, is_python_record, macos_deployment_target},
+    pypi_marker_env::{MarkerEnvironmentError, determine_marker_environment},
+    pypi_tags::{PyPITagError, get_pypi_tags, is_python_record, macos_deployment_target},
 };
 use rattler_digest::{Md5, Sha256, parse_digest_from_hex};
 use rattler_lock::{
@@ -46,13 +45,13 @@ use rattler_lock::{
 use typed_path::Utf8TypedPathBuf;
 use url::Url;
 use uv_cache_key::RepositoryUrl;
-use uv_client::{FlatIndexClient, RegistryClient, RegistryClientBuilder};
-use uv_configuration::{Constraints, Overrides};
+use uv_client::{RegistryClient, RegistryClientBuilder};
+use uv_configuration::{Constraints, DependencyModifiers, Overrides};
 use uv_distribution::DistributionDatabase;
 use uv_distribution_types::{
-    BuiltDist, ConfigSettings, DependencyMetadata, Diagnostic, Dist, FileLocation, HashPolicy,
-    IndexCapabilities, IndexUrl, Name, RequirementSource, RequiresPython, Resolution, ResolvedDist,
-    SourceDist, ToUrlError,
+    BuiltDist, ConfigSettings, DependencyMetadata, Diagnostic, Dist, FileLocation,
+    IndexCapabilities, IndexUrl, MetadataHashPolicy, Name, RequirementSource, RequiresPython,
+    Resolution, ResolvedDist, SourceDist, ToUrlError,
 };
 use uv_git::RepositoryReference;
 use uv_install_wheel::LinkMode;
@@ -60,13 +59,13 @@ use uv_pypi_types::{Conflicts, HashAlgorithm, HashDigests, ResolutionMetadata};
 use uv_requirements::LookaheadResolver;
 use uv_resolver::{
     AllowedYanks, DefaultResolverProvider, FlatIndex, InMemoryIndex, Manifest, Options, Preference,
-    PreferenceError, Preferences, PythonRequirement, ResolutionMode, ResolveError, Resolver,
-    ResolverEnvironment,
+    PreferenceError, Preferences, Prerelease, PythonRequirement, ResolutionMode, ResolveError,
+    Resolver, ResolverEnvironment,
 };
-use uv_types::{EmptyInstalledPackages, HashStrategy};
+use uv_types::{BuildContext, EmptyInstalledPackages, HashStrategy};
 
 use crate::{
-    environment::CondaPrefixUpdated,
+    environment::{CondaPrefixUpdated, CondaPrefixUpdaterBuildError},
     lock_file::{
         CondaPrefixUpdater, LockedPypiRecords, PixiRecordsByName, PypiPackageIdentifier,
         outdated::PypiEnvironmentBuildCache,
@@ -81,11 +80,10 @@ use crate::{
 use pixi_command_dispatcher::CommandDispatcher;
 use pixi_manifest::platform::host::host_baseline;
 use pixi_uv_context::UvResolutionContext;
-use rattler_conda_types::GenericVirtualPackage;
 
 #[derive(Debug, thiserror::Error)]
-#[error("Invalid hash: {0} type: {1}")]
-struct InvalidHash(String, String);
+#[error("invalid {1} hash '{0}'")]
+pub struct InvalidHash(String, String);
 
 fn parse_hashes_from_hash_vec(hashes: &HashDigests) -> Result<Option<PackageHashes>, InvalidHash> {
     let mut sha256 = None;
@@ -94,12 +92,12 @@ fn parse_hashes_from_hash_vec(hashes: &HashDigests) -> Result<Option<PackageHash
     for hash in hashes.iter() {
         match hash.algorithm() {
             HashAlgorithm::Sha256 => {
-                sha256 = Some(hash.digest.to_string());
+                sha256 = Some(hash.digest().to_string());
             }
             HashAlgorithm::Md5 => {
-                md5 = Some(hash.digest.to_string());
+                md5 = Some(hash.digest().to_string());
             }
-            HashAlgorithm::Sha384 | HashAlgorithm::Sha512 | HashAlgorithm::Blake2b => {
+            HashAlgorithm::Sha384 | HashAlgorithm::Sha512 | HashAlgorithm::Blake2b256 => {
                 // We do not support these algorithms
             }
         }
@@ -166,12 +164,127 @@ pub enum SolveError {
     GeneralPanic { message: String },
 
     #[error(transparent)]
-    #[diagnostic(transparent)]
-    LookAhead(Box<dyn miette::Diagnostic + Send + Sync + 'static>),
+    LookAhead(uv_requirements::Error),
+
+    #[error("git archive dependency '{name}' is not supported")]
+    UnsupportedGitArchive {
+        name: String,
+        #[source]
+        source: uv_requirements::Error,
+    },
 
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Locking(Box<dyn miette::Diagnostic + Send + Sync + 'static>),
+    Locking(#[from] LockPypiPackagesError),
+
+    #[error("failed to extract python packages from conda metadata")]
+    CondaPythonPackages(#[source] Box<dyn std::error::Error + Send + Sync>),
+
+    #[error("no Python interpreter found in the dependencies")]
+    #[diagnostic(help("Try `pixi add python`."))]
+    NoPythonInterpreter,
+
+    #[error("workspace does not define a platform named '{0}'")]
+    UnknownPlatform(PixiPlatformName),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    MarkerEnvironment(#[from] MarkerEnvironmentError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    Tags(#[from] PyPITagError),
+
+    #[error(transparent)]
+    Requirement(AsPep508Error),
+
+    #[error("failed to convert dependency override '{name}' to a uv requirement")]
+    DependencyOverride {
+        name: String,
+        #[source]
+        source: AsPep508Error,
+    },
+
+    #[error(transparent)]
+    PythonVersion(#[from] uv_pep440::VersionParseError),
+
+    #[error("error creating version specifier for python version")]
+    PythonVersionSpecifier(#[source] uv_pep440::VersionSpecifierBuildError),
+
+    #[error(transparent)]
+    IndexLocations(#[from] ConvertFlatIndexLocationError),
+
+    #[error(transparent)]
+    BuildOptions(#[from] uv_normalize::InvalidNameError),
+
+    #[error(transparent)]
+    RegistryClient(#[from] uv_client::ClientBuildError),
+
+    #[error(transparent)]
+    FlatIndex(#[from] uv_client::FlatIndexError),
+
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    CondaPrefixUpdater(#[from] CondaPrefixUpdaterBuildError),
+
+    #[error(transparent)]
+    Constraints(#[from] ConversionError),
+
+    #[error(transparent)]
+    Preferences(#[from] PixiPreferencesError),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum PixiPreferencesError {
+    #[error(transparent)]
+    Conversion(#[from] ConversionError),
+    #[error(transparent)]
+    Preference(#[from] PreferenceError),
+
+    #[error(transparent)]
+    OidParse(#[from] uv_git_types::OidParseError),
+
+    #[error(transparent)]
+    GitUrlParse(#[from] uv_git_types::GitUrlParseError),
+}
+
+#[derive(Debug, thiserror::Error, miette::Diagnostic)]
+pub enum LockPypiPackagesError {
+    #[error("cannot get wheel metadata")]
+    WheelMetadata(#[source] uv_client::Error),
+
+    #[error(transparent)]
+    BuildWheelMetadata(#[from] uv_distribution::Error),
+
+    #[error("cannot parse hashes for registry dist")]
+    RegistryDistHashes(#[source] InvalidHash),
+
+    #[error("cannot parse hashes for sdist")]
+    SdistHashes(#[source] InvalidHash),
+
+    #[error("cannot convert registry dist")]
+    RegistryDistLocation(#[source] GetUrlOrPathError),
+
+    #[error("cannot convert registry sdist")]
+    RegistrySdistLocation(#[source] GetUrlOrPathError),
+
+    #[error("cannot create direct url")]
+    DirectUrl(#[source] url::ParseError),
+
+    #[error(transparent)]
+    Anchor(#[from] AnchorError),
+
+    #[error("git archive dependency '{0}' is not supported")]
+    UnsupportedGitArchive(String),
+
+    #[error("cannot convert version")]
+    Version(#[source] pep440_rs::VersionParseError),
+
+    #[error("cannot convert name")]
+    Name(#[source] pep508_rs::InvalidNameError),
+
+    #[error(transparent)]
+    Conversion(#[from] ConversionError),
 }
 
 /// Creates a custom `SolveError` from a `ResolveError`.
@@ -217,7 +330,7 @@ See https://pixi.sh/latest/concepts/conda_pypi/#pinned-package-conflicts for mor
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::result_large_err)]
 pub async fn resolve_pypi(
     context: UvResolutionContext,
     pypi_options: &PypiOptions,
@@ -228,7 +341,10 @@ pub async fn resolve_pypi(
     pb: &ProgressBar,
     project_root: &Path,
     command_dispatcher: CommandDispatcher,
-    repodata_building_records: miette::Result<Arc<PixiRecordsByName>>,
+    repodata_building_records: Result<
+        Arc<PixiRecordsByName>,
+        Box<dyn miette::Diagnostic + Send + Sync>,
+    >,
     project_env_vars: HashMap<EnvironmentName, EnvironmentVars>,
     environment: Environment<'_>,
     disallow_install_conda_prefix: bool,
@@ -236,7 +352,7 @@ pub async fn resolve_pypi(
     solve_strategy: SolveStrategy,
     build_cache: Arc<PypiEnvironmentBuildCache>,
     link_mode: LinkMode,
-) -> miette::Result<(LockedPypiRecords, Option<CondaPrefixUpdated>)> {
+) -> Result<(LockedPypiRecords, Option<CondaPrefixUpdated>), SolveError> {
     // Solve python packages
     pb.set_message("resolving pypi dependencies");
 
@@ -270,9 +386,8 @@ pub async fn resolve_pypi(
             ))
         })
         .collect::<Result<Result<HashMap<_, _>, uv_normalize::InvalidNameError>, _>>()
-        .into_diagnostic()?
-        .into_diagnostic()
-        .context("failed to extract python packages from conda metadata")?;
+        .map_err(|e| SolveError::CondaPythonPackages(Box::new(e)))?
+        .map_err(|e| SolveError::CondaPythonPackages(Box::new(e)))?;
 
     if !conda_python_packages.is_empty() {
         tracing::info!(
@@ -320,7 +435,7 @@ pub async fn resolve_pypi(
             specs.iter().filter_map(|spec| {
                 let git_spec = spec.source.as_git()?;
                 let git_url = GitUrlWithPrefix::from(&git_spec.git);
-                let repository_url = RepositoryUrl::new(&git_url.to_display_safe_url());
+                let repository_url = RepositoryUrl::new(git_url.to_display_safe_url());
                 let git_ref = git_spec
                     .rev
                     .as_ref()
@@ -350,10 +465,9 @@ pub async fn resolve_pypi(
                 let uv_reference = into_uv_git_reference(pixi_git_ref);
                 let uv_sha = into_uv_git_sha(pinned_git_spec.source.commit);
 
-                let display_safe_url =
-                    uv_redacted::DisplaySafeUrl::from_url(pinned_git_spec.git.clone());
+                let display_safe_url = uv_redacted::SafeUrl::from_url(pinned_git_spec.git.clone());
 
-                let repository_url = RepositoryUrl::new(&display_safe_url);
+                let repository_url = RepositoryUrl::new(display_safe_url);
                 let reference = RepositoryReference {
                     url: repository_url,
                     reference: uv_reference,
@@ -378,21 +492,14 @@ pub async fn resolve_pypi(
     let python_record = locked_pixi_records
         .iter()
         .find(|r| is_python_record(r))
-        .ok_or_else(|| {
-            miette::miette!(
-                help = format!("Try: {}", consts::TASK_STYLE.apply_to("pixi add python")),
-                "No Python interpreter found in the dependencies"
-            )
-        })?;
+        .ok_or(SolveError::NoPythonInterpreter)?;
 
     // Construct the marker environment for the target platform
     let pixi_platform = environment
         .workspace_manifest()
         .workspace
         .platform_by_name(&platform)
-        .ok_or_else(|| {
-            miette::miette!("workspace does not define a platform named '{platform}'")
-        })?;
+        .ok_or_else(|| SolveError::UnknownPlatform(platform.clone()))?;
     let marker_environment = determine_marker_environment(pixi_platform, python_record.as_ref())?;
 
     let requirements = dependencies
@@ -403,7 +510,7 @@ pub async fn resolve_pypi(
         })
         .filter_ok(|uv_req| uv_req.evaluate_markers(Some(&marker_environment), &uv_req.extras))
         .collect::<Result<Vec<_>, _>>()
-        .into_diagnostic()?;
+        .map_err(SolveError::Requirement)?;
 
     // Determine the tags for this particular solve.
     let tags = get_pypi_tags(pixi_platform, python_record.as_ref())?;
@@ -421,14 +528,12 @@ pub async fn resolve_pypi(
                 .version()
                 .expect("python record always has a version")
                 .as_str(),
-        )
-        .into_diagnostic()?,
+        )?,
     )
-    .into_diagnostic()
-    .context("error creating version specifier for python version")?;
+    .map_err(SolveError::PythonVersionSpecifier)?;
 
     let requires_python =
-        RequiresPython::from_specifiers(&uv_pep440::VersionSpecifiers::from(python_specifier));
+        RequiresPython::from_specifiers(uv_pep440::VersionSpecifiers::from(python_specifier));
     tracing::debug!(
         "using requires-python specifier (this may differ from the above): {}",
         requires_python
@@ -436,15 +541,13 @@ pub async fn resolve_pypi(
 
     let index_strategy = to_index_strategy(pypi_options.index_strategy.as_ref());
 
-    let index_locations =
-        pypi_options_to_index_locations(pypi_options, project_root).into_diagnostic()?;
+    let index_locations = pypi_options_to_index_locations(pypi_options, project_root)?;
 
     // Create build options
     let build_options = pypi_options_to_build_options(
         &pypi_options.no_build.clone().unwrap_or_default(),
         &pypi_options.no_binary.clone().unwrap_or_default(),
-    )
-    .into_diagnostic()?;
+    )?;
 
     // Configure insecure hosts for TLS verification bypass
     let allow_insecure_hosts = configure_insecure_hosts_for_tls_bypass(
@@ -454,64 +557,43 @@ pub async fn resolve_pypi(
     );
 
     let registry_client = {
-        let base_client_builder = context.base_client_builder(
-            allow_insecure_hosts,
-            Some(&marker_environment),
-            context.connectivity,
-        );
+        let base_client_builder =
+            context.base_client_builder(allow_insecure_hosts, context.connectivity);
 
         let mut uv_client_builder =
             RegistryClientBuilder::new(base_client_builder, context.cache.clone())
                 .index_locations(index_locations.clone())
-                .index_strategy(index_strategy);
+                .index_strategy(index_strategy)
+                .markers(&marker_environment);
 
         for p in &context.proxies {
             uv_client_builder = uv_client_builder.proxy(p.clone())
         }
 
-        Arc::new(uv_client_builder.build().into_diagnostic()?)
+        Arc::new(uv_client_builder.build()?)
     };
-    let dependency_overrides =
-        pypi_options.dependency_overrides.as_ref().map(|overrides|->Result<Vec<_>, _> {
+    let dependency_overrides = pypi_options
+        .dependency_overrides
+        .as_ref()
+        .map(|overrides| {
             overrides
                 .iter()
                 .map(|(name, spec)| {
-                    as_uv_req(spec,name.as_normalized().as_ref(), project_root)
-                    .into_diagnostic()
-                    .with_context(||{
-                        format!(
-                            "dependency override {name}:{spec:?} should able to convert to uv requirement",
-                            name = name.as_source(),
-                            spec = spec.to_string()
-                        )
+                    as_uv_req(spec, name.as_normalized().as_ref(), project_root).map_err(|source| {
+                        SolveError::DependencyOverride {
+                            name: name.as_source().to_string(),
+                            source,
+                        }
                     })
                 })
                 .collect::<Result<Vec<_>, _>>()
-        }).transpose()?.unwrap_or_default();
+        })
+        .transpose()?
+        .unwrap_or_default();
 
-    let flat_index = {
-        let flat_index_client = FlatIndexClient::new(
-            registry_client.cached_client(),
-            context.connectivity,
-            &context.cache,
-        );
-        let flat_index_urls: Vec<&IndexUrl> = index_locations
-            .flat_indexes()
-            .map(|index| index.url())
-            .collect();
-        let flat_index_entries = flat_index_client
-            .fetch_all(flat_index_urls.into_iter())
-            .await
-            .into_diagnostic()?;
-        // Lock-time resolution creates the lock file; there are no locked
-        // digests to verify against yet.
-        FlatIndex::from_entries(
-            flat_index_entries,
-            Some(&tags),
-            &HashStrategy::None,
-            &build_options,
-        )
-    };
+    // Lock-time resolution creates the lock file; there are no locked
+    // digests to verify against yet.
+    let flat_index = FlatIndex::load(&registry_client, &context.cache, &index_locations).await?;
 
     let resolution_mode = match solve_strategy {
         SolveStrategy::Highest => ResolutionMode::Highest,
@@ -527,7 +609,10 @@ pub async fn resolve_pypi(
     // panics.
     let options = Options {
         resolution_mode,
-        prerelease_mode,
+        prerelease: Prerelease {
+            global: prerelease_mode,
+            ..Prerelease::default()
+        },
         index_strategy,
         build_options: build_options.clone(),
         exclude_newer: exclude_newer.clone(),
@@ -545,6 +630,7 @@ pub async fn resolve_pypi(
         &config_settings,
         deployment_target.as_deref(),
     );
+    let hash_strategy = HashStrategy::default();
     let build_params = UvBuildDispatchParams::new(
         &registry_client,
         &context.cache,
@@ -553,10 +639,11 @@ pub async fn resolve_pypi(
         &dependency_metadata,
         &config_settings,
         &build_options,
-        &HashStrategy::None,
+        &hash_strategy,
     )
     .with_index_strategy(index_strategy)
     .with_exclude_newer(options.exclude_newer.clone())
+    .with_capabilities(context.capabilities.clone())
     .with_workspace_cache(context.workspace_cache.clone())
     // Create a forked shared state that condains the in-memory index.
     // We need two in-memory indexes, one for the build dispatch and one for the
@@ -566,7 +653,7 @@ pub async fn resolve_pypi(
     // The BuildDispatch might resolve or install when building wheels which will be
     // mostly with build isolation. In that case we want to use fresh
     // non-tampered requests.
-    .with_shared_state(context.shared_state.fork())
+    .with_shared_state(context.shared_state.fork().into_inner())
     .with_no_sources(context.no_sources.clone())
     .with_concurrency(context.concurrency.clone())
     .with_link_mode(link_mode)
@@ -599,10 +686,7 @@ pub async fn resolve_pypi(
             CondaPrefixUpdater::builder(
                 group,
                 prefix_platform.clone(),
-                virtual_packages
-                    .into_iter()
-                    .map(GenericVirtualPackage::from)
-                    .collect(),
+                virtual_packages,
                 command_dispatcher,
             )
             .finish()
@@ -646,25 +730,11 @@ pub async fn resolve_pypi(
                 marker: Default::default(),
                 source,
                 groups: Default::default(),
+                scope: Default::default(),
                 origin: None,
             })
         })
-        .collect::<Result<Vec<_>, _>>()
-        .into_diagnostic()?;
-
-    #[derive(Debug, thiserror::Error)]
-    enum PixiPreferencesError {
-        #[error(transparent)]
-        Conversion(#[from] ConversionError),
-        #[error(transparent)]
-        Preference(#[from] PreferenceError),
-
-        #[error(transparent)]
-        OidParse(#[from] uv_git_types::OidParseError),
-
-        #[error(transparent)]
-        GitUrlParse(#[from] uv_git_types::GitUrlParseError),
-    }
+        .collect::<Result<Vec<_>, _>>()?;
 
     // Create preferences from the locked pypi packages
     // This will ensure minimal lock file updates
@@ -708,14 +778,17 @@ pub async fn resolve_pypi(
             Ok(Preference::from_entry(entry)?)
         })
         .filter_map(|pref| pref.transpose())
-        .collect::<Result<Vec<_>, PixiPreferencesError>>()
-        .into_diagnostic()?;
+        .collect::<Result<Vec<_>, PixiPreferencesError>>()?;
 
     let resolver_env = ResolverEnvironment::specific(marker_environment.clone().into());
 
     let constraints = Constraints::from_requirements(constraints.iter().cloned());
 
-    let overrides = Overrides::from_requirements(dependency_overrides);
+    // Pixi does not exclude any dependencies.
+    let modifiers = DependencyModifiers::new(
+        Overrides::from_requirements(dependency_overrides),
+        uv_configuration::Excludes::default(),
+    );
 
     // Wrap the resolution in panic catching to handle conda prefix initialization failures
     // This includes both lookahead resolution and main resolution since both use lazy_build_dispatch
@@ -731,8 +804,8 @@ pub async fn resolve_pypi(
             LookaheadResolver::new(
                 &requirements,
                 &constraints,
-                &overrides,
-                &HashStrategy::None,
+                &modifiers,
+                &hash_strategy,
                 &lookahead_index,
                 DistributionDatabase::new(
                     &registry_client,
@@ -746,15 +819,26 @@ pub async fn resolve_pypi(
             .resolve(&resolver_env),
         )
         .await
-        .into_diagnostic()
-        .map_err(|e| SolveError::LookAhead(e.into()))?;
+        .map_err(|err| match &err {
+            uv_requirements::Error::Dist(_, dist, _)
+                if matches!(
+                    dist.as_ref(),
+                    Dist::Built(BuiltDist::GitPath(_)) | Dist::Source(SourceDist::GitPath(_))
+                ) =>
+            {
+                SolveError::UnsupportedGitArchive {
+                    name: dist.name().to_string(),
+                    source: err,
+                }
+            }
+            _ => SolveError::LookAhead(err),
+        })?;
 
         // Move manifest and provider setup inside catch_unwind
         let manifest = Manifest::new(
             requirements,
             constraints,
-            overrides,
-            uv_configuration::Excludes::default(),
+            modifiers,
             Preferences::from_iter(preferences, &resolver_env),
             None,
             Default::default(),
@@ -778,6 +862,7 @@ pub async fn resolve_pypi(
             &index_locations,
             &build_options,
             &context.capabilities,
+            None,
         );
 
         let provider = CondaResolverProvider {
@@ -808,11 +893,6 @@ pub async fn resolve_pypi(
             provider,
             EmptyInstalledPackages,
         )
-        .into_diagnostic()
-        .context("failed to resolve pypi dependencies")
-        .map_err(|e| SolveError::GeneralPanic {
-            message: format!("Failed to create resolver: {e}"),
-        })?
         .with_reporter(UvReporter::new_arc(
             UvReporterOptions::new().with_existing(pb.clone()),
         ));
@@ -841,8 +921,7 @@ pub async fn resolve_pypi(
             project_root,
             &original_git_references,
         )
-        .await
-        .map_err(|e| SolveError::Locking(e.into()))?;
+        .await?;
 
         let conda_task = lazy_build_dispatch.conda_task;
 
@@ -864,8 +943,7 @@ pub async fn resolve_pypi(
                 return Err(SolveError::BuildDispatchPanic {
                     source: stored_error,
                     help,
-                }
-                .into());
+                });
             } else {
                 // Use the original panic message for general panics
                 let panic_message = if let Some(s) = panic_payload.downcast_ref::<String>() {
@@ -878,8 +956,7 @@ pub async fn resolve_pypi(
 
                 return Err(SolveError::GeneralPanic {
                     message: panic_message,
-                }
-                .into());
+                });
             }
         }
     };
@@ -888,7 +965,7 @@ pub async fn resolve_pypi(
 }
 
 #[derive(Debug, thiserror::Error)]
-enum GetUrlOrPathError {
+pub enum GetUrlOrPathError {
     #[error("expected absolute path found: {path}", path = .0.display())]
     InvalidAbsolutePath(PathBuf),
     #[error("invalid base url: {0}")]
@@ -1011,7 +1088,7 @@ async fn lock_pypi_packages(
     downloads_semaphore: Arc<tokio::sync::Semaphore>,
     abs_project_root: &Path,
     original_git_references: &HashMap<uv_normalize::PackageName, pixi_spec::GitReference>,
-) -> miette::Result<LockedPypiRecords> {
+) -> Result<LockedPypiRecords, LockPypiPackagesError> {
     let mut locked_packages = Vec::with_capacity(resolution.len());
     let database =
         DistributionDatabase::new(registry_client, pixi_build_dispatch, downloads_semaphore);
@@ -1034,17 +1111,15 @@ async fn lock_pypi_packages(
                         location: UrlOrPath,
                         hash: Option<PackageHashes>,
                         index_url: Option<Url>,
-                    ) -> miette::Result<LockedPypiRecord> {
+                    ) -> Result<LockedPypiRecord, LockPypiPackagesError> {
                         let locked_version =
                             pep440_rs::Version::from_str(&metadata.version.to_string())
-                                .into_diagnostic()
-                                .context("cannot convert version")?;
+                                .map_err(LockPypiPackagesError::Version)?;
                         Ok(
                             UnresolvedPypiRecord::from(PypiPackageData::Distribution(Box::new(
                                 PypiDistributionData {
                                     name: pep508_rs::PackageName::new(metadata.name.to_string())
-                                        .into_diagnostic()
-                                        .context("cannot convert name")?,
+                                        .map_err(LockPypiPackagesError::Name)?,
                                     hash,
                                     index_url,
                                     location: Verbatim::new(location),
@@ -1052,12 +1127,10 @@ async fn lock_pypi_packages(
                                     requires_python: metadata
                                         .requires_python
                                         .map(|r| to_version_specifiers(&r))
-                                        .transpose()
-                                        .into_diagnostic()?,
+                                        .transpose()?,
                                     requires_dist: convert_uv_requirements_to_pep508(
                                         metadata.requires_dist.iter(),
-                                    )
-                                    .into_diagnostic()?,
+                                    )?,
                                 },
                             )))
                             .lock(locked_version),
@@ -1065,36 +1138,32 @@ async fn lock_pypi_packages(
                     }
 
                     let metadata = registry_client
-                        .wheel_metadata(dist, index_capabilities)
+                        .wheel_metadata(dist, pixi_build_dispatch.git(), index_capabilities, None)
                         .await
-                        .into_diagnostic()
-                        .wrap_err("cannot get wheel metadata")?;
+                        .map_err(LockPypiPackagesError::WheelMetadata)?;
 
                     match &dist {
                         BuiltDist::Registry(dist) => {
                             let best_wheel = dist.best_wheel();
                             let hash = parse_hashes_from_hash_vec(&dist.best_wheel().file.hashes)
-                                .into_diagnostic()
-                                .context("cannot parse hashes for registry dist")?;
+                                .map_err(LockPypiPackagesError::RegistryDistHashes)?;
                             let url_or_path = get_url_or_path(
                                 &best_wheel.index,
                                 &best_wheel.file.url,
                                 abs_project_root,
                             )
-                            .into_diagnostic()
-                            .context("cannot convert registry dist")?;
+                            .map_err(LockPypiPackagesError::RegistryDistLocation)?;
                             locked_packages.push(wheel(
                                 metadata,
                                 url_or_path,
                                 hash,
-                                Some((*best_wheel.index).clone()),
+                                Some((*best_wheel.index).clone().into_unsafe_url()),
                             )?);
                         }
                         BuiltDist::DirectUrl(dist) => {
                             let url = dist.url.to_url();
                             let direct_url = Url::parse(&format!("direct+{url}"))
-                                .into_diagnostic()
-                                .context("cannot create direct url")?;
+                                .map_err(LockPypiPackagesError::DirectUrl)?;
 
                             locked_packages.push(wheel(
                                 metadata,
@@ -1108,12 +1177,16 @@ async fn lock_pypi_packages(
                                 metadata,
                                 UrlOrPath::Path(
                                     WorkspaceAnchor::new(abs_project_root)
-                                        .given_for_location(&dist.url, &dist.install_path)
-                                        .into_diagnostic()?,
+                                        .given_for_location(&dist.url, &dist.install_path)?,
                                 ),
                                 None,
                                 None,
                             )?);
+                        }
+                        BuiltDist::GitPath(_) => {
+                            return Err(LockPypiPackagesError::UnsupportedGitArchive(
+                                dist.name().to_string(),
+                            ));
                         }
                     }
                 }
@@ -1124,17 +1197,15 @@ async fn lock_pypi_packages(
                         hash: Option<PackageHashes>,
                         index_url: Option<Url>,
                         anchor: &WorkspaceAnchor<'_>,
-                    ) -> miette::Result<LockedPypiRecord> {
+                    ) -> Result<LockedPypiRecord, LockPypiPackagesError> {
                         let locked_version =
                             pep440_rs::Version::from_str(&metadata.version.to_string())
-                                .into_diagnostic()
-                                .context("cannot convert version")?;
+                                .map_err(LockPypiPackagesError::Version)?;
                         Ok(
                             UnresolvedPypiRecord::from(PypiPackageData::Distribution(Box::new(
                                 PypiDistributionData {
                                     name: pep508_rs::PackageName::new(metadata.name.to_string())
-                                        .into_diagnostic()
-                                        .context("cannot convert name")?,
+                                        .map_err(LockPypiPackagesError::Name)?,
                                     hash,
                                     index_url,
                                     location: Verbatim::new(location),
@@ -1142,35 +1213,34 @@ async fn lock_pypi_packages(
                                     requires_python: metadata
                                         .requires_python
                                         .map(|r| to_version_specifiers(&r))
-                                        .transpose()
-                                        .into_diagnostic()?,
+                                        .transpose()?,
                                     requires_dist: to_requirements_relative_to(
                                         metadata.requires_dist.iter(),
                                         Some(anchor),
-                                    )
-                                    .into_diagnostic()?,
+                                    )?,
                                 },
                             )))
                             .lock(locked_version),
                         )
                     }
-                    // Handle new hash stuff
-                    let hash = source
-                        .file()
+                    // Only registry source distributions carry file hashes.
+                    let source_file = match source {
+                        SourceDist::Registry(reg) => Some(&reg.file),
+                        _ => None,
+                    };
+                    let hash = source_file
                         .and_then(|file| {
                             parse_hashes_from_hash_vec(&file.hashes)
-                                .into_diagnostic()
-                                .context("cannot parse hashes for sdist")
+                                .map_err(LockPypiPackagesError::SdistHashes)
                                 .transpose()
                         })
                         .transpose()?;
 
                     let metadata_response = Box::pin(database.get_or_build_wheel_metadata(
                         &Dist::Source(source.clone()),
-                        HashPolicy::None,
+                        MetadataHashPolicy::default(),
                     ))
-                    .await
-                    .into_diagnostic()?;
+                    .await?;
                     let metadata = metadata_response.metadata;
                     let anchor = WorkspaceAnchor::new(abs_project_root);
 
@@ -1181,10 +1251,9 @@ async fn lock_pypi_packages(
                             locked_packages.push(wheel(
                                 metadata,
                                 get_url_or_path(&reg.index, &reg.file.url, abs_project_root)
-                                    .into_diagnostic()
-                                    .context("cannot convert registry sdist")?,
+                                    .map_err(LockPypiPackagesError::RegistrySdistLocation)?,
                                 hash,
-                                Some((*reg.index).clone()),
+                                Some((*reg.index).clone().into_unsafe_url()),
                                 &anchor,
                             )?);
                         }
@@ -1193,15 +1262,14 @@ async fn lock_pypi_packages(
                             locked_packages.push(wheel(
                                 metadata,
                                 Url::parse(&format!("direct+{url}"))
-                                    .into_diagnostic()
-                                    .context("could not create direct-url")?
+                                    .map_err(LockPypiPackagesError::DirectUrl)?
                                     .into(),
                                 hash,
                                 None,
                                 &anchor,
                             )?);
                         }
-                        SourceDist::Git(git) => {
+                        SourceDist::GitDirectory(git) => {
                             // Look up the original git reference from the manifest dependencies
                             // to preserve branch/tag info that uv normalizes away
                             let package_name = git.name.clone();
@@ -1224,9 +1292,8 @@ async fn lock_pypi_packages(
                             // Satisfiability check uses metadata comparison instead.
                             let hash = None;
 
-                            let install_path = anchor
-                                .given_for_location(&path.url, &path.install_path)
-                                .into_diagnostic()?;
+                            let install_path =
+                                anchor.given_for_location(&path.url, &path.install_path)?;
 
                             let url_or_path = UrlOrPath::Path(install_path);
                             locked_packages.push(wheel(
@@ -1238,9 +1305,8 @@ async fn lock_pypi_packages(
                             )?);
                         }
                         SourceDist::Directory(dir) => {
-                            let install_path = anchor
-                                .given_for_location(&dir.url, &dir.install_path)
-                                .into_diagnostic()?;
+                            let install_path =
+                                anchor.given_for_location(&dir.url, &dir.install_path)?;
 
                             // Anchor `given` to `install_path`, not `dir.url.given()`: when this
                             // package was pulled in via another package's `[tool.uv.sources]`,
@@ -1254,32 +1320,33 @@ async fn lock_pypi_packages(
                             );
                             let locked_version =
                                 pep440_rs::Version::from_str(&metadata.version.to_string())
-                                    .into_diagnostic()
-                                    .context("cannot convert version")?;
+                                    .map_err(LockPypiPackagesError::Version)?;
                             locked_packages.push(
                                 UnresolvedPypiRecord::from(PypiPackageData::Source(Box::new(
                                     PypiSourceData {
                                         name: pep508_rs::PackageName::new(
                                             metadata.name.to_string(),
                                         )
-                                        .into_diagnostic()
-                                        .context("cannot convert name")?,
+                                        .map_err(LockPypiPackagesError::Name)?,
                                         location,
                                         requires_python: metadata
                                             .requires_python
                                             .map(|r| to_version_specifiers(&r))
-                                            .transpose()
-                                            .into_diagnostic()?,
+                                            .transpose()?,
                                         requires_dist: to_requirements_relative_to(
                                             metadata.requires_dist.iter(),
                                             Some(&anchor),
-                                        )
-                                        .into_diagnostic()?,
+                                        )?,
                                         source_data: SourceData::default(),
                                     },
                                 )))
                                 .lock(locked_version),
                             );
+                        }
+                        SourceDist::GitPath(_) => {
+                            return Err(LockPypiPackagesError::UnsupportedGitArchive(
+                                source.name().to_string(),
+                            ));
                         }
                     };
                 }

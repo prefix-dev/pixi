@@ -16,7 +16,6 @@ build:
   always_copy_files: []
   always_include_files: []
   merge_build_and_host_envs: false
-  files: []
   dynamic_linking:
     rpaths: []
     binary_relocation: true
@@ -57,6 +56,8 @@ requirements:
     - coreutils
     - "${{ compiler('c') }}"
     - "${{ compiler('cxx') }}"
+    - if: build_platform != target_platform
+      then: "cross-python_${{ target_platform }}"
   host:
     - ros-noetic-catkin
     - ros-noetic-ros-package <=2.0.0
@@ -73,6 +74,7 @@ requirements:
     - numpy
     - pip
     - pkg-config
+    - setuptools
     - ros-distro-mutex
   run:
     - ros-noetic-ros-package <=2.0.0

@@ -146,6 +146,7 @@ nav = [
           { "Conda Deny" = "integration/third_party/conda_deny.md" },
           { "Direnv" = "integration/third_party/direnv.md" },
           { "Starship" = "integration/third_party/starship.md" },
+          { "Tombi" = "integration/third_party/tombi.md" },
         ]
       },
     ]
@@ -202,6 +203,17 @@ nav = [
               "reference/cli/pixi/global/index.md",
               { "add" = "reference/cli/pixi/global/add.md" },
               { "edit" = "reference/cli/pixi/global/edit.md" },
+              {
+                "exclude-newer" = [
+                  "reference/cli/pixi/global/exclude-newer/index.md",
+                  { "get" = "reference/cli/pixi/global/exclude-newer/get.md" },
+                  { "set" = "reference/cli/pixi/global/exclude-newer/set.md" },
+                  { "unset" = "reference/cli/pixi/global/exclude-newer/unset.md" },
+                  { "exempt" = "reference/cli/pixi/global/exclude-newer/exempt.md" },
+                  { "unexempt" = "reference/cli/pixi/global/exclude-newer/unexempt.md" },
+                  { "prune" = "reference/cli/pixi/global/exclude-newer/prune.md" },
+                ]
+              },
               { "install" = "reference/cli/pixi/global/install.md" },
               { "uninstall" = "reference/cli/pixi/global/uninstall.md" },
               { "remove" = "reference/cli/pixi/global/remove.md" },
@@ -340,6 +352,17 @@ nav = [
                 ]
               },
               {
+                "exclude-newer" = [
+                  "reference/cli/pixi/workspace/exclude-newer/index.md",
+                  { "get" = "reference/cli/pixi/workspace/exclude-newer/get.md" },
+                  { "set" = "reference/cli/pixi/workspace/exclude-newer/set.md" },
+                  { "unset" = "reference/cli/pixi/workspace/exclude-newer/unset.md" },
+                  { "exempt" = "reference/cli/pixi/workspace/exclude-newer/exempt.md" },
+                  { "unexempt" = "reference/cli/pixi/workspace/exclude-newer/unexempt.md" },
+                  { "prune" = "reference/cli/pixi/workspace/exclude-newer/prune.md" },
+                ]
+              },
+              {
                 "feature" = [
                   "reference/cli/pixi/workspace/feature/index.md",
                   { "list" = "reference/cli/pixi/workspace/feature/list.md" },
@@ -391,6 +414,7 @@ nav = [
       },
       # End of generated CLI nav.
       { "Environment Variables" = "reference/environment_variables.md" },
+      { "Telemetry" = "reference/telemetry.md" },
     ]
   },
   {
@@ -499,16 +523,12 @@ icon = "fontawesome/brands/mastodon"
 link = "https://hachyderm.io/@prefix"
 
 [[project.extra.social]]
-icon = "fontawesome/brands/bluesky"
-link = "https://bsky.app/profile/prefix.dev"
-
-[[project.extra.social]]
 icon = "fontawesome/brands/linkedin"
 link = "https://www.linkedin.com/company/prefix-dev"
 
 [[project.extra.social]]
-icon = "fontawesome/brands/twitter"
-link = "https://twitter.com/prefix_dev"
+icon = "fontawesome/brands/x-twitter"
+link = "https://x.com/prefix_dev"
 
 # Enables the version selector, populated by mike's versions.json
 [project.extra.version]

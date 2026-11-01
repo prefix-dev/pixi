@@ -30,7 +30,7 @@ use pixi_spec_containers::DependencyMap;
 use pixi_test_utils::format_diagnostic;
 use pixi_utils::variants::VariantConfig;
 use rattler_conda_types::{
-    ChannelUrl, GenericVirtualPackage, PackageName, Platform, prefix::Prefix,
+    ChannelUrl, GenericVirtualPackage, MatchSpec, PackageName, Subdir, prefix::Prefix,
 };
 use rattler_virtual_packages::{VirtualPackageOverrides, VirtualPackages};
 use url::Url;
@@ -147,9 +147,9 @@ fn default_cache_dirs() -> CacheDirs {
 /// Specifically, it normalizes `WinArm64` to `Win64` to increase compatibility.
 /// TODO: Once conda-forge supports `WinArm64`, we can remove this
 /// normalization.
-fn tool_platform() -> (Platform, Vec<GenericVirtualPackage>) {
-    let platform = match Platform::current() {
-        Platform::WinArm64 => Platform::Win64,
+fn tool_platform() -> (Subdir, Vec<GenericVirtualPackage>) {
+    let platform = match Subdir::current().unwrap_or(Subdir::NoArch) {
+        Subdir::WinArm64 => Subdir::Win64,
         platform => platform,
     };
     let virtual_packages = VirtualPackages::detect(&VirtualPackageOverrides::default(), None)
@@ -398,7 +398,6 @@ pub async fn instantiate_backend_with_compatible_api_version_honors_exclude_newe
         .unwrap();
     let channel_dir = root_dir.join("tests/data/channels/channels/backend_channel_1");
     let channel_url = Url::from_directory_path(channel_dir).unwrap().into();
-    let allowed_cutoff = "2026-12-31T00:00:00Z".parse().unwrap();
 
     let tempdir = test_tempdir();
     let dispatcher = CommandDispatcher::builder()
@@ -410,11 +409,12 @@ pub async fn instantiate_backend_with_compatible_api_version_honors_exclude_newe
         .instantiate_tool_environment(InstantiateToolEnvironmentSpec {
             exclude_newer: Some(
                 ResolvedExcludeNewer::from_datetime("2025-01-01T00:00:00Z".parse().unwrap())
-                    .with_package_cutoff(backend_name.clone(), allowed_cutoff)
-                    .with_package_cutoff(
-                        PackageName::new_unchecked("pixi-build-api-version"),
-                        allowed_cutoff,
-                    ),
+                    .with_exemption(MatchSpec::from(backend_name.clone()))
+                    .unwrap()
+                    .with_exemption(MatchSpec::from(PackageName::new_unchecked(
+                        "pixi-build-api-version",
+                    )))
+                    .unwrap(),
             ),
             ..InstantiateToolEnvironmentSpec::new(
                 backend_name,
@@ -603,7 +603,7 @@ pub async fn test_cycle() {
                 }
                 .into(),
             )]),
-            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
             ..empty_pixi_env_spec()
         },
     )
@@ -654,7 +654,7 @@ pub async fn test_cycle_three_packages() {
                 }
                 .into(),
             )]),
-            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
             ..empty_pixi_env_spec()
         },
     )
@@ -698,7 +698,7 @@ pub async fn test_unsolvable_build_environment_names_package() {
                 }
                 .into(),
             )]),
-            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
             ..empty_pixi_env_spec()
         },
     )
@@ -744,7 +744,7 @@ pub async fn test_unsolvable_backend_names_package() {
                 }
                 .into(),
             )]),
-            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
             ..empty_pixi_env_spec()
         },
     )
@@ -808,7 +808,7 @@ pub async fn test_run_export_on_source_host_dependency() {
                 }
                 .into(),
             )]),
-            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
             ..empty_pixi_env_spec()
         },
     )
@@ -878,7 +878,7 @@ pub async fn test_manifest_noarch_run_export_propagates_to_noarch_consumer() {
                 }
                 .into(),
             )]),
-            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
             ..empty_pixi_env_spec()
         },
     )
@@ -945,7 +945,7 @@ pub async fn test_manifest_weak_run_export_propagates_from_host_dependency() {
                 }
                 .into(),
             )]),
-            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
             ..empty_pixi_env_spec()
         },
     )
@@ -1017,7 +1017,7 @@ pub async fn test_manifest_pin_compatible_resolves_against_host_env() {
                 }
                 .into(),
             )]),
-            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
             ..empty_pixi_env_spec()
         },
     )
@@ -1079,7 +1079,7 @@ pub async fn test_manifest_pin_subpackage_run_export_pins_exporter() {
                 }
                 .into(),
             )]),
-            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
             ..empty_pixi_env_spec()
         },
     )
@@ -1134,7 +1134,7 @@ pub async fn test_manifest_strong_run_export_propagates_from_build_dependency() 
                 }
                 .into(),
             )]),
-            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
             ..empty_pixi_env_spec()
         },
     )
@@ -1232,9 +1232,9 @@ async fn solve_cross_build_dependency(
     let channel_dir = cargo_workspace_dir().join("tests/data/channels/channels/dummy_channel_1");
     let channel: ChannelUrl = Url::from_directory_path(&channel_dir).unwrap().into();
     let build_environment = BuildEnvironment {
-        host_platform: Platform::OsxArm64,
+        host_platform: Subdir::OsxArm64,
         host_virtual_packages: vec![],
-        build_platform: Platform::Linux64,
+        build_platform: Subdir::Linux64,
         build_virtual_packages: vec![],
     };
     let (installed, installed_source_hints) = installed_with_hints(installed);
@@ -1354,7 +1354,7 @@ fn build_string(packages: &[pixi_record::UnresolvedPixiRecord], name: &str) -> S
         .unwrap_or_else(|| panic!("{name} should be a binary dependency"))
         .package_record
         .build
-        .clone()
+        .to_string()
 }
 
 /// A package can receive the same source dependency through two channels at
@@ -1404,7 +1404,7 @@ pub async fn test_run_export_implied_source_yields_to_explicit_spelling() {
                 }
                 .into(),
             )]),
-            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Platform::Linux64, vec![])),
+            env_ref: env_ref_of(vec![], BuildEnvironment::simple(Subdir::Linux64, vec![])),
             ..empty_pixi_env_spec()
         },
     )
@@ -3571,8 +3571,8 @@ pub async fn test_prefix_platform_mismatch_is_reported_before_installing() {
     // Cross-install so the generic "retry without --platform" hint would
     // apply; the specific error must stand on its own.
     let target_platform = match tool_platform {
-        Platform::OsxArm64 => Platform::Linux64,
-        _ => Platform::OsxArm64,
+        Subdir::OsxArm64 => Subdir::Linux64,
+        _ => Subdir::OsxArm64,
     };
     let build_env = BuildEnvironment::simple(target_platform, vec![]);
 
@@ -3604,7 +3604,7 @@ pub async fn test_prefix_platform_mismatch_is_reported_before_installing() {
     let mut smuggled = PackageRecord::new(
         PackageName::new_unchecked("libfoo"),
         "1.0.0".parse::<VersionWithSource>().unwrap(),
-        "h0".into(),
+        "h0".parse().unwrap(),
     );
     smuggled.subdir = tool_platform.to_string();
     let smuggled = RepoDataRecord {

@@ -1,11 +1,11 @@
 use std::str::FromStr;
 use url::Url;
 use uv_pep508::VerbatimUrl;
-use uv_redacted::DisplaySafeUrl;
+use uv_redacted::SafeUrl;
 
 /// Percent-encode the colon after a Windows drive letter in a `file://` URL,
 /// e.g. `file:///C:/path/@<sha>` -> `file:///C%3A/path/@<sha>`, so uv's
-/// `DisplaySafeUrl::parse` does not reject it as ambiguous credentials.
+/// `SafeUrl::parse` does not reject it as ambiguous credentials.
 fn encode_windows_drive_letter(url: &Url) -> Url {
     if url.scheme() != "file" {
         return url.clone();
@@ -114,20 +114,20 @@ impl GitUrlWithPrefix {
         }
     }
 
-    /// Convert to DisplaySafeUrl without git+ prefix
-    pub fn to_display_safe_url(&self) -> DisplaySafeUrl {
-        DisplaySafeUrl::from_url(encode_windows_drive_letter(&self.base_url))
+    /// Convert to SafeUrl without git+ prefix
+    pub fn to_display_safe_url(&self) -> SafeUrl {
+        SafeUrl::from_url(encode_windows_drive_letter(&self.base_url))
     }
 
     /// Convert to VerbatimUrl (preserving git+ prefix)
-    pub fn to_verbatim_url(&self) -> Result<VerbatimUrl, uv_redacted::DisplaySafeUrlError> {
+    pub fn to_verbatim_url(&self) -> Result<VerbatimUrl, uv_redacted::SafeUrlError> {
         let encoded = encode_windows_drive_letter(&self.base_url);
         let with_prefix = if self.has_git_plus {
             format!("git+{encoded}")
         } else {
             encoded.to_string()
         };
-        let display_safe_url = DisplaySafeUrl::parse(&with_prefix)?;
+        let display_safe_url = SafeUrl::parse(&with_prefix)?;
         Ok(VerbatimUrl::from_url(display_safe_url))
     }
 
