@@ -333,11 +333,6 @@ If you want to use PowerShell, you need to read the script file and evaluate its
 
 1. everything here will be run inside of the pixi environment
 
-!!!warning "Don't use `pwsh -Command {0}` or `pwsh -File {0}`"
-    GitHub Actions only adds the `.ps1` extension to the temporary script file when the shell command starts with `pwsh`.
-    Without that extension, `shell: pixi run pwsh -Command {0}` doesn't run the script as PowerShell. It tries to open the file as a program, and on most runners the step passes without running anything.
-    `shell: pixi run pwsh -File {0}` works on Linux and macOS but fails on Windows because the file has no `.ps1` extension.
-
 !!!note "How does it work under the hood?"
     Under the hood, the `shell: xyz {0}` option is implemented by creating a temporary script file and calling `xyz` with that script file as an argument.
     This file does not have the executable bit set, so you cannot use `shell: pixi run {0}` directly but instead have to use `shell: pixi run bash {0}`.
