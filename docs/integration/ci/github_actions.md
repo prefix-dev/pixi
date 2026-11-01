@@ -524,10 +524,6 @@ Its content must be valid TOML and is written verbatim to `$PIXI_HOME/config.tom
       run-post-link-scripts = "insecure"
 ```
 
-!!! note
-    `setup-pixi` refuses to overwrite an existing configuration file and fails if `$PIXI_HOME/config.toml` already exists.
-    If `post-cleanup` is enabled, the configuration file is removed again in the post step.
-
 ### Download pixi from a custom URL
 
 You can also download pixi from a custom URL by setting the `pixi-url` input argument.
