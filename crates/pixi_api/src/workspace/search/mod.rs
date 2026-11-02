@@ -34,6 +34,7 @@ pub async fn search(
     channels: IndexSet<Channel>,
     platforms: Vec<Subdir>,
     fuzzy_limit: Option<usize>,
+    ignore_cache: bool,
 ) -> miette::Result<SearchResult> {
     let client = if let Some(workspace) = workspace {
         workspace.authenticated_client()?.clone()
@@ -41,7 +42,19 @@ pub async fn search(
         build_lazy_reqwest_clients(Some(&config), None)?.1
     };
 
-    let gateway = config.gateway().with_client(client).finish();
+    let mut channel_config = rattler_repodata_gateway::ChannelConfig::from(&config);
+    if ignore_cache {
+        channel_config.default.cache_action = rattler_repodata_gateway::fetch::CacheAction::NoCache;
+        for cfg in channel_config.per_channel.values_mut() {
+            cfg.cache_action = rattler_repodata_gateway::fetch::CacheAction::NoCache;
+        }
+    }
+
+    let gateway = config
+        .gateway()
+        .with_client(client)
+        .with_channel_config(channel_config)
+        .finish();
 
     let run_query = |specs: Vec<MatchSpec>| {
         let gateway = &gateway;
