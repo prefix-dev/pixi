@@ -176,7 +176,15 @@ fn merge_locations(locations: Vec<ConfigLocation>, lenient: bool) -> Result<Conf
 
 /// Logs a config file that failed to load and is skipped.
 fn log_skipped(error: ConfigError) {
-    tracing::error!("{:?}", miette::Report::new(error));
+    let chain = std::iter::successors(Some(&error as &dyn std::error::Error), |e| e.source())
+        .format(": ")
+        .to_string();
+    // TOML parse errors end with a newline.
+    let chain = chain.trim_end();
+    match miette::Diagnostic::help(&error) {
+        Some(help) => tracing::error!("{chain}\n  help: {help}"),
+        None => tracing::error!("{chain}"),
+    }
 }
 
 /// Layers env-derived CLI defaults on top, so process-env changes still apply.
