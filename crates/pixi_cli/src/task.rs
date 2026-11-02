@@ -21,7 +21,7 @@ use serde_with::serde_as;
 
 use pixi_core::{
     Workspace, WorkspaceLocator,
-    workspace::{Environment, virtual_packages::EnvironmentRunnability},
+    workspace::{Environment, EnvironmentFromNameError, virtual_packages::EnvironmentRunnability},
 };
 
 use crate::{
@@ -421,7 +421,7 @@ async fn list_tasks(
         .transpose()?;
 
     if args.json {
-        return print_tasks_json(workspace_ctx.workspace());
+        return print_tasks_json(workspace_ctx.workspace(), environment);
     }
 
     let tasks_per_env = workspace_ctx.list_tasks(environment).await?;
@@ -500,8 +500,19 @@ async fn remove_tasks(
     Ok(())
 }
 
-fn print_tasks_json(project: &Workspace) -> miette::Result<()> {
-    let env_feature_task_map: Vec<EnvTasks> = build_env_feature_task_map(project);
+fn print_tasks_json(
+    project: &Workspace,
+    environment: Option<EnvironmentName>,
+) -> miette::Result<()> {
+    let env_feature_task_map: Vec<EnvTasks> = match environment {
+        Some(name) => {
+            let env = project
+                .environment(&name)
+                .ok_or(EnvironmentFromNameError::Unknown(name))?;
+            vec![EnvTasks::from(&env)]
+        }
+        None => build_env_feature_task_map(project),
+    };
 
     let json_string =
         serde_json::to_string_pretty(&env_feature_task_map).expect("Failed to serialize tasks");

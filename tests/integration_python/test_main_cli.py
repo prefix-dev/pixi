@@ -1504,6 +1504,33 @@ def test_pixi_task_list_invalid_environment_name(pixi: Path, tmp_pixi_workspace:
         )
 
 
+def test_pixi_task_list_json_environment(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """`--json` lists only the environment passed with `-e`."""
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = """
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+
+        [feature.a.tasks]
+        foo = "echo foo"
+
+        [environments]
+        a = ["a"]
+        """
+    manifest.write_text(toml)
+    result = verify_cli_command(
+        [pixi, "task", "list", "--json", "-e", "a", "--manifest-path", manifest]
+    )
+    assert [env["environment"] for env in json.loads(result.stdout)] == ["a"]
+    verify_cli_command(
+        [pixi, "task", "list", "--json", "-e", "nope", "--manifest-path", manifest],
+        expected_exit_code=ExitCode.FAILURE,
+        stderr_contains="unknown environment 'nope'",
+    )
+
+
 def test_pixi_add_alias(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = """
