@@ -20,7 +20,7 @@ use std::{
 };
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use itertools::{Either, Itertools};
+use itertools::Either;
 use miette::Diagnostic;
 use pixi_compute_engine::{ComputeCtx, DataStore, Key};
 use pixi_record::PixiRecord;
@@ -147,23 +147,32 @@ impl EphemeralEnvSpec {
 /// Wraps the spec in an [`Arc`] so dedup hits and subscribers clone
 /// cheaply. Construct with [`EphemeralEnvKey::new`].
 #[derive(Clone, Debug)]
-pub struct EphemeralEnvKey(pub Arc<EphemeralEnvSpec>);
+pub struct EphemeralEnvKey {
+    spec: Arc<EphemeralEnvSpec>,
+    /// Describes the environment in progress reports. Not part of the key's
+    /// identity: requests for an equal spec share one environment, labelled
+    /// by whichever request came first.
+    label: Arc<str>,
+}
 
 impl EphemeralEnvKey {
-    pub fn new(spec: EphemeralEnvSpec) -> Self {
-        Self(Arc::new(spec))
+    pub fn new(spec: EphemeralEnvSpec, label: impl Into<Arc<str>>) -> Self {
+        Self {
+            spec: Arc::new(spec),
+            label: label.into(),
+        }
     }
 }
 
 impl Hash for EphemeralEnvKey {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.0.hash(state);
+        self.spec.hash(state);
     }
 }
 
 impl PartialEq for EphemeralEnvKey {
     fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.0, &other.0) || *self.0 == *other.0
+        Arc::ptr_eq(&self.spec, &other.spec) || *self.spec == *other.spec
     }
 }
 
@@ -171,7 +180,7 @@ impl Eq for EphemeralEnvKey {}
 
 impl fmt::Display for EphemeralEnvKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0.cache_key())
+        write!(f, "{}", self.spec.cache_key())
     }
 }
 
@@ -224,7 +233,7 @@ impl Key for EphemeralEnvKey {
     type Value = Result<Arc<InstalledEphemeralEnv>, Arc<EphemeralEnvError>>;
 
     async fn compute(&self, ctx: &mut ComputeCtx) -> Self::Value {
-        let spec: &EphemeralEnvSpec = &self.0;
+        let spec: &EphemeralEnvSpec = &self.spec;
 
         // Cross-process fast path: ephemeral env prefixes are
         // content-addressed by `spec.cache_key()`, so an existing
@@ -281,17 +290,8 @@ impl Key for EphemeralEnvKey {
         .await
         .map_err(|err| Arc::new(EphemeralEnvError::CacheIndex(Arc::new(err))))?;
 
-        // Every ephemeral environment is currently a build backend
-        // (`InstantiateBackendKey` and
-        // `CommandDispatcher::instantiate_tool_environment`), so label the
-        // solve as one for the progress reporter.
-        let name = spec
-            .dependencies
-            .names()
-            .map(PackageName::as_source)
-            .join(", ");
         let solve_spec = SolveCondaEnvironmentSpec {
-            name: Some(format!("build backend: {name}")),
+            name: Some(self.label.to_string()),
             source_specs: DependencyMap::default(),
             binary_specs,
             constraints: spec.constraints.clone(),
