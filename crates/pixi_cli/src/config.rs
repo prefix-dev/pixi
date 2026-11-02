@@ -961,11 +961,40 @@ fn render_describe(
     json: bool,
 ) -> Result<String, DescribeError> {
     let descriptions = config.describe_keys();
+    let doc = toml_edit::ser::to_string_pretty(config)?.parse::<toml_edit::DocumentMut>()?;
+    // A key with a placeholder segment is listed once per configured name,
+    // e.g. once per bucket for `s3-options.<bucket>.region`. With nothing
+    // configured, it is listed as-is with no value to show.
     let as_listed = |opt: &'static pixi_config::ConfigOptionDescription| {
-        // Keys with a placeholder segment have no single value to show.
-        let path =
-            (!opt.key.contains('<')).then(|| opt.key.split('.').map(str::to_string).collect());
-        (opt, opt.key.to_string(), path)
+        let segments: Vec<String> = opt.key.split('.').map(str::to_string).collect();
+        let Some(placeholder) = segments.iter().position(|s| s.starts_with('<')) else {
+            return vec![(opt, opt.key.to_string(), Some(segments))];
+        };
+        let (parents, rest) = (&segments[..placeholder], &segments[placeholder + 1..]);
+        let names: Vec<String> = lookup_path(doc.as_table(), parents)
+            .and_then(toml_edit::Item::as_table_like)
+            .map(|table| table.iter().map(|(name, _)| name.to_string()).collect())
+            .unwrap_or_default();
+        if names.is_empty() {
+            return vec![(opt, opt.key.to_string(), None)];
+        }
+        names
+            .into_iter()
+            .map(|name| {
+                let path: Vec<String> = parents
+                    .iter()
+                    .cloned()
+                    .chain(once(name))
+                    .chain(rest.iter().cloned())
+                    .collect();
+                let display = path
+                    .iter()
+                    .map(|segment| Key::new(segment.as_str()).display_repr().into_owned())
+                    .collect::<Vec<_>>()
+                    .join(".");
+                (opt, display, Some(path))
+            })
+            .collect()
     };
 
     // Each selected option is paired with the name to display and the path to
@@ -978,7 +1007,7 @@ fn render_describe(
     )> = if let Some(k) = key_filter {
         if let Some(opt) = descriptions.iter().find(|opt| opt.key == k) {
             // Keys copied from the listing, placeholders included, match as-is.
-            vec![as_listed(opt)]
+            as_listed(opt)
         } else {
             let keys = Key::parse(k).map_err(|source| DescribeError::InvalidKey {
                 key: k.to_string(),
@@ -1020,10 +1049,9 @@ fn render_describe(
             matches
         }
     } else {
-        descriptions.iter().map(as_listed).collect()
+        descriptions.iter().flat_map(as_listed).collect()
     };
 
-    let doc = toml_edit::ser::to_string_pretty(config)?.parse::<toml_edit::DocumentMut>()?;
     let lookup = |path: &Option<Vec<String>>| {
         path.as_ref()
             .and_then(|path| lookup_path(doc.as_table(), path))

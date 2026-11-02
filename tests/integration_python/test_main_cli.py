@@ -1064,7 +1064,7 @@ def test_config_describe(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: 
     assert parsed[0]["value"] is True
 
     # Per-bucket keys can be described by a concrete bucket name or by the
-    # placeholder shown in the listing.
+    # placeholder shown in the listing, which expands to each configured bucket.
     verify_cli_command(
         [
             pixi,
@@ -1101,7 +1101,8 @@ def test_config_describe(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: 
             "--manifest-path",
             manifest_path,
         ],
-        stdout_contains=["# s3-options.<bucket>.region = (unset)"],
+        stdout_contains=['s3-options.my-bucket.region = "eu-west-1"'],
+        stdout_excludes=["<bucket>.region ="],
     )
 
     verify_cli_command(
