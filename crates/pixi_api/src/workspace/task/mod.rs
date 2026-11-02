@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    error::Error,
+};
 
 use fancy_display::FancyDisplay;
 use miette::Diagnostic;
@@ -92,7 +95,8 @@ fn declare_platform_and_add_task(
     Ok(())
 }
 
-pub async fn list_tasks(
+pub async fn list_tasks<I: Interface>(
+    interface: &I,
     workspace: &Workspace,
     environment: Option<EnvironmentName>,
 ) -> Result<HashMap<EnvironmentName, (EnvironmentRunnability, HashMap<TaskName, Task>)>, TaskError>
@@ -110,7 +114,13 @@ pub async fn list_tasks(
     let lock_file = match workspace.load_lock_file().await {
         Ok(result) => Some(result.into_lock_file_or_empty_with_warning()),
         Err(err) => {
-            tracing::warn!("{:?}", miette::Report::from(err));
+            let mut message = err.to_string();
+            let mut source = err.source();
+            while let Some(cause) = source {
+                message.push_str(&format!(": {cause}"));
+                source = cause.source();
+            }
+            interface.warning(&message).await;
             None
         }
     };

@@ -573,7 +573,7 @@ impl<I: Interface> WorkspaceContext<I> {
         HashMap<EnvironmentName, (EnvironmentRunnability, HashMap<TaskName, Task>)>,
         TaskError,
     > {
-        crate::workspace::task::list_tasks(&self.workspace, environment).await
+        crate::workspace::task::list_tasks(&self.interface, &self.workspace, environment).await
     }
 
     pub async fn add_task(
