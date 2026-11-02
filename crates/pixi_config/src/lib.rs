@@ -1816,6 +1816,25 @@ fn invalid_value<E: std::error::Error + Send + Sync + 'static>(
     }
 }
 
+impl SetConfigError {
+    /// The error of `rattler_config` editing the key `key` inside
+    /// `exclude-newer`. An invalid value keeps only its source, as
+    /// `rattler_config` repeats the source in its own message.
+    pub fn from_exclude_newer_edit(
+        key: &str,
+        error: rattler_config::edit::ConfigEditError,
+    ) -> Self {
+        let source = match error {
+            rattler_config::edit::ConfigEditError::InvalidValue { source, .. } => source,
+            error => Box::new(error),
+        };
+        SetConfigError::InvalidValue {
+            key: key.to_string(),
+            source,
+        }
+    }
+}
+
 fn parse_opt<T: FromStr>(value: Option<String>, key: &str) -> Result<Option<T>, SetConfigError>
 where
     T::Err: std::error::Error + Send + Sync + 'static,
@@ -2548,10 +2567,7 @@ impl Config {
                 rattler_config::edit::set_exclude_newer(&mut self.exclude_newer, key, value)
                     .map_err(|source| match source {
                         rattler_config::edit::ConfigEditError::UnknownKey { .. } => err,
-                        source => SetConfigError::InvalidValue {
-                            key: key.to_string(),
-                            source: Box::new(source),
-                        },
+                        source => SetConfigError::from_exclude_newer_edit(key, source),
                     })?;
             }
             "pinning-strategy" => {

@@ -423,8 +423,6 @@ enum ConfigEditError {
     ParseKey(#[from] toml_edit::TomlError),
     #[error(transparent)]
     NotATable(#[from] pixi_toml_edit::NotATableError),
-    #[error(transparent)]
-    ExcludeNewer(#[from] rattler_config::edit::ConfigEditError),
 }
 
 /// Alters a specific key in the user configuration file according to the given `mode`.
@@ -591,7 +589,7 @@ async fn alter_config(
                 key,
                 value,
             )
-            .map_err(ConfigEditError::ExcludeNewer)?;
+            .map_err(|error| pixi_config::SetConfigError::from_exclude_newer_edit(key, error))?;
             if matches!(mode, AlterMode::Unset) && !changed {
                 miette::bail!("Key '{}' not found in configuration file", key);
             }
