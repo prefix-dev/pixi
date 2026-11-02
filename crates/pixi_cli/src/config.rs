@@ -576,36 +576,24 @@ async fn alter_config(
                 }
             }
         }
-        // A key inside `exclude-newer` is edited by `rattler_config`, which
-        // matches exemptions by their normalized package name. The whole
-        // value is written back, as a cutoff without exemptions is written
-        // on its own, e.g. `exclude-newer = "7d"`.
-        // TODO: writing back the whole value drops the comments and layout
-        // inside `exclude-newer`, e.g. a `[exclude-newer.exemptions]` table
-        // becomes an inline table. `rattler_config` edits a `toml::Table`
-        // serialized from the parsed config, so it never sees them. Keeping
-        // them needs the edit to apply to the `toml_edit` document instead:
-        // either `rattler_config` exposes its edit rules (expanding a bare
-        // cutoff into a table, matching exemptions by normalized name,
-        // expanding a version-only exemption when a field of it is edited,
-        // collapsing back to a bare cutoff) for a `toml_edit::Item`, or
-        // pixi reimplements them here, then validates the edited document
-        // with `rattler_config` like now.
-        // An invalid file is not loaded, so writing back its `exclude-newer`
-        // would remove all of it rather than the key.
+        // A key inside `exclude-newer` is edited and validated by
+        // `rattler_config`, which matches exemptions by their normalized
+        // package name, and only the edited key is written into the
+        // document, keeping the comments and layout around it.
+        // An invalid file is not loaded, so the edit can't be validated and
+        // the key is removed from the document like any other key.
         AlterMode::Set | AlterMode::Unset if loaded && key.starts_with("exclude-newer.") => {
             let before = config.exclude_newer.clone();
             config.set(key, value)?;
             if matches!(mode, AlterMode::Unset) && config.exclude_newer == before {
                 miette::bail!("Key '{}' not found in configuration file", key);
             }
-            transplant_config_key(
-                &config,
-                &mut toml_doc,
-                "exclude-newer",
-                &AlterMode::Set,
-                common_args.shared,
-            )?;
+            rattler_config::edit::write_exclude_newer_edit(
+                toml_doc.as_table_mut(),
+                key,
+                config.exclude_newer.as_ref(),
+            )
+            .into_diagnostic()?;
         }
         AlterMode::Set => {
             // Run set on Config object for validation
@@ -1124,13 +1112,14 @@ mod tests {
             "exclude-newer = { cutoff = \"7d\", exemptions = { ruff = \"*\" } }\n"
         );
 
-        // An exemption written in a different case replaces it.
+        // An exemption written in a different case replaces it, keeping
+        // its name as written.
         edit("exclude-newer.exemptions.Ruff", Some("==1"))
             .await
             .unwrap();
         assert_eq!(
             context.read_config(),
-            "exclude-newer = { cutoff = \"7d\", exemptions = { Ruff = \"==1\" } }\n"
+            "exclude-newer = { cutoff = \"7d\", exemptions = { ruff = \"==1\" } }\n"
         );
 
         // The cutoff is kept when the last exemption is removed.
@@ -1152,6 +1141,39 @@ mod tests {
             .await
             .unwrap_err();
         assert_eq!(context.read_config(), "exclude-newer = \"14d\"\n");
+    }
+
+    #[tokio::test]
+    async fn exclude_newer_edits_keep_comments_and_layout() {
+        let original = concat!(
+            "[exclude-newer]\n",
+            "cutoff = \"7d\" # a week\n",
+            "[exclude-newer.exemptions]\n",
+            "# keep ruff current\n",
+            "ruff = \"*\"\n",
+        );
+        let context = TestContext::setup(Some(original));
+        alter_config(
+            &context.common_args,
+            "exclude-newer.exemptions.numpy",
+            Some(">=2".to_string()),
+            AlterMode::Set,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            context.read_config(),
+            format!("{original}numpy = \">=2\"\n")
+        );
+        alter_config(
+            &context.common_args,
+            "exclude-newer.exemptions.numpy",
+            None,
+            AlterMode::Unset,
+        )
+        .await
+        .unwrap();
+        assert_eq!(context.read_config(), original);
     }
 
     #[tokio::test]
