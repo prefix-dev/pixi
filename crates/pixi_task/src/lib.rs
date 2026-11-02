@@ -14,7 +14,7 @@ pub use executable_task::{
     TaskExecutionError, get_task_env,
 };
 pub use task_environment::{
-    AmbiguousTask, FindTaskError, FindTaskSource, SearchEnvironments, TaskAndEnvironment,
-    TaskDisambiguation,
+    AmbiguousTask, DisambiguationError, DisambiguationSource, FindTaskError, FindTaskSource,
+    SearchEnvironments, TaskAndEnvironment, TaskDisambiguation,
 };
 pub use task_graph::{PreferExecutable, TaskGraph, TaskGraphError, TaskId, TaskNode};

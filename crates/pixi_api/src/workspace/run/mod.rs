@@ -27,8 +27,9 @@ use pixi_core::{
 };
 use pixi_manifest::{EnvironmentName, HasWorkspaceManifest, PixiPlatformName};
 use pixi_task::{
-    AmbiguousTask, CanSkip, ExecutableTask, FailedToParseShellScript, InvalidWorkingDirectory,
-    PreferExecutable, SearchEnvironments, TaskAndEnvironment, TaskGraph, get_task_env,
+    AmbiguousTask, CanSkip, DisambiguationSource, ExecutableTask, FailedToParseShellScript,
+    InvalidWorkingDirectory, PreferExecutable, SearchEnvironments, TaskAndEnvironment, TaskGraph,
+    get_task_env,
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -502,7 +503,7 @@ async fn execute_task(
 async fn disambiguate_task_interactive<'p, I: Interface>(
     interface: &I,
     problem: &AmbiguousTask<'p>,
-) -> Option<TaskAndEnvironment<'p>> {
+) -> Result<Option<TaskAndEnvironment<'p>>, DisambiguationSource> {
     // If any of the candidate tasks declares a `default-environment` that
     // corresponds to one of the candidate environments, prefer that
     // environment automatically.
@@ -513,7 +514,7 @@ async fn disambiguate_task_interactive<'p, I: Interface>(
             false
         }
     }) {
-        return Some(problem.environments[idx].clone());
+        return Ok(Some(problem.environments[idx].clone()));
     }
 
     let environment_names = problem
@@ -522,7 +523,7 @@ async fn disambiguate_task_interactive<'p, I: Interface>(
         .map(|(env, _)| env.name().to_string())
         .collect_vec();
 
-    interface
+    let selected = interface
         .select(
             &format!(
                 "The task '{}' {}can be run in multiple environments.\n\nPlease select an environment to run the task in:",
@@ -535,9 +536,8 @@ async fn disambiguate_task_interactive<'p, I: Interface>(
             ),
             &environment_names,
         )
-        .await
-        .unwrap_or(None)
-        .map(|idx| problem.environments[idx].clone())
+        .await?;
+    Ok(selected.map(|idx| problem.environments[idx].clone()))
 }
 
 /// `dialoguer` doesn't clean up your term if it's aborted via e.g. `SIGINT` or
