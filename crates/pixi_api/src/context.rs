@@ -22,7 +22,7 @@ use crate::workspace::add::GitOptions;
 use crate::workspace::{
     AddError, ChannelError, ChannelOptions, DependencyOptions, EditActivationError,
     EnvironmentError, InitError, InitOptions, Package, PlatformError, PreviewFlagsError,
-    ReinstallOptions, RemoveError, RemoveFeatureError, RunOptions, SetDescriptionError,
+    ReinstallOptions, RemoveError, RemoveFeatureError, RunError, RunOptions, SetDescriptionError,
     SetNameError, ShellError, ShellOptions, TaskError,
 };
 
@@ -593,7 +593,7 @@ impl<I: Interface> WorkspaceContext<I> {
         .await
     }
 
-    pub async fn run(&self, options: RunOptions) -> miette::Result<i32> {
+    pub async fn run(&self, options: RunOptions) -> Result<i32, RunError> {
         crate::workspace::run::run(
             &self.interface,
             &self.workspace,
