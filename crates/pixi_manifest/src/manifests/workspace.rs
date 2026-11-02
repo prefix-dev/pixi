@@ -404,9 +404,12 @@ impl WorkspaceManifestMut<'_> {
         platform: Option<&PixiPlatform>,
         feature_name: &FeatureName,
     ) -> Result<(), TaskEditError> {
-        // Check if the task already exists
-        if let Ok(tasks) = self.workspace.tasks(platform, feature_name)
-            && tasks.contains_key(&name)
+        // A task inherited from the default target may be overridden for a
+        // platform. A missing feature is created below.
+        if self
+            .workspace
+            .declares_task(&name, platform, feature_name)
+            .unwrap_or(false)
         {
             return Err(TaskEditError::AlreadyExists(name));
         }
@@ -7376,6 +7379,25 @@ platforms = [
                 .declares_task(&lin, Some(&linux), &FeatureName::Default)
                 .unwrap()
         );
+        // A task from the default target can be overridden for a platform,
+        // but only once.
+        manifest
+            .add_task(
+                hello.clone(),
+                Task::Plain("echo linux".into()),
+                Some(&linux),
+                &FeatureName::Default,
+            )
+            .unwrap();
+        let err = manifest
+            .add_task(
+                hello.clone(),
+                Task::Plain("echo linux".into()),
+                Some(&linux),
+                &FeatureName::Default,
+            )
+            .unwrap_err();
+        assert_matches::assert_matches!(err, TaskEditError::AlreadyExists(_));
         let err = manifest
             .remove_task(hello, None, &FeatureName::from("nosuch"))
             .unwrap_err();
