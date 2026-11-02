@@ -1531,6 +1531,24 @@ def test_pixi_task_list_json_environment(pixi: Path, tmp_pixi_workspace: Path) -
     )
 
 
+def test_pixi_task_remove_missing_does_not_save(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """Removing only tasks that don't exist leaves a read-only manifest alone."""
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = """
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+        """
+    manifest.write_text(toml)
+    manifest.chmod(0o444)
+    verify_cli_command(
+        [pixi, "task", "remove", "nope", "--manifest-path", manifest],
+        stderr_contains="does not exist",
+        stderr_excludes="failed to save",
+    )
+
+
 def test_pixi_add_alias(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = """

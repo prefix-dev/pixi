@@ -249,6 +249,11 @@ pub async fn remove_tasks<I: Interface>(
         to_remove.push(name);
     }
 
+    // Nothing to remove, so leave the manifest alone.
+    if to_remove.is_empty() {
+        return Ok(());
+    }
+
     let mut removed = Vec::with_capacity(to_remove.len());
     for name in to_remove {
         workspace
