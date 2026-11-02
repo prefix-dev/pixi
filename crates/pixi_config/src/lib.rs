@@ -29,6 +29,8 @@ use rattler_repodata_gateway::{Gateway, GatewayBuilder, SourceConfig, fetch::Cac
 use reqwest::{NoProxy, Proxy};
 pub use security::{
     SecurityConfig, TrustedChannelUrl, TrustedChannelUrlError, TrustedPackage, TrustedPackagesRule,
+    UntrustedCodeExecOrigin, UntrustedCodeExecOverride, set_untrusted_code_exec_override,
+    untrusted_code_exec_override,
 };
 use serde::{Deserialize, Serialize, de::IntoDeserializer};
 use url::Url;
@@ -192,11 +194,22 @@ fn log_skipped(error: ConfigError) {
     }
 }
 
-/// Layers env-derived CLI defaults on top, so process-env changes still apply.
-fn with_env_defaults(file_layers: Config) -> Config {
+/// Layers what this process was given on top of the config files: the CLI
+/// defaults derived from the environment (`PIXI_OFFLINE`, ...), and the
+/// `untrusted-code-exec` switch of this invocation, which comes from the
+/// top-level `--no-untrusted-code-exec` flag or its environment variable and
+/// must reach every loader, not only the subcommands that embed [`ConfigCli`].
+///
+/// This runs on every load, after the cached file layers, so the switch is
+/// seen even by a loader that filled the cache before it was stored.
+fn with_process_layers(file_layers: Config) -> Config {
     let mut default_cli = ConfigCli::default();
     default_cli.update_from(std::env::args().take(0));
-    file_layers.merge_config(default_cli.into())
+    let mut config = file_layers.merge_config(default_cli.into());
+    config.security = config
+        .security
+        .with_override(untrusted_code_exec_override());
+    config
 }
 
 /// The path of the project-local config file of `project_root`.
@@ -2152,7 +2165,7 @@ impl Config {
                 }
             },
         };
-        Ok(with_env_defaults(file_layers))
+        Ok(with_process_layers(file_layers))
     }
 
     /// Like [`Config::try_load_global_with`], but files that fail to load are
@@ -2168,7 +2181,7 @@ impl Config {
                 merge_locations(config_search_locations(), true).unwrap_or_default()
             }
         };
-        with_env_defaults(file_layers)
+        with_process_layers(file_layers)
     }
 
     /// Load the global config layer using the default search behavior.

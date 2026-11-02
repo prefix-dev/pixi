@@ -1,15 +1,61 @@
 //! The `[security]` configuration table: whether untrusted code may run, and
 //! the list of packages that may run code while it may not.
 //!
-//! This module only holds the data model and its validation. Turning the
-//! switch on from the command line and enforcing the list happen elsewhere.
+//! This module holds the data model and its validation, and the process-wide
+//! override that carries the switch from the command line or the environment
+//! into every loaded [`Config`](crate::Config). Enforcing the list happens
+//! elsewhere.
 
-use std::str::FromStr;
+use std::{str::FromStr, sync::OnceLock};
 
 use rattler_conda_types::{ChannelUrl, PackageName, ParseStrictness, VersionSpec};
 use rattler_config::config::exclude_newer::ExcludeNewerCutoff;
 use serde::{Deserialize, Deserializer, Serialize};
 use url::Url;
+
+/// Where the `untrusted-code-exec` switch of this invocation came from, if
+/// it was not read from a config file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UntrustedCodeExecOrigin {
+    /// The `--no-untrusted-code-exec` command-line flag.
+    Cli,
+    /// The `PIXI_NO_UNTRUSTED_CODE_EXEC` environment variable.
+    Env,
+}
+
+/// The `untrusted-code-exec` switch as given to this invocation on the
+/// command line or in the environment. It overrides every config file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct UntrustedCodeExecOverride {
+    /// The effective value of `security.untrusted-code-exec`.
+    pub untrusted_code_exec: bool,
+    /// Where the value came from.
+    pub origin: UntrustedCodeExecOrigin,
+}
+
+static UNTRUSTED_CODE_EXEC_OVERRIDE: OnceLock<UntrustedCodeExecOverride> = OnceLock::new();
+
+/// Stores the switch of this invocation so that every [`Config`] loaded
+/// afterwards, from any crate, applies it on top of its config files.
+///
+/// The command-line entry point calls this once, right after parsing its
+/// arguments and before anything loads a config. Calling it a second time is
+/// a programming error and returns the value that was already stored.
+///
+/// [`Config`]: crate::Config
+pub fn set_untrusted_code_exec_override(
+    value: UntrustedCodeExecOverride,
+) -> Result<(), UntrustedCodeExecOverride> {
+    UNTRUSTED_CODE_EXEC_OVERRIDE
+        .set(value)
+        .map_err(|_| *UNTRUSTED_CODE_EXEC_OVERRIDE.get().unwrap_or(&value))
+}
+
+/// The switch of this invocation, if it was given on the command line or in
+/// the environment.
+pub fn untrusted_code_exec_override() -> Option<&'static UntrustedCodeExecOverride> {
+    UNTRUSTED_CODE_EXEC_OVERRIDE.get()
+}
 
 /// The `[security]` table.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -53,6 +99,16 @@ impl SecurityConfig {
             untrusted_code_exec: other.untrusted_code_exec.or(self.untrusted_code_exec),
             trusted_packages: other.trusted_packages.or(self.trusted_packages),
         }
+    }
+
+    /// Applies the switch of this invocation, if there is one, on top of what
+    /// the config files set.
+    #[must_use]
+    pub fn with_override(mut self, value: Option<&UntrustedCodeExecOverride>) -> Self {
+        if let Some(value) = value {
+            self.untrusted_code_exec = Some(value.untrusted_code_exec);
+        }
+        self
     }
 
     /// Whether untrusted code may run (defaults to `true`).
@@ -178,6 +234,47 @@ impl Serialize for TrustedChannelUrl {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn override_replaces_the_config_value() {
+        let disabled = UntrustedCodeExecOverride {
+            untrusted_code_exec: false,
+            origin: UntrustedCodeExecOrigin::Cli,
+        };
+        let enabled = UntrustedCodeExecOverride {
+            untrusted_code_exec: true,
+            origin: UntrustedCodeExecOrigin::Env,
+        };
+        let from_file = SecurityConfig {
+            untrusted_code_exec: Some(true),
+            trusted_packages: Some(vec![]),
+        };
+
+        // No override: the file value stands.
+        assert!(from_file.clone().with_override(None).untrusted_code_exec());
+        assert!(
+            SecurityConfig::default()
+                .with_override(None)
+                .untrusted_code_exec()
+        );
+
+        // `--no-untrusted-code-exec` wins over a file that enables it.
+        let config = from_file.clone().with_override(Some(&disabled));
+        assert!(!config.untrusted_code_exec());
+        // ... and leaves the trust list alone.
+        assert_eq!(config.trusted_packages, Some(vec![]));
+
+        // `--no-untrusted-code-exec=false` wins over a file that disables it.
+        let from_file = SecurityConfig {
+            untrusted_code_exec: Some(false),
+            trusted_packages: None,
+        };
+        assert!(
+            from_file
+                .with_override(Some(&enabled))
+                .untrusted_code_exec()
+        );
+    }
 
     fn trusted(url: &str) -> TrustedChannelUrl {
         TrustedChannelUrl::from_str(url).unwrap()
