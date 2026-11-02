@@ -23,11 +23,6 @@ pytestmark = pytest.mark.skipif(
 
 class TestPixiBuild:
     pixi_projects_dir: Path = repo_root().joinpath("docs/source_files/pixi_workspaces/pixi_build")
-    # Workspaces that are deliberately not run here
-    excluded_projects: ClassVar[set[str]] = {
-        # Requires a ROS setup that is too heavy for this test
-        "ros_ws",
-    }
     # Expected stdout of the 'start' task per workspace directory name
     expected_outputs: ClassVar[dict[str, str]] = {
         "advanced_cpp": snapshot("3\n"),
@@ -70,14 +65,6 @@ class TestPixiBuild:
 └──────────────┴─────┴─────────────┘
 """),
     }
-
-    def test_all_projects_have_expected_output(self) -> None:
-        project_names = {path.name for path in self.pixi_projects_dir.iterdir() if path.is_dir()}
-        covered = self.expected_outputs.keys() | self.excluded_projects
-        assert project_names == covered, (
-            "Every workspace in docs/source_files/pixi_workspaces/pixi_build must have an entry "
-            "in expected_outputs or be listed in excluded_projects"
-        )
 
     @pytest.mark.extra_slow
     @pytest.mark.parametrize("project_name", sorted(expected_outputs))

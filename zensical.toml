@@ -72,9 +72,10 @@ nav = [
         "Tutorials" = [
           { "Building a Python Package" = "build/python.md" },
           { "Building a C++ Package" = "build/cpp.md" },
-          { "Building a ROS Package" = "build/ros.md" },
           { "Multiple Packages in Workspace" = "build/workspace.md" },
           { "Variants" = "build/variants.md" },
+          { "Building a ROS Package" = "build/ros.md" },
+          { "Building Mojo CPU and AMD Packages" = "build/mojo_accelerators.md" },
           { "Advanced Building Using rattler-build" = "build/advanced_cpp.md" },
           { "Cross Compilation using rattler-build" = "build/cross_compilation.md" },
         ]
