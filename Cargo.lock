@@ -8142,8 +8142,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_build_core"
-version = "0.2.23"
-source = "git+https://github.com/pavelzw/rattler-build?rev=06b9d97cba77367ee9fcd131f26ba49380cdabb7#06b9d97cba77367ee9fcd131f26ba49380cdabb7"
+version = "0.2.24"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab32e62d84911b1748a58fe89a781f15b065766448bfdb66a0c7229b0d257b1a"
 dependencies = [
  "anyhow",
  "arwen-codesign",
@@ -8227,7 +8228,8 @@ dependencies = [
 [[package]]
 name = "rattler_build_jinja"
 version = "0.1.24"
-source = "git+https://github.com/pavelzw/rattler-build?rev=06b9d97cba77367ee9fcd131f26ba49380cdabb7#06b9d97cba77367ee9fcd131f26ba49380cdabb7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab6f5acb9816cf1ccddfaa50eaf634d2905f67a54a29e2a05fbacee3be92b3cc"
 dependencies = [
  "fs-err",
  "indexmap 2.14.2",
@@ -8248,8 +8250,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_build_networking"
-version = "0.1.19"
-source = "git+https://github.com/pavelzw/rattler-build?rev=06b9d97cba77367ee9fcd131f26ba49380cdabb7#06b9d97cba77367ee9fcd131f26ba49380cdabb7"
+version = "0.1.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "204a56055c9e289bb2f62e90fdffe05ac978511fb3ecb41525bf7e901fad8cd2"
 dependencies = [
  "astral-reqwest-middleware",
  "astral-reqwest-retry",
@@ -8261,7 +8264,8 @@ dependencies = [
 [[package]]
 name = "rattler_build_recipe"
 version = "0.1.24"
-source = "git+https://github.com/pavelzw/rattler-build?rev=06b9d97cba77367ee9fcd131f26ba49380cdabb7#06b9d97cba77367ee9fcd131f26ba49380cdabb7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b50fb6aef3b3b8fa5a61edcb46f952b13ab324079d8ff7f4ba332101c91dbfd0"
 dependencies = [
  "fs-err",
  "globset",
@@ -8295,7 +8299,8 @@ dependencies = [
 [[package]]
 name = "rattler_build_script"
 version = "0.2.19"
-source = "git+https://github.com/pavelzw/rattler-build?rev=06b9d97cba77367ee9fcd131f26ba49380cdabb7#06b9d97cba77367ee9fcd131f26ba49380cdabb7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7aae8d24758da32dc61bb7ff88e97e4993a13776db8dc226201ffdd093de72d9"
 dependencies = [
  "async-trait",
  "clap",
@@ -8319,8 +8324,9 @@ dependencies = [
 
 [[package]]
 name = "rattler_build_source_cache"
-version = "0.1.21"
-source = "git+https://github.com/pavelzw/rattler-build?rev=06b9d97cba77367ee9fcd131f26ba49380cdabb7#06b9d97cba77367ee9fcd131f26ba49380cdabb7"
+version = "0.1.22"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f5aa471aafcb4e71109636faf3fff7ff2a2c8a66020a6bd04c4f8ea396676966"
 dependencies = [
  "astral-reqwest-middleware",
  "astral-reqwest-retry",
@@ -8358,7 +8364,8 @@ dependencies = [
 [[package]]
 name = "rattler_build_types"
 version = "0.1.22"
-source = "git+https://github.com/pavelzw/rattler-build?rev=06b9d97cba77367ee9fcd131f26ba49380cdabb7#06b9d97cba77367ee9fcd131f26ba49380cdabb7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fed4271da33d554f6db10cb7bf42a12db5b67864206c785977828cd50c514fcd"
 dependencies = [
  "globset",
  "itertools 0.15.0",
@@ -8373,7 +8380,8 @@ dependencies = [
 [[package]]
 name = "rattler_build_variant_config"
 version = "0.1.24"
-source = "git+https://github.com/pavelzw/rattler-build?rev=06b9d97cba77367ee9fcd131f26ba49380cdabb7#06b9d97cba77367ee9fcd131f26ba49380cdabb7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4c1493724ee499fa814e86a03f02fa6fc69a98b4d102ec15a09777e552fdc4c0"
 dependencies = [
  "fs-err",
  "marked-yaml",
@@ -8393,7 +8401,8 @@ dependencies = [
 [[package]]
 name = "rattler_build_yaml_parser"
 version = "0.1.24"
-source = "git+https://github.com/pavelzw/rattler-build?rev=06b9d97cba77367ee9fcd131f26ba49380cdabb7#06b9d97cba77367ee9fcd131f26ba49380cdabb7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4137d4e438d38efca1b2c553240573447c1a8c0967a8afbf200576c27bd45f49"
 dependencies = [
  "marked-yaml",
  "miette 7.6.0",
