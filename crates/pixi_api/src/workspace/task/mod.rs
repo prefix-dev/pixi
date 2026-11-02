@@ -218,8 +218,8 @@ pub async fn remove_tasks<I: Interface>(
     // No auto-declare on removal: if the name doesn't match a declared
     // platform we still try the subdir fallback so users can target a
     // dep that lives under an as-yet-undeclared subdir, but we don't
-    // mutate `[workspace].platforms` here. A miss surfaces as "Task '...'
-    // does not exist on <name>" below.
+    // mutate `[workspace].platforms` here. A miss surfaces as "task '...'
+    // does not exist on '<name>'" below.
     let pixi_platform = resolve_task_platform(workspace.workspace(), platform.as_ref())?;
 
     for name in names.iter() {
@@ -230,16 +230,10 @@ pub async fn remove_tasks<I: Interface>(
         )?;
         if !declared {
             let message = match pixi_platform.as_ref() {
-                Some(pixi_platform) => format!(
-                    "Task '{}' does not exist on {}",
-                    name.fancy_display().bold(),
-                    console::style(pixi_platform.name().as_str()).bold(),
-                ),
-                None => format!(
-                    "Task `{}` does not exist for {}",
-                    name.fancy_display().bold(),
-                    console::style(feature.user_facing()).bold(),
-                ),
+                Some(pixi_platform) => {
+                    format!("task '{name}' does not exist on '{}'", pixi_platform.name())
+                }
+                None => format!("task '{name}' does not exist for {}", feature.user_facing()),
             };
             interface.error(&message).await;
             continue;
