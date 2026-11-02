@@ -991,7 +991,7 @@ def test_config_describe(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: 
             "# Type: bool",
             "# Default: false",
             "# tls-no-verify = false",
-            "# default-channels = []",
+            '# default-channels = ["conda-forge"]',
             "# concurrency.solves = (available parallelism)",
             "# s3-options.<bucket>.region = (unset)",
         ],

@@ -134,9 +134,9 @@ static CONFIG_OPTION_DESCRIPTIONS: &[ConfigOptionDescription] = &[
     },
     ConfigOptionDescription {
         key: "default-channels",
-        description: "Channels selected when running `pixi init` or `pixi global install`. Once a workspace exists, its manifest channels are used instead.",
+        description: "Fallback channels for commands that don't take channels from a workspace, such as `pixi init`, `pixi exec`, `pixi global install` and `pixi search` outside a workspace.",
         value_type: "array of channel names or URLs",
-        default: "[]",
+        default: "[\"conda-forge\"]",
     },
     ConfigOptionDescription {
         key: "detached-environments",
