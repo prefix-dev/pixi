@@ -6887,6 +6887,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "pixi_exclude_newer"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "humantime",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "pixi_git"
 version = "0.0.1"
 dependencies = [
@@ -7262,13 +7272,13 @@ dependencies = [
  "dirs 7.0.0",
  "file_url",
  "hex",
- "humantime",
  "insta",
  "itertools 0.15.0",
  "jiff",
  "pathdiff",
  "pixi_build_types",
  "pixi_consts",
+ "pixi_exclude_newer",
  "pixi_git",
  "pixi_path",
  "pixi_test_utils",

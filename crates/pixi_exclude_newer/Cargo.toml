@@ -1,0 +1,18 @@
+[package]
+name = "pixi_exclude_newer"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+description = "The scalar `exclude-newer` cutoff shared by pixi manifests and configuration"
+readme.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+chrono = { workspace = true, features = ["serde"] }
+humantime = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+
+[dev-dependencies]
+serde_json = { workspace = true }
