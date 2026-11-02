@@ -976,6 +976,7 @@ impl Project {
             channels,
             self.global_channel_config(),
             std::iter::empty(),
+            chrono::Utc::now(),
         )
     }
 
