@@ -223,37 +223,25 @@ pub async fn remove_tasks<I: Interface>(
     let pixi_platform = resolve_task_platform(workspace.workspace(), platform.as_ref())?;
 
     for name in names.iter() {
-        if let Some(pixi_platform) = pixi_platform.as_ref() {
-            if !workspace
-                .workspace()
-                .workspace
-                .value
-                .tasks(Some(pixi_platform), &feature)?
-                .contains_key(name)
-            {
-                interface
-                    .error(&format!(
-                        "Task '{}' does not exist on {}",
-                        name.fancy_display().bold(),
-                        console::style(pixi_platform.name().as_str()).bold(),
-                    ))
-                    .await;
-                continue;
-            }
-        } else if !workspace
-            .workspace()
-            .workspace
-            .value
-            .tasks(None, &feature)?
-            .contains_key(name)
-        {
-            interface
-                .error(&format!(
+        let declared = workspace.workspace().workspace.value.declares_task(
+            name,
+            pixi_platform.as_ref(),
+            &feature,
+        )?;
+        if !declared {
+            let message = match pixi_platform.as_ref() {
+                Some(pixi_platform) => format!(
+                    "Task '{}' does not exist on {}",
+                    name.fancy_display().bold(),
+                    console::style(pixi_platform.name().as_str()).bold(),
+                ),
+                None => format!(
                     "Task `{}` does not exist for {}",
                     name.fancy_display().bold(),
                     console::style(feature.user_facing()).bold(),
-                ))
-                .await;
+                ),
+            };
+            interface.error(&message).await;
             continue;
         }
 
