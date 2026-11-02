@@ -12,12 +12,14 @@ license.workspace = true
 [dependencies]
 clap = { workspace = true, features = ["derive", "env", "std"] }
 console = { workspace = true }
+derive_more = { workspace = true, features = ["display"] }
 dirs = { workspace = true }
 fs-err = { workspace = true }
 indexmap = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true }
 pixi_consts = { workspace = true }
+pixi_exclude_newer = { workspace = true }
 rattler = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_config = { workspace = true }

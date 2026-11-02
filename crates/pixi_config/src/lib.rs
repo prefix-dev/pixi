@@ -23,13 +23,18 @@ pub use detector_decisions::{
     DetectorConfigError, consent_origin, repository_detector_config_path, write_detector_decision,
     write_repository_detector_decision,
 };
+mod security;
 use rattler_networking::s3_middleware;
 use rattler_repodata_gateway::{Gateway, GatewayBuilder, SourceConfig, fetch::CacheAction};
 use reqwest::{NoProxy, Proxy};
+pub use security::{
+    SecurityConfig, TrustedChannelUrl, TrustedChannelUrlError, TrustedPackage, TrustedPackagesRule,
+};
 use serde::{Deserialize, Serialize, de::IntoDeserializer};
 use url::Url;
 
 const EXPERIMENTAL: &str = "experimental";
+const SECURITY: &str = "security";
 const VIRTUAL_PACKAGE_DETECTORS: &str = "virtual-package-detectors";
 
 /// Controls which root certificates to use for TLS connections.
@@ -1393,6 +1398,12 @@ pub struct Config {
     #[serde(skip_serializing_if = "CacheConfig::is_default")]
     pub cache: CacheConfig,
 
+    /// Whether untrusted code may run, and the packages trusted to run code
+    /// while it may not.
+    #[serde(default)]
+    #[serde(skip_serializing_if = "SecurityConfig::is_default")]
+    pub security: SecurityConfig,
+
     //////////////////////
     // Deprecated fields //
     //////////////////////
@@ -1435,6 +1446,7 @@ impl Default for Config {
             build: BuildConfig::default(),
             tool_platform: None,
             cache: CacheConfig::default(),
+            security: SecurityConfig::default(),
 
             // Deprecated fields
             change_ps1: None,
@@ -2218,6 +2230,9 @@ impl Config {
             "s3-options.<bucket>.endpoint-url",
             "s3-options.<bucket>.addressing-style",
             "s3-options.<bucket>.region",
+            "security",
+            "security.trusted-packages",
+            "security.untrusted-code-exec",
             "shell",
             "shell.change-ps1",
             "shell.force-activate",
@@ -2307,6 +2322,7 @@ impl Config {
                 .expect("BuildConfig::merge_config is infallible"),
             tool_platform: self.tool_platform.or(other.tool_platform),
             cache: self.cache.merge(other.cache),
+            security: self.security.merge(other.security),
 
             // Deprecated fields that we can ignore as we handle them inside `shell.` field
             change_ps1: None,
@@ -2401,6 +2417,12 @@ impl Config {
     /// Whether `conda-script` files may run without `--experimental`.
     pub fn experimental_conda_script(&self) -> bool {
         self.experimental.conda_script()
+    }
+
+    /// Whether code pixi did not explicitly trust may run (defaults to
+    /// `true`).
+    pub fn untrusted_code_exec(&self) -> bool {
+        self.security.untrusted_code_exec()
     }
 
     /// Retrieve the value for the max_concurrent_solves field.
@@ -2710,6 +2732,33 @@ impl Config {
                     }
                     "conda-script" => {
                         self.experimental.conda_script = parse_opt(value, key)?;
+                    }
+                    _ => return Err(err),
+                }
+            }
+            key if key.starts_with(SECURITY) => {
+                if key == SECURITY {
+                    self.security = value
+                        .map(|v| serde_json::de::from_str(&v))
+                        .transpose()
+                        .map_err(invalid_value(key))?
+                        .unwrap_or_default();
+                    return Ok(());
+                } else if !key.starts_with(format!("{SECURITY}.").as_str()) {
+                    return Err(err);
+                }
+                let subkey = key.strip_prefix(format!("{SECURITY}.").as_str()).unwrap();
+                match subkey {
+                    "untrusted-code-exec" => {
+                        self.security.untrusted_code_exec = parse_opt(value, key)?;
+                    }
+                    // No value unsets the list, which differs from `[]`: an
+                    // empty list still replaces the lists of lower layers.
+                    "trusted-packages" => {
+                        self.security.trusted_packages = value
+                            .map(|v| serde_json::de::from_str(&v))
+                            .transpose()
+                            .map_err(invalid_value(key))?;
                     }
                     _ => return Err(err),
                 }
@@ -3827,6 +3876,17 @@ UNUSED = "unused"
                 pypi_mapping: Some(PathBuf::from("/local/mapping")),
                 netfs_redirect: NetfsRedirect::Always,
                 ..CacheConfig::default()
+            },
+            security: SecurityConfig {
+                untrusted_code_exec: Some(false),
+                trusted_packages: Some(vec![TrustedPackagesRule {
+                    channel: "https://prefix.dev/conda-forge".parse().unwrap(),
+                    reject_newer: None,
+                    packages: vec![TrustedPackage {
+                        name: rattler_conda_types::PackageName::new_unchecked("pixi-build-python"),
+                        version: VersionSpec::Any,
+                    }],
+                }]),
             },
             // Deprecated keys
             change_ps1: None,
@@ -5199,5 +5259,276 @@ UNUSED = "unused"
         };
         let err = config.validate().unwrap_err();
         assert!(format!("{err}").contains("cache.conda-packages"));
+    }
+
+    const SECURITY_TOML: &str = r#"
+[security]
+untrusted-code-exec = false
+
+[[security.trusted-packages]]
+channel = "https://prefix.dev/conda-forge"
+reject-newer = "7d"
+packages = [
+  { name = "pixi-build-python", version = ">=0.8.6,!=0.8.7" },
+  { name = "pixi-build-api-version", version = "*" },
+]
+
+[[security.trusted-packages]]
+channel = "https://conda.anaconda.org/conda-forge/"
+packages = []
+"#;
+
+    #[test]
+    fn test_security_parses() {
+        let (config, unused) = Config::from_toml(SECURITY_TOML, None).unwrap();
+        assert!(unused.is_empty(), "{unused:?}");
+        assert_eq!(config.security.untrusted_code_exec, Some(false));
+        assert!(!config.untrusted_code_exec());
+
+        let rules = config.security.trusted_packages();
+        assert_eq!(rules.len(), 2);
+        assert_eq!(
+            rules[0].channel,
+            "https://prefix.dev/conda-forge".parse().unwrap()
+        );
+        assert_eq!(rules[0].reject_newer, Some("7d".parse().unwrap()));
+        assert_eq!(rules[0].packages.len(), 2);
+        assert_eq!(
+            rules[1].channel,
+            "https://conda.anaconda.org/conda-forge".parse().unwrap()
+        );
+        assert_eq!(rules[1].reject_newer, None);
+        assert!(rules[1].packages.is_empty());
+    }
+
+    /// A missing list and an empty list both trust nothing, but they are
+    /// kept apart so that an empty list replaces the lists of lower layers.
+    #[test]
+    fn test_security_missing_and_empty_trusted_packages() {
+        let (config, _) = Config::from_toml("", None).unwrap();
+        assert!(config.security.is_default());
+        assert!(config.untrusted_code_exec());
+        assert_eq!(config.security.trusted_packages, None);
+        assert!(config.security.trusted_packages().is_empty());
+
+        let (config, _) = Config::from_toml("security.trusted-packages = []", None).unwrap();
+        assert!(!config.security.is_default());
+        assert!(config.untrusted_code_exec());
+        assert_eq!(config.security.trusted_packages, Some(vec![]));
+        assert!(config.security.trusted_packages().is_empty());
+    }
+
+    /// Unknown keys in a rule only warn like every other unknown key: a hard
+    /// error would drop the whole file, including an `untrusted-code-exec = false` in it.
+    #[test]
+    fn test_security_unknown_keys_are_reported_not_fatal() {
+        let toml = r#"
+[security]
+untrusted-code-exec = false
+untrusted-code-exe = true
+
+[[security.trusted-packages]]
+channel = "https://prefix.dev/conda-forge"
+reject-neweer = "7d"
+packages = [{ name = "foo", version = "*", build = "py*" }]
+"#;
+        let (config, unused) = Config::from_toml(toml, None).unwrap();
+        assert_eq!(config.security.untrusted_code_exec, Some(false));
+        assert_eq!(config.security.trusted_packages().len(), 1);
+        let unused = unused.into_iter().collect::<Vec<_>>();
+        assert_eq!(
+            unused,
+            vec![
+                "security.trusted-packages.0.packages.0.build",
+                "security.trusted-packages.0.reject-neweer",
+                "security.untrusted-code-exe",
+            ]
+        );
+    }
+
+    #[rstest]
+    #[case::channel_name(r#"channel = "conda-forge", packages = []"#, "not a channel name")]
+    #[case::userinfo(
+        r#"channel = "https://user:pw@prefix.dev/conda-forge", packages = []"#,
+        "username or password"
+    )]
+    #[case::query(
+        r#"channel = "https://prefix.dev/conda-forge?x=1", packages = []"#,
+        "query"
+    )]
+    #[case::fragment(
+        r#"channel = "https://prefix.dev/conda-forge#x", packages = []"#,
+        "fragment"
+    )]
+    #[case::missing_channel(r#"packages = []"#, "channel")]
+    #[case::missing_packages(r#"channel = "https://prefix.dev/conda-forge""#, "packages")]
+    #[case::missing_version(
+        r#"channel = "https://prefix.dev/conda-forge", packages = [{ name = "foo" }]"#,
+        "version"
+    )]
+    #[case::invalid_version(
+        r#"channel = "https://prefix.dev/conda-forge", packages = [{ name = "foo", version = ">=1.2.*" }]"#,
+        "version"
+    )]
+    #[case::invalid_name(
+        r#"channel = "https://prefix.dev/conda-forge", packages = [{ name = "not a name", version = "*" }]"#,
+        "name"
+    )]
+    #[case::reject_newer_table(
+        r#"channel = "https://prefix.dev/conda-forge", reject-newer = { cutoff = "7d" }, packages = []"#,
+        "reject-newer"
+    )]
+    #[case::reject_newer_garbage(
+        r#"channel = "https://prefix.dev/conda-forge", reject-newer = "soon", packages = []"#,
+        "soon"
+    )]
+    fn test_security_invalid_values_are_hard_errors(#[case] rule: &str, #[case] expected: &str) {
+        let toml = format!("security.trusted-packages = [{{ {rule} }}]");
+        let err = Config::from_toml(&toml, None).unwrap_err();
+        let message = format!("{err}");
+        assert!(message.contains(expected), "{message}");
+    }
+
+    #[test]
+    fn test_security_merges_by_replacing_each_key() {
+        let (lower, _) = Config::from_toml(SECURITY_TOML, None).unwrap();
+
+        // A layer without the table keeps everything.
+        let merged = lower.clone().merge_config(Config::default());
+        assert_eq!(merged.security, lower.security);
+
+        // A layer with an empty list replaces the rules instead of extending
+        // them, and leaves the switch alone.
+        let (upper, _) = Config::from_toml("security.trusted-packages = []", None).unwrap();
+        let merged = lower.clone().merge_config(upper);
+        assert_eq!(merged.security.untrusted_code_exec, Some(false));
+        assert_eq!(merged.security.trusted_packages, Some(vec![]));
+
+        // A layer with the switch alone replaces it and keeps the rules.
+        let (upper, _) = Config::from_toml("security.untrusted-code-exec = true", None).unwrap();
+        let merged = lower.clone().merge_config(upper);
+        assert_eq!(merged.security.untrusted_code_exec, Some(true));
+        assert_eq!(
+            merged.security.trusted_packages,
+            lower.security.trusted_packages
+        );
+    }
+
+    /// `pixi config set` serializes the whole config and copies the key into
+    /// the file, so the table has to survive a round trip.
+    #[test]
+    fn test_security_serialization_round_trip() {
+        let (config, _) = Config::from_toml(SECURITY_TOML, None).unwrap();
+        let serialized = toml_edit::ser::to_string(&config).unwrap();
+        let (parsed, unused) = Config::from_toml(&serialized, None).unwrap();
+        assert!(unused.is_empty(), "{unused:?}");
+        assert_eq!(parsed.security, config.security);
+
+        // The default table is not written out at all.
+        let serialized = toml_edit::ser::to_string(&Config::default()).unwrap();
+        assert!(!serialized.contains("security"), "{serialized}");
+    }
+
+    #[test]
+    fn test_security_keys_are_known() {
+        let config = Config::default();
+        for key in [
+            "security",
+            "security.untrusted-code-exec",
+            "security.trusted-packages",
+        ] {
+            assert!(config.get_keys().contains(&key), "{key}");
+        }
+    }
+
+    #[test]
+    fn test_set_security_untrusted_code_exec() {
+        let mut config = Config::default();
+        config
+            .set("security.untrusted-code-exec", Some("false".to_string()))
+            .unwrap();
+        assert_eq!(config.security.untrusted_code_exec, Some(false));
+        assert!(!config.untrusted_code_exec());
+
+        config.set("security.untrusted-code-exec", None).unwrap();
+        assert_eq!(config.security.untrusted_code_exec, None);
+        assert!(config.untrusted_code_exec());
+
+        let err = config
+            .set("security.untrusted-code-exec", Some("maybe".to_string()))
+            .unwrap_err();
+        assert!(matches!(err, SetConfigError::InvalidValue { .. }), "{err}");
+    }
+
+    #[test]
+    fn test_set_security_table() {
+        let mut config = Config::default();
+        config
+            .set(
+                "security",
+                Some(
+                    r#"{"untrusted-code-exec": false, "trusted-packages": [{"channel": "https://prefix.dev/conda-forge", "packages": [{"name": "pixi-build-python", "version": "*"}]}]}"#
+                        .to_string(),
+                ),
+            )
+            .unwrap();
+        assert_eq!(config.security.untrusted_code_exec, Some(false));
+        assert_eq!(config.security.trusted_packages().len(), 1);
+
+        config.set("security", None).unwrap();
+        assert!(config.security.is_default());
+
+        let err = config
+            .set("security.unknown", Some("true".to_string()))
+            .unwrap_err();
+        assert!(matches!(err, SetConfigError::UnknownKey { .. }), "{err}");
+    }
+
+    /// The trust list takes JSON like the other structured keys. Unsetting it
+    /// is not the same as setting `[]`: only the latter overrides lower layers.
+    #[test]
+    fn test_set_security_trusted_packages() {
+        let mut config = Config::default();
+        config
+            .set(
+                "security.trusted-packages",
+                Some(
+                    r#"[{"channel": "https://prefix.dev/conda-forge/", "reject-newer": "2026-01-01", "packages": [{"name": "Pixi-Build-Python", "version": ">=0.8,<1"}]}]"#
+                        .to_string(),
+                ),
+            )
+            .unwrap();
+        let rules = config.security.trusted_packages();
+        assert_eq!(rules.len(), 1);
+        assert_eq!(
+            rules[0].channel.to_string(),
+            "https://prefix.dev/conda-forge/"
+        );
+        assert!(rules[0].reject_newer.is_some());
+        assert_eq!(
+            rules[0].packages[0].name.as_normalized(),
+            "pixi-build-python"
+        );
+
+        config
+            .set("security.trusted-packages", Some("[]".to_string()))
+            .unwrap();
+        assert_eq!(config.security.trusted_packages, Some(vec![]));
+
+        config.set("security.trusted-packages", None).unwrap();
+        assert_eq!(config.security.trusted_packages, None);
+
+        // The same strict parsing as the file: a channel name or a lenient
+        // version is rejected and leaves the config untouched.
+        for value in [
+            r#"[{"channel": "conda-forge", "packages": []}]"#,
+            r#"[{"channel": "https://prefix.dev/conda-forge", "packages": [{"name": "a", "version": ">=1.2.*"}]}]"#,
+        ] {
+            let err = config
+                .set("security.trusted-packages", Some(value.to_string()))
+                .unwrap_err();
+            assert!(matches!(err, SetConfigError::InvalidValue { .. }), "{err}");
+            assert_eq!(config.security.trusted_packages, None);
+        }
     }
 }

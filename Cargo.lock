@@ -6706,6 +6706,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "console",
+ "derive_more",
  "dirs 7.0.0",
  "fs-err",
  "indexmap 2.14.2",
@@ -6714,6 +6715,7 @@ dependencies = [
  "miette 7.6.0",
  "nix 0.31.3",
  "pixi_consts",
+ "pixi_exclude_newer",
  "rattler",
  "rattler_conda_types",
  "rattler_config",
