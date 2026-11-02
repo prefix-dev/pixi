@@ -3268,7 +3268,7 @@ dependencies = {{ dummy-a = "*" }}
         [pixi, "global", "sync"],
         ExitCode.FAILURE,
         env=env,
-        stderr_contains="`date` is neither a valid duration, date",
+        stderr_contains="invalid cutoff `date`",
     )
 
 

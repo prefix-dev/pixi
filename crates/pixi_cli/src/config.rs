@@ -469,11 +469,11 @@ async fn alter_config(
     } else {
         Config::from_path(&to)
     };
-    let mut config = match loaded {
-        Ok(config) => config,
-        Err(ConfigError::FileNotFound(_)) => Config::default(),
+    let (mut config, loaded) = match loaded {
+        Ok(config) => (config, true),
+        Err(ConfigError::FileNotFound(_)) => (Config::default(), true),
         // `unset` only edits the document, so it can remove an invalid value
-        Err(_) if matches!(mode, AlterMode::Unset) => Config::default(),
+        Err(_) if matches!(mode, AlterMode::Unset) => (Config::default(), false),
         Err(e) => return Err(e.into()),
     };
 
@@ -574,6 +574,24 @@ async fn alter_config(
                         list_keys.join(", ")
                     ));
                 }
+            }
+        }
+        // A key inside `exclude-newer` is edited and validated by
+        // `rattler_config`, which matches exemptions by their normalized
+        // package name, and only the edited key is written into the
+        // document, keeping the comments and layout around it.
+        // An invalid file is not loaded, so the edit can't be validated and
+        // the key is removed from the document like any other key.
+        AlterMode::Set | AlterMode::Unset if loaded && key.starts_with("exclude-newer.") => {
+            let changed = rattler_config::edit::set_exclude_newer_in_document(
+                toml_doc.as_table_mut(),
+                &mut config.exclude_newer,
+                key,
+                value,
+            )
+            .map_err(|error| pixi_config::SetConfigError::from_exclude_newer_edit(key, error))?;
+            if matches!(mode, AlterMode::Unset) && !changed {
+                miette::bail!("Key '{}' not found in configuration file", key);
             }
         }
         AlterMode::Set => {
@@ -1067,6 +1085,127 @@ mod tests {
             );
             assert!(!context.read_config().contains("secret"));
         }
+    }
+
+    #[tokio::test]
+    async fn exclude_newer_keys_are_edited_inside_the_value() {
+        let context = TestContext::setup(Some("exclude-newer = \"7d\"\n"));
+        let edit = |key: &'static str, value: Option<&'static str>| {
+            let common_args = context.common_args.clone();
+            async move {
+                let mode = if value.is_some() {
+                    AlterMode::Set
+                } else {
+                    AlterMode::Unset
+                };
+                alter_config(&common_args, key, value.map(str::to_string), mode).await
+            }
+        };
+
+        // An exemption is added to a bare cutoff.
+        edit("exclude-newer.exemptions.ruff", Some("*"))
+            .await
+            .unwrap();
+        assert_eq!(
+            context.read_config(),
+            "exclude-newer = { cutoff = \"7d\", exemptions = { ruff = \"*\" } }\n"
+        );
+
+        // An exemption written in a different case replaces it, keeping
+        // its name as written.
+        edit("exclude-newer.exemptions.Ruff", Some("==1"))
+            .await
+            .unwrap();
+        assert_eq!(
+            context.read_config(),
+            "exclude-newer = { cutoff = \"7d\", exemptions = { ruff = \"==1\" } }\n"
+        );
+
+        // The cutoff is kept when the last exemption is removed.
+        edit("exclude-newer.cutoff", Some("14d")).await.unwrap();
+        edit("exclude-newer.exemptions.ruff", None).await.unwrap();
+        assert_eq!(context.read_config(), "exclude-newer = \"14d\"\n");
+
+        // Invalid values are rejected and leave the file unchanged.
+        edit("exclude-newer.cutoff", Some("yesterday"))
+            .await
+            .unwrap_err();
+        edit("exclude-newer.exemptions.ruff.bogus", Some("*"))
+            .await
+            .unwrap_err();
+        assert_eq!(context.read_config(), "exclude-newer = \"14d\"\n");
+
+        // Unsetting an exemption that isn't there fails like any missing key.
+        edit("exclude-newer.exemptions.numpy", None)
+            .await
+            .unwrap_err();
+        assert_eq!(context.read_config(), "exclude-newer = \"14d\"\n");
+    }
+
+    #[tokio::test]
+    async fn exclude_newer_edits_keep_comments_and_layout() {
+        let original = concat!(
+            "[exclude-newer]\n",
+            "cutoff = \"7d\" # a week\n",
+            "[exclude-newer.exemptions]\n",
+            "# keep ruff current\n",
+            "ruff = \"*\"\n",
+        );
+        let context = TestContext::setup(Some(original));
+        alter_config(
+            &context.common_args,
+            "exclude-newer.exemptions.numpy",
+            Some(">=2".to_string()),
+            AlterMode::Set,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            context.read_config(),
+            format!("{original}numpy = \">=2\"\n")
+        );
+        alter_config(
+            &context.common_args,
+            "exclude-newer.exemptions.numpy",
+            None,
+            AlterMode::Unset,
+        )
+        .await
+        .unwrap();
+        assert_eq!(context.read_config(), original);
+
+        // Without exemptions, the table is kept with its comments.
+        alter_config(
+            &context.common_args,
+            "exclude-newer.exemptions.ruff",
+            None,
+            AlterMode::Unset,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            context.read_config(),
+            "[exclude-newer]\ncutoff = \"7d\" # a week\n"
+        );
+    }
+
+    #[tokio::test]
+    async fn invalid_exclude_newer_exemption_is_unset_alone() {
+        let context = TestContext::setup(Some(
+            "exclude-newer = { cutoff = \"7d\", exemptions = { ruff = \"*\", bad = \"\" } }\n",
+        ));
+        alter_config(
+            &context.common_args,
+            "exclude-newer.exemptions.bad",
+            None,
+            AlterMode::Unset,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            context.read_config(),
+            "exclude-newer = { cutoff = \"7d\", exemptions = { ruff = \"*\"} }\n"
+        );
     }
 
     #[tokio::test]
