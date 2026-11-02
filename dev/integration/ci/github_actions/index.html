@@ -9973,9 +9973,10 @@ See the <a href="../../../reference/cli/pixi/install/#update-options">official d
 <p>There are two types of debug logging that you can enable.</p>
 <h4 id="debug-logging-of-the-action">Debug logging of the action<a class="headerlink" href="#debug-logging-of-the-action" title="Permanent link">#</a></h4>
 <p>The first one is the debug logging of the action itself.
-This can be enabled by for the action by re-running the action in debug mode:</p>
+You can enable it for a single run by re-running the workflow with debug logging enabled:</p>
 <p><img alt="Re-run in debug mode" src="https://raw.githubusercontent.com/prefix-dev/setup-pixi/main/.github/assets/enable-debug-logging-light.png#only-light" />
 <img alt="Re-run in debug mode" src="https://raw.githubusercontent.com/prefix-dev/setup-pixi/main/.github/assets/enable-debug-logging-dark.png#only-dark" /></p>
+<p>To enable it for all runs, set the repository secret or variable <code>ACTIONS_STEP_DEBUG</code> to <code>true</code>.</p>
 <div class="admonition tip">
 <p class="admonition-title">Debug logging documentation</p>
 <p>For more information about debug logging in GitHub Actions, see <a href="https://docs.github.com/en/actions/monitoring-and-troubleshooting-workflows/enabling-debug-logging">the official documentation</a>.</p>
