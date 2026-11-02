@@ -26,7 +26,7 @@ use pixi_core::{
 
 use crate::{
     cli_config::WorkspaceConfig,
-    cli_interface::{CliInterface, cli_context},
+    cli_interface::{CliInterface, cli_workspace_context},
 };
 
 #[derive(Parser, Debug)]
@@ -400,7 +400,7 @@ pub async fn execute(args: Args) -> miette::Result<()> {
         .locate()
         .await?;
 
-    let workspace_ctx = cli_context(workspace.clone());
+    let workspace_ctx = cli_workspace_context(workspace.clone());
 
     match args.operation {
         Operation::Add(args) => add_task(workspace_ctx, args).await,

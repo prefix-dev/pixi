@@ -6,7 +6,7 @@ use pixi_config::{ConfigCli, ConfigCliActivation, ConfigCliPrompt};
 use pixi_core::WorkspaceLocator;
 
 use crate::cli_config::{LockAndInstallConfig, WorkspaceConfig};
-use crate::cli_interface::cli_context;
+use crate::cli_interface::cli_workspace_context;
 
 /// Start a shell in a pixi environment.
 ///
@@ -60,6 +60,6 @@ pub async fn execute(args: Args) -> miette::Result<ExitCode> {
         no_install: args.lock_and_install_config.no_install(),
     };
 
-    let code = cli_context(workspace).shell(options).await?;
+    let code = cli_workspace_context(workspace).shell(options).await?;
     Ok(crate::process_exit::exit_code_from_code(code))
 }

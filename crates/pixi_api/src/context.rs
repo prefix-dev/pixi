@@ -16,6 +16,7 @@ use pixi_pypi_spec::{PixiPypiSpec, PypiPackageName};
 use pixi_spec::PixiSpec;
 use rattler_conda_types::{Channel, MatchSpec, NamedChannelOrUrl, PackageName, Subdir};
 
+use crate::global::{GlobalEnvironment, ListError};
 use crate::interface::Interface;
 use crate::workspace::add::GitOptions;
 use crate::workspace::{
@@ -50,6 +51,42 @@ impl<I: Interface> DefaultContext<I> {
     }
 }
 
+pub struct GlobalContext<I: Interface> {
+    _interface: I,
+    project: pixi_global::Project,
+}
+
+impl<I: Interface> GlobalContext<I> {
+    pub fn new(interface: I, project: pixi_global::Project) -> Self {
+        Self {
+            _interface: interface,
+            project,
+        }
+    }
+
+    pub fn project(&self) -> &pixi_global::Project {
+        &self.project
+    }
+
+    pub fn manifest_path(&self) -> std::path::PathBuf {
+        self.project.manifest.path.clone()
+    }
+
+    pub async fn list_environments(
+        &self,
+        regex: Option<String>,
+    ) -> Result<Vec<GlobalEnvironment>, ListError> {
+        crate::global::list::list(&self.project, regex).await
+    }
+
+    pub async fn get_environment(
+        &self,
+        name: &pixi_global::EnvironmentName,
+    ) -> Result<GlobalEnvironment, ListError> {
+        crate::global::list::get(&self.project, name).await
+    }
+}
+
 pub struct WorkspaceContext<I: Interface> {
     interface: I,
     workspace: Workspace,
@@ -75,6 +112,10 @@ impl<I: Interface> WorkspaceContext<I> {
 
     pub fn workspace(&self) -> &Workspace {
         &self.workspace
+    }
+
+    pub fn manifest_path(&self) -> std::path::PathBuf {
+        self.workspace.workspace.provenance.absolute_path()
     }
 
     pub fn workspace_mut(&self) -> Result<WorkspaceMut, LoadManifestsError> {
