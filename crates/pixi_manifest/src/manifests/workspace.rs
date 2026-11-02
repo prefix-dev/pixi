@@ -216,6 +216,24 @@ impl WorkspaceManifest {
             .collect())
     }
 
+    /// Returns whether the task `name` is declared in the target for
+    /// `platform` itself. Unlike [`Self::tasks`], this ignores the tasks
+    /// inherited from the default target.
+    pub fn declares_task(
+        &self,
+        name: &TaskName,
+        platform: Option<&PixiPlatform>,
+        feature_name: &FeatureName,
+    ) -> Result<bool, GetFeatureError> {
+        Ok(self
+            .features
+            .get(feature_name)
+            .ok_or(GetFeatureError::FeatureDoesNotExist(feature_name.clone()))?
+            .targets
+            .for_opt_target(platform.map(PixiPlatform::as_target_selector).as_ref())
+            .is_some_and(|target| target.tasks.contains_key(name)))
+    }
+
     /// Returns a mutable reference to a [`WorkspaceTarget`], creating it if
     /// needed.
     pub fn get_or_insert_target_mut(
@@ -386,9 +404,12 @@ impl WorkspaceManifestMut<'_> {
         platform: Option<&PixiPlatform>,
         feature_name: &FeatureName,
     ) -> Result<(), TaskEditError> {
-        // Check if the task already exists
-        if let Ok(tasks) = self.workspace.tasks(platform, feature_name)
-            && tasks.contains_key(&name)
+        // A task inherited from the default target may be overridden for a
+        // platform. A missing feature is created below.
+        if self
+            .workspace
+            .declares_task(&name, platform, feature_name)
+            .unwrap_or(false)
         {
             return Err(TaskEditError::AlreadyExists(name));
         }
@@ -410,7 +431,7 @@ impl WorkspaceManifestMut<'_> {
         // Add the task to the manifest
         self.workspace
             .get_or_insert_target_mut(
-                platform.map(TargetSelector::from).as_ref(),
+                platform.map(PixiPlatform::as_target_selector).as_ref(),
                 Some(feature_name),
             )
             .tasks
@@ -429,11 +450,9 @@ impl WorkspaceManifestMut<'_> {
         platform: Option<&PixiPlatform>,
         feature_name: &FeatureName,
     ) -> Result<(), TaskEditError> {
-        // Check if the task exists
         if !self
             .workspace
-            .tasks(platform, feature_name)?
-            .contains_key(&name)
+            .declares_task(&name, platform, feature_name)?
         {
             return Err(TaskEditError::NotFound(name));
         }
@@ -448,7 +467,7 @@ impl WorkspaceManifestMut<'_> {
             .feature_mut(feature_name)
             .expect("feature existence checked above")
             .targets
-            .for_opt_target_mut(platform.map(TargetSelector::from).as_ref())
+            .for_opt_target_mut(platform.map(PixiPlatform::as_target_selector).as_ref())
             .map(|target| target.tasks.remove(&name));
 
         Ok(())
@@ -7301,6 +7320,9 @@ platforms = [
             [tasks]
             hello = "echo hello"
 
+            [target.linux-64.tasks]
+            lin = "echo lin"
+
             [feature.f1.activation]
             scripts = ["a.sh"]
             env = { FOO = "1" }
@@ -7326,6 +7348,56 @@ platforms = [
             .remove_task(TaskName::from("nope"), None, &FeatureName::Default)
             .unwrap_err();
         assert_matches::assert_matches!(err, TaskEditError::NotFound(_));
+        // A task inherited from the default target is not declared for a
+        // platform.
+        let linux = PixiPlatform::from_subdir(Subdir::Linux64);
+        let err = manifest
+            .remove_task(hello.clone(), Some(&linux), &FeatureName::Default)
+            .unwrap_err();
+        assert_matches::assert_matches!(err, TaskEditError::NotFound(_));
+        let lin = TaskName::from("lin");
+        manifest
+            .remove_task(lin.clone(), Some(&linux), &FeatureName::Default)
+            .unwrap();
+        assert!(
+            !manifest
+                .workspace
+                .declares_task(&lin, Some(&linux), &FeatureName::Default)
+                .unwrap()
+        );
+        manifest
+            .add_task(
+                lin.clone(),
+                Task::Plain("echo lin".into()),
+                Some(&linux),
+                &FeatureName::Default,
+            )
+            .unwrap();
+        assert!(
+            manifest
+                .workspace
+                .declares_task(&lin, Some(&linux), &FeatureName::Default)
+                .unwrap()
+        );
+        // A task from the default target can be overridden for a platform,
+        // but only once.
+        manifest
+            .add_task(
+                hello.clone(),
+                Task::Plain("echo linux".into()),
+                Some(&linux),
+                &FeatureName::Default,
+            )
+            .unwrap();
+        let err = manifest
+            .add_task(
+                hello.clone(),
+                Task::Plain("echo linux".into()),
+                Some(&linux),
+                &FeatureName::Default,
+            )
+            .unwrap_err();
+        assert_matches::assert_matches!(err, TaskEditError::AlreadyExists(_));
         let err = manifest
             .remove_task(hello, None, &FeatureName::from("nosuch"))
             .unwrap_err();
