@@ -1108,6 +1108,8 @@ fn table_to_inline(table: &toml_edit::Table) -> toml_edit::InlineTable {
             inline.insert(k, val);
         }
     }
+    // Drop the decor copied from the source tables.
+    inline.fmt();
     inline
 }
 
