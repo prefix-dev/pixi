@@ -6,6 +6,7 @@ use std::{
     str::FromStr,
 };
 
+use chrono::{DateTime, Utc};
 use indexmap::{Equivalent, IndexMap, IndexSet};
 use itertools::Itertools;
 use miette::SourceCode;
@@ -40,7 +41,7 @@ use crate::{
 
 /// Holds the parsed content of the workspace part of a pixi manifest. This
 /// describes the part related to the workspace only.
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct WorkspaceManifest {
     /// Information about the project
     pub workspace: Workspace,
@@ -56,6 +57,22 @@ pub struct WorkspaceManifest {
 
     /// The solve groups that are part of the project.
     pub solve_groups: SolveGroups,
+
+    /// The time relative `exclude-newer` cutoffs are resolved against, fixed
+    /// at load so that every environment resolves them to the same time.
+    pub loaded_at: DateTime<Utc>,
+}
+
+impl Default for WorkspaceManifest {
+    fn default() -> Self {
+        Self {
+            workspace: Workspace::default(),
+            features: IndexMap::default(),
+            environments: Environments::default(),
+            solve_groups: SolveGroups::default(),
+            loaded_at: Utc::now(),
+        }
+    }
 }
 
 impl WorkspaceManifest {
@@ -6714,6 +6731,37 @@ exclude-newer = { cutoff = "2015-12-02T02:07:43Z", exemptions = { polars = "1.43
         assert!(config.is_excluded(&uploaded_record("polars", "1.43.2", None)));
         assert!(!config.is_excluded(&uploaded_record("numpy", "2.0.0", None)));
         assert!(config.is_excluded(&uploaded_record("pandas", "2.0.0", None)));
+    }
+
+    /// Regression test. Every solve resolved a relative cutoff against its
+    /// own `Utc::now()`, so the compute keys carrying the resolved cutoff,
+    /// such as the build backend environment, were never deduplicated.
+    #[test]
+    fn test_relative_exclude_newer_resolves_against_load_time() {
+        let contents = r#"
+[workspace]
+name = "foo"
+channels = []
+platforms = []
+exclude-newer = "14d"
+"#;
+        let manifest = parse_pixi_toml(contents).manifest;
+        let features = DefaultFeature(&manifest);
+        let expected = manifest.loaded_at - chrono::Duration::days(14);
+
+        let resolve = || {
+            features
+                .exclude_newer_config_resolved(&default_channel_config())
+                .unwrap()
+                .unwrap()
+        };
+        let first = resolve();
+        assert_eq!(first.cutoff, expected);
+        assert_eq!(first, resolve());
+
+        let pypi = features.pypi_exclude_newer_config_resolved();
+        assert_eq!(pypi.cutoff, Some(expected));
+        assert_eq!(pypi, features.pypi_exclude_newer_config_resolved());
     }
 
     #[test]

@@ -316,24 +316,8 @@ pub enum ExcludeNewerError {
 ///
 /// `package_overrides` are the per-package cutoffs of the deprecated top-level
 /// `[exclude-newer]` table. They keep working until that table is removed.
+/// Relative cutoffs are resolved as if the current time were `now`.
 pub fn resolve_exclude_newer<'a>(
-    config: &ExcludeNewerConfig,
-    channels: impl IntoIterator<Item = &'a PrioritizedChannel>,
-    channel_config: &ChannelConfig,
-    package_overrides: impl IntoIterator<Item = (&'a PackageName, &'a ExcludeNewer)>,
-) -> Result<Option<ResolvedExcludeNewer>, ExcludeNewerError> {
-    resolve_exclude_newer_at(
-        config,
-        channels,
-        channel_config,
-        package_overrides,
-        Utc::now(),
-    )
-}
-
-/// Like [`resolve_exclude_newer`], with relative cutoffs resolved as if the
-/// current time were `now`.
-fn resolve_exclude_newer_at<'a>(
     config: &ExcludeNewerConfig,
     channels: impl IntoIterator<Item = &'a PrioritizedChannel>,
     channel_config: &ChannelConfig,
@@ -442,7 +426,7 @@ where
         let mut resolved = environments
             .iter()
             .map(|channels| {
-                resolve_exclude_newer_at(
+                resolve_exclude_newer(
                     config,
                     channels.iter().copied(),
                     channel_config,
@@ -453,7 +437,7 @@ where
             .collect::<Result<Vec<_>, _>>()?;
         // Without environments, the exemptions apply to the ones added later.
         if resolved.is_empty() {
-            resolved.push(resolve_exclude_newer_at(
+            resolved.push(resolve_exclude_newer(
                 config,
                 [],
                 channel_config,
@@ -509,16 +493,17 @@ where
 ///
 /// `package_overrides` are the per-package cutoffs of the deprecated top-level
 /// `[pypi-exclude-newer]` table. They keep working until that table is
-/// removed.
+/// removed. Relative cutoffs are resolved as if the current time were `now`.
 pub fn resolve_pypi_exclude_newer<'a>(
     config: &PypiExcludeNewerConfig,
     fallback_cutoff: Option<ExcludeNewer>,
     package_overrides: impl IntoIterator<Item = (&'a PypiPackageName, &'a ExcludeNewer)>,
+    now: DateTime<Utc>,
 ) -> ResolvedPypiExcludeNewer {
     let mut exclude_newer = config
         .cutoff
         .or(fallback_cutoff)
-        .map(|cutoff| ResolvedPypiExcludeNewer::from_datetime(cutoff.cutoff()))
+        .map(|cutoff| ResolvedPypiExcludeNewer::from_datetime(cutoff.cutoff_at(now)))
         .unwrap_or_default();
 
     for (name, package_exclude_newer) in package_overrides {
@@ -530,8 +515,10 @@ pub fn resolve_pypi_exclude_newer<'a>(
             exclude_newer.with_exempt_package(name.as_normalized().clone())
         } else {
             #[allow(deprecated)]
-            exclude_newer
-                .with_package_cutoff(name.as_normalized().clone(), package_exclude_newer.cutoff())
+            exclude_newer.with_package_cutoff(
+                name.as_normalized().clone(),
+                package_exclude_newer.cutoff_at(now),
+            )
         };
     }
 
@@ -900,7 +887,7 @@ mod tests {
         };
         let channels = [channel("conda-forge", Some("7d"))];
         let configured_hash = |config: &ExcludeNewerConfig, now: &str| {
-            let resolved = resolve_exclude_newer_at(
+            let resolved = resolve_exclude_newer(
                 config,
                 &channels,
                 &ChannelConfig::default_with_root_dir("/".into()),
@@ -944,8 +931,12 @@ mod tests {
             ),
         ];
 
-        let resolved =
-            resolve_pypi_exclude_newer(&config, None, overrides.iter().map(|(n, c)| (n, c)));
+        let resolved = resolve_pypi_exclude_newer(
+            &config,
+            None,
+            overrides.iter().map(|(n, c)| (n, c)),
+            Utc::now(),
+        );
 
         assert_eq!(
             resolved.exempt_packages.iter().collect::<Vec<_>>(),
