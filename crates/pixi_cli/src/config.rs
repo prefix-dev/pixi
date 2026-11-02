@@ -997,8 +997,21 @@ fn render_describe(
                         .is_some_and(|key_path| is_known_key(&[opt.key], key_path))
                 })
                 .map(|opt| {
-                    let path = segments.iter().map(|s| s.to_string()).collect();
-                    (opt, k.to_string(), Some(path))
+                    // Look consent origins up by their normalized spelling,
+                    // like `partial_config` does.
+                    let path = key_path.as_ref().map(|key_path| {
+                        let target = key_path
+                            .consent_origin()
+                            .map(|origin| origin.as_str().to_string())
+                            .unwrap_or_else(|| key_path.target().to_string());
+                        key_path
+                            .parent_keys
+                            .iter()
+                            .cloned()
+                            .chain(once(target))
+                            .collect()
+                    });
+                    (opt, k.to_string(), path)
                 })
                 .collect();
             if matches.is_empty() {
@@ -1026,8 +1039,11 @@ fn render_describe(
                 let value = path
                     .as_ref()
                     .and_then(|path| {
-                        path.iter()
-                            .try_fold(&json_doc, |value, segment| value.get(segment))
+                        path.iter().try_fold(&json_doc, |value, segment| {
+                            key_spellings(segment)
+                                .iter()
+                                .find_map(|spelling| value.get(spelling))
+                        })
                     })
                     .cloned()
                     .unwrap_or(serde_json::Value::Null);
@@ -1078,10 +1094,15 @@ fn render_describe(
 }
 
 fn lookup_path<'a>(table: &'a toml_edit::Table, path: &[String]) -> Option<&'a toml_edit::Item> {
+    let get = |table: &'a dyn toml_edit::TableLike, segment: &str| {
+        key_spellings(segment)
+            .iter()
+            .find_map(|spelling| table.get(spelling))
+    };
     let (first, rest) = path.split_first()?;
-    let mut item = table.get(first)?;
+    let mut item = get(table, first)?;
     for part in rest {
-        item = item.as_table_like().and_then(|t| t.get(part))?;
+        item = get(item.as_table_like()?, part)?;
     }
     Some(item)
 }
