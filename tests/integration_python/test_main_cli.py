@@ -1482,6 +1482,28 @@ def test_pixi_task_list_multiline_description(pixi: Path, tmp_pixi_workspace: Pa
     assert len(result.stdout.strip().splitlines()) == 3
 
 
+def test_pixi_task_list_invalid_environment_name(pixi: Path, tmp_pixi_workspace: Path) -> None:
+    """An invalid environment name is reported instead of listing every environment."""
+    manifest = tmp_pixi_workspace.joinpath("pixi.toml")
+    toml = """
+        [workspace]
+        name = "test"
+        channels = []
+        platforms = ["linux-64", "win-64", "osx-64", "osx-arm64"]
+
+        [tasks]
+        foo = "echo foo"
+        """
+    manifest.write_text(toml)
+    for extra in ([], ["--json"]):
+        verify_cli_command(
+            [pixi, "task", "list", "-e", "Bad_Name", *extra, "--manifest-path", manifest],
+            expected_exit_code=ExitCode.FAILURE,
+            stdout_excludes="foo",
+            stderr_contains="Bad_Name",
+        )
+
+
 def test_pixi_add_alias(pixi: Path, tmp_pixi_workspace: Path) -> None:
     manifest = tmp_pixi_workspace.joinpath("pixi.toml")
     toml = """

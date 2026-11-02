@@ -414,16 +414,17 @@ async fn list_tasks(
     workspace_ctx: WorkspaceContext<CliInterface>,
     args: ListArgs,
 ) -> miette::Result<()> {
+    let environment = args
+        .environment
+        .as_deref()
+        .map(EnvironmentName::from_str)
+        .transpose()?;
+
     if args.json {
         return print_tasks_json(workspace_ctx.workspace());
     }
 
-    let tasks_per_env = workspace_ctx
-        .list_tasks(
-            args.environment
-                .and_then(|e| EnvironmentName::from_str(&e.to_string()).ok()),
-        )
-        .await?;
+    let tasks_per_env = workspace_ctx.list_tasks(environment).await?;
 
     if tasks_per_env.is_empty() {
         eprintln!("No tasks found",);
