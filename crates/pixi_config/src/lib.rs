@@ -2545,20 +2545,7 @@ impl Config {
                 // edits the keys inside it, e.g. `exclude-newer.exemptions.ruff`.
                 // A table is given as JSON like the other complex values,
                 // anything else is a cutoff such as `7d`.
-                //
-                // `rattler_config` only edits keys on a whole `ConfigBase`, and
-                // pixi's `Config` isn't one, so the value is moved into an
-                // otherwise empty one, edited there, and moved back.
-                let mut rattler_config =
-                    rattler_config::config::ConfigBase::<rattler_config::config::NoExtension> {
-                        common: rattler_config::config::CommonConfig {
-                            exclude_newer: self.exclude_newer.clone(),
-                            ..Default::default()
-                        },
-                        ..Default::default()
-                    };
-                rattler_config
-                    .set(key, value)
+                rattler_config::edit::set_exclude_newer(&mut self.exclude_newer, key, value)
                     .map_err(|source| match source {
                         rattler_config::edit::ConfigEditError::UnknownKey { .. } => err,
                         source => SetConfigError::InvalidValue {
@@ -2566,7 +2553,6 @@ impl Config {
                             source: Box::new(source),
                         },
                     })?;
-                self.exclude_newer = rattler_config.common.exclude_newer;
             }
             "pinning-strategy" => {
                 self.pinning_strategy = value

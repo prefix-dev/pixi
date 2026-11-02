@@ -585,17 +585,16 @@ async fn alter_config(
         // An invalid file is not loaded, so the edit can't be validated and
         // the key is removed from the document like any other key.
         AlterMode::Set | AlterMode::Unset if loaded && key.starts_with("exclude-newer.") => {
-            let before = config.exclude_newer.clone();
-            config.set(key, value)?;
-            if matches!(mode, AlterMode::Unset) && config.exclude_newer == before {
-                miette::bail!("Key '{}' not found in configuration file", key);
-            }
-            rattler_config::edit::write_exclude_newer_edit(
+            let changed = rattler_config::edit::set_exclude_newer_in_document(
                 toml_doc.as_table_mut(),
+                &mut config.exclude_newer,
                 key,
-                config.exclude_newer.as_ref(),
+                value,
             )
             .map_err(ConfigEditError::ExcludeNewer)?;
+            if matches!(mode, AlterMode::Unset) && !changed {
+                miette::bail!("Key '{}' not found in configuration file", key);
+            }
         }
         AlterMode::Set => {
             // Run set on Config object for validation
@@ -1176,6 +1175,20 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(context.read_config(), original);
+
+        // Without exemptions, the table is kept with its comments.
+        alter_config(
+            &context.common_args,
+            "exclude-newer.exemptions.ruff",
+            None,
+            AlterMode::Unset,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            context.read_config(),
+            "[exclude-newer]\ncutoff = \"7d\" # a week\n"
+        );
     }
 
     #[tokio::test]

@@ -386,7 +386,7 @@ def test_config_exclude_newer_url_exemption(pixi: Path, tmp_path: Path, channels
         [pixi, "exec", "--channel", channel.as_uri(), "--spec", "dummy-a", "--", *noop],
         ExitCode.FAILURE,
         env=env,
-        stderr_contains="must not specify other match spec fields than `md5` and `sha256`",
+        stderr_contains="can't have match spec fields other than `md5` and `sha256`",
     )
 
 
