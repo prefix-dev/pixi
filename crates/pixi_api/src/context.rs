@@ -68,6 +68,10 @@ impl<I: Interface> GlobalContext<I> {
         &self.project
     }
 
+    pub fn manifest_path(&self) -> &std::path::Path {
+        &self.project.manifest.path
+    }
+
     pub async fn list_environments(
         &self,
         regex: Option<String>,
