@@ -1,0 +1,11 @@
+[project]
+name = "long-username"
+version = "0.1.0"
+requires-python = ">=3.11"
+
+[project.scripts]
+long-username = "long_username:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

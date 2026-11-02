@@ -1,0 +1,2 @@
+[index-config.virtual-package-detectors]
+username-length-detect = ["__username_length"]

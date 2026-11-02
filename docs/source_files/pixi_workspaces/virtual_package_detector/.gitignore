@@ -1,0 +1,4 @@
+**/.pixi/
+**/pixi.lock
+**/__pycache__/
+channel/

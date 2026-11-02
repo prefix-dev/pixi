@@ -614,13 +614,14 @@ impl HostDetector {
         for warning in &output.warnings {
             tracing::warn!("{warning}");
         }
-        self.detect_registrations(builtin, &output.registrations, wanted)
+        self.detect_registrations(builtin, channels, &output.registrations, wanted)
             .await
     }
 
     async fn detect_registrations(
         &self,
         builtin: HostDetection,
+        channels: &[ChannelUrl],
         registrations: &[AcceptedDetectorRegistration],
         wanted: WantedNames,
     ) -> Result<HostDetection, HostDetectError> {
@@ -644,6 +645,7 @@ impl HostDetector {
             self.gateway.clone(),
             self.client.clone(),
             &root,
+            channels,
             native,
             builtin_platform
                 .solver_virtual_package_records()
@@ -939,6 +941,7 @@ impl HostDetector {
         };
         self.detect_registrations(
             HostDetection::detect_for(platform).await,
+            channels,
             &discovery.registrations,
             wanted,
         )

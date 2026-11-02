@@ -299,6 +299,119 @@ def test_detector_values_reach_consumers_and_platform_selection(
     assert not default_env_path(unsupported).exists()
 
 
+@pytest.mark.parametrize("command", ["info", "install", "exec"])
+@pytest.mark.parametrize("channel_order", [(0, 1), (1, 0)], ids=["prefer-3", "prefer-4"])
+def test_detector_dependencies_follow_explicit_channel_order_without_replacing_origin(
+    detector_sandbox: DetectorSandbox, command: str, channel_order: tuple[int, int]
+) -> None:
+    sandbox = detector_sandbox
+    origin = DetectorChannel(sandbox.root / "origin")
+    dependencies = [
+        DetectorChannel(sandbox.root / "first-dependency-channel"),
+        DetectorChannel(sandbox.root / "second-dependency-channel"),
+    ]
+    helper_versions = ("3.0", "4.0")
+    helper_markers = []
+    for channel, version in zip(dependencies, helper_versions, strict=True):
+        marker = channel.root / "helper.runs"
+        helper_markers.append(marker)
+        channel.package(
+            "dependency-version",
+            [],
+            {
+                "bin/dependency-version": (
+                    f"#!/bin/sh\necho run >> {shlex.quote(str(marker))}\necho {version}\n"
+                ).encode(),
+                "Scripts/dependency-version.bat": (
+                    f'@echo off\r\necho run>>"{marker}"\r\necho {version}\r\n'
+                ).encode(),
+            },
+        )
+
+    detector = "dependency-detect"
+    origin_marker = origin.root / "detector.runs"
+    report = json.dumps({"version": 1, "virtual_packages": {CAPABILITY: {"version": "%s"}}})
+    origin.registrations[detector] = [CAPABILITY]
+    origin.package(
+        detector,
+        ["dependency-version"],
+        {
+            f"bin/{detector}": (
+                f"#!/bin/sh\necho run >> {shlex.quote(str(origin_marker))}\n"
+                "version=$(dependency-version) || exit $?\n"
+                f"printf '{report}\\n' \"$version\"\n"
+            ).encode(),
+            f"Scripts/{detector}.bat": (
+                f'@echo off\r\necho run>>"{origin_marker}"\r\n'
+                "for /f %%v in ('call dependency-version.bat') do "
+                f"echo {report.replace('%s', '%%v')}\r\n"
+            ).encode(),
+        },
+    )
+    shadow_marker = dependencies[0].root / "shadow.runs"
+    # This higher-priority package is deliberately not registered as a detector.
+    dependencies[0].package(
+        detector,
+        [],
+        {
+            f"bin/{detector}": (
+                f"#!/bin/sh\necho run >> {shlex.quote(str(shadow_marker))}\nexit 99\n"
+            ).encode(),
+            f"Scripts/{detector}.bat": (
+                f'@echo off\r\necho run>>"{shadow_marker}"\r\nexit /b 99\r\n'
+            ).encode(),
+        },
+    )
+    expected_version = helper_versions[channel_order[0]]
+    origin.consumer("dependency-consumer", CAPABILITY, f"=={expected_version}")
+    channels = [*(dependencies[index] for index in channel_order), origin]
+    workspace = sandbox.workspace(
+        "explicit-dependency-channels",
+        channels,
+        capability=CAPABILITY,
+        required=expected_version,
+        consumer="dependency-consumer" if command == "install" else None,
+    )
+    sandbox.decision(workspace, origin, "allow")
+
+    if command == "info":
+        info = sandbox.info(workspace)
+    else:
+        if command == "install":
+            sandbox.run(workspace, "install")
+            assert (
+                default_env_path(workspace) / "conda-meta" / "dependency-consumer-1.0-0.json"
+            ).exists()
+        else:
+            args = [arg for channel in channels for arg in ("--channel", channel.url)]
+            assert (
+                "consumer-ready"
+                in sandbox.run(
+                    workspace,
+                    "exec",
+                    *args,
+                    "--spec",
+                    "dependency-consumer",
+                    bat_extension("dependency-consumer"),
+                ).stdout
+            )
+        # Assert before info, so all-mode detection cannot conceal a demand-path failure.
+        assert helper_markers[channel_order[0]].exists()
+        info = sandbox.info(workspace)
+
+    assert versions(info)[CAPABILITY] == expected_version
+    detector_report = next(
+        item for item in info["virtual_package_detectors"] if item["detector"] == detector
+    )
+    assert detector_report["origin"] == origin.url
+    assert detector_report["state"] in {"ran", "cached"}
+    assert detector_report["virtual_packages"] == [f"{CAPABILITY}={expected_version}=0"]
+    assert origin_marker.read_text(encoding="utf-8").splitlines() == ["run"]
+    assert helper_markers[channel_order[0]].read_text(encoding="utf-8").splitlines() == ["run"]
+    assert not helper_markers[channel_order[1]].exists()
+    assert not shadow_marker.exists()
+
+
 @pytest.mark.parametrize("capability", ["__cuda", "__test_detector_capability"])
 def test_explicit_override_precedes_detector_execution(
     detector_sandbox: DetectorSandbox, capability: str
