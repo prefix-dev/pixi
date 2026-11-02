@@ -22,7 +22,7 @@ use crate::workspace::{
     AddError, ChannelError, ChannelOptions, DependencyOptions, EditActivationError,
     EnvironmentError, InitError, InitOptions, Package, PlatformError, PreviewFlagsError,
     ReinstallOptions, RemoveError, RemoveFeatureError, RunOptions, SetDescriptionError,
-    SetNameError, ShellError, ShellOptions,
+    SetNameError, ShellError, ShellOptions, TaskError,
 };
 
 pub struct DefaultContext<I: Interface> {
@@ -569,9 +569,11 @@ impl<I: Interface> WorkspaceContext<I> {
     pub async fn list_tasks(
         &self,
         environment: Option<EnvironmentName>,
-    ) -> miette::Result<HashMap<EnvironmentName, (EnvironmentRunnability, HashMap<TaskName, Task>)>>
-    {
-        crate::workspace::task::list_tasks(&self.workspace, environment).await
+    ) -> Result<
+        HashMap<EnvironmentName, (EnvironmentRunnability, HashMap<TaskName, Task>)>,
+        TaskError,
+    > {
+        crate::workspace::task::list_tasks(&self.interface, &self.workspace, environment).await
     }
 
     pub async fn add_task(
@@ -580,7 +582,7 @@ impl<I: Interface> WorkspaceContext<I> {
         task: Task,
         feature: FeatureName,
         platform: Option<PixiPlatformName>,
-    ) -> miette::Result<()> {
+    ) -> Result<(), TaskError> {
         crate::workspace::task::add_task(
             &self.interface,
             self.workspace_mut()?,
@@ -598,7 +600,7 @@ impl<I: Interface> WorkspaceContext<I> {
         task: Task,
         feature: FeatureName,
         platform: Option<PixiPlatformName>,
-    ) -> miette::Result<()> {
+    ) -> Result<(), TaskError> {
         crate::workspace::task::alias_task(
             &self.interface,
             self.workspace_mut()?,
@@ -615,7 +617,7 @@ impl<I: Interface> WorkspaceContext<I> {
         names: Vec<TaskName>,
         platform: Option<PixiPlatformName>,
         feature: FeatureName,
-    ) -> miette::Result<()> {
+    ) -> Result<(), TaskError> {
         crate::workspace::task::remove_tasks(
             &self.interface,
             self.workspace_mut()?,

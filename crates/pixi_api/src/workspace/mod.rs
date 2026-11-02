@@ -26,6 +26,7 @@ pub(crate) mod shell;
 pub use shell::{ShellError, ShellOptions};
 
 pub(crate) mod task;
+pub use task::TaskError;
 
 #[allow(clippy::module_inception)]
 pub(crate) mod workspace;
