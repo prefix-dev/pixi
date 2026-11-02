@@ -96,7 +96,8 @@ The following reference describes all available configuration options.
 
 !!! tip "Describing options from the CLI"
     Run `pixi config list --describe` to print every option with its type, default and a short explanation.
-    Options you have set are shown with their current value; the rest are commented out and show their default.
+    Options with a value in the merged configuration are shown with it, the rest are commented out and show their default.
+    Options inside a table you have configured, such as `concurrency`, show their effective value even if you didn't set them.
     Pass a key to describe a single option, or add `--json` for machine-readable output.
 
     ```shell
