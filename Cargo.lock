@@ -6707,6 +6707,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "console",
+ "derive_more",
  "dirs 7.0.0",
  "fs-err",
  "indexmap 2.14.2",
@@ -6715,6 +6716,7 @@ dependencies = [
  "miette 7.6.0",
  "nix 0.31.3",
  "pixi_consts",
+ "pixi_exclude_newer",
  "rattler",
  "rattler_conda_types",
  "rattler_config",
@@ -6732,6 +6734,7 @@ dependencies = [
  "toml 1.1.8+spec-1.1.0",
  "toml_edit",
  "tracing",
+ "tracing-test",
  "url",
 ]
 
@@ -6885,6 +6888,16 @@ dependencies = [
  "itertools 0.15.0",
  "pixi_cli",
  "rattler_conda_types",
+]
+
+[[package]]
+name = "pixi_exclude_newer"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "humantime",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -7262,13 +7275,13 @@ dependencies = [
  "dirs 7.0.0",
  "file_url",
  "hex",
- "humantime",
  "insta",
  "itertools 0.15.0",
  "jiff",
  "pathdiff",
  "pixi_build_types",
  "pixi_consts",
+ "pixi_exclude_newer",
  "pixi_git",
  "pixi_path",
  "pixi_test_utils",

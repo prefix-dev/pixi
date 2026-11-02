@@ -14,12 +14,12 @@ chrono = { workspace = true, features = ["serde"] }
 dirs = { workspace = true }
 file_url = { workspace = true }
 hex = { workspace = true }
-humantime = { workspace = true }
 itertools = { workspace = true }
 jiff = { workspace = true }
 pathdiff = { workspace = true }
 pixi_build_types = { workspace = true, optional = true }
 pixi_consts = { workspace = true }
+pixi_exclude_newer = { workspace = true }
 pixi_git = { workspace = true }
 rattler_conda_types = { workspace = true }
 rattler_digest = { workspace = true, features = ["serde"] }
