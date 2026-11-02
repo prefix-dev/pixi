@@ -423,6 +423,8 @@ enum ConfigEditError {
     ParseKey(#[from] toml_edit::TomlError),
     #[error(transparent)]
     NotATable(#[from] pixi_toml_edit::NotATableError),
+    #[error(transparent)]
+    ExcludeNewer(#[from] rattler_config::edit::ConfigEditError),
 }
 
 /// Alters a specific key in the user configuration file according to the given `mode`.
@@ -593,7 +595,7 @@ async fn alter_config(
                 key,
                 config.exclude_newer.as_ref(),
             )
-            .into_diagnostic()?;
+            .map_err(ConfigEditError::ExcludeNewer)?;
         }
         AlterMode::Set => {
             // Run set on Config object for validation
