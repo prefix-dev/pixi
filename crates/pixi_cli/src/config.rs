@@ -938,9 +938,8 @@ enum DescribeError {
         source: toml_edit::TomlError,
     },
 
-    #[error(
-        "Unknown configuration key '{0}'. Run `pixi config list --describe` to list every available key."
-    )]
+    #[error("unknown configuration key '{0}'")]
+    #[diagnostic(help("run `pixi config list --describe` to list every available key"))]
     UnknownKey(String),
 
     #[error(transparent)]

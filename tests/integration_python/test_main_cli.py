@@ -1116,7 +1116,7 @@ def test_config_describe(pixi: Path, tmp_pixi_workspace: Path, dummy_channel_1: 
             manifest_path,
         ],
         ExitCode.FAILURE,
-        stderr_contains="Unknown configuration key",
+        stderr_contains="unknown configuration key",
     )
 
 
